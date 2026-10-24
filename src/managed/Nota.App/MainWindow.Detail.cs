@@ -522,6 +522,31 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            VelocityWheelSettings = () =>
+            {
+                var settings = _vm!.Settings.Current;
+                return (settings.PianoRollVelocityWheelReversed, settings.PianoRollVelocityWheelMultiplier);
+            },
+            FollowPlayhead = Timeline.FollowPlayhead,
+            GetMidiControllerIds = () =>
+            {
+                var active = roll.Clips.ActiveClip;
+                return Engine.GetMidiClipControllers(active.TrackId, active.ClipIndex);
+            },
+            GetMidiControllerPoints = ctl =>
+            {
+                var active = roll.Clips.ActiveClip;
+                return Engine.GetMidiClipController(active.TrackId, active.ClipIndex, ctl);
+            },
+            SetMidiControllerPoints = (ctl, points) =>
+            {
+                var active = roll.Clips.ActiveClip;
+                if (!Engine.TryGetClipInfo(active.TrackId, active.ClipIndex, out var live) || !live.IsMidi) return;
+                Engine.BeginUndoGroup();
+                try { Engine.SetMidiClipController(active.TrackId, active.ClipIndex, ctl, points); }
+                finally { Engine.EndUndoGroup(); }
+                Timeline.Refresh();
+            },
             // A note sounds on its own clip's track; the keys column on the active clip's.
             AuditionOn = (pitch, vel) => AuditionNoteOn(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch, vel),
             AuditionOff = pitch => Engine.TrackNoteOff(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch),
@@ -791,6 +816,21 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            VelocityWheelSettings = () =>
+            {
+                var settings = _vm!.Settings.Current;
+                return (settings.PianoRollVelocityWheelReversed, settings.PianoRollVelocityWheelMultiplier);
+            },
+            FollowPlayhead = Timeline.FollowPlayhead,
+            GetMidiControllerIds = () => Engine.GetSessionControllers(trackId, scene),
+            GetMidiControllerPoints = ctl => Engine.GetSessionController(trackId, scene, ctl),
+            SetMidiControllerPoints = (ctl, points) =>
+            {
+                Engine.BeginUndoGroup();
+                try { Engine.SetSessionController(trackId, scene, ctl, points); }
+                finally { Engine.EndUndoGroup(); }
+                _session?.Refresh();
+            },
             AuditionOn = (pitch, vel) => AuditionNoteOn(trackId, pitch, vel),
             AuditionOff = pitch => Engine.TrackNoteOff(trackId, pitch),
             IsSessionSlot = true,   // no Seek: the slot plays on its own loop clock

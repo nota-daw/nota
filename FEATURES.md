@@ -87,6 +87,9 @@ on a pool of render threads, export and freeze use every core, and an idle engin
     CPU used by the whole Nota process, in the system monitor's scale.
 - **Tempo (BPM)** and **time signature** (edited by dragging; the denominator snaps to a
   power of two), grid and quantization.
+- **Tempo track** (View → Toggle tempo track, Ctrl+T / Cmd+T): add and move tempo points,
+  box-select points, edit values, and choose Linear, Square, Triangle or Smooth transitions.
+  Tempo maps are saved with the project, run from 1 to 999 BPM, and can be a modulation target.
 - **Tap tempo**: a TAP cell beside the BPM (and *Tap Tempo* in the command palette) sets the
   tempo from tapped beats — mean of the last eight gaps, restarts on a pace change or a 3 s pause.
 - **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection; drag an end of the brace
@@ -317,6 +320,11 @@ track count and closes with Escape.
   the first part on the target track, every other part on its own new track (drum parts get
   a Nota Rhythm); on a session slot the whole file becomes that slot's clip; double-clicking
   a MIDI file in the browser puts it on a new track.
+  **Import MIDI…** opens options to select source channels, merge parts into one track, filter
+  CC automation, and Replace or Adapt the project's tempo map.
+- **MIDI file export** (**File → Export MIDI…**): choose Format 0 or Format 1, select project
+  MIDI tracks, filter CC automation and tempo changes, or export separate MIDI stems by track.
+  A tempo-only file is valid even when the project has no MIDI note/controller clips.
 - **Input**: MIDI keyboard (live play and recording), and the **computer keyboard** plays
   MIDI (the S–K row, sharps on W E T Y U) — including while a hosted plugin window has
   focus.
@@ -359,6 +367,12 @@ track count and closes with Escape.
   aftertouch (and every instrument-wide controller, see above). **Recording** keeps each note's bend, pressure and slide with the note: it plays back
   from the clip, moves, copies and quantizes with the note, is saved with the project, and the
   piano roll draws it over the note (bend as the pitch it played, pressure as a shade).
+  - **Event Line Editor** — switch between **VEL**, **BEND**, **PRES**, **SLIDE** and **CC**.
+    The CC picker lists controllers found in the clip first, then named and other non-reserved
+    controllers. Draw and move controller points; switch/pedal CCs render as steps. The lane can
+    be resized or collapsed separately from pitch zoom, with its own parameter-snap toggle.
+    Shift+wheel edits selected-note velocity, or the note under the pointer with no selection;
+    direction is reversible and a 0×–2× multiplier is available in Settings → MIDI.
   - **MPE lanes in the piano roll** — the lane under the notes switches between **VEL**,
     **BEND**, **PRES** and **SLIDE**. In an MPE lane every note's curve sits over its own
     span; drag across a selected note to draw its curve (⌥ for a straight line), drag a point

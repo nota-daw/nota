@@ -484,7 +484,56 @@ public sealed partial class PreferencesWindow : NotaWindow
             items.Add(Table(rows));
         }
         items.Add(Caption("Switch a controller off to stop Nota listening to it. New devices are on by default."));
-        return Sections(Section("MIDI inputs", 8, items.ToArray()), MpeSection(engine));
+        return Sections(Section("MIDI inputs", 8, items.ToArray()), MpeSection(engine), PianoRollVelocitySection());
+    }
+
+    private Control PianoRollVelocitySection()
+    {
+        if (_main is null) return Caption("Piano Roll settings are unavailable in this window.");
+        var settings = _main.Settings.Current;
+        double initial = double.IsFinite(settings.PianoRollVelocityWheelMultiplier)
+            ? Math.Clamp(settings.PianoRollVelocityWheelMultiplier, 0.0, 2.0)
+            : 1.0;
+        var multiplier = new Slider
+        {
+            Minimum = 0,
+            Maximum = 2,
+            Value = initial,
+            TickFrequency = 0.1,
+            IsSnapToTickEnabled = true,
+            Width = 180,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var value = new TextBlock
+        {
+            Text = $"{initial:0.0}×",
+            Width = 38,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = TextSecondary,
+        };
+        var multiplierRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+            Children = { multiplier, value },
+        };
+        multiplier.ValueChanged += (_, _) =>
+        {
+            double next = Math.Round(multiplier.Value * 10.0) / 10.0;
+            settings.PianoRollVelocityWheelMultiplier = next;
+            value.Text = $"{next:0.0}×";
+            _main.Settings.Save();
+        };
+        var reverse = SwitchRow("Reverse direction", settings.PianoRollVelocityWheelReversed, enabled =>
+        {
+            settings.PianoRollVelocityWheelReversed = enabled;
+            _main.Settings.Save();
+        });
+        return Section("Piano Roll velocity", 8,
+            Row("Shift+wheel direction", reverse),
+            Row("Change multiplier", multiplierRow),
+            Row("", Caption("Default: wheel up increases velocity and wheel down decreases it. The multiplier ranges from 0× (off) to 2×. Event-line snapping remains independent.")));
     }
 
     private static readonly int[] MpeBendRanges = [12, 24, 48, 96];

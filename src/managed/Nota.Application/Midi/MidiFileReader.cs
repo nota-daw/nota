@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Standard MIDI File (.mid / .midi) import: formats 0, 1 and 2, PPQ timing. Only notes
-// survive — tempo, controllers and program changes are dropped (Nota's clips hold notes
-// only; the project keeps its own tempo). Times come out in quarter-note beats.
+// Standard MIDI File (.mid / .midi) import: formats 0, 1 and 2 with PPQ timing, tempo
+// meta-events, channel controllers, pitch wheel and channel pressure. Times are quarter-note beats.
 
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace Nota.Application.Midi;
@@ -16,13 +17,18 @@ public sealed class MidiFilePart
     public string Name { get; init; } = "";
     /// <summary>Every note sits on MIDI channel 10 (the General MIDI drum channel).</summary>
     public bool IsDrums { get; init; }
+    public int Channel { get; set; } = -1;
     public List<NotaNote> Notes { get; } = new();
+    public SortedDictionary<int, List<AutomationPoint>> Controllers { get; } = new();
 }
+
+public readonly record struct MidiTempoPoint(double Beat, double Bpm);
 
 public sealed class MidiFileData
 {
     /// <summary>Parts that carry at least one note, in file order.</summary>
     public List<MidiFilePart> Parts { get; } = new();
+    public List<MidiTempoPoint> TempoPoints { get; } = new();
 
     /// <summary>End of the last note, rounded up to a whole 4/4 bar (at least one bar).</summary>
     public double LengthBeats { get; set; }
@@ -65,6 +71,7 @@ public static class MidiFileReader
         pos = 8 + hdrLen;
 
         var result = new MidiFileData();
+        var tempoEvents = new List<MidiTempoPoint>();
         double end = 0;
         for (int t = 0; t < ntracks && pos + 8 <= data.Length; t++)
         {
@@ -73,18 +80,31 @@ public static class MidiFileReader
             pos += 8;
             int trackEnd = Math.Min(data.Length, pos + len);
             if (id == "MTrk")
-                foreach (var part in ReadTrack(data, pos, trackEnd, ppq, splitChannels: format == 0))
+                foreach (var part in ReadTrack(data, pos, trackEnd, ppq, splitChannels: format == 0, tempoEvents: tempoEvents))
                 {
                     result.Parts.Add(part);
                     foreach (var n in part.Notes) end = Math.Max(end, n.StartBeat + n.LengthBeats);
+                    foreach (var points in part.Controllers.Values)
+                        foreach (var p in points) end = Math.Max(end, p.Beat);
                 }
             pos = trackEnd;   // unknown chunks are skipped
         }
+        var orderedTempos = tempoEvents.OrderBy(p => p.Beat).ToList();
+        for (int i = 0; i < orderedTempos.Count;)
+        {
+            int j = i + 1;
+            while (j < orderedTempos.Count && Math.Abs(orderedTempos[j].Beat - orderedTempos[i].Beat) < 1e-9) j++;
+            result.TempoPoints.Add(orderedTempos[j - 1]);
+            i = j;
+        }
+        if (result.TempoPoints.Count > 0 && result.TempoPoints[0].Beat > 1e-9)
+            result.TempoPoints.Insert(0, new MidiTempoPoint(0, 120.0));
+        foreach (var p in result.TempoPoints) end = Math.Max(end, p.Beat);
         result.LengthBeats = Math.Max(4.0, Math.Ceiling(end / 4.0 - 1e-9) * 4.0);
         return result;
     }
 
-    private static IEnumerable<MidiFilePart> ReadTrack(byte[] d, int pos, int end, double ppq, bool splitChannels)
+    private static IEnumerable<MidiFilePart> ReadTrack(byte[] d, int pos, int end, double ppq, bool splitChannels, List<MidiTempoPoint> tempoEvents)
     {
         string name = "";
         long tick = 0;
@@ -92,6 +112,24 @@ public static class MidiFileReader
         // Open notes keyed by channel*128 + pitch; queued so overlapping same-pitch notes pair FIFO.
         var open = new Dictionary<int, Queue<(long tick, int vel)>>();
         var byChannel = new SortedDictionary<int, List<NotaNote>>();
+        var controllersByChannel = new SortedDictionary<int, SortedDictionary<int, List<AutomationPoint>>>();
+
+        void AddController(int ch, int ctl, float value)
+        {
+            if (MidiController.IsReserved(ctl)) return;
+            if (!controllersByChannel.TryGetValue(ch, out var map))
+                controllersByChannel[ch] = map = new SortedDictionary<int, List<AutomationPoint>>();
+            if (!map.TryGetValue(ctl, out var points)) map[ctl] = points = new List<AutomationPoint>();
+            double beat = tick / ppq;
+            if (points.Count > 0 && Math.Abs(points[^1].Beat - beat) < 1e-9)
+            {
+                var last = points[^1];
+                last.Value = value;
+                points[^1] = last;
+            }
+            else if (points.Count == 0 || Math.Abs(points[^1].Value - value) > 1e-6f)
+                points.Add(new AutomationPoint(beat, value));
+        }
 
         void Close(int ch, int pitch, long at)
         {
@@ -115,7 +153,13 @@ public static class MidiFileReader
                 int len = (int)ReadVarLen(d, ref pos, end);
                 if (type == 0x03 && name.Length == 0 && pos + len <= end)
                     name = Encoding.Latin1.GetString(d, pos, len).Trim('\0', ' ');
-                pos += len;
+                if (type == 0x51 && len == 3 && pos + 3 <= end)
+                {
+                    int microsPerQuarter = (d[pos] << 16) | (d[pos + 1] << 8) | d[pos + 2];
+                    if (microsPerQuarter > 0)
+                        tempoEvents.Add(new MidiTempoPoint(tick / ppq, 60_000_000.0 / microsPerQuarter));
+                }
+                pos = Math.Min(end, pos + len);
                 if (type == 0x2F) break;
                 continue;
             }
@@ -140,26 +184,56 @@ public static class MidiFileReader
             }
             else if (kind == 0x80 || (kind == 0x90 && b == 0))
                 Close(ch, a & 0x7F, tick);
+            else if (kind == 0xB0)
+                AddController(ch, a & 0x7F, (b & 0x7F) / 127f);
+            else if (kind == 0xE0)
+            {
+                int raw = ((b & 0x7F) << 7) | (a & 0x7F);
+                AddController(ch, MidiController.PitchWheel, Math.Clamp((raw - 8192) / 8192f, -1f, 1f));
+            }
+            else if (kind == 0xD0)
+                AddController(ch, MidiController.ChannelPressure, (a & 0x7F) / 127f);
         }
         // Notes never released: end them at the track's last event.
         foreach (var (key, q) in open)
             while (q.Count > 0) Close(key / 128, key % 128, Math.Max(tick, q.Peek().tick + (long)ppq / 4));
 
-        if (!splitChannels || byChannel.Count <= 1)
+        var channels = new SortedSet<int>(byChannel.Keys);
+        foreach (int ch in controllersByChannel.Keys) channels.Add(ch);
+        if (channels.Count == 0) yield break;
+
+        MidiFilePart BuildPart(string partName, IEnumerable<int> channelIds)
         {
-            var part = new MidiFilePart { Name = name, IsDrums = byChannel.Count == 1 && byChannel.ContainsKey(9) };
-            foreach (var list in byChannel.Values) part.Notes.AddRange(list);
-            if (part.Notes.Count == 0) yield break;
+            var ids = channelIds.ToArray();
+            var part = new MidiFilePart { Name = partName, IsDrums = ids.Length == 1 && ids[0] == 9, Channel = ids.Length == 1 ? ids[0] : -1 };
+            foreach (int ch in ids)
+            {
+                if (byChannel.TryGetValue(ch, out var notes)) part.Notes.AddRange(notes);
+                if (!controllersByChannel.TryGetValue(ch, out var map)) continue;
+                foreach (var (ctl, points) in map)
+                {
+                    if (!part.Controllers.TryGetValue(ctl, out var combined))
+                        part.Controllers[ctl] = combined = new List<AutomationPoint>();
+                    combined.AddRange(points);
+                }
+            }
             part.Notes.Sort(static (x, y) => x.StartBeat.CompareTo(y.StartBeat));
+            foreach (int ctl in part.Controllers.Keys.ToArray())
+                part.Controllers[ctl] = part.Controllers[ctl].OrderBy(p => p.Beat).ToList();
+            return part;
+        }
+
+        if (!splitChannels || channels.Count <= 1)
+        {
+            var part = BuildPart(name, channels);
+            if (part.Notes.Count == 0 && part.Controllers.Count == 0) yield break;
             yield return part;
             yield break;
         }
-        foreach (var (ch, list) in byChannel)
+        foreach (int ch in channels)
         {
-            var part = new MidiFilePart { Name = ch == 9 ? "Drums" : $"Ch {ch + 1}", IsDrums = ch == 9 };
-            part.Notes.AddRange(list);
-            part.Notes.Sort(static (x, y) => x.StartBeat.CompareTo(y.StartBeat));
-            yield return part;
+            var part = BuildPart(ch == 9 ? "Drums" : $"Ch {ch + 1}", new[] { ch });
+            if (part.Notes.Count > 0 || part.Controllers.Count > 0) yield return part;
         }
     }
 

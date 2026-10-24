@@ -259,6 +259,7 @@ public partial class MainWindow
             _vm.Transport.LoopOn = result.Transport.LoopOn;
             _vm.Transport.TimeSigNumerator = result.Transport.TimeSigNumerator;
             _vm.Transport.TimeSigDenominator = result.Transport.TimeSigDenominator;
+            _vm.Transport.SetTempoPoints(result.Transport.TempoPoints);
             _vm.Transport.KeyCode = result.Transport.Key;
             _panLawLegacy = result.Transport.PanLawLegacy;
             _projectPath = dir;

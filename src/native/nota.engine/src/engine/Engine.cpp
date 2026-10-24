@@ -14,6 +14,15 @@
 
 namespace nota {
 
+namespace {
+bool sameTempoMapSnapshot(const std::vector<TempoPoint>& a, const std::vector<TempoPoint>& b) {
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (a[i].beat != b[i].beat || a[i].bpm != b[i].bpm || a[i].curve != b[i].curve) return false;
+    return true;
+}
+}
+
 Engine::Engine()
     : backend_(createAudioBackend()), config_(loadAudioConfig()), // M7-1: persisted device/rate/buffer
       midiConfig_(loadMidiConfig()),                              // M7-2: persisted MIDI input selection
@@ -489,19 +498,91 @@ void Engine::backToArrangement() {
     arrangementActive_.store(true, std::memory_order_relaxed);
 }
 void Engine::setBpm(double bpm) {
+    if (!std::isfinite(bpm) || bpm < 1.0 || bpm > 999.0) return;
     Command c;
     c.type = CommandType::SetBpm;
     c.d0 = bpm;
-    commands_.push(c);
-    // Warped clips play from an offline cache stretched to the tempo,
-    // so a tempo change must rebuild them. Do it on this (authoring) thread with the new
-    // spb computed directly — the SetBpm command above only reaches the transport on the
-    // audio thread later, so reading transport_.samplesPerBeat() here would be stale.
+    if (!commands_.push(c)) return;
+    if (authoring_) {
+        auto g = std::make_shared<Graph>();
+        inheritGraphLevel(*g, *authoring_);
+        g->tracks.reserve(authoring_->tracks.size());
+        for (auto& t : authoring_->tracks) g->tracks.push_back(t);
+        g->tempoMap = {TempoPoint{0.0, bpm, 0.0, static_cast<int32_t>(TempoCurve::Linear)}};
+        if (!sameTempoMapSnapshot(authoring_->tempoMap, g->tempoMap)) {
+            publishRaw(std::move(g));
+            redoStack_.clear();
+        }
+    }
     const double devSR = transport_.sampleRate();
-    if (bpm > 0.0 && devSR > 0.0) reconfigureAllWarpStreams(devSR * 60.0 / bpm, devSR);
+    if (devSR > 0.0) reconfigureAllWarpStreams(devSR * 60.0 / bpm, devSR);
+}
+bool Engine::submitTempoMap(const TempoPoint* points, int32_t count) {
+    if (!points || count < 1 || count > Transport::kMaxTempoPoints) return false;
+    int32_t slotIndex = -1;
+    for (int32_t i = 0; i < kTempoMapSubmissionSlots; ++i) {
+        bool expected = false;
+        if (tempoMapSubmissions_[static_cast<size_t>(i)].occupied.compare_exchange_strong(
+                expected, true, std::memory_order_acq_rel)) {
+            slotIndex = i;
+            break;
+        }
+    }
+    if (slotIndex < 0) return false;
+    auto& submission = tempoMapSubmissions_[static_cast<size_t>(slotIndex)];
+    submission.count = count;
+    for (int32_t i = 0; i < count; ++i)
+        submission.points[static_cast<size_t>(i)] = points[i];
+    if (!Transport::prepareTempoMap(submission.points.data(), count)) {
+        submission.occupied.store(false, std::memory_order_release);
+        return false;
+    }
+    const double initialBpm = submission.points[0].bpm;
+    Command c;
+    c.type = CommandType::SetTempoMap;
+    c.i0 = slotIndex;
+    if (!commands_.push(c)) {
+        submission.occupied.store(false, std::memory_order_release);
+        return false;
+    }
+    const double devSR = transport_.sampleRate();
+    if (devSR > 0.0) reconfigureAllWarpStreams(devSR * 60.0 / initialBpm, devSR);
+    return true;
+}
+bool Engine::setTempoMap(const double* beats, const double* bpms, const int32_t* curves, int32_t count) {
+    if (!authoring_ || !beats || !bpms || !curves || count < 1 || count > Transport::kMaxTempoPoints) return false;
+    std::vector<TempoPoint> next;
+    next.reserve(static_cast<size_t>(count));
+    for (int32_t i = 0; i < count; ++i)
+        next.push_back(TempoPoint{beats[i], bpms[i], 0.0, curves[i]});
+    if (!Transport::prepareTempoMap(next.data(), count)) return false;
+    if (sameTempoMapSnapshot(authoring_->tempoMap, next)) return true;
+    if (!submitTempoMap(next.data(), count)) return false;
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks) g->tracks.push_back(t);
+    g->tempoMap = std::move(next);
+    publish(std::move(g));
+    return true;
+}
+int32_t Engine::getTempoMap(double* beats, double* bpms, int32_t* curves, int32_t capacity) const {
+    if (!authoring_) return 0;
+    const auto& points = authoring_->tempoMap;
+    const int32_t count = static_cast<int32_t>(points.size());
+    if (capacity > 0 && beats && bpms && curves) {
+        const int32_t n = std::min(capacity, count);
+        for (int32_t i = 0; i < n; ++i) {
+            const auto& point = points[static_cast<size_t>(i)];
+            beats[i] = point.beat;
+            bpms[i] = point.bpm;
+            curves[i] = point.curve;
+        }
+    }
+    return count;
 }
 double Engine::bpm() const {
-    return transport_.bpm();
+    return transport_.uiBpm();
 }
 void Engine::setTimeSignature(int num, int denom) {
     Command c;
@@ -670,6 +751,12 @@ bool Engine::undo() {
     while (!undoStack_.empty()) {
         UndoEntry e = std::move(undoStack_.back());
         undoStack_.pop_back();
+        bool mapChanged = e.graph && authoring_
+            && !sameTempoMapSnapshot(e.graph->tempoMap, authoring_->tempoMap);
+        if (mapChanged && !submitTempoMap(e.graph->tempoMap.data(), static_cast<int32_t>(e.graph->tempoMap.size()))) {
+            undoStack_.push_back(std::move(e));
+            return false;
+        }
         bool applied = false;
         redoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
         // Restore without a new checkpoint; the restored chains may add or drop a latent
@@ -689,6 +776,12 @@ bool Engine::redo() {
     while (!redoStack_.empty()) {
         UndoEntry e = std::move(redoStack_.back());
         redoStack_.pop_back();
+        bool mapChanged = e.graph && authoring_
+            && !sameTempoMapSnapshot(e.graph->tempoMap, authoring_->tempoMap);
+        if (mapChanged && !submitTempoMap(e.graph->tempoMap.data(), static_cast<int32_t>(e.graph->tempoMap.size()))) {
+            redoStack_.push_back(std::move(e));
+            return false;
+        }
         bool applied = false;
         undoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
         if (e.graph) {

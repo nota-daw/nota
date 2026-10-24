@@ -27,7 +27,7 @@ public partial class MainWindow
         => new((double)_vm!.Transport.Bpm, _vm.Transport.MasterVolume,
                _vm.Transport.MetronomeOn, _vm.Transport.LoopOn,
                _vm.Transport.TimeSigNumerator, _vm.Transport.TimeSigDenominator, _vm.Transport.KeyCode,
-               _panLawLegacy);
+               _panLawLegacy, _vm.Transport.TempoPoints);
 
     private void OnAutosaveTick()
     {

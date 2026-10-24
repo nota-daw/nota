@@ -26,7 +26,10 @@ public sealed class ProjectStore : IProjectStore
             doc.Transport.MetronomeOn, doc.Transport.LoopOn,
             doc.Transport.TimeSigNumerator, doc.Transport.TimeSigDenominator,
             Nota.Application.Samples.MusicalKey.Parse(doc.Transport.Key)?.Code ?? -1,
-            PanLawLegacy: doc.Mixer?.PanLawLegacy ?? true);
+            PanLawLegacy: doc.Mixer?.PanLawLegacy ?? true,
+            TempoPoints: doc.Transport.TempoPoints?.Select(p => new TempoPoint(p.Beat, p.Bpm,
+                Enum.IsDefined(typeof(TempoInterpolation), p.Interpolation)
+                    ? (TempoInterpolation)p.Interpolation : TempoInterpolation.Linear)).ToArray());
         return new ProjectLoadResult(transport, warnings) { MissingPlugins = MissingPlugins(doc) };
     }
 

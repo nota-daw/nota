@@ -209,6 +209,16 @@ public partial class MainWindow
         _vm.Settings.Save();
         _vm.StatusText = Timeline.ShowSections ? "Sections lane shown" : "Sections lane hidden";
     }
+
+    private void OnMenuToggleTempoTrack(object? sender, EventArgs e)
+    {
+        Timeline.ShowTempoTrack = !Timeline.ShowTempoTrack;
+        string header = Timeline.ShowTempoTrack ? "Hide tempo track" : "Show tempo track";
+        if (MenuItemFor("view.toggleTempoTrack") is { } item) item.Header = header;
+        if (MenuItemFor("transport.toggleTempoTrack") is { } transportItem) transportItem.Header = header;
+        if (_vm is not null)
+            _vm.StatusText = Timeline.ShowTempoTrack ? "Tempo track shown" : "Tempo track hidden";
+    }
     // Follow: mirrors the transport bar's Follow button — one state, two surfaces.
     private void OnMenuToggleFollow(object? sender, EventArgs e)
         => SetFollowPlayhead(!Timeline.FollowPlayhead);

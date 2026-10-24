@@ -487,6 +487,8 @@ NOTA_API double     nota_transport_count_in_beats(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_loop_record_mode(NotaEngine* engine, int32_t mode);
 NOTA_API int32_t    nota_transport_loop_record_mode(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_bpm(NotaEngine* engine, double bpm);
+NOTA_API NotaResult nota_transport_set_tempo_map(NotaEngine* engine, const double* beats, const double* bpms, const int32_t* curves, int32_t count);
+NOTA_API int32_t    nota_transport_get_tempo_map(const NotaEngine* engine, double* beats, double* bpms, int32_t* curves, int32_t capacity);
 NOTA_API double     nota_transport_bpm(const NotaEngine* engine);
 NOTA_API NotaResult nota_transport_set_time_signature(NotaEngine* engine, int32_t num, int32_t denom);
 NOTA_API NotaResult nota_transport_set_loop(NotaEngine* engine, int32_t enabled,

@@ -69,6 +69,10 @@ public sealed class ProjectService
                 LoopOn = transport.LoopOn,
                 TimeSigNumerator = transport.TimeSigNumerator,
                 TimeSigDenominator = transport.TimeSigDenominator,
+                TempoPoints = transport.TempoPoints?.Select(p => new TempoPointDto
+                {
+                    Beat = p.Beat, Bpm = p.Bpm, Interpolation = (int)p.Interpolation
+                }).ToList(),
                 Key = Nota.Application.Samples.MusicalKey.FromCode(transport.Key)?.Short,
             },
             Mixer = new MixerDto

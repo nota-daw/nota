@@ -98,6 +98,10 @@ public sealed class Settings
     /// <summary>The piano roll's Quantize (and clip tools') step — its own value, so the
     /// result never depends on the zoom. 1/16 by default.</summary>
     public Nota.Application.Editing.GridStep QuantizeStep { get; set; } = Nota.Application.Editing.GridStep.Of(1, false);
+    /// <summary>Reverse Shift+wheel velocity editing in the Piano Roll.</summary>
+    public bool PianoRollVelocityWheelReversed { get; set; }
+    /// <summary>Shift+wheel velocity multiplier, from 0 (disabled) to 2×.</summary>
+    public double PianoRollVelocityWheelMultiplier { get; set; } = 1.0;
 
     // --- command palette (⌘⇧P) ----------------------------------------------
     /// <summary>How often and when each palette / browser item was last applied, by palette

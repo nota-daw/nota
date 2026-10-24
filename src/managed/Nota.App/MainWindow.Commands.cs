@@ -43,6 +43,8 @@ public partial class MainWindow
         B("file.saveVersion", () => OnMenuSaveVersion(this, e));
         B("file.import", () => OnMenuImport(this, e));
         B("file.export", () => OnMenuExport(this, e));
+        B("file.importMidi", () => _ = ImportMidiFromPickerAsync());
+        B("file.exportMidi", () => _ = ExportMidiAsync());
 
         // ---- Edit
         B("edit.undo", () => OnMenuUndo(this, e), _ => Need(_vm?.Engine.CanUndo == true, "Nothing to undo"));
@@ -76,6 +78,7 @@ public partial class MainWindow
         B("view.popOutDetail", () => OnToggleDetailWindow(this, e));
         B("view.toggleOverview", () => OnMenuToggleOverview(this, e));
         B("view.toggleSections", () => OnMenuToggleSections(this, e));
+        B("view.toggleTempoTrack", () => OnMenuToggleTempoTrack(this, e));
         B("view.follow", () => OnMenuToggleFollow(this, e));
         B("view.showPlayhead", ShowPlayhead);
         B("view.clipNames", () => OnMenuCycleClipNames(this, e));
@@ -98,6 +101,7 @@ public partial class MainWindow
         B("transport.metronome", () => OnMenuMetronome(this, e));
         B("transport.loopRecordMode", () => { if (_vm is not null) _vm.Transport.LoopRecordReplace = !_vm.Transport.LoopRecordReplace; });
         B("transport.tapTempo", TapTempoBeat);
+        B("transport.toggleTempoTrack", () => OnMenuToggleTempoTrack(this, e));
 
         // ---- Track
         B("track.newInstrument", () => AddTrack(NewTrackKind.Instrument));

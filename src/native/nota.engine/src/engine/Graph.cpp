@@ -12,6 +12,7 @@ void inheritGraphLevel(Graph& dst, const Graph& src) {
     dst.masterTrack = src.masterTrack;
     dst.panLaw = src.panLaw;
     dst.sections = src.sections;
+    dst.tempoMap = src.tempoMap;
 }
 
 } // namespace nota

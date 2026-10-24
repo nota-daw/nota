@@ -9,14 +9,16 @@
 
 using System;
 using System.Collections.Generic;
+using Nota.Domain;
 
 namespace Nota.Application;
 
 public sealed class TapTempo
 {
-    public const double MinBpm = 20, MaxBpm = 300;
+    public const double MinBpm = Bpm.Min, MaxBpm = Bpm.Max;
     private const int MaxGaps = 8;
-    private const double ResetMs = 60000.0 / MinBpm;   // 3 s: a longer pause is a new series
+    private const double ResetTempoBpm = 20.0;
+    private const double ResetMs = 60000.0 / ResetTempoBpm;   // 3 s: a longer pause is a new series
     private const double BounceMs = 50;
     private const double Deviation = 0.25;              // ±25 % off the mean = a new tempo
 

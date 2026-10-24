@@ -177,9 +177,17 @@ NotaResult nota_transport_stop(NotaEngine* e) {
 }
 NotaResult nota_transport_set_bpm(NotaEngine* e, double bpm) {
     if (!e) return NOTA_ERR_INVALID_ARG;
-    if (!(bpm > 0.0) || bpm > 999.0) return NOTA_ERR_INVALID_ARG;
+    if (!std::isfinite(bpm) || bpm < 1.0 || bpm > 999.0) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setBpm(bpm);
     return NOTA_OK;
+}
+NotaResult nota_transport_set_tempo_map(NotaEngine* e, const double* beats, const double* bpms, const int32_t* curves, int32_t count) {
+    if (!e || !beats || !bpms || !curves || count < 1) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setTempoMap(beats, bpms, curves, count) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_transport_get_tempo_map(const NotaEngine* e, double* beats, double* bpms, int32_t* curves, int32_t capacity) {
+    if (!e) return 0;
+    return CENG(e)->getTempoMap(beats, bpms, curves, capacity);
 }
 double nota_transport_bpm(const NotaEngine* e) {
     return e ? CENG(e)->bpm() : 120.0;

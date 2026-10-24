@@ -13,6 +13,7 @@
 #pragma once
 
 #include "Track.h"
+#include "Transport.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -53,6 +54,7 @@ struct Graph {
     // Arrangement sections (specs/016), sorted by start. In the snapshot so undo/redo
     // restore them and the project saves them.
     std::vector<Section> sections;
+    std::vector<TempoPoint> tempoMap{TempoPoint{}};
 };
 
 // Graph-level fields (everything except `tracks`). A fresh graph built from scratch must

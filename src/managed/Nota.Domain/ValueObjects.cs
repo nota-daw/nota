@@ -10,7 +10,7 @@ namespace Nota.Domain;
 /// <summary>Tempo in beats per minute. Clamped to a musically sane range.</summary>
 public readonly record struct Bpm
 {
-    public const double Min = 20.0;
+    public const double Min = 1.0;
     public const double Max = 999.0;
 
     public double Value { get; }

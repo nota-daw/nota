@@ -6,6 +6,7 @@
 using System.ComponentModel;
 using ModelContextProtocol.Server;
 using Nota.Application;
+using Nota.Domain;
 
 namespace Nota.Mcp.Tools;
 
@@ -30,7 +31,7 @@ public sealed class TransportTools(IAudioEngine engine, IEngineDispatch dispatch
     public Task Seek([Description("Target position in beats")] double beat) => Mutate(() => E.Seek(Math.Max(0, beat)));
 
     [McpServerTool(Name = "set_tempo"), Description("Set the project tempo in beats per minute.")]
-    public Task SetTempo([Description("Tempo in BPM (e.g. 120)")] double bpm) => Mutate(() => E.SetBpm(Math.Clamp(bpm, 20, 300)));
+    public Task SetTempo([Description("Tempo in BPM (e.g. 120)")] double bpm) => Mutate(() => E.SetBpm(Math.Clamp(bpm, Bpm.Min, Bpm.Max)));
 
     [McpServerTool(Name = "set_time_signature"), Description("Set the time signature, e.g. numerator=4 denominator=4.")]
     public Task SetTimeSignature([Description("Beats per bar")] int numerator, [Description("Beat unit (1,2,4,8,16)")] int denominator)

@@ -31,6 +31,8 @@ static float MonoRms(float[] buf)
 
 Console.WriteLine($"engine v{NotaEngine.Version}");
 
+MidiTempoSmokeTests.Run(Check);
+
 // --- architecture boundary checks (Phase 0.7) --------------------------------
 // Enforce the DDD dependency direction at test time: the compiler drops unused
 // references, so a forbidden name appearing in an assembly's referenced set means

@@ -29,14 +29,28 @@ public sealed partial class PianoRollView
     /// <summary>Stores an edited expression curve and returns its id (0 for none). Set by the
     /// host; without it the MPE lanes are view-only.</summary>
     public Func<NotaExprPoint[], int>? CreateExpression { get; set; }
+    public Func<(bool Reverse, double Multiplier)>? VelocityWheelSettings { get; set; }
+    public bool FollowPlayhead { get; set; }
 
-    internal enum LaneMode { Velocity, Bend, Pressure, Slide }
+    internal enum LaneMode { Velocity, Bend, Pressure, Slide, Controller }
 
-    private const double ExprH = 112;   // the MPE lanes are taller: a curve needs the room
+    private const double ExprH = 112;
     private readonly ExpressionLane _expr;
+    private readonly ControllerLane _controllerLane;
     private readonly LaneTabs _laneTabs;
+    private readonly LaneResizeHandle _laneResize;
+    private double _laneHeight = VelH;
+    private double _laneRestoreHeight = VelH;
+    private bool _laneCollapsed;
+    private bool _laneUserSized;
     private readonly Grid _laneRow;
     private LaneMode _laneMode;
+
+    public Func<int[]>? GetMidiControllerIds { get; set; }
+    public Func<int, AutomationPoint[]>? GetMidiControllerPoints { get; set; }
+    public Action<int, AutomationPoint[]>? SetMidiControllerPoints { get; set; }
+    public int SelectedMidiController { get; private set; } = MidiController.ModWheel;
+    public bool ParameterSnapOn { get; private set; } = true;
 
     // The expression curve at rest is neutral viz ink; only the point under the pointer is the accent.
     private static readonly IPen CurvePen = new Pen(NotaPalette.VizInk, 1.5, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
@@ -53,10 +67,92 @@ public sealed partial class PianoRollView
     {
         if (m == _laneMode) return;
         _laneMode = m;
-        _velHost.Child = m == LaneMode.Velocity ? _vel : _expr;
-        _laneRow.Height = m == LaneMode.Velocity ? VelH : ExprH;
+        _velHost.Child = m switch
+        {
+            LaneMode.Velocity => _vel,
+            LaneMode.Controller => _controllerLane,
+            _ => _expr,
+        };
+        if (!_laneUserSized && !_laneCollapsed)
+        {
+            _laneHeight = m == LaneMode.Velocity ? VelH : ExprH;
+            _laneRestoreHeight = _laneHeight;
+            _laneRow.Height = _laneHeight;
+        }
         Invalidate();
         _laneTabs.InvalidateVisual();
+        _controllerLane.InvalidateVisual();
+    }
+
+    internal void SelectMidiController(int ctl)
+    {
+        if (MidiController.IsReserved(ctl)) return;
+        SelectedMidiController = ctl;
+        SetLaneMode(LaneMode.Controller);
+        _controllerLane.InvalidateVisual();
+        _laneTabs.InvalidateVisual();
+    }
+
+    private void ShowControllerPicker(Control anchor)
+    {
+        var flyout = new MenuFlyout();
+        var preferred = GetMidiControllerIds?.Invoke() ?? Array.Empty<int>();
+        foreach (int ctl in preferred.Concat(Enumerable.Range(0, 128)).Distinct())
+        {
+            bool reserved = MidiController.IsReserved(ctl);
+            var item = new MenuItem
+            {
+                Header = $"CC {ctl}: {MidiController.Name(ctl)}" + (reserved ? " (reserved)" : ""),
+                ToggleType = MenuItemToggleType.Radio,
+                IsChecked = ctl == SelectedMidiController,
+                IsEnabled = !reserved,
+            };
+            int selected = ctl;
+            item.Click += (_, _) => SelectMidiController(selected);
+            flyout.Items.Add(item);
+        }
+        flyout.ShowAt(anchor, showAtPointer: true);
+    }
+
+    private void SetLaneHeight(double requested)
+    {
+        _laneUserSized = true;
+        if (requested < 24)
+        {
+            if (!_laneCollapsed) _laneRestoreHeight = _laneHeight;
+            _laneCollapsed = true;
+            _laneRow.Height = 0;
+        }
+        else
+        {
+            _laneCollapsed = false;
+            _laneHeight = Math.Clamp(requested, 36, 280);
+            _laneRestoreHeight = _laneHeight;
+            _laneRow.Height = _laneHeight;
+        }
+        _laneResize.InvalidateVisual();
+        InvalidateMeasure();
+        Invalidate();
+    }
+
+    private void ToggleLaneCollapsed()
+    {
+        if (_laneCollapsed)
+        {
+            _laneCollapsed = false;
+            _laneHeight = Math.Clamp(_laneRestoreHeight, 36, 280);
+            _laneRow.Height = _laneHeight;
+        }
+        else
+        {
+            _laneRestoreHeight = _laneHeight;
+            _laneCollapsed = true;
+            _laneRow.Height = 0;
+        }
+        _laneUserSized = true;
+        _laneResize.InvalidateVisual();
+        InvalidateMeasure();
+        Invalidate();
     }
 
     private static NoteExpressionDim DimOf(LaneMode m) => m switch
@@ -136,38 +232,63 @@ public sealed partial class PianoRollView
     private sealed class LaneTabs : Control
     {
         private static readonly (LaneMode Mode, string Label)[] Tabs =
-            { (LaneMode.Velocity, "Vel"), (LaneMode.Bend, "Bend"), (LaneMode.Pressure, "Pres"), (LaneMode.Slide, "Slide") };
-        private const double Top = 6, RowStep = 15;
+            { (LaneMode.Velocity, "Vel"), (LaneMode.Bend, "Bend"), (LaneMode.Pressure, "Pres"), (LaneMode.Slide, "Slide"), (LaneMode.Controller, "CC") };
         private readonly PianoRollView _o;
         private int _hover = -1;
-        public LaneTabs(PianoRollView o) { _o = o; Cursor = new Cursor(StandardCursorType.Hand); }
+        public LaneTabs(PianoRollView o) { _o = o; Cursor = new Cursor(StandardCursorType.Hand); ClipToBounds = true; }
 
         public override void Render(DrawingContext ctx)
         {
+            if (Bounds.Height < 12) return;
             ctx.FillRectangle(Brushes.Transparent, new Rect(Bounds.Size));
+            double rowStep = Math.Max(12, Math.Min(22, (Bounds.Height - 16) / Tabs.Length));
+            double top = Math.Max(4, (Bounds.Height - Tabs.Length * rowStep) / 2);
+
             for (int i = 0; i < Tabs.Length; i++)
             {
                 bool on = Tabs[i].Mode == _o._laneMode;
                 var ink = on ? TabActive : i == _hover ? KeyLabelHot : LabelText;
-                var ft = new FormattedText(Tabs[i].Label, NotaNum.Culture, FlowDirection.LeftToRight,
+                string label = Tabs[i].Mode == LaneMode.Controller ? $"CC {_o.SelectedMidiController}" : Tabs[i].Label;
+                var ft = new FormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight,
                     new Typeface(NotaFonts.Mono.FontFamily, FontStyle.Normal, FontWeight.Bold), 9, ink);
-                double y = Top + i * RowStep;
-                ctx.DrawText(ft, new Point((Bounds.Width - ft.Width) / 2, y));
+                double y = top + i * rowStep;
+                double textX = (Bounds.Width - ft.Width) / 2;
+                if (Tabs[i].Mode == LaneMode.Velocity) textX = Math.Min(textX, Bounds.Width - 19 - ft.Width);
+                ctx.DrawText(ft, new Point(Math.Max(1, textX), y));
                 if (on) ctx.FillRectangle(TabActive, new Rect(0, y + 1, 2, ft.Height - 2));
             }
+            var snapRect = new Rect(Bounds.Width - 14, 5, 10, 10);
+            ctx.FillRectangle(_o.ParameterSnapOn ? TabActive : NotaPalette.BorderDefault, snapRect, 2f);
+            var snapText = new FormattedText("S", NotaNum.Culture, FlowDirection.LeftToRight, Mono, 7,
+                _o.ParameterSnapOn ? NotaPalette.TextOnAccent : LabelText);
+            ctx.DrawText(snapText, new Point(snapRect.X + 2.3, snapRect.Y - 0.5));
         }
 
         private int RowAt(Point p)
         {
-            int i = (int)Math.Floor((p.Y - Top + 2) / RowStep);
+            if (Bounds.Height < 12) return -1;
+            double rowStep = Math.Max(12, Math.Min(22, (Bounds.Height - 16) / Tabs.Length));
+            double top = Math.Max(4, (Bounds.Height - Tabs.Length * rowStep) / 2);
+            int i = (int)Math.Floor((p.Y - top + 2) / rowStep);
             return i >= 0 && i < Tabs.Length ? i : -1;
         }
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
-            int i = RowAt(e.GetPosition(this));
-            if (i < 0 || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            var point = e.GetPosition(this);
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            if (point.Y <= 18 && point.X >= Bounds.Width - 17)
+            {
+                _o.ParameterSnapOn = !_o.ParameterSnapOn;
+                InvalidateVisual();
+                _o._controllerLane.InvalidateVisual();
+                e.Handled = true;
+                return;
+            }
+            int i = RowAt(point);
+            if (i < 0) return;
             _o.SetLaneMode(Tabs[i].Mode);
+            if (Tabs[i].Mode == LaneMode.Controller) _o.ShowControllerPicker(this);
             e.Handled = true;
         }
 

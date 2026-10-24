@@ -152,6 +152,29 @@ public sealed partial class PianoRollView : UserControl
     private const double MinRowH = 6, DefaultRowH = 12, MaxRowH = 36;
     private double _rowH = DefaultRowH;
     internal double RowH => _rowH;
+    private double EffectiveMinRowH => Math.Max(MinRowH, _bodyScroll?.Viewport.Height > 0 ? _bodyScroll.Viewport.Height / (MaxPitch - MinPitch + 1) : MinRowH);
+
+    // The available body height excludes the ruler and current event-lane height. Use it as
+    // the lower zoom limit so the 88-key grid always fills the available vertical viewport.
+    internal void EnsureNoEmptySpace()
+    {
+        if (_bodyScroll is null || _bodyScroll.Viewport.Height <= 0) return;
+        double minH = EffectiveMinRowH;
+        if (_rowH < minH)
+        {
+            _rowH = minH;
+            _keys.Height = RangeH;
+            _gridControl.Height = RangeH;
+        }
+        double maxY = Math.Max(0, RangeH - _bodyScroll.Viewport.Height);
+        if (_bodyScroll.Offset.Y > maxY)
+        {
+            _restoringView = true;
+            _bodyScroll.Offset = new Vector(_bodyScroll.Offset.X, maxY);
+            _restoringView = false;
+        }
+        Invalidate();
+    }
 
     // The notes on screen, in editor beats (specs/029): beats from the open clip set's origin —
     // the clip's own beats when one clip is open. _owner[i] is note i's clip (its ClipSet slot);
@@ -384,6 +407,8 @@ public sealed partial class PianoRollView : UserControl
         _gridControl = new NoteGrid(this) { Height = RangeH, ClipToBounds = true };
         _vel = new VelocityLane(this) { ClipToBounds = true };
         _expr = new ExpressionLane(this) { ClipToBounds = true };
+        _controllerLane = new ControllerLane(this) { ClipToBounds = true };
+        _laneResize = new LaneResizeHandle(this) { ClipToBounds = true, Height = 5, VerticalAlignment = VerticalAlignment.Bottom };
         _velHost = new Border { BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0), Child = _vel };
 
         // Body: keys pinned left, grid fills; both scroll vertically together.
@@ -414,7 +439,7 @@ public sealed partial class PianoRollView : UserControl
         stripRow.Children.Add(_strip);
         stripRow.Bind(IsVisibleProperty, _strip.GetObservable(IsVisibleProperty));
 
-        var velRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = VelH };
+        var velRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = _laneHeight };
         _laneRow = velRow;
         // The lane's gutter picks what it edits: velocity, or a recorded-MPE dimension.
         var velLabelHost = new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 1, 0) };
@@ -443,6 +468,10 @@ public sealed partial class PianoRollView : UserControl
         root.Children.Add(_overlayHost);
         Avalonia.Controls.Grid.SetRow(velRow, 3);
         root.Children.Add(velRow);
+        // Keep the resize handle on the moving boundary between the note grid and event lane.
+        Avalonia.Controls.Grid.SetRow(_laneResize, 2);
+        Avalonia.Controls.Grid.SetColumnSpan(_laneResize, 2);
+        root.Children.Add(_laneResize);
         Avalonia.Controls.Grid.SetRow(scrollRow, 4);
         root.Children.Add(scrollRow);
         Content = root;
@@ -450,6 +479,10 @@ public sealed partial class PianoRollView : UserControl
         // Persist vertical scroll per clip; apply a pending restore once the body is laid out.
         _bodyScroll.ScrollChanged += (_, _) => { if (!_restoringView) SaveView(); };
         _bodyScroll.LayoutUpdated += (_, _) => ApplyPendingVOffset();
+        _bodyScroll.SizeChanged += (_, _) => EnsureNoEmptySpace();
+        LayoutUpdated += (_, _) => EnsureNoEmptySpace();
+        AttachedToVisualTree += (_, _) =>
+            Dispatcher.UIThread.Post(() => { EnsureNoEmptySpace(); Invalidate(); }, DispatcherPriority.Loaded);
 
         // Poll the pressed key(s) ~40 Hz while the editor is on screen.
         AttachedToVisualTree += (_, _) =>
@@ -511,7 +544,7 @@ public sealed partial class PianoRollView : UserControl
     internal void SetRowHeightAt(double h, double viewportY)
     {
         if (_gridControl.Dragging) return;
-        double h0 = _rowH, h1 = Math.Clamp(h, MinRowH, MaxRowH);
+        double h0 = _rowH, h1 = Math.Clamp(h, EffectiveMinRowH, MaxRowH);
         if (Math.Abs(h1 - h0) < 1e-9) return;
         double c = (_pendingVOffset ?? _bodyScroll.Offset.Y) + viewportY;
         _rowH = h1;
@@ -537,14 +570,14 @@ public sealed partial class PianoRollView : UserControl
     {
         if (_gridControl.Dragging) return;
         double vh = _bodyScroll.Viewport.Height;
-        double h = DefaultRowH;
+        double h = Math.Max(DefaultRowH, EffectiveMinRowH);
         if (_notes.Count > 0 && vh > 0)
         {
             int minP = int.MaxValue, maxP = int.MinValue;
             foreach (var n in _notes) { if (n.Pitch < minP) minP = n.Pitch; if (n.Pitch > maxP) maxP = n.Pitch; }
             h = vh / (maxP - minP + 1 + 2);
         }
-        _rowH = Math.Clamp(h, MinRowH, MaxRowH);
+        _rowH = Math.Clamp(h, EffectiveMinRowH, MaxRowH);
         _keys.Height = RangeH;
         _gridControl.Height = RangeH;
         _pendingVOffset = null; _pendingCenter = true;
@@ -711,7 +744,7 @@ public sealed partial class PianoRollView : UserControl
         // length horizontally and centre vertically on the clip's own notes at the default
         // row height. Row heights are per clip: zooming one never changes another.
         bool saved = s_view.TryGetValue(_clipKey, out var vs) && vs.HasV;
-        _rowH = saved ? Math.Clamp(vs.RowH, MinRowH, MaxRowH) : DefaultRowH;
+        _rowH = saved ? Math.Clamp(vs.RowH, EffectiveMinRowH, MaxRowH) : DefaultRowH;
         _keys.Height = RangeH;
         _gridControl.Height = RangeH;
         if (saved)
@@ -1094,16 +1127,35 @@ public sealed partial class PianoRollView : UserControl
         Changed?.Invoke();
     }
 
-    /// <summary>Live playback cursor in editor beats (clip-local for one clip); playing=false
-    /// or an out-of-range beat hides it. Cheap: repaints only the grid + ruler, not the whole roll.</summary>
+    /// <summary>Live playhead cursor in editor beats (clip-local for one clip); an out-of-range
+    /// beat hides it. Follow scrolling is gated separately by the transport's playing state.</summary>
     public void SetPlayhead(double clipLocalBeat, bool playing)
     {
-        double b = (playing && clipLocalBeat >= 0 && clipLocalBeat <= _lengthBeats) ? clipLocalBeat : -1;
+        double b = (clipLocalBeat >= 0 && clipLocalBeat <= _lengthBeats) ? clipLocalBeat : -1;
         bool wasHidden = _playheadBeat < 0;
-        if (Math.Abs(b - _playheadBeat) < 1e-6 && (b < 0) == wasHidden) return;
+        if (Math.Abs(b - _playheadBeat) < 1e-6 && (b < 0) == wasHidden)
+        {
+            FollowPlayheadIfNeeded(b, playing);
+            return;
+        }
         _playheadBeat = b;
+        FollowPlayheadIfNeeded(b, playing);
         _gridControl.InvalidateVisual();
         _ruler.InvalidateVisual();
+        _vel.InvalidateVisual();
+        _expr.InvalidateVisual();
+        _controllerLane.InvalidateVisual();
+    }
+
+    private void FollowPlayheadIfNeeded(double beat, bool playing)
+    {
+        if (!FollowPlayhead || !playing || beat < 0 || _gridControl.Bounds.Width <= 0) return;
+        EnsurePpb(_gridControl.Bounds.Width);
+        if (_pixelsPerBeat <= 0) return;
+        double visible = _gridControl.Bounds.Width / _pixelsPerBeat;
+        double targetScroll = Math.Clamp(beat - visible * 0.5, 0, MaxScrollBeats);
+        if (Math.Abs(targetScroll - _scrollBeats) > 1e-4)
+            SetScrollBeats(targetScroll);
     }
 
     /// <summary>Copies the selected notes to the shared clipboard, each with the clip it came
@@ -1230,6 +1282,20 @@ public sealed partial class PianoRollView : UserControl
             changed = true;
         }
         if (!changed) return false;
+        Invalidate(); CommitNotes(); Changed?.Invoke();
+        return true;
+    }
+
+    internal bool NudgeVelocityAt(int hoveredIndex, int steps127)
+    {
+        if (steps127 == 0) return false;
+        if (_selection.Count > 0) return NudgeVelocity(steps127);
+        if (hoveredIndex < 0 || hoveredIndex >= _notes.Count) return false;
+        var n = _notes[hoveredIndex];
+        float value = NoteOverwrite.VelocityBy(n.Velocity, steps127);
+        if (value == n.Velocity) return false;
+        n.Velocity = value;
+        _notes[hoveredIndex] = n;
         Invalidate(); CommitNotes(); Changed?.Invoke();
         return true;
     }
@@ -1449,7 +1515,7 @@ public sealed partial class PianoRollView : UserControl
         double b = Math.Clamp(free ? raw : SnapBeat(raw), 0, _lengthBeats);
         if (Math.Abs(b - _playheadBeat) < 1e-9) return;
         Seek?.Invoke(b);
-        SetPlayhead(b, true);   // immediate feedback; the transport tick keeps it in sync
+        SetPlayhead(b, false);  // immediate feedback without activating Follow while transport is stopped
     }
 
     private const string SlotSeekTip = "A Session slot plays on its own loop clock — launch it to play from the start";
@@ -2270,6 +2336,27 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
         {
             var mods = e.KeyModifiers;
+            if ((mods & KeyModifiers.Shift) != 0)
+            {
+                int direction = Math.Sign(e.Delta.Y);
+                if (direction != 0)
+                {
+                    var options = _o.VelocityWheelSettings?.Invoke() ?? (Reverse: false, Multiplier: 1.0);
+                    var grid = _o.SnapGridState;
+                    int baseAmount = (grid.SnapOn && _o.ParameterSnapOn)
+                        ? Math.Max(1, (int)Math.Round(127.0 * grid.Snap.Beats(_o._beatsPerBar) / _o._beatsPerBar))
+                        : 1;
+                    int delta = Nota.Application.Editing.PianoRollVelocityWheel.ComputeDelta(
+                        direction, baseAmount, options.Reverse, options.Multiplier);
+                    if (delta != 0)
+                    {
+                        int hit = HitTest(e.GetPosition(this), out _);
+                        _o.NudgeVelocityAt(hit, delta);
+                    }
+                }
+                e.Handled = true;
+                return;
+            }
             if (IsRowZoomWheel(mods))
             {
                 _o.ZoomRowsAt(WheelInput.ZoomFactor(e.Delta.Y, 1.2), e.GetPosition(_o._bodyScroll).Y);

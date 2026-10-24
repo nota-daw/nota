@@ -19,6 +19,7 @@ using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Application.Editing;
+using Nota.Domain;
 using Nota.Presentation;
 using System.Runtime.InteropServices;
 
@@ -195,6 +196,12 @@ public partial class MainWindow : Window
         _exporter = App.Services.GetRequiredService<IAudioExporter>();
 
         Timeline.Engine = vm.Engine;
+        Timeline.GetTempoPoints = () => vm.Transport.TempoPoints;
+        Timeline.SetTempoPoints = points => vm.Transport.SetTempoPoints(points);
+        Timeline.ShowTempoTrack = false;
+        if (MenuItemFor("view.toggleTempoTrack") is { } viewTempoItem) viewTempoItem.Header = "Show tempo track";
+        if (MenuItemFor("transport.toggleTempoTrack") is { } transportTempoItem) transportTempoItem.Header = "Show tempo track";
+        vm.Transport.TempoMapChanged += Timeline.RefreshTempoTrack;
         Timeline.GetMasterVolume = () => (float)vm.Transport.MasterVolume;   // Master row fader
         Timeline.SetMasterVolume = v => vm.Transport.MasterVolume = v;
         Timeline.FreezeRole = FreezeRoleOf;   // live-freeze (v1.1) header badges
@@ -244,8 +251,23 @@ public partial class MainWindow : Window
         // BPM as a drag/type field (HANDOFF §4).
         // Tempo reads with two decimals (almanac § Numbers); a drag lands on whole BPM
         // (half a BPM per pixel), the hundredths come from double-click-to-type.
-        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: 14, dragSnap: 1);
+        var bpmField = new DragNumber((double)vm.Transport.Bpm, Bpm.Min, Bpm.Max, 0.5, "0.00", fontSize: 14, dragSnap: 1);
         bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v, 2);
+
+        void ShowBpmContextMenu(Control target, ContextRequestedEventArgs e)
+        {
+            e.Handled = true;
+            var menu = new MenuFlyout();
+            var toggle = new MenuItem { Header = Timeline.ShowTempoTrack ? "Hide tempo track" : "Show tempo track" };
+            toggle.Click += (_, _) => OnMenuToggleTempoTrack(this, EventArgs.Empty);
+            menu.Items.Add(toggle);
+            menu.ShowAt(target);
+        }
+
+        bpmField.ContextRequested += (sender, e) => ShowBpmContextMenu(bpmField, e);
+        BpmHost.ContextRequested += (sender, e) => ShowBpmContextMenu(BpmHost, e);
+        if (BpmHost.Parent is Control bpmWell)
+            bpmWell.ContextRequested += (sender, e) => ShowBpmContextMenu(bpmWell, e);
         BpmHost.Children.Add(bpmField);
 
         // Time signature: numerator drags 1–16; denominator snaps to a power of two.
@@ -830,6 +852,7 @@ public partial class MainWindow : Window
     internal void SetFollowPlayhead(bool on)
     {
         Timeline.FollowPlayhead = on;
+        if (_editorRoll is not null) _editorRoll.FollowPlayhead = on;
         if (FollowBtn.IsChecked != on) FollowBtn.IsChecked = on;
         // The View-menu twin lives in the native menu, which has no generated field —
         // look it up once by the header declared in MainWindow.axaml.

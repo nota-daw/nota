@@ -28,6 +28,8 @@ public static class CommandCatalog
         C("file.saveVersion", "Save version with note…", "File", Shortcut.CmdAlt('S'), "snapshot history commit"),
         C("file.import", "Import audio…", "File", "", "add file wav"),
         C("file.export", "Export audio…", "File", Shortcut.CmdShift('E'), "render bounce mixdown stems"),
+        C("file.importMidi", "Import MIDI…", "File", "", "mid midi channels cc tempo automation"),
+        C("file.exportMidi", "Export MIDI…", "File", "", "mid format 0 1 stems controllers tempo"),
 
         // ---- Edit -------------------------------------------------------------------------
         C("edit.undo", "Undo", "Edit", Shortcut.Cmd('Z'), "back revert"),
@@ -59,6 +61,7 @@ public static class CommandCatalog
         C("view.popOutDetail", "Open devices in a window", "View", "", "detach float pop out"),
         C("view.toggleOverview", "Toggle overview", "View", "", "minimap", view: "Arrangement"),
         C("view.toggleSections", "Toggle sections", "View", "", "markers locators", view: "Arrangement"),
+        C("view.toggleTempoTrack", "Toggle tempo track", "View", Shortcut.Cmd('T'), "tempo map bpm timeline", view: "Arrangement"),
         C("view.follow", "Follow playhead", "View", "", "scroll"),
         C("view.showPlayhead", "Show playhead", "View", Shortcut.None('P'), "find locate scroll reveal cursor position", view: "Arrangement"),
         C("view.clipNames", "Cycle clip names", "View", "", "labels", view: "Arrangement"),
@@ -77,6 +80,7 @@ public static class CommandCatalog
         C("transport.metronome", "Metronome", "Transport", Shortcut.Cmd('M'), "click"),
         C("transport.loopRecordMode", "Loop record: overdub / replace", "Transport", Shortcut.CmdShift('R'), "overdub replace take pass loop record"),
         C("transport.tapTempo", "Tap tempo", "Transport", "", "bpm beat tap"),
+        C("transport.toggleTempoTrack", "Toggle tempo track", "Transport", Shortcut.Cmd('T'), "tempo map bpm timeline"),
 
         // ---- Track ------------------------------------------------------------------------
         C("track.newInstrument", "New MIDI track", "Track", "", "add instrument track"),

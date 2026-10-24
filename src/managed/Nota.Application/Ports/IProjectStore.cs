@@ -8,7 +8,8 @@ namespace Nota.Application;
 /// as a <see cref="Samples.MusicalKey.Code"/> (−1 = none set). <paramref name="PanLawLegacy"/> marks a
 /// project made before the pan law (specs/006); it only drives the Mixer's OLDER PROJECT badge.</summary>
 public readonly record struct TransportState(double Bpm, double MasterVolume, bool MetronomeOn, bool LoopOn,
-    int TimeSigNumerator = 4, int TimeSigDenominator = 4, int Key = -1, bool PanLawLegacy = false);
+    int TimeSigNumerator = 4, int TimeSigDenominator = 4, int Key = -1, bool PanLawLegacy = false,
+    IReadOnlyList<TempoPoint>? TempoPoints = null);
 
 /// <summary>Outcome of loading a project: the transport to restore + any items that
 /// were downgraded/skipped (referential-integrity warnings).</summary>

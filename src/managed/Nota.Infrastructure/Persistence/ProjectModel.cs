@@ -97,9 +97,19 @@ public sealed class TransportDto
     public bool LoopOn { get; set; }
     public int TimeSigNumerator { get; set; } = 4;
     public int TimeSigDenominator { get; set; } = 4;
+    public List<TempoPointDto>? TempoPoints { get; set; }
     /// <summary>The project key ("Am", "Eb"); null = none set. Loops dropped in can be
     /// transposed to it.</summary>
     public string? Key { get; set; }
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+public sealed class TempoPointDto
+{
+    public double Beat { get; set; }
+    public double Bpm { get; set; } = 120.0;
+    public int Interpolation { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

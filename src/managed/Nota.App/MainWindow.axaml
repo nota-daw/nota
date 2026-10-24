@@ -29,6 +29,8 @@
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Import audio…" app:Commands.Id="file.import"/>
             <NativeMenuItem Header="Export audio…" app:Commands.Id="file.export"/>
+            <NativeMenuItem Header="Import MIDI…" app:Commands.Id="file.importMidi"/>
+            <NativeMenuItem Header="Export MIDI…" app:Commands.Id="file.exportMidi"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Settings…" app:Commands.Id="prefs.open"/>
           </NativeMenu>
@@ -82,6 +84,7 @@
             <NativeMenuItem Header="Toggle detail panel" app:Commands.Id="view.toggleDetail"/>
             <NativeMenuItem Header="Toggle overview" app:Commands.Id="view.toggleOverview"/>
             <NativeMenuItem Header="Toggle sections" app:Commands.Id="view.toggleSections"/>
+            <NativeMenuItem Header="Show tempo track" app:Commands.Id="view.toggleTempoTrack"/>
             <NativeMenuItem Header="Toggle full screen" app:Commands.Id="view.fullscreen"/>
             <NativeMenuItemSeparator/>
             <!-- Header text is matched from code to keep this checkmark in step with the
@@ -102,6 +105,7 @@
             <NativeMenuItem Header="Loop" app:Commands.Id="transport.loop"/>
             <NativeMenuItem Header="Loop record: overdub / replace" app:Commands.Id="transport.loopRecordMode"/>
             <NativeMenuItem Header="Metronome" app:Commands.Id="transport.metronome"/>
+            <NativeMenuItem Header="Show tempo track" app:Commands.Id="transport.toggleTempoTrack"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>

@@ -9,6 +9,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Nota.Application;
+using Nota.Domain;
 
 namespace Nota.Presentation;
 
@@ -48,6 +49,147 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     [ObservableProperty] private string _positionUnitText = "bars";
 
     private bool _revertingRec;
+    private bool _syncingTempo;
+    private List<TempoPoint> _tempoPoints = [new TempoPoint(0.0, 120.0)];
+
+    public IReadOnlyList<TempoPoint> TempoPoints => _tempoPoints.ToArray();
+    public event Action? TempoMapChanged;
+
+    public void RefreshTempoPointsFromEngine() => SetTempoPoints(_engine.GetTempoMap(), applyToEngine: false);
+
+    public void SetTempoPoints(IReadOnlyList<TempoPoint>? points, bool applyToEngine = true)
+    {
+        var list = points is { Count: > 0 } ? points.ToList() : [new TempoPoint(0.0, (double)Bpm)];
+        var sanitized = new List<TempoPoint>(list.Count);
+        foreach (var p in list)
+        {
+            double beat = double.IsFinite(p.Beat) ? Math.Max(0.0, p.Beat) : 0.0;
+            double bpm = double.IsFinite(p.Bpm) ? Math.Clamp(p.Bpm, 1.0, 999.0) : 120.0;
+            var interpolation = (int)p.Interpolation is >= 0 and <= 3 ? p.Interpolation : TempoInterpolation.Linear;
+            sanitized.Add(new TempoPoint(beat, bpm, interpolation));
+        }
+        sanitized.Sort((a, b) => a.Beat.CompareTo(b.Beat));
+
+        var normalized = new List<TempoPoint>(sanitized.Count);
+        const double minBeatDelta = 1e-4;
+        foreach (var point in sanitized)
+        {
+            if (normalized.Count > 0 && point.Beat <= normalized[^1].Beat)
+            {
+                normalized[^1] = point;
+                continue;
+            }
+            normalized.Add(point);
+        }
+        for (int i = 1; i < normalized.Count; i++)
+            if (normalized[i].Beat - normalized[i - 1].Beat < minBeatDelta)
+                normalized[i] = normalized[i] with { Beat = normalized[i - 1].Beat + minBeatDelta };
+
+        if (normalized.Count == 0 || normalized[0].Beat > 1e-9)
+            normalized.Insert(0, new TempoPoint(0.0, normalized.Count > 0 ? normalized[0].Bpm : (double)Bpm));
+        else
+            normalized[0] = normalized[0] with { Beat = 0.0 };
+        if (normalized.Count > 4096) normalized = normalized.Take(4096).ToList();
+
+        _tempoPoints = normalized;
+        if (applyToEngine)
+        {
+            try { _engine.SetTempoMap(_tempoPoints); }
+            catch (NotaEngineException) { }
+            catch (ArgumentException) { }
+        }
+
+        _syncingTempo = true;
+        Bpm = (decimal)Math.Round(Math.Clamp(TempoAtBeat(_tempoPoints, Math.Max(0.0, _engine.PositionBeats)), 1.0, 999.0), 2);
+        _syncingTempo = false;
+        TempoMapChanged?.Invoke();
+    }
+
+    private static double TempoAtBeat(IReadOnlyList<TempoPoint> points, double beat)
+    {
+        int index = 0;
+        for (int i = 1; i < points.Count && points[i].Beat <= beat; i++) index = i;
+        if (index + 1 >= points.Count || beat <= points[index].Beat) return points[index].Bpm;
+        var a = points[index];
+        var b = points[index + 1];
+        double t = Math.Clamp((beat - a.Beat) / (b.Beat - a.Beat), 0, 1);
+        double shaped = a.Interpolation switch
+        {
+            TempoInterpolation.Square => 0,
+            TempoInterpolation.Triangle => t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t),
+            TempoInterpolation.Smooth => t * t * (3 - 2 * t),
+            _ => t,
+        };
+        return a.Bpm + (b.Bpm - a.Bpm) * shaped;
+    }
+
+    private static double SecondsAtBeat(IReadOnlyList<TempoPoint> points, double beat)
+    {
+        if (beat <= 0) return 0;
+        double seconds = 0;
+        for (int i = 0; i < points.Count; i++)
+        {
+            var a = points[i];
+            if (i + 1 >= points.Count) return seconds + (beat - a.Beat) * 60.0 / a.Bpm;
+            var b = points[i + 1];
+            double end = Math.Min(beat, b.Beat);
+            if (end > a.Beat) seconds += IntegrateTempoSegment(a, b, end - a.Beat);
+            if (beat <= b.Beat) return seconds;
+        }
+        return seconds;
+    }
+
+    private static double IntegrateTempoSegment(TempoPoint a, TempoPoint b, double beatOffset)
+    {
+        double len = b.Beat - a.Beat;
+        double tEnd = Math.Clamp(beatOffset / len, 0, 1);
+        if (a.Interpolation == TempoInterpolation.Square) return len * tEnd * 60.0 / a.Bpm;
+        if (a.Interpolation == TempoInterpolation.Linear)
+        {
+            double delta = b.Bpm - a.Bpm;
+            double endBpm = a.Bpm + delta * tEnd;
+            return Math.Abs(delta) < 1e-12 ? len * tEnd * 60.0 / a.Bpm : len * 60.0 * Math.Log(endBpm / a.Bpm) / delta;
+        }
+        const int n = 24;
+        double h = tEnd / n;
+        double sum = 1.0 / a.Bpm + 1.0 / TempoAtFraction(a, b, tEnd);
+        for (int i = 1; i < n; i++) sum += (i % 2 == 1 ? 4.0 : 2.0) / TempoAtFraction(a, b, h * i);
+        return len * 60.0 * h * sum / 3.0;
+    }
+
+    private static double TempoAtFraction(TempoPoint a, TempoPoint b, double t)
+    {
+        double shaped = a.Interpolation switch
+        {
+            TempoInterpolation.Triangle => t < 0.5 ? 2 * t * t : 1 - 2 * (1 - t) * (1 - t),
+            TempoInterpolation.Smooth => t * t * (3 - 2 * t),
+            _ => t,
+        };
+        return a.Bpm + (b.Bpm - a.Bpm) * shaped;
+    }
+
+    public void SetTempoPoint(int index, TempoPoint point)
+    {
+        if (index < 0 || index >= _tempoPoints.Count) throw new ArgumentOutOfRangeException(nameof(index));
+        var next = _tempoPoints.ToList();
+        next[index] = point;
+        SetTempoPoints(next);
+    }
+
+    public void AddTempoPoint(TempoPoint point)
+    {
+        var next = _tempoPoints.ToList();
+        next.Add(point);
+        SetTempoPoints(next);
+    }
+
+    public void RemoveTempoPoint(int index)
+    {
+        if (index <= 0 || index >= _tempoPoints.Count) return;
+        var next = _tempoPoints.ToList();
+        next.RemoveAt(index);
+        SetTempoPoints(next);
+    }
 
     /// <summary>Status text for the record button (armed? / input failed? / recording).</summary>
     public event Action<string>? Message;
@@ -75,10 +217,11 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
 
     partial void OnBpmChanged(decimal value)
     {
-        if (_followingBpm) return;   // the engine already has it (unrounded): don't echo it back
+        if (_followingBpm || _syncingTempo) return;
         _sentBpm = (double)value;
         _sentBpmAt = Environment.TickCount64;
         _engine.SetBpm((double)value);
+        RefreshTempoPointsFromEngine();
     }
     partial void OnTimeSigNumeratorChanged(int value) => _engine.SetTimeSignature(value, TimeSigDenominator);
     partial void OnTimeSigDenominatorChanged(int value) => _engine.SetTimeSignature(TimeSigNumerator, value);
@@ -253,6 +396,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         _followingBpm = true;
         Bpm = bpm;
         _followingBpm = false;
+        TempoMapChanged?.Invoke();
     }
 
     /// <summary>The count-in as negative bars counting up to the start: −2.1 … −2.4, −1.1 … −1.4.</summary>

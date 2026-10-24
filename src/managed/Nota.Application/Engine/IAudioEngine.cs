@@ -38,6 +38,8 @@ public interface IAudioEngine : IDisposable
     bool LoopRecordReplace { get; }
     void StopTransport();
     void SetBpm(double bpm);
+    void SetTempoMap(IReadOnlyList<TempoPoint> points);
+    IReadOnlyList<TempoPoint> GetTempoMap();
     double Bpm { get; }
     void SetTimeSignature(int num, int denom);
     void SetLoop(bool enabled, double startBeat, double endBeat);

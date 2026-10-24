@@ -295,6 +295,10 @@ class Engine {
     void backToArrangement();
     void setBpm(double bpm);
     double bpm() const;
+    Transport& transport() { return transport_; }
+    const Transport& transport() const { return transport_; }
+    bool setTempoMap(const double* beats, const double* bpms, const int32_t* curves, int32_t count);
+    int32_t getTempoMap(double* beats, double* bpms, int32_t* curves, int32_t capacity) const;
     void setTimeSignature(int num, int denom);
     void setLoop(bool enabled, double startBeat, double endBeat);
     void setMetronome(bool on);
@@ -1199,6 +1203,7 @@ class Engine {
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
+    bool submitTempoMap(const TempoPoint* points, int32_t count);
     static int32_t trackLatency(const Track& t);
     std::shared_ptr<Instrument> cloneInstrument(const Track& src) const; // duplicateTrack helper
     std::shared_ptr<Device> cloneDevice(const Device& src) const;
@@ -1224,6 +1229,13 @@ class Engine {
     MidiConfig midiConfig_; // enabled MIDI inputs (M7-2)
     std::unique_ptr<MidiInput> midiInput_;
     std::unique_ptr<GamepadInput> gamepadInput_; // game controller note input
+    static constexpr int32_t kTempoMapSubmissionSlots = 4;
+    struct TempoMapSubmission {
+        std::atomic<bool> occupied{false};
+        int32_t count = 0;
+        std::array<TempoPoint, Transport::kMaxTempoPoints> points{};
+    };
+    std::array<TempoMapSubmission, kTempoMapSubmissionSlots> tempoMapSubmissions_{};
     CommandQueue commands_;
     MidiQueue liveMidi_;
     std::mutex liveMidiMx_;   // producer side only (UI, MIDI threads)
@@ -1501,7 +1513,8 @@ class Engine {
     // Mix one audio clip (warp cache / resampled source, envelopes, ADSR, edge fades) into
     // `dst` for the block at blockStart samples on the clip's timeline. Adds; never clears.
     void mixAudioClip(
-        const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain);
+        const AudioClip& clip, float* dst, int32_t frames, double blockStart, double spb, float extraGain,
+        bool tempoMapped = true);
 
     // recording target (message thread)
     int32_t recordTrackId_ = 0;
@@ -1647,7 +1660,7 @@ class Engine {
     // A clip's controller curves on the playback wire for one block (specs/020): the value at the
     // clip's start or at a jump into it (chase), every point inside the block, and a value every
     // 64 samples while a curve moves. Times are in samples on the block's clock.
-    static void clipCtlEvents(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
+    void clipCtlEvents(const MidiClip& clip, double clipStartS, double clipEndS, double blockStart,
         int32_t frames, double spb, bool chase, ExprEv* out, int& n, int cap);
     // At a clip's end, the pedals it holds down and a bent wheel go back to rest — no note stays
     // held by a clip that is over.

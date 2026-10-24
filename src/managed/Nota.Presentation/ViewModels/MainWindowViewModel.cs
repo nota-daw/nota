@@ -75,6 +75,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 
         Engine.Start();
         Engine.SetBpm(120);
+        Transport.RefreshTempoPointsFromEngine();
         Engine.SetTimeSignature(4, 4);
         EngineInfo = $"{Engine.SampleRate:0}\u2009Hz";
         _log.Info($"Engine started · {Engine.SampleRate:0}\u2009Hz");

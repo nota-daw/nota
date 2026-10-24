@@ -301,6 +301,8 @@ public sealed partial class ArrangementView : UserControl
         _ruler = new RulerControl(this) { Height = RulerH };
         _overview = new OverviewControl(this);
         _sectionsLane = new SectionsControl(this);
+        _tempoControl = new TempoTrackControl(this) { Height = _tempoH };
+        _tempoRow = BuildTempoRow();
         _lanes = new LaneControl(this) { VerticalAlignment = VerticalAlignment.Top };
         // Sits in the same grid cell as _lanes, on top; hit-transparent so all pointer
         // gestures pass through to the lanes beneath.
@@ -455,12 +457,14 @@ public sealed partial class ArrangementView : UserControl
         var root = new DockPanel();
         DockPanel.SetDock(_overviewRow, Dock.Top);
         DockPanel.SetDock(_sectionsRow, Dock.Top);
+        DockPanel.SetDock(_tempoRow, Dock.Top);
         DockPanel.SetDock(top, Dock.Top);
         DockPanel.SetDock(bottom, Dock.Bottom);
         DockPanel.SetDock(_footer, Dock.Bottom);
         DockPanel.SetDock(footerSeam, Dock.Bottom);
         root.Children.Add(_overviewRow);   // Overview sits above the ruler
         root.Children.Add(_sectionsRow);   // …then the named song sections
+        root.Children.Add(_tempoRow);
         root.Children.Add(top);
         root.Children.Add(bottom);
         root.Children.Add(_footer);
@@ -620,6 +624,7 @@ public sealed partial class ArrangementView : UserControl
         CenterOnPlayhead();
         _ruler.InvalidateVisual();
         _sectionsLane.InvalidateVisual();
+        _tempoControl.InvalidateVisual();
         _lanes.InvalidateVisual();
         _overlay.InvalidateVisual();
         _footerLanes.InvalidateVisual();
@@ -648,6 +653,7 @@ public sealed partial class ArrangementView : UserControl
     {
         bool moved = beats != _playheadBeats;
         _playheadBeats = beats;
+        if (moved) _tempoControl.InvalidateVisual();
         // While following, the view scrolls under the playhead — the lane surface (clips /
         // waveforms) must repaint along with the ruler+overlay, not just the overlay.
         // Every Play starts Follow afresh, even when the last run left it paused.
@@ -655,7 +661,11 @@ public sealed partial class ArrangementView : UserControl
         if (playing && !_wasPlaying) SetFollowSuspended(false);
         _wasPlaying = playing;
         bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && CenterOnPlayhead();
-        if (scrolled) _lanes.InvalidateVisual();
+        if (scrolled)
+        {
+            _lanes.InvalidateVisual();
+            _tempoControl.InvalidateVisual();
+        }
         // Converge the loop highlight with the engine (~30 Hz) so transport-bar
         // toggles/changes reflect here too — except mid-drag, where we show a preview.
         bool loopChanged = false;
@@ -928,6 +938,7 @@ public sealed partial class ArrangementView : UserControl
     {
         _ruler.InvalidateVisual();
         _sectionsLane.InvalidateVisual();   // spans follow scroll + zoom
+        _tempoControl.InvalidateVisual();   // tempo points share the arrangement's scroll and zoom
         _lanes.InvalidateVisual();
         _overlay.InvalidateVisual();   // playhead/loop band track scroll+zoom+loop edits
         _footerLanes.InvalidateVisual();

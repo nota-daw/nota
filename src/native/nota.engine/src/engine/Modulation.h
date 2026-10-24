@@ -108,8 +108,8 @@ struct Modulator {
 // cross-automation). Param sources live on the link's owner track (same-track for now).
 enum class CvSourceKind : int32_t { Modulator = 0, Param = 1 };
 // What the link modulates: a built-in insert-effect param, the instrument (plugin
-// param, targetDevice = -1), or a MIDI-FX param (targetDevice = chain index).
-enum class CvTargetKind : int32_t { Device = 0, Instrument = 1, MidiFx = 2 };
+// param, targetDevice = -1), a MIDI-FX param (targetDevice = chain index), or global tempo.
+enum class CvTargetKind : int32_t { Device = 0, Instrument = 1, MidiFx = 2, Tempo = 3 };
 
 struct CvLink {
     int32_t sourceKind = 0;    // CvSourceKind

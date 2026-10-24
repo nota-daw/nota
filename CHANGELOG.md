@@ -22,6 +22,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Tempo automation track**: author a tempo map in the arrangement with Linear, Square,
+  Triangle or Smooth transitions. Tempo points are saved with the project; BPM supports
+  1–999 and tempo is available as a live modulation target.
+- **MIDI file import/export**: import dialog options select MIDI channels, merge parts, filter
+  CC automation and Replace or Adapt the project tempo. Export supports Format 0/1, CC and
+  tempo filters, selected project tracks as stems, and tempo-only MIDI files. Note timing,
+  supported controllers, pitch wheel, channel pressure and tempo meta-events round-trip.
+- **Piano Roll Event Line Editor**: edit any non-reserved MIDI CC as well as velocity and MPE
+  expression. Choose a controller, edit points/step curves, resize or collapse the event lane,
+  and use parameter snapping independently from note snap. Shift+wheel adjusts selected-note
+  velocity or the hovered note; direction and the 0×–2× multiplier are configurable in
+  Settings → MIDI. Existing ruler seek/playhead drag-scrub behavior is retained.
 ## [0.57.1] — 2026-10-22
 
 ### Added

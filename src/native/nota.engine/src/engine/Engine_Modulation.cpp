@@ -98,7 +98,7 @@ float Engine::modulatorValue(int32_t trackId, int32_t modId) const {
     const double spb = transport_.samplesPerBeat();
     const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
     const double samples = static_cast<double>(transport_.playheadSamples());
-    const double beat = spb > 0 ? samples / spb : 0.0;
+    const double beat = transport_.positionBeats();
     for (auto& m : t->modulators)
         if (m.id == modId) return m.eval(beat, samples / sr);
     return 0.0f;
@@ -106,10 +106,11 @@ float Engine::modulatorValue(int32_t trackId, int32_t modId) const {
 
 // ---- CV link CRUD ----------------------------------------------------------
 
-// ---- modulation target read/write (device / instrument / MIDI-FX) ----------
+// ---- modulation target read/write (device / instrument / MIDI-FX / tempo) ----
 
 // True if (kind, dev, param) names a live target on track t.
-static bool targetValid(Track& t, int32_t kind, int32_t dev, int32_t param) {
+static bool targetValid(Engine& e, Track& t, int32_t kind, int32_t dev, int32_t param) {
+    if (kind == static_cast<int32_t>(CvTargetKind::Tempo)) return true;
     if (kind == static_cast<int32_t>(CvTargetKind::Instrument))
         return t.instrument && param >= 0 && param < t.instrument->pluginParamCount();
     if (kind == static_cast<int32_t>(CvTargetKind::MidiFx))
@@ -119,9 +120,14 @@ static bool targetValid(Track& t, int32_t kind, int32_t dev, int32_t param) {
            param < t.devices[dev]->paramCount();
 }
 // Current value + range of a target (instrument params are normalized 0..1).
-static float targetGet(Track& t, int32_t kind, int32_t dev, int32_t param, float& mn, float& mx) {
+static float targetGet(Engine& e, Track& t, int32_t kind, int32_t dev, int32_t param, float& mn, float& mx) {
     mn = 0.0f;
     mx = 1.0f;
+    if (kind == static_cast<int32_t>(CvTargetKind::Tempo)) {
+        mn = 1.0f;
+        mx = 999.0f;
+        return static_cast<float>(e.transport().bpm());
+    }
     if (kind == static_cast<int32_t>(CvTargetKind::Instrument))
         return t.instrument ? t.instrument->pluginParamGet(param) : 0.0f;
     if (kind == static_cast<int32_t>(CvTargetKind::MidiFx)) {
@@ -135,7 +141,11 @@ static float targetGet(Track& t, int32_t kind, int32_t dev, int32_t param, float
     mx = d->paramMax(param);
     return d->getParam(param);
 }
-static void targetSet(Track& t, int32_t kind, int32_t dev, int32_t param, float v) {
+static void targetSet(Engine& e, Track& t, int32_t kind, int32_t dev, int32_t param, float v) {
+    if (kind == static_cast<int32_t>(CvTargetKind::Tempo)) {
+        e.transport().setModulatedBpm(v);
+        return;
+    }
     if (kind == static_cast<int32_t>(CvTargetKind::Instrument)) {
         if (t.instrument) t.instrument->pluginParamSet(param, v);
         return;
@@ -160,7 +170,7 @@ int32_t Engine::addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId
         return -1;
     const int32_t tgt = targetTrack < 0 ? trackId : targetTrack;
     auto tgtTrack = findTrackAuthoring(tgt);
-    if (!tgtTrack || !targetValid(*tgtTrack, targetKind, targetDevice, targetParam)) return -1;
+    if (!tgtTrack || !targetValid(*this, *tgtTrack, targetKind, targetDevice, targetParam)) return -1;
     const int32_t storedTarget = tgt == trackId ? -1 : tgt;
     for (auto& l : old->cvLinks)
         if (l.sourceKind == sourceKind && l.sourceModId == modId && l.sourceDevice == srcDev &&
@@ -178,7 +188,7 @@ int32_t Engine::addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId
     l.targetDevice = targetDevice;
     l.targetParam = targetParam;
     float mn, mx;
-    l.base.store(targetGet(*tgtTrack, targetKind, targetDevice, targetParam, mn, mx), std::memory_order_relaxed);
+    l.base.store(targetGet(*this, *tgtTrack, targetKind, targetDevice, targetParam, mn, mx), std::memory_order_relaxed);
     nt->cvLinks.push_back(l);
     const int32_t idx = static_cast<int32_t>(nt->cvLinks.size()) - 1;
     republishWithTrack(trackId, nt);
@@ -210,8 +220,8 @@ int32_t Engine::addCvLinkFromParamToTarget(int32_t trackId, int32_t srcDevice, i
 void Engine::restoreLinkTarget(int32_t ownerTrack, const CvLink& l) {
     const int32_t tgt = l.targetTrack < 0 ? ownerTrack : l.targetTrack;
     if (auto tt = findTrackAuthoring(tgt))
-        if (targetValid(*tt, l.targetKind, l.targetDevice, l.targetParam))
-            targetSet(*tt, l.targetKind, l.targetDevice, l.targetParam, l.base.load(std::memory_order_relaxed));
+        if (targetValid(*this, *tt, l.targetKind, l.targetDevice, l.targetParam))
+            targetSet(*this, *tt, l.targetKind, l.targetDevice, l.targetParam, l.base.load(std::memory_order_relaxed));
 }
 
 bool Engine::removeCvLink(int32_t trackId, int32_t index) {
@@ -446,13 +456,13 @@ void Engine::applyModulation(Graph* g, double beat, double timeSec) {
                 if (!tgt) continue;
             }
             const int32_t tk = link.targetKind, di = link.targetDevice, pi = link.targetParam;
-            if (!targetValid(*tgt, tk, di, pi)) continue;
+            if (!targetValid(*this, *tgt, tk, di, pi)) continue;
 
             // Swing around the stored base (the target atomic holds the live modulated
             // value continuously — no per-block restore — so the UI shows it smoothly).
             const float base = link.base.load(std::memory_order_relaxed);
             float mn, mx;
-            targetGet(*tgt, tk, di, pi, mn, mx);
+            targetGet(*this, *tgt, tk, di, pi, mn, mx);
             const float span = mx - mn;
             const float ld = link.depth.load(std::memory_order_relaxed);
             float v;
@@ -465,7 +475,7 @@ void Engine::applyModulation(Graph* g, double beat, double timeSec) {
             }
             default: v = base + ld * mv * span; break; // Add
             }
-            targetSet(*tgt, tk, di, pi, std::clamp(v, mn, mx));
+            targetSet(*this, *tgt, tk, di, pi, std::clamp(v, mn, mx));
         }
     }
 }

@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Tap tempo: steady taps land on the tempo, jitter averages out, a pause or a tempo change
-// starts a new series, a switch bounce is ignored, and the result stays in 20–300 BPM.
+// starts a new series, a switch bounce is ignored, and the result stays in 1–999 BPM.
 // Also runnable alone: `dotnet run --project tests/Nota.SmokeTest -- --tap`.
 
 using Nota.Application;
@@ -57,9 +57,9 @@ internal static class TapTempoTests
         for (int i = 0; i < 12; i++) { t.Tap(now); now += 600; }
         yield return (t.Count == 9, "the series keeps the last nine taps (eight gaps)");
 
-        // Clamp: very fast taps (80 ms ≈ 750 BPM) read the 300 BPM ceiling.
+        // Clamp: 50 ms taps imply 1200 BPM, above the shared 999 BPM ceiling.
         t = new TapTempo();
-        yield return (Series(t, 0, 80, 5) == TapTempo.MaxBpm, "taps faster than 300 BPM clamp to 300");
+        yield return (Series(t, 0, 50, 5) == TapTempo.MaxBpm, "taps faster than 999 BPM clamp to 999");
 
         t.Reset();
         yield return (t.Count == 0 && t.Tap(10000) is null, "Reset clears the series");
