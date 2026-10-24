@@ -115,7 +115,7 @@ public sealed partial class DeviceChainView
         string name = _engine.DeviceName(_trackId, di);
         if (_engine.WrapDeviceInRack(_trackId, di) < 0)
         {
-            StatusMessage?.Invoke($"{name} can't go in a rack: it has a sidechain key, automation or a modulation link");
+            StatusMessage?.Invoke($"{name} can't go in a rack: it has a sidechain key, automation, a modulation link or an Arp's CC lane");
             return;
         }
         // The device's A/B snapshots and preset label live only here: the rack keeps them for
