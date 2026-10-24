@@ -135,7 +135,7 @@ public sealed partial class DeviceChainView
         int n = _engine.UnwrapRack(_trackId, di);
         if (n < 0)
         {
-            StatusMessage?.Invoke("Only a rack with one chain can be ungrouped, and not while it is automated or modulated");
+            StatusMessage?.Invoke("Only a rack with one chain can be ungrouped, and not while it is automated, modulated or driven by an Arp's CC lane");
             return;
         }
         // The rack's slot becomes its n devices; the cards after it shift with them.

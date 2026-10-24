@@ -79,6 +79,15 @@ internal static class DeviceCopyTests
         yield return (e.WrapDeviceInRack(it, target) < 0 && Chain(e, it) == "0,1", $"wrap in rack: a device an Arp's CC targets isn't wrapped ({Chain(e, it)})");
         e.SetMidiEffectCcDest(it, arp, -1, -1);
         yield return (e.WrapDeviceInRack(it, target) == target, "wrap in rack: it wraps once the Arp lets go");
+        // Unwrapping a rack the Arp drives, or one whose devices would shift the Arp's target, is refused.
+        e.SetMidiEffectCcDest(it, arp, target, 0);
+        yield return (e.UnwrapRack(it, target) < 0 && Chain(e, it) == "0,5", "wrap in rack: a rack an Arp's CC lane drives isn't unwrapped");
+        int after = e.AddBuiltinDevice(it, 3);
+        e.RackDevAddChainDevice(it, target, 0, 3);
+        e.SetMidiEffectCcDest(it, arp, after, 0);
+        yield return (e.UnwrapRack(it, target) < 0 && Chain(e, it) == "0,5,3", "wrap in rack: an unwrap that would shift the Arp's target is refused");
+        e.SetMidiEffectCcDest(it, arp, -1, -1);
+        yield return (e.UnwrapRack(it, target) == 2 && Chain(e, it) == "0,1,3,3", $"wrap in rack: with the Arp unhooked it comes out ({Chain(e, it)})");
 
         foreach (var x in WrapKeepsTail()) yield return x;
     }

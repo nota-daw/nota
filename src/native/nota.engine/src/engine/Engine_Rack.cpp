@@ -229,6 +229,12 @@ int32_t Engine::unwrapRack(int32_t trackId, int32_t deviceIndex) {
     RackCore::RackState* st = rack ? rack->live() : nullptr;
     if (!st || st->chains.size() != 1 || deviceIsReferenced(*old, deviceIndex)) return -1;
     auto devs = st->chains[0].devices;
+    // The devices after the rack shift by (n - 1). Lanes and CV links are remapped below; an
+    // Arp's CC target lives on the shared MIDI device, outside the undo snapshot, so rather
+    // than move it, don't unwrap under one.
+    if (devs.size() != 1)
+        for (auto& md : old->midiEffects)
+            if (md && md->ccDestDevice() > deviceIndex) return -1;
     auto nt = cloneTrack(*old);
     nt->devices.erase(nt->devices.begin() + deviceIndex);
     nt->devices.insert(nt->devices.begin() + deviceIndex, devs.begin(), devs.end());
