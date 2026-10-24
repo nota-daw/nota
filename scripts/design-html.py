@@ -1234,7 +1234,7 @@ def build_sections():
         ('Devices', 'Bordered boxes, big gauge knobs and a status line underneath', 'Even spacing inside the card, smaller knobs with a centre cap, the round wheels from Aurora, Bass, Operator and Volt (Pentad’s flat wheels go) and square switches, no status line'),
         ('Orange', 'Orange for anything playing or selected, always as a solid fill', 'Three strengths: solid for what is playing, a pale tint for what you picked, orange values inside devices'),
         ('Depth', 'Raised buttons everywhere; flat panels', 'Only device cards look raised; the sections inside them look pressed in, and their controls sit in grooves'),
-        ('Device card size', 'Every card 700 × 260', 'Always 260 high; the width grows to fit the device (Pentad 724, EQ-8 720, or 562 with its right panel folded)'),
+        ('Device card size', 'Every card 700 × 260', 'Always 260 high; the width grows to fit the device (Pentad 724, EQ-8 720, or 580 with its right panel folded)'),
         ('Sliders outside devices', 'A 3 px line with a small cap and the value beside it', 'A flat 16 px bar with the value written inside it, in the same family as the device value bars'),
         ('Device sliders', 'A thin line with a small handle', 'A wider bar you can drag anywhere, with an orange line at the value'),
         ('Corners', 'Small corners (2 to 4 px), nothing fully round', 'Rounder corners, from 2 px on small parts up to 9 px on device cards'),

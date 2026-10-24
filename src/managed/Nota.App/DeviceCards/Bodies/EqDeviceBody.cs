@@ -7,8 +7,8 @@
 // and frequency on one line (click picks, double-click switches it on / off) — with Analyzer and
 // Auto gain over its top-left corner. One narrow column at the right edits the picked band (its
 // head with the On switch, the six filter shapes, Freq, Gain and Q, Slope and Channel) over the
-// device's Scale and Output. Its arrow folds the column to a thin strip (the card narrows from
-// 720 to 562); the fold is session-only view state. The live readings come from the engine (Eq.h scopeRead). Every control is a device
+// device's Scale and Output. Its arrow folds the column to a thin strip that keeps the band's
+// Freq, Gain and Q (the card narrows from 720 to 580); the fold is session-only view state. The live readings come from the engine (Eq.h scopeRead). Every control is a device
 // param (raw units), so automation / MIDI learn / presets / A-B / persistence come for free.
 // FullBleed — the shared shell draws the header (name · preset · type · power).
 
@@ -29,10 +29,11 @@ namespace Nota.App;
 
 internal sealed class EqDeviceBody : IDeviceBody
 {
-    // The right panel: one column inside the section's padding and its 1px edge.
-    internal const double ColumnW = 176;
+    // The right panel: one column inside the section's padding and its 1px edge. Folded, a strip
+    // just wide enough for the picked band's Freq, Gain and Q knobs stacked under the arrow.
+    internal const double ColumnW = 176, StripW = 60;
     internal const double PanelW = ColumnW + 2 * SectionPad;
-    public const double OpenW = 720, FoldedW = OpenW - PanelW + EqBandUi.FoldedW;   // 562 folded
+    public const double OpenW = 720, FoldedW = OpenW - PanelW + StripW;   // 580 folded
 
     public double Width => OpenW;
     public bool AutoWidth => true;   // the card follows the fold
@@ -189,13 +190,27 @@ internal sealed class EqDeviceBody : IDeviceBody
             return new StackPanel { Children = { seg, lbl } };
         }
 
+        // The picked band's Freq, Gain and Q knobs (across in the panel, stacked in the folded strip).
+        Control[] BandKnobs(int b, double cw)
+        {
+            int pF = Eq8.P(b, Eq8.FreqF), pG = Eq8.P(b, Eq8.GainF), pQ = Eq8.P(b, Eq8.QF);
+            return new[]
+            {
+                K(pF, "Freq", () => Eq8.HzShort(B(b, Eq8.FreqF)) + (B(b, Eq8.FreqF) < 1000 ? " Hz" : ""), "Frequency — or drag the node left / right", 1000, cw),
+                K(pG, "Gain", () => Capable(b) ? Eq8.Db(B(b, Eq8.GainF)) + " dB" : "—", "Gain — or drag the node up / down (Scale multiplies it)", 0, cw,
+                    inactive: () => !Capable(b)),
+                K(pQ, "Q", () => NotaNum.F($"{B(b, Eq8.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node", 0.71, cw,
+                    liveLabel: () => Cut(b) ? "Reso" : "Q"),
+            };
+        }
+
         // ======================================================================
         // RIGHT — one column: the picked band (rebuilt when the selection moves, so MIDI learn
         // and automation bind to that band's own params) over the device's Scale and Output
         // ======================================================================
         Control PanelBody(int b)
         {
-            int pOn = Eq8.P(b, Eq8.On), pType = Eq8.P(b, Eq8.TypeF), pF = Eq8.P(b, Eq8.FreqF), pG = Eq8.P(b, Eq8.GainF), pQ = Eq8.P(b, Eq8.QF);
+            int pOn = Eq8.P(b, Eq8.On), pType = Eq8.P(b, Eq8.TypeF);
             int pSlope = Eq8.SlopeBase + b, pChan = Eq8.ChannelBase + b;
             void Toggle() { SetP(pOn, BandOn(b) ? 0 : 1); RefreshAll(); }
 
@@ -214,13 +229,7 @@ internal sealed class EqDeviceBody : IDeviceBody
             Learn(types, pType);
             bandReadouts.Add(typeSync);
 
-            const double cw = ColumnW / 3;
-            var knobs = Across(
-                K(pF, "Freq", () => Eq8.HzShort(B(b, Eq8.FreqF)) + (B(b, Eq8.FreqF) < 1000 ? " Hz" : ""), "Frequency — or drag the node left / right", 1000, cw),
-                K(pG, "Gain", () => Capable(b) ? Eq8.Db(B(b, Eq8.GainF)) + " dB" : "—", "Gain — or drag the node up / down (Scale multiplies it)", 0, cw,
-                    inactive: () => !Capable(b)),
-                K(pQ, "Q", () => NotaNum.F($"{B(b, Eq8.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node", 0.71, cw,
-                    liveLabel: () => Cut(b) ? "Reso" : "Q"));
+            var knobs = Across(BandKnobs(b, ColumnW / 3));
 
             var slopeSeg = Segments(new[] { "12", "24", "48" }, () => SlopeOf(b), i => { if (Cut(b)) { SetP(pSlope, i); RefreshAll(); } },
                 out var slopeSync, fill: true, padX: 0, dim: () => !Cut(b));
@@ -250,8 +259,17 @@ internal sealed class EqDeviceBody : IDeviceBody
             return col;
         }
 
-        // The folded strip: just the arrow that opens the panel again.
-        Control FoldedStrip() => new StackPanel { Children = { EqBandUi.FoldButton(true, () => SetFolded(false)) }, HorizontalAlignment = HorizontalAlignment.Center };
+        // The folded strip: the arrow that opens the panel again over the picked band's knobs.
+        Control FoldedStrip(int b)
+        {
+            var strip = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center };
+            var open = EqBandUi.FoldButton(true, () => SetFolded(false));
+            open.HorizontalAlignment = HorizontalAlignment.Center;
+            open.Margin = new Thickness(0, 0, 0, 2);
+            strip.Children.Add(open);
+            foreach (var k in BandKnobs(b, StripW - 2)) strip.Children.Add(k);
+            return strip;
+        }
 
         var right = Section(new ContentControl());
         var bodyRow = new DockPanel { LastChildFill = true };
@@ -264,9 +282,9 @@ internal sealed class EqDeviceBody : IDeviceBody
         {
             bandReadouts.Clear();
             int b = Sel();
-            right.Width = folded ? EqBandUi.FoldedW : PanelW;
-            right.Padding = folded ? new Thickness(0, SectionPad - 1) : new Thickness(SectionPad - 1);
-            ((ContentControl)right.Child!).Content = folded ? FoldedStrip() : PanelBody(b);
+            right.Width = folded ? StripW : PanelW;
+            right.Padding = folded ? new Thickness(0, 6) : new Thickness(SectionPad - 1);
+            ((ContentControl)right.Child!).Content = folded ? FoldedStrip(b) : PanelBody(b);
             bodyRow.Width = (folded ? FoldedW : OpenW) - 2 * CardPad;
             for (int i = 0; i < bandReadouts.Count; i++) bandReadouts[i]();
         }

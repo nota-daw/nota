@@ -18,7 +18,7 @@ namespace Nota.App;
 
 internal static class EqBandUi
 {
-    internal const double ChipH = 20, BadgeD = 18, FoldedW = 42;
+    internal const double ChipH = 20, BadgeD = 18;
 
     /// <summary>A filter type drawn as its response, 22 × 12: high-pass, low shelf, bell, notch,
     /// high shelf, low-pass (DynEq.TypeNames order).</summary>
