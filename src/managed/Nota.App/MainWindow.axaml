@@ -256,7 +256,7 @@
           <Border x:Name="TimeSigCell" Classes="readout" ToolTip.Tip="Set the time signature — drag each field">
             <StackPanel Orientation="Horizontal" Spacing="1" Height="22" VerticalAlignment="Center">
               <Panel x:Name="TimeSigNumHost" Width="20"/>
-              <TextBlock Text="/" FontSize="17" FontWeight="Medium" VerticalAlignment="Center"
+              <TextBlock Text="/" FontSize="16" FontWeight="Medium" VerticalAlignment="Center"
                          Foreground="{DynamicResource Brush.TextTertiary}"/>
               <Panel x:Name="TimeSigDenHost" Width="20"/>
             </StackPanel>
@@ -352,7 +352,7 @@
                       BorderBrush="{Binding $parent[Button].Foreground}" VerticalAlignment="Center"/>
               <TextBlock x:Name="RemoteLabel" Text="Remote" VerticalAlignment="Center"
                          Foreground="{Binding $parent[Button].Foreground}"/>
-              <TextBlock x:Name="RemoteCount" Classes="Mono" Text="Off" FontSize="10" VerticalAlignment="Center"
+              <TextBlock x:Name="RemoteCount" Classes="Mono" Text="Off" FontSize="9" VerticalAlignment="Center"
                          Foreground="{Binding $parent[Button].Foreground}"/>
               <Ellipse x:Name="RemoteDot" Width="5" Height="5" VerticalAlignment="Center"
                        Fill="{DynamicResource Brush.BorderStrong}"/>
@@ -482,7 +482,7 @@
                       ToolTip.Tip="Freeze the track to audio to free CPU (right-click to flatten)">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <app:Glyph x:Name="FreezeIcon" Kind="Freeze" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                  <TextBlock x:Name="FreezeLabel" Text="Freeze" FontSize="12" VerticalAlignment="Center"
+                  <TextBlock x:Name="FreezeLabel" Text="Freeze" FontSize="11" VerticalAlignment="Center"
                              Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </StackPanel>
               </Button>
@@ -491,7 +491,7 @@
                       ToolTip.Tip="Bounce to a linked audio track below and put the source to sleep">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <app:Glyph Kind="ChainLink" Size="14" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                  <TextBlock Text="Live freeze" FontSize="12" VerticalAlignment="Center"
+                  <TextBlock Text="Live freeze" FontSize="11" VerticalAlignment="Center"
                              Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </StackPanel>
               </Button>
@@ -500,7 +500,7 @@
                       ToolTip.Tip="Wake the frozen source to edit it (right-click to unfreeze or flatten)">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                   <app:Glyph x:Name="EditGlyph" Kind="Edit" Foreground="{DynamicResource Brush.AccentBright}"/>
-                  <TextBlock Text="Edit" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
+                  <TextBlock Text="Edit" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
                 </StackPanel>
               </Button>
               <Button x:Name="DoneBtn" Height="22" Padding="9,0" VerticalAlignment="Center"
@@ -508,7 +508,7 @@
                       ToolTip.Tip="Re-freeze the source and put it back to sleep">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                   <app:Glyph x:Name="DoneGlyph" Kind="Check" Foreground="{DynamicResource Brush.AccentBright}"/>
-                  <TextBlock Text="Done" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
+                  <TextBlock Text="Done" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
                 </StackPanel>
               </Button>
               <Button x:Name="DiscardBtn" Classes="ghost" Height="22" Padding="6,0" VerticalAlignment="Center"

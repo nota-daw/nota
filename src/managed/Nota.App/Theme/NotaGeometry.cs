@@ -37,6 +37,9 @@ internal static class NotaRadius
 
     /// <summary>Rounded top only — a header strip or a stripe sitting on a body.</summary>
     public static CornerRadius Top(double r) => new(r, r, 0, 0);
+
+    /// <summary>Rounded bottom only — a key hanging from a rail.</summary>
+    public static CornerRadius Bottom(double r) => new(0, 0, r, r);
 }
 
 internal static class NotaSize

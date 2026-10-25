@@ -408,15 +408,15 @@ Name, so the files stay unmodified and the feature is applied at shaping time
 
 | Role | Size / weight | Ink | Where |
 |---|---|---|---|
-| Readout | 17 / 500 | 1 | Position, tempo, signature, key and grid in the toolbar; the unit beside it in ink 3 |
+| Readout | 16 / 500 | 1 | Position, tempo, signature, key and grid in the toolbar; the unit beside it in ink 3 |
 | Device name | 12 / 600 | 1 | Device card header, the inspector's clip name |
-| Track name | 13 / 580 | 1 | Track headers, mixer strips, browser rows |
-| Body | 12 / 400 | 1–2 | Chips, tabs, search, menu items, buttons |
-| Value | 11.5 / 400 | 1 | Numbers on a button or in a row; segment cells |
-| Label | 11 / 400 | 3 | Tags, units and row labels |
+| Track name | 12 / 580 | 1 | Track headers, mixer strips, browser rows |
+| Body | 11 / 400 | 1–2 | Chips, tabs, search, menu items, buttons |
+| Value | 10.5 / 400 | 1 | Numbers on a button or in a row; segment cells |
+| Label | 10 / 400 | 3 | Tags, units and row labels |
 | Device label | 9.5 / 400 | 3 | Knob names inside a device; section titles and row labels |
-| Column head | 10 / 400 | 4 | Column heads and axes |
-| Key letter | 10 / 650 | 3 | M, S and arm letters on track buttons |
+| Column head | 9.5 / 400 | 4 | Column heads and axes |
+| Key letter | 9.5 / 650 | 3 | M, S and arm letters on track buttons |
 
 Geist ships as static 400 / 500 / 600 / 700 files, so the guide's in-between weights round
 to the nearest one the app has: 580 and 650 draw as 600 (SemiBold), 550 as 500 (Medium).
@@ -425,11 +425,20 @@ Inside a device the whole scale sits one step lower so the 260 card keeps its ro
 controls: a knob's value 10, switch words and captions 10, a value on a button or in a row
 10.5, titles and tabs inside a device 11, graph axes 9 (`NotaType.Device*`).
 
-Others the guide fixes: a field 12.5, the browser search 12.5, a clip's
-name 10.5 / 600, a Modular node's name 12.5 / 600, the current tab 12 / 580, a tooltip
-10.5, a device number button 9.5 / 550. `NotaType` and the `TextBlock.*` role classes in
+The shell scale came down one point after review (Oct 25), so the app reads closer to
+other DAWs; the device scale stayed. Others the guide fixes: a field 11.5, the browser
+search 11.5, a clip's name 10 / 600, a Modular node's name 12.5 / 600, the current tab
+11 / 580, a tooltip 10.5, a device number button 9.5 / 550. `NotaType` and the `TextBlock.*` role classes in
 `NotaTheme.axaml` carry the scale for code and XAML. Tags and units are Geist in sentence
 case, so nothing looks like code.
+
+**Text size** (Preferences → Appearance: Smaller, Default, Larger, Largest) adds −1, 0, +1
+or +2 pt to every text the app draws, shell and devices, on top of this scale and
+independent of Interface scale (`NotaTextSize`). It works by coercion on `TextBlock` and
+`TextPresenter` font sizes plus `NotaFormattedText`, so views keep setting the scale's
+sizes and never read the setting. Layout doesn't grow with it: at the larger sizes a long
+label trims with an ellipsis, so a label that can't trim (a fixed-width cell) needs room
+for +2.
 
 **Do:** set every word and number in Geist · write tags in sentence case · put a unit in
 ink 3 beside its value. **Don't:** use a monospace face, even for numbers · fade text with
@@ -890,6 +899,13 @@ field sits in a groove and a preset menu is raised.
   Duplicate ⌘D, always in this order, `MenuKit.ClipboardGroup`) → destructive.
   `DesignTokenCheck.RunMenus` keeps menus on `MenuKit`: icons through `MenuKit.Icon`,
   destructive items through `MenuKit.Danger`, no Color / Track height submenus.
+- **The key picker** (`KeyPicker`, the toolbar's Key cell and the Files tab's key filter): a
+  flyout 278 wide. The key named in full (Heading 12 / 600, "No key" in ink 2) over its
+  relative key in a caption, a Major / Minor segment switch at the right, then a one-octave
+  keyboard (white keys 38 × 64, black 24 × 38, 2 apart, bottom corners rounded) whose keys
+  carry their names spelled for the mode, the picked tonic filled orange; then the shortcut
+  buttons and "No key" / "Any key" as ghost buttons. Picking a key keeps the mode; switching
+  the mode keeps the tonic.
 - **Command palette:** the in-window modal: panel body, corner 9, seam ring and
   `Shadow.Modal`.
 - **Dialog windows** (`NotaWindow`): panel body; on macOS and Windows a 32 px header with
@@ -990,6 +1006,10 @@ The controls at the left of each track in the arrangement.
 - **Selected:** the header takes `TrackHeaderSelected` (background only, no outline) and its
   lane `LaneSelected`.
 - **Meter** down the right edge.
+- **Large** (from 100): a third row with the input picker, then the track's send to each
+  return, two per row as the height allows: the return's colour square and letter (tooltip
+  "Send to Reverb"), then a value bar with the amount inside ("–" at 0), double-click to
+  reset, typed entry like the volume bar. Returns show none; groups do.
 - **Rows** default to 54; below 50 a row is compact (the name row only), from 100 large.
   The pinned Return / Master rows are one 30 px line each (name, flat slider 122, meter).
 
@@ -1158,7 +1178,12 @@ control, label and value stays.
 - **Header 32** (`DeviceCardKit.HeaderH`), in fixed slots, left to right: name · preset
   menu · type tag and the card's accessories (MIDI learn, the S / L size toggle) · power.
   The name trims before it reaches the preset menu; a compact card drops the "Nota "
-  prefix. The preset menu (‹ Name ⌄ ›) opens the factory presets and its arrows step
+  prefix. **The strip after the preset menu holds the card's main tab row** when it fits
+  (`DeviceCardKit.Liftable` marks the rows the tab helpers build; the shell lifts the one
+  with the most tabs, on a tie the one with a trailing readout, i.e. the centre section's,
+  not a right panel's Levels / Output). Its readout comes along when there is room, else it
+  stays in the section; a long readout trims. The section below gains the 22 px row.
+  Compact and utility cards keep their tabs in the body. The preset menu (‹ Name ⌄ ›) opens the factory presets and its arrows step
   through them, wrapping. A/B, move and delete live in the header's right-click menu; drag
   the card by its whole header; Delete removes it.
 - **Body:** sections 4 from the card edge, 6 apart, 8 padding (`DeviceCardKit.Section`).

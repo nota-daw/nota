@@ -423,6 +423,40 @@ themes; no icon is blurry or clipped at 16 px, and the Follow button shows the n
 - One branch carries the whole change in phased commits (tokens and docs, controls, shell,
   device cards, Modular, icons); it can be split into stacked PRs if review needs it.
 
+## Round 2: review follow-ups (Oct 25)
+
+ambertape reviewed the PR (nota#296, Oct 25); Chris accepted every point. Already done in
+this branch: title back in the window title, Loop and loop-record as icons, typed entry on
+the shell bars, fixed card widths (S 260 / L 700 / Wide 1050), the Volt pass. The rest:
+
+- **FR-035 (key panel)**: The key picker MUST be redesigned: a one-octave keyboard picks the
+  tonic and a Major / Minor switch picks the mode, with the chosen key named in full; "No key"
+  (project) or "Any key" (browser filter) and the browser's shortcut buttons stay. Picking a
+  tonic keeps the mode; switching the mode keeps the tonic. Both callers share it.
+- **FR-036 (Large track header)**: A track header at the Large tier MUST show the track's
+  send level to each return (the return's letter and colour, a value bar with the amount
+  inside, double-click resets to 0, typed entry like the other bars), two per row, as far as
+  the row's height allows. Sends follow changes made elsewhere (mixer, Sends card,
+  automation). Return tracks show none (they don't send); groups do.
+- **FR-037 (smaller shell text)**: The shell type scale MUST come down one point (Title,
+  Heading, Track name 12; Name, Body 11; Caption, section labels 10; values 10.5; the
+  transport readout 16; clip names 10; eyebrows 9.5), in the theme, NotaType and every
+  literal size in the shell. The device scale (already one step down) stays.
+- **FR-038 (text size setting)**: Preferences → Appearance MUST offer Text size: Smaller,
+  Default, Larger, Largest (−1, 0, +1, +2 pt on every text the app draws, shell and devices),
+  applied live to every open window and kept in the settings file, independent of Interface
+  scale. Larger sizes may trim long labels with an ellipsis; nothing may overlap.
+- **FR-039 (device header strip)**: A device card's main tab row MUST move into the header's
+  empty strip, after the preset picker, with its trailing readout; the section below gains
+  the 22 px row. The main row is the one with the most tabs; on a tie, the one with a trailing
+  readout (a centre section's, not a right panel's Levels / Output). When only the tabs fit,
+  they move alone and the readout stays below; a long readout trims with an ellipsis. A card
+  whose header has no room keeps the row in place (compact and utility cards always do).
+- **FR-040**: DESIGN.md, the style guide page and the manual (EN + RU) MUST follow.
+
+Assumptions: the key panel has no reference design; the keyboard layout is our proposal.
+Text size is a settings-file value, not a project value (no format change).
+
 ## Nota Compliance Checklist *(review before implementation; re-check in tasks.md)*
 
 - [x] Every new source file will carry the AGPL-3.0-only SPDX header (two lines, see CONTRIBUTING.md)

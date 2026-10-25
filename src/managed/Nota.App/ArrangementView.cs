@@ -66,6 +66,7 @@ public sealed partial class ArrangementView : UserControl
     private readonly Dictionary<int, MeterBar> _meters = new(); // per-track header meters (M6-2)
     // Per-track header vol/pan controls, refreshed each tick so automation moves them live.
     private readonly Dictionary<int, MiniFader> _volFaders = new();
+    private readonly List<(int Track, int Bus, MiniFader Fader)> _sendFaders = new();   // Large headers' sends
     private readonly Dictionary<int, PanBar> _panBars = new();
     // Return / Master footer rows: meter, volume fader and its dB read-out. Kept apart from the
     // track-header maps because the two columns are rebuilt independently.
@@ -877,6 +878,13 @@ public sealed partial class ArrangementView : UserControl
                 p.Pan = ti.Pan;
             if (_footerFaders.TryGetValue(ti.Id, out var rf))
                 FollowVolume(rf, ti.Volume);
+        }
+        // Large headers' sends follow the mixer, the Sends card and automation (#138).
+        foreach (var (tid, bus, sf) in _sendFaders)
+        {
+            if (sf.Dragging) continue;
+            double v = eng.GetTrackSend(tid, bus);
+            if (Math.Abs(sf.Value - v) > 1e-3) sf.Value = v;
         }
     }
 
@@ -1956,6 +1964,7 @@ public sealed partial class ArrangementView : UserControl
         _headers.Children.Clear();
         _meters.Clear();
         _volFaders.Clear();
+        _sendFaders.Clear();
         _panBars.Clear();
         _headerCards.Clear();
         _cardTiers.Clear();
@@ -2156,6 +2165,14 @@ public sealed partial class ArrangementView : UserControl
                     picker.MinWidth = PickerW;
                     stack.Children.Add(picker);
                 }
+                // The sends to each return, two to a row, as far as the row's height allows
+                // (the card clips the rest; the mixer and the Sends card show them all).
+                if (!t.IsReturn)
+                {
+                    double used = 8 + 2 * (MiniFader.BarH + 2) + HeaderRowGap + (picker is not null ? HeaderRowGap + PickerH : 0);
+                    int fits = (int)((rowH - used - 6) / (HeaderRowGap + MiniFader.BarH + 2));
+                    foreach (var row in SendRows(t.Id).Take(Math.Max(0, fits))) stack.Children.Add(row);
+                }
                 break;
             default:
                 stack.VerticalAlignment = VerticalAlignment.Center;
@@ -2205,7 +2222,41 @@ public sealed partial class ArrangementView : UserControl
 
     // Header geometry (style guide): 18px chips 4 apart, rows 6 apart, the name 12px past the
     // colour bar, the input picker 62 wide.
-    private const double ChipGap = 4, HeaderRowGap = 6, NameGap = 12, PickerW = 66, HeaderRightPad = 10;
+    // A Large header's sends: the return's colour and letter, then its bar with the amount inside
+    // (– at 0). Double-click resets to 0; double-click the amount or Alt-click types one.
+    private IEnumerable<Control> SendRows(int trackId)
+    {
+        if (_engine is not { } eng) yield break;
+        var sends = new List<Control>();
+        foreach (var r in _returns)
+        {
+            int bus = eng.TrackReturnIndex(r.Id);
+            if (bus < 0) continue;
+            static string SendText(double v) => v <= 0.005 ? "–" : NotaNum.Pct(v);
+            var f = new MiniFader(eng.GetTrackSend(trackId, bus), 1.0) { Default = 0, Text = SendText, VerticalAlignment = VerticalAlignment.Center };
+            int b = bus;
+            f.ValueChanged += v => eng.SetTrackSend(trackId, b, (float)v);
+            ValueEntry.Attach(f, f.EntryField($"Send {(char)('A' + b)}", SendText));
+            _sendFaders.Add((trackId, b, f));
+            var swatch = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Fine, Background = TrackBrush(r.ColorIndex), VerticalAlignment = VerticalAlignment.Center };
+            var letter = new TextBlock { Text = ((char)('A' + b)).ToString(), FontSize = NotaType.Eyebrow, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextSecondary"), VerticalAlignment = VerticalAlignment.Center };
+            ToolTip.SetTip(letter, $"Send to {r.Name}");
+            var cell = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 4 };
+            cell.Children.Add(swatch);
+            Grid.SetColumn(letter, 1); cell.Children.Add(letter);
+            Grid.SetColumn(f, 2); cell.Children.Add(f);
+            sends.Add(cell);
+        }
+        for (int i = 0; i < sends.Count; i += 2)
+        {
+            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 10, Height = MiniFader.BarH + 2 };
+            row.Children.Add(sends[i]);
+            if (i + 1 < sends.Count) { Grid.SetColumn(sends[i + 1], 1); row.Children.Add(sends[i + 1]); }
+            yield return row;
+        }
+    }
+
+    private const double ChipGap = 4, HeaderRowGap = 6, NameGap = 12, PickerW = 66, PickerH = 22, HeaderRightPad = 10;
 
     private TextBlock HeaderName(string text) => new()
     {
@@ -2566,7 +2617,7 @@ public sealed partial class ArrangementView : UserControl
     private void PromptRenameTrack(Control anchor, int trackId)
     {
         if (_engine is null) return;
-        var box = new TextBox { Text = _engine.GetTrackName(trackId), Width = 180, FontSize = 12 };
+        var box = new TextBox { Text = _engine.GetTrackName(trackId), Width = 180, FontSize = 11 };
         var flyout = new Flyout { Content = box, Placement = PlacementMode.Bottom };
         box.KeyDown += (_, ke) =>
         {
@@ -2620,7 +2671,7 @@ public sealed partial class ArrangementView : UserControl
         };
         var name = new TextBlock
         {
-            Text = who, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextStrong"),
+            Text = who, FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextStrong"),
             VerticalAlignment = VerticalAlignment.Center, MaxWidth = 70, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var pill = new Border
@@ -2796,7 +2847,7 @@ public sealed partial class ArrangementView : UserControl
     {
         var b = new Button
         {
-            Content = text, Width = 22, Height = 22, MinWidth = 0, FontSize = 14,
+            Content = text, Width = 22, Height = 22, MinWidth = 0, FontSize = 13,
             Padding = new Thickness(0), Background = Brushes.Transparent, BorderThickness = new Thickness(0),
             VerticalContentAlignment = VerticalAlignment.Center,
             HorizontalContentAlignment = HorizontalAlignment.Center,

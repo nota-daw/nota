@@ -709,7 +709,7 @@ public sealed partial class ArrangementView
         filter.TextChanged += (_, _) => Rebuild(filter.Text ?? "");
 
         var panel = new StackPanel { Margin = new Thickness(8), MinWidth = 260 };
-        panel.Children.Add(new TextBlock { Text = name, FontSize = 11, Margin = new Thickness(0, 0, 0, 6) });
+        panel.Children.Add(new TextBlock { Text = name, FontSize = 10, Margin = new Thickness(0, 0, 0, 6) });
         panel.Children.Add(filter);
         panel.Children.Add(list);
         var popup = new Flyout { Content = panel };

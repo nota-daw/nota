@@ -19,6 +19,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
@@ -272,6 +273,35 @@ public sealed partial class DeviceChainView
             picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
                 nameWidth: s.Compact ? 74 : 132, height: 20, init: resetToInit != null ? ApplyInit : null);
             Grid.SetColumn(picker, 1); headerGrid.Children.Add(picker);
+        }
+
+        // The header strip (spec 038 FR-039): the body's main tab row moves up after the preset
+        // picker when the header has room for it; the badges keep their place on the right.
+        if (!s.Compact && !s.Utility && DeviceCardKit.FindLiftable(body) is { } tabRow)
+        {
+            static double W(Control? c) { if (c is null) return 0; c.Measure(Size.Infinity); return c.DesiredSize.Width; }
+            double room = s.Width - (2 * (DeviceCardKit.CardPad + 4) + W(name) + (picker is null ? 0 : 16 + W(picker))
+                        + 16 + W(badges) + 20 + 8 + SwitchTrack.W + 16);   // gaps, live-count slack, the power slot
+            // The whole row when it fits (the section gains its height), else the tabs alone (the
+            // trailing readout keeps its place in the section), else nothing moves.
+            Control? lifted = null;
+            // A row whose readout is swapped per tab (a ContentControl, which can't be measured
+            // before it is shown) moves its tabs alone.
+            bool swaps = tabRow.GetLogicalDescendants().OfType<ContentControl>().Any();
+            if (!swaps && W(tabRow) <= room && DeviceCardKit.Lift(tabRow)) lifted = tabRow;
+            else if (tabRow.GetValue(DeviceCardKit.HeaderTabsCoreProperty) is { } core && W(core) <= room && DeviceCardKit.Lift(core)) lifted = core;
+            if (lifted is not null)
+            {
+                // A trailing readout that grows later (another tab's summary) trims rather than
+                // running under the badges.
+                lifted.MaxWidth = room;
+                foreach (var tb in lifted.GetLogicalDescendants().OfType<TextBlock>()) tb.TextTrimming = TextTrimming.CharacterEllipsis;
+                lifted.HorizontalAlignment = HorizontalAlignment.Left;
+                lifted.VerticalAlignment = VerticalAlignment.Bottom;
+                lifted.Margin = new Thickness(0, 0, 0, 1);
+                if (lifted == tabRow) lifted.Height = DeviceCardKit.HeaderH - 1;
+                right.Children.Insert(0, lifted);   // same cell as the right-aligned badges, which it never reaches
+            }
         }
 
         void Move(int to) { if (s.Kind == ChainKind.Midi) _engine.MoveMidiEffect(_trackId, di, to); else _engine.MoveDevice(_trackId, di, to); ExtrasMoved(s.Kind, di, to); Rebuild(); Changed?.Invoke(); }

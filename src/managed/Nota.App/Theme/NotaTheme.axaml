@@ -78,7 +78,7 @@
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
         <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="11"/>
         <Setter Property="MinHeight" Value="24"/>
         <Setter Property="Padding" Value="8,0"/>
         <Setter Property="CornerRadius" Value="{StaticResource Radius.Field}"/>
@@ -129,7 +129,7 @@
                                     VerticalAlignment="Center" HorizontalAlignment="Right"/>
                   <TextBlock Name="PART_InputGestureText" Grid.Column="3"
                              Text="{Binding InputGesture, RelativeSource={RelativeSource TemplatedParent}, Converter={x:Static app:MenuGestureConverter.Instance}}"
-                             FontFamily="{StaticResource Font.UI}" FontSize="11"
+                             FontFamily="{StaticResource Font.UI}" FontSize="10"
                              Foreground="{DynamicResource Brush.TextMuted}"
                              Margin="16,0,0,0"
                              VerticalAlignment="Center" HorizontalAlignment="Right"/>
@@ -289,7 +289,7 @@
     <Setter Property="Padding" Value="10,0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Field}"/>
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Background" Value="{DynamicResource Brush.Well}"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
@@ -367,7 +367,7 @@
     <Setter Property="Padding" Value="10,0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Field}"/>
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Background" Value="{DynamicResource Brush.Well}"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextStrong}"/>
@@ -434,7 +434,7 @@
     <Setter Property="Width" Value="{StaticResource Control.Transport}"/>
     <Setter Property="Height" Value="{StaticResource Control.Transport}"/>
     <Setter Property="Padding" Value="0"/>
-    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Group}"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
@@ -510,7 +510,7 @@
     <Setter Property="Height" Value="{StaticResource Control.Chip}"/>
     <Setter Property="Padding" Value="10,0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Group}"/>
-    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="Background" Value="{DynamicResource Brush.Well}"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
     <Setter Property="BorderThickness" Value="0"/>
@@ -654,7 +654,7 @@
     <Setter Property="Height" Value="20"/>
     <Setter Property="Padding" Value="7,0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Field}"/>
-    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontSize" Value="10"/>
     <Setter Property="FontWeight" Value="Normal"/>
     <Setter Property="Background" Value="{DynamicResource Brush.Well}"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
@@ -684,7 +684,7 @@
     <Setter Property="Height" Value="{StaticResource Control.Seg}"/>
     <Setter Property="Padding" Value="8,0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Cell}"/>
-    <Setter Property="FontSize" Value="11.5"/>
+    <Setter Property="FontSize" Value="10.5"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
@@ -724,7 +724,7 @@
     <Setter Property="MinHeight" Value="0"/>
     <Setter Property="Padding" Value="8,0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Field}"/>
-    <Setter Property="FontSize" Value="11.5"/>
+    <Setter Property="FontSize" Value="10.5"/>
     <Setter Property="Background" Value="{DynamicResource Brush.Well}"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
     <Setter Property="BorderBrush" Value="Transparent"/>
@@ -757,7 +757,7 @@
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Field}"/>
   </Style>
   <Style Selector="ComboBoxItem">
-    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
     <Setter Property="Padding" Value="8,4"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Field}"/>
@@ -779,7 +779,7 @@
        opacity. -->
   <Style Selector="CheckBox">
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontSize" Value="10"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
     <Setter Property="MinHeight" Value="0"/>
@@ -846,7 +846,7 @@
     <Setter Property="Height" Value="{StaticResource Control.Shell}"/>
     <Setter Property="MinHeight" Value="0"/>
     <Setter Property="Padding" Value="9,0"/>
-    <Setter Property="FontSize" Value="12.5"/>
+    <Setter Property="FontSize" Value="11.5"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Field}"/>
     <Setter Property="Background" Value="{DynamicResource Brush.Well}"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
@@ -921,36 +921,36 @@
        Mirrored as constants in Theme/NotaFonts.cs (NotaType). -->
 
   <!-- Shell scale -->
-  <Style Selector="TextBlock.Title">          <!-- modal / section heading: 13 / 600 -->
-    <Setter Property="FontSize" Value="13"/>
+  <Style Selector="TextBlock.Title">          <!-- modal / section heading: 12 / 600 -->
+    <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextHeading}"/>
   </Style>
-  <Style Selector="TextBlock.Heading">        <!-- project name: 13 / 600 -->
-    <Setter Property="FontSize" Value="13"/>
+  <Style Selector="TextBlock.Heading">        <!-- project name: 12 / 600 -->
+    <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
-  <Style Selector="TextBlock.Name">           <!-- track, preset, file name: 12 / 500 -->
-    <Setter Property="FontSize" Value="12"/>
+  <Style Selector="TextBlock.Name">           <!-- track, preset, file name: 11 / 500 -->
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
-  <Style Selector="TextBlock.Caption">        <!-- supporting copy, hint: 11 / 400 / 1.5, secondary -->
-    <Setter Property="FontSize" Value="11"/>
+  <Style Selector="TextBlock.Caption">        <!-- supporting copy, hint: 10 / 400 / 1.5, secondary -->
+    <Setter Property="FontSize" Value="10"/>
     <Setter Property="FontWeight" Value="Normal"/>
     <Setter Property="LineHeight" Value="16"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
   </Style>
-  <Style Selector="TextBlock.SectionLabel">   <!-- panel group heading: 11 / 600, muted, sentence case -->
-    <Setter Property="FontSize" Value="11"/>
+  <Style Selector="TextBlock.SectionLabel">   <!-- panel group heading: 10 / 600, muted, sentence case -->
+    <Setter Property="FontSize" Value="10"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
   </Style>
   <!-- The unit beside a readout (BPM, Loop, Grid): the label size, 11 / 400 in ink 3. -->
-  <Style Selector="TextBlock.CellLabel">      <!-- 11 / 400, ink 3 -->
+  <Style Selector="TextBlock.CellLabel">      <!-- 10 / 400, ink 3 -->
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontSize" Value="10"/>
     <Setter Property="FontWeight" Value="Normal"/>
     <Setter Property="LineHeight" Value="13"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
@@ -958,20 +958,20 @@
   <Style Selector="TextBlock.Mono">           <!-- kept for older markup: numbers are Geist like everything else -->
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
   </Style>
-  <Style Selector="TextBlock.Readout">        <!-- toolbar values: 17 / 500 -->
+  <Style Selector="TextBlock.Readout">        <!-- toolbar values: 16 / 500 -->
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="17"/>
+    <Setter Property="FontSize" Value="16"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
-  <Style Selector="TextBlock.Value">          <!-- a number on a button or in a row: 11.5 / 400 -->
+  <Style Selector="TextBlock.Value">          <!-- a number on a button or in a row: 10.5 / 400 -->
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="11.5"/>
+    <Setter Property="FontSize" Value="10.5"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
   </Style>
-  <Style Selector="TextBlock.Eyebrow">        <!-- format badge: mono 10 / 400, muted, as written -->
+  <Style Selector="TextBlock.Eyebrow">        <!-- format badge: 9.5 / 400, muted, as written -->
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="10"/>
+    <Setter Property="FontSize" Value="9.5"/>
     <Setter Property="FontWeight" Value="Normal"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextMuted}"/>
   </Style>
@@ -1028,7 +1028,7 @@
   </Style>
   <!-- A list row: 26px, one line of text. Selected = raised hover + a 2px accent tick. -->
   <Style Selector="ListBoxItem">
-    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
     <Setter Property="Padding" Value="8,0"/>
     <Setter Property="MinHeight" Value="{StaticResource Control.Shell}"/>
@@ -1055,7 +1055,7 @@
        (orange underlines are for tabs inside a device). No fill. -->
   <Style Selector="TabItem">
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="FontWeight" Value="Medium"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
     <Setter Property="Background" Value="Transparent"/>
@@ -1148,8 +1148,8 @@
   <Style Selector="ListBoxItem:selected Border.RowEdge">
     <Setter Property="Background" Value="{DynamicResource Brush.Accent}"/>
   </Style>
-  <Style Selector="TextBlock.RowName">     <!-- track-name scale: 13 / 580 -->
-    <Setter Property="FontSize" Value="13"/>
+  <Style Selector="TextBlock.RowName">     <!-- track-name scale: 12 / 580 -->
+    <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
@@ -1160,7 +1160,7 @@
   <!-- Row metadata on the right: the label scale, 11 / 400 in ink 3. -->
   <Style Selector="TextBlock.RowTag">
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontSize" Value="10"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
   <Style Selector="ListBoxItem:selected TextBlock.RowTag">
@@ -1195,8 +1195,8 @@
   <Style Selector="ListBox.themes ListBoxItem:selected Border.ThemeFrame">
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
   </Style>
-  <Style Selector="TextBlock.GroupLabel">     <!-- browser section: 12 / 600, ink 2, sentence case -->
-    <Setter Property="FontSize" Value="12"/>
+  <Style Selector="TextBlock.GroupLabel">     <!-- browser section: 11 / 600, ink 2, sentence case -->
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
   </Style>
@@ -1209,7 +1209,7 @@
     <Setter Property="Padding" Value="0"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderThickness" Value="0"/>
-    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
     <Setter Property="CaretBrush" Value="{DynamicResource Brush.Accent}"/>
     <Setter Property="VerticalContentAlignment" Value="Center"/>
@@ -1285,7 +1285,7 @@
   <Style Selector="Menu > MenuItem">
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="FontSize" Value="11"/>
     <Setter Property="Padding" Value="8,0"/>
     <Setter Property="MinHeight" Value="22"/>
   </Style>
@@ -1313,7 +1313,7 @@
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Field}"/>
     <Setter Property="Padding" Value="7,4"/>
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
-    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="FontSize" Value="10.5"/>
   </Style>
 
   <!-- ===== Scrollbars: a thin muted thumb on a transparent track ===== -->

@@ -145,7 +145,7 @@ public sealed partial class ArrangementView
 
     private void RenameSection(Control anchor, ArrangementSection s)
     {
-        var box = new TextBox { Text = s.Name, Width = 160, FontSize = 12 };
+        var box = new TextBox { Text = s.Name, Width = 160, FontSize = 11 };
         var flyout = new Flyout { Content = box, Placement = PlacementMode.Bottom };
         box.KeyDown += (_, ke) =>
         {

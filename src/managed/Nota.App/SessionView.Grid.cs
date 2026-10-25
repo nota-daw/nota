@@ -66,7 +66,7 @@ public sealed partial class SessionView
         }
         _cellsRow.Children.Add(mid);
 
-        var addScene = new Button { Content = "+ Scene", Classes = { "ghost" }, Height = SpacerH, FontSize = 10, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0) };
+        var addScene = new Button { Content = "+ Scene", Classes = { "ghost" }, Height = SpacerH, FontSize = 9, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0) };
         ToolTip.SetTip(addScene, "Add a scene at the end");
         addScene.Click += (_, _) => { int s = _engine.InsertScene(_engine.SceneCount); Refresh(); if (s >= 0) Select(new Selection(SelKind.Scene, 0, s)); };
 
@@ -76,7 +76,7 @@ public sealed partial class SessionView
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 7,
-                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = "Stop all clips", FontSize = 10, FontWeight = FontWeight.SemiBold } },
+                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = "Stop all clips", FontSize = 9, FontWeight = FontWeight.SemiBold } },
             },
         };
         ToolTip.SetTip(stopAll, "Stop every session clip");
@@ -198,7 +198,7 @@ public sealed partial class SessionView
 
     private void PromptText(Control anchor, string current, Action<string> commit)
     {
-        var box = new TextBox { Text = current, Width = 180, FontSize = 12, Classes = { "field" } };
+        var box = new TextBox { Text = current, Width = 180, FontSize = 11, Classes = { "field" } };
         var flyout = new Flyout { Content = box, Placement = Avalonia.Controls.PlacementMode.Pointer };
         box.KeyDown += (_, ke) =>
         {
@@ -228,7 +228,7 @@ public sealed partial class SessionView
             var stripe = new Border { Height = 3, VerticalAlignment = VerticalAlignment.Top, Background = c.Kind == ColKind.Master ? NotaPalette.Master : c.Brush };
             var name = new TextBlock
             {
-                Text = c.Name, FontSize = 12, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
+                Text = c.Name, FontSize = 11, FontWeight = FontWeight.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis,
                 Foreground = c.Kind == ColKind.Return ? NotaPalette.TextSecondary : NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center,
             };
             var top = new DockPanel { LastChildFill = true };
@@ -268,7 +268,7 @@ public sealed partial class SessionView
             }
             top.Children.Add(name);
 
-            var kind = new TextBlock { Text = c.KindLabel, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextMuted, TextTrimming = TextTrimming.CharacterEllipsis };
+            var kind = new TextBlock { Text = c.KindLabel, FontSize = 8.5, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextMuted, TextTrimming = TextTrimming.CharacterEllipsis };
             kind.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             var stack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 3, 8, 0), Children = { top, kind } };
             Child = new Panel { Children = { stripe, stack } };

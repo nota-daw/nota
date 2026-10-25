@@ -415,9 +415,19 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         }
         sync = Paint;
         Paint();
-        var strip = new Grid { Height = TabH };
-        strip.Children.Add(new Border { Height = 1, VerticalAlignment = VerticalAlignment.Bottom, Background = NotaPalette.Rule });
-        if (trailing is not null) strip.Children.Add(trailing);
+        // Tabs, then the trailing hint in the rest (right-aligned): stretched in a section it sits at
+        // the far end; lifted into the header (sized to content) it follows the tabs.
+        var strip = DeviceCardKit.Liftable(new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*") }, row, trailing is not null);
+        var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Bottom, Background = NotaPalette.Rule };
+        Grid.SetColumnSpan(rule, 2);
+        strip.Children.Add(rule);
+        if (trailing is not null)
+        {
+            trailing.HorizontalAlignment = HorizontalAlignment.Right;
+            trailing.Margin = new Thickness(16, 0, 0, 0);
+            Grid.SetColumn(trailing, 1);
+            strip.Children.Add(trailing);
+        }
         strip.Children.Add(row);
         return strip;
     }

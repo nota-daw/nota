@@ -67,10 +67,10 @@ internal sealed class ConnectPhoneView : Border
         _qr = null; _code = _left = null; _ring = null;
         bool on = _settings.Current.RemoteEnabled;
 
-        var title = new TextBlock { Text = "Connect phone", FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        var title = new TextBlock { Text = "Connect phone", FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         var sw = new ToggleSwitch(on, shell: true) { VerticalAlignment = VerticalAlignment.Center };
         sw.Changed += v => { _settings.Current.RemoteEnabled = v; _settings.Save(); _ = _remote.ApplyAsync(); };
-        var allow = new TextBlock { Text = "Allow", FontSize = 11, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+        var allow = new TextBlock { Text = "Allow", FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 7, Margin = new Thickness(18, 16, 18, 12) };
         head.Children.Add(title);
         Grid.SetColumn(sw, 1); head.Children.Add(sw);
@@ -101,10 +101,10 @@ internal sealed class ConnectPhoneView : Border
         _qr = new QrView { Width = 150, Height = 150, Text = _remote.QrText };
         var info = new StackPanel { Spacing = 10 };
         info.Children.Add(Field("Address", AddressRows()));
-        _code = new TextBlock { FontSize = 24, FontWeight = FontWeight.Medium, LetterSpacing = 4.8, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center };
+        _code = new TextBlock { FontSize = 23, FontWeight = FontWeight.Medium, LetterSpacing = 4.8, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center };
         _ring = new Arc { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.VizInk, StartAngle = -90, VerticalAlignment = VerticalAlignment.Center };
         var ringBack = new Ellipse { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.TrackOff };
-        _left = new TextBlock { FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _left = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var codeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { _code, new Panel { Children = { ringBack, _ring } }, _left } };
         info.Children.Add(Field("Code", codeRow));
         bool usb = _remote.Links is { Count: > 0 } links && links[0].Usb;
@@ -142,11 +142,11 @@ internal sealed class ConnectPhoneView : Border
             : d.Usb ? $"USB · {d.RttMs} ms · {(d.Screen.Length > 0 ? d.Screen : "connected")}"
             : $"{d.RttMs} ms · {(d.Screen.Length > 0 ? d.Screen : "connected")}";
         var names = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
-        names.Children.Add(new TextBlock { Text = d.Name, FontSize = 12, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis });
-        names.Children.Add(new TextBlock { Text = sub, FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = weak ? NotaPalette.Warning : NotaPalette.TextTertiary });
+        names.Children.Add(new TextBlock { Text = d.Name, FontSize = 11, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis });
+        names.Children.Add(new TextBlock { Text = sub, FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = weak ? NotaPalette.Warning : NotaPalette.TextTertiary });
 
         var trackBar = new Border { Width = 4, Height = 18, CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center, Background = d.TrackId > 0 ? TrackColorBrush(d.TrackId) : NotaPalette.BorderStrong };
-        var trackName = new TextBlock { Text = d.TrackId > 0 ? _engine.GetTrackName(d.TrackId) : "—", FontSize = 11, Foreground = NotaPalette.TextSecondary, Width = 70, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var trackName = new TextBlock { Text = d.TrackId > 0 ? _engine.GetTrackName(d.TrackId) : "—", FontSize = 10, Foreground = NotaPalette.TextSecondary, Width = 70, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
 
         var x = new Border
         {
@@ -187,19 +187,19 @@ internal sealed class ConnectPhoneView : Border
         var links = _remote.Links;
         var host = _remote.Url!.Replace("http://", "");
         var first = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        first.Children.Add(new TextBlock { Text = host, FontSize = 13, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center });
+        first.Children.Add(new TextBlock { Text = host, FontSize = 12, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center });
         if (links.Count > 0 && links[0].Usb)
             first.Children.Add(new Border
             {
                 Height = 16, Padding = new Thickness(5, 0), CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center,
                 Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = "USB", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center },
+                Child = new TextBlock { Text = "USB", FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center },
             });
         var rows = new StackPanel { Spacing = links.Count > 1 ? 3 : 0, Children = { first } };
         for (int i = 1; i < links.Count; i++)
             rows.Children.Add(new TextBlock
             {
-                Text = $"{links[i].Name}  {links[i].Address}:{_settings.Current.RemotePort}", FontSize = 10, FontFamily = NotaFonts.UiFamily,
+                Text = $"{links[i].Name}  {links[i].Address}:{_settings.Current.RemotePort}", FontSize = 9, FontFamily = NotaFonts.UiFamily,
                 Foreground = NotaPalette.TextTertiary, Margin = new Thickness(0, 1, 0, 0),
             });
         return rows;
@@ -208,14 +208,14 @@ internal sealed class ConnectPhoneView : Border
     private static Control Field(string label, Control value)
     {
         var s = new StackPanel { Spacing = 3 };
-        s.Children.Add(new TextBlock { Text = NotaText.Label(label), FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted });
+        s.Children.Add(new TextBlock { Text = NotaText.Label(label), FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted });
         s.Children.Add(value);
         return s;
     }
 
     private static TextBlock Note(string text, Thickness margin, IBrush? ink = null) => new()
     {
-        Text = text, FontSize = 11, LineHeight = 16.5, TextWrapping = TextWrapping.Wrap,
+        Text = text, FontSize = 10, LineHeight = 16.5, TextWrapping = TextWrapping.Wrap,
         Foreground = ink ?? NotaPalette.TextMuted, Margin = margin,
     };
 }

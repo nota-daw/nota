@@ -42,7 +42,7 @@ public sealed class MosaicCreateWindow : NotaWindow
     private readonly StackPanel _instList = new() { Spacing = 3 };
     private readonly ContentControl _octave = new();
     private readonly ContentControl _mapping = new();
-    private readonly TextBlock _instTitle = new() { FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _instTitle = new() { FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _instSub = Mono("", TextTertiary, 8);
     private readonly MosaicZoneMap _map = new() { Interactive = false };
     private readonly WrapPanel _issues = new() { Orientation = Orientation.Horizontal };
@@ -64,7 +64,7 @@ public sealed class MosaicCreateWindow : NotaWindow
         Background = NotaPalette.BgApp;
 
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 12, Margin = new Thickness(12, 8) };
-        head.Children.Add(new TextBlock { Text = "Create multisample", FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center });
+        head.Children.Add(new TextBlock { Text = "Create multisample", FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center });
         var crumb = Mono(breadcrumb ?? _folderName, TextTertiary, 8.5);
         Grid.SetColumn(crumb, 1); head.Children.Add(crumb);
         Grid.SetColumn(_headerInfo, 2); head.Children.Add(_headerInfo);
@@ -170,7 +170,7 @@ public sealed class MosaicCreateWindow : NotaWindow
             var check = new CheckBox { IsChecked = inst.Selected, VerticalAlignment = VerticalAlignment.Center, MinWidth = 0 };
             check.IsCheckedChanged += (_, _) => { inst.Selected = check.IsChecked == true; PaintFoot(); };
             string layers = inst.Layers.Count > 1 ? string.Join("/", inst.Layers) : $"{inst.Layers.Count} layer";
-            var name = new TextBlock { Text = inst.Stem, FontSize = 9, FontWeight = sel ? FontWeight.SemiBold : FontWeight.Normal, Foreground = sel ? AccentBright : TextPrimary };
+            var name = new TextBlock { Text = inst.Stem, FontSize = 8.5, FontWeight = sel ? FontWeight.SemiBold : FontWeight.Normal, Foreground = sel ? AccentBright : TextPrimary };
             var sub = Mono($"{inst.Files.Count} files · {inst.Roots} roots · {layers}{(inst.MaxRr > 1 ? $" · rr {inst.MaxRr}" : "")}", TextTertiary, 7.5);
             var conf = Mono(NotaNum.Unit(inst.Confidence, "0", "%"), inst.Confidence >= 85 ? TextPrimary : NotaPalette.Warning, 8.5);
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6 };
@@ -327,7 +327,7 @@ public sealed class MosaicCreateWindow : NotaWindow
         var b = new Border
         {
             Width = 16, Height = 16, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised,
-            Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = glyph, FontSize = 9, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = glyph, FontSize = 8.5, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         b.PointerPressed += (_, e) => { if (e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) { click(); e.Handled = true; } };
         return b;

@@ -27,6 +27,72 @@ internal static class DeviceCardKit
     internal const double CardPad = 4;    // the body's distance from the card edge
     internal const double SectionGap = 6, SectionPad = 8;   // between pressed-in sections; inside one
 
+    // ---- the header strip (spec 038 FR-039) ----
+    // A card's main tab row moves up into the header's empty strip, after the preset picker,
+    // when the header has room for it: the tab helpers mark the row they build, and the shell
+    // lifts the main marked row it finds in the body (see FindLiftable) and drops its rule. The section it came from gains the row's height.
+    internal static readonly AttachedProperty<bool> HeaderTabsProperty =
+        AvaloniaProperty.RegisterAttached<Control, bool>("HeaderTabs", typeof(DeviceCardKit));
+
+    internal static readonly AttachedProperty<Control?> HeaderTabsCoreProperty =
+        AvaloniaProperty.RegisterAttached<Control, Control?>("HeaderTabsCore", typeof(DeviceCardKit));
+
+    internal static readonly AttachedProperty<bool> HeaderTabsTrailingProperty =
+        AvaloniaProperty.RegisterAttached<Control, bool>("HeaderTabsTrailing", typeof(DeviceCardKit));
+
+    /// <summary>Mark <paramref name="row"/> as a tab row the shell may lift into the header;
+    /// <paramref name="tabs"/> is the tabs alone, lifted without the row's trailing readout when
+    /// only they fit (the readout then keeps its place in the section).</summary>
+    internal static T Liftable<T>(T row, Control tabs, bool trailing = false) where T : Control
+    {
+        row.SetValue(HeaderTabsProperty, true);
+        row.SetValue(HeaderTabsTrailingProperty, trailing);
+        row.SetValue(HeaderTabsCoreProperty, tabs);
+        return row;
+    }
+
+    /// <summary>The card's main tab row under <paramref name="root"/>: of the liftable rows, the
+    /// one with the most tabs (the centre section's — a right panel's Levels / Output has fewer);
+    /// on a tie, the one with a trailing readout (the centre's), then the first found.</summary>
+    internal static Control? FindLiftable(Avalonia.LogicalTree.ILogical root)
+    {
+        Control? best = null; int most = 0;   // rank: tabs × 2, +1 with a trailing readout
+        void Walk(Avalonia.LogicalTree.ILogical node)
+        {
+            foreach (var child in node.LogicalChildren)
+            {
+                if (child is Control c && c.GetValue(HeaderTabsProperty))
+                {
+                    int n = (c.GetValue(HeaderTabsCoreProperty) is Panel tabs ? tabs.Children.Count : 1) * 2
+                          + (c.GetValue(HeaderTabsTrailingProperty) ? 1 : 0);
+                    if (n > most) { best = c; most = n; }
+                    continue;
+                }
+                Walk(child);
+            }
+        }
+        Walk(root);
+        return best;
+    }
+
+    /// <summary>Take <paramref name="row"/> out of its parent and drop its rule, ready for the
+    /// header. False when its parent can't give it up.</summary>
+    internal static bool Lift(Control row)
+    {
+        switch (row.Parent)
+        {
+            case Panel p: p.Children.Remove(row); break;
+            case Decorator d: d.Child = null; break;
+            case ContentControl cc: cc.Content = null; break;
+            default: return false;
+        }
+        if (row is Border b) b.BorderThickness = new Thickness(0);
+        if (row is Panel panel)
+            for (int i = panel.Children.Count - 1; i >= 0; i--)
+                if (panel.Children[i] is Border { Height: 1, Child: null } rule) panel.Children.Remove(rule);
+        return true;
+    }
+
     internal static readonly IBrush Raised = NotaPalette.SurfaceRaised;
     internal static readonly IBrush Card2 = NotaPalette.SurfaceCard;
     internal static readonly IBrush Sunken = NotaPalette.BgSunken;

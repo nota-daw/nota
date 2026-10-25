@@ -551,7 +551,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             Action sync = () => { };
             var bar = SynthInstrumentCard.TabStrip(tabs, () => sel, iv => { sel = iv; sync(); host.Content = body(iv); changed?.Invoke(iv); }, out var s, extrasCtl);
             sync = s;
-            if (extrasCtl is not null) { extrasCtl.HorizontalAlignment = HorizontalAlignment.Right; extrasCtl.Margin = new Thickness(0, 0, 0, 3); }
+            if (extrasCtl is not null) { extrasCtl.HorizontalAlignment = HorizontalAlignment.Right; extrasCtl.Margin = new Thickness(16, 0, 0, 3); }
             DockPanel.SetDock(bar, Avalonia.Controls.Dock.Top);
             host.Content = body(sel); changed?.Invoke(sel);
             return new DockPanel { LastChildFill = true, Children = { bar, host } };

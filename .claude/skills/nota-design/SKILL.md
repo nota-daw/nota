@@ -93,8 +93,9 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
 - **One typeface: Geist, with tabular figures.** Every word and number, no monospace face.
   `NotaFonts.InstallTabular()` turns on `tnum` app-wide; custom-drawn text is a
   `NotaFormattedText`, never a bare `FormattedText`. Use the scale in `DESIGN.md` § Type
-  (readout 17 / 500, device name 13 / 600, track name 13 / 580, body 12, value 11.5, label
-  11, device label 10.5, column head 10, key letter 10 / 650); a unit sits beside its value
+  (readout 16 / 500, device name 12 / 600, track name 12 / 580, body 11, value 10.5, label
+  10, device label 9.5, column head 9.5, key letter 9.5 / 650; the user's Text size steps all
+  of it by −1…+2 pt through `NotaTextSize`, so never read the setting in a view); a unit sits beside its value
   in ink 3. Nothing under 7 px.
 - **Sentence case, no tracking — every label.** Menu items, command titles, palette
   headings, window titles, tooltips, buttons, tags: "Save as…", "Export audio", "Analog
@@ -133,7 +134,7 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
 - **Header 32** (`BuildCardShell` in `DeviceChainView.Shell.cs` — every card uses it,
   racks, the generic instrument card, plug-ins and Sends included; never build a header of
   your own), in fixed slots: **name · preset menu · type tag and accessories · power**.
-  Name in 13 / 600; the preset menu `‹ Name ⌄ ›` is a raised dropdown, only when the device
+  Name in 12 / 600; the preset menu `‹ Name ⌄ ›` is a raised dropdown, only when the device
   has presets; the type tag Geist 11 in ink 3, sentence case; the power switch at the
   right on every card, instruments and racks included. A/B, move and delete go in the
   right-click menu.

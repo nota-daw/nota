@@ -59,12 +59,13 @@ public static class NotaFonts
 }
 
 /// <summary>FormattedText with tabular figures — what every custom-drawn view builds, so
-/// numbers drawn in Render() keep their width like the ones in controls.</summary>
+/// numbers drawn in Render() keep their width like the ones in controls, and take the
+/// Text size step like every control's text.</summary>
 public class NotaFormattedText : FormattedText
 {
     public NotaFormattedText(string textToFormat, CultureInfo culture, FlowDirection flowDirection,
                              Typeface typeface, double emSize, IBrush? foreground)
-        : base(textToFormat, culture, flowDirection, typeface, emSize, foreground)
+        : base(textToFormat, culture, flowDirection, typeface, NotaTextSize.Apply(emSize), foreground)
         => SetFontFeatures(NotaFonts.Tabular);
 }
 
@@ -75,9 +76,9 @@ public class NotaFormattedText : FormattedText
 internal static class NotaType
 {
     // Shell scale
-    public const double Title = 13, Heading = 13, Name = 12, Body = 12, Caption = 11,
-                        SectionLabel = 11, Readout = 17, Value = 11.5, Eyebrow = 10,
-                        ClipName = 10.5, TrackName = 13, KeyLetter = 10;
+    public const double Title = 12, Heading = 12, Name = 11, Body = 11, Caption = 10,
+                        SectionLabel = 10, Readout = 16, Value = 10.5, Eyebrow = 9.5,
+                        ClipName = 10, TrackName = 12, KeyLetter = 9.5;
     public const double SectionLabelTracking = 0, EyebrowTracking = 0;
 
     // Device scale (style guide): one step under the shell so a 260px card keeps its room for

@@ -74,11 +74,11 @@ public sealed partial class PreferencesWindow
         for (int i = 0; i < StoreFilters.Length; i++)
         {
             int idx = i;
-            var count = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
+            var count = new TextBlock { FontSize = 8.5, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
             _storeCounts[i] = count;
             var b = new ToggleButton
             {
-                Classes = { "seg" }, FontSize = 12, IsChecked = i == _storeFilter,
+                Classes = { "seg" }, FontSize = 11, IsChecked = i == _storeFilter,
                 Content = new StackPanel
                 {
                     Orientation = Orientation.Horizontal, Spacing = 6,
@@ -94,9 +94,9 @@ public sealed partial class PreferencesWindow
             segs.Add(b);
             strip.Children.Add(b);
         }
-        var search = new TextBox { PlaceholderText = "Search", Text = _storeSearch, Classes = { "search" }, FontSize = 12 };
+        var search = new TextBox { PlaceholderText = "Search", Text = _storeSearch, Classes = { "search" }, FontSize = 11 };
         search.TextChanged += (_, _) => { _storeSearch = search.Text ?? ""; RenderStoreList(); };
-        var refresh = new Button { Content = "Refresh", Classes = { "ghost" }, Height = 30, FontSize = 12, Padding = new Thickness(12, 0), Foreground = TextSecondary };
+        var refresh = new Button { Content = "Refresh", Classes = { "ghost" }, Height = 30, FontSize = 11, Padding = new Thickness(12, 0), Foreground = TextSecondary };
         ToolTip.SetTip(refresh, "Reload the registry");
         refresh.Click += (_, _) => { if (!_storeLoading) _storeLoad = LoadStoreAsync(refresh: true); };
         _storeRefresh = refresh;
@@ -181,8 +181,8 @@ public sealed partial class PreferencesWindow
                     Orientation = Orientation.Horizontal, Spacing = 8,
                     Children =
                     {
-                        new TextBlock { Text = h.Title, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = h.Count.ToString(), FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = h.Title, FontSize = 8.5, FontWeight = FontWeight.Medium, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = h.Count.ToString(), FontSize = 8.5, FontFamily = NotaFonts.UiFamily, Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
             }),
@@ -198,7 +198,7 @@ public sealed partial class PreferencesWindow
             Children =
             {
                 new ProgressBar { IsIndeterminate = true, Width = 180, Height = 4, MinWidth = 0 },
-                new TextBlock { Text = "Loading the plugin registry…", FontSize = 12, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
+                new TextBlock { Text = "Loading the plugin registry…", FontSize = 11, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
             },
         },
     });
@@ -240,7 +240,7 @@ public sealed partial class PreferencesWindow
             var empty = new TextBlock
             {
                 Text = _storeFilter == 3 && q.Length == 0 ? "Nothing installed from the registry yet." : "Nothing matches.",
-                FontSize = 12, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(28),
+                FontSize = 11, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(28),
             };
             _storeList.Content = Table(new List<Control> { empty });
             return;
@@ -307,8 +307,8 @@ public sealed partial class PreferencesWindow
     // outcome with a close button. Hidden when there's neither.
     private Control StoreDock()
     {
-        _dockTitle = new TextBlock { FontSize = 12, FontWeight = FontWeight.Medium, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-        _dockDetail = new TextBlock { FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _dockTitle = new TextBlock { FontSize = 11, FontWeight = FontWeight.Medium, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        _dockDetail = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         _dockBar = new ProgressBar { Minimum = 0, Maximum = 1, Height = 4, MinWidth = 0 };
         _dockCancel = StoreButton("Cancel", enabled: true, Jobs.Cancel);
         _dockCancel.VerticalAlignment = VerticalAlignment.Center;
@@ -378,17 +378,17 @@ public sealed partial class PreferencesWindow
                 {
                     Children =
                     {
-                        new TextBlock { Text = p.Name, FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = here ? TextPrimary : TextSecondary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = KindLabel(p.Kind), FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = p.Name, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = here ? TextPrimary : TextSecondary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = KindLabel(p.Kind), FontSize = 8.5, FontFamily = NotaFonts.UiFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
                         PlatformIcons(p.Platforms),
                     },
                 },
-                new TextBlock { Text = $"{p.Developer} · {p.Version} · {p.License}", FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = here ? TextTertiary : TextDisabled },
-                new TextBlock { Text = p.Description, FontSize = 12, LineHeight = 18, Foreground = here ? TextSecondary : TextTertiary, TextWrapping = TextWrapping.Wrap },
+                new TextBlock { Text = $"{p.Developer} · {p.Version} · {p.License}", FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = here ? TextTertiary : TextDisabled },
+                new TextBlock { Text = p.Description, FontSize = 11, LineHeight = 18, Foreground = here ? TextSecondary : TextTertiary, TextWrapping = TextWrapping.Wrap },
             },
         };
         if (p.Notes is { Length: > 0 } notes)
-            text.Children.Add(new TextBlock { Text = notes, FontSize = 11, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = notes, FontSize = 10, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
 
         var actions = new StackPanel { Spacing = 8, MinWidth = 96, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
         bool busy = Jobs.BusyId is not null;
@@ -398,7 +398,7 @@ public sealed partial class PreferencesWindow
         }
         else if (p.Asset is null)
         {
-            actions.Children.Add(new TextBlock { Text = UnavailableReason(p.Platforms), FontSize = 11, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, Width = 110, TextAlignment = TextAlignment.Right, HorizontalAlignment = HorizontalAlignment.Right });
+            actions.Children.Add(new TextBlock { Text = UnavailableReason(p.Platforms), FontSize = 10, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, Width = 110, TextAlignment = TextAlignment.Right, HorizontalAlignment = HorizontalAlignment.Right });
         }
         else if (inst is null)
         {
@@ -412,14 +412,14 @@ public sealed partial class PreferencesWindow
                 actions.Children.Add(new StackPanel
                 {
                     Orientation = Orientation.Horizontal, Spacing = 6, Height = 26, HorizontalAlignment = HorizontalAlignment.Right,
-                    Children = { Dot(Brass), new TextBlock { Text = "Installed", FontSize = 11, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
+                    Children = { Dot(Brass), new TextBlock { Text = "Installed", FontSize = 10, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
                 });
             actions.Children.Add(StoreLink("Remove", null, busy ? null : () => RemoveFromStore(p)));
         }
         if (inst is null && p.Asset is { Size: > 0 } asset)
             actions.Children.Add(new TextBlock
             {
-                Text = NotaNum.Unit(asset.Size / 1048576.0, "0.0", "MB"), FontSize = 10, FontFamily = NotaFonts.UiFamily,
+                Text = NotaNum.Unit(asset.Size / 1048576.0, "0.0", "MB"), FontSize = 9, FontFamily = NotaFonts.UiFamily,
                 Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
             });
         var source = StoreLink("Source", GlyphKind.PopOut, () => _ = Launcher.LaunchUriAsync(new Uri(p.Repo)));
@@ -439,7 +439,7 @@ public sealed partial class PreferencesWindow
     {
         var b = new Button
         {
-            Content = label, IsEnabled = enabled, Height = 26, MinWidth = 88, FontSize = 12, Padding = new Thickness(12, 0),
+            Content = label, IsEnabled = enabled, Height = 26, MinWidth = 88, FontSize = 11, Padding = new Thickness(12, 0),
             CornerRadius = NotaRadius.Group, HorizontalAlignment = HorizontalAlignment.Right,
         };
         b.Click += (_, _) => onClick();
@@ -449,7 +449,7 @@ public sealed partial class PreferencesWindow
     // A text link: Ink 4, Ink 1 on hover; null action = inert (Ink 6).
     private static Control StoreLink(string label, GlyphKind? glyph, Action? onClick)
     {
-        var text = new TextBlock { Text = label, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { Text = label, FontSize = 10, VerticalAlignment = VerticalAlignment.Center };
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right, Background = Brushes.Transparent };
         row.Children.Add(text);
         if (glyph is { } g) row.Children.Add(new Glyph(g, 9));

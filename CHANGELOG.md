@@ -28,8 +28,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   of a one-chain rack back out. Also in the device's right-click menu (**Group into rack** /
   **Ungroup rack**). A device with a sidechain key, automation or CV links stays where it is
   and the status line says why. ⌘G on tracks still groups tracks.
+- **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
+  text in the app a point smaller or up to two points larger, live, without changing the
+  layout (Interface scale still scales everything).
+- **Send levels in the Large track header**: a track at the Large height shows a value bar for
+  its send to each return, two per row, as far as the height allows.
 
 ### Changed
+- **Smaller shell text, a new key picker and tabs in the device header** (review of
+  nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
+  The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
+  full. A device card's main tabs move into the empty strip of its header when there is room,
+  giving the section below their row.
 - **A new look** (spec 038, the Studio style guide): every control and setting stays where it
   was; how it is drawn changes. The shell is flat and grey so the track colours carry the
   content, and depth is kept for device cards. Orange now has three jobs: solid for what is

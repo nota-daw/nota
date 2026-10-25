@@ -112,6 +112,16 @@ All paths are under `src/managed/Nota.App/` unless they start with a top-level f
   `pr-assets/pr-NNN/`, then ready for review when CI is green
 - [x] T046 Follow-up nota-docs PR: re-shoot manual screenshots (EN + RU)
 
+## Phase 8: Review follow-ups (FR-035 – FR-040)
+
+- [x] T047 Key picker: keyboard + Major / Minor (Controls/KeyPicker.cs), both callers
+- [x] T048 Large track header: send rows (ArrangementView), synced on the meter tick
+- [x] T049 Shell scale −1 pt: NotaTheme.axaml, NotaType, shell literals; DESIGN.md table
+- [x] T050 Text size preference (settings, Preferences → Appearance, live re-apply)
+- [x] T051 Device header strip: lift the first tab row into the header (DeviceChainView.Shell,
+  the four tab helpers); audit every card
+- [ ] T052 Build + smoke, Mac hands-on, docs re-shoot, CHANGELOG / FEATURES
+
 ## Dependencies
 
 Phase 1 → Phase 2 → Phases 3 and 4 (independent of each other) → 5 → 6 → 7. Inside Phase 4,

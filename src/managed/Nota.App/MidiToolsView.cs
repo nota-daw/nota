@@ -385,7 +385,7 @@ public sealed class MidiToolsView : UserControl
 
     private static TextBlock CapsLabel(string text) => new()
     {
-        Text = text, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextTertiary,
+        Text = text, FontSize = 8.5, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextTertiary,
         VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
     };
 }

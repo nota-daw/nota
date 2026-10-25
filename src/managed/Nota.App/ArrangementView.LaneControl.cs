@@ -1061,7 +1061,7 @@ public sealed partial class ArrangementView
         // A small inline rename popup (Enter commits, Esc cancels) anchored at the pointer.
         private void PromptRename(string current, Action<string> commit)
         {
-            var box = new TextBox { Text = current, Width = 170, FontSize = 12 };
+            var box = new TextBox { Text = current, Width = 170, FontSize = 11 };
             var flyout = new Flyout { Content = box, Placement = PlacementMode.Pointer };
             box.KeyDown += (_, ke) =>
             {

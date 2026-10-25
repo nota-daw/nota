@@ -187,7 +187,7 @@ public sealed class AudioClipEditorView : UserControl
         // inline BPM editor).
         _bpmBox = new TextBox
         {
-            Classes = { "field" }, IsVisible = false, Width = 56, Height = 20, FontSize = 10, Padding = new Thickness(4, 0),
+            Classes = { "field" }, IsVisible = false, Width = 56, Height = 20, FontSize = 9, Padding = new Thickness(4, 0),
             VerticalContentAlignment = VerticalAlignment.Center,
         };
         _bpmBox.KeyDown += OnBpmKey;

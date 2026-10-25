@@ -51,7 +51,7 @@ internal sealed class SnapChip
     {
         var value = new TextBlock
         {
-            FontFamily = NotaFonts.UiFamily, FontSize = 11, VerticalAlignment = VerticalAlignment.Center,
+            FontFamily = NotaFonts.UiFamily, FontSize = 10, VerticalAlignment = VerticalAlignment.Center,
             TextAlignment = TextAlignment.Center,
         };
         // A grid glyph names the control and a chevron says it opens a menu, like the other

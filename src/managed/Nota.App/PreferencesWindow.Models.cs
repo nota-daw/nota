@@ -47,7 +47,7 @@ public sealed partial class PreferencesWindow
         else rows.Add(new TextBlock
         {
             Text = "ONNX Runtime has no build for this computer, so the models can't run here.",
-            FontSize = 12, Foreground = TextTertiary, Margin = new Thickness(16, 14),
+            FontSize = 11, Foreground = TextTertiary, Margin = new Thickness(16, 14),
         });
         _modelList.Content = Table(rows);
     }
@@ -64,12 +64,12 @@ public sealed partial class PreferencesWindow
                 {
                     Children =
                     {
-                        new TextBlock { Text = m.Name, FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = m.Feature, FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = m.Name, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = m.Feature, FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
-                new TextBlock { Text = $"{m.Author} · {m.License}", FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary },
-                new TextBlock { Text = m.Description, FontSize = 12, LineHeight = 18, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap },
+                new TextBlock { Text = $"{m.Author} · {m.License}", FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary },
+                new TextBlock { Text = m.Description, FontSize = 11, LineHeight = 18, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap },
             },
         };
 
@@ -82,20 +82,20 @@ public sealed partial class PreferencesWindow
             actions.Children.Add(new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 6, Height = 26, HorizontalAlignment = HorizontalAlignment.Right,
-                Children = { Dot(Brass), new TextBlock { Text = "Installed", FontSize = 11, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
+                Children = { Dot(Brass), new TextBlock { Text = "Installed", FontSize = 10, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
             });
             if (!runtime) actions.Children.Add(StoreLink("Remove", null, busy ? null : () => RemoveModel(m)));
         }
         else if (!runtime)
             actions.Children.Add(StoreButton("Install", enabled: !busy && _models.Runtime is not null, () => InstallModel(m)));
         else
-            actions.Children.Add(new TextBlock { Text = "Comes with a model", FontSize = 11, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right, Height = 26 });
+            actions.Children.Add(new TextBlock { Text = "Comes with a model", FontSize = 10, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right, Height = 26 });
 
         long download = runtime || installed || _models.Runtime is null ? m.Size : _models.DownloadSize(m.Id);
         var size = new TextBlock
         {
             Text = installed ? Megabytes(m.UnpackedSize) : Megabytes(download),
-            FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
+            FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
         };
         ToolTip.SetTip(size, installed ? "On disk"
             : download > m.Size ? $"{Megabytes(m.Size)} model + {Megabytes(download - m.Size)} AI runtime, downloaded once"

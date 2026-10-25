@@ -362,7 +362,7 @@ public sealed class BrowserView : UserControl
         _statusBar.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
 
         // Empty-state message, centered over the list when a tab has nothing to show.
-        _emptyText.FontSize = 11;
+        _emptyText.FontSize = 10;
         _emptyText.TextWrapping = TextWrapping.Wrap;
         _emptyText.TextAlignment = TextAlignment.Center;
         _emptyText.LineHeight = 16;
@@ -1314,7 +1314,7 @@ public sealed class BrowserView : UserControl
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
         TextBox Field(double v, string hint) => new()
         {
-            Classes = { "field" }, Width = 64, Watermark = hint, FontSize = 12,
+            Classes = { "field" }, Width = 64, Watermark = hint, FontSize = 11,
             Text = v > 0 ? SampleInfo.FormatBpm(v) : "",
         };
         var min = Field(f.BpmMin, "min");

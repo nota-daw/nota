@@ -55,7 +55,7 @@ public sealed class AboutWindow : NotaWindow
         };
         brand.Children.Add(new TextBlock
         {
-            Text = "Nota", FontSize = 26, FontWeight = FontWeight.SemiBold,
+            Text = "Nota", FontSize = 25, FontWeight = FontWeight.SemiBold,
             Foreground = Brush("Brush.TextPrimary"),
         });
         brand.Children.Add(new TextBlock

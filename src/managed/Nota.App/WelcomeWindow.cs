@@ -464,14 +464,14 @@ public sealed class WelcomeWindow : NotaWindow
         text.Children.Add(new TextBlock
         {
             Text = title,
-            FontSize = 13,
+            FontSize = 12,
             FontWeight = FontWeight.SemiBold,
             Foreground = NotaPalette.TextPrimary,
         });
         text.Children.Add(new TextBlock
         {
             Text = message,
-            FontSize = 12,
+            FontSize = 11,
             Foreground = NotaPalette.TextSecondary,
             TextWrapping = TextWrapping.Wrap,
         });

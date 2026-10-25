@@ -85,7 +85,7 @@ public sealed class TagEditorWindow : NotaWindow
         _rows.Children.Clear();
         foreach (var tag in _lib.Tags) _rows.Children.Add(BuildRow(tag));
         if (_lib.Tags.Count == 0)
-            _rows.Children.Add(new TextBlock { Text = "No tags yet — add one below.", Foreground = NotaPalette.TextTertiary, FontSize = 11 });
+            _rows.Children.Add(new TextBlock { Text = "No tags yet — add one below.", Foreground = NotaPalette.TextTertiary, FontSize = 10 });
     }
 
     private Control BuildRow(BrowserTag tag)

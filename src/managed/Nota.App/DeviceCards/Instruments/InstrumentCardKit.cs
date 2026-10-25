@@ -73,10 +73,11 @@ internal static class InstrumentCardKit
         if (trailing is not null)
         {
             trailing.VerticalAlignment = VerticalAlignment.Center;
+            trailing.Margin = new Thickness(16, 0, 0, 0);   // apart from the tabs when the row sits in the header
             DockPanel.SetDock(trailing, Dock.Right);
             dock.Children.Add(trailing);
         }
-        return new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 0, 1), Child = dock };
+        return DeviceCardKit.Liftable(new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 0, 1), Child = dock }, row, trailing is not null);
     }
 
     /// <summary>A graph window inside a section: the groove ground, corner 6, a 1–2px inner shadow.</summary>

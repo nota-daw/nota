@@ -112,7 +112,7 @@ public sealed class ExportWindow : NotaWindow
         rangeRow.Children.Add(_rangeReadout);
         var startBox = PositionBox(_customStart);
         var endBox = PositionBox(_customEnd);
-        _customError = new TextBlock { FontSize = 10, Foreground = NotaPalette.Danger, VerticalAlignment = VerticalAlignment.Center };
+        _customError = new TextBlock { FontSize = 9, Foreground = NotaPalette.Danger, VerticalAlignment = VerticalAlignment.Center };
         void ReadCustom()
         {
             var a = ParsePosition(startBox.Text);
@@ -132,7 +132,7 @@ public sealed class ExportWindow : NotaWindow
         {
             Text = "Positions are bar.beat.sixteenth, counted from 1 as in the transport: 5 or 5.1 is the "
                  + "start of bar 5, 5.3 its third beat. The export stops at the end position, so 1 to 5 is four bars.",
-            FontSize = 10, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, MaxWidth = 520,
+            FontSize = 9, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, MaxWidth = 520,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
         _customRow = new StackPanel
@@ -193,7 +193,7 @@ public sealed class ExportWindow : NotaWindow
         body.Children.Add(StemsBlock());
 
         // Footer.
-        _estimate = new TextBlock { FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _estimate = new TextBlock { FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         // The dialog's primary action: set apart by weight and one tone step, not by colour
         // (orange is for what is live or chosen).
         var export = _export = new Border
@@ -201,7 +201,7 @@ public sealed class ExportWindow : NotaWindow
             Background = NotaPalette.SurfaceHover, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
             CornerRadius = NotaRadius.Field, Padding = new Thickness(18, 0), Height = 28,
             Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = (_exportLabel = new TextBlock { Text = "Export WAV", FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center }),
+            Child = (_exportLabel = new TextBlock { Text = "Export WAV", FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center }),
         };
         export.BindResource(Border.BoxShadowProperty, "Shadow.Raised");
         export.PointerPressed += (_, _) =>
@@ -217,7 +217,7 @@ public sealed class ExportWindow : NotaWindow
             int kbps = Bitrates[_quality.SelectedIndex < 0 ? 0 : _quality.SelectedIndex];
             Close(new ExportOptions(sr, d, tailBeats, _rangeBeats, _stems, _normalize, dither, fmt, kbps, _startBeats));
         };
-        var cancel = new TextBlock { Text = "Cancel", FontSize = 11, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
+        var cancel = new TextBlock { Text = "Cancel", FontSize = 10, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
         cancel.PointerPressed += (_, _) => Close(null);
         var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(0, 2, 0, 0) };
         footer.Children.Add(export);
@@ -311,14 +311,14 @@ public sealed class ExportWindow : NotaWindow
 
     private TextBox PositionBox(double beats)
     {
-        var box = new TextBox { Text = BarBeatText(beats), Width = 72, FontSize = 11, PlaceholderText = "bar.beat" };
+        var box = new TextBox { Text = BarBeatText(beats), Width = 72, FontSize = 10, PlaceholderText = "bar.beat" };
         ToolTip.SetTip(box, "Bar.beat.sixteenth, counted from 1 — e.g. 5.1 or 5.3.2");
         box.BindResource(TextBox.FontFamilyProperty, "Font.UI");
         return box;
     }
 
     private TextBlock Caption(string text)
-        => new() { Text = text, FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        => new() { Text = text, FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
 
     private void RefreshEstimate()
     {
@@ -345,7 +345,7 @@ public sealed class ExportWindow : NotaWindow
     private Control Section(string title, Control content) => new StackPanel
     {
         Spacing = 6,
-        Children = { new TextBlock { Text = title, FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary }, content },
+        Children = { new TextBlock { Text = title, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary }, content },
     };
 
     private ComboBox Combo(string[] items, int selected)
@@ -358,7 +358,7 @@ public sealed class ExportWindow : NotaWindow
 
     private TextBlock Mono(string text, IBrush fg)
     {
-        var t = new TextBlock { Text = text, FontSize = 10, Foreground = fg, VerticalAlignment = VerticalAlignment.Center };
+        var t = new TextBlock { Text = text, FontSize = 9, Foreground = fg, VerticalAlignment = VerticalAlignment.Center };
         t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         return t;
     }
@@ -372,10 +372,10 @@ public sealed class ExportWindow : NotaWindow
         var knob = new Border { Width = 26, Height = 15, CornerRadius = NotaRadius.Card, Background = Raised, BorderBrush = BorderStrong, BorderThickness = new Thickness(1) };
         var dot = new Border { Width = 11, Height = 11, CornerRadius = NotaRadius.Group, Background = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         knob.Child = dot;
-        var text = new TextBlock { Text = label, FontSize = 11, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { Text = label, FontSize = 10, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Children = { knob, text } };
         if (hint is not null)
-            row.Children.Add(new TextBlock { Text = "· " + hint, FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(new TextBlock { Text = "· " + hint, FontSize = 8.5, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center });
 
         void Paint()
         {
@@ -429,8 +429,8 @@ public sealed class ExportWindow : NotaWindow
             Children =
             {
                 knob,
-                new TextBlock { Text = "Export stems", FontSize = 11, FontWeight = FontWeight.Medium, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = "· one file per track, post-fader", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "Export stems", FontSize = 10, FontWeight = FontWeight.Medium, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "· one file per track, post-fader", FontSize = 8.5, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
             },
         };
         var headerBar = new Border { Height = 28, Background = NotaPalette.SurfaceInset, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(10, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = header };
@@ -446,7 +446,7 @@ public sealed class ExportWindow : NotaWindow
         for (int i = 0; i < items.Length; i++)
         {
             int idx = i;
-            var t = new TextBlock { Text = items[i].label, FontSize = 10, VerticalAlignment = VerticalAlignment.Center };
+            var t = new TextBlock { Text = items[i].label, FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
             var cell = new Border { CornerRadius = NotaRadius.Cell, Padding = new Thickness(10, 2), Child = t };
             if (items[i].enabled) { cell.Cursor = new Cursor(StandardCursorType.Hand); cell.PointerPressed += (_, _) => { onSelect(idx); Paint(idx); }; }
             else t.Foreground = NotaPalette.TextDisabled;

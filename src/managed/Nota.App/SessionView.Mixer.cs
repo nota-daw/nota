@@ -52,7 +52,7 @@ public sealed partial class SessionView
         var stack = new StackPanel { Spacing = Gap };
         TextBlock Label(string text) => new()
         {
-            Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextDisabled,
+            Text = text, FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextDisabled,
             Margin = new Thickness(10, 0), VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         Border Row(double h, string text) => new() { Height = h, Child = Label(text) };
@@ -184,7 +184,7 @@ public sealed partial class SessionView
 
     private static TextBlock ReadoutText()
     {
-        var t = new TextBlock { FontSize = 9, Foreground = NotaPalette.TextMuted, Width = 30, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        var t = new TextBlock { FontSize = 8.5, Foreground = NotaPalette.TextMuted, Width = 30, TextAlignment = TextAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         return t;
     }
@@ -203,7 +203,7 @@ public sealed partial class SessionView
     private static Control MixToggle(string? label, bool initial, bool arm, Action<bool> set)
     {
         bool on = initial;
-        var text = new TextBlock { Text = label ?? "", FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { Text = label ?? "", FontSize = 9, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var disc = new Glyph(GlyphKind.Record, 7);
         var b = new Border
         {
@@ -261,8 +261,8 @@ public sealed partial class SessionView
             foreach (var n in names) items.Add((n.Id, n.Name));
             cur = _engine.GetTrackRecordInput(c.TrackId);
         }
-        var cb = new ComboBox { Height = IoRowH, FontSize = 10, Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0) };
-        foreach (var it in items) cb.Items.Add(new ComboBoxItem { Content = it.Label, FontSize = 10 });
+        var cb = new ComboBox { Height = IoRowH, FontSize = 9, Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0) };
+        foreach (var it in items) cb.Items.Add(new ComboBoxItem { Content = it.Label, FontSize = 9 });
         int sel = items.FindIndex(it => it.Value == cur);
         cb.SelectedIndex = sel >= 0 ? sel : 0;
         int id = c.TrackId;
@@ -299,7 +299,7 @@ public sealed partial class SessionView
         {
             Height = IoRowH, Margin = new Thickness(4, 0), Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell,
             Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
-            Child = new TextBlock { Text = text, FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis },
+            Child = new TextBlock { Text = text, FontSize = 9, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis },
         };
         ToolTip.SetTip(b, "Output — group a track to route it through the group");
         return b;

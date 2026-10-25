@@ -57,7 +57,7 @@ public sealed class WhatsNewWindow : NotaWindow
         header.Children.Add(new TextBlock
         {
             Text = "What's new",
-            FontSize = 24,
+            FontSize = 23,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brush("Brush.TextPrimary"),
         });
@@ -95,7 +95,7 @@ public sealed class WhatsNewWindow : NotaWindow
         title.Children.Add(new TextBlock
         {
             Text = "Version " + entry.Version,
-            FontSize = 15,
+            FontSize = 14,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brush("Brush.TextHeading"),
             VerticalAlignment = VerticalAlignment.Center,
@@ -149,7 +149,7 @@ public sealed class WhatsNewWindow : NotaWindow
     private TextBlock FeatureTitle(string text) => new()
     {
         Text = text,
-        FontSize = 13,
+        FontSize = 12,
         FontWeight = FontWeight.SemiBold,
         Foreground = Brush("Brush.TextPrimary"),
         Margin = new Thickness(0, 6, 0, 0),

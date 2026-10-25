@@ -42,10 +42,10 @@ internal sealed class HistoryView : UserControl
     private readonly IProjectHistory _history;
     private readonly IHistoryHost _host;
     private readonly ListBox _list = new() { Classes = { "browser" }, Padding = new Thickness(0, 0, 0, 6) };
-    private readonly TextBlock _summary = new() { Classes = { "Mono" }, FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _summary = new() { Classes = { "Mono" }, FontSize = 8.5, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _empty = new()
     {
-        FontSize = 11, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
+        FontSize = 10, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
         HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         MaxWidth = 220, Margin = new Thickness(20, 0),
     };

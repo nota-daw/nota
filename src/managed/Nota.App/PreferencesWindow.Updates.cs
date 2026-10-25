@@ -30,7 +30,7 @@ public sealed partial class PreferencesWindow
             if (on && UpdateSchedule.IsDue(true, updates.LastChecked, DateTime.Now)) _ = updates.CheckAsync();
         });
 
-        var status = new TextBlock { FontSize = 12, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+        var status = new TextBlock { FontSize = 11, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
         var detail = Caption("");
         var check = Btn("Check now");
         var act = Btn("Update");

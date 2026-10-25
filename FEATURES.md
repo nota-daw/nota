@@ -71,7 +71,8 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 - **Quit without saving** dialog names the project and how long its changes have gone
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
 - **Project key** (KEY cell in the transport bar, saved with the project): loops dropped on
-  the arrangement can be transposed to it.
+  the arrangement can be transposed to it. The cell opens a one-octave keyboard with a
+  Major / Minor switch; picking a note keeps the mode, switching the mode keeps the note.
 - **Transport**: play / stop / record, playhead position. Click the position read-out to
   switch it between bars and time; the arrangement and clip editor rulers follow it.
   - **Stop returns to the launch point** (a seek sets the start anchor).
@@ -133,7 +134,8 @@ track count and closes with Escape.
     The track menu's **Height** keys (Compact · Standard · Large) size the selection in one
     click; ⌥-click sizes every track. Headers
     fit their height: one line (name, M / S / arm) when short, input, fader and pan on rows
-    of their own when tall. Drag the seam between headers and lanes to set the header
+    of their own when tall, and at Large the track's send to each return as value bars, two
+    per row. Drag the seam between headers and lanes to set the header
     width (160–480 px). Both are saved with the project.
   - **Group rows are slim** — a group collapses to a titled bar with its disclosure,
     mute/solo and level, and opens to the full control set when selected, so groups read as
@@ -1177,7 +1179,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   dark mode and one for light mode, switched with the OS appearance; the choice applies
   live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
-  remembered; timeline, piano roll and audio editor zoom work on top of it. Also
+  remembered; timeline, piano roll and audio editor zoom work on top of it. **Text size** —
+  Smaller / Default / Larger / Largest steps every text by −1 to +2 pt without changing the
+  layout, live and remembered. Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Shortcuts**: the shortcut list.

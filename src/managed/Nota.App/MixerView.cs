@@ -318,7 +318,7 @@ public sealed class MixerView : UserControl
             string[] tips = { "Panning moves the whole stereo image; nothing is dropped", "Panning attenuates the opposite channel (legacy behaviour)" };
             for (int i = 0; i < buttons.Children.Count && i < tips.Length; i++) ToolTip.SetTip(buttons.Children[i], tips[i]);
         }
-        _lawHint = new TextBlock { FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _lawHint = new TextBlock { FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         _olderBadge = Tag("Older project", 9, 0, 18, "Projects saved before stereo pan law open with Balance so existing mixes do not change");
         return new StackPanel
         {
@@ -385,7 +385,7 @@ public sealed class MixerView : UserControl
         // The strip header: a 3px bar in the track colour on top (muted grey for master).
         var grid = new Grid { RowDefinitions = new RowDefinitions("3,*") };
         grid.Children.Add(new Border { Background = topColor, Height = 3, VerticalAlignment = VerticalAlignment.Top });
-        var label = new TextBlock { Text = name, FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0), TextTrimming = TextTrimming.CharacterEllipsis };
+        var label = new TextBlock { Text = name, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0), TextTrimming = TextTrimming.CharacterEllipsis };
         Grid.SetRow(label, 1);
         grid.Children.Add(label);
         return new Border { Height = 24, Background = bg, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = grid };
@@ -604,7 +604,7 @@ public sealed class MixerView : UserControl
     private Border Toggle(string label, bool danger, bool initial, Action<bool> set)
     {
         bool on = initial;
-        var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var t = new TextBlock { Text = label, FontSize = 8.5, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = t };
         void Paint()
         {

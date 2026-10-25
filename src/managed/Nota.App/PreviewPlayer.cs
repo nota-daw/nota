@@ -103,13 +103,13 @@ public sealed class PreviewPlayer : UserControl
         // Row 1: name · format.
         _name = new TextBlock
         {
-            Text = "—", FontSize = 12, FontWeight = FontWeight.SemiBold,
+            Text = "—", FontSize = 11, FontWeight = FontWeight.SemiBold,
             Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Bottom,
         };
         _meta = new TextBlock
         {
-            FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary,
+            FontSize = 8.5, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary,
             Margin = new Thickness(8, 0, 0, 1), VerticalAlignment = VerticalAlignment.Bottom,
         };
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -129,8 +129,8 @@ public sealed class PreviewPlayer : UserControl
         ToolTip.SetTip(_playBtn, "Play / stop");
         _playBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { Toggle(); e.Handled = true; } };
 
-        _timeNow = new TextBlock { FontSize = 10, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
-        _timeTotal = new TextBlock { FontSize = 10, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextDisabled, VerticalAlignment = VerticalAlignment.Center };
+        _timeNow = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
+        _timeTotal = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextDisabled, VerticalAlignment = VerticalAlignment.Center };
         var time = _time = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(6, 0, 0, 0),
@@ -140,7 +140,7 @@ public sealed class PreviewPlayer : UserControl
         // Effect presets: what they are heard through (Beat / Keys / Loop / the Files sample).
         _sourceText = new TextBlock
         {
-            FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextSecondary,
+            FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextSecondary,
             VerticalAlignment = VerticalAlignment.Center,
         };
         var caret = new Glyph(GlyphKind.CaretDown, 9) { Foreground = NotaPalette.TextTertiary };
@@ -163,7 +163,7 @@ public sealed class PreviewPlayer : UserControl
         _loopBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { SetLoop(!_loop, persist: true); e.Handled = true; } };
 
         _autoDot = new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center };
-        _autoText = new TextBlock { Text = "Auto", FontSize = 10, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        _autoText = new TextBlock { Text = "Auto", FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         _autoBtn = Chip(new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,

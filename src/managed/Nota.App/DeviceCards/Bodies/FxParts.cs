@@ -102,7 +102,7 @@ internal static class FxParts
             row.Children.Add(extras);
         }
         var rule = new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Bottom };
-        var head = new Panel { Children = { rule, row } };
+        var head = DeviceCardKit.Liftable(new Panel { Children = { rule, row } }, bar, extras is not null);
         DockPanel.SetDock(head, Dock.Top);
         Hi();
         host.Content = body(sel);

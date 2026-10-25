@@ -178,10 +178,11 @@ internal static class DeviceBodyKit
         if (trailing is not null)
         {
             trailing.VerticalAlignment = VerticalAlignment.Center;
+            trailing.Margin = new Thickness(16, 0, 0, 0);   // apart from the tabs when the row sits in the header
             DockPanel.SetDock(trailing, Avalonia.Controls.Dock.Right);
             dock.Children.Add(trailing);
         }
-        return new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 0, 1), Child = dock };
+        return DeviceCardKit.Liftable(new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 0, 1), Child = dock }, row, trailing is not null);
     }
 
     /// <summary>A tab row over a swapping body: <paramref name="body"/> builds (or returns the
