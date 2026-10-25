@@ -4,8 +4,8 @@
 // The pan control outside devices (track header, Session mixer; style guide, spec 038): a
 // small 14px knob, its arc growing from 12 o'clock toward the panned side, with the value
 // ("C", "12L", "50R", 11 / 400 ink 1) just right of it. Grey at rest, orange only while
-// under the pointer or in the hand. Drag vertically to set; double-click centres it,
-// ⌥-click types a value. Fires GestureBegin/End so callers can bracket an automation write,
+// under the pointer or in the hand. Drag vertically to set; double-click the knob centres
+// it, a double-click on the value (or ⌥-click) types one. Fires GestureBegin/End so callers can bracket an automation write,
 // like MiniFader / the gauge Knob.
 
 using System;
@@ -17,7 +17,7 @@ using Avalonia.Media;
 
 namespace Nota.App;
 
-public sealed class PanBar : Control
+public sealed class PanBar : Control, IInlineReadout
 {
     private static readonly IBrush Track = NotaPalette.KnobTrack;
     private static readonly IBrush Arc = NotaPalette.TextTertiary;     // at rest: neutral
@@ -35,6 +35,9 @@ public sealed class PanBar : Control
     public event Action<double>? PanChanged;
     public event Action? GestureBegin;
     public event Action? GestureEnd;
+
+    // The value right of the knob is its read-out: a double-click there types (ValueEntry).
+    bool IInlineReadout.ReadoutAt(Point p) => p.X >= KnobD + 2;
 
     /// <summary>True while dragging — callers skip external value writes then.</summary>
     public bool Dragging => _drag;

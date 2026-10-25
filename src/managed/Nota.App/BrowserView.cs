@@ -729,7 +729,7 @@ public sealed class BrowserView : UserControl
         return item.IsGroup ? GroupRow(item) : IndexRow(item);
     }, supportsRecycling: false);
 
-    // A section header: caption and the section's count at the right.
+    // A section header: caption, a hairline filling the gap, and the section's count.
     private Control GroupRow(BrowserItem item)
     {
         // Device tabs' BUILT-IN / PLUG-INS headers fold their section on click (#230); a
@@ -749,6 +749,8 @@ public sealed class BrowserView : UserControl
             head.Children.Add(caret);
         }
         head.Children.Add(label);
+        var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
+        rule.BindResource(Border.BackgroundProperty, "Brush.Rule");
         var count = new TextBlock
         {
             Text = item.GroupCount.ToString(),
@@ -760,6 +762,8 @@ public sealed class BrowserView : UserControl
 
         var grid = new Grid { Height = GroupRowH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Background = Brushes.Transparent };
         grid.Children.Add(head);
+        Grid.SetColumn(rule, 1);
+        grid.Children.Add(rule);
         Grid.SetColumn(count, 2);
         grid.Children.Add(count);
         if (foldable)

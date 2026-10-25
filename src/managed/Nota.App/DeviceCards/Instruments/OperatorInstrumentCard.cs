@@ -38,7 +38,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
     public string Subtitle => "FM";
     public double CardWidth => 724;
 
-    private const double WheelsW = 76, RailW = 196;
+    private const double RailW = 196;
     // The gap under a tab strip's line before the tab's content, and the rail's operator chips.
     private const double StripGap = 6, OpChipH = 18;
 
@@ -226,33 +226,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             modVal.Foreground = G("modwheel") > 1e-3f ? TextPrimary : TextSecondary;
         });
 
-        var wheelPair = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), VerticalAlignment = VerticalAlignment.Stretch };
-        bendWheel.HorizontalAlignment = modWheel.HorizontalAlignment = HorizontalAlignment.Center;
-        wheelPair.Children.Add(bendWheel);
-        Grid.SetColumn(modWheel, 1); wheelPair.Children.Add(modWheel);
-
-        var wheelLabels = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*") };
-        var pitchCap = Cap("PITCH"); pitchCap.HorizontalAlignment = HorizontalAlignment.Center;
-        var modCap = Cap("MOD"); modCap.HorizontalAlignment = HorizontalAlignment.Center;
-        wheelLabels.Children.Add(pitchCap);
-        Grid.SetColumn(modCap, 1); wheelLabels.Children.Add(modCap);
-
-        var wheelVals = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*") };
-        wheelVals.Children.Add(bendVal);
-        Grid.SetColumn(modVal, 1); wheelVals.Children.Add(modVal);
-
-        wheelPair.Width = wheelLabels.Width = wheelVals.Width = 60;
-        wheelPair.HorizontalAlignment = wheelLabels.HorizontalAlignment = wheelVals.HorizontalAlignment = HorizontalAlignment.Center;
-        pitchCap.FontSize = modCap.FontSize = NotaType.KnobLabel;
-        var wheelsGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 4 };
-        var wheelsCap = Cap("Wheels"); wheelsCap.HorizontalAlignment = HorizontalAlignment.Center;
-        wheelsGrid.Children.Add(wheelsCap);
-        Grid.SetRow(wheelPair, 1); wheelsGrid.Children.Add(wheelPair);
-        Grid.SetRow(wheelLabels, 2); wheelsGrid.Children.Add(wheelLabels);
-        Grid.SetRow(wheelVals, 3); wheelsGrid.Children.Add(wheelVals);
-        var wheelsPanel = SectionBox(wheelsGrid);
-        wheelsPanel.Padding = new Thickness(4, 10, 4, 10);
-        wheelsPanel.Width = WheelsW;
+        var wheelsPanel = InstrumentCardKit.WheelsPanel(bendWheel, modWheel, bendVal, modVal);
 
         // ---- Operators tab ----------------------------------------------------
         // One grid for the whole table — a per-row grid would size its Auto columns on its

@@ -238,19 +238,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         var bendTxt = MonoText("", NotaType.KnobValue, TxtC); var modTxt = MonoText("", NotaType.KnobValue, MutedC);
         bendTxt.HorizontalAlignment = HorizontalAlignment.Center; modTxt.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() => { bendTxt.Text = $"±{BendSt()}\u2009st"; modTxt.Text = $"{G("modwheel") * 100:0}\u2009%"; modTxt.Foreground = G("modwheel") > 0.01f ? TxtC : MutedC; });
-        var wheelPair = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), Width = 56, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Stretch };
-        wheelPair.Children.Add(VWheel("bend", "Pitch", spring: true));
-        wheelPair.Children.Add(Col(VWheel("modwheel", "Mod wheel", spring: false), 1));
-        var wheelNames = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), Width = 60, HorizontalAlignment = HorizontalAlignment.Center };
-        var pitchCap = Caps("Pitch"); pitchCap.FontSize = NotaType.KnobLabel; pitchCap.HorizontalAlignment = HorizontalAlignment.Center;
-        var modCap = Caps("Mod"); modCap.FontSize = NotaType.KnobLabel; modCap.HorizontalAlignment = HorizontalAlignment.Center;
-        wheelNames.Children.Add(pitchCap); wheelNames.Children.Add(Col(modCap, 1));
-        var wTitle = Caps("Wheels"); wTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var wheelsBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto,Auto"), RowSpacing = 4 };
-        void WRow(Control c, int r) { Grid.SetRow(c, r); wheelsBody.Children.Add(c); }
-        WRow(wTitle, 0); WRow(wheelPair, 1); WRow(wheelNames, 2); WRow(bendTxt, 3); WRow(modTxt, 4);
-        modTxt.Margin = new Thickness(0, -4, 0, 0);
-        var wheels = new RuleSection { Width = 76, Padding = new Thickness(4, 10, 4, 10), Child = wheelsBody };
+        var wheels = InstrumentCardKit.WheelsPanel(VWheel("bend", "Pitch", spring: true), VWheel("modwheel", "Mod wheel", spring: false), bendTxt, modTxt);
 
         // ======================================================================
         // CENTRE — Oscillators

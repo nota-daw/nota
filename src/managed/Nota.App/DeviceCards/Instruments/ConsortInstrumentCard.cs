@@ -292,14 +292,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             pitchCap.Foreground = Math.Abs(G("bend") - 0.5f) > 0.01f ? Txt2 : MutedC;
             modCap.Foreground = G("modwheel") > 0.01f ? Txt2 : MutedC;
         });
-        // Consort stacks its two wheel values under the captions.
-        var wheelsBody = (Grid)WheelsColumn(bendWheel, modWheel, new TextBlock(), new TextBlock(), pitchCap, modCap);
-        var wheelVals = new StackPanel { Spacing = 0, Children = { bendTxt, modTxt } };
-        bendTxt.HorizontalAlignment = modTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        wheelsBody.Children.RemoveAt(wheelsBody.Children.Count - 1);
-        Grid.SetRow(wheelVals, 3); wheelsBody.Children.Add(wheelVals);
-        var wheels = Pane(wheelsBody, new Thickness(8, 9, 8, 6));
-        wheels.Width = 76;
+        var wheels = WheelsPanel(bendWheel, modWheel, bendTxt, modTxt, pitchCap, modCap);
         DockPanel.SetDock(wheels, Avalonia.Controls.Dock.Left);
 
         // ======================================================================

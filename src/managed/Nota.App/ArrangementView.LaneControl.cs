@@ -1678,7 +1678,7 @@ public sealed partial class ArrangementView
         }
 
         private const double BandH = 2;         // the content area starts under this (ADSR frame, notes)
-        private const double LabelH = 20;       // the clip name's line over the notes and waveform
+        private const double LabelH = 18;       // the clip name's line over the notes and waveform
         private const double ClipRadius = 6;
 
         // The clip's ADSR: the curve whenever it shapes the clip, the handles while the clip is

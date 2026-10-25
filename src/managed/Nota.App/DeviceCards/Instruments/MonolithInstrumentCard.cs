@@ -164,8 +164,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             modVal.Text = $"{m * 100:0} %";
             modVal.Foreground = m > 1e-3f ? TextPrimary : TextTertiary;
         });
-        var wheels = Pane(WheelsColumn(bendWheel, modWheel, bendVal, modVal), new Thickness(8, 9, 8, 6));
-        wheels.Width = 76;
+        var wheels = WheelsPanel(bendWheel, modWheel, bendVal, modVal);
         DockPanel.SetDock(wheels, Dock.Left);
 
         // ======================================================================

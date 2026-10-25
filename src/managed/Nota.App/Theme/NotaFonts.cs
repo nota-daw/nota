@@ -77,7 +77,7 @@ internal static class NotaType
     // Shell scale
     public const double Title = 13, Heading = 13, Name = 12, Body = 12, Caption = 11,
                         SectionLabel = 11, Readout = 17, Value = 11.5, Eyebrow = 10,
-                        ClipName = 11.5, TrackName = 13, KeyLetter = 10;
+                        ClipName = 10.5, TrackName = 13, KeyLetter = 10;
     public const double SectionLabelTracking = 0, EyebrowTracking = 0;
 
     // Device scale (style guide): one step under the shell so a 260px card keeps its room for

@@ -39,7 +39,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
     public string Subtitle => "Bass synth";
     public double CardWidth => 790;
 
-    private const double WheelsW = 76, RailW = 186, RailLabelW = 42;
+    private const double RailW = 186, RailLabelW = 42;
 
     private static readonly string[] TabNames = { "Signal", "Mod" };
     // The main oscillator is a continuous morph sine → tri → saw → pulse; its chips jump to
@@ -228,8 +228,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             // On the Mod tab the wheel is part of what's on screen — it drives the LFO.
             modCap.Foreground = tab == 1 ? TextSecondary : TextTertiary;
         });
-        var wheelsPanel = Pane(WheelsColumn(bendWheel, modWheel, bendVal, modVal, modCap: modCap), new Thickness(8, 9, 8, 6));
-        wheelsPanel.Width = WheelsW;
+        var wheelsPanel = WheelsPanel(bendWheel, modWheel, bendVal, modVal, modCap: modCap);
 
         // ---- Signal tab -------------------------------------------------------
         // Osc: the morph oscillator's corners, then shape, pulse width, tuning and level.

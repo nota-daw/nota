@@ -25,7 +25,6 @@ public partial class MainWindow
     private Control[][] TransportShedOrder => _transportShedOrder ??= new[]
     {
         new Control[] { CpuMeter, CpuSep },     // informative only
-        new Control[] { ProjectNameText },      // moves to the title-bar caption
         new Control[] { RemoteLabel },          // Remote keeps its glyph, count and dot
         new Control[] { TapChip },              // palette ▸ Tap Tempo; the BPM field stays
         new Control[] { KeyChip },              // set once per project
@@ -37,7 +36,7 @@ public partial class MainWindow
         new Control[] { SnapChip },             // the grid; snapping itself stays switchable
         new Control[] { SnapToggle },           // hold Alt to drag freely
         new Control[] { LoopRecordCell },       // ⌘⇧R / Transport menu
-        new Control[] { LoopSep, LoopCell },    // ⌘L; the range stays visible on the ruler
+        new Control[] { LoopSep, LoopCell },    // ⌘L; the range is on the ruler
         new Control[] { MasterWell },           // the master strip is in the mixer
     };
 
@@ -46,8 +45,7 @@ public partial class MainWindow
         TransportBar.SizeChanged += (_, _) => FitTransport();
     }
 
-    /// <summary>Re-fit after something in the bar changed width (the project name, the
-    /// Re-enable chip). Coalesced to one pass after the current layout.</summary>
+    /// <summary>Re-fit after something in the bar changed width (the Re-enable chip). Coalesced to one pass after the current layout.</summary>
     private void RequestTransportFit()
     {
         if (_transportFitPosted) return;
@@ -73,8 +71,6 @@ public partial class MainWindow
             hidden++;
         }
 
-        // The name leaves the bar for the caption, so the open project stays on screen.
-        DocTitleText.Text = ProjectNameText.IsVisible ? "Nota" : ProjectDisplayName();
         TransportGrid.InvalidateMeasure();
     }
 

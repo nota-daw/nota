@@ -47,7 +47,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
     public string Subtitle => "Subtractive";
     public double CardWidth => 862;
 
-    private const double WheelsW = 76, RailW = 220;
+    private const double RailW = 220;
 
     private static readonly string[] TabNames = { "Osc", "Filter", "Env", "LFO", "Mod", "Macro" };
     private static readonly string[] RailTabs = { "Global", "Voice" };
@@ -315,25 +315,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             modVal.Foreground = G("modwheel") > 1e-3f ? TextPrimary : TextSecondary;
         });
 
-        Grid Pair(Control a, Control b)
-        {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*") };
-            g.Children.Add(a); Grid.SetColumn(b, 1); g.Children.Add(b);
-            return g;
-        }
-        var pitchCap = Cap("Pitch"); pitchCap.HorizontalAlignment = HorizontalAlignment.Center;
-        var modCap = Cap("Mod"); modCap.HorizontalAlignment = HorizontalAlignment.Center;
-        var wheelsCap = Cap("Wheels"); wheelsCap.HorizontalAlignment = HorizontalAlignment.Center;
-        var wheelsGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 4 };
-        var wheelRows = new Control[] { wheelsCap, Pair(bendWheel, modWheel), Pair(pitchCap, modCap), Pair(bendVal, modVal) };
-        for (int i = 0; i < wheelRows.Length; i++)
-        {
-            if (i > 0) { wheelRows[i].Width = 60; wheelRows[i].HorizontalAlignment = HorizontalAlignment.Center; }
-            Grid.SetRow(wheelRows[i], i); wheelsGrid.Children.Add(wheelRows[i]);
-        }
-        var wheelsPanel = SectionBox(wheelsGrid);
-        wheelsPanel.Padding = new Thickness(4, 10, 4, 10);
-        wheelsPanel.Width = WheelsW;
+        var wheelsPanel = InstrumentCardKit.WheelsPanel(bendWheel, modWheel, bendVal, modVal);
 
         // ---- Osc tab ----------------------------------------------------------
         // One grid for all three sources under one row of column heads, so each head sits

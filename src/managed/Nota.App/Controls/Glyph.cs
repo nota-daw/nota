@@ -35,7 +35,7 @@ internal enum GlyphKind
     Copy, Cut, Paste, Trash, Duplicate, Split, Consolidate, Stems, Reverse, Folder, Ungroup,
     Palette, Note, Input, Arrow, Grid, Select, Save, List, Compare, Flatten,
     // Path kinds (24-unit grid, see Paths)
-    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink, Update,
+    Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Overdub, Replace, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink, Update,
     Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
 }
 
@@ -500,6 +500,10 @@ internal sealed class Glyph : Control
         [GlyphKind.Patch] = ("M4 7 A2.501 2.501 0 1 0 9 7 A2.501 2.501 0 1 0 4 7 M15 17 A2.501 2.501 0 1 0 20 17 A2.501 2.501 0 1 0 15 17 M8.5 8.5 L15.5 15.5", null),
         // Two arrows chasing each other (loop).
         [GlyphKind.Loop] = ("M17 3 l3 3 l-3 3 M20 6 H8 a4 4 0 0 0 -4 4 v1.001 M7 21 l-3 -3 l3 -3 M4 18 h12 a4 4 0 0 0 4 -4 v-1.001", null),
+        // Two stacked layers (loop recording that adds every pass).
+        [GlyphKind.Overdub] = ("M4 10 H14 V20 H4 Z M9 10 V5 H20 V15 H14", null),
+        // One layer, a turn arrow over it (loop recording that keeps the latest pass).
+        [GlyphKind.Replace] = ("M4 10 H14 V20 H4 Z M9 7 A6 6 0 0 1 20 9.5 V14 M17.5 11.5 L20 14 L22.5 11.5", null),
         // A speaker cone; layer a Speaker* wave kind over it.
         [GlyphKind.Speaker] = ("M4 9 h4 l5 -4 v14 l-5 -4 h-4 z", null),
         // A cross beside the speaker (muted).

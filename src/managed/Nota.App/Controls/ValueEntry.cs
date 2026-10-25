@@ -39,6 +39,13 @@ using Avalonia.VisualTree;
 
 namespace Nota.App;
 
+/// <summary>A control that writes its own value inside itself (the value bar): a double-click on
+/// that text types, like a double-click on a separate read-out; elsewhere it still resets.</summary>
+internal interface IInlineReadout
+{
+    bool ReadoutAt(Point p);
+}
+
 internal static partial class ValueEntry
 {
     [System.Text.RegularExpressions.GeneratedRegex(@"[+\-−]?(?:\d+(?:[.,]\d*)?|[.,]\d+|∞)")]
@@ -79,7 +86,8 @@ internal static partial class ValueEntry
         Entries.AddOrUpdate(control, new Entry(control, () => fields, AnchorOf));
         void Press(object? s, PointerPressedEventArgs e)
         {
-            bool onReadout = control is TextBlock || readout is not null && ReferenceEquals(s, readout);
+            bool onReadout = control is TextBlock || readout is not null && ReferenceEquals(s, readout)
+                             || control is IInlineReadout ir && ir.ReadoutAt(e.GetPosition(control));
             if (Pressed(e, s as Visual ?? control, field, onReadout: onReadout)) Open(control, field, AnchorOf(field));
         }
         control.AddHandler(InputElement.PointerPressedEvent, Press, RoutingStrategies.Tunnel);

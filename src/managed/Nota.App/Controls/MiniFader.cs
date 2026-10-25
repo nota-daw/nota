@@ -6,7 +6,7 @@
 // and a 2px Text-secondary line marks it; the value itself is written inside the bar at the
 // left (10.5 / 400), or just past the line when the fill is too short to hold it. Under the
 // pointer or in the hand it takes the value bar's colours: the soft orange tint and an
-// orange line.
+// orange line. A double-click on the written value types one; elsewhere it resets.
 
 using System;
 using Avalonia;
@@ -16,7 +16,7 @@ using Avalonia.Media;
 
 namespace Nota.App;
 
-public sealed class MiniFader : Control
+public sealed class MiniFader : Control, IInlineReadout
 {
     private static readonly IBrush Ground = NotaPalette.BgSunken;
     private static readonly IBrush Fill = NotaPalette.Derived(() => Mix(NotaPalette.BgSunken.Color, NotaPalette.TextTertiary.Color, 0.4));
@@ -64,6 +64,11 @@ public sealed class MiniFader : Control
     }
 
     private double _lastY;
+    private Rect _textRect;
+
+    // The written value is the read-out: a double-click on it types (ValueEntry), with a few
+    // pixels' grace either side; a double-click elsewhere on the bar resets.
+    bool IInlineReadout.ReadoutAt(Point p) => Text is not null && _textRect.Width > 0 && _textRect.Inflate(new Thickness(4, 0)).Contains(p);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -151,6 +156,7 @@ public sealed class MiniFader : Control
                 // Inside the fill at the left when it fits; otherwise just past the line.
                 double tx = t.Width + 12 <= fx ? 6 : Math.Min(fx + LineW + 4, w - t.Width - 4);
                 ctx.DrawText(t, new Point(tx, ty + (bh - t.Height) / 2));
+                _textRect = new Rect(tx, ty, t.Width, bh);
             }
         }
     }

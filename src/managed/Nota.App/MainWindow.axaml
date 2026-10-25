@@ -122,7 +122,7 @@
   <Panel>
   <DockPanel Background="{DynamicResource Brush.Seam}">
     <!-- Header (32) on the ground, a seam under it — custom frameless: macOS traffic lights
-         sit in the left inset; the project name is centred on the window. Draggable.
+         sit in the left inset; the project's name is the title, centred on the window. Draggable.
          (Transport sits right under it, at the top of the window.) -->
     <Border x:Name="TitleBar" DockPanel.Dock="Top" Height="32"
             Background="{DynamicResource Brush.BgApp}"
@@ -153,11 +153,9 @@
     <Border x:Name="TransportBar" DockPanel.Dock="Top" Classes="transport" Height="{StaticResource Control.TransportBar}">
       <Grid x:Name="TransportGrid" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
-        <!-- Project name, then the view group: three 28px icon cells in a 2px well (corner 9) -->
+        <!-- The view group: three 28px icon cells in a 2px well (corner 9). The project's name
+             is the window title, centred in the header above. -->
         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="2,0,0,0" VerticalAlignment="Center">
-          <TextBlock x:Name="ProjectNameText" Text="Untitled" FontSize="13" FontWeight="SemiBold"
-                     MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                     Foreground="{DynamicResource Brush.TextPrimary}"/>
           <Border Classes="segmented view" VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
               <!-- The views as icon keys (spec 012): the tooltip and the accessible name carry
@@ -211,25 +209,20 @@
 
           <Border x:Name="LoopSep" Classes="tb-sep"/>
 
-          <!-- Loop: the range is the key; on, the loop is live (solid orange) -->
-          <ToggleButton x:Name="LoopCell" Classes="cell" IsChecked="{Binding Transport.LoopOn}" ToolTip.Tip="Loop the range set on the ruler">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock Classes="CellLabel" Text="Loop" VerticalAlignment="Center" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
-              <TextBlock FontSize="11.5" MinWidth="58" VerticalAlignment="Center"
-                         Text="{Binding Transport.LoopRangeText}"
-                         Foreground="{Binding $parent[ToggleButton].Foreground}"/>
-            </StackPanel>
+          <!-- Loop on/off as an icon key (the range itself is on the ruler); on is the soft
+               tint, the glyph takes the orange ink through ToggleButton:checked -->
+          <ToggleButton x:Name="LoopCell" Classes="tp-icon" IsChecked="{Binding Transport.LoopOn}"
+                        ToolTip.Tip="Loop the range set on the ruler (⌘L)" AutomationProperties.Name="Loop">
+            <app:Glyph Kind="Loop" Size="16"/>
           </ToggleButton>
-          <!-- Loop record mode: Overdub (rests on the well) or Replace (picked: the soft tint) -->
-          <ToggleButton x:Name="LoopRecordCell" Classes="pill" IsChecked="{Binding Transport.LoopRecordReplace}"
+          <!-- Loop record mode as an icon key: Overdub stacks the passes (two layers, at rest);
+               Replace keeps the latest (one layer and a turn arrow, picked: the soft tint) -->
+          <ToggleButton x:Name="LoopRecordCell" Classes="tp-icon" IsChecked="{Binding Transport.LoopRecordReplace}"
+                        AutomationProperties.Name="Loop recording mode"
                         ToolTip.Tip="Loop recording: Overdub adds every pass · Replace keeps the latest pass (⌘⇧R)">
             <Panel>
-              <!-- Sizer: the pill keeps the longer label's width in both states, so the bar doesn't shift -->
-              <TextBlock Text="Overdub" Opacity="0" VerticalAlignment="Center"/>
-              <TextBlock Text="Overdub" VerticalAlignment="Center" HorizontalAlignment="Center"
-                         IsVisible="{Binding !Transport.LoopRecordReplace}"/>
-              <TextBlock Text="Replace" VerticalAlignment="Center" HorizontalAlignment="Center"
-                         IsVisible="{Binding Transport.LoopRecordReplace}"/>
+              <app:Glyph Kind="Overdub" Size="16" IsVisible="{Binding !Transport.LoopRecordReplace}"/>
+              <app:Glyph Kind="Replace" Size="16" IsVisible="{Binding Transport.LoopRecordReplace}"/>
             </Panel>
           </ToggleButton>
         </StackPanel>

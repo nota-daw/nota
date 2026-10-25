@@ -367,7 +367,7 @@ headers and in the mixer, faders and meters.
 | Strength | Looks like | Used for |
 |---|---|---|
 | **Live: solid** | `Accent` fill, derived ink on it | Playing (Play while the transport runs), recording, the playhead, the loop range, a switch that is on inside a device, a device's power switch, the current device tab's underline, a live icon button |
-| **Picked: soft tint** | `AccentSoft` fill with orange text or icon (`AccentBright` in dark themes, `AccentPale` in light ones) | The option you chose: a segment, the current view, a tool that is on (Metronome, Follow, Snap, Automation), the left rail's current page (with a 2 × 14 orange tick), a filter chip that is on, Overdub on. Never solid |
+| **Picked: soft tint** | `AccentSoft` fill with orange text or icon (`AccentBright` in dark themes, `AccentPale` in light ones) | The option you chose: a segment, the current view, a tool that is on (Metronome, Follow, Snap, Automation), the left rail's current page (with a 2 × 14 orange tick), a filter chip that is on, Loop and Replace on. Never solid |
 | **Values in devices: orange lines** | `Accent` line on a quiet fill | Only inside a device card: the arc of a knob, the 3 px line on a value bar (its fill is the soft tint), the selected EQ point, an upright value bar |
 
 A shell slider under the pointer or being dragged borrows the value bar's colours (soft
@@ -426,7 +426,7 @@ controls: a knob's value 10, switch words and captions 10, a value on a button o
 10.5, titles and tabs inside a device 11, graph axes 9 (`NotaType.Device*`).
 
 Others the guide fixes: a field 12.5, the browser search 12.5, a clip's
-name 11.5 / 600, a Modular node's name 12.5 / 600, the current tab 12 / 580, a tooltip
+name 10.5 / 600, a Modular node's name 12.5 / 600, the current tab 12 / 580, a tooltip
 10.5, a device number button 9.5 / 550. `NotaType` and the `TextBlock.*` role classes in
 `NotaTheme.axaml` carry the scale for code and XAML. Tags and units are Geist in sentence
 case, so nothing looks like code.
@@ -587,7 +587,9 @@ The bar across the top: views, transport, tempo, grid and tools.
   are split by short thin lines.
 - **Values** are plain numbers at Readout 17 / 500 with the unit in ink 3 (`124.00 BPM`,
   `1.1.00 bars`); no box.
-- **Toggles:** Overdub and Tap are small pills on the well; Tap keeps its four beat dots.
+- **Toggles:** Loop and the loop-record mode (Overdub: two layers · Replace: one layer and a
+  turn arrow) are icon buttons beside the position; the loop range is on the ruler. Tap is
+  a small pill and keeps its four beat dots.
 - **Tools:** Metronome, Follow, Snap and Automation are icon buttons; on is the soft tint.
 - **Right:** MIDI and Remote with small status dots, then Master as a flat slider with its
   dB value inside (§ Sliders).
@@ -628,7 +630,7 @@ A row of options where exactly one is picked (Notes / Envelopes, Pre / Post / Of
   Body 12 in ink 2; on is the soft tint with orange text. A category chip may carry its
   colour dot. The Favorites / tags strip is one line and overflows into `+N`; the device
   tabs' category row wraps instead, so every category stays in sight.
-- **Pill** (Overdub, Tap in the toolbar): a label-size toggle, 3 × 7 padding, corner 6,
+- **Pill** (Tap in the toolbar): a label-size toggle, 3 × 7 padding, corner 6,
   Label 11; on is the soft tint.
 
 ### Track buttons
@@ -756,8 +758,11 @@ wheels go. Never put in a groove.
 - **Bar colour:** ink 3 at rest, `VizInk` once moved off its default, orange while
   dragged.
 - **Height** fills the wheels column (about 147 on a 260 card).
-- **Text:** "Wheels" above, "Pitch" and "Mod" under each wheel; Pentad stacks `±2 st` and
-  `0 %` below, the other instruments put the two values side by side.
+- **Panel:** one shared panel (`InstrumentCardKit.WheelsPanel`), identical in every
+  instrument: 76 wide, 4 / 9 / 4 / 6 padding, the wheels, captions and values on a 60 px
+  centred pair.
+- **Text:** "Wheels" above, "Pitch" and "Mod" under each wheel, and the two values
+  (`±2 st`, `0 %`) side by side below.
 - 140 px of drag for the full range, ×0.25 with Shift, never jumps to the pointer;
   double-click resets; the pitch wheel springs back to the centre.
 
@@ -928,7 +933,7 @@ colour comes from the tracks.
 Every region is **docked**: corner 0, no gutter, separated by 1 px seams.
 
 - **Title bar 32**, frameless, on `BgApp`, a seam below; macOS traffic lights in a left
-  inset, "Nota" centred (the project's name lives in the toolbar); Windows reserves 180 px
+  inset, the project's name centred ("Untitled" until it is saved); Windows reserves 180 px
   for the caption buttons. There is no in-window menubar row.
 - **Toolbar 44** (§ Toolbar).
 - **Left rail and browser:** the rail 40 wide on `SurfaceDeep`; the browser on `Panel`,
@@ -994,7 +999,7 @@ A block of notes or audio on a track lane.
 - **Fill:** 20 % of the track colour over the lane, corner 6.
 - **Edge:** a thin line in the track colour; **selected:** a 1.5 px outline in ink 1,
   never orange.
-- **Content:** notes, waveform and the name (11.5 / 600) in the full track colour, moved toward
+- **Content:** notes, waveform and the name (10.5 / 600) in the full track colour, moved toward
   dark ink (or white) just enough to keep 3 : 1 on the lane. Only a light shade on Studio Light
   needs it.
 - Audio clips draw their waveform as spaced bars by default (a 1 px stroke every 3 px,
@@ -1014,7 +1019,7 @@ A group track and the tracks inside it.
 
 A clip slot in the Session view grid.
 
-- **Clip:** the track tint (20 %, a step deeper while playing) with the name (11.5 / 600)
+- **Clip:** the track tint (20 %, a step deeper while playing) with the name (10.5 / 600)
   in the track colour and the length in ink 3; corner 5.
 - **Selected:** a 1.5 px outline in ink 1, not orange; the selected column's header takes
   `SurfaceSelected` with no outline.

@@ -235,7 +235,8 @@ public partial class MainWindow : Window
         masterVol.GestureEnd += masterUndo.End;
         Action<double> setMaster = v => vm.Transport.MasterVolume = v;
         masterVol.ValueChanged += v => masterUndo.Change(v, setMaster);
-        // Double-click the bar to type the master gain, ⌥-click for 0 dB.
+        // Double-click the dB written in the bar (or ⌥-click anywhere) to type the master gain;
+        // a double-click elsewhere on the bar resets to 0 dB.
         ValueEntry.Attach(masterVol, masterVol.EntryField("Master volume", v => NotaNum.GainDb(v)));
         MasterVolHost.Children.Add(masterVol);
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");

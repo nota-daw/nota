@@ -49,7 +49,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
     public string Subtitle => "Wavetable";
     public double CardWidth => 776;
 
-    private const double WheelsW = 76, RailW = 194;
+    private const double RailW = 194;
 
     private static readonly string[] TabNames = { "Osc", "Filter", "Env", "LFO", "Mod", "FX" };
     private static readonly string[] RailTabs = { "Global", "Macros" };
@@ -375,8 +375,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             modVal.Text = NotaNum.Pct(G("modwheel"));
             modVal.Foreground = G("modwheel") > 1e-3f ? TextPrimary : TextTertiary;
         });
-        var wheelsPanel = Pane(WheelsColumn(bendWheel, modWheel, bendVal, modVal), new Thickness(8, 9, 8, 6));
-        wheelsPanel.Width = WheelsW;
+        var wheelsPanel = WheelsPanel(bendWheel, modWheel, bendVal, modVal);
 
         // ---- Osc tab --------------------------------------------------------------
         // Both oscillators own a bank and a warp mode. Two chip strips per oscillator

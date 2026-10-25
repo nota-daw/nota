@@ -128,9 +128,14 @@ internal static class InstrumentCardKit
     internal static RuleSection Pane(Control body, Thickness? pad = null)
         => new() { Child = body, Padding = pad ?? new Thickness(SectionPad, 8) };
 
-    /// <summary>The wheels column (§ Wheels): "Wheels" over the two round wheels filling the
+    /// <summary>The wheels panel's width: the same in every instrument that has wheels.</summary>
+    internal const double WheelsW = 76;
+    private const double WheelsInnerW = 60;
+
+    /// <summary>The wheels panel (§ Wheels) every instrument with wheels leads with, identical in
+    /// all of them: a <see cref="WheelsW"/> pane, "Wheels" over the two round wheels filling the
     /// height, "Pitch" and "Mod" under each and the two values side by side.</summary>
-    internal static Control WheelsColumn(Control pitch, Control mod, TextBlock pitchVal, TextBlock modVal,
+    internal static Decorator WheelsPanel(Control pitch, Control mod, TextBlock pitchVal, TextBlock modVal,
         TextBlock? pitchCap = null, TextBlock? modCap = null)
     {
         pitchCap ??= Cap("Pitch");
@@ -139,7 +144,7 @@ internal static class InstrumentCardKit
         foreach (var t in new[] { head, pitchCap, modCap, pitchVal, modVal }) { t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; }
         Grid Pair(Control a, Control b)
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*") };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), Width = WheelsInnerW, HorizontalAlignment = HorizontalAlignment.Center };
             a.HorizontalAlignment = b.HorizontalAlignment = HorizontalAlignment.Center;
             g.Children.Add(a); Grid.SetColumn(b, 1); g.Children.Add(b);
             return g;
@@ -148,7 +153,9 @@ internal static class InstrumentCardKit
         var rows = new Control[] { head, Pair(pitch, mod), Pair(pitchCap, modCap), Pair(pitchVal, modVal) };
         rows[2].Margin = new Thickness(0, 2, 0, -3);
         for (int i = 0; i < rows.Length; i++) { Grid.SetRow(rows[i], i); grid.Children.Add(rows[i]); }
-        return grid;
+        var pane = Pane(grid, new Thickness(4, 9, 4, 6));
+        pane.Width = WheelsW;
+        return pane;
     }
 
     /// <summary>A round wheel bound to a plugin parameter (pitch springs back to the centre).</summary>
