@@ -44,6 +44,7 @@
       <sys:Double x:Key="Control.Console">32</sys:Double>     <!-- the transport keys' well: 28 + 2 × 2 -->
       <sys:Double x:Key="Control.TransportBar">44</sys:Double> <!-- the docked transport row -->
       <sys:Double x:Key="Control.Knob">26</sys:Double>        <!-- device knob, centre cap -->
+      <sys:Double x:Key="Control.KnobLarge">34</sys:Double>   <!-- device knob on a wide card with room (Volt osc) -->
       <sys:Double x:Key="Control.KnobInline">22</sys:Double>  <!-- device knob, label beside -->
       <sys:Double x:Key="Control.KnobFlat">28</sys:Double>    <!-- knob outside a device -->
       <sys:Double x:Key="Control.ParamCell">56</sys:Double>   <!-- knob 26 + value 13 + label 13 + gaps -->
