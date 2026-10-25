@@ -71,7 +71,6 @@ internal sealed class VintageDeviceBody : IDeviceBody
         static string ShelfF(double v) => NotaNum.F($"{(v - 0.5) * 24:+0.0;−0.0;0.0}");
         static string HzF(double hz) => hz >= 1000 ? NotaNum.F($"{hz / 1000:0.0#} kHz") : hz >= 10 ? NotaNum.F($"{hz:0} Hz") : hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz");
         static string DbF(double lin) => lin > 1e-5 ? NotaNum.F($"{20 * Math.Log10(lin):0.0;−0.0} dB") : "−∞ dB";
-        static string DbfsF(double lin) => lin > 1e-5 ? NotaNum.F($"{20 * Math.Log10(lin):0.0;−0.0} dBFS") : "−∞ dBFS";
         static string ThdF(double v) => v < 0.001 ? "< 0.1 %" : NotaNum.F($"{v * 100:0.0} %");
         static string CentsF(double c) => NotaNum.F($"±{c:0} ¢");
         bool Synced() => On(WowSync);
@@ -368,11 +367,9 @@ internal sealed class VintageDeviceBody : IDeviceBody
             ToolTip.SetTip(harm, "The harmonics the saturation adds at the input's level (the fundamental at the top), against the hiss floor. Drag up or down for the drive.");
             Learn(harm, Drive);
 
-            var peak = Mono("", 7, TextSecondary);
-            readouts.Add(() => peak.Text = DbfsF(Sc(S_OutPk)));
             var comp = ToggleLatch(AutoComp, () => Sc(S_CompDb) != 0 && On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0}") : "Auto-comp",
                 "Auto-comp — the output level follows the input's, however hard the drive");
-            var head = HeadRow(Row(8, Caps("Char"), CharDrop(), new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames), comp), peak);
+            var head = HeadRow(Row(8, Caps("Char"), CharDrop(), new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames), comp), new Border());   // the output peak is the Output panel's in · out
             var knobs = KnobRow(new[]
             {
                 K(Drive, "DRIVE", Pct),

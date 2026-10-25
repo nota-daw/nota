@@ -152,7 +152,7 @@ internal sealed class VtCurveView : VtWindowBase
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "−∞");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "0 dBFS");
         var mid = NotaGraph.AxisText("−6 dB");
-        ctx.DrawText(mid, new Point(X(0.5) - mid.Width / 2, h - mid.Height - 3));
+        ctx.DrawText(mid, new Point(X(0.5) + 3, h - mid.Height - 3));   // beside its grid line, not on it
     }
 }
 
@@ -264,8 +264,6 @@ internal sealed class VtHarmView : VtWindowBase
                 c.EndFigure(false);
             }
             ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.1), g);
-            var ft = NotaGraph.AxisText(_floorText, NotaPalette.TextSecondary);
-            ctx.DrawText(ft, new Point(w - ft.Width - 5, Math.Max(top, fy - ft.Height - 2)));
         }
         var bar = new Pen(NotaPalette.VizInk, 3, lineCap: PenLineCap.Round);
         var dim = new Pen(NotaPalette.TextDisabled, 3, lineCap: PenLineCap.Round);   // under the hiss: ink 4
@@ -278,7 +276,9 @@ internal sealed class VtHarmView : VtWindowBase
         }
 
         NotaGraph.Title(ctx, frame, "Harmonics");
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _thd, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        // The corner names the hiss floor (inside a short plot it lands on its own line or a bar);
+        // THD is in the tab's head row, so it shows here only while a drag changes it.
+        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, Dragging ? _thd : _floor > -range ? _floorText : "", Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         string[] names = { "f", "2f", "3f", "4f", "5f", "6f", "7f" };
         for (int k = 0; k < 7; k++)
         {

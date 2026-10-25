@@ -206,7 +206,7 @@ internal sealed class ChamberIrView : Control
         }
         double full = h;
         h = Math.Floor(full * SourceShare);                 // ---- SOURCE lane (top) ----
-        double mid = h / 2, amp = mid - 3;
+        double mid = h / 2, amp = mid - 6;   // the peak stays clear of the frame
         ctx.DrawLine(new Pen(ChamberInk.GridLine, 1), new Point(0, mid), new Point(w, mid));
         var clip = ctx.PushClip(new Rect(0, 0, w, h));
         void Env(float[] a, bool up, Color c, double alphaLine)

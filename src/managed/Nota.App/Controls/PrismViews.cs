@@ -381,7 +381,7 @@ internal sealed class PrismTransfer : Control
         var ta = PrismInk.Text(NotaNum.F($"above {_thrA:0}"), NotaGraph.AxisSize, PrismInk.BandLit[_band]);
         ctx.DrawText(ta, new Point(4, 3));
         var tb = PrismInk.Text(_below ? NotaNum.F($"below {_thrB:0}") : "below off", NotaGraph.AxisSize, _below ? NotaPalette.TextSecondary : NotaPalette.TextDisabled);
-        ctx.DrawText(tb, new Point(4, h - tb.Height - 2));
+        ctx.DrawText(tb, new Point(w - tb.Width - 4, h - tb.Height - 2));   // bottom right: the curve never comes down there
         ctx.DrawRectangle(null, PrismInk.InnerPen, rect.Deflate(0.5), 4, 4);
     }
 }

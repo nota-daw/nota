@@ -65,14 +65,15 @@ internal sealed class DelayTaps : Control
         if (_freeze)
             ctx.DrawRectangle(null, new Pen(NotaPalette.Accent, 1), new RoundedRect(rect.Deflate(0.5), NotaGraph.Radius));
 
-        double x0 = 8, x1 = w - 8, mid = h * 0.5, half = (h - 34) * 0.5;
+        // The trains stay between the corner label rows, and so does the grid.
+        double x0 = 8, x1 = w - 8, mid = h * 0.5, half = (h - 2 * 22) * 0.5;
         if (x1 <= x0 || half <= 2) return;
 
         // Quarter grid + the centre axis the two channels hang from.
         for (int i = 1; i < 4; i++)
         {
             double x = x0 + (x1 - x0) * i / 4.0;
-            ctx.DrawLine(NotaGraph.GridPen, new Point(x, 5), new Point(x, h - 5));
+            ctx.DrawLine(NotaGraph.GridPen, new Point(x, 19), new Point(x, h - 19));
         }
         ctx.DrawLine(new Pen(NotaPalette.GridBeat, 1.2), new Point(x0, mid), new Point(x1, mid));
 
@@ -220,7 +221,7 @@ internal sealed class DelayFilterCurve : Control
         // Corner handles on the two cut frequencies.
         foreach (var (hz, idx) in new[] { (_lowHz, 1), (_highHz, 2) })
         {
-            double x = Math.Clamp(XOf(hz, w), 2, w - 2);
+            double x = Math.Clamp(XOf(hz, w), 5, w - 5);   // the whole handle inside the box
             bool hot = _drag == idx || (_drag == 0 && _hover == idx);
             // Stop the stem above the corner readout so the two never cross.
             ctx.DrawLine(new Pen(hot ? NotaPalette.AccentBright : NotaPalette.BorderStrong, 1),

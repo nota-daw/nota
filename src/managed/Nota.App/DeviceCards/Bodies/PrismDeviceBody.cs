@@ -91,7 +91,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         static string Inv(FormattableString f) => NotaNum.F(f);
         static string DbF(double db) => Math.Abs(db) < 0.05 ? "0.0\u2009dB" : Inv($"{db:+0.0;−0.0}\u2009dB");
         static string DbShort(double db) => Math.Abs(db) < 0.05 ? "0.0" : Inv($"{db:+0.0;−0.0}");
-        static string ThrF(double db) => Inv($"{db:0.#}\u2009dB");   // "−18 dB": five knobs share 215 px
+        static string ThrF(double db) => Inv($"{db:0.0}\u2009dB");
         static string RatioAF(double v) { if (v >= 0.999) return "∞ : 1"; double r = 1 / (1 - v); return r < 10 ? Inv($"{r:0.0#} : 1") : Inv($"{r:0} : 1"); }
         static string RatioAShort(double v) { if (v >= 0.999) return "∞:1"; double r = 1 / (1 - v); return r < 10 ? Inv($"{r:0.#}:1") : Inv($"{r:0}:1"); }
         static string RatioBF(double v) { double r = RatioB(v); return Math.Abs(r - 1) < 0.01 ? "1 : 1" : r > 1 ? Inv($"{r:0.0#} : 1") : Inv($"↑ {1 / r:0.0#} : 1"); }
@@ -102,7 +102,14 @@ internal sealed class PrismDeviceBody : IDeviceBody
         static string GainF(double v) => DbF((v - 0.5) * 48);
         static string HzF(double hz) => hz >= 1000 ? Inv($"{hz / 1000:0.0}\u2009k") : Inv($"{hz:0}\u2009Hz");
         static string Pct(double v) => Inv($"{v * 100:0}\u2009%");
-        string FloorF(int b) => RatioB(P(BP(b, BelowRatio))) < 1 ? Inv($"+{P(BP(b, Floor)) * 48:0.#}\u2009dB") : Inv($"−{P(BP(b, Floor)) * 48:0.#}\u2009dB");
+        string FloorF(int b) => RatioB(P(BP(b, BelowRatio))) < 1 ? Inv($"+{P(BP(b, Floor)) * 48:0.0}\u2009dB") : Inv($"−{P(BP(b, Floor)) * 48:0.0}\u2009dB");
+        // Five knobs share the row: the dB readouts at the ends ("−18.0 dB") get wider columns.
+        static Grid KnobRow(params Control[] knobs)
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("6*,5*,5*,5*,6*"), VerticalAlignment = VerticalAlignment.Center };
+            for (int i = 0; i < knobs.Length; i++) { Grid.SetColumn(knobs[i], i); g.Children.Add(knobs[i]); }
+            return g;
+        }
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null) => DeviceBodyKit.Label(t, c ?? MutedC);
@@ -323,7 +330,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var kneeRow = new Grid { ColumnDefinitions = new ColumnDefinitions("32,*"), Margin = new Thickness(0, 6, 0, 0) };
             kneeRow.Children.Add(Caps("Knee"));
             kneeRow.Children.Add(Col(Bar(BP(b, Knee), v => Inv($"{v * 24:0.0}\u2009dB"), () => PrismInk.Band[b], null, 44), 1));
-            var left = new Border { Width = 150, BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(0, 6, 8, 0),
+            var left = new Border { Width = 132, BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(0, 6, 8, 0),
                 Child = new DockPanel { Children = { Docked(trCap, Dock.Top), Docked(kneeRow, Dock.Bottom), new Border { Margin = new Thickness(0, 4, 0, 0), Child = tr } } } };
 
             // ABOVE — compression
@@ -332,12 +339,12 @@ internal sealed class PrismDeviceBody : IDeviceBody
             readouts.Add(() => { double gr = Sc(S_Gr0 + b); aGr.Text = gr > 0.05 ? Inv($"GR −{gr:0.0}\u2009dB") : "GR 0.0\u2009dB"; });
             var aHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 16 };
             aHead.Children.Add(aCap); aHead.Children.Add(Col(aGr, 1));
-            var aKnobs = new UniformGrid { Rows = 1, VerticalAlignment = VerticalAlignment.Center };
-            aKnobs.Children.Add(K(BP(b, AboveThresh), "Thresh", v => ThrF(ThrA(v))));
-            aKnobs.Children.Add(K(BP(b, AboveRatio), "Ratio", RatioAF));
-            aKnobs.Children.Add(K(BP(b, Attack), "Attack", AtkF));
-            aKnobs.Children.Add(K(BP(b, Release), "Release", RelF));
-            aKnobs.Children.Add(K(BP(b, Gain), "Gain", GainF));
+            var aKnobs = KnobRow(
+                K(BP(b, AboveThresh), "Thresh", v => ThrF(ThrA(v))),
+                K(BP(b, AboveRatio), "Ratio", RatioAF),
+                K(BP(b, Attack), "Attack", AtkF),
+                K(BP(b, Release), "Release", RelF),
+                K(BP(b, Gain), "Gain", GainF));
             var aSec = new DockPanel { Children = { Docked(aHead, Dock.Top), aKnobs } };
 
             // BELOW — expansion / upward compression
@@ -346,12 +353,12 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var bToggle = Toggle(BP(b, BelowOn), "", () => On(BP(b, BelowOn)) ? "on" : "off");
             var bHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 16 };
             bHead.Children.Add(bCap); bHead.Children.Add(Col(bToggle, 1));
-            var bKnobs = new UniformGrid { Rows = 1, VerticalAlignment = VerticalAlignment.Center };
-            bKnobs.Children.Add(K(BP(b, BelowThresh), "Thresh", v => ThrF(ThrB(v))));
-            bKnobs.Children.Add(K(BP(b, BelowRatio), "Ratio", RatioBF));
-            bKnobs.Children.Add(K(BP(b, BelowAttack), "Attack", AtkF));
-            bKnobs.Children.Add(K(BP(b, BelowRelease), "Release", RelF));
-            bKnobs.Children.Add(K(BP(b, Floor), "Floor", _ => FloorF(b)));
+            var bKnobs = KnobRow(
+                K(BP(b, BelowThresh), "Thresh", v => ThrF(ThrB(v))),
+                K(BP(b, BelowRatio), "Ratio", RatioBF),
+                K(BP(b, BelowAttack), "Attack", AtkF),
+                K(BP(b, BelowRelease), "Release", RelF),
+                K(BP(b, Floor), "Floor", _ => FloorF(b)));
             readouts.Add(() => Inactive.Set(bKnobs, !On(BP(b, BelowOn)), interactive: true));
             ToolTip.SetTip(bKnobs, "Ratio above 1 : 1 expands (quiet parts get quieter); below 1 : 1 (↑) compresses upward (quiet parts are lifted). Floor limits either to ± that many dB.");
             var bSec = Divider(new DockPanel { Children = { Docked(bHead, Dock.Top), bKnobs } }, 4);

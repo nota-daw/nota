@@ -181,11 +181,15 @@ internal sealed class ShSignalView : ShDragView
 
         NotaGraph.Title(ctx, frame, _duck ? "Signal and duck" : "Signal and gate");
         NotaGraph.Legend(ctx, w - 6, 3, ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Area), ("output", NotaPalette.VizInk, NotaGraph.Mark.Line));
-        var thrTxt = NotaNum.F($"threshold {_thr:0.0}");
-        double ty = Y(_thr) - 13;
-        if (ty < 18) ty = Y(_thr) + 3;   // under the line when above it would reach the title row
-        // On a plate: under the line it would otherwise sit on the signal's own trace.
-        NotaGraph.PlateText(ctx, NotaGraph.AxisText(thrTxt, hotT ? NotaPalette.AccentBright : NotaPalette.TextSecondary), new Point(6, ty));
+        // The Thresh knob shows the level, so the line is named only while it is grabbed.
+        if (hotT)
+        {
+            var thrTxt = NotaNum.F($"threshold {_thr:0.0}");
+            double ty = Y(_thr) - 13;
+            if (ty < 18) ty = Y(_thr) + 3;   // under the line when above it would reach the title row
+            // On a plate: under the line it would otherwise sit on the signal's own trace.
+            NotaGraph.PlateText(ctx, NotaGraph.AxisText(thrTxt, NotaPalette.AccentBright), new Point(6, ty));
+        }
         Text(ctx, "−" + _window, 6, h - 11);
         TextR(ctx, "now", w - 6, h - 11);
         if (_closing > _n * 0.12 && _closing < _n * 0.85)

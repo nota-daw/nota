@@ -529,7 +529,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             var duck = SliderRow("DUCKING", DuckAmount, v => NotaNum.F($"{v * 24:0.0}"));
             var rel = SliderRow("RELEASE", DuckRelease, v => NotaNum.F($"{Exp(v, 20, 2000):0}"));
             ToolTip.SetTip(duck, "Ducking — the wet dips (up to 24\u2009dB) while the input plays");
-            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 10, VerticalAlignment = VerticalAlignment.Bottom };
+            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 10, VerticalAlignment = VerticalAlignment.Center };
             btns.Children.Add(Latch(Freeze, "Freeze", "Freeze — hold the algorithm tail forever; the input is muted"));
             btns.Children.Add(Col(Latch(FreezeIn, "Hold in", "Hold in — keep feeding the input into the frozen tail (layering)"), 1));
             var wetBar = new PentadLevelBar { Height = 4, VerticalAlignment = VerticalAlignment.Center };
@@ -547,7 +547,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             var duckGr = Mono("", 7, MutedC);
             readouts.Add(() => { double gr = Sc(S_DuckDb); duckGr.Text = gr > 0.05 ? NotaNum.F($"−{gr:0.0}") : ""; });
 
-            var g = new Grid { RowDefinitions = new RowDefinitions("17,17,22,19,6,19,18,26,*"), Margin = new Thickness(0, 4, 0, 0) };
+            var g = new Grid { RowDefinitions = new RowDefinitions("17,17,22,19,6,19,18,24,*"), Margin = new Thickness(0, 4, 0, 0) };
             Control[] rows = { EngineRow(ConvOn, "Conv", true), EngineRow(AlgoOn, "Algo", false), route, dry,
                 new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Center }, duck, rel, btns, wet };
             for (int r = 0; r < rows.Length; r++) g.Children.Add(GRow(rows[r], r));

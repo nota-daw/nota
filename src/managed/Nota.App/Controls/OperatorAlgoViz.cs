@@ -118,7 +118,15 @@ internal sealed class OperatorAlgoMini : Control
         var mod = new Pen(_active ? Teal : BorderDef, 1);
         for (int o = 0; o < 4; o++)
             if (tgt[o] < 4) ctx.DrawLine(mod, Pt(o), Pt(tgt[o]));
+        // Boxes shrink until the closest two have a clear gap (a four-deep stack, three in a row).
         double bs = Math.Min(6, (gx1 - gx0) / 4);
+        for (int a = 0; a < 4; a++)
+            for (int b = a + 1; b < 4; b++)
+            {
+                Point pa = Pt(a), pb = Pt(b);
+                bs = Math.Min(bs, Math.Max(Math.Abs(pa.X - pb.X), Math.Abs(pa.Y - pb.Y)) - 2.5);
+            }
+        bs = Math.Max(bs, 3);
         for (int o = 0; o < 4; o++)
         {
             var p = Pt(o);

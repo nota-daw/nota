@@ -189,7 +189,7 @@ internal sealed class LensSpectrumView : Control
         double top = _d.TopDb, range = Math.Max(6, _d.RangeDb);
         // The frequency labels get their own lane under the plot, so the noise floor never
         // sits on top of "1k" (the mockup's axis row).
-        const double AxisH = 11;
+        const double AxisH = 12, TitleH = 17;   // the title row stays clear of the grid
         double plotH = Math.Max(8, h - AxisH);
         double Y(double db) => Math.Clamp((top - db) / range, 0, 1) * plotH;
 
@@ -197,16 +197,16 @@ internal sealed class LensSpectrumView : Control
         for (double db = Math.Ceiling(top / 30) * 30; db > top - range; db -= 30)
         {
             double y = Y(db);
-            if (y < 2 || y > plotH - 2) continue;
+            if (y < TitleH + 2 || y > plotH - 6) continue;   // none on the title row or on the floor
             ctx.DrawLine(LensInk.GridFaint, new Point(0, y), new Point(w, y));
-            if (y - 8 >= 16) LensInk.Text(ctx, NotaNum.F($"{db:0}"), 4, y - 8, LensInk.Axis);   // clear of the title
+            if (y - 8 >= TitleH) LensInk.Text(ctx, NotaNum.F($"{db:0}"), 4, y - 8, LensInk.Axis);
         }
         // Frequency grid.
         foreach (double hz in GridHz)
         {
             if (hz >= _d.FreqHi) continue;
             double x = _d.FracOf(hz) * w;
-            ctx.DrawLine(Array.IndexOf(LabelHz, hz) >= 0 ? LensInk.GridStrong : LensInk.GridFaint, new Point(x, 0), new Point(x, plotH));
+            ctx.DrawLine(Array.IndexOf(LabelHz, hz) >= 0 ? LensInk.GridStrong : LensInk.GridFaint, new Point(x, TitleH), new Point(x, plotH));
         }
         if (_d.NoteGrid)
         {
@@ -215,7 +215,7 @@ internal sealed class LensSpectrumView : Control
                 double hz = 440.0 * Math.Pow(2, (12 * oct - 57) / 12.0);   // C of each octave
                 if (hz < _d.FreqLo || hz >= _d.FreqHi) continue;
                 double x = _d.FracOf(hz) * w;
-                ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x40), 1), new Point(x, 0), new Point(x, plotH));
+                ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x40), 1), new Point(x, TitleH), new Point(x, plotH));
             }
         }
 
@@ -276,7 +276,7 @@ internal sealed class LensSpectrumView : Control
         }
         else
         {
-            LensInk.Title(ctx, "SPECTRUM", NotaNum.F($"{_d.TopDb:0} … {_d.TopDb - range:0} dB"));
+            LensInk.Title(ctx, "SPECTRUM", "");   // the top and range are on the Top and Rng bars
         }
 
         // The axis lane: the decade labels sit under the plot, each on its grid line.
@@ -286,9 +286,8 @@ internal sealed class LensSpectrumView : Control
             if (hz >= _d.FreqHi) continue;
             double x = _d.FracOf(hz) * w;
             string s = hz >= 1000 ? NotaNum.F($"{hz / 1000:0} kHz") : NotaNum.F($"{hz:0} Hz");
-            LensInk.Text(ctx, s, Math.Min(x + 3, w - LensInk.TextW(s) - 3), plotH + 1, LensInk.Axis);
+            LensInk.Text(ctx, s, Math.Min(x + 3, w - LensInk.TextW(s) - 3), plotH + 2, LensInk.Axis);
         }
-        LensInk.Text(ctx, NotaNum.F($"{top - range:0} dB"), w - LensInk.TextW(NotaNum.F($"{top - range:0} dB")) - 4, plotH - 9, LensInk.Axis);
     }
 
     private static string Fmt(double hz) => hz >= 1000 ? NotaNum.F($"{hz / 1000:0.00} kHz") : NotaNum.F($"{hz:0} Hz");
