@@ -15,7 +15,7 @@ namespace Nota.App;
     // Interactive filter response for Nota Volt (and Bass, Aurora, Operator): drag anywhere to
     // set cutoff (X) and resonance (Y) of the targeted filter, recording gestures. Drawn like
     // Auto Filter's curve: the real 2-pole response by type (LP / HP / BP / Notch / Morph) over a
-    // log-frequency grid, a wash under it, the handle on the curve and the cutoff top-right.
+    // log-frequency grid, the handle on the curve and the cutoff top-right.
     internal sealed class VoltFilter : Control, IMidiLearnRegions
     {
         private readonly IAudioEngine _e;
@@ -62,7 +62,6 @@ namespace Nota.App;
             void G1((int i, string id) p) { if (p.i < 0) return; if (begin) _e.BeginAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); else _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); }
             G1(_freq); G1(_reso);
         }
-        private static readonly IBrush FillB = NotaPalette.Wash(NotaPalette.VizInk, 0x14);
         private const double DbTop = 18, DbBot = -36;
 
         /// <summary>24 dB/oct: the response is drawn squared (two poles more), like Auto Filter's.</summary>
@@ -89,7 +88,8 @@ namespace Nota.App;
         // Auto Filter's curve), by type; Morph (Aurora) is a bell that resonance raises.
         private double MagDb(double f, double fc, double res)
         {
-            double q = 0.5 + res * 14.5, w = f / fc, w2 = w * w;
+            // The engines' resonance mapping (VoltSynth::resoToK, Bass, Operator): k = 2 − 1.9·res, q = 1/k.
+            double q = 1.0 / Math.Clamp(2.0 - 1.9 * Math.Clamp(res, 0.0, 1.0), 0.05, 2.0), w = f / fc, w2 = w * w;
             double den = Math.Max(1e-9, Math.Sqrt((1 - w2) * (1 - w2) + w / q * (w / q)));
             double m = _type switch
             {
@@ -127,15 +127,6 @@ namespace Nota.App;
                 double t = (double)i / (n - 1), f = lo * Math.Pow(hi / lo, t);
                 pts[i] = new Point(x0 + t * (x1 - x0), Y(MagDb(f, fc, res)));
             }
-            var area = new StreamGeometry();
-            using (var g = area.Open())
-            {
-                g.BeginFigure(new Point(pts[0].X, h), true);
-                foreach (var pt in pts) g.LineTo(pt);
-                g.LineTo(new Point(pts[^1].X, h));
-                g.EndFigure(true);
-            }
-            ctx.DrawGeometry(FillB, null, area);
             var line = new StreamGeometry();
             using (var g = line.Open())
             {

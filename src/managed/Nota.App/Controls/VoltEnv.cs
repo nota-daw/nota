@@ -108,7 +108,6 @@ namespace Nota.App;
             InvalidateVisual();
         }
 
-        private static readonly IBrush FillB = NotaPalette.Wash(NotaPalette.VizInk, 0x14);
 
         public override void Render(DrawingContext ctx)
         {
@@ -120,8 +119,8 @@ namespace Nota.App;
             var (xa, xd, sy, xh, xr) = Nodes();
             foreach (var gx in new[] { xa, xd, xh }) ctx.DrawLine(NotaGraph.GridPen, new Point(gx, top), new Point(gx, bot));
 
-            // Drawn like Auto Filter's windows: the attack rises in a soft curve, decay and release
-            // fall away exponentially (as the engine's one-pole stages do), a wash under the shape.
+            // Drawn like Auto Filter's windows: a straight attack, then decay and release falling
+            // away exponentially (as the engine's one-pole stages do); no fill under the line.
             void Shape(StreamGeometryContext g)
             {
                 g.LineTo(new Point(xa, top));   // linear attack
@@ -129,9 +128,6 @@ namespace Nota.App;
                 g.LineTo(new Point(xh, sy));
                 g.CubicBezierTo(new Point(xh + (xr - xh) * 0.25, bot - (bot - sy) * 0.15), new Point(xh + (xr - xh) * 0.55, bot), new Point(xr, bot));
             }
-            var area = new StreamGeometry();
-            using (var g = area.Open()) { g.BeginFigure(new Point(x0, bot), true); Shape(g); g.EndFigure(true); }
-            ctx.DrawGeometry(FillB, null, area);
             var line = new StreamGeometry();
             using (var g = line.Open()) { g.BeginFigure(new Point(x0, bot), false); Shape(g); g.EndFigure(false); }
             ctx.DrawGeometry(null, new Pen(Accent, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), line);
