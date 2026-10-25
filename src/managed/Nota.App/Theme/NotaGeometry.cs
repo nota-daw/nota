@@ -53,6 +53,7 @@ internal static class NotaSize
     public const double Console = 32;     // the transport keys' well: 28px icon buttons in 2px of well
     public const double TransportBar = 44; // the docked transport row
     public const double Knob = 26;        // a device knob, with its centre cap
+    public const double KnobLarge = 34;   // a device knob where a wide card has the room (Volt's oscillator rows)
     public const double KnobInline = 22;  // a device knob with its label beside it (Glide, EQ band, oscillator rows)
     public const double KnobFlat = 28;    // a knob outside a device card: no cap
     public const double ParamCell = 56;   // knob 26 + 2 + value line 13 + 2 + label line 13

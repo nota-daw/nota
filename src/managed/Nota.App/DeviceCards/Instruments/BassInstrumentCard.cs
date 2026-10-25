@@ -114,6 +114,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         void Refresh()
         {
             filtGraph.Target("FILTER", P("filfreq"), P("filreso"), Sel("filtype", 4));
+            filtGraph.Slope24 = G("filslope") >= 0.5f;
             filtGraph.Refresh(); ampEnv.Refresh(); filtEnv.Refresh();
             foreach (var r in readouts) r();
             hint.Text = Hint();

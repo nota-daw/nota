@@ -513,7 +513,7 @@ R2). Each site picks the name for what it draws.
 | Track header | 229 wide, 54 high, two rows: name row 18, controls row 20 |
 | Device card | always 260 high; the width fits the device (§ Devices); header 24 |
 | Device sections | 4 from the card edge, 6 apart, 8 padding inside; tab rows 22; rows spread to fill the height |
-| Knob | 26 with a centre cap in a device; 22 when its label sits beside it (Glide, an EQ band); 28 and flat outside devices |
+| Knob | 26 with a centre cap in a device; 34 (large) where a wide card has the room (Volt's oscillator rows); 22 when its label sits beside it (Glide, an EQ band); 28 and flat outside devices |
 | Switch | 20 × 12, knob 8, square corners |
 | Track buttons | M, S and arm 18 × 18; device number buttons 14 × 16 |
 | Segment cell | 20 high in a 2 px well |
@@ -1206,7 +1206,7 @@ control, label and value stays.
 | Rhythm | 1050 | Status line removed. The Step strip sits under the Voice panel so the eight kit voices keep full-height rows. Swing, Human and Accent become value bars; the teal trigger line, playing bank and velocity lane become grey or a picked segment. |
 | Sampler | 700 | Status line removed. Volume, Pan and Glide become value bars; Crossfade is ink 4 while the loop is off. |
 | Synth | 700 | Status line removed. MIDI learn and the S / L toggle stay in the header after the type tag; Volume, Pan and Glide become value bars. Pulse W is ink 4 while the wave is not Square. |
-| Volt | 1050 | Status line removed. Cutoff, Reso and Glide become value bars. The repeated knob and Route labels of the two oscillator rows become one row of column heads (Noise keeps its Color label); in the Global rail the meter stands at the right. |
+| Volt | 1050 | Status line removed. Cutoff, Reso and Glide become value bars. The repeated knob and Route labels of the two oscillator rows become one row of column heads; the oscillator and noise knobs are large (34) in 54 px cells, and the noise colour is the dark / pink / white chips alone. Gain, Drive and Pan, and the filter knobs, are full knob cells; in the Global rail the meter stands at the right. |
 
 ### Audio effects (25, plus Vocoder)
 
@@ -1221,9 +1221,9 @@ control, label and value stays.
 | Compressor | 700 | Status line removed. Thr and Mkp faders become upright value bars; Ratio, Mix and Range become value bars. |
 | Crush | 700 | Status line removed. Grit-tab sliders become value bars; the In and Out level columns stay as empty readout columns with no signal. |
 | Delay | 700 | Status line removed. The two loop faders become upright value bars; the level sliders become value bars. |
-| Dynamic EQ-8 | 1050; 584 folded | The EQ Eight layout (below), graph 473 × 169. Each band chip carries a dynamics activity bar along its bottom. The panel is drawn like EQ-8's, in two columns on one set of rows so their parts line up: the band column (head, shapes, Freq / Gain / Q, then Key Self / Ext and Solo) beside the dynamics column (title and fold arrow, Static / Duck / Lift beside the shapes, Thresh / Range / Attack / Release as knobs beside Freq / Gain / Q, then the Dynamic switch and an inline Output knob, as EQ-8's Scale and Output). Range is a bipolar knob (left cuts, right boosts); Thresh carries the band's level as a marker. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics knobs are ink 4 while the band is Static. The right panel folds like EQ-8's (below). |
+| Dynamic EQ-8 | 1050; 702 folded | The EQ Eight layout (below), graph 473 × 169. Each band chip carries a dynamics activity bar along its bottom. The panel is drawn like EQ-8's, in two columns on one set of rows so their parts line up: the band column (head, shapes, Freq / Gain / Q, then Key Self / Ext and Solo) beside the dynamics column (title and fold arrow, Static / Duck / Lift beside the shapes, Thresh / Range / Attack / Release as knobs beside Freq / Gain / Q, then the Dynamic switch and an inline Output knob, as EQ-8's Scale and Output). Range is a bipolar knob (left cuts, right boosts); Thresh carries the band's level as a marker. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics knobs are ink 4 while the band is Static. The right panel folds like EQ-8's (below). |
 | EQ-3 | 700 | Status line removed. Band faders become upright value bars around 0 dB; the band colours (rose, white, teal) become greys. |
-| EQ-8 | 700; 580 folded | The EQ Eight layout (below), graph 470 × 169, with the right panel one narrow column (200) as before. Slope and Channel sit side by side under the picked band's knobs, each named underneath like a knob; Scale and Output close the column as small knobs. Analyzer and Auto gain sit over the graph's top-left corner, the auto gain in effect on the switch's word. Channel uses the short names St, M, S, L, R. The status line's draggable Out readout is the same control as the Output knob, which stays. The right column folds (below). |
+| EQ-8 | 700; 568 folded | The EQ Eight layout (below), graph 470 × 169, with the right panel one narrow column (200) as before. Slope and Channel sit side by side under the picked band's knobs, each named underneath like a knob; Scale and Output close the column as small knobs. Analyzer and Auto gain sit over the graph's top-left corner, the auto gain in effect on the switch's word. Channel uses the short names St, M, S, L, R. The status line's draggable Out readout is the same control as the Output knob, which stays. The right column folds (below). |
 | Flanger | 700 | Status line removed. Sliders become value bars (Feedback fills from the centre); the right channel draws in a darker grey instead of teal. |
 | Forge | 700 | Status line removed. The three stage boxes become rows split by rules: each stage dot becomes an on switch, the selected stage shows a tinted number. Amount, Wet and Out stack as value-bar rows above the transfer graph; switched-off stages are ink 4. |
 | Lens | 700 | Status line removed. The Top and Range rail faders become upright value bars; Peak hold and Mid / Side share one row. |
@@ -1251,8 +1251,8 @@ in the tooltip), then Freq, Gain and Q side by side. A row that does not apply (
 with nothing picked. The card stays 260 high; the graph grows sideways only.
 
 **The EQ fold.** EQ-8's and Dynamic EQ-8's right panel folds to a narrow strip (60) with an
-arrow to bring it back over the picked band's Freq, Gain and Q knobs, stacked and centred in the space under it; the card narrows from 720 to 580
-(Dynamic EQ-8 940 to 584); the band tabs and the graph keep
+arrow to bring it back over the picked band's Freq, Gain and Q knobs, stacked and centred in the space under it; the card narrows from 700 to 568
+(Dynamic EQ-8 1050 to 702); the band tabs and the graph keep
 working (a node's right-click menu still sets type, slope and channel, or type, mode and solo). Folding hides nothing that unfolding doesn't bring back, and changes
 no parameter. The fold is kept per device for the session (like Prism's picked band), not
 saved in the project.

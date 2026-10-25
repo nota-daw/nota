@@ -41,7 +41,7 @@ public sealed class Knob : Control
     private const double SweepDeg = 270.0;   // clockwise to down-right
     private const double Stroke = 2.4, PointerW = 1.6;
 
-    public const double Size = NotaSize.Knob, SizeInline = NotaSize.KnobInline, SizeFlat = NotaSize.KnobFlat;
+    public const double Size = NotaSize.Knob, SizeInline = NotaSize.KnobInline, SizeFlat = NotaSize.KnobFlat, SizeLarge = NotaSize.KnobLarge;
 
     static Knob()
     {
@@ -49,11 +49,15 @@ public sealed class Knob : Control
         HeightProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => double.IsNaN(v) ? v : ((Knob)o).Fixed));
     }
 
-    private double Fixed => _inline ? SizeInline : _flat ? SizeFlat : Size;
+    private double Fixed => _inline ? SizeInline : _flat ? SizeFlat : _large ? SizeLarge : Size;
 
     /// <summary>The 22 px knob with its label beside it (see the header).</summary>
     public bool Inline { get => _inline; init { _inline = value; CoerceValue(WidthProperty); CoerceValue(HeightProperty); } }
     private readonly bool _inline;
+
+    /// <summary>The 34 px device knob, where a wide card has the room for it.</summary>
+    public bool Large { get => _large; init { _large = value; CoerceValue(WidthProperty); CoerceValue(HeightProperty); } }
+    private readonly bool _large;
 
     /// <summary>The 28 px knob outside a device card: no cap, a grey value, orange while live.</summary>
     public bool Flat { get => _flat; init { _flat = value; CoerceValue(WidthProperty); CoerceValue(HeightProperty); } }

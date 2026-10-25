@@ -35,7 +35,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
     // Folded, a strip just wide enough for the picked band's Freq, Gain and Q stacked under the arrow.
     internal const double BandW = 176, DynW = 200, PanelGap = 16, StripW = EqDeviceBody.StripW;
     internal const double PanelW = BandW + PanelGap + DynW + 2 * SectionPad;
-    public const double OpenW = DeviceCardKit.CardWide, FoldedW = OpenW - PanelW + StripW;   // 584 folded
+    public const double OpenW = DeviceCardKit.CardWide, FoldedW = OpenW - PanelW + StripW;   // 702 folded
 
     public double Width => OpenW;
     public bool AutoWidth => true;   // the card follows the fold

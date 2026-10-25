@@ -158,7 +158,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         var bendVal = Value(); var modVal = Value();
         readouts.Add(() =>
         {
-            SetWheelValues(bendVal, modVal, (int)Math.Round(2 + G("bendrange") * 10), G("bend"), G("modwheel"));
+            SetWheelValues(bendVal, modVal, 2 + G("bendrange") * 10, G("bend"), G("modwheel"));
         });
         var wheels = WheelsPanel(bendWheel, modWheel, bendVal, modVal);
         DockPanel.SetDock(wheels, Dock.Left);

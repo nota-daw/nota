@@ -97,7 +97,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         var routing = new OperatorRoutingViz { VerticalAlignment = VerticalAlignment.Stretch };
         var minis = new OperatorAlgoMini[OperatorTopo.Count];
         var filtCurve = new VoltFilter(engine, track)
-        { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60, FreqRange = (60, 18000) };
+        { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60, FreqRange = (60, 18000), ShowCutoff = false };
         var env = new VoltEnv(engine, track) { MinHeight = 48, VerticalAlignment = VerticalAlignment.Stretch };
         Action applyEnv = () => { };
 

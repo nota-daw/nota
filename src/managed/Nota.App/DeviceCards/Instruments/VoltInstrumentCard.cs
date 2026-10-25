@@ -177,7 +177,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         // macro tile, none at all, because the tile is already named) while MIDI learn and
         // the CV menu keep the parameter's full name.
         Control PKnob(string id, string label, string learn, Func<float, string> fmt,
-            double cellW = 44, bool inline = false, bool bipolar = false)
+            double cellW = 44, bool inline = false, bool bipolar = false, bool large = false)
         {
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
@@ -188,7 +188,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             };
             var knob = new Knob(G(id), 1.0)
             {
-                Accent = true, Inline = inline, Bipolar = bipolar, Default = engine.InstrumentParamDefault(track, pi),
+                Accent = true, Inline = inline, Large = large, Bipolar = bipolar, Default = engine.InstrumentParamDefault(track, pi),
                 HorizontalAlignment = HorizontalAlignment.Center,
             };
             knob.Format = v => fmt((float)v);
@@ -317,8 +317,9 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         // Color label: that column means Oct above it).
         var oscGrid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("46,Auto,*,36,36,36,36,36,36,36,*,Auto"),
-            RowDefinitions = new RowDefinitions("Auto,44,44,*"),
+            // The wide card's room goes to the knobs: 34 px knobs in 54 px cells, the rows sharing the height.
+            ColumnDefinitions = new ColumnDefinitions("46,Auto,*,54,54,54,54,54,54,54,*,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,*,*,*"),
         };
         void OscCell(Control c, int row, int col, int span = 1)
         { Grid.SetRow(c, row); Grid.SetColumn(c, col); if (span > 1) Grid.SetColumnSpan(c, span); oscGrid.Children.Add(c); }
@@ -346,22 +347,21 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             int r = o + 1;
             OscCell(Section(nm), r, 0);
             OscCell(WaveChips(pre + "wave"), r, 1);
-            OscCell(PKnob(pre + "octave", "", learn + " Octave", Oct, 36, bipolar: true), r, 3);
-            OscCell(PKnob(pre + "semi", "", learn + " Semi", Semi, 36, bipolar: true), r, 4);
-            OscCell(PKnob(pre + "detune", "", learn + " Fine", Cents, 36, bipolar: true), r, 5);
-            OscCell(PKnob(pre + "shape", "", learn + " Shape", ShapeText, 36), r, 6);
-            OscCell(PKnob(pre + "pw", "", learn + " Pulse Width", PwText, 36), r, 7);
-            OscCell(PKnob(pre + "phase", "", learn + " Phase", Phase, 36), r, 8);
-            OscCell(PKnob(pre + "level", "", learn + " Level", Pct, 36), r, 9);
+            OscCell(PKnob(pre + "octave", "", learn + " Octave", Oct, 54, bipolar: true, large: true), r, 3);
+            OscCell(PKnob(pre + "semi", "", learn + " Semi", Semi, 54, bipolar: true, large: true), r, 4);
+            OscCell(PKnob(pre + "detune", "", learn + " Fine", Cents, 54, bipolar: true, large: true), r, 5);
+            OscCell(PKnob(pre + "shape", "", learn + " Shape", ShapeText, 54, large: true), r, 6);
+            OscCell(PKnob(pre + "pw", "", learn + " Pulse Width", PwText, 54, large: true), r, 7);
+            OscCell(PKnob(pre + "phase", "", learn + " Phase", Phase, 54, large: true), r, 8);
+            OscCell(PKnob(pre + "level", "", learn + " Level", Pct, 54, large: true), r, 9);
             OscCell(RouteCell(pre + "route"), r, 11);
         }
         {
             OscCell(Section("Noise"), 3, 0);
             OscCell(Chips("noisecolor", NoiseNames, () => NoiseBand(G("noisecolor")), iv => { SetP("noisecolor", NoiseStops[iv]); Refresh(); }), 3, 1);
-            var color = PKnob("noisecolor", "Color", "Noise Color", Pct, 40);
-            color.HorizontalAlignment = HorizontalAlignment.Center; color.VerticalAlignment = VerticalAlignment.Center;
-            OscCell(color, 3, 3);
-            OscCell(PKnob("noise", "", "Noise Level", Pct, 36), 3, 9);
+            // The colour is the dark / pink / white chips' own (no second Color knob); the level
+            // sits in the Level column like the oscillators'.
+            OscCell(PKnob("noise", "", "Noise Level", Pct, 54, large: true), 3, 9);
 
             var mixBar = new MixBar(engine, track, new[] { I("osc1level"), I("osc2level"), I("noise") }) { Height = 8 };
             readouts.Add(mixBar.Refresh);
@@ -377,7 +377,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
                 Children = { Cap("Mix sum"), mixBar, mixVal },
             };
             mixVal.HorizontalAlignment = HorizontalAlignment.Left;
-            OscCell(mixCell, 3, 4, 5);
+            OscCell(mixCell, 3, 3, 6);
             OscCell(RouteCell("noiseroute"), 3, 11);
         }
         var oscBody = new Border { Padding = new Thickness(0, 6, 0, 0), Child = oscGrid };
@@ -389,11 +389,11 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         var filtStack = new Control[2, 6];
         string[] filtIds = { "freq", "reso", "env", "key", "lfo", "tof2" };
         string[] filtLbl = { "Cutoff", "Reso", "Env", "Key", "LFO", "To F2" };
-        // Inline knobs (name and value beside the knob), so the two rows fit under the chips.
+        // Full knob cells in two rows under the chips: the wide card has the height for them.
         var filtKnobGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), RowDefinitions = new RowDefinitions("Auto,Auto"),
-            RowSpacing = 8, VerticalAlignment = VerticalAlignment.Top,
+            RowSpacing = 4, VerticalAlignment = VerticalAlignment.Top,
         };
         // Cutoff Reso Env | Drive  over  Key LFO | Wheel To F2 — Drive and Wheel → LFO act on
         // both filters, so they stay put when the 1 / 2 pick swaps the rest.
@@ -405,9 +405,9 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             filtKnobGrid.Children.Add(filtCells[k]);
         }
         {
-            var drive = PKnob("fildrive", "Drive", "Filter Drive", Pct, 64, inline: true);
+            var drive = PKnob("fildrive", "Drive", "Filter Drive", Pct, 64);
             Grid.SetColumn(drive, 3); filtKnobGrid.Children.Add(drive);
-            var wheel = PKnob("wheellfo", "Wheel", "Wheel → LFO", Pct, 64, inline: true);
+            var wheel = PKnob("wheellfo", "Wheel", "Wheel → LFO", Pct, 64);
             Grid.SetColumn(wheel, 2); Grid.SetRow(wheel, 1); filtKnobGrid.Children.Add(wheel);
         }
         for (int f = 0; f < 2; f++)
@@ -423,7 +423,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
                 // Filter 2 has no "To F2" — it is the end of that path.
                 Control cell = k == 5 && f == 1
                     ? new Panel()
-                    : PKnob(id, filtLbl[k], $"Filter {f + 1} {filtLbl[k]}", fmt, 64, inline: true, bipolar: k is 2 or 4);
+                    : PKnob(id, filtLbl[k], $"Filter {f + 1} {filtLbl[k]}", fmt, 64, bipolar: k is 2 or 4);
                 cell.IsVisible = false;
                 filtStack[f, k] = cell;
                 filtCells[k].Children.Add(cell);
@@ -467,6 +467,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         {
             string pre = fsel == 0 ? "fil1" : "fil2";
             filtGraph.Target($"FILTER {fsel + 1}", P(pre + "freq"), P(pre + "reso"), Sel(pre + "type", 4));
+            filtGraph.Slope24 = G(pre + "slope") >= 0.5f;
             filtGraph.Refresh();
             for (int f = 0; f < 2; f++)
             {
@@ -779,9 +780,10 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
 
         var knobRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 8, 0, 0) };
-        knobRow.Children.Add(PKnob("volume", "Gain", "Gain", Pct, 56, inline: true));
-        knobRow.Children.Add(PKnob("drive", "Drive", "Drive", Pct, 56, inline: true));
-        knobRow.Children.Add(PKnob("outpan", "Pan", "Out Pan", PanText, 48, inline: true, bipolar: true));
+        // Full knob cells (name under the value), so the row fills the rail's height.
+        knobRow.Children.Add(PKnob("volume", "Gain", "Gain", Pct, 54));
+        knobRow.Children.Add(PKnob("drive", "Drive", "Drive", Pct, 54));
+        knobRow.Children.Add(PKnob("outpan", "Pan", "Out Pan", PanText, 54, bipolar: true));
         var leftCol = new StackPanel
         {
             Spacing = 5,
@@ -822,7 +824,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         Border Rule(Control child) => new()
         {
             BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0),
-            Padding = new Thickness(0, 3, 0, 0), Child = child,
+            Padding = new Thickness(0, 8, 0, 0), Child = child,
         };
         var uniChips = Chips("univoices", UniNames);
         uniChips.HorizontalAlignment = HorizontalAlignment.Right;
@@ -831,7 +833,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         Grid.SetColumn(uniChips, 1); uniRow.Children.Add(uniChips);
         var voiceGrid = new StackPanel
         {
-            Spacing = 3, Margin = new Thickness(0, 2, 0, 0),
+            Spacing = 8, Margin = new Thickness(0, 8, 0, 0),
             Children =
             {
                 CapRow("Amp 1", "Amp 2"),

@@ -12,16 +12,12 @@ using Nota.Application;
 
 namespace Nota.App;
 
-    // Interactive filter response for Nota Volt: drag anywhere to set cutoff (X) and
-    // resonance (Y) of the targeted filter, recording gestures. Curve shape follows the
-    // filter type (LP/HP/BP/Notch).
+    // Interactive filter response for Nota Volt (and Bass, Aurora, Operator): drag anywhere to
+    // set cutoff (X) and resonance (Y) of the targeted filter, recording gestures. Drawn like
+    // Auto Filter's curve: the real 2-pole response by type (LP / HP / BP / Notch / Morph) over a
+    // log-frequency grid, a wash under it, the handle on the curve and the cutoff top-right.
     internal sealed class VoltFilter : Control, IMidiLearnRegions
     {
-        private static readonly IBrush Sunken = NotaPalette.BgSunken;
-        private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
-        private static readonly IBrush Ink = NotaPalette.VizInk;   // the curve at rest: neutral ink
-        private static readonly IBrush GridB = NotaGraph.Grid;
-        private static readonly Typeface Face = NotaFonts.Sans;
         private readonly IAudioEngine _e;
         private readonly int _t;
         private (int i, string id) _freq, _reso;
@@ -66,12 +62,18 @@ namespace Nota.App;
             void G1((int i, string id) p) { if (p.i < 0) return; if (begin) _e.BeginAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); else _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); }
             G1(_freq); G1(_reso);
         }
-        private static readonly IBrush FillB = NotaPalette.Wash(NotaPalette.VizInk, 0x18);
-        private static readonly IBrush AxisB = NotaPalette.TextAxis;
-        private static readonly IBrush HandleB = NotaPalette.Accent;
+        private static readonly IBrush FillB = NotaPalette.Wash(NotaPalette.VizInk, 0x14);
+        private const double DbTop = 18, DbBot = -36;
 
+        /// <summary>24 dB/oct: the response is drawn squared (two poles more), like Auto Filter's.</summary>
+        public bool Slope24 { get; set; }
+
+        /// <summary>Write the cutoff top-right; off where the card's own header above already shows it (Operator).</summary>
+        public bool ShowCutoff { get; set; } = true;
+
+        // The plot spans the window's width, so the cutoff's x is linear in its normalised value.
         private (double x0, double x1, double top, double bot) Geo()
-        { return (8, Bounds.Width - 8, 15, Bounds.Height - 14); }
+        { return (0, Bounds.Width, NotaGraph.PlotTop - 6, Bounds.Height - NotaGraph.PlotFloor); }
 
         private void Apply(Point p)
         {
@@ -83,71 +85,74 @@ namespace Nota.App;
             InvalidateVisual();
         }
 
-        // The filter's magnitude curve as a top polyline (left→right), per type.
-        private System.Collections.Generic.List<Point> Curve(double x0, double x1, double top, double bot, double cx, double res)
+        // The magnitude of a 2-pole state-variable filter at f for cutoff fc (the same model as
+        // Auto Filter's curve), by type; Morph (Aurora) is a bell that resonance raises.
+        private double MagDb(double f, double fc, double res)
         {
-            double flatY = top + (bot - top) * 0.34;
-            double peakY = Math.Max(top + 2, flatY - res * (flatY - top) * 0.92);
-            double kx = Math.Max(x0, cx - 14), rx = Math.Min(x1, cx + 14);
-            double mid = (peakY + bot) / 2 + (bot - peakY) * 0.15;
-            var p = new System.Collections.Generic.List<Point>();
-            switch (_type)
+            double q = 0.5 + res * 14.5, w = f / fc, w2 = w * w;
+            double den = Math.Max(1e-9, Math.Sqrt((1 - w2) * (1 - w2) + w / q * (w / q)));
+            double m = _type switch
             {
-                case 1: // HP: roll up to cutoff, then flat
-                    p.Add(new(x0, bot)); p.Add(new((x0 + cx) / 2, mid)); p.Add(new(cx, peakY)); p.Add(new(rx, flatY)); p.Add(new(x1, flatY)); break;
-                case 2: // BP: peak at cutoff
-                    p.Add(new(x0, bot)); p.Add(new(kx, mid)); p.Add(new(cx, peakY)); p.Add(new(rx, mid)); p.Add(new(x1, bot)); break;
-                case 3: // Notch: flat with a dip
-                    p.Add(new(x0, flatY)); p.Add(new(kx, flatY)); p.Add(new(cx, bot)); p.Add(new(rx, flatY)); p.Add(new(x1, flatY)); break;
-                case 4: // Morph (Aurora): flat either side with a bell at the cutoff
-                    p.Add(new(x0, flatY)); p.Add(new(kx, flatY)); p.Add(new(cx, peakY)); p.Add(new(rx, flatY)); p.Add(new(x1, flatY)); break;
-                default: // LP: flat to cutoff, resonance peak, roll off
-                    p.Add(new(x0, flatY)); p.Add(new(kx, flatY)); p.Add(new(cx, peakY)); p.Add(new((cx + x1) / 2, mid)); p.Add(new(x1, bot)); break;
-            }
-            return p;
+                1 => w2 / den,
+                2 => w / q / den,
+                3 => Math.Abs(1 - w2) / den,
+                4 => 1 + res * 3 * (w / q / den),
+                _ => 1 / den,
+            };
+            if (Slope24 && _type != 4) m *= m;
+            return 20 * Math.Log10(Math.Max(m, 1e-5));
         }
 
         public override void Render(DrawingContext ctx)
         {
-            double w = Bounds.Width, h = Bounds.Height; if (w <= 0) return;
-            NotaGraph.Window(ctx, new Rect(0, 0, w, h));
+            double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0) return;
+            var frame = new Rect(0, 0, w, h);
+            NotaGraph.Window(ctx, frame);
+            using var clip = ctx.PushClip(new RoundedRect(frame.Deflate(1), NotaGraph.Radius));
             var (x0, x1, top, bot) = Geo();
-            // Grid: 3 horizontal (mid dashed) + 3 vertical.
-            var gp = new Pen(GridB, 1);
-            var dgp = new Pen(GridB, 1) { DashStyle = DashStyle.Dash };
-            for (int i = 1; i <= 3; i++) { double gy = top + (bot - top) * i / 4.0; ctx.DrawLine(i == 2 ? dgp : gp, new Point(x0, gy), new Point(x1, gy)); }
-            for (int i = 1; i <= 3; i++) { double gx = x0 + (x1 - x0) * i / 4.0; ctx.DrawLine(gp, new Point(gx, top), new Point(gx, bot)); }
+            double lo = FreqRange.Lo, hi = FreqRange.Hi, span = Math.Log(hi / lo);
+            double X(double hz) => x0 + Math.Log(hz / lo) / span * (x1 - x0);
+            double Y(double db) => top + Math.Clamp((DbTop - db) / (DbTop - DbBot), 0, 1) * (bot - top);
+
+            // Decades across, 0 dB and −18 dB down: the same grid as Auto Filter.
+            foreach (var f in new[] { 100.0, 1000, 10000 }) if (f > lo && f < hi) ctx.DrawLine(NotaGraph.GridPen, new Point(X(f), 0), new Point(X(f), h));
+            foreach (var db in new[] { 0.0, -18 }) ctx.DrawLine(NotaGraph.GridPen, new Point(0, Y(db)), new Point(w, Y(db)));
 
             double cut = G(_freq), res = G(_reso);
-            double cx = x0 + cut * (x1 - x0);
-            var pts = Curve(x0, x1, top, bot, cx, res);
-
-            // Filled area under the curve + the curve line.
-            var geo = new StreamGeometry();
-            using (var gc = geo.Open())
+            double fc = lo * Math.Pow(hi / lo, cut);
+            int n = (int)Math.Clamp(w, 24, 400);
+            var pts = new Point[n];
+            for (int i = 0; i < n; i++)
             {
-                gc.BeginFigure(new Point(pts[0].X, bot), true);
-                foreach (var pt in pts) gc.LineTo(pt);
-                gc.LineTo(new Point(pts[^1].X, bot));
-                gc.EndFigure(true);
+                double t = (double)i / (n - 1), f = lo * Math.Pow(hi / lo, t);
+                pts[i] = new Point(x0 + t * (x1 - x0), Y(MagDb(f, fc, res)));
             }
-            var pen = new Pen(Ink, 1.8, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
-            for (int i = 1; i < pts.Count; i++) ctx.DrawLine(pen, pts[i - 1], pts[i]);
+            var area = new StreamGeometry();
+            using (var g = area.Open())
+            {
+                g.BeginFigure(new Point(pts[0].X, h), true);
+                foreach (var pt in pts) g.LineTo(pt);
+                g.LineTo(new Point(pts[^1].X, h));
+                g.EndFigure(true);
+            }
+            ctx.DrawGeometry(FillB, null, area);
+            var line = new StreamGeometry();
+            using (var g = line.Open())
+            {
+                g.BeginFigure(pts[0], false);
+                for (int i = 1; i < n; i++) g.LineTo(pts[i]);
+                g.EndFigure(false);
+            }
+            ctx.DrawGeometry(null, NotaGraph.PrimaryPen, line);
 
-            // Cutoff marker line + draggable handle at the curve's cutoff point.
-            ctx.DrawLine(new Pen(NotaPalette.Wash(_drag ? NotaPalette.Accent : NotaPalette.VizInk, 0x40), 1), new Point(cx, top), new Point(cx, bot));
-            double hy = _type == 3 ? bot : Math.Max(top + 2, top + (bot - top) * 0.34 - res * ((bot - top) * 0.34) * 0.92);
-            NotaGraph.Node(ctx, new Point(cx, hy), active: _drag);
+            // The handle sits on the curve at the cutoff; a faint rule marks the cutoff while dragged.
+            double cx = x0 + cut * (x1 - x0), cy = Y(MagDb(fc, fc, res));
+            if (_drag) ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x50), 1), new Point(cx, 0), new Point(cx, h));
+            NotaGraph.Node(ctx, new Point(cx, cy), active: true);
 
-            // Axis labels: dB left, frequency scale along the bottom.
-            void Lbl(string t, double x, double y, IBrush b) => ctx.DrawText(new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, b), new Point(x, y));
-            Lbl("+12", x0 + 1, top - 1, AxisB);
-            Lbl("−48\u2009dB", x0 + 1, bot - 10, AxisB);
-            double HzAt(double v) => FreqRange.Lo * Math.Pow(FreqRange.Hi / FreqRange.Lo, v);
-            for (int i = 0; i < 5; i++)
-            { double lx = x0 + (x1 - x0) * i / 4.0; Lbl(NotaNum.Hz(HzAt(i / 4.0)), Math.Clamp(lx - 6, x0, x1 - 22), bot + 2, AxisB); }
-            double hz = HzAt(cut);
-            Glyph.Draw(ctx, GlyphKind.Record, new Rect(x1 - 52, top + 2, 5, 5), _drag ? HandleB : NotaPalette.TextSecondary);
-            Lbl(NotaNum.Hz(hz), x1 - 45, top - 1, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+            NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopLeft, "+18");
+            NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, NotaNum.Hz(lo));
+            NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, NotaNum.Hz(hi));
+            if (ShowCutoff) NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, NotaNum.Hz(fc), _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         }
     }

@@ -162,11 +162,11 @@ internal static class InstrumentCardKit
     /// <summary>The wheel values, written alike in every instrument: the pitch wheel as its
     /// range (±2 st) at rest and the bend in semitones while moved, the mod wheel in %; ink 2 at
     /// rest, ink 1 once moved. <paramref name="bend"/> and <paramref name="mod"/> are 0..1.</summary>
-    internal static void SetWheelValues(TextBlock pitchVal, TextBlock modVal, int range, double bend, double mod)
+    internal static void SetWheelValues(TextBlock pitchVal, TextBlock modVal, double range, double bend, double mod)
     {
         double semis = (bend - 0.5) * 2 * range;
         bool centred = Math.Abs(semis) < 0.05;
-        pitchVal.Text = centred ? $"±{NotaNum.Unit(range, "0", "st")}" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
+        pitchVal.Text = centred ? $"±{NotaNum.Unit(range, "0.#", "st")}" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
         pitchVal.Foreground = centred ? TextSecondary : TextPrimary;
         modVal.Text = NotaNum.Pct(mod);
         modVal.Foreground = mod > 1e-3 ? TextPrimary : TextSecondary;
