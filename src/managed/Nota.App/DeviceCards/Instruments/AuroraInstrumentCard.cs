@@ -409,7 +409,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var oscGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("54,*,*,*,*,*,*"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto"), RowSpacing = 3,
             VerticalAlignment = VerticalAlignment.Top,
         };
         // One row of column heads over the two oscillator rows.

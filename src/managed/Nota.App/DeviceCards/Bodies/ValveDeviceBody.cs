@@ -480,7 +480,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
                 Docked(new Border { Margin = new Thickness(0, 4, 0, 0), Child = sliders }, Dock.Top),
-                Docked(new StackPanel { Spacing = 0, Children = { Toggle(AutoComp, "Auto-compensation", () => On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0} dB") : "Auto-compensation"), Toggle(EvenOnly, "Even harmonics only") } }, Dock.Bottom),
+                Docked(new StackPanel { Spacing = 3, Children = { Toggle(AutoComp, "Auto-compensation", () => On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0} dB") : "Auto-compensation"), Toggle(EvenOnly, "Even harmonics only") } }, Dock.Bottom),
                 Docked(new Border { Padding = new Thickness(0, 0, 0, 4), Child = btns }, Dock.Bottom) } };
             return new Border { Padding = new Thickness(0, 4, 0, 0), Child = body };   // 166 of 190
         }

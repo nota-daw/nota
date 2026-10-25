@@ -613,7 +613,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
                 Docked(sliders, Dock.Top),
-                Docked(new StackPanel { Spacing = 0, Children = { tempo, stereo } }, Dock.Bottom),
+                Docked(new StackPanel { Spacing = 3, Children = { tempo, stereo } }, Dock.Bottom),
                 Docked(new Border { Padding = new Thickness(0, 4, 0, 4), Child = btns }, Dock.Bottom) } };
             body.Margin = new Thickness(0, 6, 0, 0);
             return body;

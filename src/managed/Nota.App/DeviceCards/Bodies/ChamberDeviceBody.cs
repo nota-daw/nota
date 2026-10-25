@@ -384,7 +384,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             knobs.Children.Add(Col(K(IrAttack, "Attack", v => Ms(500 * v * v), cellW: 58), 2));
             knobs.Children.Add(Col(K(IrDecay, "Decay", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v), cellW: 58), 3));
             // Three switches in the 54 knob row: no gap between them (each is 18 high).
-            var toggles = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(6, 0, 0, 0), Children = {
+            var toggles = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(6, 0, 0, 0), Children = {
                 Toggle(IrTrueStereo, "True stereo"), Toggle(IrReverse, "Reverse IR"), Toggle(ConvSync, "Sync predelay") } };
             knobs.Children.Add(Col(toggles, 4));
 
@@ -562,7 +562,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             var qseg = Seg(Quality, new[] { "Eco", "Mid", "High" });
             ToolTip.SetTip(qseg, "Eco: IR up to 3 s · Mid: 6 s · High: 10 s + cubic-interpolated algorithm modulation");
             qual.Children.Add(Col(qseg, 1));
-            var mid = new Grid { RowDefinitions = new RowDefinitions("20,20,24"), Children = {
+            var mid = new Grid { RowDefinitions = new RowDefinitions("26,26,30"), Children = {
                 SliderRow("Width", WidthP, v => NotaNum.F($"{v * 200:0}")),
                 GRow(SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")), 1),
                 GRow(qual, 2) } };
@@ -570,7 +570,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             ToolTip.SetTip(wetOnly, "Wet only — 100\u2009% wet, no dry: for a return / send track");
             var zl = Toggle(ZeroLatency, "Zero latency");
             ToolTip.SetTip(zl, "On: exact convolution timing at 0\u2009ms predelay (FIR head, more CPU). Off: lighter — the first block arrives late and is absorbed into the predelay.");
-            var bottom = new StackPanel { Spacing = 0, Children = { wetOnly, zl } };
+            var bottom = new StackPanel { Spacing = 3, Children = { wetOnly, zl } };
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Dock.Top),
                 Docked(Divider(mid), Dock.Top),

@@ -477,7 +477,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 Rule(),
                 SliderRow("Range", Range, RangeF, RangeMap()),
                 GrBox(false),
-                new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Bottom, Children = {
+                new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Bottom, Children = {
                     Toggle(AutoRelease, "Auto-release", "Auto-release — a slower second release once the reduction runs deep, so sustained material does not pump"),
                     Toggle(AutoGain, "Auto gain", "Auto gain — make-up that follows the threshold and ratio") } },
             };
@@ -501,7 +501,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 SliderRow("Mix", Mix, PctF, Lin(Mix)),
                 SliderRow("Range", Range, RangeF, RangeMap()),
                 btns,
-                new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Bottom, Children = {
+                new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Bottom, Children = {
                     Toggle(External, "External key", "External key — key off the source picked on the Sidechain tab; off, the track keys itself"),
                     Toggle(StereoLink, "Stereo link", "Stereo link — one reduction for both channels; off, left and right compress on their own") } },
             };

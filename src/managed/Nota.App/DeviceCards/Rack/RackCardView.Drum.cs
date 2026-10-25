@@ -365,7 +365,16 @@ internal sealed partial class RackCardView
             }
             scroll.ScrollChanged += (_, _) => Visible();
             readout.Text = $"{BankNames[_drumBank]} · {pads.Count} pad{(pads.Count == 1 ? "" : "s")}";
-            list = scroll;
+            // The viewport holds whole rows, so the last one in view is never cut in half.
+            scroll.VerticalAlignment = VerticalAlignment.Top;
+            var holder = new Border { Child = scroll };
+            holder.SizeChanged += (_, e) =>
+            {
+                double rowH = MixRowH + 2;
+                int n = Math.Max(1, (int)Math.Floor((e.NewSize.Height - 4 + 2) / rowH));
+                scroll.Height = 4 + n * rowH - 2;
+            };
+            list = holder;
         }
         DockPanel.SetDock(headBar, Dock.Top);
         return new DockPanel { LastChildFill = true, Children = { headBar, list } };

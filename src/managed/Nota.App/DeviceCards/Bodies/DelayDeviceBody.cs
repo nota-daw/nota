@@ -445,7 +445,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
             ToolTip.SetTip(wetOnly, "Wet only — repeats with no dry, for a return / send track");
             var comp = Toggle(LatencyComp, "Latency comp.");
             ToolTip.SetTip(comp, "The diffuser lengthens the loop by a fixed group delay; on, the read pointer is pulled back by exactly that so each repeat lands on the set time.");
-            var bottom = new StackPanel { Spacing = 0, Children = { wetOnly, comp } };
+            var bottom = new StackPanel { Spacing = 3, Children = { wetOnly, comp } };
 
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Dock.Top), Docked(Divider(mid), Dock.Top), Docked(Divider(bottom), Dock.Bottom) } };
