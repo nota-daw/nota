@@ -1159,8 +1159,8 @@ def build_sections():
              + '</div></div>')
     body = (
         '<h3>Device card</h3>'
-        + stage(chamber_card(), 'ground scroll', 'Always 260 high; the width fits the device. Header 32: name, preset menu, type tag, '
-                'power at the right. Sections 8 from the edge, 10 apart, 12 padding. No status line under the card.')
+        + stage(chamber_card(), 'ground scroll', 'Always 260 high; the width fits the device. Header 24: name, preset menu, type tag, '
+                'power at the right. Sections 4 from the edge, 6 apart, 8 padding: the room goes to graphs and controls. No status line under the card.')
         + '<h3>Track header</h3>'
         + stage(f'<div class="threads">{th_rows}</div>', 'flush', '229 × 54, two rows: the name row (name, tag, M, S, arm) and the '
                 'controls row (volume, pan, input). A 3 px bar in the track colour; the meter down the right. The middle one is selected.')
@@ -1399,8 +1399,8 @@ summary{cursor:pointer;color:var(--text-tertiary);font-size:12px}
 .kn path{fill:none;stroke-width:2.4;stroke-linecap:round}
 .kn line{stroke-linecap:round}
 .kc{display:inline-flex;flex-direction:column;align-items:center;gap:2px;min-width:48px}
-.kv{font-size:11px;color:var(--text-primary);white-space:nowrap}
-.kl{font-size:10.5px;color:var(--text-tertiary);white-space:nowrap}
+.kv{font-size:10px;color:var(--text-primary);white-space:nowrap}
+.kl{font-size:9.5px;color:var(--text-tertiary);white-space:nowrap}
 .kc.mod .kl,.vr.mod .kl{color:var(--text-primary)}
 .kc.dim .kv,.kc.dim .kl,.vr.dim .kl,.vr.dim .kv{color:var(--text-disabled)}
 .ks{display:inline-flex;align-items:center;gap:6px;line-height:1.2}
@@ -1447,13 +1447,13 @@ summary{cursor:pointer;color:var(--text-tertiary);font-size:12px}
 /* cards */
 .card{border-radius:var(--r-card);overflow:hidden;background:var(--surface-raised);box-shadow:var(--sh-card);flex:none}
 .card.sel{box-shadow:var(--sh-card),0 0 0 2.5px var(--accent)}
-.chead{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;background:var(--device-header);box-shadow:inset 0 1px 0 var(--bevel);border-bottom:1px solid var(--seam)}
-.cname{font-size:13px;font-weight:600;white-space:nowrap}
+.chead{display:flex;align-items:center;gap:8px;height:24px;padding:0 8px;background:var(--device-header);box-shadow:inset 0 1px 0 var(--bevel);border-bottom:1px solid var(--seam)}
+.cname{font-size:12px;font-weight:600;white-space:nowrap}
 .ctag{font-size:11px;color:var(--text-tertiary);white-space:nowrap}
-.cbody{display:flex;gap:10px;padding:8px;height:228px}
+.cbody{display:flex;gap:6px;padding:4px;height:236px}
 .card .cbody{height:228px}
-.dsec{display:flex;flex-direction:column;gap:8px;padding:12px;border-radius:var(--r-group);background:var(--device-section);box-shadow:var(--sh-section);min-width:0}
-.dst{display:flex;align-items:center;gap:8px;font-size:10.5px;color:var(--text-tertiary);height:18px}
+.dsec{display:flex;flex-direction:column;gap:8px;padding:8px;border-radius:var(--r-group);background:var(--device-section);box-shadow:var(--sh-section);min-width:0}
+.dst{display:flex;align-items:center;gap:8px;font-size:9.5px;color:var(--text-tertiary);height:18px}
 .kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px 6px;justify-items:center;align-content:space-around;flex:1}
 .clip{position:relative;border-radius:var(--r-field);overflow:hidden;background:color-mix(in oklab,var(--c) 20%,var(--lane-b));box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--c) 45%,transparent);flex:none}
 .clip.sel{box-shadow:inset 0 0 0 1px var(--text-primary)}
