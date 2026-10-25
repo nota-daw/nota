@@ -297,7 +297,7 @@ internal sealed class SamplerEnvView : Control
     private (Point A, Point D, Point S, Point R, Point O) Nodes()
     {
         double w = Bounds.Width, h = Bounds.Height;
-        double x0 = Pad, x1 = w - Pad, span = x1 - x0, top = 14, bot = h - 12;
+        double x0 = Pad, x1 = w - Pad, span = x1 - x0, top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         double aw = (SegMin + SegSpan * _a) * span, dw = (SegMin + SegSpan * _d) * span, rw = (SegMin + SegSpan * _r) * span;
         double sy = top + (1 - _s) * (bot - top);
         var o = new Point(x0, bot);
@@ -347,7 +347,7 @@ internal sealed class SamplerEnvView : Control
             case 1:
             {
                 _d = Math.Clamp(_d + dx, 0, 1); Changed?.Invoke("decay", _d);
-                double top = 14, bot = Bounds.Height - 12;
+                double top = NotaGraph.PlotTop, bot = Bounds.Height - NotaGraph.PlotFloor;
                 double dy = (p.Y - _last.Y) / Math.Max(1, bot - top) * (fine ? 0.2 : 1);
                 _s = Math.Clamp(_s - dy, 0, 1); Changed?.Invoke("sustain", _s);
                 break;

@@ -585,16 +585,13 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             var box = new Border
             {
                 Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 4),
-                Child = new StackPanel { Spacing = 0, Children = {
-                    new Border { Height = 16, Child = Caps("Output") },
-                    Line("in", () => DbF(Sc(S_InPk))),
-                    Line("out", () => DbF(Sc(S_OutPk))),
-                    Line("cutoff", () => HzLong(LiveHz()), TextPrimary) } },
+                // One line: the tab is named Output, and the live cutoff is on the Mod tab's read-out.
+                Child = Line("in · out", () => DbF(Sc(S_InPk)).Replace("\u2009dB", "").Replace(" dB", "") + " · " + DbF(Sc(S_OutPk))),
             };
-            var sliders = new StackPanel { Spacing = 4, Children = {
-                SliderRow("Drive", Drive, v => v <= 0.001 ? "off" : Pct(v)),
-                SliderRow("Dry/wet", DryWet, Pct),
-                SliderRow("Gain", Gain, GainF, bipolar: true) } };
+            var sliders = new Grid { RowDefinitions = new RowDefinitions("20,20,20"), Margin = new Thickness(0, 4, 0, 0) };
+            sliders.Children.Add(SliderRow("Drive", Drive, v => v <= 0.001 ? "off" : Pct(v)));
+            sliders.Children.Add(GRow(SliderRow("Dry/wet", DryWet, Pct), 1));
+            sliders.Children.Add(GRow(SliderRow("Gain", Gain, GainF, bipolar: true), 2));
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
             btns.Children.Add(Latch(LfoRetrig, () => "Retrig", "Retrig — restart the LFO on each input onset (−24 dBFS) and when play starts", fill: true));
             btns.Children.Add(Col(Latch(Circuit, () => "Analog", "Analog — a gentle saturation after the filter, like an analog circuit", fill: true), 1));
@@ -612,11 +609,12 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             };
             ToolTip.SetTip(stereo, "Stereo phase — the right channel's LFO runs ahead of the left (90° when switched on; right-click steps 45° … 180°)");
 
+            // 160 high: the read-out, three bars, the buttons, two switches.
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
-                Docked(new Border { Margin = new Thickness(0, 6, 0, 0), Child = sliders }, Dock.Top),
+                Docked(sliders, Dock.Top),
                 Docked(new StackPanel { Spacing = 0, Children = { tempo, stereo } }, Dock.Bottom),
-                Docked(new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 5), Child = btns }, Dock.Bottom) } };
+                Docked(new Border { Padding = new Thickness(0, 4, 0, 4), Child = btns }, Dock.Bottom) } };
             body.Margin = new Thickness(0, 6, 0, 0);
             return body;
         }

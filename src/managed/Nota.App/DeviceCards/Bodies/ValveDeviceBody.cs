@@ -90,7 +90,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
         static string LowCutF(double v) => v <= 0.005 ? "off" : HzF(Exp(v, 20, 300));
         static string HighCutF(double v) => v >= 0.995 ? "off" : HzF(Exp(v, 2000, 20000));
         string ModelName() => Models[Idx(Model)];
-        string OsText() => Sel(OS, 4) == 0 ? "no oversampling" : NotaNum.F($"{OsNames[Sel(OS, 4)]} OS");
+        string OsText() => Sel(OS, 4) == 0 ? "OS off" : NotaNum.F($"{OsNames[Sel(OS, 4)]} OS");
         string AliasText() => Sc(S_AliasDb) <= -119 ? "aliasing < −120 dB" : NotaNum.F($"aliasing {Sc(S_AliasDb):0} dB");
         string AxisText() => P(Axis) <= 0.005f ? "on-axis" : NotaNum.F($"{P(Axis) * 100:0} % off-axis");
         string CabLine() => On(CabOn) ? NotaNum.F($"{CabShort[Idx(CabType)]} · {Mics[Idx(Mic)].ToLowerInvariant()} {AxisText()}") : "no cabinet";
@@ -251,12 +251,12 @@ internal sealed class ValveDeviceBody : IDeviceBody
         }
         Control KnobRow(Control[] knobs, Func<string> info1, Func<string> info2)
         {
-            var i1 = Mono("", 11, TextSecondary); i1.HorizontalAlignment = HorizontalAlignment.Right;
-            var i2 = Mono("", 11, TextSecondary); i2.HorizontalAlignment = HorizontalAlignment.Right;
+            var i1 = Mono("", 11, TextSecondary); i1.HorizontalAlignment = HorizontalAlignment.Right; i1.TextTrimming = TextTrimming.CharacterEllipsis;
+            var i2 = Mono("", 11, TextSecondary); i2.HorizontalAlignment = HorizontalAlignment.Right; i2.TextTrimming = TextTrimming.CharacterEllipsis;
             readouts.Add(() => { i1.Text = info1(); i2.Text = info2(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 52 };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 56 };   // knob 26 + value + label
             g.Children.Add(Row(0, knobs));
-            g.Children.Add(Col(new StackPanel { Spacing = 8, Margin = new Thickness(-14, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 1));   // may run under the last knob cell's spare width
+            g.Children.Add(Col(new StackPanel { Spacing = 8, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 1));
             return g;
         }
         static Control TabBody(Control head, Control window, Control knobs) => new DockPanel
@@ -312,7 +312,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
                 K(Treble, "TREBLE", Ten),
                 K(Presence, "PRESENCE", Ten),
             },
-            () => NotaNum.F($"peak {DbF(Sc(S_InPk))} → {DbF(Sc(S_OutPk))} · mix {Pct(P(Mix))}"),
+            () => NotaNum.F($"{DbF(Sc(S_InPk)).Replace("\u2009dB", "").Replace(" dB", "")} → {DbF(Sc(S_OutPk))} · mix {Pct(P(Mix))}"),
             () => NotaNum.F($"{OsText()} · {AliasText()}"));
             return TabBody(head, toneView, knobs);
         }
@@ -467,25 +467,22 @@ internal sealed class ValveDeviceBody : IDeviceBody
             var box = new Border
             {
                 Background = NotaPalette.Groove, CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 4),
-                Child = new StackPanel { Spacing = 1, Children = {
-                    Caps("Output"),
-                    Line("in", () => DbF(Sc(S_InPk))),
-                    Line("out", () => DbF(Sc(S_OutPk))),
-                    Line("THD", () => ThdF(Sc(S_Thd)), TextPrimary) } },
+                // One line: the tab is named Output and THD is in the centre's head row.
+                Child = Line("in · out", () => DbF(Sc(S_InPk)).Replace("\u2009dB", "").Replace(" dB", "") + " · " + DbF(Sc(S_OutPk))),
             };
-            var sliders = new StackPanel { Spacing = 6, Children = {
-                SliderRow("MIX", Mix, Pct),
-                SliderRow("GATE", Gate, GateF, modulation: true),
-                SliderRow("OUTPUT", Output, OutDb, bipolar: true) } };
+            var sliders = new Grid { RowDefinitions = new RowDefinitions("20,20,20") };
+            sliders.Children.Add(SliderRow("MIX", Mix, Pct));
+            sliders.Children.Add(GRow(SliderRow("GATE", Gate, GateF, modulation: true), 1));
+            sliders.Children.Add(GRow(SliderRow("OUTPUT", Output, OutDb, bipolar: true), 2));
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 8 };
             btns.Children.Add(ToggleLatch(Bright, () => "Bright", "Bright — a treble lift before the preamp, strongest at low gain (the bright cap on a volume pot)", fill: true));
             btns.Children.Add(Col(ToggleLatch(Deep, () => "Deep", "Deep — a low resonance boost after the tone stack, for a fuller, tighter bottom", fill: true), 1));
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
-                Docked(new Border { Margin = new Thickness(0, 6, 0, 0), Child = sliders }, Dock.Top),
-                Docked(new StackPanel { Spacing = 3, Children = { Toggle(AutoComp, "Auto-compensation", () => On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0} dB") : "Auto-compensation"), Toggle(EvenOnly, "Even harmonics only") } }, Dock.Bottom),
-                Docked(new Border { Padding = new Thickness(0, 0, 0, 6), Child = btns }, Dock.Bottom) } };
-            return new Border { Padding = new Thickness(0, 6, 0, 0), Child = body };
+                Docked(new Border { Margin = new Thickness(0, 4, 0, 0), Child = sliders }, Dock.Top),
+                Docked(new StackPanel { Spacing = 0, Children = { Toggle(AutoComp, "Auto-compensation", () => On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0} dB") : "Auto-compensation"), Toggle(EvenOnly, "Even harmonics only") } }, Dock.Bottom),
+                Docked(new Border { Padding = new Thickness(0, 0, 0, 4), Child = btns }, Dock.Bottom) } };
+            return new Border { Padding = new Thickness(0, 4, 0, 0), Child = body };   // 148 of 160
         }
 
         // ======================================================================

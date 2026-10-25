@@ -190,7 +190,7 @@ internal sealed class PhaserResponseView : Control
             var ft = NotaGraph.AxisText(s);
             ctx.DrawText(ft, new Point(x, y - ft.Height / 2));
         }
-        Label("+12", 4, Y(12) + 6);
+        if (Y(0) - Y(12) >= 30) Label("+12", 4, Y(12) + 6);   // under the top line only where it clears "0 dB"
         Label("0 dB", 4, Y(0) - 6);
         Label("−24", 4, Y(-24) - 6);
         foreach (var (hz, s) in new[] { (100.0, "100"), (1000.0, "1k"), (10000.0, "10k") })
@@ -253,12 +253,12 @@ internal sealed class PhaserSweepView : Control
         Curve(0, _on ? NotaPalette.VizInk : NotaPalette.TextDisabled, 1.4, 1);
 
         var tl = NotaGraph.AxisText("fc 20k");
-        ctx.DrawText(tl, new Point(5, 1));
+        NotaGraph.PlateText(ctx, tl, new Point(5, 1));   // a short window: the sweep passes behind its labels
         var bl = NotaGraph.AxisText("20");
-        ctx.DrawText(bl, new Point(5, h - 1 - bl.Height));
+        NotaGraph.PlateText(ctx, bl, new Point(5, h - 1 - bl.Height));
         string span = "2 × " + (_periodMs >= 1000 ? NotaNum.F($"{_periodMs / 1000:0.0} s") : NotaNum.F($"{_periodMs:0} ms"));
         var br = NotaGraph.AxisText(span);
-        ctx.DrawText(br, new Point(w - 5 - br.Width, h - 1 - br.Height));
+        NotaGraph.PlateText(ctx, br, new Point(w - 5 - br.Width, h - 1 - br.Height));
 
         if (_on)
         {

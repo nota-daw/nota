@@ -532,7 +532,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             });
             var caption = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
             caption.Children.Add(capL); caption.Children.Add(Col(capR, 1));
-            var bottom = new StackPanel { Height = 54, Spacing = 8, Children = { new Border { Height = 2 }, chipGrid, caption } };
+            var bottom = new StackPanel { Height = 46, Spacing = 7, VerticalAlignment = VerticalAlignment.Bottom, Children = { chipGrid, caption } };
             return TabBody(head, histView, bottom);
         }
 
@@ -548,7 +548,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                     Seg(MidiMode, new[] { "Note", "Scale" }, "Note — the voice goes to the last held note; Scale — the held notes form the scale"),
                     ToggleLatch(MidiLatch, "Latch", "Latch — keep the last target between notes (off = no correction while no note is held)"),
                     ToggleLatch(MidiOct, "Oct lock", "Oct lock — the note's own octave (off = whichever octave of it is nearest the voice)")),
-                RightInfo(() => MidiOn() ? NotaNum.F($"{Sc(S_MidiHeld):0} {(Math.Round(Sc(S_MidiHeld)) == 1 ? "note" : "notes")}") : "Key Source is not MIDI"));
+                RightInfo(() => MidiOn() ? NotaNum.F($"{Sc(S_MidiHeld):0} {(Math.Round(Sc(S_MidiHeld)) == 1 ? "note" : "notes")}") : ""));   // off: the line under the knobs says so
             var knobs = KnobRow(new[]
             {
                 K(Amount, "Amount", PctF, tip: "Amount — how far the voice is pulled to the note"),
@@ -556,10 +556,10 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 K(Speed, "Speed", v => MsF(Exp(v, 2, 300)), tip: "Speed — how fast the voice follows the target"),
                 K(MidiBendRange, "Bend", v => NotaNum.F($"±{v * 6:0.#} st"), "Bend — the widest move between notes that bends over Glide; wider leaps jump"),
             },
-            () => !MidiOn() ? "set Key Source to MIDI to follow the notes"
+            () => !MidiOn() ? "Key Source is not MIDI"
                 : Sc(S_MidiNote) < 0 ? (MidiSrc() < 0 ? "pick a track in FROM" : "no note held")
                 : Voiced() ? NotaNum.F($"input {InputText()} → clip note {TargetText()}") : NotaNum.F($"clip note {Note((int)Sc(S_MidiNote))}"),
-            () => On(MidiLatch) ? "latch holds the target between notes" : "no correction between notes");
+            () => On(MidiLatch) ? "holds the note between notes" : "lets go between notes");
             return TabBody(head, midiView, knobs);
         }
 

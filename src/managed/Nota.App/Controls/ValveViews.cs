@@ -54,7 +54,7 @@ internal sealed class VlResponseView : VtWindowBase
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double top = 14, bot = h - 12;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         double X(double hz) => Math.Log(hz / LoHz) / Math.Log(HiHz / LoHz) * w;
         double Y(double db) => top + (TopDb - Math.Clamp(db, BottomDb - 2, TopDb + 2)) / (TopDb - BottomDb) * (bot - top);
 

@@ -191,8 +191,16 @@ internal sealed class LensDeviceBody : IDeviceBody
 
         // A tab's body: its choice row, the graph (its summary in the top-right corner) and
         // the knob row with a two-line note beside it.
-        Control GraphHost(Control topRow, Control graph, TextBlock info, Control knobRow)
+        // `info` overlays the graph's top-right corner; the scope and the waterfall draw their own
+        // readouts there (and the knobs under them carry the rest), so they pass none.
+        Control GraphHost(Control topRow, Control graph, TextBlock? info, Control knobRow)
         {
+            if (info is null)
+                return new DockPanel
+                {
+                    LastChildFill = true,
+                    Children = { DeviceBodyKit.Dock(topRow, Avalonia.Controls.Dock.Top), DeviceBodyKit.Dock(knobRow, Avalonia.Controls.Dock.Bottom), graph },
+                };
             info.HorizontalAlignment = HorizontalAlignment.Right;
             info.VerticalAlignment = VerticalAlignment.Top;
             info.Margin = new Thickness(0, 4, 8, 0);
@@ -230,8 +238,6 @@ internal sealed class LensDeviceBody : IDeviceBody
         var wfNote = SideNote();
         TextBlock InfoText() { var t = DeviceBodyKit.Note("", TextSecondary); t.FontSize = NotaType.RowLabel; return t; }
         var specInfo = InfoText();
-        var scopeInfo = InfoText();
-        var wfInfo = InfoText();
 
         Control TopRow(string label, Control chips) => new StackPanel
         {
@@ -257,7 +263,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             };
             return GraphHost(
                 TopRow("Trig", trig),
-                scopeView, scopeInfo,
+                scopeView, null,
                 KnobRow(scopeNote,
                         K(TimeDivP, "Time/div", v => Ms(Exp(v, 0.00002, 0.02))),
                         K(VoltDivP, "Volt/div", v => Inv($"{Exp(v, 0.02, 2.0):0.00}")),
@@ -267,7 +273,7 @@ internal sealed class LensDeviceBody : IDeviceBody
 
         Control WaterfallTab() => GraphHost(
             TopRow("Speed", Seg(WfSpeedP, new[] { "4 s", "12 s", "60 s" }, () => data.ClearWaterfall())),
-            waterfall, wfInfo,
+            waterfall, null,
             KnobRow(wfNote,
                     K(WfGainP, "Gain", v => Inv($"{-24 + v * 48:+0;−0;0}\u2009dB")),
                     K(WfFloorP, "Floor", v => Inv($"{-120 + v * 80:0}\u2009dB")),
@@ -537,8 +543,6 @@ internal sealed class LensDeviceBody : IDeviceBody
                 : centreTab == 2 ? Inv($"{LensData.WfBins} bins") : Inv($"FFT {fftN}");
 
             specInfo.Text = Inv($"window {Sc(M_FftMs):0} ms · slope {P(TiltP) * 9:0.0} dB/oct");
-            scopeInfo.Text = Inv($"level {(P(TrigLevelP) - 0.5) * 2:0.00} · holdoff {P(HoldoffP) * 200:0} ms");
-            wfInfo.Text = Inv($"floor {-120 + P(WfFloorP) * 80:0} dB · {(On(LogFreqP) ? "log" : "linear")} freq");
 
             specNote.A.Text = Inv($"peak {Sc(M_PeakDb):0.0} dB @ {Hz(Sc(M_PeakHz))}");
             specNote.B.Text = Inv($"crest {Sc(M_CrestDb):0.0} dB · LUFS {Sc(M_Lufs):0.0}");

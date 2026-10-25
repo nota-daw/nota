@@ -94,7 +94,7 @@ internal sealed class AfEnvView : AfWindowBase
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
         Grid(ctx, w, h, 6);
-        double top = 14, bot = h - 12, span = Math.Max(1, bot - top);
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, span = Math.Max(1, bot - top);
         double YCut(double norm) => bot - Math.Clamp(norm, 0, 1) * span;
         double YEnv(double lin) { double db = lin > 1e-6 ? 20 * Math.Log10(lin) : -120; return bot - Math.Clamp((db + 48) / 48, 0, 1) * span; }
 

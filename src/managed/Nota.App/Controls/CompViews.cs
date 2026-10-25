@@ -76,7 +76,7 @@ internal sealed class CompTransferView : Control
         return new Size(s, s);
     }
 
-    private (double x0, double x1, double top, double bot) Geo() => (4, Bounds.Width - 4, 14, Bounds.Height - 12);
+    private (double x0, double x1, double top, double bot) Geo() => (4, Bounds.Width - 4, NotaGraph.PlotTop, Bounds.Height - NotaGraph.PlotFloor);
     private static double Map(double db, double a, double b) => a + (db - Lo) / (Hi - Lo) * (b - a);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -144,8 +144,13 @@ internal sealed class CompTransferView : Control
         }
         NotaGraph.Node(ctx, new Point(tx, Y(_thr - CompDraw.Reduction(_thr, _thr, _ratio, _knee, _range))), active: true);   // the one point is always the picked one
 
-        NotaGraph.Title(ctx, rect, "Transfer");
-        NotaGraph.Axis(ctx, rect, NotaGraph.Corner.TopRight, NotaNum.F($"{_ratio:0.#}:1"), _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        // Title and ratio share the top row where both fit; in a narrow window the ratio shows only
+        // while dragging, in the title's place (the tab row names it too).
+        var ratio = NotaGraph.AxisText(NotaNum.F($"{_ratio:0.#}:1"));
+        bool both = w >= 6 + NotaGraph.TitleWidth("Transfer") + 10 + ratio.Width + 4;
+        if (both || !_drag) NotaGraph.Title(ctx, rect, "Transfer");
+        if (both || _drag)
+            NotaGraph.Axis(ctx, rect, NotaGraph.Corner.TopRight, NotaNum.F($"{_ratio:0.#}:1"), _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomLeft, "−60");
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomRight, "0 in");
     }
@@ -191,7 +196,7 @@ internal sealed class CompGrHistoryView : Control
         if (w < 20 || h < 20) return;
         var rect = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, rect);
-        double top = 14, bot = h - 12, x0 = 3, x1 = w - 3;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, x0 = 3, x1 = w - 3;
         double scale = Peak > 18 ? 36 : Peak > 9 ? 18 : 12;   // dB at the bottom edge
         for (int i = 1; i <= 3; i++) { double gy = top + (bot - top) * i / 4.0; ctx.DrawLine(NotaGraph.GridPen, new Point(x0, gy), new Point(x1, gy)); }
         ctx.DrawLine(new Pen(NotaPalette.GraphBorder, 1), new Point(x0, top), new Point(x1, top));
@@ -250,7 +255,7 @@ internal sealed class CompMotionView : Control
         if (w < 20 || h < 20) return;
         var rect = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, rect);
-        double top = 14, bot = h - 12, x0 = 3, x1 = w - 3;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, x0 = 3, x1 = w - 3;
         for (int i = 1; i < 6; i++) { double gx = x0 + (x1 - x0) * i / 6.0; ctx.DrawLine(NotaGraph.GridPen, new Point(gx, top), new Point(gx, bot)); }
         ctx.DrawLine(NotaGraph.GridPen, new Point(x0, (top + bot) / 2), new Point(x1, (top + bot) / 2));
 
@@ -284,7 +289,7 @@ internal sealed class CompMotionView : Control
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomLeft, "0");
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomRight, _windowMs >= 1000 ? NotaNum.F($"{_windowMs / 1000:0.#} s") : NotaNum.F($"{_windowMs:0} ms"));
         var sc = CompDraw.Text(NotaNum.F($"−{_grScale:0} dB"), NotaPalette.TextAxis);
-        ctx.DrawText(sc, new Point(x1 - sc.Width - 2, bot - sc.Height - 11));
+        ctx.DrawText(sc, new Point(x1 - sc.Width - 2, bot - sc.Height - 2));
     }
 }
 
@@ -427,7 +432,7 @@ internal sealed class CompKeyView : Control
         var rect = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, rect);
         if (_listen) ctx.DrawRectangle(null, new Pen(NotaPalette.BorderBrass, 1), new RoundedRect(rect.Deflate(0.5), NotaGraph.Radius));
-        double top = 14, bot = h - 12;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         const double floor = -84, ceil = 0;
         double Y(double db) => top + Math.Clamp((ceil - db) / (ceil - floor), 0, 1) * (bot - top);
         foreach (double f in new[] { 100.0, 1000, 10000 }) { double gx = XOf(f, w); ctx.DrawLine(NotaGraph.GridPen, new Point(gx, top), new Point(gx, bot)); }
@@ -474,8 +479,9 @@ internal sealed class CompKeyView : Control
         NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.VizInk, NotaGraph.Mark.Line), ("key filter", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed));
         if (!_has)
         {
-            var ft = CompDraw.Text("no key signal", NotaPalette.TextTertiary, 8);
-            ctx.DrawText(ft, new Point((w - ft.Width) / 2, (top + bot - ft.Height) / 2));
+            // Under the filter's pass-band line (which runs high in the window), not on it.
+            var ft = CompDraw.Text("no key signal", NotaPalette.TextTertiary, NotaGraph.AxisSize);
+            ctx.DrawText(ft, new Point((w - ft.Width) / 2, top + (bot - top) * 0.7 - ft.Height / 2));
         }
     }
 

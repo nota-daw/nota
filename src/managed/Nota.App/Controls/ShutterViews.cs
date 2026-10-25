@@ -127,7 +127,7 @@ internal sealed class ShSignalView : ShDragView
         InvalidateVisual();
     }
 
-    private (double top, double bot) Band() => (14, Bounds.Height - 12);
+    private (double top, double bot) Band() => (NotaGraph.PlotTop, Bounds.Height - NotaGraph.PlotFloor);
     private double Y(double db) { var (t, b) = Band(); return t + Math.Clamp((DbTop - db) / (DbTop - DbBot), 0, 1) * (b - t); }
     private double DbAt(double y) { var (t, b) = Band(); return DbTop - Math.Clamp((y - t) / Math.Max(1, b - t), 0, 1) * (DbTop - DbBot); }
 
@@ -182,9 +182,10 @@ internal sealed class ShSignalView : ShDragView
         NotaGraph.Title(ctx, frame, _duck ? "Signal and duck" : "Signal and gate");
         NotaGraph.Legend(ctx, w - 6, 3, ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Area), ("output", NotaPalette.VizInk, NotaGraph.Mark.Line));
         var thrTxt = NotaNum.F($"threshold {_thr:0.0}");
-        double ty = Y(_thr) - 11;
-        if (ty < 14) ty = Y(_thr) + 2;
-        Text(ctx, thrTxt, 6, ty, hotT ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        double ty = Y(_thr) - 13;
+        if (ty < 18) ty = Y(_thr) + 3;   // under the line when above it would reach the title row
+        // On a plate: under the line it would otherwise sit on the signal's own trace.
+        NotaGraph.PlateText(ctx, NotaGraph.AxisText(thrTxt, hotT ? NotaPalette.AccentBright : NotaPalette.TextSecondary), new Point(6, ty));
         Text(ctx, "−" + _window, 6, h - 11);
         TextR(ctx, "now", w - 6, h - 11);
         if (_closing > _n * 0.12 && _closing < _n * 0.85)
@@ -217,7 +218,7 @@ internal sealed class ShEnvelopeView : ShDragView
         InvalidateVisual();
     }
 
-    private double Top => 16;
+    private double Top => 20;   // the open level sits just under the title; the window is short
     private double Bot => Bounds.Height - 14;
     private double X0 => Bounds.Width * 0.12;
     private double Xt(double ms) => X0 + ms / _span * Bounds.Width;

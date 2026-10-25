@@ -58,7 +58,7 @@ internal sealed class BrTimelineView : Control
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double x0 = 6, x1 = w - 6, top = 16, bot = h - 13;
+        double x0 = 6, x1 = w - 6, top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         double X(double beats) => x0 + beats / _winBeats * (x1 - x0);
 
         // Grid steps over the window (at most 64 drawn; finer grids share a column).
@@ -168,7 +168,7 @@ internal sealed class BrSlicesView : ShDragView
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double top = 16, bot = h - 13, mid = (top + bot) / 2, amp = (bot - top) / 2;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, mid = (top + bot) / 2, amp = (bot - top) / 2;
 
         // Gate window shaded from the offset.
         ctx.FillRectangle(NotaPalette.Wash(NotaPalette.VizInk, 0x20), new Rect(Xf(_offset), 0, Math.Max(1, Xf(GateEnd) - Xf(_offset)), h));

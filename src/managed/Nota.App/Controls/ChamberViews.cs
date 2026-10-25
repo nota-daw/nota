@@ -250,10 +250,18 @@ internal sealed class ChamberIrView : Control
         ctx.DrawRectangle(_drag == 1 ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(xs - 1.5, mid - 7, 3, 14), 1.5, 1.5);
         ctx.DrawRectangle(_drag == 2 ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(xe - 1.5, mid - 7, 3, 14), 1.5, 1.5);
 
-        var st = ChamberInk.Text(NotaNum.F($"start {Sec(_start * _sec)}"), NotaGraph.AxisSize, _drag == 1 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        ctx.DrawText(st, new Point(Math.Min(xs + 4, w - st.Width - 2), 2));
-        var en = ChamberInk.Text(NotaNum.F($"end {Sec(_end * _sec)}"), NotaGraph.AxisSize, _drag == 2 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        ctx.DrawText(en, new Point(Math.Max(2, xe - en.Width - 4), h - en.Height - 2));
+        // The trim being dragged names its time; at rest the lane stays clear of text (the end is
+        // the Decay knob's value, a start past 0 is in the tab row).
+        if (_drag == 1)
+        {
+            var st = ChamberInk.Text(NotaNum.F($"start {Sec(_start * _sec)}"), NotaGraph.AxisSize, NotaPalette.AccentBright);
+            ctx.DrawText(st, new Point(Math.Min(xs + 4, w - st.Width - 2), 2));
+        }
+        if (_drag == 2)
+        {
+            var en = ChamberInk.Text(NotaNum.F($"end {Sec(_end * _sec)}"), NotaGraph.AxisSize, NotaPalette.AccentBright);
+            ctx.DrawText(en, new Point(Math.Max(2, xe - en.Width - 4), h - en.Height - 2));
+        }
         if (_reverse)
         {
             var rv = ChamberInk.Text("Reversed", NotaGraph.AxisSize, NotaPalette.TextSecondary);
@@ -303,18 +311,16 @@ internal sealed class ChamberIrView : Control
                 f.LineTo(new Point(Math.Min(w, X(_preSec + _resSec)), bot));
             }
             ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, 1), line);
+            // The pre-delay gap, dashed (its time is the Predelay knob's value).
             if (_preSec > 0.0005)
-            {
                 ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 2, 2 }, 0)), new Point(x0, top + 2), new Point(x0, full));
-                var pt = ChamberInk.Text(NotaNum.F($"pre {_preSec * 1000:0}\u2009ms"), NotaGraph.AxisSize, NotaPalette.TextTertiary);
-                ctx.DrawText(pt, new Point(Math.Min(x0 + 3, w - pt.Width - 2), bot - pt.Height));
-            }
             if (_preSec + _resSec > axis * 1.001)
             {
                 Glyph.Draw(ctx, GlyphKind.ChevronRight, new Rect(w - 9, peakY - 1, 7, 7), NotaPalette.TextSecondary);
             }
         }
-        var len = ChamberInk.Text(NotaNum.F($"as heard · {_resSec:0.00}\u2009s · axis {ChamberInk.AxisLabel(axis)}"), NotaGraph.AxisSize, NotaPalette.TextDisabled);
+        // The lane's name and its length, in the last quarter (where the tail is low).
+        var len = ChamberInk.Text(NotaNum.F($"as heard {_resSec:0.00}\u2009s"), NotaGraph.AxisSize, NotaPalette.TextTertiary);
         ctx.DrawText(len, new Point(w - len.Width - 4, top + 2));
     }
 }

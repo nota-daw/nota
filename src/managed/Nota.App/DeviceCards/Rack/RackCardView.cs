@@ -258,8 +258,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     {
         var head = new DockPanel { LastChildFill = true, Height = 22, Children = {
             new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Cell, Background = dot, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0), [DockPanel.DockProperty] = Dock.Left },
-            WithRight(new TextBlock { Text = kind, FontSize = NotaType.RowLabel, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center }),
-            new TextBlock { Text = name, FontSize = NotaType.KnobValue, FontWeight = FontWeight.SemiBold, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis } } };
+            WithRight(new TextBlock { Text = kind, FontSize = NotaType.RowLabel, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) }),   // clear of a trimmed name
+            // A compact slot drops the "Nota " prefix (as a compact card does); the tooltip keeps the full name.
+            new TextBlock { Text = name.StartsWith("Nota ", StringComparison.Ordinal) ? name[5..] : name, FontSize = NotaType.KnobValue, FontWeight = FontWeight.SemiBold, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, [ToolTip.TipProperty] = name } } };
         if (onDelete != null) head.Children.Insert(1, WithRight(SgSlotDelBtn(onDelete)));
         var headWrap = new Border { Padding = new Thickness(8, 0), Child = head };
         Border MiniBtn(string label, Action act)

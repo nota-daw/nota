@@ -335,19 +335,19 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
                 if (!rndTrack.Dragging) rndTrack.Norm = Math.Clamp(G(PRandom), 0, 1);
                 dirSync();
             });
-            var rndBox = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 10, 0, 0),
-                Child = new StackPanel { Spacing = 10, Children = { rndRow, rndTrack, dirSeg } } };
+            var rndBox = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 8, 0, 0),
+                Child = new StackPanel { Spacing = 6, Children = { rndRow, rndTrack, dirSeg } } };
 
             var hist = new VelocityHistoryViz();
             ToolTip.SetTip(hist, "The last 12 notes: outline — velocity in, fill — velocity out");
             readouts.Add(() => hist.Set(notes, count, Bypassed()));
             var histLbl = new TextBlock { Text = "Last 12 notes", FontSize = NotaType.Caption, Foreground = Sub };
-            var histBox = new DockPanel { Margin = new Thickness(0, 12, 0, 0), Children = { WithDock(histLbl, Dock.Top), hist } };
+            var histBox = new DockPanel { Margin = new Thickness(0, 8, 0, 0), Children = { WithDock(histLbl, Dock.Top), hist } };
             hist.Margin = new Thickness(0, 4, 0, 0);
 
             var outBody = new DockPanel { Children =
             {
-                WithDock(new StackPanel { Spacing = 10, Children = { range, rndBox } }, Dock.Top),
+                WithDock(new StackPanel { Spacing = 8, Children = { range, rndBox } }, Dock.Top),
                 histBox,
             } };
             var outIsland = IslandBox(IslandHead("Out range", rangeTxt), outBody, 188);

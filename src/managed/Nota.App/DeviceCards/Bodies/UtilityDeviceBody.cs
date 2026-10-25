@@ -498,14 +498,14 @@ internal sealed class UtilityDeviceBody : IDeviceBody
                 g.Children.Add(Col(val, 1));
                 return g;
             }
+            // Two read-out lines (the tab is named Output), then the bars; True-peak limiter switches the
+            // Ceiling row on, Level match sits beside what it aims for, the two buttons last.
             var box = new Border
             {
                 Background = NotaPalette.Groove, CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 4),
                 Child = new StackPanel { Spacing = 1, Children = {
-                    Caps("Measurements"),
-                    Line("in", () => NotaNum.F($"{LvlF(ScDb(S_InLevel))} {Unit()}")),
-                    Line("out", () => NotaNum.F($"{LvlF(ScDb(S_OutLevel))} {Unit()}")),
-                    Line("true peak", () => NotaNum.F($"{LvlF(ScDb(S_TruePeak))} dBTP"), TextPrimary) } },
+                    Line("in · out", () => NotaNum.F($"{LvlF(ScDb(S_InLevel))} · {LvlF(ScDb(S_OutLevel))} {Unit()}")),
+                    Line("true peak", () => NotaNum.F($"{LvlF(ScDb(S_TruePeak))} dBTP{(On(TpLimit) && Sc(S_LimDb) > 0.05 ? NotaNum.F($" · −{Sc(S_LimDb):0.0}") : "")}"), TextPrimary) } },
             };
             var matchTo = Seg(MatchTo, new[] { "Input", "Target" }, "What Gain match and Level match aim for — the input's level, or Target");
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
@@ -513,16 +513,21 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             ((TextBlock)gm.Child!).FontWeight = FontWeight.SemiBold;
             btns.Children.Add(gm);
             btns.Children.Add(Col(Button("Reset", ResetLevels, ResetTip, false), 1));
+            var ceiling = SliderRow("", TpCeiling, v => NotaNum.F($"{v:0.0}"), dim: () => !On(TpLimit), labW: 70);
+            var tp = Toggle(TpLimit, "Ceiling");
+            ToolTip.SetTip(tp, "True-peak limiter — holds the output's true peak under the ceiling");
+            ((Grid)ceiling).Children.Add(tp);
+            var match = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+            var lm = Toggle(AutoMatch, "Level match", () => On(AutoMatch) ? NotaNum.F($"Match {Sc(S_AutoDb):+0.0;−0.0;0.0} dB") : "Level match");
+            match.Children.Add(lm);
+            match.Children.Add(Col(matchTo, 1));
             return Spread(
                 box,
-                SliderRow("GAIN", Gain, Db1, bipolar: true),
-                SliderRow("TARGET", Target, v => NotaNum.F($"{v:0.0}"), modulation: true),
-                SliderRow("CEILING", TpCeiling, v => NotaNum.F($"{v:0.0}"), dim: () => !On(TpLimit)),
-                LabelRow("Match", matchTo),
-                Divided(btns),
-                new StackPanel { Spacing = 5, Children = {
-                    Toggle(AutoMatch, "Level match", () => On(AutoMatch) ? NotaNum.F($"Level match {Sc(S_AutoDb):+0.0;−0.0;0.0} dB") : "Level match"),
-                    Toggle(TpLimit, "True-peak limiter", () => On(TpLimit) ? NotaNum.F($"TP limit {CeilF(P(TpCeiling))}{(Sc(S_LimDb) > 0.05 ? NotaNum.F($" · −{Sc(S_LimDb):0.0}") : "")}") : "True-peak limiter") } });
+                SliderRow("GAIN", Gain, Db1, bipolar: true, labW: 70),
+                SliderRow("TARGET", Target, v => NotaNum.F($"{v:0.0}"), modulation: true, labW: 70),
+                ceiling,
+                match,
+                Divided(btns));
         }
 
         // ======================================================================

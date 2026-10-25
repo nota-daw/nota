@@ -719,7 +719,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         var detectBtn = Button("Detect from file name", () => { if (Zsel() is { } z && Detected() >= 0) { z.Root = Detected(); Commit(); SetMap(); } },
             "Make the note in the zone's file name its root", on: () => Zsel() is { } z && Detected() == z.Root, enabled: () => Detected() >= 0);
         var fineKnob = VKnob("Fine", () => ((Zsel()?.Tune ?? 0) + 100) / 200.0, v => { if (Zsel() is { } z) z.Tune = Math.Round(v * 200 - 100); }, () => Cents(Zsel()?.Tune ?? 0), 0.5, null, "The zone's fine tune, ±100 cents");
-        var pitchRow = Row(12,
+        var pitchRow = Row(8,   // 8, not 12: the six cells and Detect fit the 610 centre
             (PKnob("transpose", "Transpose", St, tip: "Shift every note, ±24 semitones"), "Auto"),
             (PKnob("detune", "Detune", v => Cents(MosaicModel.DetuneCents(v)), tip: "Fine tune of the whole instrument, ±50 cents"), "Auto"),
             (PKnob("pitchtrack", "Keytrack", v => NotaNum.Pct(v), tip: "How far the key moves the pitch — 100 % chromatic, 0 % every key plays the root"), "Auto"),
@@ -760,8 +760,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         }
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1), "Let the amp envelope open (or close) the filter", on: () => G("envcutoff") >= 0.5f);
-        var filterRow = Row(10,
-            (Field("Type", Chips("filtertype", MosaicModel.FilterNames, padX: 6)), "Auto"),
+        var filterRow = Row(6,   // seven controls: the tighter gap keeps Slide inside the panel
+            (Field("Type", Chips("filtertype", MosaicModel.FilterNames, padX: 5)), "Auto"),
             (PKnob("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v)), NotaSize.Knob, 56), "Auto"),
             (PKnob("resonance", "Reso", v => NotaNum.Pct(v)), "Auto"),
             (PKnob("keytrack", "Keytrack", v => NotaNum.Pct(v), tip: "The cutoff follows the key"), "Auto"),
@@ -1068,16 +1068,14 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             int ExclVal(bool off) { var z = prog.Zones.FirstOrDefault(z => z.Group == ui.Group); return z is null ? 0 : off ? z.OffBy : z.Excl; }
             void SetExcl(bool off, int v) { foreach (var z in prog.Zones.Where(z => z.Group == ui.Group)) { if (off) z.OffBy = v; else z.Excl = v; } }
             var exG = NumBox(() => ExclVal(false) is var v && v > 0 ? $"group {v}" : "group —", d => SetExcl(false, Math.Clamp(ExclVal(false) + d, 0, 64)), () => SetExcl(false, 0), 70,
-                "This group's exclusive number", () => { Commit(); rebuildGroups(); SetMap(); });
+                "This group's exclusive number — for hi-hats and valves: a new note chokes the off_by group", () => { Commit(); rebuildGroups(); SetMap(); });
             var exO = NumBox(() => ExclVal(true) is var v && v > 0 ? $"off_by {v}" : "off_by —", d => SetExcl(true, Math.Clamp(ExclVal(true) + d, 0, 64)), () => SetExcl(true, 0), 70,
                 "Voices of this group stop when a note of that exclusive group starts", () => { Commit(); rebuildGroups(); SetMap(); });
             var exRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { exG, exO } };
-            var note = Caps("Exclusive is for hi-hats and valves: a new note chokes the off_by group.");
-            note.TextWrapping = TextWrapping.Wrap; note.TextTrimming = TextTrimming.None;
             var body = new StackPanel
             {
                 Spacing = 4,
-                Children = { gain, tune, seqRow, Caps("Round-robin"), rrSeg, Caps("Exclusive · group / off by"), exRow, note },
+                Children = { gain, tune, seqRow, Caps("Round-robin"), rrSeg, Caps("Exclusive · group / off by"), exRow },
             };
             return RailBody(RailHead(title, sub: $"{ZonesIn(ui.Group)} zones"), body);
         }

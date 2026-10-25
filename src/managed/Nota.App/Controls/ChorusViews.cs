@@ -157,14 +157,12 @@ internal sealed class ChorusVoicesView : Control
             ctx.DrawGeometry(null, NotaGraph.SecondaryPen(ink, v == 0 ? 1.6 : 1.2), geo);
         }
 
-        void Label(string s, double y)
-        {
-            var ft = NotaGraph.AxisText(s);
-            ctx.DrawText(ft, new Point(5, Math.Clamp(y - ft.Height - 1, 1, h - ft.Height - 1)));
-        }
-        Label(_cents ? "+" + ChorusMath.Ct(cR * 0.75) + " ct" : ChorusMath.Ms(baseMs * 2) + " ms", gTop + 10);
-        Label(_cents ? "0 ct" : ChorusMath.Ms(baseMs) + " ms", gMid);
-        Label(_cents ? "−" + ChorusMath.Ct(cR * 0.75) + " ct" : "0 ms", gBot);
+        // The scale's two ends, under the top line and over the bottom one (the dashed middle is
+        // half-way; the voices cross it there, so it carries no label).
+        var topL = NotaGraph.AxisText(_cents ? "+" + ChorusMath.Ct(cR * 0.75) + " ct" : ChorusMath.Ms(baseMs * 2) + " ms");
+        ctx.DrawText(topL, new Point(5, Math.Max(1, gTop + 2)));
+        var botL = NotaGraph.AxisText(_cents ? "−" + ChorusMath.Ct(cR * 0.75) + " ct" : "0 ms");
+        ctx.DrawText(botL, new Point(5, Math.Min(h - botL.Height - 1, gBot - botL.Height - 1)));
         string span = "2 × " + (_periodMs >= 1000 ? NotaNum.F($"{_periodMs / 1000:0.0} s") : NotaNum.F($"{_periodMs:0} ms"));
         var br = NotaGraph.AxisText(span);
         ctx.DrawText(br, new Point(w - 5 - br.Width, h - 3 - br.Height));

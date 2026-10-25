@@ -65,6 +65,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   - **Devices:** cards are raised with pressed-in sections, have no status line, use value
     bars instead of thin sliders, and draw inactive controls in a quieter grey instead of
     fading them.
+  - **Spacing in every device tab:** each tab of each device was checked for crowding,
+    clipping and overlap. Graph plots start under their title and stop above their corner
+    labels, axis labels skip a spot where they would sit on another label, and readouts that
+    repeated a knob's value are gone. Operator's right panel is rebuilt and its routing
+    diagram steps a four-deep chain sideways so every box and the **out** bus show. Controls
+    that appeared twice keep one place: Delay's Feedback and Spread live on the Loop rail
+    (not Levels), Shutter's detector switches on the Detector tab, Strata's Undo, Export and
+    Clear sit in the Layers head. Beat Repeat's slice Interval is a drop-down like Timeline's,
+    Ceiling's Level graph drops its reduction strip (the Reduction tab has it), Prism names
+    its own sidechain **Own input**, a Drum or Instrument Rack chain slot drops the "Nota "
+    prefix, and Mosaic's exclusive-group note moved into its tooltip.
 
 ### Fixed
 - **⌘G on a device, follow-ups** (nota-daw/nota#257): grouping a playing effect no longer

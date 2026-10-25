@@ -39,6 +39,8 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
     public double CardWidth => 724;
 
     private const double WheelsW = 76, RailW = 196;
+    // The gap under a tab strip's line before the tab's content, and the rail's operator chips.
+    private const double StripGap = 6, OpChipH = 18;
 
     // Coarse ratio table — mirrors OperatorSynth::kRatio.
     private static readonly double[] Ratios = { 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16 };
@@ -96,7 +98,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         var minis = new OperatorAlgoMini[OperatorTopo.Count];
         var filtCurve = new VoltFilter(engine, track)
         { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60, FreqRange = (60, 18000) };
-        var env = new VoltEnv(engine, track) { MinHeight = 60, VerticalAlignment = VerticalAlignment.Stretch };
+        var env = new VoltEnv(engine, track) { MinHeight = 48, VerticalAlignment = VerticalAlignment.Stretch };
         Action applyEnv = () => { };
 
         void SyncSpectrum()
@@ -311,7 +313,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         // ---- Algorithm tab ----------------------------------------------------
         // The eleven sketches on one row, then feedback, then the routing diagram — which
         // needs the height, because the deepest topology stacks four operators.
-        var tiles = new Grid { ColumnSpacing = 4, Height = 56 };
+        var tiles = new Grid { ColumnSpacing = 4, Height = 46 };
         for (int i = 0; i < OperatorTopo.Count; i++) tiles.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
         for (int i = 0; i < OperatorTopo.Count; i++)
         {
@@ -462,7 +464,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
                 modeRow,
             },
         };
-        var globalGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        var globalGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), Margin = new Thickness(0, StripGap, 0, 0) };
         globalGrid.Children.Add(globalTop);
         var globalBottomFrame = new Border
         {
@@ -481,7 +483,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             var tb = new TextBlock { Text = OperatorTopo.Names[i], FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center };
             var chip = new Border
             {
-                Height = NotaSize.Seg, CornerRadius = NotaRadius.Cell, Padding = new Thickness(7, 0), Cursor = new Cursor(StandardCursorType.Hand),
+                Height = OpChipH, CornerRadius = NotaRadius.Cell, Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand),
                 Background = Brushes.Transparent, Child = tb,
             };
             chip.PointerPressed += (_, e) =>
@@ -491,16 +493,13 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             };
             opCells[i] = chip; opTexts[i] = tb; opPick.Children.Add(chip);
         }
+        // The operator picker rides on the rail's tab strip, at its right, while Env is showing.
         var opPickHost = new Border
         {
             Background = NotaPalette.Groove, CornerRadius = NotaRadius.Group, Padding = new Thickness(2), HorizontalAlignment = HorizontalAlignment.Right,
-            Child = opPick,
+            VerticalAlignment = VerticalAlignment.Top, Child = opPick,
         };
         opPickHost.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
-        var envRoleText = Mono("", TextSecondary, NotaType.Caption);
-        var envPickRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6 };
-        envPickRow.Children.Add(envRoleText);
-        Grid.SetColumn(opPickHost, 1); envPickRow.Children.Add(opPickHost);
 
         var envStages = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
         var envKnobHosts = new Panel[4];
@@ -536,8 +535,8 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             env.Accent = NotaPalette.VizInk;
             env.Target($"{OperatorTopo.Names[envOp]} env",
                 (I(p + "atk"), p + "atk"), (I(p + "dec"), p + "dec"), (I(p + "sus"), p + "sus"), (I(p + "rel"), p + "rel"));
-            envRoleText.Text = carrier ? "carrier → out" : "mod → " + OperatorTopo.Names[tgt[envOp]];
-            envRoleText.Foreground = carrier ? TextPrimary : TextTertiary;
+            env.Note = carrier ? "carrier → out" : "mod → " + OperatorTopo.Names[tgt[envOp]];
+            env.NoteInk = carrier ? TextPrimary : TextTertiary;
             for (int o = 0; o < 4; o++)
                 for (int s = 0; s < 4; s++) stageCells[o, s].IsVisible = o == envOp;
             for (int i = 0; i < 4; i++)
@@ -551,16 +550,19 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         };
         readouts.Add(() => applyEnv());
 
+        // Key and velocity tracking as two small knobs side by side, so the envelope keeps its height.
+        var trackRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*") };
+        var keyCell = Knob("keylevel", "Key → lvl", v => NotaNum.Pct(v), size: NotaSize.KnobInline, cellW: 84, inline: true);
+        var velCell = Knob("veltolevel", "Vel → lvl", v => NotaNum.Pct(v), size: NotaSize.KnobInline, cellW: 84, inline: true);
+        velCell.HorizontalAlignment = HorizontalAlignment.Right;
+        trackRow.Children.Add(keyCell);
+        Grid.SetColumn(velCell, 1); trackRow.Children.Add(velCell);
+
         var envGrid = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto,Auto"), RowSpacing = 4, Margin = new Thickness(0, 6, 0, 0),
+            RowDefinitions = new RowDefinitions("*,Auto,Auto"), RowSpacing = 4, Margin = new Thickness(0, StripGap, 0, 0),
         };
-        var envRows = new Control[]
-        {
-            envPickRow, env, envStages,
-            Slider("Key → lvl", "keylevel", () => NotaNum.Pct(G("keylevel"))),
-            Slider("Vel → lvl", "veltolevel", () => NotaNum.Pct(G("veltolevel"))),
-        };
+        var envRows = new Control[] { env, envStages, trackRow };
         for (int i = 0; i < envRows.Length; i++) { Grid.SetRow(envRows[i], i); envGrid.Children.Add(envRows[i]); }
 
         // ---- the rail's own two tabs ------------------------------------------
@@ -570,9 +572,10 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         {
             syncRail();
             for (int i = 0; i < RailTabs.Length; i++) railBodies[i].IsVisible = i == railTab;
+            opPickHost.IsVisible = railTab == 1;
             Refresh();
         }
-        var railTabGrid = SynthInstrumentCard.TabStrip(RailTabs, () => railTab, i => { railTab = i; ShowRailTab(); }, out var railSync);
+        var railTabGrid = SynthInstrumentCard.TabStrip(RailTabs, () => railTab, i => { railTab = i; ShowRailTab(); }, out var railSync, opPickHost);
         syncRail = railSync;
         var railHost = new Panel();
         foreach (var b in railBodies) railHost.Children.Add(b);

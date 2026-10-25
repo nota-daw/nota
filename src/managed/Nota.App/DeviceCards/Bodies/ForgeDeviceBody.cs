@@ -174,13 +174,13 @@ internal sealed class ForgeDeviceBody : IDeviceBody
                 Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 0), Height = 16, VerticalAlignment = VerticalAlignment.Center,
                 Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = outTxt,
             };
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"), ColumnSpacing = 8, Height = 18 };
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"), ColumnSpacing = 8, Height = 16 };
             head.Children.Add(dot); head.Children.Add(Col(numChip, 1)); head.Children.Add(Col(name, 2)); head.Children.Add(Col(role, 3)); head.Children.Add(Col(outBox, 4));
 
             bool Lit() => On(OnP(s)) && Active();
             var drive = Slider("Drive", () => DriveP(s), PctF, $"Stage {s + 1} drive — how hard the stage is pushed (gain 1 … ×21, the level made up)", 48, 30, dim: () => !Lit());
             var fb = Slider("Feedback", () => FbP(s), FbF, $"Stage {s + 1} feedback — its output back into its input (0 … 85 %): thicker, and on the edge of ringing with Fold / Fuzz", 48, 30, dim: () => !Lit());
-            var body = new Grid { RowDefinitions = new RowDefinitions("18,17,17") };
+            var body = new Grid { RowDefinitions = new RowDefinitions("16,16,16"), Margin = new Thickness(0, 3) };   // 54, the bars 3 px clear of the rules
             body.Children.Add(head); body.Children.Add(GRow(drive, 1)); body.Children.Add(GRow(fb, 2));
             var tile = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = body };
 
@@ -232,7 +232,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             });
             return tile;
         }
-        var stageGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,6,52,1,52,1,52,*") };
+        var stageGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,6,54,1,54,1,54,*") };
         stageGrid.Children.Add(routeSeg);
         for (int s = 0; s < 3; s++) stageGrid.Children.Add(GRow(StageTile(s), 2 + s * 2));
         stageGrid.Children.Add(GRow(Rule(), 3));
@@ -255,7 +255,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         transfer.ResetRequested += _ => { Reset(Amount); Refresh(); };
         Learn(transfer, Amount);
         ToolTip.SetTip(transfer, "Input → output through the device (in M/S and Multi through the selected stage): each stage alone in a lighter grey, the LFO-modulated curve dashed, the node where the input sits now. Drag up / down for Amount; double-click resets.");
-        var harm = new FgHarmonicsView { Height = 46 };
+        var harm = new FgHarmonicsView { Height = 54 };
         ToolTip.SetTip(harm, "Harmonics 2 … 9 of a −6 dB sine through the curve: odd partials in full ink (hard, buzzy), even ones dimmer (warm, round), and the total harmonic distortion");
         var graphs = new DockPanel
         {
@@ -283,7 +283,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         });
 
         var typeSeg = Segments(ForgeMath.ChipNames, () => Array.IndexOf(ForgeMath.ChipAlgo, TypeI(sel)),
-            i => { SetP(TypeP(sel), ForgeMath.ChipAlgo[i] / 5f); Refresh(); }, out var typeSync, fill: true, padX: 1);
+            i => { SetP(TypeP(sel), ForgeMath.ChipAlgo[i] / 5f); Refresh(); }, out var typeSync, fill: true, padX: 0, fontSize: 10);
         readouts.Add(typeSync);
         ToolTip.SetTip(typeSeg, "The selected stage's type — Tube: soft, asymmetric, warm; Tape: soft and even; Diode: hard on one side; Fuzz: squared-off, dense; Fold: folds the peaks back, bright and metallic; Digital: a hard clip");
 
@@ -342,7 +342,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         rightBody.Children.Add(GRow(envTone, 7));
         rightBody.Children.Add(GRow(rate, 8));
         rightBody.Children.Add(GRow(osRow, 10));
-        var right = Island(rightBody, 206, new Thickness(SectionPad));
+        var right = Island(rightBody, 218, new Thickness(SectionPad));
         DockPanel.SetDock(right, Dock.Right);
 
         // ---- assemble ---------------------------------------------------------------

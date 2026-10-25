@@ -189,11 +189,13 @@ internal sealed class AsTraceView : Control
         Flush();
         if (any) ctx.DrawEllipse(NotaPalette.VizInk, new Pen(NotaGraph.Ground, 1), last, 2.6, 2.6);
 
-        // Lane labels, the target lit.
+        // Lane labels on every other lane (the lanes are too thin for one each), skipping the top and
+        // bottom ones under the legend and the time labels; the target lane is always named, lit.
         for (int i = 0; i < nl; i++)
         {
             int m = lanes[i];
-            var ft = NotaGraph.AxisText(Names[((m % 12) + 12) % 12] + (m / 12 - 1), m == tgtNote ? NotaPalette.AccentBright : null, 6);
+            if (m != tgtNote && (nl - 1 - i) % 2 == 0) continue;
+            var ft = NotaGraph.AxisText(Names[((m % 12) + 12) % 12] + (m / 12 - 1), m == tgtNote ? NotaPalette.AccentBright : null, 8);
             ctx.DrawText(ft, new Point(4, LaneY(i) - ft.Height / 2));
         }
         if (_midiMode) NotaGraph.Legend(ctx, w - 5, 2, ("MIDI", NotaPalette.VizInk, NotaGraph.Mark.Area), ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Dashed));
@@ -256,7 +258,7 @@ internal sealed class AsHistView : Control
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double top = 15, bot = h - 4, gw = (w - 12) / 12, gap = 4;
+        double top = NotaGraph.PlotTop, bot = h - 4, gw = (w - 12) / 12, gap = 4;
         for (int i = 0; i < 12; i++)
         {
             bool inScale = (_mask >> i & 1) != 0;

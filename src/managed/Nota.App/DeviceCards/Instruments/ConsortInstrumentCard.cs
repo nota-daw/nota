@@ -141,11 +141,11 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         }
 
         // On/off pill toggle backed by a param (> 0.5 = on).
-        Control Toggle(string id, string label, Func<bool>? dim = null)
+        Control Toggle(string id, string label, Func<bool>? dim = null, string? learn = null)
         {
             var wrap = Switch(label, () => On(id), () => { SetP(id, On(id) ? 0f : 1f); Refresh(); }, out var sync, dim);
             cur.Add(sync);
-            if (I(id) is var pi and >= 0) MidiLearn.Bind(wrap, MidiTarget.PluginParam(track, -1, pi), label.Length > 0 ? label : id);
+            if (I(id) is var pi and >= 0) MidiLearn.Bind(wrap, MidiTarget.PluginParam(track, -1, pi), learn ?? (label.Length > 0 ? label : id));
             return wrap;
         }
 
@@ -397,7 +397,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             mix.Children.Add(Col(MixCell("Osc 3", "mix3"), 2)); mix.Children.Add(RowAt(Col(MixCell("Osc 4", "mix4"), 2), 1));
             mix.Children.Add(Col(MixCell("Noise", "mixnoise"), 3)); mix.Children.Add(RowAt(Col(MixCell("Ext", "mixext"), 3), 1));
             var ext = mix.Children[^1]; ToolTip.SetTip(ext, "Ext: normalled to the VCA output (Moog feedback) — patch Ext in to replace it");
-            var drive = Toggle("mixdrive", "Mixer drive"); drive.HorizontalAlignment = HorizontalAlignment.Right;
+            var drive = Toggle("mixdrive", "Drive", learn: "Mixer drive"); drive.HorizontalAlignment = HorizontalAlignment.Right;
             mix.Children.Add(Col(drive, 4));
             var noise = Chips("noisecolor", new[] { "White", "Pink" }); noise.HorizontalAlignment = HorizontalAlignment.Right;
             mix.Children.Add(RowAt(Col(noise, 4), 1));
@@ -814,8 +814,8 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 new StackPanel { Children = { Toggle("multitrig", "Multi trig", Poly), Toggle("truepoly", "True poly (16)"), Toggle("unison", "Unison detune") } },
                 RuleLine(),
                 Line("Drift", ParamRow(ctx, idx, "drift", "", v => Pct(v), Refresh, cur, valueWidth: 34, learnName: "Drift")) } };
-            foreach (var sw in ((StackPanel)body.Children[5]).Children) sw.Height = 15;
-            body.Children[6].Margin = new Thickness(0, 3, 0, 1);
+            foreach (var sw in ((StackPanel)body.Children[5]).Children) sw.Height = 14;
+            body.Children[6].Margin = new Thickness(0, 2, 0, 3);   // Drift's bar ends inside the 160 content height
             body.Children[7].Height = 20;
             return body;
         }

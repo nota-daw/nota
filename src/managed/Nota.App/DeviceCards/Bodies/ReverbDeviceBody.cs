@@ -93,10 +93,10 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        Control K(int p, string name, Func<double, string> fmt, double cellW = 64)
+        Control K(int p, string name, Func<double, string> fmt, double cellW = 64, bool inline = false)
         {
             var val = Mono(fmt(P(p)), TextPrimary);
-            var knob = new Knob(P(p), 1.0) { Accent = true, Default = engine.DeviceParamDefault(track, di, p) };
+            var knob = new Knob(P(p), 1.0) { Accent = true, Inline = inline, Default = engine.DeviceParamDefault(track, di, p) };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); SyncTail(); };
             knob.GestureBegin += () => Begin(p);
@@ -213,7 +213,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             tailTitle.Foreground = On(Freeze) ? AccentBright : TextTertiary;
             tailLbls[0].Foreground = On(Freeze) ? AccentBright : TextTertiary;
         });
-        var tailCol = DeviceBodyKit.Sec(tailBody, new Thickness(8, 8, 8, 6), 75);
+        var tailCol = DeviceBodyKit.Sec(tailBody, new Thickness(8, 8, 8, 6), 80);   // wide enough that "Decay" and "Damp" do not touch
         DockPanel.SetDock(tailCol, Dock.Left);
 
         // ======================================================================
@@ -246,10 +246,11 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         Control SpaceTab()
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,*,Auto") };
-            g.Children.Add(K(PreDelay, "Pre", PreF));
-            g.Children.Add(Col(K(Size, "Size", Pct), 1));
-            g.Children.Add(Col(K(Diffusion, "Diffuse", Pct), 2));
-            g.Children.Add(Col(K(Decay, "Decay", DecayF), 3));
+            // 58-wide cells leave the switches' labels room beside four knobs.
+            g.Children.Add(K(PreDelay, "Pre", PreF, 58));
+            g.Children.Add(Col(K(Size, "Size", Pct, 58), 1));
+            g.Children.Add(Col(K(Diffusion, "Diffuse", Pct, 58), 2));
+            g.Children.Add(Col(K(Decay, "Decay", DecayF, 58), 3));
             var er = Toggle(EarlyRefl, "Early reflections");
             ToolTip.SetTip(er, "Early reflections — the first discrete echoes off the walls, spaced by the algorithm and the size");
             var fr = Toggle(Freeze, "Freeze");
@@ -324,34 +325,25 @@ internal sealed class ReverbDeviceBody : IDeviceBody
 
         Control OutputTab()
         {
-            var meterL = new PentadLevelBar { Vertical = true, Width = 8, Height = 56 };
-            var meterR = new PentadLevelBar { Vertical = true, Width = 8, Height = 56 };
-            readouts.Add(() => { meterL.SetLinear(Sc(S_OutL)); meterR.SetLinear(Sc(S_OutR)); });
-            static Control Centre(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 56, Children = { Caps("0"), GRow(Caps("−12"), 1), GRow(Caps("−48"), 2) } };
-            var meters = Row(4,
-                new StackPanel { Spacing = 2, Children = { meterL, Centre(Caps("L")) } },
-                new StackPanel { Spacing = 2, Children = { meterR, Centre(Caps("R")) } },
-                scale);
-            meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(10, K(Output, "Out", v => Db(OutDb(v)), 60), meters);
-            top.Margin = new Thickness(0, 6, 0, 0);
+            // 160 high: the knob and meter in one 36 row, three bars, two switches.
+            var top = DeviceBodyKit.OutputHead(K(Output, "Out", v => Db(OutDb(v)), 96, inline: true), () => Sc(S_OutL), () => Sc(S_OutR), readouts.Add);
+            top.Margin = new Thickness(0, 4, 0, 0);
 
-            var mid = new StackPanel { Spacing = 6, Children = {
+            var mid = new Grid { RowDefinitions = new RowDefinitions("20,20,20"), Children = {
                 SliderRow("Mix", DryWet, Pct, () => On(WetOnly)),
-                SliderRow("Width", WidthP, Pct),
-                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")) } };
+                GRow(SliderRow("Width", WidthP, Pct), 1),
+                GRow(SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")), 2) } };
             ToolTip.SetTip(mid.Children[2], "Bass mono — below this frequency the tail is mono, so a wide reverb does not smear the low end (off at the far left)");
 
             var wetOnly = Toggle(WetOnly, "Wet only (send)");
             ToolTip.SetTip(wetOnly, "Wet only — the tail with no dry, for a return / send track");
             var comp = Toggle(LatencyComp, "Latency comp.");
             ToolTip.SetTip(comp, "The input diffuser delays the tail by a fixed group delay; on, the pre-delay is shortened by exactly that so the tail starts on the set pre-delay (it cannot go below zero).");
-            var bottom = new StackPanel { Spacing = 6, Children = { wetOnly, comp } };
+            var bottom = new StackPanel { Spacing = 0, Children = { wetOnly, comp } };
 
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Dock.Top), Docked(Divider(mid), Dock.Top), Docked(Divider(bottom), Dock.Bottom) } };
-            ((Control)body.Children[1]).Margin = new Thickness(0, 6, 0, 0);
+            ((Control)body.Children[1]).Margin = new Thickness(0, 4, 0, 0);
             return body;
         }
 

@@ -5,9 +5,9 @@
 // of it (700 × 260, full-bleed). The Layers section is headed by the live strip (bar.beat
 // counter · a cycle tick strip that fills as the loop runs · the four transport actions,
 // each captioned with what it will do next) over the layer stack (per pass: index, name,
-// its own waveform, Play / Muted / Rec state, level and mute); beside it the Loop section
-// (Feedback · Input gain · Speed value bars · Quantize · count-in / set-tempo / reverse
-// switches · Undo / Export / Clear). Transport + editing go through the device
+// its own waveform, Play / Muted / Rec state, level and mute; Undo / Export / Clear head it);
+// beside it the Loop section (Feedback · Input gain · Speed value bars · Quantize · count-in /
+// set-tempo / reverse switches). Transport + editing go through the device
 // command channel; state and per-layer waveforms come from the device scope.
 
 using System;
@@ -62,13 +62,13 @@ internal sealed class StrataDeviceBody : IDeviceBody
         var actNames = new[] { "Record", "Overdub", "Play", "Stop" };
         var actCmds = new[] { C_Record, C_Overdub, C_Play, C_Stop };
         var actBtn = new Border[4]; var actSub = new TextBlock[4]; var actName = new TextBlock[4];
-        var actRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        var actRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         for (int i = 0; i < 4; i++)
         {
             int iv = i;
             actName[i] = new TextBlock { Text = actNames[i], FontSize = NotaType.Caption, FontWeight = FontWeight.SemiBold, Foreground = i == 0 ? NotaPalette.Record : TextPrimary, LineHeight = 13 };
             actSub[i] = new TextBlock { Text = "", FontSize = NotaType.RowLabel, Foreground = TextTertiary, LineHeight = 13 };
-            actBtn[i] = new Border { Height = 30, Width = 70, CornerRadius = NotaRadius.Field, Background = NotaPalette.SurfaceHover, Padding = new Thickness(7, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            actBtn[i] = new Border { Height = 30, Width = 70, CornerRadius = NotaRadius.Field, Background = NotaPalette.SurfaceHover, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { actName[i], actSub[i] } } };
             actBtn[i].BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
             actBtn[i].PointerPressed += (_, _) => Act(actCmds[iv]);
@@ -78,7 +78,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
         var live = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(0, 0, 0, 8),
             Child = new DockPanel { LastChildFill = false, VerticalAlignment = VerticalAlignment.Center, Children = {
                 actRow,
-                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Children = { barNum, tickRow, ofBars } } } } };
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { barNum, tickRow, ofBars } } } } };
 
         // ---------- layer stack ----------
         var layerHint = new TextBlock { Text = "Press Record to lay down the first loop", FontSize = NotaType.Caption, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -112,8 +112,13 @@ internal sealed class StrataDeviceBody : IDeviceBody
             layerRows[i] = new Border { Height = 28, CornerRadius = NotaRadius.Cell, Padding = new Thickness(8, 0), IsVisible = false, Child = row };
             layerStack.Children.Add(layerRows[i]);
         }
-        var layerHead = new DockPanel { LastChildFill = false, Margin = new Thickness(0, 10, 0, 8), Children = { DeviceBodyKit.Title("Layers") } };
-        DockPanel.SetDock(countLbl, Dock.Right); layerHead.Children.Add(countLbl);
+        // Undo / Export / Clear act on the layers, so they head the stack (the Loop rail keeps the settings).
+        var layerActions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        var layerTitle = DeviceBodyKit.Title("Layers"); layerTitle.VerticalAlignment = VerticalAlignment.Center;
+        countLbl.VerticalAlignment = VerticalAlignment.Center; countLbl.Margin = new Thickness(10, 0, 0, 0);
+        var layerHead = new DockPanel { LastChildFill = false, Margin = new Thickness(0, 8, 0, 6), Children = { layerTitle } };
+        DockPanel.SetDock(layerActions, Dock.Right); layerHead.Children.Add(layerActions);
+        layerHead.Children.Add(countLbl);
         var layerCol = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(live, Dock.Top); layerCol.Children.Add(live);
         DockPanel.SetDock(layerHead, Dock.Top); layerCol.Children.Add(layerHead);
@@ -164,9 +169,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
         var undo = ActionBtn("Undo", () => Act(C_Undo));
         var export = ActionBtn("Export", () => ctx.NotifyChanged());
         var clear = ActionBtn("Clear", () => Act(C_Clear));
-        var bottomActions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 10, VerticalAlignment = VerticalAlignment.Bottom };
-        Grid.SetColumn(undo, 0); Grid.SetColumn(export, 1); Grid.SetColumn(clear, 2);
-        bottomActions.Children.Add(undo); bottomActions.Children.Add(export); bottomActions.Children.Add(clear);
+        foreach (var b in new[] { undo, export, clear }) { ((Border)b).MinWidth = 58; layerActions.Children.Add(b); }
 
         var qLbl = DeviceBodyKit.Label("Quantize"); qLbl.Width = 70;
         var qRow = new StackPanel { Orientation = Orientation.Horizontal, Children = { qLbl, Seg(Quantize, new[] { "Off", "Bar", "1/4" }) } };
@@ -183,8 +186,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 HSlider(Speed, "Speed", SpeedF, true),
                 qRow,
                 DeviceBodyKit.Rule(1),
-                toggles } }, Dock.Top),
-            DeviceBodyKit.Dock(bottomActions, Dock.Bottom) } };
+                toggles } }, Dock.Top) } };
         var rail = DeviceBodyKit.Sec(railBody, SectionPad, 206);
         DockPanel.SetDock(rail, Dock.Right);
         var layerSec = DeviceBodyKit.Sec(layerCol);
@@ -207,7 +209,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 barNum.Text = $"{barPos + 1} . {beat + 1}";
             }
             else barNum.Text = "–";
-            ofBars.Text = $"of {(loopBars > 0 ? loopBars : 0)} bars";
+            ofBars.Text = loopBars == 1 ? "of 1 bar" : $"of {loopBars} bars";
             int lit = (int)Math.Round(Math.Clamp(phase, 0, 1) * 16);
             bool rolling = mode is M_Rec or M_Over or M_Play;   // the progress is the playhead only while it runs
             for (int i = 0; i < 16; i++) ticks[i].Background = (layers > 0 && i < lit) ? (rolling ? Brass : NotaPalette.VizInk) : TextDisabled;

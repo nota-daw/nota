@@ -338,7 +338,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             int n = (int)Sc(S_Clips);
             string times = n == 1 ? "time" : "times";
-            return CharI() == 1 ? NotaNum.F($"attack passed to the clip · {n} {times}") : NotaNum.F($"reached the clip · {n} {times}");
+            return CharI() == 1 ? NotaNum.F($"attack to the clip {n} {times}") : NotaNum.F($"hit the clip {n} {times}");
         }
 
         // ======================================================================
@@ -522,7 +522,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 t.Text = d ? "Delta" : "Detector";
                 t.Foreground = d ? AccentBright : TextTertiary;
                 l1.Text = d ? "hearing what it removes" : (Tp() ? "true peak · 4×" : "sample peak") + (ExtOn() ? " · key" : "");
-                l2.Text = d ? "the difference in − out" : NotaNum.F($"{KeyName()} · HP {HpF(P(ScHp))} · latency {Sc(S_Latency):0} smp");
+                l2.Text = d ? "the difference in − out" : NotaNum.F($"{KeyName()} · HP {HpF(P(ScHp))} · delay {Sc(S_Latency):0} smp");
                 l1.Foreground = d ? AccentBright : TextPrimary;
                 dot.Background = d ? Brass : Sc(S_Gr) > 0.1 ? Success : NotaPalette.TextDisabled;
             });

@@ -334,17 +334,17 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         }
         Control EnvPanel(string title, string pre, PentadEnvCurve curve, bool amp)
         {
-            var times = MonoText("", NotaType.Eyebrow, MutedC);
-            times.TextTrimming = TextTrimming.CharacterEllipsis; times.TextAlignment = TextAlignment.Right;
-            readouts.Add(() => times.Text = $"{Atk(G(pre + "attack"))} · {Dec(G(pre + "decay"))} · {G(pre + "sustain") * 100:0}\u2009% · {(On("releaseon") ? Dec(G(pre + "release")) : "min")}");
+            // The A / D / S / R values sit on the knobs beside the graph; the head carries only the title (and the
+            // amp's Release switch — R draws in ink 4 while it's off, the release then being the minimum).
             var head = new DockPanel { Height = 18, LastChildFill = true };
             head.Children.Add(Docked(Caps(title), Avalonia.Controls.Dock.Left));
             if (amp) head.Children.Add(Docked(Toggle("releaseon", "Release"), Avalonia.Controls.Dock.Right));
-            head.Children.Add(new Border { Margin = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Center, Child = times });
+            head.Children.Add(new Panel());
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = curve };
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 2, RowSpacing = 0, VerticalAlignment = VerticalAlignment.Center };
             Control[] ks = { K(pre + "attack", "A", Atk, amp, Knob.SizeInline, 64, true), K(pre + "decay", "D", Dec, amp, Knob.SizeInline, 64, true), K(pre + "sustain", "S", v => Pct(v), amp, Knob.SizeInline, 64, true), K(pre + "release", "R", Dec, amp, Knob.SizeInline, 64, true) };
             for (int i = 0; i < 4; i++) { Grid.SetColumn(ks[i], i % 2); Grid.SetRow(ks[i], i / 2); knobs.Children.Add(ks[i]); }
+            if (amp) readouts.Add(SynthInstrumentCard.Dimmer(ks[3], () => !On("releaseon")));
             knobs.Margin = new Thickness(8, 0, 0, 0);
             return new DockPanel { LastChildFill = true, Children = { Docked(head, Avalonia.Controls.Dock.Top), Docked(knobs, Avalonia.Controls.Dock.Right), graph } };
         }
@@ -392,11 +392,11 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             var dests = Row(12, Caps("Dest"), Toggle("pmfreqa", "Osc A freq"), Toggle("pmpwa", "Osc A PW"), Toggle("pmfilter", "Filter cutoff"));
             dests.Height = 18;
             var vel = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 12, Height = 16, Children = {
-                SliderRow("Vel → amp", "velamp", v => Pct(v), 52, 30),
-                Col(SliderRow("Vel → filt", "velfilt", v => Pct(v), 52, 30), 1) } };
+                SliderRow("Vel → amp", "velamp", v => Pct(v), 60, 30),
+                Col(SliderRow("Vel → filt", "velfilt", v => Pct(v), 60, 30), 1) } };
             var at = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 12, Height = 16, Children = {
-                SliderRow("AT → cut", "atcutoff", v => Pct(v), 52, 30),
-                Col(SliderRow("AT → LFO", "atlfo", v => Pct(v), 52, 30), 1) } };
+                SliderRow("AT → cut", "atcutoff", v => Pct(v), 60, 30),
+                Col(SliderRow("AT → LFO", "atlfo", v => Pct(v), 60, 30), 1) } };
             var routes = new StackPanel { Spacing = 4, Children = {
                 RouteRow("Filter env", "pmenv", true, Dests),
                 RouteRow("Osc B", "pmoscb", true, Dests),

@@ -157,7 +157,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
                 var row = VaryRow(sp.Label, sp.P, sp.Max, sp.Fmt, sp.Tip);
                 Grid.SetRow(row, i); rows.Children.Add(row);
             }
-            var varyIsland = IslandBox(IslandHead(Caps("What varies"), Mono("amount · range", Cap, 7)), rows, 168);
+            var varyIsland = IslandBox(IslandHead(Caps("What varies"), Mono("amount · range", Cap, 7)), rows, 200);
 
             // ---- OUTPUT ----
             var viz = new RandomOutputViz { Full = true };
@@ -350,10 +350,10 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
                 l.Foreground = x > 0.0005 ? Txt : Cap;
                 v.Text = fmt(x);
             });
-            return new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children =
-            {
-                new DockPanel { Children = { WithDock(v, Dock.Right), l } }, trk,
-            } };
+            // One line, like every value-bar row: name · bar · value.
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("54,*,48"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            g.Children.Add(l); Grid.SetColumn(trk, 1); g.Children.Add(trk); Grid.SetColumn(v, 2); g.Children.Add(v);
+            return g;
         }
 
         Control Seg(int p, string[] names, string tip)

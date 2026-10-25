@@ -37,6 +37,11 @@ namespace Nota.App;
         // in a header above it (Nota Bass).
         public bool ShowTitle { get; set; } = true;
 
+        // A word after the title in its own ink (Nota Operator: the operator's role, carrier or
+        // modulator); it names nothing for MIDI learn.
+        public string? Note { get; set; }
+        public IBrush NoteInk { get; set; } = TextTertiary;
+
         public VoltEnv(IAudioEngine e, int t) { _e = e; _t = t; MinWidth = 150; MinHeight = 96; }
         public void Target(string title, (int, string) a, (int, string) d, (int, string) s, (int, string) r)
         { _title = title; _a = a; _d = d; _s = s; _r = r; InvalidateVisual(); }
@@ -56,7 +61,7 @@ namespace Nota.App;
 
         private float G((int i, string id) p) => p.i >= 0 ? _e.PluginParamGet(_t, -1, p.i) : 0f;
         private (double x0, double x1, double top, double bot) Geo()
-        { double pad = 6; return (pad, Bounds.Width - pad, pad + 11, Bounds.Height - pad - 9); }
+        { double pad = 6; return (pad, Bounds.Width - pad, ShowTitle ? 22 : pad + 4, Bounds.Height - pad - 9); }   // the attack peak sits under the title
         private (double xa, double xd, double sy, double xh, double xr) Nodes()
         {
             var (x0, x1, top, bot) = Geo(); double span = x1 - x0;
@@ -120,6 +125,11 @@ namespace Nota.App;
             for (int k = 0; k < nodes.Length; k++)
                 ctx.DrawEllipse(_drag == k ? NotaPalette.Accent : Accent, null, nodes[k], 3.2, 3.2);
             if (ShowTitle)
-                ctx.DrawText(new NotaFormattedText(NotaText.Label(_title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, 5));
+            {
+                var title = new NotaFormattedText(NotaText.Label(_title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary);
+                ctx.DrawText(title, new Point(x0, 5));
+                if (!string.IsNullOrEmpty(Note))
+                    ctx.DrawText(new NotaFormattedText(Note, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, NoteInk), new Point(x0 + title.Width + 6, 5));
+            }
         }
     }

@@ -105,10 +105,10 @@ internal sealed class DelayDeviceBody : IDeviceBody
         { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 50, IBrush? arc = null, Action? onChange = null)
+        Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 50, IBrush? arc = null, Action? onChange = null, bool inline = false)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
-            var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
+            var knob = new Knob(P(p), 1.0) { Accent = true, Inline = inline, ArcColor = arc, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); onChange?.Invoke(); };
             knob.GestureBegin += () => Begin(p);
@@ -317,10 +317,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
             Refill();
 
             var modeSeg = Seg(SyncMode, new[] { "ms", "Sync" }, onPick: () => { Refill(); SyncTaps(); });
-            var hint = Mono("", 7, TextTertiary); hint.HorizontalAlignment = HorizontalAlignment.Right;
-            readouts.Add(() => hint.Text = On(SyncMode)
-                ? NotaNum.F($"L {DivNames[Sel(DivL, 8)]} · R {DivNames[On(LinkLR) ? Sel(DivL, 8) : Sel(DivR, 8)]}")
-                : On(LinkLR) ? "channels linked" : "channels independent");
+            // The L/R division rows and the Link latch already say what a readout here would.
 
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto,*"), ColumnSpacing = 8, Height = 24 };
             head.Children.Add(Caps("Mode"));
@@ -328,7 +325,6 @@ internal sealed class DelayDeviceBody : IDeviceBody
             head.Children.Add(Col(Latch(LinkLR, "Link", "Link L/R — the right channel follows the left's time"), 2));
             head.Children.Add(Col(Latch(PingPong, "Ping", "Ping-pong — each repeat crosses to the other channel"), 3));
             head.Children.Add(Col(Latch(FadeChange, "Fade", "Fade on change — crossfade to a new delay time instead of gliding to it (which bends the pitch, tape style)"), 4));
-            head.Children.Add(Col(hint, 5));
 
             var bottom = new Border { Child = host };
             // Automation or a preset can flip Sync under us — follow it.
@@ -353,19 +349,21 @@ internal sealed class DelayDeviceBody : IDeviceBody
             MidiLearn.Bind(filter, MidiTarget.DeviceParam(track, di, LowCut), "Low Cut");
             readouts.Add(() => { if (!filter.Dragging) filter.Set(P(LowCut), P(HighCut), LowHz(P(LowCut)), HighHz(P(HighCut))); });
 
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("48,48,*,60,60,Auto"), ColumnSpacing = 4, Height = 58 };
-            g.Children.Add(K(Feedback, "FEEDBACK", v => On(Freeze) ? "Hold" : Pct(v), 34, 48, null, SyncTaps));
-            g.Children.Add(Col(K(Diffuse, "DIFFUSE", Pct, 34, 48), 1));
-            g.Children.Add(Col(new Border { Margin = new Thickness(2, 2, 2, 6), Child = filter }, 2));
-            g.Children.Add(Col(K(WowRate, "WOW RATE", v => { double hz = Exp(v, 0.05, 8); return hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz"); }, 34, 60), 3));
-            g.Children.Add(Col(K(WowDepth, "WOW DEPTH", Pct, 34, 60), 4));
-            var toggles = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), Children = {
+            // The filter band sits beside the taps (it shapes every repeat), the knobs and switches under both.
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("52,46,56,60,*,Auto"), ColumnSpacing = 3, Height = 58 };
+            g.Children.Add(K(Feedback, "FEEDBACK", v => On(Freeze) ? "Hold" : Pct(v), 34, 52, null, SyncTaps));
+            g.Children.Add(Col(K(Diffuse, "DIFFUSE", Pct, 34, 46), 1));
+            g.Children.Add(Col(K(WowRate, "WOW RATE", v => { double hz = Exp(v, 0.05, 8); return hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz"); }, 34, 56), 2));
+            g.Children.Add(Col(K(WowDepth, "WOW DEPTH", Pct, 34, 60), 3));
+            var toggles = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), Children = {
                 Toggle(Freeze, "Freeze"), Toggle(TapeMode, "Tape mode") } };
             g.Children.Add(Col(toggles, 5));
 
+            filter.Width = 96; filter.Margin = new Thickness(6, 0, 0, 0);
+            var top = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 0, 0, 6) };
+            top.Children.Add(NewTaps()); top.Children.Add(Col(filter, 1));
             return new DockPanel { LastChildFill = true, Margin = new Thickness(0, 6, 0, 0), Children = {
-                Docked(g, Dock.Bottom),
-                new Border { Margin = new Thickness(0, 0, 0, 6), Child = NewTaps() } } };
+                Docked(g, Dock.Bottom), top } };
         }
 
         // ======================================================================
@@ -424,11 +422,10 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 SliderRow("Dry", DryLevel, v => ShortDb(DryDb(v)), dim: () => On(WetOnly)),
                 SliderRow("Out", Output, v => ShortDb(OutDb(v))),
                 new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Center },
-                SliderRow("Feedback", Feedback, v => On(Freeze) ? "Hold" : Pct(v)),
-                SliderRow("Spread", Spread, v => NotaNum.F($"{v * 50:0}")),
                 btns, clear, wet,
             };
-            var grid = new Grid { RowDefinitions = new RowDefinitions("19,19,19,3,19,19,25,24,*"), Margin = new Thickness(0, 3, 0, 0) };
+            // Feedback and Spread live on the Loop rail beside this panel, so they are not repeated here.
+            var grid = new Grid { RowDefinitions = new RowDefinitions("20,20,20,9,30,30,*"), Margin = new Thickness(0, 3, 0, 0) };
             for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
             btns.VerticalAlignment = VerticalAlignment.Bottom; clear.VerticalAlignment = VerticalAlignment.Bottom;
             return grid;
@@ -436,34 +433,24 @@ internal sealed class DelayDeviceBody : IDeviceBody
 
         Control OutputTab()
         {
-            var meterL = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            var meterR = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            readouts.Add(() => { meterL.SetLinear(Sc(S_OutL)); meterR.SetLinear(Sc(S_OutR)); });
-            static Control Centre(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-            static TextBlock Axis(string t) { var a = FxParts.Info(t, TextDisabled); a.FontSize = NotaType.Axis; return a; }
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 56, Children = { Axis("0"), GRow(Axis("−12"), 1), GRow(Axis("−48"), 2) } };
-            var meters = Row(4,
-                new StackPanel { Spacing = 2, Children = { meterL, Centre(Caps("L")) } },
-                new StackPanel { Spacing = 2, Children = { meterR, Centre(Caps("R")) } },
-                scale);
-            meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(8, K(Output, "Out", v => Db(OutDb(v)), 40, 54), meters);
+            // 160 high: the knob and meter in one 36 row, three bars, two switches.
+            var top = DeviceBodyKit.OutputHead(K(Output, "Out", v => Db(OutDb(v)), cellW: 96, inline: true), () => Sc(S_OutL), () => Sc(S_OutR), readouts.Add);
 
-            var mid = new StackPanel { Spacing = 3, Children = {
+            var mid = new Grid { RowDefinitions = new RowDefinitions("20,20,20"), Children = {
                 SliderRow("Mix", DryWet, Pct, dim: () => On(WetOnly)),
-                SliderRow("Width", WidthP, v => NotaNum.F($"{v * 200:0}")),
-                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")) } };
+                GRow(SliderRow("Width", WidthP, v => NotaNum.F($"{v * 200:0}")), 1),
+                GRow(SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")), 2) } };
 
             var wetOnly = Toggle(WetOnly, "Wet only (send)");
             ToolTip.SetTip(wetOnly, "Wet only — repeats with no dry, for a return / send track");
             var comp = Toggle(LatencyComp, "Latency comp.");
             ToolTip.SetTip(comp, "The diffuser lengthens the loop by a fixed group delay; on, the read pointer is pulled back by exactly that so each repeat lands on the set time.");
-            var bottom = new StackPanel { Spacing = 3, Children = { wetOnly, comp } };
+            var bottom = new StackPanel { Spacing = 0, Children = { wetOnly, comp } };
 
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Dock.Top), Docked(Divider(mid), Dock.Top), Docked(Divider(bottom), Dock.Bottom) } };
-            ((Control)body.Children[1]).Margin = new Thickness(0, 5, 0, 0);
-            body.Margin = new Thickness(0, 6, 0, 0);
+            ((Control)body.Children[1]).Margin = new Thickness(0, 4, 0, 0);
+            body.Margin = new Thickness(0, 4, 0, 0);
             return body;
         }
 
@@ -489,7 +476,8 @@ internal sealed class DelayDeviceBody : IDeviceBody
             {
                 extras.Text = On(Freeze)
                     ? NotaNum.F($"input muted · loop {Secs(MsL() / 1000)}")
-                    : NotaNum.F($"filter {LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}");
+                    : P(LowCut) <= 0.001 && P(HighCut) >= 0.999 ? "filter open"
+                    : NotaNum.F($"low cut {LowCutF(P(LowCut))} · high cut {HighCutF(P(HighCut))}");
                 extras.Foreground = On(Freeze) ? AccentBright : TextTertiary;
             }
         });

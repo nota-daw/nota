@@ -321,13 +321,13 @@ internal sealed class CrushDeviceBody : IDeviceBody
 
         Control GritTab()
         {
-            var t = Caps("Result"); t.Height = 17;
-            var l1 = FxParts.Value(); l1.Height = 17;
-            var l2 = FxParts.Info(); l2.Height = 17;
+            var t = Caps("Result"); t.Height = 14;
+            var l1 = FxParts.Value(); l1.Height = 14;
+            var l2 = FxParts.Info(); l2.Height = 14;
             l1.TextTrimming = TextTrimming.CharacterEllipsis;
             var box = new Border
             {
-                Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 4), Margin = new Thickness(0, 1, 0, 0),
+                Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 3), Margin = new Thickness(0, 4, 0, 0),
                 Child = new StackPanel { Children = { t, l1, l2 } },
             };
             readouts.Add(() =>
@@ -343,7 +343,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
                 l1.Foreground = hot ? AccentBright : TextPrimary;
             });
             ToolTip.SetTip(box, "What comes out: the bit depth and the rate, and whether the post filter cuts the images above the reduced Nyquist or lets them through");
-            return Stack("19,19,19,1,19,19,*",
+            return Stack("19,19,19,7,19,19,*",
                 SliderRow("Dither", Dither, v => Pct(v), "Dither — up to ±½ LSB of triangular noise before the levels: softens the steps into hiss"),
                 SliderRow("Jitter", Jitter, v => Pct(v), "Jitter — the hold length wanders up to ±50 %: an unsteady, broken clock"),
                 SliderRow("Noise", NoiseFloor, v => Pct(v), "Noise — a white noise floor under the crush, up to −50\u2009dBFS"),

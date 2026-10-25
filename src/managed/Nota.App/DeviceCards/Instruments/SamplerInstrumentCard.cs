@@ -360,18 +360,18 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             return $"{SamplerModel.FilterNames[t]} 12\u2009dB/oct · {NotaNum.Hz(SamplerModel.CutoffHz(G("cutoff")))} · reso {NotaNum.Pct(G("resonance"))}";
         }
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
-        var typeSeg = ParamChips("filtertype", SamplerModel.FilterNames, padX: 7);
+        var typeSeg = ParamChips("filtertype", SamplerModel.FilterNames, padX: 5);
         ToolTip.SetTip(typeSeg, "Off · low-pass · high-pass · band-pass (12\u2009dB/oct)");
-        var cutKnob = PKnob("cutoff", "CUTOFF", v => NotaNum.Hz(SamplerModel.CutoffHz(v)), NotaSize.Knob, 58, emphasised: true);
-        var resoKnob = PKnob("resonance", "RESO", v => NotaNum.Pct(v));
-        var ktKnob = PKnob("keytrack", "KEYTRACK", v => NotaNum.Pct(v), tip: "The cutoff follows the key, 0 … 100\u2009%");
+        var cutKnob = PKnob("cutoff", "CUTOFF", v => NotaNum.Hz(SamplerModel.CutoffHz(v)), NotaSize.Knob, 50, emphasised: true);
+        var resoKnob = PKnob("resonance", "RESO", v => NotaNum.Pct(v), cellW: 44);
+        var ktKnob = PKnob("keytrack", "KEYTRACK", v => NotaNum.Pct(v), cellW: 50, tip: "The cutoff follows the key, 0 … 100\u2009%");
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1),
             "Let the amp envelope open (or close) the filter — the depth is ENV", on: () => G("envcutoff") >= 0.5f, learnId: "envcutoff");
-        var envAmt = PKnob("envamount", "ENV", Oct, tip: "How far the envelope moves the cutoff, ±6 octaves");
+        var envAmt = PKnob("envamount", "ENV", Oct, cellW: 46, tip: "How far the envelope moves the cutoff, ±6 octaves");
         var filterBody = new[] { cutKnob, resoKnob, ktKnob };
         foreach (var c in filterBody) DimWhen(c, () => Sel("filtertype", 4) == 0);
         DimWhen(envAmt, () => Sel("filtertype", 4) == 0 || G("envcutoff") < 0.5f);
-        var filterRow = Row(14, (Labeled("TYPE", typeSeg), "Auto"), (cutKnob, "Auto"), (resoKnob, "Auto"), (ktKnob, "Auto"),
+        var filterRow = Row(8, (Labeled("TYPE", typeSeg), "Auto"), (cutKnob, "Auto"), (resoKnob, "Auto"), (ktKnob, "Auto"),
             (new Panel(), "*"), (envBtn, "Auto"), (envAmt, "Auto"));
 
         // ---- the tab panel ------------------------------------------------------------

@@ -331,9 +331,9 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 return NotaNum.F($"transient {Ms(tr)} · recovery {(double.IsNaN(rec) ? "–" : Ms(rec))}");
             }
             return new DockPanel { LastChildFill = true, Margin = new Thickness(0, 6, 0, 0), Children = {
-                Docked(CharRow(() => NotaNum.F($"attack {Ms(Sc(S_AtkMs))} · release {Ms(Sc(S_RelMs))}"), () => TextSecondary), Dock.Top),
+                Docked(CharRow(() => NotaNum.F($"atk {Ms(Sc(S_AtkMs))} · rel {Ms(Sc(S_RelMs))}"), () => TextSecondary), Dock.Top),
                 Docked(TimingRow(true,
-                    () => NotaNum.F($"GR peak {Gr(grHist.Peak)} dB · {Hits((int)WindowMs())} hits / window"),
+                    () => NotaNum.F($"GR peak {Gr(grHist.Peak)} dB · {Hits((int)WindowMs())} hits"),   // in the window named in the tab row
                     Measured), Dock.Bottom),
                 new Border { Margin = new Thickness(0, 6, 0, 6), Child = motion } } };
         }
@@ -443,9 +443,8 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             }
             if (levels)
             {
-                stack.Children.Add(new Border { Height = 16, Child = title });
-                stack.Children.Add(Line(Caps("in"), () => NotaNum.F($"{Lvl(LinDb(Sc(S_InRms)))} dB"), () => TextPrimary));
-                stack.Children.Add(Line(Caps("out"), () => NotaNum.F($"{Lvl(LinDb(Sc(S_OutRms)))} dB"), () => Sc(S_OutPk) > 0.5 ? NotaPalette.Warning : TextPrimary));
+                // The tab is already named Output: two lines, no title.
+                stack.Children.Add(Line(Caps("in · out"), () => NotaNum.F($"{Lvl(LinDb(Sc(S_InRms)))} · {Lvl(LinDb(Sc(S_OutRms)))} dB"), () => Sc(S_OutPk) > 0.5 ? NotaPalette.Warning : TextPrimary));
                 stack.Children.Add(Line(Caps("GR"), () => NotaNum.F($"{Gr(Sc(S_Gr))} dB"), () => TextPrimary));
             }
             else
@@ -478,12 +477,12 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 Rule(),
                 SliderRow("Range", Range, RangeF, RangeMap()),
                 GrBox(false),
-                new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, Children = {
+                new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Bottom, Children = {
                     Toggle(AutoRelease, "Auto-release", "Auto-release — a slower second release once the reduction runs deep, so sustained material does not pump"),
                     Toggle(AutoGain, "Auto gain", "Auto gain — make-up that follows the threshold and ratio") } },
             };
             rows[5].Margin = new Thickness(0, 1, 0, 0);
-            var grid = new Grid { RowDefinitions = new RowDefinitions("24,20,20,3,20,Auto,*"), Margin = new Thickness(0, 2, 0, 0) };
+            var grid = new Grid { RowDefinitions = new RowDefinitions("22,20,20,3,20,Auto,*"), Margin = new Thickness(0, 2, 0, 0) };   // 159 of 160
             for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
             return grid;
         }
@@ -501,12 +500,15 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 SliderRow("Makeup", Makeup, v => NotaNum.F($"{v:+0.0;−0.0;0.0}"), Lin(Makeup)),
                 SliderRow("Mix", Mix, PctF, Lin(Mix)),
                 SliderRow("Range", Range, RangeF, RangeMap()),
-                new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = btns },
-                new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, Children = {
+                btns,
+                new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Bottom, Children = {
                     Toggle(External, "External key", "External key — key off the source picked on the Sidechain tab; off, the track keys itself"),
                     Toggle(StereoLink, "Stereo link", "Stereo link — one reduction for both channels; off, left and right compress on their own") } },
             };
-            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,*,*,Auto,*"), RowSpacing = 2, Margin = new Thickness(0, 6, 0, 0) };
+            // 160 high in all: the read-out, three bars 20 apart, the buttons, two switches.
+            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,19,19,19,Auto,*"), Margin = new Thickness(0, 4, 0, 0) };
+            rows[0].Margin = new Thickness(0, 0, 0, 2);
+            btns.Margin = new Thickness(0, 3, 0, 0);
             for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
             return grid;
         }

@@ -99,7 +99,7 @@ internal sealed class VtCurveView : VtWindowBase
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
         Grid(ctx, w, h, 4);
-        double x0 = 3, x1 = w - 3, top = 14, bot = h - 12;
+        double x0 = 3, x1 = w - 3, top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         // y spans the larger of the curve's peak and unity, so a hot curve is never clipped.
         double peak = 1;
         for (int i = 0; i < _n; i++) peak = Math.Max(peak, Math.Abs(_curve[i]) * Math.Max(1, _out));
@@ -179,7 +179,7 @@ internal sealed class VtWearView : VtWindowBase
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
         Grid(ctx, w, h, 6);
-        double top = 14, bot = h - 12, cy = (top + bot) / 2, half = Math.Max(4, (bot - top) / 2);
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, cy = (top + bot) / 2, half = Math.Max(4, (bot - top) / 2);
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1, new DashStyle(new double[] { 2, 4 }, 0)), new Point(0, cy), new Point(w, cy));
         if (_n < 2) { Labels(); return; }
 
@@ -209,15 +209,14 @@ internal sealed class VtWearView : VtWindowBase
         }
         if (showF) ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.1), Line(k => _flut[k] + (showW ? _wow[k] : 0)));
         if (showW) ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(k => _wow[k]));
-        var scale = NotaGraph.AxisText(NotaNum.F($"±{range:0} ¢"));
-        ctx.DrawText(scale, new Point(4, top));
-        Labels();
+        Labels();   // (the scale follows the peak, named top-right — no label of its own on the curves)
 
         void Labels()
         {
             NotaGraph.Title(ctx, frame, "Pitch drift");
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _peak, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-            if (_show != 0) NotaGraph.Legend(ctx, w - 5, h - 26, ("flutter", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
+            // The flutter key sits in the title row, left of the peak, clear of the corner labels.
+            if (_show != 0) NotaGraph.Legend(ctx, w - 4 - NotaGraph.AxisText(_peak).Width - 12, 3, ("flutter", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "0");
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, _end);
             var m = NotaGraph.AxisText(_mid);
@@ -248,7 +247,7 @@ internal sealed class VtHarmView : VtWindowBase
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
         Grid(ctx, w, h, 6);
-        double top = 16, bot = h - 12;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         const double range = 96;   // dB below the fundamental
         double Y(double db) => bot - Math.Clamp((db + range) / range, 0, 1) * (bot - top);
         double Xk(int k) => w * (0.1 + 0.8 * k / 6.0);

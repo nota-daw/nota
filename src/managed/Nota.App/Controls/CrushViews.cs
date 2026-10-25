@@ -121,7 +121,7 @@ internal sealed class CrQuantView : Control
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double x0 = 6, x1 = w - 6, top = 16, bot = h - 12, mid = (top + bot) / 2, amp = (bot - top) / 2 * 0.86;
+        double x0 = 6, x1 = w - 6, top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, mid = (top + bot) / 2, amp = (bot - top) / 2 * 0.86;
         double Y(double v) => mid - Math.Clamp(v, -1.12, 1.12) * amp;
 
         double levels = CrushMath.ShownLevels(_bits);
@@ -207,7 +207,7 @@ internal sealed class CrSpectrumView : ShDragView
         InvalidateVisual();
     }
 
-    private (double x0, double x1, double top, double bot) Plot() => (6, Bounds.Width - 6, 16, Bounds.Height - 12);
+    private (double x0, double x1, double top, double bot) Plot() => (6, Bounds.Width - 6, NotaGraph.PlotTop, Bounds.Height - NotaGraph.PlotFloor);
     private double X(double hz) { var (x0, x1, _, _) = Plot(); return x0 + Math.Log(Math.Clamp(hz, FLo, FHi) / FLo) / Math.Log(FHi / FLo) * (x1 - x0); }
     private double F(double x) { var (x0, x1, _, _) = Plot(); return FLo * Math.Pow(FHi / FLo, Math.Clamp((x - x0) / Math.Max(1, x1 - x0), 0, 1)); }
 
@@ -308,7 +308,7 @@ internal sealed class CrTransferView : ShDragView
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double pad = 8, top = 16, x0 = pad, x1 = w - pad, bot = h - pad;
+        double pad = 8, top = NotaGraph.PlotTop, x0 = pad, x1 = w - pad, bot = h - pad;
         double side = Math.Min(x1 - x0, bot - top);
         double cx = (x0 + x1) / 2, cy = (top + bot) / 2, r = side / 2;
         ctx.DrawLine(NotaGraph.GridPen, new Point(cx, cy - r), new Point(cx, cy + r));
@@ -360,7 +360,7 @@ internal sealed class CrWaveView : Control
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double x0 = 6, x1 = w - 6, top = 16, bot = h - 12, mid = (top + bot) / 2, amp = (bot - top) / 2 * 0.8;
+        double x0 = 6, x1 = w - 6, top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, mid = (top + bot) / 2, amp = (bot - top) / 2 * 0.8;
         double Y(double v) => mid - Math.Clamp(v, -1.22, 1.22) * amp;
         ctx.DrawLine(NotaGraph.GridPen, new Point(x0, mid), new Point(x1, mid));
         ctx.DrawLine(NotaGraph.GridPen, new Point(x0, Y(1)), new Point(x1, Y(1)));

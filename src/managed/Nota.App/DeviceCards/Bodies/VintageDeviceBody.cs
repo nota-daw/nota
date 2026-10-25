@@ -79,7 +79,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
         static string FlutRateF(double v) => HzF(Exp(v, 2, 20));
         static string HissHpF(double v) => HzF(Exp(v, 20, 2000));
         string ModeName() => Modes[Sel(Mode, 6)];
-        string OsText() => Sel(OS, 4) == 0 ? "no oversampling" : NotaNum.F($"{OsNames[Sel(OS, 4)]} OS");
+        string OsText() => Sel(OS, 4) == 0 ? "OS off" : NotaNum.F($"{OsNames[Sel(OS, 4)]} OS");
         double WowHz() => Sc(S_WowHz) > 0 ? Sc(S_WowHz) : Exp(P(WowRate), 0.1, 4);
         double FlutHz() => Sc(S_FlutHz) > 0 ? Sc(S_FlutHz) : Exp(P(FlutterRate), 2, 20);
         double H(int k) => Sc(S_H1 + k - 1);   // harmonic k, dB re the fundamental
@@ -237,12 +237,12 @@ internal sealed class VintageDeviceBody : IDeviceBody
         }
         Control KnobRow(Control[] knobs, Func<string> info1, Func<string> info2)
         {
-            var i1 = Mono("", 11, TextSecondary); i1.HorizontalAlignment = HorizontalAlignment.Right;
-            var i2 = Mono("", 11, TextSecondary); i2.HorizontalAlignment = HorizontalAlignment.Right;
+            var i1 = Mono("", 11, TextSecondary); i1.HorizontalAlignment = HorizontalAlignment.Right; i1.TextTrimming = TextTrimming.CharacterEllipsis;
+            var i2 = Mono("", 11, TextSecondary); i2.HorizontalAlignment = HorizontalAlignment.Right; i2.TextTrimming = TextTrimming.CharacterEllipsis;
             readouts.Add(() => { i1.Text = info1(); i2.Text = info2(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 52 };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 56 };   // knob 26 + value + label
             g.Children.Add(Row(9, knobs));
-            g.Children.Add(Col(new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 1));
+            g.Children.Add(Col(new StackPanel { Spacing = 8, Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 1));
             return g;
         }
         static Control TabBody(Control head, Control window, Control knobs) => new DockPanel
@@ -338,8 +338,10 @@ internal sealed class VintageDeviceBody : IDeviceBody
                 K(Crackle, "CRACKLE", Pct, null, 40),
                 K(Wear, "WEAR", Pct, null, 40),
             },
-            () => NotaNum.F($"{CentsF(Sc(8) + Sc(9))} · wow {HzF(WowHz())} · flut {HzF(FlutHz())}"),
-            () => (Sc(S_BandHz) > 0 ? "band " + HzF(Sc(S_BandHz)) : "band open") + (Sc(S_HissDb) > -119 ? NotaNum.F($" · hiss {Sc(S_HissDb):0} dB") : " · no hiss"));
+            // The two rates are on their knobs; these lines carry what the knobs add up to.
+            () => NotaNum.F($"{CentsF(Sc(8) + Sc(9))} of pitch drift"),
+            () => (Sc(S_BandHz) > 0 ? "band " + (Sc(S_BandHz) >= 10000 ? NotaNum.F($"{Sc(S_BandHz) / 1000:0} kHz") : HzF(Sc(S_BandHz))) : "band open")
+                  + (Sc(S_HissDb) > -119 ? NotaNum.F($" · hiss {Sc(S_HissDb):0} dB") : " · no hiss"));
             return TabBody(head, wearView, knobs);
         }
         void SyncWearView()
@@ -475,16 +477,13 @@ internal sealed class VintageDeviceBody : IDeviceBody
             var box = new Border
             {
                 Background = NotaPalette.Groove, CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 4),
-                Child = new StackPanel { Spacing = 1, Children = {
-                    Caps("Output"),
-                    Line("in", () => DbF(Sc(S_InPk))),
-                    Line("out", () => DbF(Sc(S_OutPk))),
-                    Line("THD", () => ThdF(Sc(S_Thd)), TextPrimary) } },
+                // One line: the tab is named Output and THD is in the centre's head row.
+                Child = Line("in · out", () => DbF(Sc(S_InPk)).Replace("\u2009dB", "").Replace(" dB", "") + " · " + DbF(Sc(S_OutPk))),
             };
-            var sliders = new StackPanel { Spacing = 6, Children = {
-                SliderRow("MIX", Mix, Pct),
-                SliderRow("NOISE", Noise, Pct, modulation: true),
-                SliderRow("GAIN", Output, ShelfF, bipolar: true) } };
+            var sliders = new Grid { RowDefinitions = new RowDefinitions("20,20,20") };
+            sliders.Children.Add(SliderRow("MIX", Mix, Pct));
+            sliders.Children.Add(GRow(SliderRow("NOISE", Noise, Pct, modulation: true), 1));
+            sliders.Children.Add(GRow(SliderRow("GAIN", Output, ShelfF, bipolar: true), 2));
             // Output stage: Tube / Analog, a click on the lit one switches the stage off.
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 8 };
             btns.Children.Add(Latch(OutputStage, () => Sel(OutputStage, 3) == 1, () => SetP(OutputStage, Sel(OutputStage, 3) == 1 ? 0f : 0.5f), () => "Tube",
@@ -493,10 +492,10 @@ internal sealed class VintageDeviceBody : IDeviceBody
                 "Analog stage — a console-style soft clip after the saturation (click again for none)", fill: true), 1));
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
-                Docked(new Border { Margin = new Thickness(0, 6, 0, 0), Child = sliders }, Dock.Top),
-                Docked(new StackPanel { Spacing = 3, Children = { Toggle(AutoComp, "Auto-compensation"), Toggle(EvenOnly, "Even harmonics only") } }, Dock.Bottom),
-                Docked(new Border { Padding = new Thickness(0, 0, 0, 6), Child = btns }, Dock.Bottom) } };
-            return new Border { Padding = new Thickness(0, 6, 0, 0), Child = body };
+                Docked(new Border { Margin = new Thickness(0, 4, 0, 0), Child = sliders }, Dock.Top),
+                Docked(new StackPanel { Spacing = 0, Children = { Toggle(AutoComp, "Auto-compensation"), Toggle(EvenOnly, "Even harmonics only") } }, Dock.Bottom),
+                Docked(new Border { Padding = new Thickness(0, 0, 0, 4), Child = btns }, Dock.Bottom) } };
+            return new Border { Padding = new Thickness(0, 4, 0, 0), Child = body };   // 148 of 160
         }
 
         // ======================================================================

@@ -787,6 +787,14 @@ window (`Controls/NotaGraph.cs`):
   discrete.
 - Timeline: the playhead is a 1 px orange line with a 7 × 5 flag and no glow; the loop
   range is orange.
+- **Room for the words.** The plot starts under the title row (`NotaGraph.PlotTop`, 22) and
+  stops above the bottom corner labels (`NotaGraph.PlotFloor`, 18), so no curve, node or
+  peak runs through the title or a corner label. Edge labels go through
+  `NotaGraph.EdgeLabels`, which drops one that would sit on another label, the title row or
+  the bottom corners; a label that has to sit over a curve goes on a ground plate
+  (`NotaGraph.PlateText`).
+- A graph does not repeat a value its knobs already show; its title carries a name, not the
+  knob values. A short window keeps its two end labels and drops the middle ones.
 
 **Do:** use value bars for sliders inside a device · write a shell slider's value inside
 the bar · use the round wheel for pitch and mod on every instrument. **Don't:** use a thin
@@ -1113,12 +1121,19 @@ control, label and value stays.
 - Keep every control, in the same groups as 0.56.1.
 - Use pressed-in sections, value bars, capped knobs and orange values inside the card.
 - Put the on/off switch at the right of every header, instruments and racks included.
+- Fit every tab of a panel in the 160 px under its tab row: rows on a fixed grid, at least
+  3 px between a control and a rule, nothing clipped at the bottom or the right edge.
+- Say a reading once. A readout under the knobs carries what the knobs add up to (a
+  result, a derived time), not their own values again; an in · out readout is one line.
+- Give a control one home. When it shows on two tabs, keep the one where it does its
+  work; never drop it outright.
 
 **Don't**
 
 - Add a status line under the card; a control that lived there moves into the card.
 - Use thin sliders, monospace readouts or capital-letter labels.
 - Fade anything out; draw it in ink 4 with nothing picked.
+- Wrap a note onto a second line in a narrow column; it goes in the control's tooltip.
 
 ### The card shell
 

@@ -129,8 +129,8 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
 
         var stack = new AuroraStack { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
         var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
-        var env1 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
-        var env2 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
+        var env1 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50, ShowTitle = false };   // the panel head names it
+        var env2 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50, ShowTitle = false };   // the panel head names it
         var lfoStrip = new AuroraLfoStrip { VerticalAlignment = VerticalAlignment.Stretch };
 
         var hint = new TextBlock
@@ -618,7 +618,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var filtBody = new Border { Padding = new Thickness(0, 6, 0, 0), Child = filtGrid };
 
         // ---- Env tab --------------------------------------------------------------
-        Control EnvPanel(string title, Func<string> route, VoltEnv view, string[] ids, Func<string> summary)
+        Control EnvPanel(string title, Func<string> route, VoltEnv view, string[] ids)
         {
             view.Target(title, P(ids[0]), P(ids[1]), P(ids[2]), P(ids[3]));
             string[] stage = { "A", "D", "S", "R" };
@@ -636,27 +636,21 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 if (I(id) is var pi and >= 0) MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), title + " · " + stage[k]);
                 Grid.SetColumn(cell, k); cells.Children.Add(cell);
             }
-            var sum = Mono("", TextDisabled, NotaType.RowLabel);
-            sum.HorizontalAlignment = HorizontalAlignment.Right;
-            readouts.Add(() => sum.Text = summary());
             var dest = Mono("", TextTertiary, NotaType.RowLabel);
             readouts.Add(() => dest.Text = route());
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6, Height = 16 };
+            // The head names the envelope and where it goes; its four times are the cells under the graph.
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6, Height = 16 };
             head.Children.Add(Cap(title));
+            dest.TextTrimming = TextTrimming.CharacterEllipsis;
             Grid.SetColumn(dest, 1); head.Children.Add(dest);
-            Grid.SetColumn(sum, 2); head.Children.Add(sum);
             var g = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 4 };
             g.Children.Add(head);
             Grid.SetRow(view, 1); g.Children.Add(view);
             Grid.SetRow(cells, 2); g.Children.Add(cells);
             return g;
         }
-        string AdsrSum(string a, string d, string s, string r)
-            => $"{Secs(G(a), 0.001, 2.0)} · {Secs(G(d), 0.002, 3.0)} · {Pct(G(s))} · {Secs(G(r), 0.002, 4.0)}";
-        var envPanel1 = EnvPanel("Env 1", () => "→ Amp", env1, new[] { "attack", "decay", "sustain", "release" },
-            () => AdsrSum("attack", "decay", "sustain", "release"));
-        var envPanel2 = EnvPanel("Env 2", () => EnvDest(1), env2, new[] { "env2attack", "env2decay", "env2sustain", "env2release" },
-            () => AdsrSum("env2attack", "env2decay", "env2sustain", "env2release"));
+        var envPanel1 = EnvPanel("Env 1", () => "→ Amp", env1, new[] { "attack", "decay", "sustain", "release" });
+        var envPanel2 = EnvPanel("Env 2", () => EnvDest(1), env2, new[] { "env2attack", "env2decay", "env2sustain", "env2release" });
         var env2Host = new Border
         {
             BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1, 0, 0, 0),

@@ -200,7 +200,7 @@ internal sealed partial class RackCardView
 
         // Name pinned to the top, note to the bottom: a short pad lets the line boxes meet.
         top.VerticalAlignment = VerticalAlignment.Top;
-        nameTb.LineHeight = 14; noteTb.LineHeight = 12; chokeTb.LineHeight = 12;
+        nameTb.LineHeight = 13; noteTb.LineHeight = 12; chokeTb.LineHeight = 12;   // 25: the boxes meet without overlapping
         var cell = new Panel { Margin = new Thickness(8, 0, 8, 1), Children = { top, bottom } };
 
         // A loaded pad is raised (soft orange when selected); an empty one is pressed in.
@@ -331,7 +331,8 @@ internal sealed partial class RackCardView
         var pads = LoadedPads(a).Where(c => InBank(a.ChainTriggerNote(c))).ToList();
         const string Cols = "92,30,*,30,64";
 
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions(Cols), ColumnSpacing = 6, Height = MixRowH };
+        // Head and rows keep 8 px on the right for the scroll bar, so it never covers the ch column.
+        var head = new Grid { ColumnDefinitions = new ColumnDefinitions(Cols), ColumnSpacing = 6, Height = MixRowH, Margin = new Thickness(0, 0, 8, 0) };
         void H(string t, int col, bool right = false)
         {
             var x = DrumCap(t); if (right) x.HorizontalAlignment = HorizontalAlignment.Right;
@@ -340,7 +341,7 @@ internal sealed partial class RackCardView
         H("Pad", 0); H("Note", 1); H("Volume", 2); H("Pan", 3); H("M S ch", 4, right: true);
         var headBar = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(0, 0, 0, 2), Child = head };
 
-        var rows = new StackPanel { Spacing = 2, Margin = new Thickness(0, 4, 0, 0) };
+        var rows = new StackPanel { Spacing = 2, Margin = new Thickness(0, 4, 8, 0) };
         foreach (int c in pads) rows.Children.Add(DrumMixerRow(a, c, Cols));
         Control list;
         if (pads.Count == 0)

@@ -130,8 +130,8 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         int tab = 0, railTab = 0, fsel = 0;   // Osc · Global · Filter 1
 
         var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
-        var ampEnv = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
-        var filtEnv = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
+        var ampEnv = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50, ShowTitle = false };   // the panel head names it
+        var filtEnv = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50, ShowTitle = false };   // the panel head names it
         var hint = new TextBlock
         {
             FontSize = NotaType.Eyebrow, Foreground = TextTertiary, FontFamily = NotaFonts.UiFamily,
@@ -404,7 +404,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             OscCell(mixCell, 3, 4, 5);
             OscCell(RouteCell("noiseroute"), 3, 11);
         }
-        var oscBody = new Border { Padding = new Thickness(0, 2, 0, 0), Child = oscGrid };
+        var oscBody = new Border { Padding = new Thickness(0, 6, 0, 0), Child = oscGrid };
 
         // ---- Filter tab -------------------------------------------------------
         // Both filters share one column of controls; picking 1 or 2 swaps which set of
@@ -578,52 +578,61 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             return best < 0 ? "unrouted" : "→ " + DestNames[best];
         }
 
+        // A table like the Osc tab: the column names once in a head row, the knobs under them
+        // with their values only, a rule between the rows.
         var lfoGrid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("52,Auto,*,*,*,*,Auto"), ColumnSpacing = 5,
-            RowDefinitions = new RowDefinitions("*,*,*"),
+            RowDefinitions = new RowDefinitions("Auto,*,*,*"),
         };
-        void LfoCell(Control c, int row, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); lfoGrid.Children.Add(c); }
+        void LfoCell(Control c, int row, int col, int span = 1)
+        { Grid.SetRow(c, row); Grid.SetColumn(c, col); if (span > 1) Grid.SetColumnSpan(c, span); lfoGrid.Children.Add(c); }
+        {
+            LfoCell(Head("Shape", HorizontalAlignment.Left), 0, 1);
+            string[] heads = { "Rate", "Depth", "Sync", "Fade" };
+            for (int k = 0; k < heads.Length; k++) LfoCell(Head(heads[k]), 0, 2 + k);
+            LfoCell(Head("Goes to", HorizontalAlignment.Right), 0, 6);
+        }
+        void LfoRule(int row)
+        {
+            var rule = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0) };
+            Grid.SetRow(rule, row); Grid.SetColumnSpan(rule, 7); lfoGrid.Children.Add(rule);
+        }
         for (int l = 0; l < 2; l++)
         {
             string pre = l == 0 ? "lfo1" : "lfo2";
             string nm = l == 0 ? "LFO 1" : "LFO 2";   // MIDI-learn names stay as they were
-            int src = l + 2;
-            if (l > 0)
-            {
-                var rule = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0) };
-                Grid.SetRow(rule, l); Grid.SetColumnSpan(rule, 7); lfoGrid.Children.Add(rule);
-            }
-            LfoCell(Section(nm), l, 0);
-            LfoCell(Chips(pre + "shape", ShapeNames), l, 1);
+            int src = l + 2, r = l + 1;
+            if (l > 0) LfoRule(r);
+            LfoCell(Section(nm), r, 0);
+            LfoCell(Chips(pre + "shape", ShapeNames), r, 1);
             string rateId = pre + "rate", syncId = pre + "sync";
-            LfoCell(PKnob(rateId, "Rate", nm + " Rate", v => SyncDiv(G(syncId)) > 0 ? SyncText(G(syncId)) : SlowHz(ExpMap(v, 0.05, 20)), 46), l, 2);
-            LfoCell(PKnob(pre + "depth", "Depth", nm + " Depth", Pct, 46), l, 3);
-            LfoCell(PKnob(syncId, "Sync", nm + " Sync", SyncText, 46), l, 4);
-            LfoCell(PKnob(pre + "fade", "Fade", nm + " Fade", FadeT, 46), l, 5);
+            LfoCell(PKnob(rateId, "", nm + " Rate", v => SyncDiv(G(syncId)) > 0 ? SyncText(G(syncId)) : SlowHz(ExpMap(v, 0.05, 20)), 46), r, 2);
+            LfoCell(PKnob(pre + "depth", "", nm + " Depth", Pct, 46), r, 3);
+            LfoCell(PKnob(syncId, "", nm + " Sync", SyncText, 46), r, 4);
+            LfoCell(PKnob(pre + "fade", "", nm + " Fade", FadeT, 46), r, 5);
             var dest = Mono("", TextSecondary, NotaType.KnobLabel);
             dest.HorizontalAlignment = HorizontalAlignment.Right; dest.Width = 62; dest.TextAlignment = TextAlignment.Right;
             readouts.Add(() => dest.Text = LfoDest(src));
-            LfoCell(dest, l, 6);
+            LfoCell(dest, r, 6);
         }
         {
-            var rule = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0) };
-            Grid.SetRow(rule, 2); Grid.SetColumnSpan(rule, 7); lfoGrid.Children.Add(rule);
-            LfoCell(Section("Vibrato"), 2, 0);
-            LfoCell(Toggle("By wheel", "vibwheel"), 2, 1);
-            LfoCell(PKnob("vibrate", "Rate", "Vibrato Rate", v => SlowHz(ExpMap(v, 0.1, 12)), 46), 2, 2);
-            LfoCell(PKnob("vibamt", "Depth", "Vibrato Depth", VibDepth, 46), 2, 3);
+            LfoRule(3);
+            LfoCell(Section("Vibrato"), 3, 0);
+            LfoCell(Toggle("By wheel", "vibwheel"), 3, 1);
+            LfoCell(PKnob("vibrate", "", "Vibrato Rate", v => SlowHz(ExpMap(v, 0.1, 12)), 46), 3, 2);
+            LfoCell(PKnob("vibamt", "", "Vibrato Depth", VibDepth, 46), 3, 3);
             var note = new TextBlock
             {
                 Text = "vibrato always rides the pitch", FontSize = NotaType.KnobLabel, Foreground = TextTertiary,
                 VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap,
             };
-            Grid.SetRow(note, 2); Grid.SetColumn(note, 4); Grid.SetColumnSpan(note, 2); lfoGrid.Children.Add(note);
+            LfoCell(note, 3, 4, 2);
             var dest = Mono("→ Pitch", TextSecondary, NotaType.KnobLabel);
             dest.HorizontalAlignment = HorizontalAlignment.Right; dest.Width = 62; dest.TextAlignment = TextAlignment.Right;
-            LfoCell(dest, 2, 6);
+            LfoCell(dest, 3, 6);
         }
-        var lfoBody = new Border { Padding = new Thickness(0, 2, 0, 0), Child = lfoGrid };
+        var lfoBody = new Border { Padding = new Thickness(0, 6, 0, 0), Child = lfoGrid };
 
         // ---- Mod tab ----------------------------------------------------------
         var mtxIdx = new int[7, 6];

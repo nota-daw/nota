@@ -88,16 +88,19 @@ internal static class FxParts
             texts[i] = tb; lines[i] = line;
             bar.Children.Add(cell);
         }
-        var row = new DockPanel { Height = TabRowH, LastChildFill = false };
+        // The tabs are laid out first, so a long readout on the right never squeezes them; the
+        // readout takes what's left and is right-aligned in it.
+        var row = new DockPanel { Height = TabRowH, LastChildFill = true };
+        DockPanel.SetDock(bar, Dock.Left);
+        row.Children.Add(bar);
         if (extras is not null)
         {
             extras.VerticalAlignment = VerticalAlignment.Center;
+            extras.HorizontalAlignment = HorizontalAlignment.Right;
             extras.Margin = new Thickness(8, 0, 0, 2);
-            DockPanel.SetDock(extras, Dock.Right);
+            if (extras is TextBlock xt) xt.TextTrimming = TextTrimming.CharacterEllipsis;
             row.Children.Add(extras);
         }
-        DockPanel.SetDock(bar, Dock.Left);
-        row.Children.Add(bar);
         var rule = new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Bottom };
         var head = new Panel { Children = { rule, row } };
         DockPanel.SetDock(head, Dock.Top);

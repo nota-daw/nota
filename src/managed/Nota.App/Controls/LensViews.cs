@@ -199,7 +199,7 @@ internal sealed class LensSpectrumView : Control
             double y = Y(db);
             if (y < 2 || y > plotH - 2) continue;
             ctx.DrawLine(LensInk.GridFaint, new Point(0, y), new Point(w, y));
-            LensInk.Text(ctx, NotaNum.F($"{db:0}"), 4, y - 8, LensInk.Axis);
+            if (y - 8 >= 16) LensInk.Text(ctx, NotaNum.F($"{db:0}"), 4, y - 8, LensInk.Axis);   // clear of the title
         }
         // Frequency grid.
         foreach (double hz in GridHz)
@@ -413,7 +413,7 @@ internal sealed class LensScopeView : Control
             LensInk.Text(ctx, s, w - LensInk.TextW(s, 8) - 4, h - 11, LensInk.TraceLit, 8);
         }
 
-        LensInk.Title(ctx, "SCOPE", NotaNum.F($"{Ms(_d.TimeDivSec)}/div · {_d.VoltDiv:0.00}/div"));
+        LensInk.Title(ctx, "SCOPE", "");   // the divisions are on the Time/div and Volt/div knobs
         string trig = _d.Held ? "held" : NotaNum.F($"trig {(_d.TrigRising ? "↑" : "↓")} {_d.TrigLevel:0.00}{(_d.TrigOk ? "" : " ·free")}");
         LensInk.Text(ctx, trig, w - LensInk.TextW(trig) - 4, 3, _d.TrigOk || _d.Held ? LensInk.TraceLit : LensInk.Axis);
         LensInk.Text(ctx, "0", 4, h - 10, LensInk.Axis);
@@ -535,11 +535,15 @@ internal sealed class LensWaterfallView : Control
         double plotH = Math.Max(8, h - AxisH);
         ctx.DrawImage(_bmp, new Rect(0, 0, rows, bins), new Rect(1, 1, w - 2, plotH - 1));
 
+        // Labels skip the title row and any label they would sit on; the lines stay.
+        double lastLab = double.MaxValue;
         foreach (double hz in LabelHz)
         {
             if (hz >= _d.FreqHi) continue;
             double y = (1 - _d.FracOf(hz)) * plotH;
             ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.GridBeat, 0x88), 1), new Point(0, y), new Point(w, y));
+            if (y - 9 < 18 || y + 1 > lastLab) continue;
+            lastLab = y - 9;
             LensInk.Text(ctx, hz >= 1000 ? NotaNum.F($"{hz / 1000:0} kHz") : NotaNum.F($"{hz:0} Hz"), 4, y - 9, LensInk.Axis);
         }
         if (_d.NoteGrid)

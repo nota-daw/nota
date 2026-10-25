@@ -592,7 +592,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             patView.GestureEnd += () => { foreach (int k in touched) End(Step1 + k); touched.Clear(); };
             ToolTip.SetTip(patView, "The step pattern — each column is one step's level, the line is the gain it makes (smooth and swing bend it). Draw sets steps, Line draws a ramp, Erase clears, Flip toggles on / off.");
 
-            var tools = Segments(new[] { "Draw", "Line", "Erase", "Flip" }, () => patTool, i => { patTool = i; if (patView is not null) patView.Tool = i; }, out var toolSync, padX: 6);
+            var tools = Segments(new[] { "Draw", "Line", "Erase", "Flip" }, () => patTool, i => { patTool = i; if (patView is not null) patView.Tool = i; }, out var toolSync, padX: 4);
             readouts.Add(toolSync);
             ToolTip.SetTip(tools, "Mouse tool for the grid");
 
@@ -612,7 +612,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             ToolTip.SetTip(browser, "Pattern shapes — the arrows step through them (fitted to the grid)");
             var rnd = Button("Rnd", Randomize, "Roll a new pattern — Complexity sets how busy and how varied it is");
             var cx = FillBar(PatComplexity, () => "Complexity " + Pct(P(PatComplexity)), "Complexity — how busy and varied Rnd makes the pattern");
-            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,120"), ColumnSpacing = 6, Height = 22, Margin = new Thickness(0, 8, 0, 0) };
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,104"), ColumnSpacing = 6, Height = 22, Margin = new Thickness(0, 8, 0, 0) };   // room for a shape's name
             head.Children.Add(tools); head.Children.Add(Col(browser, 1)); head.Children.Add(Col(rnd, 2)); head.Children.Add(Col(cx, 3));
 
             var smooth = FillBar(PatSmooth, () => "Smooth " + Pct(P(PatSmooth)), "Smooth — ramps into each step instead of jumping (up to half a step)");
@@ -748,27 +748,25 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 g.Children.Add(Col(val, 1));
                 return g;
             }
+            // The tab is named Meters: no title; in and out share a line.
             var box = DeviceBodyKit.Well(new StackPanel { Spacing = 2, Children = {
-                    Caps("Measurements"),
-                    Line(() => Sc(S_ExtKey) > 0.5 ? "sc in" : "in", () => DbF(Sc(S_ExtKey) > 0.5 ? Sc(S_KeyDb) : Sc(S_InDb))),
-                    Line(() => "out", () => DbF(Sc(S_OutDb))),
+                    Line(() => Sc(S_ExtKey) > 0.5 ? "sc in · out" : "in · out",
+                        () => DbF(Sc(S_ExtKey) > 0.5 ? Sc(S_KeyDb) : Sc(S_InDb)).Replace("\u2009dB", "").Replace(" dB", "") + " · " + DbF(Sc(S_OutDb))),
                     Line(() => "GR · peak", () => NotaNum.F($"{(Sc(S_GrDb) < 0.05 ? "0.0" : Sc(S_GrDb) > 99 ? "−∞" : NotaNum.F($"−{Sc(S_GrDb):0.0}"))} · {(Sc(S_PeakGrDb) < 0.05 ? "0.0" : Sc(S_PeakGrDb) > 99 ? "−∞" : NotaNum.F($"−{Sc(S_PeakGrDb):0.0}"))}\u2009dB"), TextPrimary) } });
-            var sliders = new StackPanel { Spacing = 6, Children = {
-                SliderRow("SC HP", DetHP, HpF),
-                SliderRow("SC LP", DetLP, LpF),
-                SliderRow("Range", Floor, FloorShort) } };
+            var sliders = new Grid { RowDefinitions = new RowDefinitions("20,20,20") };
+            sliders.Children.Add(SliderRow("SC HP", DetHP, HpF));
+            sliders.Children.Add(GRow(SliderRow("SC LP", DetLP, LpF), 1));
+            sliders.Children.Add(GRow(SliderRow("Range", Floor, FloorShort), 2));
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 8 };
             btns.Children.Add(ListenLatch(fill: true));
             btns.Children.Add(Col(Latch(-1, () => false, () => engine.DeviceAction(track, di, A_ResetMeters, 0, 0), () => "Reset",
                 "Reset — clear the peak reduction, the opening count and the history", fill: true), 1));
+            // External sidechain and Detector filter live on the Detector tab beside this one.
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
                 Docked(new Border { Margin = new Thickness(0, 8, 0, 0), Child = sliders }, Dock.Top),
-                Docked(new StackPanel { Spacing = 6, Children = {
-                    ExtSwitch(),
-                    Toggle(DetFilter, "Detector filter", "Detector filter — the key goes through the band-pass before the detector") } }, Dock.Bottom),
-                Docked(new Border { Padding = new Thickness(0, 0, 0, 8), Child = btns }, Dock.Bottom) } };
-            return new Border { Padding = new Thickness(0, 8, 0, 0), Child = body };
+                Docked(btns, Dock.Bottom) } };
+            return new Border { Padding = new Thickness(0, 6, 0, 4), Child = body };
         }
 
         // ======================================================================

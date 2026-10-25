@@ -39,7 +39,6 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
     private const int kCellAt = kTele, kWaveAt = kTele + 3 * kCells, kScope = kWaveAt + kWave;
     private const int A_Reset = 0;
 
-    private static readonly string[] IntervalSeg = { "1/8", "1/4", "1/2", "1", "2", "4" };
     private static readonly string[] IntervalName = { "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars" };
     private static readonly string[] IntervalEvery = { "every 1/8", "every 1/4", "every 1/2", "every bar", "every 2 bars", "every 4 bars" };
     private static readonly string[] GridSeg = { "1/4", "1/8", "1/16", "1/32" };
@@ -161,8 +160,6 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         }
         Control ModeSeg() => Seg(ModeNames, () => Sel(Mode, 3), i => SetP(Mode, i / 2f), Mode,
             "Mode — Mix: the repeats play over the dry; Insert: they replace it while they play; Gate: only the burst sounds");
-        Control IntervalSegC() => Seg(IntervalSeg, () => Sel(Interval, 6), i => SetP(Interval, i / 5f), Interval,
-            "Interval — how often it rolls Chance: 1/8, 1/4, 1/2 note, or every 1, 2, 4 bars", 5);
         // Grid picks a straight value and keeps the triplet state (a legacy 1/8T / 1/16T turns into the Triplet switch).
         void PickGrid(int baseIdx, bool trip)
         {
@@ -364,13 +361,11 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         {
             timeline = new BrTimelineView();
             ToolTip.SetTip(timeline, "Two intervals on the grid: each step is the input's level — dim when dry, full where the slice is captured, dimmer with every repeat as it decays. Ticks at the top mark where the interval fires.");
-            var slice = FxParts.Info();
-            readouts.Add(() => slice.Text = "slice " + MsF(SliceMs(GridBeats())));
             var intervalLbl = Caps("Interval"); intervalLbl.Margin = new Thickness(4, 0, 0, 0);
             var head = HeadRow(Row(6, ModeSeg(), intervalLbl,
                 Drop(Interval, IntervalName, () => Sel(Interval, 6), i => SetP(Interval, i / 5f), "Interval — how often it rolls Chance"),
                 Caps("Grid"),
-                Drop(GridP, gridDropNames, GridDropIdx, i => PickGrid(i % 4, i >= 4), "Grid — the length of the slice that repeats")), slice);
+                Drop(GridP, gridDropNames, GridDropIdx, i => PickGrid(i % 4, i >= 4), "Grid — the length of the slice that repeats")), new Border());
             var knobs = KnobRow(new[]
             {
                 K(Chance, "Chance", ChanceF, tip: "Chance — how likely each interval fires a repeat"),
@@ -393,7 +388,10 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             WireDrag(slices, h => h == BrSlicesView.HGate ? Gate : Offset);
             ToolTip.SetTip(slices, "The last interval's sound (grey) on the grid: the gate from the offset is shaded and the captured slice is brass. Drag the offset line or the gate's end sideways; double-click resets.");
             Learn(slices, Offset);
-            var head = HeadRow(Row(8, Caps("Interval"), IntervalSegC(), Caps("Grid"), GridSegC(), TripletChip()), new Border());
+            // Interval as a drop-down (as on Timeline) so the grid, its triplet switch and both labels fit one row.
+            var head = HeadRow(Row(6, Caps("Interval"),
+                Drop(Interval, IntervalName, () => Sel(Interval, 6), i => SetP(Interval, i / 5f), "Interval — how often it rolls Chance"),
+                Caps("Grid"), GridSegC(), TripletChip()), new Border());
             var knobs = KnobRow(new[]
             {
                 K(Offset, "Offset", OffsetF, steps: 17, tip: "Offset — where in the interval it fires, in 16ths"),
@@ -523,18 +521,18 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             var box = new Border
             {
                 Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 4),
+                // Two lines, as on the other devices' Output tabs: in and out together, then the repeats.
                 Child = new StackPanel { Children = {
-                    new Border { Height = 16, Child = Caps("Measurements") },
-                    Line("in", () => DbF(Sc(S_InDb))),
-                    Line("repeat", () => DbF(Sc(S_RepDb))),
-                    Line("out", () => DbF(Sc(S_OutDb)), TextPrimary) } },
+                    Line("in · out", () => DbF(Sc(S_InDb)).Replace("\u2009dB", "").Replace(" dB", "") + " · " + DbF(Sc(S_OutDb)), TextPrimary),
+                    Line("repeat", () => DbF(Sc(S_RepDb))) } },
             };
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
             btns.Children.Add(RepeatButton(fill: true));
             btns.Children.Add(Col(Latch(-1, () => false, () => engine.DeviceAction(track, di, A_Reset, 0, 0), () => "Reset",
                 "Reset — stop the repeat and clear the timeline and the meters", fill: true), 1));
-            btns.Margin = new Thickness(0, 1, 0, 0);
-            return Stack("Auto,20,20,4,Auto,*", box,
+            btns.Margin = new Thickness(0, 2, 0, 0);
+            box.Margin = new Thickness(0, 0, 0, 4);
+            return Stack("Auto,20,20,6,Auto,*", box,
                 SliderRow("Volume", Volume, VolF, bipolar: true, modulation: true),
                 SliderRow("Mix", MixP, PctF),
                 null, btns, Toggles());
@@ -555,7 +553,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             {
                 1 => NotaNum.F($"{IntervalText()} · slice {MsF(SliceMs(GridBeats()))}"),
                 2 => "repeats only",
-                _ => NotaNum.F($"{WindowText()} · {Bpm():0.##} BPM"),
+                _ => NotaNum.F($"{WindowText()} · slice {MsF(SliceMs(GridBeats()))} · {Bpm():0.##} BPM"),   // the slice here: the head row is full
             };
         });
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => SlicesTab(), 2 => FilterTab(), _ => TimelineTab() };

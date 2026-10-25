@@ -91,7 +91,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         static string Inv(FormattableString f) => NotaNum.F(f);
         static string DbF(double db) => Math.Abs(db) < 0.05 ? "0.0\u2009dB" : Inv($"{db:+0.0;−0.0}\u2009dB");
         static string DbShort(double db) => Math.Abs(db) < 0.05 ? "0.0" : Inv($"{db:+0.0;−0.0}");
-        static string ThrF(double db) => Inv($"{db:0.0}\u2009dB");
+        static string ThrF(double db) => Inv($"{db:0.#}\u2009dB");   // "−18 dB": five knobs share 215 px
         static string RatioAF(double v) { if (v >= 0.999) return "∞ : 1"; double r = 1 / (1 - v); return r < 10 ? Inv($"{r:0.0#} : 1") : Inv($"{r:0} : 1"); }
         static string RatioAShort(double v) { if (v >= 0.999) return "∞:1"; double r = 1 / (1 - v); return r < 10 ? Inv($"{r:0.#}:1") : Inv($"{r:0}:1"); }
         static string RatioBF(double v) { double r = RatioB(v); return Math.Abs(r - 1) < 0.01 ? "1 : 1" : r > 1 ? Inv($"{r:0.0#} : 1") : Inv($"↑ {1 / r:0.0#} : 1"); }
@@ -102,7 +102,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         static string GainF(double v) => DbF((v - 0.5) * 48);
         static string HzF(double hz) => hz >= 1000 ? Inv($"{hz / 1000:0.0}\u2009k") : Inv($"{hz:0}\u2009Hz");
         static string Pct(double v) => Inv($"{v * 100:0}\u2009%");
-        string FloorF(int b) => RatioB(P(BP(b, BelowRatio))) < 1 ? Inv($"+{P(BP(b, Floor)) * 48:0.0}\u2009dB") : Inv($"−{P(BP(b, Floor)) * 48:0.0}\u2009dB");
+        string FloorF(int b) => RatioB(P(BP(b, BelowRatio))) < 1 ? Inv($"+{P(BP(b, Floor)) * 48:0.#}\u2009dB") : Inv($"−{P(BP(b, Floor)) * 48:0.#}\u2009dB");
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null) => DeviceBodyKit.Label(t, c ?? MutedC);
@@ -116,10 +116,10 @@ internal sealed class PrismDeviceBody : IDeviceBody
         Control Learn(Control c, int p) { MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p)); return c; }
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        Control K(int p, string name, Func<double, string> fmt, double cellW = 56)
+        Control K(int p, string name, Func<double, string> fmt, double cellW = 56, bool inline = false)
         {
             var val = Mono(fmt(P(p)), TxtC);
-            var knob = new Knob(P(p), 1.0) { Accent = true, Default = Def(p) };
+            var knob = new Knob(P(p), 1.0) { Accent = true, Inline = inline, Default = Def(p) };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); };
             knob.GestureBegin += () => Begin(p);
@@ -226,7 +226,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         var globCol = DeviceBodyKit.Sec(DeviceBodyKit.FaderRail("Global", true,
             Fader(Amount, "Amount", () => Pct(P(Amount)), "Amount — scales every band's compression and expansion (0\u2009% = none). Double-click: 100\u2009%"),
             Fader(Output, "Out", () => DbShort((P(Output) - 0.5) * 48), "Output gain ±24\u2009dB — double-click: 0\u2009dB")),
-            new Thickness(8, 8, 8, 6), 75);
+            new Thickness(8, 8, 8, 6), 84);   // wide enough that "Amount" and "Out" do not touch
         DockPanel.SetDock(globCol, Dock.Left);
 
         // ======================================================================
@@ -488,15 +488,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
         }
         Control OutputTab()
         {
-            var meterL = new PentadLevelBar { Vertical = true, Width = 8, Height = 50 };
-            var meterR = new PentadLevelBar { Vertical = true, Width = 8, Height = 50 };
-            readouts.Add(() => { meterL.SetLinear(Sc(S_OutL)); meterR.SetLinear(Sc(S_OutR)); });
-            static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 50, Children = { Caps("0"), GRow(Caps("−12"), 1), GRow(Caps("−48"), 2) } };
-            var meters = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Top, Children = {
-                new StackPanel { Spacing = 2, Children = { meterL, Center(Caps("L")) } },
-                new StackPanel { Spacing = 2, Children = { meterR, Center(Caps("R")) } }, scale } };
-            var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Margin = new Thickness(0, 6, 0, 0), Children = { K(Output, "Output", v => DbF((v - 0.5) * 48), 60), meters } };
+            // 160 high: the knob and meter in one 36 row, the bars, sidechain and switches, soft clip.
+            var top = DeviceBodyKit.OutputHead(K(Output, "Output", v => DbF((v - 0.5) * 48), 96, inline: true), () => Sc(S_OutL), () => Sc(S_OutR), readouts.Add);
+            top.Margin = new Thickness(0, 4, 0, 0);
 
             // Sidechain source (None + every other track).
             var scName = new TextBlock { FontSize = NotaType.KnobValue, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -505,7 +499,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             readouts.Add(() =>
             {
                 int src = scOk ? engine.DeviceSidechainSource(track, di) : -1;
-                scName.Text = !scOk ? "n/a in a rack" : src < 0 ? "None — own input" : SrcName(src);
+                scName.Text = !scOk ? "n/a in a rack" : src < 0 ? "Own input" : SrcName(src);
                 scName.Foreground = src >= 0 ? TxtC : Txt2;
             });
             var scBox = new Border { Height = 20, Background = NotaPalette.Groove, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 0),
@@ -540,9 +534,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
             ToolTip.SetTip(mk, "Auto makeup — each band gets back about half of its compression at 0\u2009dBFS");
             var toggles = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
             toggles.Children.Add(listen); toggles.Children.Add(Col(mk, 1));
-            var mid = new StackPanel { Spacing = 5, Children = {
+            var mid = new Grid { RowDefinitions = new RowDefinitions("20,20,24,18"), Children = {
                 SliderRow("Lookahead", Lookahead, v => Inv($"{v * 10:0.0}\u2009ms")),
-                SliderRow("Mix", Mix, Pct), scRow, toggles } };
+                GRow(SliderRow("Mix", Mix, Pct), 1), GRow(scRow, 2), GRow(toggles, 3) } };
 
             var clipTxt = Mono("", TxtC); clipTxt.HorizontalAlignment = HorizontalAlignment.Right; clipTxt.FontSize = NotaType.RowLabel;
             readouts.Add(() =>
@@ -555,7 +549,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var clipSeg = Seg(SoftClip, new[] { "Off", "On" });
             ToolTip.SetTip(clipSeg, "Soft clip — a smooth ceiling at −0.3\u2009dBFS after the output gain");
             clipRow.Children.Add(Caps("Soft clip")); clipRow.Children.Add(Col(clipSeg, 1)); clipRow.Children.Add(Col(clipTxt, 2));
-            var midB = Divider(mid, 6); midB.Margin = new Thickness(0, 6, 0, 0);
+            var midB = Divider(mid, 4); midB.Margin = new Thickness(0, 4, 0, 0);
             return new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Dock.Top), Docked(midB, Dock.Top), Docked(Divider(clipRow, 6), Dock.Bottom) } };
         }

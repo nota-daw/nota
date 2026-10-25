@@ -195,7 +195,7 @@ internal sealed class DelayFilterCurve : Control
         var rect = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, rect);
 
-        double top = 12, bottom = h - 5, span = bottom - top;
+        double top = 24, bottom = h - 5, span = bottom - top;   // under the title
         if (span < 4) return;
 
         // One-pole high-pass × one-pole low-pass magnitude, −24 dB floor.
@@ -224,7 +224,7 @@ internal sealed class DelayFilterCurve : Control
             bool hot = _drag == idx || (_drag == 0 && _hover == idx);
             // Stop the stem above the corner readout so the two never cross.
             ctx.DrawLine(new Pen(hot ? NotaPalette.AccentBright : NotaPalette.BorderStrong, 1),
-                new Point(x, top - 4), new Point(x, bottom - 9));
+                new Point(x, top - 2), new Point(x, bottom - 9));
             ctx.DrawEllipse(hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary, null, new Point(x, top + span * 0.5), 2.8, 2.8);
         }
 

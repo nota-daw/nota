@@ -81,6 +81,31 @@ internal static class DeviceBodyKit
         HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
     };
 
+    /// <summary>The head row of a right-panel Output tab, 36 high: the output knob (an inline knob cell) on
+    /// the left, the L / R output meter on the right with its 0 and −48 dB marks. <paramref name="add"/>
+    /// registers the meter's repaint with the card's readouts.</summary>
+    internal static Control OutputHead(Control knob, Func<double> left, Func<double> right, Action<Action> add)
+    {
+        var l = new PentadLevelBar { Vertical = true, Width = 8, Height = 32 };
+        var r = new PentadLevelBar { Vertical = true, Width = 8, Height = 32 };
+        add(() => { l.SetLinear(left()); r.SetLinear(right()); });
+        TextBlock Mark(string t, VerticalAlignment v) => new()
+        {
+            Text = t, FontSize = NotaType.Axis, Foreground = TextDisabled, VerticalAlignment = v, LineHeight = 11,
+        };
+        var marks = new Grid { Height = 32, Margin = new Thickness(2, 0, 0, 0), Children = { Mark("0", VerticalAlignment.Top), Mark("−48", VerticalAlignment.Bottom) } };
+        var meter = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 3, HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent, Children = { l, r, marks },
+        };
+        ToolTip.SetTip(meter, "The output level, left and right");
+        knob.VerticalAlignment = VerticalAlignment.Center; knob.HorizontalAlignment = HorizontalAlignment.Left;
+        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 36, Children = { knob } };
+        Grid.SetColumn(meter, 1); g.Children.Add(meter);
+        return g;
+    }
+
     /// <summary>A readout well: the groove grey, corner 6, no border (a cursor readout, a hint box).</summary>
     internal static Border Well(Control child, Thickness? pad = null) => new()
     {

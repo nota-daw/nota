@@ -15,6 +15,7 @@
 // UtCorrBar is the −1 … +1 correlation bar of the Routing panel.
 
 using System;
+using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -48,7 +49,7 @@ internal sealed class UtFieldView : VtWindowBase
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double top = 16, bot = h - 13, cx = w / 2, half = w / 2 - 10;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, cx = w / 2, half = w / 2 - 10;
         for (int i = 1; i < 4; i++) ctx.DrawLine(NotaGraph.GridPen, new Point(0, h * i / 4), new Point(w, h * i / 4));
         ctx.DrawLine(NotaGraph.GridPen, new Point(cx - half / 2, 0), new Point(cx - half / 2, h));
         ctx.DrawLine(NotaGraph.GridPen, new Point(cx + half / 2, 0), new Point(cx + half / 2, h));
@@ -121,14 +122,14 @@ internal sealed class UtFieldView : VtWindowBase
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "R");
         var c0 = NotaGraph.AxisText("C");
         ctx.DrawText(c0, new Point(cx - c0.Width / 2, h - c0.Height - 3));
-        // Frequency marks up the left edge.
-        foreach (double hz in new double[] { 100, 1000, 10000 })
+        // Frequency marks up the left edge (as many as the height leaves room for).
+        if (_n >= 2)
         {
-            if (hz < _lo || hz > _hi || _n < 2) continue;
-            double t = Math.Log(hz / _lo) / Math.Log(_hi / _lo);
-            double y = bot - t * (bot - top);
-            var ft = NotaGraph.AxisText(hz >= 1000 ? NotaNum.F($"{hz / 1000:0} k") : NotaNum.F($"{hz:0}"));
-            ctx.DrawText(ft, new Point(4, y - ft.Height / 2));
+            double YHz(double hz) => bot - Math.Log(hz / _lo) / Math.Log(_hi / _lo) * (bot - top);
+            var marks = new List<(double, string)>();
+            foreach (double hz in new double[] { 1000, 100, 10000 })
+                if (hz >= _lo && hz <= _hi) marks.Add((YHz(hz), hz >= 1000 ? NotaNum.F($"{hz / 1000:0}\u2009k") : NotaNum.F($"{hz:0}")));
+            NotaGraph.EdgeLabels(ctx, frame, false, marks.ToArray());
         }
         if (!_valid)
         {
@@ -183,7 +184,7 @@ internal sealed class UtWidthView : VtWindowBase
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double top = 14, bot = h - 12;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         double X(double hz) => Math.Log(hz / LoHz) / Math.Log(HiHz / LoHz) * w;
         double Y(double pct) => bot - Norm(pct) * (bot - top);
         foreach (double t in new double[] { 100, 1000, 10000 }) ctx.DrawLine(NotaGraph.GridPen, new Point(X(t), 0), new Point(X(t), h));
@@ -254,7 +255,8 @@ internal sealed class UtWidthView : VtWindowBase
             ctx.DrawText(ft, new Point(Math.Clamp(X(_monoHz) - ft.Width / 2, 22, Math.Max(22, w - ft.Width - 30)), h - ft.Height - 2));
         }
         var scale = NotaGraph.AxisText("100 %");
-        ctx.DrawText(scale, new Point(w - scale.Width - 5, Y(100) - scale.Height - 1));
+        if (Y(100) - scale.Height - 1 >= 18)   // else the legend's own width sits right above it
+            ctx.DrawText(scale, new Point(w - scale.Width - 5, Y(100) - scale.Height - 1));
     }
 }
 
@@ -284,7 +286,7 @@ internal sealed class UtLevelView : VtWindowBase
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
         Grid(ctx, w, h, 4);
-        double top = 14, bot = h - 12;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         double Y(double db) => top + Math.Clamp(-db / RangeDb, 0, 1) * (bot - top);
         if (!double.IsNaN(_target))
             ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 2, 4 }, 0)), new Point(0, Y(_target)), new Point(w, Y(_target)));
@@ -320,11 +322,7 @@ internal sealed class UtLevelView : VtWindowBase
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "now");
         var tt = NotaGraph.AxisText(_targetText);
         ctx.DrawText(tt, new Point((w - tt.Width) / 2, h - tt.Height - 3));
-        foreach (double db in new double[] { -12, -24, -36 })
-        {
-            var ft = NotaGraph.AxisText(NotaNum.F($"{db:0}"));
-            ctx.DrawText(ft, new Point(4, Y(db) - ft.Height / 2));
-        }
+        NotaGraph.EdgeLabels(ctx, frame, false, (Y(-24), "−24"), (Y(-12), "−12"), (Y(-36), "−36"));
     }
 }
 

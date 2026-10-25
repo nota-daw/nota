@@ -136,10 +136,10 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         static Border InsetBox(Control child) => new() { Background = Inset, CornerRadius = NotaRadius.Field, ClipToBounds = true, Child = child };
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 48, IBrush? arc = null, Action? onChange = null)
+        Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 48, IBrush? arc = null, Action? onChange = null, bool inline = false)
         {
             var val = Mono(fmt(P(p)), 7, TxtC);
-            var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
+            var knob = new Knob(P(p), 1.0) { Accent = true, Inline = inline, ArcColor = arc, Default = engine.DeviceParamDefault(track, di, p), Width = size, Height = size };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
             knob.ValueChanged += v => { Raw(p, (float)v); val.Text = fmt(v); onChange?.Invoke(); };
             knob.GestureBegin += () => Begin(p);
@@ -383,7 +383,8 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             knobs.Children.Add(Col(K(IrSize, "Size", v => NotaNum.F($"{Exp(v, 0.5, 2) * 100:0}\u2009%"), cellW: 58), 1));
             knobs.Children.Add(Col(K(IrAttack, "Attack", v => Ms(500 * v * v), cellW: 58), 2));
             knobs.Children.Add(Col(K(IrDecay, "Decay", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v), cellW: 58), 3));
-            var toggles = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(6, 0, 0, 0), Children = {
+            // Three switches in the 54 knob row: no gap between them (each is 18 high).
+            var toggles = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(6, 0, 0, 0), Children = {
                 Toggle(IrTrueStereo, "True stereo"), Toggle(IrReverse, "Reverse IR"), Toggle(ConvSync, "Sync predelay") } };
             knobs.Children.Add(Col(toggles, 4));
 
@@ -546,7 +547,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             var duckGr = Mono("", 7, MutedC);
             readouts.Add(() => { double gr = Sc(S_DuckDb); duckGr.Text = gr > 0.05 ? NotaNum.F($"−{gr:0.0}") : ""; });
 
-            var g = new Grid { RowDefinitions = new RowDefinitions("17,17,22,19,2,19,17,24,*"), Margin = new Thickness(0, 4, 0, 0) };
+            var g = new Grid { RowDefinitions = new RowDefinitions("17,17,22,19,6,19,18,26,*"), Margin = new Thickness(0, 4, 0, 0) };
             Control[] rows = { EngineRow(ConvOn, "Conv", true), EngineRow(AlgoOn, "Algo", false), route, dry,
                 new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Center }, duck, rel, btns, wet };
             for (int r = 0; r < rows.Length; r++) g.Children.Add(GRow(rows[r], r));
@@ -554,36 +555,28 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         }
         Control OutputTab()
         {
-            var meterL = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            var meterR = new PentadLevelBar { Vertical = true, Width = 11, Height = 56 };
-            readouts.Add(() => { meterL.SetLinear(Sc(S_OutL)); meterR.SetLinear(Sc(S_OutR)); });
-            static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
-            static TextBlock Axis(string t) { var a = FxParts.Info(t, DimC); a.FontSize = NotaType.Axis; return a; }
-            var scale = new Grid { RowDefinitions = new RowDefinitions("*,*,*"), Height = 56, Children = { Axis("0"), GRow(Axis("−12"), 1), GRow(Axis("−48"), 2) } };
-            var meters = Row(4, new StackPanel { Spacing = 2, Children = { meterL, Center(Caps("L", MutedC)) } },
-                                new StackPanel { Spacing = 2, Children = { meterR, Center(Caps("R", MutedC)) } }, scale);
-            meters.VerticalAlignment = VerticalAlignment.Top;
-            var top = Row(8, K(Output, "OUTPUT", v => Db(-24 + 36 * v), 40, 54), meters);
+            // 160 high: the knob and meter in one 36 row, two bars and Quality, two switches.
+            var top = DeviceBodyKit.OutputHead(K(Output, "OUTPUT", v => Db(-24 + 36 * v), cellW: 96, inline: true), () => Sc(S_OutL), () => Sc(S_OutR), readouts.Add);
             var qual = new Grid { ColumnDefinitions = new ColumnDefinitions("62,*"), VerticalAlignment = VerticalAlignment.Center };
             qual.Children.Add(Caps("Quality"));
             var qseg = Seg(Quality, new[] { "Eco", "Mid", "High" });
             ToolTip.SetTip(qseg, "Eco: IR up to 3 s · Mid: 6 s · High: 10 s + cubic-interpolated algorithm modulation");
             qual.Children.Add(Col(qseg, 1));
-            var mid = new StackPanel { Spacing = 3, Children = {
+            var mid = new Grid { RowDefinitions = new RowDefinitions("20,20,24"), Children = {
                 SliderRow("Width", WidthP, v => NotaNum.F($"{v * 200:0}")),
-                SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")),
-                qual } };
+                GRow(SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")), 1),
+                GRow(qual, 2) } };
             var wetOnly = Toggle(WetOnly, "Wet only (send)");
             ToolTip.SetTip(wetOnly, "Wet only — 100\u2009% wet, no dry: for a return / send track");
             var zl = Toggle(ZeroLatency, "Zero latency");
             ToolTip.SetTip(zl, "On: exact convolution timing at 0\u2009ms predelay (FIR head, more CPU). Off: lighter — the first block arrives late and is absorbed into the predelay.");
-            var bottom = new StackPanel { Spacing = 3, Children = { wetOnly, zl } };
+            var bottom = new StackPanel { Spacing = 0, Children = { wetOnly, zl } };
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Dock.Top),
                 Docked(Divider(mid), Dock.Top),
                 Docked(Divider(bottom), Dock.Bottom) } };
-            ((Control)body.Children[1]).Margin = new Thickness(0, 5, 0, 0);
-            body.Margin = new Thickness(0, 6, 0, 0);
+            ((Control)body.Children[1]).Margin = new Thickness(0, 4, 0, 0);
+            body.Margin = new Thickness(0, 4, 0, 0);
             return body;
         }
 
@@ -601,7 +594,8 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                 case 0:
                     int ch = (int)Sc(S_IrChannels);
                     string ts = !On(IrTrueStereo) || ch <= 1 ? "stereo" : ch >= 4 ? "true stereo" : "mono-in stereo";
-                    extras.Text = Sc(S_KernelSeconds) > 0 ? NotaNum.F($"{ts} · {Sc(S_KernelSeconds):0.0}\u2009s IR") : ts;
+                    extras.Text = (Sc(S_KernelSeconds) > 0 ? NotaNum.F($"{ts} · {Sc(S_KernelSeconds):0.0}\u2009s IR") : ts)
+                        + (P(IrStart) > 0.001 && IrSecs() > 0 ? " · from " + Secs(P(IrStart) * IrSecs()) : "");
                     extras.Foreground = MutedC; break;
                 case 1:
                     extras.Text = On(Freeze) ? "Freeze active" : On(Routing) && On(ConvOn) ? "fed by convolution" : "";

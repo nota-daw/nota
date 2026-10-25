@@ -179,7 +179,8 @@ internal sealed class FgHarmonicsView : Control
         ctx.DrawText(lbl, new Point(w - 6 - lbl.Width, 3));
         if (!_valid) return;
 
-        double x0 = 8, x1 = w - 8, top = 15, bot = h - 10, gap = 6;
+        // Bars rise from just over the partial numbers to just under the title row.
+        double x0 = 8, x1 = w - 8, top = 19, bot = h - 15, gap = 6;
         int n = ForgeMath.kHarm;
         double bw = (x1 - x0 - gap * (n - 1)) / n;
         for (int i = 0; i < n; i++)
