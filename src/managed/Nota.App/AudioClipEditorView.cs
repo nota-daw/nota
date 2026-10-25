@@ -1634,8 +1634,19 @@ public sealed class AudioClipEditorView : UserControl
             return (f0 * TotalBeats, f1 * TotalBeats);
         }
         private double _monoCharW;
-        private double MonoCharW => _monoCharW > 0 ? _monoCharW
-            : _monoCharW = new NotaFormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, RulerBar).Width / 10;
+        private int _monoCharWStep;   // the Text size step _monoCharW was measured at
+        private double MonoCharW
+        {
+            get
+            {
+                if (_monoCharW <= 0 || _monoCharWStep != NotaTextSize.Step)   // re-measure when Text size changes
+                {
+                    _monoCharWStep = NotaTextSize.Step;
+                    _monoCharW = new NotaFormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, GridFace, 9, RulerBar).Width / 10;
+                }
+                return _monoCharW;
+            }
+        }
 
         // bar / bar.beat / bar.beat.16th[.sub] label for a beat (1-based), as fine as the step needs.
         private static string BeatLabel(double beat, double step)

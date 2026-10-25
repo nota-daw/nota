@@ -83,6 +83,7 @@ internal static class FxParts
             {
                 if (!e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
                 Pick(iv);
+                e.Handled = true;   // in the header, a tab click mustn't select, drag or fold the card
             };
             if (tip?.Invoke(i) is { } t) ToolTip.SetTip(cell, t);
             texts[i] = tb; lines[i] = line;

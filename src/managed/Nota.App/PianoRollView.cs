@@ -1511,8 +1511,12 @@ public sealed partial class PianoRollView : UserControl
         private void RenderTime(DrawingContext ctx, double h, double ppb, double viewEnd, double origin, double bpm)
         {
             double pxPerSec = ppb * bpm / 60.0;
-            double charW = _charW > 0 ? _charW
-                : _charW = new NotaFormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, LabelText).Width / 10;
+            if (_charW <= 0 || _charWStep != NotaTextSize.Step)   // re-measure when Text size changes
+            {
+                _charWStep = NotaTextSize.Step;
+                _charW = new NotaFormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, LabelText).Width / 10;
+            }
+            double charW = _charW;
             double stepS = RulerLabels.TimeSteps[^1];
             foreach (var st in RulerLabels.TimeSteps)
             {
@@ -1533,6 +1537,7 @@ public sealed partial class PianoRollView : UserControl
             }
         }
         private double _charW;
+        private int _charWStep;   // the Text size step _charW was measured at
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
