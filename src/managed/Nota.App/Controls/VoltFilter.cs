@@ -136,8 +136,12 @@ namespace Nota.App;
             }
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, line);
 
-            // The handle sits on the curve at the cutoff; a faint rule marks the cutoff while dragged.
-            double cx = x0 + cut * (x1 - x0), cy = Y(MagDb(fc, fc, res));
+            // The handle sits on the drawn curve at the cutoff (read off the line, so a notch's
+            // bottom, which only the exact cutoff reaches, doesn't pull it below the curve); a
+            // faint rule marks the cutoff while dragged.
+            double cx = x0 + cut * (x1 - x0), pos = cut * (n - 1);
+            int i0 = Math.Clamp((int)Math.Floor(pos), 0, n - 2);
+            double cy = pts[i0].Y + (pts[i0 + 1].Y - pts[i0].Y) * (pos - i0);
             if (_drag) ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x50), 1), new Point(cx, 0), new Point(cx, h));
             NotaGraph.Node(ctx, new Point(cx, cy), active: true);
 
