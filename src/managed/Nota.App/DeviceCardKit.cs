@@ -19,7 +19,10 @@ namespace Nota.App;
 
 internal static class DeviceCardKit
 {
+    // A card is one of three fixed sizes, all CardH high (style guide § Device cards): Small
+    // (a folded or mini card), Large, and Wide for the densest devices.
     internal const double CardH = 260;
+    internal const double CardS = 260, CardL = 700, CardWide = 1050;
     internal const double HeaderH = 24;   // device header: name · preset · type tag · power
     internal const double CardPad = 4;    // the body's distance from the card edge
     internal const double SectionGap = 6, SectionPad = 8;   // between pressed-in sections; inside one

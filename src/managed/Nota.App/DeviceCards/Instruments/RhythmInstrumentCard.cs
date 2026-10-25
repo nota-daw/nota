@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — the Nota Rhythm editor (instrument kind 12): an eight-voice drum
-// machine in a 776 × 260 card. Reading order, left to right:
+// machine in a 1050 × 260 card. Reading order, left to right:
 //
 //   Kit 132       the voices — a hue dot, the name (a kit voice takes its sample's name), an
 //                 "fx" mark when it has effects, syn / smp. Click selects and plays the voice;
@@ -50,7 +50,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "Drum machine";
-    public double CardWidth => 776;
+    public double CardWidth => DeviceCardKit.CardWide;
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active) => $"{Math.Max(0, active)}/{RM.Voices}";
 

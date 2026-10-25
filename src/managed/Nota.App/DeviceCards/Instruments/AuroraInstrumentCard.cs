@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Aurora editor (instrument kind 5): a wavetable synth in
-// a 776 × 260 card (style guide, spec 038), three pressed-in sections.
+// a 1050 × 260 card (style guide, spec 038), three pressed-in sections.
 //
 //   Wheels 76   pitch bend and mod wheel, on screen on every tab.
 //   Centre      six tabs:
@@ -47,7 +47,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "Wavetable";
-    public double CardWidth => 776;
+    public double CardWidth => DeviceCardKit.CardWide;
 
     private const double RailW = 194;
 
@@ -367,13 +367,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var bendVal = Value(); var modVal = Value();
         readouts.Add(() =>
         {
-            int range = BendRange(G("bendrange"));
-            double semis = (G("bend") - 0.5) * 2 * range;
-            bool centred = Math.Abs(semis) < 0.05;
-            bendVal.Text = centred ? $"±{NotaNum.Unit(range, "0", "st")}" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
-            bendVal.Foreground = centred ? TextSecondary : TextPrimary;
-            modVal.Text = NotaNum.Pct(G("modwheel"));
-            modVal.Foreground = G("modwheel") > 1e-3f ? TextPrimary : TextTertiary;
+            InstrumentCardKit.SetWheelValues(bendVal, modVal, BendRange(G("bendrange")), G("bend"), G("modwheel"));
         });
         var wheelsPanel = WheelsPanel(bendWheel, modWheel, bendVal, modVal);
 

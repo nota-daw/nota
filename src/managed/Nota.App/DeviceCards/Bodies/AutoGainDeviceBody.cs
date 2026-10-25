@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Level body (loudness leveler, device kind 18), a build of the
-// "Nota Level" picture of the style guide (760 × 260), three pressed-in sections. On the left the CORRECTION:
+// "Nota Level" picture of the style guide (700 × 260), three pressed-in sections. On the left the CORRECTION:
 // Manual / Auto, an upright value bar around 0 dB (Auto rides it; in Manual drag it), the gain applied
 // in large type with why it is held (max gain, true-peak), MATCH (Manual: set the gain to the
 // distance to the target) / RESET (Auto: restart the measurement from now), Target and Trim.
@@ -39,7 +39,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         ("−18\u2009LUFS · audiobook", -18), ("−23\u2009LUFS · EBU R128", -23), ("−24\u2009LUFS · ATSC A/85", -24), ("−27\u2009LUFS · cinema dialogue", -27),
     };
 
-    public double Width => 760;
+    public double Width => DeviceCardKit.CardL;
     public bool FullBleed => true;
     public string? Subtitle => "Leveler";
 
@@ -276,8 +276,10 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             "Scale — what the correction reads: Momentary (400 ms, fast and nervous), Short-term (3 s) or Integrated (12 s with BS.1770 gating, the steadiest)");
         scaleSeg.HorizontalAlignment = HorizontalAlignment.Left;
         var legend = new LvLegend { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
-        var centreHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 10 };
-        centreHead.Children.Add(DeviceBodyKit.Label("Scale")); centreHead.Children.Add(Col(scaleSeg, 1)); centreHead.Children.Add(Col(legend, 2));
+        // The scale segment needs no caption of its own (Mom · Short · Integ name it; the tooltip
+        // explains), so the legend keeps its room on the 700 card.
+        var centreHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
+        centreHead.Children.Add(scaleSeg); centreHead.Children.Add(Col(legend, 1));
 
         var hist = new LvHistoryView { Value = () => P(Target) };
         hist.GestureBegin += () => Begin(Target);

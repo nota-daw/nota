@@ -5,7 +5,7 @@
 // "Nota Keys" mockup. Two sizes of one device; the S / L toggle in the shell header flips
 // them (the instrument's "view" param — see InstrumentView — a new Keys opens as L):
 //
-//   • L 774 × 260 in two pressed-in sections (style guide, spec 038), two tabs:
+//   • L 1050 × 260 in two pressed-in sections (style guide, spec 038), two tabs:
 //       Sound  Hammer ▸ Resonator ▸ Pickup (the curve — drag X = symmetry, Y = distance,
 //              H1–H8 of what it does to a sine; Clav shows its string and two pickups) ▸
 //              Damper (+ the pedal, lit by the Pedal param or a keyboard's CC64), with the
@@ -37,7 +37,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
     public bool BodyOnly => true;
     public string Subtitle => "Electric piano";
 
-    public double WidthFor(IAudioEngine engine, int trackId) => InstrumentView.IsMini(engine, trackId) ? 260 : 774;
+    public double WidthFor(IAudioEngine engine, int trackId) => InstrumentView.IsMini(engine, trackId) ? DeviceCardKit.CardS : DeviceCardKit.CardWide;
 
     public Control? HeaderAccessory(DeviceCardContext ctx)
     {

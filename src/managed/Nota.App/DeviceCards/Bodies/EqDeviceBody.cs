@@ -33,7 +33,7 @@ internal sealed class EqDeviceBody : IDeviceBody
     // just wide enough for the picked band's Freq, Gain and Q knobs stacked under the arrow.
     internal const double ColumnW = 176, StripW = 60;
     internal const double PanelW = ColumnW + 2 * SectionPad;
-    public const double OpenW = 720, FoldedW = OpenW - PanelW + StripW;   // 580 folded
+    public const double OpenW = DeviceCardKit.CardL, FoldedW = OpenW - PanelW + StripW;   // 580 folded
 
     public double Width => OpenW;
     public bool AutoWidth => true;   // the card follows the fold

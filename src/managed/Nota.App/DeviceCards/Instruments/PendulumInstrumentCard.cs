@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — the Nota Pendulum editor (instrument kind 8): arpeggios out of
-// bounces, in an 806 × 260 card. Held notes form a chord; balls swing across it and every
+// bounces, in an 1050 × 260 card. Held notes form a chord; balls swing across it and every
 // degree a ball crosses plays that note.
 //
 //   Centre      two tabs:
@@ -42,7 +42,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "Gen keys";
-    public double CardWidth => 806;
+    public double CardWidth => DeviceCardKit.CardWide;
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active)
     {

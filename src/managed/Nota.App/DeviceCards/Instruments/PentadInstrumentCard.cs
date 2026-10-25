@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Devices — built-in Nota Pentad editor (instrument kind 14), 748 × 260 in the
+// Detail · Devices — built-in Nota Pentad editor (instrument kind 14), 700 × 260 in the
 // style guide's frame: an always-visible Wheels section (the round pitch / mod wheels), a
 // centre tabbed section (Oscillators / Filter · Amp / Poly Mod) and a right tabbed section
 // (Mixer / Output) whose tab row carries the Voice setup menu (polyphony, allocation,
@@ -43,7 +43,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
 
     public bool BodyOnly => true;
     public string Subtitle => "Analog poly";
-    public double CardWidth => 748;
+    public double CardWidth => DeviceCardKit.CardL;
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active)
     {
@@ -237,7 +237,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         // ======================================================================
         var bendTxt = MonoText("", NotaType.KnobValue, TxtC); var modTxt = MonoText("", NotaType.KnobValue, MutedC);
         bendTxt.HorizontalAlignment = HorizontalAlignment.Center; modTxt.HorizontalAlignment = HorizontalAlignment.Center;
-        readouts.Add(() => { bendTxt.Text = $"±{BendSt()}\u2009st"; modTxt.Text = $"{G("modwheel") * 100:0}\u2009%"; modTxt.Foreground = G("modwheel") > 0.01f ? TxtC : MutedC; });
+        readouts.Add(() => InstrumentCardKit.SetWheelValues(bendTxt, modTxt, BendSt(), G("bend"), G("modwheel")));
         var wheels = InstrumentCardKit.WheelsPanel(VWheel("bend", "Pitch", spring: true), VWheel("modwheel", "Mod wheel", spring: false), bendTxt, modTxt);
 
         // ======================================================================
@@ -277,7 +277,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
                 hdr.Children.Add(Col(t, i));
             }
             // bottom row: glide · glide mode · voice mode · voices
-            var glide = K("glide", "Glide", v => Glide(v), false, Knob.SizeInline, 54, true);
+            var glide = K("glide", "Glide", v => Glide(v), false, Knob.SizeInline, 46, true);
             var mode = Row(6, Caps("Mode"), Chips("voicemode", new[] { "Poly", "Uni", "Mono" }));
             var strip = new VoiceKeys { Height = 16, MinWidth = 68, HorizontalAlignment = HorizontalAlignment.Right }; voiceStrips.Add(strip);
             var voices = Row(6, Caps("Voices"), strip);

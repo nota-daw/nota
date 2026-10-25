@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Operator editor (instrument kind 9): a 4-operator FM
-// synth in a 724 × 260 card, three pressed-in sections (style guide), no status line.
+// synth in a 700 × 260 card, three pressed-in sections (style guide), no status line.
 //
 //   Wheels 76   pitch bend and mod wheel, on screen on every tab — the two hand controls
 //               a player reaches for first.
@@ -36,7 +36,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "FM";
-    public double CardWidth => 724;
+    public double CardWidth => DeviceCardKit.CardL;
 
     private const double RailW = 196;
     // The gap under a tab strip's line before the tab's content, and the rail's operator chips.
@@ -217,13 +217,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         bendVal.HorizontalAlignment = modVal.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
         {
-            int range = BendRange(G("bendrange"));
-            double semis = (G("bend") - 0.5) * 2 * range;
-            bool centred = Math.Abs(semis) < 0.05;
-            bendVal.Text = centred ? $"±{range} st" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
-            bendVal.Foreground = centred ? TextSecondary : TextPrimary;
-            modVal.Text = NotaNum.Pct(G("modwheel"));
-            modVal.Foreground = G("modwheel") > 1e-3f ? TextPrimary : TextSecondary;
+            InstrumentCardKit.SetWheelValues(bendVal, modVal, BendRange(G("bendrange")), G("bend"), G("modwheel"));
         });
 
         var wheelsPanel = InstrumentCardKit.WheelsPanel(bendWheel, modWheel, bendVal, modVal);

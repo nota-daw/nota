@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Bass editor (instrument kind 7): a mono-first bass
-// synth in a 790 × 260 card (style guide, spec 038): three pressed-in sections.
+// synth in a 1050 × 260 card (style guide, spec 038): three pressed-in sections.
 //
 //   Wheels 76   pitch bend and mod wheel (the wheel opens the LFO onto the cutoff), on
 //               screen on both tabs.
@@ -37,7 +37,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "Bass synth";
-    public double CardWidth => 790;
+    public double CardWidth => DeviceCardKit.CardWide;
 
     private const double RailW = 186, RailLabelW = 42;
 
@@ -217,14 +217,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         ToolTip.SetTip(modWheel, "Mod wheel — opens the LFO onto the cutoff");
         readouts.Add(() =>
         {
-            int range = BendRange(G("bendrange"));
-            double semis = (G("bend") - 0.5) * 2 * range;
-            bool centred = Math.Abs(semis) < 0.05;
-            bendVal.Text = centred ? $"±{NotaNum.Unit(range, "0", "st")}" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
-            bendVal.Foreground = centred ? TextSecondary : TextPrimary;
-            bool modOn = G("modwheel") > 1e-3f;
-            modVal.Text = NotaNum.Pct(G("modwheel"));
-            modVal.Foreground = modOn ? TextPrimary : TextTertiary;
+            InstrumentCardKit.SetWheelValues(bendVal, modVal, BendRange(G("bendrange")), G("bend"), G("modwheel"));
             // On the Mod tab the wheel is part of what's on screen — it drives the LFO.
             modCap.Foreground = tab == 1 ? TextSecondary : TextTertiary;
         });

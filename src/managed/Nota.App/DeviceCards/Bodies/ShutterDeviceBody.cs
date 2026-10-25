@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Shutter body (noise gate / ducker, device kind 19), drawn to
-// the style guide's picture of it (760 × 260): an always-visible State column (input or key level with the threshold · reduction), a centre panel
+// the style guide's picture of it (700 × 260): an always-visible State column (input or key level with the threshold · reduction), a centre panel
 // with Signal / Envelope / Sidechain / Pattern tabs — the input and the gated output over the
 // window with the threshold and the close level on it, one opening drawn from attack / hold /
 // release / shape / floor, the detector's band-pass under the reduction, the rhythmic gate's
@@ -66,7 +66,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
     private static float[]? _clipboard;
     private static readonly Random Rng = new();
 
-    public double Width => 760;
+    public double Width => DeviceCardKit.CardL;
     public bool FullBleed => true;
     public string? Subtitle => "Gate";
 
@@ -120,7 +120,6 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         string LookF(double v) => NotaNum.F($"{new[] { 0, 1, 5 }[Math.Clamp((int)Math.Round(v * 2), 0, 2)]}\u2009ms");
         string HpF(double v) => HzF(Exp(v, 20, 2000));
         string LpF(double v) => HzF(Exp(v, 200, 20000));
-        string Times() => NotaNum.F($"{MsN(AtkMs())} / {MsN(HoldMs())} / {MsN(RelMs())}\u2009ms");
         string GrText() => Sc(S_GrDb) < 0.05 ? "GR 0.0\u2009dB" : Sc(S_GrDb) > 99 ? "GR −∞\u2009dB" : NotaNum.F($"GR −{Sc(S_GrDb):0.0}\u2009dB");
         string WindowText() { double s = Sc(S_WindowSec); return s <= 0 ? "1\u2009s" : s < 1 ? NotaNum.F($"{s * 1000:0}\u2009ms") : NotaNum.F($"{s:0.#}\u2009s"); }
         int WindowIdx() { double s = Sc(S_WindowSec); return s <= 0 ? 1 : s < 0.5 ? 0 : s < 2 ? 1 : 2; }
@@ -399,8 +398,9 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 K(Hold, "Hold", HoldF),
                 K(Release, "Release", RelF),
             },
-            () => NotaNum.F($"threshold {ThrDb():0.0}\u2009dB · return {RetDb():0.0}\u2009dB"),
-            () => NotaNum.F($"{(Duck() ? "ducked" : "open")} {Sc(S_OpenRatio) * 100:0}\u2009% of window · {GrText()}"));
+            // Threshold and return are the knob and the head row's own; these lines say what the gate did.
+            () => NotaNum.F($"{(Duck() ? "ducked" : "open")} {Sc(S_OpenRatio) * 100:0}\u2009% of window"),
+            GrText);
             return TabBody(head, signal, knobs);
         }
 
@@ -418,9 +418,8 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             var shapes = Chips(Shapes, i => Sel(Shape, 3) == i, i => SetP(Shape, i / 2f), Shape,
                 "Shape — Linear: straight ramps over the times; Log: the classic one-pole curve; Snap: stays open, then shuts hard");
             var retrig = ToggleLatch(Retrigger, "Retrig", "Retrigger — trigger mode: each hit fires one attack → hold → release, however long the signal stays above the threshold");
-            var times = Mono("", 7, TextSecondary);
-            readouts.Add(() => times.Text = Times());
-            var head = HeadRow(Row(8, Caps("Shape"), shapes, ModeSeg(), retrig), times);
+            // The times are the knobs' own values below, so the head row carries only the switches.
+            var head = HeadRow(Row(8, Caps("Shape"), shapes, ModeSeg(), retrig), new Control());
             var knobs = KnobRow(new[]
             {
                 K(Attack, "Attack", AtkF),

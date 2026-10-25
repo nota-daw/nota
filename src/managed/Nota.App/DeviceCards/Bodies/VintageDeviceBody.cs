@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Vintage body (device kind 8), drawn to the style guide's
-// picture of it (790 × 260): an always-visible State column (drive · wear faders), a centre panel with Curve / Wear / Output
+// picture of it (1050 × 260): an always-visible State column (drive · wear faders), a centre panel with Curve / Wear / Output
 // tabs — the transfer curve the engine runs, the pitch drift over the last four seconds,
 // the harmonics against the hiss floor — each with the character list in its head row, a
 // right panel with Tone / Output tabs. Every control is a device param,
@@ -38,7 +38,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
     private static readonly string[] OsNames = { "Off", "2×", "4×", "8×" };
     private static readonly string[] SyncNames = { "4 bars", "2 bars", "1 bar", "1/2", "1/4", "1/8" };
 
-    public double Width => 790;
+    public double Width => DeviceCardKit.CardWide;
     public bool FullBleed => true;
     public string? Subtitle => "Character";
 

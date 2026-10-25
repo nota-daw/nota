@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Valve body (guitar amp, device kind 6), drawn to the style
-// guide's picture of it (790 × 260): an always-visible Stage column (gain · output faders), a centre panel with Amp / Cab / Harmonics
+// guide's picture of it (1050 × 260): an always-visible Stage column (gain · output faders), a centre panel with Amp / Cab / Harmonics
 // tabs — the tone stack's response, the cabinet's response against on-axis, the harmonics
 // the preamp adds — each with the model or cabinet list in its head row, a right panel with
 // Cabinet / Output tabs. The responses and harmonics come from the
@@ -44,7 +44,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
     private static readonly string[] MicNames = { "dynamic", "condenser", "ribbon" };
     private static readonly string[] OsNames = { "Off", "2×", "4×", "8×" };
 
-    public double Width => 790;
+    public double Width => DeviceCardKit.CardWide;
     public bool FullBleed => true;
     public string? Subtitle => "Amp sim";
 

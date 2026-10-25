@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Flux editor (instrument kind 11): the vector synth that
-// listens to a track, 750 × 260 in three pressed-in sections (style guide, spec 038).
+// listens to a track, 700 × 260 in three pressed-in sections (style guide, spec 038).
 //
 //   Vector 190   the XY field — four timbre worlds at the corners, the orange dot is the
 //                vector, a dashed ring is where Motion and React pull it.
@@ -34,7 +34,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "Vector";
-    public double CardWidth => 750;
+    public double CardWidth => DeviceCardKit.CardL;
 
     private const double VectorW = 190, MacroW = 204;
 

@@ -2,8 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Volt editor (instrument kind 6): a two-path subtractive
-// synth in an 862 × 260 card (the almanac drew it 700 wide; it grew when Volt took over Nota
-// Synth and Nota Bass, specs/026, and again so the oscillator table and the Global rail fit).
+// synth in a wide 1050 × 260 card (it outgrew 700 when Volt took over Nota Synth and Nota Bass,
+// specs/026; cards come in fixed sizes, so it takes the wide one).
 //
 //   Wheels 76   pitch bend and mod wheel, on screen on every tab — the two hand controls
 //               a player reaches for first.
@@ -45,7 +45,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "Subtractive";
-    public double CardWidth => 862;
+    public double CardWidth => DeviceCardKit.CardWide;
 
     private const double RailW = 220;
 
@@ -306,13 +306,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         bendVal.HorizontalAlignment = modVal.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
         {
-            int range = BendRange(G("bendrange"));
-            double semis = (G("bend") - 0.5) * 2 * range;
-            bool centred = Math.Abs(semis) < 0.05;
-            bendVal.Text = centred ? $"±{range}\u2009st" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
-            bendVal.Foreground = centred ? TextSecondary : TextPrimary;
-            modVal.Text = NotaNum.Pct(G("modwheel"));
-            modVal.Foreground = G("modwheel") > 1e-3f ? TextPrimary : TextSecondary;
+            InstrumentCardKit.SetWheelValues(bendVal, modVal, BendRange(G("bendrange")), G("bend"), G("modwheel"));
         });
 
         var wheelsPanel = InstrumentCardKit.WheelsPanel(bendWheel, modWheel, bendVal, modVal);

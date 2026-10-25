@@ -4,7 +4,7 @@
 // Detail · Devices — the Nota Arp editor (MIDI effect kind 0), almanac mockups 1a / 1b.
 // Two sizes share every value; the S / L toggle in the shell header flips the card (the
 // choice is the device's "View" param, so it persists with the project):
-//   • L 770 × 260 — ORDER list | Pattern / Groove window over the Free·Sync + division
+//   • L 1050 × 260 — ORDER list | Pattern / Groove window over the Free·Sync + division
 //     strip | PLAY (Gate · Swing · Vel Amt sliders, Octaves, Retrig, Transpose and Steps,
 //     Hold, Restart), in pressed-in sections.
 //   • S 260 × 260 — the window with a Pattern / Groove toggle (the lane picked by clicking
@@ -49,11 +49,11 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
     private static readonly Dictionary<(int, int), Ui> UiState = new();
     private static Ui UiFor(int track, int mi) { if (!UiState.TryGetValue((track, mi), out var u)) UiState[(track, mi)] = u = new Ui(); return u; }
 
-    public double Width => 770;
+    public double Width => DeviceCardKit.CardWide;
     public bool FullBleed => true;
 
     private static bool IsMini(IAudioEngine e, int track, int mi) => e.MidiEffectParamCount(track, mi) > PView && e.MidiEffectGetParam(track, mi, PView) >= 0.5f;
-    public double WidthFor(IAudioEngine engine, int trackId, int index) => IsMini(engine, trackId, index) ? 260 : 770;
+    public double WidthFor(IAudioEngine engine, int trackId, int index) => IsMini(engine, trackId, index) ? DeviceCardKit.CardS : DeviceCardKit.CardWide;
 
     // ---- small builders -------------------------------------------------------------------
     private static TextBlock Caps(string t, IBrush? c = null, double fs = 0) => DeviceBodyKit.Label(t, c);

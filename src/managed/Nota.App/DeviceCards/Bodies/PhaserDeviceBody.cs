@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Phaser body (a chain of LFO-swept all-pass stages, device kind
-// 24), a build of the "Nota Phaser" picture of the style guide (712 × 260), three pressed-in sections: an LFO
+// 24), a build of the "Nota Phaser" picture of the style guide (700 × 260), three pressed-in sections: an LFO
 // column (waveform, Hz or Sync, the rate as a big readout with its period, Rate and the Stereo phase
 // offset between the channels), a centre panel with the live all-pass response of L and R with the
 // notches ticked (drag: left / right = Center, up / down = Feedback) and, under it, the corner
@@ -33,7 +33,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
     // Scope layout (Phaser::S_* / kTele).
     private const int S_FcL = 3, S_FcR = 4, S_WinPhase = 5, S_SampleRate = 10, kTele = 32;
 
-    public double Width => 712;
+    public double Width => DeviceCardKit.CardL;
     public bool FullBleed => true;
     public string? Subtitle => "Modulation";   // the processing type, shown as the header badge
 

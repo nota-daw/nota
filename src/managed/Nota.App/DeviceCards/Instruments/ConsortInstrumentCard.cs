@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Devices — built-in Nota Consort editor (instrument kind 15), 780 × 260 in three
+// Detail · Devices — built-in Nota Consort editor (instrument kind 15), 1050 × 260 in three
 // pressed-in sections (style guide, spec 038): an always-visible wheels column, a centre
 // tabbed panel (Osc · Mix / Filters · Env / LFO · Delay / Seq / Patch) and a right tabbed
 // panel (Voices / Output). The patch bay's cable count and its Open button (the entry to
@@ -56,7 +56,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
 
     public bool BodyOnly => true;
     public string Subtitle => "Paraphonic";
-    public double CardWidth => 780;
+    public double CardWidth => DeviceCardKit.CardWide;
 
     // Build runs first with the same context: it leaves the patch bay's header part here.
     public Control? HeaderAccessory(DeviceCardContext ctx)
@@ -287,8 +287,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         var pitchCap = Cap("Pitch"); var modCap = Cap("Mod");
         common.Add(() =>
         {
-            bendTxt.Text = $"±{BendSt()}\u2009st"; modTxt.Text = $"{G("modwheel") * 100:0}\u2009%";
-            modTxt.Foreground = G("modwheel") > 0.01f ? TxtC : MutedC;
+            SetWheelValues(bendTxt, modTxt, BendSt(), G("bend"), G("modwheel"));
             pitchCap.Foreground = Math.Abs(G("bend") - 0.5f) > 0.01f ? Txt2 : MutedC;
             modCap.Foreground = G("modwheel") > 0.01f ? Txt2 : MutedC;
         });

@@ -761,8 +761,9 @@ wheels go. Never put in a groove.
 - **Panel:** one shared panel (`InstrumentCardKit.WheelsPanel`), identical in every
   instrument: 76 wide, 4 / 9 / 4 / 6 padding, the wheels, captions and values on a 60 px
   centred pair.
-- **Text:** "Wheels" above, "Pitch" and "Mod" under each wheel, and the two values
-  (`±2 st`, `0 %`) side by side below.
+- **Text:** "Wheels" above, "Pitch" and "Mod" under each wheel, and the two values side by
+  side below (`InstrumentCardKit.SetWheelValues`): the pitch wheel's range (`±2 st`) at rest
+  and the bend in semitones while moved, the mod wheel in %; ink 2 at rest, ink 1 once moved.
 - 140 px of drag for the full range, ×0.25 with Shift, never jumps to the pointer;
   double-click resets; the pitch wheel springs back to the centre.
 
@@ -1179,29 +1180,33 @@ control, label and value stays.
 - **Hosted plug-ins** (VST3 / AU / CLAP) use the same shell and keep their own parameter
   list: S 260 wide names it over *Open editor* and *Save preset*; L 700 adds the parameters
   as a paged, filterable grid.
-- **Widths.** 700 unless listed below; the parameter-list stubs are 190 and the generic
-  "Open GUI" card 170.
+- **Widths.** Three fixed sizes, all 260 high (`DeviceCardKit.CardS / CardL / CardWide`):
+  **S 260** (mini and folded cards), **L 700** (every device unless listed below) and
+  **Wide 1050** for the densest devices. A card never takes a width in between: a device
+  that outgrows 700 is repacked to fit or moves up to 1050 and uses the room. The
+  parameter-list stubs (190) and the generic "Open GUI" card (170) are the exceptions; EQ-8
+  and Dynamic EQ-8 also fold to a narrower strip.
 
 ### Instruments (16)
 
 | Device | Width | What changes |
 |---|---|---|
-| Aurora | 776 | Status line removed. Rail sliders become value bars; the teal modulation colour goes, so Position, Fine, Detune and Spread read like the rest. Wider so the oscillator strip fits on one line. |
-| Bass | 790 | Status line removed. Rail sliders become value bars; filter type in one row of four instead of a 2 × 2 grid. Wider so the filter graph keeps its frequency labels. |
-| Consort | 780 | Status line removed. The patch-bay row under the card goes: its cable count and Open menu move to the header, its "no cables" note is dropped. Mixer, glide and drift sliders become value bars. |
-| Flux | 750 | Status line removed. With no source the React controls (Listen, Target, the source menu) are drawn in ink 4; the four world names lose their colours. Glide, tune and gain become value bars; React keeps its header line. |
+| Aurora | 1050 | Status line removed. Rail sliders become value bars; the teal modulation colour goes, so Position, Fine, Detune and Spread read like the rest. Wide so the oscillator strip fits on one line. |
+| Bass | 1050 | Status line removed. Rail sliders become value bars; filter type in one row of four instead of a 2 × 2 grid. Wide so the filter graph keeps its frequency labels. |
+| Consort | 1050 | Status line removed. The patch-bay row under the card goes: its cable count and Open menu move to the header, its "no cables" note is dropped. Mixer, glide and drift sliders become value bars. |
+| Flux | 700 | Status line removed. With no source the React controls (Listen, Target, the source menu) are drawn in ink 4; the four world names lose their colours. Glide, tune and gain become value bars; React keeps its header line. |
 | Grain | 700 | Status line removed. Read sliders become value bars; Scan speed is inactive in Freeze, so its row is ink 4. |
-| Keys | 774 | Status line removed. MIDI learn and the S / L switch stay in the header; Play sliders become value bars; the teal goes. Wider so the pickup window keeps its size and the pedal sits beside its label. |
+| Keys | 1050 | Status line removed. MIDI learn and the S / L switch stay in the header; Play sliders become value bars; the teal goes. Wide so the pickup window keeps its size and the pedal sits beside its label. |
 | Monolith | 700 | No status line before either. Mixer, Ext, Feedback and Drift sliders become value bars. |
-| Mosaic | 754 | Status line removed. MIDI learn stays in the header; Volume, Pan and Glide become value bars; the teal Vel → Vol arc turns orange like the rest. Wider so the zone row and the Voices menu fit. |
-| Operator | 724 | Status line removed. Level and Global sliders become value bars; the Volume knob sits beside the meter. Wider so the operator table fits; the teal modulator marks become grey (carrier D stays in ink 1). |
-| Pendulum | 806 | Status line removed. The Rate slider becomes a value bar on its own row under Free / Sync, division and Motion. The teal leads and times become grey; the ball striking a wall stays orange. |
-| Pentad | 748 | Status line removed; the Voice menu moves up beside the Mixer and Output tabs. Mixer sliders become value bars; the flat wheels become the round wheels. Wider so the bottom row keeps all five voice keys. |
+| Mosaic | 700 | Status line removed. MIDI learn stays in the header; Volume, Pan and Glide become value bars; the teal Vel → Vol arc turns orange like the rest. |
+| Operator | 700 | Status line removed. Level and Global sliders become value bars; the Volume knob sits beside the meter. The teal modulator marks become grey (carrier D stays in ink 1). |
+| Pendulum | 1050 | Status line removed. The Rate slider becomes a value bar on its own row under Free / Sync, division and Motion. The teal leads and times become grey; the ball striking a wall stays orange. |
+| Pentad | 700 | Status line removed; the Voice menu moves up beside the Mixer and Output tabs. Mixer sliders become value bars; the flat wheels become the round wheels. |
 | Physical | 700 | Status line removed. Tune, Fine and Note off become value bars; the teal "env → freq off" readout becomes grey. |
-| Rhythm | 776 | Status line removed. The Step strip sits under the Voice panel so the eight kit voices keep full-height rows. Swing, Human and Accent become value bars; the teal trigger line, playing bank and velocity lane become grey or a picked segment. |
+| Rhythm | 1050 | Status line removed. The Step strip sits under the Voice panel so the eight kit voices keep full-height rows. Swing, Human and Accent become value bars; the teal trigger line, playing bank and velocity lane become grey or a picked segment. |
 | Sampler | 700 | Status line removed. Volume, Pan and Glide become value bars; Crossfade is ink 4 while the loop is off. |
 | Synth | 700 | Status line removed. MIDI learn and the S / L toggle stay in the header after the type tag; Volume, Pan and Glide become value bars. Pulse W is ink 4 while the wave is not Square. |
-| Volt | 862 | Status line removed. Cutoff, Reso and Glide become value bars. The repeated knob and Route labels of the two oscillator rows become one row of column heads (Noise keeps its Color label); in the Global rail the meter stands at the right. |
+| Volt | 1050 | Status line removed. Cutoff, Reso and Glide become value bars. The repeated knob and Route labels of the two oscillator rows become one row of column heads (Noise keeps its Color label); in the Global rail the meter stands at the right. |
 
 ### Audio effects (25, plus Vocoder)
 
@@ -1216,22 +1221,22 @@ control, label and value stays.
 | Compressor | 700 | Status line removed. Thr and Mkp faders become upright value bars; Ratio, Mix and Range become value bars. |
 | Crush | 700 | Status line removed. Grit-tab sliders become value bars; the In and Out level columns stay as empty readout columns with no signal. |
 | Delay | 700 | Status line removed. The two loop faders become upright value bars; the level sliders become value bars. |
-| Dynamic EQ-8 | 940; 584 folded | The EQ Eight layout (below), graph 473 × 169. Each band chip carries a dynamics activity bar along its bottom. The panel is drawn like EQ-8's, in two columns on one set of rows so their parts line up: the band column (head, shapes, Freq / Gain / Q, then Key Self / Ext and Solo) beside the dynamics column (title and fold arrow, Static / Duck / Lift beside the shapes, Thresh / Range / Attack / Release as knobs beside Freq / Gain / Q, then the Dynamic switch and an inline Output knob, as EQ-8's Scale and Output). Range is a bipolar knob (left cuts, right boosts); Thresh carries the band's level as a marker. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics knobs are ink 4 while the band is Static. The right panel folds like EQ-8's (below). |
+| Dynamic EQ-8 | 1050; 584 folded | The EQ Eight layout (below), graph 473 × 169. Each band chip carries a dynamics activity bar along its bottom. The panel is drawn like EQ-8's, in two columns on one set of rows so their parts line up: the band column (head, shapes, Freq / Gain / Q, then Key Self / Ext and Solo) beside the dynamics column (title and fold arrow, Static / Duck / Lift beside the shapes, Thresh / Range / Attack / Release as knobs beside Freq / Gain / Q, then the Dynamic switch and an inline Output knob, as EQ-8's Scale and Output). Range is a bipolar knob (left cuts, right boosts); Thresh carries the band's level as a marker. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics knobs are ink 4 while the band is Static. The right panel folds like EQ-8's (below). |
 | EQ-3 | 700 | Status line removed. Band faders become upright value bars around 0 dB; the band colours (rose, white, teal) become greys. |
-| EQ-8 | 720; 580 folded | The EQ Eight layout (below), graph 470 × 169, with the right panel one narrow column (200) as before. Slope and Channel sit side by side under the picked band's knobs, each named underneath like a knob; Scale and Output close the column as small knobs. Analyzer and Auto gain sit over the graph's top-left corner, the auto gain in effect on the switch's word. Channel uses the short names St, M, S, L, R. The status line's draggable Out readout is the same control as the Output knob, which stays. The right column folds (below). |
+| EQ-8 | 700; 580 folded | The EQ Eight layout (below), graph 470 × 169, with the right panel one narrow column (200) as before. Slope and Channel sit side by side under the picked band's knobs, each named underneath like a knob; Scale and Output close the column as small knobs. Analyzer and Auto gain sit over the graph's top-left corner, the auto gain in effect on the switch's word. Channel uses the short names St, M, S, L, R. The status line's draggable Out readout is the same control as the Output knob, which stays. The right column folds (below). |
 | Flanger | 700 | Status line removed. Sliders become value bars (Feedback fills from the centre); the right channel draws in a darker grey instead of teal. |
 | Forge | 700 | Status line removed. The three stage boxes become rows split by rules: each stage dot becomes an on switch, the selected stage shows a tinted number. Amount, Wet and Out stack as value-bar rows above the transfer graph; switched-off stages are ink 4. |
 | Lens | 700 | Status line removed. The Top and Range rail faders become upright value bars; Peak hold and Mid / Side share one row. |
-| Level | 760 | Status line removed. The correction fader becomes an upright value bar around 0 dB; target and peak marks are grey instead of teal. Wider so the scale switch and the legend share one row. |
+| Level | 700 | Status line removed. The correction fader becomes an upright value bar around 0 dB; target and peak marks are grey instead of teal. |
 | Orbit | 700 | Status line removed. Rate, Shape, Amount, Phase and Mix become value bars. The teal goes: the right channel (curve, legend, playhead dot, R tags) is a darker grey, L the curve colour. |
-| Phaser | 712 | Status line removed. Wider so the graph head and its readout fit on one line. Rate, Stereo, Center, Depth, Feedback and Mix become value bars (Feedback from the middle). The teal goes as in Orbit. |
+| Phaser | 700 | Status line removed. Rate, Stereo, Center, Depth, Feedback and Mix become value bars (Feedback from the middle). The teal goes as in Orbit. |
 | Prism | 700 | Status line removed. Amount and Out faders become upright value bars; the band threshold sliders become value bars (an off band is grey). The band colours (olive, teal) go: band marks and crossovers are greys told apart by shade. |
 | Reverb | 700 | Status line removed. Decay and Damp faders in the Tail column become upright value bars; the Levels sliders become value bars. |
-| Shutter | 760 | Status line removed. Wider so the Detector column keeps all its rows; Detector filter and Peak hold share one row. Thresh, Return and Floor become value bars. |
+| Shutter | 700 | Status line removed. Detector filter and Peak hold share one row. Thresh, Return and Floor become value bars. |
 | Strata | 700 | No status line before either; the live strip (bar counter, cycle ticks, the four transport buttons) heads the Layers section. Feedback, Input gain and Speed become value bars; Record keeps its red. |
-| Utility | 740 | Status line removed. Wider so the Routing column keeps its rows. Width, Balance and Gain become value bars (Balance and Gain from the middle). The Mono knob is grey while Mono below freq is off. |
-| Valve | 790 | Status line removed. Wider so five knobs and their readouts fit side by side and the five cab sizes fit in one row; Cabinet sim and Noise gate share one row. Gain and Out faders become upright value bars; Axis and Gate become value bars. |
-| Vintage | 790 | Status line removed. Wider so the knobs and their two readout lines fit side by side. Drv and Wear faders become upright value bars; Low, High (from the middle) and Mix become value bars. |
+| Utility | 700 | Status line removed. Width, Balance and Gain become value bars (Balance and Gain from the middle). The Mono knob is grey while Mono below freq is off. |
+| Valve | 1050 | Status line removed. Wide so five knobs and their readouts fit side by side and the five cab sizes fit in one row; Cabinet sim and Noise gate share one row. Gain and Out faders become upright value bars; Axis and Gate become value bars. |
+| Vintage | 1050 | Status line removed. Wide so the knobs and their two readout lines fit side by side. Drv and Wear faders become upright value bars; Low, High (from the middle) and Mix become value bars. |
 | Vocoder | 700 | Added after 0.56.1, so the guide has no picture of it yet. It follows the same rules: the card shell, pressed-in sections, value bars, capped knobs, no status line. |
 
 **The EQ Eight layout** (EQ-8 and Dynamic EQ-8), the classic EQ Eight arrangement drawn in
@@ -1256,7 +1261,7 @@ saved in the project.
 
 | Device | Width | What changes |
 |---|---|---|
-| Arp | 770 | Status line removed. Play sliders become value bars; Transpose and Steps share one row. Wider so the rate row fits. |
+| Arp | 1050 | Status line removed. Play sliders become value bars; Transpose and Steps share one row. Wide so the rate row fits. |
 | Chord | 700 | Status line removed. Shift rulers, Strum and Spread become value bars; the shift on/off dots become switches. |
 | Length | 700 | Status line removed. Length and the three modifier sliders become value bars; each modifier puts its value on the bar row with its hint under it. |
 | Random | 700 | Status line removed. The five amount sliders and Chance become value bars. |
@@ -1268,7 +1273,7 @@ saved in the project.
 | Device | Width | What changes |
 |---|---|---|
 | Audio Effect Rack | 700 | No preset menu (the header holds the name, "Built-in" and power). The macro strip becomes its own section across the top; the eight macro sliders and Gain become value bars. The rail is regrouped so all of it fits: Mode, then Dry / wet beside Gain and PDC, then Macro map, Fold and Save on one row; Macro map is a plain button. |
-| Drum Rack | 740 | Status line removed. Swing, Humanize and the pad sliders become value bars; Pan and Tune are centred bars. Wider so the bank, swing and humanize strip fits on one row. |
+| Drum Rack | 700 | Status line removed. Swing, Humanize and the pad sliders become value bars; Pan and Tune are centred bars. |
 | Instrument Rack | 700 | No preset menu; the header holds the name, "Rack · 1 chain" and power. The macro strip becomes its own section across the top; the eight macro sliders and Glide become value bars. Rack out puts Volume beside Glide, with Macro map, Fold and Save on one row; Macro map is a plain button. |
 
 ## Nota Remote

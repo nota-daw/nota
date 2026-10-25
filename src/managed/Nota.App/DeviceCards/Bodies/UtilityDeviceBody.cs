@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Utility body (device kind 4), drawn to the style guide's
-// picture of it (740 × 260): an always-visible Level
+// picture of it (700 × 260): an always-visible Level
 // column (input and output meters with their level in the meter's unit), a centre panel with
 // Field / Mono / Levels tabs — the stereo field by frequency, the width over frequency with the
 // mono region, input and output over the last 8 s against the target — a right panel with
@@ -45,7 +45,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
     private static readonly string[] Units = { "LUFS", "dB", "dB" };
     private static readonly int[] Slopes = { 6, 12, 24 };
 
-    public double Width => 740;
+    public double Width => DeviceCardKit.CardL;
     public bool FullBleed => true;
     public string? Subtitle => "Utility";
 

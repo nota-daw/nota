@@ -4,7 +4,7 @@
 // Detail · Devices — Nota Mosaic (instrument kind 17), a build of the "Nota Mosaic" mockup.
 // One device, two sizes (the shell's S / L toggle — the instrument's "view" param):
 //
-//   • L 754 × 260. Centre: a tab panel —
+//   • L 700 × 260. Centre: a tab panel —
 //       Zones   the zone map (keys × velocity, the keyboard under it, a tick under
 //               every root), Attack / Release to show the release zones, and the selected
 //               zone's row: root · layer · round-robin, keys, velocity, fine, gain, pan.
@@ -54,7 +54,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
     public bool BodyOnly => true;
     public string Subtitle => "Multisample";
 
-    public double WidthFor(IAudioEngine engine, int trackId) => InstrumentView.IsMini(engine, trackId) ? 260 : 754;
+    public double WidthFor(IAudioEngine engine, int trackId) => InstrumentView.IsMini(engine, trackId) ? DeviceCardKit.CardS : DeviceCardKit.CardL;
 
     public Control? HeaderAccessory(DeviceCardContext ctx)
     {
@@ -762,7 +762,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1), "Let the amp envelope open (or close) the filter", on: () => G("envcutoff") >= 0.5f);
         var filterRow = Row(6,   // seven controls: the tighter gap keeps Slide inside the panel
             (Field("Type", Chips("filtertype", MosaicModel.FilterNames, padX: 5)), "Auto"),
-            (PKnob("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v)), NotaSize.Knob, 56), "Auto"),
+            (PKnob("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v))), "Auto"),
             (PKnob("resonance", "Reso", v => NotaNum.Pct(v)), "Auto"),
             (PKnob("keytrack", "Keytrack", v => NotaNum.Pct(v), tip: "The cutoff follows the key"), "Auto"),
             (new Panel(), "*"), (envBtn, "Auto"),

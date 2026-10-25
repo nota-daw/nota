@@ -142,6 +142,7 @@ internal static class InstrumentCardKit
         modCap ??= Cap("Mod");
         var head = Cap("Wheels");
         foreach (var t in new[] { head, pitchCap, modCap, pitchVal, modVal }) { t.HorizontalAlignment = HorizontalAlignment.Center; t.TextAlignment = TextAlignment.Center; }
+        foreach (var t in new[] { pitchVal, modVal }) { t.FontSize = NotaType.KnobValue; t.FontFamily = NotaFonts.UiFamily; }
         Grid Pair(Control a, Control b)
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), Width = WheelsInnerW, HorizontalAlignment = HorizontalAlignment.Center };
@@ -156,6 +157,19 @@ internal static class InstrumentCardKit
         var pane = Pane(grid, new Thickness(4, 9, 4, 6));
         pane.Width = WheelsW;
         return pane;
+    }
+
+    /// <summary>The wheel values, written alike in every instrument: the pitch wheel as its
+    /// range (±2 st) at rest and the bend in semitones while moved, the mod wheel in %; ink 2 at
+    /// rest, ink 1 once moved. <paramref name="bend"/> and <paramref name="mod"/> are 0..1.</summary>
+    internal static void SetWheelValues(TextBlock pitchVal, TextBlock modVal, int range, double bend, double mod)
+    {
+        double semis = (bend - 0.5) * 2 * range;
+        bool centred = Math.Abs(semis) < 0.05;
+        pitchVal.Text = centred ? $"±{NotaNum.Unit(range, "0", "st")}" : NotaNum.Unit(semis, "+0.0;−0.0;0", "st");
+        pitchVal.Foreground = centred ? TextSecondary : TextPrimary;
+        modVal.Text = NotaNum.Pct(mod);
+        modVal.Foreground = mod > 1e-3 ? TextPrimary : TextSecondary;
     }
 
     /// <summary>A round wheel bound to a plugin parameter (pitch springs back to the centre).</summary>
