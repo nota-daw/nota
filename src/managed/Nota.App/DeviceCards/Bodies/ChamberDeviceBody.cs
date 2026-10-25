@@ -547,7 +547,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             var duckGr = Mono("", 7, MutedC);
             readouts.Add(() => { double gr = Sc(S_DuckDb); duckGr.Text = gr > 0.05 ? NotaNum.F($"−{gr:0.0}") : ""; });
 
-            var g = new Grid { RowDefinitions = new RowDefinitions("17,17,22,19,6,19,18,24,*"), Margin = new Thickness(0, 4, 0, 0) };
+            var g = new Grid { RowDefinitions = new RowDefinitions("17,17,20,18,6,19,18,24,*"), Margin = new Thickness(0, 4, 0, 0) };
             Control[] rows = { EngineRow(ConvOn, "Conv", true), EngineRow(AlgoOn, "Algo", false), route, dry,
                 new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Center }, duck, rel, btns, wet };
             for (int r = 0; r < rows.Length; r++) g.Children.Add(GRow(rows[r], r));
