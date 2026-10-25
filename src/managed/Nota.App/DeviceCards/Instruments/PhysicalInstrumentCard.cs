@@ -45,7 +45,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         return mi >= 0 && engine.PluginParamGet(trackId, -1, mi) >= 0.5f ? "Mono" : $"{Math.Max(0, active)}/{PhysicalModel.Voices}";
     }
 
-    private const double RailW = 196, TabH = 26, KnobS = NotaSize.Knob;
+    private const double RailW = 196, TabH = 22, KnobS = NotaSize.Knob;
 
     private static readonly string[] TabNames = { "Exciter", "Resonator" };
     private static readonly string[] TypeNames = PhysicalModel.TypeNames;
@@ -91,7 +91,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
 
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = NotaText.Label(t), FontSize = NotaType.Caption,
+            Text = NotaText.Label(t), FontSize = NotaType.DeviceCaption,
             Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -204,7 +204,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             PKnob("malletcolor", "COLOR", Pct));
         ToolTip.SetTip(malletKnobs, "Stiffness sets the contact time: soft = long and dark, hard = short and bright");
 
-        var envCap = Mono("", TextTertiary, NotaType.Caption);
+        var envCap = Mono("", TextTertiary, NotaType.DeviceCaption);
         envCap.HorizontalAlignment = HorizontalAlignment.Right;
         readouts.Add(() =>
         {
@@ -360,7 +360,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         ToolTip.SetTip(monoChips, "Poly: 8 voices ring over each other · Mono: a new strike chokes the sounding note");
         var outCap = new TextBlock
         {
-            Text = "Output", FontSize = NotaType.Body, FontWeight = FontWeight.SemiBold,
+            Text = "Output", FontSize = NotaType.DeviceBody, FontWeight = FontWeight.SemiBold,
             Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center,
         };
         var outHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };

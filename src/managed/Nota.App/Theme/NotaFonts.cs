@@ -80,10 +80,13 @@ internal static class NotaType
                         ClipName = 11.5, TrackName = 13, KeyLetter = 10;
     public const double SectionLabelTracking = 0, EyebrowTracking = 0;
 
-    // Device scale (style guide): name 13/600, a parameter's value 11 over its name 10.5 (ink 3),
-    // section titles and row labels 10.5. 7 is the floor (plot tick labels only).
-    public const double DeviceName = 13, DeviceSection = 10.5, RowLabel = 10.5, KnobLabel = 10.5,
-                        KnobValue = 11, Axis = 10;
+    // Device scale (style guide): one step under the shell so a 260px card keeps its room for
+    // controls: name 12/600, a parameter's value 10 over its name 9.5 (ink 3), section titles and
+    // row labels 9.5; switch words and captions 10, titles inside a device 11, a value on a button
+    // or in a row 10.5, a tab inside a device 11. 7 is the floor (plot tick labels only).
+    public const double DeviceName = 12, DeviceSection = 9.5, RowLabel = 9.5, KnobLabel = 9.5,
+                        KnobValue = 10, Axis = 9,
+                        DeviceCaption = 10, DeviceBody = 11, DeviceValue = 10.5, DeviceTab = 11;
     public const double DeviceSectionTracking = 0, RowLabelTracking = 0, KnobLabelTracking = 0;
 
     public const double Floor = 7;

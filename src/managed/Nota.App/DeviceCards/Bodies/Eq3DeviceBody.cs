@@ -179,7 +179,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         // Header: crossover readouts · Output · Range · Slope.
         Control XRead(string label, Func<string> text)
         {
-            var v = Mono("", 8, TextPrimary); v.FontSize = NotaType.Value;
+            var v = Mono("", 8, TextPrimary); v.FontSize = NotaType.DeviceValue;
             readouts.Add(() => v.Text = text());
             return Row(8, Caps(label), v);
         }

@@ -305,7 +305,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         Control ConvTab()
         {
             // IR selector: ‹ [name · length · rate ▾] › + Load…
-            var irName = new TextBlock { FontSize = NotaType.Value, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var irName = new TextBlock { FontSize = NotaType.DeviceValue, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var irInfo = Mono("", 7, MutedC);
             // A dropdown inside a device: raised, no border.
             var irBox = new Border { Height = NotaSize.Dropdown, Background = NotaPalette.SurfaceHover, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 0), Cursor = new Cursor(StandardCursorType.Hand),
@@ -555,7 +555,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         }
         Control OutputTab()
         {
-            // 160 high: the knob and meter in one 36 row, two bars and Quality, two switches.
+            // 190 high: the knob and meter in one 36 row, two bars and Quality, two switches.
             var top = DeviceBodyKit.OutputHead(K(Output, "OUTPUT", v => Db(-24 + 36 * v), cellW: 96, inline: true), () => Sc(S_OutL), () => Sc(S_OutR), readouts.Add);
             var qual = new Grid { ColumnDefinitions = new ColumnDefinitions("62,*"), VerticalAlignment = VerticalAlignment.Center };
             qual.Children.Add(Caps("Quality"));

@@ -242,7 +242,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         // External Key on; Internal clears the source.
         Control KeyDrop(bool stretch)
         {
-            var name = new TextBlock { FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var name = new TextBlock { FontSize = NotaType.DeviceCaption, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var chev = new Glyph(GlyphKind.ChevronDown, 8) { Margin = new Thickness(6, 0, 0, 0) };
             var box = new Border
             {
@@ -753,7 +753,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                     Line(() => Sc(S_ExtKey) > 0.5 ? "sc in · out" : "in · out",
                         () => DbF(Sc(S_ExtKey) > 0.5 ? Sc(S_KeyDb) : Sc(S_InDb)).Replace("\u2009dB", "").Replace(" dB", "") + " · " + DbF(Sc(S_OutDb))),
                     Line(() => "GR · peak", () => NotaNum.F($"{(Sc(S_GrDb) < 0.05 ? "0.0" : Sc(S_GrDb) > 99 ? "−∞" : NotaNum.F($"−{Sc(S_GrDb):0.0}"))} · {(Sc(S_PeakGrDb) < 0.05 ? "0.0" : Sc(S_PeakGrDb) > 99 ? "−∞" : NotaNum.F($"−{Sc(S_PeakGrDb):0.0}"))}\u2009dB"), TextPrimary) } });
-            var sliders = new Grid { RowDefinitions = new RowDefinitions("20,20,20") };
+            var sliders = new Grid { RowDefinitions = new RowDefinitions("26,26,26") };
             sliders.Children.Add(SliderRow("SC HP", DetHP, HpF));
             sliders.Children.Add(GRow(SliderRow("SC LP", DetLP, LpF), 1));
             sliders.Children.Add(GRow(SliderRow("Range", Floor, FloorShort), 2));

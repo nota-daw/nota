@@ -133,7 +133,7 @@ public sealed partial class DeviceChainView
         int di = s.DeviceIndex;
         var extra = s.Utility ? new CardExtra() : Extra(s.Kind, di);
 
-        // ---- header (32), in fixed slots: name · preset · badges · power. The preset picker
+        // ---- header (24), in fixed slots: name · preset · badges · power. The preset picker
         // follows the name (trimmed if it is long); the badges sit right-aligned before the
         // power slot on the right; the power slot is reserved (empty) on a card that can't be bypassed. A/B, move and delete live in
         // the header's context menu (with the presets again); the whole header drags the card
@@ -203,7 +203,7 @@ public sealed partial class DeviceChainView
         var headerBar = new Border
         {
             Height = DeviceCardKit.HeaderH, Background = ShellHdr,
-            Padding = new Thickness(DeviceCardKit.CardPad + 2, 0, DeviceCardKit.CardPad + 2, 0), Child = headerGrid,
+            Padding = new Thickness(DeviceCardKit.CardPad + 4, 0, DeviceCardKit.CardPad + 4, 0), Child = headerGrid,
             Cursor = s.CanMove && SelectableKind(s.Kind) ? new Cursor(StandardCursorType.SizeAll) : null,
         };
         if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · double-click to fold · right-click for A/B, move and delete" : "Double-click to fold · right-click for more");
@@ -270,7 +270,7 @@ public sealed partial class DeviceChainView
         if (presets.Count > 0)
         {
             picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
-                nameWidth: s.Compact ? 74 : 132, init: resetToInit != null ? ApplyInit : null);
+                nameWidth: s.Compact ? 74 : 132, height: 20, init: resetToInit != null ? ApplyInit : null);
             Grid.SetColumn(picker, 1); headerGrid.Children.Add(picker);
         }
 

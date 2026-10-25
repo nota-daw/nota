@@ -1208,7 +1208,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         // ======================= drop: files / a folder → a multisample ============================
         Control DropOverlay()
         {
-            var title = new TextBlock { FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center };
+            var title = new TextBlock { FontSize = NotaType.DeviceTab, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center };
             var line = new TextBlock { FontSize = NotaType.KnobValue, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center };
             var hint = new TextBlock { FontSize = NotaType.RowLabel, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Text = "Opens the mapping preview. A single file replaces the sample, as before." };
             var dash = new Rectangle

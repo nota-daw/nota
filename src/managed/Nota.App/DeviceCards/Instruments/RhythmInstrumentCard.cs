@@ -126,7 +126,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         // A section title: 12, semibold, ink 1.
         static TextBlock Title(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.Body, FontWeight = FontWeight.SemiBold, Foreground = c ?? TextPrimary,
+            Text = t, FontSize = NotaType.DeviceBody, FontWeight = FontWeight.SemiBold, Foreground = c ?? TextPrimary,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
@@ -326,7 +326,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         var folder = new Glyph(GlyphKind.Folder, 10) { Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         var fileText = new TextBlock
         {
-            Text = sampleMode ? sampleName : "Load file…", FontSize = NotaType.Body, MaxWidth = 100,
+            Text = sampleMode ? sampleName : "Load file…", FontSize = NotaType.DeviceBody, MaxWidth = 100,
             TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
         };
         var fileBtn = SmallButton(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { folder, fileText } }, fileText,
@@ -372,7 +372,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         if (_macroMode)
         {
             voiceTools.Children.Add(Mono($"{MacroPanel.Count} slots · {MacroPanel.Assigned(macros)} assigned"));
-            var mapText = new TextBlock { Text = "Map", FontSize = NotaType.Body, VerticalAlignment = VerticalAlignment.Center };
+            var mapText = new TextBlock { Text = "Map", FontSize = NotaType.DeviceBody, VerticalAlignment = VerticalAlignment.Center };
             Border map = null!;
             map = SmallButton(mapText, mapText, () => MacroPanel.ShowMapMenu(ctx, macros, map, _macro));
             ToolTip.SetTip(map, $"Add a receiver to {macros.MacroName(_macro)}: a voice param, a kit setting or a voice's effect");
@@ -386,7 +386,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         }
         if (sampleMode && _voiceTab == 0 && !_macroMode)
         {
-            var revText = new TextBlock { Text = "Reverse", FontSize = NotaType.Body, VerticalAlignment = VerticalAlignment.Center };
+            var revText = new TextBlock { Text = "Reverse", FontSize = NotaType.DeviceBody, VerticalAlignment = VerticalAlignment.Center };
             var rev = SmallButton(revText, revText,
                 () => { Write(P("reverse"), G(P("reverse")) >= 0.5f ? 0f : 1f); Refresh(); }, () => G(P("reverse")) >= 0.5f);
             ToolTip.SetTip(rev, "Play the region back to front");
@@ -651,7 +651,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         };
         bankBox.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
 
-        var stepCount = Mono("", TextTertiary, NotaType.Caption);
+        var stepCount = Mono("", TextTertiary, NotaType.DeviceCaption);
         stepCount.HorizontalAlignment = HorizontalAlignment.Right;
         readouts.Add(() => stepCount.Text = $"{pat.Count(bank, sel)} of {RM.Steps} · 1/16 · bank {RM.BankNames[bank]}");
         var stepHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), ColumnSpacing = 8 };

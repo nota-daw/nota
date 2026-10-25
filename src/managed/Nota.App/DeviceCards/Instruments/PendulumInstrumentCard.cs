@@ -220,7 +220,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         {
             var tb = new TextBlock
             {
-                Text = text, FontSize = NotaType.Value,
+                Text = text, FontSize = NotaType.DeviceValue,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             };
             var b = new Border
@@ -333,7 +333,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         var tabPanel = SectionBox(tabGrid);
 
         // ---- rail · the balls ---------------------------------------------------------
-        var railCap = new TextBlock { Text = "Balls", FontSize = NotaType.Body, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        var railCap = new TextBlock { Text = "Balls", FontSize = NotaType.DeviceBody, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         var railSub = Mono("rate · phase · note", TextTertiary, NotaType.Eyebrow); railSub.HorizontalAlignment = HorizontalAlignment.Right;
         var railHead = new Grid { Height = 20, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         railHead.Children.Add(railCap);
@@ -361,7 +361,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             return b;
         }
         var steppers = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { StepBtn(GlyphKind.Minus, -1, "One ball fewer (2 at least)"), StepBtn(GlyphKind.Plus, +1, "One ball more (6 at most)") } };
-        var countCap = Cap("Balls"); countCap.FontSize = NotaType.Body;
+        var countCap = Cap("Balls"); countCap.FontSize = NotaType.DeviceBody;
         var countRow = Row((countCap, "Auto"), (countText, "Auto"), (new Panel(), "*"), (steppers, "Auto"));
         countRow.ColumnSpacing = 8;
         if (I("balls") is var bi and >= 0) MidiLearn.Bind(countRow, MidiTarget.PluginParam(track, -1, bi), engine.PluginParamName(track, -1, bi));
@@ -370,8 +370,8 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         ToolTip.SetTip(sortSeg, "Up: the low wall plays the chord's lowest note · Down: its highest");
         var quantSeg = Chips("quantize", PendulumModel.QuantNames, padX: 5);
         ToolTip.SetTip(quantSeg, "Quantize: a crossing waits for the next 1/16 or 1/8 before it plays");
-        var sortCap = Cap("Sort"); sortCap.FontSize = NotaType.Body;
-        var quantCap = Cap("Quant"); quantCap.FontSize = NotaType.Body;
+        var sortCap = Cap("Sort"); sortCap.FontSize = NotaType.DeviceBody;
+        var quantCap = Cap("Quant"); quantCap.FontSize = NotaType.DeviceBody;
         var sortRow = Row((sortCap, "Auto"), (sortSeg, "Auto"), (new Panel(), "*"), (quantCap, "Auto"), (quantSeg, "Auto"));
 
         var holdBtn = RailButton("Hold", () => Write("hold", G("hold") >= 0.5f ? 0 : 1), () => G("hold") >= 0.5f, "hold");
@@ -409,7 +409,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         ToolTip.SetTip(spreadBlock.Children[3], "Level and pitch jitter per note");
         var spreadHost = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = spreadBlock };
 
-        var scaleText = Mono("", TextPrimary, NotaType.Value);
+        var scaleText = Mono("", TextPrimary, NotaType.DeviceValue);
         scaleText.TextTrimming = TextTrimming.CharacterEllipsis;
         readouts.Add(() => scaleText.Text = PendulumModel.ScaleText(G("root"), G("scalemode")));
         var scaleBox = new Border

@@ -71,7 +71,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         if (!IsMini(e, t, index))
         {
-            var tag = new TextBlock { FontSize = NotaType.Caption, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(-4, 0, 0, 0) };
+            var tag = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(-4, 0, 0, 0) };
             void Sync() => tag.Text = "· " + KeyTag(p => e.MidiEffectGetParam(t, index, p));
             Sync();
             ctx.AddDeviceRefresher(Sync);
@@ -285,7 +285,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
 
         Control IslandHead(Control left, Control? right)
         {
-            if (left is TextBlock t) { t.FontSize = NotaType.Caption; t.FontWeight = FontWeight.SemiBold; t.Foreground = NotaPalette.TextPrimary; }
+            if (left is TextBlock t) { t.FontSize = NotaType.DeviceCaption; t.FontWeight = FontWeight.SemiBold; t.Foreground = NotaPalette.TextPrimary; }
             var d = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
             if (right is not null) { right.HorizontalAlignment = HorizontalAlignment.Right; d.Children.Add(WithDock(right, Dock.Right)); }
             d.Children.Add(left);
@@ -415,7 +415,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
         Control FollowSwitch()
         {
             var sw = new SwitchTrack { Width = SwitchTrack.W, Height = SwitchTrack.H, VerticalAlignment = VerticalAlignment.Center };
-            var lbl = new TextBlock { Text = "Follow key · from input", FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center };
+            var lbl = new TextBlock { Text = "Follow key · from input", FontSize = NotaType.DeviceCaption, VerticalAlignment = VerticalAlignment.Center };
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Children = { sw, lbl } };
             row.PointerPressed += (_, ev) =>
             {

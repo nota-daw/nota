@@ -325,7 +325,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
 
         Control IslandHead(Control left, Control? right)
         {
-            if (left is TextBlock t) { t.FontSize = NotaType.Caption; t.FontWeight = FontWeight.SemiBold; t.Foreground = NotaPalette.TextPrimary; }
+            if (left is TextBlock t) { t.FontSize = NotaType.DeviceCaption; t.FontWeight = FontWeight.SemiBold; t.Foreground = NotaPalette.TextPrimary; }
             var d = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
             if (right is not null) { right.HorizontalAlignment = HorizontalAlignment.Right; d.Children.Add(WithDock(right, Dock.Right)); }
             d.Children.Add(left);
@@ -341,13 +341,13 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
         {
             var sw = new Border { Width = 8, Height = 8, CornerRadius = NotaRadius.Fine, Background = fill, BorderBrush = ring,
                 BorderThickness = new Thickness(ring is null ? 0 : 1), VerticalAlignment = VerticalAlignment.Center };
-            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { sw, new TextBlock { Text = label, FontSize = NotaType.Caption, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center } } };
+            return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { sw, new TextBlock { Text = label, FontSize = NotaType.DeviceCaption, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center } } };
         }
 
         // A raised toggle (Keep root / Fold in scale), soft orange when on.
         Control Flag(int p, string label, string tip)
         {
-            var tb = new TextBlock { Text = label, FontSize = NotaType.Caption, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var tb = new TextBlock { Text = label, FontSize = NotaType.DeviceCaption, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var b = new Border { Height = 18, CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
             b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
             b.PointerPressed += (_, ev) =>

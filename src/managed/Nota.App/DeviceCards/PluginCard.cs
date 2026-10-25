@@ -85,7 +85,7 @@ internal static class PluginCard
         ToolTip.SetTip(name, info.Name);
         var vendor = new TextBlock
         {
-            Text = info.Vendor.Length > 0 ? info.Vendor : "Unknown vendor", FontSize = NotaType.Body,
+            Text = info.Vendor.Length > 0 ? info.Vendor : "Unknown vendor", FontSize = NotaType.DeviceBody,
             Foreground = info.Vendor.Length > 0 ? TextSecondary : TextTertiary, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var tags = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Thickness(0, 4, 0, 0) };
@@ -161,7 +161,7 @@ internal static class PluginCard
         };
         var v = new TextBlock
         {
-            Text = value, FontFamily = NotaFonts.UiFamily, FontSize = NotaType.Value, Foreground = TextPrimary,
+            Text = value, FontFamily = NotaFonts.UiFamily, FontSize = NotaType.DeviceValue, Foreground = TextPrimary,
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         Grid.SetRow(l, row); Grid.SetRow(v, row); Grid.SetColumn(v, 1);

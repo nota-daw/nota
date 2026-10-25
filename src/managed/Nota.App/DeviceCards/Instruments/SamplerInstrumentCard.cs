@@ -41,7 +41,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
     public string Subtitle => "Built-in";
     public double CardWidth => 700;
 
-    private const double RailW = 204, TabH = 26;
+    private const double RailW = 204, TabH = 22;
     private static readonly string[] TabNames = { "Sample", "Pitch", "Env", "Filter" };
     private static readonly string[] TabHints = { "start · end · loop · crossfade", "root · transpose · detune · keytrack", "a · d · s · r · vel", "type · cutoff · reso · keytrack" };
 
@@ -86,11 +86,11 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
 
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = NotaText.Label(t), FontSize = NotaType.Caption,
+            Text = NotaText.Label(t), FontSize = NotaType.DeviceCaption,
             Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        static TextBlock Mono(string t, IBrush? c = null, double fs = NotaType.Caption) => new()
+        static TextBlock Mono(string t, IBrush? c = null, double fs = NotaType.DeviceCaption) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
             VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
@@ -150,7 +150,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         // takes the soft tint with orange text while on; an unavailable one is ink 4.
         Border Button(string text, Action click, string tip, Func<bool>? on = null, Func<bool>? enabled = null, string? learnId = null)
         {
-            var tb = new TextBlock { Text = text, FontSize = NotaType.Value, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            var tb = new TextBlock { Text = text, FontSize = NotaType.DeviceValue, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var b = new Border
             {
                 Height = NotaSize.Dropdown, CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 0),
@@ -268,7 +268,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             return (int)Math.Round(rootv - off / tr);
         }
         readouts.Add(() => keys.Set(rootv, NaturalKey(), snap.Live ? snap.Note : -1, G("pitchtrack"), "the key sets the playback speed"));
-        var rootText = Mono(SamplerModel.NoteName(rootv), TextPrimary, NotaType.Value);
+        var rootText = Mono(SamplerModel.NoteName(rootv), TextPrimary, NotaType.DeviceValue);
         rootText.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() => rootText.Text = SamplerModel.NoteName(rootv));
         Border StepBtn(GlyphKind g, int d, string tip)
@@ -334,7 +334,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         }, out var velSync);
         readouts.Add(velSync);
         if (I("velamount") is var vli and >= 0) acc.Learn(velSwitch, vli);
-        var velWord = Mono("", TextSecondary, NotaType.Caption);
+        var velWord = Mono("", TextSecondary, NotaType.DeviceCaption);
         readouts.Add(() => velWord.Text = G("velamount") > 0.005f ? NotaNum.Pct(G("velamount")) : "off");
         var velBlock = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { Cap("VEL → VOL"), velSwitch, velWord } };
         ToolTip.SetTip(velBlock, "Velocity sets the level — the amount is the rail's VEL → VOL");
@@ -408,7 +408,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         var railHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         var railCap = new TextBlock
         {
-            Text = "Voices", FontSize = NotaType.Body, FontWeight = FontWeight.SemiBold,
+            Text = "Voices", FontSize = NotaType.DeviceBody, FontWeight = FontWeight.SemiBold,
             Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center,
         };
         railHead.Children.Add(railCap);

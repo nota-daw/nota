@@ -131,7 +131,7 @@ internal sealed class SamplerWaveView : Control
         NotaGraph.Window(ctx, r);
         if (_peaks.Length == 0)
         {
-            var ft = SamplerInk.Mono(_empty, NotaPalette.TextTertiary, NotaType.Caption);
+            var ft = SamplerInk.Mono(_empty, NotaPalette.TextTertiary, NotaType.DeviceCaption);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, (h - ft.Height) / 2));
             return;
         }

@@ -66,7 +66,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
         for (int i = 0; i < 4; i++)
         {
             int iv = i;
-            actName[i] = new TextBlock { Text = actNames[i], FontSize = NotaType.Caption, FontWeight = FontWeight.SemiBold, Foreground = i == 0 ? NotaPalette.Record : TextPrimary, LineHeight = 13 };
+            actName[i] = new TextBlock { Text = actNames[i], FontSize = NotaType.DeviceCaption, FontWeight = FontWeight.SemiBold, Foreground = i == 0 ? NotaPalette.Record : TextPrimary, LineHeight = 13 };
             actSub[i] = new TextBlock { Text = "", FontSize = NotaType.RowLabel, Foreground = TextTertiary, LineHeight = 13 };
             actBtn[i] = new Border { Height = 30, Width = 70, CornerRadius = NotaRadius.Field, Background = NotaPalette.SurfaceHover, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { actName[i], actSub[i] } } };
@@ -81,7 +81,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { barNum, tickRow, ofBars } } } } };
 
         // ---------- layer stack ----------
-        var layerHint = new TextBlock { Text = "Press Record to lay down the first loop", FontSize = NotaType.Caption, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var layerHint = new TextBlock { Text = "Press Record to lay down the first loop", FontSize = NotaType.DeviceCaption, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var layerRows = new Border[MaxLayers]; var waves = new StrataWave[MaxLayers];
         var stateTxts = new TextBlock[MaxLayers]; var dbTxts = new TextBlock[MaxLayers]; var muteBtns = new Border[MaxLayers]; var idxTxts = new TextBlock[MaxLayers];
         var layerStack = new StackPanel { Spacing = 2, Margin = new Thickness(4) };

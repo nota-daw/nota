@@ -163,7 +163,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         };
         static TextBlock Section(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.Body, FontWeight = FontWeight.SemiBold,
+            Text = t, FontSize = NotaType.DeviceBody, FontWeight = FontWeight.SemiBold,
             Foreground = c ?? TextPrimary, VerticalAlignment = VerticalAlignment.Center,
         };
 

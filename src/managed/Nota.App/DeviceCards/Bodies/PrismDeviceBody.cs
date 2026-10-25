@@ -495,7 +495,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         }
         Control OutputTab()
         {
-            // 160 high: the knob and meter in one 36 row, the bars, sidechain and switches, soft clip.
+            // 190 high: the knob and meter in one 36 row, the bars, sidechain and switches, soft clip.
             var top = DeviceBodyKit.OutputHead(K(Output, "Output", v => DbF((v - 0.5) * 48), 96, inline: true), () => Sc(S_OutL), () => Sc(S_OutR), readouts.Add);
             top.Margin = new Thickness(0, 4, 0, 0);
 

@@ -110,7 +110,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         // ---- small builders --------------------------------------------------------
         static TextBlock Lbl(string t, double fs, IBrush c, FontWeight w = FontWeight.SemiBold)
             => new() { Text = NotaText.Label(t), FontSize = fs, FontWeight = w, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
-        static TextBlock Caps(string t) => new() { Text = NotaText.Label(t), FontSize = NotaType.Caption, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Caps(string t) => new() { Text = NotaText.Label(t), FontSize = NotaType.DeviceCaption, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock MonoText(string t, double fs, IBrush c)
         { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
@@ -262,7 +262,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             bool isA = o == "a";
             string p = "o" + o;
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(OscCols) };
-            g.Children.Add(Cell(Lbl(isA ? "A" : "B", NotaType.Body, TxtC, FontWeight.SemiBold), 0, HorizontalAlignment.Left));
+            g.Children.Add(Cell(Lbl(isA ? "A" : "B", NotaType.DeviceBody, TxtC, FontWeight.SemiBold), 0, HorizontalAlignment.Left));
             g.Children.Add(Cell(K($"{p}oct", "", v => Feet[Math.Clamp((int)Math.Round(v * 3), 0, 3)], false, Knob.Size, 40), 1));
             g.Children.Add(Cell(K($"{p}semi", "", v => { int s = (int)Math.Round((v - 0.5f) * 24); return s == 0 ? "0\u2009st" : $"{s:+0;−0}\u2009st"; }, false, Knob.Size, 40), 2));
             g.Children.Add(Cell(K($"{p}fine", "", v => { double c = (v - 0.5) * 100; return Math.Abs(c) < 0.5 ? "0\u2009c" : $"{c:+0;−0}\u2009c"; }, false, Knob.Size, 40), 3));
@@ -440,7 +440,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         {
             bool UniOff() => G("voicemode") < 0.25f && G("unison") < 0.25f;
             var noiseType = (Border)Chips("noisecolor", new[] { "White", "Pink" }); noiseType.HorizontalAlignment = HorizontalAlignment.Right;
-            var uni = Row(5, new TextBlock { Text = "Unison", FontSize = NotaType.Caption, Foreground = MutedC, Width = 44, VerticalAlignment = VerticalAlignment.Center }, Chips("unison", new[] { "Off", "×2", "×5" }));
+            var uni = Row(5, new TextBlock { Text = "Unison", FontSize = NotaType.DeviceCaption, Foreground = MutedC, Width = 44, VerticalAlignment = VerticalAlignment.Center }, Chips("unison", new[] { "Off", "×2", "×5" }));
             var det = SliderRow("Detune", "unidetune", v => $"{v * 50:0}\u2009c", 49, 32, UniOff);
             var sum = new Grid { ColumnDefinitions = new ColumnDefinitions("44,*,32"), ColumnSpacing = 5, Children = { Caps("Sum"), Col(sumBar, 1), Col(Right(sumTxt), 2) } };
             var g = new Grid { RowDefinitions = new RowDefinitions("*,*,*,Auto,Auto,*,*,*") };
@@ -457,8 +457,8 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
                                 new StackPanel { Spacing = 2, Children = { meterR, Center(Lbl("R", NotaType.Axis, MutedC, FontWeight.Normal)) } }, scale);
             meters.VerticalAlignment = VerticalAlignment.Top;
             var top = Row(10, K("volume", "Volume", VolDb, false, Knob.Size, 54), meters);
-            var bend = Row(6, new TextBlock { Text = "Bend", FontSize = NotaType.Caption, Foreground = MutedC, Width = 44, VerticalAlignment = VerticalAlignment.Center },
-                Chips("bendrange", new[] { "2", "5", "7", "12" }, new[] { 1 / 11f, 4 / 11f, 6 / 11f, 1f }), Lbl("st", NotaType.Caption, MutedC, FontWeight.Normal));
+            var bend = Row(6, new TextBlock { Text = "Bend", FontSize = NotaType.DeviceCaption, Foreground = MutedC, Width = 44, VerticalAlignment = VerticalAlignment.Center },
+                Chips("bendrange", new[] { "2", "5", "7", "12" }, new[] { 1 / 11f, 4 / 11f, 6 / 11f, 1f }), Lbl("st", NotaType.DeviceCaption, MutedC, FontWeight.Normal));
             // Velocity → filter: a quick switch over the Velocity Filter amount (0 ↔ 50 %).
             var velF = Switch("Vel → filter", () => G("velfilt") > 0.001f, () => { SetP("velfilt", G("velfilt") > 0.001f ? 0f : 0.5f); Refresh(); }, out var velSync);
             readouts.Add(velSync);
@@ -516,7 +516,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             var tune = HSlider("tune", v => { double c = (v - 0.5) * 200; return Math.Abs(c) < 0.5 ? "0\u2009c" : $"{c:+0;−0}\u2009c"; }, 30, null, flyReadouts); tune.Width = 130;
             var at = HSlider("aftertouch", v => Pct(v), 30, null, flyReadouts); at.Width = 130;
             var p = new StackPanel { Spacing = 2, Width = 290, Children = {
-                Lbl("Voice setup", NotaType.Body, TxtC),
+                Lbl("Voice setup", NotaType.DeviceBody, TxtC),
                 new Border { Height = 4 },
                 R("VOICES", Chips("polyphony", new[] { "5", "10", "16" }, null, flyReadouts, 8)),
                 R("ALLOCATION", Chips("alloc", new[] { "Rotate", "Oldest" }, null, flyReadouts, 8)),
@@ -532,7 +532,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         }
         // A raised menu button inside the device (22 high, corner 6), at the right of the Mixer / Output tabs.
         var voiceBtn = new Border { Height = NotaSize.Dropdown, Padding = new Thickness(9, 0, 8, 0), CornerRadius = NotaRadius.Field, Background = NotaPalette.SurfaceHover, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
-            Child = Glyph.WithChevron(new TextBlock { Text = "Voice", FontSize = NotaType.Body, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, 7) };
+            Child = Glyph.WithChevron(new TextBlock { Text = "Voice", FontSize = NotaType.DeviceBody, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, 7) };
         voiceBtn.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
         ToolTip.SetTip(voiceBtn, "Voice setup: polyphony, allocation, glide mode, oversampling, vintage seed");
         voiceBtn.PointerPressed += (_, e) =>

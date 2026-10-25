@@ -913,7 +913,7 @@
   <!-- ===== Text roles ===== -->
   <!-- ===== Type ============================================================
        The hierarchy: nothing in the shell is larger than 13 except the position
-       readout; chrome text is 11–12. Device text sits lower (8–10.5) because a card keeps
+       readout; chrome text is 11–12. Device text sits lower (7–10) because a card keeps
        Nota's 260px frame. Labels are sentence case at letter-spacing 0 — no uppercase
        tracked labels anywhere; NotaText.Label turns the caps
        strings views still pass into sentence case. Mono means a number you read.
@@ -976,26 +976,26 @@
   </Style>
 
   <!-- Device scale (inside a 260px card; mirrors NotaType) -->
-  <Style Selector="TextBlock.DeviceName">     <!-- 13 / 600 -->
-    <Setter Property="FontSize" Value="13"/>
+  <Style Selector="TextBlock.DeviceName">     <!-- 12 / 600 -->
+    <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>
-  <Style Selector="TextBlock.DeviceSection">  <!-- section title: 10.5 / 400, ink 3 -->
-    <Setter Property="FontSize" Value="10.5"/>
+  <Style Selector="TextBlock.DeviceSection">  <!-- section title: 9.5 / 400, ink 3 -->
+    <Setter Property="FontSize" Value="9.5"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
-  <Style Selector="TextBlock.RowLabel">       <!-- row label: 10.5 / 400, ink 3 -->
-    <Setter Property="FontSize" Value="10.5"/>
+  <Style Selector="TextBlock.RowLabel">       <!-- row label: 9.5 / 400, ink 3 -->
+    <Setter Property="FontSize" Value="9.5"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
-  <Style Selector="TextBlock.KnobLabel">      <!-- the control's name: 10.5 / 400, ink 3 -->
-    <Setter Property="FontSize" Value="10.5"/>
+  <Style Selector="TextBlock.KnobLabel">      <!-- the control's name: 9.5 / 400, ink 3 -->
+    <Setter Property="FontSize" Value="9.5"/>
     <Setter Property="LineHeight" Value="13"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextTertiary}"/>
   </Style>
-  <Style Selector="TextBlock.KnobValue">      <!-- parameter value: 11 / 400, ink 1 -->
-    <Setter Property="FontSize" Value="11"/>
+  <Style Selector="TextBlock.KnobValue">      <!-- parameter value: 10 / 400, ink 1 -->
+    <Setter Property="FontSize" Value="10"/>
     <Setter Property="LineHeight" Value="13"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
   </Style>

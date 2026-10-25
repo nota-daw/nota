@@ -425,7 +425,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 btns, clear, wet,
             };
             // Feedback and Spread live on the Loop rail beside this panel, so they are not repeated here.
-            var grid = new Grid { RowDefinitions = new RowDefinitions("20,20,20,9,30,30,*"), Margin = new Thickness(0, 3, 0, 0) };
+            var grid = new Grid { RowDefinitions = new RowDefinitions("26,26,26,9,30,30,*"), Margin = new Thickness(0, 3, 0, 0) };
             for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
             btns.VerticalAlignment = VerticalAlignment.Bottom; clear.VerticalAlignment = VerticalAlignment.Bottom;
             return grid;
@@ -433,10 +433,10 @@ internal sealed class DelayDeviceBody : IDeviceBody
 
         Control OutputTab()
         {
-            // 160 high: the knob and meter in one 36 row, three bars, two switches.
+            // 190 high: the knob and meter in one 36 row, three bars, two switches.
             var top = DeviceBodyKit.OutputHead(K(Output, "Out", v => Db(OutDb(v)), cellW: 96, inline: true), () => Sc(S_OutL), () => Sc(S_OutR), readouts.Add);
 
-            var mid = new Grid { RowDefinitions = new RowDefinitions("20,20,20"), Children = {
+            var mid = new Grid { RowDefinitions = new RowDefinitions("26,26,26"), Children = {
                 SliderRow("Mix", DryWet, Pct, dim: () => On(WetOnly)),
                 GRow(SliderRow("Width", WidthP, v => NotaNum.F($"{v * 200:0}")), 1),
                 GRow(SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")), 2) } };

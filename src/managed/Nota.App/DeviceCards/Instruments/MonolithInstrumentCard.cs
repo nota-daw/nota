@@ -190,7 +190,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         {
             string p = $"o{n}";
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(OscCols), Height = 24 };
-            var num = new TextBlock { Text = n.ToString(), FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+            var num = new TextBlock { Text = n.ToString(), FontSize = NotaType.DeviceTab, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(Cell(num, 0));
             g.Children.Add(Cell(RowKnob($"{p}range", v => Feet[Math.Clamp((int)Math.Round(v * 5), 0, 5)], 26), 1));
             Control freq = n == 1 ? Cap("master") : RowKnob($"{p}tune", DetFmt, 34);

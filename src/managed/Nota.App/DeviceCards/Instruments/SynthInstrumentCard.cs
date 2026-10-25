@@ -51,7 +51,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         return row;
     }
 
-    private const double RailW = 204, TabH = 26, MiniRowH = 56;
+    private const double RailW = 204, TabH = 22, MiniRowH = 56;
 
     private static readonly string[] WaveNames = { "Saw", "Square", "Triangle", "Sine" };
     private static readonly string[] FilterNames = { "Off", "LP", "HP", "BP" };
@@ -130,7 +130,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
             {
                 new TextBlock
                 {
-                    Text = NotaText.Label(label), FontSize = NotaType.Caption, Foreground = TextTertiary,
+                    Text = NotaText.Label(label), FontSize = NotaType.DeviceCaption, Foreground = TextTertiary,
                 },
                 c,
             },
@@ -253,7 +253,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         var railHeader = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         railHeader.Children.Add(new TextBlock
         {
-            Text = "Voices", FontSize = NotaType.Body, FontWeight = FontWeight.SemiBold,
+            Text = "Voices", FontSize = NotaType.DeviceBody, FontWeight = FontWeight.SemiBold,
             Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center,
         });
         voiceChips.HorizontalAlignment = HorizontalAlignment.Right;
@@ -389,7 +389,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         for (int i = 0; i < names.Length; i++)
         {
             int iv = i;
-            var tb = new TextBlock { Text = names[i], FontSize = NotaType.Body, VerticalAlignment = VerticalAlignment.Center };
+            var tb = new TextBlock { Text = names[i], FontSize = NotaType.DeviceBody, VerticalAlignment = VerticalAlignment.Center };
             var cell = new Border
             {
                 Height = TabH, BorderThickness = new Thickness(0, 0, 0, 2), Background = Brushes.Transparent,

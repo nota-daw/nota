@@ -123,7 +123,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         // ---- shared builders --------------------------------------------------
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = NotaText.Label(t), FontSize = NotaType.Caption,
+            Text = NotaText.Label(t), FontSize = NotaType.DeviceCaption,
             Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -281,10 +281,10 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             var bar = new Border { Width = 2, Height = 18, CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center };
             var letter = new TextBlock
             {
-                Text = OperatorTopo.Names[op], FontSize = NotaType.Body, FontWeight = FontWeight.SemiBold,
+                Text = OperatorTopo.Names[op], FontSize = NotaType.DeviceBody, FontWeight = FontWeight.SemiBold,
                 Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center,
             };
-            var role = new TextBlock { FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center };
+            var role = new TextBlock { FontSize = NotaType.DeviceCaption, VerticalAlignment = VerticalAlignment.Center };
             readouts.Add(() =>
             {
                 var tgt = OperatorTopo.Algo[AlgoIdx()];

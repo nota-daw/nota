@@ -411,7 +411,7 @@ internal static partial class DesignTokenCheck
             yield return (hits[name].Count == 0, hits[name].Count == 0 ? $"no {name}" : $"{name}: {string.Join(", ", hits[name].Take(8))}");
     }
 
-    /// <summary>Layout: device cards 260 high with a 32px header and a width that fits the device,
+    /// <summary>Layout: device cards 260 high with a 24px header and a width that fits the device,
     /// transport at the top, list rows 26. See DESIGN.md § Device cards and § Shell.</summary>
     public static IEnumerable<(bool Ok, string Label)> RunLayout()
     {
@@ -420,7 +420,7 @@ internal static partial class DesignTokenCheck
         var app = Path.Combine(root, "src/managed/Nota.App");
 
         var kit = File.ReadAllText(Path.Combine(app, "DeviceCardKit.cs"));
-        yield return (Regex.IsMatch(kit, @"HeaderH = 32;"), "device card header is 32px");
+        yield return (Regex.IsMatch(kit, @"HeaderH = 24;"), "device card header is 24px");
 
         // Style guide (spec 038): every card is 260 high and its width fits the device. A width
         // outside 260–940 is a layout that has lost its frame. The generic instrument card is an

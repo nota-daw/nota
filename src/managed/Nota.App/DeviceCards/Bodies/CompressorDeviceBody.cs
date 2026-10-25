@@ -482,7 +482,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                     Toggle(AutoGain, "Auto gain", "Auto gain — make-up that follows the threshold and ratio") } },
             };
             rows[5].Margin = new Thickness(0, 1, 0, 0);
-            var grid = new Grid { RowDefinitions = new RowDefinitions("22,20,20,3,20,Auto,*"), Margin = new Thickness(0, 2, 0, 0) };   // 159 of 160
+            var grid = new Grid { RowDefinitions = new RowDefinitions("26,26,26,5,26,Auto,*"), Margin = new Thickness(0, 2, 0, 0) };   // 183 of 190
             for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
             return grid;
         }
@@ -505,8 +505,8 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                     Toggle(External, "External key", "External key — key off the source picked on the Sidechain tab; off, the track keys itself"),
                     Toggle(StereoLink, "Stereo link", "Stereo link — one reduction for both channels; off, left and right compress on their own") } },
             };
-            // 160 high in all: the read-out, three bars 20 apart, the buttons, two switches.
-            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,19,19,19,Auto,*"), Margin = new Thickness(0, 4, 0, 0) };
+            // 190 high in all: the read-out, three bars 24 apart, the buttons, two switches.
+            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,24,24,24,Auto,*"), Margin = new Thickness(0, 4, 0, 0) };
             rows[0].Margin = new Thickness(0, 0, 0, 2);
             btns.Margin = new Thickness(0, 3, 0, 0);
             for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));

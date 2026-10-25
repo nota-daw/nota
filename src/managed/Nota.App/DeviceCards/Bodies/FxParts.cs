@@ -17,7 +17,7 @@ namespace Nota.App;
 
 internal static class FxParts
 {
-    public const double TabRowH = 26, TabGap = 16, TabSize = 12;
+    public const double TabRowH = 22, TabGap = 16, TabSize = NotaType.DeviceTab;
     private static readonly FontWeight TabWeight = (FontWeight)580;
 
     /// <summary>A row label: 10.5, ink 3, sentence case.</summary>

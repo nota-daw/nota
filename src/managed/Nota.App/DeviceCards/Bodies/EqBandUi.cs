@@ -68,7 +68,7 @@ internal static class EqBandUi
     {
         var num = new TextBlock
         {
-            Text = (band + 1).ToString(), FontSize = NotaType.Caption, FontWeight = FontWeight.SemiBold,
+            Text = (band + 1).ToString(), FontSize = NotaType.DeviceCaption, FontWeight = FontWeight.SemiBold,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         var badge = new Border
@@ -207,7 +207,7 @@ internal static class EqBandUi
     internal static DockPanel Head(Border badge, Border onSwitch, Func<string> name, Func<bool> on, out Action sync)
     {
         var title = Title("");
-        title.FontSize = NotaType.Value;
+        title.FontSize = NotaType.DeviceValue;
         title.Margin = new Thickness(6, 0, 6, 0);
         DockPanel.SetDock(badge, Dock.Left);
         DockPanel.SetDock(onSwitch, Dock.Right);
@@ -242,7 +242,7 @@ internal static class EqBandUi
     /// <summary>A title inside a section: 12 / 600, ink 1.</summary>
     internal static TextBlock Title(string text) => new()
     {
-        Text = text, FontSize = NotaType.Body, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
+        Text = text, FontSize = NotaType.DeviceBody, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
         VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
     };
 

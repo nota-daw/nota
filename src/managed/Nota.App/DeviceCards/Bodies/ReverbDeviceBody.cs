@@ -325,11 +325,11 @@ internal sealed class ReverbDeviceBody : IDeviceBody
 
         Control OutputTab()
         {
-            // 160 high: the knob and meter in one 36 row, three bars, two switches.
+            // 190 high: the knob and meter in one 36 row, three bars, two switches.
             var top = DeviceBodyKit.OutputHead(K(Output, "Out", v => Db(OutDb(v)), 96, inline: true), () => Sc(S_OutL), () => Sc(S_OutR), readouts.Add);
             top.Margin = new Thickness(0, 4, 0, 0);
 
-            var mid = new Grid { RowDefinitions = new RowDefinitions("20,20,20"), Children = {
+            var mid = new Grid { RowDefinitions = new RowDefinitions("26,26,26"), Children = {
                 SliderRow("Mix", DryWet, Pct, () => On(WetOnly)),
                 GRow(SliderRow("Width", WidthP, Pct), 1),
                 GRow(SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}")), 2) } };

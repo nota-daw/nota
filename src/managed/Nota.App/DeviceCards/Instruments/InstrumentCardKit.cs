@@ -20,7 +20,7 @@ namespace Nota.App;
 
 internal static class InstrumentCardKit
 {
-    internal const double TabRowH = 26;   // a device tab row
+    internal const double TabRowH = 22;   // a device tab row
     internal const double TabGap = 16;    // between tabs inside a device
 
     /// <summary>A tab row inside a device (§ Tabs): 26 high with a thin line under it, tabs 16
@@ -38,7 +38,7 @@ internal static class InstrumentCardKit
             int iv = i;
             var tb = new TextBlock
             {
-                Text = names[i], FontSize = 12,
+                Text = names[i], FontSize = NotaType.DeviceTab,
                 VerticalAlignment = VerticalAlignment.Center,
             };
             var line = new Border { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, CornerRadius = NotaRadius.Fine };
@@ -113,7 +113,7 @@ internal static class InstrumentCardKit
     /// <summary>A section title that names a group of rows (Osc, Sub, Global): 12 / 600, ink 1.</summary>
     internal static TextBlock Title(string text) => new()
     {
-        Text = NotaText.Label(text), FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
+        Text = NotaText.Label(text), FontSize = NotaType.DeviceTab, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary,
         VerticalAlignment = VerticalAlignment.Center,
     };
 

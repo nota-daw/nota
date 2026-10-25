@@ -79,7 +79,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
 
         if (!mini)
         {
-            var bpm = new TextBlock { FontSize = NotaType.Caption, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(-4, 0, 0, 0) };
+            var bpm = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(-4, 0, 0, 0) };
             ctx.AddDeviceRefresher(() => bpm.Text = $"· {e.Bpm:0.0} BPM");
             bpm.Text = $"· {e.Bpm:0.0} BPM";
             row.Children.Add(bpm); row.Children.Add(MidiCardHeader.LearnButton(ctx));
@@ -247,7 +247,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             var tabs = DeviceCardKit.Segments(new[] { "Pattern", "Groove" }, () => grid.Groove ? 1 : 0,
                 i => { ui.Groove = grid.Groove = i == 1; Refresh(); }, out var tabSync, padX: 6);
             readouts.Add(tabSync);
-            var laneName = new TextBlock { FontSize = NotaType.Caption, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
+            var laneName = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
             var laneBtn = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent,
                 Children = { laneName, new Glyph { Kind = GlyphKind.ChevronDown, Width = 8, Height = 8, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center } } };
             ToolTip.SetTip(laneBtn, "Next Groove lane");
@@ -292,7 +292,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
 
         Control IslandHead(Control left, Control? right)
         {
-            if (left is TextBlock t) { t.FontSize = NotaType.Caption; t.FontWeight = FontWeight.SemiBold; t.Foreground = NotaPalette.TextPrimary; }
+            if (left is TextBlock t) { t.FontSize = NotaType.DeviceCaption; t.FontWeight = FontWeight.SemiBold; t.Foreground = NotaPalette.TextPrimary; }
             var d = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
             if (right is not null) { right.HorizontalAlignment = HorizontalAlignment.Right; d.Children.Add(WithDock(right, Dock.Right)); }
             d.Children.Add(left);

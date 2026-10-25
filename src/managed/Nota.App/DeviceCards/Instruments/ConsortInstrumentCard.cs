@@ -903,7 +903,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         var overlay = new Border { IsVisible = false, Background = NotaPalette.SurfaceCard, CornerRadius = NotaRadius.Group, Focusable = true };
         void OpenOverlay(bool open) { vs.Overlay = open; overlay.IsVisible = open; if (open) { overlay.Focus(); } Refresh(); }
         var countTxt = Value("");
-        var openTxt = new TextBlock { FontSize = NotaType.Caption, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center };
+        var openTxt = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center };
         var openBtn = TextButton("");
         openBtn.Child = Glyph.WithChevron(openTxt, 8);
         openBtn.VerticalAlignment = VerticalAlignment.Center;
@@ -923,7 +923,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             ToolTip.SetTip(countTxt, cs.Count == 0 ? "No cables — the normals run the voice" : string.Join("\n", cs.Select(c => $"{CableName(c)} · depth {c.Depth * 100:+0;−0;0}")));
             openTxt.Text = vs.Overlay ? "Close" : vs.Centre == 4 ? "Collapse" : "Open";
         });
-        var header = Row(10, Cap("Patch bay", MutedC, NotaType.Caption), countTxt, openBtn);
+        var header = Row(10, Cap("Patch bay", MutedC, NotaType.DeviceCaption), countTxt, openBtn);
         header.Margin = new Thickness(6, 0, 0, 0);
         vs.Header = header;
 

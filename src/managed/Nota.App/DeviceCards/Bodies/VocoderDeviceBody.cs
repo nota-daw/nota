@@ -91,7 +91,7 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         // ---- small builders ---------------------------------------------------------
         // A section's title: 12 / semibold, ink 1.
         static TextBlock Title(string t) => new()
-        { Text = t, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        { Text = t, FontSize = NotaType.DeviceTab, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T Row<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }

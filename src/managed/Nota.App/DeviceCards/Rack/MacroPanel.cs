@@ -269,7 +269,7 @@ internal static class MacroPanel
 
     public static void PromptRename(DeviceCardContext ctx, IMacroSurface s, Control anchor, int m)
     {
-        var box = new TextBox { Text = s.MacroName(m), FontSize = NotaType.Caption, Width = 120, Height = 22, Padding = new Thickness(6, 0) };
+        var box = new TextBox { Text = s.MacroName(m), FontSize = NotaType.DeviceCaption, Width = 120, Height = 22, Padding = new Thickness(6, 0) };
         var fly = new Flyout { Content = box };
         box.KeyDown += (_, e) =>
         {

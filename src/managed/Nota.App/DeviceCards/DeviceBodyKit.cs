@@ -18,7 +18,7 @@ namespace Nota.App;
 
 internal static class DeviceBodyKit
 {
-    internal const double TabRowH = 26;   // a device tab row
+    internal const double TabRowH = 22;   // a device tab row
     internal const double TabGap = 16;    // between tabs inside a device
 
     /// <summary>The body frame: no background of its own (the raised card shows through), 8 under
@@ -70,7 +70,7 @@ internal static class DeviceBodyKit
     /// <summary>A section title: 11 / 600 in ink 1 ("Meters", "Correction").</summary>
     internal static TextBlock Title(string text, IBrush? ink = null) => new()
     {
-        Text = NotaText.Label(text), FontSize = NotaType.Caption, FontWeight = FontWeight.SemiBold,
+        Text = NotaText.Label(text), FontSize = NotaType.DeviceCaption, FontWeight = FontWeight.SemiBold,
         Foreground = ink ?? TextPrimary, VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -145,7 +145,7 @@ internal static class DeviceBodyKit
         for (int i = 0; i < n; i++)
         {
             int iv = i;
-            var tb = new TextBlock { Text = names[i], FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+            var tb = new TextBlock { Text = names[i], FontSize = NotaType.DeviceTab, VerticalAlignment = VerticalAlignment.Center };
             var line = new Border { Height = 2, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, -1) };
             var cell = new Panel
             {

@@ -204,7 +204,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
         // A list box: [name ▾] opens the entries; the wheel steps through them.
         Control Drop(int p, string[] names, string tip)
         {
-            var name = new TextBlock { FontSize = NotaType.Caption, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+            var name = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
             var box = new Border
             {
                 Height = 22, MinWidth = 108, Background = NotaPalette.SurfaceHover, CornerRadius = NotaRadius.Field,
@@ -470,7 +470,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
                 // One line: the tab is named Output and THD is in the centre's head row.
                 Child = Line("in · out", () => DbF(Sc(S_InPk)).Replace("\u2009dB", "").Replace(" dB", "") + " · " + DbF(Sc(S_OutPk))),
             };
-            var sliders = new Grid { RowDefinitions = new RowDefinitions("20,20,20") };
+            var sliders = new Grid { RowDefinitions = new RowDefinitions("26,26,26") };
             sliders.Children.Add(SliderRow("MIX", Mix, Pct));
             sliders.Children.Add(GRow(SliderRow("GATE", Gate, GateF, modulation: true), 1));
             sliders.Children.Add(GRow(SliderRow("OUTPUT", Output, OutDb, bipolar: true), 2));
@@ -482,7 +482,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
                 Docked(new Border { Margin = new Thickness(0, 4, 0, 0), Child = sliders }, Dock.Top),
                 Docked(new StackPanel { Spacing = 0, Children = { Toggle(AutoComp, "Auto-compensation", () => On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0} dB") : "Auto-compensation"), Toggle(EvenOnly, "Even harmonics only") } }, Dock.Bottom),
                 Docked(new Border { Padding = new Thickness(0, 0, 0, 4), Child = btns }, Dock.Bottom) } };
-            return new Border { Padding = new Thickness(0, 4, 0, 0), Child = body };   // 148 of 160
+            return new Border { Padding = new Thickness(0, 4, 0, 0), Child = body };   // 166 of 190
         }
 
         // ======================================================================

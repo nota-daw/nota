@@ -560,7 +560,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             });
 
             box.Margin = new Thickness(0, 1, 0, 0);
-            var grid = new Grid { RowDefinitions = new RowDefinitions("24,20,20,3,20,Auto,*"), Margin = new Thickness(0, 2, 0, 0) };
+            var grid = new Grid { RowDefinitions = new RowDefinitions("26,26,26,5,26,Auto,*"), Margin = new Thickness(0, 2, 0, 0) };
             grid.Children.Add(GRow(tRow, 0));
             grid.Children.Add(GRow(env, 1));
             grid.Children.Add(GRow(lfo, 2));
@@ -588,7 +588,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 // One line: the tab is named Output, and the live cutoff is on the Mod tab's read-out.
                 Child = Line("in · out", () => DbF(Sc(S_InPk)).Replace("\u2009dB", "").Replace(" dB", "") + " · " + DbF(Sc(S_OutPk))),
             };
-            var sliders = new Grid { RowDefinitions = new RowDefinitions("20,20,20"), Margin = new Thickness(0, 4, 0, 0) };
+            var sliders = new Grid { RowDefinitions = new RowDefinitions("26,26,26"), Margin = new Thickness(0, 4, 0, 0) };
             sliders.Children.Add(SliderRow("Drive", Drive, v => v <= 0.001 ? "off" : Pct(v)));
             sliders.Children.Add(GRow(SliderRow("Dry/wet", DryWet, Pct), 1));
             sliders.Children.Add(GRow(SliderRow("Gain", Gain, GainF, bipolar: true), 2));
@@ -609,7 +609,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             };
             ToolTip.SetTip(stereo, "Stereo phase — the right channel's LFO runs ahead of the left (90° when switched on; right-click steps 45° … 180°)");
 
-            // 160 high: the read-out, three bars, the buttons, two switches.
+            // 190 high: the read-out, three bars, the buttons, two switches.
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
                 Docked(sliders, Dock.Top),

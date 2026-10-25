@@ -86,7 +86,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null) => FxParts.Label(t, c);
         // A section's title: 12 / semibold, ink 1.
         static TextBlock Title(string t) => new()
-        { Text = t, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        { Text = t, FontSize = NotaType.DeviceTab, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }

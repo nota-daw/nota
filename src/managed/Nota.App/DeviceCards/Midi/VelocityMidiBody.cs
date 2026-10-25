@@ -132,7 +132,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center };
         if (!IsMini(e, t, index))
         {
-            var tag = new TextBlock { FontSize = NotaType.Caption, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(-4, 0, 0, 0) };
+            var tag = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(-4, 0, 0, 0) };
             void Sync() => tag.Text = "· " + Modes[VelocityModel.Mode(p => e.MidiEffectGetParam(t, index, p))];
             Sync();
             ctx.AddDeviceRefresher(Sync);
@@ -211,7 +211,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             for (int i = 0; i < Modes.Length; i++)
             {
                 int m = i;
-                var name = new TextBlock { Text = Modes[m], FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center };
+                var name = new TextBlock { Text = Modes[m], FontSize = NotaType.DeviceCaption, VerticalAlignment = VerticalAlignment.Center };
                 var hint = Mono(VelocityModel.ModeHints[m], Cap, NotaType.RowLabel); hint.HorizontalAlignment = HorizontalAlignment.Right;
                 var rowB = new Border { Height = 22, CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand),
                     Child = new DockPanel { Margin = new Thickness(8, 0), Children = { WithDock(hint, Dock.Right), name } } };
@@ -303,7 +303,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             });
 
             var rndSw = new SwitchTrack();
-            var rndLbl = new TextBlock { Text = "Random", FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center };
+            var rndLbl = new TextBlock { Text = "Random", FontSize = NotaType.DeviceCaption, VerticalAlignment = VerticalAlignment.Center };
             var rndVal = Mono("", Txt); rndVal.HorizontalAlignment = HorizontalAlignment.Right;
             var rndRow = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new DockPanel { Children = { WithDock(rndVal, Dock.Right), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { rndSw, rndLbl } } } } };
@@ -341,7 +341,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             var hist = new VelocityHistoryViz();
             ToolTip.SetTip(hist, "The last 12 notes: outline — velocity in, fill — velocity out");
             readouts.Add(() => hist.Set(notes, count, Bypassed()));
-            var histLbl = new TextBlock { Text = "Last 12 notes", FontSize = NotaType.Caption, Foreground = Sub };
+            var histLbl = new TextBlock { Text = "Last 12 notes", FontSize = NotaType.DeviceCaption, Foreground = Sub };
             var histBox = new DockPanel { Margin = new Thickness(0, 8, 0, 0), Children = { WithDock(histLbl, Dock.Top), hist } };
             hist.Margin = new Thickness(0, 4, 0, 0);
 
@@ -362,7 +362,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
         Control BuildMini()
         {
             // Mode chip: click for the next mode, Shift-click for the previous.
-            var modeTb = new TextBlock { FontSize = NotaType.Caption, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
+            var modeTb = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
             var chev = new Glyph(GlyphKind.ChevronDown, 8) { Foreground = Sub, VerticalAlignment = VerticalAlignment.Center };
             var modeChip = new Border { Height = 22, Width = 92, CornerRadius = NotaRadius.Field, Background = NotaPalette.SurfaceHover,
                 Padding = new Thickness(8, 0), Cursor = new Cursor(StandardCursorType.Hand), Margin = new Thickness(0, 0, 8, 0),

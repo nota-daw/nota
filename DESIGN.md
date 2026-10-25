@@ -409,19 +409,23 @@ Name, so the files stay unmodified and the feature is applied at shaping time
 | Role | Size / weight | Ink | Where |
 |---|---|---|---|
 | Readout | 17 / 500 | 1 | Position, tempo, signature, key and grid in the toolbar; the unit beside it in ink 3 |
-| Device name | 13 / 600 | 1 | Device card header, the inspector's clip name |
+| Device name | 12 / 600 | 1 | Device card header, the inspector's clip name |
 | Track name | 13 / 580 | 1 | Track headers, mixer strips, browser rows |
 | Body | 12 / 400 | 1–2 | Chips, tabs, search, menu items, buttons |
 | Value | 11.5 / 400 | 1 | Numbers on a button or in a row; segment cells |
 | Label | 11 / 400 | 3 | Tags, units and row labels |
-| Device label | 10.5 / 400 | 3 | Knob names inside a device; section titles |
+| Device label | 9.5 / 400 | 3 | Knob names inside a device; section titles and row labels |
 | Column head | 10 / 400 | 4 | Column heads and axes |
 | Key letter | 10 / 650 | 3 | M, S and arm letters on track buttons |
 
 Geist ships as static 400 / 500 / 600 / 700 files, so the guide's in-between weights round
 to the nearest one the app has: 580 and 650 draw as 600 (SemiBold), 550 as 500 (Medium).
 
-Others the guide fixes: a knob's value 11, a field 12.5, the browser search 12.5, a clip's
+Inside a device the whole scale sits one step lower so the 260 card keeps its room for
+controls: a knob's value 10, switch words and captions 10, a value on a button or in a row
+10.5, titles and tabs inside a device 11, graph axes 9 (`NotaType.Device*`).
+
+Others the guide fixes: a field 12.5, the browser search 12.5, a clip's
 name 11.5 / 600, a Modular node's name 12.5 / 600, the current tab 12 / 580, a tooltip
 10.5, a device number button 9.5 / 550. `NotaType` and the `TextBlock.*` role classes in
 `NotaTheme.axaml` carry the scale for code and XAML. Tags and units are Geist in sentence
@@ -507,8 +511,8 @@ R2). Each site picks the name for what it draws.
 | Left rail | 40 wide, buttons 28, 6 apart; the current page gets a 2 × 14 orange tick and the soft tint |
 | Browser | rows 30, search 30, chips 24, footer 30 |
 | Track header | 229 wide, 54 high, two rows: name row 18, controls row 20 |
-| Device card | always 260 high; the width fits the device (§ Devices); header 32 |
-| Device sections | 8 from the card edge, 10 apart, 12 padding inside; rows spread to fill the height |
+| Device card | always 260 high; the width fits the device (§ Devices); header 24 |
+| Device sections | 4 from the card edge, 6 apart, 8 padding inside; tab rows 22; rows spread to fill the height |
 | Knob | 26 with a centre cap in a device; 22 when its label sits beside it (Glide, an EQ band); 28 and flat outside devices |
 | Switch | 20 × 12, knob 8, square corners |
 | Track buttons | M, S and arm 18 × 18; device number buttons 14 × 16 |
@@ -707,7 +711,7 @@ and grey.
 - **Colour** orange (`Accent`) inside a device. Outside devices a knob is flat: grey
   (`TextTertiary`) at rest and orange only while it is being set, like the shell slider:
   the pan knob on a track header, sends and pan in the mixer.
-- **Size** (`NotaSize`) 26 in a device with the value (11) and label (Device label 10.5)
+- **Size** (`NotaSize`) 26 in a device with the value (10) and label (Device label 9.5)
   under it; 22 with the label and value beside it (Glide, an EQ band's gain); a flat knob
   outside devices 28, with no cap. `Knob` snaps to these three sizes.
 - An inactive knob draws its arc in ink 4. A modulation arc keeps its source's colour:
@@ -953,11 +957,12 @@ The card each instrument or effect lives in, in the device panel.
 
 - **Card:** corner 9, raised: a thin outline and a light top edge; always 260 high
   (`DeviceCardKit.CardH`), the width fits the device (`IDeviceBody.Width`, § Devices).
-- **Header 32:** name (Device name 13 / 600), preset menu (where the device has presets),
+- **Header 24:** name (Device name 12 / 600), preset menu (20 high) (where the device has presets),
   type tag in ink 3, power switch at the right, on every device, instruments and racks
   included.
-- **Sections** are pressed in, corner 7; 8 from the card edge, 10 apart, 12 padding
-  inside; rows spread to fill the height.
+- **Sections** are pressed in, corner 7; 4 from the card edge, 6 apart, 8 padding
+  inside; rows spread to fill the height. The header and the padding stay thin on purpose:
+  the room goes to graphs and controls (0.57 had a 22 header and almost no padding).
 - **No status line:** nothing sits under the card. A control or a device's own readout that
   lived there moves into the card (§ Devices). The engine readouts every status line ended
   with (sample rate, latency, voices, CPU) go, as the style guide's Changes section lists
@@ -1121,7 +1126,7 @@ control, label and value stays.
 - Keep every control, in the same groups as 0.56.1.
 - Use pressed-in sections, value bars, capped knobs and orange values inside the card.
 - Put the on/off switch at the right of every header, instruments and racks included.
-- Fit every tab of a panel in the 160 px under its tab row: rows on a fixed grid, at least
+- Fit every tab of a panel in the 190 px under its tab row: rows on a fixed grid, at least
   3 px between a control and a rule, nothing clipped at the bottom or the right edge.
 - Say a reading once. A readout under the knobs carries what the knobs add up to (a
   result, a derived time), not their own values again; an in · out readout is one line.
@@ -1150,7 +1155,7 @@ control, label and value stays.
   prefix. The preset menu (‹ Name ⌄ ›) opens the factory presets and its arrows step
   through them, wrapping. A/B, move and delete live in the header's right-click menu; drag
   the card by its whole header; Delete removes it.
-- **Body:** sections 8 from the card edge, 10 apart, 12 padding (`DeviceCardKit.Section`).
+- **Body:** sections 4 from the card edge, 6 apart, 8 padding (`DeviceCardKit.Section`).
   Graph windows keep their frame inside a section. Columns run choice → work → output:
   source or preset on the left, graph and parameters in the middle, levels and mix on the
   right.
@@ -1312,7 +1317,7 @@ drift).
 | `RunBrowser` | Every built-in device sits in exactly one category of its own tab (`DeviceCategories.cs`); no stale or empty category; names in sentence case; 16 / 27 / 6 devices shelved |
 | `RunRemote` | Nota Remote's page: no colour literal in its sources or `index.html`; the first-paint fallback built from the theme files; no letter-spacing, `uppercase`, `.toUpperCase()` or `.caps`; radii 0 / 1 / 2 / 3 / 4 px or 50 %; every custom property it reads is a theme token or one it defines |
 
-Not enforced by a test yet: the type scale, the sizes in § Shapes, the 32 header and the
+Not enforced by a test yet: the type scale, the sizes in § Shapes, the 24 header and the
 card widths in § Devices, where orange may appear, the absence of depth in the shell, the
 track colour order, and every per-device note. Those are held by review against this file
 and the guide.

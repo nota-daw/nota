@@ -114,7 +114,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             var t = new TextBlock { FontSize = NotaType.KnobValue, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             return (new Border { Width = 16, Height = 16, CornerRadius = NotaRadius.Cell, VerticalAlignment = VerticalAlignment.Center, Child = t }, t);
         }
-        static TextBlock StageName() => new() { FontSize = 12, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock StageName() => new() { FontSize = NotaType.DeviceTab, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
 
         // Slider row: label · value bar · value. The param is chosen at paint time — the selected
         // stage's, or a fixed one. `dim` draws the row in ink 4 (its stage is off). Double-click resets.

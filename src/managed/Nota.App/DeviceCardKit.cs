@@ -20,9 +20,9 @@ namespace Nota.App;
 internal static class DeviceCardKit
 {
     internal const double CardH = 260;
-    internal const double HeaderH = 32;   // device header: name · preset · type tag · power
-    internal const double CardPad = 8;    // the body's distance from the card edge
-    internal const double SectionGap = 10, SectionPad = 12;   // between pressed-in sections; inside one
+    internal const double HeaderH = 24;   // device header: name · preset · type tag · power
+    internal const double CardPad = 4;    // the body's distance from the card edge
+    internal const double SectionGap = 6, SectionPad = 8;   // between pressed-in sections; inside one
 
     internal static readonly IBrush Raised = NotaPalette.SurfaceRaised;
     internal static readonly IBrush Card2 = NotaPalette.SurfaceCard;
@@ -106,7 +106,7 @@ internal static class DeviceCardKit
         var track = new SwitchTrack();
         var txt = new TextBlock
         {
-            Text = NotaText.Label(label), FontSize = NotaType.Caption,
+            Text = NotaText.Label(label), FontSize = NotaType.DeviceCaption,
             VerticalAlignment = VerticalAlignment.Center,
         };
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { track } };
@@ -314,7 +314,7 @@ internal static class DeviceCardKit
             Background = NotaPalette.SurfaceHover,
             CornerRadius = NotaRadius.Field, Padding = new Thickness(10, 3), HorizontalAlignment = HorizontalAlignment.Center,
             Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = text, FontSize = NotaType.Caption, Foreground = TextPrimary },
+            Child = new TextBlock { Text = text, FontSize = NotaType.DeviceCaption, Foreground = TextPrimary },
         };
         b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
         return b;
@@ -324,7 +324,7 @@ internal static class DeviceCardKit
     {
         Background = NotaPalette.Well, CornerRadius = NotaRadius.Cell,
         Padding = new Thickness(5, 1), VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock { Text = "Bypassed", FontSize = NotaType.Caption, Foreground = TextTertiary },
+        Child = new TextBlock { Text = "Bypassed", FontSize = NotaType.DeviceCaption, Foreground = TextTertiary },
     };
 
     // A caption above a control (centered, sentence case, secondary ink).
@@ -351,7 +351,7 @@ internal static class DeviceCardKit
         double H = height;   // 22: a card header and the device window's title bar
         var label = new TextBlock
         {
-            Text = string.IsNullOrEmpty(current) ? "Init" : current, FontSize = NotaType.Value,
+            Text = string.IsNullOrEmpty(current) ? "Init" : current, FontSize = NotaType.DeviceValue,
             Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var chevron = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };

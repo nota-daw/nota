@@ -576,7 +576,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         // Three rows, a rule, a row, a reading box and the switches, on the device grid.
         static Control Spread(Control r1, Control r2, Control r3, Control r4, Control box, Control switches)
         {
-            var g = new Grid { RowDefinitions = new RowDefinitions("20,20,20,4,20,Auto,*"), Margin = new Thickness(0, 3, 0, 0) };
+            var g = new Grid { RowDefinitions = new RowDefinitions("26,26,26,6,26,Auto,*"), Margin = new Thickness(0, 3, 0, 0) };
             g.Children.Add(GRow(r1, 0)); g.Children.Add(GRow(r2, 1)); g.Children.Add(GRow(r3, 2));
             g.Children.Add(GRow(new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Center }, 3));
             g.Children.Add(GRow(r4, 4)); g.Children.Add(GRow(box, 5)); g.Children.Add(GRow(switches, 6));
