@@ -209,7 +209,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
                 readouts.Add(Paint);
                 list.Children.Add(rowB);
             }
-            var typeIsland = IslandBox(IslandHead(Caps("Root"), RootStepper()), list, 110);
+            var typeIsland = IslandBox(IslandHead(Caps("Root"), RootStepper()), list, 122);
 
             // ---- NOTE MAP ----
             var remapped = Mono("", Cap, 7);
