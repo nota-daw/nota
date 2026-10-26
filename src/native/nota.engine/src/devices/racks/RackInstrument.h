@@ -50,6 +50,9 @@ class RackInstrument : public Instrument, public RackCore {
 
     int32_t latencySamples() const override { return maxChainLatency(); }
 
+    // A fork for an undoable edit plays on with the same held keys, sounding note and glide.
+    void shareMonoWith(const RackInstrument& o) { mono_ = o.mono_; }
+
     // ---- macros over the plugin-param surface (automation-free) -------------
     int32_t pluginParamCount() const override { return kNumMacros; }
     std::string pluginParamId(int32_t i) const override { return macroParamId(i); }
@@ -72,15 +75,22 @@ class RackInstrument : public Instrument, public RackCore {
     void fanOn(int32_t pitch, float velocity, int32_t glideFrom);
     void fanOff(int32_t pitch);
     void monoRemove(int32_t pitch);
+    void syncMono(); // mono switched since the last call: reconcile the sounding keys
 
-    // Mono state (audio thread only): held keys in press order, their velocities, the
-    // sounding pitch, and the glide ramp (bend in semitones from start to 0 over total samples).
-    int8_t held_[128] = {};
-    int32_t heldN_ = 0;
-    float heldVel_[128] = {};
-    int32_t sounding_ = -1;
-    float glideBend_ = 0.0f;
-    int64_t glideTotal_ = 0, glideLeft_ = 0;
+    // Note state (audio thread only), shared by every fork of the rack so an edit that swaps
+    // the rack object keeps it: held keys in press order (poly too, so switching mono on knows
+    // them), their velocities, the sounding pitch in mono, and the glide ramp (bend in
+    // semitones from start to 0 over total samples).
+    struct MonoState {
+        int8_t held[128] = {};
+        int32_t heldN = 0;
+        float heldVel[128] = {};
+        int32_t sounding = -1;
+        float glideBend = 0.0f;
+        int64_t glideTotal = 0, glideLeft = 0;
+        bool wasMono = false;
+    };
+    std::shared_ptr<MonoState> mono_ = std::make_shared<MonoState>();
 };
 
 } // namespace nota

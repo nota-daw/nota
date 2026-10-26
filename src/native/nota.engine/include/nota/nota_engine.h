@@ -1432,6 +1432,90 @@ NOTA_API int32_t     nota_midi_effect_scope(const NotaEngine* engine, int32_t tr
 NOTA_API int32_t     nota_midi_effect_get_state(const NotaEngine* engine, int32_t track_id, int32_t index, uint8_t* out, int32_t cap);
 /* Restores a state blob by swapping in a restored copy; checkpoint != 0 makes it one undo step. */
 NOTA_API NotaResult  nota_midi_effect_set_state(NotaEngine* engine, int32_t track_id, int32_t index, const uint8_t* data, int32_t size, int32_t checkpoint);
+/* ---- MIDI Effect Rack (specs/040) and chain MIDI effects (#329) ---------------
+ * A MIDI Effect Rack is MIDI effect kind 6 (nota_track_add_midi_effect); its calls take
+ * the track and its MIDI effect index `mi`. Its state blob (nota_midi_effect_get_state)
+ * holds the whole rack. */
+/* Instrument Rack chain MIDI effects (issue #329): a chain's MIDI effects (built-in kinds 0–5), run in order before the chain's sound. */
+NOTA_API int32_t     nota_rack_chain_midi_count(const NotaEngine* e, int32_t t, int32_t chain);
+NOTA_API int32_t     nota_rack_chain_midi_add(NotaEngine* e, int32_t t, int32_t chain, int32_t midi_kind);
+NOTA_API int32_t     nota_rack_chain_midi_remove(NotaEngine* e, int32_t t, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_rack_chain_midi_move(NotaEngine* e, int32_t t, int32_t chain, int32_t from_index, int32_t to_index);
+NOTA_API int32_t     nota_rack_chain_midi_kind(const NotaEngine* e, int32_t t, int32_t chain, int32_t index);
+NOTA_API const char* nota_rack_chain_midi_name(const NotaEngine* e, int32_t t, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_rack_chain_midi_param_count(const NotaEngine* e, int32_t t, int32_t chain, int32_t index);
+NOTA_API const char* nota_rack_chain_midi_param_name(const NotaEngine* e, int32_t t, int32_t chain, int32_t index, int32_t param);
+NOTA_API float       nota_rack_chain_midi_param_min(const NotaEngine* e, int32_t t, int32_t chain, int32_t index, int32_t param);
+NOTA_API float       nota_rack_chain_midi_param_max(const NotaEngine* e, int32_t t, int32_t chain, int32_t index, int32_t param);
+NOTA_API float       nota_rack_chain_midi_param_get(const NotaEngine* e, int32_t t, int32_t chain, int32_t index, int32_t param);
+NOTA_API void        nota_rack_chain_midi_param_set(NotaEngine* e, int32_t t, int32_t chain, int32_t index, int32_t param, float value);
+NOTA_API void        nota_rack_chain_midi_set_bypassed(NotaEngine* e, int32_t t, int32_t chain, int32_t index, int32_t bypassed);
+NOTA_API int32_t     nota_rack_chain_midi_bypassed(const NotaEngine* e, int32_t t, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_rack_chain_midi_last_in(const NotaEngine* e, int32_t t, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_rack_chain_midi_last_out(const NotaEngine* e, int32_t t, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_rack_chain_midi_scope(const NotaEngine* e, int32_t t, int32_t chain, int32_t index, float* out, int32_t max_n);
+NOTA_API void        nota_rack_chain_midi_command(NotaEngine* e, int32_t t, int32_t chain, int32_t index, int32_t cmd);
+/* MIDI Effect Rack (specs/040, MIDI kind 6; mi = its MIDI effect index): a chain's MIDI effects (built-in kinds 0–5), run in order before the chain's sound. */
+NOTA_API int32_t     nota_midirack_chain_device_count(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
+NOTA_API int32_t     nota_midirack_chain_device_add(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t midi_kind);
+NOTA_API int32_t     nota_midirack_chain_device_remove(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_midirack_chain_device_move(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t from_index, int32_t to_index);
+NOTA_API int32_t     nota_midirack_chain_device_kind(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index);
+NOTA_API const char* nota_midirack_chain_device_name(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_midirack_chain_device_param_count(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index);
+NOTA_API const char* nota_midirack_chain_device_param_name(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index, int32_t param);
+NOTA_API float       nota_midirack_chain_device_param_min(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index, int32_t param);
+NOTA_API float       nota_midirack_chain_device_param_max(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index, int32_t param);
+NOTA_API float       nota_midirack_chain_device_param_get(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index, int32_t param);
+NOTA_API void        nota_midirack_chain_device_param_set(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index, int32_t param, float value);
+NOTA_API void        nota_midirack_chain_device_set_bypassed(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index, int32_t bypassed);
+NOTA_API int32_t     nota_midirack_chain_device_bypassed(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_midirack_chain_device_last_in(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_midirack_chain_device_last_out(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_midirack_chain_device_scope(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index, float* out, int32_t max_n);
+NOTA_API void        nota_midirack_chain_device_command(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index, int32_t cmd);
+/* MIDI Effect Rack structure. Up to 16 chains; add/duplicate return <0 at the limit. Edits are undoable. */
+NOTA_API int32_t     nota_midirack_chain_count(const NotaEngine* e, int32_t t, int32_t mi);
+NOTA_API int32_t     nota_midirack_add_chain(NotaEngine* e, int32_t t, int32_t mi);
+NOTA_API int32_t     nota_midirack_remove_chain(NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
+NOTA_API int32_t     nota_midirack_duplicate_chain(NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
+NOTA_API const char* nota_midirack_chain_name(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
+NOTA_API void        nota_midirack_set_chain_name(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, const char* name);
+/* Chain controls: mute, solo, key/velocity zone, select range (0..127), transpose (−48..+48), velocity scale (0..2, 0 = silent), note activity (0..1). */
+NOTA_API void        nota_midirack_set_chain_mute(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t on);
+NOTA_API int32_t     nota_midirack_chain_mute(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
+NOTA_API void        nota_midirack_set_chain_solo(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t on);
+NOTA_API int32_t     nota_midirack_chain_solo(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
+NOTA_API void        nota_midirack_set_chain_zone(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t key_lo, int32_t key_hi, int32_t vel_lo, int32_t vel_hi);
+NOTA_API void        nota_midirack_chain_zone(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t* key_lo, int32_t* key_hi, int32_t* vel_lo, int32_t* vel_hi);
+NOTA_API void        nota_midirack_set_chain_select(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t lo, int32_t hi);
+NOTA_API void        nota_midirack_chain_select_range(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t* lo, int32_t* hi);
+NOTA_API void        nota_midirack_set_chain_transpose(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t semitones);
+NOTA_API int32_t     nota_midirack_chain_transpose(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
+NOTA_API void        nota_midirack_set_chain_vel_scale(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, float scale);
+NOTA_API float       nota_midirack_chain_vel_scale(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
+NOTA_API float       nota_midirack_chain_activity(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
+/* Rack: chains run 0 Parallel / 2 Select; the selector (0..1); merge duplicate notes; pass notes outside every zone through. */
+NOTA_API void        nota_midirack_set_mode(NotaEngine* e, int32_t t, int32_t mi, int32_t mode);
+NOTA_API int32_t     nota_midirack_mode(const NotaEngine* e, int32_t t, int32_t mi);
+NOTA_API void        nota_midirack_set_selector(NotaEngine* e, int32_t t, int32_t mi, float v);
+NOTA_API float       nota_midirack_selector(const NotaEngine* e, int32_t t, int32_t mi);
+NOTA_API void        nota_midirack_set_merge(NotaEngine* e, int32_t t, int32_t mi, int32_t on);
+NOTA_API int32_t     nota_midirack_merge(const NotaEngine* e, int32_t t, int32_t mi);
+NOTA_API void        nota_midirack_set_thru(NotaEngine* e, int32_t t, int32_t mi, int32_t on);
+NOTA_API int32_t     nota_midirack_thru(const NotaEngine* e, int32_t t, int32_t mi);
+/* Macros and mappings, as nota_rackdev_*; device = the chain's MIDI effect index, or NOTA_RACK_CONTROL (the selector). */
+NOTA_API float       nota_midirack_macro_get(const NotaEngine* e, int32_t t, int32_t mi, int32_t macro);
+NOTA_API void        nota_midirack_macro_set(NotaEngine* e, int32_t t, int32_t mi, int32_t macro, float v);
+NOTA_API const char* nota_midirack_macro_name(const NotaEngine* e, int32_t t, int32_t mi, int32_t macro);
+NOTA_API void        nota_midirack_set_macro_name(NotaEngine* e, int32_t t, int32_t mi, int32_t macro, const char* name);
+NOTA_API int32_t     nota_midirack_add_macro_mapping(NotaEngine* e, int32_t t, int32_t mi, int32_t macro, int32_t chain, int32_t device, int32_t param, float lo, float hi);
+NOTA_API int32_t     nota_midirack_mapping_count(const NotaEngine* e, int32_t t, int32_t mi);
+NOTA_API int32_t     nota_midirack_mapping_info(const NotaEngine* e, int32_t t, int32_t mi, int32_t index, int32_t* macro, int32_t* chain, int32_t* device, int32_t* param, float* lo, float* hi, int32_t* curve);
+NOTA_API int32_t     nota_midirack_remove_mapping(NotaEngine* e, int32_t t, int32_t mi, int32_t index);
+NOTA_API int32_t     nota_midirack_set_mapping_range(NotaEngine* e, int32_t t, int32_t mi, int32_t index, float lo, float hi);
+NOTA_API int32_t     nota_midirack_set_mapping_curve(NotaEngine* e, int32_t t, int32_t mi, int32_t index, int32_t curve);
+
 /* An editor command to a MIDI effect (Nota Arp: 1 = restart the pattern). */
 NOTA_API void        nota_midi_effect_command(NotaEngine* engine, int32_t track_id, int32_t index, int32_t cmd);
 /* Map/CC routing: the effect's CC lane modulates an audio-device param on the track. */

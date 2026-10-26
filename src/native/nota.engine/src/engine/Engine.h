@@ -879,6 +879,25 @@ class Engine {
     void rackSetChainName(int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& name);
     int32_t rackChainCount(int32_t trackId, int32_t deviceIndex) const;
     int32_t rackDuplicateChain(int32_t trackId, int32_t deviceIndex, int32_t chain);
+    // A MIDI Effect Rack is addressed as deviceIndex kMidiRackBase − its MIDI effect index.
+    static constexpr int32_t kMidiRackBase = -1000;
+    // Chain MIDI effects (MIDI Effect Rack chains; Instrument Rack chains, #329).
+    int32_t rackChainMidiCount(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    int32_t rackAddChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t kind);
+    bool rackRemoveChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    bool rackMoveChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t from, int32_t to);
+    MidiDevice* rackChainMidiAt(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index) const;
+    void rackSetChainMidiBypassed(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, bool b);
+    void rackChainSelectRange(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t& lo, int32_t& hi) const;
+    void rackSetChainSelectRange(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t lo, int32_t hi);
+    int32_t rackChainTranspose(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    void rackSetChainTranspose(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t st);
+    float rackChainVelScale(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    void rackSetChainVelScale(int32_t trackId, int32_t deviceIndex, int32_t chain, float v);
+    bool rackMerge(int32_t trackId, int32_t deviceIndex) const;
+    void rackSetMerge(int32_t trackId, int32_t deviceIndex, bool on);
+    bool rackThru(int32_t trackId, int32_t deviceIndex) const;
+    void rackSetThru(int32_t trackId, int32_t deviceIndex, bool on);
     bool rackMono(int32_t trackId) const;
     void rackSetMono(int32_t trackId, bool on);
     int32_t rackAddChain(int32_t trackId, int32_t deviceIndex, int32_t instKind); // 0=Synth, 2=Physical, <0=none
@@ -1235,6 +1254,7 @@ class Engine {
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
+    void reapplyRackMacros(); // after undo/redo: racks drive their shared children again
     static int32_t trackLatency(const Track& t);
     std::shared_ptr<Instrument> cloneInstrument(const Track& src) const; // duplicateTrack helper
     std::shared_ptr<Device> cloneDevice(const Device& src) const;

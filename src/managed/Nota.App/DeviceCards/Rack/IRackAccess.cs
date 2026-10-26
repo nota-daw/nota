@@ -106,8 +106,11 @@ internal interface IRackAccess
     // Rack output and routing (what each rack has: see RackKindProfile).
     int RackMode() => 0;                      // 0 Parallel, 1 Serial, 2 Select
     void SetRackMode(int mode) { }
-    float Selector() => 0.5f;                 // Select-mode selector, 0..1
+    float Selector() => 0.5f;                 // Select-mode selector, 0..1 (the manual one)
     void SetSelector(float v) { }
+    bool SelectorFollows() => false;          // Audio Effect Rack: the selector follows the input level
+    void SetSelectorFollows(bool on) { }
+    float LiveSelector() => Selector();       // where the selector is now (follow or manual)
     float RackVolume() => 1f;                 // linear
     void SetRackVolume(float v) { }
     float RackGlide() => 0f;                  // 0..1 = 0..500 ms
@@ -271,6 +274,9 @@ internal sealed class EffectRackAccess(IAudioEngine e, int t, int di) : IRackAcc
     public void SetRackMode(int mode) => e.RackDevSetMode(t, di, mode);
     public float Selector() => e.RackDevChainSelect(t, di);
     public void SetSelector(float v) => e.RackDevSetChainSelect(t, di, v);
+    public bool SelectorFollows() => e.RackDevSelFollow(t, di);
+    public void SetSelectorFollows(bool on) => e.RackDevSetSelFollow(t, di, on);
+    public float LiveSelector() => e.RackDevSelFollow(t, di) ? e.RackDevLiveSelector(t, di) : e.RackDevChainSelect(t, di);
     public float RackVolume() => e.RackDevVolume(t, di);
     public void SetRackVolume(float v) => e.RackDevSetVolume(t, di, v);
     public float RackDryWet() => e.RackDevDryWet(t, di);

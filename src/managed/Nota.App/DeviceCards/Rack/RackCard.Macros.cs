@@ -75,8 +75,21 @@ internal sealed partial class RackCardView
             _ctx.InvokeRackParamRefreshers();
         };
         var (target, device, param, id) = a.MacroAutomation(i);
-        knob.GestureBegin += () => { _rs.SelectedMacro = i; E.BeginAutomationWrite(T, target, device, param, id); };
-        knob.GestureEnd += () => E.EndAutomationWrite(T, target, device, param, id);
+        bool picked = false;
+        knob.GestureBegin += () =>
+        {
+            // Turning a macro picks it (and, while mapping, maps to it); the card catches up
+            // once the drag ends, so the knob isn't torn down under the pointer.
+            picked = _rs.SelectedMacro != i || (_rs.Mapping && _rs.MappingMacro != i);
+            _rs.SelectedMacro = i;
+            if (_rs.Mapping) _rs.MappingMacro = i;
+            E.BeginAutomationWrite(T, target, device, param, id);
+        };
+        knob.GestureEnd += () =>
+        {
+            E.EndAutomationWrite(T, target, device, param, id);
+            if (picked) DeferRebuild();
+        };
         ValueEntry.Attach(knob, $"Macro · {name}", value);
         MidiLearn.Bind(knob, a.MacroLearnTarget(T, i), $"Macro · {name}", v => knob.Value = v);
         _irTick.Add(() =>

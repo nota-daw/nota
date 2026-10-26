@@ -376,6 +376,13 @@ class RackCore {
         return (st && i >= 0 && i < static_cast<int32_t>(st->mappings.size())) ? st->mappings[i].curve : 0;
     }
 
+    // Drive every mapped target from its macro again. After an undo or redo swaps in another
+    // copy of the rack, the children it shares with the copy still hold the values the other
+    // copy's mappings gave them (specs/040). Message thread.
+    void reapplyMacros() {
+        for (int32_t i = 0; i < kNumMacros; ++i) applyMacro(i, macros_[i].load(std::memory_order_relaxed));
+    }
+
     // ---- undoable edits ---------------------------------------------------
     // Take over another rack's content (#236). The engine edits a copy of the rack instead
     // of the rack itself, so the graph snapshot on the undo stack keeps the old rack intact:

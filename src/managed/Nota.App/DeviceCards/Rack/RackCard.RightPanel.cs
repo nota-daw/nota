@@ -156,6 +156,9 @@ internal sealed partial class RackCardView
                     () => NotaNum.Db(20 * Math.Log10(Math.Max(1e-6, a.RackVolume())), signed: true), reset: () => a.SetRackVolume(1f), bipolar: true);
                 MidiLearn.Bind(gain, MidiTarget.RackVolume(T, a.AutomationDeviceIndex), "Rack Gain");
                 stack.Children.Add(gain);
+                toggles.Children.Add(Switch("Follow input level", () => a.SelectorFollows(), () => { a.SetSelectorFollows(!a.SelectorFollows()); DeferRebuild(); }, out var followSync));
+                _irTick.Add(followSync);
+                ToolTip.SetTip(toggles.Children[^1], "In Select mode the selector follows the input level instead of its handle");
                 toggles.Children.Add(Switch("Latency compensation", () => a.RackPdc(), () => a.SetRackPdc(!a.RackPdc()), out var pdcSync));
                 _irTick.Add(pdcSync);
                 ToolTip.SetTip(toggles.Children[^1], "Line up chains with different latency");
@@ -190,7 +193,7 @@ internal sealed partial class RackCardView
                 string mode = a.RackMode() switch
                 {
                     RackKindProfile.Serial => "Serial",
-                    RackKindProfile.Select => $"Select {(int)Math.Round(a.Selector() * 127)}",
+                    RackKindProfile.Select => $"Select {(int)Math.Round(a.LiveSelector() * 127)}{(a.SelectorFollows() ? " · follows input" : "")}",
                     _ => "Parallel",
                 };
                 return $"{mode} · {chains} · dry/wet {NotaNum.Pct(a.RackDryWet())} · {macros}";

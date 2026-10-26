@@ -674,9 +674,14 @@ internal sealed partial class RackCardView
         float min = P.Min(p), max = P.Max(p), span = max - min, cur = P.Get(p);
         int curve = RcMacroCurve(m);
         bool was = MappedMacro(a, c, target, p) >= 0;
-        int i = a.AddMacroMapping(m, c, target, p, Math.Max(min, cur - 0.3f * span), Math.Min(max, cur + 0.3f * span));
-        // A new target takes its macro's curve; a Mixed macro gives it Lin. A moved one keeps its own.
-        if (i >= 0 && !was && curve > 0) a.SetMappingCurve(i, curve);
+        E.BeginUndoGroup(); // the mapping and its curve are one step
+        try
+        {
+            int i = a.AddMacroMapping(m, c, target, p, Math.Max(min, cur - 0.3f * span), Math.Min(max, cur + 0.3f * span));
+            // A new target takes its macro's curve; a Mixed macro gives it Lin. A moved one keeps its own.
+            if (i >= 0 && !was && curve > 0) a.SetMappingCurve(i, curve);
+        }
+        finally { E.EndUndoGroup(); }
         DeferRebuild();
     }
 

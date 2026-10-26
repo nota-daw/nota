@@ -39,62 +39,83 @@ void RackInstrument::fanOff(int32_t pitch) {
 }
 
 void RackInstrument::monoRemove(int32_t pitch) {
-    for (int32_t i = 0; i < heldN_; ++i)
-        if (held_[i] == pitch) {
-            for (int32_t j = i; j + 1 < heldN_; ++j) held_[j] = held_[j + 1];
-            --heldN_;
+    auto& m = *mono_;
+    for (int32_t i = 0; i < m.heldN; ++i)
+        if (m.held[i] == pitch) {
+            for (int32_t j = i; j + 1 < m.heldN; ++j) m.held[j] = m.held[j + 1];
+            --m.heldN;
             return;
         }
 }
 
+void RackInstrument::syncMono() {
+    auto& m = *mono_;
+    const bool mono = rackMono();
+    if (mono == m.wasMono) return;
+    m.wasMono = mono;
+    m.glideLeft = 0;
+    if (mono) {
+        // Poly → mono: only the last held key keeps sounding.
+        for (int32_t i = 0; i + 1 < m.heldN; ++i) fanOff(m.held[i]);
+        m.sounding = m.heldN > 0 ? m.held[m.heldN - 1] : -1;
+    } else {
+        m.sounding = -1; // mono → poly: the sounding key plays on as a poly note
+    }
+}
+
 void RackInstrument::noteOn(int32_t pitch, float velocity) {
     if (pitch < 0 || pitch > 127) return;
+    syncMono();
+    auto& m = *mono_;
+    monoRemove(pitch);
+    if (m.heldN < 128) m.held[m.heldN++] = static_cast<int8_t>(pitch);
+    m.heldVel[pitch] = velocity;
     if (!rackMono()) {
         fanOn(pitch, velocity, -1);
         return;
     }
     // Mono, last-note priority: the new key takes over from the sounding one.
-    monoRemove(pitch);
-    if (heldN_ < 128) held_[heldN_++] = static_cast<int8_t>(pitch);
-    heldVel_[pitch] = velocity;
-    const int32_t prev = sounding_;
+    const int32_t prev = m.sounding;
     if (prev >= 0) fanOff(prev);
     const double ms = rackGlide() * 500.0;
     const bool glide = prev >= 0 && prev != pitch && ms > 0.5;
     fanOn(pitch, velocity, glide ? prev : -1);
-    sounding_ = pitch;
-    glideBend_ = glide ? static_cast<float>(prev - pitch) : 0.0f;
-    glideTotal_ = glideLeft_ = glide ? std::max<int64_t>(1, std::llround(ms * 0.001 * sampleRate_)) : 0;
+    m.sounding = pitch;
+    m.glideBend = glide ? static_cast<float>(prev - pitch) : 0.0f;
+    m.glideTotal = m.glideLeft = glide ? std::max<int64_t>(1, std::llround(ms * 0.001 * sampleRate_)) : 0;
 }
 
 void RackInstrument::noteOff(int32_t pitch) {
     if (pitch < 0 || pitch > 127) return;
+    syncMono();
+    auto& m = *mono_;
     monoRemove(pitch);
-    if (!rackMono() || pitch != sounding_) {
+    if (!rackMono() || pitch != m.sounding) {
         // Poly, or a key that isn't sounding (superseded, or pressed before mono was on):
         // let it go everywhere — a note-off for a silent pitch is harmless.
         fanOff(pitch);
-        if (pitch == sounding_) sounding_ = -1;
+        if (pitch == m.sounding) m.sounding = -1;
         return;
     }
     fanOff(pitch);
-    sounding_ = -1;
-    glideLeft_ = 0;
-    if (heldN_ > 0) { // fall back to the key still held last, gliding from the released one
-        const int32_t back = held_[heldN_ - 1];
+    m.sounding = -1;
+    m.glideLeft = 0;
+    if (m.heldN > 0) { // fall back to the key still held last, gliding from the released one
+        const int32_t back = m.held[m.heldN - 1];
         const double ms = rackGlide() * 500.0;
         const bool glide = ms > 0.5;
-        fanOn(back, heldVel_[back], glide ? pitch : -1);
-        sounding_ = back;
-        glideBend_ = glide ? static_cast<float>(pitch - back) : 0.0f;
-        glideTotal_ = glideLeft_ = glide ? std::max<int64_t>(1, std::llround(ms * 0.001 * sampleRate_)) : 0;
+        fanOn(back, m.heldVel[back], glide ? pitch : -1);
+        m.sounding = back;
+        m.glideBend = glide ? static_cast<float>(pitch - back) : 0.0f;
+        m.glideTotal = m.glideLeft = glide ? std::max<int64_t>(1, std::llround(ms * 0.001 * sampleRate_)) : 0;
     }
 }
 
 void RackInstrument::allNotesOff() {
-    heldN_ = 0;
-    sounding_ = -1;
-    glideLeft_ = 0;
+    auto& m = *mono_;
+    m.heldN = 0;
+    m.sounding = -1;
+    m.glideLeft = 0;
     RackState* st = live();
     if (!st) return;
     for (auto& c : st->chains)
@@ -135,12 +156,14 @@ void RackInstrument::render(float* out, int32_t frames) {
         }
     const float rv = rackVolume_.load(std::memory_order_relaxed);
     // Mono glide: the sounding note's bend ramps back to 0 (block rate; the voices smooth it).
-    if (glideLeft_ > 0 && sounding_ >= 0) {
-        glideLeft_ = std::max<int64_t>(0, glideLeft_ - frames);
-        const float bend = glideBend_ * static_cast<float>(glideLeft_) / static_cast<float>(glideTotal_);
+    syncMono();
+    auto& m = *mono_;
+    if (m.glideLeft > 0 && m.sounding >= 0) {
+        m.glideLeft = std::max<int64_t>(0, m.glideLeft - frames);
+        const float bend = m.glideBend * static_cast<float>(m.glideLeft) / static_cast<float>(m.glideTotal);
         for (auto& c : st->chains)
             if (c.instrument && c.midiDevices.empty() && c.instrument->supportsMpe())
-                c.instrument->noteExpression(sounding_, ExprBend, bend);
+                c.instrument->noteExpression(m.sounding, ExprBend, bend);
     }
     for (auto& c : st->chains) {
         if (!c.instrument) continue;

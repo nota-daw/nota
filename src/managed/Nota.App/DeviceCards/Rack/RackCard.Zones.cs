@@ -51,18 +51,22 @@ internal sealed partial class RackCardView
         // The selector (Select mode picks the chains whose select range holds it).
         if (select)
         {
-            int sel = (int)Math.Round(a.Selector() * 127);
-            var bar = new RackRangeBar { Single = true, Lo = sel, Hi = sel, Dim = !selectOn, Height = 10 };
-            ToolTip.SetTip(bar, "Drag to choose which chains play · map it to a macro on the Macros tab");
+            bool follows = a.SelectorFollows();
+            int sel = (int)Math.Round(a.LiveSelector() * 127);
+            var bar = new RackRangeBar { Single = true, Lo = sel, Hi = sel, Dim = !selectOn || follows, Height = 10, IsHitTestVisible = !follows };
+            ToolTip.SetTip(bar, follows
+                ? "The selector follows the input level · turn Follow input off on the Rack out tab to set it by hand"
+                : "Drag to choose which chains play · right-click to map it to a macro");
             bar.Changed += (lo, _) => { a.SetSelector(lo / 127f); RcProbeUpdate(); };
             bar.Committed += DeferRebuild;
+            bar.ContextRequested += (_, e) => { e.Handled = true; RcSelectorMenu(bar); };
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions($"{RcZoneNameWidth},*{(vel ? $",{RcVelWidth}" : "")}"), ColumnSpacing = 8, Height = 14 };
             row.Children.Add(RcText("Selector", NotaPalette.TextSecondary, NotaType.KnobLabel));
             Grid.SetColumn(bar, 1); row.Children.Add(bar);
             rows.Children.Add(row);
             _irTick.Add(() =>
             {
-                int live = (int)Math.Round(a.Selector() * 127);
+                int live = (int)Math.Round(a.LiveSelector() * 127);
                 if (live != bar.Lo) { bar.Lo = bar.Hi = live; bar.InvalidateVisual(); RcProbeUpdate(); }
             });
         }
@@ -152,11 +156,34 @@ internal sealed partial class RackCardView
             if (keys)
                 result.Text = probe < 0 ? "Hover the zones" : $"{NoteName(probe)} · vel {RcProbeVelocity} → {(names.Length > 0 ? names : "nothing")}";
             else
-                result.Text = $"selector {(int)Math.Round(a.Selector() * 127)} → {(names.Length > 0 ? names : "silence")}{(selectOn ? "" : " · inactive")}";
+                result.Text = $"selector {(int)Math.Round(a.LiveSelector() * 127)} → {(names.Length > 0 ? names : "silence")}{(selectOn ? "" : " · inactive")}";
             result.Foreground = hits.Count > 0 ? NotaPalette.TealBright : NotaPalette.TextTertiary;
         };
         RcProbeUpdate();
         return new DockPanel { LastChildFill = true, Children = { footer, scroll } };
+    }
+
+    // Map the selector to a macro (the selector is a rack control, not a chain parameter).
+    private void RcSelectorMenu(Control anchor)
+    {
+        var f = new MenuFlyout();
+        f.Items.Add(MenuKit.Header("Selector", null, "Map to a macro"));
+        f.Items.Add(new Separator());
+        for (int m = 0; m < 8; m++)
+        {
+            int mm = m;
+            var mi = new MenuItem { Header = $"Macro {m + 1} · {_ra.MacroName(m)}" };
+            mi.Click += (_, _) => RcMapSelector(mm);
+            f.Items.Add(mi);
+        }
+        f.ShowAt(anchor, showAtPointer: true);
+    }
+
+    private void RcMapSelector(int macro)
+    {
+        _ra.AddMacroMapping(macro, 0, Nota.Application.RackMacroMapping.RackControl, 0, 0f, 1f);
+        _rs.SelectedMacro = macro;
+        DeferRebuild();
     }
 
     private Action? _rcProbe;
@@ -169,7 +196,7 @@ internal sealed partial class RackCardView
         var a = _ra;
         var hits = new List<int>();
         bool selectOn = a.RackMode() == RackKindProfile.Select;
-        int selector = (int)Math.Round(a.Selector() * 127);
+        int selector = (int)Math.Round(a.LiveSelector() * 127);
         for (int c = 0; c < a.ChainCount(); c++)
         {
             if (!RcAudible(c)) continue;

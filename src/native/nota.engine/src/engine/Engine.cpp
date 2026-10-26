@@ -4,6 +4,7 @@
 // Engine — lifecycle, audio/MIDI device config, preview, tone/transport setters, immutable-graph publish/clone/undo/reset, post-fader meters. Definitions of the rest of the class live in the sibling Engine_*.cpp slices.
 
 #include "Engine.h"
+#include "devices/racks/RackCore.h"
 #include "audio_io/AudioBackendFactory.h"
 #include "media/AudioFile.h"
 #include "bridge/PluginHostBridge.h"
@@ -688,12 +689,29 @@ bool Engine::undo() {
         if (e.graph) {
             publishRaw(std::move(e.graph));
             recomputePdc();
+            reapplyRackMacros();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, false);
         if (applied) return true;
     }
     return false;
+}
+
+// The restored racks drive their mapped targets again: the children they share with the
+// copies an edit made still hold what those copies' mappings gave them (specs/040).
+void Engine::reapplyRackMacros() {
+    if (!authoring_) return;
+    auto each = [](const std::shared_ptr<Track>& t) {
+        if (!t) return;
+        if (auto* r = dynamic_cast<RackCore*>(t->instrument.get())) r->reapplyMacros();
+        for (auto& d : t->devices)
+            if (auto* r = dynamic_cast<RackCore*>(d.get())) r->reapplyMacros();
+        for (auto& m : t->midiEffects)
+            if (auto* r = dynamic_cast<RackCore*>(m.get())) r->reapplyMacros();
+    };
+    for (auto& t : authoring_->tracks) each(t);
+    each(authoring_->masterTrack);
 }
 
 bool Engine::redo() {
@@ -705,6 +723,7 @@ bool Engine::redo() {
         if (e.graph) {
             publishRaw(std::move(e.graph));
             recomputePdc();
+            reapplyRackMacros();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, true);

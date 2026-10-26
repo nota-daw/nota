@@ -576,6 +576,12 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             map.Items.Add(chainItem);
         }
         f.Items.Add(map);
+        if (a.Kind != RackKind.Instrument)
+        {
+            var sel = new MenuItem { Header = "Map to the selector" };
+            sel.Click += (_, _) => { a.AddMacroMapping(m, 0, RackMacroMapping.RackControl, 0, 0f, 1f); _ctx.RequestRebuild(); };
+            f.Items.Add(sel);
+        }
 
         int mapped = 0, n = a.MappingCount();
         for (int i = 0; i < n; i++) if (a.TryGetMapping(i, out var mm) && mm.Macro == m) mapped++;

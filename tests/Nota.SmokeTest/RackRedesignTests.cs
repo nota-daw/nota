@@ -32,6 +32,7 @@ internal static class RackRedesignTests
         yield return ("racks: v8 compatibility", V8Compatibility);
         yield return ("racks: instrument mono/glide", MonoGlide);
         yield return ("racks: duplicate chain", DuplicateChain);
+        yield return ("racks: edits keep playing state", EditsKeepState);
         yield return ("racks: mapping rules", MappingRules);
         yield return ("racks: macro curves and ranges", CurvesAndRanges);
         yield return ("racks: audio rack select", AudioSelect);
@@ -172,27 +173,27 @@ internal static class RackRedesignTests
     {
         var s = new StringBuilder();
         int n = e.RackChainCount(t);
-        s.AppendLine($"chains {n}");
+        s.Append($"chains {n}").Append('\n');
         for (int c = 0; c < n; c++)
         {
             e.RackChainZone(t, c, out int kl, out int kh, out int vl, out int vh);
-            s.AppendLine($"chain {c} name='{e.RackChainName(t, c)}' inst={e.RackChainInstrumentKind(t, c)} " +
+            s.Append($"chain {c} name='{e.RackChainName(t, c)}' inst={e.RackChainInstrumentKind(t, c)} " +
                          $"gain={F(e.RackChainGain(t, c))} pan={F(e.RackChainPan(t, c))} mute={e.RackChainMute(t, c)} " +
-                         $"solo={e.RackChainSolo(t, c)} keys={kl}-{kh} vel={vl}-{vh}");
+                         $"solo={e.RackChainSolo(t, c)} keys={kl}-{kh} vel={vl}-{vh}").Append('\n');
             int ip = Math.Min(8, e.RackChainInstrumentParamCount(t, c));
-            for (int p = 0; p < ip; p++) s.AppendLine($"  inst p{p}={F(e.RackChainInstrumentParamGet(t, c, p))}");
+            for (int p = 0; p < ip; p++) s.Append($"  inst p{p}={F(e.RackChainInstrumentParamGet(t, c, p))}").Append('\n');
             for (int d = 0; d < e.RackChainDeviceCount(t, c); d++)
             {
                 s.Append($"  dev {d} kind={e.RackChainDeviceBuiltinKind(t, c, d)}");
                 for (int p = 0; p < e.RackChainDeviceParamCount(t, c, d); p++) s.Append(' ').Append(F(e.RackChainDeviceParamGet(t, c, d, p)));
-                s.AppendLine();
+                s.Append('\n');
             }
         }
-        for (int m = 0; m < 8; m++) s.AppendLine($"macro {m} '{e.RackMacroName(t, m)}' {F(e.RackMacroGet(t, m))}");
+        for (int m = 0; m < 8; m++) s.Append($"macro {m} '{e.RackMacroName(t, m)}' {F(e.RackMacroGet(t, m))}").Append('\n');
         for (int i = 0; i < e.RackMappingCount(t); i++)
             if (e.RackTryGetMapping(t, i, out var mm))
-                s.AppendLine($"map {i} m{mm.Macro} c{mm.Chain} d{mm.DeviceIndex} p{mm.ParamIndex} {F(mm.RangeMin)}..{F(mm.RangeMax)} curve={e.RackMappingCurve(t, i)}");
-        s.AppendLine($"volume {F(e.RackVolume(t))} glide {F(e.RackGlide(t))}");
+                s.Append($"map {i} m{mm.Macro} c{mm.Chain} d{mm.DeviceIndex} p{mm.ParamIndex} {F(mm.RangeMin)}..{F(mm.RangeMax)} curve={e.RackMappingCurve(t, i)}").Append('\n');
+        s.Append($"volume {F(e.RackVolume(t))} glide {F(e.RackGlide(t))}").Append('\n');
         return s.ToString();
     }
 
@@ -200,25 +201,25 @@ internal static class RackRedesignTests
     {
         var s = new StringBuilder();
         int n = e.RackDevChainCount(t, d);
-        s.AppendLine($"chains {n}");
+        s.Append($"chains {n}").Append('\n');
         for (int c = 0; c < n; c++)
         {
             e.RackDevChainZone(t, d, c, out int lo, out int hi);
-            s.AppendLine($"chain {c} gain={F(e.RackDevChainGain(t, d, c))} pan={F(e.RackDevChainPan(t, d, c))} " +
-                         $"mute={e.RackDevChainMute(t, d, c)} solo={e.RackDevChainSolo(t, d, c)} select={lo}-{hi}");
+            s.Append($"chain {c} gain={F(e.RackDevChainGain(t, d, c))} pan={F(e.RackDevChainPan(t, d, c))} " +
+                         $"mute={e.RackDevChainMute(t, d, c)} solo={e.RackDevChainSolo(t, d, c)} select={lo}-{hi}").Append('\n');
             for (int k = 0; k < e.RackDevChainDeviceCount(t, d, c); k++)
             {
                 s.Append($"  dev {k} kind={e.RackDevChainDeviceBuiltinKind(t, d, c, k)}");
                 for (int p = 0; p < e.RackDevChainDeviceParamCount(t, d, c, k); p++) s.Append(' ').Append(F(e.RackDevChainDeviceParamGet(t, d, c, k, p)));
-                s.AppendLine();
+                s.Append('\n');
             }
         }
-        for (int m = 0; m < 8; m++) s.AppendLine($"macro {m} '{e.RackDevMacroName(t, d, m)}' {F(e.RackDevMacroGet(t, d, m))}");
+        for (int m = 0; m < 8; m++) s.Append($"macro {m} '{e.RackDevMacroName(t, d, m)}' {F(e.RackDevMacroGet(t, d, m))}").Append('\n');
         for (int i = 0; i < e.RackDevMappingCount(t, d); i++)
             if (e.RackDevTryGetMapping(t, d, i, out var mm))
-                s.AppendLine($"map {i} m{mm.Macro} c{mm.Chain} d{mm.DeviceIndex} p{mm.ParamIndex} {F(mm.RangeMin)}..{F(mm.RangeMax)} curve={e.RackDevMappingCurve(t, d, i)}");
-        s.AppendLine($"mode {e.RackDevMode(t, d)} select {F(e.RackDevChainSelect(t, d))} drywet {F(e.RackDevDryWet(t, d))} " +
-                     $"pdc {e.RackDevPdc(t, d)} volume {F(e.RackDevVolume(t, d))}");
+                s.Append($"map {i} m{mm.Macro} c{mm.Chain} d{mm.DeviceIndex} p{mm.ParamIndex} {F(mm.RangeMin)}..{F(mm.RangeMax)} curve={e.RackDevMappingCurve(t, d, i)}").Append('\n');
+        s.Append($"mode {e.RackDevMode(t, d)} select {F(e.RackDevChainSelect(t, d))} drywet {F(e.RackDevDryWet(t, d))} " +
+                     $"pdc {e.RackDevPdc(t, d)} volume {F(e.RackDevVolume(t, d))}").Append('\n');
         return s.ToString();
     }
 
@@ -251,7 +252,7 @@ internal static class RackRedesignTests
         {
             int t = e.AddInstrumentRackTrack();
             e.SetPluginState(t, -1, File.ReadAllBytes(Path.Combine(dir, "instrument.bin")));
-            string want = File.ReadAllText(Path.Combine(dir, "instrument.txt")), got = DumpInstrumentRack(e, t);
+            string want = File.ReadAllText(Path.Combine(dir, "instrument.txt")).ReplaceLineEndings("\n"), got = DumpInstrumentRack(e, t);
             yield return (got == want, "v8 Instrument Rack blob loads with every setting (zones, mix, macros, per-target curves, glide)"
                                        + (got == want ? "" : $"\n--- want\n{want}--- got\n{got}"));
         }
@@ -262,7 +263,7 @@ internal static class RackRedesignTests
             e.AddAudioClip(t, ToneFile(), 0);
             int d = e.AddBuiltinDevice(t, EffectRack);
             e.SetPluginState(t, d, File.ReadAllBytes(Path.Combine(dir, "effect.bin")));
-            string want = File.ReadAllText(Path.Combine(dir, "effect.txt")), got = DumpEffectRack(e, t, d);
+            string want = File.ReadAllText(Path.Combine(dir, "effect.txt")).ReplaceLineEndings("\n"), got = DumpEffectRack(e, t, d);
             yield return (got == want, "v8 Audio Effect Rack blob loads with every setting (Select mode, select ranges, dry/wet, PDC)"
                                        + (got == want ? "" : $"\n--- want\n{want}--- got\n{got}"));
             var refAudio = BytesToFloats(File.ReadAllBytes(Path.Combine(dir, "effect.f32")));
@@ -589,5 +590,65 @@ internal static class RackRedesignTests
         int dup = e.RackDevDuplicateChain(t, d, loud);
         e.RackDevChainZone(t, d, dup, out int lo, out int hi);
         yield return (dup == 2 && e.RackDevChainCount(t, d) == 3 && lo == 64 && hi == 127, "duplicate chain on an Audio Effect Rack keeps its select range");
+    }
+
+    // ---- review follow-ups: undo restores driven values, mono survives edits and switches ----
+
+    private static IEnumerable<(bool, string)> EditsKeepState()
+    {
+        using (var e = new NotaEngine())
+        {
+            int t = e.AddInstrumentRackTrack();
+            while (e.RackChainCount(t) > 0) e.RackRemoveChain(t, 0);
+            int c = e.RackAddChain(t, Synth);
+            e.RackMacroSet(t, 0, 0f);
+            e.RackMacroSet(t, 3, 1f);
+            e.RackAddMacroMapping(t, 0, c, -1, 5, 0.2f, 0.7f);
+            float before = e.RackChainInstrumentParamGet(t, c, 5);
+            e.RackAddMacroMapping(t, 3, c, -1, 5, 0.2f, 0.7f); // moves it to macro 3, at its top
+            float moved = e.RackChainInstrumentParamGet(t, c, 5);
+            e.Undo();
+            float undone = e.RackChainInstrumentParamGet(t, c, 5);
+            e.Redo();
+            float redone = e.RackChainInstrumentParamGet(t, c, 5);
+            yield return (Near(before, 0.2f) && Near(moved, 0.7f) && Near(undone, 0.2f) && Near(redone, 0.7f),
+                string.Create(CultureInfo.InvariantCulture, $"undo and redo restore what a macro drives ({before:0.##} → {moved:0.##}, undo {undone:0.##}, redo {redone:0.##})"));
+        }
+
+        using (var e = new NotaEngine())
+        {
+            int t = PentadRack(e);
+            e.RackSetMono(t, true);
+            e.TrackNoteOn(t, 48, 0.8f);
+            RenderFrames(e, Block * 4);
+            e.RackSetMacroName(t, 0, "Edited");   // an undoable edit swaps the rack object
+            e.TrackNoteOn(t, 60, 0.8f);
+            RenderFrames(e, Block * 4);
+            Held(e, t, 0, out var afterEdit);
+            e.TrackNoteOff(t, 60);
+            RenderFrames(e, Block * 4);
+            Held(e, t, 0, out var back);
+            e.TrackNoteOff(t, 48);
+            RenderFrames(e, Block * 8);
+            yield return (afterEdit == "60" && back == "48" && Held(e, t, 0, out _) == 0,
+                $"mono plays on through a rack edit (new key {afterEdit}, back to {back})");
+        }
+
+        using (var e = new NotaEngine())
+        {
+            int t = PentadRack(e);
+            foreach (int p in new[] { 48, 52, 55 }) e.TrackNoteOn(t, p, 0.8f);
+            RenderFrames(e, Block * 4);
+            e.RackSetMono(t, true);
+            RenderFrames(e, Block * 4);
+            Held(e, t, 0, out var onSwitch);
+            e.TrackNoteOn(t, 60, 0.8f);
+            RenderFrames(e, Block * 4);
+            Held(e, t, 0, out var next);
+            foreach (int p in new[] { 48, 52, 55, 60 }) e.TrackNoteOff(t, p);
+            RenderFrames(e, Block * 8);
+            yield return (onSwitch == "55" && next == "60" && Held(e, t, 0, out _) == 0,
+                $"switching mono on with a chord held keeps only the last key ({onSwitch}, then {next})");
+        }
     }
 }

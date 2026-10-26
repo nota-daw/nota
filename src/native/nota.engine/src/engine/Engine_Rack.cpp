@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Engine — Instrument / Audio-Effect Rack (nested device containers). Resolves a
-// (trackId, deviceIndex) pair to the shared RackCore (deviceIndex < 0 = the
-// track's instrument rack; >= 0 = the effect-rack device at that chain position)
-// and delegates to its editing API. Rack-internal edits publish the rack's OWN
+// Engine — Instrument / Audio-Effect / MIDI-Effect Rack (nested device containers). Resolves a
+// (trackId, deviceIndex) pair to the shared RackCore (deviceIndex −1 = the track's instrument
+// rack; >= 0 = the effect-rack device at that chain position; <= kMidiRackBase = the MIDI
+// effect rack at MIDI index kMidiRackBase − deviceIndex, specs/040) and delegates to its
+// editing API. Rack-internal edits publish the rack's OWN
 // snapshot (thread-safe) and don't republish the graph — the rack object is
 // stable across graph snapshots.
 
@@ -15,6 +16,7 @@
 #include "devices/racks/RackInstrument.h"
 #include "devices/racks/RackDevice.h"
 #include "devices/racks/DrumRack.h"
+#include "devices/racks/MidiRack.h"
 #include "devices/instruments/Sampler.h"
 #include "SnapshotHistory.h"
 
@@ -129,6 +131,11 @@ bool Engine::rackSetChainSamplerSample(
 RackCore* Engine::rackCoreAt(int32_t trackId, int32_t deviceIndex) const {
     auto t = findTrackAuthoring(trackId);
     if (!t) return nullptr;
+    if (deviceIndex <= kMidiRackBase) {
+        const int32_t mi = kMidiRackBase - deviceIndex;
+        if (mi >= static_cast<int32_t>(t->midiEffects.size()) || !t->midiEffects[mi]) return nullptr;
+        return dynamic_cast<RackCore*>(dynamic_cast<MidiRack*>(t->midiEffects[mi].get()));
+    }
     if (deviceIndex < 0) return t->instrument ? dynamic_cast<RackCore*>(t->instrument.get()) : nullptr;
     if (deviceIndex < static_cast<int32_t>(t->devices.size()))
         return t->devices[deviceIndex] ? dynamic_cast<RackCore*>(t->devices[deviceIndex].get()) : nullptr;
@@ -144,6 +151,20 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
     if (!old || !rackCoreAt(trackId, deviceIndex)) return nullptr;
     auto nt = cloneTrack(*old);
     RackCore* fresh = nullptr;
+    if (deviceIndex <= kMidiRackBase) {
+        const int32_t mi = kMidiRackBase - deviceIndex;
+        auto* src = dynamic_cast<MidiRack*>(old->midiEffects[mi].get());
+        if (!src) return nullptr;
+        auto r = std::make_shared<MidiRack>();
+        r->forkFrom(*src);
+        r->shareRuntimeWith(*src); // held notes play on through the swap
+        r->setBypassed(src->bypassed());
+        r->setFolded(src->folded());
+        fresh = r.get();
+        nt->midiEffects[mi] = std::move(r);
+        republishWithTrack(trackId, nt);
+        return fresh;
+    }
     if (deviceIndex < 0) {
         auto* src = dynamic_cast<RackInstrument*>(old->instrument.get());
         if (!src) return nullptr;
@@ -151,6 +172,7 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
         if (dynamic_cast<DrumRack*>(src)) r = std::make_shared<DrumRack>();
         else r = std::make_shared<RackInstrument>();
         r->forkFrom(*src);
+        r->shareMonoWith(*src); // held keys, the sounding note and a glide in progress play on
         r->setBypassed(src->bypassed());
         r->folded = src->folded;
         // Playback state the audio thread owns: relaxed atomics, carried over so a held pedal
@@ -259,6 +281,7 @@ int32_t Engine::rackChainCount(int32_t t, int32_t di) const {
 int32_t Engine::rackDuplicateChain(int32_t t, int32_t di, int32_t c) {
     auto* r = rackCoreAt(t, di);
     if (!r || c < 0 || c >= r->chainCount()) return -1;
+    if (di <= kMidiRackBase && r->chainCount() >= MidiRack::kMaxChains) return -1;
     return rackForEdit(t, di)->duplicateChain(c);
 }
 bool Engine::rackMono(int32_t t) const {
@@ -269,6 +292,7 @@ void Engine::rackSetMono(int32_t t, bool on) {
     if (auto* r = rackCoreAt(t, -1)) r->setRackMono(on);
 }
 int32_t Engine::rackAddChain(int32_t t, int32_t di, int32_t k) {
+    if (auto* cur = rackCoreAt(t, di); cur && di <= kMidiRackBase && cur->chainCount() >= MidiRack::kMaxChains) return -1;
     auto* r = rackForEdit(t, di);
     return r ? r->addChain(k) : -1;
 }
@@ -456,6 +480,73 @@ float Engine::rackChainDeviceParamGet(int32_t t, int32_t di, int32_t c, int32_t 
     Device* dev = r ? r->chainDeviceAt(c, d) : nullptr;
     return dev ? dev->getParam(p) : 0.0f;
 }
+// ---- chain MIDI effects (MIDI Effect Rack chains; Instrument Rack chains, #329) ----------
+int32_t Engine::rackChainMidiCount(int32_t t, int32_t di, int32_t c) const {
+    auto* r = rackCoreAt(t, di);
+    return r ? r->chainMidiDeviceCount(c) : 0;
+}
+int32_t Engine::rackAddChainMidi(int32_t t, int32_t di, int32_t c, int32_t kind) {
+    auto* r = rackCoreAt(t, di);
+    if (!r || c < 0 || c >= r->chainCount() || kind < 0 || kind > 5) return -1;
+    if (dynamic_cast<DrumRack*>(r)) return -1; // pads keep their own note handling
+    return rackForEdit(t, di)->addChainMidiDevice(c, kind);
+}
+bool Engine::rackRemoveChainMidi(int32_t t, int32_t di, int32_t c, int32_t i) {
+    auto* r = rackCoreAt(t, di);
+    if (!r || i < 0 || i >= r->chainMidiDeviceCount(c)) return false;
+    return rackForEdit(t, di)->removeChainMidiDevice(c, i);
+}
+bool Engine::rackMoveChainMidi(int32_t t, int32_t di, int32_t c, int32_t from, int32_t to) {
+    auto* r = rackCoreAt(t, di);
+    if (!r || from < 0 || from >= r->chainMidiDeviceCount(c)) return false;
+    return rackForEdit(t, di)->moveChainMidiDevice(c, from, to);
+}
+MidiDevice* Engine::rackChainMidiAt(int32_t t, int32_t di, int32_t c, int32_t i) const {
+    auto* r = rackCoreAt(t, di);
+    return r ? r->chainMidiDeviceAt(c, i) : nullptr;
+}
+void Engine::rackSetChainMidiBypassed(int32_t t, int32_t di, int32_t c, int32_t i, bool b) {
+    if (auto* m = rackChainMidiAt(t, di, c, i)) m->setBypassed(b);
+}
+
+// ---- chain select range / transpose / velocity scale, rack merge / pass-through (v9) ----
+void Engine::rackChainSelectRange(int32_t t, int32_t di, int32_t c, int32_t& lo, int32_t& hi) const {
+    lo = 0;
+    hi = 127;
+    if (auto* r = rackCoreAt(t, di)) r->chainSelectRange(c, lo, hi);
+}
+void Engine::rackSetChainSelectRange(int32_t t, int32_t di, int32_t c, int32_t lo, int32_t hi) {
+    if (auto* r = rackCoreAt(t, di)) r->setChainSelectRange(c, lo, hi);
+}
+int32_t Engine::rackChainTranspose(int32_t t, int32_t di, int32_t c) const {
+    auto* r = rackCoreAt(t, di);
+    return r ? r->chainTranspose(c) : 0;
+}
+void Engine::rackSetChainTranspose(int32_t t, int32_t di, int32_t c, int32_t st) {
+    if (auto* r = rackCoreAt(t, di)) r->setChainTranspose(c, st);
+}
+float Engine::rackChainVelScale(int32_t t, int32_t di, int32_t c) const {
+    auto* r = rackCoreAt(t, di);
+    return r ? r->chainVelScale(c) : 1.0f;
+}
+void Engine::rackSetChainVelScale(int32_t t, int32_t di, int32_t c, float v) {
+    if (auto* r = rackCoreAt(t, di)) r->setChainVelScale(c, v);
+}
+bool Engine::rackMerge(int32_t t, int32_t di) const {
+    auto* r = rackCoreAt(t, di);
+    return !r || r->rackMerge();
+}
+void Engine::rackSetMerge(int32_t t, int32_t di, bool on) {
+    if (auto* r = rackCoreAt(t, di)) r->setRackMerge(on);
+}
+bool Engine::rackThru(int32_t t, int32_t di) const {
+    auto* r = rackCoreAt(t, di);
+    return !r || r->rackThru();
+}
+void Engine::rackSetThru(int32_t t, int32_t di, bool on) {
+    if (auto* r = rackCoreAt(t, di)) r->setRackThru(on);
+}
+
 void Engine::rackChainDeviceParamSet(int32_t t, int32_t di, int32_t c, int32_t d, int32_t p, float v) {
     auto* r = rackCoreAt(t, di);
     Device* dev = r ? r->chainDeviceAt(c, d) : nullptr;
