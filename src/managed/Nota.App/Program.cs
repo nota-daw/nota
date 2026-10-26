@@ -23,6 +23,7 @@ class Program
             .WithDeveloperTools()
 #endif
             .WithNotaFonts()
+            .WithLinuxFileDialogFallback()
             .LogToTrace()
             .WithImeLogNoiseFiltered();
 }

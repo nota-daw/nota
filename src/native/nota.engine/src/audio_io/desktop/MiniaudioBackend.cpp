@@ -12,6 +12,8 @@ namespace nota {
 struct MiniaudioBackend::Impl {
     ma_device device{};
     bool deviceInited = false;
+    ma_context nullContext{};   // the silent fallback's context (null backend only)
+    bool nullContextInited = false;
     RenderCallback render; // copied from the backend on start()
 };
 
@@ -29,6 +31,7 @@ MiniaudioBackend::MiniaudioBackend() : impl_(new Impl()) {}
 
 MiniaudioBackend::~MiniaudioBackend() {
     stop();
+    if (impl_->nullContextInited) ma_context_uninit(&impl_->nullContext);
     delete impl_;
 }
 
@@ -36,6 +39,7 @@ bool MiniaudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
     if (running_) return true;
     impl_->render = std::move(render);
     exclusiveFallback_ = false;
+    silentFallback_ = false;
 
     ma_device_id id{};
     const bool haveId = notaMiniaudioDeviceIdForIndex(/*inputScope=*/false, cfg.device, id);
@@ -43,9 +47,9 @@ bool MiniaudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
     // Build the config once; we re-init if exclusive mode is refused and we
     // have to retry in shared mode. miniaudio returns MA_ACCESS_DENIED (device
     // in use by another exclusive app) or MA_BUSY for exclusive refusals.
-    auto buildConfig = [&](ma_share_mode share) {
+    auto buildConfig = [&](ma_share_mode share, bool useId = true) {
         ma_device_config c = ma_device_config_init(ma_device_type_playback);
-        c.playback.pDeviceID = haveId ? &id : nullptr; // NULL = system default
+        c.playback.pDeviceID = haveId && useId ? &id : nullptr; // NULL = system default
         c.playback.format = ma_format_f32;
         c.playback.channels = 2; // interleaved stereo, like the engine
         c.playback.shareMode = share;
@@ -66,8 +70,31 @@ bool MiniaudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
         config = buildConfig(ma_share_mode_shared);
         r = ma_device_init(nullptr, &config, &impl_->device);
     }
+    if (r != MA_SUCCESS && (haveId || cfg.sampleRate > 0.0 || cfg.bufferFrames > 0)) {
+        // The chosen device / rate / buffer won't open (unplugged, busy, unsupported):
+        // try the system default as it comes.
+        config = buildConfig(ma_share_mode_shared, /*useId=*/false);
+        config.sampleRate = 0;
+        config.periodSizeInFrames = 0;
+        r = ma_device_init(nullptr, &config, &impl_->device);
+    }
+    // No real output at all (no sound server, no card, broken setup): run on the null
+    // device so the app still starts and works, silently, instead of failing to open.
+    // A default context can also land on the null backend when neither PulseAudio nor
+    // ALSA loads; either way the UI is told.
+    if (r != MA_SUCCESS) {
+        if (!impl_->nullContextInited) {
+            const ma_backend nullOnly[] = {ma_backend_null};
+            impl_->nullContextInited = ma_context_init(nullOnly, 1, nullptr, &impl_->nullContext) == MA_SUCCESS;
+        }
+        if (impl_->nullContextInited) {
+            config = buildConfig(ma_share_mode_shared, /*useId=*/false);
+            r = ma_device_init(&impl_->nullContext, &config, &impl_->device);
+        }
+    }
     if (r != MA_SUCCESS) { return false; }
     impl_->deviceInited = true;
+    silentFallback_ = impl_->device.pContext != nullptr && impl_->device.pContext->backend == ma_backend_null;
 
     if (ma_device_start(&impl_->device) != MA_SUCCESS) {
         stop();

@@ -1963,6 +1963,11 @@ NOTA_API int32_t     nota_audio_negotiated_buffer_frames(const NotaEngine* engin
  * device refused it and the backend fell back to shared. Always 0 on platforms
  * without exclusive mode. */
 NOTA_API int32_t     nota_audio_exclusive_fallback(const NotaEngine* engine);
+/* True if no output device could be opened (the chosen one, then the system default)
+ * and the engine runs on a silent stand-in device instead: everything works, nothing
+ * is heard. nota_engine_start / nota_audio_apply still return NOTA_OK. Desktop
+ * (miniaudio) backend only; always 0 elsewhere. */
+NOTA_API int32_t     nota_audio_silent_fallback(const NotaEngine* engine);
 
 /* --- MIDI device settings (M7-2) ------------------------------------------
  * Which CoreMIDI inputs the engine listens to. The chosen set is persisted as a
