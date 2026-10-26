@@ -130,6 +130,7 @@ class Sampler final : public Instrument {
 
     void noteOn(int32_t pitch, float velocity) override;
     void noteOff(int32_t pitch) override;
+    void noteOffHeldBack(int32_t pitch) override;
     void allNotesOff() override;
 
     void render(float* out, int32_t frames) override;
@@ -155,6 +156,7 @@ class Sampler final : public Instrument {
         float velocity = 0.0f, env = 0.0f;
         double ic1L = 0, ic2L = 0, ic1R = 0, ic2R = 0;
         Stage stage = Stage::Attack;
+        bool keyUp = false; // its note-off came while it played as a one-shot
     };
     Voice* findFreeVoice();
     // Linear-interpolated stereo read at a fractional sample position. Kept verbatim:

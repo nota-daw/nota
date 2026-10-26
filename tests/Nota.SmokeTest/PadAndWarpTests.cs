@@ -6,7 +6,8 @@
 //   A looped pad still stops on note-off, so it can't ring forever.
 // - A pad audition (TrackNoteOn) plays only the rack's own track, never the armed ones (#307).
 // - Warp off → on restores the markers as they were, through undo and a save / load; a split
-//   made with warp off seeds fresh markers for the half instead (#310).
+//   made with warp off seeds fresh markers for the half instead, after a save / load too (#310).
+// - A one-shot pad whose loop turns on after its note-off releases instead of looping on.
 // Also runnable alone: `dotnet run --project tests/Nota.SmokeTest -- --pad-warp`.
 
 using Nota.Application;
@@ -57,6 +58,26 @@ internal static class PadAndWarpTests
                 yield return (later > 0.05, $"one-shot pad: a short note plays the sample through (rms {later:F3} after note-off)");
             else
                 yield return (later < 1e-3, $"looped pad: note-off still stops it (rms {later:F5})");
+        }
+
+        // The loop switched on while a released one-shot still sounds: it releases rather
+        // than looping on with nothing left to stop it.
+        {
+            using var e = new NotaEngine();
+            int t = e.AddDrumRackTrack();
+            int p = e.RackAddSamplerChain(t, wav, 60, false);
+            e.RackSetChainTriggerNote(t, p, 60);
+            int loopParam = -1;
+            for (int i = 0; i < e.RackChainInstrumentParamCount(t, p); i++)
+                if (e.RackChainInstrumentParamId(t, p, i) == "loopmode") loopParam = i;
+            e.TrackNoteOn(t, 60, 1f);
+            Rms(e, 2);
+            e.TrackNoteOff(t, 60);
+            Rms(e, 4);
+            if (loopParam >= 0) e.RackChainInstrumentParamSet(t, p, loopParam, 0.5f);
+            Rms(e, 350);                   // ~4 s: past the 2 s sample, so only a loop still sounds
+            double later = Rms(e, 4);
+            yield return (loopParam >= 0 && later < 1e-3, $"a released one-shot whose loop turns on fades out (rms {later:F5})");
         }
     }
 
@@ -132,5 +153,28 @@ internal static class PadAndWarpTests
         bool inside = e.TryGetAudioClipInfo(t, right, out var ri) && rm.src.Length >= 2
                       && rm.src[0] >= ri.SourceOffsetFrames - 1 && rm.src[^1] <= ri.SourceOffsetFrames + ri.LengthFrames + 1;
         yield return (inside, $"a half split off with warp off gets markers for its own audio ({string.Join(", ", rm.src.Select(s => s.ToString("F0")))})");
+
+        // The left half is still off with the whole clip's markers: saved and reloaded, they
+        // mustn't come back on re-enable and play audio the split cut away.
+        string dir2 = Path.Combine(Path.GetTempPath(), "nota-smoke-warp-split-" + Guid.NewGuid().ToString("N") + ".nota");
+        try
+        {
+            ProjectService.Save(ProjectService.Capture(e, transport, new List<string>()), dir2, e);
+            using var d = new NotaEngine();
+            ProjectService.Apply(ProjectService.Load(dir2), d, dir2);
+            int dt = -1;
+            for (int i = 0; i < d.TrackCount; i++)
+                if (d.TryGetTrackInfo(i, out var ti) && !ti.IsInstrument && ti.ClipCount == 2) dt = ti.Id;
+            int left = -1;
+            for (int k = 0; k < 2; k++)
+                if (d.TryGetAudioClipInfo(dt, k, out var ki) && ki.WarpEnabled == 0) left = k;
+            d.SetClipWarp(dt, left, true, 3);
+            var lm = Markers(d, dt, left);
+            bool within = d.TryGetAudioClipInfo(dt, left, out var lj) && lm.src.Length >= 2
+                          && lm.src[^1] <= lj.SourceOffsetFrames + lj.LengthFrames + 1;
+            yield return (left >= 0 && within,
+                $"a half split with warp off, saved and reloaded, re-seeds on re-enable ({string.Join(", ", lm.src.Select(s => s.ToString("F0")))})");
+        }
+        finally { try { Directory.Delete(dir2, true); } catch { } }
     }
 }

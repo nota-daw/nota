@@ -71,6 +71,10 @@ class Instrument {
     // one-shot, however short the MIDI note (#312); anything that would ring forever
     // without a note-off (a looped sample, a synth) still gets it.
     virtual bool playsOneShot() const { return false; }
+    // The note-off a one-shot pad held back. The note still plays through, but if the
+    // instrument stops playing one-shots mid-note (its loop turned on), it releases then
+    // instead of ringing on.
+    virtual void noteOffHeldBack(int32_t /*pitch*/) {}
     // The engine's damper state for this instrument. Written on the audio thread only; relaxed
     // atomics because a rack edit forks the rack on the message thread and carries them over.
     std::atomic<bool> pedalDown{false};

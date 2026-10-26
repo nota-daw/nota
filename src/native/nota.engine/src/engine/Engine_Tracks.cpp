@@ -707,7 +707,11 @@ int32_t Engine::clipWarpMarkers(
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Audio) return 0;
     if (!audioClipRef(*t, clipIndex)) return 0;
-    const auto& m = (*audioClipRef(*t, clipIndex)).warpMarkers;
+    const AudioClip& c = (*audioClipRef(*t, clipIndex));
+    // A warp-off clip split or trimmed since has markers for a region it no longer
+    // plays: they'd be re-seeded on re-enable, so they aren't reported (nor saved).
+    if (!c.warpEnabled && !warpMarkersRestorable(c)) return 0;
+    const auto& m = c.warpMarkers;
     const int32_t n = std::min<int32_t>(maxCount, static_cast<int32_t>(m.size()));
     for (int32_t i = 0; i < n; ++i) {
         if (outSrc) outSrc[i] = m[i].srcFrame;
