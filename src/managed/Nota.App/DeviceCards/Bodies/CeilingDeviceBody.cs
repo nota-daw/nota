@@ -149,7 +149,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { label = tb; break; }
             readouts.Add(() =>
             {
-                knob.ArcColor = teal?.Invoke() == true ? Teal : null;
+                knob.ArcColor = null;
                 if (!knob.Dragging) { double c = N(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
                 val.Text = fmt(P(p));
                 bool on = lit?.Invoke() ?? false;

@@ -192,11 +192,11 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             if (!pad.Dragging) pad.SetValue(G("vecx"), G("vecy"));
             pad.SetGhost(effX, effY, Ghost());
             vecReadout.Text = $"x {Coord(G("vecx"))} · y {Coord(G("vecy"))}";
-            vecReadout.Foreground = VectorPulled() ? NotaPalette.TealBright : TextSecondary;   // teal: the reaction pulls it
+            vecReadout.Foreground = VectorPulled() ? DeviceCardKit.ModInkBright : TextSecondary;   // teal: the reaction pulls it
             bool pulled = VectorPulled();
             vecFoot.Text = pulled ? "dashed — where the reaction pulls"
                 : Ghost() ? "dashed — where motion drifts" : "four timbres · drag the point";
-            vecFoot.Foreground = pulled ? NotaPalette.TealBright : TextTertiary;
+            vecFoot.Foreground = pulled ? DeviceCardKit.ModInkBright : TextTertiary;
         });
 
         var vecGrid = new Grid { RowDefinitions = new RowDefinitions($"{HeadH},*,{StatusH}") };
@@ -270,7 +270,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
 
         var scope = new FluxReactScope { VerticalAlignment = VerticalAlignment.Stretch, Live = live };
 
-        var listen = PKnob("listen", "LISTEN", "Listen", Pct, NotaSize.KnobSecondary, 44, Teal);
+        var listen = PKnob("listen", "LISTEN", "Listen", Pct, NotaSize.KnobSecondary, 44, null);
         var targetSeg = Segments(Targets, TargetIdx, iv => { Begin("target"); SetP("target", iv / 3f); End("target"); Refresh(); },
             out var targetSync, fill: true, dim: () => !live, padX: 2);
         readouts.Add(targetSync);
@@ -292,14 +292,14 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         {
             scope.Live = live;
             listen.Knob.IsDim = !live;
-            reactCap.Foreground = live ? NotaPalette.TealBright : TextTertiary;
+            reactCap.Foreground = live ? DeviceCardKit.ModInkBright : TextTertiary;
             reactSub.Foreground = live ? NotaPalette.TextMuted : TextDisabled;
             int src = engine.InstrumentSidechainSource(track);
             srcText.Text = SourceName(src);
             srcText.Foreground = live ? TextPrimary : TextDisabled;
             srcField.Background = live ? NotaPalette.SurfaceRaised : NotaPalette.BgSunken;
             targetHint.Text = TargetLine();
-            targetHint.Foreground = live ? NotaPalette.TealBright : TextDisabled;
+            targetHint.Foreground = live ? DeviceCardKit.ModInkBright : TextDisabled;
         });
 
         var reactBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };

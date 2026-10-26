@@ -725,8 +725,8 @@ and grey.
 - **Size** (`NotaSize`) in a device 0.57's sizes: 36 regular, 34 secondary, 44 main, with
   the value over the name (both 8); 24 in a table row (`KnobInline`); a flat knob outside
   devices 28, with no cap. `Knob` snaps to these sizes.
-- An inactive knob draws its arc in ink 4. A modulation arc keeps its source's colour:
-  that is data, not state.
+- An inactive knob draws its arc in ink 4. The knobs 0.57 drew in a modulation colour
+  (teal) draw orange like the rest (`Knob.ArcColor` only marks them).
 
 ### Value bar
 

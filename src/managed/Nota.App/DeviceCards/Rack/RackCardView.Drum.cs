@@ -230,7 +230,7 @@ internal sealed partial class RackCardView
         Grid.SetColumn(nameTb, 1); top.Children.Add(nameTb);
 
         var noteTb = DrumMono(NoteName(note), selected ? AccentBright : filled ? TextTertiary : TextDisabled, 7);
-        var chokeTb = DrumMono(choke > 0 ? $"Ch {choke}" : "", NotaPalette.TealBright, 7);
+        var chokeTb = DrumMono(choke > 0 ? $"Ch {choke}" : "", DeviceCardKit.ModInkBright, 7);
         var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), VerticalAlignment = VerticalAlignment.Bottom };
         bottom.Children.Add(noteTb);
         Grid.SetColumn(chokeTb, 1); bottom.Children.Add(chokeTb);
@@ -444,7 +444,7 @@ internal sealed partial class RackCardView
         int choke = E.RackChainChoke(T, c);
         var mute = MixBtn("M", () => a.ChainMute(c), NotaPalette.Mute, () => a.SetChainMute(c, !a.ChainMute(c)));
         var solo = MixBtn("S", () => a.ChainSolo(c), NotaPalette.Solo, () => a.SetChainSolo(c, !a.ChainSolo(c)));
-        var chk = MixBtn(choke > 0 ? choke.ToString() : "·", () => E.RackChainChoke(T, c) > 0, NotaPalette.Teal,
+        var chk = MixBtn(choke > 0 ? choke.ToString() : "·", () => E.RackChainChoke(T, c) > 0, DeviceCardKit.ModInk,
             () => { E.RackSetChainChoke(T, c, (E.RackChainChoke(T, c) + 1) % ChokeNames.Length); DeferRebuild(); }, choke: true);
         ToolTip.SetTip(mute, "Mute the pad"); ToolTip.SetTip(solo, "Solo the pad"); ToolTip.SetTip(chk, "Choke group: click for the next");
         MidiLearn.Bind(mute, MidiTarget.RackChainMute(T, a.AutomationDeviceIndex, c), "Pad Mute");
@@ -495,9 +495,9 @@ internal sealed partial class RackCardView
             bool v = on();
             if (choke)
             {
-                b.Background = v ? NotaPalette.Wash(NotaPalette.Teal, 0x33) : NotaPalette.BgSunken;
+                b.Background = v ? NotaPalette.Wash(DeviceCardKit.ModInk, 0x33) : NotaPalette.BgSunken;
                 b.BorderBrush = v ? accent : NotaPalette.GraphBorder;
-                tb.Foreground = v ? NotaPalette.TealBright : TextDisabled;
+                tb.Foreground = v ? DeviceCardKit.ModInkBright : TextDisabled;
             }
             else
             {

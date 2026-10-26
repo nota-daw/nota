@@ -31,7 +31,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
     private static readonly IBrush Inset = NotaPalette.BgSunken;
     private static readonly IBrush TabBg = NotaPalette.SurfaceCard;
     private static readonly IBrush Amber = NotaPalette.Accent;
-    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealC = DeviceCardKit.ModInk;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
     private static readonly IBrush Handle = NotaPalette.TextSecondary;
@@ -73,7 +73,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
 
         Control K(string id, string name, Func<float, string>? fmt = null, bool mod = false, double sz = Knob.SizeSecondary, double cw = 46, bool inline = false)
-            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null, inline);
+            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, null, inline);
 
         // A table-row knob: [inline knob] value, side by side — for the oscillator rows and unison.
         Control RowKnob(string id, Func<float, string> fmt, double valW, bool mod = false)
@@ -81,7 +81,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             if (I(id) is not (var i and >= 0)) return new Panel();
             var value = new TextBlock { Text = fmt(G(id)), FontSize = 8, Foreground = TxtC, Width = valW, VerticalAlignment = VerticalAlignment.Center };
             value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
-            var knob = new Knob(G(id), 1.0) { Accent = true, Inline = true, ArcColor = mod ? TealC : null, Default = engine.InstrumentParamDefault(track, i) };
+            var knob = new Knob(G(id), 1.0) { Accent = true, Inline = true, ArcColor = null, Default = engine.InstrumentParamDefault(track, i) };
             knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, i, (float)v); value.Text = fmt((float)v); Refresh(); };
             knob.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id);

@@ -241,17 +241,17 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
 
         var hammer = Col("Hammer", VStack(
             Knob("hard", "Hard", v => NotaNum.Pct(v), size: 24),
-            Knob("velhard", "Vel→H", v => NotaNum.Pct(v), size: 24, arc: Teal),
+            Knob("velhard", "Vel→H", v => NotaNum.Pct(v), size: 24, arc: null),
             Knob("noise", "Noise", NoiseText, size: 24)), 46);
 
         var reso = Col("Resonator", Grid2(
             Knob("decay", "Decay", v => NotaNum.Pct(KeysModel.DecayPct(v) / 100)),
             Knob("body", "Body", v => NotaNum.Pct(v)),
             Knob("bright", "Bright", v => NotaNum.Pct(v)),
-            Knob("keybright", "Key→Br", v => Signed(KeysModel.Bipolar(v) * 100, "%"), arc: Teal)), 94);
+            Knob("keybright", "Key→Br", v => Signed(KeysModel.Bipolar(v) * 100, "%"), arc: null)), 94);
 
         // PICKUP: the graph, with the bark readout (or, for Clav, the pickup chips) on its header.
-        var bark = new TextBlock { FontSize = 8, Foreground = NotaPalette.TealBright, VerticalAlignment = VerticalAlignment.Center };
+        var bark = new TextBlock { FontSize = 8, Foreground = DeviceCardKit.ModInkBright, VerticalAlignment = VerticalAlignment.Center };
         bark.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var puChips = Chips("pupos", KeysModel.PickupPositions, padX: 4);
         var puAcc = new Panel { Children = { bark, puChips } };
@@ -341,7 +341,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
         var tremView = new KeysTremView(G);
         ctx.AddDeviceRefresher(() => tremView.SetPhase(scope[KeysModel.ScLfo]));
         var rateK = Knob("tremrate", "Rate", _ => KeysModel.TremRateText(G));
-        var depthK = Knob("tremdepth", "Depth", v => NotaNum.Pct(v), arc: Teal);
+        var depthK = Knob("tremdepth", "Depth", v => NotaNum.Pct(v), arc: null);
         DimWhen(() => !On("tremon"), rateK, depthK);
         var syncSeg = Chips("tremsync", KeysModel.TremSyncs, padX: 4);
         var syncCell = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { syncSeg, Center(Caps("Sync")) } };
@@ -526,7 +526,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
             knob("hard", "Hard", v => NotaNum.Pct(v), 30, 54, null),
             knob("dist", "Pickup", v => NotaNum.Pct(v), 30, 54, null),
             knob("drive", "Drive", v => NotaNum.Pct(v), 30, 54, null),
-            knob("tremdepth", "Trem", v => NotaNum.Pct(v), 30, 54, Teal),
+            knob("tremdepth", "Trem", v => NotaNum.Pct(v), 30, 54, null),
         };
         var knobRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
         for (int i = 0; i < cells.Length; i++)

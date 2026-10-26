@@ -102,7 +102,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             FreqRange = (30.0, 18000.0), VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50,
         };
         var ampEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50 };
-        var filtEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50, Accent = NotaPalette.TealBright };
+        var filtEnv = new VoltEnv(engine, track) { ShowTitle = false, VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 100, MinHeight = 50, Accent = DeviceCardKit.ModInkBright };
         var hint = new TextBlock
         {
             FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.UiFamily,
@@ -406,8 +406,8 @@ internal sealed class BassInstrumentCard : IInstrumentCard
                     PKnob("filfreq", "CUTOFF", "Filter Freq", Hz, 26, 38),
                     PKnob("filreso", "RESO", "Filter Reso", Pct, 26, 30),
                     PKnob("fildrive", "DRIVE", "Filter Drive", Pct, 26, 32),
-                    PKnob("filenv", "ENV", "Filter Env", Bip, 26, 30, Teal),
-                    PKnob("filkey", "KEY", "Filter Key", Pct, 26, 30, Teal),
+                    PKnob("filenv", "ENV", "Filter Env", Bip, 26, 30, null),
+                    PKnob("filkey", "KEY", "Filter Key", Pct, 26, 30, null),
                 },
             };
             filtRow.Children.Add(left);
@@ -466,8 +466,8 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             var ks = new[]
             {
                 PKnob("lforate", "RATE", "LFO Rate", v => SlowHz(ExpMap(v, 0.05, 30)), 26, 40),
-                PKnob("fillfo", "→ FLT", "Filter LFO", Bip, 26, 40, Teal),
-                PKnob("lfopitch", "→ PIT", "LFO → Pitch", LfoPitch, 26, 40, Teal),
+                PKnob("fillfo", "→ FLT", "Filter LFO", Bip, 26, 40, null),
+                PKnob("lfopitch", "→ PIT", "LFO → Pitch", LfoPitch, 26, 40, null),
             };
             for (int i = 0; i < ks.Length; i++) { Grid.SetColumn(ks[i], i); lfoKnobs.Children.Add(ks[i]); }
         }

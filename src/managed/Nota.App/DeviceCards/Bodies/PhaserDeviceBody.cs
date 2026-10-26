@@ -194,7 +194,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         var legend = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), fcWord },
+            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", DeviceCardKit.ModInkBright), fcWord },
         };
         var response = new PhaserResponseView { Value = () => (P(Center), P(Feedback)) };
         response.GestureBegin += () => { Begin(Center); Begin(Feedback); };
@@ -219,7 +219,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         {
             string m = Mode();
             modeWord.Text = m;
-            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? NotaPalette.TealBright : TextSecondary;
+            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? DeviceCardKit.ModInkBright : TextSecondary;
         });
         ToolTip.SetTip(modeWord, "What the feedback makes: positive sharpens the peaks, negative moves and widens the notches, past 85 % the phaser whistles");
 
@@ -252,7 +252,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         }
         var sweepBar = new FlangerBar { Ink = NotaPalette.BorderStrong, VerticalAlignment = VerticalAlignment.Center };
         var sweepVal = Mono("", 8, TextPrimary);
-        var nullBar = new FlangerBar { Ink = NotaPalette.TealBright, VerticalAlignment = VerticalAlignment.Center };
+        var nullBar = new FlangerBar { Ink = DeviceCardKit.ModInkBright, VerticalAlignment = VerticalAlignment.Center };
         var nullVal = Mono("", 8, TextPrimary);
         var reads = new Border
         {

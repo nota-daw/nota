@@ -277,7 +277,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
             modulation: true, snap: v => Math.Round(v * 200) / 200);
         var warmRow = Slider("WARMTH", Warmth, v => PctF(v),
             "Warmth — a bucket-brigade flavour on the delay line: darker (low-pass down to 2.5 kHz) and gently saturated", LW, VW,
-            snap: v => Math.Round(v * 100) / 100, ink: NotaPalette.RoseBright);
+            snap: v => Math.Round(v * 100) / 100, ink: DeviceCardKit.ModInkBright);
         var mixRow = Slider("MIX", Mix, v => Vib() ? "wet" : PctF(v), "Mix — 0 % dry, 50 % dry and wet equal, 100 % the voices alone. Vibrato is always wet", LW, VW,
             snap: v => Math.Round(v * 100) / 100, locked: Vib);
 

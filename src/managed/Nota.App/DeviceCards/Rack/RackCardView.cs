@@ -46,7 +46,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     private static readonly IBrush IrCard = NotaPalette.SurfaceRaised;
     private static readonly IBrush IrAmber = NotaPalette.Accent;
     private static readonly IBrush IrAmberLit = NotaPalette.AccentBright;   // selection only
-    private static readonly IBrush IrTeal = NotaPalette.Teal;
+    private static readonly IBrush IrTeal = DeviceCardKit.ModInk;
     private static readonly IBrush IrTxt = NotaPalette.TextPrimary;
     private static readonly IBrush IrMuted = NotaPalette.TextTertiary;
     private static readonly IBrush IrRed = NotaPalette.AccentHover;   // a state, not an alert: red is kept for recording and overload
@@ -310,7 +310,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         // The dashed outline shows only while an effect is dragged over the slot (spec 012).
         void Idle() { dash.IsVisible = false; dash.Stroke = DashIdle; dash.Fill = null; plus.Foreground = IrMuted; lbl.Foreground = IrMuted; }
         void Hover() { dash.Stroke = NotaPalette.TextTertiary; plus.Foreground = IrTxt; lbl.Foreground = NotaPalette.TextSecondary; }
-        void Drop() { dash.IsVisible = true; dash.Stroke = IrTeal; dash.Fill = NotaPalette.Wash(NotaPalette.Teal, 0x22); plus.Foreground = IrTeal; lbl.Foreground = IrTeal; }
+        void Drop() { dash.IsVisible = true; dash.Stroke = IrTeal; dash.Fill = NotaPalette.Wash(DeviceCardKit.ModInk, 0x22); plus.Foreground = IrTeal; lbl.Foreground = IrTeal; }
 
         ToolTip.SetTip(box, "Add device — click for the list, or drop an effect here");
         box.PointerEntered += (_, _) => Hover();
@@ -396,7 +396,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         _irTick.Add(() => { if (!gd) GUpd(); });
         var glideRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4, Children = { IrCap("GLIDE"), WithCol(gSlot, 1), WithCol(glideVal, 2) } };
 
-        var mapBtn = new Border { BorderBrush = IrTeal, BorderThickness = new Thickness(1), Background = NotaPalette.Wash(NotaPalette.Teal, 0x24), CornerRadius = NotaRadius.Field, Padding = new Thickness(0, 3), Cursor = new Cursor(StandardCursorType.Hand),
+        var mapBtn = new Border { BorderBrush = IrTeal, BorderThickness = new Thickness(1), Background = NotaPalette.Wash(DeviceCardKit.ModInk, 0x24), CornerRadius = NotaRadius.Field, Padding = new Thickness(0, 3), Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = "Macro map", FontSize = 8, FontWeight = FontWeight.Medium, Foreground = IrTeal, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center } };
         mapBtn.PointerPressed += (_, _) => { _macroMapMode = true; _ctx.RequestRebuild(); };
 
@@ -732,7 +732,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         double span = Math.Max(1e-6, pMax - pMin);
         double fLo = Math.Clamp((mm.RangeMin - pMin) / span, 0, 1), fHi = Math.Clamp((mm.RangeMax - pMin) / span, 0, 1);
         var name = new TextBlock { Text = $"{dev} · {pn}", FontSize = 9, Foreground = IrTxt, Width = 122, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        var band = new Border { Height = 6, Background = NotaPalette.Wash(NotaPalette.Teal, 0x73), CornerRadius = NotaRadius.Cell, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        var band = new Border { Height = 6, Background = NotaPalette.Wash(DeviceCardKit.ModInk, 0x73), CornerRadius = NotaRadius.Cell, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         var track = new Panel { Height = 6, MinWidth = 60, Children = { new Border { Height = 6, Background = NotaPalette.BgSunken, CornerRadius = NotaRadius.Cell, VerticalAlignment = VerticalAlignment.Center }, band } };
         var vals = IrMono($"{mm.RangeMin * 100:0}\u2009%–{mm.RangeMax * 100:0}\u2009%", NotaPalette.TextSecondary);
         void Upd() { double w = track.Bounds.Width; band.Margin = new Thickness(fLo * w, 0, 0, 0); band.Width = Math.Max(2, (fHi - fLo) * w); }
@@ -962,7 +962,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         MidiLearn.Bind(gSlot, MidiTarget.RackVolume(T, di), "Rack Volume");
         var gainRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { IrCap("GAIN"), WithCol(gSlot, 1), WithCol(gainVal, 2) } };
 
-        var macroMap = new Border { BorderBrush = IrTeal, BorderThickness = new Thickness(1), Background = NotaPalette.Wash(NotaPalette.Teal, 0x24), CornerRadius = NotaRadius.Field, Padding = new Thickness(0, 3), Cursor = new Cursor(StandardCursorType.Hand),
+        var macroMap = new Border { BorderBrush = IrTeal, BorderThickness = new Thickness(1), Background = NotaPalette.Wash(DeviceCardKit.ModInk, 0x24), CornerRadius = NotaRadius.Field, Padding = new Thickness(0, 3), Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = "Macro map", FontSize = 8, FontWeight = FontWeight.Medium, Foreground = IrTeal, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center } };
         macroMap.PointerPressed += (_, _) => { _aeMacroMap = true; DeferRebuild(); };
         var pdc = AeRailToggle("PDC", E.RackDevPdc(T, di), () => { E.RackDevSetPdc(T, di, !E.RackDevPdc(T, di)); DeferRebuild(); });
@@ -1375,7 +1375,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             text = $"→ C{lastChain + 1} {pn}";
         }
         else if (count > 1) text = $"→ {count} params";
-        return new TextBlock { Text = text, FontSize = 8, Foreground = NotaPalette.TealBright, TextTrimming = TextTrimming.CharacterEllipsis };
+        return new TextBlock { Text = text, FontSize = 8, Foreground = DeviceCardKit.ModInkBright, TextTrimming = TextTrimming.CharacterEllipsis };
     }
 
     private void ShowMacroMenu(IRackAccess a, Control anchor, int m)
@@ -1603,7 +1603,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     // A teal on/off chip (the Effect Rack's Follow / Manual selector).
     private static Border DrumChip(string text, bool on, Action onClick)
     {
-        var b = new Border { BorderThickness = new Thickness(1), BorderBrush = on ? IrTeal : NotaPalette.BorderStrong, Background = on ? NotaPalette.Wash(NotaPalette.Teal, 0x24) : IrCard, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+        var b = new Border { BorderThickness = new Thickness(1), BorderBrush = on ? IrTeal : NotaPalette.BorderStrong, Background = on ? NotaPalette.Wash(DeviceCardKit.ModInk, 0x24) : IrCard, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = new TextBlock { Text = text, FontSize = 9, Foreground = on ? IrTeal : NotaPalette.TextSecondary } };
         b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
         return b;

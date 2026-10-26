@@ -176,7 +176,7 @@ internal static class MacroPanel
         var recv = new TextBlock
         {
             Text = assigned ? Receivers(s, m, compact: !stacked) : "not assigned", FontSize = 7, TextTrimming = TextTrimming.CharacterEllipsis,
-            Foreground = assigned ? NotaPalette.TealBright : TextDisabled,
+            Foreground = assigned ? DeviceCardKit.ModInkBright : TextDisabled,
         };
 
         Control content;
@@ -386,7 +386,7 @@ internal static class MacroPanel
         var name = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.Medium, Foreground = TextPrimary, Width = withParam ? 74 : 50, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         ToolTip.SetTip(name, dev.Length > 0 ? $"{s.SlotName(mm.Chain)} · {Short(dev)} · {pn}" : $"{s.SlotName(mm.Chain)} · {pn}");
 
-        var band = new Border { Height = 3, CornerRadius = NotaRadius.Fine, Background = NotaPalette.Teal, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
+        var band = new Border { Height = 3, CornerRadius = NotaRadius.Fine, Background = DeviceCardKit.ModInk, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         var now = new Border { Width = 2, Height = 7, Background = NotaPalette.VizInk, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
         var track = new Panel
         {
@@ -460,15 +460,15 @@ internal static class MacroPanel
         var tb = new TextBlock
         {
             Text = text, FontSize = 7, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Foreground = teal ? NotaPalette.TealBright : NotaPalette.TextStrong,
+            Foreground = teal ? DeviceCardKit.ModInkBright : NotaPalette.TextStrong,
         };
-        IBrush rest = teal ? NotaPalette.Wash(NotaPalette.Teal, 0x33) : NotaPalette.SurfaceRaised;
+        IBrush rest = teal ? NotaPalette.Wash(DeviceCardKit.ModInk, 0x33) : NotaPalette.SurfaceRaised;
         var b = new Border
         {
             Height = 16, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(6, 0),
-            Background = rest, BorderBrush = teal ? NotaPalette.Teal : BorderDef, Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
+            Background = rest, BorderBrush = teal ? DeviceCardKit.ModInk : BorderDef, Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
         };
-        b.PointerEntered += (_, _) => b.Background = teal ? NotaPalette.Wash(NotaPalette.Teal, 0x55) : NotaPalette.SurfaceHover;
+        b.PointerEntered += (_, _) => b.Background = teal ? NotaPalette.Wash(DeviceCardKit.ModInk, 0x55) : NotaPalette.SurfaceHover;
         b.PointerExited += (_, _) => b.Background = rest;
         b.PointerPressed += (_, e) =>
         {

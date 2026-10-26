@@ -55,7 +55,7 @@ internal sealed class LensDeviceBody : IDeviceBody
     private static readonly IBrush Inset = NotaPalette.BgSunken;
     private static readonly IBrush Amber = NotaPalette.Accent;
     private static readonly IBrush AmberLit = NotaPalette.AccentBright;
-    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealC = DeviceCardKit.ModInk;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush Txt2 = NotaPalette.TextSecondary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
@@ -380,7 +380,7 @@ internal sealed class LensDeviceBody : IDeviceBody
 
         int centreTab = Sel(ViewP, 3);
         var railA = RailSlider(() => centreTab == 1 ? VoltDivP : ScaleTopP, NotaPalette.VizInk, () => centreTab == 1 ? "V/D" : "TOP");
-        var railB = RailSlider(() => centreTab == 1 ? TimeDivP : ScaleRangeP, NotaPalette.Teal, () => centreTab == 1 ? "T/D" : "RNG");
+        var railB = RailSlider(() => centreTab == 1 ? TimeDivP : ScaleRangeP, DeviceCardKit.ModInk, () => centreTab == 1 ? "T/D" : "RNG");
         var rail = new RuleSection
         {
             Width = 56, Padding = new Thickness(0, 5),

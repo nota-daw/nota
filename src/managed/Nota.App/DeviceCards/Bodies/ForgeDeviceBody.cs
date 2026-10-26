@@ -221,7 +221,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
                 name.Text = ForgeMath.AlgoNames[TypeI(s)];
                 name.Foreground = lit ? TextPrimary : TextTertiary;
                 role.Text = NotaText.Label(ForgeMath.Role(RouteI(), s));
-                role.Foreground = lit ? NotaPalette.TealBright : TextDisabled;
+                role.Foreground = lit ? DeviceCardKit.ModInkBright : TextDisabled;
                 double trim = (P(OutP(s)) - 0.5) * 24;
                 outTxt.Text = TrimF(P(OutP(s)));
                 outTxt.Foreground = Math.Abs(trim) > 0.05 ? TextPrimary : lit ? TextSecondary : TextDisabled;

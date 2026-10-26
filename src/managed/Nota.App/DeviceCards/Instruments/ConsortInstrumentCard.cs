@@ -35,7 +35,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
     private static readonly IBrush TabBg = NotaPalette.SurfaceCard;
     private static readonly IBrush Amber = NotaPalette.Accent;
     private static readonly IBrush AmberLit = NotaPalette.AccentBright;
-    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealC = DeviceCardKit.ModInk;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush Txt2 = NotaPalette.TextSecondary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
@@ -127,7 +127,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
 
         Control K(string id, string name, Func<float, string> fmt, bool mod = false, double sz = Knob.SizeSecondary, double cw = 44, bool inline = false)
-            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null, inline);
+            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, null, inline);
 
         // A compact horizontal knob: [inline knob] value — for the oscillator table.
         Control MiniKnob(string id, Func<float, string> fmt, double valW, IBrush valColor)

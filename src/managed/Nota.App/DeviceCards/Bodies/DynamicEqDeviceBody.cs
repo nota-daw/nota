@@ -74,7 +74,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         bool Capable(int b) => DynEq.HasGain(TypeOf(b));
         bool IsDyn(int b) => DynMaster() && BandOn(b) && Capable(b) && ModeOf(b) != DynEq.Static;
         bool KeyExt(int b) => P(DynEq.SidechainP) >= 0.5f || P(DynEq.KeyBase + b) >= 0.5f;
-        IBrush DirInk(int b, bool bright = false) => B(b, DynEq.RangeF) >= 0 ? (bright ? NotaPalette.RoseBright : NotaPalette.Rose) : (bright ? NotaPalette.TealBright : Teal);
+        IBrush DirInk(int b, bool bright = false) => B(b, DynEq.RangeF) >= 0 ? (bright ? DeviceCardKit.ModInkBright : DeviceCardKit.ModInk) : (bright ? DeviceCardKit.ModInkBright : Teal);
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()

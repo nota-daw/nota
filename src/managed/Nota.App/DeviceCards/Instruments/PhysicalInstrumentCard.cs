@@ -237,7 +237,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
 
             var knobs = KnobGrid(2,
                 PKnob("noisevol", "VOLUME", Pct, cellW: 46),
-                PKnob("noiseenv", "ENV", Bip, cellW: 46, arc: Teal),
+                PKnob("noiseenv", "ENV", Bip, cellW: 46, arc: null),
                 PKnob("noisefreq", "FREQ", v => NotaNum.Hz(PhysicalModel.NoiseFreqHz(v)), cellW: 46),
                 PKnob("noisereso", "RESO", Pct, cellW: 46));
             knobs.Width = 96;

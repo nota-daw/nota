@@ -39,7 +39,11 @@ internal static class DeviceCardKit
     internal static readonly IBrush TextDisabled = NotaPalette.TextDisabled;
     internal static readonly IBrush AccentBright = NotaPalette.AccentBright;
     internal static readonly IBrush OnAccent = NotaPalette.TextOnAccent;
-    internal static readonly IBrush Teal = NotaPalette.Teal;                                     // modulation accent
+    // The identity colours 0.57 gave a modulation, a channel or a band (teal, rose) are greys
+    // told apart by shade in the style guide: TextTertiary for the second voice, TextSecondary bright.
+    internal static readonly SolidColorBrush ModInk = NotaPalette.TextTertiary;
+    internal static readonly SolidColorBrush ModInkBright = NotaPalette.TextSecondary;
+    internal static readonly IBrush Teal = ModInk;                                               // was the modulation teal
     internal static readonly IBrush AccentSubtleB = NotaPalette.AccentSubtle;
 
     internal static string Pct(float v) => $"{(int)Math.Round(v * 100)}\u2009%";

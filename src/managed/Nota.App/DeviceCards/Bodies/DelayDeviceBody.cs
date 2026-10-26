@@ -272,7 +272,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         faders.Children.Add(LoopFader(Feedback, "FEEDBACK", NotaPalette.VizInk, NotaPalette.VizInk,
             () => On(Freeze) ? "Hold" : Pct(P(Feedback)),
             "Feedback — how much of each repeat goes round again; Freeze pins it at 100 %. Double-click resets."));
-        faders.Children.Add(Col(LoopFader(Spread, "SPREAD", NotaPalette.Rose, NotaPalette.RoseBright,
+        faders.Children.Add(Col(LoopFader(Spread, "SPREAD", DeviceCardKit.ModInk, DeviceCardKit.ModInkBright,
             () => NotaNum.F($"{P(Spread) * 50:0} ms"),
             "Spread — pushes the right channel later, up to 50 ms. Double-click resets."), 1));
         var loopCol = new RuleSection

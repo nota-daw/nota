@@ -188,7 +188,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         var legend = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), waveWord },
+            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", DeviceCardKit.ModInkBright), waveWord },
         };
         var graph = new OrbitGainView { Value = () => (P(Amount), P(Phase)) };
         graph.GestureBegin += () => { Begin(Amount); Begin(Phase); };
@@ -201,7 +201,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         var panBar = new OrbitPanBar { VerticalAlignment = VerticalAlignment.Center };
         var panTxt = Mono("", 8, TextPrimary); panTxt.TextAlignment = TextAlignment.Right; panTxt.Width = 28;
         var lTag = Mono("L", 7, NotaPalette.VizInk); lTag.FontWeight = FontWeight.Medium;
-        var rTag = Mono("R", 7, NotaPalette.TealBright); rTag.FontWeight = FontWeight.Medium;
+        var rTag = Mono("R", 7, DeviceCardKit.ModInkBright); rTag.FontWeight = FontWeight.Medium;
         var panRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 6, Height = 14, Margin = new Thickness(0, 4, 0, 0) };
         panRow.Children.Add(lTag);
         panRow.Children.Add(Col(panBar, 1));
@@ -221,7 +221,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         {
             string m = Mode();
             modeWord.Text = m;
-            modeWord.Foreground = m == "auto-pan" ? TextPrimary : m == "tremolo" ? NotaPalette.TealBright : TextSecondary;
+            modeWord.Foreground = m == "auto-pan" ? TextPrimary : m == "tremolo" ? DeviceCardKit.ModInkBright : TextSecondary;
         });
         ToolTip.SetTip(modeWord, "What the phase makes: tremolo near 0°, auto-pan near 180°, an offset pan between");
 
@@ -283,7 +283,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
                 Spacing = 5, Children =
                 {
                     MeterRow("OUT L", NotaPalette.VizInk, NotaPalette.VizInk, S_OutPeakL, S_GainL),
-                    MeterRow("OUT R", NotaPalette.TealBright, NotaPalette.TealBright, S_OutPeakR, S_GainR),
+                    MeterRow("OUT R", DeviceCardKit.ModInkBright, DeviceCardKit.ModInkBright, S_OutPeakR, S_GainR),
                 },
             },
         };

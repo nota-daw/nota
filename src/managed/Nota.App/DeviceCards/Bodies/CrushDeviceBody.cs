@@ -108,7 +108,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, Default = Def(p), Width = 34, Height = 34 };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
-            if (teal) knob.ArcColor = Teal;
+            // no modulation colour on the arc: values are orange inside a device
             knob.ValueChanged += v => { Raw(p, v); val.Text = fmt(P(p)); RefreshAll(); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);

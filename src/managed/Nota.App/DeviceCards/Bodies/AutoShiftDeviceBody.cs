@@ -520,7 +520,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                     bool sung = !inS && Sc(PcAt + i) > 0.08;
                     chips[i].Background = tonic ? Brass : inS ? NotaPalette.AccentSubtle : Sunken;
                     chips[i].BorderBrush = inS ? Brass : sung ? Teal : BorderDef;
-                    chipTx[i].Foreground = tonic ? OnAccent : inS ? AccentBright : sung ? NotaPalette.TealBright : TextDisabled;
+                    chipTx[i].Foreground = tonic ? OnAccent : inS ? AccentBright : sung ? DeviceCardKit.ModInkBright : TextDisabled;
                     chipTx[i].FontWeight = tonic ? FontWeight.Bold : inS ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             });

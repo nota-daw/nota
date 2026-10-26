@@ -235,7 +235,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
 
         // The second fader is make-up on Curve / Motion and the key's gain on Sidechain.
         int F2() => centreTab == 2 ? ScGain : Makeup;
-        var f2 = new CompFader { Ink = NotaPalette.Teal, Handle = NotaPalette.TealBright, VerticalAlignment = VerticalAlignment.Stretch };
+        var f2 = new CompFader { Ink = DeviceCardKit.ModInk, Handle = DeviceCardKit.ModInkBright, VerticalAlignment = VerticalAlignment.Stretch };
         f2.Changed += v => Raw(F2(), Lin(F2()).V(v));
         f2.GestureBegin += () => Begin(F2());
         f2.GestureEnd += () => End(F2());

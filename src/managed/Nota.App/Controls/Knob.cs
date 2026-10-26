@@ -71,8 +71,9 @@ public sealed class Knob : Control
     /// <summary>The value fills from 12 o'clock (pan, detune, a ± amount).</summary>
     public bool Bipolar { get; init; }
 
-    /// <summary>Overrides the value-arc colour (e.g. teal for modulation knobs); may change live
-    /// (a knob that turns into a modulation depth when its mode switches).</summary>
+    /// <summary>Marks a knob 0.57 drew in a modulation colour; may change live (a knob that turns
+    /// into a modulation depth when its mode switches). Inside a device every value arc is
+    /// orange now, so a marked knob draws its arc orange even when it is not <see cref="Accent"/>.</summary>
     public IBrush? ArcColor { get => _arc; set { if (ReferenceEquals(_arc, value)) return; _arc = value; InvalidateVisual(); } }
     private IBrush? _arc;
 
@@ -230,7 +231,7 @@ public sealed class Knob : Control
         bool live = on && (_drag || _hover);
 
         var arcBrush = !on ? OffArc
-            : ArcColor ?? (_flat ? (live ? LiveArc : GreyArc) : Accent || live ? DeviceArc : GreyArc);
+            : _flat ? (live ? LiveArc : GreyArc) : Accent || live || ArcColor is not null ? DeviceArc : GreyArc;
         var pointer = !on ? PointerOff : PointerOn;
 
         // The track, then the value arc over it — round ends. A bipolar value grows from the top.

@@ -216,7 +216,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 1, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
         faders.Children.Add(TailFader(Decay, "DECAY", NotaPalette.VizInk, NotaPalette.VizInk,
             "Decay — RT60, the time the tail takes to fall 60 dB (0.2 … 12 s); Freeze holds it forever. Double-click resets."));
-        faders.Children.Add(Col(TailFader(HFDamp, "DAMP", NotaPalette.Teal, NotaPalette.TealBright,
+        faders.Children.Add(Col(TailFader(HFDamp, "DAMP", DeviceCardKit.ModInk, DeviceCardKit.ModInkBright,
             "HF Damp — how much faster the highs die than the lows. Double-click resets."), 1));
         var decVal = Mono("", 7, TextPrimary); decVal.HorizontalAlignment = HorizontalAlignment.Center;
         var dmpVal = Mono("", 7, TextPrimary); dmpVal.HorizontalAlignment = HorizontalAlignment.Center;
@@ -279,11 +279,11 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         Control ToneTab()
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto,*,Auto") };
-            g.Children.Add(K(LowCut, "LOW CUT", v => Hz(LowHz(v)), arc: Teal));
-            g.Children.Add(Col(K(HighCut, "HIGH CUT", v => Hz(HighHz(v)), arc: Teal), 1));
+            g.Children.Add(K(LowCut, "LOW CUT", v => Hz(LowHz(v)), arc: null));
+            g.Children.Add(Col(K(HighCut, "HIGH CUT", v => Hz(HighHz(v)), arc: null), 1));
             g.Children.Add(Col(K(WidthP, "WIDTH", Pct), 2));
-            g.Children.Add(Col(K(ModRate, "MOD RATE", RateF, arc: NotaPalette.Rose), 3));
-            g.Children.Add(Col(K(ModDepth, "MOD DEPTH", Pct, arc: NotaPalette.Rose), 4));
+            g.Children.Add(Col(K(ModRate, "MOD RATE", RateF, arc: DeviceCardKit.ModInk), 3));
+            g.Children.Add(Col(K(ModDepth, "MOD DEPTH", Pct, arc: DeviceCardKit.ModInk), 4));
             var mt = Toggle(ModOnTail, "Mod on tail");
             ToolTip.SetTip(mt, "Mod on tail — the modulation wobbles the tail itself (a chorused, evolving decay); off, it moves only the early part and the tail stays still");
             var vi = Toggle(Vintage, "Vintage");

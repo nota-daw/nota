@@ -33,7 +33,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
     private static readonly IBrush Inset = NotaPalette.BgSunken;
     private static readonly IBrush TabBg = NotaPalette.SurfaceCard;
     private static readonly IBrush Amber = NotaPalette.Accent;
-    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealC = DeviceCardKit.ModInk;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush Txt2 = NotaPalette.TextSecondary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
@@ -122,7 +122,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         static Border Divider(Control child, double top = 5) => new() { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
 
         Control K(string id, string name, Func<float, string> fmt, bool mod = false, double sz = Knob.SizeSecondary, double cw = 40, bool inline = false)
-            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null, inline);
+            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, null, inline);
 
         // On/off pill toggle backed by a param (> 0.5 = on).
         Control Toggle(string id, string label, List<Action>? into = null)

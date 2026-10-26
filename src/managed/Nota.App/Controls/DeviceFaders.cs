@@ -152,7 +152,7 @@ internal sealed class CompFader : Control
         double n = Math.Clamp(v, 0, 1);
         bool dirty = !_drag && Math.Abs(n - _v) > 1e-4;
         if (!_drag) _v = n;
-        if (!(double.IsNaN(live) && double.IsNaN(_live)) && Math.Abs(live - _live) > 1e-3) { _live = live; dirty = true; }
+        if (double.IsNaN(live) != double.IsNaN(_live) || Math.Abs(live - _live) > 1e-3) { _live = live; dirty = true; }
         if (dirty) InvalidateVisual();
     }
 

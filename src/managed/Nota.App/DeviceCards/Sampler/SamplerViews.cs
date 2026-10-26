@@ -247,7 +247,7 @@ internal sealed class SamplerKeysView : Control
             double kh = black ? keyH * 0.62 : keyH;
             var rect = new Rect(pad + i * kw + 1, bot - kh, Math.Max(1, kw - 2), kh);   // resting on the bottom edge
             IBrush fill = note == _root ? NotaPalette.Accent
-                : note == playing ? NotaPalette.Teal
+                : note == playing ? DeviceCardKit.ModInk
                 : black ? NotaPalette.SurfaceAbyss : NotaPalette.SurfaceRaised;
             ctx.DrawRectangle(fill, note == _root ? null : hair, new RoundedRect(rect, 0, 0, 2, 2));
             if (note == _natural && note != _root)
@@ -423,7 +423,7 @@ internal sealed class SamplerEnvView : Control
                 _ => n.S.X + (n.R.X - n.S.X) * (1 - env / Math.Max(1e-3, _s)),
             };
             x = Math.Clamp(x, n.O.X, n.R.X);
-            NotaGraph.Node(ctx, new Point(x, y), true, NotaPalette.Teal);
+            NotaGraph.Node(ctx, new Point(x, y), true, DeviceCardKit.ModInk);
         }
 
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopLeft, _tl, NotaPalette.TextTertiary);
@@ -550,7 +550,7 @@ internal sealed class SamplerFilterView : Control
             if (_liveHz > 0 && Math.Abs(Math.Log2(_liveHz / fc)) > 0.05)
             {
                 double lx = XOf(_liveHz, w);
-                ctx.DrawLine(new Pen(NotaPalette.Teal, 1.2), new Point(lx, 0), new Point(lx, h));
+                ctx.DrawLine(new Pen(DeviceCardKit.ModInk, 1.2), new Point(lx, 0), new Point(lx, h));
             }
         }
 

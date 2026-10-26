@@ -302,7 +302,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             {
                 PKnob("tone", "TONE", PendulumModel.ToneWord),
                 PKnob("bright", "BRIGHT", v => NotaNum.Pct(v)),
-                PKnob("fm", "FM", v => NotaNum.Pct(v), arc: Teal),
+                PKnob("fm", "FM", v => NotaNum.Pct(v), arc: null),
                 PKnob("notelen", "LENGTH", v => Secs(PendulumModel.NoteSeconds(v))),
             },
         };

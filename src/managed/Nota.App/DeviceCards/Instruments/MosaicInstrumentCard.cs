@@ -634,7 +634,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 Grid.SetColumn(name, 0); row.Children.Add(name);
                 Cell(row, 1, ZonesIn(g).ToString(NotaNum.Culture));
                 Cell(row, 2, DbS(gr.GainDb));
-                Cell(row, 3, Cents(gr.Tune), Math.Abs(gr.Tune) > 0.01 ? NotaPalette.TealBright : NotaPalette.Teal);
+                Cell(row, 3, Cents(gr.Tune), Math.Abs(gr.Tune) > 0.01 ? DeviceCardKit.ModInkBright : DeviceCardKit.ModInk);
                 Cell(row, 4, gr.SeqLen.ToString(NotaNum.Culture));
                 if (sel && gr.SeqLen > 1)
                 {
@@ -717,10 +717,10 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         var fineKnob = VKnob("Fine", () => ((Zsel()?.Tune ?? 0) + 100) / 200.0, v => { if (Zsel() is { } z) z.Tune = Math.Round(v * 200 - 100); }, () => Cents(Zsel()?.Tune ?? 0), 0.5, Teal, "The zone's fine tune, ±100 cents");
         var pitchRow = Row(12,
             (PKnob("transpose", "Transpose", St, tip: "Shift every note, ±24 semitones"), "Auto"),
-            (PKnob("detune", "Detune", v => Cents(MosaicModel.DetuneCents(v)), arc: Teal, tip: "Fine tune of the whole instrument, ±50 cents"), "Auto"),
+            (PKnob("detune", "Detune", v => Cents(MosaicModel.DetuneCents(v)), arc: null, tip: "Fine tune of the whole instrument, ±50 cents"), "Auto"),
             (PKnob("pitchtrack", "Keytrack", v => NotaNum.Pct(v), tip: "How far the key moves the pitch — 100 % chromatic, 0 % every key plays the root"), "Auto"),
             (rootBox, "Auto"), (fineKnob, "Auto"),
-            (PKnob("bendrange", "Bend", v => NotaNum.Unit(MosaicModel.BendSemis(v), "0", "st"), arc: Teal, tip: "The pitch wheel's range (MPE bends are per note)"), "Auto"),
+            (PKnob("bendrange", "Bend", v => NotaNum.Unit(MosaicModel.BendSemis(v), "0", "st"), arc: null, tip: "The pitch wheel's range (MPE bends are per note)"), "Auto"),
             (new Panel(), "*"), (detectBtn, "Auto"));
 
         // ======================= Env tab =========================================================
@@ -738,8 +738,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             (PKnob("sustain", "Sustain", DbLin, NotaSize.KnobMain, 56), "Auto"),
             (PKnob("release", "Release", v => NotaNum.Time(MosaicModel.ReleaseSec(v))), "Auto"),
             (new Panel(), "*"),
-            (PKnob("velcurve", "Vel curve", v => { int c = MosaicModel.VelCurve(v); return c == 0 ? "linear" : c < 0 ? $"soft {-c}" : $"hard {c}"; }, arc: Teal, tip: "Velocity → level curve"), "Auto"),
-            (PKnob("mpepressure", "Pressure", v => NotaNum.Pct(v), arc: Teal, tip: "MPE pressure (aftertouch) → level"), "Auto"));
+            (PKnob("velcurve", "Vel curve", v => { int c = MosaicModel.VelCurve(v); return c == 0 ? "linear" : c < 0 ? $"soft {-c}" : $"hard {c}"; }, arc: null, tip: "Velocity → level curve"), "Auto"),
+            (PKnob("mpepressure", "Pressure", v => NotaNum.Pct(v), arc: null, tip: "MPE pressure (aftertouch) → level"), "Auto"));
 
         // ======================= Filter tab ======================================================
         var filt = new SamplerFilterView();
@@ -760,10 +760,10 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             (Field("Type", Chips("filtertype", MosaicModel.FilterNames, padX: 6)), "Auto"),
             (PKnob("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v)), NotaSize.KnobMain, 56), "Auto"),
             (PKnob("resonance", "Reso", v => NotaNum.Pct(v)), "Auto"),
-            (PKnob("keytrack", "Keytrack", v => NotaNum.Pct(v), arc: Teal, tip: "The cutoff follows the key"), "Auto"),
+            (PKnob("keytrack", "Keytrack", v => NotaNum.Pct(v), arc: null, tip: "The cutoff follows the key"), "Auto"),
             (new Panel(), "*"), (envBtn, "Auto"),
-            (PKnob("envamount", "Env", v => NotaNum.Unit(MosaicModel.EnvOctaves(v), "+0.0;−0.0;0.0", "oct"), arc: Teal), "Auto"),
-            (PKnob("mpeslide", "Slide", v => NotaNum.Pct(v), arc: Teal, tip: "MPE slide (CC74) → cutoff"), "Auto"));
+            (PKnob("envamount", "Env", v => NotaNum.Unit(MosaicModel.EnvOctaves(v), "+0.0;−0.0;0.0", "oct"), arc: null), "Auto"),
+            (PKnob("mpeslide", "Slide", v => NotaNum.Pct(v), arc: null, tip: "MPE slide (CC74) → cutoff"), "Auto"));
 
         // ======================= the tab panel ===================================================
         const double RowH = 62;
@@ -1046,7 +1046,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             sliders.Children.Add(pedalRow);
 
             var outKnob = PKnob("output", "Output", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: "The level after everything");
-            var velKnob = PKnob("velamount", "Vel → Vol", v => NotaNum.Pct(v), cellW: 50, arc: Teal, tip: "How much velocity sets the level");
+            var velKnob = PKnob("velamount", "Vel → Vol", v => NotaNum.Pct(v), cellW: 50, arc: null, tip: "How much velocity sets the level");
             var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
             ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) meter.Push(m); });
             var outRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 4 };

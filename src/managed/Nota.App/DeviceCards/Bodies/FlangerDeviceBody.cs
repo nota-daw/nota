@@ -191,7 +191,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         var legend = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), tauWord },
+            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", DeviceCardKit.ModInkBright), tauWord },
         };
         var comb = new FlangerCombView { Value = () => (P(Delay), P(Feedback)) };
         comb.GestureBegin += () => { Begin(Delay); Begin(Feedback); };
@@ -216,7 +216,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         {
             string m = Mode();
             modeWord.Text = m;
-            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? NotaPalette.TealBright : TextSecondary;
+            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? DeviceCardKit.ModInkBright : TextSecondary;
         });
         ToolTip.SetTip(modeWord, "What the feedback makes: positive sharpens the peaks, negative hollows the tone, past 85\u2009% the comb rings");
 
@@ -268,7 +268,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         }
         var notchBar = new FlangerBar { Ink = NotaPalette.BorderStrong, VerticalAlignment = VerticalAlignment.Center };
         var notchVal = Mono("", 8, TextPrimary);
-        var nullBar = new FlangerBar { Ink = NotaPalette.TealBright, VerticalAlignment = VerticalAlignment.Center };
+        var nullBar = new FlangerBar { Ink = DeviceCardKit.ModInkBright, VerticalAlignment = VerticalAlignment.Center };
         var nullVal = Mono("", 8, TextPrimary);
         var reads = new Border
         {
