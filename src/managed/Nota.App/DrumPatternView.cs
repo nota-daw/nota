@@ -412,11 +412,10 @@ public sealed class DrumPatternView : UserControl
         {
             e.Handled = true;
             SelectRow(r);
-            _e.SetAuditionTrack(TrackId);   // audition without arming, as the pad grid does
-            _e.NoteOn(pad.Note, 1.0f);
+            _e.TrackNoteOn(TrackId, pad.Note, 1.0f);   // audition this rack only, as the pad grid does (#307)
             e.Pointer.Capture(cell);
         };
-        cell.PointerReleased += (_, e) => { _e.NoteOff(pad.Note); e.Pointer.Capture(null); };
+        cell.PointerReleased += (_, e) => { _e.TrackNoteOff(TrackId, pad.Note); e.Pointer.Capture(null); };
         _nameCells[r] = cell;
         _nameLabels[r] = name;
         return cell;

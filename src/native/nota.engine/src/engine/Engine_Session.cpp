@@ -516,7 +516,7 @@ SessionSlot Engine::slotFromAudioClip(const AudioClip& a) {
     s.audio = a;
     s.audio.startBeat = 0.0;
     s.audio.active = true;
-    if (warpNeedsBuild(s.audio)) // a clipboard copy dropped its cache (or it is stale)
+    if (warpNeedsBuild(s.audio)) // a stale cache, or a copied clip narrowed to the slot
         configureClipWarp(s.audio, transport_.samplesPerBeat(), transport_.sampleRate());
     s.name = a.name;
     const double beats = audioClipBeats(s.audio);
@@ -797,7 +797,6 @@ int32_t Engine::sessionSlotsToArrangement(
                 b.audio = sl->audio;
                 b.audio.name = sl->name;
                 b.audio.active = true;
-                b.audio.warpCache = nullptr; // placeBlock rebuilds it
                 b.len = audioClipBeats(b.audio);
             }
             at += b.len;

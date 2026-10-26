@@ -66,6 +66,15 @@ class Instrument {
     // playEvents / deliverExpr). An instrument that models the pedal itself (Keys, Mosaic, a
     // hosted plug-in) or ignores it on purpose (drums) returns true and is left alone.
     virtual bool handlesSustain() const { return false; }
+    // True while every note it plays ends on its own (a sample that isn't looped), so a
+    // note-off would only cut the sound short. A Drum Rack pad then plays its hit as a
+    // one-shot, however short the MIDI note (#312); anything that would ring forever
+    // without a note-off (a looped sample, a synth) still gets it.
+    virtual bool playsOneShot() const { return false; }
+    // The note-off a one-shot pad held back. The note still plays through, but if the
+    // instrument stops playing one-shots mid-note (its loop turned on), it releases then
+    // instead of ringing on.
+    virtual void noteOffHeldBack(int32_t /*pitch*/) {}
     // The engine's damper state for this instrument. Written on the audio thread only; relaxed
     // atomics because a rack edit forks the rack on the message thread and carries them over.
     std::atomic<bool> pedalDown{false};

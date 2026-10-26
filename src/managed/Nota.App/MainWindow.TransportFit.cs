@@ -5,7 +5,9 @@
 // or let the row run past the island's edge, it sheds parts in order of how little they are
 // needed. First what is shown elsewhere or merely informative, then what has a menu entry or
 // a shortcut, last the readouts you set while playing. Stop / play / record, the position,
-// the tempo, the metronome and the view switch never go.
+// the tempo, the metronome and the view switch never go. The DSP meter is what you look at
+// when the audio starts to crackle and isn't shown anywhere else, so it only folds to its
+// number early on and goes last of all (#303).
 
 using System;
 using System.Collections.Generic;
@@ -24,7 +26,7 @@ public partial class MainWindow
 
     private Control[][] TransportShedOrder => _transportShedOrder ??= new[]
     {
-        new Control[] { CpuMeter, CpuSep },     // informative only
+        new Control[] { CpuBar },               // the DSP meter keeps its number
         new Control[] { RemoteLabel },          // Remote keeps its glyph, count and dot
         new Control[] { TapChip },              // palette ▸ Tap Tempo; the BPM field stays
         new Control[] { KeyChip },              // set once per project
@@ -38,6 +40,7 @@ public partial class MainWindow
         new Control[] { LoopRecordCell },       // ⌘⇧R / Transport menu
         new Control[] { LoopSep, LoopCell },    // ⌘L; the range is on the ruler
         new Control[] { MasterWell },           // the master strip is in the mixer
+        new Control[] { CpuMeter, CpuSep },     // only when nothing else is left to give
     };
 
     private void InitTransportFit()
