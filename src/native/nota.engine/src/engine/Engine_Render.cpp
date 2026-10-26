@@ -1535,7 +1535,7 @@ void Engine::mixAudioClip(
         const int32_t segLen = static_cast<int32_t>(std::llround(ovEnd - ovStart));
         if (segLen <= 0 || dstOff < 0 || dstOff + segLen > frames) return;
         const int64_t cacheBase = std::llround(ovStart - startSamples); // 0-based into the cache
-        const float* csamp = wc.samples.data();
+        const float* csamp = wc.data();
         const float g = clip.gain * extraGain;
         for (int32_t j = 0; j < segLen; ++j) {
             // Reverse reads the same cache back-to-front: the window is already the
