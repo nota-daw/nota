@@ -29,6 +29,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   **Ungroup rack**). A device with a sidechain key, automation or CV links stays where it is
   and the status line says why. ⌘G on tracks still groups tracks.
 
+### Changed
+- **Splitting a long warped clip is instant** (nota-daw/nota#299, nota-daw/nota#259): a split,
+  trim or range cut of a warped clip reuses the stretch the clip already has instead of
+  stretching both halves again on the UI thread (13 s for a 20-minute clip before), and the
+  halves play exactly what the clip played. Long or zoomed-in audio clips draw their waveform
+  at full detail instead of in blocks.
+
 ### Fixed
 - **⌘G on a device, follow-ups** (nota-daw/nota#257): grouping a playing effect no longer
   resets it (a Reverb kept ringing cut off), an effect an Arp's CC lane drives stays out of a
