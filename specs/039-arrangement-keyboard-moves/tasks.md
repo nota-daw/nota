@@ -9,5 +9,6 @@
 - [x] T7 LaneControl: ghost rows below the last track; `MoveClipsToNewTracks` on release
 - [x] T8 Smoke test `ArrangementMovesTests` (`--moves`) and the full run
 - [x] T9 Settings → Shortcuts rows, CHANGELOG
-- [ ] T10 Real-app check on Linux and macOS, screenshots on `pr-assets`
-- [ ] T11 nota-docs EN + RU
+- [x] T10 Real-app check on Linux and macOS, screenshots on `pr-assets`
+- [x] T11 nota-docs EN + RU (nota-docs#31)
+- [x] T12 Review fixes: open editors follow clips re-indexed by a move and by its undo / redo; arrows stay in the floating detail window; `addTrackLike` skips copying content
