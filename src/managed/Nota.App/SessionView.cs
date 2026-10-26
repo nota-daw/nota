@@ -409,6 +409,7 @@ public sealed partial class SessionView : UserControl
     /// <summary>⌘C on the selected slot.</summary>
     public bool CopySelection()
     {
+        if (_sel.Kind == SelKind.Bus) return true;   // a Return / Master has no clip to act on; keep it from reaching the Arrangement
         if (_sel.Kind != SelKind.Slot || !SlotFilled(_sel.TrackId, _sel.Scene)) return false;
         ClipTransfer.TookSlot(_sel.TrackId, _sel.Scene, cut: false);
         Say("Copied clip");
@@ -418,6 +419,7 @@ public sealed partial class SessionView : UserControl
     /// <summary>⌘X: the clip moves to where it is pasted next.</summary>
     public bool CutSelection()
     {
+        if (_sel.Kind == SelKind.Bus) return true;   // a Return / Master has no clip to act on; keep it from reaching the Arrangement
         if (_sel.Kind != SelKind.Slot || !SlotFilled(_sel.TrackId, _sel.Scene)) return false;
         ClipTransfer.TookSlot(_sel.TrackId, _sel.Scene, cut: true);
         Say("Cut clip — paste to move it");
@@ -430,6 +432,7 @@ public sealed partial class SessionView : UserControl
     /// <summary>⌘V onto the selected slot (clips copied in the arrangement: also onto a scene row).</summary>
     public bool PasteSelection()
     {
+        if (_sel.Kind == SelKind.Bus) return true;   // a Return / Master has no clip to act on; keep it from reaching the Arrangement
         if (ClipTransfer.FromArrangement(_engine)) return PasteFromArrangement();
         if (_sel.Kind != SelKind.Slot || ClipTransfer.Slot is not { } src) return false;
         if (ColumnFor(_sel.TrackId) is not { Kind: ColKind.Track }) return false;
@@ -498,6 +501,7 @@ public sealed partial class SessionView : UserControl
     /// <summary>⌘D: a scene duplicates below itself; a clip copies into the empty slot below.</summary>
     public bool DuplicateSelection()
     {
+        if (_sel.Kind == SelKind.Bus) return true;   // a Return / Master has no clip to act on; keep it from reaching the Arrangement
         if (_sel.Kind == SelKind.Scene)
         {
             int s = _engine.DuplicateScene(_sel.Scene);
@@ -519,6 +523,7 @@ public sealed partial class SessionView : UserControl
     /// <summary>⌫: delete the selected clip or scene.</summary>
     public bool DeleteSelection()
     {
+        if (_sel.Kind == SelKind.Bus) return true;   // a Return / Master has no clip to act on; keep it from reaching the Arrangement
         if (_sel.Kind == SelKind.Scene)
         {
             if (!_engine.RemoveScene(_sel.Scene)) return false;
@@ -626,7 +631,23 @@ public sealed partial class SessionView : UserControl
             else if (key == Key.Right && nav.Count > 0) Select(new Selection(SelKind.Slot, nav[0].TrackId, s));
             return;
         }
+        // Return / Master columns (#314) have no slots: ← / → walk them in column order, back
+        // into the last track column on the left; ↑ / ↓ have nowhere to go.
+        var buses = _cols.Where(c => c.Kind is ColKind.Return or ColKind.Master).ToList();
+        if (_sel.Kind == SelKind.Bus)
+        {
+            int b = buses.FindIndex(c => BusId(c) == _sel.TrackId);
+            if (key == Key.Left)
+            {
+                if (b > 0) Select(new Selection(SelKind.Bus, BusId(buses[b - 1]), s));
+                else if (nav.Count > 0) Select(new Selection(SelKind.Slot, nav[^1].TrackId, s));
+                else Select(new Selection(SelKind.Scene, 0, s));
+            }
+            else if (key == Key.Right && b >= 0 && b < buses.Count - 1) Select(new Selection(SelKind.Bus, BusId(buses[b + 1]), s));
+            return;
+        }
         int i = Math.Max(0, nav.FindIndex(c => c.TrackId == _sel.TrackId));
+        if (key == Key.Right && i == nav.Count - 1 && buses.Count > 0) { Select(new Selection(SelKind.Bus, BusId(buses[0]), s)); return; }
         if (key == Key.Up) s = Math.Max(0, s - 1);
         if (key == Key.Down) s = Math.Min(last, s + 1);
         if (key == Key.Left) { if (i == 0) { Select(new Selection(SelKind.Scene, 0, s)); return; } i--; }
