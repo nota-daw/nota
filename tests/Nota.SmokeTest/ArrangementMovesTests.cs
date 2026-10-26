@@ -63,6 +63,17 @@ internal static class ArrangementMovesTests
                 new Dictionary<int, IReadOnlyList<double>> { [t] = Starts() });
             yield return (ok && map[(t, 1)] == (t, 0) && map[(t, 0)] is null && map[(t, 2)] == (t, 1),
                 $"moves: after a move that carves a clip away, clips are found at their new indices ({string.Join(", ", map.Select(kv => $"{kv.Key.Clip}→{kv.Value?.Clip.ToString() ?? "gone"}"))})");
+            // Undo brings the carved clip back: an editor on the moved clip (now 0) goes back to
+            // 1, and one on the clip behind it (now 1) back to 2 (Greptile on #324, round 2).
+            var after = new Dictionary<int, IReadOnlyList<double>> { [t] = Starts() };
+            var inverse = ArrangementMoves.Invert(map, after);
+            bool undone = re.Undo();
+            var restored = new Dictionary<int, IReadOnlyList<double>> { [t] = Starts() };
+            yield return (undone && ArrangementMoves.SameStarts(restored, before) && !ArrangementMoves.SameStarts(restored, after)
+                          && inverse[(t, 0)] == (t, 1) && inverse[(t, 1)] == (t, 2),
+                "moves: undoing the move is recognised, and sends the clips back to their old indices");
+            yield return (re.Redo() && ArrangementMoves.SameStarts(new Dictionary<int, IReadOnlyList<double>> { [t] = Starts() }, after),
+                "moves: redoing it is recognised too");
         }
         var cross = ArrangementMoves.Reindex(
             new Dictionary<int, IReadOnlyList<double>> { [1] = new[] { 0.0, 8.0 }, [2] = new[] { 0.0 } },

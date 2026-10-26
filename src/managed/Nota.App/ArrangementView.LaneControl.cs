@@ -640,7 +640,7 @@ public sealed partial class ArrangementView
                 // the model, so a jiggle-and-release doesn't create a no-op undo step.
                 bool moved = rowDelta != 0 || _groupMove.Any(m => Math.Abs(m.vm.StartBeat - m.origStart) > 1e-9);
                 bool committed = false;
-                Dictionary<(int Track, int Clip), (int Track, int Clip)?>? map = null;
+                Nota.Application.Editing.ClipBlockMove? move = null;
                 if (eng is not null && moved)
                 {
                     // One atomic group move: moving the clips one by one let an early clip
@@ -652,8 +652,8 @@ public sealed partial class ArrangementView
                             ? _o._tracks[destRow].Id : m.track;
                         return (m.track, m.clip, destTrack, m.vm.StartBeat);
                     }).ToArray();
-                    map = _o.MoveBlock(moves);
-                    committed = map is not null;
+                    move = _o.MoveBlock(moves);
+                    committed = move is not null;
                     if (committed && eng.LastMoveKeptDeviceAutomation())   // explicit hint: only Volume/Pan followed across tracks (req 8.3.4)
                         _o.StatusMessage?.Invoke("Moved across tracks — device automation stayed on the source");
                 }
@@ -663,7 +663,7 @@ public sealed partial class ArrangementView
                 {
                     _o.Refresh();   // also restores the preview if the engine rejected the move
                     if (committed) _o.ReselectPlaced();   // a move can change clip indices
-                    if (map is not null) _o.RaiseClipsMoved(map);   // so can open editors' clips
+                    if (move is not null) _o.RaiseClipsMoved(move);   // so can open editors' clips
                     if (committed && rowDelta != 0) _o.AnnounceSelectedTrack();   // the destination track is now the active one
                 }
                 else InvalidateVisual();

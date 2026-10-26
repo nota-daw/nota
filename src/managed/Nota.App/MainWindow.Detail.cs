@@ -653,11 +653,46 @@ public partial class MainWindow
 
     // A block of clips moved in the arrangement (drag, ←/→, ⌥↑/⌥↓, a drop onto new tracks). The
     // editors address clips by index, and a move can re-index them: a landing that carves away a
-    // clip in front shifts the ones after it, and a cross-track move appends. An editor whose
-    // clips kept their indices only re-reads their geometry; one whose clips moved index is
-    // rebuilt on the new indices (dropping clips that were carved away), so a later note edit
-    // never lands in another clip.
-    private void OnClipsMoved(IReadOnlyDictionary<(int Track, int Clip), (int Track, int Clip)?> map)
+    // clip in front shifts the ones after it, and a cross-track move appends. The open editors
+    // follow their clips (RetargetEditors); the move is kept so an undo / redo of exactly it
+    // takes them along (FollowMoveThroughHistory).
+    private void OnClipsMoved(ClipBlockMove move)
+    {
+        _blockMoves.RemoveRange(_blockMovesDone, _blockMoves.Count - _blockMovesDone);   // a new step drops the redo side
+        _blockMoves.Add(move);
+        if (_blockMoves.Count > 64) _blockMoves.RemoveAt(0);
+        _blockMovesDone = _blockMoves.Count;
+        RetargetEditors(move.Map);
+    }
+
+    // Recent block moves, oldest first; the first _blockMovesDone are done, the rest undone.
+    private readonly List<ClipBlockMove> _blockMoves = new();
+    private int _blockMovesDone;
+
+    // After an undo / redo: when it took back the latest done block move (redid the earliest
+    // undone one) — the touched tracks' clips are exactly as before (after) it — the editors'
+    // indices go back (forward) with it. Any other step leaves those tracks otherwise and the
+    // editors alone.
+    private void FollowMoveThroughHistory()
+    {
+        if (_blockMovesDone > 0 && _blockMoves[_blockMovesDone - 1] is var undo
+            && ArrangementMoves.SameStarts(Timeline.ClipStartsOf(undo.StartsBefore.Keys), undo.StartsBefore))
+        {
+            _blockMovesDone--;
+            RetargetEditors(ArrangementMoves.Invert(undo.Map, undo.StartsAfter));
+        }
+        else if (_blockMovesDone < _blockMoves.Count && _blockMoves[_blockMovesDone] is var redo
+                 && ArrangementMoves.SameStarts(Timeline.ClipStartsOf(redo.StartsAfter.Keys), redo.StartsAfter))
+        {
+            _blockMovesDone++;
+            RetargetEditors(redo.Map);
+        }
+    }
+
+    // An editor whose clips kept their indices only re-reads their geometry; one whose clips
+    // changed index is rebuilt on the new indices (dropping clips that no longer exist), so a
+    // later note edit never lands in another clip.
+    private void RetargetEditors(IReadOnlyDictionary<(int Track, int Clip), (int Track, int Clip)?> map)
     {
         (int Track, int Clip)? Where(int t, int c) => map.TryGetValue((t, c), out var to) ? to : (t, c);
 

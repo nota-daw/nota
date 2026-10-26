@@ -16,7 +16,7 @@ public partial class ArrangementView
     {
         if (_engine is null || sourceTracks.Count == 0 || clips.Count == 0) { Refresh(); return; }
         var newIds = new Dictionary<int, int>();
-        Dictionary<(int Track, int Clip), (int Track, int Clip)?>? map = null;
+        Nota.Application.Editing.ClipBlockMove? move = null;
         bool ok = true;
         _engine.BeginUndoGroup();
         try
@@ -27,7 +27,7 @@ public partial class ArrangementView
                 if (id < 0) { ok = false; break; }
                 newIds[src] = id;
             }
-            ok = ok && (map = MoveBlock(clips.Select(c => (c.track, c.clip, newIds[c.track], c.start)).ToArray())) is not null;
+            ok = ok && (move = MoveBlock(clips.Select(c => (c.track, c.clip, newIds[c.track], c.start)).ToArray())) is not null;
         }
         finally { _engine.EndUndoGroup(); }
         // Half-done (a source the engine wouldn't copy, or a refused move): take the tracks back.
@@ -37,7 +37,7 @@ public partial class ArrangementView
         if (_engine.LastMoveKeptDeviceAutomation())
             StatusMessage?.Invoke("Moved to new tracks — device automation stayed on the source");
         ReselectPlaced();
-        ClipsMoved?.Invoke(map!);
+        ClipsMoved?.Invoke(move!);
         RevealTrack(newIds[sourceTracks[^1]]);
         AfterTrackEdit();
     }

@@ -75,6 +75,7 @@ public partial class MainWindow
             else ShowDevices(-1);
         }
         if (_modular?.IsVisible == true) _modular.Refresh();
+        FollowMoveThroughHistory();                      // undoing a clip move re-indexes clips
         ReloadEditorNotes();                             // reflect clip/note edits
         // Volume / pan / master steps (specs/009): the master volume lives on the view model
         // (MST, Master row, Mixer and Remote follow it), the track strips in the Mixer rebuild.

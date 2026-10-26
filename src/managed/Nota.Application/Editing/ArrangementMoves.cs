@@ -11,6 +11,14 @@ using System.Linq;
 
 namespace Nota.Application.Editing;
 
+/// <summary>One committed block move: where each clip of the touched tracks went (<see
+/// cref="ArrangementMoves.Reindex"/>), and the touched tracks' clip starts before and after —
+/// which tell an undo or redo of exactly this move apart from any other step.</summary>
+public sealed record ClipBlockMove(
+    IReadOnlyDictionary<(int Track, int Clip), (int Track, int Clip)?> Map,
+    IReadOnlyDictionary<int, IReadOnlyList<double>> StartsBefore,
+    IReadOnlyDictionary<int, IReadOnlyList<double>> StartsAfter);
+
 public static class ArrangementMoves
 {
     /// <summary>The fine nudge (⌥←/⌥→): a 64th note, whatever the grid.</summary>
@@ -86,6 +94,26 @@ public static class ArrangementMoves
         }
         return map;
     }
+
+    /// <summary>The way back: where each clip is after undoing a move that re-indexed with
+    /// <paramref name="map"/>. A clip the move didn't produce on a touched track (a carve's right
+    /// piece) has no place before it: null. Clips of other tracks are not in either map.</summary>
+    public static Dictionary<(int Track, int Clip), (int Track, int Clip)?> Invert(
+        IReadOnlyDictionary<(int Track, int Clip), (int Track, int Clip)?> map,
+        IReadOnlyDictionary<int, IReadOnlyList<double>> startsAfter)
+    {
+        var back = new Dictionary<(int, int), (int, int)?>();
+        foreach (var (track, starts) in startsAfter)
+            for (int c = 0; c < starts.Count; c++) back[(track, c)] = null;
+        foreach (var (from, to) in map)
+            if (to is { } t) back[t] = from;
+        return back;
+    }
+
+    /// <summary>Whether two snapshots of track clip starts are the same.</summary>
+    public static bool SameStarts(IReadOnlyDictionary<int, IReadOnlyList<double>> a, IReadOnlyDictionary<int, IReadOnlyList<double>> b)
+        => a.Count == b.Count && a.All(kv => b.TryGetValue(kv.Key, out var o) && o.Count == kv.Value.Count
+                                             && o.Zip(kv.Value).All(p => Math.Abs(p.First - p.Second) < 1e-9));
 
     private static int IndexOf(IReadOnlyList<int> order, int id)
     {
