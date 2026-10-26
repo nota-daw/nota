@@ -32,7 +32,10 @@ void DrumRack::noteOff(int32_t pitch) {
     RackState* st = live();
     if (!st) return;
     for (auto& c : st->chains)
-        if (c.instrument && c.ctl->triggerNote.load(std::memory_order_relaxed) == pitch)
+        // A pad plays its sample through (#312): the note's length doesn't cut it, only a
+        // choke or a retrigger does. A pad that can't end on its own stays gated.
+        if (c.instrument && c.ctl->triggerNote.load(std::memory_order_relaxed) == pitch &&
+            !c.instrument->playsOneShot())
             c.instrument->noteOff(tunedNote(*c.ctl, pitch));
 }
 

@@ -239,6 +239,19 @@ double seedAutoWarp(AudioClip& c, double spb, double devSR, double knownBpm = 0.
     return bpm;
 }
 
+// Remember which unwarped region a warp-off clip's markers belong to (see AudioClip).
+void stampWarpOffRegion(AudioClip& c) {
+    c.warpOffRegionOffset = c.sourceOffsetFrames;
+    c.warpOffRegionLength = c.effectiveLength();
+}
+
+// A warp-off clip's markers can come back on re-enable only while the region is the one
+// they were stamped with — a split or trim made with warp off has moved it since.
+bool warpMarkersRestorable(const AudioClip& c) {
+    return c.warpMarkers.size() >= 2 && c.warpBeats > 0.0 && c.warpOffRegionLength >= 0 &&
+           c.warpOffRegionOffset == c.sourceOffsetFrames && c.warpOffRegionLength == c.effectiveLength();
+}
+
 // Keep the trim window valid after warpBeats changes (marker/length edits). Preserves
 // the window (clamped); an explicit end past the new length snaps back to full.
 void clampWarpPlay(AudioClip& c) {
@@ -537,10 +550,14 @@ bool Engine::setClipWarp(int32_t trackId, int32_t clipIndex, bool enabled, int32
     AudioClip& c = (*audioClipRef(*nt, clipIndex));
     const double spb = transport_.samplesPerBeat();
     const double devSR = transport_.sampleRate();
-    // On enable, auto-detect the source tempo and snap the clip's length to the
-    // beat grid so it conforms to the project BPM. If detection fails, fall back
-    // to a length-neutral seed (toggling warp then leaves audio where it is).
-    if (enabled && !c.warpEnabled && c.sample && spb > 0.0 && devSR > 0.0 && c.sample->sourceSampleRate > 0.0) {
+    // Off is a bypass (#310): the markers stay on the clip, stamped with the region they
+    // belong to, and turning warp back on restores them as they were. Only a first enable
+    // (or one after a split / trim moved the region) seeds: auto-detect the source tempo
+    // and snap the clip's length to the beat grid so it conforms to the project BPM; if
+    // detection fails, a length-neutral seed (toggling warp then leaves audio where it is).
+    if (!enabled && c.warpEnabled) stampWarpOffRegion(c);
+    if (enabled && !c.warpEnabled && !warpMarkersRestorable(c) && c.sample && spb > 0.0 && devSR > 0.0 &&
+        c.sample->sourceSampleRate > 0.0) {
         if (seedAutoWarp(c, spb, devSR) <= 0.0) seedNeutralWarp(c, spb, devSR);
     }
     c.warpEnabled = enabled;
@@ -655,6 +672,7 @@ bool Engine::setClipWarpMarkers(
         [](const WarpMarker& a, const WarpMarker& b) { return a.srcFrame < b.srcFrame; });
     c.warpBeats = c.warpMarkers.back().beat;
     clampWarpPlay(c); // preserve the trim window across marker edits (clamped to new length)
+    if (!c.warpEnabled) stampWarpOffRegion(c); // markers kept for a later re-enable (a project load)
     configureClipWarp(c, transport_.samplesPerBeat(), transport_.sampleRate());
     syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
@@ -669,7 +687,8 @@ bool Engine::setClipWarpTrim(int32_t trackId, int32_t clipIndex, double playStar
     if (!old || old->type() != TrackType::Audio) return false;
     if (!audioClipRef(*old, clipIndex)) return false;
     const AudioClip& oc = (*audioClipRef(*old, clipIndex));
-    if (!oc.warpEnabled || oc.warpBeats <= 0.0) return false;
+    // A warp-off clip still takes the window of the markers it keeps (a project load).
+    if ((!oc.warpEnabled && !warpMarkersRestorable(oc)) || oc.warpBeats <= 0.0) return false;
     constexpr double kMinBeat = 0.05;
     double ps = std::clamp(playStart, 0.0, std::max(0.0, oc.warpBeats - kMinBeat));
     double pe = std::clamp(playEnd, ps + kMinBeat, oc.warpBeats);

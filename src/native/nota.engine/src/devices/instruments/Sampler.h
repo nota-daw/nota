@@ -92,6 +92,9 @@ class Sampler final : public Instrument {
     int32_t rootNote() const { return rootNote_.load(std::memory_order_relaxed); }
     void setRoot(int32_t r) { rootNote_.store(std::clamp(r, 0, 127), std::memory_order_relaxed); }
     bool loopEnabled() const { return loopModeOf() > 0; }
+    // Unlooped poly playback ends at the sample's End. Mono / legato keeps a held-note
+    // stack that note-offs unwind, so it stays gated.
+    bool playsOneShot() const override { return !loopEnabled() && voiceModeOf() != 1; }
     void setSample(std::shared_ptr<SampleBuffer> s, int32_t rootNote, bool loop);
 
     void setSampleRate(double sr) override {
