@@ -250,6 +250,9 @@ internal sealed class DeviceWindow : NotaWindow
     private Control BodyArea(DeviceWindowPage page)
     {
         _bodyHost = page.Body;
+        // A device body has a fixed size here too: its text keeps its size, as in the card
+        // (the window's own title row still follows Text size).
+        NotaTextSize.SetFixed(page.Body, true);
         var tag = new Border
         {
             Height = 18, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),

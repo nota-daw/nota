@@ -437,7 +437,7 @@ or +2 pt to every text the shell draws, on top of this scale and independent of 
 scale (`NotaTextSize`). It works by coercion on `TextBlock` and `TextPresenter` font sizes
 plus `NotaFormattedText`, so views keep setting the scale's sizes and never read the
 setting. Device cards are left out: their 700 × 260 layouts are fixed, so the card shell
-sets `NotaTextSize.Fixed` (inherited by everything in the card) and custom-drawn device
+(and a popped-out device window's body) sets `NotaTextSize.Fixed` (inherited by everything in it) and custom-drawn device
 views pass themselves as the owner of their `NotaFormattedText` (static helpers pass
 `NotaTextSize.InCard`). Layout doesn't grow with it: at the larger sizes a long
 label trims with an ellipsis, so a label that can't trim (a fixed-width cell) needs room
