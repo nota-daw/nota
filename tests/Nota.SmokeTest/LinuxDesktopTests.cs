@@ -31,6 +31,11 @@ internal static class LinuxDesktopTests
         var utf16 = System.Text.Encoding.Unicode.GetBytes("file:///x/a.wav\nKick");
         yield return (DroppedFilePaths.Parse(DroppedFilePaths.Decode(utf16)).SequenceEqual(new[] { "/x/a.wav" }),
             "drop: a UTF-16 text/x-moz-url decodes, its title line ignored");
+        byte[] Bom(byte[] bom, byte[] body) => bom.Concat(body).ToArray();
+        yield return (DroppedFilePaths.Decode(Bom(new byte[] { 0xFF, 0xFE }, System.Text.Encoding.Unicode.GetBytes("file:///x/a.wav"))) == "file:///x/a.wav"
+                   && DroppedFilePaths.Decode(Bom(new byte[] { 0xFE, 0xFF }, System.Text.Encoding.BigEndianUnicode.GetBytes("file:///x/a.wav"))) == "file:///x/a.wav"
+                   && DroppedFilePaths.Decode(Bom(new byte[] { 0xEF, 0xBB, 0xBF }, System.Text.Encoding.UTF8.GetBytes("file:///x/a.wav"))) == "file:///x/a.wav",
+            "drop: text with a byte-order mark (UTF-16 LE / BE, UTF-8) decodes without it");
 
         // File dialog fallback: a dialog that took the focus is real.
         yield return (FileDialogFallback.Decide(finished: true, empty: false, shown: false, windowActive: true) == V.Keep,
@@ -43,6 +48,14 @@ internal static class LinuxDesktopTests
             "dialogs: no dialog within the timeout falls back");
         yield return (FileDialogFallback.Decide(false, false, shown: true, windowActive: false) == V.Wait,
             "dialogs: an open dialog is waited for");
+        var limit = TimeSpan.FromSeconds(4);
+        yield return (FileDialogFallback.WhileWaiting(false, TimeSpan.Zero, limit) == V.Wait
+                   && FileDialogFallback.WhileWaiting(false, TimeSpan.FromSeconds(2), limit) == V.Wait,
+            "dialogs: while the window is away or only just back, the dialog is still waited for");
+        yield return (FileDialogFallback.WhileWaiting(false, TimeSpan.FromSeconds(4), limit) == V.Fallback,
+            "dialogs: focus back for the timeout with the request still open (an app switch, no dialog) falls back");
+        yield return (FileDialogFallback.WhileWaiting(true, TimeSpan.FromSeconds(9), limit) == V.Keep,
+            "dialogs: a dialog that answered while waiting is kept");
 
         // The engine starts on Linux whatever the audio setup (a device, or the silent stand-in).
         if (OperatingSystem.IsLinux())

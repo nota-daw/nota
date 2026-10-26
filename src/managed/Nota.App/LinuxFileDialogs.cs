@@ -75,7 +75,7 @@ internal static class LinuxFileDialogs
             return FileDialogFallback.Decide(finished, finished && isEmpty(result), shown, active) switch
             {
                 FileDialogFallback.Verdict.Keep => result,
-                FileDialogFallback.Verdict.Wait => await task,   // a dialog is up: wait for the user
+                FileDialogFallback.Verdict.Wait => await WaitForDialog(task),
                 _ => await Broken(finished ? "the system file dialog answered without showing"
                                            : $"the system file dialog didn't open within {ShowTimeout.TotalSeconds:0} s"),
             };
@@ -87,6 +87,24 @@ internal static class LinuxFileDialogs
         finally
         {
             if (window is not null) window.Deactivated -= OnDeactivated;
+        }
+
+        // A dialog seems up: wait for the user. But the focus may have gone to another app
+        // instead; if the window has the focus back for ShowTimeout and the request is still
+        // open, nothing is showing, so the built-in chooser takes over.
+        async Task<T> WaitForDialog(Task<T> pending)
+        {
+            var activeSince = DateTime.MinValue;
+            while (true)
+            {
+                if (await Task.WhenAny(pending, Task.Delay(250)) == pending) return await pending;
+                bool active = window?.IsActive ?? false;
+                if (!active) activeSince = DateTime.MinValue;
+                else if (activeSince == DateTime.MinValue) activeSince = DateTime.UtcNow;
+                var activeFor = active ? DateTime.UtcNow - activeSince : TimeSpan.Zero;
+                if (FileDialogFallback.WhileWaiting(false, activeFor, ShowTimeout) == FileDialogFallback.Verdict.Fallback)
+                    return await Broken($"the system file dialog didn't open within {ShowTimeout.TotalSeconds:0} s");
+            }
         }
 
         Task<T> Broken(string why)

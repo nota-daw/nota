@@ -38,11 +38,14 @@ public static class DroppedFilePaths
         return paths;
     }
 
-    /// <summary>The text of a drag format's raw bytes: UTF-16 when it looks like it
-    /// (text/x-moz-url is), otherwise UTF-8.</summary>
+    /// <summary>The text of a drag format's raw bytes: by its byte-order mark when it has
+    /// one, else UTF-16 when it looks like it (text/x-moz-url is), otherwise UTF-8.</summary>
     public static string Decode(byte[]? bytes)
     {
         if (bytes is not { Length: > 0 }) return "";
+        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE) return System.Text.Encoding.Unicode.GetString(bytes, 2, bytes.Length - 2);
+        if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF) return System.Text.Encoding.BigEndianUnicode.GetString(bytes, 2, bytes.Length - 2);
+        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF) return System.Text.Encoding.UTF8.GetString(bytes, 3, bytes.Length - 3);
         bool utf16 = bytes.Length >= 2 && bytes[1] == 0 && bytes[0] != 0;
         return (utf16 ? System.Text.Encoding.Unicode : System.Text.Encoding.UTF8).GetString(bytes);
     }

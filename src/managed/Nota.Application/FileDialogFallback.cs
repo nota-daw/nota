@@ -22,4 +22,11 @@ public static class FileDialogFallback
         if (finished) return !empty || showedSomething ? Verdict.Keep : Verdict.Fallback;
         return showedSomething ? Verdict.Wait : Verdict.Fallback;
     }
+
+    /// <summary>While waiting on a dialog that seemed to show (<see cref="Verdict.Wait"/>):
+    /// the window losing the focus may have been the user switching apps, not a dialog. If
+    /// the request is still open while the window has had the focus back for
+    /// <paramref name="limit"/>, no dialog is in front of it and the request stalled.</summary>
+    public static Verdict WhileWaiting(bool finished, System.TimeSpan activeFor, System.TimeSpan limit)
+        => finished ? Verdict.Keep : activeFor >= limit ? Verdict.Fallback : Verdict.Wait;
 }
