@@ -605,7 +605,8 @@ void Engine::rackMacroSet(int32_t t, int32_t di, int32_t m, float v) {
 int32_t Engine::rackAddMacroMapping(int32_t t, int32_t di, int32_t macro, int32_t chain, int32_t targetDevice,
     int32_t paramIndex, float rangeMin, float rangeMax) {
     auto* r = rackCoreAt(t, di);
-    if (!r || macro < 0 || macro >= RackCore::kNumMacros || chain < 0 || chain >= r->chainCount()) return -1;
+    if (!r || macro < 0 || macro >= RackCore::kNumMacros) return -1;
+    if (targetDevice != RackCore::kRackControl && (chain < 0 || chain >= r->chainCount())) return -1;
     return rackForEdit(t, di)->addMacroMapping(macro, chain, targetDevice, paramIndex, rangeMin, rangeMax);
 }
 int32_t Engine::rackMappingCount(int32_t t, int32_t di) const {

@@ -411,6 +411,23 @@ if (args.Length >= 1 && args[0] == "--warp-split")
     Console.WriteLine(failures == 0 ? "WARP SPLIT PASSED" : $"WARP SPLIT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Writes the racks-redesign v8 fixtures (run on the engine from before specs/040 only).
+if (args.Length >= 1 && args[0] == "--rack-fixtures")
+{
+    RackRedesignTests.WriteFixtures();
+    return 0;
+}
+// Racks redesign (specs/040) alone: `--racks`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--racks")
+{
+    foreach (var (title, run) in RackSections())
+    {
+        Console.WriteLine($"-- {title} --");
+        foreach (var (ok, label) in run()) Check(ok, label);
+    }
+    Console.WriteLine(failures == 0 ? "RACKS PASSED" : $"RACKS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Device copy / duplicate audit + rack undo alone: `--device-copy`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--device-copy")
 {
@@ -15120,6 +15137,13 @@ Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device copy + rack undo --");
 foreach (var (ok, label) in DeviceCopyTests.Run()) Check(ok, label);
+
+// --- racks redesign (specs/040): v8 compatibility, mapping rules, MIDI racks, chain MIDI effects ---
+foreach (var (title, run) in RackSections())
+{
+    Console.WriteLine($"-- {title} --");
+    foreach (var (ok, label) in run()) Check(ok, label);
+}
 Console.WriteLine("-- pads + warp toggle --");
 foreach (var (ok, label) in PadAndWarpTests.Run()) Check(ok, label);
 
@@ -15165,3 +15189,6 @@ foreach (var (ok, label) in AppUpdaterTests.Run()) Check(ok, label);
 
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;
+
+static IEnumerable<(string title, Func<IEnumerable<(bool ok, string label)>> run)> RackSections() =>
+    RackRedesignTests.Sections().Concat(MidiRackTests.Sections()).Concat(RackChainMidiTests.Sections());

@@ -179,6 +179,24 @@ public sealed partial class NotaEngine
     public int MidiEffectLastOut(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectLastOut(_handle, trackId, index); }
     public int MidiEffectScope(int trackId, int index, float[] outv) { ThrowIfDisposed(); return NativeMethods.MidiEffectScope(_handle, trackId, index, outv, outv.Length); }
     public void MidiEffectCommand(int trackId, int index, int cmd) { ThrowIfDisposed(); NativeMethods.MidiEffectCommand(_handle, trackId, index, cmd); }
+
+    /// <summary>A MIDI effect's opaque state blob (the MIDI Effect Rack: its whole structure); empty for params-only effects.</summary>
+    public byte[] MidiEffectGetState(int trackId, int index)
+    {
+        ThrowIfDisposed();
+        int size = NativeMethods.MidiEffectGetState(_handle, trackId, index, null, 0);
+        if (size <= 0) return Array.Empty<byte>();
+        var buf = new byte[size];
+        NativeMethods.MidiEffectGetState(_handle, trackId, index, buf, size);
+        return buf;
+    }
+
+    /// <summary>Restores a MIDI effect's state blob; checkpoint makes it one undo step. False if it couldn't be applied.</summary>
+    public bool MidiEffectSetState(int trackId, int index, byte[] data, bool checkpoint)
+    {
+        ThrowIfDisposed();
+        return data.Length > 0 && NativeMethods.MidiEffectSetState(_handle, trackId, index, data, data.Length, checkpoint ? 1 : 0) == NativeMethods.NotaResult.Ok;
+    }
     public string MidiEffectName(int trackId, int index) { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.MidiEffectName(_handle, trackId, index)) ?? ""; }
     public int MidiEffectParamCount(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectParamCount(_handle, trackId, index); }
     public string MidiEffectParamName(int trackId, int index, int paramIndex) { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.MidiEffectParamName(_handle, trackId, index, paramIndex)) ?? ""; }

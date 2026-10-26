@@ -551,6 +551,10 @@ public interface IAudioEngine : IDisposable
     int MidiEffectScope(int trackId, int index, float[] outv);
     /// <summary>Send an editor command to a MIDI effect (Nota Arp: 1 = restart the pattern).</summary>
     void MidiEffectCommand(int trackId, int index, int cmd);
+    /// <summary>A MIDI effect's opaque state blob (the MIDI Effect Rack: its whole structure); empty for params-only effects.</summary>
+    byte[] MidiEffectGetState(int trackId, int index);
+    /// <summary>Restores a MIDI effect's state blob; checkpoint makes it one undo step.</summary>
+    bool MidiEffectSetState(int trackId, int index, byte[] data, bool checkpoint);
     string MidiEffectName(int trackId, int index);
     int MidiEffectParamCount(int trackId, int index);
     string MidiEffectParamName(int trackId, int index, int paramIndex);

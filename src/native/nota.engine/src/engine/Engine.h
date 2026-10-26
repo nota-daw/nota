@@ -818,6 +818,10 @@ class Engine {
     int32_t midiEffectScope(int32_t trackId, int32_t index, float* out,
         int32_t maxN) const;                                             // float scope (Nota Velocity in/out pairs)
     void midiEffectCommand(int32_t trackId, int32_t index, int32_t cmd); // editor command (Nota Arp: 1 = restart)
+    // Opaque state blob of a MIDI effect (the MIDI Effect Rack: its whole structure). Setting
+    // it swaps in a restored copy, so the old one stays on the undo stack when checkpoint.
+    std::vector<uint8_t> midiEffectGetState(int32_t trackId, int32_t index) const;
+    bool midiEffectSetState(int32_t trackId, int32_t index, const uint8_t* data, int32_t size, bool checkpoint);
     const char* midiEffectName(int32_t trackId, int32_t index) const;
     int32_t midiEffectParamCount(int32_t trackId, int32_t index) const;
     const char* midiEffectParamName(int32_t trackId, int32_t index, int32_t paramIndex) const;

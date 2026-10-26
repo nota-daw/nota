@@ -189,6 +189,20 @@ int32_t nota_midi_effect_last_out(const NotaEngine* e, int32_t t, int32_t i) {
 int32_t nota_midi_effect_scope(const NotaEngine* e, int32_t t, int32_t i, float* out, int32_t max_n) {
     return e ? CENG(e)->midiEffectScope(t, i, out, max_n) : 0;
 }
+int32_t nota_midi_effect_get_state(const NotaEngine* e, int32_t t, int32_t i, uint8_t* out, int32_t cap) {
+    if (!e) return 0;
+    const auto st = CENG(e)->midiEffectGetState(t, i);
+    const int32_t n = static_cast<int32_t>(st.size());
+    if (!out) return n;
+    const int32_t w = std::min(n, cap);
+    if (w > 0) std::memcpy(out, st.data(), static_cast<size_t>(w));
+    return w;
+}
+NotaResult nota_midi_effect_set_state(
+    NotaEngine* e, int32_t t, int32_t i, const uint8_t* data, int32_t size, int32_t checkpoint) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->midiEffectSetState(t, i, data, size, checkpoint != 0) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 void nota_midi_effect_command(NotaEngine* e, int32_t t, int32_t i, int32_t cmd) {
     if (e) ENG(e)->midiEffectCommand(t, i, cmd);
 }

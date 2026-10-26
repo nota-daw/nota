@@ -2,13 +2,16 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — a uniform view over a rack (Instrument Rack via Rack*, Audio
-// Effect Rack via RackDev*), so the one card renders both. HasInstrumentChains hides
+// Effect Rack via RackDev*, MIDI Effect Rack via MidiRack*), so the one card renders all. HasInstrumentChains hides
 // the per-chain instrument selector for effect racks; AutomationDeviceIndex is the
 // plugin-param device index used when driving/recording the macros.
 
 using Nota.Application;
 
 namespace Nota.App;
+
+/// <summary>Which rack a card shows (specs/040): the three share one card.</summary>
+internal enum RackKind { Instrument, AudioEffect, MidiEffect }
 
 internal interface IRackAccess
 {
@@ -64,6 +67,41 @@ internal interface IRackAccess
     int ChainDeviceLayerWave(int chain, int dev, int layer, float[] outSamples, int maxSamples) => 0;
     string ChainDeviceText(int chain, int dev, int id) => "";
     void ChainDeviceAction(int chain, int dev, int id, int iarg, float farg) { }
+
+    // ---- shared rack card surface (specs/040) --------------------------------
+    // Defaults describe "not supported", so an access only implements what its rack has.
+    RackKind Kind => HasInstrumentChains ? RackKind.Instrument : RackKind.AudioEffect;
+    float MacroGet(int i) => 0f;
+    void MacroSet(int i, float v) { }
+    string ChainName(int chain) => "";
+    void SetChainName(int chain, string name) { }
+    /// <summary>Key and velocity zone (Instrument and MIDI racks).</summary>
+    void ChainZone(int chain, out int keyLo, out int keyHi, out int velLo, out int velHi) { keyLo = 0; keyHi = 127; velLo = 0; velHi = 127; }
+    void SetChainZone(int chain, int keyLo, int keyHi, int velLo, int velHi) { }
+    /// <summary>Select-mode range, 0..127 (Audio Effect and MIDI racks). Which engine fields hold
+    /// it is the access's business: the Audio Effect Rack keeps it in its velocity fields.</summary>
+    void SelectRange(int chain, out int lo, out int hi) { lo = 0; hi = 127; }
+    void SetSelectRange(int chain, int lo, int hi) { }
+    bool MoveChain(int from, int to) => false;
+    /// <summary>Copies a chain (devices, controls, its mappings) after itself; the new index or &lt;0.</summary>
+    int DuplicateChain(int chain) => -1;
+
+    // Chain MIDI effects: a MIDI Effect Rack chain, or the MIDI section in front of an
+    // Instrument Rack chain's instrument (issue #329). None by default.
+    int ChainMidiCount(int chain) => 0;
+    int AddChainMidi(int chain, int kind) => -1;
+    bool RemoveChainMidi(int chain, int idx) => false;
+    void MoveChainMidi(int chain, int from, int to) { }
+    int ChainMidiKind(int chain, int idx) => -1;
+    string ChainMidiName(int chain, int idx) => "";
+    int ChainMidiParamCount(int chain, int idx) => 0;
+    string ChainMidiParamName(int chain, int idx, int p) => "";
+    float ChainMidiParamMin(int chain, int idx, int p) => 0f;
+    float ChainMidiParamMax(int chain, int idx, int p) => 1f;
+    float ChainMidiParamGet(int chain, int idx, int p) => 0f;
+    void ChainMidiParamSet(int chain, int idx, int p, float v) { }
+    bool ChainMidiBypassed(int chain, int idx) => false;
+    void SetChainMidiBypassed(int chain, int idx, bool b) { }
 }
 
 internal sealed class InstrumentRackAccess(IAudioEngine e, int t) : IRackAccess
@@ -122,6 +160,13 @@ internal sealed class InstrumentRackAccess(IAudioEngine e, int t) : IRackAccess
     public bool SetMappingRange(int i, float lo, float hi) => e.RackSetMappingRange(t, i, lo, hi);
     public int MappingCurve(int i) => e.RackMappingCurve(t, i);
     public bool SetMappingCurve(int i, int curve) => e.RackSetMappingCurve(t, i, curve);
+    public RackKind Kind => RackKind.Instrument;
+    public float MacroGet(int i) => e.RackMacroGet(t, i);
+    public void MacroSet(int i, float v) => e.RackMacroSet(t, i, v);
+    public string ChainName(int c) => e.RackChainName(t, c);
+    public void SetChainName(int c, string name) => e.RackSetChainName(t, c, name);
+    public void ChainZone(int c, out int kl, out int kh, out int vl, out int vh) => e.RackChainZone(t, c, out kl, out kh, out vl, out vh);
+    public void SetChainZone(int c, int kl, int kh, int vl, int vh) => e.RackSetChainZone(t, c, kl, kh, vl, vh);
 }
 
 internal sealed class EffectRackAccess(IAudioEngine e, int t, int di) : IRackAccess
@@ -180,6 +225,12 @@ internal sealed class EffectRackAccess(IAudioEngine e, int t, int di) : IRackAcc
     public bool SetMappingRange(int i, float lo, float hi) => e.RackDevSetMappingRange(t, di, i, lo, hi);
     public int MappingCurve(int i) => e.RackDevMappingCurve(t, di, i);
     public bool SetMappingCurve(int i, int curve) => e.RackDevSetMappingCurve(t, di, i, curve);
+    public RackKind Kind => RackKind.AudioEffect;
+    public float MacroGet(int i) => e.RackDevMacroGet(t, di, i);
+    public void MacroSet(int i, float v) => e.RackDevMacroSet(t, di, i, v);
+    // The Audio Effect Rack keeps its select range in the chain's velocity fields (v7 blobs).
+    public void SelectRange(int c, out int lo, out int hi) => e.RackDevChainZone(t, di, c, out lo, out hi);
+    public void SetSelectRange(int c, int lo, int hi) => e.RackDevSetChainZone(t, di, c, lo, hi);
 }
 
 // Nota Rhythm's eight voices as effect-only "chains": each voice's insert chain through the

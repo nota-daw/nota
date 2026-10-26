@@ -913,6 +913,23 @@ void Engine::midiEffectSetParam(int32_t t, int32_t i, int32_t p, float v) {
     routeCvBaseEdit(2, t, i, p, v);
     if (auto* m = midiDeviceAt(t, i)) m->setParam(p, v);
 }
+std::vector<uint8_t> Engine::midiEffectGetState(int32_t t, int32_t i) const {
+    auto* m = midiDeviceAt(t, i);
+    return m ? m->getState() : std::vector<uint8_t>{};
+}
+bool Engine::midiEffectSetState(int32_t t, int32_t i, const uint8_t* data, int32_t size, bool checkpoint) {
+    auto old = findTrackAuthoring(t);
+    if (!old || !data || size <= 0 || i < 0 || i >= static_cast<int32_t>(old->midiEffects.size()) || !old->midiEffects[i])
+        return false;
+    auto fresh = cloneMidiDevice(*old->midiEffects[i]);
+    if (!fresh) return false;
+    fresh->setState(data, size);
+    auto nt = cloneTrack(*old);
+    nt->midiEffects[i] = std::move(fresh);
+    if (checkpoint) republishWithTrack(t, nt);
+    else republishWithTrackRaw(t, nt);
+    return true;
+}
 void Engine::setMidiEffectBypassed(int32_t t, int32_t i, bool b) {
     if (auto* m = midiDeviceAt(t, i)) m->setBypassed(b);
 }

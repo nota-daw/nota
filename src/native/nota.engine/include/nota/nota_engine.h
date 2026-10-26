@@ -1426,6 +1426,12 @@ NOTA_API int32_t     nota_midi_effect_last_in(const NotaEngine* engine, int32_t 
 NOTA_API int32_t     nota_midi_effect_last_out(const NotaEngine* engine, int32_t track_id, int32_t index);
 /* Float scope buffer for a MIDI effect editor (Nota Velocity in/out pairs); returns count written. */
 NOTA_API int32_t     nota_midi_effect_scope(const NotaEngine* engine, int32_t track_id, int32_t index, float* out, int32_t max_n);
+/* Opaque state blob of a MIDI effect (the MIDI Effect Rack, kind 6: its chains, devices,
+ * zones, macros and output). out == NULL returns the size; otherwise writes up to cap bytes and
+ * returns the count written. 0 = no state (params-only effects). */
+NOTA_API int32_t     nota_midi_effect_get_state(const NotaEngine* engine, int32_t track_id, int32_t index, uint8_t* out, int32_t cap);
+/* Restores a state blob by swapping in a restored copy; checkpoint != 0 makes it one undo step. */
+NOTA_API NotaResult  nota_midi_effect_set_state(NotaEngine* engine, int32_t track_id, int32_t index, const uint8_t* data, int32_t size, int32_t checkpoint);
 /* An editor command to a MIDI effect (Nota Arp: 1 = restart the pattern). */
 NOTA_API void        nota_midi_effect_command(NotaEngine* engine, int32_t track_id, int32_t index, int32_t cmd);
 /* Map/CC routing: the effect's CC lane modulates an audio-device param on the track. */
@@ -1610,9 +1616,18 @@ NOTA_API int32_t     nota_rack_chain_mute(const NotaEngine* engine, int32_t trac
 NOTA_API int32_t     nota_rack_chain_solo(const NotaEngine* engine, int32_t track_id, int32_t chain);
 NOTA_API float       nota_rack_macro_get(const NotaEngine* engine, int32_t track_id, int32_t macro);
 NOTA_API void        nota_rack_macro_set(NotaEngine* engine, int32_t track_id, int32_t macro, float v);
-/* Add a macro mapping. device_index < 0 targets the chain's instrument (param is
- * a plugin-param index); >= 0 targets that device (param is a generic index).
- * range_min/max are in the target's own units. Returns the mapping index or <0. */
+/* Macro-mapping targets beside a chain's instrument (-1) and audio devices (>= 0), for every
+ * rack's add_macro_mapping (specs/040): NOTA_RACK_CONTROL drives a rack-level control
+ * (param 0 = the Select-mode selector, 0..1; the chain argument is ignored), and
+ * NOTA_RACK_MIDI_DEVICE_BASE - j drives the chain's MIDI effect j (param = its generic index). */
+#define NOTA_RACK_CONTROL (-3)
+#define NOTA_RACK_MIDI_DEVICE_BASE (-1000)
+/* Add a macro mapping. device_index -1 targets the chain's instrument (param is
+ * a plugin-param index); >= 0 targets that device (param is a generic index); see
+ * NOTA_RACK_CONTROL / NOTA_RACK_MIDI_DEVICE_BASE for the others.
+ * range_min/max are in the target's own units. A target belongs to one macro: mapping a
+ * target that is already mapped moves that mapping to `macro` (range and curve kept) and
+ * returns its index. Returns the mapping index or <0. */
 NOTA_API int32_t     nota_rack_add_macro_mapping(NotaEngine* engine, int32_t track_id, int32_t macro, int32_t chain,
                                                  int32_t device_index, int32_t param_index, float range_min, float range_max);
 NOTA_API int32_t     nota_rack_mapping_count(const NotaEngine* engine, int32_t track_id);
