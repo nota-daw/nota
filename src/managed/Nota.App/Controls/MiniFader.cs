@@ -27,7 +27,7 @@ public sealed class MiniFader : Control, IInlineReadout
     private static readonly IBrush Ink = NotaPalette.TextPrimary;
     private static readonly Typeface Face = NotaFonts.Sans;
 
-    public const double BarH = 16, LineW = 2;
+    public const double BarH = 16, LineW = 2, MinW = 40;
 
     private static Color Mix(Color a, Color b, double t)
         => Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
@@ -59,7 +59,7 @@ public sealed class MiniFader : Control, IInlineReadout
         _max = max;
         _value = Math.Clamp(value, 0, max);
         Height = BarH;
-        MinWidth = 40;
+        MinWidth = MinW;
         Cursor = new Cursor(StandardCursorType.SizeNorthSouth);   // almanac: vertical drag for every value control
     }
 

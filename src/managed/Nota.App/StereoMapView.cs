@@ -66,7 +66,7 @@ public sealed class StereoMapView : Control
     private StereoMeasure[] _measures = new StereoMeasure[64];
     private readonly Dictionary<int, int> _measureAt = new();
     private readonly Dictionary<int, (string name, IBrush color)> _looks = new();
-    private readonly Dictionary<int, (string text, IBrush brush, FormattedText ft)> _labels = new();
+    private readonly Dictionary<int, (string text, IBrush brush, int step, FormattedText ft)> _labels = new();
     private readonly List<Rect> _placedLabels = new();   // this frame's label boxes (no two overlap)
     // The last tooltip drawn: its rows and note titles (read by the UI checks).
     private readonly List<(string key, string value)> _tooltipRows = new();
@@ -269,12 +269,12 @@ public sealed class StereoMapView : Control
 
     private FormattedText Label(int id, string name, IBrush brush)
     {
-        if (_labels.TryGetValue(id, out var l) && l.text == name && ReferenceEquals(l.brush, brush)) return l.ft;
+        if (_labels.TryGetValue(id, out var l) && l.text == name && ReferenceEquals(l.brush, brush) && l.step == NotaTextSize.Step) return l.ft;
         var ft = new NotaFormattedText(name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 10, brush)
         {
             MaxTextWidth = LabelMaxW, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis,
         };
-        _labels[id] = (name, brush, ft);
+        _labels[id] = (name, brush, NotaTextSize.Step, ft);
         return ft;
     }
 

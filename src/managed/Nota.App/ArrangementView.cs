@@ -2147,6 +2147,7 @@ public sealed partial class ArrangementView : UserControl
         Grid.SetColumn(pan, 1);
         volRow.Children.Add(pan);
 
+        var (bars, spine, x) = HeaderBars(t, own: true);
         var stack = new StackPanel { Spacing = HeaderRowGap };
         stack.Children.Add(nameRow);
         switch (tier)
@@ -2177,6 +2178,13 @@ public sealed partial class ArrangementView : UserControl
                 break;
             default:
                 stack.VerticalAlignment = VerticalAlignment.Center;
+                // A column too narrow for volume, pan and the picker on one row leaves the
+                // picker to the context menu, as a compact row does.
+                if (picker is not null && HeaderW - x - NameGap - MeterW < MiniFader.MinW + PanBar.W + PickerW + 2 * 6)
+                {
+                    picker = null;
+                    monitor?.SetSource(_engine?.GetTrackRecordInput(t.Id) ?? 0);
+                }
                 if (picker is not null)
                 {
                     picker.Width = PickerW;
@@ -2189,10 +2197,9 @@ public sealed partial class ArrangementView : UserControl
         }
 
         // The meter down the right edge: two 3px channels.
-        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 7, Margin = new Thickness(6, 6, 4, 6) };
+        var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 7, Margin = new Thickness(6, 6, 4, 6) };   // MeterW in all
         _meters[t.Id] = meter;
         DockPanel.SetDock(meter, Dock.Right);
-        var (bars, spine, x) = HeaderBars(t, own: true);
         var body = new DockPanel { LastChildFill = true, Margin = new Thickness(x + NameGap, 0, 0, 0), Children = { meter, stack } };
 
         // Inside a group: a 6% wash of the group's colour under the card's content.
@@ -2257,7 +2264,7 @@ public sealed partial class ArrangementView : UserControl
         }
     }
 
-    private const double ChipGap = 4, HeaderRowGap = 6, NameGap = 12, PickerW = 66, PickerH = 22, HeaderRightPad = 10;
+    private const double ChipGap = 4, HeaderRowGap = 6, NameGap = 12, PickerW = 66, PickerH = 22, HeaderRightPad = 10, MeterW = 7 + 6 + 4;
 
     private TextBlock HeaderName(string text) => new()
     {

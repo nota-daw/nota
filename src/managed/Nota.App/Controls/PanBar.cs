@@ -19,6 +19,7 @@ namespace Nota.App;
 
 public sealed class PanBar : Control, IInlineReadout
 {
+    public const double W = 40;
     private static readonly IBrush Track = NotaPalette.KnobTrack;
     private static readonly IBrush Arc = NotaPalette.TextTertiary;     // at rest: neutral
     private static readonly IBrush ArcLive = NotaPalette.Accent;       // under the pointer or in the hand
@@ -52,7 +53,7 @@ public sealed class PanBar : Control, IInlineReadout
     {
         _pan = Math.Clamp(pan, -1, 1);
         Height = 16;
-        Width = 40;
+        Width = W;
         Cursor = new Cursor(StandardCursorType.SizeNorthSouth);   // almanac: vertical drag for every value control
     }
 
