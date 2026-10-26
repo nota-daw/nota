@@ -270,11 +270,9 @@ internal sealed class ArpGrid : Control
                 ctx.FillRectangle(NotaPalette.Accent, new Rect(hr.X, hr.Y, 1, hr.Height));
             }
 
-            // Mini: the lowest note's name sits in the well under the steps, so a step drawn there covers it.
-            if (!Groove && Mini && rows.Count > 0)
-                Text(ctx, DeviceCardKit.NoteName(rows[^1]), w.X + 4, w.Bottom - 8, NotaPalette.TextTertiary);
             if (!Groove) DrawPattern(ctx, w, n, cw, seq, rows, rh, octs);
             else DrawGroove(ctx, w, n, cw, lane);
+            if (!Groove && Mini) MiniNoteLabel(ctx, w, seq, rows, octs);
         }
 
         // Key gutter (L Pattern): note names, root rows brighter; all names while it stays legible.
@@ -299,6 +297,28 @@ internal sealed class ArpGrid : Control
                 if (muted) ctx.FillRectangle(ink, new Rect(cx - 4, y, 8, 1));
             }
         }
+    }
+
+    // Mini: one note name in the well (no key gutter). It names the bottom row in the
+    // bottom-left corner, or the top row top-left when step 1 sits on the bottom row (Up);
+    // when step 1 covers both, it goes bottom-left on a ground chip so it stays legible.
+    private void MiniNoteLabel(DrawingContext ctx, Rect w, List<int> seq, List<int> rows, int octs)
+    {
+        if (rows.Count == 0) return;
+        var first = new HashSet<int>();
+        if (seq.Count > 0)
+        {
+            long page = _k >= 0 ? (_k / StepCount) * StepCount : 0;
+            foreach (int p in ArpPattern.NotesAt(seq, GI(GOrder), page, octs, GI(GOctaveMode))) first.Add(p);
+        }
+        bool bottomFree = !first.Contains(rows[^1]);
+        bool topFree = rows.Count > 1 && !first.Contains(rows[0]);
+        bool top = !bottomFree && topFree;
+        var ft = new NotaFormattedText(DeviceCardKit.NoteName(top ? rows[0] : rows[^1]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaType.Axis, NotaPalette.TextTertiary);
+        double x = w.X + 4, y = top ? w.Y + 3 : w.Bottom - 3 - ft.Height;
+        if (!bottomFree && !topFree)
+            ctx.DrawRectangle(NotaGraph.Ground, null, new RoundedRect(new Rect(x - 2, y, ft.Width + 4, ft.Height), 2));
+        ctx.DrawText(ft, new Point(x, y));
     }
 
     private void DrawPattern(DrawingContext ctx, Rect w, int n, double cw, List<int> seq, List<int> rows, double rh, int octs)

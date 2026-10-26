@@ -277,7 +277,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
                 hdr.Children.Add(Col(t, i));
             }
             // bottom row: glide · glide mode · voice mode · voices
-            var glide = K("glide", "Glide", v => Glide(v), false, Knob.SizeInline, 54, true);
+            var glide = K("glide", "Glide", v => Glide(v), false, Knob.SizeInline, 64, true);
             var mode = Row(6, Caps("Mode"), Chips("voicemode", new[] { "Poly", "Uni", "Mono" }));
             var strip = new VoiceKeys { Height = 16, MinWidth = 68, HorizontalAlignment = HorizontalAlignment.Right }; voiceStrips.Add(strip);
             var voices = Row(6, Caps("Voices"), strip);
