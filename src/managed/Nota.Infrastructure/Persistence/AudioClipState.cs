@@ -29,7 +29,8 @@ internal static class AudioClipState
             WarpPlayEnd = ac.WarpPlayEnd,
             Reversed = ac.Reversed != 0,
         };
-        if (ac.WarpEnabled != 0)
+        // Warp off keeps its markers for a later re-enable (#310), so they're saved either way.
+        if (ac.WarpEnabled != 0 || ac.WarpBeats > 0)
         {
             var ms = new double[128]; var mb = new double[128];
             int nm = Math.Min(engine.GetClipWarpMarkers(trackId, clipIndex, ms, mb), 128);
@@ -66,19 +67,24 @@ internal static class AudioClipState
     {
         if (ac.PitchSemitones != 0) engine.SetClipPitch(trackId, ci, ac.PitchSemitones);
         if (ac.Reversed) engine.SetClipReverse(trackId, ci, true);   // reverse (v19)
+        // Markers go on first: warp then switches on with them as they were (no tempo
+        // detection), and a warp-off clip keeps them for a later re-enable (#310).
+        bool markers = ac.WarpMarkers is { Count: >= 2 };
+        if (markers)
+        {
+            var wm = ac.WarpMarkers!;
+            var ms = new double[wm.Count]; var mb = new double[wm.Count];
+            for (int k = 0; k < wm.Count; k++) { ms[k] = wm[k].Src; mb[k] = wm[k].Beat; }
+            engine.SetClipWarpMarkers(trackId, ci, ms, mb);   // also sets warpBeats from the last marker
+        }
         if (ac.WarpEnabled != 0)
         {
             engine.SetClipWarp(trackId, ci, true, ac.WarpMode);
-            if (ac.WarpMarkers is { Count: >= 2 } wm)
-            {
-                var ms = new double[wm.Count]; var mb = new double[wm.Count];
-                for (int k = 0; k < wm.Count; k++) { ms[k] = wm[k].Src; mb[k] = wm[k].Beat; }
-                engine.SetClipWarpMarkers(trackId, ci, ms, mb);   // also sets warpBeats from the last marker
-            }
-            else if (ac.WarpBeats > 0) engine.SetClipWarpLength(trackId, ci, ac.WarpBeats);
-            if (ac.WarpPlayEnd > 0)   // restore the trim window (v11); 0 = whole warp
-                engine.SetClipWarpTrim(trackId, ci, ac.WarpPlayStart, ac.WarpPlayEnd);
+            if (!markers && ac.WarpBeats > 0) engine.SetClipWarpLength(trackId, ci, ac.WarpBeats);
         }
+        else if (markers) engine.SetClipWarp(trackId, ci, false, ac.WarpMode);   // keep the mode for re-enable
+        if ((ac.WarpEnabled != 0 || markers) && ac.WarpPlayEnd > 0)   // restore the trim window (v11); 0 = whole warp
+            engine.SetClipWarpTrim(trackId, ci, ac.WarpPlayStart, ac.WarpPlayEnd);
         if (ac.VolumeEnvelope is { Length: > 0 } venv)   // clip volume envelope (v8)
             engine.SetClipVolumeEnvelope(trackId, ci, Array.ConvertAll(venv, p => p.ToPoint()));
         if (ac.PanEnvelope is { Length: > 0 } penv)      // clip pan envelope (v9)
