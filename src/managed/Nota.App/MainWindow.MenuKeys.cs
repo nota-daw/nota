@@ -30,6 +30,8 @@ public partial class MainWindow
         foreach (var c in new Control[] { RecordBtn, LoopRecordCell, MetronomeBtn })
             if (ToolTip.GetTip(c) is string tip) ToolTip.SetTip(c, MenuKit.Keys(tip));
         if (NativeMenu.GetMenu(this) is not { } menu) return;
+        // macOS quits from the app menu (Quit Nota, ⌘Q); File → Exit is for Windows / Linux (#316).
+        if (OperatingSystem.IsMacOS()) RemoveWithSeparatorAbove(menu, "file.exit");
         Collect(menu);
 
         void Collect(NativeMenu m)
@@ -51,6 +53,23 @@ public partial class MainWindow
                 if (item.Menu is { } sub) Collect(sub);
             }
         }
+    }
+
+    // Drops the item bound to commandId (searching submenus) and the separator just above it.
+    private static bool RemoveWithSeparatorAbove(NativeMenu m, string commandId)
+    {
+        for (int i = 0; i < m.Items.Count; i++)
+        {
+            if (m.Items[i] is not NativeMenuItem item) continue;
+            if (Commands.GetId(item) == commandId)
+            {
+                m.Items.RemoveAt(i);
+                if (i > 0 && m.Items[i - 1] is NativeMenuItemSeparator) m.Items.RemoveAt(i - 1);
+                return true;
+            }
+            if (item.Menu is { } sub && RemoveWithSeparatorAbove(sub, commandId)) return true;
+        }
+        return false;
     }
 
     private NativeMenuItem? MenuItemFor(string commandId) => _menuItems.GetValueOrDefault(commandId);

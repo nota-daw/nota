@@ -1125,6 +1125,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌥⌘S", "Save a version with a note"),
             ("⌘⇧E", "Export audio"),
             ("⌘,", "Settings"),
+            ("⌘Q", "Quit Nota · asks about unsaved changes first"),
         }),
         ("Window", new[]
         {
