@@ -2,19 +2,21 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — built-in Nota Flux editor (instrument kind 11): the vector synth that
-// listens to a track, 700 × 260 in three pressed-in sections (style guide, spec 038).
+// listens to a track, in the 700 × 260 card the almanac draws for it.
 //
-//   Vector 190   the XY field — four timbre worlds at the corners, the orange dot is the
-//                vector, a dashed ring is where Motion and React pull it.
+//   Vector 186   the XY field — four timbre worlds at the corners, the neutral dot is the
+//                vector, a dashed teal ring is where Motion and React pull it.
 //   React        the sidechain source, a live scope of what the synth hears (envelope,
-//                transients, tilt) beside the reaction's own level, Listen and the Target
+//                transients, tilt) beside the reaction's own level, LISTEN and the TARGET
 //                it drives (Filter / Pitch / Space / Vector). With no source React is off:
-//                the scope goes flat and Listen, Target and the source menu drop to ink 4.
-//   Macros 204   the five one-knob macros (Age, Motion, Filter, Env, Space), then glide,
+//                the scope goes flat and LISTEN and TARGET dim.
+//   Macros 186   the five one-knob macros (Age, Motion, Filter, Env, Space), then glide,
 //                tune and gain; resonance, attack/release and unison follow the vector.
+//   Status 18    the patch read back in words — the world blend, or what React is doing.
 //
-// Everything is a plugin param → automation / persist / clone, and the card follows
-// automation live.
+// The four role chromas live only inside the vector field. Neutral ink is the parameter itself;
+// teal is the reaction and what receives it. Everything is a plugin param → automation /
+// persist / clone, and the card follows automation live.
 
 using System;
 using System.Collections.Generic;
@@ -26,7 +28,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
-using static Nota.App.InstrumentCardKit;
 
 namespace Nota.App;
 
@@ -34,12 +35,13 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "Vector";
-    public double CardWidth => DeviceCardKit.CardL;
+    public double CardWidth => 700;
 
-    private const double VectorW = 190, MacroW = 204;
+    private const double SideW = 186, HeadH = 20, StatusH = 18;
 
     private static readonly string[] Targets = { "Filter", "Pitch", "Space", "Vector" };
     private static readonly string[] RateNames = { "1/1", "1/2", "1/4", "1/8", "1/8T", "1/16" };
+    private static readonly string[] WorldNames = { "warm", "glass", "moog", "grain" };
 
     // The engine's worlds and maps (FluxSynth.h), so the FILTER readout says what it does.
     private static readonly (double Cutoff, double Bright)[] Worlds = { (0.42, 0.20), (0.88, 0.95), (0.38, 0.10), (0.55, 0.55) };
@@ -80,18 +82,48 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         // Live state from the engine's scope, refreshed on the playhead tick.
         var sc = new float[9];
         double effX = G("vecx"), effY = G("vecy");
+        float react = 0;
         bool live = engine.InstrumentSidechainSource(track) >= 0;
+        var onsetLog = new Queue<(double T, float Count)>();
+        var clock = Stopwatch.StartNew();
+        int perBar = 0;
 
-        void Refresh() { foreach (var r in readouts) r(); }
+        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily };
 
-        // A knob with its value and name under it, short name on the card, the full name for MIDI learn.
+        void Refresh()
+        {
+            foreach (var r in readouts) r();
+            status.Text = Summary();
+            meta.Text = Meta();
+        }
+
+        // ---- shared builders --------------------------------------------------
+        static TextBlock Cap(string t, IBrush? c = null) => new()
+        {
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = c ?? TextTertiary,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        static TextBlock Note(string t, IBrush? c = null) => new()
+        {
+            Text = t, FontSize = NotaType.KnobLabel, Foreground = c ?? TextDisabled,
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        static TextBlock Mono(string t, IBrush? c = null) => new()
+        {
+            Text = t, FontSize = NotaType.Axis, Foreground = c ?? TextTertiary, FontFamily = NotaFonts.UiFamily,
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+
+        // A knob as a table cell: short label on the card, the full name for MIDI learn.
         (Control Cell, Knob Knob, TextBlock Value) PKnob(string id, string label, string learn, Func<float, string> fmt,
-            double size, double cellW, bool inline = false)
+            double size, double cellW, IBrush? arc = null)
         {
             var value = new TextBlock { Text = fmt(G(id)), Foreground = TextPrimary };
             var knob = new Knob(G(id), 1.0)
             {
-                Accent = true, Inline = inline, Width = size, Height = size,
+                Accent = true, ArcColor = arc, Width = size, Height = size,
                 Default = I(id) is var d and >= 0 ? engine.InstrumentParamDefault(track, d) : double.NaN,
             };
             knob.Format = v => fmt((float)v);
@@ -104,26 +136,35 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
                 MidiLearn.Bind(knob, MidiTarget.PluginParam(track, -1, pi), learn);
             }
             var cell = KnobCell(label, knob, value, cellW);
+            cell.HorizontalAlignment = HorizontalAlignment.Center;
             cell.VerticalAlignment = VerticalAlignment.Center;
-            if (!inline) cell.HorizontalAlignment = HorizontalAlignment.Center;
             return (cell, knob, value);
         }
 
-        // A section's head line: its title, then a note or a read-out on the right.
-        Control Head(Control left, Control? right = null)
+        Grid Slider(string label, string id, Func<string> text)
         {
-            var g = new Grid { Height = TabRowH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+            int pi = I(id);
+            var row = SliderRow(label, () => G(id), v => { SetP(id, (float)v); Refresh(); }, text, out var sync,
+                begin: pi >= 0 ? () => Begin(id) : null,
+                end: pi >= 0 ? () => End(id) : null,
+                reset: pi >= 0 ? () => { SetP(id, engine.InstrumentParamDefault(track, pi)); Refresh(); } : null,
+                labelWidth: 34, valueWidth: 38);
+            readouts.Add(sync);
+            if (pi >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), label);
+            return row;
+        }
+
+        Grid Head(Control left, Control? right = null)
+        {
+            var g = new Grid { Height = HeadH, ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(8, 0) };
             g.Children.Add(left);
             if (right is not null)
             {
                 right.HorizontalAlignment = HorizontalAlignment.Right;
                 Grid.SetColumn(right, 1); g.Children.Add(right);
             }
-            DockPanel.SetDock(g, Dock.Top);
             return g;
         }
-        static Control Foot(TextBlock t) { var b = new Border { Height = 22, Child = t }; DockPanel.SetDock(b, Dock.Bottom); return b; }
-        static Thickness SectionPadding() => new(SectionPad, 10, SectionPad, 8);
 
         // ---- Vector -------------------------------------------------------------
         var pad = new FluxVectorPad { VerticalAlignment = VerticalAlignment.Stretch, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -144,21 +185,31 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         bool VectorPulled() => live && TargetIdx() == 3;
         bool Ghost() => Math.Abs(effX - G("vecx")) > 0.012 || Math.Abs(effY - G("vecy")) > 0.012;
 
-        var vecReadout = Value("");
-        var vecFoot = Cap("");
+        var vecReadout = Mono("");
+        var vecFoot = Mono("");
         readouts.Add(() =>
         {
             if (!pad.Dragging) pad.SetValue(G("vecx"), G("vecy"));
             pad.SetGhost(effX, effY, Ghost());
             vecReadout.Text = $"x {Coord(G("vecx"))} · y {Coord(G("vecy"))}";
-            vecFoot.Text = VectorPulled() ? "dashed — where the reaction pulls"
+            vecReadout.Foreground = VectorPulled() ? NotaPalette.TealBright : TextSecondary;   // teal: the reaction pulls it
+            bool pulled = VectorPulled();
+            vecFoot.Text = pulled ? "dashed — where the reaction pulls"
                 : Ghost() ? "dashed — where motion drifts" : "four timbres · drag the point";
+            vecFoot.Foreground = pulled ? NotaPalette.TealBright : TextTertiary;
         });
-        var vecPanel = Pane(new DockPanel { Children = { Head(Title("Vector"), vecReadout), Foot(vecFoot), pad } }, SectionPadding());
-        vecPanel.Width = VectorW;
+
+        var vecGrid = new Grid { RowDefinitions = new RowDefinitions($"{HeadH},*,{StatusH}") };
+        vecGrid.Children.Add(HeaderStrip(Head(Cap("VECTOR"), vecReadout)));
+        var padHost = new Border { Padding = new Thickness(6), Child = pad };
+        Grid.SetRow(padHost, 1); vecGrid.Children.Add(padHost);
+        var vecFootHost = FootStrip(vecFoot);
+        Grid.SetRow(vecFootHost, 2); vecGrid.Children.Add(vecFootHost);
+        var vecPanel = SectionBox(vecGrid);
+        vecPanel.Width = SideW;
 
         // ---- React --------------------------------------------------------------
-        // Source picker: a raised field that opens the other tracks; the list is read when
+        // Source picker: a sunken field that opens the other tracks; the list is read when
         // it opens, so a track added since the card was built is there.
         string SourceName(int id)
         {
@@ -172,20 +223,20 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             }
             return "No source";
         }
-        var srcText = new TextBlock { FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 120 };
-        var srcChevron = new Glyph(GlyphKind.ChevronDown, 8) { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+        var srcText = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 110 };
+        var srcChevron = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
         var srcField = new Border
         {
-            Height = 22, MinWidth = 104, CornerRadius = NotaRadius.Field, Background = NotaPalette.SurfaceHover,
-            Padding = new Thickness(8, 0, 8, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new DockPanel { Children = { srcChevron.Docked(Dock.Right), srcText } },
+            Height = 15, MinWidth = 92, CornerRadius = NotaRadius.Cell, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
+            Padding = new Thickness(6, 0, 5, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+            Child = new DockPanel { Children = { Docked(srcChevron, Dock.Right), srcText } },
         };
-        srcField.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
         ToolTip.SetTip(srcField, "Choose the track Flux listens to");
         void SetSource(int id)
         {
             engine.SetInstrumentSidechainSource(track, id);
             live = engine.InstrumentSidechainSource(track) >= 0;
+            onsetLog.Clear(); perBar = 0;
             ctx.NotifyChanged();
             Refresh();
         }
@@ -209,42 +260,27 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             flyout.ShowAt(srcField);
         };
 
-        var reactSub = Cap("the synth listens to a track");
-        reactSub.Margin = new Thickness(10, 0, 0, 0);
-        var reactHead = new Grid { Height = TabRowH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        reactHead.Children.Add(Title("React"));
-        reactHead.Children.Add(reactSub.At(1));
-        reactHead.Children.Add(srcField.At(2));
-        DockPanel.SetDock(reactHead, Dock.Top);
+        var reactCap = Cap("REACT");
+        var reactSub = Note("the synth listens to a track");
+        reactSub.Margin = new Thickness(6, 0, 0, 0);
+        var reactHead = new Grid { Height = HeadH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(8, 0) };
+        reactHead.Children.Add(reactCap);
+        Grid.SetColumn(reactSub, 1); reactHead.Children.Add(reactSub);
+        Grid.SetColumn(srcField, 2); reactHead.Children.Add(srcField);
 
         var scope = new FluxReactScope { VerticalAlignment = VerticalAlignment.Stretch, Live = live };
 
-        // Listen: a knob with its value and name under it; all three drop to ink 4 with no source.
-        var listenValue = Value(Pct(G("listen")));
-        var listenKnob = new Knob(G("listen"), 1.0) { Accent = true, Width = NotaSize.Knob, Height = NotaSize.Knob, HorizontalAlignment = HorizontalAlignment.Center,
-            Default = I("listen") is var ld and >= 0 ? engine.InstrumentParamDefault(track, ld) : double.NaN };
-        listenKnob.Format = v => Pct((float)v);
-        if (I("listen") is var lpi and >= 0)
-        {
-            listenKnob.ValueChanged += v => { engine.PluginParamSet(track, -1, lpi, (float)v); listenValue.Text = Pct((float)v); Refresh(); };
-            listenKnob.GestureBegin += () => Begin("listen");
-            listenKnob.GestureEnd += () => End("listen");
-            ctx.AddInstFader(lpi, listenKnob, listenValue, Pct);
-            MidiLearn.Bind(listenKnob, MidiTarget.PluginParam(track, -1, lpi), "Listen");
-        }
-        ValueEntry.Attach(listenKnob, "Listen", listenValue);
-        var listenLabel = Cap("Listen");
-        listenValue.HorizontalAlignment = listenLabel.HorizontalAlignment = HorizontalAlignment.Center;
-        listenValue.Margin = new Thickness(0, 2, 0, 0);
-        var listenCell = new StackPanel { Width = 46, VerticalAlignment = VerticalAlignment.Center, Children = { listenKnob, listenValue, listenLabel } };
-
+        var listen = PKnob("listen", "LISTEN", "Listen", Pct, NotaSize.KnobSecondary, 44, Teal);
         var targetSeg = Segments(Targets, TargetIdx, iv => { Begin("target"); SetP("target", iv / 3f); End("target"); Refresh(); },
-            out var targetSync, fill: true, dim: () => !live);
+            out var targetSync, fill: true, dim: () => !live, padX: 2);
         readouts.Add(targetSync);
         if (I("target") is var tgi and >= 0) MidiLearn.Bind(targetSeg, MidiTarget.PluginParam(track, -1, tgi), "Target");
-        var targetCap = Cap("Target — what the reaction drives");
-        var targetHint = Cap("");
-        var targetStack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { targetCap, targetSeg, targetHint } };
+        var targetHint = Mono("");
+        var targetStack = new StackPanel
+        {
+            Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
+            Children = { Cap("Target — what the reaction drives"), targetSeg, targetHint },
+        };
         string TargetLine() => !live ? "→ assign a source to turn the reaction on" : TargetIdx() switch
         {
             0 => "→ the sidechain opens the filter",
@@ -255,33 +291,36 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         readouts.Add(() =>
         {
             scope.Live = live;
-            listenKnob.IsDim = !live;
-            listenValue.Foreground = live ? TextPrimary : TextDisabled;
-            listenLabel.Foreground = live ? TextTertiary : TextDisabled;
-            srcText.Text = SourceName(engine.InstrumentSidechainSource(track));
+            listen.Knob.IsDim = !live;
+            reactCap.Foreground = live ? NotaPalette.TealBright : TextTertiary;
+            reactSub.Foreground = live ? NotaPalette.TextMuted : TextDisabled;
+            int src = engine.InstrumentSidechainSource(track);
+            srcText.Text = SourceName(src);
             srcText.Foreground = live ? TextPrimary : TextDisabled;
-            srcChevron.Foreground = live ? TextSecondary : TextDisabled;
-            targetCap.Foreground = live ? TextTertiary : TextDisabled;
+            srcField.Background = live ? NotaPalette.SurfaceRaised : NotaPalette.BgSunken;
             targetHint.Text = TargetLine();
-            targetHint.Foreground = live ? TextSecondary : TextTertiary;
+            targetHint.Foreground = live ? NotaPalette.TealBright : TextDisabled;
         });
 
         var reactBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
-        reactBottom.Children.Add(listenCell);
-        reactBottom.Children.Add(targetStack.At(1));
-        var reactBody = new Grid { RowDefinitions = new RowDefinitions("*,Auto") };
+        reactBottom.Children.Add(listen.Cell);
+        Grid.SetColumn(targetStack, 1); reactBottom.Children.Add(targetStack);
+        var reactBody = new Grid { RowDefinitions = new RowDefinitions("*,62"), RowSpacing = 5, Margin = new Thickness(7, 5, 7, 4) };
         reactBody.Children.Add(scope);
         var bottomHost = new Border
         {
-            BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 4, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = reactBottom,
+            BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = reactBottom,
         };
-        reactBody.Children.Add(bottomHost.At(0, 1));
-        var reactPanel = Pane(new DockPanel { Children = { reactHead, reactBody } }, SectionPadding());
+        Grid.SetRow(bottomHost, 1); reactBody.Children.Add(bottomHost);
+
+        var reactGrid = new Grid { RowDefinitions = new RowDefinitions($"{HeadH},*") };
+        reactGrid.Children.Add(HeaderStrip(reactHead));
+        Grid.SetRow(reactBody, 1); reactGrid.Children.Add(reactBody);
+        var reactPanel = SectionBox(reactGrid);
 
         // ---- Macros -------------------------------------------------------------
-        const double MacroCell = 90;
-        double Inl = Knob.SizeInline;
-        var motion = PKnob("motion", "Motion", "Motion", v => $"{RateNames[RateIdx()]} · {Pct(v)}", Inl, MacroCell, true);
+        const double MacroSize = 26, MacroCell = 54;
+        var motion = PKnob("motion", "MOTION", "Motion", v => $"{RateNames[RateIdx()]} · {Pct(v)}", MacroSize, MacroCell);
         // Click the Motion readout to step its tempo-sync rate.
         motion.Value.Cursor = new Cursor(StandardCursorType.Hand);
         motion.Value.Background = Brushes.Transparent;
@@ -294,69 +333,116 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             motion.Value.Text = $"{RateNames[RateIdx()]} · {Pct(G("motion"))}";
             Refresh();
         };
-        var filter = PKnob("filter", "Filter", "Filter", v => NotaNum.Hz(CutoffHz(v, G("vecx"), G("vecy"))), Inl, MacroCell, true);
+        var filter = PKnob("filter", "FILTER", "Filter", v => NotaNum.Hz(CutoffHz(v, G("vecx"), G("vecy"))), MacroSize, MacroCell);
         // The cutoff also moves with the vector — keep the readout honest while dragging it.
         readouts.Add(() => { if (!filter.Knob.Dragging) filter.Value.Text = NotaNum.Hz(CutoffHz(G("filter"), G("vecx"), G("vecy"))); });
         readouts.Add(() => { if (!motion.Knob.Dragging) motion.Value.Text = $"{RateNames[RateIdx()]} · {Pct(G("motion"))}"; });
-        // Two columns: Age, Filter, Space down the left; Motion, Env on the right.
-        var macros = new (Control Cell, int Col, int Row)[]
+        var macros = new[]
         {
-            (PKnob("age", "Age", "Age", AgeWord, Inl, MacroCell, true).Cell, 0, 0),
-            (motion.Cell, 1, 0),
-            (filter.Cell, 0, 1),
-            (PKnob("env", "Env", "Env", EnvWord, Inl, MacroCell, true).Cell, 1, 1),
-            (PKnob("space", "Space", "Space", Pct, Inl, MacroCell, true).Cell, 0, 2),
+            PKnob("age", "AGE", "Age", AgeWord, MacroSize, MacroCell).Cell,
+            motion.Cell,
+            filter.Cell,
+            PKnob("env", "ENV", "Env", EnvWord, MacroSize, MacroCell).Cell,
+            PKnob("space", "SPACE", "Space", Pct, MacroSize, MacroCell).Cell,
         };
-        var macroGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("27,27,27") };
-        foreach (var (cell, col, row) in macros) macroGrid.Children.Add(cell.At(col, row));
-        DockPanel.SetDock(macroGrid, Dock.Top);
-        Grid Slider(string label, string id, Func<float, string> fmt)
+        var macroGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), RowDefinitions = new RowDefinitions("*,*") };
+        for (int i = 0; i < macros.Length; i++)
         {
-            var row = ParamRow(ctx, idx, id, label, fmt, Refresh, readouts, labelWidth: 35, valueWidth: 40);
-            row.Height = 20;
-            return row;
+            Grid.SetColumn(macros[i], i % 3); Grid.SetRow(macros[i], i / 3);
+            macroGrid.Children.Add(macros[i]);
         }
         var voiceRows = new StackPanel
         {
+            Spacing = 4,
             Children =
             {
-                Slider("Glide", "glide", GlideT),
-                Slider("Tune", "tune", Cents),
-                Slider("Gain", "gain", Pct),
+                Slider("GLIDE", "glide", () => GlideT(G("glide"))),
+                Slider("TUNE", "tune", () => Cents(G("tune"))),
+                Slider("GAIN", "gain", () => Pct(G("gain"))),
             },
         };
+        var macroFoot = Mono("adaptive: reso · a/r · unison", TextDisabled);
+        var macroBody = new Grid { RowDefinitions = new RowDefinitions("*,Auto,Auto"), Margin = new Thickness(8, 4, 8, 0) };
+        macroBody.Children.Add(macroGrid);
         var voiceHost = new Border
         {
-            BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 3, 0, 0), Padding = new Thickness(0, 3, 0, 0), Child = voiceRows,
+            BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 5), Child = voiceRows,
         };
-        DockPanel.SetDock(voiceHost, Dock.Top);
-        var macroPanel = Pane(new DockPanel
+        Grid.SetRow(voiceHost, 1); macroBody.Children.Add(voiceHost);
+        var macroFootHost = FootStrip(macroFoot);
+        macroFootHost.Margin = new Thickness(-8, 0);
+        Grid.SetRow(macroFootHost, 2); macroBody.Children.Add(macroFootHost);
+
+        var macroGridHost = new Grid { RowDefinitions = new RowDefinitions($"{HeadH},*") };
+        macroGridHost.Children.Add(HeaderStrip(Head(Cap("MACROS"), Note("one knob each"))));
+        Grid.SetRow(macroBody, 1); macroGridHost.Children.Add(macroBody);
+        var macroPanel = SectionBox(macroGridHost);
+        macroPanel.Width = SideW;
+
+        // ---- status strip -------------------------------------------------------
+        string Summary()
         {
-            Children = { Head(Title("Macros"), Cap("one knob each")), Foot(Cap("adaptive: reso · a/r · unison")), macroGrid, voiceHost, new Panel() },
-        }, SectionPadding());
-        macroPanel.Width = MacroW;
+            if (!live)
+            {
+                var w = Weights(G("vecx"), G("vecy"));
+                var parts = new List<string>();
+                for (int i = 0; i < 4; i++) parts.Add($"{WorldNames[i]} {Pct((float)w[i])}");
+                return $"Vector x {Coord(G("vecx"))} · y {Coord(G("vecy"))} → {string.Join(" · ", parts)} · react off";
+            }
+            string src = SourceName(engine.InstrumentSidechainSource(track));
+            string what = TargetIdx() switch
+            {
+                3 => $"vector x {Coord(G("vecx"))} → {Coord(effX)}",
+                0 => $"cutoff +{Pct(react * 0.45f)} of range",
+                1 => NotaNum.Unit(react * 3, "+0.0;−0.0;0", "st"),
+                _ => $"space +{Pct(react * 0.5f)}",
+            };
+            string hits = perBar == 1 ? "1 transient per bar" : $"{perBar} transients per bar";
+            return $"{src} → {Targets[TargetIdx()].ToLowerInvariant()} · listen {Pct(G("listen"))} · {hits} · {what}";
+        }
+        string Meta() => $"MOTION {RateNames[RateIdx()]} · TUNE {Cents(G("tune"))} · GAIN {Pct(G("gain"))}";
+
+        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
+        statusBar.Children.Add(status);
+        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
+        var statusHost = new Border
+        {
+            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
+            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
+        };
 
         // ---- assembly -----------------------------------------------------------
-        var root = new Grid
+        var body = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = SectionGap,
-            Margin = new Thickness(0, CardPad, 0, 0),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = NotaSpace.DeviceGap,
+            Margin = new Thickness(NotaSpace.DeviceGap),
         };
-        root.Children.Add(vecPanel);
-        root.Children.Add(reactPanel.At(1));
-        root.Children.Add(macroPanel.At(2));
+        body.Children.Add(vecPanel);
+        Grid.SetColumn(reactPanel, 1); body.Children.Add(reactPanel);
+        Grid.SetColumn(macroPanel, 2); body.Children.Add(macroPanel);
 
-        // Live tick: the scope, the pulled vector, then every readout.
+        DockPanel.SetDock(statusHost, Dock.Bottom);
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
+
+        // Live tick: the scope, the pulled vector, transients per bar, then every readout.
         void Tick()
         {
             int n = engine.InstrumentScope(track, sc);
             live = engine.InstrumentSidechainSource(track) >= 0;
             if (n >= 6)
             {
-                float react = live ? sc[3] : 0f;
+                react = live ? sc[3] : 0f;
                 effX = sc[4]; effY = sc[5];
                 scope.Live = live;
                 if (live) scope.Push(sc[0], sc[1], sc[2], react);
+            }
+            if (n >= 8 && live)
+            {
+                double now = clock.Elapsed.TotalSeconds;
+                onsetLog.Enqueue((now, sc[7]));
+                double bar = 4 * 60.0 / Math.Max(20, engine.Bpm);
+                while (onsetLog.Count > 1 && now - onsetLog.Peek().T > bar) onsetLog.Dequeue();
+                perBar = (int)Math.Max(0, sc[7] - onsetLog.Peek().Count);
             }
             Refresh();
         }
@@ -364,4 +450,22 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         Tick();
         return root;
     }
+
+    private static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
+
+    // A device section: card ground, hairline, radius 6 — the almanac's section box.
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
+
+    // A section's own header strip: a hairline under it, nothing else.
+    private static Border HeaderStrip(Control child) => new()
+    {
+        BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
+    };
+
+    // A section's foot line: a hairline over one mono sentence.
+    private static Border FootStrip(Control child) => new()
+    {
+        BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0),
+        Padding = new Thickness(8, 0), MinHeight = 16, Child = child,
+    };
 }

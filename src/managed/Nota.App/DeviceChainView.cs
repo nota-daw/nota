@@ -324,7 +324,7 @@ public sealed partial class DeviceChainView : UserControl
             Name: "Sends", Subtitle: "", DeviceIndex: -2, Count: 0, Bypassed: false, Bypassable: false,
             CanMove: false, CanDelete: false, PresetKind: -1, IsInstrument: false, Width: double.NaN,
             Kind: ChainKind.Effect, Compact: true, Utility: true);
-        return BuildCardShell(spec, body);   // the shell already insets the body by CardPad
+        return BuildCardShell(spec, new Border { Padding = new Thickness(CardPad, 0, CardPad, CardPad), Child = body });
     }
 
     // The end of the chain: a slim "+" key. Its dashed outline shows only while a browser

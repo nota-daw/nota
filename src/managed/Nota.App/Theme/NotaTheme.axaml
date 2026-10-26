@@ -43,11 +43,12 @@
       <sys:Double x:Key="Control.Play">36</sys:Double>        <!-- Play is the one wide transport key -->
       <sys:Double x:Key="Control.Console">32</sys:Double>     <!-- the transport keys' well: 28 + 2 × 2 -->
       <sys:Double x:Key="Control.TransportBar">44</sys:Double> <!-- the docked transport row -->
-      <sys:Double x:Key="Control.Knob">26</sys:Double>        <!-- device knob, centre cap -->
-      <sys:Double x:Key="Control.KnobLarge">34</sys:Double>   <!-- device knob on a wide card with room (Volt osc) -->
-      <sys:Double x:Key="Control.KnobInline">22</sys:Double>  <!-- device knob, label beside -->
-      <sys:Double x:Key="Control.KnobFlat">28</sys:Double>    <!-- knob outside a device -->
-      <sys:Double x:Key="Control.ParamCell">56</sys:Double>   <!-- knob 26 + value 13 + label 13 + gaps -->
+      <sys:Double x:Key="Control.KnobSecondary">34</sys:Double> <!-- device knob, small -->
+      <sys:Double x:Key="Control.KnobRegular">36</sys:Double>   <!-- device knob -->
+      <sys:Double x:Key="Control.KnobMain">44</sys:Double>      <!-- device knob, main -->
+      <sys:Double x:Key="Control.KnobInline">24</sys:Double>    <!-- device knob in a table row -->
+      <sys:Double x:Key="Control.KnobFlat">28</sys:Double>      <!-- knob outside a device -->
+      <sys:Double x:Key="Control.ParamCell">53</sys:Double>     <!-- knob 34 + value line 9 + label line 10 -->
 
       <!-- Spacing. Inside a device everything moves in 2px units, in the shell in 4px. -->
       <sys:Double x:Key="Space.DeviceHair">2</sys:Double>

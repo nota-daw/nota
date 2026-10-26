@@ -254,12 +254,13 @@ internal static partial class DesignTokenCheck
                                  : $"icon glyphs typed as text: {string.Join(", ", offenders.Take(10))}");
 
         var knob = File.ReadAllText(Path.Combine(app, "Controls/Knob.cs"));
-        yield return (knob.Contains("NotaSize.Knob,") && knob.Contains("WidthProperty.OverrideMetadata<Knob>"),
-            "Knob is coerced onto its sizes (26 device, 22 label beside, 28 flat)");
+        yield return (knob.Contains("SizeSecondary = NotaSize.KnobSecondary") && knob.Contains("SizeInline = NotaSize.KnobInline")
+                      && knob.Contains("WidthProperty.OverrideMetadata<Knob>"),
+            "Knob is coerced onto its sizes (34 / 36 / 44 device, 24 inline, 28 flat)");
         var sw = File.ReadAllText(Path.Combine(app, "Controls/SwitchTrack.cs"));
-        yield return (Regex.IsMatch(sw, @"W = 20, H = 12, KnobD = 8, Inset = 2\b"), "SwitchTrack is 20×12 with an 8px knob inset 2");
+        yield return (Regex.IsMatch(sw, @"W = 18, H = 10, KnobD = 7, Inset = 1\.5\b"), "SwitchTrack is 18×10 with a 7px knob inset 1.5");
         var sl = File.ReadAllText(Path.Combine(app, "Controls/SliderTrack.cs"));
-        yield return (Regex.IsMatch(sl, @"LineW = 3, Height0 = 16") && sl.Contains("NotaDepth.Groove"), "SliderTrack is a 16px value bar in a groove with a 3px line");
+        yield return (Regex.IsMatch(sl, @"LineW = 3, Height0 = 16, DeviceH = 9\b") && sl.Contains("NotaDepth.Groove"), "SliderTrack is a 9px value bar in a groove with a 3px line (16 in the shell)");
     }
 
     /// <summary>Numbers and labels: a display culture with a point and U+2212, units after a
@@ -420,10 +421,10 @@ internal static partial class DesignTokenCheck
         var app = Path.Combine(root, "src/managed/Nota.App");
 
         var kit = File.ReadAllText(Path.Combine(app, "DeviceCardKit.cs"));
-        yield return (Regex.IsMatch(kit, @"HeaderH = 24;"), "device card header is 24px");
+        yield return (Regex.IsMatch(kit, @"HeaderH = 22;"), "device card header is 22px");
 
-        // Style guide (spec 038): every card is 260 high and its width fits the device. A width
-        // outside 260–940 is a layout that has lost its frame. The generic instrument card is an
+        // Every card is 260 high in its 0.57 layout (spec 038 FR-041). A width outside 260–940
+        // is a layout that has lost its frame. The generic instrument card is an
         // "Open GUI" stub (170) and parameter stubs are narrow.
         yield return (Regex.IsMatch(kit, @"CardH = 260;"), "device cards are 260 high");
         var exempt = new HashSet<string> { "GenericParamDeviceBody.cs", "GenericMidiBody.cs", "GenericInstrumentCard.cs" };

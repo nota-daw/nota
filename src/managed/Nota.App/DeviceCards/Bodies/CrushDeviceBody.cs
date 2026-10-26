@@ -8,7 +8,7 @@
 // spectrum from the engine's FFT with what the crush added and the images above the reduced
 // Nyquist (drag the Nyquist and the filter lines), the transfer curve with the form it makes
 // (drag: Drive) — with Mode and Anti-alias over the graph and Bits / Rate / Drive / Wet under
-// it, and a right panel with Grit / Output tabs. The meters and the spectrum
+// it, a right panel with Grit / Output tabs, and a status strip. The meters and the spectrum
 // come from the engine (Crush.h scopeRead). Every control is a device param (normalized 0..1),
 // so automation / MIDI learn / presets / A-B / persistence come for free.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
@@ -90,8 +90,10 @@ internal sealed class CrushDeviceBody : IDeviceBody
         static string FiltF(double v) => Hz(FiltHz(v));
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 0) => FxParts.Label(t, c);
-        static TextBlock Mono(string t, double fs, IBrush c) { var tb = FxParts.Info(t, c); tb.TextTrimming = TextTrimming.None; return tb; }
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Mono(string t, double fs, IBrush c)
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -100,21 +102,28 @@ internal sealed class CrushDeviceBody : IDeviceBody
         void Learn(Control c, int p) => MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        Control K(int p, string name, Func<double, string> fmt, string tip)
+        // `lit` brightens the label and value (the knob the current tab is about).
+        Control K(int p, string name, Func<double, string> fmt, string tip, Func<bool>? lit = null, bool teal = false)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, Default = Def(p), Width = 34, Height = 34 };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
+            if (teal) knob.ArcColor = Teal;
             knob.ValueChanged += v => { Raw(p, v); val.Text = fmt(P(p)); RefreshAll(); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
             Learn(knob, p);
             ToolTip.SetTip(knob, tip);
-            var cell = KnobCell(name, knob, val, 48);
+            var cell = KnobCell(name, knob, val, 50);
+            TextBlock? label = null;
+            if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { label = tb; break; }
             readouts.Add(() =>
             {
                 if (!knob.Dragging) { double c = P(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
                 val.Text = fmt(P(p));
+                bool on = lit?.Invoke() ?? false;
+                val.Foreground = on ? TextPrimary : TextSecondary;
+                if (label is not null) label.Foreground = on ? TextSecondary : TextTertiary;
             });
             return cell;
         }
@@ -129,17 +138,18 @@ internal sealed class CrushDeviceBody : IDeviceBody
             return wrap;
         }
 
-        // A latching button bound to an on/off param: raised at rest; on, the soft tint with orange text.
+        // A latching chip bound to an on/off param.
         Border ParamChip(int p, string text, string tip)
         {
-            var tb = new TextBlock { Text = text, FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = NotaSize.Dropdown, Padding = new Thickness(9, 0), CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
-            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+            var tb = new TextBlock { Text = text, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             void Hi()
             {
                 bool on = On(p);
-                b.Background = on ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
-                tb.Foreground = on ? AccentBright : TextPrimary;
+                b.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent;
+                b.BorderBrush = on ? Brass : NotaPalette.BorderStrong;
+                tb.Foreground = on ? AccentBright : TextSecondary;
+                tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
             }
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; SetP(p, On(p) ? 0f : 1f); RefreshAll(); e.Handled = true; };
             ToolTip.SetTip(b, tip);
@@ -148,15 +158,15 @@ internal sealed class CrushDeviceBody : IDeviceBody
             return b;
         }
 
-        // Slider row: label · value bar · value.
+        // Slider row: caps label · track · mono value.
         Control SliderRow(string label, int p, Func<double, string> fmt, string tip, bool modulation = false, bool bipolar = false)
         {
             var bar = DeviceCardKit.SliderRow("", () => P(p), v => { Raw(p, v); RefreshAll(); }, () => fmt(P(p)), out var sync,
-                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: 42, modulation: modulation, bipolar: bipolar);
+                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: 38, modulation: modulation, bipolar: bipolar);
             readouts.Add(sync);
             Learn(bar, p);
             ToolTip.SetTip(bar, tip);
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), VerticalAlignment = VerticalAlignment.Center };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("40,*"), VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(Caps(label));
             g.Children.Add(Col(bar, 1));
             return g;
@@ -164,21 +174,20 @@ internal sealed class CrushDeviceBody : IDeviceBody
 
         static Grid HeadRow(Control left, Control right)
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 24, ColumnSpacing = 8 };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 18, ColumnSpacing = 6 };
             g.Children.Add(left); g.Children.Add(Col(right, 1));
             return g;
         }
         Control ModeHead()
         {
             var seg = Segments(CrushMath.Modes, ModeI, i => { SetP(Mode, i / 2f); RefreshAll(); }, out var sync, padX: 6);
-            seg.VerticalAlignment = VerticalAlignment.Center;
             readouts.Add(sync);
             Learn(seg, Mode);
             ToolTip.SetTip(seg, "Mode — Digital: hard truncation to the levels; Analog: a soft tanh clip before them (+4\u2009dB, rounder); Fold: a wavefolder — more Drive folds the peaks back more times");
-            var words = FxParts.Info();
+            var words = new TextBlock { FontSize = 7, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
             readouts.Add(() => words.Text = ModeWords[ModeI()]);
             var aa = ParamChip(AntiAlias, "Anti-alias", "Anti-alias — a 4th-order low-pass at the reduced rate's Nyquist before the hold, so less folds back as images");
-            return HeadRow(Row(8, Caps("Mode"), seg, words), aa);
+            return HeadRow(Row(6, Caps("MODE"), seg, words), aa);
         }
 
         // The knob row under every graph: Bits, Rate, Drive, Wet and two info lines.
@@ -189,28 +198,28 @@ internal sealed class CrushDeviceBody : IDeviceBody
             var i2 = Mono("", 7, TextTertiary); i2.HorizontalAlignment = HorizontalAlignment.Right;
             i1.TextTrimming = i2.TextTrimming = TextTrimming.CharacterEllipsis;
             readouts.Add(() => { i1.Text = info1(); i2.Text = info2(); });
-            var knobs = Row(10,
-                K(Bits, "Bits", BitsF, "Bits — the bit depth, 1 … 24: fewer bits, fewer levels, more grit"),
-                K(Rate, "Rate", RateF, "Rate — the reduced sample rate, 500\u2009Hz … full: lower holds each value longer and adds images above its Nyquist"),
-                K(Drive, "Drive", DriveF, "Drive — −12 … +24\u2009dB into the crusher: pushes the signal up the levels, into the Analog clip or into more folds"),
-                K(DryWet, "Wet", v => Pct(v), "Wet — the crushed signal against the dry one"));
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 54, ColumnSpacing = 8 };
+            var knobs = Row(2,
+                K(Bits, "BITS", BitsF, "Bits — the bit depth, 1 … 24: fewer bits, fewer levels, more grit", lit: () => centreTab == 0),
+                K(Rate, "RATE", RateF, "Rate — the reduced sample rate, 500\u2009Hz … full: lower holds each value longer and adds images above its Nyquist", lit: () => centreTab == 1),
+                K(Drive, "DRIVE", DriveF, "Drive — −12 … +24\u2009dB into the crusher: pushes the signal up the levels, into the Analog clip or into more folds", lit: () => centreTab == 2),
+                K(DryWet, "WET", v => Pct(v), "Wet — the crushed signal against the dry one", teal: true));
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 52, ColumnSpacing = 8 };
             g.Children.Add(knobs);
-            g.Children.Add(Col(new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2), Children = { i1, i2 } }, 1));
+            g.Children.Add(Col(new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 1));
             return g;
         }
         static Control TabBody(Control head, Control window, Control knobs) => new DockPanel
         {
-            LastChildFill = true, Margin = new Thickness(0, 6, 0, 0),
-            Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 6, 0, 6), Child = window } },
+            LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
+            Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
         };
 
         // ======================================================================
         // LEFT — CRUSH column (input · output)
         // ======================================================================
-        var colTitle = Caps("Crush"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new FxLevel { VerticalAlignment = VerticalAlignment.Stretch };
-        var outPill = new FxLevel { VerticalAlignment = VerticalAlignment.Stretch };
+        var colTitle = Caps("CRUSH"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
+        var inPill = new ShPill { Ink = Teal, VerticalAlignment = VerticalAlignment.Stretch, Width = 14 };
+        var outPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch, Width = 14 };
         ToolTip.SetTip(inPill, "The input peak, −60 … 0\u2009dBFS");
         ToolTip.SetTip(outPill, "The output peak, −60 … 0\u2009dBFS");
         var colIn = Mono("", 7, TextPrimary); colIn.HorizontalAlignment = HorizontalAlignment.Center;
@@ -219,23 +228,23 @@ internal sealed class CrushDeviceBody : IDeviceBody
         bool Crushing() => Sc(S_Signal) > 0.5 && P(DryWet) > 0.01f;
         readouts.Add(() =>
         {
-            inPill.Set(NormLvl(ScDb(S_InPeak)));
-            outPill.Set(NormLvl(ScDb(S_OutPeak)));
+            inPill.Set(NormLvl(ScDb(S_InPeak)), double.NaN);
+            outPill.Set(NormLvl(ScDb(S_OutPeak)), double.NaN);
             colIn.Text = Lvl(ScDb(S_InPeak));
             colOut.Text = Lvl(ScDb(S_OutPeak));
             colTitle.Foreground = Crushing() ? AccentBright : TextTertiary;   // lit while it crushes
         });
-        Control PillCol(FxLevel pill, string lbl)
+        Control PillCol(ShPill pill, string lbl)
         {
-            var l = Caps(lbl); l.HorizontalAlignment = HorizontalAlignment.Center; l.Margin = new Thickness(0, 4, 0, 0);
-            return new DockPanel { Children = { Docked(l, Dock.Bottom), new Border { HorizontalAlignment = HorizontalAlignment.Center, Child = pill } } };
+            var l = Caps(lbl); l.HorizontalAlignment = HorizontalAlignment.Center;
+            return new DockPanel { Children = { Docked(l, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), HorizontalAlignment = HorizontalAlignment.Center, Child = pill } } };
         }
-        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 12, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 5) };
-        pills.Children.Add(PillCol(inPill, "In"));
-        pills.Children.Add(Col(PillCol(outPill, "Out"), 1));
+        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 8, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
+        pills.Children.Add(PillCol(inPill, "IN"));
+        pills.Children.Add(Col(PillCol(outPill, "OUT"), 1));
         var leftCol = new RuleSection
         {
-            Width = 64, Padding = new Thickness(0, 8, 0, 6),
+            Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(colTitle, Dock.Top), Docked(colOut, Dock.Bottom), Docked(colIn, Dock.Bottom), pills } },
         };
         DockPanel.SetDock(leftCol, Dock.Left);
@@ -308,27 +317,28 @@ internal sealed class CrushDeviceBody : IDeviceBody
         // ======================================================================
         // RIGHT — Grit / Output
         // ======================================================================
-        // Rows on a fixed grid ("19" rows, "1" / "3" rules, "Auto" boxes, "*" the rest); null = a rule.
-        static Control Stack(string defs, params Control?[] rows)
+        static Control Spread(params Control[] rows)
         {
-            var g = new Grid { RowDefinitions = new RowDefinitions(defs), Margin = new Thickness(0, 6, 0, 0) };
-            for (int i = 0; i < rows.Length; i++)
-                g.Children.Add(GRow(rows[i] ?? new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Center }, i));
-            return g;
+            var defs = new List<string>();
+            for (int i = 0; i < rows.Length; i++) { if (i > 0) defs.Add("*"); defs.Add("Auto"); }
+            var g = new Grid { RowDefinitions = new RowDefinitions(string.Join(",", defs)) };
+            for (int i = 0; i < rows.Length; i++) g.Children.Add(GRow(rows[i], i * 2));
+            return new Border { Padding = new Thickness(8, 6), Child = g };
         }
-        Control FilterRow() => SliderRow("Filter", PostFilter, FiltF, "Post filter — a low-pass after the crush, 200\u2009Hz … 20 kHz: under the Nyquist it smooths the steps", modulation: true);
-        Control GainRow() => SliderRow("Gain", Output, GainF, "Output gain, ±12\u2009dB", bipolar: true);
+        static Control Rule(Control c) => new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = c };
+        Control FilterRow() => SliderRow("FILTER", PostFilter, FiltF, "Post filter — a low-pass after the crush, 200\u2009Hz … 20 kHz: under the Nyquist it smooths the steps", modulation: true);
+        Control GainRow() => SliderRow("GAIN", Output, GainF, "Output gain, ±12\u2009dB", bipolar: true);
 
         Control GritTab()
         {
-            var t = Caps("Result"); t.Height = 14;
-            var l1 = FxParts.Value(); l1.Height = 14;
-            var l2 = FxParts.Info(); l2.Height = 14;
-            l1.TextTrimming = TextTrimming.CharacterEllipsis;
+            var t = Caps("RESULT");
+            var l1 = Mono("", 9, TextPrimary);
+            var l2 = Mono("", 8, TextSecondary);
+            l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
             var box = new Border
             {
-                Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 3), Margin = new Thickness(0, 4, 0, 0),
-                Child = new StackPanel { Children = { t, l1, l2 } },
+                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
+                Child = new StackPanel { Spacing = 2, Children = { t, l1, l2 } },
             };
             readouts.Add(() =>
             {
@@ -341,34 +351,35 @@ internal sealed class CrushDeviceBody : IDeviceBody
                     : NotaNum.F($"Nyquist {Hz(nyq)} · filter above");
                 t.Foreground = hot ? AccentBright : TextTertiary;
                 l1.Foreground = hot ? AccentBright : TextPrimary;
+                box.BorderBrush = hot ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
             });
             ToolTip.SetTip(box, "What comes out: the bit depth and the rate, and whether the post filter cuts the images above the reduced Nyquist or lets them through");
-            return Stack("19,19,19,7,19,19,*",
-                SliderRow("Dither", Dither, v => Pct(v), "Dither — up to ±½ LSB of triangular noise before the levels: softens the steps into hiss"),
-                SliderRow("Jitter", Jitter, v => Pct(v), "Jitter — the hold length wanders up to ±50 %: an unsteady, broken clock"),
-                SliderRow("Noise", NoiseFloor, v => Pct(v), "Noise — a white noise floor under the crush, up to −50\u2009dBFS"),
-                null, FilterRow(), GainRow(), box);
+            return Spread(
+                SliderRow("DITHER", Dither, v => Pct(v), "Dither — up to ±½ LSB of triangular noise before the levels: softens the steps into hiss"),
+                SliderRow("JITTER", Jitter, v => Pct(v), "Jitter — the hold length wanders up to ±50 %: an unsteady, broken clock"),
+                SliderRow("NOISE", NoiseFloor, v => Pct(v), "Noise — a white noise floor under the crush, up to −50\u2009dBFS"),
+                Rule(FilterRow()), GainRow(), box);
         }
 
         Control OutputTab()
         {
             Control MRow(string key, Func<string> val, Func<IBrush> ink)
             {
-                var k = Caps(key);
-                var v = FxParts.Value(); v.HorizontalAlignment = HorizontalAlignment.Right;
+                var k = new TextBlock { Text = key, FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+                var v = Mono("", 8, TextPrimary); v.HorizontalAlignment = HorizontalAlignment.Right;
                 readouts.Add(() => { v.Text = val(); v.Foreground = ink(); });
-                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 16 };
+                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
                 g.Children.Add(k); g.Children.Add(Col(v, 1));
                 return g;
             }
             var meters = new Border
             {
-                Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 4),
+                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel
                 {
-                    Children =
+                    Spacing = 2, Children =
                     {
-                        new Border { Height = 16, Child = Caps("Measurements") },
+                        Caps("MEASUREMENTS"),
                         MRow("in", () => Lvl(ScDb(S_InPeak)) + " dB", () => TextPrimary),
                         MRow("out", () => Lvl(ScDb(S_OutPeak)) + " dB", () => ScDb(S_OutPeak) > 0 ? NotaPalette.DangerBright : TextPrimary),
                         MRow("crest", () => ScDb(S_OutRms) <= -119 ? "—" : NotaNum.F($"{Sc(S_Crest):0.0} dB"), () => TextPrimary),
@@ -378,14 +389,14 @@ internal sealed class CrushDeviceBody : IDeviceBody
             ToolTip.SetTip(meters, "Peaks in and out, and the output's crest factor (peak over RMS) — the crush flattens it");
             var toggles = new StackPanel
             {
-                VerticalAlignment = VerticalAlignment.Center, Children =
+                Spacing = 5, Children =
                 {
                     Toggle(AutoGain, "Auto gain", "Auto gain — rides the output back to the input's loudness (300\u2009ms RMS, ±24\u2009dB), so turning Bits or Drive doesn't jump in level",
                         () => On(AutoGain) ? "Auto gain " + Sgn(Sc(S_AutoGain)) + "\u2009dB" : "Auto gain"),
                     Toggle(DcFilter, "DC filter", "DC filter — a 10\u2009Hz high-pass on the crushed signal: takes out the offset a coarse, folded or noisy crush can leave"),
                 },
             };
-            return Stack("Auto,2,19,19,3,*", meters, new Border(), FilterRow(), GainRow(), null, toggles);
+            return Spread(meters, FilterRow(), GainRow(), Rule(toggles));
         }
 
         // ======================================================================
@@ -395,7 +406,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
         var rightHost = new ContentControl();
         var centreBodies = new Control?[3];
         var rightBodies = new Control?[2];
-        var extras = FxParts.Info();
+        var extras = Mono("", 7, TextTertiary);
         readouts.Add(() =>
         {
             extras.Text = centreTab switch
@@ -408,15 +419,51 @@ internal sealed class CrushDeviceBody : IDeviceBody
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => SpectrumTab(), 2 => TransferTab(), _ => QuantTab() };
         Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : GritTab();
 
-        var centre = FxParts.Tabs(new[] { "Quantiser", "Spectrum", "Transfer" }, centreHost, CentreBody, t => { centreTab = t; Refresh(); }, extras);
-        var rightFrame = FxParts.Tabs(new[] { "Grit", "Output" }, rightHost, RightBody, _ => RefreshAll());
-        var right = FxParts.Section(rightFrame); right.Width = 196;
+        var centre = TabFrame(new[] { "Quantiser", "Spectrum", "Transfer" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extras);
+        var rightFrame = TabFrame(new[] { "Grit", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = FxParts.Section(centre); centreBox.Margin = new Thickness(SectionGap, 0);
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
+
+        // ======================================================================
+        // Status strip
+        // ======================================================================
+        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var statusRight = Mono("", 8, TextSecondary);
+        string StatusText()
+        {
+            var parts = new List<string>
+            {
+                CrushMath.Modes[ModeI()],
+                "bits " + BitsF(P(Bits)),
+                "rate " + KHz(RateHz(P(Rate))),
+                "drive " + DriveF(P(Drive)),
+                "wet " + Pct(P(DryWet)),
+            };
+            if (P(Dither) > 0.005f) parts.Add("dither " + Pct(P(Dither)));
+            if (P(Jitter) > 0.005f) parts.Add("jitter " + Pct(P(Jitter)));
+            if (P(NoiseFloor) > 0.005f) parts.Add("noise " + Pct(P(NoiseFloor)));
+            if (Math.Abs(GainDb(P(Output))) > 0.05) parts.Add("gain " + GainF(P(Output)));
+            if (On(AntiAlias)) parts.Add("AA on");
+            if (On(AutoGain)) parts.Add("auto gain");
+            if (On(DcFilter)) parts.Add("DC");
+            return string.Join(" · ", parts);
+        }
+        readouts.Add(() =>
+        {
+            statusLeft.Text = StatusText();
+            double sr = Sc(S_SampleRate);
+            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · latency {Sc(S_Latency):0} smp · CPU {Sc(S_Cpu) * 100:0.0}\u2009%") : "";
+        });
+        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
+        statusGrid.Children.Add(statusLeft);
+        statusGrid.Children.Add(Col(statusRight, 1));
+        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
+        DockPanel.SetDock(status, Dock.Bottom);
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, CardPad, 0, 0), Children = { leftCol, right, centreBox } };
-        var root = bodyRow;
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { leftCol, right, centreBox } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -437,5 +484,46 @@ internal sealed class CrushDeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(Refresh);
         Refresh();
         return root;
+
+        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
+        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
+        {
+            int sel = 0;
+            var btns = new Border[tabs.Length];
+            void Hi()
+            {
+                for (int i = 0; i < tabs.Length; i++)
+                {
+                    bool on = i == sel;
+                    btns[i].Background = on ? Card2 : Brushes.Transparent;
+                    btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
+                    var tb = (TextBlock)btns[i].Child!;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
+                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                }
+            }
+            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
+            for (int i = 0; i < tabs.Length; i++)
+            {
+                int iv = i;
+                var b = new Border
+                {
+                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
+                };
+                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
+                btns[i] = b;
+                bar.Children.Add(b);
+            }
+            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
+            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
+            if (!centered) DockPanel.SetDock(bar, Dock.Left);
+            barDock.Children.Add(bar);
+            var barBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
+            DockPanel.SetDock(barBorder, Dock.Top);
+            Hi();
+            host.Content = body(sel);
+            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
+        }
     }
 }

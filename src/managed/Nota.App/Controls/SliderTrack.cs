@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The value bar, the slider inside devices (style guide, spec 038): 16 high, corner 4, in a
+// The value bar, the slider inside devices (style guide, spec 038): 9 high, corner 4, in a
 // groove; the soft orange tint fills up to the value and a 3px orange line marks it. While
 // dragged the fill deepens toward orange. Bipolar bars fill from the centre, with a 1px
 // centre mark. An inactive bar (IsDim) keeps its position in ink 4, so the number next to
@@ -45,9 +45,10 @@ internal sealed class SliderTrack : Control
     private static readonly IBrush ShellLine = NotaPalette.TextSecondary;
     private static readonly Typeface Face = NotaFonts.Sans;
 
-    public const double LineW = 3, Height0 = 16, ShellLineW = 2;
+    // A device bar is 9 high (DeviceH); a Shell bar and an upright fader are 16 (Height0).
+    public const double LineW = 3, Height0 = 16, DeviceH = 9, ShellLineW = 2;
 
-    private static Color Mix(Color a, Color b, double t)
+    internal static Color Mix(Color a, Color b, double t)
         => Color.FromRgb((byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
 
     private double _norm;
@@ -57,7 +58,8 @@ internal sealed class SliderTrack : Control
     public bool Bipolar { get; init; }
 
     /// <summary>Outside a device: flat and grey at rest, the value written inside (see above).</summary>
-    public bool Shell { get; init; }
+    public bool Shell { get => _shell; init { _shell = value; if (value) Height = Height0; } }
+    private readonly bool _shell;
 
     /// <summary>The value written inside a Shell bar; null writes nothing.</summary>
     public Func<string>? Text { get; set; }
@@ -111,7 +113,7 @@ internal sealed class SliderTrack : Control
 
     public SliderTrack()
     {
-        Height = Height0;
+        Height = DeviceH;
         MinWidth = 24;
         Cursor = new Cursor(StandardCursorType.SizeWestEast);
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;

@@ -7,8 +7,8 @@
 // tabs — the input, the part over the ceiling and the output over 4 s with the reduction under
 // it (drag the ceiling), the reduction with the transients that reached the clip, momentary /
 // short-term / integrated loudness over 60 s around the Target (drag it) — with Character over
-// the graph and Gain / Ceiling / Release under it, and a right panel with Meters / Detector
-// tabs. The pictures come from the engine (Ceiling.h scopeRead). Every control
+// the graph and Gain / Ceiling / Release under it, a right panel with Meters / Detector tabs,
+// and a status strip. The pictures come from the engine (Ceiling.h scopeRead). Every control
 // is a device param (raw units), so automation / MIDI learn / presets / A-B / persistence come
 // for free; the key source is the device's sidechain routing, the resets are device actions.
 // FullBleed — the shared shell draws the header (name · preset · badge · bypass).
@@ -121,8 +121,10 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         }
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 0) => FxParts.Label(t, c);
-        static TextBlock Mono(string t, double fs, IBrush c) { var tb = FxParts.Info(t, c); tb.TextTrimming = TextTrimming.None; return tb; }
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Mono(string t, double fs, IBrush c)
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -131,7 +133,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         void Learn(Control c, int p) => MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        Control K(int p, string name, Func<double, string> fmt, string tip)
+        // `lit` brightens the label and value (the knob that matters now); `arc` recolours the arc.
+        Control K(int p, string name, Func<double, string> fmt, string tip, Func<bool>? lit = null, Func<bool>? teal = null)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(N(p), 1.0) { Accent = true, Default = DefN(p), Width = 34, Height = 34 };
@@ -141,11 +144,17 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             knob.GestureEnd += () => End(p);
             Learn(knob, p);
             ToolTip.SetTip(knob, tip);
-            var cell = KnobCell(name, knob, val, 48);
+            var cell = KnobCell(name, knob, val, 52);
+            TextBlock? label = null;
+            if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { label = tb; break; }
             readouts.Add(() =>
             {
+                knob.ArcColor = teal?.Invoke() == true ? Teal : null;
                 if (!knob.Dragging) { double c = N(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
                 val.Text = fmt(P(p));
+                bool on = lit?.Invoke() ?? false;
+                val.Foreground = on ? TextPrimary : TextSecondary;
+                if (label is not null) label.Foreground = on ? TextSecondary : TextTertiary;
             });
             return cell;
         }
@@ -163,16 +172,16 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         // A latching chip: lit when `lit()`, a click runs `click`. `fill` = a full-width button.
         Border Chip(int p, Func<bool> lit, Action click, string text, string tip, bool fill = false)
         {
-            // Raised at rest; on, the soft tint with orange text.
-            var tb = new TextBlock { Text = text, FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = NotaSize.Dropdown, Padding = new Thickness(fill ? 6 : 9, 0), CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
-            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+            var tb = new TextBlock { Text = text, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
             void Hi()
             {
                 bool on = lit();
-                b.Background = on ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
-                tb.Foreground = on ? AccentBright : TextPrimary;
+                b.Background = on ? NotaPalette.AccentSubtle : fill ? Raised : Brushes.Transparent;
+                b.BorderBrush = on ? Brass : fill ? Brushes.Transparent : NotaPalette.BorderStrong;
+                tb.Foreground = on ? AccentBright : fill ? TextPrimary : TextSecondary;
+                tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
             }
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; click(); RefreshAll(); e.Handled = true; };
             ToolTip.SetTip(b, tip);
@@ -180,42 +189,47 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             readouts.Add(Hi); Hi();
             return b;
         }
-        Control ParamChip(int p, string text, string tip) => Chip(p, () => On(p), () => SetP(p, On(p) ? 0f : 1f), text, tip, fill: true);
+        Control ParamChip(int p, string text, string tip) => Chip(p, () => On(p), () => SetP(p, On(p) ? 0f : 1f), text, tip);
 
-        // Slider row: label · value bar · value.
-        Control SliderRow(string label, int p, Func<double, string> fmt, bool modulation = false)
+        // Slider row: caps label · track · mono value.
+        Control SliderRow(string label, int p, Func<double, string> fmt, bool modulation = false, Func<bool>? lit = null)
         {
             var bar = DeviceCardKit.SliderRow("", () => N(p), v => { SetN(p, v); RefreshAll(); }, () => fmt(P(p)), out var sync,
-                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: 44, modulation: modulation);
+                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: 38, modulation: modulation);
             readouts.Add(sync);
             Learn(bar, p);
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("44,*"), VerticalAlignment = VerticalAlignment.Center };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("34,*"), VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(Caps(label));
             g.Children.Add(Col(bar, 1));
+            if (lit is not null)
+                readouts.Add(() =>
+                {
+                    bool on = lit();
+                    foreach (var c in bar.Children) if (c is TextBlock tb && tb.TextAlignment == TextAlignment.Right) tb.Foreground = on ? TextPrimary : TextSecondary;
+                });
             return g;
         }
 
         // A dropdown: [label  value ▾] opens `items`; the current one is dotted.
         Border Drop(string caps, Func<string> text, Func<bool> hot, Func<IEnumerable<(string Label, bool Current, Action Pick)>> items, string tip, int learnParam = -1)
         {
-            // Raised like a button: an ink-3 label, the value 11 / ink 1 and a chevron.
-            var name = new TextBlock { FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-            var chev = new Glyph(GlyphKind.ChevronDown, 9) { Margin = new Thickness(6, 0, 0, 0) };
+            var name = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var chev = new Glyph(GlyphKind.ChevronDown, 7) { Margin = new Thickness(6, 0, 0, 0) };
             var inner = new DockPanel { Children = { Docked(chev, Dock.Right) } };
             if (caps.Length > 0) inner.Children.Add(Docked(new Border { Padding = new Thickness(0, 0, 6, 0), Child = Caps(caps) }, Dock.Left));
             inner.Children.Add(name);
             var box = new Border
             {
-                Height = NotaSize.Dropdown, Background = NotaPalette.SurfaceHover, CornerRadius = NotaRadius.Field,
-                Padding = new Thickness(8, 0, 6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = inner,
+                Height = 16, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
+                Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = inner,
             };
-            box.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
             readouts.Add(() =>
             {
                 bool h = hot();
                 name.Text = text();
-                name.Foreground = TextPrimary;
-                chev.Foreground = h ? TextPrimary : TextSecondary;
+                name.Foreground = TextPrimary;   // emphasis, not state: a stronger frame
+                box.BorderBrush = h ? NotaPalette.BorderStrong : BorderDef;
+                chev.Foreground = h ? TextSecondary : TextTertiary;
             });
             ToolTip.SetTip(box, tip);
             if (learnParam >= 0) Learn(box, learnParam);
@@ -266,24 +280,23 @@ internal sealed class CeilingDeviceBody : IDeviceBody
 
         static Grid HeadRow(Control left, Control right)
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 24, ColumnSpacing = 8 };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 18, ColumnSpacing = 6 };
             g.Children.Add(left); g.Children.Add(Col(right, 1));
             return g;
         }
         Control CharSeg(bool words = true)
         {
             var seg = Segments(CharNames, CharI, i => { SetP(Character, i); RefreshAll(); }, out var sync, padX: 6);
-            seg.VerticalAlignment = VerticalAlignment.Center;
             readouts.Add(sync);
             Learn(seg, Character);
             ToolTip.SetTip(seg, "Character — Clean: transparent, the fastest attack; Punch: a slower attack lets the transient through to the clip; Glue: a slow release and a soft knee under the ceiling");
-            var wordsTb = FxParts.Info();
+            var wordsTb = new TextBlock { FontSize = 7, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
             readouts.Add(() => wordsTb.Text = CharWords[CharI()]);
-            return words ? Row(8, Caps("Character"), seg, wordsTb) : Row(8, Caps("Character"), seg);
+            return words ? Row(6, Caps("CHARACTER"), seg, wordsTb) : Row(6, Caps("CHARACTER"), seg);
         }
         Control Info(Func<string> text, IBrush? ink = null)
         {
-            var t = FxParts.Info("", ink);
+            var t = Mono("", 7, ink ?? TextSecondary);
             readouts.Add(() => t.Text = text());
             return t;
         }
@@ -298,26 +311,27 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             readouts.Add(() => { i1.Text = info1(); i2.Text = info2(); });
             var chips = new StackPanel
             {
-                Spacing = 4, Width = 70, VerticalAlignment = VerticalAlignment.Center, Children =
+                Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children =
                 {
                     ParamChip(AutoRelease, "Auto rel", "Auto release — the release slows as the reduction deepens (up to 5× at 7\u2009dB), so dense passages don't pump"),
                     ParamChip(TruePeak, "True peak", "True peak — the detector reads the inter-sample peak (4×), so the ceiling holds in dBTP after conversion"),
                 },
             };
-            var knobs = Row(10,
-                K(Gain, "Gain", GainF, "Gain — how hard the signal is driven into the ceiling"),
-                K(Ceil, "Ceiling", v => NotaNum.F($"{v:0.0}\u2009dB"), "Ceiling — the output never goes above it (in dBTP with True peak on)"),
-                K(Release, "Release", RelF, "Release — how fast the gain comes back (the character scales it; Auto rel lets the signal decide)"));
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), Height = 54, ColumnSpacing = 12 };
+            var knobs = Row(2,
+                K(Gain, "GAIN", GainF, "Gain — how hard the signal is driven into the ceiling", lit: () => centreTab != 1),
+                K(Ceil, "CEILING", v => NotaNum.F($"{v:0.0}\u2009dB"), "Ceiling — the output never goes above it (in dBTP with True peak on)"),
+                K(Release, "RELEASE", RelF, "Release — how fast the gain comes back (the character scales it; Auto rel lets the signal decide)",
+                    lit: () => centreTab == 1, teal: () => On(AutoRelease)));
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), Height = 52, ColumnSpacing = 8 };
             g.Children.Add(knobs);
             g.Children.Add(Col(chips, 1));
-            g.Children.Add(Col(new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2), Children = { i1, i2 } }, 2));
+            g.Children.Add(Col(new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 2));
             return g;
         }
         static Control TabBody(Control head, Control window, Control knobs) => new DockPanel
         {
-            LastChildFill = true, Margin = new Thickness(0, 6, 0, 0),
-            Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 6, 0, 6), Child = window } },
+            LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
+            Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
         };
         void WireDrag(ShDragView v, int param)
         {
@@ -338,16 +352,16 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             int n = (int)Sc(S_Clips);
             string times = n == 1 ? "time" : "times";
-            return CharI() == 1 ? NotaNum.F($"attack to the clip {n} {times}") : NotaNum.F($"hit the clip {n} {times}");
+            return CharI() == 1 ? NotaNum.F($"attack passed to the clip · {n} {times}") : NotaNum.F($"reached the clip · {n} {times}");
         }
 
         // ======================================================================
         // LEFT — LIMIT column (input · reduction · output)
         // ======================================================================
-        var colTitle = Caps("Limit"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new FxLevel { VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
-        var grPill = new FxLevel { Ink = Brass, FromTop = true, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
-        var outPill = new FxLevel { VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
+        var colTitle = Caps("LIMIT"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
+        var inPill = new ShPill { Ink = Teal, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
+        var grPill = new ShPill { Ink = NotaPalette.VizInk, FromTop = true, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
+        var outPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch, Width = 12 };
         ToolTip.SetTip(inPill, "The input after Gain, with the ceiling marked");
         ToolTip.SetTip(grPill, "Gain reduction, 0 … 24\u2009dB");
         ToolTip.SetTip(outPill, "The output");
@@ -357,24 +371,24 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         readouts.Add(() =>
         {
             inPill.Set(NormLvl(ScDb(S_InPeak)), NormLvl(P(Ceil)));
-            grPill.Set(Math.Clamp(Sc(S_Gr) / 24, 0, 1));
-            outPill.Set(NormLvl(ScDb(S_OutPeak)));
+            grPill.Set(Math.Clamp(Sc(S_Gr) / 24, 0, 1), double.NaN);
+            outPill.Set(NormLvl(ScDb(S_OutPeak)), double.NaN);
             colGr.Text = GrF(Sc(S_Gr));
             colOut.Text = Lvl(ScDb(S_OutPeak));
             colTitle.Foreground = Sc(S_Gr) > 0.1 ? AccentBright : TextTertiary;   // lit while it limits
         });
-        Control PillCol(FxLevel pill, string lbl)
+        Control PillCol(ShPill pill, string lbl)
         {
-            var l = Caps(lbl); l.HorizontalAlignment = HorizontalAlignment.Center; l.Margin = new Thickness(0, 4, 0, 0);
-            return new DockPanel { Children = { Docked(l, Dock.Bottom), new Border { HorizontalAlignment = HorizontalAlignment.Center, Child = pill } } };
+            var l = Caps(lbl); l.HorizontalAlignment = HorizontalAlignment.Center;
+            return new DockPanel { Children = { Docked(l, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), HorizontalAlignment = HorizontalAlignment.Center, Child = pill } } };
         }
-        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"), ColumnSpacing = 5, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 5) };
-        pills.Children.Add(PillCol(inPill, "In"));
+        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto"), ColumnSpacing = 5, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
+        pills.Children.Add(PillCol(inPill, "IN"));
         pills.Children.Add(Col(PillCol(grPill, "GR"), 1));
-        pills.Children.Add(Col(PillCol(outPill, "Out"), 2));
+        pills.Children.Add(Col(PillCol(outPill, "OUT"), 2));
         var leftCol = new RuleSection
         {
-            Width = 64, Padding = new Thickness(0, 8, 0, 6),
+            Width = 64, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(colTitle, Dock.Top), Docked(colOut, Dock.Bottom), Docked(colGr, Dock.Bottom), pills } },
         };
         DockPanel.SetDock(leftCol, Dock.Left);
@@ -387,7 +401,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             level = new CeLevelView { CeilToNorm = db => ToN(Ceil, db) };
             WireDrag(level, Ceil);
-            ToolTip.SetTip(level, "The last 4 s: the input (grey), the part over the ceiling (red) and the output (neutral ink), with the reduction under it. Drag the ceiling line; double-click resets.");
+            ToolTip.SetTip(level, "The last 4 s: the input (teal), the part over the ceiling (red) and the output (neutral ink), with the reduction under it. Drag the ceiling line; double-click resets.");
             var head = HeadRow(CharSeg(), Info(() => "ceiling " + CeilF(P(Ceil))));
             var knobs = KnobRow(
                 () => ScDb(S_WinInPeak) <= -119 ? "no signal" : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
@@ -399,7 +413,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Control ReductionTab()
         {
             reduction = new CeReductionView();
-            ToolTip.SetTip(reduction, "The gain reduction over the last 4 s: lighter grey where a transient got through to the clip, the dashed line is the mean");
+            ToolTip.SetTip(reduction, "The gain reduction over the last 4 s: teal where a transient got through to the clip, the dashed line is the mean");
             var head = HeadRow(CharSeg(), Info(() => NotaNum.F($"avg {GrF(Sc(S_AvgGr))} · max {GrF(Sc(S_WinMaxGr))}")));
             var knobs = KnobRow(ReleaseRange, ClipText);
             return TabBody(head, reduction, knobs);
@@ -410,8 +424,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             loudness = new CeLoudnessView { TargetToNorm = t => ToN(Target, t) };
             WireDrag(loudness, Target);
-            ToolTip.SetTip(loudness, "Momentary (light grey), short-term (neutral ink) and integrated (mid grey) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; double-click resets.");
-            var head = HeadRow(Row(8, CharSeg(false), Caps("Target"), TargetDrop()),
+            ToolTip.SetTip(loudness, "Momentary (teal), short-term (neutral ink) and integrated (rose) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; double-click resets.");
+            var head = HeadRow(Row(6, CharSeg(false), Caps("TARGET"), TargetDrop()),
                 Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : "measuring…"));
             var knobs = KnobRow(
                 () => NotaNum.F($"LRA {Sc(S_Lra):0.0}\u2009LU · PLR {(HaveI() ? NotaNum.F($"{Sc(S_Plr):0.0}") : "—")}"),
@@ -422,29 +436,29 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         // ======================================================================
         // RIGHT — Meters / Detector
         // ======================================================================
-        // Rows on the device grid; null = a rule.
-        static Control Stack(string defs, params Control?[] rows)
+        static Control Spread(params Control[] rows)
         {
-            var g = new Grid { RowDefinitions = new RowDefinitions(defs), Margin = new Thickness(0, 6, 0, 0) };
-            for (int i = 0; i < rows.Length; i++)
-                g.Children.Add(GRow(rows[i] ?? new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Center }, i));
-            return g;
+            var defs = new List<string>();
+            for (int i = 0; i < rows.Length; i++) { if (i > 0) defs.Add("*"); defs.Add("Auto"); }
+            var g = new Grid { RowDefinitions = new RowDefinitions(string.Join(",", defs)) };
+            for (int i = 0; i < rows.Length; i++) g.Children.Add(GRow(rows[i], i * 2));
+            return new Border { Padding = new Thickness(8, 6), Child = g };
         }
         Control MeterGrid(params (string Key, Func<string> Val, Func<IBrush> Ink)[] cells)
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,*,Auto"), ColumnSpacing = 6 };
-            for (int i = 0; i < (cells.Length + 1) / 2; i++) g.RowDefinitions.Add(new RowDefinition(17, GridUnitType.Pixel));
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,*,Auto"), ColumnSpacing = 6, RowSpacing = 3 };
+            for (int i = 0; i < (cells.Length + 1) / 2; i++) g.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
             for (int i = 0; i < cells.Length; i++)
             {
                 var (key, val, ink) = cells[i];
                 int r = i / 2, c = (i % 2) * 2;
-                var k = Caps(key); k.Margin = new Thickness(c > 0 ? 6 : 0, 0, 0, 0);
-                var v = FxParts.Value(); v.HorizontalAlignment = HorizontalAlignment.Right;
+                var k = new TextBlock { Text = key, FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(c > 0 ? 4 : 0, 0, 0, 0) };
+                var v = Mono("", 8, TextPrimary); v.HorizontalAlignment = HorizontalAlignment.Right;
                 readouts.Add(() => { v.Text = val(); v.Foreground = ink(); });
                 g.Children.Add(GRow(Col(k, c), r));
                 g.Children.Add(GRow(Col(v, c + 1), r));
             }
-            return new Border { Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 4, 9, 4), Child = g };
+            return new Border { Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 5), Child = g };
         }
         IBrush OverInk(double db, double limit) => db > limit + 0.05 ? NotaPalette.DangerBright : TextPrimary;
         Control ResetRow(bool loud)
@@ -452,17 +466,16 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             var reset = Chip(-1, () => false, () => engine.DeviceAction(track, di, loud ? A_ResetLoudness : A_ResetPeaks, 0, 0),
                 loud ? "Reset" : "Reset peaks", loud ? "Reset — start the integrated loudness, the range and the peaks again" : "Reset peaks — clear the peak holds, the max reduction and the clip count", fill: true);
             reset.HorizontalAlignment = HorizontalAlignment.Right;
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 6 };
             g.Children.Add(KeyDrop());
             g.Children.Add(Col(reset, 1));
-            reset.HorizontalAlignment = HorizontalAlignment.Stretch;
-            return g;
+            return new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = g };
         }
         Control DeltaSwitch() => Toggle(DeltaP, "Delta · hear what it removes", "Delta — play the difference between the input and the output: what the limiter takes away");
-        Control LookRow() => SliderRow("Look", Lookahead, LookF);
-        Control LinkRow() => SliderRow("Link", StereoLink, LinkF);
+        Control LookRow() => SliderRow("LOOK", Lookahead, LookF, lit: () => false);
+        Control LinkRow() => SliderRow("LINK", StereoLink, LinkF);
 
-        Control MetersTab() => Stack("Auto,3,22,22,8,22,*",
+        Control MetersTab() => Spread(
             MeterGrid(
                 ("peak in", () => Lvl(ScDb(S_PeakInHold)), () => OverInk(ScDb(S_PeakInHold), 0)),
                 ("peak out", () => Lvl(ScDb(S_PeakOutHold)), () => TextPrimary),
@@ -470,13 +483,13 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 ("LUFS-S", () => Lufs(ScDb(S_LufsS)), () => TextPrimary),
                 ("LUFS-I", () => Lufs(ScDb(S_LufsI)), () => TextPrimary),
                 ("true pk", () => Lvl(ScDb(S_TpHold)), () => OverInk(ScDb(S_TpHold), P(Ceil)))),
-            new Border(), LookRow(), LinkRow(), null, ResetRow(false), DeltaSwitch());
+            LookRow(), LinkRow(), ResetRow(false), DeltaSwitch());
 
         Control LoudMetersTab()
         {
-            var big = FxParts.Value(); big.FontSize = 16;
-            var unit = Caps("LUFS"); unit.VerticalAlignment = VerticalAlignment.Bottom; unit.Margin = new Thickness(0, 0, 0, 3);
-            var verdict = FxParts.Info("", Success); verdict.HorizontalAlignment = HorizontalAlignment.Right; verdict.VerticalAlignment = VerticalAlignment.Bottom; verdict.Margin = new Thickness(0, 0, 0, 2);
+            var big = Mono("", 16, TextPrimary);
+            var unit = new TextBlock { Text = "LUFS", FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2) };
+            var verdict = Mono("", 8, Success); verdict.HorizontalAlignment = HorizontalAlignment.Right; verdict.VerticalAlignment = VerticalAlignment.Bottom;
             readouts.Add(() =>
             {
                 big.Text = HaveI() ? NotaNum.F($"{Sc(S_LufsI):0.0}") : "—";
@@ -487,34 +500,30 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             line.Children.Add(big); line.Children.Add(Col(unit, 1)); line.Children.Add(Col(verdict, 2));
             var box = new Border
             {
-                Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 4),
-                Child = new StackPanel { Children = { new Border { Height = 16, Child = Caps("Integrated") }, line } },
+                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
+                Child = new StackPanel { Spacing = 1, Children = { Caps("INTEGRATED"), line } },
             };
             ToolTip.SetTip(box, "Integrated loudness since the last Reset, gated (BS.1770), against the Target");
-            return Stack("Auto,4,Auto,22,8,22,*", box, new Border(),
+            return Spread(box,
                 MeterGrid(
                     ("LUFS-S", () => Lufs(ScDb(S_LufsS)), () => TextPrimary),
                     ("LUFS-M", () => Lufs(ScDb(S_LufsM)), () => TextPrimary),
                     ("true pk", () => Lvl(ScDb(S_TpHold)), () => OverInk(ScDb(S_TpHold), P(Ceil))),
                     ("max GR", () => GrF(Sc(S_MaxGrHold)), () => TextPrimary)),
-                LookRow(), null, ResetRow(true));
+                LookRow(), ResetRow(true));
         }
 
         Control DetectorTab()
         {
-            // Title · dot + line on the right, a second line under.
-            var t = Caps("Detector");
+            var t = Caps("DETECTOR");
             var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center };
-            var l1 = FxParts.Value();
-            var l2 = FxParts.Info(); l2.Height = 16;
-            l1.TextTrimming = TextTrimming.CharacterEllipsis;
-            var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 8, Height = 16 };
-            var rt = Row(6, dot, l1); rt.HorizontalAlignment = HorizontalAlignment.Right;
-            top.Children.Add(t); top.Children.Add(Col(rt, 1));
+            var l1 = Mono("", 9, TextPrimary);
+            var l2 = Mono("", 8, TextSecondary);
+            l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
             var box = new Border
             {
-                Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 4), Margin = new Thickness(0, 2, 0, 0),
-                Child = new StackPanel { Children = { top, l2 } },
+                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
+                Child = new StackPanel { Spacing = 2, Children = { t, Row(5, dot, l1), l2 } },
             };
             readouts.Add(() =>
             {
@@ -522,15 +531,16 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 t.Text = d ? "Delta" : "Detector";
                 t.Foreground = d ? AccentBright : TextTertiary;
                 l1.Text = d ? "hearing what it removes" : (Tp() ? "true peak · 4×" : "sample peak") + (ExtOn() ? " · key" : "");
-                l2.Text = d ? "the difference in − out" : NotaNum.F($"{KeyName()} · HP {HpF(P(ScHp))} · delay {Sc(S_Latency):0} smp");
+                l2.Text = d ? "the difference in − out" : NotaNum.F($"{KeyName()} · HP {HpF(P(ScHp))} · latency {Sc(S_Latency):0} smp");
                 l1.Foreground = d ? AccentBright : TextPrimary;
-                dot.Background = d ? Brass : Sc(S_Gr) > 0.1 ? Success : NotaPalette.TextDisabled;
+                dot.Background = d ? Brass : Sc(S_Gr) > 0.1 ? Success : NotaPalette.BorderStrong;
+                box.BorderBrush = d ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
             });
             ToolTip.SetTip(box, "What the limiter listens to — or, with Delta on, that you are hearing only what it takes away");
-            return Stack("20,20,20,6,22,Auto,*",
+            return Spread(
                 LookRow(), LinkRow(),
-                SliderRow("SC HP", ScHp, HpF, modulation: true),
-                null, ResetRow(false), box, DeltaSwitch());
+                SliderRow("SC HP", ScHp, HpF, modulation: true, lit: () => P(ScHp) > 20.5f),
+                ResetRow(false), box, DeltaSwitch());
         }
 
         // ======================================================================
@@ -541,7 +551,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         var centreBodies = new Control?[3];
         var rightBodies = new Control?[3];
         int rightTab = 0;
-        var extras = FxParts.Info();
+        var extras = Mono("", 7, TextTertiary);
         readouts.Add(() =>
         {
             extras.Text = centreTab switch
@@ -559,20 +569,51 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             return rightBodies[slot] ??= slot switch { 2 => DetectorTab(), 1 => LoudMetersTab(), _ => MetersTab() };
         }
 
-        var centre = FxParts.Tabs(new[] { "Level", "Reduction", "Loudness" }, centreHost, CentreBody, t =>
+        var centre = TabFrame(new[] { "Level", "Reduction", "Loudness" }, centreHost, CentreBody, false, t =>
         {
             centreTab = t;
             rightHost.Content = RightBody(rightTab);
             Refresh();
         }, extras);
-        var rightFrame = FxParts.Tabs(new[] { "Meters", "Detector" }, rightHost, RightBody, t => { rightTab = t; RefreshAll(); });
-        var right = FxParts.Section(rightFrame); right.Width = 202;
+        var rightFrame = TabFrame(new[] { "Meters", "Detector" }, rightHost, RightBody, true, t => { rightTab = t; RefreshAll(); }, null);
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = FxParts.Section(centre); centreBox.Margin = new Thickness(SectionGap, 0);
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
+
+        // ======================================================================
+        // Status strip
+        // ======================================================================
+        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var statusRight = Mono("", 8, TextSecondary);
+        string StatusText()
+        {
+            var parts = new List<string> { CharNames[CharI()] };
+            if (centreTab == 2) parts.Add("target " + TargetF(P(Target)));
+            parts.Add("gain " + GainF(P(Gain)));
+            parts.Add("ceiling " + CeilF(P(Ceil)));
+            parts.Add("release " + (On(AutoRelease) ? "auto" : MsF(P(Release))));
+            parts.Add("look " + LookF(P(Lookahead)));
+            if (centreTab != 2) parts.Add("link " + LinkF(P(StereoLink)));
+            if (P(ScHp) > 20.5f) parts.Add("SC HP " + HzF(P(ScHp)));
+            if (ExtOn()) parts.Add("key " + KeyName());
+            if (On(DeltaP)) parts.Add("delta");
+            return string.Join(" · ", parts);
+        }
+        readouts.Add(() =>
+        {
+            statusLeft.Text = StatusText();
+            double sr = Sc(S_SampleRate);
+            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
+        });
+        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
+        statusGrid.Children.Add(statusLeft);
+        statusGrid.Children.Add(Col(statusRight, 1));
+        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
+        DockPanel.SetDock(status, Dock.Bottom);
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, CardPad, 0, 0), Children = { leftCol, right, centreBox } };
-        var root = bodyRow;
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { leftCol, right, centreBox } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -589,5 +630,46 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(Refresh);
         Refresh();
         return root;
+
+        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
+        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
+        {
+            int sel = 0;
+            var btns = new Border[tabs.Length];
+            void Hi()
+            {
+                for (int i = 0; i < tabs.Length; i++)
+                {
+                    bool on = i == sel;
+                    btns[i].Background = on ? Card2 : Brushes.Transparent;
+                    btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
+                    var tb = (TextBlock)btns[i].Child!;
+                    tb.Foreground = on ? NotaPalette.TextPrimary : TextTertiary;
+                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                }
+            }
+            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
+            for (int i = 0; i < tabs.Length; i++)
+            {
+                int iv = i;
+                var b = new Border
+                {
+                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
+                };
+                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
+                btns[i] = b;
+                bar.Children.Add(b);
+            }
+            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
+            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
+            if (!centered) DockPanel.SetDock(bar, Dock.Left);
+            barDock.Children.Add(bar);
+            var barBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
+            DockPanel.SetDock(barBorder, Dock.Top);
+            Hi();
+            host.Content = body(sel);
+            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
+        }
     }
 }

@@ -2,28 +2,27 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Detail · Devices — the Nota Pendulum editor (instrument kind 8): arpeggios out of
-// bounces, in an 1050 × 260 card. Held notes form a chord; balls swing across it and every
-// degree a ball crosses plays that note.
+// bounces, in the 700 × 260 card the almanac draws for it. Held notes form a chord; balls
+// swing across it and every degree a ball crosses plays that note.
 //
 //   Centre      two tabs:
-//               Balls — Free / Sync · the division (or the free swing time) · the Motion
-//                       curve; under them the bipolar Rate as a value bar on its own row;
-//                       then one lane per ball (x = pitch, the wall it came from, the wall it
-//                       strikes, the time to the wall ahead) over the bar strip the
-//                       generated notes fall into. The space says "why this note", the
-//                       strip "when".
+//               Balls — Free / Sync · the division (or the free swing time) · bipolar
+//                       Rate · the Motion curve; then one lane per ball (x = pitch, the
+//                       wall it came from, the wall it strikes, the time to the wall ahead)
+//                       over the bar strip the generated notes fall into. The space says
+//                       "why this note", the strip "when".
 //               Voice — what the bounces sound with: the wave, tone / bright / FM / note
 //                       length, the envelope and volume; the last note and a level bar
 //                       per sounding voice.
-//   Rail 250    the balls themselves (division · rate · phase · note), always visible;
+//   Rail 186    the balls themselves (division · rate · phase · note), always visible;
 //               under them the tab's own controls — count, sort, quantize, Hold / First
 //               note / Reset on Balls; spread (rate, detune, pan, humanize), the scale and
 //               Humanize / Reset on Voice.
 //
 // Everything live comes from the engine's telemetry (PendulumModel), so the lanes are the
-// balls the audio thread is actually swinging. Orange marks values and the ball striking a
-// wall; where a ball is going is grey. Every control is a plugin param → automation /
-// persist / clone, and the card follows automation live.
+// balls the audio thread is actually swinging. Neutral ink is the parameter, teal is where a
+// ball is going and the spread (modulation). Every control is a plugin param →
+// automation / persist / clone, and the card follows automation live.
 
 using System;
 using System.Collections.Generic;
@@ -42,7 +41,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
 {
     public bool BodyOnly => true;
     public string Subtitle => "Gen keys";
-    public double CardWidth => DeviceCardKit.CardWide;
+    public double CardWidth => 700;
 
     public string? VoiceLabel(IAudioEngine engine, int trackId, int active)
     {
@@ -52,7 +51,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         return null;
     }
 
-    private const double RailW = 250, BarH = 28;
+    private const double RailW = 186, TabH = 20, StripH = 22, StatusH = 18, BarH = 34;
     private static readonly string[] TabNames = { "Balls", "Voice" };
 
     private static string Secs(double s) => NotaNum.Time(s);
@@ -85,7 +84,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         int[] held = Array.Empty<int>();
 
         var lanes = new PendulumLanesView { VerticalAlignment = VerticalAlignment.Stretch };
-        ToolTip.SetTip(lanes, "One lane per ball: x is pitch, low to high. Crossing a chord degree plays that note; the grey lead shows the wall ahead");
+        ToolTip.SetTip(lanes, "One lane per ball: x is pitch, low to high. Crossing a chord degree plays that note; teal shows the wall ahead");
         var bar = new PendulumBarView { Height = BarH };
         ToolTip.SetTip(bar, "The bar: generated notes land on the 1/16 grid — this bar in neutral ink with the note just played in accent, the last bar dimmer ahead of the playhead");
         var ballList = new PendulumBallList();
@@ -93,20 +92,22 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
 
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
             Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        static TextBlock Mono(string t, IBrush? c = null, double fs = NotaType.KnobValue) => new()
+        static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
             VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
-        var hint = Mono("", TextTertiary, NotaType.Eyebrow);
-        hint.HorizontalAlignment = HorizontalAlignment.Right;
+        var hint = Mono("", TextTertiary);
+        hint.HorizontalAlignment = HorizontalAlignment.Right; hint.Margin = new Thickness(0, 0, 8, 0);
         hint.TextTrimming = TextTrimming.CharacterEllipsis;
-        var lastNote = Mono("", TextTertiary, NotaType.KnobLabel);
+        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var meta = Mono("", TextSecondary, 8);
+        var lastNote = Mono("", TextTertiary);
         Action showTab = () => { };
 
         // ---- live state -------------------------------------------------------------
@@ -154,6 +155,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         {
             foreach (var r in readouts) r();
             hint.Text = Hint();
+            status.Text = Summary();
         }
 
         void Live()
@@ -168,16 +170,20 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             voiceBars.Set(snap.Levels);
             int voices = snap.Live ? snap.Voices : Math.Max(0, engine.InstrumentVoiceCount(track));
             lastNote.Text = $"last note {PendulumModel.NoteName(snap.LastPitch)} · {voices} {(voices == 1 ? "voice" : "voices")}";
+            double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
+            meta.Text = $"{voices}/{PendulumModel.Voices} voices · {NotaNum.Unit(sr / 1000, "0.#", "kHz")} · {NotaNum.Bpm(engine.Bpm)} BPM · DSP {NotaNum.Unit(engine.CpuLoad * 100, "0.0", "%")}";
+            status.Text = Summary();
         }
 
         // ---- shared builders ----------------------------------------------------------
-        Control PKnob(string id, string label, Func<float, string> fmt, double cellW = 54)
+        Control PKnob(string id, string label, Func<float, string> fmt, double size = NotaSize.KnobSecondary, double cellW = 54, IBrush? arc = null)
         {
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock { Text = fmt(G(id)), Foreground = TextPrimary };
             var knob = new Knob(G(id), 1.0)
             {
-                Accent = true, Default = engine.InstrumentParamDefault(track, pi),
+                Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
+                Width = size, Height = size,
             };
             knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); value.Text = fmt((float)v); Refresh(); };
@@ -190,7 +196,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             return cell;
         }
 
-        Border Chips(string id, string[] names, double padX = 6, double fontSize = NotaType.KnobValue, Func<bool>? dim = null)
+        Border Chips(string id, string[] names, double padX = 5, double fontSize = 8, Func<bool>? dim = null)
         {
             int n = names.Length;
             var seg = Segments(names, () => Sel(id, n), iv => { Write(id, iv / (float)(n - 1)); Refresh(); }, out var sync,
@@ -200,40 +206,40 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             return seg;
         }
 
-        Grid Slider(string label, string id, Func<string> text, bool bipolar = false,
-            double labelWidth = 40, double valueWidth = 40)
+        Grid Slider(string label, string id, Func<string> text, bool bipolar = false, bool modulation = false,
+            double labelWidth = 30, double valueWidth = 26)
         {
             int pi = I(id);
             var row = SliderRow(label, () => G(id), v => { SetP(id, (float)v); Refresh(); }, text, out var sync,
                 begin: pi >= 0 ? () => Begin(id) : null,
                 end: pi >= 0 ? () => End(id) : null,
                 reset: pi >= 0 ? () => { Write(id, engine.InstrumentParamDefault(track, pi)); Refresh(); } : null,
-                bipolar: bipolar, labelWidth: labelWidth, valueWidth: valueWidth);
+                bipolar: bipolar, labelWidth: labelWidth, valueWidth: valueWidth, modulation: modulation);
+            row.ColumnSpacing = 5;
             readouts.Add(sync);
             if (pi >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), engine.PluginParamName(track, -1, pi));
             return row;
         }
 
-        // A rail button: raised at rest; a latching one rises in the soft tint, its word in
-        // orange, while on.
-        Border RailButton(string text, Action click, Func<bool>? on = null, string? id = null)
+        // A rail button: raised at rest; a latching one turns accent-washed while on.
+        Border RailButton(string text, Action click, Func<bool>? on = null, string? id = null, double height = 16)
         {
             var tb = new TextBlock
             {
-                Text = text, FontSize = NotaType.DeviceValue,
+                Text = text, FontSize = NotaType.KnobLabel, FontWeight = FontWeight.SemiBold,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             };
             var b = new Border
             {
-                Height = NotaSize.Dropdown, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 0),
+                Height = height, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
             };
-            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
             void Paint()
             {
                 bool lit = on?.Invoke() ?? false;
-                b.Background = lit ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
-                tb.Foreground = lit ? AccentBright : TextPrimary;
+                b.Background = lit ? NotaPalette.AccentSubtle : NotaPalette.SurfaceRaised;
+                b.BorderBrush = lit ? NotaPalette.BorderBrass : BorderDef;
+                tb.Foreground = lit ? AccentBright : NotaPalette.TextStrong;
             }
             b.PointerPressed += (_, e) =>
             {
@@ -258,84 +264,103 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         }
 
         // ---- Balls tab ----------------------------------------------------------------
-        var syncSeg = Chips("sync", new[] { "Free", "Sync" });
+        var syncSeg = Chips("sync", new[] { "Free", "Sync" }, padX: 5, fontSize: 7);
         ToolTip.SetTip(syncSeg, "Sync: a swing takes a note division of the tempo · Free: it takes a time in seconds");
-        var divSeg = Chips("division", PendulumModel.DivNames);
+        var divSeg = Chips("division", PendulumModel.DivNames, padX: 4, fontSize: 7);
         ToolTip.SetTip(divSeg, "How long one swing (low → high → low) takes at +100\u2009%");
-        var timeRow = Slider("Time", "freerate", () => Secs(PendulumModel.FreeSeconds(G("freerate"))), labelWidth: 0, valueWidth: 36);
-        timeRow.Width = 150;
+        var timeRow = Slider("TIME", "freerate", () => Secs(PendulumModel.FreeSeconds(G("freerate"))), labelWidth: 0, valueWidth: 32);
+        timeRow.Width = 100;
         ToolTip.SetTip(timeRow, "Free: seconds per swing at +100\u2009%");
         var cycleHost = new Panel { VerticalAlignment = VerticalAlignment.Center, Children = { divSeg, timeRow } };
         readouts.Add(() => { divSeg.IsVisible = Synced(); timeRow.IsVisible = !Synced(); });
-        var rateRow = Slider("Rate", "rate", () => NotaNum.Unit(PendulumModel.RateSigned(G("rate")) * 100, "+0;−0;0", "%"), bipolar: true, labelWidth: 30, valueWidth: 44);
+        var rateRow = Slider("RATE", "rate", () => NotaNum.Unit(PendulumModel.RateSigned(G("rate")) * 100, "+0;−0;0", "%"), bipolar: true, labelWidth: 0, valueWidth: 28);
         ToolTip.SetTip(rateRow, "Swing speed — centre stops the balls, left of centre runs them in reverse");
-        var motionSeg = Chips("motion", PendulumModel.MotionNames);
+        var motionSeg = Chips("motion", PendulumModel.MotionNames, padX: 4, fontSize: 7);
         ToolTip.SetTip(motionSeg, "The swing curve — Pendulum slows at the walls, Linear keeps one speed, Bounce settles with a ripple");
-        var motionCap = Cap("Motion");
-        var ballStrip = Row((syncSeg, "Auto"), (cycleHost, "Auto"), (new Panel(), "*"), (motionCap, "Auto"), (motionSeg, "Auto"));
-        ballStrip.ColumnSpacing = 6;
-        motionCap.Margin = new Thickness(0, 0, 2, 0);
+        var ballStrip = Row((syncSeg, "Auto"), (cycleHost, "Auto"), (rateRow, "*"), (Cap("MOTION"), "Auto"), (motionSeg, "Auto"));
+        ballStrip.ColumnSpacing = 7;
+        ballStrip.Margin = new Thickness(7, 0);
 
-        var ballsBody = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto"), Margin = new Thickness(0, 4, 0, 0) };
-        rateRow.Margin = new Thickness(0, 2, 0, 0);
-        lanes.Margin = new Thickness(0, 6, 0, 0);
-        bar.Margin = new Thickness(0, 6, 0, 0);
-        ballsBody.Children.Add(ballStrip);
-        Grid.SetRow(rateRow, 1); ballsBody.Children.Add(rateRow);
-        Grid.SetRow(lanes, 2); ballsBody.Children.Add(lanes);
-        Grid.SetRow(bar, 3); ballsBody.Children.Add(bar);
+        var ballsView = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 4, Margin = new Thickness(7, 5) };
+        ballsView.Children.Add(lanes);
+        Grid.SetRow(bar, 1); ballsView.Children.Add(bar);
+        var ballsBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        ballsBody.Children.Add(StripBox(ballStrip));
+        Grid.SetRow(ballsView, 1); ballsBody.Children.Add(ballsView);
 
         // ---- Voice tab ----------------------------------------------------------------
-        var waveSeg = Chips("wave", PendulumModel.WaveNames);
+        var waveSeg = Chips("wave", PendulumModel.WaveNames, padX: 6, fontSize: 7);
         ToolTip.SetTip(waveSeg, "The voice: soft Keys, bright Glass, Saw, hollow Square or inharmonic Bell");
         var voiceStrip = Row((waveSeg, "Auto"), (new Panel(), "*"), (lastNote, "Auto"), (voiceBars, "Auto"));
-        voiceStrip.ColumnSpacing = 8;
+        voiceStrip.ColumnSpacing = 7;
+        voiceStrip.Margin = new Thickness(7, 0);
 
         var toneRow = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 30, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Orientation = Orientation.Horizontal, Spacing = 22, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                PKnob("tone", "Tone", PendulumModel.ToneWord),
-                PKnob("bright", "Bright", v => NotaNum.Pct(v)),
-                PKnob("fm", "FM", v => NotaNum.Pct(v)),
-                PKnob("notelen", "Length", v => Secs(PendulumModel.NoteSeconds(v))),
+                PKnob("tone", "TONE", PendulumModel.ToneWord),
+                PKnob("bright", "BRIGHT", v => NotaNum.Pct(v)),
+                PKnob("fm", "FM", v => NotaNum.Pct(v), arc: Teal),
+                PKnob("notelen", "LENGTH", v => Secs(PendulumModel.NoteSeconds(v))),
             },
         };
         var envRow = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 30, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+            Orientation = Orientation.Horizontal, Spacing = 18, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                PKnob("attack", "Attack", v => Secs(PendulumModel.AttackSeconds(v))),
-                PKnob("decay", "Decay", v => Secs(PendulumModel.DecaySeconds(v))),
-                PKnob("release", "Release", v => Secs(PendulumModel.ReleaseSeconds(v))),
-                PKnob("volume", "Volume", DbOf),
+                PKnob("attack", "ATTACK", v => Secs(PendulumModel.AttackSeconds(v))),
+                PKnob("decay", "DECAY", v => Secs(PendulumModel.DecaySeconds(v))),
+                PKnob("release", "RELEASE", v => Secs(PendulumModel.ReleaseSeconds(v))),
+                PKnob("volume", "VOLUME", DbOf),
             },
         };
-        var envHost = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Child = envRow };
-        var voiceBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,*"), Margin = new Thickness(0, 4, 0, 0) };
-        voiceBody.Children.Add(voiceStrip);
-        Grid.SetRow(toneRow, 1); voiceBody.Children.Add(toneRow);
-        Grid.SetRow(envHost, 2); voiceBody.Children.Add(envHost);
+        var toneHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 0, 0, 1), Child = toneRow };
+        var voiceView = new Grid { RowDefinitions = new RowDefinitions("*,*"), Margin = new Thickness(8, 0, 8, 4) };
+        voiceView.Children.Add(toneHost);
+        Grid.SetRow(envRow, 1); voiceView.Children.Add(envRow);
+        var voiceBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        voiceBody.Children.Add(StripBox(voiceStrip));
+        Grid.SetRow(voiceView, 1); voiceBody.Children.Add(voiceView);
 
         // ---- the tab strip ------------------------------------------------------------
         var bodies = new Control[] { ballsBody, voiceBody };
-        Action syncTabs = () => { };
-        var tabStrip = SynthInstrumentCard.TabStrip(TabNames, () => tab, i => { tab = i; showTab(); }, out var tabSync, hint);
-        syncTabs = tabSync;
+        var tabCells = new Border[TabNames.Length];
+        var tabTexts = new TextBlock[TabNames.Length];
+        var tabRow = new StackPanel { Orientation = Orientation.Horizontal };
+        for (int i = 0; i < TabNames.Length; i++)
+        {
+            int iv = i;
+            var tb = new TextBlock { Text = TabNames[i], FontSize = NotaType.DeviceSection, VerticalAlignment = VerticalAlignment.Center };
+            var cell = new Border
+            {
+                Padding = new Thickness(8, 0), BorderThickness = new Thickness(0, 0, 0, 2),
+                Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
+            };
+            cell.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
+                tab = iv; showTab(); e.Handled = true;
+            };
+            tabCells[i] = cell; tabTexts[i] = tb; tabRow.Children.Add(cell);
+        }
+        var tabStrip = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        tabStrip.Children.Add(tabRow);
+        Grid.SetColumn(hint, 1); tabStrip.Children.Add(hint);
 
         var tabHost = new Panel();
         foreach (var b in bodies) tabHost.Children.Add(b);
         var tabGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
-        tabGrid.Children.Add(tabStrip);
+        tabGrid.Children.Add(HeaderStrip(tabStrip));
         Grid.SetRow(tabHost, 1); tabGrid.Children.Add(tabHost);
         var tabPanel = SectionBox(tabGrid);
 
         // ---- rail · the balls ---------------------------------------------------------
-        var railCap = new TextBlock { Text = "Balls", FontSize = NotaType.DeviceBody, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
-        var railSub = Mono("rate · phase · note", TextTertiary, NotaType.Eyebrow); railSub.HorizontalAlignment = HorizontalAlignment.Right;
-        var railHead = new Grid { Height = 20, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var railCap = Cap("BALLS"); railCap.Margin = new Thickness(8, 0, 0, 0);
+        var railSub = Mono("rate · phase · note", TextTertiary); railSub.HorizontalAlignment = HorizontalAlignment.Right; railSub.Margin = new Thickness(0, 0, 8, 0);
+        var railHead = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         railHead.Children.Add(railCap);
         Grid.SetColumn(railSub, 1); railHead.Children.Add(railSub);
 
@@ -347,11 +372,10 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         {
             var b = new Border
             {
-                Width = NotaSize.Dropdown, Height = NotaSize.Dropdown, CornerRadius = NotaRadius.Field,
-                Background = NotaPalette.SurfaceHover, Cursor = new Cursor(StandardCursorType.Hand),
-                Child = new Glyph(g, 9) { Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                Width = 16, Height = 14, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
+                BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised, Cursor = new Cursor(StandardCursorType.Hand),
+                Child = new Glyph(g, 7) { Foreground = NotaPalette.TextStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
-            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
             ToolTip.SetTip(b, tip);
             b.PointerPressed += (_, e) =>
             {
@@ -360,19 +384,16 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             };
             return b;
         }
-        var steppers = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { StepBtn(GlyphKind.Minus, -1, "One ball fewer (2 at least)"), StepBtn(GlyphKind.Plus, +1, "One ball more (6 at most)") } };
-        var countCap = Cap("Balls"); countCap.FontSize = NotaType.DeviceBody;
-        var countRow = Row((countCap, "Auto"), (countText, "Auto"), (new Panel(), "*"), (steppers, "Auto"));
-        countRow.ColumnSpacing = 8;
+        var steppers = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Children = { StepBtn(GlyphKind.Minus, -1, "One ball fewer (2 at least)"), StepBtn(GlyphKind.Plus, +1, "One ball more (6 at most)") } };
+        var countRow = Row((Cap("BALLS"), "Auto"), (countText, "Auto"), (new Panel(), "*"), (steppers, "Auto"));
+        countRow.ColumnSpacing = 6;
         if (I("balls") is var bi and >= 0) MidiLearn.Bind(countRow, MidiTarget.PluginParam(track, -1, bi), engine.PluginParamName(track, -1, bi));
 
-        var sortSeg = Chips("chordsort", new[] { "Up", "Down" }, padX: 5);
+        var sortSeg = Chips("chordsort", new[] { "Up", "Down" }, padX: 4, fontSize: 7);
         ToolTip.SetTip(sortSeg, "Up: the low wall plays the chord's lowest note · Down: its highest");
-        var quantSeg = Chips("quantize", PendulumModel.QuantNames, padX: 5);
+        var quantSeg = Chips("quantize", PendulumModel.QuantNames, padX: 3, fontSize: 7);
         ToolTip.SetTip(quantSeg, "Quantize: a crossing waits for the next 1/16 or 1/8 before it plays");
-        var sortCap = Cap("Sort"); sortCap.FontSize = NotaType.DeviceBody;
-        var quantCap = Cap("Quant"); quantCap.FontSize = NotaType.DeviceBody;
-        var sortRow = Row((sortCap, "Auto"), (sortSeg, "Auto"), (new Panel(), "*"), (quantCap, "Auto"), (quantSeg, "Auto"));
+        var sortRow = Row((Cap("SORT"), "Auto"), (sortSeg, "Auto"), (new Panel(), "*"), (Cap("QUANT"), "Auto"), (quantSeg, "Auto"));
 
         var holdBtn = RailButton("Hold", () => Write("hold", G("hold") >= 0.5f ? 0 : 1), () => G("hold") >= 0.5f, "hold");
         ToolTip.SetTip(holdBtn, "Latch the chord — it keeps swinging after you let go; the next chord replaces it");
@@ -380,12 +401,12 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         ToolTip.SetTip(firstBtn, "Restart every ball from its start when a new chord begins");
         var resetBtn = RailButton("Reset", () => SetP("reset", 1), id: "reset");
         ToolTip.SetTip(resetBtn, "Restart every ball's swing now");
-        var actionRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 6 };
+        var actionRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 4 };
         actionRow.Children.Add(holdBtn);
         Grid.SetColumn(firstBtn, 1); actionRow.Children.Add(firstBtn);
         Grid.SetColumn(resetBtn, 2); actionRow.Children.Add(resetBtn);
 
-        var ballsFoot = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 5 };
+        var ballsFoot = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 4 };
         ballsFoot.Children.Add(countRow);
         Grid.SetRow(sortRow, 2); ballsFoot.Children.Add(sortRow);
         Grid.SetRow(actionRow, 3); ballsFoot.Children.Add(actionRow);
@@ -394,38 +415,37 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         string Cents(float v) => NotaNum.Unit(PendulumModel.DetuneCents(v), "0", "c");
         var spreadBlock = new StackPanel
         {
-            Spacing = 4,
+            Spacing = 2,
             Children =
             {
-                Slider("Spread", "spread", () => NotaNum.Pct(G("spread")), labelWidth: 44),
-                Slider("Detune", "detune", () => Cents(G("detune")), labelWidth: 44),
-                Slider("Pan", "panspread", () => NotaNum.Pct(G("panspread")), labelWidth: 44),
-                Slider("Human", "humanize", () => NotaNum.Pct(G("humanize")), labelWidth: 44),
+                Cap("SPREAD"),
+                Slider("RATE", "spread", () => NotaNum.Pct(G("spread")), modulation: true, labelWidth: 40),
+                Slider("DETUNE", "detune", () => Cents(G("detune")), modulation: true, labelWidth: 40),
+                Slider("PAN", "panspread", () => NotaNum.Pct(G("panspread")), modulation: true, labelWidth: 40),
+                Slider("HUMAN", "humanize", () => NotaNum.Pct(G("humanize")), modulation: true, labelWidth: 40),
             },
         };
-        ToolTip.SetTip(spreadBlock.Children[0], "Spread: how far the balls' rates drift apart — each ball a little faster than the one before");
-        ToolTip.SetTip(spreadBlock.Children[1], "Detune of the chorus partner inside each voice");
-        ToolTip.SetTip(spreadBlock.Children[2], "Fan the notes across the stereo field by where the ball is");
-        ToolTip.SetTip(spreadBlock.Children[3], "Level and pitch jitter per note");
-        var spreadHost = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = spreadBlock };
+        ToolTip.SetTip(spreadBlock.Children[1], "How far the balls' rates drift apart — each ball a little faster than the one before");
+        ToolTip.SetTip(spreadBlock.Children[2], "Detune of the chorus partner inside each voice");
+        ToolTip.SetTip(spreadBlock.Children[3], "Fan the notes across the stereo field by where the ball is");
+        ToolTip.SetTip(spreadBlock.Children[4], "Level and pitch jitter per note");
+        var spreadHost = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 3, 0, 0), Child = spreadBlock };
 
-        var scaleText = Mono("", TextPrimary, NotaType.DeviceValue);
-        scaleText.TextTrimming = TextTrimming.CharacterEllipsis;
+        var scaleText = Mono("", TextPrimary);
         readouts.Add(() => scaleText.Text = PendulumModel.ScaleText(G("root"), G("scalemode")));
         var scaleBox = new Border
         {
-            Height = NotaSize.Dropdown, CornerRadius = NotaRadius.Field,
-            Background = NotaPalette.SurfaceHover, Padding = new Thickness(8, 0, 6, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            Height = 14, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
+            Background = NotaPalette.BgSunken, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
             Child = new DockPanel
             {
                 Children =
                 {
-                    new Glyph(GlyphKind.ChevronDown, 8) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0, 0, 0), [DockPanel.DockProperty] = Dock.Right },
+                    new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, [DockPanel.DockProperty] = Dock.Right },
                     scaleText,
                 },
             },
         };
-        scaleBox.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
         ToolTip.SetTip(scaleBox, "Snap the generated notes to a scale");
         scaleBox.PointerPressed += (_, e) =>
         {
@@ -463,33 +483,34 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             Write("scalemode", m / (float)(n - 1)); Refresh();
         };
         if (I("scalemode") is var smi and >= 0) MidiLearn.Bind(scaleBox, MidiTarget.PluginParam(track, -1, smi), engine.PluginParamName(track, -1, smi));
+        var scaleRow = Row((Cap("SCALE"), "Auto"), (scaleBox, "*"));
+        scaleRow.ColumnSpacing = 5;
 
         float lastHuman = G("humanize") > 0.005f ? G("humanize") : 0.3f;
         var humanBtn = RailButton("Humanize", () =>
         {
             if (G("humanize") > 0.005f) { lastHuman = G("humanize"); Write("humanize", 0); }
             else Write("humanize", lastHuman);
-        }, () => G("humanize") > 0.005f, "humanize");
-        ToolTip.SetTip(humanBtn, "Humanize on / off — the amount is the Human value bar");
+        }, () => G("humanize") > 0.005f, "humanize", 14);
+        ToolTip.SetTip(humanBtn, "Humanize on / off — the amount is the HUMAN slider");
         var spreadResetBtn = RailButton("Reset", () =>
         {
             foreach (var id in new[] { "spread", "detune", "panspread", "humanize", "root", "scalemode" }) Write(id, Def(id));
-        });
+        }, height: 14);
         ToolTip.SetTip(spreadResetBtn, "Reset spread, humanize and scale to their defaults");
-        // The scale menu, Humanize and Reset share one row so the ball list keeps some room.
-        var voiceBtns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 6 };
-        voiceBtns.Children.Add(scaleBox);
-        Grid.SetColumn(humanBtn, 1); voiceBtns.Children.Add(humanBtn);
-        Grid.SetColumn(spreadResetBtn, 2); voiceBtns.Children.Add(spreadResetBtn);
+        var voiceBtns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 4 };
+        voiceBtns.Children.Add(humanBtn);
+        Grid.SetColumn(spreadResetBtn, 1); voiceBtns.Children.Add(spreadResetBtn);
 
-        var voiceFoot = new Grid { RowDefinitions = new RowDefinitions("*,Auto,Auto"), RowSpacing = 5 };
-        Grid.SetRow(spreadHost, 1); voiceFoot.Children.Add(spreadHost);
-        Grid.SetRow(voiceBtns, 2); voiceFoot.Children.Add(voiceBtns);
+        var voiceFoot = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 3 };
+        voiceFoot.Children.Add(spreadHost);
+        Grid.SetRow(scaleRow, 2); voiceFoot.Children.Add(scaleRow);
+        Grid.SetRow(voiceBtns, 3); voiceFoot.Children.Add(voiceBtns);
 
         // The list keeps its natural height (rows of 17 / 16) while it fits; otherwise it
         // takes what the foot leaves and the rows tighten.
         var feet = new Panel { Children = { ballsFoot, voiceFoot } };
-        var railBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 5, Margin = new Thickness(0, 2, 0, 0) };
+        var railBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 4, Margin = new Thickness(8, 5, 8, 5) };
         railBody.Children.Add(ballList);
         Grid.SetRow(feet, 1); railBody.Children.Add(feet);
         (int, int, double, double) fitKey = default;
@@ -499,8 +520,8 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             if (key == fitKey) return;
             fitKey = key;
             bool balls = tab == 0;
-            ballList.Gap = 3;
-            ballList.MaxRow = 18;
+            ballList.Gap = balls ? 4 : 3;
+            ballList.MaxRow = balls ? 17 : 16;
             int n = Count();
             double natural = n * ballList.MaxRow + (n - 1) * ballList.Gap;
             double avail = railBody.Bounds.Height;
@@ -514,32 +535,77 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         railBody.SizeChanged += (_, _) => FitList();
 
         var railGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
-        railGrid.Children.Add(railHead);
+        railGrid.Children.Add(HeaderStrip(railHead));
         Grid.SetRow(railBody, 1); railGrid.Children.Add(railBody);
         var rail = SectionBox(railGrid);
         rail.Width = RailW;
-        tabPanel.Padding = rail.Padding = new Thickness(SectionPad);
 
-        // ---- words: the tab hint ---------------------------------------------------------
+        // ---- words: the tab hint and the status line -----------------------------------
         string Cycle() => Synced() ? "sync " + PendulumModel.DivNames[Sel("division", 5)] : "free " + Secs(PendulumModel.FreeSeconds(G("freerate")));
         string RateText() => NotaNum.Unit(PendulumModel.RateSigned(G("rate")) * 100, "+0;−0;0", "%");
         string MotionWord() => PendulumModel.MotionNames[Sel("motion", 4)].ToLowerInvariant();
         string Hint() => tab == 0
             ? $"{Cycle()} · {MotionWord()} · {RateText()}"
             : $"{PendulumModel.WaveNames[Sel("wave", 5)].ToLowerInvariant()} · {PendulumModel.ToneWord(G("tone"))} · {Secs(PendulumModel.AttackSeconds(G("attack")))}";
+        string Summary()
+        {
+            if (tab == 0)
+            {
+                int n = Count();
+                var notes = new List<string>();
+                for (int b = 0; b < n; b++) notes.Add(PendulumModel.NoteName(snap.BallState[b].Pitch));
+                string chord = held.Length == 0 ? "hold a chord" : string.Join(" ", notes);
+                string s = $"{(Synced() ? "Sync " + PendulumModel.DivNames[Sel("division", 5)] : "Free " + Secs(PendulumModel.FreeSeconds(G("freerate"))))} · {MotionWord()} · rate {RateText()}"
+                    + $" · {n} balls → {chord} · sort {(G("chordsort") >= 0.5f ? "down" : "up")} · quantize {PendulumModel.QuantNames[Sel("quantize", 3)].ToLowerInvariant()}";
+                if (G("hold") >= 0.5f) s += " · hold";
+                return s;
+            }
+            string sc = PendulumModel.ScaleText(G("root"), G("scalemode"));
+            return $"{PendulumModel.WaveNames[Sel("wave", 5)]} · {PendulumModel.ToneWord(G("tone"))} · "
+                + $"{NotaNum.Str(PendulumModel.AttackSeconds(G("attack")) * 1000, "0")} / {NotaNum.Str(PendulumModel.DecaySeconds(G("decay")) * 1000, "0")} / "
+                + $"{NotaNum.Str(PendulumModel.ReleaseSeconds(G("release")) * 1000, "0")} ms · {DbOf(G("volume"))} · spread rate {NotaNum.Pct(G("spread"))} · "
+                + $"detune {Cents(G("detune"))} · pan {NotaNum.Pct(G("panspread"))}"
+                + (G("humanize") > 0.005f ? $" · humanize {NotaNum.Pct(G("humanize"))}" : "")
+                + (sc == "Off" ? "" : $" · {sc}");
+        }
+
         showTab = () =>
         {
-            syncTabs();
-            for (int i = 0; i < TabNames.Length; i++) bodies[i].IsVisible = i == tab;
+            for (int i = 0; i < TabNames.Length; i++)
+            {
+                bool on = i == tab;
+                tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
+                tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
+                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
+                tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                bodies[i].IsVisible = on;
+            }
             ballsFoot.IsVisible = tab == 0;
             voiceFoot.IsVisible = tab == 1;
             Refresh();
         };
 
+        // ---- status strip -------------------------------------------------------------
+        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
+        statusBar.Children.Add(status);
+        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
+        var statusHost = new Border
+        {
+            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
+            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
+        };
+
         // ---- assembly -----------------------------------------------------------------
-        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = SectionGap, Margin = new Thickness(0, CardPad, 0, 0) };
-        root.Children.Add(tabPanel);
-        Grid.SetColumn(rail, 1); root.Children.Add(rail);
+        var body = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = NotaSpace.DeviceGap,
+            Margin = new Thickness(NotaSpace.DeviceGap),
+        };
+        body.Children.Add(tabPanel);
+        Grid.SetColumn(rail, 1); body.Children.Add(rail);
+
+        DockPanel.SetDock(statusHost, Dock.Bottom);
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
 
         ctx.AddDeviceRefresher(Live);
         ctx.SetInstLiveViz(Refresh);
@@ -548,6 +614,18 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         return root;
     }
 
-    // A pressed-in section (style guide).
+    // A section: card ground, hairline, radius 6 — the almanac's section box.
     private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
+
+    // A section's own header strip: a hairline under it, nothing else.
+    private static Border HeaderStrip(Control child) => new()
+    {
+        BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
+    };
+
+    // A tab's control strip under the tab row: 22 tall, a fainter hairline under it.
+    private static Border StripBox(Control child) => new()
+    {
+        Height = StripH, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
+    };
 }

@@ -129,31 +129,28 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
 
 ## Device cards
 
-- **Always 260 high** (`DeviceCardKit.CardH`); the width fits the device
-  (`IDeviceBody.Width`; every width is in `DESIGN.md` § Devices). Corner 9, raised.
-- **Header 32** (`BuildCardShell` in `DeviceChainView.Shell.cs` — every card uses it,
+- **Every device keeps its 0.57 layout and size**: 700 × 260 (`DeviceCardKit.CardH`,
+  `IDeviceBody.Width`), the same sections in the same places, its status line inside the
+  body. The style guide restyles the elements, never the layout; repacking a card, growing
+  its width or its text is a separate decision for Chris (a full redraw was reverted on
+  Oct 26 for making the cards cramped and too large). Corner 9, raised.
+- **Header 22** (`BuildCardShell` in `DeviceChainView.Shell.cs` — every card uses it,
   racks, the generic instrument card, plug-ins and Sends included; never build a header of
   your own), in fixed slots: **name · preset menu · type tag and accessories · power**.
-  Name in 12 / 600; the preset menu `‹ Name ⌄ ›` is a raised dropdown, only when the device
-  has presets; the type tag Geist 11 in ink 3, sentence case; the power switch at the
-  right on every card, instruments and racks included. A/B, move and delete go in the
-  right-click menu.
-- **Body:** sections pressed in (`DeviceCardKit.Section`), 8 from the card edge, 10 apart,
-  12 padding inside, rows spread to fill the height. Columns run choice → work → output.
-  **No status line** under the card: a control or device readout that lived there moves into the card; the engine readouts (sample rate, latency, voices, CPU) go.
-- **Inside:** capped knobs (26, or 22 with the label beside), value bars for every slider
-  (16 high in a groove, soft fill, 3 px orange line; upright for faders), segment groups in
-  a groove with the picked cell raised, square switches (20 × 12, orange when on), the
-  round pitch and mod wheels (never in a groove). Graphs go through `NotaGraph`
-  (`SurfaceInset`, rule frame, corner 6, `VizGrid`, `VizInk` curve, labels in the corners,
-  no fills under curves, orange only on the selected node).
+  Tabs stay in the body. A/B, move and delete go in the right-click menu.
+- **Inside:** capped knobs (36, 34 secondary, 44 main, 24 in a table row) with an orange
+  arc, value bars for every slider (9 high in a groove, soft fill, 3 px orange line;
+  upright faders through `UprightBar`), segment groups in a groove with the picked cell
+  tinted, switches 18 × 10, the round pitch and mod wheels, Geist only, device text on the
+  `NotaType.Device*` scale (name 12, rows 9, knob text 8, axes 7.5). Graphs go through
+  `NotaGraph` (no fills under curves, orange only on the selected node).
 - A bypassed card keeps its layout and takes the unavailable look; a selected card has a
   1.5 px orange ring outside its outline.
 
 ## Adding a control
 
-Reuse before writing: `Knob` (snaps to 26 device · 22 label beside · 28 flat),
-`DeviceCardKit.KnobCell`, `SwitchTrack` / `DeviceCardKit.Switch` (20 × 12),
+Reuse before writing: `Knob` (snaps to 34 / 36 / 44 · 24 inline · 28 flat),
+`DeviceCardKit.KnobCell`, `SwitchTrack` / `DeviceCardKit.Switch` (18 × 10),
 `DeviceCardKit.Segments`, `SliderTrack` / `DeviceCardKit.SliderRow` (the value bar),
 `VFader`, `MiniFader`, `PanBar`, `DragNumber`, `PerformWheel`, `MeterBar` / `StereoMeter` /
 `GrMeter`, `ValueEntry` / `ValueText`, `Glyph`, `NaBadge`. Sizes and specs: `DESIGN.md`

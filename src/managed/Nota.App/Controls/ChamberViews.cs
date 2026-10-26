@@ -27,6 +27,8 @@ internal static class ChamberInk
 
     public static FormattedText Text(string s, double size, IBrush b) => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b);
     public static FormattedText Caps(string s, double size, IBrush b) => new NotaFormattedText(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
+    public static IBrush Slate => NotaPalette.Ink("#6D8FB5");   // convolution
+    public static IBrush Mauve => NotaPalette.Ink("#B57286");   // shimmer / pitch
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));
 
     // A time axis that stays put while the content moves inside it (so turning a knob visibly

@@ -120,6 +120,7 @@ All paths are under `src/managed/Nota.App/` unless they start with a top-level f
 - [x] T050 Text size preference (settings, Preferences → Appearance, live re-apply)
 - [x] T051 Device header strip: lift the first tab row into the header (DeviceChainView.Shell,
   the four tab helpers); audit every card
+- [x] T053 Device layouts back to develop with the new elements (FR-041); FR-039 dropped
 - [ ] T052 Build + smoke, Mac hands-on, docs re-shoot, CHANGELOG / FEATURES
 
 ## Dependencies

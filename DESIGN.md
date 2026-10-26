@@ -421,9 +421,9 @@ Name, so the files stay unmodified and the feature is applied at shaping time
 Geist ships as static 400 / 500 / 600 / 700 files, so the guide's in-between weights round
 to the nearest one the app has: 580 and 650 draw as 600 (SemiBold), 550 as 500 (Medium).
 
-Inside a device the whole scale sits one step lower so the 260 card keeps its room for
-controls: a knob's value 10, switch words and captions 10, a value on a button or in a row
-10.5, titles and tabs inside a device 11, graph axes 9 (`NotaType.Device*`).
+Inside a device the text keeps 0.57's device scale, so every device keeps its 0.57 layout:
+the device name 12, section titles 10.5, row labels and tabs 9, a knob's name and value 8,
+graph axes 7.5, graph titles 8 (`NotaType.Device*`).
 
 The shell scale came down one point after review (Oct 25), so the app reads closer to
 other DAWs; the device scale stayed. Others the guide fixes: a field 11.5, the browser
@@ -520,14 +520,14 @@ R2). Each site picks the name for what it draws.
 | Left rail | 40 wide, buttons 28, 6 apart; the current page gets a 2 × 14 orange tick and the soft tint |
 | Browser | rows 30, search 30, chips 24, footer 30 |
 | Track header | 229 wide, 54 high, two rows: name row 18, controls row 20 |
-| Device card | always 260 high; the width fits the device (§ Devices); header 24 |
-| Device sections | 4 from the card edge, 6 apart, 8 padding inside; tab rows 22; rows spread to fill the height |
-| Knob | 26 with a centre cap in a device; 34 (large) where a wide card has the room (Volt's oscillator rows); 22 when its label sits beside it (Glide, an EQ band); 28 and flat outside devices |
-| Switch | 20 × 12, knob 8, square corners |
+| Device card | 700 × 260 (the parameter-list stubs 190); header 22 |
+| Device body | each device's 0.57 layout, unchanged (§ Devices) |
+| Knob | 34 / 36 / 44 with a centre cap in a device (`KnobSecondary` / `KnobRegular` / `KnobMain`); 24 in a table row (`KnobInline`); 28 and flat outside devices |
+| Switch | 18 × 10, knob 7, inset 1.5 |
 | Track buttons | M, S and arm 18 × 18; device number buttons 14 × 16 |
 | Segment cell | 20 high in a 2 px well |
 | Field · dropdown · search | 26 · 22 · 30 high |
-| Value bar · shell slider | 16 high |
+| Value bar · shell slider | 9 high in a device · 16 in the shell |
 | Tab row | 26 high |
 | Meter channel | 3 wide, 1.5 apart |
 | Modular node | 214 wide, header 34, parameter rows 18 |
@@ -578,7 +578,7 @@ supplies the colours (`ShadowBevel`, `ShadowPopover`, `ShadowModal`, `Bevel`,
 black at a strength set by the theme's kind.
 
 **Do:** keep depth inside device cards · build depth from greys, thin lines and 1–2 px
-shadows · keep every device card 260 high and let the width fit. **Don't:** raise buttons
+shadows · keep every device card 700 × 260 in its 0.57 layout. **Don't:** raise buttons
 or panels in the shell · use gradients or blur · put the pitch and mod wheels in a groove.
 
 ## Buttons
@@ -657,7 +657,7 @@ Mute, solo and record-arm on each track, and the numbered voice buttons in devic
 
 An on/off toggle, including a device's power switch.
 
-- 20 × 12, corner 3; knob 8 × 8, corner 2. Square, not round.
+- 18 × 10, knob 7, inset 1.5 (0.57's size, so device rows keep their height); square, not round.
 - **Off:** a dark track (`WellTrack`) with a slight inner shadow, the knob in ink 3 at the
   left.
 - **On:** light grey (ink 2) with a `SurfaceDeep` knob outside devices; orange with a
@@ -722,9 +722,9 @@ and grey.
 - **Colour** orange (`Accent`) inside a device. Outside devices a knob is flat: grey
   (`TextTertiary`) at rest and orange only while it is being set, like the shell slider:
   the pan knob on a track header, sends and pan in the mixer.
-- **Size** (`NotaSize`) 26 in a device with the value (10) and label (Device label 9.5)
-  under it; 22 with the label and value beside it (Glide, an EQ band's gain); a flat knob
-  outside devices 28, with no cap. `Knob` snaps to these three sizes.
+- **Size** (`NotaSize`) in a device 0.57's sizes: 36 regular, 34 secondary, 44 main, with
+  the value over the name (both 8); 24 in a table row (`KnobInline`); a flat knob outside
+  devices 28, with no cap. `Knob` snaps to these sizes.
 - An inactive knob draws its arc in ink 4. A modulation arc keeps its source's colour:
   that is data, not state.
 
@@ -733,7 +733,8 @@ and grey.
 The slider inside devices (`ValueBar`). Every slider inside a device is one; a vertical
 fader inside a device is an upright value bar.
 
-- 16 high, corner 4, in a groove.
+- 9 high (`SliderTrack.DeviceH`), corner 4, in a groove; 0.57's thin slider height, so the
+  layouts keep their rows.
 - **Fill:** the soft tint up to the value; **value:** a 3 px orange line. Bipolar bars
   (Pan, Balance, Feedback) fill from the centre. While dragged the fill deepens toward
   orange.
@@ -967,7 +968,7 @@ Every region is **docked**: corner 0, no gutter, separated by 1 px seams.
   `SurfaceDeep`: the mode tabs, the track (colour square, name, routing summary),
   Freeze / Live freeze, a rule, then pop-out and close as icon buttons.
 - **Status 22**: one line of caption text (Label 11, ink 2) on `SurfaceDeep`, a seam above it,
-  16 px in. This is the window's status line; device cards have none.
+  16 px in. This is the window's status line; a device's own status line sits inside its card.
 - **Mixer strips** are `Panel` columns on seams, each with a 3 px top bar in the track
   colour (grey for master); sliders and knobs are the flat shell kind, sends with their
   amount written inside the bar. The footer's Sends and I/O toggles are chips (shown is
@@ -977,18 +978,13 @@ Every region is **docked**: corner 0, no gutter, separated by 1 px seams.
 
 The card each instrument or effect lives in, in the device panel.
 
-- **Card:** corner 9, raised: a thin outline and a light top edge; always 260 high
-  (`DeviceCardKit.CardH`), the width fits the device (`IDeviceBody.Width`, § Devices).
-- **Header 24:** name (Device name 12 / 600), preset menu (20 high) (where the device has presets),
+- **Card:** corner 9, raised: a thin outline and a light top edge; 700 × 260
+  (`DeviceCardKit.CardH`, width from `IDeviceBody.Width`, § Devices).
+- **Header 22:** name (Device name 12 / 600), preset menu (where the device has presets),
   type tag in ink 3, power switch at the right, on every device, instruments and racks
   included.
-- **Sections** are pressed in, corner 7; 4 from the card edge, 6 apart, 8 padding
-  inside; rows spread to fill the height. The header and the padding stay thin on purpose:
-  the room goes to graphs and controls (0.57 had a 22 header and almost no padding).
-- **No status line:** nothing sits under the card. A control or a device's own readout that
-  lived there moves into the card (§ Devices). The engine readouts every status line ended
-  with (sample rate, latency, voices, CPU) go, as the style guide's Changes section lists
-  for each device.
+- **Body:** each device keeps its 0.57 layout and sizes, status line included; only the
+  elements in it take this guide's look (§ Devices).
 
 ### Track header
 
@@ -1112,8 +1108,7 @@ horizontal scrollbar is a 12 px well with a 5 px thumb (`ThinScrollBar`). The pi
 (`ArrangementView.RevealTrack`).
 
 **Do:** keep every control a device or track already has · outline a selected clip or slot
-in ink 1 · tint a Modular node's header by category. **Don't:** add a status line under a
-device card · fill a selected clip with orange.
+in ink 1 · tint a Modular node's header by category. **Don't:** fill a selected clip with orange.
 
 ## Icons
 
@@ -1143,56 +1138,50 @@ geometry, and no icon is a typed character (`RunIcons`).
 
 ## Devices
 
-All 50 devices in 0.56.1 (16 instruments, 25 audio effects, 6 MIDI effects, 3 racks) are
-redrawn with this guide, and Nota Vocoder, added since, follows the same rules. Every
-control, label and value stays.
+All 50 devices in 0.56.1 (16 instruments, 25 audio effects, 6 MIDI effects, 3 racks), and
+Nota Vocoder added since, **keep their 0.57 layouts and sizes**: the same sections in the
+same places, the same widths, the same status line under the body. The style guide
+changes the elements inside them, not where they sit. (A full redraw of every card was
+tried first; it made the cards cramped and too large, so it was reverted on Oct 26.)
+
+What the guide changes inside a card:
+
+- **Knobs** take the capped look with an orange value arc; the value sits over the name.
+- **Value bars** replace thin sliders: a 9 px groove with an orange wash and a 3 px line
+  (`SliderTrack`); upright faders (Auto Filter's shape, Compressor's Thr and Mkp, the EQ-3
+  bands, Lens, Level, Shutter, Delay) are the same bar standing up (`UprightBar`).
+- **Segments and switches** are the guide's: the picked cell tinted `AccentSoft` in a
+  groove, switches 18 × 10.
+- **Sections** are pressed in with the guide's corners; graph windows keep their frame.
+- **One font:** Geist everywhere, numbers tabular; no monospace readouts.
+- **Values are orange lines**; the identity colours some devices had (teal, olive, rose,
+  mauve for a channel, band or modulation) become greys told apart by shade.
+- **The header** is the shared shell (`DeviceChainView.Shell.cs` `BuildCardShell`): name ·
+  preset menu · type tag and accessories (MIDI learn, the S / L toggle) · power, on every
+  card, instruments and racks included. Tabs stay in the body, where 0.57 had them.
 
 **Do**
 
-- Keep every control, in the same groups as 0.56.1.
-- Use pressed-in sections, value bars, capped knobs and orange values inside the card.
-- Put the on/off switch at the right of every header, instruments and racks included.
-- Fit every tab of a panel in the 190 px under its tab row: rows on a fixed grid, at least
-  3 px between a control and a rule, nothing clipped at the bottom or the right edge.
-- Say a reading once. A readout under the knobs carries what the knobs add up to (a
-  result, a derived time), not their own values again; an in · out readout is one line.
-- Give a control one home. When it shows on two tabs, keep the one where it does its
-  work; never drop it outright.
+- Keep every control where 0.57 had it, at 0.57's size.
+- Use the shared elements (`Knob`, `SliderTrack`, `UprightBar`, `SwitchTrack`,
+  `DeviceCardKit` segments and sections) so a device picks up the look for free.
 
 **Don't**
 
-- Add a status line under the card; a control that lived there moves into the card.
+- Repack a card, grow its width or text, or move a control between sections as part of a
+  style change. A layout change is its own decision.
 - Use thin sliders, monospace readouts or capital-letter labels.
 - Fade anything out; draw it in ink 4 with nothing picked.
-- Wrap a note onto a second line in a narrow column; it goes in the control's tooltip.
 
 ### The card shell
 
-- **Every card uses one shell** (`DeviceChainView.Shell.cs` `BuildCardShell`): effects,
-  instruments, MIDI effects, racks (the Instrument Rack's "Rack · N chains" is its type
-  tag), the generic instrument card, hosted plug-ins, and the Sends card (a `Utility` card
-  with no device menu, selection or presets). Never build a header of your own.
-- **The Sends card** sizes to its returns: one pressed-in section holding a 60 px column per
-  return track (its colour square and letter, the knob, the amount, the return's name), so
-  it is narrow with one return and grows a column for each return added.
-- **Header 32** (`DeviceCardKit.HeaderH`), in fixed slots, left to right: name · preset
-  menu · type tag and the card's accessories (MIDI learn, the S / L size toggle) · power.
-  The name trims before it reaches the preset menu; a compact card drops the "Nota "
-  prefix. **The strip after the preset menu holds the card's main tab row** when it fits
-  (`DeviceCardKit.Liftable` marks the rows the tab helpers build; the shell lifts the one
-  with the most tabs, on a tie the one with a trailing readout, i.e. the centre section's,
-  not a right panel's Levels / Output). Its readout comes along when there is room, else it
-  stays in the section; a long readout trims. The section below gains the 22 px row.
-  Compact and utility cards keep their tabs in the body. The preset menu (‹ Name ⌄ ›) opens the factory presets and its arrows step
-  through them, wrapping. A/B, move and delete live in the header's right-click menu; drag
-  the card by its whole header; Delete removes it.
-- **Body:** sections 4 from the card edge, 6 apart, 8 padding (`DeviceCardKit.Section`).
-  Graph windows keep their frame inside a section. Columns run choice → work → output:
-  source or preset on the left, graph and parameters in the middle, levels and mix on the
-  right.
-- **Values** are orange lines (knob arcs, value bars, the selected point); the identity
-  colours some devices had (teal, olive, rose for a channel, band or modulation) become
-  greys told apart by shade.
+- **Every card uses one shell**: effects, instruments, MIDI effects, racks (the
+  Instrument Rack's "Rack · N chains" is its type tag), the generic instrument card,
+  hosted plug-ins, and the Sends card (a `Utility` card with no device menu, selection or
+  presets). Never build a header of your own.
+- The preset menu (‹ Name ⌄ ›) opens the factory presets and its arrows step through them,
+  wrapping. A/B, move and delete live in the header's right-click menu; drag the card by
+  its whole header; Delete removes it.
 - A **bypassed** card keeps its layout and takes the unavailable look via `Inactive`.
 - A **selected** card carries a 1.5 px orange ring outside its outline.
 - **Add device:** the end of a chain is a 28 px-wide key with a `Plus` glyph and a
@@ -1200,106 +1189,10 @@ control, label and value stays.
   ends the same way.
 - **The chain** sits tight in the Devices panel: a 6 px inset all round and 6 px between
   cards (`DeviceChainView.ChainInset`, room for the selection ring), and the panel opens at
-  exactly the cards' height (seam + 32 px toolbar + insets + 260). A card wider than the
-  panel scrolls sideways.
+  exactly the cards' height (seam + 32 px toolbar + insets + 260).
 - **Hosted plug-ins** (VST3 / AU / CLAP) use the same shell and keep their own parameter
   list: S 260 wide names it over *Open editor* and *Save preset*; L 700 adds the parameters
   as a paged, filterable grid.
-- **Widths.** Three fixed sizes, all 260 high (`DeviceCardKit.CardS / CardL / CardWide`):
-  **S 260** (mini and folded cards), **L 700** (every device unless listed below) and
-  **Wide 1050** for the densest devices. A card never takes a width in between: a device
-  that outgrows 700 is repacked to fit or moves up to 1050 and uses the room. The
-  parameter-list stubs (190) and the generic "Open GUI" card (170) are the exceptions; EQ-8
-  and Dynamic EQ-8 also fold to a narrower strip.
-
-### Instruments (16)
-
-| Device | Width | What changes |
-|---|---|---|
-| Aurora | 1050 | Status line removed. Rail sliders become value bars; the teal modulation colour goes, so Position, Fine, Detune and Spread read like the rest. Wide so the oscillator strip fits on one line. |
-| Bass | 1050 | Status line removed. Rail sliders become value bars; filter type in one row of four instead of a 2 × 2 grid. Wide so the filter graph keeps its frequency labels. |
-| Consort | 1050 | Status line removed. The patch-bay row under the card goes: its cable count and Open menu move to the header, its "no cables" note is dropped. Mixer, glide and drift sliders become value bars. |
-| Flux | 700 | Status line removed. With no source the React controls (Listen, Target, the source menu) are drawn in ink 4; the four world names lose their colours. Glide, tune and gain become value bars; React keeps its header line. |
-| Grain | 700 | Status line removed. Read sliders become value bars; Scan speed is inactive in Freeze, so its row is ink 4. |
-| Keys | 1050 | Status line removed. MIDI learn and the S / L switch stay in the header; Play sliders become value bars; the teal goes. Wide so the pickup window keeps its size and the pedal sits beside its label. |
-| Monolith | 700 | No status line before either. Mixer, Ext, Feedback and Drift sliders become value bars. |
-| Mosaic | 700 | Status line removed. MIDI learn stays in the header; Volume, Pan and Glide become value bars; the teal Vel → Vol arc turns orange like the rest. |
-| Operator | 700 | Status line removed. Level and Global sliders become value bars; the Volume knob sits beside the meter. The teal modulator marks become grey (carrier D stays in ink 1). |
-| Pendulum | 1050 | Status line removed. The Rate slider becomes a value bar on its own row under Free / Sync, division and Motion. The teal leads and times become grey; the ball striking a wall stays orange. |
-| Pentad | 700 | Status line removed; the Voice menu moves up beside the Mixer and Output tabs. Mixer sliders become value bars; the flat wheels become the round wheels. |
-| Physical | 700 | Status line removed. Tune, Fine and Note off become value bars; the teal "env → freq off" readout becomes grey. |
-| Rhythm | 1050 | Status line removed. The Step strip sits under the Voice panel so the eight kit voices keep full-height rows. Swing, Human and Accent become value bars; the teal trigger line, playing bank and velocity lane become grey or a picked segment. |
-| Sampler | 700 | Status line removed. Volume, Pan and Glide become value bars; Crossfade is ink 4 while the loop is off. |
-| Synth | 700 | Status line removed. MIDI learn and the S / L toggle stay in the header after the type tag; Volume, Pan and Glide become value bars. Pulse W is ink 4 while the wave is not Square. |
-| Volt | 1050 | Status line removed. Cutoff, Reso and Glide become value bars. The repeated knob and Route labels of the two oscillator rows become one row of column heads; the oscillator and noise knobs are large (34) in 54 px cells, and the noise colour is the dark / pink / white chips alone. Gain, Drive and Pan, and the filter knobs, are full knob cells; in the Global rail the meter stands at the right. |
-
-### Audio effects (25, plus Vocoder)
-
-| Device | Width | What changes |
-|---|---|---|
-| Auto Filter | 700 | Status line removed. Shape faders become upright value bars; Mod-tab sliders become value bars. |
-| Auto Shift | 700 | Status line removed. Shift-tab sliders become value bars; the In and Corr pitch columns stay as empty readout columns until something is sung. |
-| Beat Repeat | 700 | Status line removed. Character-tab sliders become value bars; Repeat filter and Latch share one row. |
-| Ceiling | 700 | Status line removed. Look and Link become value bars; the Limit title stays orange while the limiter is reducing. |
-| Chamber | 700 | Status line removed. Blend and Wet faders become upright value bars; Levels-tab sliders become value bars and the wet meter a thin level bar. The IR, decay and LFO views lose their teal and mauve (greys by shade). On EQ · Mod the EQ position switch sits beside Tail EQ, so Modulation and Shimmer fit; the shimmer toggle reads Feed back. |
-| Chorus | 700 | Status line removed. Rate, Offset, HPF and the Voice sliders become value bars; Detune and Delay stay read-only range bars. |
-| Compressor | 700 | Status line removed. Thr and Mkp faders become upright value bars; Ratio, Mix and Range become value bars. |
-| Crush | 700 | Status line removed. Grit-tab sliders become value bars; the In and Out level columns stay as empty readout columns with no signal. |
-| Delay | 700 | Status line removed. The two loop faders become upright value bars; the level sliders become value bars. |
-| Dynamic EQ-8 | 1050; 702 folded | The EQ Eight layout (below), graph 473 × 169. Each band chip carries a dynamics activity bar along its bottom. The panel is drawn like EQ-8's, in two columns on one set of rows so their parts line up: the band column (head, shapes, Freq / Gain / Q, then Key Self / Ext and Solo) beside the dynamics column (title and fold arrow, Static / Duck / Lift beside the shapes, Thresh / Range / Attack / Release as knobs beside Freq / Gain / Q, then the Dynamic switch and an inline Output knob, as EQ-8's Scale and Output). Range is a bipolar knob (left cuts, right boosts); Thresh carries the band's level as a marker. A picked but switched-off band has a grey toggle and an orange-ring graph point; the dynamics knobs are ink 4 while the band is Static. The right panel folds like EQ-8's (below). |
-| EQ-3 | 700 | Status line removed. Band faders become upright value bars around 0 dB; the band colours (rose, white, teal) become greys. |
-| EQ-8 | 700; 568 folded | The EQ Eight layout (below), graph 470 × 169, with the right panel one narrow column (200) as before. Slope and Channel sit side by side under the picked band's knobs, each named underneath like a knob; Scale and Output close the column as small knobs. Analyzer and Auto gain sit over the graph's top-left corner, the auto gain in effect on the switch's word. Channel uses the short names St, M, S, L, R. The status line's draggable Out readout is the same control as the Output knob, which stays. The right column folds (below). |
-| Flanger | 700 | Status line removed. Sliders become value bars (Feedback fills from the centre); the right channel draws in a darker grey instead of teal. |
-| Forge | 700 | Status line removed. The three stage boxes become rows split by rules: each stage dot becomes an on switch, the selected stage shows a tinted number. Amount, Wet and Out stack as value-bar rows above the transfer graph; switched-off stages are ink 4. |
-| Lens | 700 | Status line removed. The Top and Range rail faders become upright value bars; Peak hold and Mid / Side share one row. |
-| Level | 700 | Status line removed. The correction fader becomes an upright value bar around 0 dB; target and peak marks are grey instead of teal. |
-| Orbit | 700 | Status line removed. Rate, Shape, Amount, Phase and Mix become value bars. The teal goes: the right channel (curve, legend, playhead dot, R tags) is a darker grey, L the curve colour. |
-| Phaser | 700 | Status line removed. Rate, Stereo, Center, Depth, Feedback and Mix become value bars (Feedback from the middle). The teal goes as in Orbit. |
-| Prism | 700 | Status line removed. Amount and Out faders become upright value bars; the band threshold sliders become value bars (an off band is grey). The band colours (olive, teal) go: band marks and crossovers are greys told apart by shade. |
-| Reverb | 700 | Status line removed. Decay and Damp faders in the Tail column become upright value bars; the Levels sliders become value bars. |
-| Shutter | 700 | Status line removed. Detector filter and Peak hold share one row. Thresh, Return and Floor become value bars. |
-| Strata | 700 | No status line before either; the live strip (bar counter, cycle ticks, the four transport buttons) heads the Layers section. Feedback, Input gain and Speed become value bars; Record keeps its red. |
-| Utility | 700 | Status line removed. Width, Balance and Gain become value bars (Balance and Gain from the middle). The Mono knob is grey while Mono below freq is off. |
-| Valve | 1050 | Status line removed. Wide so five knobs and their readouts fit side by side and the five cab sizes fit in one row; Cabinet sim and Noise gate share one row. Gain and Out faders become upright value bars; Axis and Gate become value bars. |
-| Vintage | 1050 | Status line removed. Wide so the knobs and their two readout lines fit side by side. Drv and Wear faders become upright value bars; Low, High (from the middle) and Mix become value bars. |
-| Vocoder | 700 | Added after 0.56.1, so the guide has no picture of it yet. It follows the same rules: the card shell, pressed-in sections, value bars, capped knobs, no status line. |
-
-**The EQ Eight layout** (EQ-8 and Dynamic EQ-8), the classic EQ Eight arrangement drawn in
-this guide: the graph leads at the left under a slim row of eight band chips (20 high), and one
-panel at the right edits the picked band. Each chip reads on one line: the band's number (ink 1),
-its filter shape and its frequency (ink 2), all ink 4 while the band is off; the band being edited
-has an orange outline and an orange number. A click picks the band, a double-click switches it on
-or off. The panel's band
-column opens with the toggle, the type's name and an On switch, then the six filter shapes in a
-groove (Low cut, Low shelf, Bell, Notch, High shelf, High cut; the picked one tinted, its name
-in the tooltip), then Freq, Gain and Q side by side. A row that does not apply (Slope on a shelf band) is ink 4
-with nothing picked. The card stays 260 high; the graph grows sideways only.
-
-**The EQ fold.** EQ-8's and Dynamic EQ-8's right panel folds to a narrow strip (60) with an
-arrow to bring it back over the picked band's Freq, Gain and Q knobs, stacked and centred in the space under it; the card narrows from 700 to 568
-(Dynamic EQ-8 1050 to 702); the band tabs and the graph keep
-working (a node's right-click menu still sets type, slope and channel, or type, mode and solo). Folding hides nothing that unfolding doesn't bring back, and changes
-no parameter. The fold is kept per device for the session (like Prism's picked band), not
-saved in the project.
-
-### MIDI effects (6)
-
-| Device | Width | What changes |
-|---|---|---|
-| Arp | 1050 | Status line removed. Play sliders become value bars; Transpose and Steps share one row. Wide so the rate row fits. |
-| Chord | 700 | Status line removed. Shift rulers, Strum and Spread become value bars; the shift on/off dots become switches. |
-| Length | 700 | Status line removed. Length and the three modifier sliders become value bars; each modifier puts its value on the bar row with its hint under it. |
-| Random | 700 | Status line removed. The five amount sliders and Chance become value bars. |
-| Scale | 700 | Status line removed. The root stepper (‹ C ›) stays on the Root section's title row. |
-| Velocity | 700 | Status line removed. Drive and Random become value bars, the out range a two-ended bar; Random off is ink 4. Last 12 notes stays empty until notes are played. |
-
-### Racks (3)
-
-| Device | Width | What changes |
-|---|---|---|
-| Audio Effect Rack | 700 | No preset menu (the header holds the name, "Built-in" and power). The macro strip becomes its own section across the top; the eight macro sliders and Gain become value bars. The rail is regrouped so all of it fits: Mode, then Dry / wet beside Gain and PDC, then Macro map, Fold and Save on one row; Macro map is a plain button. |
-| Drum Rack | 700 | Status line removed. Swing, Humanize and the pad sliders become value bars; Pan and Tune are centred bars. |
-| Instrument Rack | 700 | No preset menu; the header holds the name, "Rack · 1 chain" and power. The macro strip becomes its own section across the top; the eight macro sliders and Glide become value bars. Rack out puts Volume beside Glide, with Macro map, Fold and Save on one row; Macro map is a plain button. |
 
 ## Nota Remote
 
@@ -1340,9 +1233,9 @@ drift).
 | `RunInterfaceScale` | Scale presets 75 / 100 / 125 / 150 / 200 %; anything else reads as 100 % |
 | `RunGeometry` | `Radius.*` / `Control.*` / `Space.*` in XAML equal `NotaGeometry`; no undefined keys; no `CornerRadius` literals, drop shadows or gradients in views; `Rectangle` `RadiusX` / `RadiusY` literals on the 0 / 2 / 3 / 4 / 5 / 6 / 7 / 9 scale (`RadiusAllowList.txt`) |
 | `RunType` | `Font.UI` matches `NotaFonts.UiUri`; it is the only font family (no Mono URI); `+tnum` is on (`NotaFonts.Tabular`); the four Geist weights are bundled and no other `.ttf`; the Geist OFL licence ships; no font names or `FontFamily.Default` in views; nothing under 7 px |
-| `RunControls` | No unicode icons typed as text; `Knob` snaps to its three sizes (26 device, 22 label beside, 28 flat); `SwitchTrack` is 20 × 12 with an 8 px knob inset 2; `SliderTrack` is a 16 px value bar in a groove with a 3 px line |
+| `RunControls` | No unicode icons typed as text; `Knob` snaps to its sizes (34 / 36 / 44 device, 24 inline, 28 flat); `SwitchTrack` is 18 × 10 with a 7 px knob inset 1.5; `SliderTrack` is a 9 px value bar in a groove with a 3 px line (16 in the shell) |
 | `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter or spectrum ballistics; meter channels 3 wide, 1.5 apart, green to 70 %, amber to 88 %; the arrangement playhead 1 px without glow |
-| `RunLayout` | `DeviceCardKit.HeaderH` 32 and cards 260 high; every card width between 260 and 940; the transport a docked row at the top at `Control.TransportBar` with its console; browser rows 30 |
+| `RunLayout` | `DeviceCardKit.HeaderH` 22 and cards 260 high; every card width between 260 and 940; the transport a docked row at the top at `Control.TransportBar` with its console; browser rows 30 |
 | `RunNumbers` | Display culture installed; no hyphen in a negative format section or before ∞; no hyphen-minus before a digit in a view literal (`NumberAllowList.txt`); no invariant culture on readouts; thin space before units; no vowel-dropped labels |
 | `RunBans` | No hex outside `Ink()` (bar three data tables), no RGB typed as numbers, no named system colours, `Opacity` only on drag ghosts, no brush snapshotting a theme colour |
 | `RunStudio` | Every `Radius.*` on the 0 / 2 / 3 / 4 / 5 / 6 / 7 / 9 scale; only `Shadow.Popover` / `Shadow.Modal` blur more than 2 px, no literal `BoxShadow` in views; no positive `LetterSpacing` in the theme or views (bar the Remote pairing code), `NotaType` tracking 0, no upper-casing in the shared label builders; device knob arcs and value-bar lines `Accent`, flat knobs `TextTertiary` at rest, graph curves `VizInk`; toolbar 44, transport well 32, seam 1; no Ember value in the Studio themes |
@@ -1352,8 +1245,8 @@ drift).
 | `RunBrowser` | Every built-in device sits in exactly one category of its own tab (`DeviceCategories.cs`); no stale or empty category; names in sentence case; 16 / 27 / 6 devices shelved |
 | `RunRemote` | Nota Remote's page: no colour literal in its sources or `index.html`; the first-paint fallback built from the theme files; no letter-spacing, `uppercase`, `.toUpperCase()` or `.caps`; radii 0 / 1 / 2 / 3 / 4 px or 50 %; every custom property it reads is a theme token or one it defines |
 
-Not enforced by a test yet: the type scale, the sizes in § Shapes, the 24 header and the
-card widths in § Devices, where orange may appear, the absence of depth in the shell, the
+Not enforced by a test yet: the type scale, the sizes in § Shapes, the device layouts in
+§ Devices, where orange may appear, the absence of depth in the shell, the
 track colour order, and every per-device note. Those are held by review against this file
 and the guide.
 
@@ -1369,8 +1262,7 @@ Places where a screen's needs override a general rule, kept on purpose:
 
 - **The round wheels keep their 0.56.1 look** inside device cards and never sit in a
   groove.
-- **Every card stays 260 high**, EQ cards included; a device that needs room grows
-  sideways (and the EQ cards fold).
+- **Every device keeps its 0.57 layout**; the guide restyles the elements only (§ Devices).
 - **Menu hover is a full orange fill.** The guide's three strengths don't cover menus; a
   hovered item counts as live (§ Menus).
 - **Menu popups without a blur**, a seam ring only (§ Menus).
@@ -1388,7 +1280,7 @@ Places where a screen's needs override a general rule, kept on purpose:
   Division (8), Arp Rate (8) and Order (8), Aurora Warp (5) and Filter (5), Bass LFO wave
   (5), Monolith Glide range (6), Pendulum Division (5) and Wave (5).
 - **Knobs in table rows** (the oscillator rows and envelope strips of Consort, Pentad and
-  Monolith) take the 22 size with the label beside or above, as the row allows.
+  Monolith) take the 24 size (`KnobInline`) with the label beside or above, as the row allows.
 - **`Freq`, `Reso`, `Thresh`** as labels (§ Labels and copy).
 - **Hero readouts** larger than the device scale: Strata's bar number, Shutter Open/Shut,
   Auto Shift's note, Level's value.

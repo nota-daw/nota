@@ -5,8 +5,8 @@
 // One window, one set of rules, so forty devices read as one instrument:
 //
 //   ground Well · 1px rule frame · radius 6 · grid lines in the viz-grid colour
-//   axis labels at the column-head size (10) in ink 4, in the corners — never full axes with ticks
-//   a title (sentence case) at the top-left, a legend inside the window with values
+//   axis labels 7.5 in ink 4, in the corners — never full axes with ticks
+//   a title (sentence case, 8) at the top-left, a legend inside the window with values
 //   the primary curve 1.8px in viz ink; a second source a darker grey (shade before chroma)
 //   nodes 7px with a 2px ground-coloured ring; the active one the accent, the rest secondary
 //   no fills under curves, no gradients
@@ -26,7 +26,7 @@ internal static class NotaGraph
     public const double Radius = NotaRadius.FieldValue;   // 6
     public const double PrimaryWidth = 1.8, SecondaryWidth = 1.4;
     public const double NodeD = 7, NodeRing = 2;
-    public const double AxisSize = NotaType.Axis, TitleSize = NotaType.DeviceSection;   // column-head size, ink 4; a graph title 10.5
+    public const double AxisSize = NotaType.Axis, TitleSize = 8;   // axis labels 7.5 in ink 4; a graph title 8
     /// <summary>Where a plot starts under the title row (title ink ends near 18), and how far its floor
     /// sits above the bottom edge, clear of the corner axis labels (which take the last 16 px) — so no
     /// grid line, frame line or resting trace runs through a label.</summary>

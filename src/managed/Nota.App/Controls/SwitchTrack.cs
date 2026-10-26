@@ -25,7 +25,7 @@ internal sealed class SwitchTrack : Control
     private static readonly IBrush KnobOnShell = NotaPalette.SurfaceDeep;
     private static readonly IBrush KnobOff = NotaPalette.TextTertiary;
 
-    public const double W = 20, H = 12, KnobD = 8, Inset = 2;
+    public const double W = 18, H = 10, KnobD = 7, Inset = 1.5;
     // The settings-window size: a 28×16 track with a 12px knob inset 2 — a standalone row
     // toggle at the shell scale, not a parameter inside a device card.
     public const double LargeW = 28, LargeH = 16, LargeKnobD = 12, LargeInset = 2;

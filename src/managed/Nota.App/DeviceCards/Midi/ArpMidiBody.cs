@@ -4,9 +4,9 @@
 // Detail · Devices — the Nota Arp editor (MIDI effect kind 0), almanac mockups 1a / 1b.
 // Two sizes share every value; the S / L toggle in the shell header flips the card (the
 // choice is the device's "View" param, so it persists with the project):
-//   • L 1050 × 260 — ORDER list | Pattern / Groove window over the Free·Sync + division
-//     strip | PLAY (Gate · Swing · Vel Amt sliders, Octaves, Retrig, Transpose and Steps,
-//     Hold, Restart), in pressed-in sections.
+//   • L 700 × 260 — ORDER list | Pattern / Groove window over the Free·Sync + division
+//     strip | PLAY (Gate · Swing · Vel Amt sliders, Octaves, Retrig, Transpose, Steps,
+//     Hold, Restart) — over a status line (held chord · order · rate · steps · retrig).
 //   • S 260 × 260 — the window with a Pattern / Groove toggle (the lane picked by clicking
 //     its name) over four knobs (Rate · Gate · Oct · Swing). The header keeps the full preset
 //     picker (same list, same current preset as L); what S can't edit, presets still set.
@@ -38,29 +38,35 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         ("Random", ArpPattern.OrdRandom), ("Chord", ArpPattern.OrdChord), ("As played", ArpPattern.OrdAsPlayed),
     };
     private static readonly string[] RetrigNames = { "Off", "Note", "Beat" };
-    private const double FreeMsMin = 20, FreeMsMax = 1000, LabelW = 60;
+    private const double FreeMsMin = 20, FreeMsMax = 1000, LabelW = 50;
 
+    private static readonly IBrush Ground = NotaPalette.SurfaceCard;   // the card surface: sections sit on it, divided by rules (spec 012)
+    private static readonly IBrush Bd = NotaPalette.BorderDefault;
+    private static readonly IBrush Rule = NotaPalette.GraphBorder;
+    private static readonly IBrush Well = NotaPalette.BgSunken;
+    private static readonly IBrush Chip = NotaPalette.GridBeat;
+    private static readonly IBrush Brass = NotaPalette.Accent;
     private static readonly IBrush Txt = NotaPalette.TextPrimary;
     private static readonly IBrush Sub = NotaPalette.TextSecondary;
     private static readonly IBrush Cap = NotaPalette.TextTertiary;
+    private static readonly IBrush Ink = NotaPalette.TextOnAccent;
 
     // Per-card editor state that survives rebuilds (tab + Groove lane) — UI only, not persisted.
     private sealed class Ui { public bool Groove; public int Lane; }
     private static readonly Dictionary<(int, int), Ui> UiState = new();
     private static Ui UiFor(int track, int mi) { if (!UiState.TryGetValue((track, mi), out var u)) UiState[(track, mi)] = u = new Ui(); return u; }
 
-    public double Width => DeviceCardKit.CardWide;
+    public double Width => 700;
     public bool FullBleed => true;
 
     private static bool IsMini(IAudioEngine e, int track, int mi) => e.MidiEffectParamCount(track, mi) > PView && e.MidiEffectGetParam(track, mi, PView) >= 0.5f;
-    public double WidthFor(IAudioEngine engine, int trackId, int index) => IsMini(engine, trackId, index) ? DeviceCardKit.CardS : DeviceCardKit.CardWide;
+    public double WidthFor(IAudioEngine engine, int trackId, int index) => IsMini(engine, trackId, index) ? 260 : 700;
 
     // ---- small builders -------------------------------------------------------------------
-    private static TextBlock Caps(string t, IBrush? c = null, double fs = 0) => DeviceBodyKit.Label(t, c);
-    // The old small sizes land on the device scale: 6–7 → 10.5 (a label / axis), 8–9 → 11 (a value).
-    private static double Fs(double fs) => fs < 8 ? NotaType.RowLabel : fs < 10 ? NotaType.KnobValue : fs;
-    private static TextBlock Mono(string t, IBrush c, double fs = NotaType.KnobValue) => new()
-    { Text = t, FontSize = Fs(fs), FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+    { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
+    { Text = t, FontSize = fs, FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
 
     private static string RateLabel(IAudioEngine e, int t, int mi)
         => e.MidiEffectGetParam(t, mi, GSync) > 0.5f ? RateNames[Math.Clamp((int)Math.Round(e.MidiEffectGetParam(t, mi, GRate)), 0, 7)]
@@ -79,10 +85,10 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
 
         if (!mini)
         {
-            var bpm = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(-4, 0, 0, 0) };
-            ctx.AddDeviceRefresher(() => bpm.Text = $"· {e.Bpm:0.0} BPM");
-            bpm.Text = $"· {e.Bpm:0.0} BPM";
-            row.Children.Add(bpm); row.Children.Add(MidiCardHeader.LearnButton(ctx));
+            var bpm = Mono("", Cap);
+            ctx.AddDeviceRefresher(() => bpm.Text = $"{e.Bpm:0.0} BPM");
+            bpm.Text = $"{e.Bpm:0.0} BPM";
+            row.Children.Add(MidiCardHeader.LearnButton(ctx)); row.Children.Add(bpm);
         }
 
         row.Children.Add(MidiCardHeader.SizeToggle(ctx, mi, PView, () => IsMini(e, t, mi)));
@@ -116,13 +122,19 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         Border Seg(int p, string[] names, int off = 0, bool fill = true, double padX = 6)
         {
             var seg = DeviceCardKit.Segments(names, () => { int c = GI(p) - off; return c >= 0 && c < names.Length ? c : -1; },
-                i => { S(p, i + off); Refresh(); }, out var sync, fill: fill, padX: padX);
+                i => { S(p, i + off); Refresh(); }, out var sync, fill: fill, padX: padX, fontSize: 8);
             readouts.Add(sync);
             Learn(seg, p, engine.MidiEffectParamName(track, mi, p));
             return seg;
         }
 
-
+        // ---- the status strings ----
+        string ChordText()
+        {
+            var c = grid.Chord;
+            return c.Count == 0 ? "no notes yet" : string.Join(" ", c.Select(DeviceCardKit.NoteName));
+        }
+        string RetrigText() => RetrigNames[Math.Clamp(GI(GRetrig), 0, 2)].ToLowerInvariant();
 
         // ---- the window's header readout ----
         string InfoText(bool shortForm)
@@ -149,18 +161,20 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         Control BuildLarge()
         {
             // ---- ORDER ----
-            var list = new StackPanel();
+            var list = new StackPanel { Margin = new Thickness(0, 3) };
             foreach (var (name, value) in Orders)
             {
                 int v = value;
-                var tb = new TextBlock { Text = name, FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
-                var rowB = new Border { Height = 19, CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var bar = new Border { Width = 2, Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Left };
+                var tb = new TextBlock { Text = name, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
+                var rowB = new Border { Height = 18, Cursor = new Cursor(StandardCursorType.Hand), Child = new Panel { Children = { bar, tb } } };
                 bool hover = false;
                 void Paint()
                 {
                     bool on = GI(GOrder) == v;
-                    rowB.Background = on ? NotaPalette.AccentSoft : hover ? NotaPalette.GridBeat : Brushes.Transparent;
-                    tb.Foreground = on ? NotaPalette.AccentBright : Sub; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                    rowB.Background = on ? NotaPalette.AccentSubtle : hover ? NotaPalette.SurfaceRaised : Brushes.Transparent;
+                    bar.Background = on ? Brass : Brushes.Transparent;
+                    tb.Foreground = on ? Txt : Sub; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 }
                 rowB.PointerEntered += (_, _) => { hover = true; Paint(); };
                 rowB.PointerExited += (_, _) => { hover = false; Paint(); };
@@ -169,87 +183,146 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 readouts.Add(Paint);
                 list.Children.Add(rowB);
             }
-            var orderIsland = IslandBox(IslandHead(Caps("Order"), null), list, 110);
+            var orderIsland = IslandBox(IslandHead(Caps("ORDER"), null), list, 100);
 
             // ---- center: tabs + window + rate strip ----
-            var info = Mono("", Cap, 7);
+            var info = Mono("", Cap, 7); info.Margin = new Thickness(0, 0, 8, 0);
+            var tabRow = new StackPanel { Orientation = Orientation.Horizontal };
+            var tabs = new (Border b, TextBlock tb)[2];
             Action layoutFor = () => { };
-            var tabs = DeviceBodyKit.Tabs(new[] { "Pattern", "Groove" }, () => grid.Groove ? 1 : 0,
-                i => { ui.Groove = grid.Groove = i == 1; layoutFor(); Refresh(); }, out var tabSync, info);
-            tabs.Margin = new Thickness(0, 0, 0, 8);
-            readouts.Add(tabSync);
+            string[] tabNames = { "Pattern", "Groove" };
+            for (int i = 0; i < 2; i++)
+            {
+                bool groove = i == 1;
+                var tb = new TextBlock { Text = tabNames[i], FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
+                var b = new Border { Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                b.PointerPressed += (_, ev) => { if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; ui.Groove = grid.Groove = groove; layoutFor(); Refresh(); ev.Handled = true; };
+                tabs[i] = (b, tb); tabRow.Children.Add(b);
+            }
+            var tabHead = new Border { Height = 20, BorderBrush = Bd, BorderThickness = new Thickness(0, 0, 0, 1),
+                Child = new DockPanel { Children = { WithDock(info, Dock.Right), tabRow } } };
 
             // Groove lane chips.
-            var laneSeg = DeviceCardKit.Segments(Lanes.Select(l => l.Label).ToArray(), () => grid.LaneIndex,
-                i => { ui.Lane = grid.LaneIndex = i; Refresh(); }, out var laneSync, fill: true, padX: 2);
-            laneSeg.Margin = new Thickness(0, 0, 0, 6);
-            readouts.Add(laneSync);
+            var laneGrid = new Grid { Height = 15, ColumnSpacing = 2, Margin = new Thickness(0, 0, 0, 4) };
+            var laneChips = new (Border b, TextBlock tb)[Lanes.Length];
+            for (int i = 0; i < Lanes.Length; i++)
+            {
+                int li = i;
+                laneGrid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+                var tb = new TextBlock { Text = Lanes[i].Label, FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                var b = new Border { CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                b.PointerPressed += (_, ev) => { if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; ui.Lane = grid.LaneIndex = li; Refresh(); ev.Handled = true; };
+                Grid.SetColumn(b, i); laneGrid.Children.Add(b); laneChips[i] = (b, tb);
+            }
 
             // Rate strip: Free / Sync + divisions, or the free-rate slider.
-            var mode = Seg(GSync, new[] { "Free", "Sync" }, fill: false, padX: 4);
-            var rateGrid = Seg(GRate, RateNames, padX: 0);
-            Func<double> freeNorm = () => (FreeMs(G(GFreeRate)) - FreeMsMin) / (FreeMsMax - FreeMsMin);
-            Action<double> setFree = n => S(GFreeRate, 1000.0 / (FreeMsMin + n * (FreeMsMax - FreeMsMin)));
-            var freeRow = DeviceCardKit.SliderRow("", freeNorm, n => { setFree(n); Refresh(); }, () => $"{FreeMs(G(GFreeRate)):0}\u2009ms", out var freeSync,
-                () => Begin(GFreeRate), () => End(GFreeRate), () => { Begin(GFreeRate); S(GFreeRate, Def(GFreeRate)); End(GFreeRate); Refresh(); }, valueWidth: 48);
-            Learn(freeRow.Children.OfType<SliderTrack>().First(), GFreeRate, "Free rate");
-            readouts.Add(freeSync);
-            var rateHost = new Panel { Margin = new Thickness(8, 0, 0, 0), Children = { rateGrid, freeRow } };
-            var rateStrip = new DockPanel { Margin = new Thickness(0, 8, 0, 0), Children = { WithDock(mode, Dock.Left), rateHost } };
+            var mode = Seg(GSync, new[] { "Free", "Sync" }, fill: false);
+            var rateGrid = new Grid { ColumnSpacing = 2, Height = 15, VerticalAlignment = VerticalAlignment.Center };
+            var rateChips = new (Border b, TextBlock tb)[RateNames.Length];
+            for (int i = 0; i < RateNames.Length; i++)
+            {
+                int ri = i;
+                rateGrid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+                var tb = Mono(RateNames[i], Cap); tb.HorizontalAlignment = HorizontalAlignment.Center;
+                var b = new Border { CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                b.PointerPressed += (_, ev) => { if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; S(GRate, ri); Refresh(); ev.Handled = true; };
+                Learn(b, GRate, "Rate");
+                Grid.SetColumn(b, i); rateGrid.Children.Add(b); rateChips[i] = (b, tb);
+            }
+            var freeTrack = new SliderTrack { Margin = new Thickness(3, 0), Reset = () => { S(GFreeRate, Def(GFreeRate)); Refresh(); } };
+            freeTrack.Changed += n => { S(GFreeRate, 1000.0 / (FreeMsMin + n * (FreeMsMax - FreeMsMin))); Refresh(); };
+            freeTrack.GestureBegin += () => Begin(GFreeRate); freeTrack.GestureEnd += () => End(GFreeRate);
+            Learn(freeTrack, GFreeRate, "Free rate");
+            var freeVal = Mono("", Txt); freeVal.Width = 40; freeVal.TextAlignment = TextAlignment.Right;
+            ValueEntry.Attach(freeVal, () => (FreeMs(G(GFreeRate)) - FreeMsMin) / (FreeMsMax - FreeMsMin),
+                n => S(GFreeRate, 1000.0 / (FreeMsMin + n * (FreeMsMax - FreeMsMin))), () => $"{FreeMs(G(GFreeRate)):0}\u2009ms",
+                () => Begin(GFreeRate), () => End(GFreeRate), Refresh, control: freeTrack);
+            var freeRow = new DockPanel { Children = { WithDock(freeVal, Dock.Right), freeTrack } };
+            var rateHost = new Panel { Margin = new Thickness(4, 0, 0, 0), Children = { rateGrid, freeRow } };
+            var rateStrip = new DockPanel { Height = 16, Margin = new Thickness(0, 4, 0, 0), Children = { WithDock(mode, Dock.Left), rateHost } };
 
-            var winRow = new DockPanel { Children = { WithDock(tabs, Dock.Top), WithDock(laneSeg, Dock.Top), WithDock(rateStrip, Dock.Bottom), grid } };
-            var centerIsland = DeviceBodyKit.Sec(winRow);
+            var winRow = new DockPanel { Children = { WithDock(laneGrid, Dock.Top), WithDock(rateStrip, Dock.Bottom), grid } };
+            var centerIsland = IslandBox(tabHead, new Border { Padding = new Thickness(8, 5), Child = winRow }, double.NaN);
 
-            void LayoutFor() => laneSeg.IsVisible = grid.Groove;
+            void LayoutFor()
+            {
+                laneGrid.IsVisible = grid.Groove;
+                for (int i = 0; i < 2; i++)
+                {
+                    bool on = (i == 1) == grid.Groove;
+                    tabs[i].b.Background = on ? Chip : Brushes.Transparent;
+                    tabs[i].b.BorderBrush = on ? Brass : Brushes.Transparent;
+                    tabs[i].tb.Foreground = on ? NotaPalette.TextPrimary : Cap;
+                    tabs[i].tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                }
+            }
             layoutFor = LayoutFor;
             LayoutFor();
             readouts.Add(() =>
             {
                 info.Text = InfoText(false);
-                info.Foreground = grid.Groove ? Txt : Sub;
+                info.Foreground = grid.Groove ? Txt : Cap;
+                for (int i = 0; i < Lanes.Length; i++)
+                {
+                    bool on = i == grid.LaneIndex;
+                    laneChips[i].b.Background = on ? Brass : Chip;
+                    laneChips[i].tb.Foreground = on ? Ink : Sub;
+                    laneChips[i].tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                }
                 bool sync = G(GSync) > 0.5f;
                 rateGrid.IsVisible = sync; freeRow.IsVisible = !sync;
+                int rate = GI(GRate);
+                for (int i = 0; i < RateNames.Length; i++)
+                {
+                    bool on = i == rate;
+                    rateChips[i].b.Background = on ? Brass : Chip;
+                    rateChips[i].tb.Foreground = on ? Ink : Cap;
+                }
+                double ms = FreeMs(G(GFreeRate));
+                if (!freeTrack.Dragging) freeTrack.Norm = (ms - FreeMsMin) / (FreeMsMax - FreeMsMin);
+                freeVal.Text = $"{ms:0}\u2009ms";
             });
 
             // ---- PLAY ----
-            var steps = new Grid { ColumnDefinitions = new ColumnDefinitions($"{LabelW - 8},*,Auto,*"), ColumnSpacing = 8 };
-            steps.Children.Add(Caps("Transpose"));
-            steps.Children.Add(DeviceBodyKit.At(Stepper("Transpose", GTranspose, -24, 24, v => v == 0 ? "0\u2009st" : $"{(v > 0 ? "+" : "−")}{Math.Abs(v)}\u2009st"), 1));
-            steps.Children.Add(DeviceBodyKit.At(Caps("Steps"), 2));
-            steps.Children.Add(DeviceBodyKit.At(Stepper("Steps", GLoop, 1, 16, v => v.ToString()), 3));
-            var play = new StackPanel { Spacing = 3, Children =
+            var play = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto,*,Auto,*,Auto,*,Auto") };
+            var playRows = new List<Control>
             {
-                SliderLine("Gate", GGate, v => v / 2, n => n * 2, v => $"{v * 100:0}\u2009%"),
-                SliderLine("Swing", GSwing, v => v, n => n, v => $"{v * 50:0}\u2009%"),
-                SliderLine("Vel amt", PVelAmt, v => v, n => n, v => $"{v * 100:0}\u2009%"),
-                DeviceBodyKit.Rule(),
-                Line("Octaves", Seg(GOctaves, new[] { "1", "2", "3", "4" }, off: 1)),
-                Line("Retrig", Seg(GRetrig, RetrigNames)),
-                steps,
-            } };
-            var buttons = ButtonsRow();
-            var playHead = IslandHead(Caps("Play"), Mono("MIDI out · ch 1", Sub));
-            playHead.Margin = new Thickness(0, 0, 0, 6);
-            var playIsland = IslandBox(playHead, new DockPanel { Children =
-            {
-                WithDock(new StackPanel { Spacing = 3, Margin = new Thickness(0, 3, 0, 0), Children = { DeviceBodyKit.Rule(), buttons } }, Dock.Bottom), play,
-            } }, 253);
-            playIsland.Padding = new Thickness(12, 12, 12, 10);
+                SliderLine("GATE", GGate, v => v / 2, n => n * 2, v => $"{v * 100:0}\u2009%"),
+                SliderLine("SWING", GSwing, v => v, n => n, v => $"{v * 50:0}\u2009%"),
+                SliderLine("VEL AMT", PVelAmt, v => v, n => n, v => $"{v * 100:0}\u2009%"),
+                Ruled(Line("OCTAVES", Seg(GOctaves, new[] { "1", "2", "3", "4" }, off: 1))),
+                Line("RETRIG", Seg(GRetrig, RetrigNames)),
+                Stepper("TRANSPOSE", GTranspose, -24, 24, v => v == 0 ? "0\u2009st" : $"{(v > 0 ? "+" : "−")}{Math.Abs(v)}\u2009st"),
+                Stepper("STEPS", GLoop, 1, 16, v => v.ToString()),
+                Ruled(ButtonsRow()),
+            };
+            for (int i = 0; i < playRows.Count; i++) { Grid.SetRow(playRows[i], i * 2); play.Children.Add(playRows[i]); }
+            var playHead = IslandHead(Caps("PLAY"), Mono("MIDI out · ch 1", Cap, 7));
+            var playIsland = IslandBox(playHead, new Border { Padding = new Thickness(8, 5), Child = play }, 176);
 
-            var islands = new DockPanel { Children = { WithDock(orderIsland, Dock.Left), WithDock(playIsland, Dock.Right), centerIsland } };
-            orderIsland.Margin = new Thickness(0, 0, DeviceCardKit.SectionGap, 0); playIsland.Margin = new Thickness(DeviceCardKit.SectionGap, 0, 0, 0);
-            return DeviceBodyKit.Frame(islands);
+            var islands = new DockPanel { Background = Ground, Children = { WithDock(orderIsland, Dock.Left), WithDock(playIsland, Dock.Right), centerIsland } };
+            islands.Margin = new Thickness(0);
+            orderIsland.Margin = new Thickness(0, 0, 5, 0); playIsland.Margin = new Thickness(5, 0, 0, 0);
+
+            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var statusR = Mono("", Sub);
+            readouts.Add(() =>
+            {
+                statusL.Text = $"{ChordText()} · {OrderName(GI(GOrder))} · {Math.Clamp(GI(GOctaves), 1, 8)} oct · {RateLabel(engine, track, mi)} · {grid.StepCount} steps · retrig {RetrigText()}{(G(GHold) > 0.5f ? " · hold" : "")}";
+                statusR.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : grid.Running ? "MIDI · latency 0 smp" : "MIDI · waiting for notes";
+            });
+            return Framed(islands, statusL, statusR);
         }
 
         // =======================================================================================
         Control BuildMini()
         {
             var tabs = DeviceCardKit.Segments(new[] { "Pattern", "Groove" }, () => grid.Groove ? 1 : 0,
-                i => { ui.Groove = grid.Groove = i == 1; Refresh(); }, out var tabSync, padX: 6);
+                i => { ui.Groove = grid.Groove = i == 1; Refresh(); }, out var tabSync, padX: 6, fontSize: 8);
             readouts.Add(tabSync);
-            var laneName = new TextBlock { FontSize = NotaType.DeviceCaption, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
+            var laneName = new TextBlock { FontSize = 8, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
             var laneBtn = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent,
-                Children = { laneName, new Glyph { Kind = GlyphKind.ChevronDown, Width = 8, Height = 8, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center } } };
+                Children = { laneName, new Glyph { Kind = GlyphKind.ChevronDown, Width = 6, Height = 6, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center } } };
             ToolTip.SetTip(laneBtn, "Next Groove lane");
             laneBtn.PointerPressed += (_, ev) =>
             {
@@ -257,51 +330,66 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 ui.Lane = grid.LaneIndex = (grid.LaneIndex + 1) % Lanes.Length; Refresh(); ev.Handled = true;
             };
             var info = Mono("", Cap, 7);
-            var head = new DockPanel { Height = 24, Margin = new Thickness(0, 0, 0, 8),
+            var head = new DockPanel { Height = 14, Margin = new Thickness(0, 0, 0, 4),
                 Children = { WithDock(tabs, Dock.Left), WithDock(info, Dock.Right), laneBtn } };
-            laneBtn.Margin = new Thickness(8, 0, 0, 0);
+            laneBtn.Margin = new Thickness(6, 0, 0, 0);
 
-            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Margin = new Thickness(0, 8, 0, 0) };
+            var knobs = new Grid { Height = 53, ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Margin = new Thickness(0, 3, 0, 0) };
             var cells = new[]
             {
-                KnobCell("Rate", GRate,
+                KnobCell("RATE", GRate,
                     () => G(GSync) > 0.5f ? GI(GRate) / 7.0 : (FreeMs(G(GFreeRate)) - FreeMsMin) / (FreeMsMax - FreeMsMin),
                     n => { if (G(GSync) > 0.5f) S(GRate, Math.Round(n * 7)); else S(GFreeRate, 1000.0 / (FreeMsMin + n * (FreeMsMax - FreeMsMin))); },
                     () => RateLabel(engine, track, mi), () => G(GSync) > 0.5f ? GRate : GFreeRate),
-                KnobCell("Gate", GGate, () => G(GGate) / 2, n => S(GGate, n * 2), () => $"{G(GGate) * 100:0}\u2009%"),
-                KnobCell("Oct", GOctaves, () => (Math.Clamp(GI(GOctaves), 1, 4) - 1) / 3.0, n => S(GOctaves, Math.Round(n * 3) + 1), () => $"{GI(GOctaves)}"),
-                KnobCell("Swing", GSwing, () => G(GSwing), n => S(GSwing, n), () => $"{G(GSwing) * 50:0}\u2009%"),
+                KnobCell("GATE", GGate, () => G(GGate) / 2, n => S(GGate, n * 2), () => $"{G(GGate) * 100:0}\u2009%"),
+                KnobCell("OCT", GOctaves, () => (Math.Clamp(GI(GOctaves), 1, 4) - 1) / 3.0, n => S(GOctaves, Math.Round(n * 3) + 1), () => $"{GI(GOctaves)}"),
+                KnobCell("SWING", GSwing, () => G(GSwing), n => S(GSwing, n), () => $"{G(GSwing) * 50:0}\u2009%"),
             };
             for (int i = 0; i < cells.Length; i++) { Grid.SetColumn(cells[i], i); knobs.Children.Add(cells[i]); }
 
             var inner = new DockPanel { Children = { WithDock(head, Dock.Top), WithDock(knobs, Dock.Bottom), grid } };
-            var island = DeviceBodyKit.Sec(inner, new Thickness(10, 10, 10, 8));
+            var island = new RuleSection { Padding = new Thickness(6, 5, 6, 0), Child = inner };
 
             readouts.Add(() =>
             {
                 laneBtn.IsVisible = grid.Groove;
                 laneName.Text = Lanes[grid.LaneIndex].Label;
-                info.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : InfoText(true);
+                info.Text = InfoText(true);
                 info.Foreground = grid.Groove ? Txt : Cap;
             });
 
-            return DeviceBodyKit.Frame(island);
+            var statusL = new TextBlock { FontSize = 8, Foreground = Sub, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            var statusR = Mono("", Sub);
+            readouts.Add(() =>
+            {
+                statusL.Text = $"{ChordText()} · {Math.Clamp(GI(GOctaves), 1, 8)} oct";
+                statusR.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : RateLabel(engine, track, mi);
+            });
+            return Framed(new Border { Background = Ground, Child = island }, statusL, statusR);
         }
 
         // ---- shared pieces ---------------------------------------------------------------------
+        Control Framed(Control main, TextBlock left, TextBlock right)
+        {
+            var status = new Border { Height = 18, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0),
+                Child = new DockPanel { Children = { WithDock(right, Dock.Right), left } } };
+            right.Margin = new Thickness(8, 0, 0, 0);
+            return new DockPanel { Background = Ground, Children = { WithDock(status, Dock.Bottom), new Border { Padding = new Thickness(5), Child = main } } };
+        }
 
         Control IslandHead(Control left, Control? right)
         {
-            if (left is TextBlock t) { t.FontSize = NotaType.DeviceCaption; t.FontWeight = FontWeight.SemiBold; t.Foreground = NotaPalette.TextPrimary; }
-            var d = new DockPanel { Margin = new Thickness(0, 0, 0, 10) };
-            if (right is not null) { right.HorizontalAlignment = HorizontalAlignment.Right; d.Children.Add(WithDock(right, Dock.Right)); }
+            var d = new DockPanel { Margin = new Thickness(8, 0) };
+            if (right is not null) d.Children.Add(WithDock(right, Dock.Right));
             d.Children.Add(left);
-            return d;
+            return new Border { Height = 20, BorderBrush = Bd, BorderThickness = new Thickness(0, 0, 0, 1), Child = d };
         }
 
         Decorator IslandBox(Control head, Control content, double width)
         {
-            return DeviceBodyKit.Sec(new DockPanel { Children = { WithDock(head, Dock.Top), content } }, DeviceCardKit.SectionPad, width);
+            var b = DeviceCardKit.Section(new DockPanel { Children = { WithDock(head, Dock.Top), content } });
+            if (!double.IsNaN(width)) b.Width = width;
+            return b;
         }
 
         Control Line(string label, Control c)
@@ -309,26 +397,40 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             var l = Caps(label); l.Width = LabelW;
             return new DockPanel { Children = { WithDock(l, Dock.Left), c } };
         }
+        Control Ruled(Control c) => new Border { BorderBrush = Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = c };
 
-        // A play slider: label · value bar · value.
+        // A PLAY slider: label brightens to primary text once moved off its default.
         Control SliderLine(string label, int p, Func<double, double> toNorm, Func<double, double> fromNorm, Func<double, string> fmt)
         {
-            var row = DeviceCardKit.SliderRow(label, () => toNorm(G(p)), n => { S(p, fromNorm(n)); Refresh(); }, () => fmt(G(p)), out var sync,
-                () => Begin(p), () => End(p), () => { Begin(p); S(p, Def(p)); End(p); Refresh(); },
-                labelWidth: LabelW - 8, valueWidth: 40);
-            Learn(row.Children.OfType<SliderTrack>().First(), p, label);
-            readouts.Add(sync);
-            return row;
+            var l = Caps(label); l.Width = LabelW;
+            var val = Mono("", Txt); val.Width = 30; val.TextAlignment = TextAlignment.Right;
+            var track = new SliderTrack { Height = 11, Reset = () => { S(p, Def(p)); Refresh(); } };
+            track.Changed += n => { S(p, fromNorm(n)); Refresh(); };
+            track.GestureBegin += () => Begin(p); track.GestureEnd += () => End(p);
+            Learn(track, p, label);
+            ValueEntry.Attach(val, () => toNorm(G(p)), n => S(p, fromNorm(n)), () => fmt(G(p)), () => Begin(p), () => End(p), Refresh, control: track);
+            readouts.Add(() =>
+            {
+                double v = G(p);
+                if (!track.Dragging) track.Norm = toNorm(v);
+                bool mod = Math.Abs(v - Def(p)) > 0.005;
+                l.Foreground = mod ? Txt : Cap;
+                val.Foreground = Txt;
+                val.Text = fmt(v);
+            });
+            track.Margin = new Thickness(0, 0, 4, 0);
+            return new DockPanel { Children = { WithDock(l, Dock.Left), WithDock(val, Dock.Right), track } };
         }
 
         Control Stepper(string label, int p, int min, int max, Func<int, string> fmt)
         {
+            var l = Caps(label); l.Width = LabelW;
             var val = Mono("", Txt); val.HorizontalAlignment = HorizontalAlignment.Center;
             Border Btn(string glyph, int d)
             {
-                var tb = Mono(glyph, Sub); tb.HorizontalAlignment = HorizontalAlignment.Center;
+                var tb = Mono(glyph, NotaPalette.TextMuted, 9); tb.HorizontalAlignment = HorizontalAlignment.Center;
                 var b = new Border { Width = 18, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
-                b.PointerEntered += (_, _) => tb.Foreground = Txt; b.PointerExited += (_, _) => tb.Foreground = Sub;
+                b.PointerEntered += (_, _) => tb.Foreground = Txt; b.PointerExited += (_, _) => tb.Foreground = NotaPalette.TextMuted;
                 b.PointerPressed += (_, ev) =>
                 {
                     if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
@@ -336,23 +438,27 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 };
                 return b;
             }
-            var box = new Border { Height = 22, Background = NotaPalette.Groove, CornerRadius = NotaRadius.Field,
+            var box = new Border { Height = 14, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Child = new DockPanel { Children = { WithDock(Btn("−", -1), Dock.Left), WithDock(Btn("+", +1), Dock.Right), val } } };
-            box.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
             box.PointerPressed += (_, ev) => { if ((ev.ClickCount == 2 || (ev.KeyModifiers & KeyModifiers.Alt) != 0)) { S(p, Def(p)); Refresh(); } };
             Learn(box, p, label);
-            readouts.Add(() => val.Text = fmt(GI(p)));
-            return box;
+            readouts.Add(() =>
+            {
+                int v = GI(p);
+                bool mod = Math.Abs(v - Def(p)) > 0.5;
+                l.Foreground = mod ? Txt : Cap;
+                val.Foreground = Txt;
+                val.Text = fmt(v);
+            });
+            return new DockPanel { Children = { WithDock(l, Dock.Left), box } };
         }
 
         Control ButtonsRow()
         {
             Border Btn(string text, Action click, out TextBlock tb)
             {
-                var b = DeviceCardKit.TextButton(text);
-                var t = (TextBlock)b.Child!;
-                b.HorizontalAlignment = HorizontalAlignment.Stretch; b.Height = 22; b.Padding = new Thickness(6, 0);
-                t.HorizontalAlignment = HorizontalAlignment.Center; t.VerticalAlignment = VerticalAlignment.Center;
+                var t = new TextBlock { Text = text, FontSize = 8, Foreground = Txt, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+                var b = new Border { Height = 16, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Background = NotaPalette.TrackOff, BorderBrush = NotaPalette.TrackOff, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
                 b.PointerPressed += (_, ev) => { if (!ev.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; click(); ev.Handled = true; };
                 tb = t; return b;
             }
@@ -362,31 +468,34 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             readouts.Add(() =>
             {
                 bool on = G(GHold) > 0.5f;
-                hold.Background = on ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
-                holdTb.Foreground = on ? NotaPalette.AccentBright : Txt;
+                hold.Background = on ? NotaPalette.AccentSubtle : NotaPalette.TrackOff;
+                hold.BorderBrush = on ? NotaPalette.BorderBrass : NotaPalette.TrackOff;
+                holdTb.Foreground = on ? NotaPalette.AccentHover : Txt;
                 holdTb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
             });
-            var restart = Btn("Restart", () => engine.MidiEffectCommand(track, mi, 1), out _);
+            var restart = Btn("Restart", () => engine.MidiEffectCommand(track, mi, 1), out var rTb);
+            restart.PointerEntered += (_, _) => restart.Background = NotaPalette.SurfaceHover;
+            restart.PointerExited += (_, _) => restart.Background = NotaPalette.TrackOff;
             ToolTip.SetTip(restart, "Restart the pattern from step 1");
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 8 };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
             Grid.SetColumn(restart, 1); g.Children.Add(hold); g.Children.Add(restart);
             return g;
         }
 
-        // A mini-view knob: the device knob, value (11, ink 1) over label (10.5, ink 3). `learnParam` names the param the
+        // A mini-view knob: 34px gauge, sentence-case label, mono value. `learnParam` names the param the
         // knob drives right now (Rate is the division when synced, the free rate otherwise).
         Control KnobCell(string label, int p, Func<double> norm, Action<double> set, Func<string> text, Func<int>? learnParam = null)
         {
-            var knob = new Knob(norm(), 1.0) { Accent = true, HorizontalAlignment = HorizontalAlignment.Center };
+            var knob = new Knob(norm(), 1.0) { Accent = true, Width = 34, Height = 34, HorizontalAlignment = HorizontalAlignment.Center };
             int LP() => learnParam?.Invoke() ?? p;
             knob.ValueChanged += n => { set(n); Refresh(); };
             knob.GestureBegin += () => Begin(LP()); knob.GestureEnd += () => End(LP());
             Learn(knob, p, label);
-            var val = Mono("", Txt); val.HorizontalAlignment = HorizontalAlignment.Center; val.Margin = new Thickness(0, 4, 0, 0);
+            var val = Mono("", Sub, 7); val.HorizontalAlignment = HorizontalAlignment.Center;
             ValueEntry.Attach(knob, label, val, text);
             readouts.Add(() => { double n = norm(); if (!knob.Dragging && Math.Abs(knob.Value - n) > 1e-6) knob.Value = n; val.Text = text(); });
             return new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
-                Children = { knob, val, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 13 } } };
+                Children = { knob, new TextBlock { Text = NotaText.Label(label), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = Cap, HorizontalAlignment = HorizontalAlignment.Center, LineHeight = 9 }, val } };
         }
     }
 }

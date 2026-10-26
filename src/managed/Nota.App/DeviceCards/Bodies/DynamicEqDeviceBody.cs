@@ -1,19 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Devices — built-in Nota Dynamic EQ-8 body (device kind 13), laid out like the
-// classic EQ Eight and drawn in the style guide (spec 038): the response graph leads at the left
-// (nodes drag on the curve) under a slim row of eight band chips — the band's number, filter
-// shape and frequency on one line, with its dynamics activity along the bottom — and the panel at the
-// right is drawn like EQ-8's: two columns on one set of rows, so their parts line up. The picked
-// band (its head with the On switch, the six filter shapes, Freq, Gain and Q, its key and Solo)
-// sits beside its dynamics (the mode, then Thresh — the band's level ticked on its ring — Range,
-// Attack and Release as knobs, over the device's Dynamic switch and Output).
-// The live readings come from the engine (DynamicEq.h scopeRead). Every control is a device param
-// (raw units), so automation / MIDI learn / presets / A-B / persistence come for free; the key
-// track is the device's sidechain routing. As on EQ-8, the arrow folds the panel to a thin strip
-// that keeps the band's Freq, Gain and Q (the card narrows from 940 to 584); the fold is
-// session-only view state. FullBleed — the shared shell draws the header.
+// Detail · Devices — built-in Nota Dynamic EQ-8 body (device kind 13), a build of the "Nota
+// Dynamic EQ" mockup (700 × 260): the response graph takes almost the whole width — nodes drag
+// right on the curve, a row of eight band chips above it shows each band's dynamic activity, a
+// panel on the right edits the selected band (type, FREQ / GAIN / Q, the dynamics mode with
+// THRESH — the band's level marked on it — RANGE, ATTACK, RELEASE, its key and Solo), and a
+// status strip carries the summary, the selected band's gain now, the Dynamic master switch
+// and the output. The live readings come from the engine (DynamicEq.h scopeRead). Every
+// control is a device param (raw units), so automation / MIDI learn / presets / A-B /
+// persistence come for free; the key track is the device's sidechain routing.
+// FullBleed — the shared shell draws the header (name · preset · badge · bypass).
 
 using System;
 using System.Collections.Generic;
@@ -30,19 +27,9 @@ namespace Nota.App;
 
 internal sealed class DynamicEqDeviceBody : IDeviceBody
 {
-    // The right panel: the band column, a gap, the dynamics column, inside the section's padding
-    // and its 1px edge.
-    // Folded, a strip just wide enough for the picked band's Freq, Gain and Q stacked under the arrow.
-    internal const double BandW = 176, DynW = 200, PanelGap = 16, StripW = EqDeviceBody.StripW;
-    internal const double PanelW = BandW + PanelGap + DynW + 2 * SectionPad;
-    public const double OpenW = DeviceCardKit.CardWide, FoldedW = OpenW - PanelW + StripW;   // 702 folded
-
-    public double Width => OpenW;
-    public bool AutoWidth => true;   // the card follows the fold
+    public double Width => 700;
     public bool FullBleed => true;
     public string? Subtitle => "Dynamic EQ";
-
-    // Whether the right panel is folded, per track and device: view state for this session only.
 
     public Control Build(DeviceCardContext ctx, int index)
     {
@@ -75,9 +62,9 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         }
         var scope = new float[DynEq.kScope];
         int scN = 0;
+        double Sc(int i) => scN > i ? scope[i] : 0;
 
         var curve = new DynamicEqCurve(engine, track, di);
-        if (EqBandUi.PickedBand(track, di) is int picked) curve.SelectedBand = picked;   // survives a chain rebuild
         int Sel() => curve.SelectedBand;
         bool BandOn(int b) => B(b, DynEq.On) > 0.5f;
         int TypeOf(int b) => Math.Clamp((int)Math.Round(B(b, DynEq.TypeF)), 0, 5);
@@ -87,16 +74,15 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         bool Capable(int b) => DynEq.HasGain(TypeOf(b));
         bool IsDyn(int b) => DynMaster() && BandOn(b) && Capable(b) && ModeOf(b) != DynEq.Static;
         bool KeyExt(int b) => P(DynEq.SidechainP) >= 0.5f || P(DynEq.KeyBase + b) >= 0.5f;
+        IBrush DirInk(int b, bool bright = false) => B(b, DynEq.RangeF) >= 0 ? (bright ? NotaPalette.RoseBright : NotaPalette.Rose) : (bright ? NotaPalette.TealBright : Teal);
 
+        // ---- small builders ---------------------------------------------------------
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Mono(string t, double fs, IBrush c)
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
-        static T Row<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
-        static Grid Across(params Control[] cells)
-        {
-            var g = new Grid();
-            for (int i = 0; i < cells.Length; i++) { g.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star)); g.Children.Add(Col(cells[i], i)); }
-            return g;
-        }
 
         // Key source: the device's sidechain routing (a track), picked from a menu.
         string SrcName(int id) => TrackNames.Of(engine, id);
@@ -120,121 +106,237 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         }
 
         // ======================================================================
-        // CENTRE — the response graph over the row of band cells
+        // LEFT — band chips over the response graph
         // ======================================================================
-        ToolTip.SetTip(curve, "Drag a node — frequency and gain · wheel over a node — Q · double-click a node — band on / off · "
-            + "double-click empty space — a new bell there · right-click a node — type, mode, solo");
-        void SetType(int b, int i)
-        {
-            SetP(DynEq.P(b, DynEq.TypeF), i);
-            if (!DynEq.HasGain(i) && ModeOf(b) != DynEq.Static) SetP(DynEq.P(b, DynEq.ModeF), DynEq.Static);
-            RefreshAll(); curve.InvalidateVisual();
-        }
-        var tabRow = new Grid { Margin = new Thickness(0, 0, 0, 6), ColumnSpacing = 2 };
+        var chipRow = new UniformGrid { Rows = 1, Margin = new Thickness(3, 0), VerticalAlignment = VerticalAlignment.Center };
         for (int b = 0; b < DynEq.Bands; b++)
         {
-            int bb = b, pOn = DynEq.P(b, DynEq.On);
-            bool Lit() => BandOn(bb) && (Solo() < 0 || Solo() == bb);   // outside a solo a band reads as off
-            // How much of its range the band's dynamics use right now.
-            double Activity()
+            int bb = b;
+            var num = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Text = (b + 1).ToString(), VerticalAlignment = VerticalAlignment.Center };
+            num.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+            var type = new TextBlock { FontSize = 7, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
+            var hz = Mono("", 7, TextPrimary); hz.HorizontalAlignment = HorizontalAlignment.Right;
+            var bar = new Border { Height = 2, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom };
+            var inner = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), Margin = new Thickness(4, 0) };
+            inner.Children.Add(num); inner.Children.Add(Col(type, 1)); inner.Children.Add(Col(hz, 2));
+            var chip = new Border
             {
+                Height = 15, Margin = new Thickness(1, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), ClipToBounds = true,
+                Cursor = new Cursor(StandardCursorType.Hand), Child = new Grid { Children = { inner, bar } },
+            };
+            ToolTip.SetTip(chip, NotaNum.F($"Band {b + 1} — click to edit it; the bar shows how much of its range the dynamics use now"));
+            chip.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
+                if (e.ClickCount == 2) SetP(DynEq.P(bb, DynEq.On), BandOn(bb) ? 0 : 1);
+                curve.SelectedBand = bb; RefreshAll(); e.Handled = true;
+            };
+            readouts.Add(() =>
+            {
+                bool on = BandOn(bb), sel = bb == Sel(), dimmed = Solo() >= 0 && !sel;
+                num.Foreground = !on || dimmed ? TextDisabled : sel ? AccentBright : TextSecondary;
+                type.Text = DynEq.TypeShort[TypeOf(bb)];
+                type.Foreground = on && !dimmed ? TextSecondary : TextDisabled;
+                hz.Text = DynEq.HzShort(B(bb, DynEq.FreqF));
+                hz.Foreground = on && !dimmed ? TextPrimary : TextDisabled;
+                chip.BorderBrush = sel ? Brass : Brushes.Transparent;
+                chip.Background = sel ? Raised : Sunken;
                 double r = Math.Abs(B(bb, DynEq.RangeF));
-                return IsDyn(bb) && r > 0.05 ? Math.Abs(curve.Gr(bb)) / r : 0;
-            }
-            var chip = EqBandUi.Chip(b, () => TypeOf(bb), Lit, () => DynEq.HzShort(B(bb, DynEq.FreqF)),
-                () => bb == Sel(), () => { curve.SelectedBand = bb; RefreshAll(); },
-                () => { SetP(pOn, BandOn(bb) ? 0 : 1); curve.InvalidateVisual(); }, out var chipSync, Activity);
-            Learn(chip, pOn);
-            ToolTip.SetTip(chip, NotaNum.F($"Band {b + 1} — click to edit it, double-click to switch it on / off; the bar shows how much of its range the dynamics use now"));
-            readouts.Add(chipSync);
-            tabRow.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
-            tabRow.Children.Add(Col(chip, b));
+                double frac = IsDyn(bb) && r > 0.05 ? Math.Clamp(Math.Abs(curve.Gr(bb)) / r, 0, 1) : 0;
+                bar.Width = frac * Math.Max(0, chip.Bounds.Width - 2);
+                bar.Background = DirInk(bb);
+            });
+            chipRow.Children.Add(chip);
         }
-        DockPanel.SetDock(tabRow, Dock.Top);
-        var graphSection = Section(new DockPanel { LastChildFill = true, Children = { tabRow, curve } });
-        graphSection.Padding = new Thickness(SectionPad - 1);
-
-        // 0..1 mappings (frequency, Q, attack and release are log)
-        bool IsLog(int p) => p >= 0 && p < DynEq.Bands * DynEq.PerBand && (p % DynEq.PerBand) is DynEq.FreqF or DynEq.QF or DynEq.AtkF or DynEq.RelF;
-        double ToN(int p, double v) => IsLog(p)
-            ? Math.Log(Math.Clamp(v, mn[p], mx[p]) / mn[p]) / Math.Log(mx[p] / mn[p])
-            : (Math.Clamp(v, mn[p], mx[p]) - mn[p]) / (mx[p] - mn[p]);
-        double FromN(int p, double n) { n = Math.Clamp(n, 0, 1); return IsLog(p) ? mn[p] * Math.Pow(mx[p] / mn[p], n) : mn[p] + n * (mx[p] - mn[p]); }
-        double DefOf(int p) => engine.DeviceParamDefault(track, di, p);
-
-        var right = Section(new ContentControl());
-
-        // A knob cell bound to param p. `marker` marks a live reading on the track; `def` moves the
-        // double-click value with the band's mode; `inactive` draws it in ink 4 (still editable).
-        Control K(int p, string label, Func<string> fmt, string tip, double cellW, Func<string>? liveLabel = null, Func<bool>? inactive = null,
-            bool inline = false, bool bipolar = false, Func<double>? marker = null, Func<double>? def = null)
+        var chipStrip = new Border { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = chipRow };
+        DockPanel.SetDock(chipStrip, Dock.Top);
+        ToolTip.SetTip(curve, "Drag a node — frequency and gain · wheel over a node — Q · double-click a node — band on / off · "
+            + "double-click empty space — a new bell there · right-click a node — type, mode, solo");
+        var graphPanel = new RuleSection
         {
-            var val = new TextBlock { Text = fmt(), Foreground = TextPrimary };
-            var knob = new Knob(ToN(p, P(p)), 1.0) { Accent = true, Inline = inline, Bipolar = bipolar, Default = ToN(p, def?.Invoke() ?? DefOf(p)) };
-            knob.ValueChanged += v => { Raw(p, (float)FromN(p, v)); val.Text = fmt(); curve.InvalidateVisual(); RefreshAll(); };
-            knob.GestureBegin += () => Begin(p);
-            knob.GestureEnd += () => End(p);
-            Learn(knob, p);
-            ToolTip.SetTip(knob, tip);
-            var cell = KnobCell(label, knob, val, cellW);
-            TextBlock? lbl = null;
-            if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { lbl = tb; break; }
-            bool? wasInactive = null;
+            Margin = new Thickness(0, 0, 5, 0),
+            Child = new DockPanel { LastChildFill = true, Children = { chipStrip, new Border { Padding = new Thickness(5), Child = curve } } },
+        };
+
+        // ======================================================================
+        // RIGHT — the selected band (rebuilt when the selection moves, so MIDI learn and
+        // automation bind to that band's own params)
+        // ======================================================================
+        var bandHost = new ContentControl();
+
+        Control BandPanel(int b)
+        {
+            bandReadouts.Clear();
+            int pOn = DynEq.P(b, DynEq.On), pType = DynEq.P(b, DynEq.TypeF), pF = DynEq.P(b, DynEq.FreqF), pG = DynEq.P(b, DynEq.GainF),
+                pQ = DynEq.P(b, DynEq.QF), pMode = DynEq.P(b, DynEq.ModeF), pThr = DynEq.P(b, DynEq.ThrF), pRange = DynEq.P(b, DynEq.RangeF),
+                pAtk = DynEq.P(b, DynEq.AtkF), pRel = DynEq.P(b, DynEq.RelF), pKey = DynEq.KeyBase + b;
+
+            // 0..1 mappings (frequency, Q, attack and release are log)
+            bool IsLog(int p) => p == pF || p == pQ || p == pAtk || p == pRel;
+            double ToN(int p, double v) => IsLog(p)
+                ? Math.Log(Math.Clamp(v, mn[p], mx[p]) / mn[p]) / Math.Log(mx[p] / mn[p])
+                : (Math.Clamp(v, mn[p], mx[p]) - mn[p]) / (mx[p] - mn[p]);
+            double FromN(int p, double n) { n = Math.Clamp(n, 0, 1); return IsLog(p) ? mn[p] * Math.Pow(mx[p] / mn[p], n) : mn[p] + n * (mx[p] - mn[p]); }
+            double DefOf(int p) => engine.DeviceParamDefault(track, di, p);
+
+            // ---- header: badge · name · ON ----
+            var badgeTxt = Mono((b + 1).ToString(), 8, OnAccent); badgeTxt.FontWeight = FontWeight.Bold; badgeTxt.HorizontalAlignment = HorizontalAlignment.Center;
+            var badge = new Border { Width = 13, Height = 13, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center, Child = badgeTxt };
+            var name = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
+            var onSw = Switch("On", () => BandOn(b), () => { SetP(pOn, BandOn(b) ? 0 : 1); RefreshAll(); }, out var onSync);
+            Learn(onSw, pOn);
+            ToolTip.SetTip(onSw, "Band on — off leaves the band out of the signal (double-click its node does the same)");
+            bandReadouts.Add(onSync);
             bandReadouts.Add(() =>
             {
-                if (!knob.Dragging) { double c = ToN(p, P(p)); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
-                val.Text = fmt();
-                if (lbl is not null && liveLabel is not null) lbl.Text = liveLabel();
-                bool ina = inactive?.Invoke() ?? false;
-                if (wasInactive != ina) { Inactive.Set(cell, ina); wasInactive = ina; }
-                if (marker is not null) knob.Marker = ina ? double.NaN : marker();
-                if (def is not null) knob.Default = ToN(p, def());
+                bool on = BandOn(b);
+                badge.Background = on ? AccentBright : NotaPalette.TextAxis;
+                badgeTxt.Foreground = on ? OnAccent : TextTertiary;
+                name.Text = DynEq.TypeNames[TypeOf(b)];
+                name.Foreground = on ? TextPrimary : TextTertiary;
             });
-            cell.HorizontalAlignment = HorizontalAlignment.Center;
-            return cell;
-        }
-        // The picked band's Freq, Gain and Q knobs (across in the panel, stacked in the folded strip).
-        Control[] BandKnobs(int b, double cw)
-        {
-            int pF = DynEq.P(b, DynEq.FreqF), pG = DynEq.P(b, DynEq.GainF), pQ = DynEq.P(b, DynEq.QF);
-            return new[]
+            var head = new DockPanel { Height = 20, Margin = new Thickness(8, 0), Children = { Docked(onSw, Dock.Right), badge, name } };
+            var headBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = head };
+
+            // ---- type ----
+            var typeSeg = Segments(DynEq.TypeSeg, () => TypeOf(b), i =>
             {
-                K(pF, "Freq", () => DynEq.HzShort(B(b, DynEq.FreqF)) + (B(b, DynEq.FreqF) < 1000 ? " Hz" : ""), "Frequency — or drag the node left / right", cw),
-                K(pG, "Gain", () => Capable(b) ? DynEq.Db(B(b, DynEq.GainF)) + " dB" : "—", "Gain — the static gain; or drag the node up / down", cw,
-                    inactive: () => !Capable(b)),
-                K(pQ, "Q", () => NotaNum.F($"{B(b, DynEq.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node", cw,
-                    liveLabel: () => TypeOf(b) is DynEq.LowCut or DynEq.HighCut ? "Reso" : "Q"),
-            };
-        }
-
-        // ======================================================================
-        // RIGHT — two columns on one grid of rows, so their parts line up: the picked band (head,
-        // filter shapes, Freq / Gain / Q, its key and Solo) beside its dynamics (title and fold
-        // arrow, mode, Thresh / Range / Attack / Release, the device's Dynamic switch and Out).
-        // Rebuilt when the selection moves, so MIDI learn and automation bind to that band's params.
-        // ======================================================================
-        Control PanelBody(int b)
-        {
-            int pOn = DynEq.P(b, DynEq.On), pType = DynEq.P(b, DynEq.TypeF);
-            int pMode = DynEq.P(b, DynEq.ModeF), pThr = DynEq.P(b, DynEq.ThrF), pRange = DynEq.P(b, DynEq.RangeF),
-                pAtk = DynEq.P(b, DynEq.AtkF), pRel = DynEq.P(b, DynEq.RelF), pKey = DynEq.KeyBase + b;
-            void Toggle() { SetP(pOn, BandOn(b) ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }
-
-            // ---- the band
-            var badge = EqBandUi.Badge(b, () => BandOn(b), Toggle, out var badgeSync);
-            var onSw = Switch("On", () => BandOn(b), Toggle, out var onSync);
-            Learn(badge, pOn); Learn(onSw, pOn);
-            ToolTip.SetTip(badge, "Band on — off leaves the band out of the signal (double-click its node does the same)");
-            ToolTip.SetTip(onSw, "Band on — off leaves the band out of the signal (double-click its node does the same)");
-            var bandHead = EqBandUi.Head(badge, onSw, () => DynEq.TypeNames[TypeOf(b)], () => BandOn(b), out var headSync);
-            bandReadouts.Add(badgeSync); bandReadouts.Add(onSync); bandReadouts.Add(headSync);
-
-            var types = EqBandUi.TypeRow(DynEq.TypeNames, () => TypeOf(b), i => SetType(b, i), out var typeSync);
-            Learn(types, pType);
+                SetP(pType, i);
+                if (!DynEq.HasGain(i) && ModeOf(b) != DynEq.Static) SetP(pMode, DynEq.Static);
+                RefreshAll();
+            }, out var typeSync, fill: true, padX: 0);
+            Learn(typeSeg, pType);
+            ToolTip.SetTip(typeSeg, "Type — high-pass, low shelf, bell, notch, high shelf, low-pass; only shelves and bells take gain and dynamics");
             bandReadouts.Add(typeSync);
 
-            var bandKnobs = Across(BandKnobs(b, BandW / 3));
+            // ---- knobs ----
+            Control K(int p, string label, Func<string> fmt, string tip, Func<string>? liveLabel = null, Func<bool>? inactive = null)
+            {
+                var val = Mono(fmt(), 7, TextPrimary);
+                var knob = new Knob(ToN(p, P(p)), 1.0) { Accent = true, Default = ToN(p, DefOf(p)), Width = 34, Height = 34 };
+                knob.ValueChanged += v => { Raw(p, (float)FromN(p, v)); val.Text = fmt(); curve.InvalidateVisual(); RefreshAll(); };
+                knob.GestureBegin += () => Begin(p);
+                knob.GestureEnd += () => End(p);
+                Learn(knob, p);
+                ToolTip.SetTip(knob, tip);
+                var cell = KnobCell(label, knob, val, 54);
+                TextBlock? lbl = null;
+                if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { lbl = tb; break; }
+                bool? wasInactive = null;
+                bandReadouts.Add(() =>
+                {
+                    if (!knob.Dragging) { double c = ToN(p, P(p)); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
+                    val.Text = fmt();
+                    if (lbl is not null && liveLabel is not null) lbl.Text = liveLabel();
+                    bool ina = inactive?.Invoke() ?? false;
+                    if (wasInactive != ina) { Inactive.Set(cell, ina); wasInactive = ina; }
+                });
+                return cell;
+            }
+            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), Children =
+            {
+                K(pF, "FREQ", () => DynEq.HzShort(B(b, DynEq.FreqF)) + (B(b, DynEq.FreqF) < 1000 ? " Hz" : ""), "Frequency — or drag the node left / right"),
+                Col(K(pG, "GAIN", () => Capable(b) ? DynEq.Db(B(b, DynEq.GainF)) + " dB" : "—", "Gain — the static gain; or drag the node up / down",
+                    inactive: () => !Capable(b)), 1),
+                Col(K(pQ, "Q", () => NotaNum.F($"{B(b, DynEq.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node",
+                    liveLabel: () => TypeOf(b) is DynEq.LowCut or DynEq.HighCut ? "Reso" : "Q"), 2),
+            } };
 
+            // ---- dynamics mode ----
+            var modeSeg = Segments(DynEq.ModeNames, () => ModeOf(b), i =>
+            {
+                if (i != DynEq.Static && !Capable(b)) return;
+                DynamicEqCurve.SetMode(engine, track, di, b, i);
+                RefreshAll(); curve.InvalidateVisual();
+            }, out var modeSync, padX: 6, dim: () => !Capable(b));
+            Learn(modeSeg, pMode);
+            ToolTip.SetTip(modeSeg, "Static — a plain EQ band · Duck — acts as the band's level rises above the threshold (a cut by default) · "
+                + "Lift — acts as it falls below it (a boost by default)");
+            bandReadouts.Add(modeSync);
+            var dynLabel = Caps("DYNAMICS");
+            bandReadouts.Add(() => dynLabel.Foreground = IsDyn(b) ? TextSecondary : TextTertiary);
+            var modeRow = new Border
+            {
+                BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0),
+                Child = new DockPanel { Children = { Docked(modeSeg, Dock.Right), dynLabel } },
+            };
+
+            // ---- sliders ----
+            bool DynOp() => IsDyn(b);
+            Control SliderRow(string label, int p, Func<string> fmt, string tip, Func<double>? getN = null, Action<double>? setN = null,
+                Func<double>? marker = null, Func<IBrush?>? ink = null, Action? reset = null, Control? valueCtl = null)
+            {
+                getN ??= () => ToN(p, P(p));
+                setN ??= n => Raw(p, (float)FromN(p, n));
+                reset ??= () => SetP(p, (float)DefOf(p));
+                var trk = new SliderTrack { Reset = () => { reset(); RefreshAll(); } };
+                trk.Changed += v => { setN(v); RefreshAll(); curve.InvalidateVisual(); };
+                trk.GestureBegin += () => Begin(p);
+                trk.GestureEnd += () => End(p);
+                Learn(trk, p);
+                ToolTip.SetTip(trk, tip);
+                var val = Mono(fmt(), 8, TextPrimary); val.TextAlignment = TextAlignment.Right; val.HorizontalAlignment = HorizontalAlignment.Right;
+                // Range's read-out sits in its flip arrow, which a click toggles — it stays click-only.
+                if (valueCtl is null)
+                    ValueEntry.Attach(val, getN, setN, fmt, () => Begin(p), () => End(p), () => { RefreshAll(); curve.InvalidateVisual(); }, control: trk);
+                var lbl = Caps(label);
+                bandReadouts.Add(() =>
+                {
+                    bool op = DynOp();
+                    if (!trk.Dragging) trk.Norm = getN();
+                    trk.IsDim = !op;
+                    trk.Ink = ink?.Invoke();
+                    trk.Marker = marker is not null && op ? marker() : double.NaN;
+                    val.Text = fmt();
+                    val.Foreground = op ? TextPrimary : TextDisabled;
+                    lbl.Foreground = op ? TextTertiary : TextDisabled;
+                });
+                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("40,*,40"), ColumnSpacing = 6, Height = 11 };
+                g.Children.Add(lbl);
+                g.Children.Add(Col(trk, 1));
+                g.Children.Add(Col(valueCtl ?? val, 2));
+                if (valueCtl is Border { Child: Panel vp }) vp.Children.Add(val);
+                return g;
+            }
+            float Rng() => B(b, DynEq.RangeF);
+            // Range: the slider sets the magnitude, the arrow the direction (click it to flip).
+            var flip = new Border
+            {
+                Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), HorizontalAlignment = HorizontalAlignment.Right,
+            };
+            ToolTip.SetTip(flip, "Flip — cut ↔ boost (a Duck that boosts is upward expansion, a Lift that cuts is downward expansion)");
+            var flipPanel = new Panel();
+            flip.Child = flipPanel;
+            flip.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(flip).Properties.IsLeftButtonPressed) return;
+                float r = Rng(); if (Math.Abs(r) < 0.05f) r = ModeOf(b) == DynEq.Lift ? -6 : 6;
+                SetP(pRange, -r); RefreshAll(); curve.InvalidateVisual(); e.Handled = true;
+            };
+            var sliders = new StackPanel
+            {
+                Spacing = 5, Children =
+                {
+                    SliderRow("THRESH", pThr, () => NotaNum.F($"{B(b, DynEq.ThrF):0} dB"),
+                        "Threshold — where the band starts to act; the teal mark is the band's level now",
+                        marker: () => ToN(pThr, Math.Max(mn[pThr], curve.Level(b)))),
+                    SliderRow("RANGE", pRange, () => (Rng() >= 0 ? "↑ " : "↓ ") + NotaNum.F($"{Math.Abs(Rng()):0.0}"),
+                        "Range — how far the gain can move at full engagement (6 dB past the threshold); click the arrow to flip cut / boost",
+                        getN: () => Math.Abs(Rng()) / 18.0,
+                        setN: n =>
+                        {
+                            float sgn = Rng() > 0 || (Math.Abs(Rng()) < 0.05f && ModeOf(b) == DynEq.Lift) ? 1 : -1;
+                            Raw(pRange, sgn * (float)(Math.Clamp(n, 0, 1) * 18.0));
+                        },
+                        ink: () => DirInk(b),
+                        reset: () => SetP(pRange, ModeOf(b) == DynEq.Lift ? 6 : -6),
+                        valueCtl: flip),
+                    SliderRow("ATTACK", pAtk, () => DynEq.Ms(B(b, DynEq.AtkF)), "Attack — how fast the band moves toward its range"),
+                    SliderRow("RELEASE", pRel, () => DynEq.Ms(B(b, DynEq.RelF)), "Release — how fast it returns to its static gain"),
+                },
+            };
+
+            // ---- key + solo ----
             var keySeg = Segments(new[] { "Self", "Ext" }, () => KeyExt(b) ? 1 : 0, i =>
             {
                 if (i == 0)
@@ -251,15 +353,19 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 {
                     bool was = KeyExt(b);
                     SetP(pKey, 1);
-                    if (was || Src() < 0) ShowKeyMenu(right);
+                    if (was || Src() < 0) ShowKeyMenu(bandHost);
                 }
                 RefreshAll();
-            }, out var keySync, padX: 6);
+            }, out var keySync);
             Learn(keySeg, pKey);
             ToolTip.SetTip(keySeg, "Key — Self: the band listens to this track · Ext: to the key track (click Ext again to pick the track)");
             bandReadouts.Add(keySync);
-            var solo = TextButton("Solo");
-            var soloTb = (TextBlock)solo.Child!;
+            var soloTb = new TextBlock { Text = "Solo", FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
+            var solo = new Border
+            {
+                Height = 15, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
+                Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = soloTb,
+            };
             solo.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(solo).Properties.IsLeftButtonPressed) return;
@@ -270,107 +376,119 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             bandReadouts.Add(() =>
             {
                 bool on = Solo() == b;
-                solo.Background = on ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
+                solo.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent;
+                solo.BorderBrush = on ? Brass : NotaPalette.BorderStrong;
                 soloTb.Foreground = on ? AccentBright : TextSecondary;
+                soloTb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
             });
-            var keyLbl = EqBandUi.Label("Key");
-            keyLbl.Margin = new Thickness(0, 0, 6, 0);
             var keyRow = new DockPanel
             {
-                VerticalAlignment = VerticalAlignment.Center,
-                Children = { Docked(solo, Dock.Right), Docked(keyLbl, Dock.Left), Docked(keySeg, Dock.Left) },
+                Children = { Docked(solo, Dock.Right), Docked(new Border { Width = 46, Child = Caps("KEY") }, Dock.Left), new Border { HorizontalAlignment = HorizontalAlignment.Left, Child = keySeg } },
             };
 
-            // ---- its dynamics
-            var fold = EqBandUi.FoldButton(false, () => SetFolded(true));
-            fold.Margin = new Thickness(8, 0, 0, 0);
-            var title = new DockPanel { Children = { Docked(fold, Dock.Right), EqBandUi.Title("Dynamics") } };
-            title.Children[1].VerticalAlignment = VerticalAlignment.Center;
-
-            var modeSeg = Segments(DynEq.ModeNames, () => ModeOf(b), i =>
+            var body = new Grid
             {
-                if (i != DynEq.Static && !Capable(b)) return;
-                DynamicEqCurve.SetMode(engine, track, di, b, i);
-                RefreshAll(); curve.InvalidateVisual();
-            }, out var modeSync, fill: true, padX: 0, dim: () => !Capable(b));
-            Learn(modeSeg, pMode);
-            ToolTip.SetTip(modeSeg, "Static — a plain EQ band · Duck — acts as the band's level rises above the threshold (a cut by default) · "
-                + "Lift — acts as it falls below it (a boost by default)");
-            bandReadouts.Add(modeSync);
-            modeSeg.VerticalAlignment = VerticalAlignment.Center;
-
-            // Ink 4 while the band is static (or the Dynamic switch is off); still editable.
-            bool Idle() => !IsDyn(b);
-            float Rng() => B(b, DynEq.RangeF);
-            double cw = DynW / 4;
-            var dynKnobs = Across(
-                K(pThr, "Thresh", () => NotaNum.F($"{B(b, DynEq.ThrF):0}\u2009dB"),
-                    "Threshold — where the band starts to act; the tick on the ring is the band's level now", cw, inactive: Idle,
-                    marker: () => ToN(pThr, Math.Max(mn[pThr], curve.Level(b)))),
-                K(pRange, "Range", () => DynEq.Db(Rng()) + " dB",
-                    "Range — how far the gain can move at full engagement (6\u2009dB past the threshold): left cuts, right boosts "
-                    + "(a Duck that boosts is upward expansion, a Lift that cuts is downward expansion)", cw, inactive: Idle, bipolar: true,
-                    def: () => ModeOf(b) == DynEq.Lift ? 6 : -6),
-                K(pAtk, "Attack", () => DynEq.Ms(B(b, DynEq.AtkF)), "Attack — how fast the band moves toward its range", cw, inactive: Idle),
-                K(pRel, "Release", () => DynEq.Ms(B(b, DynEq.RelF)), "Release — how fast it returns to its static gain", cw, inactive: Idle));
-
-            // The device's Dynamic master switch and output, at the bottom right (as EQ-8's Scale and Output).
-            var dynSw = Switch("Dynamic", DynMaster, () => { SetP(DynEq.DynamicsP, DynMaster() ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }, out var dynSync);
-            Learn(dynSw, DynEq.DynamicsP);
-            ToolTip.SetTip(dynSw, "Dynamic — off parks every band on its static gain: hear what the dynamics do");
-            bandReadouts.Add(dynSync);
-            dynSw.VerticalAlignment = VerticalAlignment.Center;
-            var outK = K(DynEq.OutputP, "Output", () => DynEq.Db(P(DynEq.OutputP)) + " dB", "Output — the level after the EQ, ±18\u2009dB", 80, inline: true);
-            outK.HorizontalAlignment = HorizontalAlignment.Right;
-            var master = new DockPanel { Children = { Docked(outK, Dock.Right), dynSw } };
-
-            var g = new Grid
-            {
-                ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{BandW},{PanelGap},{DynW}")),
-                // The head sits on its shapes / mode as on EQ-8; the spare height splits evenly above
-                // and below the knob row (EQ-8 fills it with Slope and Channel).
-                RowDefinitions = new RowDefinitions("Auto,6,Auto,*,Auto,*,Auto"),
+                RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto"), Margin = new Thickness(8, 6, 8, 6),
             };
-            void At(Control c, int row, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); g.Children.Add(c); }
-            At(bandHead, 0, 0); At(title, 0, 2);
-            At(types, 2, 0); At(modeSeg, 2, 2);
-            At(bandKnobs, 4, 0); At(dynKnobs, 4, 2);
-            At(keyRow, 6, 0); At(master, 6, 2);
-            return g;
-        }
-
-        // The folded strip: the arrow that opens the panel again, the picked band's knobs centred
-        // in the space under it (nudged down past the label lines' slack), as on EQ-8.
-        Control FoldedStrip(int b)
-        {
-            var open = EqBandUi.FoldButton(true, () => SetFolded(false));
-            open.HorizontalAlignment = HorizontalAlignment.Center;
-            var knobs = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 6, 0, 0) };
-            foreach (var k in BandKnobs(b, StripW - 2)) knobs.Children.Add(k);
-            var strip = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
-            strip.Children.Add(open);
-            strip.Children.Add(Row(knobs, 1));
-            return strip;
-        }
-
-        graphSection.Margin = new Thickness(0, 0, SectionGap, 0);
-        var root = new DockPanel { LastChildFill = true, Children = { Docked(right, Dock.Right), graphSection } };
-
-        bool folded = EqBandUi.IsFolded(track, di);
-        void Rebuild()
-        {
-            bandReadouts.Clear();
-            int b = Sel();
-            right.Width = folded ? StripW : PanelW;
-            right.Padding = folded ? new Thickness(0, 6) : new Thickness(SectionPad - 1);
-            ((ContentControl)right.Child!).Content = folded ? FoldedStrip(b) : PanelBody(b);
-            root.Width = (folded ? FoldedW : OpenW) - 2 * CardPad;
+            void Row(Control c, int r) { Grid.SetRow(c, r); body.Children.Add(c); }
+            Row(typeSeg, 0); Row(knobs, 2); Row(modeRow, 4); Row(sliders, 6); Row(keyRow, 8);
+            var panel = new DockPanel { LastChildFill = true, Children = { Docked(headBorder, Dock.Top), body } };
             for (int i = 0; i < bandReadouts.Count; i++) bandReadouts[i]();
+            return panel;
         }
-        void SetFolded(bool v) { folded = v; EqBandUi.SetFolded(track, di, v); Rebuild(); RefreshAll(); }
-        Rebuild();
-        curve.SelectionChanged += () => { EqBandUi.SetPickedBand(track, di, curve.SelectedBand); Rebuild(); RefreshAll(); };
+
+        var right = new RuleSection { Width = 186, Child = bandHost };
+        DockPanel.SetDock(right, Dock.Right);
+        bandHost.Content = BandPanel(Sel());
+        curve.SelectionChanged += () => { bandHost.Content = BandPanel(Sel()); RefreshAll(); };
         curve.Edited += RefreshAll;
+
+        // ======================================================================
+        // Status strip: summary · gain now · Dynamic · output · engine
+        // ======================================================================
+        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        string StatusText()
+        {
+            int s = Sel(), nOn = 0, nDyn = 0;
+            for (int b = 0; b < DynEq.Bands; b++) { if (BandOn(b)) nOn++; if (IsDyn(b)) nDyn++; }
+            var parts = new List<string> { NotaNum.F($"{nOn} bands · {nDyn} dynamic") };
+            string band = NotaNum.F($"B{s + 1} {DynEq.TypeNames[TypeOf(s)]} {DynEq.Hz(B(s, DynEq.FreqF))}");
+            if (Capable(s)) band += " " + DynEq.Db(B(s, DynEq.GainF)) + " dB";
+            band += NotaNum.F($" · Q {B(s, DynEq.QF):0.00}");
+            parts.Add(band);
+            bool anyExt = false;
+            for (int b = 0; b < DynEq.Bands; b++) if (IsDyn(b) && KeyExt(b)) anyExt = true;
+            if (anyExt) parts.Add("key " + (Src() >= 0 ? SrcName(Src()) : "none"));
+            return string.Join(" · ", parts);
+        }
+        var nowRead = Mono("", 8, TextTertiary);
+        ToolTip.SetTip(nowRead, "The selected band's dynamic gain right now");
+        readouts.Add(() =>
+        {
+            int s = Sel();
+            if (IsDyn(s))
+            {
+                double g = curve.Gr(s);
+                nowRead.Text = NotaNum.F($"B{s + 1} ") + (B(s, DynEq.RangeF) >= 0 ? "↑ " : "↓ ") + NotaNum.F($"{Math.Abs(g):0.0} dB");
+                nowRead.Foreground = DirInk(s, bright: true);
+            }
+            else
+            {
+                nowRead.Text = Solo() >= 0 ? NotaNum.F($"Solo B{Solo() + 1}") : NotaNum.F($"B{s + 1} static");
+                nowRead.Foreground = Solo() >= 0 ? AccentBright : TextTertiary;
+            }
+        });
+        var dynSw = Switch("Dynamic", DynMaster, () => { SetP(DynEq.DynamicsP, DynMaster() ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }, out var dynSync);
+        Learn(dynSw, DynEq.DynamicsP);
+        ToolTip.SetTip(dynSw, "Dynamic — off parks every band on its static gain: hear what the dynamics do");
+        readouts.Add(dynSync);
+
+        // OUT: a mono readout that drags vertically (±18 dB), double-click resets to 0.
+        var outTb = Mono("", 8, TextSecondary);
+        var outBox = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), VerticalAlignment = VerticalAlignment.Center, Child = outTb };
+        bool outDrag = false; double outY = 0;
+        outBox.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(outBox).Properties.IsLeftButtonPressed) return;
+            if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { SetP(DynEq.OutputP, 0); RefreshAll(); e.Handled = true; return; }
+            outDrag = true; outY = e.GetPosition(outBox).Y; e.Pointer.Capture(outBox); Begin(DynEq.OutputP); e.Handled = true;
+        };
+        outBox.PointerMoved += (_, e) =>
+        {
+            if (!outDrag) return;
+            double y = e.GetPosition(outBox).Y, dy = outY - y; outY = y;
+            bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+            Raw(DynEq.OutputP, P(DynEq.OutputP) + (float)(dy * 36.0 / (fine ? 1400.0 : 140.0)));
+            RefreshAll();
+        };
+        void OutEnd() { if (!outDrag) return; outDrag = false; End(DynEq.OutputP); }
+        outBox.PointerReleased += (_, e) => { OutEnd(); e.Pointer.Capture(null); };
+        outBox.PointerCaptureLost += (_, _) => OutEnd();
+        Learn(outBox, DynEq.OutputP);
+        ToolTip.SetTip(outBox, "Output — drag up / down (Shift for fine), double-click for 0 dB");
+        readouts.Add(() =>
+        {
+            float o = P(DynEq.OutputP);
+            outTb.Text = "Out " + DynEq.Db(o) + " dB";
+            outTb.Foreground = Math.Abs(o) > 0.05f ? TextPrimary : TextSecondary;
+        });
+        var engineRead = Mono("", 8, TextTertiary);
+        readouts.Add(() =>
+        {
+            statusLeft.Text = StatusText();
+            double sr = Sc(DynEq.S_SampleRate);
+            engineRead.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · CPU {Sc(DynEq.S_Cpu) * 100:0.0} %") : "";
+        });
+        var statusRight = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center, Children = { nowRead, dynSw, outBox, engineRead } };
+        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
+        statusGrid.Children.Add(statusLeft);
+        statusGrid.Children.Add(Col(statusRight, 1));
+        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
+        DockPanel.SetDock(status, Dock.Bottom);
+
+        // ---- assemble ---------------------------------------------------------------
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { right, graphPanel } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {

@@ -31,7 +31,7 @@ namespace Nota.App;
 
 internal static class SamplerInk
 {
-    public static FormattedText Mono(string t, IBrush ink, double size = NotaGraph.AxisSize)
+    public static FormattedText Mono(string t, IBrush ink, double size = 7)
         => new NotaFormattedText(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
 
     public static void Corner(DrawingContext ctx, Rect r, NotaGraph.Corner c, string text, IBrush ink)
@@ -131,7 +131,7 @@ internal sealed class SamplerWaveView : Control
         NotaGraph.Window(ctx, r);
         if (_peaks.Length == 0)
         {
-            var ft = SamplerInk.Mono(_empty, NotaPalette.TextTertiary, NotaType.DeviceCaption);
+            var ft = SamplerInk.Mono(_empty, NotaPalette.TextTertiary, 9);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, (h - ft.Height) / 2));
             return;
         }
@@ -155,9 +155,9 @@ internal sealed class SamplerWaveView : Control
         }
 
         int n = _peaks.Length / 2;
-        var upIn = new Pen(NotaPalette.VizInk, 1.2); var downIn = upIn;
-        var outPen = new Pen(NotaPalette.TextDisabled, 1);
-        int step = Math.Max(1, (int)Math.Floor(n / Math.Max(1.0, w / 2.5)));
+        var upIn = new Pen(NotaPalette.VizInk, 1.2); var downIn = new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0xA0), 1.2);
+        var outPen = new Pen(NotaPalette.Wash(NotaPalette.VizInk, 0x40), 1);
+        int step = Math.Max(1, (int)Math.Floor(n / Math.Max(1.0, w / 1.5)));
         for (int i = 0; i < n; i += step)
         {
             double f = (double)i / n, x = f * w;
@@ -246,9 +246,8 @@ internal sealed class SamplerKeysView : Control
             bool black = pc is 1 or 3 or 6 or 8 or 10;
             double kh = black ? keyH * 0.62 : keyH;
             var rect = new Rect(pad + i * kw + 1, bot - kh, Math.Max(1, kw - 2), kh);   // resting on the bottom edge
-            // The root is picked (soft tint); the sounding note is live (solid orange).
-            IBrush fill = note == playing ? NotaPalette.Accent
-                : note == _root ? NotaPalette.AccentSoft
+            IBrush fill = note == _root ? NotaPalette.Accent
+                : note == playing ? NotaPalette.Teal
                 : black ? NotaPalette.SurfaceAbyss : NotaPalette.SurfaceRaised;
             ctx.DrawRectangle(fill, note == _root ? null : hair, new RoundedRect(rect, 0, 0, 2, 2));
             if (note == _natural && note != _root)
@@ -260,7 +259,7 @@ internal sealed class SamplerKeysView : Control
             }
             if (note == _root)
             {
-                var t = SamplerInk.Mono(SamplerModel.NoteName(note), note == playing ? NotaPalette.TextOnAccent : NotaPalette.AccentBright);
+                var t = SamplerInk.Mono(SamplerModel.NoteName(note), NotaPalette.TextOnAccent);
                 ctx.DrawText(t, new Point(rect.X + (rect.Width - t.Width) / 2, rect.Bottom - t.Height - 2));
             }
         }
@@ -297,7 +296,7 @@ internal sealed class SamplerEnvView : Control
     private (Point A, Point D, Point S, Point R, Point O) Nodes()
     {
         double w = Bounds.Width, h = Bounds.Height;
-        double x0 = Pad, x1 = w - Pad, span = x1 - x0, top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
+        double x0 = Pad, x1 = w - Pad, span = x1 - x0, top = 14, bot = h - 12;
         double aw = (SegMin + SegSpan * _a) * span, dw = (SegMin + SegSpan * _d) * span, rw = (SegMin + SegSpan * _r) * span;
         double sy = top + (1 - _s) * (bot - top);
         var o = new Point(x0, bot);
@@ -347,7 +346,7 @@ internal sealed class SamplerEnvView : Control
             case 1:
             {
                 _d = Math.Clamp(_d + dx, 0, 1); Changed?.Invoke("decay", _d);
-                double top = NotaGraph.PlotTop, bot = Bounds.Height - NotaGraph.PlotFloor;
+                double top = 14, bot = Bounds.Height - 12;
                 double dy = (p.Y - _last.Y) / Math.Max(1, bot - top) * (fine ? 0.2 : 1);
                 _s = Math.Clamp(_s - dy, 0, 1); Changed?.Invoke("sustain", _s);
                 break;
@@ -424,7 +423,7 @@ internal sealed class SamplerEnvView : Control
                 _ => n.S.X + (n.R.X - n.S.X) * (1 - env / Math.Max(1e-3, _s)),
             };
             x = Math.Clamp(x, n.O.X, n.R.X);
-            NotaGraph.Node(ctx, new Point(x, y), true, NotaPalette.TextSecondary);
+            NotaGraph.Node(ctx, new Point(x, y), true, NotaPalette.Teal);
         }
 
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopLeft, _tl, NotaPalette.TextTertiary);
@@ -551,7 +550,7 @@ internal sealed class SamplerFilterView : Control
             if (_liveHz > 0 && Math.Abs(Math.Log2(_liveHz / fc)) > 0.05)
             {
                 double lx = XOf(_liveHz, w);
-                ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1.2), new Point(lx, 0), new Point(lx, h));
+                ctx.DrawLine(new Pen(NotaPalette.Teal, 1.2), new Point(lx, 0), new Point(lx, h));
             }
         }
 

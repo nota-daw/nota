@@ -6,7 +6,8 @@
 // always-visible REPEAT column (the input and the repeats' level · the repeat count), a centre
 // panel with Timeline / Slices / Filter tabs — capture and repeats over two intervals on the
 // grid, the interval's sound with the offset, gate and slice on it (drag them), the repeat
-// filter with a later repeat's band — and a right panel with Character / Output tabs. Interval and Grid sit in the row over the graph; Chance, Gate, Offset and Variation
+// filter with a later repeat's band — a right panel with Character / Output tabs, and a status
+// strip. Interval and Grid sit in the row over the graph; Chance, Gate, Offset and Variation
 // are knobs under it. The pictures come from the engine (BeatRepeat.h scopeRead). Every
 // control is a device param, so automation / MIDI learn / presets / A-B / persistence come for
 // free; Reset and the one-shot trigger are device actions.
@@ -39,6 +40,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
     private const int kCellAt = kTele, kWaveAt = kTele + 3 * kCells, kScope = kWaveAt + kWave;
     private const int A_Reset = 0;
 
+    private static readonly string[] IntervalSeg = { "1/8", "1/4", "1/2", "1", "2", "4" };
     private static readonly string[] IntervalName = { "1/8", "1/4", "1/2", "1 Bar", "2 Bars", "4 Bars" };
     private static readonly string[] IntervalEvery = { "every 1/8", "every 1/4", "every 1/2", "every bar", "every 2 bars", "every 4 bars" };
     private static readonly string[] GridSeg = { "1/4", "1/8", "1/16", "1/32" };
@@ -104,8 +106,10 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         int RepeatNo() => State() == 2 ? Math.Max(1, (int)Sc(S_Pass) - 1) : 0;
 
         // ---- small builders ---------------------------------------------------------
-        static TextBlock Caps(string t, IBrush? c = null, double fs = 0) => FxParts.Label(t, c);
-        static TextBlock Mono(string t, double fs, IBrush c) { var tb = FxParts.Info(t, c); tb.TextTrimming = TextTrimming.None; return tb; }
+        static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
+        { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        static TextBlock Mono(string t, double fs, IBrush c)
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -114,11 +118,11 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         void Learn(Control c, int p) => MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
-        // `steps` > 1 snaps a discrete param.
-        Control K(int p, string name, Func<double, string> fmt, int steps = 0, string? tip = null)
+        // `steps` > 1 snaps a discrete param; `lit` brightens the label and value (the knob that matters now).
+        Control K(int p, string name, Func<double, string> fmt, IBrush? arc = null, int steps = 0, string? tip = null, Func<bool>? lit = null)
         {
             var val = Mono(fmt(P(p)), 7, TextPrimary);
-            var knob = new Knob(P(p), 1.0) { Accent = true, Default = Def(p), Width = 34, Height = 34 };
+            var knob = new Knob(P(p), 1.0) { Accent = true, ArcColor = arc, Default = Def(p), Width = 34, Height = 34 };
             knob.Format = v => fmt(steps > 1 ? Math.Round(v * (steps - 1)) / (steps - 1) : v);   // read-out at any value: typing searches it
             knob.ValueChanged += v =>
             {
@@ -129,11 +133,19 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             knob.GestureEnd += () => End(p);
             Learn(knob, p);
             if (tip is not null) ToolTip.SetTip(knob, tip);
-            var cell = KnobCell(name, knob, val, 48);
+            var cell = KnobCell(name, knob, val, 52);
+            TextBlock? label = null;
+            if (lit is not null && cell is Panel pn) foreach (var c in pn.Children) if (c is TextBlock tb && tb != val) { label = tb; break; }
             readouts.Add(() =>
             {
                 if (!knob.Dragging) { double c = P(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
                 val.Text = fmt(P(p));
+                if (lit is not null)
+                {
+                    bool on = lit();
+                    val.Foreground = on ? TextPrimary : TextSecondary;
+                    if (label is not null) label.Foreground = on ? TextSecondary : TextTertiary;
+                }
             });
             return cell;
         }
@@ -152,7 +164,6 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         Control Seg(string[] names, Func<int> get, Action<int> pick, int learnParam, string tip, double padX = 6)
         {
             var seg = Segments(names, get, iv => { pick(iv); RefreshAll(); }, out var sync, padX: padX);
-            seg.VerticalAlignment = VerticalAlignment.Center;
             readouts.Add(sync);
             Learn(seg, learnParam);
             ToolTip.SetTip(seg, tip);
@@ -160,6 +171,8 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         }
         Control ModeSeg() => Seg(ModeNames, () => Sel(Mode, 3), i => SetP(Mode, i / 2f), Mode,
             "Mode — Mix: the repeats play over the dry; Insert: they replace it while they play; Gate: only the burst sounds");
+        Control IntervalSegC() => Seg(IntervalSeg, () => Sel(Interval, 6), i => SetP(Interval, i / 5f), Interval,
+            "Interval — how often it rolls Chance: 1/8, 1/4, 1/2 note, or every 1, 2, 4 bars", 5);
         // Grid picks a straight value and keeps the triplet state (a legacy 1/8T / 1/16T turns into the Triplet switch).
         void PickGrid(int baseIdx, bool trip)
         {
@@ -172,16 +185,16 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         // A latching chip: lit when `lit()`, a click runs `click`. `fill` = a full-width button.
         Border Latch(int p, Func<bool> lit, Action click, Func<string> text, string tip, bool fill = false)
         {
-            // Raised at rest; on, the soft tint with orange text.
-            var tb = new TextBlock { FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = NotaSize.Dropdown, Padding = new Thickness(9, 0), CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
-            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+            var tb = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
             void Hi()
             {
                 bool on = lit();
-                b.Background = on ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover;
-                tb.Foreground = on ? AccentBright : TextPrimary;
+                b.Background = on ? NotaPalette.AccentSubtle : fill ? Raised : Brushes.Transparent;
+                b.BorderBrush = on ? Brass : fill ? Brushes.Transparent : NotaPalette.BorderStrong;
+                tb.Foreground = on ? AccentBright : fill ? TextPrimary : TextSecondary;
+                tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 tb.Text = text();
             }
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; click(); RefreshAll(); e.Handled = true; };
@@ -195,16 +208,17 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         // Repeat: held while pressed; with Latch on, a click turns it on and the next one off.
         Border RepeatButton(bool fill)
         {
-            var tb = new TextBlock { Text = "Repeat", FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = NotaSize.Dropdown, Padding = new Thickness(9, 0), CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
-            b.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+            var tb = new TextBlock { Text = "Repeat", FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
             bool held = false;
             void Hi()
             {
-                bool on = On(RepeatP);   // solid orange only while it repeats
-                b.Background = on ? Brass : NotaPalette.SurfaceHover;
+                bool on = On(RepeatP);   // accent only while it repeats
+                b.Background = on ? Brass : Raised;
+                b.BorderBrush = on ? Brass : NotaPalette.BorderStrong;
                 tb.Foreground = on ? OnAccent : TextPrimary;
+                tb.FontWeight = FontWeight.SemiBold;
             }
             b.PointerPressed += (_, e) =>
             {
@@ -226,33 +240,37 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             return b;
         }
 
-        // Slider row: label · value bar · value.
-        Control SliderRow(string label, int p, Func<double, string> fmt, bool bipolar = false, bool modulation = false, double labW = 58)
+        // Slider row: caps label · track · mono value.
+        Control SliderRow(string label, int p, Func<double, string> fmt, bool bipolar = false, bool modulation = false, double labW = 40, Func<bool>? lit = null)
         {
             var bar = DeviceCardKit.SliderRow("", () => P(p), v => { Raw(p, v); RefreshAll(); }, () => fmt(P(p)), out var sync,
-                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: 40, bipolar: bipolar, modulation: modulation);
+                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), valueWidth: 34, bipolar: bipolar, modulation: modulation);
             readouts.Add(sync);
             Learn(bar, p);
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")), VerticalAlignment = VerticalAlignment.Center };
             var cap = Caps(label);
             g.Children.Add(cap);
             g.Children.Add(Col(bar, 1));
+            if (lit is not null)
+                readouts.Add(() =>
+                {
+                    bool on = lit();
+                    foreach (var c in bar.Children) if (c is TextBlock tb && tb.TextAlignment == TextAlignment.Right) tb.Foreground = on ? TextPrimary : TextSecondary;
+                });
             return g;
         }
 
         // A dropdown over a discrete choice: [value ▾] opens the list.
         Control Drop(int learnParam, string[] names, Func<int> get, Action<int> pick, string tip)
         {
-            // Raised like a button: the value 11 / ink 1 and a chevron.
-            var name = new TextBlock { FontSize = NotaType.KnobValue, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
-            var chev = new Glyph(GlyphKind.ChevronDown, 9) { Margin = new Thickness(8, 0, 0, 0), Foreground = TextSecondary };
+            var name = new TextBlock { FontSize = 8, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+            var chev = new Glyph(GlyphKind.ChevronDown, 7) { Margin = new Thickness(8, 0, 0, 0), Foreground = TextTertiary };
             var box = new Border
             {
-                Height = NotaSize.Dropdown, Background = NotaPalette.SurfaceHover, CornerRadius = NotaRadius.Field,
-                Padding = new Thickness(9, 0, 7, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+                Height = 16, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
+                Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
                 Child = new DockPanel { Children = { Docked(chev, Dock.Right), name } },
             };
-            box.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
             readouts.Add(() => name.Text = names[Math.Clamp(get(), 0, names.Length - 1)]);
             ToolTip.SetTip(box, tip);
             Learn(box, learnParam);
@@ -280,7 +298,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
 
         static Grid HeadRow(Control left, Control right)
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 24, ColumnSpacing = 8 };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 18, ColumnSpacing = 6 };
             g.Children.Add(left); g.Children.Add(Col(right, 1));
             return g;
         }
@@ -290,15 +308,15 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             var i2 = Mono("", 7, TextTertiary); i2.HorizontalAlignment = HorizontalAlignment.Right;
             i1.TextTrimming = i2.TextTrimming = TextTrimming.CharacterEllipsis;
             readouts.Add(() => { i1.Text = info1(); i2.Text = info2(); });
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 54, ColumnSpacing = 8 };
-            g.Children.Add(Row(10, knobs));
-            g.Children.Add(Col(new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 2), Children = { i1, i2 } }, 1));
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 52, ColumnSpacing = 6 };
+            g.Children.Add(Row(2, knobs));
+            g.Children.Add(Col(new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 1));
             return g;
         }
         static Control TabBody(Control head, Control window, Control knobs) => new DockPanel
         {
-            LastChildFill = true, Margin = new Thickness(0, 6, 0, 0),
-            Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 6, 0, 6), Child = window } },
+            LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
+            Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
         };
         void WireDrag(ShDragView v, Func<int, int> param)
         {
@@ -324,11 +342,11 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         // ======================================================================
         // LEFT — REPEAT column (input · repeats)
         // ======================================================================
-        var colTitle = Caps("Repeat"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
-        var inPill = new FxLevel { VerticalAlignment = VerticalAlignment.Stretch };
-        var repPill = new FxLevel { VerticalAlignment = VerticalAlignment.Stretch };
-        var inLbl = Caps("In"); inLbl.HorizontalAlignment = HorizontalAlignment.Center; inLbl.Margin = new Thickness(0, 4, 0, 0);
-        var repLbl = Caps("Rep"); repLbl.HorizontalAlignment = HorizontalAlignment.Center; repLbl.Margin = new Thickness(0, 4, 0, 0);
+        var colTitle = Caps("REPEAT"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
+        var inPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch };
+        var repPill = new ShPill { Ink = Teal, VerticalAlignment = VerticalAlignment.Stretch };
+        var inLbl = Caps("IN"); inLbl.HorizontalAlignment = HorizontalAlignment.Center;
+        var repLbl = Caps("REP"); repLbl.HorizontalAlignment = HorizontalAlignment.Center;
         ToolTip.SetTip(inPill, "The input level");
         ToolTip.SetTip(repPill, "The repeats' level — after pitch, filter, decay and volume");
         var colIn = Mono("", 7, TextPrimary); colIn.HorizontalAlignment = HorizontalAlignment.Center;
@@ -336,19 +354,19 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         static double Norm60(double db) => Math.Clamp((db + 60) / 60, 0, 1);
         readouts.Add(() =>
         {
-            inPill.Set(Norm60(Sc(S_InDb)));
-            repPill.Set(Norm60(Sc(S_RepDb)));
+            inPill.Set(Norm60(Sc(S_InDb)), double.NaN);
+            repPill.Set(Norm60(Sc(S_RepDb)), double.NaN);
             colIn.Text = Sc(S_InDb) <= -119 ? "−∞" : NotaNum.F($"{Sc(S_InDb):0.0}");
             colRep.Text = State() == 2 ? NotaNum.F($"rep {RepeatNo()}") : State() == 1 ? "capture" : "rep —";
             colTitle.Foreground = State() > 0 ? AccentBright : TextTertiary;   // lit while a burst runs
         });
-        Control PillCol(FxLevel pill, TextBlock lbl) => new DockPanel { Children = { Docked(lbl, Dock.Bottom), new Border { HorizontalAlignment = HorizontalAlignment.Center, Child = pill } } };
-        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 12, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 5, 0, 5) };
+        Control PillCol(ShPill pill, TextBlock lbl) => new DockPanel { Children = { Docked(lbl, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = pill } } };
+        var pills = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
         pills.Children.Add(PillCol(inPill, inLbl));
         pills.Children.Add(Col(PillCol(repPill, repLbl), 1));
         var leftCol = new RuleSection
         {
-            Width = 64, Padding = new Thickness(0, 8, 0, 6),
+            Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(colTitle, Dock.Top), Docked(colRep, Dock.Bottom), Docked(colIn, Dock.Bottom), pills } },
         };
         DockPanel.SetDock(leftCol, Dock.Left);
@@ -361,17 +379,18 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         {
             timeline = new BrTimelineView();
             ToolTip.SetTip(timeline, "Two intervals on the grid: each step is the input's level — dim when dry, full where the slice is captured, dimmer with every repeat as it decays. Ticks at the top mark where the interval fires.");
-            var intervalLbl = Caps("Interval"); intervalLbl.Margin = new Thickness(4, 0, 0, 0);
-            var head = HeadRow(Row(6, ModeSeg(), intervalLbl,
+            var slice = Mono("", 7, TextSecondary);
+            readouts.Add(() => slice.Text = "slice " + MsF(SliceMs(GridBeats())));
+            var head = HeadRow(Row(6, ModeSeg(), new Border { Width = 2 }, Caps("INTERVAL"),
                 Drop(Interval, IntervalName, () => Sel(Interval, 6), i => SetP(Interval, i / 5f), "Interval — how often it rolls Chance"),
-                Caps("Grid"),
-                Drop(GridP, gridDropNames, GridDropIdx, i => PickGrid(i % 4, i >= 4), "Grid — the length of the slice that repeats")), new Border());
+                Caps("GRID"),
+                Drop(GridP, gridDropNames, GridDropIdx, i => PickGrid(i % 4, i >= 4), "Grid — the length of the slice that repeats")), slice);
             var knobs = KnobRow(new[]
             {
-                K(Chance, "Chance", ChanceF, tip: "Chance — how likely each interval fires a repeat"),
-                K(Gate, "Gate", GateF, steps: 17, tip: "Gate — how long the burst lasts, in 16ths of the interval"),
-                K(Offset, "Offset", OffsetF, steps: 17, tip: "Offset — where in the interval it fires, in 16ths"),
-                K(Variation, "Variation", VarF, tip: "Variation — the grid floats up to this many steps (double / half) on each trigger"),
+                K(Chance, "CHANCE", ChanceF, tip: "Chance — how likely each interval fires a repeat", lit: () => true),
+                K(Gate, "GATE", GateF, steps: 17, tip: "Gate — how long the burst lasts, in 16ths of the interval"),
+                K(Offset, "OFFSET", OffsetF, steps: 17, tip: "Offset — where in the interval it fires, in 16ths"),
+                K(Variation, "VARIATION", VarF, Teal, tip: "Variation — the grid floats up to this many steps (double / half) on each trigger"),
             },
             () => NotaNum.F($"capture {GridName()} → {Passes() - 1} {(Passes() - 1 == 1 ? "repeat" : "repeats")}"),
             () => NotaNum.F($"{IntervalEvery[Sel(Interval, 6)]} · decay {P(Decay) * 100:0}\u2009%"));
@@ -386,18 +405,15 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         {
             slices = new BrSlicesView();
             WireDrag(slices, h => h == BrSlicesView.HGate ? Gate : Offset);
-            ToolTip.SetTip(slices, "The last interval's sound (grey) on the grid: the gate from the offset is shaded and the captured slice is brass. Drag the offset line or the gate's end sideways; double-click resets.");
+            ToolTip.SetTip(slices, "The last interval's sound (teal) on the grid: the gate from the offset is shaded and the captured slice is brass. Drag the offset line or the gate's end sideways; double-click resets.");
             Learn(slices, Offset);
-            // Interval as a drop-down (as on Timeline) so the grid, its triplet switch and both labels fit one row.
-            var head = HeadRow(Row(6, Caps("Interval"),
-                Drop(Interval, IntervalName, () => Sel(Interval, 6), i => SetP(Interval, i / 5f), "Interval — how often it rolls Chance"),
-                Caps("Grid"), GridSegC(), TripletChip()), new Border());
+            var head = HeadRow(Row(6, Caps("INTERVAL"), IntervalSegC(), Caps("GRID"), GridSegC(), TripletChip()), new Border());
             var knobs = KnobRow(new[]
             {
-                K(Offset, "Offset", OffsetF, steps: 17, tip: "Offset — where in the interval it fires, in 16ths"),
-                K(Gate, "Gate", GateF, steps: 17, tip: "Gate — how long the burst lasts, in 16ths of the interval"),
-                K(Chance, "Chance", ChanceF, tip: "Chance — how likely each interval fires a repeat"),
-                K(Variation, "Variation", VarF, tip: "Variation — the grid floats up to this many steps (double / half) on each trigger"),
+                K(Offset, "OFFSET", OffsetF, steps: 17, tip: "Offset — where in the interval it fires, in 16ths", lit: () => true),
+                K(Gate, "GATE", GateF, steps: 17, tip: "Gate — how long the burst lasts, in 16ths of the interval", lit: () => true),
+                K(Chance, "CHANCE", ChanceF, tip: "Chance — how likely each interval fires a repeat"),
+                K(Variation, "VARIATION", VarF, Teal, tip: "Variation — the grid floats up to this many steps (double / half) on each trigger"),
             },
             () => NotaNum.F($"takes {GridName()} at {OffSteps()}/16 · {Passes()} {(Passes() == 1 ? "step" : "steps")}"),
             () => VarSteps() == 0 ? "the grid holds still" : NotaNum.F($"grid floats ±{VarSteps()} {(VarSteps() == 1 ? "step" : "steps")}"));
@@ -414,22 +430,22 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         {
             filter = new BrFilterView();
             WireDrag(filter, h => h == BrFilterView.HFreq ? FilterFreq : FilterWidth);
-            ToolTip.SetTip(filter, "The repeat filter — only the repeats go through it. Solid: the first repeat; grey dashed: a later one when the band narrows and follows the pitch. Drag the node for the frequency, a band edge for the width; double-click resets.");
+            ToolTip.SetTip(filter, "The repeat filter — only the repeats go through it. Solid: the first repeat; teal dashed: a later one when the band narrows and follows the pitch. Drag the node for the frequency, a band edge for the width; double-click resets.");
             Learn(filter, FilterFreq);
             var type = Seg(FilterNames, () => On(FilterOn) ? FType() + 1 : 0,
                 i => { if (i == 0) SetP(FilterOn, 0f); else { SetP(FilterType, (i - 1) / 2f); if (!On(FilterOn)) SetP(FilterOn, 1f); } },
                 FilterType, "Filter — Off, or a low-pass, band-pass or high-pass on the repeats");
             var narrow = Latch(FilterNarrow, () => On(FilterNarrow), () => SetP(FilterNarrow, On(FilterNarrow) ? 0f : 1f), () => "Narrow with repeats",
                 "Narrow with repeats — each repeat narrows the band and moves it with the pitch");
-            var drop = FxParts.Info();
+            var drop = Mono("", 7, TextSecondary);
             readouts.Add(() => drop.Text = PDecaySt() > 0.01 ? NotaNum.F($"{StF(PitchSt())} → {StF(LaterPitch())} by repeat {LaterRepeat()}") : "pitch " + StF(PitchSt()));
-            var head = HeadRow(Row(8, Caps("Filter"), type, narrow), drop);
+            var head = HeadRow(Row(6, Caps("FILTER"), type, narrow), drop);
             var knobs = KnobRow(new[]
             {
-                K(FilterFreq, "Freq", FreqF, tip: "Freq — the filter's frequency"),
-                K(FilterWidth, "Width", WidthF, tip: "Width — the band in octaves (low- and high-pass: less is more resonant)"),
-                K(Pitch, "Pitch", PitchF, tip: "Pitch — the repeats transposed, ±12 semitones"),
-                K(PitchDecay, "P. decay", PDecF, tip: "Pitch decay — each repeat drops lower, up to 6 semitones a repeat"),
+                K(FilterFreq, "FREQ", FreqF, tip: "Freq — the filter's frequency", lit: () => On(FilterOn)),
+                K(FilterWidth, "WIDTH", WidthF, tip: "Width — the band in octaves (low- and high-pass: less is more resonant)", lit: () => On(FilterOn)),
+                K(Pitch, "PITCH", PitchF, Teal, tip: "Pitch — the repeats transposed, ±12 semitones"),
+                K(PitchDecay, "P. DECAY", PDecF, tip: "Pitch decay — each repeat drops lower, up to 6 semitones a repeat"),
             },
             () =>
             {
@@ -444,27 +460,26 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         // ======================================================================
         // RIGHT — Character / Output
         // ======================================================================
-        // Rows on the device grid ("20" rows, "4" rules, "Auto" boxes, "*" the rest); null = a rule.
-        static Control Stack(string defs, params Control?[] rows)
+        static Control Spread(params Control[] rows)
         {
-            var g = new Grid { RowDefinitions = new RowDefinitions(defs), Margin = new Thickness(0, 3, 0, 0) };
-            for (int i = 0; i < rows.Length; i++)
-                g.Children.Add(GRow(rows[i] ?? new Border { Height = 1, Background = NotaPalette.Rule, VerticalAlignment = VerticalAlignment.Center }, i));
-            return g;
+            var defs = new List<string>();
+            for (int i = 0; i < rows.Length; i++) { if (i > 0) defs.Add("*"); defs.Add("Auto"); }
+            var g = new Grid { RowDefinitions = new RowDefinitions(string.Join(",", defs)) };
+            for (int i = 0; i < rows.Length; i++) g.Children.Add(GRow(rows[i], i * 2));
+            return new Border { Padding = new Thickness(8, 6), Child = g };
         }
 
         Control StateBox()
         {
-            var t = Caps("State"); t.Height = 16;
+            var t = Caps("STATE");
             var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center };
-            var l1 = FxParts.Value();
-            var l2 = FxParts.Info(); l2.Height = 16;
-            l1.TextTrimming = TextTrimming.CharacterEllipsis;
-            var line1 = Row(6, dot, l1); line1.Height = 16;
+            var l1 = Mono("", 9, TextPrimary);
+            var l2 = Mono("", 8, TextSecondary);
+            l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
             var b = new Border
             {
-                Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 4), Margin = new Thickness(0, 1, 0, 0),
-                Child = new StackPanel { Children = { t, line1, l2 } },
+                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
+                Child = new StackPanel { Spacing = 2, Children = { t, Row(5, dot, l1), l2 } },
             };
             readouts.Add(() =>
             {
@@ -482,26 +497,27 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
                 l2.Text = forced
                     ? NotaNum.F($"slice {MsF(Sc(S_SliceMs))} · {StF(Sc(S_PitchSt))}")
                     : NotaNum.F($"bar {Math.Max(1, Sc(S_Bar)):0} · beat {Math.Max(1, Sc(S_BeatInBar)):0.0} · mix {P(MixP) * 100:0}\u2009%");
-                dot.Background = forced ? Brass : st > 0 ? Success : NotaPalette.TextDisabled;
+                dot.Background = forced ? Brass : st > 0 ? Success : NotaPalette.BorderStrong;
                 l1.Foreground = forced ? AccentBright : TextPrimary;
+                b.BorderBrush = forced ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
                 t.Foreground = forced ? AccentBright : TextTertiary;
             });
             ToolTip.SetTip(b, "What the repeater is doing now — waiting for the interval, capturing the slice, or repeating it — and where the transport is");
             return b;
         }
 
-        Control Toggles() => new StackPanel { Orientation = Orientation.Horizontal, Spacing = 16, VerticalAlignment = VerticalAlignment.Center, Children = {
+        Control Toggles() => new StackPanel { Spacing = 5, Children = {
             Toggle(FilterOn, "Repeat filter", "Repeat filter — the repeats go through the filter (Filter tab)"),
             Toggle(LatchP, "Latch", "Latch — the Repeat button stays on after a click instead of only while held") } };
 
         Control CharacterTab()
         {
-            var vol = SliderRow("Volume", Volume, VolF, bipolar: true, modulation: true);
-            return Stack("20,20,20,4,20,Auto,*",
-                SliderRow("Pitch", Pitch, PitchF, bipolar: true, modulation: true),
-                SliderRow("P. decay", PitchDecay, PDecF),
-                SliderRow("Decay", Decay, DecayF),
-                null, vol,
+            var vol = SliderRow("VOLUME", Volume, VolF, bipolar: true, modulation: true);
+            return Spread(
+                SliderRow("PITCH", Pitch, PitchF, bipolar: true, modulation: true),
+                SliderRow("P. DECAY", PitchDecay, PDecF),
+                SliderRow("DECAY", Decay, DecayF, lit: () => P(Decay) > 0.001f),
+                new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = vol },
                 StateBox(),
                 Toggles());
         }
@@ -510,32 +526,36 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         {
             Control Line(string k, Func<string> v, IBrush? ink = null)
             {
-                var key = Caps(k);
-                var val = FxParts.Value("", ink); val.HorizontalAlignment = HorizontalAlignment.Right;
+                var key = new TextBlock { Text = k, FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+                var val = Mono("", 8, ink ?? TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
                 readouts.Add(() => val.Text = v());
-                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 16 };
+                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
                 g.Children.Add(key);
                 g.Children.Add(Col(val, 1));
                 return g;
             }
             var box = new Border
             {
-                Background = NotaGraph.Ground, CornerRadius = NotaRadius.Field, Padding = new Thickness(8, 4),
-                // Two lines, as on the other devices' Output tabs: in and out together, then the repeats.
-                Child = new StackPanel { Children = {
-                    Line("in · out", () => DbF(Sc(S_InDb)).Replace("\u2009dB", "").Replace(" dB", "") + " · " + DbF(Sc(S_OutDb)), TextPrimary),
-                    Line("repeat", () => DbF(Sc(S_RepDb))) } },
+                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
+                Child = new StackPanel { Spacing = 3, Children = {
+                    Caps("MEASUREMENTS"),
+                    Line("in", () => DbF(Sc(S_InDb))),
+                    Line("repeat", () => DbF(Sc(S_RepDb))),
+                    Line("out", () => DbF(Sc(S_OutDb)), TextPrimary) } },
             };
+            var sliders = new StackPanel { Spacing = 6, Children = {
+                SliderRow("VOLUME", Volume, VolF, bipolar: true, modulation: true),
+                SliderRow("MIX", MixP, PctF, lit: () => true) } };
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
             btns.Children.Add(RepeatButton(fill: true));
             btns.Children.Add(Col(Latch(-1, () => false, () => engine.DeviceAction(track, di, A_Reset, 0, 0), () => "Reset",
                 "Reset — stop the repeat and clear the timeline and the meters", fill: true), 1));
-            btns.Margin = new Thickness(0, 2, 0, 0);
-            box.Margin = new Thickness(0, 0, 0, 4);
-            return Stack("Auto,20,20,6,Auto,*", box,
-                SliderRow("Volume", Volume, VolF, bipolar: true, modulation: true),
-                SliderRow("Mix", MixP, PctF),
-                null, btns, Toggles());
+            var body = new DockPanel { LastChildFill = false, Children = {
+                Docked(box, Dock.Top),
+                Docked(new Border { Margin = new Thickness(0, 6, 0, 0), Child = sliders }, Dock.Top),
+                Docked(Toggles(), Dock.Bottom),
+                Docked(new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 5), Child = btns }, Dock.Bottom) } };
+            return new Border { Padding = new Thickness(8, 6), Child = body };
         }
 
         // ======================================================================
@@ -546,28 +566,76 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         var rightHost = new ContentControl();
         var centreBodies = new Control?[3];
         var rightBodies = new Control?[2];
-        var extras = FxParts.Info();
+        var extras = Mono("", 7, TextTertiary);
         readouts.Add(() =>
         {
             extras.Text = centreTab switch
             {
                 1 => NotaNum.F($"{IntervalText()} · slice {MsF(SliceMs(GridBeats()))}"),
                 2 => "repeats only",
-                _ => NotaNum.F($"{WindowText()} · slice {MsF(SliceMs(GridBeats()))} · {Bpm():0.##} BPM"),   // the slice here: the head row is full
+                _ => NotaNum.F($"{WindowText()} · {Bpm():0.##} BPM"),
             };
         });
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => SlicesTab(), 2 => FilterTab(), _ => TimelineTab() };
         Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : CharacterTab();
 
-        var centre = FxParts.Tabs(new[] { "Timeline", "Slices", "Filter" }, centreHost, CentreBody, t => { centreTab = t; Refresh(); }, extras);
-        var rightFrame = FxParts.Tabs(new[] { "Character", "Output" }, rightHost, RightBody, _ => RefreshAll());
-        var right = FxParts.Section(rightFrame); right.Width = 196;
+        var centre = TabFrame(new[] { "Timeline", "Slices", "Filter" }, centreHost, CentreBody, false, t => { centreTab = t; Refresh(); }, extras);
+        var rightFrame = TabFrame(new[] { "Character", "Output" }, rightHost, RightBody, true, _ => RefreshAll(), null);
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
-        var centreBox = FxParts.Section(centre); centreBox.Margin = new Thickness(SectionGap, 0);
+        var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
+
+        // ======================================================================
+        // Status strip
+        // ======================================================================
+        var statusLeft = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var statusRight = Mono("", 8, TextSecondary);
+        string StatusText()
+        {
+            var parts = new List<string> { ModeNames[Sel(Mode, 3)] };
+            switch (centreTab)
+            {
+                case 1:
+                    parts.Add(IntervalEvery[Sel(Interval, 6)]);
+                    parts.Add("grid " + GridName());
+                    parts.Add(NotaNum.F($"offset {OffSteps()}/16"));
+                    parts.Add(NotaNum.F($"gate {GateSteps()}/16"));
+                    parts.Add("chance " + PctF(P(Chance)));
+                    if (VarSteps() > 0) parts.Add(NotaNum.F($"var {VarSteps()}"));
+                    break;
+                case 2:
+                    parts.Add(FilterText());
+                    parts.Add("pitch " + StF(PitchSt()));
+                    parts.Add("p. decay " + PctF(P(PitchDecay)));
+                    if (On(FilterNarrow) && On(FilterOn)) parts.Add("narrowing");
+                    parts.Add("mix " + PctF(P(MixP)));
+                    break;
+                default:
+                    parts.Add(IntervalEvery[Sel(Interval, 6)]);
+                    parts.Add("grid " + GridName());
+                    parts.Add("chance " + PctF(P(Chance)));
+                    parts.Add(NotaNum.F($"gate {GateSteps()}/16"));
+                    parts.Add("decay " + PctF(P(Decay)));
+                    break;
+            }
+            if (On(RepeatP)) parts.Add("repeat held");
+            return string.Join(" · ", parts);
+        }
+        readouts.Add(() =>
+        {
+            statusLeft.Text = StatusText();
+            double sr = Sc(S_SampleRate);
+            statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · latency {Sc(S_Latency):0}\u2009smp · CPU {Sc(S_Cpu) * 100:0.0}\u2009%") : "";
+        });
+        var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
+        statusGrid.Children.Add(statusLeft);
+        statusGrid.Children.Add(Col(statusRight, 1));
+        var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
+        DockPanel.SetDock(status, Dock.Bottom);
 
         // ---- assemble ---------------------------------------------------------------
-        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, CardPad, 0, 0), Children = { leftCol, right, centreBox } };
-        var root = bodyRow;
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { leftCol, right, centreBox } };
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { status, bodyRow } };
 
         void Refresh()
         {
@@ -594,5 +662,46 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         ctx.AddDeviceRefresher(Refresh);
         Refresh();
         return root;
+
+        // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
+        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
+        {
+            int sel = 0;
+            var btns = new Border[tabs.Length];
+            void Hi()
+            {
+                for (int i = 0; i < tabs.Length; i++)
+                {
+                    bool on = i == sel;
+                    btns[i].Background = on ? Card2 : Brushes.Transparent;
+                    btns[i].BorderBrush = on ? Brass : Brushes.Transparent;
+                    var tb = (TextBlock)btns[i].Child!;
+                    tb.Foreground = on ? TextPrimary : TextTertiary;
+                    tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                }
+            }
+            var bar = centered ? (Avalonia.Controls.Panel)new UniformGrid { Rows = 1 } : new StackPanel { Orientation = Orientation.Horizontal };
+            for (int i = 0; i < tabs.Length; i++)
+            {
+                int iv = i;
+                var b = new Border
+                {
+                    Padding = new Thickness(9, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+                    Child = new TextBlock { Text = tabs[i], FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
+                };
+                b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); changed?.Invoke(iv); };
+                btns[i] = b;
+                bar.Children.Add(b);
+            }
+            var barDock = new DockPanel { Height = 20, LastChildFill = centered };
+            if (extrasCtl != null) { var ex = new Border { Padding = new Thickness(0, 0, 8, 0), Child = extrasCtl }; DockPanel.SetDock(ex, Dock.Right); barDock.Children.Add(ex); }
+            if (!centered) DockPanel.SetDock(bar, Dock.Left);
+            barDock.Children.Add(bar);
+            var barBorder = new Border { BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
+            DockPanel.SetDock(barBorder, Dock.Top);
+            Hi();
+            host.Content = body(sel);
+            return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
+        }
     }
 }

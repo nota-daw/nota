@@ -298,8 +298,6 @@ def inline(md):
 
 TYPE_SCALE = md_table(r'^\*\*The scale\.\*\*', 'the type scale (Type, "The scale.")')
 SIZE_TABLE = md_table(r'^### Sizes', 'the Sizes table (Shapes)')
-DEVICES = {fam: md_table(rf'^### {re.escape(fam)}', f'the {fam} table (Devices)')
-           for fam in ('Instruments (16)', 'Audio effects (25, plus Vocoder)', 'MIDI effects (6)', 'Racks (3)')}
 ICON_STATES = md_table(r'^### Icon button', 'the icon button states')
 
 # DESIGN.md writes every colour out; warn (never fail) where a value there no longer
@@ -1159,8 +1157,8 @@ def build_sections():
              + '</div></div>')
     body = (
         '<h3>Device card</h3>'
-        + stage(chamber_card(), 'ground scroll', 'Always 260 high; the width fits the device. Header 24: name, preset menu, type tag, '
-                'power at the right. Sections 4 from the edge, 6 apart, 8 padding: the room goes to graphs and controls. No status line under the card.')
+        + stage(chamber_card(), 'ground scroll', '700 × 260 with a 22 header: name, preset menu, type tag, power at the right. '
+                'The body keeps its 0.57 layout and status line; only its parts take this guide’s look.')
         + '<h3>Track header</h3>'
         + stage(f'<div class="threads">{th_rows}</div>', 'flush', '229 × 54, two rows: the name row (name, tag, M, S, arm) and the '
                 'controls row (volume, pan, input). A 3 px bar in the track colour; the meter down the right. The middle one is selected.')
@@ -1188,34 +1186,25 @@ def build_sections():
               'drawings show the rules; the app’s own glyphs are the reference for each shape.</p>')
     S.append(sec('icons', 'Icons', 'One icon set, drawn on a 24-unit grid with one line weight, so every icon matches.', body))
 
-    # Devices summary
-    fams = ''
-    maxw = 0
-    parsed = {}
-    for fam, rows in DEVICES.items():
-        items = []
-        for name, width, change in rows:
-            mm = re.match(r'(\d+)', width)
-            if not mm:
-                fail(f'DESIGN.md {fam}: cannot read the width "{width}" of {name}')
-            items.append((name, int(mm.group(1)), width, change))
-            maxw = max(maxw, int(mm.group(1)))
-        parsed[fam] = items
-    for fam, items in parsed.items():
-        bars = ''.join(
-            f'<div class="dw"><span class="dn">{html.escape(n)}</span><span class="dbar"><i style="width:{w / maxw * 100:.1f}%"></i></span>'
-            f'<span class="hex">{html.escape(wt)}</span></div>' for n, w, wt, _ in items)
-        notes = ''.join(f'<tr><td>{html.escape(n)}</td><td class="hex">{html.escape(wt)}</td><td>{inline(ch)}</td></tr>' for n, w, wt, ch in items)
-        fams += (f'<h3>{fam}</h3>{stage(f"<div class=dws>{bars}</div>")}<details><summary>What changes on each</summary>'
-                 f'<div class="tw"><table class="t"><thead><tr><th>Device</th><th>Width</th><th>What changes</th></tr></thead>'
-                 f'<tbody>{notes}</tbody></table></div></details>')
-    body = ('<p>Every device keeps every control, label and value it had in 0.56.1, in the same groups. Each card is 260 high; '
-            'the bars show each card’s width to scale (from the tables in DESIGN.md).</p>' + fams
-            + dodont(['Keep every control, in the same groups as 0.56.1.', 'Use pressed-in sections, value bars, capped knobs and orange values inside the card.',
-                      'Put the on/off switch at the right of every header, instruments and racks included.'],
-                     ['Add a status line under the card; a control that lived there moves into the card.',
+    # Devices
+    parts = [
+        ('Knobs', 'A centre cap and an orange value arc; the value over the name. Sizes stay 0.57’s: 34 / 36 / 44, 24 in a table row.'),
+        ('Sliders', 'Value bars: a 9 px groove, a soft fill and a 3 px orange line; upright faders are the same bar standing up.'),
+        ('Segments and switches', 'The picked cell tinted in a groove; switches 18 × 10.'),
+        ('Sections', 'Pressed in, with the guide’s corners; graph windows keep their frame.'),
+        ('Text', 'Geist only, numbers tabular, on 0.57’s device scale (name 12, rows 9, knob text 8, axes 7.5).'),
+        ('Colour', 'Values are orange lines; teal, olive, rose and mauve become greys told apart by shade; inactive is ink 4.'),
+        ('Header', 'The shared shell: name · preset menu · type tag and accessories · power, on every card. Tabs stay in the body.'),
+    ]
+    rows = ''.join(f'<tr><td><b>{a}</b></td><td>{b}</td></tr>' for a, b in parts)
+    body = ('<p>Every device keeps its 0.57 layout and size: 700 × 260, the same sections in the same places, its status line. '
+            'The guide changes how the parts are drawn, not where they sit.</p>'
+            f'<div class="tw"><table class="t"><thead><tr><th>Part</th><th>Inside a device</th></tr></thead><tbody>{rows}</tbody></table></div>'
+            + dodont(['Keep every control where 0.57 had it, at 0.57’s size.',
+                      'Use the shared elements so a device picks up the look for free.'],
+                     ['Repack a card, grow its width or its text as part of a style change.',
                       'Use thin sliders, monospace readouts or capital-letter labels.', 'Fade anything out; draw it in ink 4 with nothing picked.']))
-    S.append(sec('devices', 'Devices', 'All 50 devices of 0.56.1, plus Vocoder, are redrawn with these rules.', body))
+    S.append(sec('devices', 'Devices', 'All 50 devices of 0.56.1, plus Vocoder, keep their layouts and take the new parts.', body))
 
     # Changes
     changes = [
@@ -1231,10 +1220,9 @@ def build_sections():
         ('Icon grid', 'Icons drawn on a 16 px grid with a 1.5 px line', 'Icons drawn on a 24 px grid with a 1.6 px line; every icon gets redrawn'),
         ('Modular nodes', 'Ports in rows that don’t line up, so cables bend; a status dot and a bypass button; a grid of large knobs',
          'Ports on the card edges, lined up so cables run straight; a different shape per signal; one power switch; a header tinted by category; parameters as a short list of bars'),
-        ('Devices', 'Bordered boxes, big gauge knobs and a status line underneath', 'Even spacing inside the card, smaller knobs with a centre cap, the round wheels from Aurora, Bass, Operator and Volt (Pentad’s flat wheels go) and square switches, no status line'),
+        ('Devices', 'Bordered boxes, big gauge knobs and a status line underneath', 'The same layouts and sizes, status line included; knobs with a centre cap and an orange arc, value bars, the new switches and segments, pressed-in sections'),
         ('Orange', 'Orange for anything playing or selected, always as a solid fill', 'Three strengths: solid for what is playing, a pale tint for what you picked, orange values inside devices'),
         ('Depth', 'Raised buttons everywhere; flat panels', 'Only device cards look raised; the sections inside them look pressed in, and their controls sit in grooves'),
-        ('Device card size', 'Every card 700 × 260', 'Always 260 high; the width grows to fit the device (Pentad 724, EQ-8 720, or 580 with its right panel folded)'),
         ('Sliders outside devices', 'A 3 px line with a small cap and the value beside it', 'A flat 16 px bar with the value written inside it, in the same family as the device value bars'),
         ('Device sliders', 'A thin line with a small handle', 'A wider bar you can drag anywhere, with an orange line at the value'),
         ('Corners', 'Small corners (2 to 4 px), nothing fully round', 'Rounder corners, from 2 px on small parts up to 9 px on device cards'),

@@ -12,9 +12,10 @@
 // MiniFader (Value / max / Accent / ValueChanged / GestureBegin / GestureEnd) so it
 // drops into the plugin editors.
 //
-// A device knob is 26; an `Inline` knob, whose label sits beside it (Glide, an EQ band, the
-// oscillator rows and ADSR strips), is 22; a Flat knob outside a device is 28. Width and
-// Height are coerced onto that scale, whatever a call site asks for.
+// A device knob exists in three sizes — 34 secondary · 36 regular · 44 main. Width and
+// Height are coerced onto that scale, so a call site asking for 30 or 40 gets 34 or 44.
+// The exceptions are an `Inline` knob (24) that sits inside a table row (the Consort /
+// Pentad / Monolith oscillator rows and ADSR strips) and a Flat knob outside a device (28).
 
 using System;
 using Avalonia;
@@ -41,23 +42,23 @@ public sealed class Knob : Control
     private const double SweepDeg = 270.0;   // clockwise to down-right
     private const double Stroke = 2.4, PointerW = 1.6;
 
-    public const double Size = NotaSize.Knob, SizeInline = NotaSize.KnobInline, SizeFlat = NotaSize.KnobFlat, SizeLarge = NotaSize.KnobLarge;
+    public const double SizeSecondary = NotaSize.KnobSecondary, SizeRegular = NotaSize.KnobRegular, SizeMain = NotaSize.KnobMain,
+                        SizeInline = NotaSize.KnobInline, SizeFlat = NotaSize.KnobFlat;
 
     static Knob()
     {
-        WidthProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => double.IsNaN(v) ? v : ((Knob)o).Fixed));
-        HeightProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => double.IsNaN(v) ? v : ((Knob)o).Fixed));
+        WidthProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => ((Knob)o).Fixed(v)));
+        HeightProperty.OverrideMetadata<Knob>(new StyledPropertyMetadata<double>(double.NaN, coerce: (o, v) => ((Knob)o).Fixed(v)));
     }
 
-    private double Fixed => _inline ? SizeInline : _flat ? SizeFlat : _large ? SizeLarge : Size;
+    /// <summary>Onto the three-size scale: up to 34 is secondary, under 40 regular, else main.</summary>
+    public static double Snap(double v) => double.IsNaN(v) ? v : v <= SizeSecondary ? SizeSecondary : v < 40 ? SizeRegular : SizeMain;
 
-    /// <summary>The 22 px knob with its label beside it (see the header).</summary>
+    private double Fixed(double v) => double.IsNaN(v) ? v : _inline ? SizeInline : _flat ? SizeFlat : Snap(v);
+
+    /// <summary>The 24 px table-row knob, outside the three-size scale (see the header).</summary>
     public bool Inline { get => _inline; init { _inline = value; CoerceValue(WidthProperty); CoerceValue(HeightProperty); } }
     private readonly bool _inline;
-
-    /// <summary>The 34 px device knob, where a wide card has the room for it.</summary>
-    public bool Large { get => _large; init { _large = value; CoerceValue(WidthProperty); CoerceValue(HeightProperty); } }
-    private readonly bool _large;
 
     /// <summary>The 28 px knob outside a device card: no cap, a grey value, orange while live.</summary>
     public bool Flat { get => _flat; init { _flat = value; CoerceValue(WidthProperty); CoerceValue(HeightProperty); } }
@@ -146,8 +147,8 @@ public sealed class Knob : Control
     {
         _max = max <= 0 ? 1.0 : max;
         _value = Math.Clamp(value, 0, _max);
-        Width = Size;
-        Height = Size;
+        Width = SizeRegular;
+        Height = SizeRegular;
         Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
     }
 

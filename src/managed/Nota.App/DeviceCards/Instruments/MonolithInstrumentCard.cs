@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Devices — built-in Nota Monolith editor (instrument kind 13): a Minimoog Model-D
-// layout as three pressed-in sections (style guide, spec 038) — an always-visible wheels
-// column (pitch / mod), a centre tabbed panel (Controllers · Osc Bank / Modifiers) and a
-// right tabbed panel (Mixer / Output). Oscillator ranges/detune, six waveform chips, the
-// ladder filter response and both contours are all shown; every control is a plugin-param
-// so automation / MIDI-learn / persist come for free. The card is BodyOnly — the shared
-// shell provides the header (name / preset / type tag / power).
+// Detail · Devices — built-in Nota Monolith editor (instrument kind 13), a faithful build
+// of the "Nota Monolith" mockup (700×260): a Minimoog Model-D layout as three regions —
+// an always-visible WHEELS column (pitch / mod), a centre tabbed panel (Controllers · Osc
+// Bank / Modifiers) and a right tabbed panel (Mixer / Output). Oscillator ranges/detune,
+// six waveform chips, the ladder filter response and both contours are all shown; every
+// control is a plugin-param so automation / MIDI-learn / persist come for free. The card is
+// BodyOnly — the shared shell provides the header (name / preset / A-B / bypass / meter).
 
 using System;
 using System.Collections.Generic;
@@ -16,14 +16,26 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
-using static Nota.App.InstrumentCardKit;
 
 namespace Nota.App;
 
 internal sealed class MonolithInstrumentCard : IInstrumentCard
 {
+    private static readonly IBrush CardBg = NotaPalette.BgApp;
+    private static readonly IBrush RailBg = NotaPalette.SurfaceInset;
+    private static readonly IBrush Border2 = NotaPalette.BorderDefault;
+    private static readonly IBrush BorderIn = NotaPalette.GraphBorder;
+    private static readonly IBrush Inset = NotaPalette.BgSunken;
+    private static readonly IBrush TabBg = NotaPalette.SurfaceCard;
+    private static readonly IBrush Amber = NotaPalette.Accent;
+    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TxtC = NotaPalette.TextPrimary;
+    private static readonly IBrush MutedC = NotaPalette.TextTertiary;
+    private static readonly IBrush Handle = NotaPalette.TextSecondary;
+
     private static readonly string[] Feet = { "Lo", "32′", "16′", "8′", "4′", "2′" };
 
     public bool BodyOnly => true;
@@ -44,7 +56,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         var readouts = new List<Action>();
         var filtCurve = new MonolithFilterCurve();
         var fEnvCurve = new MonolithEnvCurve { Accent = NotaPalette.VizInk };
-        var aEnvCurve = new MonolithEnvCurve { Accent = NotaPalette.VizInk };
+        var aEnvCurve = new MonolithEnvCurve { Accent = TealC };
 
         void Refresh()
         {
@@ -55,19 +67,21 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         }
 
         // ---- shared builders --------------------------------------------------
+        Control Lbl(string t, double fs, IBrush c, FontWeight w = FontWeight.SemiBold)
+            => new TextBlock { Text = NotaText.Label(t), FontSize = fs, FontWeight = w, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
         Control Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
 
-        Control K(string id, string name, Func<float, string>? fmt = null, double cw = 52)
-            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, Knob.Size, cw);
+        Control K(string id, string name, Func<float, string>? fmt = null, bool mod = false, double sz = Knob.SizeSecondary, double cw = 46, bool inline = false)
+            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null, inline);
 
         // A table-row knob: [inline knob] value, side by side — for the oscillator rows and unison.
-        Control RowKnob(string id, Func<float, string> fmt, double valW)
+        Control RowKnob(string id, Func<float, string> fmt, double valW, bool mod = false)
         {
             if (I(id) is not (var i and >= 0)) return new Panel();
-            var value = Value(fmt(G(id)));
-            value.Width = valW;
-            var knob = new Knob(G(id), 1.0) { Accent = true, Inline = true, Default = engine.InstrumentParamDefault(track, i) };
+            var value = new TextBlock { Text = fmt(G(id)), FontSize = 8, Foreground = TxtC, Width = valW, VerticalAlignment = VerticalAlignment.Center };
+            value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+            var knob = new Knob(G(id), 1.0) { Accent = true, Inline = true, ArcColor = mod ? TealC : null, Default = engine.InstrumentParamDefault(track, i) };
             knob.Format = v => fmt((float)v);
             knob.ValueChanged += v => { engine.PluginParamSet(track, -1, i, (float)v); value.Text = fmt((float)v); Refresh(); };
             knob.GestureBegin += () => engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id);
@@ -75,10 +89,10 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             ctx.AddInstFader(i, knob, value, fmt);
             MidiLearn.Bind(knob, MidiTarget.PluginParam(track, -1, i), id);
             ValueEntry.Attach(knob, engine.PluginParamName(track, -1, i), value);
-            return Row(6, knob, value);
+            return Row(4, knob, value);
         }
 
-        // On/off switch backed by a param (>0.5 = on).
+        // On/off pill toggle backed by a param (>0.5 = on).
         Control Toggle(string id, string label)
         {
             var wrap = Switch(label, () => G(id) > 0.5f, () => { SetP(id, G(id) > 0.5f ? 0f : 1f); Refresh(); }, out var sync);
@@ -87,81 +101,105 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             return wrap;
         }
 
-        // Param-backed segment strip (writes id = pick/(n-1)).
-        Control Chips(string id, string[] names, double padX = 6)
+        // Param-backed chip strip (writes id = pick/(n-1)).
+        Control Chips(string id, string[] names, double fs = 7)
         {
             int n = names.Length;
-            var seg = Segments(names, () => Sel(id, n), iv => { SetP(id, iv / (float)(n - 1)); Refresh(); }, out var sync, padX: padX);
+            var seg = DeviceCardKit.Segments(names, () => Sel(id, n), iv => { SetP(id, iv / (float)(n - 1)); Refresh(); }, out var sync, padX: n > 4 ? 3 : 5, fontSize: fs);
             readouts.Add(sync);
             if (I(id) is var pi and >= 0) MidiLearn.Bind(seg, MidiTarget.PluginParam(track, -1, pi), id);
             return seg;
         }
 
-        // Six waveform cells in a groove (osc3 swaps shark-tooth → reverse saw); the picked one raised.
+        // Six waveform icon chips (osc3 swaps shark-tooth → reverse saw).
         Control WaveChips(string id, bool osc3)
         {
             var arr = new Border[6]; var ic = new MonolithWaveIcon[6];
-            void Hi()
-            {
-                int cur = Sel(id, 6);
-                for (int i = 0; i < 6; i++)
-                {
-                    bool on = i == cur;
-                    PaintCell(arr[i], on);
-                    ic[i].Stroke = on ? AccentBright : TextSecondary; ic[i].InvalidateVisual();
-                }
-            }
-            var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,*,*") };
+            void Hi() { int cur = Sel(id, 6); for (int i = 0; i < 6; i++) { bool on = i == cur; arr[i].Background = on ? NotaPalette.Accent : Brushes.Transparent; arr[i].BorderBrush = on ? NotaPalette.Accent : Border2; ic[i].Stroke = on ? NotaPalette.TextOnAccent : MutedC; ic[i].InvalidateVisual(); } }
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center };
             for (int i = 0; i < 6; i++)
-            {
-                int iv = i;
-                var wi = new MonolithWaveIcon(i, osc3) { Width = 16, Height = 9, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var b = new Border { Height = NotaSize.Seg, CornerRadius = NotaRadius.Cell, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent, Child = wi };
-                b.PointerPressed += (_, e) =>
-                {
-                    if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
-                    SetP(id, iv / 5f); Hi(); Refresh(); e.Handled = true;
-                };
-                Grid.SetColumn(b, i);
-                arr[i] = b; ic[i] = wi; row.Children.Add(b);
-            }
+            { int iv = i; var wi = new MonolithWaveIcon(i, osc3) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }; var b = new Border { Width = 22, Height = 16, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Cursor = new Cursor(StandardCursorType.Hand), Child = wi }; b.PointerPressed += (_, _) => { SetP(id, iv / 5f); Hi(); Refresh(); }; arr[i] = b; ic[i] = wi; row.Children.Add(b); }
             readouts.Add(Hi); Hi();
-            var groove = Groove(row);
-            if (I(id) is var pi and >= 0) MidiLearn.Bind(groove, MidiTarget.PluginParam(track, -1, pi), id);
-            return groove;
+            if (I(id) is var pi and >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), id);
+            return row;
         }
 
-        // A value-bar row bound to a param: the bar and its value, right-aligned in the column.
-        Control Bar(string id, string name, Func<float, string> fmt, double trackW = 56, double valW = 24)
+        // Horizontal fill slider bound to a param.
+        Control HSlider(string id, string name, Func<double, string> fmt, double nameW = 30, double valW = 20, IBrush? col = null)
         {
-            var r = ParamRow(ctx, idx, id, "", fmt, Refresh, readouts, trackWidth: trackW, valueWidth: valW, learnName: name);
-            r.HorizontalAlignment = HorizontalAlignment.Right;
-            return r;
+            int pi = I(id);
+            var row = DeviceCardKit.SliderRow(name, () => G(id), n => { if (pi >= 0) engine.PluginParamSet(track, -1, pi, (float)n); Refresh(); }, () => fmt(G(id)), out var sync,
+                begin: () => { if (pi >= 0) engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); },
+                end: () => { if (pi >= 0) engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); },
+                labelWidth: nameW, valueWidth: valW);
+            readouts.Add(sync);
+            if (pi >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), name);
+            return row;
+        }
+
+        // Vertical wheel slider bound to a param (pitch / mod). spring = auto-return to centre.
+        Control VWheel(string id, string name, Func<double, string> fmt, IBrush? col = null, bool spring = false)
+        {
+            int pi = I(id); var lit = col ?? NotaPalette.VizInk;
+            IBrush grad = NotaPalette.BgSunken;
+            var trackBar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Stretch };
+            var mark = new Border { Height = 2, Background = lit, CornerRadius = NotaRadius.Fine, Margin = new Thickness(2, 0) };
+            var lay = new Canvas { Width = 16, VerticalAlignment = VerticalAlignment.Stretch };
+            var host = new Panel { Width = 16, VerticalAlignment = VerticalAlignment.Stretch, Children = { trackBar, lay } };
+            lay.Children.Add(mark); mark.Width = 12;
+            bool drag = false; DispatcherTimer? springT = null;
+            void Vis(double v) { double h = host.Bounds.Height; if (h <= 0) h = 60; Canvas.SetTop(mark, (1 - v) * (h - 2)); }
+            void From(PointerEventArgs e) { double h = host.Bounds.Height; double v = h > 0 ? Math.Clamp(1 - e.GetPosition(host).Y / h, 0, 1) : 0.5; if (pi >= 0) engine.PluginParamSet(track, -1, pi, (float)v); Vis(v); Refresh(); }
+            void Spring()
+            {
+                springT?.Stop();
+                springT = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+                springT.Tick += (_, _) =>
+                {
+                    double v = G(id); v += (0.5 - v) * 0.32;
+                    if (Math.Abs(v - 0.5) < 0.002) { v = 0.5; springT!.Stop(); }
+                    if (pi >= 0) engine.PluginParamSet(track, -1, pi, (float)v); Vis(v); Refresh();
+                };
+                springT.Start();
+            }
+            host.PointerPressed += (_, e) => { springT?.Stop(); drag = true; if (pi >= 0) engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); e.Pointer.Capture(host); From(e); };
+            host.PointerMoved += (_, e) => { if (drag) From(e); };
+            void EndDrag() { drag = false; if (pi >= 0) engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, id); if (spring) Spring(); }
+            host.PointerReleased += (_, e) => { if (drag) { EndDrag(); e.Pointer.Capture(null); } };
+            host.PointerCaptureLost += (_, _) => { if (drag) EndDrag(); };
+            host.SizeChanged += (_, _) => Vis(G(id));
+            var valTxt = new TextBlock { FontSize = 7, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };
+            valTxt.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+            readouts.Add(() => { if (!drag) Vis(G(id)); valTxt.Text = fmt(G(id)); });
+            var col2 = new DockPanel { HorizontalAlignment = HorizontalAlignment.Center };
+            var nm = new TextBlock { Text = NotaText.Label(name), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center };
+            DockPanel.SetDock(nm, Dock.Bottom); DockPanel.SetDock(valTxt, Dock.Bottom);
+            col2.Children.Add(valTxt); col2.Children.Add(nm); col2.Children.Add(host);
+            if (pi >= 0) MidiLearn.Bind(col2, MidiTarget.PluginParam(track, -1, pi), name);
+            return col2;
         }
 
         // ---- formatters -------------------------------------------------------
-        string StFmt(float v) => $"{(v - 0.5f) * 5f:+0.0;−0.0;0.0} st";
-        string GlideFmt(float v) => v <= 0.001f ? "off" : (Sec(0.002, 10, v) is var s && s >= 1 ? $"{s:0.0} s" : $"{s * 1000:0} ms");
+        string StFmt(float v) => $"{(v - 0.5f) * 5f:+0.0;−0.0;0.0}\u2009st";
+        string GlideFmt(float v) => v <= 0.001f ? "off" : (Sec(0.002, 10, v) is var s && s >= 1 ? $"{s:0.0}\u2009s" : $"{s * 1000:0}\u2009ms");
         string DetFmt(float v) => $"{(v - 0.5f) * 14f:+0.00;−0.00;0.00}";
         string HzFmt(float v) { double hz = 16 * Math.Pow(1250, v); return hz >= 1000 ? $"{hz / 1000:0.0}k" : $"{hz:0}"; }
         string EmphFmt(float v) => $"{v * 10f:0.0}";
-        string TimeFmt(double lo, double hi, float v) { double s = Sec(lo, hi, v); return s >= 1 ? $"{s:0.0} s" : $"{s * 1000:0} ms"; }
-        string VolFmt(float v) => v <= 0.001f ? "−∞" : $"{20 * Math.Log10(v):0.0} dB";
-        string Lvl(float v) => $"{v * 10:0.0}";
+        string TimeFmt(double lo, double hi, float v) { double s = Sec(lo, hi, v); return s >= 1 ? $"{s:0.0}\u2009s" : $"{s * 1000:0}\u2009ms"; }
+        string VolFmt(float v) => v <= 0.001f ? "−∞" : $"{20 * Math.Log10(v):0.0}\u2009dB";
         static double Sec(double lo, double hi, double v) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0, 1));
 
         // ======================================================================
         // LEFT — wheels column (always visible)
         // ======================================================================
-        var bendWheel = Wheel(ctx, idx, "bend", 0.5, true, Refresh, readouts);
-        var modWheel = Wheel(ctx, idx, "modwheel", 0, false, Refresh, readouts);
-        var bendVal = Value(); var modVal = Value();
-        readouts.Add(() =>
-        {
-            SetWheelValues(bendVal, modVal, 2 + G("bendrange") * 10, G("bend"), G("modwheel"));
-        });
-        var wheels = WheelsPanel(bendWheel, modWheel, bendVal, modVal);
+        var wheels = new RuleSection { Width = 56, Padding = new Thickness(0, 5),
+            Child = new DockPanel { LastChildFill = true, Children = {
+                Head(Lbl("WHEELS", 7, MutedC)),
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0), Children = {
+                    VWheel("bend", "PITCH", v => $"{(v - 0.5) * 2 * (2 + G("bendrange") * 10):+0.0;−0.0;0.0}", null, spring: true),
+                    VWheel("modwheel", "MOD", v => $"{v * 100:0}\u2009%", NotaPalette.VizInk) } } } } };
         DockPanel.SetDock(wheels, Dock.Left);
+        Control Head(Control c) { DockPanel.SetDock(c, Dock.Top); ((Control)c).HorizontalAlignment = HorizontalAlignment.Center; return c; }
 
         // ======================================================================
         // CENTRE — Osc Bank / Modifiers tabs
@@ -169,59 +207,52 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
         // -- Osc Bank tab --
         Control ControllersStrip()
         {
-            var toggles = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("19,19,19"), ColumnSpacing = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, -2, 0, 0) };
-            void T(string id, string lbl, int r, int c) => toggles.Children.Add(Toggle(id, lbl).At(c, r));
+            var toggles = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("*,*,*"), ColumnSpacing = 8, RowSpacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            void T(string id, string lbl, int r, int c) { var t = Toggle(id, lbl); Grid.SetRow(t, r); Grid.SetColumn(t, c); toggles.Children.Add(t); }
             T("glideon", "Glide", 0, 0); T("legato", "Legato", 0, 1);
             T("decayon", "Decay", 1, 0); T("oscmodon", "Osc mod", 1, 1);
             T("filtmodon", "Filter mod", 2, 0); T("osc3kbd", "Osc 3 kbd", 2, 1);
-            var knobs = Row(0, K("tune", "Tune", StFmt), K("glide", "Glide", GlideFmt), K("modmix", "Mod mix", v => $"{v * 100:0} %"));
-            var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Height = 60, Margin = new Thickness(0, 4, 0, 0) };
-            strip.Children.Add(knobs.At(0)); strip.Children.Add(toggles.At(2));
-            toggles.Width = 176;
-            return new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(0, 0, 0, 4), Child = strip };
+            var knobs = Row(6, K("tune", "TUNE", StFmt, false, Knob.SizeSecondary, 40), K("glide", "GLIDE", GlideFmt, false, Knob.SizeSecondary, 40), K("modmix", "MOD MIX", v => $"{v * 100:0}\u2009%", false, Knob.SizeSecondary, 40));
+            var strip = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10, Height = 56 };
+            Grid.SetColumn((Control)knobs, 0); Grid.SetColumn(toggles, 1);
+            strip.Children.Add((Control)knobs); strip.Children.Add(toggles);
+            return new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(6, 2), Child = strip };
         }
-        const string OscCols = "22,62,74,*,44";
         Control OscRow(int n)
         {
             string p = $"o{n}";
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions(OscCols), Height = 24 };
-            var num = new TextBlock { Text = n.ToString(), FontSize = NotaType.DeviceTab, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
-            g.Children.Add(Cell(num, 0));
-            g.Children.Add(Cell(RowKnob($"{p}range", v => Feet[Math.Clamp((int)Math.Round(v * 5), 0, 5)], 26), 1));
-            Control freq = n == 1 ? Cap("master") : RowKnob($"{p}tune", DetFmt, 34);
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("14,50,54,*,40"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(4, 0) };
+            g.Children.Add(Cell(Lbl(n.ToString(), 10, TxtC, FontWeight.SemiBold), 0));
+            g.Children.Add(Cell(RowKnob($"{p}range", v => Feet[Math.Clamp((int)Math.Round(v * 5), 0, 5)], 20), 1));
+            Control freq = n == 1
+                ? new TextBlock { Text = "master", FontSize = 8, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center }
+                : RowKnob($"{p}tune", DetFmt, 26);
             g.Children.Add(Cell(freq, 2));
-            var waves = WaveChips($"{p}wave", n == 3);
-            waves.HorizontalAlignment = HorizontalAlignment.Stretch; waves.Margin = new Thickness(0, 0, 8, 0);
-            g.Children.Add(Cell(waves, 3));
-            var mt = Cap(n == 3 ? "free" : "kbd");
+            g.Children.Add(Cell(WaveChips($"{p}wave", n == 3), 3));
+            string modTxt = n == 3 ? "free" : "kbd";
+            var mt = new TextBlock { Text = modTxt, FontSize = 8, Foreground = MutedC, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+            mt.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             if (n == 3) readouts.Add(() => mt.Text = G("osc3kbd") > 0.5f ? "kbd" : "free");
             g.Children.Add(Cell(mt, 4));
-            return g;
+            return new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 0, n < 3 ? 1 : 0), Height = 40, Child = g };
         }
-        Control Cell(Control c, int col)
-        {
-            if (col != 3) c.HorizontalAlignment = col == 4 ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-            c.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(c, col); return c;
-        }
+        Control Cell(Control c, int col) { var w = new Panel { Children = { c } }; c.HorizontalAlignment = col == 4 ? HorizontalAlignment.Right : (col == 0 ? HorizontalAlignment.Left : HorizontalAlignment.Center); c.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(w, col); return w; }
         Control OscTab()
         {
-            var hdr = new Grid { ColumnDefinitions = new ColumnDefinitions(OscCols), Height = 22 };
-            string[] h = { "#", "Range", "Freq", "Waveform", "Mod" };
-            for (int i = 0; i < 5; i++)
-            {
-                var t = Cap(h[i], TextDisabled);
-                t.HorizontalAlignment = i == 3 ? HorizontalAlignment.Center : i == 4 ? HorizontalAlignment.Right : HorizontalAlignment.Left;
-                if (i == 3) t.Margin = new Thickness(0, 0, 8, 0);
-                hdr.Children.Add(t.At(i));
-            }
-            var table = new StackPanel { Children = { hdr, OscRow(1), OscRow(2), OscRow(3) } };
-            return new DockPanel { LastChildFill = true, Children = { ControllersStrip().Docked(Dock.Top), table } };
+            var hdr = new Grid { ColumnDefinitions = new ColumnDefinitions("14,50,54,*,40"), Height = 12, Margin = new Thickness(4, 0) };
+            string[] h = { "#", "RANGE", "FREQ", "WAVEFORM", "MOD" };
+            for (int i = 0; i < 5; i++) { var t = new TextBlock { Text = NotaText.Label(h[i]), FontSize = 7, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextDisabled, HorizontalAlignment = i == 0 ? HorizontalAlignment.Left : (i == 4 ? HorizontalAlignment.Right : HorizontalAlignment.Center) }; Grid.SetColumn(t, i); hdr.Children.Add(t); }
+            var table = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(hdr, Dock.Top);
+            table.Children.Add(hdr);
+            table.Children.Add(new StackPanel { Children = { OscRow(1), OscRow(2), OscRow(3) } });
+            return new DockPanel { LastChildFill = true, Children = { WithDock(ControllersStrip(), Dock.Top), new Border { Padding = new Thickness(2, 2), Child = table } } };
         }
 
         // -- Modifiers tab --
         Control FilterPanel()
         {
+            filtCurve.VerticalAlignment = VerticalAlignment.Stretch;
             filtCurve.Changed = (c, r) => {
                 if (I("cutoff") is var ci and >= 0) engine.PluginParamSet(track, -1, ci, (float)c);
                 if (I("emph") is var ri and >= 0) engine.PluginParamSet(track, -1, ri, (float)r);
@@ -229,97 +260,128 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
             };
             filtCurve.DragStarted += () => { engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); };
             filtCurve.DragEnded += () => { engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); };
-            var graph = GraphWindow(filtCurve);
-            graph.Margin = new Thickness(0, 4, 0, 2);
-            var knobs = Row(0, K("cutoff", "Cutoff", HzFmt, 56), K("emph", "Emphasis", EmphFmt, 56), K("contour", "Contour", v => $"{v * 100:0} %", 56));
-            var head = new DockPanel { Height = 18, Children = {
-                Row(8, Cap("Kbd"), Toggle("kbd1", "1/3"), Toggle("kbd2", "2/3")).Docked(Dock.Right),
-                Cap("Filter") } };
-            return new DockPanel { Width = 172, LastChildFill = true, Children = { head.Docked(Dock.Top), knobs.Docked(Dock.Bottom), graph } };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = filtCurve, Margin = new Thickness(0, 3, 0, 4) };
+            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,Auto"), ColumnSpacing = 2, VerticalAlignment = VerticalAlignment.Bottom };
+            void C(Control c, int col) { Grid.SetColumn(c, col); knobs.Children.Add(c); }
+            C(K("cutoff", "CUTOFF", HzFmt, false, Knob.SizeSecondary, 44), 0);
+            C(K("emph", "EMPHASIS", EmphFmt, false, Knob.SizeSecondary, 48), 1);
+            C(K("contour", "CONTOUR", v => $"{v * 100:0}\u2009%", true, Knob.SizeSecondary, 44), 2);
+            var kbd = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = {
+                new TextBlock { Text = "Kbd ctrl", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = MutedC },
+                Row(3, Toggle("kbd1", "1/3"), Toggle("kbd2", "2/3")) } };
+            C(kbd, 3);
+            var body = new DockPanel { LastChildFill = true, Children = { WithDock(Lbl("FILTER", 7, MutedC), Dock.Top), WithDock(knobs, Dock.Bottom), graph } };
+            return new Border { Width = 226, BorderBrush = BorderIn, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(6, 4), Child = body };
         }
-        Control ContourPanel(string title, string route, MonolithEnvCurve curve, string pre)
+        Control ContourPanel(string title, string route, MonolithEnvCurve curve, string pre, IBrush col)
         {
-            var graph = GraphWindow(curve);
-            graph.Margin = new Thickness(0, 0, 4, 0);
-            var knobs = Row(0, K($"{pre}attack", "A", v => TimeFmt(0.001, 10, v), 42), K($"{pre}decay", "D", v => TimeFmt(0.004, 20, v), 42), K($"{pre}sustain", "S", v => $"{v * 100:0} %", 40));
-            var head = Row(6, Cap(title), Cap(route, TextDisabled));
-            head.Height = 16;
-            var inner = new DockPanel { LastChildFill = true, Children = { knobs.Docked(Dock.Right), graph } };
-            return new DockPanel { LastChildFill = true, Children = { head.Docked(Dock.Top), inner } };
+            curve.VerticalAlignment = VerticalAlignment.Stretch;
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = curve };
+            var knobs = Row(1, K($"{pre}attack", "A", v => TimeFmt(0.001, 10, v), false, Knob.SizeInline, 34, true), K($"{pre}decay", "D", v => TimeFmt(0.004, 20, v), false, Knob.SizeInline, 34, true), K($"{pre}sustain", "S", v => $"{v * 100:0}\u2009%", false, Knob.SizeInline, 34, true));
+            DockPanel.SetDock((Control)knobs, Dock.Right);
+            ((Control)knobs).Margin = new Thickness(6, 0, 0, 0);
+            var head = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Height = 11, Margin = new Thickness(0, 0, 0, 3), Children = { Lbl(title, 7, MutedC), new TextBlock { Text = route, FontSize = 7, Foreground = col, VerticalAlignment = VerticalAlignment.Center } } };
+            DockPanel.SetDock(head, Dock.Top);
+            var inner = new DockPanel { LastChildFill = true, Children = { (Control)knobs, graph } };
+            return new DockPanel { LastChildFill = true, Children = { head, inner } };
         }
         Control ModifiersTab()
         {
-            var contours = new Grid { RowDefinitions = new RowDefinitions("*,*"), RowSpacing = 4 };
-            contours.Children.Add(ContourPanel("Filter contour", "→ cutoff", fEnvCurve, "f"));
-            contours.Children.Add(ContourPanel("Loudness contour", "→ amp", aEnvCurve, "a").At(0, 1));
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 14, Margin = new Thickness(0, 6, 0, 0) };
-            g.Children.Add(FilterPanel()); g.Children.Add(contours.At(1));
+            var contours = new Grid { RowDefinitions = new RowDefinitions("*,*"), RowSpacing = 4, Margin = new Thickness(6, 2) };
+            var c1 = ContourPanel("FILTER CONTOUR", "→ cutoff", fEnvCurve, "f", TextSecondary);
+            var c2 = ContourPanel("LOUDNESS CONTOUR", "→ amp", aEnvCurve, "a", TealC);
+            Grid.SetRow((Control)c2, 1); contours.Children.Add((Control)c1); contours.Children.Add((Control)c2);
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+            var fp = FilterPanel(); Grid.SetColumn(fp, 0); Grid.SetColumn(contours, 1);
+            g.Children.Add(fp); g.Children.Add(contours);
             return g;
         }
 
         // ======================================================================
         // RIGHT — Mixer / Output tabs
         // ======================================================================
-        Control MixRow(string onId, string lvlId, string name)
+        Control MixRow(string onId, string lvlId, string name, IBrush? col = null)
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("20,*,Auto"), ColumnSpacing = 7, Height = 25 };
-            g.Children.Add(Toggle(onId, "").At(0));
-            g.Children.Add(Cap(name).At(1));
-            g.Children.Add(Bar(lvlId, name, Lvl).At(2));
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,42,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            var tog = Toggle(onId, ""); Grid.SetColumn(tog, 0);
+            var lbl = new TextBlock { Text = NotaText.Label(name), FontSize = 7, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(lbl, 1);
+            var sl = HSlider(lvlId, "", v => $"{v * 10:0.0}", 0, 22, col); sl.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetColumn(sl, 2);
+            g.Children.Add(tog); g.Children.Add(lbl); g.Children.Add(sl);
             return g;
         }
         Control MixerTab()
         {
-            var nrow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 8, Height = 28 };
-            nrow.Children.Add(Chips("noisetype", new[] { "White", "Pink" }));
-            nrow.Children.Add(ParamRow(ctx, idx, "extlvl", "Ext", Lvl, Refresh, readouts, valueWidth: 24).At(1));
-            var fb = new Border { BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Margin = new Thickness(0, 4, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = MixRow("exton", "feedback", "Feedback") };
-            return new StackPanel { Margin = new Thickness(0, 5, 0, 0), Children = {
-                MixRow("mix1on", "mix1lvl", "Osc 1"), MixRow("mix2on", "mix2lvl", "Osc 2"), MixRow("mix3on", "mix3lvl", "Osc 3"),
-                MixRow("noiseon", "noiselvl", "Noise"), nrow, fb } };
+            var g = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(2, 4), VerticalAlignment = VerticalAlignment.Top };
+            void R(Control c, int r) { Grid.SetRow(c, r); g.Children.Add(c); }
+            R(MixRow("mix1on", "mix1lvl", "OSC 1"), 0);
+            R(MixRow("mix2on", "mix2lvl", "OSC 2"), 1);
+            R(MixRow("mix3on", "mix3lvl", "OSC 3"), 2);
+            R(MixRow("noiseon", "noiselvl", "NOISE"), 3);
+            var nrow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            var chips = Chips("noisetype", new[] { "White", "Pink" }); chips.HorizontalAlignment = HorizontalAlignment.Left; Grid.SetColumn(chips, 0);
+            var ext = HSlider("extlvl", "EXT", v => $"{v * 10:0.0}", 26, 22); ext.HorizontalAlignment = HorizontalAlignment.Stretch; Grid.SetColumn(ext, 1);
+            nrow.Children.Add(chips); nrow.Children.Add(ext);
+            R(nrow, 4);
+            var fb = new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0), Child = MixRow("exton", "feedback", "FEEDBACK", NotaPalette.VizInk) };
+            R(fb, 5);
+            return g;
         }
         Control OutputTab()
         {
-            var vol = K("volume", "Volume", VolFmt, 60);
-            var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
-            top.Children.Add(vol);
-            top.Children.Add(new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { Toggle("a440", "A-440 tone"), Toggle("basscomp", "Bass comp") } }.At(1));
-            return new StackPanel { Spacing = 4, Margin = new Thickness(0, 6, 0, 0), Children = {
-                top,
-                LblRow("Unison", Row(10, RowKnob("unison", v => $"{1 + (int)Math.Round(v * 6)}", 12), RowKnob("unidetune", v => $"{v * 50:0} c", 30))),
-                LblRow("Priority", Chips("priority", new[] { "Low", "High", "Last" })),
-                LblRow("Bend", Chips("bendrange", new[] { "±2", "±4", "±5", "±7", "±9", "±12" }, 3)) } };
+            var vol = K("volume", "VOLUME", VolFmt, false, Knob.SizeMain, 60);
+            var sp = new StackPanel { Spacing = 6, Margin = new Thickness(2, 2), Children = {
+                new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Center, Children = { vol } },
+                new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = new StackPanel { Spacing = 4, Children = {
+                    Toggle("a440", "A-440 tone"), Toggle("basscomp", "Bass compensation") } } },
+                new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = new StackPanel { Spacing = 5, Children = {
+                    LblRow("UNISON", Row(4, RowKnob("unison", v => $"{1 + (int)Math.Round(v * 6)}", 10), RowKnob("unidetune", v => $"{v * 50:0}\u2009c", 26, true))),
+                    LblRow("PRIORITY", Chips("priority", new[] { "Low", "High", "Last" })),
+                    LblRow("BEND", Chips("bendrange", new[] { "±2", "±4", "±5", "±7", "±9", "±12" })) } } } } };
+            return sp;
         }
-        Control LblRow(string t, Control c)
-        {
-            c.HorizontalAlignment = HorizontalAlignment.Left;
-            return new Grid { ColumnDefinitions = new ColumnDefinitions("44,*"), Height = 28, Children = { Cap(t), c.At(1) } };
-        }
+        Control LblRow(string t, Control c) { c.HorizontalAlignment = HorizontalAlignment.Left; return new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { WithCol(new TextBlock { Text = NotaText.Label(t), FontSize = 7, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center }, 0), WithCol(c, 1) } }; }
 
         // ---- tab shells -------------------------------------------------------
-        Control TabPanel(string[] tabs, Control? trailing, Func<int, Control> body)
-        {
-            int sel = 0;
-            var host = new ContentControl { Content = body(0) };
-            var bar = Tabs(tabs, () => sel, i => { sel = i; host.Content = body(i); }, out _, trailing);
-            return new DockPanel { LastChildFill = true, Children = { bar.Docked(Dock.Top), host } };
-        }
+        var centreHost = new ContentControl { VerticalAlignment = VerticalAlignment.Stretch };
+        var rightHost = new ContentControl { VerticalAlignment = VerticalAlignment.Stretch };
         Control? oscTabC = null, modTabC = null, mixTabC = null, outTabC = null;
+        Control CentreBody(int t) => t == 1 ? (modTabC ??= ModifiersTab()) : (oscTabC ??= OscTab());
+        Control RightBody(int t) => t == 1 ? (outTabC ??= OutputTab()) : (mixTabC ??= MixerTab());
 
-        var drift = ParamRow(ctx, idx, "drift", "Drift", v => $"{v * 100:0} %", Refresh, readouts, trackWidth: 54, valueWidth: 30);
-        var centre = Pane(TabPanel(new[] { "Controllers · Osc Bank", "Modifiers" }, drift,
-            t => t == 1 ? (modTabC ??= ModifiersTab()) : (oscTabC ??= OscTab())), new Thickness(SectionPad, 9, SectionPad, 8));
-        centre.Margin = new Thickness(SectionGap, 0);
-        var right = Pane(TabPanel(new[] { "Mixer", "Output" }, null,
-            t => t == 1 ? (outTabC ??= OutputTab()) : (mixTabC ??= MixerTab())), new Thickness(SectionPad, 9, SectionPad, 8));
-        right.Width = 196;
+        var drift = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Width = 96, Children = { new TextBlock { Text = "Drift", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center }, WithStretch(HSlider("drift", "", v => $"{v * 100:0}\u2009%", 0, 22)) } };
+
+        var centre = TabPanel(new[] { "Controllers · Osc Bank", "Modifiers" }, drift, centreHost, CentreBody);
+        var right = new RuleSection { Width = 186, Child = TabInner(new[] { "Mixer", "Output" }, null, rightHost, RightBody, true) };
         DockPanel.SetDock(right, Dock.Right);
 
         // ---- assemble ---------------------------------------------------------
-        var root = new DockPanel { LastChildFill = true, Margin = new Thickness(0, CardPad, 0, 0), Children = { wheels, right, centre } };
+        var bodyRow = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { wheels, right, centre } };
+        var root = new Border { Background = NotaPalette.SurfaceCard, Child = bodyRow };
 
         ctx.SetInstLiveViz(Refresh);
         Refresh();
         return root;
+
+        // local: build the centre tab panel (flex) with an extras control in the tab bar
+        Control TabPanel(string[] tabs, Control? extras, ContentControl host, Func<int, Control> body)
+            => new RuleSection { Margin = new Thickness(5, 0), Child = TabInner(tabs, extras, host, body, false) };
+        Control TabInner(string[] tabs, Control? extras, ContentControl host, Func<int, Control> body, bool centered)
+        {
+            int sel = 0; var btns = new Border[tabs.Length];
+            void Hi() { for (int i = 0; i < tabs.Length; i++) { bool on = i == sel; btns[i].Background = on ? TabBg : Brushes.Transparent; btns[i].BorderBrush = on ? Amber : Brushes.Transparent; ((TextBlock)btns[i].Child!).Foreground = on ? TxtC : MutedC; } }
+            var bar = new StackPanel { Orientation = Orientation.Horizontal };
+            for (int i = 0; i < tabs.Length; i++)
+            { int iv = i; var b = new Border { Padding = new Thickness(10, 0), BorderThickness = new Thickness(0, 0, 0, 2), BorderBrush = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Stretch, HorizontalAlignment = centered ? HorizontalAlignment.Stretch : HorizontalAlignment.Left, Child = new TextBlock { Text = tabs[i], FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center } }; if (centered) b.Width = double.NaN; b.PointerPressed += (_, _) => { sel = iv; Hi(); host.Content = body(iv); }; btns[i] = b; bar.Children.Add(b); }
+            if (centered) { bar.HorizontalAlignment = HorizontalAlignment.Stretch; for (int i = 0; i < btns.Length; i++) { btns[i].Width = 92; } }
+            var barDock = new DockPanel { Height = 20, LastChildFill = false, Children = { WithDock(bar, Dock.Left) } };
+            if (extras != null) { DockPanel.SetDock(extras, Dock.Right); barDock.Children.Add(extras); }
+            var barBorder = new Border { BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
+            DockPanel.SetDock(barBorder, Dock.Top);
+            Hi(); host.Content = body(sel);
+            return new DockPanel { LastChildFill = true, Children = { barBorder, new Border { Padding = new Thickness(2), Child = host } } };
+        }
+        static Control WithDock(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
+        static Control WithCol(Control c, int col) { Grid.SetColumn(c, col); return c; }
+        static Control WithStretch(Control c) { c.HorizontalAlignment = HorizontalAlignment.Stretch; return c; }
     }
 }

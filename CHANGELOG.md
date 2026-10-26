@@ -35,11 +35,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   its send to each return, two per row, as far as the height allows.
 
 ### Changed
-- **Smaller shell text, a new key picker and tabs in the device header** (review of
+- **Smaller shell text and a new key picker** (review of
   nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
   The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
-  full. A device card's main tabs move into the empty strip of its header when there is room,
-  giving the section below their row.
+  full.
 - **A new look** (spec 038, the Studio style guide): every control and setting stays where it
   was; how it is drawn changes. The shell is flat and grey so the track colours carry the
   content, and depth is kept for device cards. Orange now has three jobs: solid for what is
@@ -63,29 +62,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     mode on the Warp title row, so nothing scrolls.
   - **Session and Mixer:** a selected slot gets an outline in the text colour, empty slots
     fade back, and send and volume values sit inside their bars.
-  - **EQ-8 and Dynamic EQ-8** keep their classic layout in the new style: a slim row of band
-    chips (number, filter shape, frequency) over a large graph, and one panel at the right with the
-    picked band's type, Freq, Gain and Q side by side. In EQ-8 that panel is one narrow column
-    again, as before, with Analyzer and Auto gain back over the graph. Dynamic EQ-8's panel is
-    drawn the same way: its Thresh, Range, Attack and Release are knobs in a row beside Freq,
-    Gain and Q (the band's level ticked on Thresh), Static / Duck / Lift sits beside the filter
-    shapes, and the Dynamic switch and an Output knob sit at the bottom. In both, the panel
-    folds to a slim strip that keeps the picked band's Freq, Gain and Q, giving the graph more
-    room.
-  - **Devices:** cards are raised with pressed-in sections, have no status line, use value
-    bars instead of thin sliders, and draw inactive controls in a quieter grey instead of
-    fading them.
-  - **Spacing in every device tab:** each tab of each device was checked for crowding,
-    clipping and overlap. Graph plots start under their title and stop above their corner
-    labels, axis labels skip a spot where they would sit on another label, and readouts that
-    repeated a knob's value are gone. Operator's right panel is rebuilt and its routing
-    diagram steps a four-deep chain sideways so every box and the **out** bus show. Controls
-    that appeared twice keep one place: Delay's Feedback and Spread live on the Loop rail
-    (not Levels), Shutter's detector switches on the Detector tab, Strata's Undo, Export and
-    Clear sit in the Layers head. Beat Repeat's slice Interval is a drop-down like Timeline's,
-    Ceiling's Level graph drops its reduction strip (the Reduction tab has it), Prism names
-    its own sidechain **Own input**, a Drum or Instrument Rack chain slot drops the "Nota "
-    prefix, and Mosaic's exclusive-group note moved into its tooltip.
+  - **Devices** keep the layout and size they had: every card is still 700 × 260 with its
+    controls in the same places and its status line. What changes is how the parts are drawn:
+    capped knobs with an orange value arc, value bars instead of thin sliders, the new
+    switches and segment groups, pressed-in sections, one font, greys instead of the old
+    identity colours, and inactive controls in a quieter grey instead of faded.
 
 ### Fixed
 - **⌘G on a device, follow-ups** (nota-daw/nota#257): grouping a playing effect no longer

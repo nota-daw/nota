@@ -13,11 +13,11 @@
 //                           (1→2 serial, 1+2 parallel); the bank's partials as the engine
 //                           tunes them (drag: ↔ ratio, ↕ bright) beside its seven knobs
 //                           and the 1+2 mix.
-//   Rail 196    Output: Poly / Mono, tune, fine and note-off value bars, volume, pan and
-//               the track's meter.
+//   Rail 186    Output: Poly / Mono, tune, fine and note-off rows, volume, pan and the
+//               track's meter.
 //
-// Both are pressed-in sections (style guide); values are orange, readouts grey. Everything
-// is a plugin param → automation / persist / clone, and the card follows automation live.
+// Neutral ink is the parameter itself; teal is modulation. Everything is a plugin param →
+// automation / persist / clone, and the card follows automation live.
 
 using System;
 using System.Collections.Generic;
@@ -42,10 +42,10 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         int mi = -1;
         for (int i = 0, n = engine.PluginParamCount(trackId, -1); i < n; i++)
             if (engine.PluginParamId(trackId, -1, i) == "mono") { mi = i; break; }
-        return mi >= 0 && engine.PluginParamGet(trackId, -1, mi) >= 0.5f ? "Mono" : $"{Math.Max(0, active)}/{PhysicalModel.Voices}";
+        return mi >= 0 && engine.PluginParamGet(trackId, -1, mi) >= 0.5f ? "MONO" : $"{Math.Max(0, active)}/{PhysicalModel.Voices}";
     }
 
-    private const double RailW = 196, TabH = 22, KnobS = NotaSize.Knob;
+    private const double RailW = 186, TabH = 20, StatusH = 18, KnobS = 30;
 
     private static readonly string[] TabNames = { "Exciter", "Resonator" };
     private static readonly string[] TypeNames = PhysicalModel.TypeNames;
@@ -85,13 +85,13 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         var scope = new float[PhysicalModel.ScopeLength];
 
         var noiseEnv = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 90, MinHeight = 50 };
-        noiseEnv.Target("Noise env", P("noisea"), P("noised"), P("noises"), P("noiser"));
+        noiseEnv.Target("NOISE ENV", P("noisea"), P("noised"), P("noises"), P("noiser"));
         var partials = new PhysPartialsView { VerticalAlignment = VerticalAlignment.Stretch };
         ToolTip.SetTip(partials, "Partials as the engine tunes them — drag ↔ to spread the series (Ratio), ↕ to tilt the highs (Bright)");
 
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
-            Text = NotaText.Label(t), FontSize = NotaType.DeviceCaption,
+            Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
             Foreground = c ?? TextTertiary,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -101,9 +101,11 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
-        var hint = Mono("", TextTertiary, NotaType.Eyebrow);
-        hint.HorizontalAlignment = HorizontalAlignment.Right;
+        var hint = Mono("", TextTertiary, NotaType.Axis);
+        hint.HorizontalAlignment = HorizontalAlignment.Right; hint.Margin = new Thickness(0, 0, 8, 0);
         hint.TextTrimming = TextTrimming.CharacterEllipsis;
+        var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        var meta = Mono("", TextSecondary);
         Action showTab = () => { };
 
         // The partial window: the selected bank's modes from the engine's scope, the other
@@ -129,11 +131,12 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             foreach (var r in readouts) r();
             RefreshPartials();
             hint.Text = Hint();
+            status.Text = Summary();
         }
 
         // ---- shared builders --------------------------------------------------
         Control PKnob(string id, string label, Func<float, string> fmt, double size = KnobS, double cellW = 48,
-            IBrush? arc = null, Func<bool>? dim = null, bool bipolar = false)
+            IBrush? arc = null, Func<bool>? dim = null)
         {
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
@@ -144,7 +147,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             };
             var knob = new Knob(G(id), 1.0)
             {
-                Accent = true, ArcColor = arc, Bipolar = bipolar, Default = engine.InstrumentParamDefault(track, pi),
+                Accent = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
                 Width = size, Height = size, HorizontalAlignment = HorizontalAlignment.Center,
             };
             knob.Format = v => fmt((float)v);
@@ -153,8 +156,8 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             knob.GestureEnd += () => End(id);
             ctx.AddInstFader(pi, knob, value, fmt);
             MidiLearn.Bind(knob, MidiTarget.PluginParam(track, -1, pi), engine.PluginParamName(track, -1, pi));
+            if (dim is not null) readouts.Add(() => knob.IsDim = dim());
             var cell = KnobCell(label, knob, value, cellW);
-            if (dim is not null) readouts.Add(SynthInstrumentCard.Dimmer(cell, dim));
             cell.HorizontalAlignment = HorizontalAlignment.Center;
             cell.VerticalAlignment = VerticalAlignment.Center;
             return cell;
@@ -178,7 +181,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
                 begin: pi >= 0 ? () => Begin(id) : null,
                 end: pi >= 0 ? () => End(id) : null,
                 reset: pi >= 0 ? () => { SetP(id, engine.InstrumentParamDefault(track, pi)); Refresh(); } : null,
-                bipolar: bipolar, dim: dim, labelWidth: 52, valueWidth: 34);
+                bipolar: bipolar, dim: dim, labelWidth: 46, valueWidth: 30);
             readouts.Add(sync);
             if (pi >= 0) MidiLearn.Bind(row, MidiTarget.PluginParam(track, -1, pi), engine.PluginParamName(track, -1, pi));
             return row;
@@ -196,57 +199,62 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         }
 
         // ---- Exciter tab ------------------------------------------------------
-        // Mallet › Noise: the two heads share a row; the noise envelope and its knobs under it.
-        var malletKnobs = KnobGrid(2,
-            PKnob("malletvol", "VOLUME", Pct),
-            PKnob("malletstiff", "STIFF", Pct),
-            PKnob("malletnoise", "NOISE", Pct),
-            PKnob("malletcolor", "COLOR", Pct));
-        ToolTip.SetTip(malletKnobs, "Stiffness sets the contact time: soft = long and dark, hard = short and bright");
-
-        var envCap = Mono("", TextTertiary, NotaType.DeviceCaption);
-        envCap.HorizontalAlignment = HorizontalAlignment.Right;
-        readouts.Add(() =>
+        var malletGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 3 };
         {
-            double oct = PhysicalModel.NoiseEnvOct(G("noiseenv"));
-            envCap.Text = Math.Abs(oct) < 0.05 ? "env → freq off" : "env → freq " + NotaNum.Unit(oct, "+0.0;−0.0;0", "oct");
-        });
-        var noiseHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 8 };
-        var typeChips = Chips("noisetype", PhysicalModel.NoiseTypes);
-        noiseHead.Children.Add(Cap("NOISE"));
-        Grid.SetColumn(typeChips, 1); noiseHead.Children.Add(typeChips);
-        Grid.SetColumn(envCap, 2); noiseHead.Children.Add(envCap);
+            var knobs = KnobGrid(2,
+                PKnob("malletvol", "VOLUME", Pct),
+                PKnob("malletstiff", "STIFF", Pct),
+                PKnob("malletnoise", "NOISE", Pct),
+                PKnob("malletcolor", "COLOR", Pct));
+            ToolTip.SetTip(knobs, "Stiffness sets the contact time: soft = long and dark, hard = short and bright");
+            malletGrid.Children.Add(Cap("MALLET"));
+            Grid.SetRow(knobs, 1); malletGrid.Children.Add(knobs);
+        }
 
-        // The ADSR editor with its stage times along the bottom edge.
-        var envTimes = Mono("", NotaPalette.TextAxis, NotaType.Axis);
-        envTimes.HorizontalAlignment = HorizontalAlignment.Right; envTimes.VerticalAlignment = VerticalAlignment.Bottom;
-        envTimes.Margin = new Thickness(0, 0, 8, 4); envTimes.IsHitTestVisible = false;
-        readouts.Add(() => envTimes.Text =
-            $"{Secs(PhysicalModel.NoiseAttack(G("noisea")))} · {Secs(PhysicalModel.NoiseDecay(G("noised")))} · "
-            + $"{Pct(G("noises"))} · {Secs(PhysicalModel.NoiseRelease(G("noiser")))}");
-        var envHost = new Panel { Children = { noiseEnv, envTimes } };
-
-        var noiseKnobs = KnobGrid(2,
-            PKnob("noisevol", "VOLUME", Pct, cellW: 56),
-            PKnob("noiseenv", "ENV", Bip, cellW: 56, bipolar: true),
-            PKnob("noisefreq", "FREQ", v => NotaNum.Hz(PhysicalModel.NoiseFreqHz(v)), cellW: 56),
-            PKnob("noisereso", "RESO", Pct, cellW: 56));
-
-        var exciterGrid = new Grid
+        var noiseGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), RowSpacing = 3 };
         {
-            ColumnDefinitions = new ColumnDefinitions("104,20,*,124"), RowDefinitions = new RowDefinitions("Auto,*"),
-            RowSpacing = 8,
-        };
-        void Put(Control c, int col, int row, int span = 1) { Grid.SetColumn(c, col); Grid.SetRow(c, row); Grid.SetColumnSpan(c, span); exciterGrid.Children.Add(c); }
-        var malletCap = Cap("MALLET");
-        Put(malletCap, 0, 0);
-        Put(malletKnobs, 0, 1);
-        var arrow = new Glyph(GlyphKind.ChevronRight, 9) { Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        Put(arrow, 1, 1);
-        Put(noiseHead, 2, 0, 2);
-        Put(envHost, 2, 1);
-        Put(noiseKnobs, 3, 1);
-        var exciterBody = new Border { Padding = new Thickness(0, 6, 0, 0), Child = exciterGrid };
+            var envCap = Mono("", Teal, NotaType.Axis);
+            envCap.HorizontalAlignment = HorizontalAlignment.Right;
+            readouts.Add(() =>
+            {
+                double oct = PhysicalModel.NoiseEnvOct(G("noiseenv"));
+                envCap.Text = Math.Abs(oct) < 0.05 ? "env → freq off" : "env → freq " + NotaNum.Unit(oct, "+0.0;−0.0;0", "oct");
+            });
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5 };
+            var typeChips = Chips("noisetype", PhysicalModel.NoiseTypes);
+            head.Children.Add(Cap("NOISE"));
+            Grid.SetColumn(typeChips, 1); head.Children.Add(typeChips);
+            Grid.SetColumn(envCap, 2); head.Children.Add(envCap);
+
+            // The ADSR editor with its stage times along the bottom edge.
+            var envTimes = Mono("", NotaPalette.TextAxis, NotaType.Axis);
+            envTimes.HorizontalAlignment = HorizontalAlignment.Right; envTimes.VerticalAlignment = VerticalAlignment.Bottom;
+            envTimes.Margin = new Thickness(0, 0, 6, 1); envTimes.IsHitTestVisible = false;
+            readouts.Add(() => envTimes.Text =
+                $"{Secs(PhysicalModel.NoiseAttack(G("noisea")))} · {Secs(PhysicalModel.NoiseDecay(G("noised")))} · "
+                + $"{Pct(G("noises"))} · {Secs(PhysicalModel.NoiseRelease(G("noiser")))}");
+            var envHost = new Panel { Children = { noiseEnv, envTimes } };
+
+            var knobs = KnobGrid(2,
+                PKnob("noisevol", "VOLUME", Pct, cellW: 46),
+                PKnob("noiseenv", "ENV", Bip, cellW: 46, arc: Teal),
+                PKnob("noisefreq", "FREQ", v => NotaNum.Hz(PhysicalModel.NoiseFreqHz(v)), cellW: 46),
+                PKnob("noisereso", "RESO", Pct, cellW: 46));
+            knobs.Width = 96;
+            var noiseBody = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 5 };
+            noiseBody.Children.Add(envHost);
+            Grid.SetColumn(knobs, 1); noiseBody.Children.Add(knobs);
+
+            noiseGrid.Children.Add(head);
+            Grid.SetRow(noiseBody, 1); noiseGrid.Children.Add(noiseBody);
+        }
+
+        var exciterGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("104,10,*"), ColumnSpacing = 5 };
+        exciterGrid.Children.Add(malletGrid);
+        var arrow = new Glyph(GlyphKind.ChevronRight, 9) { Foreground = NotaPalette.BorderStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        Grid.SetColumn(arrow, 1); exciterGrid.Children.Add(arrow);
+        Grid.SetColumn(noiseGrid, 2); exciterGrid.Children.Add(noiseGrid);
+        var exciterBody = new Border { Padding = new Thickness(6, 5), Child = exciterGrid };
 
         // ---- Resonator tab ----------------------------------------------------
         // Both banks' controls are built once; the 1 / 2 segment shows one set.
@@ -260,7 +268,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             };
             var val = Mono("", TextPrimary, NotaType.KnobValue);
             val.HorizontalAlignment = HorizontalAlignment.Center;
-            var cap = Cap("Mix 1+2"); cap.FontSize = NotaType.KnobLabel; cap.HorizontalAlignment = HorizontalAlignment.Center;
+            var cap = Cap("MIX 1+2"); cap.HorizontalAlignment = HorizontalAlignment.Center;
             trackC.Changed += v => { SetP("resmix", (float)v); Refresh(); };
             trackC.GestureBegin += () => Begin("resmix");
             trackC.GestureEnd += () => End("resmix");
@@ -286,7 +294,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         {
             string pre = b == 0 ? "r1" : "r2";
             Func<bool>? off = b == 1 ? () => !R2On() : null;
-            typeHosts[b] = Chips(pre + "type", TypeNames, dim: off, padX: 3);
+            typeHosts[b] = Chips(pre + "type", TypeNames, dim: off, padX: 4);
             knobHosts[b] = KnobGrid(4,
                 PKnob(pre + "decay", "DECAY", v => Secs(PhysicalModel.DecaySeconds(v)), dim: off),
                 PKnob(pre + "material", "MATERIAL", Pct, dim: off),
@@ -305,27 +313,27 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         partials.DragH += v => { SetP(bank == 0 ? "r1ratio" : "r2ratio", (float)v); Refresh(); };
         partials.DragV += v => { SetP(bank == 0 ? "r1bright" : "r2bright", (float)v); Refresh(); };
 
-        var bankSeg = Segments(new[] { "1", "2" }, () => bank, iv => { bank = iv; showTab(); }, out var bankSync, padX: 4);
+        var bankSeg = Segments(new[] { "1", "2" }, () => bank, iv => { bank = iv; showTab(); }, out var bankSync, padX: 5);
         readouts.Add(bankSync);
         ToolTip.SetTip(bankSeg, "Which resonator the controls below edit");
         // On / Off belongs to the bank on screen: bank 1 always rings, bank 2 is switchable.
         var onSeg = Chips("r2on", new[] { "Off", "On" }, () => bank == 0 || R2On() ? 1 : 0,
-            iv => { if (bank == 1) { Write("r2on", iv); Refresh(); } }, dim: () => bank == 0, padX: 4);
+            iv => { if (bank == 1) { Write("r2on", iv); Refresh(); } }, dim: () => bank == 0);
         ToolTip.SetTip(onSeg, "Resonator 2 on / off — resonator 1 always rings");
-        var structSeg = Chips("structure", new[] { "1→2", "1+2" }, dim: () => !R2On(), padX: 3);
+        var structSeg = Chips("structure", new[] { "1→2", "1+2" }, dim: () => !R2On(), padX: 4);
         ToolTip.SetTip(structSeg, "1→2: resonator 1 rings into resonator 2 · 1+2: both struck, mixed");
         var typeHost = new Panel { Children = { typeHosts[0], typeHosts[1] } };
 
-        var resHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto,Auto"), ColumnSpacing = 4 };
+        var resHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto,Auto"), ColumnSpacing = 5, Margin = new Thickness(6, 0) };
         {
             var structCap = Cap("STRUCT"); structCap.HorizontalAlignment = HorizontalAlignment.Right;
             var cs = new Control[] { bankSeg, onSeg, typeHost, new Panel(), structCap, structSeg };
             for (int i = 0; i < cs.Length; i++) { Grid.SetColumn(cs[i], i); resHead.Children.Add(cs[i]); }
         }
-        var resHeadHost = new Border { Margin = new Thickness(0, 6, 0, 0), Child = resHead };
+        var resHeadHost = new Border { Height = TabH, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 0, 0, 1), Child = resHead };
 
         var knobHost = new Panel { Children = { knobHosts[0], knobHosts[1] } };
-        var resBody = new Grid { ColumnDefinitions = new ColumnDefinitions("150,*"), ColumnSpacing = 8, Margin = new Thickness(0, 8, 0, 0) };
+        var resBody = new Grid { ColumnDefinitions = new ColumnDefinitions("150,*"), ColumnSpacing = 6, Margin = new Thickness(6, 5) };
         resBody.Children.Add(partials);
         Grid.SetColumn(knobHost, 1); resBody.Children.Add(knobHost);
 
@@ -335,14 +343,40 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
 
         // ---- the tab strip ----------------------------------------------------
         var bodies = new Control[] { exciterBody, resonatorGrid };
-        Action syncTabs = () => { };
-        var tabStrip = SynthInstrumentCard.TabStrip(TabNames, () => tab, i => { tab = i; showTab(); }, out var tabSync, hint);
-        syncTabs = tabSync;
+        var tabCells = new Border[TabNames.Length];
+        var tabTexts = new TextBlock[TabNames.Length];
+        var tabRow = new StackPanel { Orientation = Orientation.Horizontal };
+        for (int i = 0; i < TabNames.Length; i++)
+        {
+            int iv = i;
+            var tb = new TextBlock { Text = TabNames[i], FontSize = NotaType.DeviceSection, VerticalAlignment = VerticalAlignment.Center };
+            var cell = new Border
+            {
+                Padding = new Thickness(8, 0), BorderThickness = new Thickness(0, 0, 0, 2),
+                Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
+            };
+            cell.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
+                tab = iv; showTab(); e.Handled = true;
+            };
+            tabCells[i] = cell; tabTexts[i] = tb; tabRow.Children.Add(cell);
+        }
+        var tabStrip = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        tabStrip.Children.Add(tabRow);
+        Grid.SetColumn(hint, 1); tabStrip.Children.Add(hint);
 
         showTab = () =>
         {
-            syncTabs();
-            for (int i = 0; i < TabNames.Length; i++) bodies[i].IsVisible = i == tab;
+            for (int i = 0; i < TabNames.Length; i++)
+            {
+                bool on = i == tab;
+                tabCells[i].Background = on ? NotaPalette.SurfaceRaised : Brushes.Transparent;
+                tabCells[i].BorderBrush = on ? Brass : Brushes.Transparent;
+                tabTexts[i].Foreground = on ? TextPrimary : TextTertiary;
+                tabTexts[i].FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
+                bodies[i].IsVisible = on;
+            }
             for (int b = 0; b < 2; b++) { typeHosts[b].IsVisible = b == bank; knobHosts[b].IsVisible = b == bank; }
             Refresh();
         };
@@ -350,20 +384,17 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         var tabHost = new Panel();
         foreach (var b in bodies) tabHost.Children.Add(b);
         var tabGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
-        tabGrid.Children.Add(tabStrip);
+        tabGrid.Children.Add(HeaderStrip(tabStrip));
         Grid.SetRow(tabHost, 1); tabGrid.Children.Add(tabHost);
         var tabPanel = SectionBox(tabGrid);
 
         // ---- rail · Output ----------------------------------------------------
         var monoChips = Chips("mono", new[] { "Poly", "Mono" }, () => IsMono() ? 1 : 0, iv => { Write("mono", iv); Refresh(); });
         monoChips.HorizontalAlignment = HorizontalAlignment.Right;
+        monoChips.Margin = new Thickness(0, 0, 6, 0);
         ToolTip.SetTip(monoChips, "Poly: 8 voices ring over each other · Mono: a new strike chokes the sounding note");
-        var outCap = new TextBlock
-        {
-            Text = "Output", FontSize = NotaType.DeviceBody, FontWeight = FontWeight.SemiBold,
-            Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center,
-        };
-        var outHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var outCap = Cap("OUTPUT"); outCap.Margin = new Thickness(8, 0, 0, 0);
+        var outHead = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         outHead.Children.Add(outCap);
         Grid.SetColumn(monoChips, 1); outHead.Children.Add(monoChips);
 
@@ -371,7 +402,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         ToolTip.SetTip(noteOffRow, "How hard a released key damps the body — at 0 it rings on, fully up it stops at once");
         var outTop = new StackPanel
         {
-            Spacing = 9, Margin = new Thickness(0, 8, 0, 12),
+            Spacing = 6, Margin = new Thickness(8, 6, 8, 0),
             Children =
             {
                 Slider("TUNE", "tune", () => Semis(Math.Round(PhysicalModel.TuneSemis(G("tune")))), bipolar: true),
@@ -390,32 +421,35 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         }
         var meterBlock = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 5,
-            HorizontalAlignment = HorizontalAlignment.Right, Height = 58, VerticalAlignment = VerticalAlignment.Center,
+            ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4,
+            HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 9),
         };
         meterBlock.Children.Add(meter);
         Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
 
-        var outBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 2, VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 10, 0, 0) };
-        var volCell = PKnob("volume", "VOLUME", Pct, NotaSize.Knob, 40);
-        var panCell = PKnob("pan", "PAN", PanText, NotaSize.Knob, 40, bipolar: true);
+        var outBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
+        var volCell = PKnob("volume", "VOLUME", Pct, NotaSize.KnobMain, 48);
+        var panCell = PKnob("pan", "PAN", PanText, NotaSize.KnobSecondary, 42);
         outBottom.Children.Add(volCell);
         Grid.SetColumn(panCell, 1); outBottom.Children.Add(panCell);
         Grid.SetColumn(meterBlock, 2); outBottom.Children.Add(meterBlock);
 
+        var outGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        outGrid.Children.Add(outTop);
         var outBottomFrame = new Border
         {
-            BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 1, 0, 0), Child = outBottom,
+            BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0),
+            Margin = new Thickness(8, 6, 8, 5), Padding = new Thickness(0, 5, 0, 0), Child = outBottom,
         };
-        var railGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
-        railGrid.Children.Add(outHead);
-        Grid.SetRow(outTop, 1); railGrid.Children.Add(outTop);
-        Grid.SetRow(outBottomFrame, 2); railGrid.Children.Add(outBottomFrame);
+        Grid.SetRow(outBottomFrame, 1); outGrid.Children.Add(outBottomFrame);
+
+        var railGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*") };
+        railGrid.Children.Add(HeaderStrip(outHead));
+        Grid.SetRow(outGrid, 1); railGrid.Children.Add(outGrid);
         var rail = SectionBox(railGrid);
-        rail.Padding = new Thickness(SectionPad, 8, SectionPad, SectionPad);
         rail.Width = RailW;
 
-        // ---- the tab hint -----------------------------------------------------
+        // ---- status strip -----------------------------------------------------
         string Exciters()
         {
             var parts = new List<string>();
@@ -432,25 +466,71 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             0 => $"{Exciters()} → {TypeWord("r1")}",
             _ => $"{StructWord()} · {TypeWord(BankOf())} · decay {Secs(PhysicalModel.DecaySeconds(G(BankOf() + "decay")))}",
         };
-        ctx.AddDeviceRefresher(RefreshPartials);   // follows the struck note (the partials' reach under Nyquist)
+        string Summary()
+        {
+            if (tab == 0)
+            {
+                var s = G("malletvol") > 0.001f
+                    ? $"Mallet {Pct(G("malletvol"))} · stiff {Pct(G("malletstiff"))} ({NotaNum.Unit(PhysicalModel.ContactMs(G("malletstiff")), "0.0", "ms")})"
+                    : "Mallet off";
+                s += G("noisevol") > 0.001f
+                    ? $" · noise {Pct(G("noisevol"))} {PhysicalModel.NoiseTypes[Sel("noisetype", 3)]} {NotaNum.Hz(PhysicalModel.NoiseFreqHz(G("noisefreq")))} · env → freq {NotaNum.Unit(PhysicalModel.NoiseEnvOct(G("noiseenv")), "+0.0;−0.0;0", "oct")}"
+                    : " · noise off";
+                return s + $" → resonator {TypeWord("r1")}";
+            }
+            string pre = BankOf();
+            bool on = bank == 0 || R2On();
+            var line = $"Resonator {bank + 1} {TypeWord(pre)} {(on ? "on" : "off")} · decay {Secs(PhysicalModel.DecaySeconds(G(pre + "decay")))} · "
+                + $"bright {Pct(G(pre + "bright"))} · inharm {Pct(G(pre + "inharm"))} · structure {StructWord()}";
+            if (R2On())
+            {
+                var (g1, g2) = PhysicalModel.MixGains(G("resmix"));
+                line += $" · mix {NotaNum.Str(g1 * 100, "0")} / {NotaNum.Str(g2 * 100, "0")}";
+            }
+            return line;
+        }
+        ctx.AddDeviceRefresher(() =>
+        {
+            int v = Math.Max(0, engine.InstrumentVoiceCount(track));
+            string mode = IsMono() ? "MONO" : $"POLY {v}/{PhysicalModel.Voices}";
+            double sr = engine.SampleRate > 0 ? engine.SampleRate : 48000;
+            meta.Text = $"{mode} · NOTE OFF {Secs(PhysicalModel.NoteOffSeconds(G("noteoff")))} · {NotaNum.Unit(sr / 1000, "0.#", "kHz")}";
+            RefreshPartials();   // follows the struck note (the partials' reach under Nyquist)
+        });
+        var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
+        statusBar.Children.Add(status);
+        Grid.SetColumn(meta, 1); statusBar.Children.Add(meta);
+        var statusHost = new Border
+        {
+            Height = StatusH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0),
+            Background = NotaPalette.SurfaceAbyss, Padding = new Thickness(8, 0), Child = statusBar,
+        };
 
         // ---- assembly ---------------------------------------------------------
-        var root = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = SectionGap, Margin = new Thickness(0, CardPad, 0, 0) };
-        root.Children.Add(tabPanel);
-        Grid.SetColumn(rail, 1); root.Children.Add(rail);
+        var body = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = NotaSpace.DeviceGap,
+            Margin = new Thickness(NotaSpace.DeviceGap),
+        };
+        body.Children.Add(tabPanel);
+        Grid.SetColumn(rail, 1); body.Children.Add(rail);
+
+        DockPanel.SetDock(statusHost, Dock.Bottom);
+        var root = new DockPanel { LastChildFill = true, Background = NotaPalette.SurfaceCard, Children = { statusHost, body } };
 
         ctx.SetInstLiveViz(Refresh);
         showTab();
         return root;
     }
 
-    // A pressed-in section with the guide's 12 of room inside.
-    private static Decorator SectionBox(Control child)
+    // A device section: card ground, hairline, radius 6 — the almanac's section box.
+    private static Decorator SectionBox(Control child) => DeviceCardKit.Section(child);
+
+    // A section's own header strip: a hairline under it, nothing else.
+    private static Border HeaderStrip(Control child) => new()
     {
-        var s = DeviceCardKit.Section(child);
-        s.Padding = new Thickness(SectionPad);
-        return s;
-    }
+        BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = child,
+    };
 
     /// <summary>Row definitions that put a caption for each dB mark at its place on the
     /// meter's scale: a star gap, the caption (Auto), … and a star gap for the remainder.</summary>

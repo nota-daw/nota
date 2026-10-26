@@ -457,6 +457,21 @@ the shell bars, fixed card widths (S 260 / L 700 / Wide 1050), the Volt pass. Th
 Assumptions: the key panel has no reference design; the keyboard layout is our proposal.
 Text size is a settings-file value, not a project value (no format change).
 
+## Round 3: device layouts back (Oct 26)
+
+Chris, Oct 26: the redrawn device layouts made the cards cramped and too large; keep the
+exact 0.57 layouts and only swap in the new elements. This supersedes FR-025's "width fits
+the device", the "no status line" part of User Story 4 and SC-001, the fixed card widths
+(S 260 / L 700 / Wide 1050) and FR-039.
+
+- **FR-041**: Every built-in device card MUST have its develop (0.57) layout, width (700;
+  the stubs 190), status line and element sizes: knobs 34 / 36 / 44 (24 in a table row),
+  value bars 9 high, switches 18 × 10, header 22, the `NotaType.Device*` text scale of 0.57.
+  Only the drawing of the elements follows the style guide (knob cap and orange arc, value
+  bar groove and line, segment and switch look, pressed-in sections, Geist, greys for the
+  identity colours, ink 4 for inactive).
+- FR-039 (device header strip) is dropped: tabs stay in the body.
+
 ## Nota Compliance Checklist *(review before implementation; re-check in tasks.md)*
 
 - [x] Every new source file will carry the AGPL-3.0-only SPDX header (two lines, see CONTRIBUTING.md)
