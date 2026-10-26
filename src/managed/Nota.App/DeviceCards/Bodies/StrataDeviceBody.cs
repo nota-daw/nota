@@ -106,7 +106,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             dbTxts[i].BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             // Vertical drag on the dB readout sets that layer's level.
             bool drag = false; double startY = 0, startDb = 0;
-            dbTxts[i].PointerPressed += (_, e) => { drag = true; startY = e.GetPosition(dbTxts[iv]).Y; startDb = scope[7 + iv * 3]; e.Pointer.Capture(dbTxts[iv]); };
+            dbTxts[i].PointerPressed += (_, e) => { if (!e.GetCurrentPoint(dbTxts[iv]).Properties.IsLeftButtonPressed) return; drag = true; startY = e.GetPosition(dbTxts[iv]).Y; startDb = scope[7 + iv * 3]; e.Pointer.Capture(dbTxts[iv]); };
             dbTxts[i].PointerMoved += (_, e) => { if (drag) { double db = Math.Clamp(startDb + (startY - e.GetPosition(dbTxts[iv]).Y) * 0.15, -24, 12); Act(A_LayerGain, iv, (float)db); dbTxts[iv].Text = $"{db:+0.0;−0.0;0.0}"; } };
             dbTxts[i].PointerReleased += (_, e) => { drag = false; e.Pointer.Capture(null); };
             dbTxts[i].PointerCaptureLost += (_, _) => drag = false;

@@ -121,7 +121,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         void Vis(double v) { double W = slot.Bounds.Width; fill.Width = v * W; handle.Margin = new Thickness(Math.Clamp(v * W - 3, 0, Math.Max(0, W - 6)), 0, 0, 0); }
         bool drag = false;
         void SetFromX(double x) { double v = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); E.PluginParamSet(T, adi, i, (float)v); Vis(v); _ctx.InvokeRackParamRefreshers(); }
-        slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); SetFromX(e.GetPosition(slot).X); };
+        slot.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(slot).Properties.IsLeftButtonPressed) return; drag = true; e.Pointer.Capture(slot); SetFromX(e.GetPosition(slot).X); };
         slot.PointerMoved += (_, e) => { if (drag) SetFromX(e.GetPosition(slot).X); };
         slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); } };
         slot.PointerCaptureLost += (_, _) => drag = false;

@@ -46,6 +46,14 @@ internal static class DeviceCardKit
     internal static readonly IBrush Teal = ModInk;                                               // was the modulation teal
     internal static readonly IBrush AccentSubtleB = NotaPalette.AccentSubtle;
 
+    /// <summary>⌥-click <paramref name="control"/>, or double-click <paramref name="readout"/>, to type a value
+    /// (specs/035): for the upright faders and value boxes that are not knobs or value bars. Typed by
+    /// probing <paramref name="setNorm"/> and reading <paramref name="text"/> back. Without
+    /// <paramref name="reset"/> a double-click on the control keeps the control's own reset.</summary>
+    internal static void Typeable(Control control, string name, Func<double> norm, Action<double> setNorm, Func<string> text,
+        Action begin, Action end, Action after, Action? reset = null, TextBlock? readout = null)
+        => ValueEntry.Attach(control, ValueEntry.Probing(name, norm, setNorm, text, begin, end, after, reset), readout);
+
     internal static string Pct(float v) => $"{(int)Math.Round(v * 100)}\u2009%";
 
     private static readonly string[] NoteNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
