@@ -19,11 +19,13 @@ public partial class ArrangementView
     public bool NudgeSelectedClips(int dir, bool fine)
     {
         if (_engine is null || _sel.Count == 0) return false;
-        var block = _sel.Select(s => (s.track, s.clip, vm: FindClipVM(s.track, s.clip))).Where(b => b.vm is not null).ToList();
+        // Starts come from the engine, not the drawn clips: a clip on a folded group's child is
+        // still selected and moves with the block, like Duplicate and Copy already take it.
+        var block = SelectedClipStarts();
         if (block.Count == 0) return false;
-        double delta = ArrangementMoves.NudgeDelta(block.Min(b => b.vm!.StartBeat), fine ? ArrangementMoves.FineNudgeBeats : SnapStepBeats, dir);
+        double delta = ArrangementMoves.NudgeDelta(block.Min(b => b.start), fine ? ArrangementMoves.FineNudgeBeats : SnapStepBeats, dir);
         if (delta == 0) return true;   // already at the song start: the key is still ours
-        if (MoveBlock(block.Select(b => (b.track, b.clip, b.track, b.vm!.StartBeat + delta)).ToArray()) is not { } move) return true;
+        if (MoveBlock(block.Select(b => (b.track, b.clip, b.track, b.start + delta)).ToArray()) is not { } move) return true;
         Refresh();
         ReselectPlaced();
         ClipsMoved?.Invoke(move);   // open editors follow their clips (index and START read-out)
@@ -36,16 +38,22 @@ public partial class ArrangementView
     public bool MoveSelectedClipsToTrack(int dir)
     {
         if (_engine is null || _sel.Count == 0) return false;
-        var block = _sel.Select(s => (s.track, s.clip, vm: FindClipVM(s.track, s.clip), row: RowOfTrack(s.track)))
-                        .Where(b => b.vm is not null && b.row >= 0).ToList();
+        var block = SelectedClipStarts().Select(b => (b.track, b.clip, b.start, row: RowOfTrack(b.track))).ToList();
         if (block.Count == 0) return false;
+        if (block.Any(b => b.row < 0))
+        {
+            // Rows are what ⌥↑/⌥↓ step through, and a folded group's children have none: moving
+            // only the shown clips would split the block, so the whole move is refused.
+            StatusMessage?.Invoke("Unfold the group to move these clips across tracks");
+            return true;
+        }
         int shift = ArrangementMoves.RowShift(block.Select(b => b.row).Distinct().ToList(), _tracks.Count, dir, TakesClipsFrom);
         if (shift == 0)
         {
             StatusMessage?.Invoke(dir < 0 ? "No track above takes these clips" : "No track below takes these clips");
             return true;
         }
-        var moves = block.Select(b => (b.track, b.clip, _tracks[b.row + shift].Id, b.vm!.StartBeat)).ToArray();
+        var moves = block.Select(b => (b.track, b.clip, _tracks[b.row + shift].Id, b.start)).ToArray();
         if (MoveBlock(moves) is not { } move) return true;
         if (_engine.LastMoveKeptDeviceAutomation())
             StatusMessage?.Invoke("Moved across tracks — device automation stayed on the source");
@@ -86,6 +94,15 @@ public partial class ArrangementView
         var starts = new List<double>();
         while (_engine!.TryGetClipInfo(trackId, starts.Count, out var ci)) starts.Add(ci.StartBeat);
         return starts;
+    }
+
+    // Every selected clip with its start, shown or not (a folded group hides its children's rows).
+    private List<(int track, int clip, double start)> SelectedClipStarts()
+    {
+        var block = new List<(int, int, double)>();
+        foreach (var (track, clip) in _sel)
+            if (_engine!.TryGetClipInfo(track, clip, out var ci)) block.Add((track, clip, ci.StartBeat));
+        return block;
     }
 
     // A row takes another row's clips when it holds the same kind of clip (a group or a return holds none).
