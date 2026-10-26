@@ -247,9 +247,11 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         var f2Val = Mono("", 7, TextPrimary); f2Val.HorizontalAlignment = HorizontalAlignment.Center;
         void RefreshAll() { foreach (var r in readouts) r(); }
         Typeable(thrFader, "Thresh", () => thrMap.N(P(Threshold)), n => { Raw(Threshold, thrMap.V(n)); RefreshAll(); },
-            () => Db(P(Threshold)), () => Begin(Threshold), () => End(Threshold), RefreshAll, readout: thrVal);
+            () => Db(P(Threshold)), () => Begin(Threshold), () => End(Threshold), RefreshAll,
+            () => { Begin(Threshold); Raw(Threshold, Def(Threshold)); End(Threshold); RefreshAll(); }, thrVal);
         Typeable(f2, "Makeup", () => Lin(F2()).N(P(F2())), n => { Raw(F2(), Lin(F2()).V(n)); RefreshAll(); },
-            () => SDb(P(F2())), () => Begin(F2()), () => End(F2()), RefreshAll, readout: f2Val);
+            () => SDb(P(F2())), () => Begin(F2()), () => End(F2()), RefreshAll,
+            () => { int id = F2(); Begin(id); Raw(id, Def(id)); End(id); RefreshAll(); }, f2Val);
         readouts.Add(() =>
         {
             double keyDb = KeyDb();

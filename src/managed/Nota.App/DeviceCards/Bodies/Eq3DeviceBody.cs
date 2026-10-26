@@ -130,7 +130,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             fader.Changed += db => { GainRaw(b, db); RefreshAll(); };
             fader.ResetRequested += () => ResetBand(b);
             Typeable(fader, engine.DeviceParamName(track, di, Low + b), () => P(Low + b), n => { Raw(Low + b, n); RefreshAll(); },
-                () => Eq3Math.Db(Eq3Math.GainDb(P(Low + b), Iso())), () => Begin(Low + b), () => End(Low + b), RefreshAll, readout: val);
+                () => Eq3Math.Db(Eq3Math.GainDb(P(Low + b), Iso())), () => Begin(Low + b), () => End(Low + b), RefreshAll, () => ResetBand(b), val);
             ToolTip.SetTip(fader, "Drag up / down for the band's gain (Shift for fine steps); double-click resets to 0\u2009dB and lifts the kill");
             Learn(fader, Low + b);
             readouts.Add(() =>
