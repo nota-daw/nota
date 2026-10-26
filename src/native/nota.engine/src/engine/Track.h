@@ -70,6 +70,11 @@ struct AudioClip {
     WarpMode warpMode = WarpMode::Complex;
     double warpBeats = 0.0;              // full warped material length (beats) = last marker's beat
     std::vector<WarpMarker> warpMarkers; // source↔beat anchors (≥2 when warped)
+    // Warp off keeps the markers (#310) so turning it back on restores them. They stay valid
+    // only for the unwarped region they were made for: a split or trim with warp off moves
+    // the region, and re-enabling then seeds fresh markers instead. -1 = no off-state stamp.
+    double warpOffRegionOffset = -1.0;
+    int64_t warpOffRegionLength = -1;
     // Played sub-window of the warp (trim). Beats within [0, warpBeats];
     // the clip plays [warpPlayStart, warpPlayEndEff()] placed at startBeat. 0/0 => whole
     // warp (default, back-compat). Trimming leaves warpBeats/markers untouched.

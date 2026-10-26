@@ -98,6 +98,7 @@ void Sampler::noteOn(int32_t pitch, float velocity) {
                 if (v.active && v.stage != Stage::Release) {
                     v.pitch = pitch;
                     v.velocity = velocity;
+                    v.keyUp = false; // a new, held key now owns it
                     return;
                 }
         }
@@ -112,6 +113,7 @@ void Sampler::noteOn(int32_t pitch, float velocity) {
     const bool rev = pn_[Reverse].load(std::memory_order_relaxed) > 0.5f;
     v->active = true;
     v->stage = Stage::Attack;
+    v->keyUp = false;
     v->env = 0.0f;
     v->pitch = pitch;
     v->velocity = velocity;
@@ -139,6 +141,11 @@ void Sampler::noteOff(int32_t pitch) {
     }
     for (auto& v : voices_)
         if (v.active && v.pitch == pitch && v.stage != Stage::Release) v.stage = Stage::Release;
+}
+
+void Sampler::noteOffHeldBack(int32_t pitch) {
+    for (auto& v : voices_)
+        if (v.active && v.pitch == pitch) v.keyUp = true;
 }
 
 void Sampler::allNotesOff() {
@@ -203,10 +210,13 @@ void Sampler::render(float* out, int32_t frames) {
     const bool envOn = pn_[EnvCutoff].load(std::memory_order_relaxed) > 0.5f;
     const double envOct = envOn ? envOctaves(pn_[EnvAmount].load(std::memory_order_relaxed)) : 0.0;
 
+    const bool oneShot = playsOneShot();
     int nActive = 0;
     float peak = 0.0f, ownPeak = 0.0f;
     for (auto& v : voices_) {
         if (!v.active) continue;
+        // A pad's one-shot whose key is already up releases once it would loop.
+        if (v.keyUp && !oneShot && v.stage != Stage::Release) v.stage = Stage::Release;
         ++nActive;
         double inc = 0.0, a1 = 0.0, a2 = 0.0, a3 = 0.0;
         for (int32_t i = 0; i < frames; ++i) {
