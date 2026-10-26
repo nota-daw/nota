@@ -3068,7 +3068,8 @@ bool Engine::deleteClip(int32_t trackId, int32_t clipIndex) {
 
 // Fully independent copy of a track: cloned instrument/MIDI-FX/insert devices (own DSP
 // state), copied clips/automation with fresh warp stretchers, and the UI metadata.
-std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId) {
+// withContent = false leaves out what it plays: clips, Session slots and automation.
+std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, bool withContent) {
     auto nt = std::make_shared<Track>(newId, src.type());
     nt->setVolume(src.volume());
     nt->setPan(src.pan());
@@ -3081,10 +3082,12 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId) {
     nt->setMonitor(src.monitor());
     nt->setMidiFromTrackId(src.midiFromTrackId());
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, src.send(b));
-    nt->clips = src.clips; // sample buffers are shared_ptr (immutable) — fine
-    nt->midiClips = src.midiClips;
-    nt->sessionSlots = src.sessionSlots;
-    nt->automation = src.automation;
+    if (withContent) {
+        nt->clips = src.clips; // sample buffers are shared_ptr (immutable) — fine
+        nt->midiClips = src.midiClips;
+        nt->sessionSlots = src.sessionSlots;
+        nt->automation = src.automation;
+    }
     nt->name = src.name;
     nt->colorIndex = src.colorIndex;
     nt->instrument = cloneInstrument(src);
@@ -3124,11 +3127,7 @@ int32_t Engine::addTrackLike(int32_t trackId) {
     auto src = findTrackAuthoring(trackId);
     if (!src || src->type() == TrackType::Return || src->type() == TrackType::Group) return -1;
     const int32_t newId = nextTrackId_++;
-    auto nt = deepCloneTrack(*src, newId);
-    nt->clips.clear();
-    nt->midiClips.clear();
-    nt->sessionSlots.clear(); // publish re-sizes it to the scene count, every slot empty
-    nt->automation.clear();
+    auto nt = deepCloneTrack(*src, newId, /*withContent=*/false); // publish sizes the Session slots, all empty
     nt->setGroupId(-1);
     nt->setArmed(false);
     nt->name.clear();

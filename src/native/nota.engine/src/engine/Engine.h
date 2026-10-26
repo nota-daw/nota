@@ -1347,7 +1347,7 @@ class Engine {
     SessionSlot slotFromAudioClip(const AudioClip& a);
 
     // Build a fully independent copy of a track (fresh id + cloned instrument/devices).
-    std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId);
+    std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId, bool withContent = true);
     // The tracks in ids plus every descendant of a group among them, in engine order.
     std::vector<std::shared_ptr<Track>> expandTrackSet(const int32_t* ids, int32_t n) const;
     void compactReturns(Graph& g) const; // renumber return buses 0..n-1 + remap sends (after a delete)

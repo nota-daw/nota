@@ -5,6 +5,8 @@
 // the grid step, ⌥←/⌥→ by a 64th (#302); ⌥↑/⌥↓ move them to the next track that takes them,
 // keeping their exact position (#301's comment). Each key press is one undo step.
 
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using Nota.Application.Editing;
 
@@ -21,10 +23,10 @@ public partial class ArrangementView
         if (block.Count == 0) return false;
         double delta = ArrangementMoves.NudgeDelta(block.Min(b => b.vm!.StartBeat), fine ? ArrangementMoves.FineNudgeBeats : SnapStepBeats, dir);
         if (delta == 0) return true;   // already at the song start: the key is still ours
-        if (!_engine.MoveClipBlock(block.Select(b => (b.track, b.clip, b.track, b.vm!.StartBeat + delta)).ToArray())) return true;
-        foreach (var b in block) RaiseClipGeometryChanged(b.track, b.clip);   // an open editor's START read-out
+        if (MoveBlock(block.Select(b => (b.track, b.clip, b.track, b.vm!.StartBeat + delta)).ToArray()) is not { } map) return true;
         Refresh();
         ReselectPlaced();
+        ClipsMoved?.Invoke(map);   // open editors follow their clips (index and START read-out)
         return true;
     }
 
@@ -44,14 +46,41 @@ public partial class ArrangementView
             return true;
         }
         var moves = block.Select(b => (b.track, b.clip, _tracks[b.row + shift].Id, b.vm!.StartBeat)).ToArray();
-        if (!_engine.MoveClipBlock(moves)) return true;
+        if (MoveBlock(moves) is not { } map) return true;
         if (_engine.LastMoveKeptDeviceAutomation())
             StatusMessage?.Invoke("Moved across tracks — device automation stayed on the source");
         Refresh();
         ReselectPlaced();
+        ClipsMoved?.Invoke(map);
         if (SelTrackId > 0) RevealTrack(SelTrackId);
         AnnounceSelectedTrack();   // the destination track is now the active one
         return true;
+    }
+
+    /// <summary>Raised after a block of clips moved (drag, keys, drop onto new tracks) with where
+    /// each clip of the touched tracks now is (null: carved away). Open editors hold clip indices,
+    /// which a move can shift, so they re-target from this.</summary>
+    public event Action<IReadOnlyDictionary<(int Track, int Clip), (int Track, int Clip)?>>? ClipsMoved;
+
+    // One MoveClipBlock, plus where every clip of the touched tracks ended up; null if refused.
+    internal Dictionary<(int Track, int Clip), (int Track, int Clip)?>? MoveBlock(
+        (int trackId, int clipIndex, int destTrackId, double newStartBeat)[] moves)
+    {
+        if (_engine is null) return null;
+        var touched = moves.SelectMany(m => new[] { m.trackId, m.destTrackId }).Distinct().ToList();
+        var before = touched.ToDictionary(t => t, ClipStarts);
+        if (!_engine.MoveClipBlock(moves)) return null;
+        return ArrangementMoves.Reindex(before, moves.Select(m => (m.trackId, m.clipIndex)).ToList(),
+            _engine.LastPlacedClips(), touched.ToDictionary(t => t, ClipStarts));
+    }
+
+    internal void RaiseClipsMoved(IReadOnlyDictionary<(int Track, int Clip), (int Track, int Clip)?> map) => ClipsMoved?.Invoke(map);
+
+    private IReadOnlyList<double> ClipStarts(int trackId)
+    {
+        var starts = new List<double>();
+        while (_engine!.TryGetClipInfo(trackId, starts.Count, out var ci)) starts.Add(ci.StartBeat);
+        return starts;
     }
 
     // A row takes another row's clips when it holds the same kind of clip (a group or a return holds none).

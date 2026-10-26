@@ -651,6 +651,83 @@ public partial class MainWindow
         }
     }
 
+    // A block of clips moved in the arrangement (drag, ←/→, ⌥↑/⌥↓, a drop onto new tracks). The
+    // editors address clips by index, and a move can re-index them: a landing that carves away a
+    // clip in front shifts the ones after it, and a cross-track move appends. An editor whose
+    // clips kept their indices only re-reads their geometry; one whose clips moved index is
+    // rebuilt on the new indices (dropping clips that were carved away), so a later note edit
+    // never lands in another clip.
+    private void OnClipsMoved(IReadOnlyDictionary<(int Track, int Clip), (int Track, int Clip)?> map)
+    {
+        (int Track, int Clip)? Where(int t, int c) => map.TryGetValue((t, c), out var to) ? to : (t, c);
+
+        if (_editorRoll is { } roll && _clipEditor is not null && _editorTrackId > 0)
+        {
+            var open = roll.Clips.Clips;
+            if (open.All(c => Where(c.TrackId, c.ClipIndex) == (c.TrackId, c.ClipIndex)))
+                foreach (var c in open.Where(c => map.ContainsKey((c.TrackId, c.ClipIndex))).ToList())
+                    OnClipGeometryChanged(c.TrackId, c.ClipIndex);
+            else
+            {
+                var now = open.Select(c => Where(c.TrackId, c.ClipIndex)).OfType<(int Track, int Clip)>().ToList();
+                if (now.Count == 0) InvalidateClipEditor();
+                else
+                {
+                    var active = Where(roll.ActiveClip.TrackId, roll.ActiveClip.ClipIndex) ?? now[0];
+                    bool shown = ClipEditorShown(_clipEditor);
+                    BuildClipEditor(now, active.Track, active.Clip);
+                    if (shown) ShowClipPanel();
+                }
+            }
+        }
+
+        if (_audioEditor is { } audio && _audioEditorTrackId > 0 && SessionClip.SceneOf(_audioEditorClipIndex) < 0)
+        {
+            var to = Where(_audioEditorTrackId, _audioEditorClipIndex);
+            if (to == (_audioEditorTrackId, _audioEditorClipIndex))
+            {
+                if (map.ContainsKey((_audioEditorTrackId, _audioEditorClipIndex))) audio.Reload();
+            }
+            else
+            {
+                bool shown = ClipEditorShown(audio);
+                if (to is { } a)
+                {
+                    BuildAudioClipEditor(a.Track, a.Clip);
+                    if (shown) ShowAudioClipPanel();
+                }
+                else
+                {
+                    _audioEditor = null;
+                    _audioEditorTrackId = -1;
+                    _audioEditorClipIndex = -1;
+                    if (shown && DetailFloating) SetHost(_detailWindow!.ClipHost, ClipPlaceholder());
+                    else if (shown) DetailPanel.IsVisible = false;
+                }
+            }
+        }
+
+        if (_patternView is not null && _patternTrackId > 0 && _patternScene < 0)
+        {
+            var to = Where(_patternTrackId, _patternClipIndex);
+            if (to is not { } p) InvalidatePatternView();
+            else if (p == (_patternTrackId, _patternClipIndex))
+            {
+                if (map.ContainsKey(p)) _patternView.Reload();   // a carve can shorten it
+            }
+            else
+            {
+                bool shown = ClipEditorShown(_patternView);
+                BuildPatternView(p.Track, p.Clip, -1);
+                if (shown) ShowPatternPanel();
+            }
+        }
+    }
+
+    // Whether this editor is the one on screen (the docked detail panel, or the floating window's top pane).
+    private bool ClipEditorShown(Control editor)
+        => ReferenceEquals(ClipDetailHost.Content, editor) && (DetailFloating || DetailPanel.IsVisible);
+
     private void ReloadEditorNotes()
     {
         _patternView?.Reload();   // the step grid is a second view of the same notes

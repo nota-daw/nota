@@ -423,6 +423,7 @@ public partial class MainWindow : Window
         _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         Timeline.TrackSelected += OnTrackSelected;
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
+        Timeline.ClipsMoved += OnClipsMoved;   // a block move can re-index the open editor's clips
         Timeline.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // automation-follow hints etc.
 
         _session = new SessionView(vm.Engine)

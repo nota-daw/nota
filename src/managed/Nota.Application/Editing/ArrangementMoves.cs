@@ -57,6 +57,36 @@ public static class ArrangementMoves
         return ids;
     }
 
+    /// <summary>Where each clip of the tracks a block move touched is afterwards. Clips are
+    /// addressed by index, and a move re-indexes them: a landing carves away or splits clips in
+    /// front of others, and a clip arriving from another track is appended. A moved clip is where
+    /// the engine placed it (<paramref name="moved"/>[i] → <paramref name="placed"/>[i]); a clip
+    /// that stayed is found by its start, which a carve of its tail keeps; null when it was carved
+    /// away or lost its head. <paramref name="startsBefore"/> / <paramref name="startsAfter"/>:
+    /// each touched track's clip starts, by index.</summary>
+    public static Dictionary<(int Track, int Clip), (int Track, int Clip)?> Reindex(
+        IReadOnlyDictionary<int, IReadOnlyList<double>> startsBefore,
+        IReadOnlyList<(int Track, int Clip)> moved, IReadOnlyList<(int Track, int Clip)> placed,
+        IReadOnlyDictionary<int, IReadOnlyList<double>> startsAfter)
+    {
+        var map = new Dictionary<(int, int), (int, int)?>();
+        for (int i = 0; i < moved.Count && i < placed.Count; i++) map[moved[i]] = placed[i];
+        var taken = new HashSet<(int, int)>(placed);
+        foreach (var (track, starts) in startsBefore)
+        {
+            var after = startsAfter.TryGetValue(track, out var a) ? a : Array.Empty<double>();
+            for (int c = 0; c < starts.Count; c++)
+            {
+                if (map.ContainsKey((track, c))) continue;
+                (int, int)? to = null;
+                for (int j = 0; j < after.Count; j++)
+                    if (!taken.Contains((track, j)) && Math.Abs(after[j] - starts[c]) < 1e-9) { to = (track, j); break; }
+                map[(track, c)] = to;
+            }
+        }
+        return map;
+    }
+
     private static int IndexOf(IReadOnlyList<int> order, int id)
     {
         for (int i = 0; i < order.Count; i++) if (order[i] == id) return i;

@@ -42,6 +42,35 @@ internal static class ArrangementMovesTests
         yield return (ArrangementMoves.Range(order, 99, 12).SequenceEqual(new[] { 12 }), "moves: no anchor selects just the clicked track");
         yield return (ArrangementMoves.Range(order, 10, 99).Count == 0, "moves: a hidden target selects nothing");
 
+        // Re-indexing after a block move: a nudge of clip 1 over all of clip 0 carves clip 0
+        // away, so clip 1 becomes clip 0 and clip 2 becomes clip 1 (Greptile on #324: an open
+        // editor kept the old index and its next edit went into another clip).
+        using (var re = new NotaEngine())
+        {
+            int t = re.AddInstrumentTrack();
+            re.AddMidiClip(t, 4.0, 1.0);
+            re.AddMidiClip(t, 5.0, 2.0);
+            re.AddMidiClip(t, 12.0, 2.0);
+            IReadOnlyList<double> Starts()
+            {
+                var l = new List<double>();
+                while (re.TryGetClipInfo(t, l.Count, out var ci)) l.Add(ci.StartBeat);
+                return l;
+            }
+            var before = new Dictionary<int, IReadOnlyList<double>> { [t] = Starts() };
+            bool ok = re.MoveClipBlock(new[] { (t, 1, t, 4.0) });
+            var map = ArrangementMoves.Reindex(before, new[] { (t, 1) }, re.LastPlacedClips(),
+                new Dictionary<int, IReadOnlyList<double>> { [t] = Starts() });
+            yield return (ok && map[(t, 1)] == (t, 0) && map[(t, 0)] is null && map[(t, 2)] == (t, 1),
+                $"moves: after a move that carves a clip away, clips are found at their new indices ({string.Join(", ", map.Select(kv => $"{kv.Key.Clip}→{kv.Value?.Clip.ToString() ?? "gone"}"))})");
+        }
+        var cross = ArrangementMoves.Reindex(
+            new Dictionary<int, IReadOnlyList<double>> { [1] = new[] { 0.0, 8.0 }, [2] = new[] { 0.0 } },
+            new[] { (1, 0) }, new[] { (2, 1) },
+            new Dictionary<int, IReadOnlyList<double>> { [1] = new[] { 8.0 }, [2] = new[] { 0.0, 4.0 } });
+        yield return (cross[(1, 0)] == (2, 1) && cross[(1, 1)] == (1, 0) && cross[(2, 0)] == (2, 0),
+            "moves: a clip moved to another track is where it landed, and the ones left behind close up");
+
         // A track like the source.
         using var eng = new NotaEngine();
         int inst = eng.AddInstrumentTrack();

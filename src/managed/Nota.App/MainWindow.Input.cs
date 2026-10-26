@@ -292,8 +292,9 @@ public partial class MainWindow
 
         // ←/→ nudge the selected arrangement clips by the grid step (⌥: a 64th); ⌥↑/⌥↓ move them
         // to the next track that takes them (#302). Only with clips selected, and not while the
-        // piano roll or the detail panel has the keys.
+        // piano roll, the detail panel or the floating detail window has the keys.
         if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down && Timeline.IsVisible && !_detailWasLastFocused
+            && _detailWindow?.IsActive != true
             && _editorRoll is not { GridFocused: true }
             && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta | KeyModifiers.Shift)) == 0)
         {
