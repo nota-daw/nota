@@ -192,6 +192,10 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.RackDevMode(_handle, trackId, deviceIndex); }
     public void RackDevSetMode(int trackId, int deviceIndex, int mode)
     { ThrowIfDisposed(); NativeMethods.RackDevSetMode(_handle, trackId, deviceIndex, mode); }
+
+    /// <summary>Copies an Audio Effect Rack chain after itself (devices, controls, its mappings); the new index or &lt;0.</summary>
+    public int RackDevDuplicateChain(int trackId, int deviceIndex, int chain)
+    { ThrowIfDisposed(); return NativeMethods.RackDevDuplicateChain(_handle, trackId, deviceIndex, chain); }
     public float RackDevDryWet(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.RackDevDryWet(_handle, trackId, deviceIndex); }
     public void RackDevSetDryWet(int trackId, int deviceIndex, float v)

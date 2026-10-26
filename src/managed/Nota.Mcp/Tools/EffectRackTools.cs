@@ -20,8 +20,8 @@ public sealed class EffectRackTools(IAudioEngine engine, IEngineDispatch dispatc
         float Gain, float Pan, bool Mute, bool Solo, int DeviceCount);
     public sealed record RackSnapshot(int Mode, string ModeName, float DryWet, float Volume, float ChainSelect, ChainInfo[] Chains);
     public sealed record Param(int Index, string Name, float Value);
-    public sealed record MacroInfo(int Index, string Name, float Value);
-    public sealed record Mapping(int Index, int Macro, int Chain, int DeviceIndex, int ParamIndex, float RangeMin, float RangeMax);
+    public sealed record MacroInfo(int Index, string Name, float Value, string Curve, int Targets);
+    public sealed record Mapping(int Index, int Macro, int Chain, int DeviceIndex, int ParamIndex, float RangeMin, float RangeMax, string Curve);
 
     private static string ModeName(int m) => m switch { 1 => "series", 2 => "select", _ => "parallel" };
 
@@ -92,7 +92,13 @@ public sealed class EffectRackTools(IAudioEngine engine, IEngineDispatch dispatc
     public Task<MacroInfo[]> GetEffectRackMacros(int trackId, int deviceIndex) => Read(() =>
     {
         var ms = new MacroInfo[8];
-        for (int i = 0; i < 8; i++) ms[i] = new MacroInfo(i, E.RackDevMacroName(trackId, deviceIndex, i), E.RackDevMacroGet(trackId, deviceIndex, i));
+        int n = E.RackDevMappingCount(trackId, deviceIndex);
+        (bool, int, int) Map(int i) => E.RackDevTryGetMapping(trackId, deviceIndex, i, out var m) ? (true, m.Macro, E.RackDevMappingCurve(trackId, deviceIndex, i)) : (false, 0, 0);
+        for (int i = 0; i < 8; i++)
+        {
+            var (curve, targets) = RackTools.MacroCurve(n, Map, i);
+            ms[i] = new MacroInfo(i, E.RackDevMacroName(trackId, deviceIndex, i), E.RackDevMacroGet(trackId, deviceIndex, i), curve, targets);
+        }
         return ms;
     });
 
@@ -107,15 +113,20 @@ public sealed class EffectRackTools(IAudioEngine engine, IEngineDispatch dispatc
         var list = new List<Mapping>(n);
         for (int i = 0; i < n; i++)
             if (E.RackDevTryGetMapping(trackId, deviceIndex, i, out var m))
-                list.Add(new Mapping(i, m.Macro, m.Chain, m.DeviceIndex, m.ParamIndex, m.RangeMin, m.RangeMax));
+                list.Add(new Mapping(i, m.Macro, m.Chain, m.DeviceIndex, m.ParamIndex, m.RangeMin, m.RangeMax, RackTools.CurveName(E.RackDevMappingCurve(trackId, deviceIndex, i))));
         return list.ToArray();
     });
 
     [McpServerTool(Name = "add_effect_rack_mapping"), Description(
-        "Map a macro (0..7) onto a chain parameter. targetDevice = the chain's device index (or -1 for its source instrument); "
-        + "range is the param's normalized 0..1 span the macro sweeps. Returns the mapping index.")]
+        "Map a macro (0..7) onto a chain parameter. targetDevice = the chain's device index (or -1 for its source instrument), "
+        + "or -3 for the Select-mode selector (paramIndex 0, range 0..1; chain is ignored). range is the span the macro sweeps, "
+        + "in the target's units; min above max inverts. A parameter belongs to one macro: mapping it again moves its mapping. "
+        + "Returns the mapping index.")]
     public Task<int> AddEffectRackMapping(int trackId, int deviceIndex, int macro, int chain, int targetDevice, int paramIndex, float rangeMin = 0f, float rangeMax = 1f)
         => Mutate(() => E.RackDevAddMacroMapping(trackId, deviceIndex, macro, chain, targetDevice, paramIndex, rangeMin, rangeMax));
+
+    [McpServerTool(Name = "duplicate_effect_rack_chain"), Description("Copy a chain right after itself: its devices, select range, mix and its macro mappings. Returns the new chain index.")]
+    public Task<int> DuplicateEffectRackChain(int trackId, int deviceIndex, int chain) => Mutate(() => E.RackDevDuplicateChain(trackId, deviceIndex, chain));
 
     [McpServerTool(Name = "remove_effect_rack_mapping"), Description("Remove a macro mapping by index.")]
     public Task<bool> RemoveEffectRackMapping(int trackId, int deviceIndex, int index) => Mutate(() => E.RackDevRemoveMapping(trackId, deviceIndex, index));

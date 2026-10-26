@@ -22,7 +22,7 @@ namespace Nota.SmokeTest;
 internal static class RackRedesignTests
 {
     private const int Rate = 48000, Block = 512, EffectFrames = 24 * Block; // ~0.26 s of audio
-    private const int Synth = 0, Physical = 2, Volt = 6;               // instrument kinds
+    private const int Synth = 0, Physical = 2, Volt = 6, Pentad = 14;  // instrument kinds
     private const int Eq3 = 16, Reverb = 2, Utility = 4, EffectRack = 5; // device kinds
     private const int RackControl = -3, Selector = 0;                    // NOTA_RACK_CONTROL target
 
@@ -30,7 +30,11 @@ internal static class RackRedesignTests
     public static IEnumerable<(string title, Func<IEnumerable<(bool ok, string label)>> run)> Sections()
     {
         yield return ("racks: v8 compatibility", V8Compatibility);
+        yield return ("racks: instrument mono/glide", MonoGlide);
+        yield return ("racks: duplicate chain", DuplicateChain);
         yield return ("racks: mapping rules", MappingRules);
+        yield return ("racks: macro curves and ranges", CurvesAndRanges);
+        yield return ("racks: audio rack select", AudioSelect);
         yield return ("racks: key params table", KeyParamsTable);
     }
 
@@ -372,5 +376,218 @@ internal static class RackRedesignTests
         bool ok = want.Count is > 0 and <= RackKeyParams.Max && missing.Count == 0 && got.Length == Math.Min(RackKeyParams.Max, count)
                   && got.Distinct().Count() == got.Length && got.All(p => p >= 0 && p < count);
         return (ok, $"{name}: key params {string.Join(", ", got.Select(paramName))}" + (missing.Count > 0 ? $" (missing: {string.Join(", ", missing)})" : ""));
+    }
+
+    // ---- mono / glide (US1) -----------------------------------------------------------
+
+    private static float[] RenderFrames(NotaEngine e, int frames)
+    {
+        var all = new float[frames * 2];
+        var buf = new float[Block * 2];
+        for (int done = 0; done < frames; done += Block)
+        {
+            int n = Math.Min(Block, frames - done);
+            e.RenderOffline(buf, n, Rate);
+            Array.Copy(buf, 0, all, done * 2, n * 2);
+        }
+        return all;
+    }
+
+    // Fundamental of the left channel by autocorrelation: the shortest lag within 90 % of the
+    // best one (so a lag of two periods never wins), 60–600 Hz.
+    private static double Pitch(float[] st, int from, int len)
+    {
+        int lo = Rate / 600, hi = Rate / 60;
+        var x = new double[len];
+        for (int i = 0; i < len; i++) x[i] = st[(from + i) * 2];
+        var r = new double[hi + 1];
+        double best = 0;
+        for (int lag = lo; lag <= hi; lag++)
+        {
+            double sum = 0, e0 = 0, e1 = 0;
+            for (int i = 0; i + lag < len; i++) { sum += x[i] * x[i + lag]; e0 += x[i] * x[i]; e1 += x[i + lag] * x[i + lag]; }
+            r[lag] = e0 > 0 && e1 > 0 ? sum / Math.Sqrt(e0 * e1) : 0;
+            best = Math.Max(best, r[lag]);
+        }
+        for (int lag = lo; lag <= hi; lag++)
+            if (r[lag] >= 0.9 * best && (lag == lo || r[lag] >= r[lag - 1]) && (lag == hi || r[lag] >= r[lag + 1])) return (double)Rate / lag;
+        return 0;
+    }
+
+    private static double Hz(int note) => 440.0 * Math.Pow(2, (note - 69) / 12.0);
+
+    private static int Held(NotaEngine e, int t, int c, out string list)
+    {
+        var buf = new int[16];
+        int n = e.RackChainInstrumentHeldNotes(t, c, buf);
+        list = string.Join(",", buf.Take(Math.Max(0, n)));
+        return n;
+    }
+
+    private static int PentadRack(NotaEngine e)
+    {
+        int t = e.AddInstrumentRackTrack();
+        while (e.RackChainCount(t) > 0) e.RackRemoveChain(t, 0);
+        int c = e.RackAddChain(t, Pentad);
+        for (int p = 0; p < e.RackChainInstrumentParamCount(t, c); p++)
+        {
+            string n = e.RackChainInstrumentParamName(t, c, p);
+            if (n == "Amp-Env Release" || n == "Amp-Env Attack") e.RackChainInstrumentParamSet(t, c, p, 0f);
+            if (n == "Glide Time") e.RackChainInstrumentParamSet(t, c, p, 0f); // the rack glides, not Pentad
+        }
+        return t;
+    }
+
+    private static IEnumerable<(bool, string)> MonoGlide()
+    {
+        string F2(double v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+        using (var e = new NotaEngine())
+        {
+            int t = PentadRack(e);
+            e.TrackNoteOn(t, 48, 0.8f);
+            e.TrackNoteOn(t, 60, 0.8f);
+            RenderFrames(e, Block * 4);
+            int poly = Held(e, t, 0, out var pl);
+            e.TrackNoteOff(t, 48); e.TrackNoteOff(t, 60);
+            RenderFrames(e, Block * 8);
+            yield return (poly == 2 && !e.RackMono(t), $"poly by default: both keys sound ({pl})");
+
+            e.RackSetMono(t, true);
+            e.TrackNoteOn(t, 48, 0.8f);
+            RenderFrames(e, Block * 4);
+            e.TrackNoteOn(t, 60, 0.8f);
+            RenderFrames(e, Block * 4);
+            int mono = Held(e, t, 0, out var ml);
+            yield return (e.RackMono(t) && mono == 1 && ml == "60", $"mono: the last key takes over ({ml})");
+            e.TrackNoteOff(t, 60);
+            RenderFrames(e, Block * 4);
+            int back = Held(e, t, 0, out var bl);
+            yield return (back == 1 && bl == "48", $"mono: releasing it returns to the key still held ({bl})");
+            e.TrackNoteOff(t, 48);
+            RenderFrames(e, Block * 8);
+            yield return (Held(e, t, 0, out _) == 0, "mono: no note left hanging");
+        }
+
+        using (var e = new NotaEngine())
+        {
+            int t = PentadRack(e);
+            e.RackSetMono(t, true);
+            e.RackSetGlide(t, 0.6f); // 300 ms
+            e.TrackNoteOn(t, 48, 0.8f);
+            RenderFrames(e, Rate / 4);
+            e.TrackNoteOn(t, 60, 0.8f);
+            var a = RenderFrames(e, Rate / 2);
+            double start = Pitch(a, 0, 2048), end = Pitch(a, Rate * 2 / 5, 2048);
+            yield return (start > 0 && start < Hz(60) * 0.8 && Math.Abs(end - Hz(60)) < Hz(60) * 0.04,
+                $"glide: the new note starts near the old pitch and arrives in time ({F2(start)} → {F2(end)} Hz, target {F2(Hz(60))})");
+            e.TrackNoteOff(t, 60); e.TrackNoteOff(t, 48);
+            RenderFrames(e, Block * 8);
+
+            e.RackSetGlide(t, 0f);
+            e.TrackNoteOn(t, 48, 0.8f);
+            RenderFrames(e, Rate / 4);
+            e.TrackNoteOn(t, 60, 0.8f);
+            var b = RenderFrames(e, Rate / 10);
+            double now = Pitch(b, 0, 2048);
+            yield return (Math.Abs(now - Hz(60)) < Hz(60) * 0.04, $"no glide at 0 ms: the new note is in tune at once ({F2(now)} Hz)");
+        }
+    }
+
+    private static IEnumerable<(bool, string)> DuplicateChain()
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentRackTrack();
+        while (e.RackChainCount(t) > 0) e.RackRemoveChain(t, 0);
+        int a = e.RackAddChain(t, Synth), b = e.RackAddChain(t, Volt);
+        e.RackSetChainZone(t, a, 10, 70, 5, 120);
+        e.RackSetChainGain(t, a, 0.6f);
+        e.RackSetChainName(t, a, "Low");
+        e.RackChainInstrumentParamSet(t, a, 5, 0.3f);
+        int eq = e.RackAddChainDevice(t, a, Eq3);
+        e.RackChainDeviceParamSet(t, a, eq, 1, 0.37f);
+        e.RackAddMacroMapping(t, 0, a, -1, 5, 0.1f, 0.9f);
+        e.RackAddMacroMapping(t, 1, b, -1, 0, 0f, 1f);
+        int d = e.RackDuplicateChain(t, a);
+        e.RackChainZone(t, d, out int kl, out int kh, out int vl, out int vh);
+        bool same = d == 1 && e.RackChainCount(t) == 3 && e.RackChainInstrumentKind(t, d) == Synth && e.RackChainName(t, d) == "Low"
+                    && kl == 10 && kh == 70 && vl == 5 && vh == 120 && Near(e.RackChainGain(t, d), 0.6f)
+                    && e.RackChainDeviceCount(t, d) == 1 && Near(e.RackChainDeviceParamGet(t, d, 0, 1), e.RackChainDeviceParamGet(t, a, eq, 1))
+                    && e.RackChainInstrumentKind(t, 2) == Volt;
+        yield return (same, "duplicate chain: the copy sits after the original with its instrument, devices, zone and mix"
+            + (same ? "" : $" [d={d} n={e.RackChainCount(t)} kind={e.RackChainInstrumentKind(t, d)} name='{e.RackChainName(t, d)}' zone={kl}-{kh}/{vl}-{vh} gain={e.RackChainGain(t, d)} devs={e.RackChainDeviceCount(t, d)} eq={(e.RackChainDeviceCount(t, d) > 0 ? e.RackChainDeviceParamGet(t, d, 0, 1) : -1)} k2={e.RackChainInstrumentKind(t, 2)}]"));
+        int onCopy = 0, onVolt = 0;
+        for (int i = 0; i < e.RackMappingCount(t); i++)
+            if (e.RackTryGetMapping(t, i, out var m)) { if (m.Chain == d && m.Macro == 0) onCopy++; if (m.Chain == 2 && m.Macro == 1) onVolt++; }
+        yield return (e.RackMappingCount(t) == 3 && onCopy == 1 && onVolt == 1, "duplicate chain: the copy gets the chain's mappings, later chains keep theirs");
+        yield return (e.Undo() && e.RackChainCount(t) == 2 && e.RackMappingCount(t) == 2, "duplicate chain is one undo step");
+    }
+
+    // ---- curves, inverted ranges (US2) -------------------------------------------------
+
+    private static IEnumerable<(bool, string)> CurvesAndRanges()
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentRackTrack();
+        while (e.RackChainCount(t) > 0) e.RackRemoveChain(t, 0);
+        int c = e.RackAddChain(t, Synth);
+        int a = e.RackAddMacroMapping(t, 0, c, -1, 5, 0f, 1f);
+        int b = e.RackAddMacroMapping(t, 0, c, -1, 6, 0f, 1f);
+        e.RackSetMappingCurve(t, a, 1);
+        e.RackSetMappingCurve(t, b, 2);
+        yield return (e.RackMappingCurve(t, a) != e.RackMappingCurve(t, b), "one macro can hold different curves per target (the Mixed case)");
+
+        e.BeginUndoGroup();
+        e.RackSetMappingCurve(t, a, 3);
+        e.RackSetMappingCurve(t, b, 3);
+        e.EndUndoGroup();
+        yield return (e.RackMappingCurve(t, a) == 3 && e.RackMappingCurve(t, b) == 3, "picking a curve for the macro sets every target");
+        yield return (e.Undo() && e.RackMappingCurve(t, a) == 1 && e.RackMappingCurve(t, b) == 2, "picking a curve is one undo step");
+
+        // min above max inverts: the macro at its top drives the parameter to the range's min end.
+        int inv = e.RackAddMacroMapping(t, 1, c, -1, 7, 0.8f, 0.2f);
+        e.RackMacroSet(t, 1, 1f);
+        float top = e.RackChainInstrumentParamGet(t, c, 7);
+        e.RackMacroSet(t, 1, 0f);
+        float bottom = e.RackChainInstrumentParamGet(t, c, 7);
+        yield return (inv >= 0 && Near(top, 0.2f) && Near(bottom, 0.8f),
+            string.Create(CultureInfo.InvariantCulture, $"a range with min above max inverts the response ({bottom:0.##} → {top:0.##})"));
+    }
+
+    // ---- Audio Effect Rack select (US3) -----------------------------------------------
+
+    private static IEnumerable<(bool, string)> AudioSelect()
+    {
+        using var e = new NotaEngine();
+        int t = e.AddAudioTrack();
+        e.AddAudioClip(t, ToneFile(), 0);
+        int d = e.AddBuiltinDevice(t, EffectRack);
+        while (e.RackDevChainCount(t, d) > 0) e.RackDevRemoveChain(t, d, 0);
+        int quiet = e.RackDevAddChain(t, d, -1), loud = e.RackDevAddChain(t, d, -1);
+        int u = e.RackDevAddChainDevice(t, d, quiet, Utility);
+        for (int p = 0; p < e.RackDevChainDeviceParamCount(t, d, quiet, u); p++)
+            if (e.RackDevChainDeviceParamName(t, d, quiet, u, p) == "Mute") e.RackDevChainDeviceParamSet(t, d, quiet, u, p, 1f);
+        e.RackDevSetChainZone(t, d, quiet, 0, 63);
+        e.RackDevSetChainZone(t, d, loud, 64, 127);
+        e.RackDevSetMode(t, d, 2);
+        e.RackDevSetDryWet(t, d, 1f);
+        e.RackDevAddMacroMapping(t, d, 0, 0, RackControl, Selector, 0f, 1f);
+
+        float Level(float macro)
+        {
+            e.RackDevMacroSet(t, d, 0, macro);
+            e.Seek(0); e.Play();
+            var buf = RenderFrames(e, Rate / 4);
+            e.Stop();
+            double sum = 0;
+            for (int i = Rate / 8 * 2; i < buf.Length; i++) sum += buf[i] * buf[i];
+            return (float)Math.Sqrt(sum / (buf.Length - Rate / 8 * 2));
+        }
+        float low = Level(0f), high = Level(1f);
+        yield return (low < 1e-4f && high > 0.02f,
+            string.Create(CultureInfo.InvariantCulture, $"a macro on the selector switches which chain plays (rms {low:0.####} → {high:0.###})"));
+
+        int dup = e.RackDevDuplicateChain(t, d, loud);
+        e.RackDevChainZone(t, d, dup, out int lo, out int hi);
+        yield return (dup == 2 && e.RackDevChainCount(t, d) == 3 && lo == 64 && hi == 127, "duplicate chain on an Audio Effect Rack keeps its select range");
     }
 }

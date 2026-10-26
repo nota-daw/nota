@@ -180,6 +180,10 @@ class RackCore {
     // + devices. Publishes a fresh Sampler via a state swap (thread-safe, no in-place mutate).
     bool setChainInstrumentSample(int32_t chain, std::shared_ptr<SampleBuffer> buf, int32_t root, bool loop);
     bool removeChain(int32_t chain);
+    // Copies a chain right after itself: children rebuilt from the rack blob (so hosted plugins,
+    // Sampler audio and MIDI effects come along), its controls, and copies of its mappings.
+    // Returns the new chain index or -1.
+    int32_t duplicateChain(int32_t chain);
     bool setChainInstrument(int32_t chain, int32_t instKind);
     int32_t chainInstrumentKind(int32_t chain) const;
     Instrument* chainInstrument(int32_t chain) const;

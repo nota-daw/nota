@@ -878,6 +878,9 @@ class Engine {
     std::string rackChainName(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     void rackSetChainName(int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& name);
     int32_t rackChainCount(int32_t trackId, int32_t deviceIndex) const;
+    int32_t rackDuplicateChain(int32_t trackId, int32_t deviceIndex, int32_t chain);
+    bool rackMono(int32_t trackId) const;
+    void rackSetMono(int32_t trackId, bool on);
     int32_t rackAddChain(int32_t trackId, int32_t deviceIndex, int32_t instKind); // 0=Synth, 2=Physical, <0=none
     bool rackRemoveChain(int32_t trackId, int32_t deviceIndex, int32_t chain);
     bool rackSetChainInstrument(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t instKind);

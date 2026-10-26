@@ -215,6 +215,18 @@ int32_t nota_rack_add_macro_mapping(
     NotaEngine* e, int32_t t, int32_t macro, int32_t chain, int32_t di, int32_t pi, float lo, float hi) {
     return e ? ENG(e)->rackAddMacroMapping(t, -1, macro, chain, di, pi, lo, hi) : -1;
 }
+int32_t nota_rack_duplicate_chain(NotaEngine* e, int32_t t, int32_t chain) {
+    return e ? ENG(e)->rackDuplicateChain(t, -1, chain) : -1;
+}
+int32_t nota_rackdev_duplicate_chain(NotaEngine* e, int32_t t, int32_t di, int32_t chain) {
+    return e ? ENG(e)->rackDuplicateChain(t, di, chain) : -1;
+}
+void nota_rack_set_mono(NotaEngine* e, int32_t t, int32_t on) {
+    if (e) ENG(e)->rackSetMono(t, on != 0);
+}
+int32_t nota_rack_mono(const NotaEngine* e, int32_t t) {
+    return (e && CENG(e)->rackMono(t)) ? 1 : 0;
+}
 int32_t nota_rack_mapping_count(const NotaEngine* e, int32_t t) {
     return e ? CENG(e)->rackMappingCount(t, -1) : 0;
 }

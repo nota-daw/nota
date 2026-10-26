@@ -256,6 +256,18 @@ int32_t Engine::rackChainCount(int32_t t, int32_t di) const {
     auto* r = rackCoreAt(t, di);
     return r ? r->chainCount() : 0;
 }
+int32_t Engine::rackDuplicateChain(int32_t t, int32_t di, int32_t c) {
+    auto* r = rackCoreAt(t, di);
+    if (!r || c < 0 || c >= r->chainCount()) return -1;
+    return rackForEdit(t, di)->duplicateChain(c);
+}
+bool Engine::rackMono(int32_t t) const {
+    auto* r = rackCoreAt(t, -1);
+    return r && r->rackMono();
+}
+void Engine::rackSetMono(int32_t t, bool on) {
+    if (auto* r = rackCoreAt(t, -1)) r->setRackMono(on);
+}
 int32_t Engine::rackAddChain(int32_t t, int32_t di, int32_t k) {
     auto* r = rackForEdit(t, di);
     return r ? r->addChain(k) : -1;
@@ -663,7 +675,9 @@ std::string Engine::rackMacroName(int32_t t, int32_t di, int32_t m) const {
     return r ? r->macroName(m) : std::string{};
 }
 void Engine::rackSetMacroName(int32_t t, int32_t di, int32_t m, const std::string& name) {
-    if (auto* r = rackCoreAt(t, di)) r->setMacroName(m, name);
+    auto* r = rackCoreAt(t, di);
+    if (!r || m < 0 || m >= RackCore::kNumMacros || r->macroName(m) == name) return;
+    rackForEdit(t, di)->setMacroName(m, name); // undoable (specs/040)
 }
 float Engine::rackVolume(int32_t t, int32_t di) const {
     auto* r = rackCoreAt(t, di);
@@ -679,9 +693,14 @@ float Engine::rackGlide(int32_t t, int32_t di) const {
 void Engine::rackSetGlide(int32_t t, int32_t di, float v) {
     if (auto* r = rackCoreAt(t, di)) r->setRackGlide(v);
 }
+// Range and curve edits fork the rack like any other rack edit, so they undo (specs/040);
+// a range drag brackets itself in an undo group so the whole gesture is one step.
 bool Engine::rackSetMappingRange(int32_t t, int32_t di, int32_t i, float lo, float hi) {
     auto* r = rackCoreAt(t, di);
-    return r && r->setMappingRange(i, lo, hi);
+    RackCore::MacroMapping m;
+    if (!r || !r->mappingInfo(i, m)) return false;
+    if (m.rangeMin == lo && m.rangeMax == hi) return true;
+    return rackForEdit(t, di)->setMappingRange(i, lo, hi);
 }
 int32_t Engine::rackMappingCurve(int32_t t, int32_t di, int32_t i) const {
     auto* r = rackCoreAt(t, di);
@@ -689,7 +708,10 @@ int32_t Engine::rackMappingCurve(int32_t t, int32_t di, int32_t i) const {
 }
 bool Engine::rackSetMappingCurve(int32_t t, int32_t di, int32_t i, int32_t curve) {
     auto* r = rackCoreAt(t, di);
-    return r && r->setMappingCurve(i, curve);
+    RackCore::MacroMapping m;
+    if (!r || !r->mappingInfo(i, m)) return false;
+    if (m.curve == std::clamp(curve, 0, 3)) return true;
+    return rackForEdit(t, di)->setMappingCurve(i, curve);
 }
 
 // Device-free self-test for the rack core (kept from Phase 1; now exercises the

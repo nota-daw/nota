@@ -108,7 +108,7 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 ### Tests for User Story 1
 
-- [ ] T016 [P] [US1] Smoke `racks: instrument mono/glide` in `tests/Nota.SmokeTest/RackRedesignTests.cs`:
+- [X] T016 [P] [US1] Smoke `racks: instrument mono/glide` in `tests/Nota.SmokeTest/RackRedesignTests.cs`:
   - mono on: one sounding pitch per chain, last-note priority, release returns to the previous held note;
   - glide 0.5 on a Volt chain: per-note bend starts at (prev − new) semitones and reaches 0 after ~250 ms;
   - a chain with a non-MPE instrument retriggers without bend;
@@ -116,33 +116,33 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] Mono note stack in `src/native/nota.engine/src/devices/racks/RackInstrument.cpp`/`.h` (fixed 128-entry stack, no allocation). Glide via block-rate `noteExpression(pitch, ExprBend, …)` ramps over `glide × 500 ms`, only for chains whose instrument `supportsMpe()` (research D4)
-- [ ] T018 [US1] ABI `nota_rack_set_mono` / `nota_rack_mono` in `src/native/nota.engine/include/nota/nota_engine.h` + `src/native/nota.engine/src/abi/nota_engine_rack.cpp` + `src/native/nota.engine/src/engine/Engine_Rack.cpp`. Add `nota_rack_duplicate_chain` and `nota_rackdev_duplicate_chain`: insert after, copy devices, controls and the chain's mappings, as one undo step through `rackForEdit`
-- [ ] T019 [P] [US1] Interop for T018 in `src/managed/Nota.Infrastructure/Interop/NativeMethods.Rack.cs`, `NotaEngine.Rack.cs`, `NativeMethods.RackDev.cs`, `NotaEngine.RackDev.cs` and `src/managed/Nota.Application/Engine/IAudioEngine.cs`
-- [ ] T020 [US1] Macro column (display and turning only; mapping comes in US2) in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Macros.cs`:
+- [X] T017 [US1] Mono note stack in `src/native/nota.engine/src/devices/racks/RackInstrument.cpp`/`.h` (fixed 128-entry stack, no allocation). Glide via block-rate `noteExpression(pitch, ExprBend, …)` ramps over `glide × 500 ms`, only for chains whose instrument `supportsMpe()` (research D4)
+- [X] T018 [US1] ABI `nota_rack_set_mono` / `nota_rack_mono` in `src/native/nota.engine/include/nota/nota_engine.h` + `src/native/nota.engine/src/abi/nota_engine_rack.cpp` + `src/native/nota.engine/src/engine/Engine_Rack.cpp`. Add `nota_rack_duplicate_chain` and `nota_rackdev_duplicate_chain`: insert after, copy devices, controls and the chain's mappings, as one undo step through `rackForEdit`
+- [X] T019 [P] [US1] Interop for T018 in `src/managed/Nota.Infrastructure/Interop/NativeMethods.Rack.cs`, `NotaEngine.Rack.cs`, `NativeMethods.RackDev.cs`, `NotaEngine.RackDev.cs` and `src/managed/Nota.Application/Engine/IAudioEngine.cs`
+- [X] T020 [US1] Macro column (display and turning only; mapping comes in US2) in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Macros.cs`:
   - 2 × 4 cells with a 22 px `Knob`, name, mono value ("—" when unmapped), target-count badge;
   - knob contract: vertical drag, fine modifier, double-click resets, `GestureBegin/End` automation write on the rack's macro params, `MidiLearn.Bind`, live follow that skips while dragging.
-- [ ] T021 [US1] Chains tab in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Chains.cs`.
+- [X] T021 [US1] Chains tab in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Chains.cs`.
   - Chain list:
     - 34 px rows: colour stripe from the chain palette index (resolved at render time); name in accent ink when chosen;
     - M/S keys with `NotaPalette.Mute`/`Solo` fills and `InkOn`; mono zone summary (`C-1–A#4 · v96+`); level bar;
     - "+ Chain"; chains-foot hint.
   - Device strip of the chosen chain: 96 px compact cards with power dot, name, kind badge, `RackKeyParams` sliders (`SliderTrack`, `VizInk` at rest), "Open" and `Glyph.Grip` reorder; chevron glyphs between cards; a dashed drop target.
   - Browser drops follow `RackKindProfile` rules; refused drops show a tooltip.
-- [ ] T022 [US1] Zones tab in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Zones.cs`.
+- [X] T022 [US1] Zones tab in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Zones.cs`.
   - Ruler C0…C8.
   - Per-chain 24 px rows: key bar and velocity bar with drag edges (whole values, edges never cross), mono labels in note names.
   - Hover probe: teal 1 px line on every row; chains hit at velocity 100 get a teal wash and name. The footer shows the hint and the result ("C4 · vel 100 → Volt + Pentad" / "nothing").
-- [ ] T023 [US1] Right panel in `src/managed/Nota.App/DeviceCards/Rack/RackCard.RightPanel.cs`.
+- [X] T023 [US1] Right panel in `src/managed/Nota.App/DeviceCards/Rack/RackCard.RightPanel.cs`.
   - Chain tab:
     - colour dot, name with double-click rename, "n / N";
     - Volume (dB) and Pan (L/C/R) via `DeviceCardKit.SliderRow`;
     - Keys/Vel rows that open the Zones tab;
     - Duplicate and Delete (Delete disabled with one chain).
   - Rack out tab for Instrument: Volume, Glide (ms, tooltip "Glides in mono mode"), switch "Mono (last note)".
-- [ ] T024 [US1] Status line summary for Instrument in `src/managed/Nota.App/DeviceCards/Rack/RackCard.cs`: chains · probe result or zone summary · "N macros mapped". Nothing on the right
-- [ ] T025 [US1] Route `BuildInstrumentRackBody` in `src/managed/Nota.App/DeviceCards/Rack/RackCardView.cs` to `RackCard` (Instrument profile). Delete the `Ir*` builders (`InstrumentRackMain`, `IrMacroStrip`, `IrChainList`, `IrDeviceArea`, `IrZoneMap`, `IrRackRail`, `IrCap`…) that nothing else uses. Keep `RackCardView.Drum.cs` and `MacroPanel.cs` compiling
-- [ ] T026 [US1] MCP: `set_rack_mono(trackId, on)` and `get_rack` gains `mono` in `src/managed/Nota.Mcp/Tools/RackTools.cs`. The `set_rack_glide` description says it is audible in mono mode
+- [X] T024 [US1] Status line summary for Instrument in `src/managed/Nota.App/DeviceCards/Rack/RackCard.cs`: chains · probe result or zone summary · "N macros mapped". Nothing on the right
+- [X] T025 [US1] Route `BuildInstrumentRackBody` in `src/managed/Nota.App/DeviceCards/Rack/RackCardView.cs` to `RackCard` (Instrument profile). Delete the `Ir*` builders (`InstrumentRackMain`, `IrMacroStrip`, `IrChainList`, `IrDeviceArea`, `IrZoneMap`, `IrRackRail`, `IrCap`…) that nothing else uses. Keep `RackCardView.Drum.cs` and `MacroPanel.cs` compiling
+- [X] T026 [US1] MCP: `set_rack_mono(trackId, on)` and `get_rack` gains `mono` in `src/managed/Nota.Mcp/Tools/RackTools.cs`. The `set_rack_glide` description says it is audible in mono mode
 
 **Checkpoint**: An Instrument Rack can be built, split and played from the new card (mapping still read-only).
 
@@ -156,7 +156,7 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 ### Tests for User Story 2
 
-- [ ] T027 [P] [US2] Extend `racks: mapping rules` in `tests/Nota.SmokeTest/RackRedesignTests.cs`:
+- [X] T027 [P] [US2] Extend `racks: mapping rules` in `tests/Nota.SmokeTest/RackRedesignTests.cs`:
   - the curve of a macro reads "mixed" when its targets differ;
   - setting a macro curve updates every target in one undo step;
   - min > max inverts the response;
@@ -164,14 +164,14 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] Mapping mode in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Chains.cs` and `RackCard.Macros.cs`:
+- [X] T028 [US2] Mapping mode in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Chains.cs` and `RackCard.Macros.cs`:
   - Map key: accent key while on. Map switches to the Chains tab and sets `mappingMacro`; selecting another macro moves mapping to it.
   - Compact cards in mapping mode: teal dashed frame (not this macro) or solid frame (this macro), "copy" cursor, and a scrollable list of **all** params of the device.
   - Click toggles the mapping (default range ±0.3 around the current value). A param mapped to another macro moves (engine T007).
   - Header line "Mapping · Macro N · Name — click to add or remove".
   - Outside mapping, a mapped param shows the teal "M n" tag, ignores drags and opens the Macros tab on its macro when clicked.
-- [ ] T029 [US2] Esc ends mapping: register it with the app's key handling in `src/managed/Nota.App/MainWindow.MenuKeys.cs`, active only while a rack card is mapping, so other Esc uses are untouched. Leaving the Chains tab also ends mapping
-- [ ] T030 [US2] Macros tab in `src/managed/Nota.App/DeviceCards/Rack/RackCard.MacroTab.cs`.
+- [X] T029 [US2] Esc ends mapping: register it with the app's key handling in `src/managed/Nota.App/MainWindow.MenuKeys.cs`, active only while a rack card is mapping, so other Esc uses are untouched. Leaving the Chains tab also ends mapping
+- [X] T030 [US2] Macros tab in `src/managed/Nota.App/DeviceCards/Rack/RackCard.MacroTab.cs`.
   - Header:
     - slot "Macro N", name with double-click rename, mono value;
     - "Curve" segmented Lin · Exp · Log · S. "Mixed" means no key chosen plus a caption; picking a curve applies it to every target in one undo step;
@@ -183,8 +183,8 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
     - range text in the param's units, unmap via `Glyph.Close`.
   - One Ink-5 empty-state line.
   - New targets get the macro's curve, or Lin when the macro is Mixed (research D5).
-- [ ] T031 [US2] Remove `InstrumentRackMacroMap`, `IrMappingRow` and `_macroMapMode` from `src/managed/Nota.App/DeviceCards/Rack/RackCardView.cs`
-- [ ] T032 [P] [US2] MCP in `src/managed/Nota.Mcp/Tools/RackTools.cs` and `src/managed/Nota.Mcp/Tools/EffectRackTools.cs`:
+- [X] T031 [US2] Remove `InstrumentRackMacroMap`, `IrMappingRow` and `_macroMapMode` from `src/managed/Nota.App/DeviceCards/Rack/RackCardView.cs`
+- [X] T032 [P] [US2] MCP in `src/managed/Nota.Mcp/Tools/RackTools.cs` and `src/managed/Nota.Mcp/Tools/EffectRackTools.cs`:
   - `set_macro_curve(trackId, deviceIndex, macro, curve)`;
   - `set_mapping_range(trackId, deviceIndex, index, min, max)`;
   - per-macro `curve` with `"mixed"` in `get_rack` / `get_effect_rack`;
@@ -200,14 +200,14 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 **Independent Test**: Capture the card in each theme, switch live, run the guards (quickstart Q5, SC-003).
 
-- [ ] T033 [US5] Run the smoke test design sections (`RunStudio`, `RunThemes`, `RunLabels`, `RunIcons` in `tests/Nota.SmokeTest/DesignTokenCheck*.cs`). Fix every hit in `src/managed/Nota.App/DeviceCards/Rack/RackCard*.cs` **without** adding lines to any `*AllowList.txt`
-- [ ] T034 [US5] Audit `src/managed/Nota.App/DeviceCards/Rack/RackCard*.cs` for colour snapshots:
+- [X] T033 [US5] Run the smoke test design sections (`RunStudio`, `RunThemes`, `RunLabels`, `RunIcons` in `tests/Nota.SmokeTest/DesignTokenCheck*.cs`). Fix every hit in `src/managed/Nota.App/DeviceCards/Rack/RackCard*.cs` **without** adding lines to any `*AllowList.txt`
+- [X] T034 [US5] Audit `src/managed/Nota.App/DeviceCards/Rack/RackCard*.cs` for colour snapshots:
   - no `new SolidColorBrush(slot.Color)` outside `Render`;
   - no `static readonly` palette-derived brush except slots and `Wash`;
   - chain colours resolved per render.
 
   Confirm that view state (tabs, chosen chain and macro) survives a theme switch.
-- [ ] T035 [US5] Headless capture harness (scratch project, not committed). Capture the Instrument Rack card × 3 centre tabs × 2 right tabs × {Studio Dark, Studio Light, Ember Graphite, Ember Paper}, plus a live switch without rebuild. Check each frame against the DESIGN.md readability bar and keep the sheet for the PR
+- [X] T035 [US5] Headless capture harness (scratch project, not committed). Capture the Instrument Rack card × 3 centre tabs × 2 right tabs × {Studio Dark, Studio Light, Ember Graphite, Ember Paper}, plus a live switch without rebuild. Check each frame against the DESIGN.md readability bar and keep the sheet for the PR
 
 **Checkpoint**: The P1 slice (US1, US2, US5) can ship as the first UI PR.
 
@@ -219,21 +219,21 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 **Independent Test**: A two-chain Audio Effect Rack; switch the modes and drag the selector; audio and status line agree (spec US3).
 
-- [ ] T036 [P] [US3] Smoke in `tests/Nota.SmokeTest/RackRedesignTests.cs`: duplicate chain on an Audio Effect Rack copies its devices and mappings; a selector mapped to a macro switches the active chain mid-render
-- [ ] T037 [US3] Select tab for the Audio profile in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Zones.cs`:
+- [X] T036 [P] [US3] Smoke in `tests/Nota.SmokeTest/RackRedesignTests.cs`: duplicate chain on an Audio Effect Rack copies its devices and mappings; a selector mapped to a macro switches the active chain mid-render
+- [X] T037 [US3] Select tab for the Audio profile in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Zones.cs`:
   - ruler 0/32/64/96/127;
   - Selector row (accent handle, drag to set, mappable via Map);
   - per-chain select-range bars;
   - outside Select mode the bars use the next ink step and the footer says "Ranges apply when Chains run is set to Select";
   - footer result "selector 30 → Crunch" / "silence".
-- [ ] T038 [US3] Rack out for the Audio profile in `src/managed/Nota.App/DeviceCards/Rack/RackCard.RightPanel.cs`:
+- [X] T038 [US3] Rack out for the Audio profile in `src/managed/Nota.App/DeviceCards/Rack/RackCard.RightPanel.cs`:
   - "Chains run" Parallel · Serial · Select with a one-line explanation;
   - Dry/wet (%) and Gain (dB, centred);
   - switch "Latency compensation".
 
   Chain rows show `sel lo–hi` in Select mode and "N devices" otherwise.
-- [ ] T039 [US3] Status line for Audio in `src/managed/Nota.App/DeviceCards/Rack/RackCard.cs` (mode · chain names · dry/wet · macros). Route `BuildEffectRackBody` in `src/managed/Nota.App/DeviceCards/Rack/RackCardView.cs` to `RackCard` (Audio profile) and delete the `Ae*` builders
-- [ ] T040 [P] [US3] MCP: `add_effect_rack_mapping` accepts `deviceIndex = −3` (selector) in `src/managed/Nota.Mcp/Tools/EffectRackTools.cs`
+- [X] T039 [US3] Status line for Audio in `src/managed/Nota.App/DeviceCards/Rack/RackCard.cs` (mode · chain names · dry/wet · macros). Route `BuildEffectRackBody` in `src/managed/Nota.App/DeviceCards/Rack/RackCardView.cs` to `RackCard` (Audio profile) and delete the `Ae*` builders
+- [X] T040 [P] [US3] MCP: `add_effect_rack_mapping` accepts `deviceIndex = −3` (selector) in `src/managed/Nota.Mcp/Tools/EffectRackTools.cs`
 
 **Checkpoint**: Instrument and Audio Effect Racks share one card.
 

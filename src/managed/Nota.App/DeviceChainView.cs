@@ -217,6 +217,8 @@ public sealed partial class DeviceChainView : UserControl
         if (kind == 5)   // Audio Effect Rack — full-bleed body (fills the shell; no body inset
         {                // that would overflow its fixed width and skew hit-testing).
             body = new RackCardView(NewCardContext()).BuildEffectRackBody(index); width = 700; fullBleed = true;
+            int chains = _engine.RackDevChainCount(_trackId, index);
+            tag = $"Rack · {chains} chain{(chains == 1 ? "" : "s")}";
         }
         else
         {

@@ -219,6 +219,15 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rack_set_glide")]
     internal static partial void RackSetGlide(IntPtr engine, int trackId, float v);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rack_duplicate_chain")]
+    internal static partial int RackDuplicateChain(IntPtr engine, int trackId, int chain);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_set_mono")]
+    internal static partial void RackSetMono(IntPtr engine, int trackId, int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_mono")]
+    internal static partial int RackMono(IntPtr engine, int trackId);
+
     [LibraryImport(Lib, EntryPoint = "nota_rack_set_mapping_range")]
     internal static partial int RackSetMappingRange(IntPtr engine, int trackId, int index, float rangeMin, float rangeMax);
 

@@ -719,6 +719,11 @@ public interface IAudioEngine : IDisposable
     void RackSetMacroName(int trackId, int macro, string name);
     float RackVolume(int trackId);
     void RackSetVolume(int trackId, float v);
+    /// <summary>Copies an Instrument Rack chain after itself (children, controls, its mappings); the new index or &lt;0.</summary>
+    int RackDuplicateChain(int trackId, int chain);
+    /// <summary>Instrument Rack mono: one note at a time, last-note priority; glide bends between notes.</summary>
+    bool RackMono(int trackId);
+    void RackSetMono(int trackId, bool on);
     float RackGlide(int trackId);
     void RackSetGlide(int trackId, float v);
     bool RackSetMappingRange(int trackId, int index, float rangeMin, float rangeMax);
@@ -800,6 +805,7 @@ public interface IAudioEngine : IDisposable
     void RackDevSetVolume(int trackId, int deviceIndex, float v);
     int RackDevMode(int trackId, int deviceIndex);
     void RackDevSetMode(int trackId, int deviceIndex, int mode);
+    int RackDevDuplicateChain(int trackId, int deviceIndex, int chain);
     float RackDevDryWet(int trackId, int deviceIndex);
     void RackDevSetDryWet(int trackId, int deviceIndex, float v);
     bool RackDevPdc(int trackId, int deviceIndex);

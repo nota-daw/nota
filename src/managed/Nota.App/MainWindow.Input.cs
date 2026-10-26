@@ -163,6 +163,13 @@ public partial class MainWindow
             e.Handled = true;
             return;
         }
+        // Esc ends macro mapping on a rack card (specs/040) before it touches the arrangement.
+        if (!mod && e.Key == Key.Escape && RackCardState.EndAllMapping())
+        {
+            if (DetailBody.Content is DeviceChainView chain) chain.Refresh();
+            e.Handled = true;
+            return;
+        }
         if (!mod && e.Key == Key.Escape && Timeline.EscapePressed())
         {
             e.Handled = true;

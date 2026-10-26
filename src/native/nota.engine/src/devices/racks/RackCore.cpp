@@ -177,6 +177,32 @@ bool RackCore::removeChain(int32_t chain) {
     return true;
 }
 
+int32_t RackCore::duplicateChain(int32_t chain) {
+    if (chain < 0 || chain >= chainCount()) return -1;
+    // Rebuild the chain from this rack's own blob in a scratch rack: the blob already knows
+    // how to recreate every child kind with all of its state.
+    RackCore tmp;
+    tmp.setRates(sampleRate_, maxBlock_);
+    const auto blob = serialize();
+    tmp.deserialize(blob.data(), static_cast<int32_t>(blob.size()));
+    if (!tmp.authoring_ || chain >= static_cast<int32_t>(tmp.authoring_->chains.size())) return -1;
+    auto ns = copyState();
+    const int32_t at = chain + 1;
+    ns->chains.insert(ns->chains.begin() + at, std::move(tmp.authoring_->chains[chain]));
+    std::vector<MacroMapping> copies;
+    for (auto& m : ns->mappings) {
+        if (m.chainIndex == chain) {
+            MacroMapping c = m;
+            c.chainIndex = at;
+            copies.push_back(c);
+        } else if (m.chainIndex >= at)
+            ++m.chainIndex;
+    }
+    ns->mappings.insert(ns->mappings.end(), copies.begin(), copies.end());
+    commit(ns);
+    return at;
+}
+
 bool RackCore::setChainInstrument(int32_t chain, int32_t instKind) {
     auto inst = makeInstrument(instKind);
     if (!inst) return false;

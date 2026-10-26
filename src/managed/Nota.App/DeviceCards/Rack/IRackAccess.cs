@@ -102,6 +102,34 @@ internal interface IRackAccess
     void ChainMidiParamSet(int chain, int idx, int p, float v) { }
     bool ChainMidiBypassed(int chain, int idx) => false;
     void SetChainMidiBypassed(int chain, int idx, bool b) { }
+
+    // Rack output and routing (what each rack has: see RackKindProfile).
+    int RackMode() => 0;                      // 0 Parallel, 1 Serial, 2 Select
+    void SetRackMode(int mode) { }
+    float Selector() => 0.5f;                 // Select-mode selector, 0..1
+    void SetSelector(float v) { }
+    float RackVolume() => 1f;                 // linear
+    void SetRackVolume(float v) { }
+    float RackGlide() => 0f;                  // 0..1 = 0..500 ms
+    void SetRackGlide(float v) { }
+    bool RackMono() => false;
+    void SetRackMono(bool on) { }
+    float RackDryWet() => 1f;
+    void SetRackDryWet(float v) { }
+    bool RackPdc() => false;
+    void SetRackPdc(bool on) { }
+    bool RackMerge() => true;
+    void SetRackMerge(bool on) { }
+    bool RackThru() => true;
+    void SetRackThru(bool on) { }
+    int ChainTranspose(int chain) => 0;       // MIDI chains, semitones
+    void SetChainTranspose(int chain, int st) { }
+    float ChainVelScale(int chain) => 1f;     // MIDI chains' Volume, 0..2
+    void SetChainVelScale(int chain, float v) { }
+
+    /// <summary>Where a macro's moves are recorded as automation, and what MIDI Learn binds it to.</summary>
+    (AutomationTarget Target, int Device, int Param, string Id) MacroAutomation(int i) => (AutomationTarget.PluginParam, AutomationDeviceIndex, -1, $"macro{i + 1}");
+    MidiTarget MacroLearnTarget(int track, int i) => MidiTarget.PluginParam(track, AutomationDeviceIndex, i);
 }
 
 internal sealed class InstrumentRackAccess(IAudioEngine e, int t) : IRackAccess
@@ -167,6 +195,13 @@ internal sealed class InstrumentRackAccess(IAudioEngine e, int t) : IRackAccess
     public void SetChainName(int c, string name) => e.RackSetChainName(t, c, name);
     public void ChainZone(int c, out int kl, out int kh, out int vl, out int vh) => e.RackChainZone(t, c, out kl, out kh, out vl, out vh);
     public void SetChainZone(int c, int kl, int kh, int vl, int vh) => e.RackSetChainZone(t, c, kl, kh, vl, vh);
+    public int DuplicateChain(int c) => e.RackDuplicateChain(t, c);
+    public float RackVolume() => e.RackVolume(t);
+    public void SetRackVolume(float v) => e.RackSetVolume(t, v);
+    public float RackGlide() => e.RackGlide(t);
+    public void SetRackGlide(float v) => e.RackSetGlide(t, v);
+    public bool RackMono() => e.RackMono(t);
+    public void SetRackMono(bool on) => e.RackSetMono(t, on);
 }
 
 internal sealed class EffectRackAccess(IAudioEngine e, int t, int di) : IRackAccess
@@ -231,6 +266,17 @@ internal sealed class EffectRackAccess(IAudioEngine e, int t, int di) : IRackAcc
     // The Audio Effect Rack keeps its select range in the chain's velocity fields (v7 blobs).
     public void SelectRange(int c, out int lo, out int hi) => e.RackDevChainZone(t, di, c, out lo, out hi);
     public void SetSelectRange(int c, int lo, int hi) => e.RackDevSetChainZone(t, di, c, lo, hi);
+    public int DuplicateChain(int c) => e.RackDevDuplicateChain(t, di, c);
+    public int RackMode() => e.RackDevMode(t, di);
+    public void SetRackMode(int mode) => e.RackDevSetMode(t, di, mode);
+    public float Selector() => e.RackDevChainSelect(t, di);
+    public void SetSelector(float v) => e.RackDevSetChainSelect(t, di, v);
+    public float RackVolume() => e.RackDevVolume(t, di);
+    public void SetRackVolume(float v) => e.RackDevSetVolume(t, di, v);
+    public float RackDryWet() => e.RackDevDryWet(t, di);
+    public void SetRackDryWet(float v) => e.RackDevSetDryWet(t, di, v);
+    public bool RackPdc() => e.RackDevPdc(t, di);
+    public void SetRackPdc(bool on) => e.RackDevSetPdc(t, di, on);
 }
 
 // Nota Rhythm's eight voices as effect-only "chains": each voice's insert chain through the

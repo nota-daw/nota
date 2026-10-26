@@ -3,8 +3,9 @@
 //
 // RackInstrument — a parallel-chain Instrument Rack. A container Instrument whose
 // parallel chains each hold a built-in instrument followed by an insert chain of
-// built-in devices. Every note is fanned to every chain (no key/velocity zones in
-// v1) and the chain outputs are summed. All the chain/macro/snapshot/persistence
+// built-in devices. A note reaches every chain whose key/velocity zone holds it and the
+// chain outputs are summed. With mono on (specs/040) the rack plays one note at a time,
+// last-note priority, and glides between notes by per-note pitch bend. All the chain/macro/snapshot/persistence
 // machinery lives in RackCore; this class only adds the Instrument interface.
 //
 // Because a RackInstrument is just an Instrument, it slots onto an instrument
@@ -64,6 +65,22 @@ class RackInstrument : public Instrument, public RackCore {
 
   protected:
     float scratch_[kMaxBlock * 2]; // per-chain render buffer (DrumRack reuses it)
+
+  private:
+    // Fan a note-on out to the chains whose zone holds it; with glideFrom >= 0 the chains
+    // that take per-note bend start bent to the previous pitch and glide back (mono).
+    void fanOn(int32_t pitch, float velocity, int32_t glideFrom);
+    void fanOff(int32_t pitch);
+    void monoRemove(int32_t pitch);
+
+    // Mono state (audio thread only): held keys in press order, their velocities, the
+    // sounding pitch, and the glide ramp (bend in semitones from start to 0 over total samples).
+    int8_t held_[128] = {};
+    int32_t heldN_ = 0;
+    float heldVel_[128] = {};
+    int32_t sounding_ = -1;
+    float glideBend_ = 0.0f;
+    int64_t glideTotal_ = 0, glideLeft_ = 0;
 };
 
 } // namespace nota

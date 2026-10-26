@@ -1631,6 +1631,15 @@ NOTA_API void        nota_rack_macro_set(NotaEngine* engine, int32_t track_id, i
 NOTA_API int32_t     nota_rack_add_macro_mapping(NotaEngine* engine, int32_t track_id, int32_t macro, int32_t chain,
                                                  int32_t device_index, int32_t param_index, float range_min, float range_max);
 NOTA_API int32_t     nota_rack_mapping_count(const NotaEngine* engine, int32_t track_id);
+/* Copies a chain right after itself (children with all their state, controls, and copies of
+ * its macro mappings), one undo step. Returns the new chain index or <0. */
+NOTA_API int32_t     nota_rack_duplicate_chain(NotaEngine* engine, int32_t track_id, int32_t chain);
+NOTA_API int32_t     nota_rackdev_duplicate_chain(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain);
+/* Instrument Rack mono (specs/040): one note at a time, last-note priority; the rack's glide
+ * (nota_rack_set_glide, 0..1 = 0..500 ms) bends each new note from the previous pitch on chain
+ * instruments that take per-note bend. Off by default. */
+NOTA_API void        nota_rack_set_mono(NotaEngine* engine, int32_t track_id, int32_t on);
+NOTA_API int32_t     nota_rack_mono(const NotaEngine* engine, int32_t track_id);
 /* Fills the out params for mapping `index`; returns 1 on success, 0 otherwise. */
 NOTA_API int32_t     nota_rack_mapping_info(const NotaEngine* engine, int32_t track_id, int32_t index,
                                             int32_t* macro, int32_t* chain, int32_t* device_index,

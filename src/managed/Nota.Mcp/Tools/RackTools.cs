@@ -20,10 +20,29 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
 {
     public sealed record ChainInfo(int Index, int InstrumentKind, string InstrumentName, int TriggerNote,
         float Gain, float Pan, bool Mute, bool Solo, int DeviceCount, string Name);
-    public sealed record RackSnapshot(float Volume, ChainInfo[] Chains);
+    public sealed record RackSnapshot(float Volume, ChainInfo[] Chains, bool Mono, float Glide);
     public sealed record Param(int Index, string Id, string Name, float Value);
-    public sealed record MacroInfo(int Index, string Name, float Value);
-    public sealed record Mapping(int Index, int Macro, int Chain, int DeviceIndex, int ParamIndex, float RangeMin, float RangeMax);
+    public sealed record MacroInfo(int Index, string Name, float Value, string Curve, int Targets);
+    public sealed record Mapping(int Index, int Macro, int Chain, int DeviceIndex, int ParamIndex, float RangeMin, float RangeMax, string Curve);
+
+    private static readonly string[] CurveNames = ["lin", "exp", "log", "s"];
+    internal static string CurveName(int curve) => curve >= 0 && curve < CurveNames.Length ? CurveNames[curve] : "lin";
+    internal static int CurveId(string curve) => Math.Max(0, Array.IndexOf(CurveNames, curve.Trim().ToLowerInvariant()));
+
+    // A macro's curve as the card shows it: its targets' common curve, "mixed" when they differ, "none" without targets.
+    internal static (string Curve, int Targets) MacroCurve(int count, Func<int, (bool Ok, int Macro, int Curve)> mapping, int macro)
+    {
+        int curve = -1, n = 0;
+        bool mixed = false;
+        for (int i = 0; i < count; i++)
+        {
+            var (ok, m, c) = mapping(i);
+            if (!ok || m != macro) continue;
+            n++;
+            if (curve < 0) curve = c; else if (curve != c) mixed = true;
+        }
+        return (n == 0 ? "none" : mixed ? "mixed" : CurveName(curve), n);
+    }
 
     // ---- snapshot ---------------------------------------------------------
 
@@ -39,7 +58,7 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
                 E.RackChainTriggerNote(trackId, c), E.RackChainGain(trackId, c), E.RackChainPan(trackId, c),
                 E.RackChainMute(trackId, c), E.RackChainSolo(trackId, c), E.RackChainDeviceCount(trackId, c),
                 E.RackChainName(trackId, c));
-        return new RackSnapshot(E.RackVolume(trackId), chains);
+        return new RackSnapshot(E.RackVolume(trackId), chains, E.RackMono(trackId), E.RackGlide(trackId));
     });
 
     // ---- chains -----------------------------------------------------------
@@ -47,6 +66,9 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     [McpServerTool(Name = "add_rack_chain"), Description("Add a parallel chain to the rack with the given built-in instrument kind. Returns the chain index.")]
     public Task<int> AddRackChain(int trackId, [Description("Instrument kind id, e.g. 6=Volt, 2=Physical, 5=Aurora")] int instrumentKind)
         => Mutate(() => E.RackAddChain(trackId, instrumentKind));
+
+    [McpServerTool(Name = "duplicate_rack_chain"), Description("Copy a chain right after itself: its instrument, devices, zone, mix and its macro mappings. Returns the new chain index.")]
+    public Task<int> DuplicateRackChain(int trackId, int chain) => Mutate(() => E.RackDuplicateChain(trackId, chain));
 
     [McpServerTool(Name = "remove_rack_chain"), Description("Remove a chain from the rack by index.")]
     public Task<bool> RemoveRackChain(int trackId, int chain) => Mutate(() => E.RackRemoveChain(trackId, chain));
@@ -97,11 +119,17 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
 
     // ---- macros -----------------------------------------------------------
 
-    [McpServerTool(Name = "get_macros"), Description("List the rack's 8 macro knobs (index, name, value 0..1).")]
+    [McpServerTool(Name = "get_macros"), Description("List the rack's 8 macro knobs (index, name, value 0..1, response curve — lin/exp/log/s, \"mixed\" when its targets differ, \"none\" without targets — and target count).")]
     public Task<MacroInfo[]> GetMacros(int trackId) => Read(() =>
     {
         var ms = new MacroInfo[8];
-        for (int i = 0; i < 8; i++) ms[i] = new MacroInfo(i, E.RackMacroName(trackId, i), E.RackMacroGet(trackId, i));
+        int n = E.RackMappingCount(trackId);
+        (bool, int, int) Map(int i) => E.RackTryGetMapping(trackId, i, out var m) ? (true, m.Macro, E.RackMappingCurve(trackId, i)) : (false, 0, 0);
+        for (int i = 0; i < 8; i++)
+        {
+            var (curve, targets) = MacroCurve(n, Map, i);
+            ms[i] = new MacroInfo(i, E.RackMacroName(trackId, i), E.RackMacroGet(trackId, i), curve, targets);
+        }
         return ms;
     });
 
@@ -119,7 +147,7 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
         var list = new List<Mapping>(n);
         for (int i = 0; i < n; i++)
             if (E.RackTryGetMapping(trackId, i, out var m))
-                list.Add(new Mapping(i, m.Macro, m.Chain, m.DeviceIndex, m.ParamIndex, m.RangeMin, m.RangeMax));
+                list.Add(new Mapping(i, m.Macro, m.Chain, m.DeviceIndex, m.ParamIndex, m.RangeMin, m.RangeMax, CurveName(E.RackMappingCurve(trackId, i))));
         return list.ToArray();
     });
 
@@ -127,9 +155,45 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
         "Map a macro (0..7) onto a parameter. deviceIndex = -1 targets the chain instrument, -2 the chain's own controls "
         + "(a Drum Rack pad: paramIndex 0 Volume (linear gain), 1 Pan (-1..1), 2 Tune (semitones), 3 Decay (0..1, 1 = hold)), "
         + "else the chain's device index (a built-in effect on the pad; range in the device's units). range is the span the "
-        + "macro sweeps, in the target's units (0..1 for an instrument param). Returns mapping index.")]
+        + "macro sweeps, in the target's units (0..1 for an instrument param); min above max inverts. A parameter belongs to "
+        + "one macro: mapping it again moves its mapping (range and curve kept). A new target takes the macro's curve. "
+        + "Returns mapping index.")]
     public Task<int> AddMacroMapping(int trackId, int macro, int chain, int deviceIndex, int paramIndex, float rangeMin = 0f, float rangeMax = 1f)
-        => Mutate(() => E.RackAddMacroMapping(trackId, macro, chain, deviceIndex, paramIndex, rangeMin, rangeMax));
+        => Mutate(() =>
+        {
+            bool known = false;
+            for (int i = 0; i < E.RackMappingCount(trackId); i++)
+                if (E.RackTryGetMapping(trackId, i, out var m) && m.Chain == chain && m.DeviceIndex == deviceIndex && m.ParamIndex == paramIndex) known = true;
+            var (curve, _) = MacroCurve(E.RackMappingCount(trackId), i => E.RackTryGetMapping(trackId, i, out var m) ? (true, m.Macro, E.RackMappingCurve(trackId, i)) : (false, 0, 0), macro);
+            int idx = E.RackAddMacroMapping(trackId, macro, chain, deviceIndex, paramIndex, rangeMin, rangeMax);
+            if (idx >= 0 && !known && curve is not ("none" or "mixed" or "lin")) E.RackSetMappingCurve(trackId, idx, CurveId(curve));
+            return idx;
+        });
+
+    [McpServerTool(Name = "set_macro_curve"), Description(
+        "Set a macro's response curve (lin | exp | log | s) on every one of its targets, as one undo step. "
+        + "deviceIndex -1 = the track's Instrument Rack, else the Audio Effect Rack at that device index.")]
+    public Task<int> SetMacroCurve(int trackId, int macro, [Description("lin | exp | log | s")] string curve, int deviceIndex = -1) => Mutate(() =>
+    {
+        int id = CurveId(curve), n = 0;
+        bool rack = deviceIndex < 0;
+        int count = rack ? E.RackMappingCount(trackId) : E.RackDevMappingCount(trackId, deviceIndex);
+        for (int i = 0; i < count; i++)
+        {
+            RackMacroMapping m;
+            bool ok = rack ? E.RackTryGetMapping(trackId, i, out m) : E.RackDevTryGetMapping(trackId, deviceIndex, i, out m);
+            if (!ok || m.Macro != macro) continue;
+            if (rack) E.RackSetMappingCurve(trackId, i, id); else E.RackDevSetMappingCurve(trackId, deviceIndex, i, id);
+            n++;
+        }
+        return n;
+    });
+
+    [McpServerTool(Name = "set_mapping_range"), Description(
+        "Set a macro mapping's range in the target's units (min above max inverts). "
+        + "deviceIndex -1 = the track's Instrument Rack, else the Audio Effect Rack at that device index.")]
+    public Task<bool> SetMappingRange(int trackId, int index, float rangeMin, float rangeMax, int deviceIndex = -1)
+        => Mutate(() => deviceIndex < 0 ? E.RackSetMappingRange(trackId, index, rangeMin, rangeMax) : E.RackDevSetMappingRange(trackId, deviceIndex, index, rangeMin, rangeMax));
 
     [McpServerTool(Name = "remove_macro_mapping"), Description("Remove a macro mapping by index.")]
     public Task<bool> RemoveMacroMapping(int trackId, int index) => Mutate(() => E.RackRemoveMapping(trackId, index));
@@ -139,10 +203,13 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     [McpServerTool(Name = "set_rack_volume"), Description("Set the rack's overall output volume (0..1 linear).")]
     public Task SetRackVolume(int trackId, float value) => Mutate(() => E.RackSetVolume(trackId, Math.Clamp(value, 0f, 1f)));
 
-    [McpServerTool(Name = "set_rack_glide"), Description("Set the rack glide/portamento amount (0..1).")]
+    [McpServerTool(Name = "set_rack_glide"), Description("Set the rack glide (0..1 = 0..500 ms). Audible with mono on: each new note bends from the previous pitch on chain instruments that take per-note bend.")]
     public Task SetRackGlide(int trackId, float value) => Mutate(() => E.RackSetGlide(trackId, Math.Clamp(value, 0f, 1f)));
 
     // ---- Drum Rack extras -------------------------------------------------
+
+    [McpServerTool(Name = "set_rack_mono"), Description("Instrument Rack mono: one note at a time, last-note priority, all chains share one voice.")]
+    public Task SetRackMono(int trackId, bool on) => Mutate(() => E.RackSetMono(trackId, on));
 
     [McpServerTool(Name = "set_pad_choke"), Description("Drum Rack: set a pad/chain's choke group (0 = none). Pads in the same group cut each other off.")]
     public Task SetPadChoke(int trackId, int chain, int group) => Mutate(() => E.RackSetChainChoke(trackId, chain, group));

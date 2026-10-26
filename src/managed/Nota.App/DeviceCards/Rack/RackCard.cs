@@ -11,17 +11,20 @@
 //
 // The columns are card sections (a rule where they meet), never framed boxes. What differs
 // between the racks comes from RackKindProfile; the regions live in the RackCard.*.cs
-// partials. The card is rebuilt after every structural edit, so the view state (tabs, the
-// chosen macro, mapping, the probe) lives in RackCardState, keyed by the rack, and survives
-// rebuilds and theme switches. The chosen chain stays in the context, shared with the chain
-// view. Colour only from NotaPalette slots: every theme recolours it live.
+// partials of RackCardView, so they share its device popups, add menus and Browser drops.
+// The card is rebuilt after every structural edit, so the view state (tabs, the chosen
+// macro, mapping, the probe) lives in RackCardState, keyed by the rack, and survives
+// rebuilds and theme switches; the chosen chain stays in the context. Colour only from
+// NotaPalette slots: every theme recolours it live.
 
 using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application;
 using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
@@ -48,60 +51,64 @@ internal sealed class RackCardState
         if (!Store.TryGetValue(key, out var s)) Store[key] = s = new RackCardState();
         return s;
     }
-}
 
-internal sealed partial class RackCard(DeviceCardContext ctx, IRackAccess access, int rackIndex)
-{
-    public const double MacroColumnWidth = 116, RightPanelWidth = 160, StatusHeight = 18, TabHeight = 20, Gutter = 6;
-
-    private readonly DeviceCardContext _ctx = ctx;
-    private readonly IRackAccess _a = access;
-    private readonly RackKindProfile _profile = RackKindProfile.For(access.Kind);
-    private readonly RackCardState _st = RackCardState.For(ctx.TrackId, access.Kind, rackIndex);
-    private readonly List<Action> _tick = new();
-
-    private int ChainCount => _a.ChainCount();
-
-    /// <summary>The chosen chain, clamped to the rack's chains (0 when it has none).</summary>
-    private int Chosen
+    /// <summary>Ends macro mapping on every rack card (Esc). True when one was mapping.</summary>
+    public static bool EndAllMapping()
     {
-        get
-        {
-            int n = ChainCount;
-            return n > 0 ? Math.Clamp(_ctx.SelectedChain, 0, n - 1) : 0;
-        }
-        set => _ctx.SelectedChain = value;
+        bool any = false;
+        foreach (var s in Store.Values)
+            if (s.Mapping) { s.MappingMacro = -1; any = true; }
+        return any;
     }
 
-    // Rebuild on the next dispatcher cycle, never inside a pointer handler: tearing down the
-    // clicked element mid-dispatch corrupts pointer routing.
-    private void Rebuild() => Avalonia.Threading.Dispatcher.UIThread.Post(_ctx.RequestRebuild);
-
-    public Control Build()
+    /// <summary>Whether any rack card is mapping a macro right now.</summary>
+    public static bool AnyMapping()
     {
-        Chosen = Chosen;
-        _st.SelectedMacro = Math.Clamp(_st.SelectedMacro, 0, 7);
-        if (_st.Centre != RackCentreTab.Chains) _st.MappingMacro = -1;
+        foreach (var s in Store.Values) if (s.Mapping) return true;
+        return false;
+    }
+}
+
+internal sealed partial class RackCardView
+{
+    public const double RcMacroWidth = 116, RcRightWidth = 160, RcStatusHeight = 18, RcTabHeight = 20, RcGutter = 6;
+
+    private IRackAccess _ra = null!;
+    private RackKindProfile _rp = RackKindProfile.Instrument;
+    private RackCardState _rs = new();
+
+    /// <summary>The shared rack card body for <paramref name="a"/>. <paramref name="rackIndex"/> tells
+    /// racks on one track apart (-1 = the track's instrument, else its device or MIDI effect index).</summary>
+    internal Control BuildRackCard(IRackAccess a, int rackIndex)
+    {
+        _ra = a;
+        _rp = RackKindProfile.For(a.Kind);
+        _rs = RackCardState.For(T, a.Kind, rackIndex);
+        _irTick.Clear();
+        int n = a.ChainCount();
+        Sel = n > 0 ? Math.Clamp(Sel, 0, n - 1) : 0;
+        _rs.SelectedMacro = Math.Clamp(_rs.SelectedMacro, 0, 7);
+        if (_rs.Centre != RackCentreTab.Chains) _rs.MappingMacro = -1;
 
         var grid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions($"{MacroColumnWidth},*,{RightPanelWidth}"),
-            RowDefinitions = new RowDefinitions($"*,{StatusHeight}"),
-            ColumnSpacing = Gutter, RowSpacing = Gutter / 2,
+            ColumnDefinitions = new ColumnDefinitions($"{RcMacroWidth},*,{RcRightWidth}"),
+            RowDefinitions = new RowDefinitions($"*,{RcStatusHeight}"),
+            ColumnSpacing = RcGutter, RowSpacing = 3,
             Margin = new Thickness(NotaSpace.DeviceInset, NotaSpace.DeviceInset, NotaSpace.DeviceInset, 0),
         };
-        Place(grid, Section(MacroColumn()), 0, 0);
-        Place(grid, Section(Centre()), 0, 1);
-        Place(grid, Section(RightPanel()), 0, 2);
-        var status = Section(StatusLine(), SectionEdge.Top);
+        RcPlace(grid, Section(RcMacroColumn()), 0, 0);
+        RcPlace(grid, Section(RcCentre()), 0, 1);
+        RcPlace(grid, Section(RcRightPanel()), 0, 2);
+        var status = Section(RcStatusLine(), SectionEdge.Top);
         Grid.SetColumnSpan(status, 3);
-        Place(grid, status, 1, 0);
+        RcPlace(grid, status, 1, 0);
 
-        if (_tick.Count > 0) _ctx.AddDeviceRefresher(() => { for (int i = 0; i < _tick.Count; i++) _tick[i](); });
+        if (_irTick.Count > 0) _ctx.AddDeviceRefresher(() => { for (int i = 0; i < _irTick.Count; i++) _irTick[i](); });
         return grid;
     }
 
-    private static void Place(Grid g, Control c, int row, int col)
+    private static void RcPlace(Grid g, Control c, int row, int col)
     {
         Grid.SetRow(c, row);
         Grid.SetColumn(c, col);
@@ -110,91 +117,174 @@ internal sealed partial class RackCard(DeviceCardContext ctx, IRackAccess access
 
     // ---- centre: tabs over the chosen tab's body -------------------------------------
 
-    private Control Centre()
+    private Control RcCentre()
     {
-        var tabs = Segments(["Chains", _profile.ZoneTab, "Macros"], () => (int)_st.Centre, i =>
+        var tabs = Segments(["Chains", _rp.ZoneTab, "Macros"], () => (int)_rs.Centre, i =>
         {
-            _st.Centre = (RackCentreTab)i;
-            if (_st.Centre != RackCentreTab.Chains) _st.MappingMacro = -1; // mapping happens on the chain
-            Rebuild();
+            _rs.Centre = (RackCentreTab)i;
+            if (_rs.Centre != RackCentreTab.Chains) _rs.MappingMacro = -1; // mapping happens on the chain
+            DeferRebuild();
         }, out _, fontSize: NotaType.RowLabel);
-        var summary = Mono(CentreSummary(), NotaPalette.TextTertiary);
+        var summary = RcMono(RcCentreSummary(), NotaPalette.TextTertiary);
         summary.HorizontalAlignment = HorizontalAlignment.Right;
-        var head = new Grid
-        {
-            Height = TabHeight, ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Children = { tabs, summary },
-        };
         Grid.SetColumn(summary, 1);
+        var head = new Grid { Height = RcTabHeight, ColumnDefinitions = new ColumnDefinitions("Auto,*"), Children = { tabs, summary } };
 
-        Control body = _st.Centre switch
+        Control body = _rs.Centre switch
         {
-            RackCentreTab.Zones => ZonesTab(),
-            RackCentreTab.Macros => MacrosTab(),
-            _ => ChainsTab(),
+            RackCentreTab.Zones => RcZonesTab(),
+            RackCentreTab.Macros => RcMacrosTab(),
+            _ => RcChainsTab(),
         };
+        body.Margin = new Thickness(0, 4, 0, 0);
         DockPanel.SetDock(head, Dock.Top);
         return new DockPanel { LastChildFill = true, Children = { head, body } };
     }
 
-    private string CentreSummary()
+    private string RcCentreSummary()
     {
-        int n = ChainCount;
-        string chains = $"{n} chain{(n == 1 ? "" : "s")}";
-        return _st.Centre switch
+        int n = _ra.ChainCount();
+        string chains = n == 1 ? "1 chain" : $"{n} chains";
+        return _rs.Centre switch
         {
-            RackCentreTab.Zones => _profile.KeyZones ? "Keys C−1–G9 · vel 0–127" : "Select 0–127",
-            RackCentreTab.Macros => $"{MappedMacroCount()} of 8 mapped",
-            _ => _profile.Modes.Length > 0 ? $"{chains} · {_profile.ModeLabel(RackMode()).ToLowerInvariant()}" : chains,
+            RackCentreTab.Zones => _rp.KeyZones ? "Keys C−1–G9 · vel 0–127" : "Select 0–127",
+            RackCentreTab.Macros => $"{RcMappedMacros()} of 8 mapped",
+            _ => _rp.Modes.Length > 0 ? $"{chains} · {RcModeWord()}" : chains,
         };
     }
 
+    private string RcModeWord() => _ra.RackMode() switch
+    {
+        RackKindProfile.Serial => "serial",
+        RackKindProfile.Select => "select",
+        _ => _rp.Kind == RackKind.MidiEffect ? "parallel · merged" : "parallel · summed",
+    };
+
     // ---- right panel: Chain · Rack out|Output -----------------------------------------
 
-    private Control RightPanel()
+    private Control RcRightPanel()
     {
-        var tabs = Segments(["Chain", _profile.OutputTab], () => _st.OutputTab ? 1 : 0, i =>
+        var tabs = Segments(["Chain", _rp.OutputTab], () => _rs.OutputTab ? 1 : 0, i =>
         {
-            _st.OutputTab = i == 1;
-            Rebuild();
+            _rs.OutputTab = i == 1;
+            DeferRebuild();
         }, out _, fill: true, fontSize: NotaType.RowLabel);
-        var head = new Border { Height = TabHeight, Child = tabs };
+        var head = new Border { Height = RcTabHeight, Child = tabs };
         DockPanel.SetDock(head, Dock.Top);
-        return new DockPanel { LastChildFill = true, Children = { head, _st.OutputTab ? OutputPanel() : ChainPanel() } };
+        var body = _rs.OutputTab ? RcOutputPanel() : RcChainPanel();
+        body.Margin = new Thickness(0, 6, 0, 0);
+        return new DockPanel { LastChildFill = true, Children = { head, body } };
     }
 
     // ---- status line ------------------------------------------------------------------
 
-    private Control StatusLine()
+    private Control RcStatusLine()
     {
         var text = new TextBlock
         {
-            Text = StatusText(), FontSize = NotaType.KnobLabel, Foreground = NotaPalette.TextSecondary,
+            Text = RcStatusText(), FontSize = NotaType.KnobLabel, Foreground = NotaPalette.TextSecondary,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        return new Border { Height = StatusHeight, Padding = new Thickness(2, 0), Child = text };
+        return new Border { Height = RcStatusHeight, Padding = new Thickness(2, 0), Child = text };
     }
 
     // ---- shared helpers ---------------------------------------------------------------
 
-    private int MappedMacroCount()
+    private int RcMappedMacros()
     {
         var seen = new bool[8];
         int n = 0;
-        for (int i = 0; i < _a.MappingCount(); i++)
-            if (_a.TryGetMapping(i, out var m) && m.Macro is >= 0 and < 8 && !seen[m.Macro]) { seen[m.Macro] = true; n++; }
+        for (int i = 0; i < _ra.MappingCount(); i++)
+            if (_ra.TryGetMapping(i, out var m) && m.Macro is >= 0 and < 8 && !seen[m.Macro]) { seen[m.Macro] = true; n++; }
         return n;
     }
 
-    /// <summary>The rack's routing mode (0 Parallel when it has no choice). Filled in per rack kind.</summary>
-    private int RackMode() => 0;
+    private int RcTargetCount(int macro)
+    {
+        int n = 0;
+        for (int i = 0; i < _ra.MappingCount(); i++)
+            if (_ra.TryGetMapping(i, out var m) && m.Macro == macro) n++;
+        return n;
+    }
 
-    private static TextBlock Mono(string text, IBrush ink, double size = NotaType.KnobValue) => new()
+    /// <summary>The chain's display name: its own name, else its first device's.</summary>
+    private string RcChainName(int c)
+    {
+        string n = _ra.ChainName(c);
+        if (n.Length > 0) return n;
+        if (_rp.TakesInstrument) { n = _ra.ChainInstrumentName(c); if (n.Length > 0) return n; }
+        if (_rp.Kind == RackKind.MidiEffect && _ra.ChainMidiCount(c) > 0) return _ra.ChainMidiName(c, 0);
+        if (_rp.Kind == RackKind.AudioEffect && _ra.ChainDeviceCount(c) > 0) return _ra.ChainDeviceName(c, 0);
+        return $"Chain {c + 1}";
+    }
+
+    /// <summary>Whether a chain sounds: not muted, and soloed when any chain is.</summary>
+    private bool RcAudible(int c)
+    {
+        if (_ra.ChainMute(c)) return false;
+        for (int i = 0; i < _ra.ChainCount(); i++)
+            if (_ra.ChainSolo(i)) return _ra.ChainSolo(c);
+        return true;
+    }
+
+    private static TextBlock RcMono(string text, IBrush ink, double size = NotaType.KnobValue) => new()
     {
         Text = text, FontFamily = NotaFonts.MonoFamily, FontSize = size, Foreground = ink,
         VerticalAlignment = VerticalAlignment.Center,
     };
 
-    /// <summary>A region a later step fills in: one Ink 5 line.</summary>
-    private static Control Pending(string text) => new Border { Padding = new Thickness(4), Child = Hint(text) };
+    private static TextBlock RcText(string text, IBrush ink, double size = NotaType.KnobLabel, FontWeight? weight = null) => new()
+    {
+        Text = NotaText.Label(text), FontSize = size, Foreground = ink, FontWeight = weight ?? FontWeight.Medium,
+        VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+    };
+
+    /// <summary>A name the user typed (chain, macro): never re-cased.</summary>
+    private static TextBlock RcName(string text, IBrush ink, double size = NotaType.KnobLabel) => new()
+    {
+        Text = text, FontSize = size, Foreground = ink, FontWeight = FontWeight.SemiBold,
+        VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+    };
+
+    /// <summary>A small raised key (Map, Duplicate, …): neutral, or a solid fill with derived ink while on.</summary>
+    private static Border RcKey(string text, Action click, bool on = false, SolidColorBrush? onFill = null, bool enabled = true, string? tip = null)
+    {
+        var fill = onFill ?? NotaPalette.Accent;
+        var tb = new TextBlock
+        {
+            Text = NotaText.Label(text), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium,
+            Foreground = on ? NotaPalette.InkOn(fill) : enabled ? NotaPalette.TextSecondary : NotaPalette.TextDisabled,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
+        };
+        var b = new Border
+        {
+            Height = 16, MinWidth = 26, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge,
+            Background = on ? fill : NotaPalette.SurfaceRaised, BorderBrush = on ? fill : NotaPalette.BorderDefault,
+            BorderThickness = new Thickness(1), Cursor = enabled ? new Cursor(StandardCursorType.Hand) : Cursor.Default,
+            VerticalAlignment = VerticalAlignment.Center, Child = tb,
+        };
+        if (tip is not null) ToolTip.SetTip(b, tip);
+        b.PointerPressed += (_, e) =>
+        {
+            if (!enabled || !e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            click();
+        };
+        return b;
+    }
+
+    /// <summary>A one-line rename field under <paramref name="anchor"/>.</summary>
+    private void RcPromptRename(Control anchor, string current, Action<string> apply)
+    {
+        var box = new TextBox { Text = current, FontSize = 9, Width = 110, Height = 20, Padding = new Thickness(4, 0) };
+        var fly = new Flyout { Content = box };
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter) { apply(box.Text ?? ""); fly.Hide(); DeferRebuild(); }
+            else if (e.Key == Key.Escape) fly.Hide();
+        };
+        fly.ShowAt(anchor);
+        box.Focus();
+        box.SelectAll();
+    }
 }
