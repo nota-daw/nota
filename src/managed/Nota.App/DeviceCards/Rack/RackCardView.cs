@@ -427,6 +427,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     // (Parallel / Series / Select). Series swaps the body for stacked chain columns.
     public Control BuildEffectRackBody(int di) => RcBody(BuildRackCard(new EffectRackAccess(E, T, di), di));
 
+    public Control BuildMidiRackBody(int mi) => RcBody(BuildRackCard(new MidiRackAccess(E, T, mi), mi));
+
     // A roomy, non-bespoke "full UI": every param as a knob in a 3-column grid (the name
     // is on the device window's title bar).
     private static Control ParamGridContent(int count, Func<int, Control> row)

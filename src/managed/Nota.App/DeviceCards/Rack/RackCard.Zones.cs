@@ -109,8 +109,8 @@ internal sealed partial class RackCardView
                     ToolTip.SetTip(sb, "Select range: in Select mode this chain plays while the selector is inside it");
                     kb.VerticalAlignment = VerticalAlignment.Top;
                     kb.Height = 12;
+                    grid.Children.Remove(kb); // it moves into the stack with the select bar
                     var stack = new Panel { Children = { kb, sb } };
-                    grid.Children.Remove(kb);
                     Grid.SetColumn(stack, 1); grid.Children.Add(stack);
                     grid.Height = 24;
                 }

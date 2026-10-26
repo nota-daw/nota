@@ -247,7 +247,7 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 ### Tests for User Story 4
 
-- [ ] T041 [P] [US4] Smoke `racks: midi rack routing` in `tests/Nota.SmokeTest/MidiRackTests.cs`: feed fixed events through a rack on an instrument track and compare the instrument's note-ons with expected lists for:
+- [X] T041 [P] [US4] Smoke `racks: midi rack routing` in `tests/Nota.SmokeTest/MidiRackTests.cs`: feed fixed events through a rack on an instrument track and compare the instrument's note-ons with expected lists for:
   - key and velocity zones; mute and solo;
   - Parallel vs Select (selector + select ranges);
   - transpose +12 and −48 clamping;
@@ -255,8 +255,8 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
   - merge on/off with two chains sending the same pitch;
   - thru on/off for a note outside every zone;
   - a bypassed rack passes notes through.
-- [ ] T042 [P] [US4] Smoke `racks: midi rack no stuck notes` in `tests/Nota.SmokeTest/MidiRackTests.cs`: 1 000 random note-on/off interleaved with zone, mode, mute and transpose edits and chain deletes (fixed seed). At the end the instrument holds no notes (`heldNotes == 0`) (SC-005)
-- [ ] T043 [P] [US4] Smoke `racks: midi rack persistence` in `tests/Nota.SmokeTest/MidiRackTests.cs`:
+- [X] T042 [P] [US4] Smoke `racks: midi rack no stuck notes` in `tests/Nota.SmokeTest/MidiRackTests.cs`: 1 000 random note-on/off interleaved with zone, mode, mute and transpose edits and chain deletes (fixed seed). At the end the instrument holds no notes (`heldNotes == 0`) (SC-005)
+- [X] T043 [P] [US4] Smoke `racks: midi rack persistence` in `tests/Nota.SmokeTest/MidiRackTests.cs`:
   - state blob → new rack → identical `get_midi_rack`;
   - project save/reopen;
   - undo/redo of every structural call;
@@ -265,7 +265,7 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 ### Implementation for User Story 4
 
-- [ ] T044 [US4] Create `src/native/nota.engine/src/devices/racks/MidiRack.h/.cpp`: `class MidiRack : public MidiDevice, public RackCore`, `midiKind() 6`, "Nota MIDI Effect Rack". `process` follows research D3:
+- [X] T044 [US4] Create `src/native/nota.engine/src/devices/racks/MidiRack.h/.cpp`: `class MidiRack : public MidiDevice, public RackCore`, `midiKind() 6`, "Nota MIDI Effect Rack". `process` follows research D3:
   - routing by zones + select;
   - `routeMask[128]` per input pitch;
   - per-chain ping-pong buffers, members only, 16 chains × 2 × 1024 events;
@@ -276,22 +276,22 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
   - sorted output capped at `maxOut`.
 
   Also: `reset` / `timeJump` fan-out; macros as params 0–7; `getState/setState` = blob; `clone`; Serial mode refused. No allocation, lock or I/O in `process` (AR-6).
-- [ ] T045 [US4] Register kind 6 in `makeMidiDevice` in `src/native/nota.engine/src/devices/DeviceFactory.cpp`. New racks start with one empty chain. Cap chains at 16 (`addChain` returns <0 at the limit)
-- [ ] T046 [US4] Engine methods in `src/native/nota.engine/src/engine/Engine_Rack.cpp` + `Engine.h`:
+- [X] T045 [US4] Register kind 6 in `makeMidiDevice` in `src/native/nota.engine/src/devices/DeviceFactory.cpp`. New racks start with one empty chain. Cap chains at 16 (`addChain` returns <0 at the limit)
+- [X] T046 [US4] Engine methods in `src/native/nota.engine/src/engine/Engine_Rack.cpp` + `Engine.h`:
   - `midiRackAt(track, midiIndex)`;
   - `midiRackForEdit`: fork + republish for undo, like `rackForEdit`, carrying bypass and fold;
   - the structural and value operations behind the ABI.
-- [ ] T047 [US4] `nota_midirack_*` ABI from `specs/040-racks-redesign/contracts/c-abi.md` in `src/native/nota.engine/include/nota/nota_engine.h` + `src/native/nota.engine/src/abi/nota_engine_rack.cpp`: structure, chain controls, rack, macros and mappings. Plain MIDI indices are translated to `kMidiDeviceBase − j` internally. Add the new symbols to `src/native/nota.engine/nota_exports.txt` and `nota_exports.map`
-- [ ] T048 [P] [US4] P/Invoke + wrapper: create `src/managed/Nota.Infrastructure/Interop/NativeMethods.MidiRack.cs` and `src/managed/Nota.Infrastructure/Interop/NotaEngine.MidiRack.cs`; add the `MidiRack*` members to `src/managed/Nota.Application/Engine/IAudioEngine.cs`
-- [ ] T049 [US4] Persistence:
+- [X] T047 [US4] `nota_midirack_*` ABI from `specs/040-racks-redesign/contracts/c-abi.md` in `src/native/nota.engine/include/nota/nota_engine.h` + `src/native/nota.engine/src/abi/nota_engine_rack.cpp`: structure, chain controls, rack, macros and mappings. Plain MIDI indices are translated to `kMidiDeviceBase − j` internally. Add the new symbols to `src/native/nota.engine/nota_exports.txt` and `nota_exports.map`
+- [X] T048 [P] [US4] P/Invoke + wrapper: create `src/managed/Nota.Infrastructure/Interop/NativeMethods.MidiRack.cs` and `src/managed/Nota.Infrastructure/Interop/NotaEngine.MidiRack.cs`; add the `MidiRack*` members to `src/managed/Nota.Application/Engine/IAudioEngine.cs`
+- [X] T049 [US4] Persistence:
   - `MidiDeviceDto.State` (optional blob ref) in `src/managed/Nota.Infrastructure/Persistence/ProjectModel.cs`;
   - in `src/managed/Nota.Infrastructure/Persistence/ProjectService.cs`, write the state when non-empty and restore it after `AddMidiEffect`;
   - bump `CurrentFormatVersion` 23 → 24; files without `State` load unchanged;
   - add a no-op entry in `ProjectMigrations.cs` if versions are listed there.
-- [ ] T050 [US4] Presets: user presets for MIDI kind 6 store and restore the state blob in `src/managed/Nota.Infrastructure/Persistence/PresetService.cs` (the same path the Audio Effect Rack, kind 5, uses)
-- [ ] T051 [P] [US4] Catalog: add "Nota MIDI Effect Rack" (MIDI, kind 6, "rack", "midirack split layer", "Splits notes across chains of MIDI effects.") in `src/managed/Nota.Application/Palette/BuiltinDeviceCatalog.cs`, and a "Racks" category on the MIDI tab in `src/managed/Nota.Application/Palette/DeviceCategories.cs`
-- [ ] T052 [US4] Add `MidiRackAccess` (on `nota_midirack_*`) to `src/managed/Nota.App/DeviceCards/Rack/IRackAccess.cs`. In `src/managed/Nota.App/DeviceChainView.Midi.cs`, build kind 6 as `RackCard` (MIDI profile) inside `BuildCardShell`, width 700
-- [ ] T053 [US4] MIDI profile UI:
+- [X] T050 [US4] Presets: user presets for MIDI effects (kind 6 with its state blob) in `src/managed/Nota.Infrastructure/Persistence/PresetService.cs` (`CaptureMidiEffect`, state restored on apply); the card menu's "Save preset" addresses a MIDI effect as `PresetService.MidiEffectBase − i` (it used to pass the MIDI index as an audio device index)
+- [X] T051 [P] [US4] Catalog: add "Nota MIDI Effect Rack" (MIDI, kind 6, "rack", "midirack split layer", "Splits notes across chains of MIDI effects.") in `src/managed/Nota.Application/Palette/BuiltinDeviceCatalog.cs`, and a "Racks" category on the MIDI tab in `src/managed/Nota.Application/Palette/DeviceCategories.cs`
+- [X] T052 [US4] Add `MidiRackAccess` (on `nota_midirack_*`) to `src/managed/Nota.App/DeviceCards/Rack/IRackAccess.cs`. In `src/managed/Nota.App/DeviceChainView.Midi.cs`, build kind 6 as `RackCard` (MIDI profile) inside `BuildCardShell`, width 700
+- [X] T053 [US4] MIDI profile UI:
   - in `RackCard.Zones.cs`: Selector row and per-chain select bars on the Zones tab, inactive outside Select mode;
   - in `RackCard.RightPanel.cs`:
     - Chain tab: Volume as velocity % (0–200, 100 = unchanged) and Transpose (st, −48…+48);
@@ -300,8 +300,8 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
   - status line: mode · "N chains → merged MIDI" · probe result.
 
   Refuse adding chains at 16 with a tooltip.
-- [ ] T054 [US4] MCP: create `src/managed/Nota.Mcp/Tools/MidiRackTools.cs` with the 22 tools in `specs/040-racks-redesign/contracts/mcp-tools.md` (zones accept note names). `list_midi_fx_kinds` / `add_midi_fx` gain kind 6 in `src/managed/Nota.Mcp/Tools/MidiFxTools.cs`. Register the tool type where the others are registered
-- [ ] T055 [P] [US4] AI golden scenario "split arp above C3, chords below" in `tests/Nota.SmokeTest/AiGoldenTests.cs` using the MIDI rack tools
+- [X] T054 [US4] MCP: create `src/managed/Nota.Mcp/Tools/MidiRackTools.cs` with the 22 tools in `specs/040-racks-redesign/contracts/mcp-tools.md` (zones accept note names). `list_midi_fx_kinds` / `add_midi_fx` gain kind 6 in `src/managed/Nota.Mcp/Tools/MidiFxTools.cs`. Register the tool type where the others are registered
+- [X] T055 [P] [US4] MCP scenario "split arp above C3, chords below, accents on hard hits" as the `racks: midi rack MCP` section in `tests/Nota.SmokeTest/MidiRackTests.cs` (AiGoldenTests covers the AI models, not MCP)
 
 **Checkpoint**: All three rack kinds exist and share the card.
 

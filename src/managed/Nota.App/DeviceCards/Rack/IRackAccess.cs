@@ -342,3 +342,118 @@ internal sealed class RhythmVoiceAccess(IAudioEngine e, int t) : IRackAccess
     public int MappingCurve(int i) => 0;
     public bool SetMappingCurve(int i, int curve) => false;
 }
+
+// The MIDI Effect Rack (MIDI kind 6, specs/040) at MIDI effect index mi. Its chains hold MIDI
+// effects only. The card addresses a chain's MIDI effect j as RackMacroMapping.MidiDeviceBase − j;
+// the MidiRack* calls take plain j, so mappings translate on the way in and out. Its macros
+// are the MIDI effect's parameters 0..7 (automation, MIDI Learn).
+internal sealed class MidiRackAccess(IAudioEngine e, int t, int mi) : IRackAccess
+{
+    private static int Plain(int target) => target <= RackMacroMapping.MidiDeviceBase ? RackMacroMapping.MidiDeviceBase - target : target;
+    private static int Card(int device) => device >= 0 ? RackMacroMapping.MidiDeviceBase - device : device;
+
+    public RackKind Kind => RackKind.MidiEffect;
+    public bool HasInstrumentChains => false;
+    public bool HostsPlugins => false;
+    public int AutomationDeviceIndex => mi;
+    public (AutomationTarget Target, int Device, int Param, string Id) MacroAutomation(int i) => (AutomationTarget.MidiDeviceParam, mi, i, "");
+    public MidiTarget MacroLearnTarget(int track, int i) => MidiTarget.MidiDeviceParam(track, mi, i);
+
+    public int ChainCount() => e.MidiRackChainCount(t, mi);
+    public int AddChain(int instKind) => e.MidiRackAddChain(t, mi);
+    public bool RemoveChain(int c) => e.MidiRackRemoveChain(t, mi, c);
+    public int DuplicateChain(int c) => e.MidiRackDuplicateChain(t, mi, c);
+    public string ChainName(int c) => e.MidiRackChainName(t, mi, c);
+    public void SetChainName(int c, string name) => e.MidiRackSetChainName(t, mi, c, name);
+
+    // No instrument, no audio devices.
+    public bool SetChainInstrument(int c, int k) => false;
+    public int ChainInstrumentKind(int c) => -2;
+    public string ChainInstrumentName(int c) => "";
+    public int ChainInstrumentParamCount(int c) => 0;
+    public string ChainInstrumentParamName(int c, int p) => "";
+    public float ChainInstrumentParamGet(int c, int p) => 0f;
+    public void ChainInstrumentParamSet(int c, int p, float v) { }
+    public int ChainDeviceCount(int c) => 0;
+    public int AddChainDevice(int c, int k) => -1;
+    public int AddPluginInstrumentChain(int catalogIndex) => -1;
+    public int AddPluginChainDevice(int c, int catalogIndex) => -1;
+    public bool RemoveChainDevice(int c, int d) => false;
+    public void MoveChainDevice(int c, int f, int to) { }
+    public string ChainDeviceName(int c, int d) => "";
+    public int ChainDeviceParamCount(int c, int d) => 0;
+    public string ChainDeviceParamName(int c, int d, int p) => "";
+    public float ChainDeviceParamMin(int c, int d, int p) => 0f;
+    public float ChainDeviceParamMax(int c, int d, int p) => 1f;
+    public float ChainDeviceParamGet(int c, int d, int p) => 0f;
+    public void ChainDeviceParamSet(int c, int d, int p, float v) { }
+    public bool ChainDeviceBypassed(int c, int d) => false;
+    public void SetChainDeviceBypassed(int c, int d, bool b) { }
+    public int ChainDeviceBuiltinKind(int c, int d) => -1;
+    public void OpenChainDeviceEditor(int c, int d) { }
+
+    // Chain MIDI effects.
+    public int ChainMidiCount(int c) => e.MidiRackChainDeviceCount(t, mi, c);
+    public int AddChainMidi(int c, int kind) => e.MidiRackChainDeviceAdd(t, mi, c, kind);
+    public bool RemoveChainMidi(int c, int i) => e.MidiRackChainDeviceRemove(t, mi, c, i);
+    public void MoveChainMidi(int c, int f, int to) => e.MidiRackChainDeviceMove(t, mi, c, f, to);
+    public int ChainMidiKind(int c, int i) => e.MidiRackChainDeviceKind(t, mi, c, i);
+    public string ChainMidiName(int c, int i) => e.MidiRackChainDeviceName(t, mi, c, i);
+    public int ChainMidiParamCount(int c, int i) => e.MidiRackChainDeviceParamCount(t, mi, c, i);
+    public string ChainMidiParamName(int c, int i, int p) => e.MidiRackChainDeviceParamName(t, mi, c, i, p);
+    public float ChainMidiParamMin(int c, int i, int p) => e.MidiRackChainDeviceParamMin(t, mi, c, i, p);
+    public float ChainMidiParamMax(int c, int i, int p) => e.MidiRackChainDeviceParamMax(t, mi, c, i, p);
+    public float ChainMidiParamGet(int c, int i, int p) => e.MidiRackChainDeviceParamGet(t, mi, c, i, p);
+    public void ChainMidiParamSet(int c, int i, int p, float v) => e.MidiRackChainDeviceParamSet(t, mi, c, i, p, v);
+    public bool ChainMidiBypassed(int c, int i) => e.MidiRackChainDeviceBypassed(t, mi, c, i);
+    public void SetChainMidiBypassed(int c, int i, bool b) => e.MidiRackChainDeviceSetBypassed(t, mi, c, i, b);
+
+    // Chain controls: Volume scales velocity; Transpose instead of Pan.
+    public float ChainGain(int c) => e.MidiRackChainVelScale(t, mi, c);
+    public void SetChainGain(int c, float v) => e.MidiRackSetChainVelScale(t, mi, c, v);
+    public float ChainPan(int c) => 0f;
+    public void SetChainPan(int c, float v) { }
+    public bool ChainMute(int c) => e.MidiRackChainMute(t, mi, c);
+    public void SetChainMute(int c, bool b) => e.MidiRackSetChainMute(t, mi, c, b);
+    public bool ChainSolo(int c) => e.MidiRackChainSolo(t, mi, c);
+    public void SetChainSolo(int c, bool b) => e.MidiRackSetChainSolo(t, mi, c, b);
+    public int ChainTriggerNote(int c) => -1;
+    public void SetChainTriggerNote(int c, int note) { }
+    public float ChainMeter(int c) => e.MidiRackChainActivity(t, mi, c);
+    public void ChainZone(int c, out int kl, out int kh, out int vl, out int vh) => e.MidiRackChainZone(t, mi, c, out kl, out kh, out vl, out vh);
+    public void SetChainZone(int c, int kl, int kh, int vl, int vh) => e.MidiRackSetChainZone(t, mi, c, kl, kh, vl, vh);
+    public void SelectRange(int c, out int lo, out int hi) => e.MidiRackChainSelectRange(t, mi, c, out lo, out hi);
+    public void SetSelectRange(int c, int lo, int hi) => e.MidiRackSetChainSelect(t, mi, c, lo, hi);
+    public int ChainTranspose(int c) => e.MidiRackChainTranspose(t, mi, c);
+    public void SetChainTranspose(int c, int st) => e.MidiRackSetChainTranspose(t, mi, c, st);
+    public float ChainVelScale(int c) => e.MidiRackChainVelScale(t, mi, c);
+    public void SetChainVelScale(int c, float v) => e.MidiRackSetChainVelScale(t, mi, c, v);
+
+    // Rack.
+    public int RackMode() => e.MidiRackMode(t, mi);
+    public void SetRackMode(int mode) => e.MidiRackSetMode(t, mi, mode);
+    public float Selector() => e.MidiRackSelector(t, mi);
+    public void SetSelector(float v) => e.MidiRackSetSelector(t, mi, v);
+    public bool RackMerge() => e.MidiRackMerge(t, mi);
+    public void SetRackMerge(bool on) => e.MidiRackSetMerge(t, mi, on);
+    public bool RackThru() => e.MidiRackThru(t, mi);
+    public void SetRackThru(bool on) => e.MidiRackSetThru(t, mi, on);
+
+    // Macros and mappings.
+    public float MacroGet(int i) => e.MidiRackMacroGet(t, mi, i);
+    public void MacroSet(int i, float v) => e.MidiRackMacroSet(t, mi, i, v);
+    public string MacroName(int i) => e.MidiRackMacroName(t, mi, i);
+    public void SetMacroName(int i, string name) => e.MidiRackSetMacroName(t, mi, i, name);
+    public int AddMacroMapping(int m, int c, int td, int p, float lo, float hi) => e.MidiRackAddMacroMapping(t, mi, m, c, Plain(td), p, lo, hi);
+    public int MappingCount() => e.MidiRackMappingCount(t, mi);
+    public bool TryGetMapping(int i, out RackMacroMapping m)
+    {
+        if (e.MidiRackMappingInfo(t, mi, i, out int macro, out int chain, out int device, out int param, out float lo, out float hi, out _) == 0) { m = default; return false; }
+        m = new RackMacroMapping(macro, chain, Card(device), param, lo, hi);
+        return true;
+    }
+    public bool RemoveMapping(int i) => e.MidiRackRemoveMapping(t, mi, i);
+    public bool SetMappingRange(int i, float lo, float hi) => e.MidiRackSetMappingRange(t, mi, i, lo, hi);
+    public int MappingCurve(int i) => e.MidiRackMappingInfo(t, mi, i, out _, out _, out _, out _, out _, out _, out int curve) != 0 ? curve : 0;
+    public bool SetMappingCurve(int i, int curve) => e.MidiRackSetMappingCurve(t, mi, i, curve);
+}

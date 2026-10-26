@@ -10,6 +10,7 @@
 // Runs with the other rack sections: `dotnet run --project tests/Nota.SmokeTest -- --racks`.
 
 using System.Globalization;
+using Nota.Application;
 using Nota.Infrastructure;
 
 namespace Nota.SmokeTest;
@@ -25,6 +26,7 @@ internal static class MidiRackTests
         yield return ("racks: midi rack routing", Routing);
         yield return ("racks: midi rack no stuck notes", NoStuckNotes);
         yield return ("racks: midi rack persistence", Persistence);
+        yield return ("racks: midi rack MCP", Mcp);
     }
 
     private sealed class Rig : IDisposable
@@ -286,7 +288,67 @@ internal static class MidiRackTests
         string bad = afterDev != want ? $"device\n{want}---\n{afterDev}" : afterName != want ? $"name\n{afterName}" : afterCurve != want ? $"curve\n{afterCurve}" : "";
         yield return (bad == "", "device, name and curve edits each undo back to where they were" + (bad == "" ? "" : $" — differs after {bad}"));
 
+        // Project save → reopen, and a user preset save → load on another track.
+        string dir = Path.Combine(Path.GetTempPath(), $"nota-midirack-{Guid.NewGuid():N}");
+        try
+        {
+            var transport = new TransportState(120.0, 1.0, false, false);
+            ProjectService.Save(ProjectService.Capture(e, transport, new List<string>()), dir, e);
+            using var dst = new NotaEngine();
+            var warn = ProjectService.Apply(ProjectService.Load(dir), dst, dir);
+            int lt = -1;
+            for (int i = 0; i < dst.TrackCount && lt < 0; i++)
+            {
+                if (!dst.TryGetTrackInfo(i, out var info)) continue;
+                if (dst.TrackMidiEffectCount(info.Id) > 0 && dst.MidiEffectKind(info.Id, 0) == RackKind) lt = info.Id;
+            }
+            yield return (warn.Count == 0 && lt > 0 && Dump(dst, lt, 0) == want, $"the rack survives a project save and reopen ({warn.Count} warnings)");
+
+            var preset = PresetService.CaptureMidiEffect(e, t, mi, "Split arp");
+            int pt = e.AddPentadTrack();
+            string err = preset is null ? "no preset" : PresetService.Apply(preset, e, pt);
+            yield return (err == "" && Dump(e, pt, 0) == want, "a rack preset brings back the whole rack" + (err == "" ? "" : $" ({err})"));
+        }
+        finally { try { Directory.Delete(dir, true); } catch (IOException) { } }
+
         for (int i = 0; i < 20; i++) e.MidiRackAddChain(t, mi);
         yield return (e.MidiRackChainCount(t, mi) == 16 && e.MidiRackAddChain(t, mi) < 0, "a MIDI Effect Rack holds up to 16 chains");
+    }
+
+    // The quickstart's MCP walkthrough: an arp above C3, chords below, accents on hard hits.
+    private static IEnumerable<(bool, string)> Mcp()
+    {
+        using var r = new Rig();
+        var e = r.E;
+        int t = r.T;
+        var fx = new Nota.Mcp.Tools.MidiFxTools(e, new SyncDispatch(), new NoRefresh());
+        var rack = new Nota.Mcp.Tools.MidiRackTools(e, new SyncDispatch(), new NoRefresh());
+        yield return (fx.ListMidiFxKinds().Any(k => k.Kind == RackKind), "list_midi_fx_kinds lists the MIDI Effect Rack");
+        int mi = Rig.Mi;
+        rack.AddChain(t, mi, "Chords").Wait();
+        rack.AddChain(t, mi, "Accents").Wait();
+        rack.SetChainName(t, mi, 0, "Arp lead").Wait();
+        rack.SetChainZone(t, mi, 0, keyLo: "C3").Wait();
+        rack.SetChainZone(t, mi, 1, keyHi: "B2").Wait();
+        rack.SetChainZone(t, mi, 2, velLo: 110).Wait();
+        rack.SetChainMix(t, mi, 0, transpose: 12).Wait();
+        rack.SetChainMix(t, mi, 1, transpose: -12).Wait();
+        rack.SetChainMix(t, mi, 2, transpose: 7).Wait();
+        rack.SetOutput(t, mi, merge: false).Wait();
+        var snap = rack.GetMidiRack(t, mi).Result;
+        yield return (snap.Chains.Length == 3 && snap.Chains[0].KeyLo == 48 && snap.Chains[1].KeyHi == 47 && snap.Chains[2].VelLo == 110 && !snap.Merge,
+            "zones by note name and output switches land (C3 = 48)");
+        string low = r.Play(36), mid = r.Play(64), hard = r.Play(64, 120 / 127f);
+        yield return (low == "24" && mid == "76" && hard == "71,76", $"notes follow the zones (C2 → {low}, E4 → {mid}, a hard E4 → {hard})");
+        rack.SetMode(t, mi, "select").Wait();
+        rack.SetChainZone(t, mi, 0, selLo: 0, selHi: 63).Wait();
+        rack.SetSelector(t, mi, 100).Wait();
+        string sel = r.Play(64);
+        yield return (rack.GetMidiRack(t, mi).Result.Mode == "select" && sel == "64", $"Select mode with the selector outside the chain's range passes the note through ({sel})");
+        int map = rack.AddMapping(t, mi, 0, 0, -3, 0, 0f, 1f).Result;
+        rack.SetMacro(t, mi, 0, value: 0.2f, name: "Section").Wait();
+        var macros = rack.GetMacros(t, mi).Result;
+        yield return (map >= 0 && macros[0].Name == "Section" && macros[0].Targets == 1 && Math.Abs(rack.GetMidiRack(t, mi).Result.Selector - 25) <= 1,
+            "a macro mapped to the selector drives it");
     }
 }

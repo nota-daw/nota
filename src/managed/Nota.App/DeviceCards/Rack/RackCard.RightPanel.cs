@@ -20,7 +20,7 @@ namespace Nota.App;
 
 internal sealed partial class RackCardView
 {
-    private const double RcRowLabel = 40;
+    private const double RcRowLabel = 50;
 
     private Control RcChainPanel()
     {

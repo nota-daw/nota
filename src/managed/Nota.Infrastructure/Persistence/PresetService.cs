@@ -18,10 +18,14 @@ public static class PresetService
     public const string Extension = ".notapreset";
     private static readonly JsonSerializerOptions JsonOpts = new() { WriteIndented = true };
 
+    /// <summary>Capture addresses a track's MIDI effect i as MidiEffectBase − i.</summary>
+    public const int MidiEffectBase = -1000;
+
     /// <summary>Snapshot a track's device (deviceIndex &lt; 0 = its instrument) into a preset.
     /// Returns null if the target has nothing capturable (e.g. a built-in synth).</summary>
     public static PresetDocument? Capture(IAudioEngine engine, int trackId, int deviceIndex, string displayName)
     {
+        if (deviceIndex <= MidiEffectBase) return CaptureMidiEffect(engine, trackId, MidiEffectBase - deviceIndex, displayName);
         var doc = new PresetDocument { DisplayName = displayName, DeviceName = engine.DeviceName(trackId, deviceIndex) };
         if (deviceIndex < 0)
         {
@@ -76,6 +80,32 @@ public static class PresetService
         doc.PluginId = engine.TrackDevicePluginId(trackId, deviceIndex);
         doc.StateBase64 = Convert.ToBase64String(engine.GetPluginState(trackId, deviceIndex));
         return string.IsNullOrEmpty(doc.PluginId) ? null : doc;
+    }
+
+    /// <summary>Snapshot a MIDI effect: its params by name, and its state blob when it has one
+    /// (the MIDI Effect Rack's chains, devices and macros, specs/040).</summary>
+    public static PresetDocument? CaptureMidiEffect(IAudioEngine engine, int trackId, int index, string displayName)
+    {
+        int kind = engine.MidiEffectKind(trackId, index);
+        if (kind < 0) return null;
+        var doc = new PresetDocument
+        {
+            DisplayName = displayName, DeviceName = engine.MidiEffectName(trackId, index),
+            Type = "builtin-midi-effect", BuiltinKind = kind,
+        };
+        int pc = engine.MidiEffectParamCount(trackId, index);
+        doc.NamedParams = new Dictionary<string, float>(pc);
+        for (int i = 0; i < pc; i++) doc.NamedParams[engine.MidiEffectParamName(trackId, index, i)] = engine.MidiEffectGetParam(trackId, index, i);
+        var state = engine.MidiEffectGetState(trackId, index);
+        if (state.Length > 0) doc.StateBase64 = Convert.ToBase64String(state);
+        return doc;
+    }
+
+    private static void ApplyMidiState(IAudioEngine engine, int trackId, int index, string base64, bool checkpoint)
+    {
+        if (string.IsNullOrEmpty(base64)) return;
+        try { engine.MidiEffectSetState(trackId, index, Convert.FromBase64String(base64), checkpoint); }
+        catch (FormatException) { /* a damaged preset keeps the params it had */ }
     }
 
     /// <summary>Snapshot a rack chain's instrument (only hosted plugins carry recallable
@@ -206,6 +236,7 @@ public static class PresetService
                     if (doc.BuiltinKind == 3 && doc.NamedParams.ContainsKey("Rate") && !doc.NamedParams.ContainsKey("Division")) LengthLegacy(engine, targetTrackId, mi);
                     if (doc.BuiltinKind == 4 && !doc.NamedParams.ContainsKey("Random On")) VelocityLegacy(engine, targetTrackId, mi);
                 }
+                ApplyMidiState(engine, targetTrackId, mi, doc.StateBase64, false);
                 return "";
             }
             case "builtin-instrument":
@@ -397,6 +428,7 @@ public static class PresetService
                     if (engine.MidiEffectKind(trackId, deviceIndex) == 4 && !doc.NamedParams.ContainsKey("Random On"))
                         VelocityLegacy(engine, trackId, deviceIndex);
                 }
+                ApplyMidiState(engine, trackId, deviceIndex, doc.StateBase64, true);
                 return "";
             }
             case "plugin-effect":

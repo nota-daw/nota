@@ -350,6 +350,9 @@ public sealed class MidiDeviceDto
     public int CcDestDevice { get; set; } = -2;   // -2 = no routing
     public int CcDestParam { get; set; } = -1;
     public float CcDepth { get; set; } = 1.0f;
+    // Opaque state blob (v24, specs/040): the MIDI Effect Rack's chains, devices, zones and
+    // macros. Null for params-only MIDI effects.
+    public string? State { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
