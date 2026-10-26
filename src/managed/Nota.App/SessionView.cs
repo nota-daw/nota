@@ -68,7 +68,7 @@ public sealed partial class SessionView : UserControl
     private int _sceneCount;
 
     // UI-only state: which group columns are folded, which mixer sections show, and the
-    // selection (a slot on a track or group column, or a scene row).
+    // selection (a slot on a track or group column, a scene row, or a Return / Master column).
     private readonly HashSet<int> _collapsed = new();
     private bool _showIO, _showSends = true, _showMixer = true;
     private bool _selectNextOnLaunch;
@@ -78,12 +78,13 @@ public sealed partial class SessionView : UserControl
     private bool _blinkOn = true;
     private bool _sessionActive;
 
-    internal enum SelKind { Slot, Scene }
+    internal enum SelKind { Slot, Scene, Bus }   // Bus: a Return / Master column, which has no slots (#314)
     internal readonly record struct Selection(SelKind Kind, int TrackId, int Scene);
 
     /// <summary>Raised to edit a filled slot's notes / audio (trackId, scene).</summary>
     public event Action<int, int>? SlotEditRequested;
-    /// <summary>Raised when the selection lands on a track's slot (trackId, scene).</summary>
+    /// <summary>Raised when the selection lands on a track's slot, or on a Return / Master column
+    /// (trackId, scene).</summary>
     public event Action<int, int>? SlotSelected;
     /// <summary>Raised after slots are copied / moved into the arrangement (M5-6) or a track is renamed.</summary>
     public event Action? ArrangementChanged;
@@ -177,6 +178,9 @@ public sealed partial class SessionView : UserControl
     private Column? ColumnFor(int trackId) => _cols.FirstOrDefault(c => c.TrackId == trackId && c.Kind is ColKind.Track or ColKind.Group);
     private IEnumerable<Column> LaunchCols => _cols.Where(c => c.Kind == ColKind.Track);
     private List<Column> NavCols => _cols.Where(c => c.Kind is ColKind.Track or ColKind.Group).ToList();
+    // A Return / Master column's track id (the Master column itself is built with id 0).
+    private int BusId(Column c) => c.Kind == ColKind.Master ? _engine.MasterTrackId : c.TrackId;
+    private Column? BusColumn(int trackId) => _cols.FirstOrDefault(c => c.Kind is ColKind.Return or ColKind.Master && BusId(c) == trackId);
 
     public void Refresh()
     {
@@ -193,6 +197,7 @@ public sealed partial class SessionView : UserControl
 
         // Keep the selection on something that still exists.
         if (_sel.Scene >= _sceneCount) _sel = _sel with { Scene = Math.Max(0, _sceneCount - 1) };
+        if (_sel.Kind == SelKind.Bus && BusColumn(_sel.TrackId) is null) _sel = new Selection(SelKind.Slot, 0, _sel.Scene);
         if (_sel.Kind == SelKind.Slot && ColumnFor(_sel.TrackId) is null)
             _sel = NavCols.FirstOrDefault() is { } first ? _sel with { TrackId = first.TrackId } : new Selection(SelKind.Scene, 0, _sel.Scene);
 
@@ -309,7 +314,8 @@ public sealed partial class SessionView : UserControl
         _sel = sel;
         InvalidateAll();
         RebuildInspector();
-        if (sel.Kind == SelKind.Slot && (prev.Kind != SelKind.Slot || prev.TrackId != sel.TrackId) && ColumnFor(sel.TrackId) is not null)
+        bool selectable = sel.Kind == SelKind.Slot ? ColumnFor(sel.TrackId) is not null : sel.Kind == SelKind.Bus && BusColumn(sel.TrackId) is not null;
+        if (selectable && (prev.Kind != sel.Kind || prev.TrackId != sel.TrackId))
             SlotSelected?.Invoke(sel.TrackId, sel.Scene);
     }
 
@@ -502,7 +508,7 @@ public sealed partial class SessionView : UserControl
             return true;
         }
         int below = _sel.Scene + 1;
-        if (!SlotFilled(_sel.TrackId, _sel.Scene)) return false;
+        if (_sel.Kind != SelKind.Slot || !SlotFilled(_sel.TrackId, _sel.Scene)) return false;
         if (below >= _sceneCount || SlotFilled(_sel.TrackId, below)) { Say("The slot below is taken."); return true; }
         MoveOrCopySlot(_sel.TrackId, _sel.Scene, _sel.TrackId, below, move: false);
         Select(_sel with { Scene = below });
@@ -520,7 +526,7 @@ public sealed partial class SessionView : UserControl
             Say("Deleted scene");
             return true;
         }
-        if (!_engine.ClearSessionSlot(_sel.TrackId, _sel.Scene)) return false;
+        if (_sel.Kind != SelKind.Slot || !_engine.ClearSessionSlot(_sel.TrackId, _sel.Scene)) return false;
         RefreshSlot(_sel.TrackId, _sel.Scene);
         Say("Deleted clip");
         return true;
