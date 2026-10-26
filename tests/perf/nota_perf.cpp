@@ -22,6 +22,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -95,8 +96,11 @@ void fillChords6(NotaEngine* e, int track, int transpose, double startBeat, doub
 
 // An 8 s stereo 48 kHz WAV of a chord with a little noise (so the stretch has real work), in
 // the temp dir; the warp scenarios load it.
+// Each process writes its own file (perf-gate runs scenarios in parallel), removed once
+// the clip has loaded it.
 std::string warpTestWav() {
-    const auto path = (std::filesystem::temp_directory_path() / "nota_perf_warp.wav").string();
+    const auto path = (std::filesystem::temp_directory_path() /
+                       ("nota_perf_warp_" + std::to_string(std::random_device{}()) + ".wav")).string();
     constexpr double kTwoPi = 6.283185307179586;
     const int sr = 48000, frames = sr * 8;
     std::vector<int16_t> pcm((size_t)frames * 2);
@@ -123,7 +127,11 @@ int gWarpTrack = -1; // the track warpedClipTrack made last
 // One audio track holding the 8 s WAV warped (Complex) over 16 beats, its stretch built.
 int warpedClipTrack(NotaEngine* e) {
     const int t = nota_engine_add_audio_track(e);
-    if (t < 0 || nota_track_add_audio_clip(e, t, warpTestWav().c_str(), 0.0) != 0) return -1;
+    const std::string wav = warpTestWav();
+    const bool loaded = t >= 0 && nota_track_add_audio_clip(e, t, wav.c_str(), 0.0) == 0;
+    std::error_code ec;
+    std::filesystem::remove(wav, ec);
+    if (!loaded) return -1;
     if (nota_clip_set_warp(e, t, 0, 1, 3) != NOTA_OK) return -1;
     return gWarpTrack = t;
 }

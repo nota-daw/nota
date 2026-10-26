@@ -204,17 +204,23 @@ bool reuseWarpCache(AudioClip& c, double spb, double devSR) {
     constexpr double eps = 1e-9;
     if (!(old.inputs == same) || want.playStart < old.inputs.playStart - eps || want.playEnd > old.inputs.playEnd + eps)
         return false;
+    // The offset is taken from the cache that owns the samples, not added up slice by
+    // slice, so repeated splits don't each round and drift off the original audio.
+    std::shared_ptr<const WarpCache> root = old.base ? old.base : c.warpCache;
+    // Both ends are rounded on the owner's frame grid, so neighbouring slices meet exactly.
     const int64_t offset = std::clamp<int64_t>(
-        std::llround((want.playStart - old.inputs.playStart) * spb), 0, old.frames);
-    const int64_t frames = std::min(warpCacheFrames(c, spb, devSR), old.frames - offset);
+        std::llround((want.playStart - root->inputs.playStart) * spb), 0, root->frames);
+    const int64_t end = std::clamp<int64_t>(
+        std::llround((want.playEnd - root->inputs.playStart) * spb), offset, root->frames);
+    const int64_t frames = end - offset;
     if (frames <= 0) return false;
     auto slice = std::make_shared<WarpCache>();
     slice->frames = frames;
     slice->spb = old.spb;
     slice->devSR = old.devSR;
     slice->inputs = std::move(want);
-    slice->base = old.base ? old.base : c.warpCache;
-    slice->baseOffset = old.baseOffset + offset;
+    slice->base = std::move(root);
+    slice->baseOffset = offset;
     c.warpCache = std::move(slice);
     return true;
 }

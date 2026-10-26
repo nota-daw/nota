@@ -46,12 +46,29 @@ internal static class WarpSplitTests
         double before = MaxDiff(whole[..cutA], afterCut[..cutA]), after = MaxDiff(whole[(cutB + 2)..], afterCut[(cutB + 2)..]);
         yield return (cut && before < 1e-6 && after < 1e-6, $"warp range cut: what's left plays as before ({before:E1}, {after:E1})");
         yield return TimingBudget.Check(cut, ms < 100, $"warp range cut doesn't re-stretch ({ms} ms)");
+
+        // A beat that isn't a whole number of frames (123 BPM): split after split, each slice
+        // still lines up with the original stretch instead of drifting a frame per split.
+        using var f = new NotaEngine();
+        f.SetBpm(123);
+        Render(f, 1, 123);               // the tempo lands before the clip is stretched
+        int ft = f.AddAudioTrack();
+        int fc = f.AddAudioClip(ft, wav, 0.0);
+        f.SetClipWarp(ft, fc, true, 3);
+        f.SetClipWarpLength(ft, fc, 64);
+        var fWhole = Render(f, 16, 123);
+        int last = fc;
+        for (int b = 1; b <= 6 && last >= 0; b++) last = f.SplitClip(ft, last, b);
+        var fr = Render(f, 16, 123);
+        double drift = MaxDiff(fWhole, fr);
+        for (int i = 0; i < fr.Length; i += 2) if (Math.Abs(fr[i] - fWhole[i]) > 1e-6) Console.WriteLine($"DBGD frame {i/2} beat {(i/2)/(Sr*60.0/123):F4} whole {fWhole[i]:F4} split {fr[i]:F4}");
+        yield return (last >= 0 && drift < 1e-6, $"six warp splits at 123 BPM still play the clip's own audio (max diff {drift:E1})");
     }
 
     // The first `beats` beats from the top, interleaved stereo.
-    private static float[] Render(NotaEngine e, double beats)
+    private static float[] Render(NotaEngine e, double beats, double bpm = 120)
     {
-        int frames = (int)(beats * Sr / 2);
+        int frames = (int)(beats * Sr * 60 / bpm);
         var all = new float[frames * 2];
         var buf = new float[Block * 2];
         e.Seek(0); e.Play();
