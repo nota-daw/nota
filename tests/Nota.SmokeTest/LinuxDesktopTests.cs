@@ -22,6 +22,8 @@ internal static class LinuxDesktopTests
         yield return (DroppedFilePaths.Parse("copy\nfile:///x/y.wav").SequenceEqual(new[] { "/x/y.wav" }),
             "drop: gnome-copied-files skips its copy header");
         yield return (DroppedFilePaths.Parse("/x/y.wav\0").SequenceEqual(new[] { "/x/y.wav" }), "drop: a plain path, NUL-terminated, is read");
+        yield return (DroppedFilePaths.Parse("/x/Kick \n").SequenceEqual(new[] { "/x/Kick " }),
+            "drop: a plain path keeps a trailing space in its name");
         yield return (DroppedFilePaths.Parse("# comment\nhttps://e.com/a.wav\nfile://otherhost/a.wav\nrel/a.wav\nhello").Count == 0,
             "drop: comments, web URLs, remote hosts, relative paths and text are ignored");
         yield return (DroppedFilePaths.Parse("file://localhost/x/a.wav\nfile:///x/a.wav").SequenceEqual(new[] { "/x/a.wav" }),

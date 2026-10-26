@@ -30,8 +30,10 @@ public static class DroppedFilePaths
         {
             var line = raw.Trim();
             if (line.Length == 0 || line[0] == '#' || line is "copy" or "cut") continue;
+            // A plain path keeps its trailing spaces: they can be part of a file name, and a
+            // URI escapes them, so only a URI line is trimmed at the end.
             string? path = line.StartsWith("file:", StringComparison.OrdinalIgnoreCase) ? FromFileUri(line)
-                         : IsAbsolute(line) ? line
+                         : IsAbsolute(line) ? raw.TrimStart()
                          : null;
             if (path is not null && !paths.Contains(path)) paths.Add(path);
         }
