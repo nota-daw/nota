@@ -23,6 +23,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **File → Exit** (nota-daw/nota#316): Windows and Linux can quit from the menu or with
+  Ctrl+Q, the same way as the window's close button, so unsaved changes still ask first. On
+  macOS Quit Nota (⌘Q) stays in the app menu.
 - **Wrap a device in a rack with ⌘G** (nota-daw/nota#257): with a device selected in the chain,
   ⌘G puts it in an Audio Effect Rack in its place, settings and all, and ⌘⇧G takes the devices
   of a one-chain rack back out. Also in the device's right-click menu (**Group into rack** /
@@ -37,6 +40,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **History tab shows the first save** (nota-daw/nota#317): with the History tab open, the first
+  save of a new project (and Save as…) now lists its version straight away instead of after a
+  tab switch.
+- **Select Return and Master in the Session view** (nota-daw/nota#314): clicking a Return or
+  the Master column header selects that track like in the Arrangement: the header lights up,
+  the Devices panel shows its chain and the inspector says what it is.
 - **Drum Rack pads play their whole hit** (nota-daw/nota#312): a pad with a sample that isn't
   looped plays as a one-shot, however short the MIDI note, instead of cutting off at note-off.
   A looped sample, a mono Sampler or a synth on a pad still stops with the note.
