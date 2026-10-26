@@ -30,6 +30,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and the status line says why. ⌘G on tracks still groups tracks.
 
 ### Fixed
+- **Drum Rack pads play their whole hit** (nota-daw/nota#312): a pad with a sample that isn't
+  looped plays as a one-shot, however short the MIDI note, instead of cutting off at note-off.
+  A looped sample, a mono Sampler or a synth on a pad still stops with the note.
+- **Clicking a Drum Rack pad plays only the rack** (nota-daw/nota#307): an armed track no
+  longer sounds along when you click pads in the pad grid or the Pattern tab.
+- **Warp off keeps the markers** (nota-daw/nota#310): turning Warp off and on again gives the
+  clip back its markers instead of a fresh straight warp, through undo, save and reload too. A
+  clip split or trimmed while warp is off starts over with new markers for its new region.
 - **⌘G on a device, follow-ups** (nota-daw/nota#257): grouping a playing effect no longer
   resets it (a Reverb kept ringing cut off), an effect an Arp's CC lane drives stays out of a
   rack instead of losing that link, and ⌘⇧G or undo gives the device back its A/B snapshots
