@@ -62,6 +62,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   **Show fewer** strip and Esc closes every opened node; Delete removes a selected modulator;
   an unwired Scope says it watches CV and how to patch it; and the hint names how to draw a
   cable.
+- **File panels open in the right folder** (nota-daw/nota#309): Open, Save as and the new-project
+  panel start in the Projects folder from Settings ▸ Library, and Import audio starts in the
+  folder you last imported from (the Samples folder at first).
+- **The live recording waveform stays in its box** (nota-daw/nota#208): a hot input no longer
+  draws the take being recorded over the tracks above and below it.
+- **The DSP meter stays on screen** (nota-daw/nota#303): when the transport row runs short, the
+  meter folds to its number and is the last thing hidden, instead of the first.
 
 ## [0.57.1] — 2026-10-22
 
