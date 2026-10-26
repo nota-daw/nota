@@ -73,6 +73,7 @@ class Engine {
     // device refused it and the backend fell back to shared mode. Always false
     // on platforms without exclusive mode. Read after applyAudioConfig() / start().
     bool audioExclusiveFallback() const { return backend_ ? backend_->exclusiveFallback() : false; }
+    bool audioSilentFallback() const { return backend_ ? backend_->silentFallback() : false; }
     int32_t bufferFrames() const { return backend_ ? backend_->bufferFrames() : 0; }
 
     // --- MIDI device settings (M7-2) ---

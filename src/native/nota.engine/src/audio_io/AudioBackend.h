@@ -50,6 +50,11 @@ class AudioBackend {
     // that don't model exclusive mode leave it false.
     virtual bool exclusiveFallback() const { return false; }
 
+    // True if no real output device could be opened and the last start() fell back to
+    // a silent device that still runs the audio thread, so the app works (no sound)
+    // until the user picks a device that opens.
+    virtual bool silentFallback() const { return false; }
+
     // Stop the audio thread and close the device.
     virtual void stop() = 0;
 

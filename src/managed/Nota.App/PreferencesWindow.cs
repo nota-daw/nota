@@ -681,7 +681,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         addBtn.Click += async (_, _) =>
         {
             Activate();
-            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Add plugin scan folder", AllowMultiple = false });
+            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions { Title = "Add plugin scan folder", AllowMultiple = false });
             if (folders.Count == 0) return;
             var path = folders[0].TryGetLocalPath();
             if (path is null) return;
@@ -785,7 +785,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         choose.Click += async (_, _) =>
         {
             Activate();
-            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = $"Choose {label} folder", AllowMultiple = false });
+            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions { Title = $"Choose {label} folder", AllowMultiple = false });
             if (folders.Count == 0) return;
             var p = folders[0].TryGetLocalPath();
             if (p is null) return;

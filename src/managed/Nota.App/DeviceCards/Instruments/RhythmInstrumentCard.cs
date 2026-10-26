@@ -205,7 +205,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         {
             var topLevel = TopLevel.GetTopLevel(anchor);
             if (topLevel is null) return;
-            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            var files = await topLevel.PickFilesAsync(new FilePickerOpenOptions
             {
                 Title = $"Load a sample into {RM.VoiceNames[voice]}", AllowMultiple = false,
                 FileTypeFilter = new[] { new FilePickerFileType("Audio") { Patterns = new[] { "*.wav", "*.flac", "*.mp3", "*.aif", "*.aiff", "*.ogg" } } },

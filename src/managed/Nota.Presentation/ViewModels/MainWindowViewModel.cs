@@ -73,11 +73,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Settings = settings;
         _log = log;
 
-        Engine.Start();
+        // No output must not stop Nota from opening (#243): the engine falls back to a silent
+        // device, and if even that fails the app still starts, with audio off.
+        try { Engine.Start(); }
+        catch (NotaEngineException ex) { _log.Error("The audio engine couldn't start", ex); }
         Engine.SetBpm(120);
         Engine.SetTimeSignature(4, 4);
         EngineInfo = $"{Engine.SampleRate:0}\u2009Hz";
         _log.Info($"Engine started · {Engine.SampleRate:0}\u2009Hz");
+        if (NoAudioOutput is { } why) { _log.Warn(why); StatusText = why; }
 
         Transport.Message += m => { if (m.Length > 0) StatusText = m; };
 
@@ -151,6 +155,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         EngineInfo = $"{Engine.SampleRate:0}\u2009Hz";   // the version sits beside it, as its own button (#127)
         int buf = Engine.NegotiatedBufferFrames;
         _log.Info($"Audio applied · {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames");
+        if (NoAudioOutput is { } why)
+        {
+            _log.Warn(why);
+            StatusText = why;
+            return StatusText;
+        }
         bool fallback = Engine.AudioExclusiveFallback;
         if (fallback)
         {
@@ -163,6 +173,13 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             : $"Audio: {Engine.NegotiatedSampleRate:0}\u2009Hz";
         return StatusText;
     }
+
+    /// <summary>Why nothing is heard when no output device opened (the engine runs silently
+    /// or not at all), else null.</summary>
+    public string? NoAudioOutput
+        => !Engine.IsRunning ? "No audio output could be opened — Nota runs without sound. Choose a device in Settings → Audio"
+         : Engine.AudioSilentFallback ? "No audio output device opened — Nota runs silently. Choose a device in Settings → Audio"
+         : null;
 
     /// <summary>
     /// Applies staged MIDI-input settings (M7-2). Lighter than audio: only the

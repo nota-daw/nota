@@ -29,7 +29,7 @@ public partial class MainWindow
         // native file panel opens (common under `dotnet run` / launched from an IDE), the
         // panel can appear unfocused and refuse clicks. Activating makes the window key.
         Activate();
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        var files = await this.PickFilesAsync(new FilePickerOpenOptions
         {
             Title = "Import audio",
             AllowMultiple = false,
@@ -76,7 +76,7 @@ public partial class MainWindow
         string? path;
         if (opts.Stems)
         {
-            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions
             {
                 Title = "Export stems to folder", AllowMultiple = false,
             });
@@ -84,7 +84,7 @@ public partial class MainWindow
         }
         else
         {
-            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            var file = await this.PickSaveFileAsync(new FilePickerSaveOptions
             {
                 Title = $"Export master to {ext.ToUpperInvariant()}",
                 DefaultExtension = ext,
@@ -221,7 +221,7 @@ public partial class MainWindow
     {
         if (_vm is null) return;
         Activate(); // keep the native panel focused (see DoImportAsync)
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions
         {
             Title = "Open Nota project (.nota folder)",
             AllowMultiple = false,
@@ -376,7 +376,7 @@ public partial class MainWindow
     private async Task<string?> PickProjectPathAsync(string title, string suggestedName)
     {
         Activate();
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        var file = await this.PickSaveFileAsync(new FilePickerSaveOptions
         {
             Title = title,
             SuggestedStartLocation = _vm is null ? null : await FolderAsync(_vm.Settings.ResolvedProjectsFolder()),   // #309

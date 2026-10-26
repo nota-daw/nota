@@ -32,5 +32,8 @@
 #define MA_ENABLE_PULSEAUDIO
 #define MA_ENABLE_ALSA
 #endif
+// The null backend: a silent device that still clocks the audio thread. Only opened on
+// purpose, when no real output opens (MiniaudioBackend::start), so Nota still runs.
+#define MA_ENABLE_NULL
 
 #include <miniaudio.h>

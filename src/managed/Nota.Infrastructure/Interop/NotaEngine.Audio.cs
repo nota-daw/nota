@@ -89,6 +89,11 @@ public sealed partial class NotaEngine
     public bool AudioExclusiveFallback
     { get { ThrowIfDisposed(); return NativeMethods.AudioExclusiveFallback(_handle) != 0; } }
 
+    /// <summary>True when no output device opened and the engine runs on a silent stand-in
+    /// device: everything works, nothing is heard until a device opens (Settings → Audio).</summary>
+    public bool AudioSilentFallback
+    { get { ThrowIfDisposed(); return NativeMethods.AudioSilentFallback(_handle) != 0; } }
+
     // --- MIDI device settings (M7-2) ---
 
     /// <summary>Re-scans connected MIDI input sources.</summary>
