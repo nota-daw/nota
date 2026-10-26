@@ -109,7 +109,7 @@ internal sealed class ReverbTailView : Control
     }
 
     private static FormattedText Text(string t, IBrush ink, double size = NotaGraph.AxisSize)
-        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
+        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink, NotaTextSize.InCard);
 
     public override void Render(DrawingContext ctx)
     {
@@ -210,7 +210,7 @@ internal sealed class ReverbTailView : Control
 
         // ---- labels ------------------------------------------------------------------
         if (_freeze) ctx.DrawText(new NotaFormattedText("Tail held · no decay", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright), new Point(6, 4));
+            NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));
         else NotaGraph.Title(ctx, new Rect(0, 0, w, h), "Decay tail");
         var rt = Text(_freeze ? "RT60 ∞" : NotaNum.F($"RT60 {_rt60:0.00} s"), _freeze ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         ctx.DrawText(rt, new Point(x1 + 2 - rt.Width, 5));

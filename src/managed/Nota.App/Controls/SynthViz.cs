@@ -82,9 +82,9 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
         => (Pad, Math.Max(Pad + 1, Bounds.Width - Pad), Pad + 11, Math.Max(Pad + 12, Bounds.Height - Pad - (Mini ? 0 : 9)));
 
     private void Text(DrawingContext ctx, string t, double x, double y, IBrush ink, double size = 8)
-        => ctx.DrawText(new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, ink), new Point(x, y));
+        => ctx.DrawText(new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, ink, this), new Point(x, y));
     private static double MeasureW(string t, double size = 8)
-        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, NotaPalette.TextPrimary).Width;
+        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, NotaPalette.TextPrimary, NotaTextSize.InCard).Width;
 
     // ---- MIDI learn --------------------------------------------------------
     // The graphs are the only place some of these params can be grabbed, so each drag

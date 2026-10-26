@@ -433,10 +433,13 @@ search 11.5, a clip's name 10 / 600, a Modular node's name 12.5 / 600, the curre
 case, so nothing looks like code.
 
 **Text size** (Preferences → Appearance: Smaller, Default, Larger, Largest) adds −1, 0, +1
-or +2 pt to every text the app draws, shell and devices, on top of this scale and
-independent of Interface scale (`NotaTextSize`). It works by coercion on `TextBlock` and
-`TextPresenter` font sizes plus `NotaFormattedText`, so views keep setting the scale's
-sizes and never read the setting. Layout doesn't grow with it: at the larger sizes a long
+or +2 pt to every text the shell draws, on top of this scale and independent of Interface
+scale (`NotaTextSize`). It works by coercion on `TextBlock` and `TextPresenter` font sizes
+plus `NotaFormattedText`, so views keep setting the scale's sizes and never read the
+setting. Device cards are left out: their 700 × 260 layouts are fixed, so the card shell
+sets `NotaTextSize.Fixed` (inherited by everything in the card) and custom-drawn device
+views pass themselves as the owner of their `NotaFormattedText` (static helpers pass
+`NotaTextSize.InCard`). Layout doesn't grow with it: at the larger sizes a long
 label trims with an ellipsis, so a label that can't trim (a fixed-width cell) needs room
 for +2.
 

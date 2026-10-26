@@ -1011,7 +1011,7 @@ public sealed class PreviewWaveform : Control
             {
                 double x = Math.Round(InsetX + innerW * Math.Log(hz / FLo) / Math.Log(FHi / FLo)) + 0.5;
                 ctx.DrawLine(NotaGraph.GridPen, new Point(x, 1), new Point(x, h - 1));
-                var t = NotaGraph.AxisText(label);
+                var t = NotaGraph.AxisText(label, owner: this);
                 ctx.DrawText(t, new Point(x + 2, h - t.Height - 1));
             }
             if (_hasSpec && innerW > 8)
@@ -1097,8 +1097,8 @@ public sealed class PreviewWaveform : Control
         }
 
         // WAVE · SPEC, the active one in brass, top-right.
-        var wave = NotaGraph.AxisText("Wave", _spectrum ? NotaPalette.TextTertiary : NotaPalette.Accent, 7);
-        var spec = NotaGraph.AxisText("Spec", _spectrum ? NotaPalette.Accent : NotaPalette.TextTertiary, 7);
+        var wave = NotaGraph.AxisText("Wave", _spectrum ? NotaPalette.TextTertiary : NotaPalette.Accent, 7, this);
+        var spec = NotaGraph.AxisText("Spec", _spectrum ? NotaPalette.Accent : NotaPalette.TextTertiary, 7, this);
         double lw = wave.Width + 5 + spec.Width, lx = w - lw - 5, ly = 3;
         _toggleRect = new Rect(lx - 4, 0, lw + 9, ly + wave.Height + 3);
         ctx.FillRectangle(NotaPalette.BgSunken, new Rect(lx - 2, ly - 1, lw + 4, wave.Height + 2), 2);

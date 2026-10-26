@@ -59,6 +59,6 @@ namespace Nota.App;
             }
             ctx.DrawGeometry(null, pen, g);
             ctx.DrawLine(new Pen(TextTertiary, 1) { DashStyle = DashStyle.Dash }, new Point(X(_thr), top), new Point(X(_thr), bot)); // threshold
-            ctx.DrawText(new NotaFormattedText("Comp", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, pad - 2));
+            ctx.DrawText(new NotaFormattedText("Comp", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary, this), new Point(x0, pad - 2));
         }
     }

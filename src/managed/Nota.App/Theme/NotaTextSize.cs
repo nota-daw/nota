@@ -2,11 +2,13 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Text size (Preferences → Appearance, spec 038 FR-038): every text the app draws grows or
-// shrinks by a whole point (−1 … +2), shell and devices alike, independent of the interface
-// scale (which scales layout and text together). Controls get it by coercion: TextBlock and
-// TextPresenter (a TextBox's text) add the step to whatever size a style, a class or code
-// gave them. Neither ever holds the other, and what inherits from them are runs, so no size
-// is stepped twice. The custom-drawn layer gets it from NotaFormattedText. A change is applied
+// shrinks by a whole point (−1 … +2) across the shell, independent of the interface scale
+// (which scales layout and text together). Device cards are the exception: their layouts are
+// fixed at 700 × 260, so a card is marked Fixed and its text keeps its size. Controls get the
+// step by coercion: TextBlock and TextPresenter (a TextBox's text) add it to whatever size a
+// style, a class or code gave them. Neither ever holds the other, and what inherits from them
+// are runs, so no size is stepped twice. The custom-drawn layer gets it from NotaFormattedText
+// (passing itself as the owner, so a view inside a card is left alone). A change is applied
 // live: every open window re-coerces its text and redraws.
 
 using System;
@@ -32,6 +34,19 @@ internal static class NotaTextSize
     /// <summary>A size as drawn: <paramref name="size"/> plus the step, never under the floor.</summary>
     public static double Apply(double size) => _step == 0 || size <= 0 ? size : Math.Max(NotaType.Floor, size + _step);
 
+    /// <summary>Device cards keep develop's fixed 700 × 260 layouts, so their text keeps its own
+    /// size: set on a card (inherited by everything in it), the step is not applied there.</summary>
+    public static readonly AttachedProperty<bool> FixedProperty =
+        AvaloniaProperty.RegisterAttached<Visual, bool>("Fixed", typeof(NotaTextSize), inherits: true);
+
+    public static void SetFixed(Visual v, bool value) => v.SetValue(FixedProperty, value);
+
+    /// <summary>The owner for text a static helper draws inside a card (it has no control to pass).</summary>
+    public static readonly AvaloniaObject InCard = new Border { [FixedProperty] = true };
+
+    /// <summary><see cref="Apply(double)"/> for text drawn by (or inside) <paramref name="owner"/>.</summary>
+    public static double Apply(double size, AvaloniaObject? owner) => owner?.GetValue(FixedProperty) == true ? size : Apply(size);
+
     /// <summary>Hook the coercion in. Once, before the XAML loads.</summary>
     public static void Install()
     {
@@ -39,9 +54,12 @@ internal static class NotaTextSize
         _installed = true;
         // The default has to be restated: metadata without one would override it with 0.
         TextBlock.FontSizeProperty.OverrideMetadata<TextBlock>(new StyledPropertyMetadata<double>(
-            TextBlock.FontSizeProperty.GetDefaultValue(typeof(TextBlock)), coerce: (_, v) => Apply(v)));
+            TextBlock.FontSizeProperty.GetDefaultValue(typeof(TextBlock)), coerce: (o, v) => Apply(v, o)));
         TextElement.FontSizeProperty.OverrideMetadata<TextPresenter>(new StyledPropertyMetadata<double>(
-            TextElement.FontSizeProperty.GetDefaultValue(typeof(TextPresenter)), coerce: (_, v) => Apply(v)));
+            TextElement.FontSizeProperty.GetDefaultValue(typeof(TextPresenter)), coerce: (o, v) => Apply(v, o)));
+        // A text that moves into (or out of) a device card re-coerces with the card's rule.
+        FixedProperty.Changed.AddClassHandler<TextBlock>((tb, _) => tb.CoerceValue(TextBlock.FontSizeProperty));
+        FixedProperty.Changed.AddClassHandler<TextPresenter>((tp, _) => tp.CoerceValue(TextElement.FontSizeProperty));
     }
 
     /// <summary>Wear <paramref name="step"/> (normalised) everywhere, live.</summary>

@@ -25,8 +25,8 @@ internal static class ChamberInk
     private static readonly Typeface NumFace = NotaFonts.Sans;
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
-    public static FormattedText Text(string s, double size, IBrush b) => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b);
-    public static FormattedText Caps(string s, double size, IBrush b) => new NotaFormattedText(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
+    public static FormattedText Text(string s, double size, IBrush b) => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b, NotaTextSize.InCard);
+    public static FormattedText Caps(string s, double size, IBrush b) => new NotaFormattedText(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b, NotaTextSize.InCard);
     public static IBrush Slate => NotaPalette.TextSecondary;   // convolution (was slate blue)
     public static IBrush Mauve => NotaPalette.TextTertiary;    // shimmer / pitch (was mauve)
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));

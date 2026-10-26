@@ -443,7 +443,8 @@ the shell bars, fixed card widths (S 260 / L 700 / Wide 1050), the Volt pass. Th
   transport readout 16; clip names 10; eyebrows 9.5), in the theme, NotaType and every
   literal size in the shell. The device scale (already one step down) stays.
 - **FR-038 (text size setting)**: Preferences → Appearance MUST offer Text size: Smaller,
-  Default, Larger, Largest (−1, 0, +1, +2 pt on every text the app draws, shell and devices),
+  Default, Larger, Largest (−1, 0, +1, +2 pt on every text the shell draws; device cards keep their size, their
+  layouts being fixed, per Chris on Oct 26),
   applied live to every open window and kept in the settings file, independent of Interface
   scale. Larger sizes may trim long labels with an ellipsis; nothing may overlap.
 - **FR-039 (device header strip)**: A device card's main tab row MUST move into the header's

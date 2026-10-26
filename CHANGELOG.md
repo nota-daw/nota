@@ -30,7 +30,7 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and the status line says why. ⌘G on tracks still groups tracks.
 - **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
   text in the app a point smaller or up to two points larger, live, without changing the
-  layout (Interface scale still scales everything).
+  layout (Interface scale still scales everything). Device cards keep their text size.
 - **Send levels in the Large track header**: a track at the Large height shows a value bar for
   its send to each return, two per row, as far as the height allows.
 

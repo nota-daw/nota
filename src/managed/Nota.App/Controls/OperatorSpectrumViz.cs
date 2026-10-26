@@ -66,13 +66,13 @@ internal sealed class OperatorSpectrumViz : Control
         void Tick(int k, string lbl)
         {
             double tx = x0 + Math.Min(_n, k) * bw;
-            var ft = new NotaFormattedText(lbl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, Axis);
+            var ft = new NotaFormattedText(lbl, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, Axis, this);
             ctx.DrawText(ft, new Point(Math.Min(tx, x1 - ft.Width), bot + 2));
         }
         Tick(0, "f"); Tick(10, "10f"); Tick(20, "20f"); Tick(30, "30f");
 
         // Played-note badge top-right.
-        var note = new NotaFormattedText(_note, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 9, NoteInk);
+        var note = new NotaFormattedText(_note, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 9, NoteInk, this);
         ctx.DrawText(note, new Point(x1 - note.Width - 1, top));
     }
 }

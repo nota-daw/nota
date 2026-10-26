@@ -106,7 +106,7 @@ internal sealed class OperatorAlgoMini : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
         ctx.DrawRectangle(_active ? AccentSubtle : Sunken, new Pen(_active ? Accent : BorderDef, 1), new Rect(0, 0, w, h), NotaRadius.FieldValue, NotaRadius.FieldValue);
-        var num = new NotaFormattedText((_algo + 1).ToString(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, _active ? AccentBright : TextTertiary);
+        var num = new NotaFormattedText((_algo + 1).ToString(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, _active ? AccentBright : TextTertiary, this);
         ctx.DrawText(num, new Point(3, 2));
 
         var tgt = OperatorTopo.Algo[_algo];
@@ -242,7 +242,7 @@ internal sealed class OperatorRoutingViz : Control
         }
 
         NotaGraph.Title(ctx, new Rect(0, 0, w, h), "Routing");
-        var hint = new NotaFormattedText("drag an operator onto another to re-route", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, TextTertiary);
+        var hint = new NotaFormattedText("drag an operator onto another to re-route", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, TextTertiary, this);
         ctx.DrawText(hint, new Point(gx1 - hint.Width, 5));
 
         // Connection lines (under the boxes).
@@ -254,7 +254,7 @@ internal sealed class OperatorRoutingViz : Control
         }
         // Out bus.
         ctx.DrawLine(new Pen(Ink, NotaGraph.PrimaryWidth), new Point(gx0 + 4, outY), new Point(gx1 - 4, outY));
-        var outWord = new NotaFormattedText("out", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, TextTertiary);
+        var outWord = new NotaFormattedText("out", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, TextTertiary, this);
         ctx.DrawText(outWord, new Point(gx1 - 4 - outWord.Width, outY - outWord.Height - 1));
 
         // Boxes.
@@ -269,7 +269,7 @@ internal sealed class OperatorRoutingViz : Control
             ctx.DrawRectangle(Sunken, null, rect, 3, 3);
             bool dragged = o == _drag;
             ctx.DrawRectangle(carr ? InkSubtle : TealSubtle, new Pen(dragged ? Accent : carr ? Ink : Teal, 1.3), rect, 3, 3);
-            var ft = new NotaFormattedText(OperatorTopo.Names[o], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, 10, carr ? TextPrimary : Teal);
+            var ft = new NotaFormattedText(OperatorTopo.Names[o], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, 10, carr ? TextPrimary : Teal, this);
             ctx.DrawText(ft, new Point(c.X - ft.Width / 2, c.Y - ft.Height / 2));
         }
     }

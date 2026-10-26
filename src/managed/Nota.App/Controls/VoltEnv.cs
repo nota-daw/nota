@@ -139,7 +139,7 @@ namespace Nota.App;
             {
                 NotaGraph.Title(ctx, frame, _title);
                 if (!string.IsNullOrEmpty(Note))
-                    ctx.DrawText(new NotaFormattedText(Note, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, NotaGraph.TitleSize, NoteInk),
+                    ctx.DrawText(new NotaFormattedText(Note, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, NotaGraph.TitleSize, NoteInk, this),
                         new Point(6 + NotaGraph.TitleWidth(_title) + 6, 4));
             }
         }

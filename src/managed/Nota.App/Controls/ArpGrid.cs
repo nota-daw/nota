@@ -228,7 +228,7 @@ internal sealed class ArpGrid : Control
     // ---- render ---------------------------------------------------------------------
     private static void Text(DrawingContext ctx, string t, double x, double y, IBrush b, double size = NotaType.Axis, bool right = false, bool centre = false)
     {
-        var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b);
+        var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b, NotaTextSize.InCard);
         double px = right ? x - ft.Width : centre ? x - ft.Width / 2 : x;
         ctx.DrawText(ft, new Point(px, y - ft.Height / 2));
     }
@@ -314,7 +314,7 @@ internal sealed class ArpGrid : Control
         bool bottomFree = !first.Contains(rows[^1]);
         bool topFree = rows.Count > 1 && !first.Contains(rows[0]);
         bool top = !bottomFree && topFree;
-        var ft = new NotaFormattedText(DeviceCardKit.NoteName(top ? rows[0] : rows[^1]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaType.Axis, NotaPalette.TextTertiary);
+        var ft = new NotaFormattedText(DeviceCardKit.NoteName(top ? rows[0] : rows[^1]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaType.Axis, NotaPalette.TextTertiary, this);
         double x = w.X + 4, y = top ? w.Y + 3 : w.Bottom - 3 - ft.Height;
         if (!bottomFree && !topFree)
             ctx.DrawRectangle(NotaGraph.Ground, null, new RoundedRect(new Rect(x - 2, y, ft.Width + 4, ft.Height), 2));

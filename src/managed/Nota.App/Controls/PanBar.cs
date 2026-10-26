@@ -133,7 +133,7 @@ public sealed class PanBar : Control, IInlineReadout
         ctx.DrawLine(new Pen(Pointer, 1.6, lineCap: PenLineCap.Round), new Point(cx, cy),
             new Point(cx + Math.Cos(rad) * (r - 0.5), cy + Math.Sin(rad) * (r - 0.5)));
         var text = new NotaFormattedText(Label(_pan), CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, NumFace, NotaType.Caption, TextBrush);
+            FlowDirection.LeftToRight, NumFace, NotaType.Caption, TextBrush, this);
         ctx.DrawText(text, new Point(KnobD + 5, (h - text.Height) / 2));
     }
 

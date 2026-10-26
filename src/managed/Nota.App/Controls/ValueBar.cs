@@ -121,7 +121,7 @@ public sealed class ValueBar : Control
                 ctx.DrawRectangle(Accent ? FillAccent : _drag || _hover ? FillLive : FillBrass, null, new Rect(0, 0, w, h), NotaRadius.FieldValue, NotaRadius.FieldValue);
         }
         var text = new NotaFormattedText(_fmt(_value), System.Globalization.CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, NumFace, 9.5, TextBrush);
+            FlowDirection.LeftToRight, NumFace, 9.5, TextBrush, this);
         ctx.DrawText(text, new Point((w - text.Width) / 2, (h - text.Height) / 2));
     }
 }

@@ -113,7 +113,7 @@ internal sealed class LengthGateViz : Control
     }
 
     private static FormattedText Text(string s, Typeface tf, double size, IBrush ink)
-        => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, tf, size, ink);
+        => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, tf, size, ink, NotaTextSize.InCard);
 
     public override void Render(DrawingContext ctx)
     {

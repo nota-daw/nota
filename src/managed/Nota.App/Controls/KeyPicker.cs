@@ -191,7 +191,7 @@ internal sealed class KeyKeyboard : Control
         var ink = on ? NotaPalette.TextOnAccent : black ? NotaPalette.TextSecondary : NotaPalette.TextPrimary;
         var ft = new NotaFormattedText(name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                                        on ? NotaFonts.SansSemiBold : NotaFonts.SansMedium,
-                                       black ? NotaType.Eyebrow : NotaType.Caption, ink);
+                                       black ? NotaType.Eyebrow : NotaType.Caption, ink, this);
         ctx.DrawText(ft, new Point(r.X + (r.Width - ft.Width) / 2, r.Bottom - ft.Height - (black ? 5 : 7)));
     }
 }

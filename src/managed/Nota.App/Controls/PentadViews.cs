@@ -129,7 +129,7 @@ internal sealed class PentadFilterCurve : Control
 
         double hz0 = 20 * Math.Pow(1000, _cut);
         string txt = (hz0 >= 1000 ? $"{hz0 / 1000:0.0}\u2009k" : $"{hz0:0}\u2009Hz") + $" · Q {_reso * 10:0.0}";
-        var ft = new NotaFormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 7, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        var ft = new NotaFormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 7, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary, this);
         ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
 
         double hx = Math.Clamp(_cut * w, 4, w - 4), hy = Math.Clamp(Y(Db(_cut)), 4, h - 4);
@@ -206,7 +206,7 @@ internal sealed class PentadVoiceStrip : Control
             ctx.DrawRectangle(lit ? new SolidColorBrush(Color.FromArgb(a, ac.R, ac.G, ac.B)) : NotaPalette.BgSunken, lit ? on : off, r, 3, 3);
             if (cw >= 12)
             {
-                var ft = new NotaFormattedText((i + 1).ToString(NotaNum.Culture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, lit ? NotaPalette.AccentBright : NotaPalette.TextDisabled);
+                var ft = new NotaFormattedText((i + 1).ToString(NotaNum.Culture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, lit ? NotaPalette.AccentBright : NotaPalette.TextDisabled, this);
                 ctx.DrawText(ft, new Point(r.X + (r.Width - ft.Width) / 2, r.Y + (r.Height - ft.Height) / 2));
             }
         }

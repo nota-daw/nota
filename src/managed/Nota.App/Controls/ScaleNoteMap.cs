@@ -177,8 +177,8 @@ internal sealed class ScaleNoteMap : Control
             string sub = isRoot ? (Mini ? "R" : "root") : inS ? "·" : Mini ? Names[Target(pc)] : "→ " + Names[Target(pc)];
             IBrush subInk = inS ? NotaPalette.AccentBright : NotaPalette.TextSecondary;
             if (Mask == 0) { sub = Mini ? "" : "thru"; subInk = NotaPalette.TextTertiary; }
-            var subFt = new NotaFormattedText(sub, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, mono, subFs, subInk);
-            var nameFt = new NotaFormattedText(Names[pc], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, sans, nameFs, nameInk);
+            var subFt = new NotaFormattedText(sub, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, mono, subFs, subInk, this);
+            var nameFt = new NotaFormattedText(Names[pc], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, sans, nameFs, nameInk, this);
             double yb = rc.Bottom - padB;
             if (subFt.Width <= rc.Width) ctx.DrawText(subFt, new Point(rc.X + (rc.Width - subFt.Width) / 2, yb - subFt.Height));
             ctx.DrawText(nameFt, new Point(rc.X + (rc.Width - nameFt.Width) / 2, yb - subFt.Height - gapT - nameFt.Height + 2));

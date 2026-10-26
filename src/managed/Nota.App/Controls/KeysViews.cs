@@ -105,7 +105,7 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
     }
 
     private static FormattedText Mono(string t, IBrush ink, double size = 8)
-        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
+        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink, NotaTextSize.InCard);
 
     public override void Render(DrawingContext ctx)
     {

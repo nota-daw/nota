@@ -126,7 +126,7 @@ internal static class LensInk
     public static void Title(DrawingContext ctx, string caps, string value, double x = 6, double y = 4)
     {
         var head = new NotaFormattedText(NotaText.Label(caps), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            NotaFonts.SansSemiBold, NotaGraph.TitleSize, Label);
+            NotaFonts.SansSemiBold, NotaGraph.TitleSize, Label, NotaTextSize.InCard);
         ctx.DrawText(head, new Point(x, y));
         if (value.Length > 0) Text(ctx, value, x + head.Width + 5, y, Axis, 8);
     }
@@ -145,11 +145,11 @@ internal static class LensInk
 
     public static void Text(DrawingContext ctx, string s, double x, double y, IBrush ink, double size = 7, bool mono = true)
         => ctx.DrawText(new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? NotaFonts.Sans : NotaFonts.SansMedium, size, ink), new Point(x, y));
+            mono ? NotaFonts.Sans : NotaFonts.SansMedium, size, ink, NotaTextSize.InCard), new Point(x, y));
 
     public static double TextW(string s, double size = 7, bool mono = true)
         => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? NotaFonts.Sans : NotaFonts.SansMedium, size, NotaPalette.TextPrimary).Width;
+            mono ? NotaFonts.Sans : NotaFonts.SansMedium, size, NotaPalette.TextPrimary, NotaTextSize.InCard).Width;
 }
 
 // ===========================================================================

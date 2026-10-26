@@ -93,7 +93,7 @@ internal sealed class ChordKeysViz : Control
             for (int o = 0; o < 3; o++)
             {
                 var ft = new NotaFormattedText(DeviceCardKit.NoteName(_start + o * 12), System.Globalization.CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, new Typeface(NotaFonts.UiFamily), NotaType.Axis, Label);
+                    FlowDirection.LeftToRight, new Typeface(NotaFonts.UiFamily), NotaType.Axis, Label, this);
                 double x = inner.X + o * 7 * ww + (ww - ft.Width) / 2;
                 ctx.DrawText(ft, new Point(x + 1, inner.Bottom - ft.Height - 2));
             }

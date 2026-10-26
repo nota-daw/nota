@@ -94,8 +94,9 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
   `NotaFonts.InstallTabular()` turns on `tnum` app-wide; custom-drawn text is a
   `NotaFormattedText`, never a bare `FormattedText`. Use the scale in `DESIGN.md` § Type
   (readout 16 / 500, device name 12 / 600, track name 12 / 580, body 11, value 10.5, label
-  10, device label 9.5, column head 9.5, key letter 9.5 / 650; the user's Text size steps all
-  of it by −1…+2 pt through `NotaTextSize`, so never read the setting in a view); a unit sits beside its value
+  10, device label 9.5, column head 9.5, key letter 9.5 / 650; the user's Text size steps the
+  shell's text by −1…+2 pt through `NotaTextSize`, so never read the setting in a view; device
+  cards are `NotaTextSize.Fixed` and keep their size); a unit sits beside its value
   in ink 3. Nothing under 7 px.
 - **Sentence case, no tracking — every label.** Menu items, command titles, palette
   headings, window titles, tooltips, buttons, tags: "Save as…", "Export audio", "Analog

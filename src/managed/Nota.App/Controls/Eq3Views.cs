@@ -168,7 +168,7 @@ internal sealed class Eq3Fader : Control
         }
         void Lbl(string t, double y, int align)
         {
-            var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Axis, NotaPalette.TextTertiary);
+            var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Axis, NotaPalette.TextTertiary, this);
             double ty = align < 0 ? y : align > 0 ? y - ft.Height : y - ft.Height / 2;
             ctx.DrawText(ft, new Point(Math.Max(0, bx - 6 - ft.Width), Math.Clamp(ty, 0, h - ft.Height)));
         }
@@ -226,7 +226,7 @@ internal sealed class Eq3Graph : Control
     private Rect Handle(int which, out FormattedText text)
     {
         double f = which == 0 ? _f1 : _f2;
-        text = new NotaFormattedText(Eq3Math.Hz(f), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaGraph.AxisSize, NotaPalette.TextPrimary);
+        text = new NotaFormattedText(Eq3Math.Hz(f), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaGraph.AxisSize, NotaPalette.TextPrimary, this);
         double w = text.Width + 14, x = Eq3Math.X(f) * Bounds.Width;
         x = Math.Clamp(x - w / 2, 1, Math.Max(1, Bounds.Width - w - 1));
         return new Rect(Math.Round(x), 4, Math.Round(w), Math.Round(text.Height + 4));
@@ -416,9 +416,9 @@ internal sealed class Eq3Graph : Control
         var lw = new double[3];
         for (int b = 0; b < 3; b++)
         {
-            names[b] = new NotaFormattedText(NotaText.Label(Eq3Math.Names[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaGraph.AxisSize, NotaPalette.TextTertiary);
+            names[b] = new NotaFormattedText(NotaText.Label(Eq3Math.Names[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaGraph.AxisSize, NotaPalette.TextTertiary, this);
             vals[b] = new NotaFormattedText(_kill[b] ? "kill" : Eq3Math.Db(_db[b]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                NotaFonts.Sans, NotaGraph.AxisSize, _kill[b] ? NotaPalette.TextDisabled : NotaPalette.TextPrimary);
+                NotaFonts.Sans, NotaGraph.AxisSize, _kill[b] ? NotaPalette.TextDisabled : NotaPalette.TextPrimary, this);
             lw[b] = names[b].Width + 4 + vals[b].Width;
             lx[b] = centres[b] - lw[b] / 2;
         }

@@ -67,6 +67,12 @@ public class NotaFormattedText : FormattedText
                              Typeface typeface, double emSize, IBrush? foreground)
         : base(textToFormat, culture, flowDirection, typeface, NotaTextSize.Apply(emSize), foreground)
         => SetFontFeatures(NotaFonts.Tabular);
+
+    /// <summary>Text drawn by <paramref name="owner"/>: inside a device card it keeps its size.</summary>
+    public NotaFormattedText(string textToFormat, CultureInfo culture, FlowDirection flowDirection,
+                             Typeface typeface, double emSize, IBrush? foreground, AvaloniaObject? owner)
+        : base(textToFormat, culture, flowDirection, typeface, NotaTextSize.Apply(emSize, owner), foreground)
+        => SetFontFeatures(NotaFonts.Tabular);
 }
 
 /// <summary>The type scales (the shell hierarchy, and a device scale held to the 260px card), for

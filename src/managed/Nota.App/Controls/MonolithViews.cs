@@ -140,7 +140,7 @@ internal sealed class MonolithFilterCurve : Control
         // freq · Q readout (top-right)
         double hz = 16 * Math.Pow(1250, _cut), q = _reso * 10;
         string txt = (hz >= 1000 ? $"{hz / 1000:0.0}\u2009k" : $"{hz:0}\u2009Hz") + $" · Q {q:0.0}";
-        var ft = new NotaFormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 8, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+        var ft = new NotaFormattedText(txt, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, 8, _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary, this);
         ctx.DrawText(ft, new Point(w - ft.Width - 4, 3));
 
         // cutoff handle (filled, dark ring) at the resonance peak

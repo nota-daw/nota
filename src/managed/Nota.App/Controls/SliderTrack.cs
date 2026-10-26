@@ -226,7 +226,7 @@ internal sealed class SliderTrack : Control, IInlineReadout
             if (Text?.Invoke() is { Length: > 0 } str && bh >= 14)
             {
                 var t = new NotaFormattedText(str, NotaNum.Culture, FlowDirection.LeftToRight, Face, 10.5,
-                    _dim ? NotaPalette.TextDisabled : NotaPalette.TextPrimary);
+                    _dim ? NotaPalette.TextDisabled : NotaPalette.TextPrimary, this);
                 double fx = Bipolar ? 0 : x;
                 double tx = Bipolar || t.Width + 12 <= fx ? 6 : Math.Min(fx + ShellLineW + 4, w - t.Width - 4);
                 ctx.DrawText(t, new Point(tx, ty + (bh - t.Height) / 2));

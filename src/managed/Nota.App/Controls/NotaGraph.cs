@@ -62,9 +62,10 @@ internal static class NotaGraph
         ctx.DrawRectangle(Ground, FramePen, new RoundedRect(inner, Radius));
     }
 
-    /// <summary>An axis label at the column-head size, faint ink.</summary>
-    public static FormattedText AxisText(string text, IBrush? ink = null, double size = AxisSize)
-        => new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink ?? AxisInk);
+    /// <summary>An axis label at the column-head size, faint ink. Text size leaves it alone (devices'
+    /// graphs); a view outside a card passes itself as <paramref name="owner"/> to take the step.</summary>
+    public static FormattedText AxisText(string text, IBrush? ink = null, double size = AxisSize, AvaloniaObject? owner = null)
+        => new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink ?? AxisInk, owner ?? NotaTextSize.InCard);
 
     public enum Corner { TopLeft, TopRight, BottomLeft, BottomRight }
 
@@ -80,7 +81,7 @@ internal static class NotaGraph
 
     /// <summary>How wide <see cref="Title"/> draws <paramref name="title"/>.</summary>
     public static double TitleWidth(string title) => new NotaFormattedText(NotaText.Label(title), CultureInfo.InvariantCulture,
-        FlowDirection.LeftToRight, NotaFonts.SansMedium, TitleSize, TitleInk).Width;
+        FlowDirection.LeftToRight, NotaFonts.SansMedium, TitleSize, TitleInk, NotaTextSize.InCard).Width;
 
     /// <summary>Scale labels up the left (or right) edge of <paramref name="r"/>, each centred on its y.
     /// A label that would crowd the one placed before it, run into the title row or sit on the bottom
@@ -111,7 +112,7 @@ internal static class NotaGraph
     public static void Title(DrawingContext ctx, Rect r, string title)
     {
         var ft = new NotaFormattedText(NotaText.Label(title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            NotaFonts.SansMedium, TitleSize, TitleInk) { };
+            NotaFonts.SansMedium, TitleSize, TitleInk, NotaTextSize.InCard) { };
         ctx.DrawText(ft, new Point(r.X + 6, r.Y + 4));
     }
 
@@ -133,7 +134,7 @@ internal static class NotaGraph
         for (int i = items.Length - 1; i >= 0; i--)
         {
             var (label, ink, mark) = items[i];
-            var ft = new NotaFormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, AxisSize, ink);
+            var ft = new NotaFormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, AxisSize, ink, NotaTextSize.InCard);
             x -= ft.Width;
             ctx.DrawText(ft, new Point(x, y));
             double cy = y + ft.Height / 2;
@@ -152,7 +153,7 @@ internal static class NotaGraph
     public static double LegendRow(DrawingContext ctx, Point at, IBrush swatch, string name, string value)
     {
         ctx.DrawRectangle(swatch, null, new RoundedRect(new Rect(at.X, at.Y + 5, 8, 2), 1));
-        var n = new NotaFormattedText(NotaText.Label(name), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, AxisSize, TitleInk);
+        var n = new NotaFormattedText(NotaText.Label(name), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, AxisSize, TitleInk, NotaTextSize.InCard);
         var v = AxisText(value, NotaPalette.TextPrimary);
         ctx.DrawText(n, new Point(at.X + 12, at.Y));
         ctx.DrawText(v, new Point(at.X + 12 + n.Width + 5, at.Y - 0.5));

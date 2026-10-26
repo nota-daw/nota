@@ -152,7 +152,7 @@ public sealed class MiniFader : Control, IInlineReadout
             ctx.FillRectangle(live ? LineLive : Line, new Rect(lx, ty, LineW, bh));
             if (Text is { } fmt && bh >= 14)
             {
-                var t = new NotaFormattedText(fmt(_value), NotaNum.Culture, FlowDirection.LeftToRight, Face, 10.5, Ink);
+                var t = new NotaFormattedText(fmt(_value), NotaNum.Culture, FlowDirection.LeftToRight, Face, 10.5, Ink, this);
                 // Inside the fill at the left when it fits; otherwise just past the line.
                 double tx = t.Width + 12 <= fx ? 6 : Math.Min(fx + LineW + 4, w - t.Width - 4);
                 ctx.DrawText(t, new Point(tx, ty + (bh - t.Height) / 2));

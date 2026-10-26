@@ -104,6 +104,7 @@ public sealed partial class DeviceChainView
             SelectDevice(k, di);
         };
         if (movable) HookDeviceDrag(strip, card, k, di);
+        NotaTextSize.SetFixed(card, true);   // as the full card: its text keeps its size
         return card;
     }
 }

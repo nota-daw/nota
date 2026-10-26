@@ -26,7 +26,7 @@ namespace Nota.App;
 internal static class PendulumInk
 {
     public static FormattedText Mono(string t, IBrush ink, double size = NotaGraph.AxisSize)
-        => new NotaFormattedText(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink);
+        => new NotaFormattedText(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink, NotaTextSize.InCard);
 
     /// <summary>Seconds as the lanes print them: 0.12 s, 1.3 s, or — when never.</summary>
     public static string Secs(double s) => s < 0 || s > 99 ? "—" : s < 10 ? NotaNum.Unit(s, "0.00", "s") : NotaNum.Unit(s, "0.0", "s");
@@ -176,7 +176,7 @@ internal sealed class PendulumBarView : Control
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
         const double padX = 8;
-        var cap = new NotaFormattedText("Notes", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, NotaGraph.TitleSize, NotaPalette.TextSecondary);
+        var cap = new NotaFormattedText("Notes", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, NotaGraph.TitleSize, NotaPalette.TextSecondary, this);
         ctx.DrawText(cap, new Point(padX, 2));
         var sub = PendulumInk.Mono($"bar · quantize {_quant.ToLowerInvariant()}", NotaPalette.TextAxis);
         ctx.DrawText(sub, new Point(padX + cap.Width + 6, 2 + (cap.Height - sub.Height) / 2));

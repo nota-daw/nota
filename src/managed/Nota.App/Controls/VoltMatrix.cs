@@ -110,7 +110,7 @@ internal sealed class VoltMatrix : Control
 
     private void Txt(DrawingContext ctx, string t, double x, double y, IBrush b, double size = 8, bool center = false)
     {
-        var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, size, b);
+        var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, size, b, this);
         ctx.DrawText(ft, new Point(center ? x - ft.Width / 2 : x, y));
     }
 
