@@ -39,7 +39,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   **Ungroup rack**). A device with a sidechain key, automation or CV links stays where it is
   and the status line says why. ⌘G on tracks still groups tracks.
 
+### Changed
+- **Splitting a long warped clip is instant** (nota-daw/nota#299, nota-daw/nota#259): a split,
+  trim or range cut of a warped clip reuses the stretch the clip already has instead of
+  stretching both halves again on the UI thread (13 s for a 20-minute clip before), and the
+  halves play exactly what the clip played. Long or zoomed-in audio clips draw their waveform
+  at full detail instead of in blocks.
+
 ### Fixed
+- **Drum Rack pads play their whole hit** (nota-daw/nota#312): a pad with a sample that isn't
+  looped plays as a one-shot, however short the MIDI note, instead of cutting off at note-off.
+  A looped sample, a mono Sampler or a synth on a pad still stops with the note.
+- **Clicking a Drum Rack pad plays only the rack** (nota-daw/nota#307): an armed track no
+  longer sounds along when you click pads in the pad grid or the Pattern tab.
+- **Warp off keeps the markers** (nota-daw/nota#310): turning Warp off and on again gives the
+  clip back its markers instead of a fresh straight warp, through undo, save and reload too. A
+  clip split or trimmed while warp is off starts over with new markers for its new region.
 - **⌘G on a device, follow-ups** (nota-daw/nota#257): grouping a playing effect no longer
   resets it (a Reverb kept ringing cut off), an effect an Arp's CC lane drives stays out of a
   rack instead of losing that link, and ⌘⇧G or undo gives the device back its A/B snapshots
@@ -72,6 +87,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   **Show fewer** strip and Esc closes every opened node; Delete removes a selected modulator;
   an unwired Scope says it watches CV and how to patch it; and the hint names how to draw a
   cable.
+- **File panels open in the right folder** (nota-daw/nota#309): Open, Save as and the new-project
+  panel start in the Projects folder from Settings ▸ Library, and Import audio starts in the
+  folder you last imported from (the Samples folder at first).
+- **The live recording waveform stays in its box** (nota-daw/nota#208): a hot input no longer
+  draws the take being recorded over the tracks above and below it.
+- **The DSP meter stays on screen** (nota-daw/nota#303): when the transport row runs short, the
+  meter folds to its number and is the last thing hidden, instead of the first.
 
 ## [0.57.1] — 2026-10-22
 

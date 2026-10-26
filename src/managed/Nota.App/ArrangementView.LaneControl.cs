@@ -42,6 +42,11 @@ public sealed partial class ArrangementView
         private float[]? _rpPeaks;
         private int _rpCount;
         private double _rpMTotal, _rpS0, _rpS1;   // material total + committed window (frames for unwarped, beats for warped)
+        private bool _rpWarped;
+        private int _rpTrack, _rpClip;
+        private float[]? _rpDetail;                // the lane's visible material at one bucket per pixel (#299)
+        private int _rpDetailCount;
+        private double _rpDetailM0, _rpDetailM1;
         private const double EdgePx = 6;
 
         // ADSR handles on audio clips (shown on hover / selection). A drag previews on the
@@ -1597,11 +1602,14 @@ public sealed partial class ArrangementView
                 {
                     double fx = r.X + (i / (double)n) * r.Width;
                     if (fx < 0 || fx > Bounds.Width) continue;
-                    float min = _recPeaks[i * 2];
-                    float max = _recPeaks[i * 2 + 1];
+                    // Input over 0 dBFS reads past ±1: pin it to the box's edges, as the take's
+                    // own waveform is once it lands (#208).
+                    float min = Math.Clamp(_recPeaks[i * 2], -1f, 1f);
+                    float max = Math.Clamp(_recPeaks[i * 2 + 1], -1f, 1f);
                     AddRect(g, fx, mid - max * amp, 1, Math.Max(1, (max - min) * amp));
                 }
-            ctx.DrawGeometry(RecWave, null, geo);
+            using (ctx.PushClip(r))   // and never paint over the tracks around it
+                ctx.DrawGeometry(RecWave, null, geo);
         }
 
         private bool IsDraggingCrossTrack(int track, int clip)
@@ -1711,7 +1719,7 @@ public sealed partial class ArrangementView
             // DrawWaveform already clip themselves to the rect they are handed.
             var contentRect = new Rect(rect.X, rect.Y + BandH, rect.Width, Math.Max(0, rect.Height - BandH));
             if (c.IsMidi) DrawNotes(ctx, c, contentRect, content, pitches, appear);
-            else DrawWaveform(ctx, c, contentRect, content);
+            else DrawWaveform(ctx, c, contentRect, content, trackId);
 
             // The title band: the track colour mixed 30% toward black across the top, the
             // accent when the clip is selected; the name sits on it in derived ink. It is drawn
@@ -1779,7 +1787,8 @@ public sealed partial class ArrangementView
         // peaks over the whole warp, window = played beats. Cleared on release/cancel.
         private void CaptureResizePreview(int trackId, int clipIndex)
         {
-            _rpPeaks = null; _rpCount = 0;
+            _rpPeaks = null; _rpCount = 0; _rpDetail = null;
+            (_rpTrack, _rpClip) = (trackId, clipIndex);
             var eng = _o._engine;
             if (eng is null || !eng.TryGetAudioClipInfo(trackId, clipIndex, out var ai)) return;
             const int buckets = 2048;
@@ -1788,7 +1797,7 @@ public sealed partial class ArrangementView
             {
                 int n = eng.GetClipWarpFullPeaks(trackId, clipIndex, peaks, buckets);
                 if (n <= 0) return;
-                _rpCount = n; _rpPeaks = peaks;
+                _rpCount = n; _rpPeaks = peaks; _rpWarped = true;
                 _rpMTotal = ai.WarpBeats;
                 _rpS0 = ai.WarpPlayStart;
                 _rpS1 = ai.WarpPlayEnd > 0 ? ai.WarpPlayEnd : ai.WarpBeats;
@@ -1798,7 +1807,7 @@ public sealed partial class ArrangementView
                 if (ai.SampleId == 0 || !eng.TryGetSampleInfo(ai.SampleId, out var si) || si.Frames <= 0) return;
                 int n = eng.GetClipSourcePeaks(trackId, clipIndex, peaks, buckets);
                 if (n <= 0) return;
-                _rpCount = n; _rpPeaks = peaks;
+                _rpCount = n; _rpPeaks = peaks; _rpWarped = false;
                 _rpMTotal = si.Frames;
                 _rpS0 = ai.SourceOffsetFrames;
                 double len = ai.LengthFrames > 0 ? ai.LengthFrames : si.Frames - ai.SourceOffsetFrames;
@@ -1815,18 +1824,38 @@ public sealed partial class ArrangementView
             double ppb = _o._pixelsPerBeat, scroll = _o._scrollBeats;
             double rate = (_rpS1 - _rpS0) / _origLen;   // material units per timeline beat (committed)
             double vx0 = Math.Max(r.X, 0), vx1 = Math.Min(r.Right, Bounds.Width);
+            double MaterialAt(double px) => _rpS0 + (scroll + px / ppb - _origStart) * rate;
+            // The whole-material overview, or — when the lane shows it wider than it has buckets —
+            // the material under the whole lane at one bucket per pixel, fetched once per drag (#299).
+            float[] pk = _rpPeaks!;
+            int count = _rpCount;
+            double m0 = 0, m1 = _rpMTotal;
+            double lm0 = Math.Clamp(MaterialAt(0), 0, _rpMTotal), lm1 = Math.Clamp(MaterialAt(Bounds.Width), 0, _rpMTotal);
+            if (lm1 > lm0 && (lm1 - lm0) / _rpMTotal * _rpCount * 1.5 < Bounds.Width && _o._engine is { } eng)
+            {
+                int n = Math.Clamp((int)Math.Ceiling(Bounds.Width), 1, 8192);
+                if (_rpDetail is null || _rpDetailCount <= 0 || _rpDetailM0 != lm0 || _rpDetailM1 != lm1)
+                {
+                    _rpDetail ??= new float[8192 * 2];
+                    _rpDetailCount = _rpWarped
+                        ? eng.GetClipWarpPeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n)
+                        : eng.GetClipSourcePeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n);
+                    (_rpDetailM0, _rpDetailM1) = (lm0, lm1);
+                }
+                if (_rpDetailCount > 0) (pk, count, m0, m1) = (_rpDetail, _rpDetailCount, lm0, lm1);
+            }
             var geo = new StreamGeometry();
             using (var g = geo.Open())
                 ForEachWaveColumn(r.X, vx0, vx1, (cx0, cx1, x) =>
                 {
                     // Material span under this column, anchored to the committed window.
-                    double s0 = _rpS0 + (scroll + cx0 / ppb - _origStart) * rate;
-                    double s1 = _rpS0 + (scroll + cx1 / ppb - _origStart) * rate;
-                    double f0 = Math.Clamp(s0 / _rpMTotal, 0, 1), f1 = Math.Clamp(s1 / _rpMTotal, 0, 1);
-                    int b0 = Math.Clamp((int)(f0 * _rpCount), 0, _rpCount - 1);
-                    int b1 = Math.Clamp((int)Math.Ceiling(f1 * _rpCount), b0 + 1, _rpCount);
+                    double s0 = MaterialAt(cx0), s1 = MaterialAt(cx1);
+                    double f0 = Math.Clamp((s0 - m0) / (m1 - m0), 0, 1), f1 = Math.Clamp((s1 - m0) / (m1 - m0), 0, 1);
+                    if (s1 <= 0 || s0 >= _rpMTotal) return;   // past the material's ends: nothing to draw
+                    int b0 = Math.Clamp((int)(f0 * count), 0, count - 1);
+                    int b1 = Math.Clamp((int)Math.Ceiling(f1 * count), b0 + 1, count);
                     float min = 1f, max = -1f;
-                    for (int b = b0; b < b1; b++) { min = Math.Min(min, _rpPeaks![b * 2]); max = Math.Max(max, _rpPeaks[b * 2 + 1]); }
+                    for (int b = b0; b < b1; b++) { min = Math.Min(min, pk[b * 2]); max = Math.Max(max, pk[b * 2 + 1]); }
                     if (min > max) return;
                     min = Math.Clamp(min * gain, -1f, 1f); max = Math.Clamp(max * gain, -1f, 1f);
                     AddWaveColumn(g, x, mid, amp, min, max);
@@ -1869,7 +1898,7 @@ public sealed partial class ArrangementView
             AddRect(g, x, mid - a, 1, Math.Max(1, 2 * a));
         }
 
-        private void DrawWaveform(DrawingContext ctx, ClipVM c, Rect r, IBrush brush)
+        private void DrawWaveform(DrawingContext ctx, ClipVM c, Rect r, IBrush brush, int trackId = -1)
         {
             // While resizing THIS clip, show the real audio revealed/hidden by the drag.
             if ((_drag == Drag.TrimL || _drag == Drag.TrimR) && ReferenceEquals(c, _dragClip)
@@ -1884,16 +1913,29 @@ public sealed partial class ArrangementView
             // One column per stroke (see ForEachWaveColumn), aggregating every peak bucket that
             // falls in the span it stands for, so nothing between strokes is skipped.
             double vx0 = Math.Max(r.X, 0), vx1 = Math.Min(r.Right, Bounds.Width);
+            if (vx1 <= vx0) return;
+            // The whole-clip overview, or — when the clip is drawn wider than it has buckets —
+            // peaks for just the visible slice at one bucket per pixel (#299).
+            float[] pk = c.Peaks;
+            int count = c.PeakCount;
+            double fa = 0, fb = 1;
+            if (r.Width > c.PeakCount * 1.5 && EnsureDetailPeaks(c, trackId, (vx0 - r.X) / r.Width, (vx1 - r.X) / r.Width,
+                    (int)Math.Ceiling(vx1 - vx0), r.Width))
+            {
+                (pk, count, fa, fb) = (c.DetailPeaks!, c.DetailCount, c.DetailF0, c.DetailF1);
+            }
+            double span = (fb - fa) * r.Width;
             var adsr = c.Adsr.Fit(c.LengthBeats);
             bool shaped = !adsr.IsIdentity;
             var geo = new StreamGeometry();
             using (var gc = geo.Open())
                 ForEachWaveColumn(r.X, vx0, vx1, (cx0, cx1, x) =>
                 {
-                    int b0 = Math.Clamp((int)((cx0 - r.X) / r.Width * c.PeakCount), 0, c.PeakCount - 1);
-                    int b1 = Math.Clamp((int)Math.Ceiling((cx1 - r.X) / r.Width * c.PeakCount), b0 + 1, c.PeakCount);
+                    double ox = r.X + fa * r.Width;
+                    int b0 = Math.Clamp((int)((cx0 - ox) / span * count), 0, count - 1);
+                    int b1 = Math.Clamp((int)Math.Ceiling((cx1 - ox) / span * count), b0 + 1, count);
                     float min = 1f, max = -1f;
-                    for (int b = b0; b < b1; b++) { min = Math.Min(min, c.Peaks[b * 2]); max = Math.Max(max, c.Peaks[b * 2 + 1]); }
+                    for (int b = b0; b < b1; b++) { min = Math.Min(min, pk[b * 2]); max = Math.Max(max, pk[b * 2 + 1]); }
                     if (min > max) return;
                     // Clip gain (and the ADSR shape) scales the drawn waveform, matching the clip editor.
                     float g = c.Gain;
@@ -1902,6 +1944,44 @@ public sealed partial class ArrangementView
                     AddWaveColumn(gc, x, mid, amp, min, max);
                 });
             ctx.DrawGeometry(brush, null, geo);
+        }
+
+        // Fill c.DetailPeaks for the played-length fractions [f0, f1] at n buckets, unless what
+        // it holds already matches to within half a pixel. Played order, like Peaks: a reversed
+        // clip reads its window back to front. False when the engine has nothing for it.
+        private bool EnsureDetailPeaks(ClipVM c, int trackId, double f0, double f1, int n, double widthPx)
+        {
+            n = Math.Clamp(n, 1, 8192);
+            if (c.DetailPeaks is not null && c.DetailCount == n
+                && Math.Abs(c.DetailF0 - f0) * widthPx < 0.5 && Math.Abs(c.DetailF1 - f1) * widthPx < 0.5)
+                return true;
+            var eng = _o._engine;
+            if (eng is null || trackId <= 0 || !eng.TryGetAudioClipInfo(trackId, c.ClipIndex, out var ai)) return false;
+            bool rev = ai.Reversed != 0;
+            double a = rev ? 1 - f1 : f0, b = rev ? 1 - f0 : f1;   // file-order fractions of the window
+            var buf = c.DetailPeaks is { } old && old.Length >= n * 2 ? old : new float[n * 2];
+            int got;
+            if (ai.WarpEnabled != 0 && ai.WarpBeats > 0)
+            {
+                double ps = ai.WarpPlayStart, pe = ai.WarpPlayEnd > 0 ? ai.WarpPlayEnd : ai.WarpBeats;
+                got = eng.GetClipWarpPeaksRange(trackId, c.ClipIndex, ps + a * (pe - ps), ps + b * (pe - ps), buf, n);
+            }
+            else
+            {
+                double len = ai.LengthFrames;
+                if (len <= 0 && eng.TryGetSampleInfo(ai.SampleId, out var si)) len = si.Frames - ai.SourceOffsetFrames;
+                if (len <= 0) return false;
+                got = eng.GetClipSourcePeaksRange(trackId, c.ClipIndex, ai.SourceOffsetFrames + a * len, ai.SourceOffsetFrames + b * len, buf, n);
+            }
+            if (got <= 0) return false;
+            if (rev)
+                for (int i = 0, j = got - 1; i < j; i++, j--)
+                {
+                    (buf[i * 2], buf[j * 2]) = (buf[j * 2], buf[i * 2]);
+                    (buf[i * 2 + 1], buf[j * 2 + 1]) = (buf[j * 2 + 1], buf[i * 2 + 1]);
+                }
+            (c.DetailPeaks, c.DetailCount, c.DetailF0, c.DetailF1) = (buf, got, f0, f1);
+            return true;
         }
 
         private static readonly IPen AutoCurvePen = new Pen(NotaPalette.VizInk, 1.6);
