@@ -3128,6 +3128,11 @@ int32_t Engine::addTrackLike(int32_t trackId) {
     if (!src || src->type() == TrackType::Return || src->type() == TrackType::Group) return -1;
     const int32_t newId = nextTrackId_++;
     auto nt = deepCloneTrack(*src, newId, /*withContent=*/false); // publish sizes the Session slots, all empty
+    // The source's clips move onto this track, so it must sound the same: refuse it when the
+    // instrument or any device didn't copy (a plugin that won't load a second instance).
+    if (static_cast<bool>(src->instrument) != static_cast<bool>(nt->instrument)
+        || src->midiEffects.size() != nt->midiEffects.size() || src->devices.size() != nt->devices.size())
+        return -1;
     nt->setGroupId(-1);
     nt->setArmed(false);
     nt->name.clear();

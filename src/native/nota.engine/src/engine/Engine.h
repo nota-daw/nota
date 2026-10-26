@@ -339,7 +339,7 @@ class Engine {
     // A new last regular track built like trackId: the same instrument, MIDI effects, devices,
     // mixer and sends, but no clips, Session clips or automation, top level, default name and
     // colour, not armed. Where clips dragged below the last track land (#301). New id or -1
-    // (unknown id, a return or a group). Checkpoints undo.
+    // (unknown id, a return, a group, or an instrument / device that didn't copy). Checkpoints undo.
     int32_t addTrackLike(int32_t trackId);
     bool removeTrack(int32_t trackId);
     // Reorders a non-return track to toIndex within the regular (non-return) track list;
