@@ -231,7 +231,16 @@ was weighed against.
 - **Problem**: the engine feeds an instrument one note at a time between render segments
   (`playEvents` in `Engine_Render.cpp`, used by the arrangement, Session and live paths),
   but a `MidiDevice` needs the whole block's events with offsets and the block clock.
-- **Decision**: a new optional `Instrument` hook,
+- **As built** (supersedes the hook below): `Instrument::takesBlockMidi()` / `blockMidi(evs, n,
+  frames)` / `midiTimeJump(delta)`. `playEvents` hands the block's sorted events to the rack once,
+  before its usual event-by-event loop; the rack routes them to its MIDI chains (zones, a route
+  per held key shared across forks), runs each chain's MIDI effects with the clock from
+  `setTransport`, and its `render` then plays each MIDI chain's output into that chain's
+  instrument in sub-segments at the exact samples. Expression, live input and bypass stay on the
+  existing path; `allNotesOff` flushes chain MIDI effects; the loop seam calls `midiTimeJump`.
+  Mono and the sustain pedal act on the chains without MIDI effects. Verified bit-exact against
+  the same Arp on a track across loop seams.
+- **Decision (planned)**: a new optional `Instrument` hook,
   `virtual bool rendersBlockEvents() const` + `virtual void renderBlock(float* out, int32_t
   frames, const MidiEv* evs, int n, const ExprEv* xev, int xn, double beatStart, double spb,
   bool playing, LiveHook)`. `playEvents` calls it instead of its own segment loop when the

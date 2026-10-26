@@ -142,13 +142,19 @@ void MidiRack::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int ma
                 mask |= static_cast<uint16_t>(1u << c);
             }
             rt.route[p] |= mask;
+            if (i < kMaxEvents) evMask_[i] = mask;
             if (mask == 0 && rackThru()) {
                 rt.thru[p] = true;
                 pool(ev, -1);
             }
-        } else if (rt.thru[p]) {
-            rt.thru[p] = false;
-            pool(ev, -1);
+        } else {
+            // The note-off goes where its note-on went, even if the key comes back in this block.
+            if (i < kMaxEvents) evMask_[i] = rt.route[p];
+            rt.route[p] = 0;
+            if (rt.thru[p]) {
+                rt.thru[p] = false;
+                pool(ev, -1);
+            }
         }
     }
 
@@ -158,10 +164,8 @@ void MidiRack::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int ma
         auto& chain = st->chains[c];
         const uint16_t bit = static_cast<uint16_t>(1u << c);
         int n = 0;
-        for (int i = 0; i < nIn; ++i) {
-            const int32_t p = std::clamp(in[i].pitch, 0, 127);
-            if ((rt.route[p] & bit) && n < kMaxEvents) bufA_[n++] = in[i];
-        }
+        for (int i = 0; i < nIn && i < kMaxEvents; ++i)
+            if ((evMask_[i] & bit) && n < kMaxEvents) bufA_[n++] = in[i];
         MidiEv* a = bufA_;
         MidiEv* b = bufB_;
         for (auto& d : chain.midiDevices) {
@@ -200,9 +204,6 @@ void MidiRack::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int ma
         }
         chain.ctl->meter.store(activity, std::memory_order_relaxed);
     }
-    // The route of a released key is done once every chain has seen its note-off.
-    for (int i = 0; i < nIn; ++i)
-        if (!in[i].on) rt.route[std::clamp(in[i].pitch, 0, 127)] = 0;
 
     // 3. Merge in time order.
     std::sort(pool_, pool_ + nPool, [](const Tagged& x, const Tagged& y) {

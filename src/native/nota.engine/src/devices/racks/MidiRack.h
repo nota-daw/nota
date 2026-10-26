@@ -88,6 +88,7 @@ class MidiRack final : public MidiDevice, public RackCore {
     MidiEv bufA_[kMaxEvents];
     MidiEv bufB_[kMaxEvents];
     Tagged pool_[kPoolEvents];
+    uint16_t evMask_[kMaxEvents] = {}; // per input event: the chains it goes to (in block order)
     std::array<char[24], kNumMacros> paramNames_{};
 };
 

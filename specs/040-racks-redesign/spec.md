@@ -164,7 +164,7 @@ save as rack preset, load it on another track — the Arp is still there.
 1. **Given** an Instrument Rack chain, **When** the user opens it on the Chains tab, **Then** the device strip shows a MIDI effects section before the instrument, then the instrument, then the audio effects, each with its own drop target.
 2. **Given** a chain, **When** the user drops a built-in MIDI effect from the Browser onto the MIDI section or picks it from the chain's Add menu, **Then** it is added there; dropping it elsewhere in the strip places it in the MIDI section; MIDI effects reorder within their section only.
 3. **Given** a chain with MIDI effects and a key/velocity zone, **When** notes are played, **Then** the zone picks which notes enter the chain, the chain's MIDI effects transform them in order, and only that chain's instrument plays the result, sample-accurately and in time with the transport (an Arp in a rack chain plays the same pattern as on a track).
-4. **Given** mono (last note) is on, **When** chains hold MIDI effects, **Then** mono applies to the notes entering the rack, before the chains' MIDI effects.
+4. **Given** mono (last note) is on, **When** some chains hold MIDI effects, **Then** mono shapes the chains without MIDI effects; a chain with MIDI effects gets the notes its zone takes as played (its effects decide what sounds).
 5. **Given** a chain's MIDI effect, **When** the user maps one of its parameters to a macro, bypasses it, or opens its full editor, **Then** this works as for the chain's other devices.
 6. **Given** a rack whose chains hold MIDI effects, **When** the project is saved and reopened, the rack is saved as a preset and loaded elsewhere, the track or rack is duplicated, an edit is undone/redone, or the rack is driven through the MCP rack tools, **Then** the MIDI effects and their settings come back exactly.
 
@@ -270,7 +270,7 @@ against the mockup's structure and the design guide's readability bar.
 
 - **FR-030**: An Instrument Rack chain MUST hold an ordered list of built-in MIDI effects before its instrument; the chain processes MIDI effects → instrument → audio effects.
 - **FR-031**: The chain's device strip MUST show the MIDI effects as their own section before the instrument; Browser drag-and-drop and the chain's Add menu MUST accept MIDI effects and place them in that section; reordering stays within the section.
-- **FR-032**: Notes MUST pass the chain's key/velocity zone (and mono, when on) before the chain's MIDI effects; MIDI effect output MUST reach only that chain's instrument, sample-accurate within the block, on the same clock a track's MIDI effects use (transport, stopped-but-live, Session slot), with reset / loop-wrap behaviour identical to a track's.
+- **FR-032**: Notes MUST pass the chain's key/velocity zone before the chain's MIDI effects (mono and the sustain pedal shape the chains without MIDI effects only); MIDI effect output MUST reach only that chain's instrument, sample-accurate within the block, on the same clock a track's MIDI effects use (transport, stopped-but-live, Session slot), with reset / loop-wrap behaviour identical to a track's.
 - **FR-033**: Parameters of chain MIDI effects MUST be mappable to macros, bypassable and openable in their full editor like other chain devices.
 - **FR-034**: Chain MIDI effects MUST be saved with the project and rack presets, copied by track/rack duplication and device copy/paste, take part in undo/redo, and be reachable from the MCP rack tools (list, add, remove, move, params, bypass).
 

@@ -24,6 +24,7 @@ namespace nota {
 
 class RackInstrument : public Instrument, public RackCore {
   public:
+    RackInstrument();
     int32_t kind() const override { return 3; } // built-in Instrument Rack (project compat)
     const char* displayName() const override { return "Nota Instrument Rack"; }
     bool hostsPlugin() const override { return chainsHostPlugin(); } // Drum Rack too
@@ -32,7 +33,19 @@ class RackInstrument : public Instrument, public RackCore {
 
     // Forward the DAW transport to every chain child (nested plugins sync too).
     void setTransportInfo(const TransportInfo& ti) override { forwardTransport(ti); }
-    void setTransport(double beatStart, double spb, bool playing) override { forwardTempo(beatStart, spb, playing); }
+    void setTransport(double beatStart, double spb, bool playing) override {
+        beat_ = beatStart;
+        spb_ = spb;
+        playing_ = playing;
+        forwardTempo(beatStart, spb, playing);
+    }
+
+    // Chain MIDI effects (issue #329): a chain with any runs them on its share of the block's
+    // notes up front; render then plays their output into that chain's instrument, sample-accurate.
+    bool takesBlockMidi() const override;
+    void blockMidi(const MidiEv* evs, int n, int32_t frames) override;
+    void midiTimeJump(double deltaBeats) override;
+    static constexpr int32_t kMaxMidiChains = 64; // chains beyond this play their notes without MIDI effects
 
     // ---- note fan-out: a note reaches a chain only if it's inside its key/vel zone --
     void noteOn(int32_t pitch, float velocity) override;
@@ -89,8 +102,24 @@ class RackInstrument : public Instrument, public RackCore {
         float glideBend = 0.0f;
         int64_t glideTotal = 0, glideLeft = 0;
         bool wasMono = false;
+        uint64_t midiRoute[128] = {}; // chains each held key went to (MIDI chains, #329)
     };
     std::shared_ptr<MonoState> mono_ = std::make_shared<MonoState>();
+
+    // Chain MIDI effects (audio thread): the block clock from setTransport, each MIDI chain's
+    // processed events (grouped by chain, sorted), the render position within the block, and
+    // which chains each held input key went to so its note-off follows it.
+    double beat_ = 0.0, spb_ = 0.0;
+    bool playing_ = false;
+    static constexpr int32_t kChainEvents = 4096;
+    MidiEv* chainEvs_ = nullptr;                      // kChainEvents, allocated once in the ctor
+    MidiEv* scratchA_ = nullptr;                      // 1024
+    MidiEv* scratchB_ = nullptr;                      // 1024
+    std::unique_ptr<MidiEv[]> evStore_;
+    int32_t chainStart_[kMaxMidiChains] = {}, chainCount_[kMaxMidiChains] = {}, chainCursor_[kMaxMidiChains] = {};
+    int32_t blockPos_ = 0;
+    uint64_t evMask_[1024] = {}; // per input event: the MIDI chains it goes to (in block order)
+    bool midiChainAt(int32_t c) const;
 };
 
 } // namespace nota

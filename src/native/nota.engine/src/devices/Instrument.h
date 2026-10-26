@@ -21,11 +21,21 @@
 
 namespace nota {
 
+struct MidiEv;
+
 class Instrument {
   public:
     virtual ~Instrument() = default;
 
     virtual void setSampleRate(double sr) = 0;
+
+    // MIDI effects inside the instrument (an Instrument Rack chain's, issue #329). An instrument
+    // that wants the block's notes up front says so; the engine then hands it the block's sorted
+    // events once, before driving it event by event as usual (setTransport has run). The loop
+    // seam shifts their clock like the track's own MIDI effects; allNotesOff flushes them.
+    virtual bool takesBlockMidi() const { return false; }
+    virtual void blockMidi(const MidiEv* /*evs*/, int /*n*/, int32_t /*frames*/) {}
+    virtual void midiTimeJump(double /*deltaBeats*/) {}
 
     // Note events (applied at segment boundaries by the engine for sample accuracy).
     virtual void noteOn(int32_t pitch, float velocity) = 0;

@@ -315,7 +315,7 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 ### Tests for User Story 6
 
-- [ ] T056 [P] [US6] Smoke `racks: chain MIDI effects` in `tests/Nota.SmokeTest/RackChainMidiTests.cs`:
+- [X] T056 [P] [US6] Smoke `racks: chain MIDI effects` in `tests/Nota.SmokeTest/RackChainMidiTests.cs`:
   - an Arp in chain 0 produces the same note-ons (pitch and sample offset) as the same Arp on a plain track over 8 bars, including a loop wrap and a stop/start;
   - chain 1 receives the raw notes;
   - zones and mono run before chain MIDI effects;
@@ -324,20 +324,20 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 ### Implementation for User Story 6
 
-- [ ] T057 [US6] Add `virtual bool rendersBlockEvents() const`, `virtual void renderBlock(float* out, int32_t frames, const MidiEv* evs, int n, const ExprEv* xev, int xn, double beatStart, double spb, bool playing, …live hook…)`, `virtual void midiReset()` and `virtual void midiTimeJump(double)` to `src/native/nota.engine/src/devices/Instrument.h` (defaults: false / no-op)
-- [ ] T058 [US6] In `src/native/nota.engine/src/engine/Engine_Render.cpp`:
+- [X] T057 [US6] Add `virtual bool rendersBlockEvents() const`, `virtual void renderBlock(float* out, int32_t frames, const MidiEv* evs, int n, const ExprEv* xev, int xn, double beatStart, double spb, bool playing, …live hook…)`, `virtual void midiReset()` and `virtual void midiTimeJump(double)` to `src/native/nota.engine/src/devices/Instrument.h` (defaults: false / no-op)
+- [X] T058 [US6] In `src/native/nota.engine/src/engine/Engine_Render.cpp`:
   - make `playEvents` call `inst.renderBlock(...)` when `inst.rendersBlockEvents()`;
   - extract its segment loop into a shared helper the rack reuses, without changing behaviour for other instruments;
   - call `midiReset` / `midiTimeJump` wherever the track's MIDI chain gets `reset` / `timeJump` (stop, seek, loop wrap, Session slot switch).
-- [ ] T059 [US6] In `src/native/nota.engine/src/devices/racks/RackInstrument.cpp`/`.h`:
+- [X] T059 [US6] In `src/native/nota.engine/src/devices/racks/RackInstrument.cpp`/`.h`:
   - `rendersBlockEvents()` = any chain has MIDI devices, read from the live snapshot; Drum Rack returns false;
   - `renderBlock` per chain: zone filter (mono first) → chain MIDI devices on member scratch (2 × 1024 events) with the block clock → the shared segment helper on the chain instrument → chain audio devices → sum;
   - glide only for chains without MIDI devices (research D4/D15);
   - `midiReset` / `midiTimeJump` fan out to the chain MIDI devices;
   - no allocation.
-- [ ] T060 [US6] ABI `nota_rack_chain_midi_*` (contracts/c-abi.md § Instrument Rack additions) in `src/native/nota.engine/include/nota/nota_engine.h` + `src/native/nota.engine/src/abi/nota_engine_rack.cpp` + `src/native/nota.engine/src/engine/Engine_Rack.cpp`, with edits through `rackForEdit`. Update the export lists
-- [ ] T061 [P] [US6] Interop for T060 in `src/managed/Nota.Infrastructure/Interop/NativeMethods.Rack.cs`, `NotaEngine.Rack.cs` and `src/managed/Nota.Application/Engine/IAudioEngine.cs`. Implement the MIDI-section members of `InstrumentRackAccess` in `src/managed/Nota.App/DeviceCards/Rack/IRackAccess.cs`
-- [ ] T062 [US6] Chain strip MIDI section for the Instrument profile in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Chains.cs`:
+- [X] T060 [US6] ABI `nota_rack_chain_midi_*` (contracts/c-abi.md § Instrument Rack additions) in `src/native/nota.engine/include/nota/nota_engine.h` + `src/native/nota.engine/src/abi/nota_engine_rack.cpp` + `src/native/nota.engine/src/engine/Engine_Rack.cpp`, with edits through `rackForEdit`. Update the export lists
+- [X] T061 [P] [US6] Interop for T060 in `src/managed/Nota.Infrastructure/Interop/NativeMethods.Rack.cs`, `NotaEngine.Rack.cs` and `src/managed/Nota.Application/Engine/IAudioEngine.cs`. Implement the MIDI-section members of `InstrumentRackAccess` in `src/managed/Nota.App/DeviceCards/Rack/IRackAccess.cs`
+- [X] T062 [US6] Chain strip MIDI section for the Instrument profile in `src/managed/Nota.App/DeviceCards/Rack/RackCard.Chains.cs`:
   - MIDI effects (own dashed drop target, "MIDI" kind badge) · instrument · audio effects;
   - a MIDI effect dropped anywhere on the strip lands in the MIDI section;
   - reorder only within the section;
@@ -345,8 +345,8 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
   - "Open" shows the full MIDI-effect card from `src/managed/Nota.App/DeviceCards/Midi/MidiDeviceCardFactory.cs` bound to the chain device.
 
   Mapping uses device `−1000 − j`.
-- [ ] T063 [US6] Route Browser drops of MIDI effects onto an Instrument Rack chain in `src/managed/Nota.App/DeviceChainView.Drop.cs`. Copy/paste of a chain MIDI effect in `src/managed/Nota.App/DeviceChainView.Clipboard.cs` if chain-device copy exists for audio devices
-- [ ] T064 [P] [US6] MCP in `src/managed/Nota.Mcp/Tools/RackTools.cs`:
+- [X] T063 [US6] Browser drops of MIDI effects onto an Instrument Rack chain: handled by the card's own drop targets (chain row, list, MIDI section) in `RackCard.Chains.cs`; chain devices have no copy/paste today, so chain MIDI effects follow (none)
+- [X] T064 [P] [US6] MCP in `src/managed/Nota.Mcp/Tools/RackTools.cs`:
   - `add_rack_chain_midi_fx`, `remove_rack_chain_midi_fx`, `move_rack_chain_midi_fx`;
   - `get_rack_chain_midi_fx_params`, `set_rack_chain_midi_fx_param`, `set_rack_chain_midi_fx_bypass`;
   - `get_rack` lists `midiEffects`;

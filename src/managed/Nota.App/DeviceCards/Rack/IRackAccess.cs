@@ -205,6 +205,21 @@ internal sealed class InstrumentRackAccess(IAudioEngine e, int t) : IRackAccess
     public void SetRackGlide(float v) => e.RackSetGlide(t, v);
     public bool RackMono() => e.RackMono(t);
     public void SetRackMono(bool on) => e.RackSetMono(t, on);
+    // MIDI effects in front of a chain's instrument (#329).
+    public int ChainMidiCount(int c) => e.RackChainMidiCount(t, c);
+    public int AddChainMidi(int c, int kind) => e.RackChainMidiAdd(t, c, kind);
+    public bool RemoveChainMidi(int c, int i) => e.RackChainMidiRemove(t, c, i);
+    public void MoveChainMidi(int c, int f, int to) => e.RackChainMidiMove(t, c, f, to);
+    public int ChainMidiKind(int c, int i) => e.RackChainMidiKind(t, c, i);
+    public string ChainMidiName(int c, int i) => e.RackChainMidiName(t, c, i);
+    public int ChainMidiParamCount(int c, int i) => e.RackChainMidiParamCount(t, c, i);
+    public string ChainMidiParamName(int c, int i, int p) => e.RackChainMidiParamName(t, c, i, p);
+    public float ChainMidiParamMin(int c, int i, int p) => e.RackChainMidiParamMin(t, c, i, p);
+    public float ChainMidiParamMax(int c, int i, int p) => e.RackChainMidiParamMax(t, c, i, p);
+    public float ChainMidiParamGet(int c, int i, int p) => e.RackChainMidiParamGet(t, c, i, p);
+    public void ChainMidiParamSet(int c, int i, int p, float v) => e.RackChainMidiParamSet(t, c, i, p, v);
+    public bool ChainMidiBypassed(int c, int i) => e.RackChainMidiBypassed(t, c, i);
+    public void SetChainMidiBypassed(int c, int i, bool b) => e.RackChainMidiSetBypassed(t, c, i, b);
 }
 
 internal sealed class EffectRackAccess(IAudioEngine e, int t, int di) : IRackAccess

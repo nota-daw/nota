@@ -154,7 +154,7 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     [McpServerTool(Name = "add_macro_mapping"), Description(
         "Map a macro (0..7) onto a parameter. deviceIndex = -1 targets the chain instrument, -2 the chain's own controls "
         + "(a Drum Rack pad: paramIndex 0 Volume (linear gain), 1 Pan (-1..1), 2 Tune (semitones), 3 Decay (0..1, 1 = hold)), "
-        + "else the chain's device index (a built-in effect on the pad; range in the device's units). range is the span the "
+        + "-1000 - j the chain's MIDI effect j (#329), else the chain's device index (a built-in effect; range in the device's units). range is the span the "
         + "macro sweeps, in the target's units (0..1 for an instrument param); min above max inverts. A parameter belongs to "
         + "one macro: mapping it again moves its mapping (range and curve kept). A new target takes the macro's curve. "
         + "Returns mapping index.")]
@@ -207,6 +207,48 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     public Task SetRackGlide(int trackId, float value) => Mutate(() => E.RackSetGlide(trackId, Math.Clamp(value, 0f, 1f)));
 
     // ---- Drum Rack extras -------------------------------------------------
+
+    // ---- chain MIDI effects (issue #329) -------------------------------------
+
+    public sealed record ChainMidiFx(int Index, int Kind, string Name, bool Bypassed);
+    public sealed record MidiParam(int Index, string Name, float Min, float Max, float Value);
+
+    [McpServerTool(Name = "list_rack_chain_midi_fx"), Description("List the MIDI effects in front of a chain's instrument (index, kind, name, bypass). They run in order on the notes the chain's zone takes.")]
+    public Task<ChainMidiFx[]> ListChainMidiFx(int trackId, int chain) => Read(() =>
+    {
+        int n = E.RackChainMidiCount(trackId, chain);
+        var a = new ChainMidiFx[n];
+        for (int i = 0; i < n; i++) a[i] = new ChainMidiFx(i, E.RackChainMidiKind(trackId, chain, i), E.RackChainMidiName(trackId, chain, i), E.RackChainMidiBypassed(trackId, chain, i));
+        return a;
+    });
+
+    [McpServerTool(Name = "add_rack_chain_midi_fx"), Description("Add a built-in MIDI effect (kind 0..5, see list_midi_fx_kinds) in front of a chain's instrument. Returns its index in the chain's MIDI section.")]
+    public Task<int> AddChainMidiFx(int trackId, int chain, int kind) => Mutate(() => E.RackChainMidiAdd(trackId, chain, kind));
+
+    [McpServerTool(Name = "remove_rack_chain_midi_fx"), Description("Remove a MIDI effect from a chain; its macro mappings go with it.")]
+    public Task<bool> RemoveChainMidiFx(int trackId, int chain, int index) => Mutate(() => E.RackChainMidiRemove(trackId, chain, index));
+
+    [McpServerTool(Name = "move_rack_chain_midi_fx"), Description("Move a MIDI effect within its chain's MIDI section.")]
+    public Task<bool> MoveChainMidiFx(int trackId, int chain, int from, int to) => Mutate(() => E.RackChainMidiMove(trackId, chain, from, to));
+
+    [McpServerTool(Name = "get_rack_chain_midi_fx_params"), Description("List a chain MIDI effect's parameters (index, name, min, max, value).")]
+    public Task<MidiParam[]> GetChainMidiFxParams(int trackId, int chain, int index) => Read(() =>
+    {
+        int pc = E.RackChainMidiParamCount(trackId, chain, index);
+        var ps = new MidiParam[pc];
+        for (int p = 0; p < pc; p++)
+            ps[p] = new MidiParam(p, E.RackChainMidiParamName(trackId, chain, index, p), E.RackChainMidiParamMin(trackId, chain, index, p),
+                E.RackChainMidiParamMax(trackId, chain, index, p), E.RackChainMidiParamGet(trackId, chain, index, p));
+        return ps;
+    });
+
+    [McpServerTool(Name = "set_rack_chain_midi_fx_param"), Description("Set a chain MIDI effect's parameter (in its own min..max).")]
+    public Task SetChainMidiFxParam(int trackId, int chain, int index, int param, float value)
+        => Mutate(() => E.RackChainMidiParamSet(trackId, chain, index, param, value));
+
+    [McpServerTool(Name = "set_rack_chain_midi_fx_bypass"), Description("Bypass or enable a chain MIDI effect.")]
+    public Task SetChainMidiFxBypass(int trackId, int chain, int index, bool bypassed)
+        => Mutate(() => E.RackChainMidiSetBypassed(trackId, chain, index, bypassed));
 
     [McpServerTool(Name = "set_rack_mono"), Description("Instrument Rack mono: one note at a time, last-note priority, all chains share one voice.")]
     public Task SetRackMono(int trackId, bool on) => Mutate(() => E.RackSetMono(trackId, on));

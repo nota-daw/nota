@@ -169,6 +169,7 @@ void playEvents(
     else if (inst.offSettled.load(std::memory_order_relaxed))
         return;
     if (off) n = xn = 0; // nothing new starts on the way out
+    if (inst.takesBlockMidi()) inst.blockMidi(evs, n, frames); // a rack's chain MIDI effects (#329)
     int32_t cursor = 0;
     bool liveDone = false;
     auto renderTo = [&](int32_t to) {
@@ -1641,9 +1642,11 @@ void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
     const double jump = loopStartBeat - loopEndBeat;
     if (g)
         for (auto& tptr : g->tracks)
-            if (tptr && tptr->instrument && !sessionActiveOf(*tptr))
+            if (tptr && tptr->instrument && !sessionActiveOf(*tptr)) {
                 for (auto& md : tptr->midiEffects)
                     if (md) md->timeJump(jump);
+                tptr->instrument->midiTimeJump(jump); // MIDI effects in a rack's chains (#329)
+            }
 
     if (!recording_.load(std::memory_order_relaxed) || recordSlotPlayer_.load(std::memory_order_acquire)) return;
     constexpr double kMinHead = 1.0 / 64.0;
