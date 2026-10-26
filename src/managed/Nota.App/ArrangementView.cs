@@ -1025,6 +1025,7 @@ public sealed partial class ArrangementView : UserControl
                         // Unchanged audio clip on a live refresh: reuse the peaks (no native recompute).
                         cvm.Peaks = prev.Peaks;
                         cvm.PeakCount = prev.PeakCount;
+                        (cvm.DetailPeaks, cvm.DetailCount, cvm.DetailF0, cvm.DetailF1) = (prev.DetailPeaks, prev.DetailCount, prev.DetailF0, prev.DetailF1);
                     }
                     else
                     {

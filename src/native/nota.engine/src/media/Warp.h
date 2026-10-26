@@ -58,11 +58,18 @@ struct WarpInputs {
 // mode, markers, the play window, or the device sample rate. Clip gain is applied
 // at read time (NOT baked), so gain changes need no rebuild.
 struct WarpCache {
-    std::vector<float> samples; // interleaved stereo, frames*2 (device rate)
+    std::vector<float> samples; // interleaved stereo, frames*2 (device rate); empty in a slice
     int64_t frames = 0;         // played-window length in device frames
     double spb = 0.0;           // device samples-per-beat this was built for
     double devSR = 0.0;         // device sample rate this was built for
     WarpInputs inputs;          // what it was stretched from (staleness check)
+    // A slice (#299): a split, trim or range carve narrows the played window, and the narrower
+    // window is a stretch of the same stream — so it shares the built cache's samples from
+    // `baseOffset` instead of stretching them again (seconds for a long clip). Always points
+    // at the cache that owns the samples, never at another slice.
+    std::shared_ptr<const WarpCache> base;
+    int64_t baseOffset = 0;
+    const float* data() const { return base ? base->samples.data() + baseOffset * 2 : samples.data(); }
 };
 
 } // namespace nota

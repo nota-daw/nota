@@ -385,6 +385,14 @@ if (args.Length >= 1 && args[0] == "--device-undo")
     Console.WriteLine(failures == 0 ? "DEVICE UNDO PASSED" : $"DEVICE UNDO FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Warped clip split / range cut alone: `--warp-split`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--warp-split")
+{
+    Console.WriteLine("-- warp split --");
+    foreach (var (ok, label) in WarpSplitTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "WARP SPLIT PASSED" : $"WARP SPLIT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Device copy / duplicate audit + rack undo alone: `--device-copy`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--device-copy")
 {
@@ -15083,6 +15091,8 @@ foreach (var (ok, label) in DeviceCopyTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- stereo map --");
 foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);
+Console.WriteLine("-- warp split --");
+foreach (var (ok, label) in WarpSplitTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- filter knob glide --");
 foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);

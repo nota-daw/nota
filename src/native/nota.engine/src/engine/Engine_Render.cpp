@@ -1525,17 +1525,21 @@ void Engine::mixAudioClip(
         const WarpCache& wc = *clip.warpCache;
         // A stale cache (an edit's rebuild still running in the background) keeps playing,
         // clipped to the clip's new played length so it never spills past the clip's end.
-        const double clipDeviceLen =
-            static_cast<double>(std::min<int64_t>(wc.frames, std::llround(clip.warpPlayLen() * spb)));
+        // Both edges sit on whole frames rounded from the timeline (not start + a rounded
+        // length), so clips that meet — the halves of a split — leave no frame between them.
+        const int64_t startF = std::llround(startSamples);
+        const int64_t endF =
+            std::min<int64_t>(startF + wc.frames, std::llround(startSamples + clip.warpPlayLen() * spb));
+        const double clipDeviceLen = static_cast<double>(endF - startF);
         lenBeats = clipDeviceLen / spb;
-        const double ovStart = std::max(blockStart, startSamples);
-        const double ovEnd = std::min(blockStart + frames, startSamples + clipDeviceLen);
+        const double ovStart = std::max(blockStart, static_cast<double>(startF));
+        const double ovEnd = std::min(blockStart + frames, static_cast<double>(endF));
         if (ovEnd <= ovStart) return;
         const int32_t dstOff = static_cast<int32_t>(std::llround(ovStart - blockStart));
         const int32_t segLen = static_cast<int32_t>(std::llround(ovEnd - ovStart));
         if (segLen <= 0 || dstOff < 0 || dstOff + segLen > frames) return;
-        const int64_t cacheBase = std::llround(ovStart - startSamples); // 0-based into the cache
-        const float* csamp = wc.samples.data();
+        const int64_t cacheBase = std::llround(ovStart) - startF; // 0-based into the cache
+        const float* csamp = wc.data();
         const float g = clip.gain * extraGain;
         for (int32_t j = 0; j < segLen; ++j) {
             // Reverse reads the same cache back-to-front: the window is already the
