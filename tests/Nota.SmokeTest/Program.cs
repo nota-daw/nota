@@ -337,6 +337,15 @@ if (args.Length >= 1 && args[0] == "--template")
     Console.WriteLine(failures == 0 ? "TEMPLATE PASSED" : $"TEMPLATE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Linux desktop robustness alone: `--linux-desktop`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--linux-desktop")
+{
+    Console.WriteLine("-- linux desktop --");
+    foreach (var (ok, label) in LinuxDesktopTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "LINUX DESKTOP PASSED" : $"LINUX DESKTOP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Deleting a return track alone: `--returns`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--returns")
 {
@@ -15051,6 +15060,9 @@ foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- return delete --");
 foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- linux desktop --");
+foreach (var (ok, label) in LinuxDesktopTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- range clipboard --");
 foreach (var (ok, label) in RangeClipboardTests.Run()) Check(ok, label);

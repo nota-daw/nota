@@ -30,6 +30,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and the status line says why. ⌘G on tracks still groups tracks.
 
 ### Fixed
+- **Linux: file dialogs that never open** (nota-daw/nota#297): when xdg-desktop-portal has no
+  working FileChooser backend, Open / Save / Export / Import used to do nothing. Nota now notices
+  within 4 seconds (the request fails, answers without showing, or shows nothing) and opens its
+  own file chooser instead, for the rest of the session. `NOTA_FILE_DIALOG=builtin` uses it from
+  the start.
+- **Linux: dropping files from a file manager** (nota-daw/nota#300): besides the standard file
+  list, a drop now also reads file paths sent as text, as a GNOME / KDE copied-files list or as
+  `text/x-moz-url`, wherever files can be dropped. A drop that still names no readable file
+  logs the formats it offered.
+- **Linux: Nota no longer quits at launch when no audio output opens** (nota-daw/nota#243): if
+  the chosen device, its rate or buffer, and the system default all fail, the engine runs on a
+  silent device and the status line says so, instead of aborting before the window appears.
 - **⌘G on a device, follow-ups** (nota-daw/nota#257): grouping a playing effect no longer
   resets it (a Reverb kept ringing cut off), an effect an Arp's CC lane drives stays out of a
   rack instead of losing that link, and ⌘⇧G or undo gives the device back its A/B snapshots
