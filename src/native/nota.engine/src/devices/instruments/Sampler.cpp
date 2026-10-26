@@ -98,6 +98,7 @@ void Sampler::noteOn(int32_t pitch, float velocity) {
                 if (v.active && v.stage != Stage::Release) {
                     v.pitch = pitch;
                     v.velocity = velocity;
+                    v.keyUp = false; // a new, held key now owns it
                     return;
                 }
         }

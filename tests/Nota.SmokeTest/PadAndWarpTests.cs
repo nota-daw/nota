@@ -79,6 +79,35 @@ internal static class PadAndWarpTests
             double later = Rms(e, 4);
             yield return (loopParam >= 0 && later < 1e-3, $"a released one-shot whose loop turns on fades out (rms {later:F5})");
         }
+
+        // Switched to Mono with Glide while a released one-shot still sounds, the next note
+        // glides on that voice and is held: it doesn't inherit the old note's key-up.
+        {
+            using var e = new NotaEngine();
+            int t = e.AddDrumRackTrack();
+            int p = e.RackAddSamplerChain(t, wav, 60, true);   // looped, so only a release ends it
+            e.RackSetChainTriggerNote(t, p, 60);
+            int ParamOf(string id)
+            {
+                for (int i = 0; i < e.RackChainInstrumentParamCount(t, p); i++)
+                    if (e.RackChainInstrumentParamId(t, p, i) == id) return i;
+                return -1;
+            }
+            int loopP = ParamOf("loopmode"), voiceP = ParamOf("voicemode"), glideP = ParamOf("glide");
+            e.RackChainInstrumentParamSet(t, p, loopP, 0f);    // a one-shot for this first note
+            e.TrackNoteOn(t, 60, 1f);
+            Rms(e, 2);
+            e.TrackNoteOff(t, 60);                              // held back: it plays through
+            Rms(e, 1);
+            e.RackChainInstrumentParamSet(t, p, voiceP, 0.5f);  // Mono …
+            e.RackChainInstrumentParamSet(t, p, glideP, 0.3f);  // … with Glide
+            e.RackChainInstrumentParamSet(t, p, loopP, 0.5f);   // looped again
+            e.TrackNoteOn(t, 60, 1f);                           // legato onto the sounding voice
+            Rms(e, 350);                                        // ~4 s, past the sample: only a held loop sounds
+            double held = Rms(e, 4);
+            yield return (loopP >= 0 && voiceP >= 0 && glideP >= 0 && held > 0.05,
+                $"a note gliding onto a released one-shot's voice stays held (rms {held:F3})");
+        }
     }
 
     private static IEnumerable<(bool, string)> PadAudition(string wav)
