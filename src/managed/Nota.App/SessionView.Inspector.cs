@@ -52,6 +52,7 @@ public sealed partial class SessionView
             else if (SlotFilled(c.TrackId, _sel.Scene) && !(_recTrack == c.TrackId && _recScene == _sel.Scene)) BuildClipInspector(stack, c, _sel.Scene);
             else BuildEmptyInspector(stack, c, _sel.Scene);
         }
+        else if (_sel.Kind == SelKind.Bus && BusColumn(_sel.TrackId) is { } bus) BuildBusInspector(stack, bus);
 
         var hint = new TextBlock
         {
@@ -426,6 +427,19 @@ public sealed partial class SessionView
                         : ("Record here", "", () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
         if (CanPaste) actions.Add(("Paste", Shortcut.Cmd('V'), () => PasteSelection()));
         s.Children.Add(Actions(actions.ToArray()));
+    }
+
+    // A Return / Master column (#314): no slots to launch; its devices are in the panel below.
+    private void BuildBusInspector(StackPanel s, Column c)
+    {
+        s.Children.Add(Title(c.Kind == ColKind.Master ? NotaPalette.Master : c.Brush, c.Name, c.Kind == ColKind.Master ? "MASTER" : "RETURN"));
+        s.Children.Add(new TextBlock
+        {
+            Text = c.Kind == ColKind.Master
+                ? "Every track ends up here. Its devices are in the Devices panel."
+                : "Tracks reach it through their sends. It has no clip slots; its devices are in the Devices panel.",
+            FontSize = 11, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
+        });
     }
 
     private void BuildGroupInspector(StackPanel s, Column g, int scene)

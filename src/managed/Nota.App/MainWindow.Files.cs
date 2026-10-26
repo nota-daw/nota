@@ -349,8 +349,10 @@ public partial class MainWindow
             Timeline.SaveTrackView(dir); // track heights + track-list width (sidecar)
             SaveFreezeLinks(dir);        // live-freeze links (v1.1) ride in the bundle sidecar
             _analysis.AdoptInto(dir);    // analysis cached while unsaved moves into the bundle
-            string? historyNote = RecordVersion(dir, previousPath, note);   // after every sidecar is written
+            // The bundle is written, so it's the open project now: set the path before the
+            // version is recorded, since the History tab refreshes against it (#317).
             _projectPath = dir;
+            string? historyNote = RecordVersion(dir, previousPath, note);   // after every sidecar is written
             RecordRecentProject(dir);    // surface it on the welcome screen next launch
             UpdateWindowTitle();
             MarkProjectClean();
