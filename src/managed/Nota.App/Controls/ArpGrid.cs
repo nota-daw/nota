@@ -270,6 +270,9 @@ internal sealed class ArpGrid : Control
                 ctx.FillRectangle(NotaPalette.Accent, new Rect(hr.X, hr.Y, 1, hr.Height));
             }
 
+            // Mini: the lowest note's name sits in the well under the steps, so a step drawn there covers it.
+            if (!Groove && Mini && rows.Count > 0)
+                Text(ctx, DeviceCardKit.NoteName(rows[^1]), w.X + 4, w.Bottom - 8, NotaPalette.TextTertiary);
             if (!Groove) DrawPattern(ctx, w, n, cw, seq, rows, rh, octs);
             else DrawGroove(ctx, w, n, cw, lane);
         }
@@ -282,8 +285,6 @@ internal sealed class ArpGrid : Control
                 if (rows.Count > 8 && !root) continue;
                 Text(ctx, DeviceCardKit.NoteName(rows[r]), GutterW, w.Y + (r + 0.5) * rh, root ? NotaPalette.TextSecondary : NotaPalette.TextTertiary, right: true);
             }
-        if (!Groove && Mini && rows.Count > 0)
-            Text(ctx, DeviceCardKit.NoteName(rows[^1]), w.X + 4, w.Bottom - 8, NotaPalette.TextTertiary);
 
         // Step numbers (L Groove): click mutes.
         if (Groove && !Mini)

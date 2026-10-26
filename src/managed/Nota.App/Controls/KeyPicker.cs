@@ -28,13 +28,15 @@ internal static class KeyPicker
                             IReadOnlyList<(string Label, MusicalKey Key)>? extras = null)
     {
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
-        flyout.Content = Build(current, noneLabel, k => { flyout.Hide(); pick(k); }, extras);
+        // A note, a shortcut or the way out picks and closes; Major / Minor re-picks and stays open.
+        flyout.Content = Build(current, noneLabel, k => { flyout.Hide(); pick(k); }, extras, k => pick(k));
         flyout.ShowAt(anchor);
     }
 
-    /// <summary>The picker's content alone (what <see cref="Show"/> puts in its flyout).</summary>
+    /// <summary>The picker's content alone (what <see cref="Show"/> puts in its flyout).
+    /// <paramref name="remode"/> gets the key when Major / Minor changes it (default: <paramref name="choose"/>).</summary>
     internal static Control Build(MusicalKey? current, string noneLabel, Action<MusicalKey?> choose,
-                                  IReadOnlyList<(string Label, MusicalKey Key)>? extras = null)
+                                  IReadOnlyList<(string Label, MusicalKey Key)>? extras = null, Action<MusicalKey>? remode = null)
     {
         // A note (KeyMode.Note) reads as its major key here: the picker offers keys only.
         var mode = current is { Mode: KeyMode.Minor } ? KeyMode.Minor : KeyMode.Major;
@@ -66,8 +68,12 @@ internal static class KeyPicker
         {
             if (mode == m) { Paint(); return; }
             mode = m;
-            if (tonic is int t) choose(new MusicalKey(t, mode));   // keeps the tonic
-            else Paint();                                          // no key yet: only the names change
+            Paint();                                               // the key names follow the mode
+            if (tonic is int t)                                    // keeps the tonic
+            {
+                var k = new MusicalKey(t, mode);
+                if (remode is not null) remode(k); else choose(k);
+            }
         }
         major.Click += (_, _) => SetMode(KeyMode.Major);
         minor.Click += (_, _) => SetMode(KeyMode.Minor);

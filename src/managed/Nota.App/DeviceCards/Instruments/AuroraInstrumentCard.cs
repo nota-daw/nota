@@ -497,6 +497,13 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             Children = { tableCap, frameCap, posMod },
         };
         stack.TopInset = 36;   // the three caption lines the overlay puts in that corner
+        // …however tall Text size makes them: keep the waveform clear of the last line.
+        tableOverlay.SizeChanged += (_, e) =>
+        {
+            double inset = Math.Max(36, e.NewSize.Height + tableOverlay.Margin.Top + 1);
+            if (Math.Abs(inset - stack.TopInset) < 0.5) return;
+            stack.TopInset = inset; stack.InvalidateVisual();
+        };
         var tableWindow = new Panel { Width = 112, Margin = new Thickness(0, 0, 0, 4), Children = { stack, tableOverlay } };
         var oscMid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6, Margin = new Thickness(0, 2, 0, 0) };
         oscMid.Children.Add(tableWindow);
