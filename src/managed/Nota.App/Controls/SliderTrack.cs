@@ -30,7 +30,7 @@ using Avalonia.Media;
 
 namespace Nota.App;
 
-internal sealed class SliderTrack : Control
+internal sealed class SliderTrack : Control, IInlineReadout
 {
     private static readonly IBrush Fill = NotaPalette.AccentSoft;
     private static readonly IBrush FillDrag = NotaPalette.Derived(() => Mix(NotaPalette.AccentSoft.Color, NotaPalette.Accent.Color, 0.45));
@@ -63,6 +63,12 @@ internal sealed class SliderTrack : Control
 
     /// <summary>The value written inside a Shell bar; null writes nothing.</summary>
     public Func<string>? Text { get; set; }
+
+    private Rect _textRect;
+
+    // The value written inside the bar is the read-out: a double-click on it types (ValueEntry),
+    // with a few pixels' grace either side; a double-click elsewhere on the bar resets.
+    bool IInlineReadout.ReadoutAt(Point p) => Text is not null && _textRect.Width > 0 && _textRect.Inflate(new Thickness(4, 0)).Contains(p);
 
     private bool _hover;
     protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; if (Shell) InvalidateVisual(); }
@@ -224,7 +230,9 @@ internal sealed class SliderTrack : Control
                 double fx = Bipolar ? 0 : x;
                 double tx = Bipolar || t.Width + 12 <= fx ? 6 : Math.Min(fx + ShellLineW + 4, w - t.Width - 4);
                 ctx.DrawText(t, new Point(tx, ty + (bh - t.Height) / 2));
+                _textRect = new Rect(tx, ty, t.Width, bh);
             }
+            else _textRect = default;
         }
     }
 
