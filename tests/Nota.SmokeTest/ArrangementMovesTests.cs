@@ -73,6 +73,13 @@ internal static class ArrangementMovesTests
         yield return (eng.Undo() && eng.TrackCount == track0 && eng.TryGetClipInfo(inst, clip, out var back) && Math.Abs(back.StartBeat - 4.0) < 1e-9,
             "moves: one undo takes back the move and the new track");
 
+        // A track added after the returns exist sits after them in the graph; the new track
+        // still goes below the last regular track, not above it (Mac check of #324).
+        int late = eng.AddInstrumentTrack();
+        int like3 = eng.AddTrackLike(inst);
+        yield return (like3 > 0 && IndexOf(eng, like3) == IndexOf(eng, late) + 1,
+            $"moves: the new track lands below the last track added (row {IndexOf(eng, like3)}, last track row {IndexOf(eng, late)})");
+
         // Only regular tracks have a "like".
         int grp = eng.CreateGroup(new[] { inst });
         yield return (eng.AddTrackLike(ret) == -1 && eng.AddTrackLike(grp) == -1 && eng.AddTrackLike(9999) == -1,

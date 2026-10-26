@@ -3134,19 +3134,20 @@ int32_t Engine::addTrackLike(int32_t trackId) {
     nt->name.clear();
     nt->colorIndex = -1;
 
-    // After the last regular track; the returns keep their trailing slots.
+    // After the last regular track. Returns aren't always trailing in the graph (a track
+    // added later is appended after them), so place it by the last regular track, not
+    // in front of the first return.
     auto g = std::make_shared<Graph>();
     inheritGraphLevel(*g, *authoring_);
     g->tracks.reserve(authoring_->tracks.size() + 1);
-    bool placed = false;
-    for (auto& t : authoring_->tracks) {
-        if (!placed && t->type() == TrackType::Return) {
-            g->tracks.push_back(nt);
-            placed = true;
-        }
-        g->tracks.push_back(t);
+    std::ptrdiff_t lastRegular = -1;
+    for (std::size_t i = 0; i < authoring_->tracks.size(); ++i)
+        if (authoring_->tracks[i]->type() != TrackType::Return) lastRegular = static_cast<std::ptrdiff_t>(i);
+    if (lastRegular < 0) g->tracks.push_back(nt);
+    for (std::size_t i = 0; i < authoring_->tracks.size(); ++i) {
+        g->tracks.push_back(authoring_->tracks[i]);
+        if (static_cast<std::ptrdiff_t>(i) == lastRegular) g->tracks.push_back(nt);
     }
-    if (!placed) g->tracks.push_back(nt);
     publish(std::move(g));
     recomputePdc();
     return newId;
