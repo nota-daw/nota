@@ -23,6 +23,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Move clips with the keyboard** (nota-daw/nota#302): in the Arrangement, ← / → nudge the
+  selected clips by the grid step and ⌥← / ⌥→ by a 64th note, stopping at the song start;
+  ⌥↑ / ⌥↓ move them to the next track up or down that takes them, at the same beats. Each
+  press is one undo step.
+- **Drop clips below the last track to make a new one** (nota-daw/nota#301): dragging clips
+  into the empty space under the tracks shows a **New track** ring per source track; on release
+  each source track gets a new track with the same instrument, devices and mix, and the clips
+  move there. One undo takes back both.
+- **Shift-click track headers to select a range** (nota-daw/nota#249): Shift-click selects every
+  track from the last clicked one; ⌘-click (Ctrl on Windows / Linux) adds or removes one track.
 - **Wrap a device in a rack with ⌘G** (nota-daw/nota#257): with a device selected in the chain,
   ⌘G puts it in an Audio Effect Rack in its place, settings and all, and ⌘⇧G takes the devices
   of a one-chain rack back out. Also in the device's right-click menu (**Group into rack** /

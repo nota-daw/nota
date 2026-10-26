@@ -3060,6 +3060,39 @@ int32_t Engine::duplicateTrack(int32_t trackId) {
     return newId;
 }
 
+int32_t Engine::addTrackLike(int32_t trackId) {
+    if (trackId == kMasterTrackId) return -1;
+    auto src = findTrackAuthoring(trackId);
+    if (!src || src->type() == TrackType::Return || src->type() == TrackType::Group) return -1;
+    const int32_t newId = nextTrackId_++;
+    auto nt = deepCloneTrack(*src, newId);
+    nt->clips.clear();
+    nt->midiClips.clear();
+    nt->sessionSlots.clear(); // publish re-sizes it to the scene count, every slot empty
+    nt->automation.clear();
+    nt->setGroupId(-1);
+    nt->setArmed(false);
+    nt->name.clear();
+    nt->colorIndex = -1;
+
+    // After the last regular track; the returns keep their trailing slots.
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    g->tracks.reserve(authoring_->tracks.size() + 1);
+    bool placed = false;
+    for (auto& t : authoring_->tracks) {
+        if (!placed && t->type() == TrackType::Return) {
+            g->tracks.push_back(nt);
+            placed = true;
+        }
+        g->tracks.push_back(t);
+    }
+    if (!placed) g->tracks.push_back(nt);
+    publish(std::move(g));
+    recomputePdc();
+    return newId;
+}
+
 bool Engine::removeTrack(int32_t trackId) {
     auto rt = findTrackAuthoring(trackId);
     if (!rt) return false;

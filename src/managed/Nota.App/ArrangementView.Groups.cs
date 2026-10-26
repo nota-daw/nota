@@ -9,6 +9,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using Nota.Application.Editing;
 
 namespace Nota.App;
 
@@ -116,6 +117,22 @@ public sealed partial class ArrangementView
     }
 
     private void ClearTrackMultiSelection() => _selTracks.Clear();
+
+    // Where a Shift-click range starts: the last plain- or Ctrl/Cmd-clicked header (#249).
+    private int _trackAnchorId = -1;
+
+    // Shift-click: every row from the anchor to this one, as shown (a folded group is one row
+    // that brings its children along); the clicked track becomes the primary.
+    private void SelectTrackRange(int trackId)
+    {
+        int anchor = _tracks.Any(t => t.Id == _trackAnchorId) ? _trackAnchorId : SelTrackId;
+        var ids = ArrangementMoves.Range(_tracks.Select(t => t.Id).ToList(), anchor, trackId);
+        if (ids.Count == 0) return;
+        _selTracks.Clear();
+        foreach (int id in ids) _selTracks.Add(id);
+        if (_trackAnchorId <= 0) _trackAnchorId = anchor;
+        Select(trackId, -1, keepTrackSet: true);
+    }
 
     // ---- create / ungroup -------------------------------------------------
     /// <summary>Group the current multi-selection (or <paramref name="fallbackTrackId"/> when

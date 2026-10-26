@@ -521,6 +521,11 @@ NOTA_API int32_t    nota_engine_track_count(const NotaEngine* engine);
  * source and returns the new id (-1 on failure); remove drops the track. */
 NOTA_API int32_t    nota_engine_duplicate_track(NotaEngine* engine, int32_t track_id);
 NOTA_API NotaResult nota_engine_remove_track(NotaEngine* engine, int32_t track_id);
+/* A new last regular track built like track_id: same instrument, MIDI effects, devices,
+ * mixer and sends, but no clips, session clips or automation; top level, default name and
+ * colour, not armed. Returns the new id, -1 for an unknown id, a return or a group. One
+ * undo step. */
+NOTA_API int32_t    nota_engine_add_track_like(NotaEngine* engine, int32_t track_id);
 /* Reorders a non-return track to to_index within the regular (non-return) track list;
  * returns/master keep their trailing slots. No-op for return tracks. Checkpoints undo. */
 NOTA_API NotaResult nota_engine_move_track(NotaEngine* engine, int32_t track_id, int32_t to_index);

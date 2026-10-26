@@ -31,6 +31,10 @@ public sealed partial class NotaEngine
 
     /// <summary>Duplicate a track (deep copy) after the source; returns the new id or -1.</summary>
     public int DuplicateTrack(int trackId) { ThrowIfDisposed(); return NativeMethods.DuplicateTrack(_handle, trackId); }
+    /// <summary>A new last track built like <paramref name="trackId"/>: its instrument, devices,
+    /// mixer and sends, but no clips, Session clips or automation (#301). New id, or -1 for an
+    /// unknown id, a return or a group. One undo step.</summary>
+    public int AddTrackLike(int trackId) { ThrowIfDisposed(); return NativeMethods.AddTrackLike(_handle, trackId); }
     /// <summary>Remove a track. False if the id is unknown.</summary>
     public bool RemoveTrack(int trackId) { ThrowIfDisposed(); return NativeMethods.RemoveTrack(_handle, trackId) == NativeMethods.NotaResult.Ok; }
     /// <summary>Reorder a non-return track to toIndex within the regular track list.</summary>

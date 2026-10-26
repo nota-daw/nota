@@ -1,0 +1,91 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+//
+// Arrangement keyboard moves and drop-below-the-last-track (specs/039-arrangement-keyboard-moves):
+// the nudge step stops at the song start (#302), ⌥↑/⌥↓ skip rows that can't take the clips,
+// a Shift-click selects the header range (#249), and a track "like" a source copies its
+// instrument and devices but nothing it played, ahead of the returns, in one undo step (#301).
+
+using Nota.Application;
+using Nota.Application.Editing;
+using Nota.Infrastructure;
+
+namespace Nota.SmokeTest;
+
+internal static class ArrangementMovesTests
+{
+    private const int Utility = 4;
+
+    public static IEnumerable<(bool ok, string label)> Run()
+    {
+        // Nudge: a full step, clamped at 0, nothing at 0.
+        yield return (ArrangementMoves.NudgeDelta(4, 1, +1) == 1 && ArrangementMoves.NudgeDelta(4, 1, -1) == -1,
+            "moves: ←/→ nudge by the grid step");
+        yield return (ArrangementMoves.NudgeDelta(0.25, 1, -1) == -0.25, "moves: a nudge left stops at the song start");
+        yield return (ArrangementMoves.NudgeDelta(0, 1, -1) == 0, "moves: nothing moves left of the song start");
+
+        // Row shift: rows 0 (audio) 1 (instrument) 2 (audio) 3 (audio); audio only on audio.
+        bool[] audio = { true, false, true, true };
+        bool Accepts(int from, int to) => audio[from] == audio[to];
+        yield return (ArrangementMoves.RowShift(new[] { 0 }, 4, +1, Accepts) == 2, "moves: ⌥↓ skips a track that can't take the clip");
+        yield return (ArrangementMoves.RowShift(new[] { 2, 3 }, 4, +1, Accepts) == 0, "moves: ⌥↓ at the last track does nothing");
+        // Rows 0 1 audio, 2 instrument, 3 4 audio: a block on 3+4 can't stop half on row 2.
+        bool[] five = { true, true, false, true, true };
+        yield return (ArrangementMoves.RowShift(new[] { 3, 4 }, 5, -1, (f, t) => five[f] == five[t]) == -3,
+            "moves: a two-row block moves until every clip lands on a track that takes it");
+        yield return (ArrangementMoves.RowShift(new[] { 2, 3 }, 4, -1, Accepts) == 0,
+            "moves: no shift when the block can't fit on matching tracks");
+
+        // Header range: either direction, unknown anchor → just the target.
+        int[] order = { 10, 11, 12, 13 };
+        yield return (ArrangementMoves.Range(order, 13, 11).SequenceEqual(new[] { 11, 12, 13 }), "moves: Shift-click selects up to the anchor");
+        yield return (ArrangementMoves.Range(order, 99, 12).SequenceEqual(new[] { 12 }), "moves: no anchor selects just the clicked track");
+        yield return (ArrangementMoves.Range(order, 10, 99).Count == 0, "moves: a hidden target selects nothing");
+
+        // A track like the source.
+        using var eng = new NotaEngine();
+        int inst = eng.AddInstrumentTrack();
+        eng.AddBuiltinDevice(inst, Utility);
+        eng.SetTrackVolume(inst, 0.5f);
+        int clip = eng.AddMidiClip(inst, 4.0, 4.0);
+        eng.AddAutomationLane(inst, AutomationTarget.Pan, -1, -1);
+        int ret = eng.AddReturnTrack();
+        int kind = eng.TrackInstrumentKind(inst);
+
+        int like = eng.AddTrackLike(inst);
+        int idx = IndexOf(eng, like);
+        yield return (like > 0 && idx == IndexOf(eng, ret) - 1, $"moves: the new track lands before the returns (row {idx})");
+        eng.TryGetTrackInfo(idx, out var info);
+        yield return (info.IsInstrument && eng.TrackInstrumentKind(like) == kind && eng.TrackDeviceCount(like) == eng.TrackDeviceCount(inst),
+            "moves: it has the source's instrument and devices");
+        yield return (info.ClipCount == 0 && eng.AutomationLaneCount(like) == 0 && info.GroupId == -1,
+            "moves: it has no clips, automation or group");
+        yield return (Math.Abs(info.Volume - 0.5f) < 1e-4, "moves: it keeps the source's mix");
+
+        // Track + clip move undo together.
+        int track0 = eng.TrackCount;
+        eng.BeginUndoGroup();
+        int like2 = eng.AddTrackLike(inst);
+        bool moved = eng.MoveClipBlock(new[] { (inst, clip, like2, 8.0) });
+        eng.EndUndoGroup();
+        eng.TryGetClipInfo(like2, 0, out var ci);
+        yield return (moved && Math.Abs(ci.StartBeat - 8.0) < 1e-9, "moves: a clip moves onto the new track at its drop beat");
+        yield return (eng.Undo() && eng.TrackCount == track0 && eng.TryGetClipInfo(inst, clip, out var back) && Math.Abs(back.StartBeat - 4.0) < 1e-9,
+            "moves: one undo takes back the move and the new track");
+
+        // Only regular tracks have a "like".
+        int grp = eng.CreateGroup(new[] { inst });
+        yield return (eng.AddTrackLike(ret) == -1 && eng.AddTrackLike(grp) == -1 && eng.AddTrackLike(9999) == -1,
+            "moves: no new track like a return, a group or an unknown id");
+        int child = eng.AddTrackLike(inst);
+        eng.TryGetTrackInfo(IndexOf(eng, child), out var ci2);
+        yield return (child > 0 && ci2.GroupId == -1, "moves: a track like a group member is top-level");
+    }
+
+    private static int IndexOf(NotaEngine eng, int id)
+    {
+        for (int i = 0; i < eng.TrackCount; i++)
+            if (eng.TryGetTrackInfo(i, out var t) && t.Id == id) return i;
+        return -1;
+    }
+}
