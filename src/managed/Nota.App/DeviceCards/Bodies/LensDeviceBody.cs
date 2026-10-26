@@ -516,7 +516,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             var raw = new float[65536];
             int n = engine.DeviceLayerWave(track, di, L_Raw, raw, raw.Length);
             if (n <= 0) return;
-            var file = await top.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            var file = await top.PickSaveFileAsync(new FilePickerSaveOptions
             {
                 Title = "Export the Lens capture to WAV",
                 DefaultExtension = "wav",

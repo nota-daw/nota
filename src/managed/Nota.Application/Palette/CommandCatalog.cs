@@ -28,6 +28,7 @@ public static class CommandCatalog
         C("file.saveVersion", "Save version with note…", "File", Shortcut.CmdAlt('S'), "snapshot history commit"),
         C("file.import", "Import audio…", "File", "", "add file wav"),
         C("file.export", "Export audio…", "File", Shortcut.CmdShift('E'), "render bounce mixdown stems"),
+        C("file.exit", "Exit Nota", "File", Shortcut.Cmd('Q'), "quit close leave"),
 
         // ---- Edit -------------------------------------------------------------------------
         C("edit.undo", "Undo", "Edit", Shortcut.Cmd('Z'), "back revert"),

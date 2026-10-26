@@ -29,7 +29,7 @@ public partial class MainWindow
         // native file panel opens (common under `dotnet run` / launched from an IDE), the
         // panel can appear unfocused and refuse clicks. Activating makes the window key.
         Activate();
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        var files = await this.PickFilesAsync(new FilePickerOpenOptions
         {
             Title = "Import audio",
             AllowMultiple = false,
@@ -76,7 +76,7 @@ public partial class MainWindow
         string? path;
         if (opts.Stems)
         {
-            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions
             {
                 Title = "Export stems to folder", AllowMultiple = false,
             });
@@ -84,7 +84,7 @@ public partial class MainWindow
         }
         else
         {
-            var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+            var file = await this.PickSaveFileAsync(new FilePickerSaveOptions
             {
                 Title = $"Export master to {ext.ToUpperInvariant()}",
                 DefaultExtension = ext,
@@ -219,7 +219,7 @@ public partial class MainWindow
     {
         if (_vm is null) return;
         Activate(); // keep the native panel focused (see DoImportAsync)
-        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions
         {
             Title = "Open Nota project (.nota folder)",
             AllowMultiple = false,
@@ -347,8 +347,10 @@ public partial class MainWindow
             Timeline.SaveTrackView(dir); // track heights + track-list width (sidecar)
             SaveFreezeLinks(dir);        // live-freeze links (v1.1) ride in the bundle sidecar
             _analysis.AdoptInto(dir);    // analysis cached while unsaved moves into the bundle
-            string? historyNote = RecordVersion(dir, previousPath, note);   // after every sidecar is written
+            // The bundle is written, so it's the open project now: set the path before the
+            // version is recorded, since the History tab refreshes against it (#317).
             _projectPath = dir;
+            string? historyNote = RecordVersion(dir, previousPath, note);   // after every sidecar is written
             RecordRecentProject(dir);    // surface it on the welcome screen next launch
             UpdateWindowTitle();
             MarkProjectClean();
@@ -372,7 +374,7 @@ public partial class MainWindow
     private async Task<string?> PickProjectPathAsync(string title, string suggestedName)
     {
         Activate();
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        var file = await this.PickSaveFileAsync(new FilePickerSaveOptions
         {
             Title = title,
             SuggestedStartLocation = _vm is null ? null : await FolderAsync(_vm.Settings.ResolvedProjectsFolder()),   // #309
@@ -443,6 +445,8 @@ public partial class MainWindow
         Timeline.ClearPendingImports();
         Timeline.ForgetAutoTargets();    // lane targets are per-project track/device indices
         ResetClipEditor();               // every clip editor points into the old graph
+        _blockMoves.Clear();             // ...and the clip moves it remembers are the old project's
+        _blockMovesDone = 0;
         CloseDetail();                   // collapse the docked row too, not just hide the panel
         _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project
         Timeline.Refresh();

@@ -73,6 +73,7 @@ class Engine {
     // device refused it and the backend fell back to shared mode. Always false
     // on platforms without exclusive mode. Read after applyAudioConfig() / start().
     bool audioExclusiveFallback() const { return backend_ ? backend_->exclusiveFallback() : false; }
+    bool audioSilentFallback() const { return backend_ ? backend_->silentFallback() : false; }
     int32_t bufferFrames() const { return backend_ ? backend_->bufferFrames() : 0; }
 
     // --- MIDI device settings (M7-2) ---
@@ -335,6 +336,11 @@ class Engine {
     // plugins re-instantiate with state) and inserts the copy after the source;
     // returns the new id (or -1). removeTrack drops it. Both checkpoint undo.
     int32_t duplicateTrack(int32_t trackId);
+    // A new last regular track built like trackId: the same instrument, MIDI effects, devices,
+    // mixer and sends, but no clips, Session clips or automation, top level, default name and
+    // colour, not armed. Where clips dragged below the last track land (#301). New id or -1
+    // (unknown id, a return, a group, or an instrument / device that didn't copy). Checkpoints undo.
+    int32_t addTrackLike(int32_t trackId);
     bool removeTrack(int32_t trackId);
     // Reorders a non-return track to toIndex within the regular (non-return) track list;
     // returns/master keep their slots. Checkpoints undo. No-op for return tracks.
@@ -1342,7 +1348,7 @@ class Engine {
     SessionSlot slotFromAudioClip(const AudioClip& a);
 
     // Build a fully independent copy of a track (fresh id + cloned instrument/devices).
-    std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId);
+    std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId, bool withContent = true);
     // The tracks in ids plus every descendant of a group among them, in engine order.
     std::vector<std::shared_ptr<Track>> expandTrackSet(const int32_t* ids, int32_t n) const;
     void compactReturns(Graph& g) const; // renumber return buses 0..n-1 + remap sends (after a delete)

@@ -51,6 +51,9 @@ int32_t nota_engine_track_count(const NotaEngine* e) {
 int32_t nota_engine_duplicate_track(NotaEngine* e, int32_t track_id) {
     return e ? ENG(e)->duplicateTrack(track_id) : -1;
 }
+int32_t nota_engine_add_track_like(NotaEngine* e, int32_t track_id) {
+    return e ? ENG(e)->addTrackLike(track_id) : -1;
+}
 NotaResult nota_engine_remove_track(NotaEngine* e, int32_t track_id) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->removeTrack(track_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;

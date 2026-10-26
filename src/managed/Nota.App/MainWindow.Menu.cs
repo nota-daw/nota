@@ -67,9 +67,15 @@ public partial class MainWindow
         // chain is showing, which isn't always the selected one (a peek, the master, nothing
         // selected) — rebuilding the selected track's chain there showed the wrong devices.
         if (_deviceChain is { TrackId: > 0 } chain)
-            chain.Show(chain.TrackId == Engine.MasterTrackId || TrackExists(chain.TrackId)
-                ? chain.TrackId : Timeline.SelectedTrackId);   // its track was undone away
+        {
+            if (chain.TrackId == Engine.MasterTrackId || TrackExists(chain.TrackId)) chain.Show(chain.TrackId);
+            // Its track was undone away: follow the selection, or empty the chain when that
+            // track went too (undoing a drop onto a new track) instead of naming a dead one.
+            else if (TrackExists(Timeline.SelectedTrackId)) chain.Show(Timeline.SelectedTrackId);
+            else ShowDevices(-1);
+        }
         if (_modular?.IsVisible == true) _modular.Refresh();
+        FollowMoveThroughHistory();                      // undoing a clip move re-indexes clips
         ReloadEditorNotes();                             // reflect clip/note edits
         // Volume / pan / master steps (specs/009): the master volume lives on the view model
         // (MST, Master row, Mixer and Remote follow it), the track strips in the Mixer rebuild.

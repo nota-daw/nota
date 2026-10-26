@@ -67,6 +67,7 @@ public interface IAudioEngine : IDisposable
     void SetTrackSolo(int trackId, bool solo);
     int TrackCount { get; }
     int DuplicateTrack(int trackId);   // deep copy after the source; new id or -1
+    int AddTrackLike(int trackId);     // empty track with the source's instrument, devices and mix, before the returns; new id or -1
     bool RemoveTrack(int trackId);
     void MoveTrack(int trackId, int toIndex);   // reorder a non-return track within the regular list
     int AddGroupTrack();                         // empty top-level group (submix) track
@@ -937,6 +938,8 @@ public interface IAudioEngine : IDisposable
     /// <summary>True if the last <see cref="ApplyAudio"/> requested WASAPI exclusive but the device refused
     /// it and the backend fell back to shared. Always false on platforms without exclusive mode.</summary>
     bool AudioExclusiveFallback { get; }
+    /// <summary>True when no output device opened and the engine runs on a silent stand-in.</summary>
+    bool AudioSilentFallback { get; }
 
     // --- MIDI device settings (M7-2) ---------------------------------------
     bool IsMidiInputEnabled(string uid);

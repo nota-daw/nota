@@ -75,6 +75,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_audio_exclusive_fallback")]
     internal static partial int AudioExclusiveFallback(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_audio_silent_fallback")]
+    internal static partial int AudioSilentFallback(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_midi_refresh_devices")]
     internal static partial void MidiRefreshDevices();
 

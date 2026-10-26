@@ -681,7 +681,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         addBtn.Click += async (_, _) =>
         {
             Activate();
-            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Add plugin scan folder", AllowMultiple = false });
+            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions { Title = "Add plugin scan folder", AllowMultiple = false });
             if (folders.Count == 0) return;
             var path = folders[0].TryGetLocalPath();
             if (path is null) return;
@@ -785,7 +785,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         choose.Click += async (_, _) =>
         {
             Activate();
-            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = $"Choose {label} folder", AllowMultiple = false });
+            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions { Title = $"Choose {label} folder", AllowMultiple = false });
             if (folders.Count == 0) return;
             var p = folders[0].TryGetLocalPath();
             if (p is null) return;
@@ -1152,6 +1152,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌥⌘S", "Save a version with a note"),
             ("⌘⇧E", "Export audio"),
             ("⌘,", "Settings"),
+            ("⌘Q", "Quit Nota · asks about unsaved changes first"),
         }),
         ("Window", new[]
         {
@@ -1202,6 +1203,10 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘E", "Split at the playhead · at the range edges"),
             ("⌘J", "Consolidate the selection into one clip per track"),
             ("0", "Deactivate / activate the selected clip(s)"),
+            ("←   →", "Nudge the selected clips by the grid step · stops at the song start"),
+            ("⌥←   ⌥→", "Nudge the selected clips by a 64th note"),
+            ("⌥↑   ⌥↓", "Move the selected clips to the next track that takes them, at the same beats"),
+            ("Drag below the last track", "Move the clips to a new track like their own · one per source track"),
             ("Delete", "Delete the selected clip / range"),
         }),
         ("Grid (Arrangement or clip editor — whichever you used last)", new[]
@@ -1216,6 +1221,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("Tracks (after a click in the track headers)", new[]
         {
             ("⌘A", "Select all tracks"),
+            ("⇧-click   ⌘-click", "Select a range of tracks / add or remove one track"),
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the selected tracks · paste lands after the last one"),
             ("⌘D", "Duplicate the selected tracks"),
             ("Delete", "Delete the selected tracks · a group goes with its tracks"),

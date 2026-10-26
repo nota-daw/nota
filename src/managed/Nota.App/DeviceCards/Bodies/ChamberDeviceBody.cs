@@ -250,7 +250,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         {
             var top = TopLevel.GetTopLevel(anchor);
             if (top is null) return;
-            var files = await top.StorageProvider.OpenFilePickerAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
+            var files = await top.PickFilesAsync(new Avalonia.Platform.Storage.FilePickerOpenOptions
             {
                 Title = "Load impulse response", AllowMultiple = false,
                 FileTypeFilter = new[] { new Avalonia.Platform.Storage.FilePickerFileType("Impulse response") { Patterns = new[] { "*.wav", "*.wave", "*.flac", "*.mp3" } } },

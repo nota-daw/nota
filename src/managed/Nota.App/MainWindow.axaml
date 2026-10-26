@@ -31,6 +31,8 @@
             <NativeMenuItem Header="Export audio…" app:Commands.Id="file.export"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Settings…" app:Commands.Id="prefs.open"/>
+            <NativeMenuItemSeparator/>
+            <NativeMenuItem Header="Exit" app:Commands.Id="file.exit"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>

@@ -23,6 +23,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Move clips with the keyboard** (nota-daw/nota#302): in the Arrangement, ← / → nudge the
+  selected clips by the grid step and ⌥← / ⌥→ by a 64th note, stopping at the song start;
+  ⌥↑ / ⌥↓ move them to the next track up or down that takes them, at the same beats. Each
+  press is one undo step.
+- **Drop clips below the last track to make a new one** (nota-daw/nota#301): dragging clips
+  into the empty space under the tracks shows a **New track** ring per source track; on release
+  each source track gets a new track with the same instrument, devices and mix, and the clips
+  move there. One undo takes back both.
+- **Shift-click track headers to select a range** (nota-daw/nota#249): Shift-click selects every
+  track from the last clicked one; ⌘-click (Ctrl on Windows / Linux) adds or removes one track.
+- **File → Exit** (nota-daw/nota#316): Windows and Linux can quit from the menu or with
+  Ctrl+Q, the same way as the window's close button, so unsaved changes still ask first. On
+  macOS Quit Nota (⌘Q) stays in the app menu.
 - **Wrap a device in a rack with ⌘G** (nota-daw/nota#257): with a device selected in the chain,
   ⌘G puts it in an Audio Effect Rack in its place, settings and all, and ⌘⇧G takes the devices
   of a one-chain rack back out. Also in the device's right-click menu (**Group into rack** /
@@ -76,6 +89,24 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Linux: file dialogs that never open** (nota-daw/nota#297): when xdg-desktop-portal has no
+  working FileChooser backend, Open / Save / Export / Import used to do nothing. Nota now notices
+  within 4 seconds (the request fails, answers without showing, or shows nothing) and opens its
+  own file chooser instead, for the rest of the session. `NOTA_FILE_DIALOG=builtin` uses it from
+  the start.
+- **Linux: dropping files from a file manager** (nota-daw/nota#300): besides the standard file
+  list, a drop now also reads file paths sent as text, as a GNOME / KDE copied-files list or as
+  `text/x-moz-url`, wherever files can be dropped. A drop that still names no readable file
+  logs the formats it offered.
+- **Linux: Nota no longer quits at launch when no audio output opens** (nota-daw/nota#243): if
+  the chosen device, its rate or buffer, and the system default all fail, the engine runs on a
+  silent device and the status line says so, instead of aborting before the window appears.
+- **History tab shows the first save** (nota-daw/nota#317): with the History tab open, the first
+  save of a new project (and Save as…) now lists its version straight away instead of after a
+  tab switch.
+- **Select Return and Master in the Session view** (nota-daw/nota#314): clicking a Return or
+  the Master column header selects that track like in the Arrangement: the header lights up,
+  the Devices panel shows its chain and the inspector says what it is.
 - **Drum Rack pads play their whole hit** (nota-daw/nota#312): a pad with a sample that isn't
   looped plays as a one-shot, however short the MIDI note, instead of cutting off at note-off.
   A looped sample, a mono Sampler or a synth on a pad still stops with the note.

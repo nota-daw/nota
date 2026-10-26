@@ -277,7 +277,9 @@ public sealed partial class SessionView
             {
                 var pp = e.GetCurrentPoint(this).Properties;
                 if (pp.IsRightButtonPressed) { e.Handled = true; o.ShowHeaderMenu(this, c); return; }
-                if (!pp.IsLeftButtonPressed || c.Kind is not (ColKind.Track or ColKind.Group)) return;
+                if (!pp.IsLeftButtonPressed) return;
+                // A Return / Master column selects that track (Devices follow); it has no slots (#314).
+                if (c.Kind is ColKind.Return or ColKind.Master) { o.Select(new Selection(SelKind.Bus, o.BusId(c), o._sel.Scene)); return; }
                 if (e.ClickCount == 2) { o.PromptRenameTrack(this, c.TrackId); return; }
                 o.Select(new Selection(SelKind.Slot, c.TrackId, o._sel.Scene));
             };
@@ -286,7 +288,9 @@ public sealed partial class SessionView
 
         public void Sync()
         {
-            bool sel = _o._sel.Kind == SelKind.Slot && _o._sel.TrackId == _c.TrackId && _c.Kind is ColKind.Track or ColKind.Group;
+            bool sel = _c.Kind is ColKind.Track or ColKind.Group
+                ? _o._sel.Kind == SelKind.Slot && _o._sel.TrackId == _c.TrackId
+                : _o._sel.Kind == SelKind.Bus && _o._sel.TrackId == _o.BusId(_c);
             Background = sel ? NotaPalette.SelHeaderBg : _c.Kind is ColKind.Return or ColKind.Master ? NotaPalette.Panel : NotaPalette.SurfaceCard;
             BorderBrush = Brushes.Transparent;
             if (_arr is not null) _arr.IsVisible = _o._engine.SessionPlayingSlot(_c.TrackId) >= 0;

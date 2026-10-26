@@ -3068,7 +3068,8 @@ bool Engine::deleteClip(int32_t trackId, int32_t clipIndex) {
 
 // Fully independent copy of a track: cloned instrument/MIDI-FX/insert devices (own DSP
 // state), copied clips/automation with fresh warp stretchers, and the UI metadata.
-std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId) {
+// withContent = false leaves out what it plays: clips, Session slots and automation.
+std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, bool withContent) {
     auto nt = std::make_shared<Track>(newId, src.type());
     nt->setVolume(src.volume());
     nt->setPan(src.pan());
@@ -3081,10 +3082,12 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId) {
     nt->setMonitor(src.monitor());
     nt->setMidiFromTrackId(src.midiFromTrackId());
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, src.send(b));
-    nt->clips = src.clips; // sample buffers are shared_ptr (immutable) — fine
-    nt->midiClips = src.midiClips;
-    nt->sessionSlots = src.sessionSlots;
-    nt->automation = src.automation;
+    if (withContent) {
+        nt->clips = src.clips; // sample buffers are shared_ptr (immutable) — fine
+        nt->midiClips = src.midiClips;
+        nt->sessionSlots = src.sessionSlots;
+        nt->automation = src.automation;
+    }
     nt->name = src.name;
     nt->colorIndex = src.colorIndex;
     nt->instrument = cloneInstrument(src);
@@ -3113,6 +3116,41 @@ int32_t Engine::duplicateTrack(int32_t trackId) {
     for (auto& t : authoring_->tracks) {
         g->tracks.push_back(t);
         if (t->id() == trackId) g->tracks.push_back(nt);
+    }
+    publish(std::move(g));
+    recomputePdc();
+    return newId;
+}
+
+int32_t Engine::addTrackLike(int32_t trackId) {
+    if (trackId == kMasterTrackId) return -1;
+    auto src = findTrackAuthoring(trackId);
+    if (!src || src->type() == TrackType::Return || src->type() == TrackType::Group) return -1;
+    const int32_t newId = nextTrackId_++;
+    auto nt = deepCloneTrack(*src, newId, /*withContent=*/false); // publish sizes the Session slots, all empty
+    // The source's clips move onto this track, so it must sound the same: refuse it when the
+    // instrument or any device didn't copy (a plugin that won't load a second instance).
+    if (static_cast<bool>(src->instrument) != static_cast<bool>(nt->instrument)
+        || src->midiEffects.size() != nt->midiEffects.size() || src->devices.size() != nt->devices.size())
+        return -1;
+    nt->setGroupId(-1);
+    nt->setArmed(false);
+    nt->name.clear();
+    nt->colorIndex = -1;
+
+    // After the last regular track. Returns aren't always trailing in the graph (a track
+    // added later is appended after them), so place it by the last regular track, not
+    // in front of the first return.
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    g->tracks.reserve(authoring_->tracks.size() + 1);
+    std::ptrdiff_t lastRegular = -1;
+    for (std::size_t i = 0; i < authoring_->tracks.size(); ++i)
+        if (authoring_->tracks[i]->type() != TrackType::Return) lastRegular = static_cast<std::ptrdiff_t>(i);
+    if (lastRegular < 0) g->tracks.push_back(nt);
+    for (std::size_t i = 0; i < authoring_->tracks.size(); ++i) {
+        g->tracks.push_back(authoring_->tracks[i]);
+        if (static_cast<std::ptrdiff_t>(i) == lastRegular) g->tracks.push_back(nt);
     }
     publish(std::move(g));
     recomputePdc();

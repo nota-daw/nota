@@ -478,7 +478,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         {
             var top = TopLevel.GetTopLevel(map);
             if (top is null) return;
-            var picked = await top.StorageProvider.OpenFolderPickerAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions { Title = "Locate the samples", AllowMultiple = false });
+            var picked = await top.PickFoldersAsync(new Avalonia.Platform.Storage.FolderPickerOpenOptions { Title = "Locate the samples", AllowMultiple = false });
             var dir = picked.FirstOrDefault()?.TryGetLocalPath();
             if (dir is null) return;
             var byName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -1314,7 +1314,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 var item = BrowserView.CurrentDrag;
                 bool folder = item is { Kind: BrowserItemKind.Folder } && Directory.Exists(item.Path);
                 bool sample = item is { Kind: BrowserItemKind.Sample };
-                bool files = item is null && e.DataTransfer.Contains(DataFormat.File);
+                bool files = item is null && BrowserView.IsAcceptableDrag(e);
                 if (!folder && !sample && !files) return;
                 e.DragEffects = DragDropEffects.Copy;
                 e.Handled = true;
@@ -1398,15 +1398,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         }
     }
 
-    private static List<string> DroppedPaths(DragEventArgs e)
-    {
-        var list = new List<string>();
-        if (!e.DataTransfer.Contains(DataFormat.File)) return list;
-        var files = e.DataTransfer.TryGetFiles();
-        if (files is null) return list;
-        foreach (var f in files) if (f.TryGetLocalPath() is { Length: > 0 } p) list.Add(p);
-        return list;
-    }
+    private static List<string> DroppedPaths(DragEventArgs e) => BrowserView.ExternalPaths(e);
 
     private static List<string> ExpandAudio(IEnumerable<string> paths)
     {

@@ -2326,13 +2326,17 @@ public sealed partial class ArrangementView : UserControl
                 try { _engine?.OpenPluginEditor(t.Id, -1); } catch { /* builtin/no editor: no-op */ }
                 return;
             }
-            // Shift- (or Ctrl/Cmd-) click adds the track to the multi-selection; again removes it.
-            if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed
-                && (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+            // Shift-click selects the range from the anchor; Ctrl/Cmd-click adds or removes one (#249).
+            if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed)
             {
-                ToggleTrackInSelection(t.Id); e.Handled = true; return;
+                if ((e.KeyModifiers & KeyModifiers.Shift) != 0) { SelectTrackRange(t.Id); e.Handled = true; return; }
+                if ((e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+                {
+                    ToggleTrackInSelection(t.Id); _trackAnchorId = t.Id; e.Handled = true; return;
+                }
             }
             _selTracks.Clear();   // a plain click resets the multi-selection to just this track
+            _trackAnchorId = t.Id;   // and is where a Shift-click range starts
             // Grab the title strip (top row, clear of the M/S/arm chips + faders below) to
             // start a reorder drag; selection is deferred to release so the capture survives
             // (Select rebuilds the headers). Returns aren't reorderable — select them outright.

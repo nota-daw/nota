@@ -117,6 +117,9 @@ int32_t nota_audio_negotiated_buffer_frames(const NotaEngine* e) {
 int32_t nota_audio_exclusive_fallback(const NotaEngine* e) {
     return (e && CENG(e)->audioExclusiveFallback()) ? 1 : 0;
 }
+int32_t nota_audio_silent_fallback(const NotaEngine* e) {
+    return (e && CENG(e)->audioSilentFallback()) ? 1 : 0;
+}
 
 } // extern "C"
 
