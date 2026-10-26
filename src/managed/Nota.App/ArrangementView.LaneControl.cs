@@ -1640,8 +1640,8 @@ public sealed partial class ArrangementView
                 var r = new Rect(0, top + k * DefaultRowHeight, w, DefaultRowHeight);
                 ctx.FillRectangle(DropWash, r);
                 ctx.DrawRectangle(null, DropEdgePen, r.Deflate(1));
-                var ft = new FormattedText("New track", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    Typeface.Default, 11, RulerText);
+                var ft = new NotaFormattedText("New track", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    NotaFonts.Sans, NotaType.Body, RulerText);
                 ctx.DrawText(ft, new Point(Math.Max(8, w - ft.Width - 12), r.Y + 4));   // clear of clips at the song start
             }
             using (ctx.PushOpacity(0.5))
