@@ -243,7 +243,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         // ======================================================================
         // CENTRE — Oscillators
         // ======================================================================
-        const string OscCols = "18,40,40,40,*,Auto";
+        const string OscCols = "24,40,40,40,*,Auto";
         Control Cell(Control c, int col, HorizontalAlignment ha = HorizontalAlignment.Center) { c.HorizontalAlignment = ha; c.VerticalAlignment = VerticalAlignment.Center; return Col(new Panel { Children = { c } }, col); }
         Control OscRow(string o)
         {
@@ -277,13 +277,23 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
                 hdr.Children.Add(Col(t, i));
             }
             // bottom row: glide · glide mode · voice mode · voices
-            var glide = K("glide", "Glide", v => Glide(v), false, Knob.SizeInline, 64, true);
+            var glide = K("glide", "Glide", v => Glide(v), false, Knob.SizeInline, 54, true);
+            // Glide's name and value grow with Text size instead of ellipsizing: the cell is 54 at
+            // least and as wide as its words need.
+            if (glide is StackPanel gp && gp.Children.Count == 2 && gp.Children[1] is StackPanel words)
+            {
+                gp.Width = double.NaN; gp.MinWidth = 54;
+                foreach (var w in words.Children) w.MaxWidth = double.PositiveInfinity;
+            }
             var mode = Row(6, Caps("Mode"), Chips("voicemode", new[] { "Poly", "Uni", "Mono" }));
-            var strip = new VoiceKeys { Height = 16, MinWidth = 68, HorizontalAlignment = HorizontalAlignment.Right }; voiceStrips.Add(strip);
-            var voices = Row(6, Caps("Voices"), strip);
-            var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,*,Auto"), ColumnSpacing = 4, Height = 44 };
+            // The voice strip takes what's left of the row and narrows its cells to fit, so every
+            // voice stays on the card at any Text size.
+            var strip = new VoiceKeys { Height = 16, MinWidth = 30 }; voiceStrips.Add(strip);
+            var voicesCap = Caps("Voices"); voicesCap.Margin = new Thickness(0, 0, 6, 0);
+            var voices = new DockPanel { LastChildFill = true, Children = { Docked(voicesCap, Avalonia.Controls.Dock.Left), strip } };
+            var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), ColumnSpacing = 6, Height = 44 };
             bottom.Children.Add(glide); bottom.Children.Add(Col(Chips("glidemode", new[] { "Off", "On", "Leg" }), 1));
-            bottom.Children.Add(Col(mode, 3)); bottom.Children.Add(Col(voices, 5));
+            bottom.Children.Add(Col(mode, 2)); bottom.Children.Add(Col(voices, 3));
             foreach (Control c in bottom.Children) c.VerticalAlignment = VerticalAlignment.Center;
             var rows = new Grid { RowDefinitions = new RowDefinitions("*,*") };
             var rb = OscRow("b"); Grid.SetRow(rb, 1);
@@ -560,7 +570,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
 
     // The voices as device number buttons (14 × 16, raised, 9.5 / 600 in ink 2), right-aligned;
     // a sounding voice takes the soft tint with its number in orange. Cells narrow to fit
-    // when the polyphony is larger than the strip.
+    // when the polyphony (or the Text size) outgrows the strip; numbers show while they fit.
     private sealed class VoiceKeys : Control
     {
         private readonly float[] _lv = new float[16];
@@ -586,12 +596,10 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
                 bool lit = _lv[i] > 0.0005f;
                 ctx.DrawRectangle(lit ? NotaPalette.AccentSoft : NotaPalette.SurfaceHover, null, r, 3, 3);
                 if (!lit) ctx.DrawLine(new Pen(NotaPalette.Bevel, 1), new Point(r.X + 2, r.Y + 0.5), new Point(r.Right - 2, r.Y + 0.5));
-                if (cw >= 9)
-                {
-                    var ft = new NotaFormattedText((i + 1).ToString(NotaNum.Culture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                        NotaFonts.SansSemiBold, 9.5, lit ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+                var ft = new NotaFormattedText((i + 1).ToString(NotaNum.Culture), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    NotaFonts.SansSemiBold, 9.5, lit ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+                if (ft.Width + 3 <= cw)
                     ctx.DrawText(ft, new Point(r.X + (r.Width - ft.Width) / 2, r.Y + (r.Height - ft.Height) / 2));
-                }
             }
         }
     }
