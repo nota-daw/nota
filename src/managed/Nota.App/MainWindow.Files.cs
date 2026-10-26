@@ -33,6 +33,7 @@ public partial class MainWindow
         {
             Title = "Import audio",
             AllowMultiple = false,
+            SuggestedStartLocation = await FolderAsync(_importFolder ?? _vm.Settings.ResolvedSamplesFolder()),
             FileTypeFilter = new[]
             {
                 new FilePickerFileType("Audio") { Patterns = new[] { "*.wav", "*.flac", "*.mp3" } }
@@ -42,6 +43,7 @@ public partial class MainWindow
         if (files.Count == 0) return;
         var path = files[0].TryGetLocalPath();
         if (path is null) { _vm.StatusText = "Unsupported file location."; return; }
+        _importFolder = System.IO.Path.GetDirectoryName(path);
 
         await ImportAudioInBackgroundAsync(path, -1, 0.0);
     }
@@ -199,6 +201,17 @@ public partial class MainWindow
         _vm.StatusText = "New project.";
     }
 
+    // The file panels start where their files live (#309): projects in the Projects folder from
+    // Preferences, audio in the folder last imported from (the Samples folder at first). Left
+    // alone, macOS opens every panel in the folder any of them used last.
+    private string? _importFolder;
+
+    private async Task<IStorageFolder?> FolderAsync(string dir)
+    {
+        try { return System.IO.Directory.Exists(dir) ? await StorageProvider.TryGetFolderFromPathAsync(dir) : null; }
+        catch { return null; }   // a provider without paths (or a stale folder): the OS default
+    }
+
     private void OnMenuOpen(object? sender, EventArgs e) => _ = DoOpenAsync();
     private void OnMenuSave(object? sender, EventArgs e) => _ = DoSaveAsync(saveAs: false);
     private void OnMenuSaveAs(object? sender, EventArgs e) => _ = DoSaveAsync(saveAs: true);
@@ -212,6 +225,7 @@ public partial class MainWindow
         {
             Title = "Open Nota project (.nota folder)",
             AllowMultiple = false,
+            SuggestedStartLocation = await FolderAsync(_vm.Settings.ResolvedProjectsFolder()),   // #309
         });
         if (folders.Count == 0) return;
         var dir = folders[0].TryGetLocalPath();
@@ -363,6 +377,7 @@ public partial class MainWindow
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = title,
+            SuggestedStartLocation = _vm is null ? null : await FolderAsync(_vm.Settings.ResolvedProjectsFolder()),   // #309
             DefaultExtension = "nota",
             SuggestedFileName = suggestedName,
             FileTypeChoices = new[]

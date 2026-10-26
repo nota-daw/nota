@@ -1579,11 +1579,14 @@ public sealed partial class ArrangementView
                 {
                     double fx = r.X + (i / (double)n) * r.Width;
                     if (fx < 0 || fx > Bounds.Width) continue;
-                    float min = _recPeaks[i * 2];
-                    float max = _recPeaks[i * 2 + 1];
+                    // Input over 0 dBFS reads past ±1: pin it to the box's edges, as the take's
+                    // own waveform is once it lands (#208).
+                    float min = Math.Clamp(_recPeaks[i * 2], -1f, 1f);
+                    float max = Math.Clamp(_recPeaks[i * 2 + 1], -1f, 1f);
                     AddRect(g, fx, mid - max * amp, 1, Math.Max(1, (max - min) * amp));
                 }
-            ctx.DrawGeometry(RecWave, null, geo);
+            using (ctx.PushClip(r))   // and never paint over the tracks around it
+                ctx.DrawGeometry(RecWave, null, geo);
         }
 
         private bool IsDraggingCrossTrack(int track, int clip)
