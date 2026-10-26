@@ -183,7 +183,6 @@ public sealed partial class DeviceChainView : UserControl
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)
-        _engine.SetAuditionTrack(-1);                // re-armed by the Drum Rack card if shown (pad audition)
         if (_trackId <= 0) { _row.Children.Add(Hint("Select a track")); return; }
 
         // MIDI effects sit before the instrument (they shape the note stream).

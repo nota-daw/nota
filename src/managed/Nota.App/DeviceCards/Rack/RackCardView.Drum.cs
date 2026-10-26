@@ -60,7 +60,6 @@ internal sealed partial class RackCardView
     public Control BuildDrumRackBody(out int padCount)
     {
         var a = new InstrumentRackAccess(E, T);
-        E.SetAuditionTrack(T);   // so clicking a pad plays it without arming the track
         _irTick.Clear();
         var pads = LoadedPads(a);
         padCount = pads.Count;
@@ -260,12 +259,12 @@ internal sealed partial class RackCardView
                 var pt = e.GetCurrentPoint(pad).Properties;
                 if (pt.IsRightButtonPressed) { e.Handled = true; ShowPadMenu(a, pad, chain); return; }
                 if (!pt.IsLeftButtonPressed) return;
-                e.Handled = true; e.Pointer.Capture(pad); E.NoteOn(note, 1.0f);
+                e.Handled = true; e.Pointer.Capture(pad); E.TrackNoteOn(T, note, 1.0f);   // this rack only, not the armed tracks (#307)
             };
             pad.PointerReleased += (_, e) =>
             {
                 if (e.InitialPressMouseButton != MouseButton.Left) return;
-                E.NoteOff(note); e.Pointer.Capture(null); SelectPad(chain);
+                E.TrackNoteOff(T, note); e.Pointer.Capture(null); SelectPad(chain);
             };
         }
         else
