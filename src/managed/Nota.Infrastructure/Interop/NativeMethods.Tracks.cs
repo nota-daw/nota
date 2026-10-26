@@ -33,6 +33,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_duplicate_track")]
     internal static partial int DuplicateTrack(IntPtr engine, int trackId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_add_track_like")]
+    internal static partial int AddTrackLike(IntPtr engine, int trackId);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_remove_track")]
     internal static partial NotaResult RemoveTrack(IntPtr engine, int trackId);
 

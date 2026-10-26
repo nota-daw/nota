@@ -108,6 +108,9 @@ public sealed partial class ArrangementView
         private double _grabOrigStart;   // grabbed clip's original start (delta reference)
         private int _grabRow;            // grabbed clip's row (vertical delta reference)
         private int _moveRowDelta;       // rows to shift the group (instrument→instrument only)
+        // Held below the last track (#301): each source track gets a new track like it, shown
+        // as ghost rows under the lanes; the ids are the sources, top to bottom.
+        private List<int>? _newTrackSources;
 
         // Audio clip → instrument (see ArrangementView.ClipDrag): the grabbed clip, the
         // sample-taking instrument row it's held over (-1 none: a plain move), and the press
@@ -489,6 +492,8 @@ public sealed partial class ArrangementView
                     foreach (var m in _groupMove) m.vm.StartBeat = m.origStart;
                     _moveRowDelta = 0;
                 }
+                SetNewTrackRows(_loadRow < 0 && _o._tracks.Count > 0 && pos.Y >= _o.RowsHeight);
+                if (_newTrackSources is not null) _moveRowDelta = 0;
                 InvalidateVisual();
                 return;
             }
@@ -618,6 +623,16 @@ public sealed partial class ArrangementView
                 return;
             }
 
+            if (_drag == Drag.Move && _groupMove is not null && _newTrackSources is { } sources)
+            {
+                var clips = _groupMove.Select(m => (m.track, m.clip, m.vm.StartBeat)).ToList();
+                SetNewTrackRows(false);
+                _groupMove = null; _drag = Drag.None; _moveRowDelta = 0;
+                e.Pointer.Capture(null);
+                _o.MoveClipsToNewTracks(sources, clips);
+                return;
+            }
+
             if (_drag == Drag.Move && _groupMove is not null)
             {
                 int rowDelta = _moveRowDelta;
@@ -625,6 +640,7 @@ public sealed partial class ArrangementView
                 // the model, so a jiggle-and-release doesn't create a no-op undo step.
                 bool moved = rowDelta != 0 || _groupMove.Any(m => Math.Abs(m.vm.StartBeat - m.origStart) > 1e-9);
                 bool committed = false;
+                Nota.Application.Editing.ClipBlockMove? move = null;
                 if (eng is not null && moved)
                 {
                     // One atomic group move: moving the clips one by one let an early clip
@@ -636,11 +652,8 @@ public sealed partial class ArrangementView
                             ? _o._tracks[destRow].Id : m.track;
                         return (m.track, m.clip, destTrack, m.vm.StartBeat);
                     }).ToArray();
-                    committed = eng.MoveClipBlock(moves);
-                    // Same-track moves keep their clip index, so an open editor on one of
-                    // them stays valid — but its START read-out is now off.
-                    if (committed && rowDelta == 0)
-                        foreach (var m in _groupMove) _o.RaiseClipGeometryChanged(m.track, m.clip);
+                    move = _o.MoveBlock(moves);
+                    committed = move is not null;
                     if (committed && eng.LastMoveKeptDeviceAutomation())   // explicit hint: only Volume/Pan followed across tracks (req 8.3.4)
                         _o.StatusMessage?.Invoke("Moved across tracks — device automation stayed on the source");
                 }
@@ -649,7 +662,8 @@ public sealed partial class ArrangementView
                 if (moved)
                 {
                     _o.Refresh();   // also restores the preview if the engine rejected the move
-                    if (committed) _o.ReselectPlaced();   // cross-track moves change indices
+                    if (committed) _o.ReselectPlaced();   // a move can change clip indices
+                    if (move is not null) _o.RaiseClipsMoved(move);   // so can open editors' clips
                     if (committed && rowDelta != 0) _o.AnnounceSelectedTrack();   // the destination track is now the active one
                 }
                 else InvalidateVisual();
@@ -698,6 +712,7 @@ public sealed partial class ArrangementView
             _rangeTrack = null;
             _adsrDrag = AdsrHandle.None; _adsrClip = null;
             SetLoadRow(-1);
+            SetNewTrackRows(false);
             _autoScroll?.Stop();
             SetResizeCursor(false);
             _o.Refresh();   // reload authoritative clip/automation positions, discarding the preview
@@ -1397,6 +1412,8 @@ public sealed partial class ArrangementView
                         DrawClipBody(ctx, dest.ColorIndex, dest.Name, m.vm, RowTop(destRow), RowH(destRow), true, pitches: pitches);
                     }
 
+            if (_groupMove is not null && _newTrackSources is { } srcs) DrawNewTrackGhosts(ctx, w, srcs);
+
             // Clip marquee (plain drag on empty space).
             if (_marquee is { } mq) ctx.DrawRectangle(MarqueeFill, MarqueePen, mq);
 
@@ -1595,7 +1612,47 @@ public sealed partial class ArrangementView
         }
 
         private bool IsDraggingCrossTrack(int track, int clip)
-            => _groupMove is not null && _moveRowDelta != 0 && _groupMove.Any(m => m.track == track && m.clip == clip);
+            => _groupMove is not null && (_moveRowDelta != 0 || _newTrackSources is not null)
+               && _groupMove.Any(m => m.track == track && m.clip == clip);
+
+        // Shows or drops the new-track ghost rows below the lanes (#301), growing the lanes
+        // so the rows can be scrolled to and drawn.
+        private void SetNewTrackRows(bool on)
+        {
+            List<int>? sources = on && _groupMove is not null
+                ? _groupMove.OrderBy(m => m.origRow).Select(m => m.track).Distinct().ToList()
+                : null;
+            if (sources is { Count: 0 }) sources = null;
+            if ((sources?.Count ?? 0) == (_newTrackSources?.Count ?? 0)) { _newTrackSources = sources; return; }
+            _newTrackSources = sources;
+            Height = Math.Max(DefaultRowHeight, _o.RowsHeight) + (sources?.Count ?? 0) * DefaultRowHeight;
+            _o._overlay.Height = Height;
+        }
+
+        // The rows a drop below the last track creates: a drop ring per new track, with the
+        // dragged clips previewed in it at their new beats.
+        private void DrawNewTrackGhosts(DrawingContext ctx, double w, List<int> sources)
+        {
+            double top = _o.RowsHeight;
+            for (int k = 0; k < sources.Count; k++)
+            {
+                var r = new Rect(0, top + k * DefaultRowHeight, w, DefaultRowHeight);
+                ctx.FillRectangle(DropWash, r);
+                ctx.DrawRectangle(null, DropEdgePen, r.Deflate(1));
+                var ft = new FormattedText("New track", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    Typeface.Default, 11, RulerText);
+                ctx.DrawText(ft, new Point(Math.Max(8, w - ft.Width - 12), r.Y + 4));   // clear of clips at the song start
+            }
+            using (ctx.PushOpacity(0.5))
+                foreach (var m in _groupMove!)
+                {
+                    int k = sources.IndexOf(m.track);
+                    var src = _o._tracks.FirstOrDefault(t => t.Id == m.track);
+                    if (k < 0 || src is null) continue;
+                    DrawClipBody(ctx, src.ColorIndex, src.Name, m.vm, top + k * DefaultRowHeight, DefaultRowHeight, true,
+                                 pitches: TrackPitchRange(new[] { m.vm }));
+                }
+        }
 
         // Draws one clip (fill + border + name strip + notes/waveform) at row-y with
         // the given track colour. Reused for the live cross-track drag preview.

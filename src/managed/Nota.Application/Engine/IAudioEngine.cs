@@ -67,6 +67,7 @@ public interface IAudioEngine : IDisposable
     void SetTrackSolo(int trackId, bool solo);
     int TrackCount { get; }
     int DuplicateTrack(int trackId);   // deep copy after the source; new id or -1
+    int AddTrackLike(int trackId);     // empty track with the source's instrument, devices and mix, before the returns; new id or -1
     bool RemoveTrack(int trackId);
     void MoveTrack(int trackId, int toIndex);   // reorder a non-return track within the regular list
     int AddGroupTrack();                         // empty top-level group (submix) track

@@ -447,6 +447,8 @@ public partial class MainWindow
         Timeline.ClearPendingImports();
         Timeline.ForgetAutoTargets();    // lane targets are per-project track/device indices
         ResetClipEditor();               // every clip editor points into the old graph
+        _blockMoves.Clear();             // ...and the clip moves it remembers are the old project's
+        _blockMovesDone = 0;
         CloseDetail();                   // collapse the docked row too, not just hide the panel
         _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project
         Timeline.Refresh();
