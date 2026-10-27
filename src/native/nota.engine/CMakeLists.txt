@@ -117,6 +117,7 @@ set(NOTA_ENGINE_SOURCES
     src/devices/racks/RackDevice.cpp  # effect rack
     src/devices/racks/RackInstrument.cpp  # instrument rack
     src/devices/racks/DrumRack.cpp  # drum rack
+    src/devices/racks/MidiRack.cpp  # MIDI effect rack (specs/040)
     src/devices/midi_fx/Arpeggiator.cpp
     src/devices/midi_fx/MidiChord.cpp
     src/devices/midi_fx/MidiScale.cpp

@@ -3,8 +3,9 @@
 //
 // RackInstrument — a parallel-chain Instrument Rack. A container Instrument whose
 // parallel chains each hold a built-in instrument followed by an insert chain of
-// built-in devices. Every note is fanned to every chain (no key/velocity zones in
-// v1) and the chain outputs are summed. All the chain/macro/snapshot/persistence
+// built-in devices. A note reaches every chain whose key/velocity zone holds it and the
+// chain outputs are summed. With mono on (specs/040) the rack plays one note at a time,
+// last-note priority, and glides between notes by per-note pitch bend. All the chain/macro/snapshot/persistence
 // machinery lives in RackCore; this class only adds the Instrument interface.
 //
 // Because a RackInstrument is just an Instrument, it slots onto an instrument
@@ -23,6 +24,7 @@ namespace nota {
 
 class RackInstrument : public Instrument, public RackCore {
   public:
+    RackInstrument();
     int32_t kind() const override { return 3; } // built-in Instrument Rack (project compat)
     const char* displayName() const override { return "Nota Instrument Rack"; }
     bool hostsPlugin() const override { return chainsHostPlugin(); } // Drum Rack too
@@ -32,6 +34,15 @@ class RackInstrument : public Instrument, public RackCore {
     // Forward the DAW transport to every chain child (nested plugins sync too).
     void setTransportInfo(const TransportInfo& ti) override { forwardTransport(ti); }
     void setTransport(double beatStart, double spb, bool playing) override { forwardTempo(beatStart, spb, playing); }
+
+    // Chain MIDI effects (issue #329): a chain with any runs them on its share of the block's
+    // notes up front; render then plays their output into that chain's instrument, sample-accurate.
+    bool takesBlockMidi() const override;
+    void blockMidi(const MidiEv* evs, int n, int32_t frames, double beatStart, double spb, bool playing) override;
+    void midiTimeJump(double deltaBeats) override;
+    // MIDI effects run in the first 16 chains; the engine refuses one further down, and a chain
+    // with effects moved past them plays its notes as a plain chain.
+    static constexpr int32_t kMaxMidiChains = 16;
 
     // ---- note fan-out: a note reaches a chain only if it's inside its key/vel zone --
     void noteOn(int32_t pitch, float velocity) override;
@@ -49,6 +60,9 @@ class RackInstrument : public Instrument, public RackCore {
 
     int32_t latencySamples() const override { return maxChainLatency(); }
 
+    // A fork for an undoable edit plays on with the same held keys, sounding note and glide.
+    void shareMonoWith(const RackInstrument& o) { mono_ = o.mono_; }
+
     // ---- macros over the plugin-param surface (automation-free) -------------
     int32_t pluginParamCount() const override { return kNumMacros; }
     std::string pluginParamId(int32_t i) const override { return macroParamId(i); }
@@ -64,6 +78,57 @@ class RackInstrument : public Instrument, public RackCore {
 
   protected:
     float scratch_[kMaxBlock * 2]; // per-chain render buffer (DrumRack reuses it)
+
+  private:
+    // Fan a note-on out to the chains whose zone holds it; with glideFrom >= 0 the chains
+    // that take per-note bend start bent to the previous pitch and glide back (mono).
+    void fanOn(int32_t pitch, float velocity, int32_t glideFrom);
+    void fanOff(int32_t pitch);
+    void monoRemove(int32_t pitch);
+    void syncMono(); // mono switched since the last call: reconcile the sounding keys
+    void endGlide(); // a glide stops half-way: the sounding note returns to its own pitch
+    // The chains or their MIDI effects changed since the last call: carry the held routes over
+    // to the chains' new places and end the notes whose MIDI effects went away.
+    void syncChains();
+    void deliver(int32_t c, Instrument& inst, const MidiEv& ev); // a MIDI chain's event into its instrument
+
+    // Note state (audio thread only), shared by every fork of the rack so an edit that swaps
+    // the rack object keeps it: held keys in press order (poly too, so switching mono on knows
+    // them), their velocities, the sounding pitch in mono, and the glide ramp (bend in
+    // semitones from start to 0 over total samples).
+    struct MonoState {
+        int8_t held[128] = {};
+        int32_t heldN = 0;
+        float heldVel[128] = {};
+        int32_t sounding = -1;
+        float glideBend = 0.0f;
+        int64_t glideTotal = 0, glideLeft = 0;
+        bool wasMono = false;
+        // MIDI chains (#329): the chains each held key went to, and the pitches each chain's
+        // MIDI effects started in its instrument and haven't ended. They are kept for the chains
+        // as they were at `structure`: chain c is the one playing `chainId[c]` (its instrument)
+        // with MIDI effects `chainSig[c]` (0 = a plain chain).
+        uint16_t midiRoute[128] = {};
+        uint8_t outHeld[kMaxMidiChains][128] = {};
+        const void* chainId[kMaxMidiChains] = {};
+        uint64_t chainSig[kMaxMidiChains] = {};
+        uint64_t structure = 0;
+    };
+    std::shared_ptr<MonoState> mono_ = std::make_shared<MonoState>();
+
+    // Chain MIDI effects (audio thread): each MIDI chain's processed events for this block (its
+    // own kChainEvents slots, sorted — a chain's effects emit at most that many per block, so
+    // nothing, a release least of all, is dropped), the render position within the block, and
+    // the chains each input event goes to.
+    static constexpr int32_t kChainEvents = 1024;
+    MidiEv* chainEvs_ = nullptr;                      // kMaxMidiChains × kChainEvents, allocated once in the ctor
+    MidiEv* scratchA_ = nullptr;                      // 1024
+    MidiEv* scratchB_ = nullptr;                      // 1024
+    std::unique_ptr<MidiEv[]> evStore_;
+    int32_t chainCount_[kMaxMidiChains] = {}, chainCursor_[kMaxMidiChains] = {};
+    int32_t blockPos_ = 0;
+    uint16_t evMask_[1024] = {}; // per input event: the MIDI chains it goes to (in block order)
+    bool midiChainAt(int32_t c) const;
 };
 
 } // namespace nota

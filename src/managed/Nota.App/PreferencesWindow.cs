@@ -1206,6 +1206,15 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘⇧G", "Take the devices out of a selected one-chain rack"),
             ("Delete", "Delete the selected device"),
         }),
+        ("Racks", new[]
+        {
+            ("Esc", "End macro mapping (Map on the rack card)"),
+            ("Drag a zone edge", "Set a chain's key, velocity or select range · edges never cross"),
+            ("Hover the zones", "See which chains a note would play"),
+            ("Double-click a chain or macro name", "Rename it"),
+            ("Right-click a macro", "Map it to a parameter or the selector · clear its mappings"),
+            ("Drag a card's grip", "Move a device within its chain"),
+        }),
         ("Modular (after a click on the canvas)", new[]
         {
             ("F", "Fit every node on screen"),

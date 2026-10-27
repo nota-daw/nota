@@ -97,6 +97,9 @@ public static class ProjectMigrations
         // v22 -> v23: devices, MIDI effects and instruments gain Folded (drawn as a strip in
         // the Devices panel, specs/022). Absent in v22 documents; false = unfolded — no-op.
         new Migration(22, _ => { }),
+        // v23 -> v24: MIDI effects gain State (the MIDI Effect Rack's blob, specs/040). Absent in
+        // v23 documents, which hold no MIDI Effect Rack; null = params only — no-op.
+        new Migration(23, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

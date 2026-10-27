@@ -134,6 +134,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_scope")]
     internal static partial int MidiEffectScope(IntPtr engine, int trackId, int index, [Out] float[] outv, int maxN);
 
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_get_state")]
+    internal static partial int MidiEffectGetState(IntPtr engine, int trackId, int index, [Out] byte[]? outBuffer, int capacity);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_set_state")]
+    internal static partial NotaResult MidiEffectSetState(IntPtr engine, int trackId, int index, [In] byte[] data, int size, int checkpoint);
+
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_command")]
     internal static partial void MidiEffectCommand(IntPtr engine, int trackId, int index, int cmd);
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_name")]

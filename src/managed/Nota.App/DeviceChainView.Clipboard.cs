@@ -13,6 +13,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Infrastructure;
 using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
@@ -191,7 +192,7 @@ public sealed partial class DeviceChainView
         header?.Invoke(flyout);   // ends with its own separator
         bool selectable = SelectableKind(kind);
         MenuKit.AddGroups(flyout.Items,
-            new Control[] { MenuKit.Item("Save preset", GlyphKind.Save, () => PresetSaveRequested?.Invoke(di)) },
+            new Control[] { MenuKit.Item("Save preset", GlyphKind.Save, () => PresetSaveRequested?.Invoke(kind == ChainKind.Midi ? PresetService.MidiEffectBase - di : di)) },
             new Control[]
             {
                 MenuKit.Item("Copy", GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey, selectable),

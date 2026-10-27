@@ -33,7 +33,7 @@ public sealed class ProjectService
     /// v18 (Phase 3) adds CV modulation: per-track LFO modulators + CV links to device params.
     /// v22 (specs/020) adds MIDI controller curves on MIDI clips and Session slot clips.
     /// v23 (specs/022) adds the Devices-panel fold on devices, MIDI effects and instruments.
-    public const int CurrentFormatVersion = 23;
+    public const int CurrentFormatVersion = 24;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -179,6 +179,8 @@ public sealed class ProjectService
                 mdev.CcDestDevice = engine.MidiEffectCcDestDevice(ti.Id, m);
                 mdev.CcDestParam = engine.MidiEffectCcDestParam(ti.Id, m);
                 mdev.CcDepth = engine.MidiEffectCcDepth(ti.Id, m);
+                var mstate = engine.MidiEffectGetState(ti.Id, m);   // the MIDI Effect Rack's structure
+                if (mstate.Length > 0) mdev.State = RegisterBlob(doc, mstate);
                 t.MidiEffects.Add(mdev);
             }
 
@@ -628,6 +630,11 @@ public sealed class ProjectService
                 if (m.Kind == 1 && m.Params.Length <= 16) PresetService.ChordLegacySwitches(engine, id, mi);   // pre-switch Nota Chord
                 if (m.Kind == 3 && m.Params.Length <= 11) PresetService.LengthLegacy(engine, id, mi);          // pre-Division Nota Length
                 if (m.Kind == 4 && m.Params.Length <= 7) PresetService.VelocityLegacy(engine, id, mi);         // pre-switch Nota Velocity
+                if (m.State is { } ms)
+                {
+                    var blob = ReadBlob(bundleDir, ms);
+                    if (blob.Length > 0) engine.MidiEffectSetState(id, mi, blob, false);
+                }
                 if (m.Bypassed) engine.SetMidiEffectBypassed(id, mi, true);
                 if (m.Folded) engine.SetMidiEffectFolded(id, mi, true);
                 if (m.CcDestDevice >= 0 && m.CcDestParam >= 0)

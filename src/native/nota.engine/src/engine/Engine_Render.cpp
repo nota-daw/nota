@@ -160,15 +160,17 @@ inline void deliverExpr(Instrument& inst, int32_t pitch, int32_t dim, float valu
 // An instrument switched off (#148) renders its first block off once more, without the block's
 // events, fading what was sounding to silence, then releases every voice and held controller;
 // after that it isn't rendered at all (no CPU) until it is switched back on, so `dst` stays
-// silent. The MIDI before it keeps running.
+// silent. The MIDI before it keeps running. `beat` / `spb` / `rolling` is the clock the track's
+// MIDI effects ran on, for the MIDI effects inside the instrument.
 template <class Live>
-void playEvents(
-    Instrument& inst, float* dst, int32_t frames, const MidiEv* evs, int n, const ExprEv* xev, int xn, Live&& live) {
+void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs, int n, const ExprEv* xev, int xn,
+    double beat, double spb, bool rolling, Live&& live) {
     const bool off = inst.bypassed();
     if (!off) inst.offSettled.store(false, std::memory_order_relaxed);
     else if (inst.offSettled.load(std::memory_order_relaxed))
         return;
     if (off) n = xn = 0; // nothing new starts on the way out
+    if (inst.takesBlockMidi()) inst.blockMidi(evs, n, frames, beat, spb, rolling); // a rack's chain MIDI effects (#329)
     int32_t cursor = 0;
     bool liveDone = false;
     auto renderTo = [&](int32_t to) {
@@ -1334,7 +1336,7 @@ void Engine::renderInstrumentRaw(
 
     std::sort(evs, evs + n, midiEvLess);
     std::stable_sort(xev, xev + xn, [](const ExprEv& a, const ExprEv& b) { return a.off < b.off; });
-    playEvents(*inst, dst, frames, evs, n, xev, xn, [&] {
+    playEvents(*inst, dst, frames, evs, n, xev, xn, spb > 0.0 ? blockStart / spb : 0.0, spb, playing, [&] {
         if (liveExprCount_ > 0) applyLiveExpression(g, t, *inst);
     });
 
@@ -1435,7 +1437,7 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
     }
 
     // The monitored live expression, after the offset-0 notes (as in renderInstrumentRaw).
-    playEvents(*inst, dst, frames, evs, n, xev, xn, [&] {
+    playEvents(*inst, dst, frames, evs, n, xev, xn, p, spb, true, [&] { // the slot's own loop clock
         if (!monitoring) return;
         for (int i = 0; i < liveExprCount_; ++i)
             if (liveExpr_[i].trackId < 0 || liveExpr_[i].trackId == t.id())
@@ -1641,9 +1643,11 @@ void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
     const double jump = loopStartBeat - loopEndBeat;
     if (g)
         for (auto& tptr : g->tracks)
-            if (tptr && tptr->instrument && !sessionActiveOf(*tptr))
+            if (tptr && tptr->instrument && !sessionActiveOf(*tptr)) {
                 for (auto& md : tptr->midiEffects)
                     if (md) md->timeJump(jump);
+                tptr->instrument->midiTimeJump(jump); // MIDI effects in a rack's chains (#329)
+            }
 
     if (!recording_.load(std::memory_order_relaxed) || recordSlotPlayer_.load(std::memory_order_acquire)) return;
     constexpr double kMinHead = 1.0 / 64.0;

@@ -191,6 +191,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_set_mode")]
     internal static partial void RackDevSetMode(IntPtr engine, int trackId, int deviceIndex, int mode);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_duplicate_chain")]
+    internal static partial int RackDevDuplicateChain(IntPtr engine, int trackId, int deviceIndex, int chain);
+
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_drywet")]
     internal static partial float RackDevDryWet(IntPtr engine, int trackId, int deviceIndex);
 

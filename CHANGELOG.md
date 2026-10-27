@@ -20,9 +20,40 @@ the GitHub release and the news posts — comes from the curated, summarised
 
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
+### Changed
+- **The rack cards are redesigned** (Instrument, Audio Effect and the new MIDI Effect Rack share
+  one card): eight macro knobs; Chains, Zones (Audio: Select) and Macros tabs; the chosen
+  chain's devices as compact cards with their key parameters; a Chain / Rack out panel; a
+  status line. Every theme draws it in its own colours.
+- **Map a macro in place**: press Map and click parameters right on the chain's devices; Esc
+  ends it. The Macros tab sets each target's range (min above max inverts) and the macro's
+  curve, shown as Mixed when an older project gave its targets different curves.
+- **Zones are dragged by their edges**, and hovering the keyboard strip shows which chains a
+  note would play.
+
+### Fixed
+- Undoing or redoing a rack edit puts back what the rack's macros drive, and changes to a
+  mapping's range, curve or a macro's name are undoable.
+- "Save preset" on a MIDI effect's card saves that MIDI effect.
+
 ## [Unreleased]
 
 ### Added
+- **MIDI Effect Rack**: a new MIDI effect with chains of MIDI effects. Each chain takes the
+  notes its key and velocity zone lets in (or, in Select mode, the chains whose select range
+  holds the selector), runs them through its Arp, Chord, Scale and so on, can transpose them
+  and scale their velocity, and the chains' notes merge before the instrument. Merge duplicate
+  notes and pass notes outside every zone through are switches. In the Browser under MIDI
+  effects · Racks; saved with the project and in presets; the MCP tools are `midi_rack_*`.
+- **MIDI effects in Instrument Rack chains** (nota-daw/nota#329): a chain runs MIDI effects →
+  instrument → audio effects, like a track, so an instrument and its Arp or Chord can live in
+  one rack. They keep time with the song exactly as on a track.
+- **Mono and glide on the Instrument Rack**: Mono (last note) plays one note at a time; Glide
+  slides each new note from the previous pitch on instruments that take per-note bend.
+- **Duplicate a rack chain**, with its devices, zones, mix and macro mappings.
+- **Map a rack's selector to a macro** (Audio Effect and MIDI Effect Racks).
+- **Nota Vocoder in rack chains**: add it to an Instrument or Audio Effect Rack chain from the
+  card's menu or the Browser; inside a rack it uses its own Saw or Noise carrier.
 - **Move clips with the keyboard** (nota-daw/nota#302): in the Arrangement, ← / → nudge the
   selected clips by the grid step and ⌥← / ⌥→ by a 64th note, stopping at the song start;
   ⌥↑ / ⌥↓ move them to the next track up or down that takes them, at the same beats. Each

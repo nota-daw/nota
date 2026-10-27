@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Detail · Devices — the rack cards, shared by the Instrument Rack (track instrument,
-// kind 3), the Audio Effect Rack (a device, builtin kind 5) and the Drum Rack (kind 4).
-// All present the same body: a 4×2 grid of macro faders on the left, a chain list (or a
-// 4×4 pad grid for the drum rack) in the middle, and the selected chain's device chain
-// on the right. The two rack addressings differ only via IRackAccess. Built per-rebuild
-// with a DeviceCardContext; all mutable state (selected chain, refreshers, drop glow,
-// rebuild) lives in the view behind the context. The Drum Rack body is in
-// RackCardView.Drum.cs.
+// Detail · Devices — the rack cards. The Instrument Rack (track instrument, kind 3), the
+// Audio Effect Rack (a device, builtin kind 5) and the MIDI Effect Rack (a MIDI effect,
+// kind 6) share one card, built in the RackCard.*.cs partials (specs/040); this file holds
+// their entry points and what the card and the Drum Rack (kind 4, RackCardView.Drum.cs)
+// share: the device windows for a chain's instrument and effects, the add menus, Browser
+// drops and macro menus. The racks' addressing differs only via IRackAccess. Built
+// per-rebuild with a DeviceCardContext; the selected chain, refreshers, drop glow and
+// rebuild live in the view behind the context.
 
 using System;
 using System.Collections.Generic;
@@ -28,14 +28,21 @@ namespace Nota.App;
 
 internal sealed partial class RackCardView(DeviceCardContext ctx)
 {
-    private static readonly string[] RackDeviceNames = { "Nota EQ-3", "Nota EQ-8", "Nota Dynamic EQ-8", "Nota Compressor", "Nota Prism", "Nota Reverb", "Nota Chamber", "Nota Delay", "Nota Utility", "Nota Level", "Nota Lens", "Nota Ceiling", "Nota Shutter", "Nota Valve", "Nota Auto Filter", "Nota Vintage", "Nota Forge", "Nota Crush", "Nota Chorus", "Nota Flanger", "Nota Phaser", "Nota Orbit", "Nota Auto Shift", "Nota Beat Repeat", "Nota Strata" };
-    private static readonly int[] RackDeviceKinds = { 16, 0, 13, 1, 21, 2, 20, 3, 4, 18, 22, 14, 19, 6, 7, 8, 17, 12, 25, 23, 24, 9, 10, 11, 15 };
+    private static readonly string[] RackDeviceNames = { "Nota EQ-3", "Nota EQ-8", "Nota Dynamic EQ-8", "Nota Compressor", "Nota Prism", "Nota Reverb", "Nota Chamber", "Nota Delay", "Nota Utility", "Nota Level", "Nota Lens", "Nota Ceiling", "Nota Shutter", "Nota Valve", "Nota Auto Filter", "Nota Vintage", "Nota Forge", "Nota Crush", "Nota Chorus", "Nota Flanger", "Nota Phaser", "Nota Orbit", "Nota Auto Shift", "Nota Beat Repeat", "Nota Strata", "Nota Vocoder" };
+    private static readonly int[] RackDeviceKinds = { 16, 0, 13, 1, 21, 2, 20, 3, 4, 18, 22, 14, 19, 6, 7, 8, 17, 12, 25, 23, 24, 9, 10, 11, 15, 26 };
     private static readonly IBrush RowSel = NotaPalette.Wash(NotaPalette.Accent, 0x22); // selected chain wash
 
     private readonly DeviceCardContext _ctx = ctx;
     private IAudioEngine E => _ctx.Engine;
     private int T => _ctx.TrackId;
-    private int Sel { get => _ctx.SelectedChain; set => _ctx.SelectedChain = value; }
+    // The chosen chain: each shared rack card keeps its own (several racks can sit on one
+    // track); the Drum Rack uses the device view's.
+    private bool _ownSel;
+    private int Sel
+    {
+        get => _ownSel ? _rs.SelectedChain : _ctx.SelectedChain;
+        set { if (_ownSel) _rs.SelectedChain = value; else _ctx.SelectedChain = value; }
+    }
 
     // ---- Instrument Rack (mockup 2p) shared bits ----
     private static readonly IBrush IrHdr = NotaPalette.SurfaceCard;
@@ -50,10 +57,6 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     private static readonly IBrush IrTxt = NotaPalette.TextPrimary;
     private static readonly IBrush IrMuted = NotaPalette.TextTertiary;
     private static readonly IBrush IrRed = NotaPalette.AccentHover;   // a state, not an alert: red is kept for recording and overload
-    private static bool _macroMapMode;     // Instrument Rack: second (Macro-map) view
-    private static int _splitAxis;         // 0 = Key zone, 1 = Velocity
-    private static bool _aeMacroMap;       // Audio Effect Rack: macro-map view
-    private static bool _aeFold;           // Audio Effect Rack: fold device cards to titles
     private readonly System.Collections.Generic.List<Action> _irTick = new();
 
     // Rebuild on the NEXT dispatcher cycle, never synchronously inside a pointer handler:
@@ -64,169 +67,21 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     // The palette slot itself, not a copy of its colour: these brushes are handed to
     // Borders that outlive a theme change, and a snapshot would freeze the chain hues.
     private static IBrush ChainHue(int c) => NotaPalette.TrackBrushes[((c % 8) + 8) % 8];
-    private static TextBlock IrMono(string t, IBrush c, double fs = 8) { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
     private static TextBlock IrCap(string t, IBrush? c = null) => new() { Text = NotaText.Label(t), FontSize = 8, FontWeight = FontWeight.Medium, Foreground = c ?? IrMuted, VerticalAlignment = VerticalAlignment.Center };
 
     // ---- entry points -----------------------------------------------------
 
-    // Instrument Rack body (the track's instrument, mockup 2p, 700×260). The shared device
-    // shell draws the header (name, presets, "Rack · N chains"); this is everything below it.
+    // The rack bodies (700 × 238 under the shared device shell's header, which draws the
+    // name, presets and "Rack · N chains").
     public Control BuildInstrumentRackBody(out int chains)
     {
         var a = new InstrumentRackAccess(E, T);
         chains = a.ChainCount();
-        Sel = chains > 0 ? Math.Clamp(Sel, 0, chains - 1) : 0;
-        _irTick.Clear();
-        Control content = _macroMapMode ? InstrumentRackMacroMap(a) : InstrumentRackMain(a);
-        if (_irTick.Count > 0) _ctx.AddDeviceRefresher(() => { for (int i = 0; i < _irTick.Count; i++) _irTick[i](); });
-        return new Border { Background = NotaPalette.BgApp, Child = content };
+        return RcBody(BuildRackCard(a, -1));
     }
 
-    private Control InstrumentRackMain(IRackAccess a)
-    {
-        var strip = IrMacroStrip(a);
-        var chainList = IrChainList(a);
-        var rail = IrRackRail(a);
-        DockPanel.SetDock(chainList, Dock.Left); DockPanel.SetDock(rail, Dock.Right);
-        var body = new DockPanel { LastChildFill = true, Children = { chainList, rail, IrDeviceArea(a) } };
-        DockPanel.SetDock(strip, Dock.Top);
-        return new DockPanel { LastChildFill = true, Children = { strip, body } };
-    }
-
-    // ---- macro strip (34): 8 named horizontal macro sliders ----
-    private Control IrMacroStrip(IRackAccess a)
-    {
-        var grid = new Grid { VerticalAlignment = VerticalAlignment.Center };
-        grid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        var lbl = IrCap("MACROS"); Grid.SetColumn(lbl, 0); grid.Children.Add(lbl);
-        for (int i = 0; i < 8; i++)
-        {
-            grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
-            var cell = IrMacroSlider(a, i); Grid.SetColumn(cell, i + 1); grid.Children.Add(cell);
-        }
-        grid.ColumnSpacing = 6;
-        return new Border { Height = 34, Background = IrHdr, BorderBrush = IrBorder, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(9, 0), Child = grid };
-    }
-
-    private Control IrMacroSlider(IRackAccess a, int i)
-    {
-        int adi = a.AutomationDeviceIndex;
-        bool mapped = false;
-        for (int m = 0; m < a.MappingCount(); m++) if (a.TryGetMapping(m, out var mm) && mm.Macro == i) { mapped = true; break; }
-        var name = new TextBlock { Text = a.MacroName(i), FontSize = 8, Foreground = mapped ? IrTxt : IrMuted, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        var val = IrMono("0", IrMuted, 8); val.TextAlignment = TextAlignment.Right;
-        var fill = new Border { Height = 3, Background = mapped ? NotaPalette.VizInk : NotaPalette.TextDisabled, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        var handle = new Border { Width = 6, Height = 8, Background = NotaPalette.TextSecondary, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        var slot = new Panel { Height = 10, Children = { new Border { Height = 3, Background = IrInset, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center }, fill, handle } };
-        void Vis(double v) { double W = slot.Bounds.Width; fill.Width = v * W; handle.Margin = new Thickness(Math.Clamp(v * W - 3, 0, Math.Max(0, W - 6)), 0, 0, 0); }
-        bool drag = false;
-        void SetFromX(double x) { double v = Math.Clamp(x / Math.Max(1, slot.Bounds.Width), 0, 1); E.PluginParamSet(T, adi, i, (float)v); Vis(v); _ctx.InvokeRackParamRefreshers(); }
-        slot.PointerPressed += (_, e) => { drag = true; e.Pointer.Capture(slot); SetFromX(e.GetPosition(slot).X); };
-        slot.PointerMoved += (_, e) => { if (drag) SetFromX(e.GetPosition(slot).X); };
-        slot.PointerReleased += (_, e) => { if (drag) { drag = false; e.Pointer.Capture(null); } };
-        slot.PointerCaptureLost += (_, _) => drag = false;
-        name.DoubleTapped += (_, _) => PromptRenameMacro(a, i, name);
-        ValueEntry.Attach(val, () => E.PluginParamGet(T, adi, i), v => E.PluginParamSet(T, adi, i, (float)v),
-            () => NotaNum.F($"{E.PluginParamGet(T, adi, i) * 100:0}"),
-            after: () => { double v = E.PluginParamGet(T, adi, i); Vis(v); val.Text = NotaNum.F($"{v * 100:0}"); _ctx.InvokeRackParamRefreshers(); });
-        _irTick.Add(() => { double v = E.PluginParamGet(T, adi, i); if (!drag) Vis(v); val.Text = $"{v * 100:0}"; });
-        var head = new DockPanel { LastChildFill = true, Children = { WithRight(val), name } };
-        var cell = new StackPanel { Spacing = 2, Children = { head, slot } };
-        // MIDI-learn: a macro is a plugin-param on the rack device (adi = automation device
-        // index). Tag the cell so the learn overlay highlights + binds it like any knob.
-        MidiLearn.Bind(cell, MidiTarget.PluginParam(T, adi, i), $"Macro · {a.MacroName(i)}", v => Vis(v));
-        return cell;
-    }
-
-    private void PromptRenameMacro(IRackAccess a, int i, TextBlock label)
-    {
-        var box = new TextBox { Text = a.MacroName(i), FontSize = 9, Width = 90, Height = 20, Padding = new Thickness(4, 0) };
-        var fly = new Flyout { Content = box };
-        box.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) { a.SetMacroName(i, box.Text ?? ""); label.Text = a.MacroName(i); fly.Hide(); _ctx.RequestRebuild(); } };
-        fly.ShowAt(label);
-        box.Focus();
-    }
-
-    // ---- chain list (186) ----
-    private Control IrChainList(IRackAccess a)
-    {
-        var rows = new StackPanel { Spacing = 4 };
-        int chains = a.ChainCount();
-        for (int c = 0; c < chains; c++) rows.Children.Add(IrChainRow(a, c));
-        var addBtn = new Border { BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(0, 3),
-            Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "+ Add chain", FontSize = 9, Foreground = IrMuted, HorizontalAlignment = HorizontalAlignment.Center } };
-        addBtn.PointerPressed += (_, _) => ShowAddChainMenu(a, addBtn);
-        rows.Children.Add(addBtn);
-
-        var header = new DockPanel { LastChildFill = false, Margin = new Thickness(0, 0, 0, 7), Children = { IrCap("CHAINS"), WithRight(new TextBlock { Text = "zone · vel · out", FontSize = 8, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center }) } };
-        var split = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { IrCap("SPLIT"), IrSeg(new[] { "Key", "Vel" }, _splitAxis, i => { _splitAxis = i; _ctx.RequestRebuild(); }) } };
-        var scroll = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 6, 0) };
-        DockPanel.SetDock(header, Dock.Top); DockPanel.SetDock(split, Dock.Bottom);
-        var inner = new DockPanel { LastChildFill = true, Children = { header, split, scroll } };
-        return new Border { Width = 186, Background = IrRail, BorderBrush = IrBorder, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(8, 6), Child = inner };
-    }
-
-    private Control IrChainRow(IRackAccess a, int c)
-    {
-        bool sel = c == Sel;
-        string name = a.ChainInstrumentName(c); if (string.IsNullOrEmpty(name)) name = $"Chain {c + 1}";
-        int devs = a.ChainDeviceCount(c);
-        E.RackChainZone(T, c, out int kLo, out int kHi, out int vLo, out int vHi);
-        var nameTb = new TextBlock { Text = name, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = sel ? IrAmberLit : IrTxt, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        var head = new DockPanel { LastChildFill = true, Children = { WithRight(ChainDelBtn(a, c)), WithRight(IrMono($"{devs} dev", IrMuted)), nameTb } };
-
-        var zone = IrMono($"{NoteName(kLo)}–{NoteName(kHi)}", NotaPalette.TextSecondary);
-        var vel = IrMono($"{vLo}–{vHi}", IrMuted);
-        double db = a.ChainGain(c) <= 0.001 ? -60 : 20 * Math.Log10(a.ChainGain(c));
-        var dbT = IrMono(db <= -59 ? "−∞" : $"{db:+0.0;−0.0;0.0}", NotaPalette.TextSecondary);
-        var meterFill = new Border { Background = Success, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = NotaRadius.Bar };
-        var meter = new Border { Width = 20, Height = 3, Background = IrInset, CornerRadius = NotaRadius.Bar, Child = meterFill, VerticalAlignment = VerticalAlignment.Center };
-        _irTick.Add(() => meterFill.Width = 20 * Math.Clamp(E.RackChainMeter(T, c), 0, 1));
-        var m = IrMsBtn("M", a.ChainMute(c), NotaPalette.Mute, () => { a.SetChainMute(c, !a.ChainMute(c)); _ctx.RequestRebuild(); });
-        var s = IrMsBtn("S", a.ChainSolo(c), NotaPalette.Solo, () => { a.SetChainSolo(c, !a.ChainSolo(c)); _ctx.RequestRebuild(); });
-        MidiLearn.Bind(m, MidiTarget.RackChainMute(T, a.AutomationDeviceIndex, c), "Chain Mute");
-        MidiLearn.Bind(s, MidiTarget.RackChainSolo(T, a.AutomationDeviceIndex, c), "Chain Solo");
-        var info = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { zone, vel, WithRight(dbT), meter, m, s } };
-        DockPanel.SetDock(dbT, Dock.Right);
-
-        var row = new Border { Background = sel ? RowSel : IrCard, BorderBrush = sel ? IrAmber : IrBorder, BorderThickness = new Thickness(1, 1, 1, 1), CornerRadius = NotaRadius.Control, Padding = new Thickness(6, 4), Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new StackPanel { Spacing = 3, Children = { head, info } } };
-        row.Background = sel ? RowSel : IrCard;
-        // left accent = chain hue, hidden while selected (the amber selection is enough).
-        var accent = new Border { Width = 2, Background = sel ? Brushes.Transparent : ChainHue(c), CornerRadius = new CornerRadius(NotaRadius.ClipValue, 0, 0, NotaRadius.ClipValue) };
-        var wrap = new DockPanel { LastChildFill = true, Children = { accent, row } };
-        DockPanel.SetDock(accent, Dock.Left);
-        wrap.PointerPressed += (_, e) => { if (e.GetCurrentPoint(wrap).Properties.IsLeftButtonPressed && Sel != c) { Sel = c; _ctx.RequestRebuild(); } };
-        DragDrop.SetAllowDrop(wrap, true);
-        DragDrop.AddDragOverHandler(wrap, (_, e) => { if (!BrowserView.IsBrowserDrag || !IsEffect(BrowserView.CurrentDrag)) { e.DragEffects = DragDropEffects.None; return; } e.DragEffects = DragDropEffects.Copy; e.Handled = true; _ctx.HideDropGlow(); row.BorderBrush = AccentBright; });
-        DragDrop.AddDragLeaveHandler(wrap, (_, _) => row.BorderBrush = sel ? IrAmber : IrBorder);
-        DragDrop.AddDropHandler(wrap, (_, e) => { row.BorderBrush = sel ? IrAmber : IrBorder; if (BrowserView.CurrentDrag is { } it && IsEffect(it)) { Sel = c; DropEffectOnChain(a, c, it); e.Handled = true; } });
-        return wrap;
-    }
-
-    // ---- device area (center): device slots + key/velocity zone map ----
-    private Control IrDeviceArea(IRackAccess a)
-    {
-        if (a.ChainCount() == 0)
-            return new Border { Padding = new Thickness(9, 7), Child = new TextBlock { Text = "Add a chain to build its device chain.", FontSize = 9, Foreground = IrMuted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-        int sc = Sel;
-        string inm = a.ChainInstrumentName(sc); if (string.IsNullOrEmpty(inm)) inm = "Instrument";
-        var hdr = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 7), Children = {
-            new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Clip, Background = ChainHue(sc), VerticalAlignment = VerticalAlignment.Center },
-            new TextBlock { Text = inm, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center },
-            new TextBlock { Text = "chain devices · signal left → right", FontSize = 8, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center } } };
-        var slots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-        if (a.HasInstrumentChains) slots.Children.Add(IrInstrumentSlot(a, sc));
-        int dc = a.ChainDeviceCount(sc);
-        for (int d = 0; d < dc; d++) slots.Children.Add(IrDeviceSlot(a, sc, d));
-        slots.Children.Add(IrAddDeviceSlot(a, sc));
-        var row = new ScrollViewer { Content = slots, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        var inner = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(hdr, Dock.Top); inner.Children.Add(hdr);
-        if (!_foldZone) { var zm = IrZoneMap(a); DockPanel.SetDock(zm, Dock.Bottom); inner.Children.Add(zm); }
-        inner.Children.Add(row);
-        return new Border { Padding = new Thickness(8, 6), Child = inner };
-    }
+    // The shared card fills the shell slot under the header (700 × 238).
+    private static Control RcBody(Control card) => new Border { Height = DeviceCardKit.CardH - DeviceCardKit.HeaderH, ClipToBounds = true, Child = card };
 
     // A minimal device "slot" — name + type + two open buttons (full GUI / param knobs)
     // + macro/bypass footer.
@@ -351,62 +206,6 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             if (sub.Items.Count > 0) { f.Items.Add(new Separator()); f.Items.Add(sub); }
         }
         f.ShowAt(anchor, showAtPointer: true);
-    }
-
-    private Control IrZoneMap(IRackAccess a)
-    {
-        int n = a.ChainCount();
-        var los = new int[n]; var his = new int[n]; var cols = new IBrush[n];
-        for (int c = 0; c < n; c++) { E.RackChainZone(T, c, out int kLo, out int kHi, out int vLo, out int vHi); los[c] = _splitAxis == 0 ? kLo : vLo; his[c] = _splitAxis == 0 ? kHi : vHi; cols[c] = ChainHue(c); }
-        var map = new RackZoneMap(los, his, cols, Sel, _splitAxis == 0);
-        map.RangeEdited += (c, lo, hi) =>
-        {
-            E.RackChainZone(T, c, out int kLo, out int kHi, out int vLo, out int vHi);
-            if (_splitAxis == 0) E.RackSetChainZone(T, c, lo, hi, vLo, vHi);
-            else E.RackSetChainZone(T, c, kLo, kHi, lo, hi);
-            DeferRebuild();   // not from inside the map's own pointer handler (#202)
-        };
-        return new Border { Height = 38, Background = IrInset, BorderBrush = IrField, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(4), Margin = new Thickness(0, 5, 0, 0), Child = map };
-    }
-
-    // ---- rack rail (96): volume · glide · macro-map · fold/save ----
-    private Control IrRackRail(IRackAccess a)
-    {
-        var volVal = IrMono("0.0\u2009dB", IrTxt, 9); volVal.HorizontalAlignment = HorizontalAlignment.Center;
-        var vol = new Knob(Math.Clamp(E.RackVolume(T) / 2.0, 0, 1), 1.0) { Accent = true, Width = 40, Height = 40, HorizontalAlignment = HorizontalAlignment.Center };
-        string VolDb(double lin) => lin <= 0.001 ? "−∞\u2009dB" : $"{20 * Math.Log10(lin):+0.0;−0.0;0.0}\u2009dB";
-        vol.ValueChanged += v => { E.RackSetVolume(T, (float)(v * 2.0)); volVal.Text = VolDb(v * 2.0); };
-        vol.Default = 0.5;   // unity gain
-        vol.Format = v => VolDb(v * 2.0);
-        ValueEntry.Attach(vol, "Rack volume", volVal);
-        volVal.Text = VolDb(E.RackVolume(T));
-        MidiLearn.Bind(vol, MidiTarget.RackVolume(T, a.AutomationDeviceIndex), "Rack Volume");
-        var volCell = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Children = { IrCap("VOLUME"), vol, volVal } };
-
-        var glideVal = IrMono("0\u2009ms", IrTxt, 8); glideVal.VerticalAlignment = VerticalAlignment.Center;
-        var gFill = new Border { Height = 3, Background = NotaPalette.VizInk, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        var gSlot = new Panel { Height = 8, MinWidth = 30, Children = { new Border { Height = 3, Background = IrInset, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center }, gFill } };
-        string GlideMs(double v) => $"{v * 500:0}\u2009ms";
-        void GUpd() { double v = E.RackGlide(T); gFill.Width = v * gSlot.Bounds.Width; glideVal.Text = GlideMs(v); }
-        bool gd = false; void GSet(double x) { double v = Math.Clamp(x / Math.Max(1, gSlot.Bounds.Width), 0, 1); E.RackSetGlide(T, (float)v); GUpd(); }
-        gSlot.PointerPressed += (_, e) => { gd = true; e.Pointer.Capture(gSlot); GSet(e.GetPosition(gSlot).X); };
-        gSlot.PointerMoved += (_, e) => { if (gd) GSet(e.GetPosition(gSlot).X); };
-        gSlot.PointerReleased += (_, e) => { if (gd) { gd = false; e.Pointer.Capture(null); } };
-        gSlot.PointerCaptureLost += (_, _) => gd = false;
-        _irTick.Add(() => { if (!gd) GUpd(); });
-        var glideRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4, Children = { IrCap("GLIDE"), WithCol(gSlot, 1), WithCol(glideVal, 2) } };
-
-        var mapBtn = new Border { BorderBrush = IrTeal, BorderThickness = new Thickness(1), Background = NotaPalette.Wash(NotaPalette.Teal, 0x24), CornerRadius = NotaRadius.Control, Padding = new Thickness(0, 3), Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = "Macro map", FontSize = 8, FontWeight = FontWeight.Medium, Foreground = IrTeal, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center } };
-        mapBtn.PointerPressed += (_, _) => { _macroMapMode = true; _ctx.RequestRebuild(); };
-
-        var fold = IrRailBtn(_foldZone ? "Unfold" : "Fold", () => { _foldZone = !_foldZone; _ctx.RequestRebuild(); });
-        var save = IrRailBtn("Save", () => _ctx.RequestPresetSave(-1));
-        var foldSave = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 4, [DockPanel.DockProperty] = Dock.Bottom, Children = { fold, WithCol(save, 1) } };
-
-        var top = new StackPanel { Spacing = 6, [DockPanel.DockProperty] = Dock.Top, Children = { IrCap("RACK OUT"), volCell, glideRow, new Border { Height = 1, Background = IrCard }, mapBtn } };
-        var inner = new DockPanel { LastChildFill = false, Children = { top, foldSave } };
-        return new Border { Width = 96, Background = IrRail, BorderBrush = IrBorder, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 6), Child = inner };
     }
 
     private static readonly InstrumentCardFactory _irFactory = new();
@@ -617,23 +416,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         f.ShowAt(anchor, showAtPointer: true);
     }
 
-    private static bool _foldZone;
     private static Control WithRight(Control c) { DockPanel.SetDock(c, Dock.Right); return c; }
     private static Control WithCol(Control c, int col) { Grid.SetColumn(c, col); return c; }
-
-    private Control IrSeg(string[] names, int sel, Action<int> onSel)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 1 };
-        for (int i = 0; i < names.Length; i++)
-        {
-            int iv = i; bool on = i == sel;
-            var c = new Border { CornerRadius = NotaRadius.Clip, Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand), Background = on ? IrAmber : Brushes.Transparent,
-                Child = new TextBlock { Text = names[i], FontSize = 8, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal, Foreground = on ? NotaPalette.TextOnAccent : IrMuted } };
-            c.PointerPressed += (_, _) => onSel(iv);
-            row.Children.Add(c);
-        }
-        return new Border { Background = IrInset, BorderBrush = IrBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Child = row };
-    }
 
     private Border IrMsBtn(string t, bool on, SolidColorBrush fill, Action onClick)
     {
@@ -643,568 +427,14 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         return b;
     }
 
-    private Border IrRailBtn(string t, Action onClick)
-    {
-        var b = new Border { BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderStrong, Background = IrCard, CornerRadius = NotaRadius.Badge, Padding = new Thickness(0, 2), Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = t, FontSize = 9, Foreground = NotaPalette.TextSecondary, HorizontalAlignment = HorizontalAlignment.Center } };
-        b.PointerPressed += (_, _) => onClick();
-        return b;
-    }
-
     // ---- second view: Macro map (mockup 2p card 2) ----
-    private static int _mapMacro;
-    // Both racks show this view inside the shared device shell; a custom onDone lets the
-    // Audio Effect Rack leave it its own way.
-    private Control InstrumentRackMacroMap(IRackAccess a, Action? onDone = null)
-    {
-        // MAPPING strip.
-        var done = new Border { BorderBrush = IrTeal, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(10, 2), Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = "Done", FontSize = 9, Foreground = IrTeal, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center }, [DockPanel.DockProperty] = Dock.Right };
-        done.PointerPressed += (_, _) => { if (onDone != null) onDone(); else { _macroMapMode = false; _ctx.RequestRebuild(); } };
-        var strip = new Border { Height = 34, Background = IrHdr, BorderBrush = IrBorder, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(9, 0), Child =
-            new DockPanel { LastChildFill = false, Children = { done, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = {
-                IrCap("MAPPING", IrTeal), new TextBlock { Text = a.MacroName(_mapMacro), FontSize = 9, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = "→ click any control to add · drag its range below", FontSize = 8, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center } } } } } };
-
-        // Macros list (left).
-        var macList = new StackPanel { Spacing = 3 };
-        macList.Children.Add(IrCap("MACROS"));
-        for (int i = 0; i < 8; i++)
-        {
-            int iv = i; int tCount = 0;
-            for (int m = 0; m < a.MappingCount(); m++) if (a.TryGetMapping(m, out var mm) && mm.Macro == i) tCount++;
-            bool cur = i == _mapMacro;
-            var nm = new TextBlock { Text = a.MacroName(i), FontSize = 9, Foreground = cur ? IrAmberLit : (tCount > 0 ? IrTxt : IrMuted), Width = 60, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-            var fill = new Border { Height = 3, Background = NotaPalette.VizInk, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-            var slot = new Panel { Height = 6, Children = { new Border { Height = 3, Background = IrInset, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center }, fill } };
-            _irTick.Add(() => fill.Width = E.PluginParamGet(T, a.AutomationDeviceIndex, iv) * slot.Bounds.Width);
-            var cnt = IrMono(tCount.ToString(), cur ? IrTeal : IrMuted);
-            var rowg = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 5, Cursor = new Cursor(StandardCursorType.Hand), Children = { nm, WithCol(slot, 1), WithCol(cnt, 2) } };
-            rowg.PointerPressed += (_, _) => { _mapMacro = iv; _ctx.RequestRebuild(); };
-            macList.Children.Add(rowg);
-        }
-        var macCol = new Border { Width = 186, Background = IrRail, BorderBrush = IrBorder, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(8, 6), Child = macList };
-
-        // Targets (right).
-        var targetStack = new StackPanel { Spacing = 4 };
-        int nTargets = 0;
-        for (int m = 0; m < a.MappingCount(); m++) if (a.TryGetMapping(m, out var mm) && mm.Macro == _mapMacro) nTargets++;
-        targetStack.Children.Add(new DockPanel { LastChildFill = false, Children = { IrCap($"{a.MacroName(_mapMacro)} → {nTargets} target{(nTargets == 1 ? "" : "s")}"), WithRight(new TextBlock { Text = "min — max", FontSize = 8, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center }) } });
-        for (int m = 0; m < a.MappingCount(); m++)
-        {
-            if (!a.TryGetMapping(m, out var mm) || mm.Macro != _mapMacro) continue;
-            targetStack.Children.Add(IrMappingRow(a, m, mm));
-        }
-        targetStack.Children.Add(new Border { BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(0, 4),
-            Child = new TextBlock { Text = "click a control in any device to map it here", FontSize = 9, Foreground = IrMuted, HorizontalAlignment = HorizontalAlignment.Center } });
-
-        var curveSeg = IrSeg(new[] { "Linear", "Exp", "Log", "S" }, CommonCurve(a, _mapMacro), i => { for (int m = 0; m < a.MappingCount(); m++) if (a.TryGetMapping(m, out var mm) && mm.Macro == _mapMacro) a.SetMappingCurve(m, i); _ctx.RequestRebuild(); });
-        var unmap = new Border { BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), [DockPanel.DockProperty] = Dock.Right,
-            Child = new TextBlock { Text = "Unmap all", FontSize = 9, Foreground = IrRed } };
-        unmap.PointerPressed += (_, _) => { for (int m = a.MappingCount() - 1; m >= 0; m--) if (a.TryGetMapping(m, out var mm) && mm.Macro == _mapMacro) a.RemoveMapping(m); _ctx.RequestRebuild(); };
-        var bottom = new DockPanel { LastChildFill = false, [DockPanel.DockProperty] = Dock.Bottom, Children = { unmap, new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { IrCap("CURVE"), curveSeg } } } };
-        var tScroll = new ScrollViewer { Content = targetStack, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
-        var tInner = new DockPanel { LastChildFill = true, Children = { bottom, tScroll } };
-        var targets = new Border { Padding = new Thickness(9, 6), Child = tInner };
-
-        DockPanel.SetDock(macCol, Dock.Left);
-        var body = new DockPanel { LastChildFill = true, Children = { macCol, targets } };
-        DockPanel.SetDock(strip, Dock.Top);
-        var root = new DockPanel { LastChildFill = true };
-        root.Children.Add(strip); root.Children.Add(body);
-        return root;
-    }
-
-    private int CommonCurve(IRackAccess a, int macro)
-    {
-        for (int m = 0; m < a.MappingCount(); m++) if (a.TryGetMapping(m, out var mm) && mm.Macro == macro) return a.MappingCurve(m);
-        return 0;
-    }
-
-    private Control IrMappingRow(IRackAccess a, int mappingIndex, RackMacroMapping mm)
-    {
-        bool pad = mm.DeviceIndex == RackMacroMapping.PadControls && mm.ParamIndex is >= 0 and < 4;
-        string dev = pad ? $"Chain {mm.Chain + 1}" : mm.DeviceIndex < 0 ? a.ChainInstrumentName(mm.Chain) : a.ChainDeviceName(mm.Chain, mm.DeviceIndex);
-        string pn = pad ? RackMacroMapping.PadParamNames[mm.ParamIndex] : mm.DeviceIndex < 0 ? a.ChainInstrumentParamName(mm.Chain, mm.ParamIndex) : a.ChainDeviceParamName(mm.Chain, mm.DeviceIndex, mm.ParamIndex);
-        float pMin = 0, pMax = 1;
-        if (pad) { pMin = RackMacroMapping.PadParamMin[mm.ParamIndex]; pMax = RackMacroMapping.PadParamMax[mm.ParamIndex]; }
-        else if (mm.DeviceIndex >= 0) { pMin = a.ChainDeviceParamMin(mm.Chain, mm.DeviceIndex, mm.ParamIndex); pMax = a.ChainDeviceParamMax(mm.Chain, mm.DeviceIndex, mm.ParamIndex); }
-        double span = Math.Max(1e-6, pMax - pMin);
-        double fLo = Math.Clamp((mm.RangeMin - pMin) / span, 0, 1), fHi = Math.Clamp((mm.RangeMax - pMin) / span, 0, 1);
-        var name = new TextBlock { Text = $"{dev} · {pn}", FontSize = 9, Foreground = IrTxt, Width = 122, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        var band = new Border { Height = 6, Background = NotaPalette.Wash(NotaPalette.Teal, 0x73), CornerRadius = NotaRadius.Badge, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        var track = new Panel { Height = 6, MinWidth = 60, Children = { new Border { Height = 6, Background = NotaPalette.BgSunken, CornerRadius = NotaRadius.Badge, VerticalAlignment = VerticalAlignment.Center }, band } };
-        var vals = IrMono($"{mm.RangeMin * 100:0}\u2009%–{mm.RangeMax * 100:0}\u2009%", NotaPalette.TextSecondary);
-        void Upd() { double w = track.Bounds.Width; band.Margin = new Thickness(fLo * w, 0, 0, 0); band.Width = Math.Max(2, (fHi - fLo) * w); }
-        int drag = 0;  // 1 = min, 2 = max
-        void Apply(double x) { double f = Math.Clamp(x / Math.Max(1, track.Bounds.Width), 0, 1); if (drag == 1) fLo = Math.Min(f, fHi); else fHi = Math.Max(f, fLo); Upd(); }
-        track.PointerPressed += (_, e) => { double x = e.GetPosition(track).X, w = track.Bounds.Width; drag = Math.Abs(x - fLo * w) <= Math.Abs(x - fHi * w) ? 1 : 2; e.Pointer.Capture(track); Apply(x); };
-        track.PointerMoved += (_, e) => { if (drag != 0) Apply(e.GetPosition(track).X); };
-        void EndDrag() { drag = 0; a.SetMappingRange(mappingIndex, (float)(pMin + fLo * span), (float)(pMin + fHi * span)); _ctx.RequestRebuild(); }
-        track.PointerReleased += (_, e) => { if (drag != 0) { EndDrag(); e.Pointer.Capture(null); } };
-        track.PointerCaptureLost += (_, _) => { if (drag != 0) EndDrag(); };
-        _irTick.Add(Upd);
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, Children = { name, WithCol(track, 1), WithCol(vals, 2) } };
-        return new Border { Background = IrInset, BorderBrush = IrField, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(7, 4), Child = g };
-    }
-
     // Audio Effect Rack body (a device, kind 5): wrapped by the view's DeviceShell.
     // Audio Effect Rack (mockup 2r): the shared device shell provides the header; this
     // body is the macro strip + (chains | devices | rack rail), with a MODE switch
     // (Parallel / Series / Select). Series swaps the body for stacked chain columns.
-    public Control BuildEffectRackBody(int di)
-    {
-        var a = new EffectRackAccess(E, T, di);
-        _irTick.Clear();
-        int chains = a.ChainCount();
-        Sel = chains > 0 ? Math.Clamp(Sel, 0, chains - 1) : 0;
+    public Control BuildEffectRackBody(int di) => RcBody(BuildRackCard(new EffectRackAccess(E, T, di), di));
 
-        Control root;
-        if (_aeMacroMap)
-        {
-            root = InstrumentRackMacroMap(a, () => { _aeMacroMap = false; DeferRebuild(); });
-        }
-        else
-        {
-            int mode = E.RackDevMode(T, di);
-            var strip = IrMacroStrip(a);
-            Control body = mode == 1 ? AeSeriesBody(a, di) : AeParallelBody(a, di);
-            DockPanel.SetDock(strip, Dock.Top);
-            root = new DockPanel { LastChildFill = true, Children = { strip, body } };
-        }
-        if (_irTick.Count > 0) _ctx.AddDeviceRefresher(() => { for (int i = 0; i < _irTick.Count; i++) _irTick[i](); });
-        return new Border { Height = DeviceCardKit.CardH - DeviceCardKit.HeaderH, ClipToBounds = true, Child = root };   // fills the full-bleed shell slot (700)
-    }
-
-    // Parallel (mode 0) / Select (mode 2): chain list | devices | rack rail.
-    private Control AeParallelBody(IRackAccess a, int di)
-    {
-        var list = AeChainList(a, di);
-        var rail = AeRackRail(a, di);
-        var devs = AeDeviceArea(a, di);
-        DockPanel.SetDock(list, Dock.Left); DockPanel.SetDock(rail, Dock.Right);
-        return new DockPanel { LastChildFill = true, Children = { list, rail, devs } };
-    }
-
-    // ---- chain list (196) ----
-    private Control AeChainList(IRackAccess a, int di)
-    {
-        int mode = E.RackDevMode(T, di);
-        int chains = a.ChainCount();
-        string sub = mode == 2 ? $"{AeActiveCount(a, di)} active" : (mode == 1 ? "series" : "parallel · summed");
-        var header = new DockPanel { LastChildFill = false, Margin = new Thickness(0, 0, 0, 5), Children = {
-            IrCap("CHAINS"), WithRight(new TextBlock { Text = sub, FontSize = 8, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center }) } };
-        var rows = new StackPanel { Spacing = 4 };
-        for (int c = 0; c < chains; c++) rows.Children.Add(AeChainRow(a, di, c));
-        var add = new Border { BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(0, 3), Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = "+ Add chain", FontSize = 9, Foreground = IrMuted, HorizontalAlignment = HorizontalAlignment.Center } };
-        add.PointerPressed += (_, _) => { int c = a.AddChain(-1); if (c >= 0) Sel = c; _ctx.RequestRebuild(); };
-        rows.Children.Add(add);
-        var scroll = new ScrollViewer { Content = rows, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(0, 0, 6, 0) };
-        DockPanel.SetDock(header, Dock.Top);
-        var inner = new DockPanel { LastChildFill = true, Children = { header, scroll } };
-        return new Border { Width = 196, Background = IrRail, BorderBrush = IrBorder, BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(8, 6), Child = inner };
-    }
-
-    private Control AeChainRow(IRackAccess a, int di, int c)
-    {
-        bool sel = c == Sel;
-        string name = a.ChainInstrumentName(c); if (string.IsNullOrEmpty(name)) name = $"Chain {c + 1}";
-        int devs = a.ChainDeviceCount(c);
-        var nameTb = new TextBlock { Text = name, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = sel ? IrAmberLit : IrTxt, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        var head = new DockPanel { LastChildFill = true, Children = { WithRight(ChainDelBtn(a, c)), WithRight(IrMono($"{devs} dev", IrMuted)), nameTb } };
-        double db = a.ChainGain(c) <= 0.001 ? -60 : 20 * Math.Log10(a.ChainGain(c));
-        var dbT = IrMono(db <= -59 ? "−∞" : $"{db:+0.0;−0.0;0.0}", NotaPalette.TextSecondary);
-        var meterFill = new Border { Background = Success, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = NotaRadius.Bar };
-        var meter = new Border { Height = 3, Background = IrInset, CornerRadius = NotaRadius.Bar, Child = meterFill, VerticalAlignment = VerticalAlignment.Center };
-        _irTick.Add(() => meterFill.Width = meter.Bounds.Width * Math.Clamp(a.ChainMeter(c), 0, 1));
-        var m = IrMsBtn("M", a.ChainMute(c), NotaPalette.Mute, () => { a.SetChainMute(c, !a.ChainMute(c)); _ctx.RequestRebuild(); });
-        var s = IrMsBtn("S", a.ChainSolo(c), NotaPalette.Solo, () => { a.SetChainSolo(c, !a.ChainSolo(c)); _ctx.RequestRebuild(); });
-        MidiLearn.Bind(m, MidiTarget.RackChainMute(T, a.AutomationDeviceIndex, c), "Chain Mute");
-        MidiLearn.Bind(s, MidiTarget.RackChainSolo(T, a.AutomationDeviceIndex, c), "Chain Solo");
-        var meterGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 4, VerticalAlignment = VerticalAlignment.Center };
-        meterGrid.Children.Add(dbT); Grid.SetColumn(meter, 1); meterGrid.Children.Add(meter);
-        Grid.SetColumn(m, 2); meterGrid.Children.Add(m); Grid.SetColumn(s, 3); meterGrid.Children.Add(s);
-        var stack = new StackPanel { Spacing = 3, Children = { head, meterGrid } };
-        // Built exactly like the Instrument Rack row (Border + PointerPressed), so it sizes to
-        // its content. Clicking is reliable now that the full-bleed body removed the earlier
-        // fixed-width overflow that skewed hit-testing inside the device shell.
-        var row = new Border { Background = sel ? RowSel : IrCard, BorderBrush = sel ? IrAmber : IrBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(6, 4), Cursor = new Cursor(StandardCursorType.Hand), Child = stack };
-        // left accent = chain hue, hidden while selected (the amber selection is enough).
-        var accent = new Border { Width = 2, Background = sel ? Brushes.Transparent : ChainHue(c), CornerRadius = new CornerRadius(NotaRadius.ClipValue, 0, 0, NotaRadius.ClipValue) };
-        var wrap = new DockPanel { LastChildFill = true, Children = { accent, row } };
-        DockPanel.SetDock(accent, Dock.Left);
-        wrap.PointerPressed += (_, e) => { if (e.GetCurrentPoint(wrap).Properties.IsLeftButtonPressed && Sel != c) { Sel = c; _ctx.RequestRebuild(); } };
-        DragDrop.SetAllowDrop(wrap, true);
-        DragDrop.AddDragOverHandler(wrap, (_, e) => { if (!BrowserView.IsBrowserDrag || !IsEffect(BrowserView.CurrentDrag)) { e.DragEffects = DragDropEffects.None; return; } e.DragEffects = DragDropEffects.Copy; e.Handled = true; _ctx.HideDropGlow(); row.BorderBrush = AccentBright; });
-        DragDrop.AddDragLeaveHandler(wrap, (_, _) => row.BorderBrush = sel ? IrAmber : IrBorder);
-        DragDrop.AddDropHandler(wrap, (_, e) => { row.BorderBrush = sel ? IrAmber : IrBorder; if (BrowserView.CurrentDrag is { } it && IsEffect(it)) { Sel = c; DropEffectOnChain(a, c, it); e.Handled = true; } });
-        return wrap;
-    }
-
-    // A small borderless ✕ that removes a rack chain (shared by both rack kinds).
-    private Control ChainDelBtn(IRackAccess a, int c)
-    {
-        var glyph = new Glyph(GlyphKind.Close, 9) { Foreground = IrMuted };
-        var b = new Border { Width = 14, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Stretch, Child = glyph };
-        ToolTip.SetTip(b, "Remove chain");
-        b.PointerEntered += (_, _) => glyph.Foreground = IrRed;
-        b.PointerExited += (_, _) => glyph.Foreground = IrMuted;
-        b.PointerPressed += (_, e) => { e.Handled = true; int n = a.ChainCount(); a.RemoveChain(c); if (Sel > c) Sel--; Sel = Math.Clamp(Sel, 0, Math.Max(0, n - 2)); DeferRebuild(); };
-        return b;
-    }
-
-    // ---- device area (center): horizontal device cards + (Select) level selector ----
-    private Control AeDeviceArea(IRackAccess a, int di)
-    {
-        if (a.ChainCount() == 0)
-            return new Border { Padding = new Thickness(9, 7), Child = new TextBlock { Text = "Add a chain to build its device chain.", FontSize = 9, Foreground = IrMuted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-        int sc = Sel, mode = E.RackDevMode(T, di);
-        double pdcMs = E.RackDevPdc(T, di) ? 0 : 0;   // (informational; latency in samples is host-side)
-        var hdr = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 0, 6), Children = {
-            new Border { Width = 7, Height = 7, CornerRadius = NotaRadius.Clip, Background = ChainHue(sc), VerticalAlignment = VerticalAlignment.Center },
-            new TextBlock { Text = $"Chain {sc + 1}", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center },
-            new TextBlock { Text = "devices · signal left → right", FontSize = 8, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center } } };
-
-        var slots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-        int dc = a.ChainDeviceCount(sc);
-        if (_aeFold)
-            for (int d = 0; d < dc; d++) slots.Children.Add(AeFoldedSlot(a, sc, d));
-        else
-            for (int d = 0; d < dc; d++) slots.Children.Add(IrDeviceSlot(a, sc, d));
-        slots.Children.Add(IrAddDeviceSlot(a, sc));
-        var row = new ScrollViewer { Content = slots, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled };
-
-        var inner = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(hdr, Dock.Top); inner.Children.Add(hdr);
-        if (mode == 2) { var selMap = AeSelectorMap(a, di); DockPanel.SetDock(selMap, Dock.Bottom); inner.Children.Add(selMap); }
-        inner.Children.Add(row);
-        return new Border { Padding = new Thickness(8, 6), Child = inner };
-    }
-
-    // Folded device: a compact name chip (no GUI/params body).
-    private Control AeFoldedSlot(IRackAccess a, int sc, int d)
-    {
-        bool byp = a.ChainDeviceBypassed(sc, d);
-        var chip = new Border { Height = 22, Background = IrCard, BorderBrush = IrBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile, Padding = new Thickness(7, 0), VerticalAlignment = VerticalAlignment.Top,
-            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
-                new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = byp ? IrMuted : Success, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = a.ChainDeviceName(sc, d), FontSize = 9, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center },
-                SlotDelBtn(() => { a.RemoveChainDevice(sc, d); DeferRebuild(); }) } } };
-        if (byp) chip.AttachedToVisualTree += (_, _) => Inactive.Set(chip, true, interactive: true);   // no opacity for state
-        Border b = chip; b.PointerPressed += (_, e) => { e.Handled = true; OpenChainDeviceGui(a, sc, d, b); };
-        return chip;
-    }
-
-    // ---- chain selector on an input-level axis (Select mode) ----
-    private int AeActiveCount(IRackAccess a, int di)
-    {
-        float sel = E.RackDevLiveSelector(T, di);
-        int n = 0, chains = a.ChainCount();
-        for (int c = 0; c < chains; c++)
-        {
-            E.RackDevChainZone(T, di, c, out int lo, out int hi);
-            if (sel >= lo / 127.0f && sel <= hi / 127.0f && !a.ChainMute(c)) n++;
-        }
-        return n;
-    }
-
-    private Control AeSelectorMap(IRackAccess a, int di)
-    {
-        int n = a.ChainCount();
-        var los = new int[n]; var his = new int[n]; var cols = new IBrush[n];
-        for (int c = 0; c < n; c++) { E.RackDevChainZone(T, di, c, out int lo, out int hi); los[c] = lo; his[c] = hi; cols[c] = ChainHue(c); }
-        var map = new RackZoneMap(los, his, cols, Sel, keyMode: false);
-        map.RangeEdited += (c, lo, hi) => { E.RackDevSetChainZone(T, di, c, lo, hi); DeferRebuild(); };
-        bool follow = E.RackDevSelFollow(T, di);
-        var marker = new Border { Width = 1.5, Background = IrAmberLit, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch };
-        var mapHost = new Panel { Children = { map, marker } };
-        _irTick.Add(() => marker.Margin = new Thickness(E.RackDevLiveSelector(T, di) * mapHost.Bounds.Width, 0, 0, 0));
-        // When not following the input, click/drag on the axis sets the manual selector.
-        if (!follow)
-            mapHost.PointerPressed += (_, e) => { if (e.GetCurrentPoint(mapHost).Properties.IsRightButtonPressed) { double x = e.GetPosition(mapHost).X; E.RackDevSetChainSelect(T, di, (float)Math.Clamp(x / Math.Max(1, mapHost.Bounds.Width), 0, 1)); } };
-
-        var readout = IrMono("", NotaPalette.TextSecondary);
-        _irTick.Add(() => readout.Text = $"in {(int)Math.Round(E.RackDevLiveSelector(T, di) * 48 - 48)}\u2009dB → {AeActiveCount(a, di)} chain{(AeActiveCount(a, di) == 1 ? "" : "s")}");
-        var head = new DockPanel { LastChildFill = false, Children = { IrCap("CHAIN SELECTOR"),
-            WithRight(DrumChip(follow ? "Follow" : "Manual", follow, () => { E.RackDevSetSelFollow(T, di, !follow); DeferRebuild(); })),
-            WithRight(readout) } };
-        DockPanel.SetDock(head, Dock.Top);
-        var body = new DockPanel { LastChildFill = true, Children = { head, mapHost } };
-        return new Border { Height = 52, Background = IrInset, BorderBrush = IrField, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Padding = new Thickness(6, 4), Margin = new Thickness(0, 5, 0, 0), Child = body };
-    }
-
-    // ---- rack rail (96): MODE · dry/wet · gain · macro-map · pdc · fold/save ----
-    private Control AeRackRail(IRackAccess a, int di)
-    {
-        int mode = E.RackDevMode(T, di);
-        var modeSeg = AeModeSeg(mode, di);
-
-        var dwVal = IrMono("", IrTxt, 9); dwVal.HorizontalAlignment = HorizontalAlignment.Center;
-        var dw = new Knob(Math.Clamp(E.RackDevDryWet(T, di), 0, 1), 1.0) { Accent = true, Width = 38, Height = 38, HorizontalAlignment = HorizontalAlignment.Center };
-        dw.ValueChanged += v => { E.RackDevSetDryWet(T, di, (float)v); dwVal.Text = $"{v * 100:0}\u2009%"; };
-        dw.Format = v => $"{v * 100:0}\u2009%";
-        ValueEntry.Attach(dw, "Dry / wet", dwVal);
-        dwVal.Text = $"{E.RackDevDryWet(T, di) * 100:0}\u2009%";
-        var dwCell = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, Children = { IrCap("DRY / WET"), dw, dwVal } };
-
-        string GainDb(double lin) => lin <= 0.001 ? "−∞" : $"{20 * Math.Log10(lin):+0.0;−0.0;0.0}";
-        var gainVal = IrMono(GainDb(E.RackDevVolume(T, di)), IrTxt, 8); gainVal.VerticalAlignment = VerticalAlignment.Center;
-        var gFill = new Border { Height = 3, Background = NotaPalette.VizInk, CornerRadius = NotaRadius.Clip, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Center };
-        var gSlot = new Panel { Height = 8, MinWidth = 26, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent, Children = { new Border { Height = 3, Background = IrInset, CornerRadius = NotaRadius.Clip, VerticalAlignment = VerticalAlignment.Center }, gFill } };
-        void GUpd() { double v = Math.Clamp(E.RackDevVolume(T, di) / 2.0, 0, 1); gFill.Width = v * gSlot.Bounds.Width; gainVal.Text = GainDb(E.RackDevVolume(T, di)); }
-        bool gd = false; void GSet(double x) { double v = Math.Clamp(x / Math.Max(1, gSlot.Bounds.Width), 0, 1); E.RackDevSetVolume(T, di, (float)(v * 2.0)); GUpd(); }
-        gSlot.PointerPressed += (_, e) => { gd = true; e.Pointer.Capture(gSlot); GSet(e.GetPosition(gSlot).X); };
-        gSlot.PointerMoved += (_, e) => { if (gd) GSet(e.GetPosition(gSlot).X); };
-        gSlot.PointerReleased += (_, e) => { if (gd) { gd = false; e.Pointer.Capture(null); } };
-        gSlot.PointerCaptureLost += (_, _) => gd = false;
-        _irTick.Add(() => { if (!gd) GUpd(); });
-        MidiLearn.Bind(gSlot, MidiTarget.RackVolume(T, di), "Rack Volume");
-        var gainRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { IrCap("GAIN"), WithCol(gSlot, 1), WithCol(gainVal, 2) } };
-
-        var macroMap = new Border { BorderBrush = IrTeal, BorderThickness = new Thickness(1), Background = NotaPalette.Wash(NotaPalette.Teal, 0x24), CornerRadius = NotaRadius.Control, Padding = new Thickness(0, 3), Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = "Macro map", FontSize = 8, FontWeight = FontWeight.Medium, Foreground = IrTeal, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center } };
-        macroMap.PointerPressed += (_, _) => { _aeMacroMap = true; DeferRebuild(); };
-        var pdc = AeRailToggle("PDC", E.RackDevPdc(T, di), () => { E.RackDevSetPdc(T, di, !E.RackDevPdc(T, di)); DeferRebuild(); });
-
-        var fold = IrRailBtn(_aeFold ? "Unfold" : "Fold", () => { _aeFold = !_aeFold; DeferRebuild(); });
-        var save = IrRailBtn("Save", () => { try { _ctx.RequestPresetSave(di); } catch { /* no-op */ } });
-        var foldSave = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 4, [DockPanel.DockProperty] = Dock.Bottom, Children = { fold, WithCol(save, 1) } };
-
-        var top = new StackPanel { Spacing = 6, [DockPanel.DockProperty] = Dock.Top, Children = {
-            new StackPanel { Spacing = 3, Children = { IrCap("MODE"), modeSeg } },
-            IrCap("RACK OUT"), dwCell, gainRow,
-            new Border { Height = 1, Background = IrCard },
-            macroMap, pdc } };
-        var inner = new DockPanel { LastChildFill = false, Children = { top, foldSave } };
-        return new Border { Width = 96, Background = IrRail, BorderBrush = IrBorder, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(8, 6), Child = inner };
-    }
-
-    // Full-width 3-way MODE segment (fits the 96px rail).
-    private Control AeModeSeg(int mode, int di)
-    {
-        var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 1 };
-        string[] names = { "Prl", "Ser", "Sel" };
-        for (int i = 0; i < 3; i++)
-        {
-            int iv = i; bool on = i == mode;
-            var cell = new Border { Background = on ? IrAmber : Brushes.Transparent, CornerRadius = NotaRadius.Clip, Cursor = new Cursor(StandardCursorType.Hand),
-                Child = new TextBlock { Text = names[i], FontSize = 8, FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal, Foreground = on ? NotaPalette.TextOnAccent : IrMuted, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, Padding = new Thickness(0, 1) } };
-            cell.PointerPressed += (_, _) => { E.RackDevSetMode(T, di, iv); DeferRebuild(); };
-            Grid.SetColumn(cell, i); g.Children.Add(cell);
-        }
-        return new Border { Background = IrInset, BorderBrush = IrBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(1), Child = g };
-    }
-
-    // A pill toggle (PDC): label on the left, switch on the right, fits the rail width.
-    private Control AeRailToggle(string text, bool on, Action onClick)
-    {
-        // The label names the setting; the switch carries the state (colour and position).
-        return DeviceCardKit.Switch(text, () => on, onClick, out _);
-    }
-
-    // ---- Series mode: chains as stacked columns you build top → bottom ----
-    private Control AeSeriesBody(IRackAccess a, int di)
-    {
-        var rail = AeRackRail(a, di);
-        var cols = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-        int chains = a.ChainCount();
-        for (int c = 0; c < chains; c++) cols.Children.Add(AeSeriesColumn(a, di, c));
-        var addCol = new Border { Width = 40, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new Glyph(GlyphKind.Plus, 10) { Foreground = IrMuted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center } };
-        addCol.PointerPressed += (_, _) => { int nc = a.AddChain(-1); if (nc >= 0) Sel = nc; DeferRebuild(); };
-        cols.Children.Add(addCol);
-        var scroll = new ScrollViewer { Content = cols, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled, Padding = new Thickness(8, 7) };
-        DockPanel.SetDock(rail, Dock.Right);
-        return new DockPanel { LastChildFill = true, Children = { rail, scroll } };
-    }
-
-    private Control AeSeriesColumn(IRackAccess a, int di, int c)
-    {
-        double db = a.ChainGain(c) <= 0.001 ? -60 : 20 * Math.Log10(a.ChainGain(c));
-        var head = new DockPanel { LastChildFill = true, Children = {
-            WithRight(IrMono(db <= -59 ? "−∞" : $"{db:+0.0;−0.0;0.0}", NotaPalette.TextSecondary)),
-            new TextBlock { Text = $"Chain {c + 1}", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis } } };
-        var stack = new StackPanel { Spacing = 4, Children = { head } };
-        int dc = a.ChainDeviceCount(c);
-        for (int d = 0; d < dc; d++) stack.Children.Add(AeSeriesDeviceRow(a, c, d));
-        var addDev = new Border { BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(0, 2), Cursor = new Cursor(StandardCursorType.Hand), [DockPanel.DockProperty] = Dock.Bottom,
-            Child = new TextBlock { Text = "+ device", FontSize = 8, Foreground = IrMuted, HorizontalAlignment = HorizontalAlignment.Center } };
-        addDev.PointerPressed += (_, _) => ShowAddDeviceMenu(a, c, addDev);
-        DockPanel.SetDock(addDev, Dock.Bottom);
-        var inner = new DockPanel { LastChildFill = false, Children = { addDev, stack } };
-        return new Border { Width = 150, Background = IrRail, BorderBrush = ChainHue(c), BorderThickness = new Thickness(0, 2, 0, 0), CornerRadius = NotaRadius.Panel, Padding = new Thickness(6, 5), Child = inner };
-    }
-
-    private Control AeSeriesDeviceRow(IRackAccess a, int c, int d)
-    {
-        bool byp = a.ChainDeviceBypassed(c, d);
-        int mc = MacrosOnTarget(a, c, d);
-        var rowInner = new DockPanel { LastChildFill = true, Children = {
-            WithRight(SlotDelBtn(() => { a.RemoveChainDevice(c, d); DeferRebuild(); })),
-            WithRight(new Glyph(GlyphKind.Grip, 8) { Foreground = IrMuted }),
-            WithRight(mc > 0 ? new TextBlock { Text = $"{mc}M", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = IrTeal, VerticalAlignment = VerticalAlignment.Center } : (Control)new Border()),
-            new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
-                new Border { Width = 5, Height = 5, CornerRadius = NotaRadius.Badge, Background = byp ? IrMuted : Success, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = a.ChainDeviceName(c, d), FontSize = 9, Foreground = IrTxt, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis } } } } };
-        var row = new Border { Height = 24, Background = IrCard, BorderBrush = IrBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = rowInner };
-        if (byp) row.AttachedToVisualTree += (_, _) => Inactive.Set(row, true, interactive: true);   // no opacity for state
-        Border b = row; b.PointerPressed += (_, e) => { e.Handled = true; OpenChainDeviceGui(a, c, d, b); };
-        return row;
-    }
-
-    // ---- rack body (macros + chains), reused by both rack types ------------
-    // The 4×2 macro grid column, shared by the rack card and the drum-rack card.
-    private Control MacroColumn(IRackAccess a)
-    {
-        var macroGrid = new StackPanel { Spacing = 7 };
-        for (int r = 0; r < 4; r++)
-        {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-            row.Children.Add(MacroCell(a, r * 2));
-            row.Children.Add(MacroCell(a, r * 2 + 1));
-            macroGrid.Children.Add(row);
-        }
-        return new StackPanel { Width = 210, Spacing = 8, Children = { SectionLabel("MACROS"), macroGrid } };
-    }
-
-    // Rack layout: macros | chain list | the selected chain's device chain.
-    private Control RackBody(IRackAccess a)
-    {
-        int chains = a.ChainCount();
-        Sel = chains > 0 ? Math.Clamp(Sel, 0, chains - 1) : 0;
-
-        var body = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 14 };
-        var macros = MacroColumn(a);
-        var list = ChainListColumn(a);
-        var devices = DeviceArea(a, Sel);
-        body.Children.Add(macros);
-        Grid.SetColumn(list, 1); body.Children.Add(list);
-        Grid.SetColumn(devices, 2); body.Children.Add(devices);
-        return body;
-    }
-
-    // ---- chain list (left): selectable rows with gain/pan/M/S -------------
-    private Control ChainListColumn(IRackAccess a)
-    {
-        var listPanel = new StackPanel { Spacing = 5 };
-        int chains = a.ChainCount();
-        for (int c = 0; c < chains; c++) listPanel.Children.Add(ChainRow(a, c));
-        listPanel.Children.Add(AddChainButton(a));
-
-        var col = new Grid { Width = 182, RowDefinitions = new RowDefinitions("Auto,*") };
-        col.Children.Add(SectionLabel("CHAINS"));
-        var scroll = new ScrollViewer
-        {
-            Content = listPanel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Padding = new Thickness(0, 0, 11, 0),   // reserve room so the thin scrollbar never floats over the ✕ buttons
-        };
-        Grid.SetRow(scroll, 1); col.Children.Add(scroll);
-        return col;
-    }
-
-    private Control ChainRow(IRackAccess a, int c)
-    {
-        bool sel = c == Sel;
-        string name = a.HasInstrumentChains ? a.ChainInstrumentName(c) : $"Chain {c + 1}";
-        if (string.IsNullOrEmpty(name)) name = $"Chain {c + 1}";
-
-        var nameTb = new TextBlock { Text = name, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = sel ? AccentBright : TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        var rm = Glyph(GlyphKind.Close, true, () => { a.RemoveChain(c); if (Sel > 0) Sel--; _ctx.RequestRebuild(); });
-        ToolTip.SetTip(rm, "Remove chain");
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        head.Children.Add(nameTb);
-        Grid.SetColumn(rm, 1); head.Children.Add(rm);
-
-        var gain = new MiniFader(a.ChainGain(c), 2.0) { Accent = true, Width = 58, Default = 1.0 };
-        gain.ValueChanged += v => a.SetChainGain(c, (float)v);
-        var pan = new MiniFader(a.ChainPan(c) * 0.5 + 0.5, 1.0) { Width = 40, Default = 0.5 };
-        pan.ValueChanged += v => a.SetChainPan(c, (float)(v * 2.0 - 1.0));
-        ValueEntry.Attach(gain, gain.EntryField("Chain gain", v => NotaNum.GainDb(v)));
-        ValueEntry.Attach(pan, pan.EntryField("Chain pan", v => NotaNum.Pan(v * 2 - 1)));
-        var m = Toggle("M", a.ChainMute(c), NotaPalette.Mute, () => { a.SetChainMute(c, !a.ChainMute(c)); _ctx.RequestRebuild(); });
-        var s = Toggle("S", a.ChainSolo(c), NotaPalette.Solo, () => { a.SetChainSolo(c, !a.ChainSolo(c)); _ctx.RequestRebuild(); });
-        var ctrls = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { gain, pan, m, s } };
-
-        var row = new Border
-        {
-            Background = sel ? RowSel : Card2, BorderBrush = sel ? Brass : BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Tile, Padding = new Thickness(6, 5), Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new StackPanel { Spacing = 5, Children = { head, ctrls } },
-        };
-        // Click the row (not its controls, which consume the press) to select it.
-        row.PointerPressed += (_, e) =>
-        {
-            if (e.GetCurrentPoint(row).Properties.IsLeftButtonPressed && Sel != c) { Sel = c; _ctx.RequestRebuild(); }
-        };
-        // Drop an effect onto a chain to append it (and select the chain).
-        DragDrop.SetAllowDrop(row, true);
-        DragDrop.AddDragOverHandler(row, (_, e) =>
-        {
-            if (!BrowserView.IsBrowserDrag || !IsEffect(BrowserView.CurrentDrag)) { e.DragEffects = DragDropEffects.None; return; }
-            e.DragEffects = DragDropEffects.Copy; e.Handled = true; _ctx.HideDropGlow();
-            row.BorderBrush = AccentBright;   // drop target: colour only
-        });
-        DragDrop.AddDragLeaveHandler(row, (_, _) => { row.BorderBrush = sel ? Brass : BorderDef; });
-        DragDrop.AddDropHandler(row, (_, e) =>
-        {
-            row.BorderBrush = sel ? Brass : BorderDef; row.BorderThickness = new Thickness(1);
-            if (BrowserView.CurrentDrag is { } it && IsEffect(it)) { Sel = c; DropEffectOnChain(a, c, it); e.Handled = true; }
-        });
-        return row;
-    }
-
-    // ---- device area (right): the selected chain's instrument + effects ----
-    private Control DeviceArea(IRackAccess a, int sc, string? title = null)
-    {
-        var col = new Grid { RowDefinitions = new RowDefinitions("Auto,*"), MinWidth = 300 };
-        if (a.ChainCount() == 0)
-        {
-            col.Children.Add(SectionLabel(title ?? "DEVICES"));
-            var hint = new TextBlock { Text = "Add a chain to build its device chain.", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            Grid.SetRow(hint, 1); col.Children.Add(hint);
-            return col;
-        }
-        col.Children.Add(SectionLabel(title ?? $"CHAIN {sc + 1} DEVICES"));
-        var rowSp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        if (a.HasInstrumentChains) rowSp.Children.Add(ChainInstrumentCard(a, sc));
-        int dc = a.ChainDeviceCount(sc);
-        for (int d = 0; d < dc; d++) rowSp.Children.Add(ChainDeviceCard(a, sc, d));
-        rowSp.Children.Add(ChainAddDeviceCard(a, sc));
-        var scroll = new ScrollViewer
-        {
-            Content = rowSp, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-        };
-        Grid.SetRow(scroll, 1); col.Children.Add(scroll);
-        return col;
-    }
-
-    private Control ChainInstrumentCard(IRackAccess a, int sc)
-    {
-        int ik = a.ChainInstrumentKind(sc);
-        string nm = a.ChainInstrumentName(sc);
-        if (string.IsNullOrEmpty(nm)) nm = "Instrument";
-
-        // Compact knob card (like the effect cards). The full bespoke UI opens in a pop-out
-        // window via the header's "Full" button — the tabbed Nota Sampler editor for the
-        // built-in Sampler, the plug-in's native GUI for a hosted instrument, or a roomy
-        // knob grid for everything else.
-        var body = new StackPanel { Spacing = 8 };
-        if (ik == -1)
-            body.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { ActionChip("Save preset", () => _ctx.RequestRackPresetSave(sc)) } });
-        int pc = a.ChainInstrumentParamCount(sc);
-        if (pc == 0) body.Children.Add(new TextBlock { Text = "No parameters", FontSize = 9, Foreground = TextTertiary });
-        for (int p = 0; p < pc; p++)
-            if (a.ChainInstrumentParamName(sc, p) != "View") body.Children.Add(RackInstParamRow(a, sc, p));   // the card size isn't sound
-
-        Control fullBtn;
-        if (ik == -1) fullBtn = ActionChip("Full", () => { try { E.RackOpenChainInstrumentEditor(T, sc); } catch { /* no-op */ } });
-        else if (ik == 1) { Border b = null!; b = ActionChip("Full", () => OpenChainSamplerWindow(a, b, sc, InstrumentPresets(a, sc, ik))); fullBtn = b; }
-        else fullBtn = FullUiChip(nm, a.ChainInstrumentParamCount(sc), p => RackInstParamRow(a, sc, p), () => ChainLocation(a, sc));
-        return DeviceCardShell(nm, fullBtn, body, 180);
-    }
+    public Control BuildMidiRackBody(int mi) => RcBody(BuildRackCard(new MidiRackAccess(E, T, mi), mi));
 
     // A roomy, non-bespoke "full UI": every param as a knob in a 3-column grid (the name
     // is on the device window's title bar).
@@ -1223,70 +453,6 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             _ => new DeviceWindowPage(ParamGridContent(count, row), 476, double.NaN), bypass,
             () => $"{status()} · {count} parameter{(count == 1 ? "" : "s")}") { ContextTrackId = T };
         win.ShowFrom(anchor);
-    }
-
-    // A small header button that pops out a device's knobs in the device window.
-    private Border FullUiChip(string name, int count, Func<int, Control> row, Func<string> status, DeviceWindowBypass? bypass = null)
-    {
-        Border chip = null!;
-        chip = ActionChip("Full", () => OpenParamWindow(chip, name, count, row, status, bypass));
-        return chip;
-    }
-
-    private Control ChainDeviceCard(IRackAccess a, int sc, int d)
-    {
-        bool byp = a.ChainDeviceBypassed(sc, d);
-        int dc = a.ChainDeviceCount(sc);
-        var ctrls = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        string dnm = a.ChainDeviceName(sc, d);
-        // Full UI: hosted-plugin effect → its native window; built-in effect → roomy knob grid.
-        ctrls.Children.Add(a.ChainDeviceBuiltinKind(sc, d) < 0
-            ? ActionChip("Full", () => a.OpenChainDeviceEditor(sc, d))
-            : FullUiChip(dnm, a.ChainDeviceParamCount(sc, d), p => RackDeviceParamRow(a, sc, d, p), () => DeviceStatus(a, sc, d), ChainDeviceBypass(a, sc, d)));
-        ctrls.Children.Add(Glyph(GlyphKind.StepLeft, d > 0, () => { a.MoveChainDevice(sc, d, d - 1); _ctx.RequestRebuild(); }));
-        ctrls.Children.Add(Glyph(GlyphKind.StepRight, d < dc - 1, () => { a.MoveChainDevice(sc, d, d + 1); _ctx.RequestRebuild(); }));
-        ctrls.Children.Add(Glyph(GlyphKind.Close, true, () => { a.RemoveChainDevice(sc, d); _ctx.RequestRebuild(); }));
-
-        var body = new StackPanel { Spacing = 7 };
-        body.Children.Add(Toggle(byp ? "Bypassed" : "Active", !byp, NotaPalette.Success, () => { a.SetChainDeviceBypassed(sc, d, !byp); _ctx.RequestRebuild(); }));
-        int pc = a.ChainDeviceParamCount(sc, d);
-        for (int p = 0; p < pc; p++) body.Children.Add(RackDeviceParamRow(a, sc, d, p));
-        var card = DeviceCardShell(a.ChainDeviceName(sc, d), ctrls, body, 180);
-        if (byp) card.AttachedToVisualTree += (_, _) => Inactive.Set(body, true, interactive: true);
-        return card;
-    }
-
-    // The end of a chain: a slim "+" key (spec 012). Its dashed outline shows only while an
-    // effect is dragged over it.
-    private Control ChainAddDeviceCard(IRackAccess a, int sc)
-    {
-        var dash = new Rectangle
-        {
-            Stroke = BorderStrong, StrokeThickness = 1, StrokeDashArray = new AvaloniaList<double>(4, 3),
-            RadiusX = NotaRadius.ControlValue, RadiusY = NotaRadius.ControlValue, IsVisible = false,
-        };
-        var host = new Grid
-        {
-            Width = 28, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
-            Children = { dash, new Glyph(GlyphKind.Plus, 12) { Foreground = TextTertiary } },
-        };
-        ToolTip.SetTip(host, "Add device — click for the list, or drop an effect here");
-        host.PointerPressed += (_, _) => ShowAddDeviceMenu(a, sc, host);
-        // Also a drop target for effects (built-in / plug-in) → append to this chain.
-        DragDrop.SetAllowDrop(host, true);
-        DragDrop.AddDragOverHandler(host, (_, e) =>
-        {
-            if (!BrowserView.IsBrowserDrag || !IsEffect(BrowserView.CurrentDrag)) { e.DragEffects = DragDropEffects.None; return; }
-            e.DragEffects = DragDropEffects.Copy; e.Handled = true; _ctx.HideDropGlow();
-            dash.Stroke = AccentBright; dash.IsVisible = true;
-        });
-        DragDrop.AddDragLeaveHandler(host, (_, _) => dash.IsVisible = false);
-        DragDrop.AddDropHandler(host, (_, e) =>
-        {
-            dash.IsVisible = false;
-            if (BrowserView.CurrentDrag is { } it && IsEffect(it)) { DropEffectOnChain(a, sc, it); e.Handled = true; }
-        });
-        return host;
     }
 
     // A compact device-area card: 24px header (title + optional controls) over a
@@ -1396,7 +562,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
                 {
                     int cc = c, pp = p;
                     var pit = new MenuItem { Header = a.ChainInstrumentParamName(c, p) };
-                    pit.Click += (_, _) => { a.AddMacroMapping(m, cc, -1, pp, 0f, 1f); _ctx.RequestRebuild(); };
+                    pit.Click += (_, _) => { RcAddMapping(m, cc, -1, pp, 0f, 1f); _ctx.RequestRebuild(); };
                     instItem.Items.Add(pit);
                 }
                 if (ipc > 0) chainItem.Items.Add(instItem);
@@ -1411,7 +577,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
                     int cc = c, dd = d, pp = p;
                     float lo = a.ChainDeviceParamMin(c, d, p), hi = a.ChainDeviceParamMax(c, d, p);
                     var pit = new MenuItem { Header = a.ChainDeviceParamName(c, d, p) };
-                    pit.Click += (_, _) => { a.AddMacroMapping(m, cc, dd, pp, lo, hi); _ctx.RequestRebuild(); };
+                    pit.Click += (_, _) => { RcAddMapping(m, cc, dd, pp, lo, hi); _ctx.RequestRebuild(); };
                     dItem.Items.Add(pit);
                 }
                 if (dpc > 0) chainItem.Items.Add(dItem);
@@ -1419,6 +585,12 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             map.Items.Add(chainItem);
         }
         f.Items.Add(map);
+        if (a.Kind != RackKind.Instrument)
+        {
+            var sel = new MenuItem { Header = "Map to the selector" };
+            sel.Click += (_, _) => { RcAddMapping(m, 0, RackMacroMapping.RackControl, 0, 0f, 1f); _ctx.RequestRebuild(); };
+            f.Items.Add(sel);
+        }
 
         int mapped = 0, n = a.MappingCount();
         for (int i = 0; i < n; i++) if (a.TryGetMapping(i, out var mm) && mm.Macro == m) mapped++;
@@ -1457,46 +629,6 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         if (item.Kind == Nota.Presentation.BrowserItemKind.BuiltinEffect) a.AddChainDevice(chain, item.BuiltinKind);
         else if (item.Kind == Nota.Presentation.BrowserItemKind.PluginEffect) a.AddPluginChainDevice(chain, item.CatalogIndex);
         _ctx.RequestRebuild();
-    }
-
-    private Control AddChainButton(IRackAccess a)
-    {
-        var b = new Border
-        {
-            BorderBrush = BorderStrong, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
-            Padding = new Thickness(8, 5), Cursor = new Cursor(StandardCursorType.Hand), HorizontalAlignment = HorizontalAlignment.Left,
-            Child = Glyph.Labeled("Add chain", GlyphKind.Plus, 9, 8),
-        };
-        b.PointerPressed += (_, _) =>
-        {
-            if (!a.HasInstrumentChains) { a.AddChain(-1); _ctx.RequestRebuild(); return; }   // effect chain (no instrument)
-            var f = new MenuFlyout();
-            var p = new MenuItem { Header = "Nota Physical" };
-            p.Click += (_, _) => { a.AddChain(2); _ctx.RequestRebuild(); };
-            var w = new MenuItem { Header = "Nota Aurora" };
-            w.Click += (_, _) => { a.AddChain(5); _ctx.RequestRebuild(); };
-            var vo = new MenuItem { Header = "Nota Volt" };
-            vo.Click += (_, _) => { a.AddChain(6); _ctx.RequestRebuild(); };
-            var pe = new MenuItem { Header = "Nota Pendulum" };
-            pe.Click += (_, _) => { a.AddChain(8); _ctx.RequestRebuild(); };
-            var op = new MenuItem { Header = "Nota Operator" };
-            op.Click += (_, _) => { a.AddChain(9); _ctx.RequestRebuild(); };
-            var gr = new MenuItem { Header = "Nota Grain" };
-            gr.Click += (_, _) => { a.AddChain(10); _ctx.RequestRebuild(); };
-            var fl = new MenuItem { Header = "Nota Flux" };
-            fl.Click += (_, _) => { a.AddChain(11); _ctx.RequestRebuild(); };
-            var mo = new MenuItem { Header = "Nota Monolith" };
-            mo.Click += (_, _) => { a.AddChain(13); _ctx.RequestRebuild(); };
-            var pd = new MenuItem { Header = "Nota Pentad" };
-            pd.Click += (_, _) => { a.AddChain(14); _ctx.RequestRebuild(); };
-            var co = new MenuItem { Header = "Nota Consort" };
-            co.Click += (_, _) => { a.AddChain(15); _ctx.RequestRebuild(); };
-            var ke = new MenuItem { Header = "Nota Keys" };
-            ke.Click += (_, _) => { a.AddChain(16); _ctx.RequestRebuild(); };
-            f.Items.Add(vo); f.Items.Add(p); f.Items.Add(w); f.Items.Add(pe); f.Items.Add(op); f.Items.Add(gr); f.Items.Add(fl); f.Items.Add(mo); f.Items.Add(pd); f.Items.Add(co); f.Items.Add(ke);
-            f.ShowAt(b, showAtPointer: true);
-        };
-        return b;
     }
 
     private Control RackDeviceParamRow(IRackAccess a, int c, int d, int p)
@@ -1600,28 +732,6 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     private static Control SectionLabel(string text) => new TextBlock
     { Text = NotaText.Label(text), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary };
 
-    // A teal on/off chip (the Effect Rack's Follow / Manual selector).
-    private static Border DrumChip(string text, bool on, Action onClick)
-    {
-        var b = new Border { BorderThickness = new Thickness(1), BorderBrush = on ? IrTeal : NotaPalette.BorderStrong, Background = on ? NotaPalette.Wash(NotaPalette.Teal, 0x24) : IrCard, CornerRadius = NotaRadius.Control, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = text, FontSize = 9, Foreground = on ? IrTeal : NotaPalette.TextSecondary } };
-        b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
-        return b;
-    }
-
-    // A small clickable chip (GUI / Save preset on the chain instrument card).
-    private static Border ActionChip(string text, Action onClick)
-    {
-        var b = new Border
-        {
-            Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = text, FontSize = 9, Foreground = TextSecondary },
-        };
-        b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
-        return b;
-    }
-
     private static Border Toggle(string text, bool active, SolidColorBrush activeBrush, Action onClick)
     {
         var b = new Border
@@ -1632,103 +742,6 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         };
         b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
         return b;
-    }
-}
-
-// Instrument-Rack key/velocity zone map: each chain's range drawn as a coloured bar over
-// a keyboard (or a 0..127 strip in velocity mode); drag a bar's ends to edit the range.
-internal sealed class RackZoneMap : Control
-{
-    private static readonly IBrush KeyWhite = NotaPalette.MiniKeyWhite;
-    private static readonly IBrush KeyBlack = NotaPalette.MiniKeyBlack;
-    private readonly int[] _lo, _hi;
-    private readonly IBrush[] _cols;
-    private readonly int _sel;
-    private readonly bool _keyMode;
-    private int _drag = -1, _edge;   // _drag = chain index; _edge: 0 lo, 1 hi, 2 move
-
-    public event Action<int, int, int>? RangeEdited;   // (chain, lo, hi)
-
-    public RackZoneMap(int[] lo, int[] hi, IBrush[] cols, int sel, bool keyMode)
-    { _lo = lo; _hi = hi; _cols = cols; _sel = sel; _keyMode = keyMode; MinHeight = 28; ClipToBounds = true; }
-
-    private double BarsH => Math.Max(8, Bounds.Height - 12);
-    private double X(int v) => v / 127.0 * Bounds.Width;
-
-    protected override void OnPointerPressed(PointerPressedEventArgs e)
-    {
-        double w = Bounds.Width, bh = BarsH; if (w <= 0 || _lo.Length == 0) return;
-        double x = e.GetPosition(this).X, y = e.GetPosition(this).Y;
-        double rowH = bh / _lo.Length;
-        int c = Math.Clamp((int)(y / rowH), 0, _lo.Length - 1);
-        if (y > bh) return;   // keyboard strip
-        double lx = X(_lo[c]), hx = X(_hi[c]);
-        _drag = c; _edge = Math.Abs(x - lx) < 7 ? 0 : Math.Abs(x - hx) < 7 ? 1 : 2;
-        e.Pointer.Capture(this); Apply(x); e.Handled = true;
-    }
-    protected override void OnPointerMoved(PointerEventArgs e) { if (_drag >= 0) Apply(e.GetPosition(this).X); }
-    // The drag ends before the edit is reported: the handler rebuilds the device chain, which
-    // takes this map out of the tree, and a drag still open then would report again from the
-    // capture loss, inside that rebuild — leaving a second copy of the rack card (#202).
-    protected override void OnPointerReleased(PointerReleasedEventArgs e)
-    {
-        if (_drag < 0) return;
-        int c = _drag; _drag = -1;
-        e.Pointer.Capture(null); InvalidateVisual();
-        RangeEdited?.Invoke(c, _lo[c], _hi[c]);
-    }
-
-    // Capture taken away mid-drag (the window deactivates): commit the range as it stands and drop the accent.
-    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
-    {
-        base.OnPointerCaptureLost(e);
-        if (_drag < 0) return;
-        int c = _drag; _drag = -1;
-        InvalidateVisual();
-        RangeEdited?.Invoke(c, _lo[c], _hi[c]);
-    }
-
-    private void Apply(double x)
-    {
-        int v = Math.Clamp((int)Math.Round(x / Math.Max(1, Bounds.Width) * 127), 0, 127);
-        int c = _drag;
-        if (_edge == 0) _lo[c] = Math.Min(v, _hi[c]);
-        else if (_edge == 1) _hi[c] = Math.Max(v, _lo[c]);
-        else { int span = _hi[c] - _lo[c]; int lo = Math.Clamp(v - span / 2, 0, 127 - span); _lo[c] = lo; _hi[c] = lo + span; }
-        InvalidateVisual();
-    }
-
-    public override void Render(DrawingContext ctx)
-    {
-        double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0) return;
-        double bh = BarsH; int n = Math.Max(1, _lo.Length);
-        double rowH = bh / n;
-        for (int c = 0; c < _lo.Length; c++)
-        {
-            double y = c * rowH + 1, hgt = Math.Max(3, rowH - 2);
-            double x0 = X(_lo[c]), x1 = X(_hi[c]);
-            var col = ((SolidColorBrush)_cols[c]).Color;
-            byte al = (byte)(c == _sel ? 0xCC : 0x80);
-            ctx.DrawRectangle(new SolidColorBrush(Color.FromArgb(al, col.R, col.G, col.B)), null, new Rect(x0, y, Math.Max(2, x1 - x0), hgt), 2, 2);
-        }
-        // keyboard strip (key mode) or vel gradient ticks.
-        double ky = bh + 1, kh = h - bh - 2;
-        if (_keyMode)
-        {
-            int lo = 24, hi = 96; // C1..C7 span for the map
-            for (int note = lo; note <= hi; note++)
-            {
-                int pc = ((note % 12) + 12) % 12;
-                bool black = pc is 1 or 3 or 6 or 8 or 10;
-                double kx = (note - lo) / (double)(hi - lo) * w, kw = w / (hi - lo);
-                ctx.FillRectangle(black ? KeyBlack : KeyWhite, new Rect(kx, ky, Math.Max(1, kw - 0.6), kh));
-            }
-        }
-        else
-        {
-            ctx.FillRectangle(KeyWhite, new Rect(0, ky, w, kh));
-            for (int t = 1; t < 4; t++) ctx.DrawLine(new Pen(KeyBlack, 1), new Point(t / 4.0 * w, ky), new Point(t / 4.0 * w, ky + kh));
-        }
     }
 }
 

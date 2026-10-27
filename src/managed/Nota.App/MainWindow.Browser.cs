@@ -17,6 +17,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Infrastructure;
 using Nota.Presentation;
 
 namespace Nota.App;
@@ -209,7 +210,9 @@ public partial class MainWindow
         int trackId = _deviceChain.TrackId;
         if (trackId <= 0) { _vm.StatusText = "Select a track first."; return; }
 
-        string label = Engine.DeviceName(trackId, deviceIndex);
+        string label = deviceIndex <= PresetService.MidiEffectBase
+            ? Engine.MidiEffectName(trackId, PresetService.MidiEffectBase - deviceIndex)
+            : Engine.DeviceName(trackId, deviceIndex);
         if (string.IsNullOrEmpty(label)) label = "Instrument";
         var name = await new TextPromptWindow("Save preset", "Preset name", label).ShowDialog<string?>(this);
         if (string.IsNullOrEmpty(name)) return;

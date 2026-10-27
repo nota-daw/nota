@@ -551,6 +551,10 @@ public interface IAudioEngine : IDisposable
     int MidiEffectScope(int trackId, int index, float[] outv);
     /// <summary>Send an editor command to a MIDI effect (Nota Arp: 1 = restart the pattern).</summary>
     void MidiEffectCommand(int trackId, int index, int cmd);
+    /// <summary>A MIDI effect's opaque state blob (the MIDI Effect Rack: its whole structure); empty for params-only effects.</summary>
+    byte[] MidiEffectGetState(int trackId, int index);
+    /// <summary>Restores a MIDI effect's state blob; checkpoint makes it one undo step.</summary>
+    bool MidiEffectSetState(int trackId, int index, byte[] data, bool checkpoint);
     string MidiEffectName(int trackId, int index);
     int MidiEffectParamCount(int trackId, int index);
     string MidiEffectParamName(int trackId, int index, int paramIndex);
@@ -715,6 +719,11 @@ public interface IAudioEngine : IDisposable
     void RackSetMacroName(int trackId, int macro, string name);
     float RackVolume(int trackId);
     void RackSetVolume(int trackId, float v);
+    /// <summary>Copies an Instrument Rack chain after itself (children, controls, its mappings); the new index or &lt;0.</summary>
+    int RackDuplicateChain(int trackId, int chain);
+    /// <summary>Instrument Rack mono: one note at a time, last-note priority; glide bends between notes.</summary>
+    bool RackMono(int trackId);
+    void RackSetMono(int trackId, bool on);
     float RackGlide(int trackId);
     void RackSetGlide(int trackId, float v);
     bool RackSetMappingRange(int trackId, int index, float rangeMin, float rangeMax);
@@ -796,6 +805,86 @@ public interface IAudioEngine : IDisposable
     void RackDevSetVolume(int trackId, int deviceIndex, float v);
     int RackDevMode(int trackId, int deviceIndex);
     void RackDevSetMode(int trackId, int deviceIndex, int mode);
+
+    // ---- MIDI Effect Rack (MIDI kind 6, specs/040; midiIndex = its MIDI effect index) and the
+    // MIDI effects in an Instrument Rack chain (#329). See nota_engine.h.
+    int RackChainMidiCount(int trackId, int chain);
+    int RackChainMidiAdd(int trackId, int chain, int midiKind);
+    bool RackChainMidiRemove(int trackId, int chain, int index);
+    bool RackChainMidiMove(int trackId, int chain, int fromIndex, int toIndex);
+    int RackChainMidiKind(int trackId, int chain, int index);
+    string RackChainMidiName(int trackId, int chain, int index);
+    int RackChainMidiParamCount(int trackId, int chain, int index);
+    string RackChainMidiParamName(int trackId, int chain, int index, int param);
+    float RackChainMidiParamMin(int trackId, int chain, int index, int param);
+    float RackChainMidiParamMax(int trackId, int chain, int index, int param);
+    float RackChainMidiParamGet(int trackId, int chain, int index, int param);
+    void RackChainMidiParamSet(int trackId, int chain, int index, int param, float value);
+    void RackChainMidiSetBypassed(int trackId, int chain, int index, bool bypassed);
+    bool RackChainMidiBypassed(int trackId, int chain, int index);
+    int RackChainMidiLastIn(int trackId, int chain, int index);
+    int RackChainMidiLastOut(int trackId, int chain, int index);
+    int RackChainMidiScope(int trackId, int chain, int index, float[] outv);
+    void RackChainMidiCommand(int trackId, int chain, int index, int cmd);
+    int MidiRackChainDeviceCount(int trackId, int midiIndex, int chain);
+    int MidiRackChainDeviceAdd(int trackId, int midiIndex, int chain, int midiKind);
+    bool MidiRackChainDeviceRemove(int trackId, int midiIndex, int chain, int index);
+    bool MidiRackChainDeviceMove(int trackId, int midiIndex, int chain, int fromIndex, int toIndex);
+    int MidiRackChainDeviceKind(int trackId, int midiIndex, int chain, int index);
+    string MidiRackChainDeviceName(int trackId, int midiIndex, int chain, int index);
+    int MidiRackChainDeviceParamCount(int trackId, int midiIndex, int chain, int index);
+    string MidiRackChainDeviceParamName(int trackId, int midiIndex, int chain, int index, int param);
+    float MidiRackChainDeviceParamMin(int trackId, int midiIndex, int chain, int index, int param);
+    float MidiRackChainDeviceParamMax(int trackId, int midiIndex, int chain, int index, int param);
+    float MidiRackChainDeviceParamGet(int trackId, int midiIndex, int chain, int index, int param);
+    void MidiRackChainDeviceParamSet(int trackId, int midiIndex, int chain, int index, int param, float value);
+    void MidiRackChainDeviceSetBypassed(int trackId, int midiIndex, int chain, int index, bool bypassed);
+    bool MidiRackChainDeviceBypassed(int trackId, int midiIndex, int chain, int index);
+    int MidiRackChainDeviceLastIn(int trackId, int midiIndex, int chain, int index);
+    int MidiRackChainDeviceLastOut(int trackId, int midiIndex, int chain, int index);
+    int MidiRackChainDeviceScope(int trackId, int midiIndex, int chain, int index, float[] outv);
+    void MidiRackChainDeviceCommand(int trackId, int midiIndex, int chain, int index, int cmd);
+    int MidiRackChainCount(int trackId, int midiIndex);
+    int MidiRackAddChain(int trackId, int midiIndex);
+    bool MidiRackRemoveChain(int trackId, int midiIndex, int chain);
+    int MidiRackDuplicateChain(int trackId, int midiIndex, int chain);
+    /// <summary>One undo step for the in-place edits that follow (chain mix, mode, selector,
+    /// output, macro values): forks the rack, keeping its MIDI effects and held notes.</summary>
+    bool MidiRackCheckpoint(int trackId, int midiIndex);
+    string MidiRackChainName(int trackId, int midiIndex, int chain);
+    void MidiRackSetChainName(int trackId, int midiIndex, int chain, string name);
+    void MidiRackSetChainMute(int trackId, int midiIndex, int chain, bool on);
+    bool MidiRackChainMute(int trackId, int midiIndex, int chain);
+    void MidiRackSetChainSolo(int trackId, int midiIndex, int chain, bool on);
+    bool MidiRackChainSolo(int trackId, int midiIndex, int chain);
+    void MidiRackSetChainZone(int trackId, int midiIndex, int chain, int keyLo, int keyHi, int velLo, int velHi);
+    void MidiRackChainZone(int trackId, int midiIndex, int chain, out int keyLo, out int keyHi, out int velLo, out int velHi);
+    void MidiRackSetChainSelect(int trackId, int midiIndex, int chain, int lo, int hi);
+    void MidiRackChainSelectRange(int trackId, int midiIndex, int chain, out int lo, out int hi);
+    void MidiRackSetChainTranspose(int trackId, int midiIndex, int chain, int semitones);
+    int MidiRackChainTranspose(int trackId, int midiIndex, int chain);
+    void MidiRackSetChainVelScale(int trackId, int midiIndex, int chain, float scale);
+    float MidiRackChainVelScale(int trackId, int midiIndex, int chain);
+    float MidiRackChainActivity(int trackId, int midiIndex, int chain);
+    void MidiRackSetMode(int trackId, int midiIndex, int mode);
+    int MidiRackMode(int trackId, int midiIndex);
+    void MidiRackSetSelector(int trackId, int midiIndex, float v);
+    float MidiRackSelector(int trackId, int midiIndex);
+    void MidiRackSetMerge(int trackId, int midiIndex, bool on);
+    bool MidiRackMerge(int trackId, int midiIndex);
+    void MidiRackSetThru(int trackId, int midiIndex, bool on);
+    bool MidiRackThru(int trackId, int midiIndex);
+    float MidiRackMacroGet(int trackId, int midiIndex, int macro);
+    void MidiRackMacroSet(int trackId, int midiIndex, int macro, float v);
+    string MidiRackMacroName(int trackId, int midiIndex, int macro);
+    void MidiRackSetMacroName(int trackId, int midiIndex, int macro, string name);
+    int MidiRackAddMacroMapping(int trackId, int midiIndex, int macro, int chain, int device, int param, float lo, float hi);
+    int MidiRackMappingCount(int trackId, int midiIndex);
+    int MidiRackMappingInfo(int trackId, int midiIndex, int index, out int macro, out int chain, out int device, out int param, out float lo, out float hi, out int curve);
+    bool MidiRackRemoveMapping(int trackId, int midiIndex, int index);
+    bool MidiRackSetMappingRange(int trackId, int midiIndex, int index, float lo, float hi);
+    bool MidiRackSetMappingCurve(int trackId, int midiIndex, int index, int curve);
+    int RackDevDuplicateChain(int trackId, int deviceIndex, int chain);
     float RackDevDryWet(int trackId, int deviceIndex);
     void RackDevSetDryWet(int trackId, int deviceIndex, float v);
     bool RackDevPdc(int trackId, int deviceIndex);

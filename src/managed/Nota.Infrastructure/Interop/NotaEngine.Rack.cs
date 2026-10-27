@@ -246,6 +246,17 @@ public sealed partial class NotaEngine
     public void RackSetVolume(int trackId, float v)
     { ThrowIfDisposed(); NativeMethods.RackSetVolume(_handle, trackId, v); }
 
+    /// <summary>Copies a chain after itself (children, controls, its mappings); the new index or &lt;0. One undo step.</summary>
+    public int RackDuplicateChain(int trackId, int chain)
+    { ThrowIfDisposed(); return NativeMethods.RackDuplicateChain(_handle, trackId, chain); }
+
+    /// <summary>Instrument Rack mono: one note at a time, last-note priority; glide bends between notes.</summary>
+    public bool RackMono(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.RackMono(_handle, trackId) != 0; }
+
+    public void RackSetMono(int trackId, bool on)
+    { ThrowIfDisposed(); NativeMethods.RackSetMono(_handle, trackId, on ? 1 : 0); }
+
     public float RackGlide(int trackId)
     { ThrowIfDisposed(); return NativeMethods.RackGlide(_handle, trackId); }
 

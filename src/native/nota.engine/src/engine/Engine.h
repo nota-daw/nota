@@ -818,6 +818,10 @@ class Engine {
     int32_t midiEffectScope(int32_t trackId, int32_t index, float* out,
         int32_t maxN) const;                                             // float scope (Nota Velocity in/out pairs)
     void midiEffectCommand(int32_t trackId, int32_t index, int32_t cmd); // editor command (Nota Arp: 1 = restart)
+    // Opaque state blob of a MIDI effect (the MIDI Effect Rack: its whole structure). Setting
+    // it swaps in a restored copy, so the old one stays on the undo stack when checkpoint.
+    std::vector<uint8_t> midiEffectGetState(int32_t trackId, int32_t index) const;
+    bool midiEffectSetState(int32_t trackId, int32_t index, const uint8_t* data, int32_t size, bool checkpoint);
     const char* midiEffectName(int32_t trackId, int32_t index) const;
     int32_t midiEffectParamCount(int32_t trackId, int32_t index) const;
     const char* midiEffectParamName(int32_t trackId, int32_t index, int32_t paramIndex) const;
@@ -874,6 +878,32 @@ class Engine {
     std::string rackChainName(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     void rackSetChainName(int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& name);
     int32_t rackChainCount(int32_t trackId, int32_t deviceIndex) const;
+    int32_t rackDuplicateChain(int32_t trackId, int32_t deviceIndex, int32_t chain);
+    // One undo step for edits the rack takes in place (a chain mix, the mode, the selector, a
+    // macro value): fork the rack now, sharing its children and held notes, so the edits that
+    // follow land on the fork and Undo brings back the rack as it was.
+    bool rackCheckpoint(int32_t trackId, int32_t deviceIndex);
+    // A MIDI Effect Rack is addressed as deviceIndex kMidiRackBase − its MIDI effect index.
+    static constexpr int32_t kMidiRackBase = -1000;
+    // Chain MIDI effects (MIDI Effect Rack chains; Instrument Rack chains, #329).
+    int32_t rackChainMidiCount(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    int32_t rackAddChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t kind);
+    bool rackRemoveChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    bool rackMoveChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t from, int32_t to);
+    MidiDevice* rackChainMidiAt(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index) const;
+    void rackSetChainMidiBypassed(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, bool b);
+    void rackChainSelectRange(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t& lo, int32_t& hi) const;
+    void rackSetChainSelectRange(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t lo, int32_t hi);
+    int32_t rackChainTranspose(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    void rackSetChainTranspose(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t st);
+    float rackChainVelScale(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    void rackSetChainVelScale(int32_t trackId, int32_t deviceIndex, int32_t chain, float v);
+    bool rackMerge(int32_t trackId, int32_t deviceIndex) const;
+    void rackSetMerge(int32_t trackId, int32_t deviceIndex, bool on);
+    bool rackThru(int32_t trackId, int32_t deviceIndex) const;
+    void rackSetThru(int32_t trackId, int32_t deviceIndex, bool on);
+    bool rackMono(int32_t trackId) const;
+    void rackSetMono(int32_t trackId, bool on);
     int32_t rackAddChain(int32_t trackId, int32_t deviceIndex, int32_t instKind); // 0=Synth, 2=Physical, <0=none
     bool rackRemoveChain(int32_t trackId, int32_t deviceIndex, int32_t chain);
     bool rackSetChainInstrument(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t instKind);
@@ -1228,6 +1258,7 @@ class Engine {
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
+    void reapplyRackMacros(); // after undo/redo: racks drive their shared children again
     static int32_t trackLatency(const Track& t);
     std::shared_ptr<Instrument> cloneInstrument(const Track& src) const; // duplicateTrack helper
     std::shared_ptr<Device> cloneDevice(const Device& src) const;

@@ -836,7 +836,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   with a Tilt. 8–32 bands between Low and High, Q, Formant ±12 st, Attack, Release; Unvoiced noise
   for consonants, Hold, Mix, Gain. A live graph of each band's voice level and the carrier, with
   draggable range edges; 7 factory presets; a carrier track is routed over MCP with
-  `set_device_sidechain`.
+  `set_device_sidechain`. It also goes in Instrument and Audio Effect Rack chains, with its own
+  Saw or Noise carrier.
 - **Forge**, **Valve** and **Vintage** each carry an **OVERSAMPLE** selector
   (Off/2×/4×/8×) to suppress aliasing under heavy drive.
 
@@ -882,9 +883,18 @@ audio effects after it keep running and keep their settings; saved with the proj
   full automation, MCP tools (`get_chord` / `set_chord` / `set_chord_shift`).
 
 ### Racks
-- **Nota Instrument Rack** — 8 named macros (mapped with Linear/Exp/Log/S curves), chains
-  with **key and velocity zones**, gain/meter/M·S, horizontal device cards (GUI / Params),
-  a zone map, rack output (Volume/Glide), Fold/Save.
+- **One rack card** for the Instrument, Audio Effect and MIDI Effect Racks: eight macro knobs
+  (name, value, target count) with a **Map** key; **Chains** (chain list with M·S, zone summary
+  and level · the chosen chain's devices left to right as compact cards with their key
+  parameters, Browser drops, + Chain, grip reorder, Open for the full editor), **Zones** /
+  **Select** (drag zone edges; hover the keyboard strip to see which chains a note plays) and
+  **Macros** tabs (rename, curve Lin/Exp/Log/S — "Mixed" when targets differ — and each
+  target's range, min above max inverts); a **Chain** panel (Volume, Pan or Transpose, zones,
+  Duplicate, Delete) and a **Rack out** / **Output** panel; a status line. **Map** works in
+  place: click parameters on the chain's devices to add or remove them; Esc ends it.
+- **Nota Instrument Rack** — layered chains of MIDI effects → instrument → audio effects, each
+  with **key and velocity zones**, gain, pan, M·S; Rack out: Volume, Glide and **Mono (last
+  note)** — glide bends each new note from the last one on instruments that take per-note bend.
 - **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads, Mixer, Chain and Macro views,
   per-pad Volume/Pan/Tune/Decay, named pads (rename, re-choke or remove from a pad's
   right-click menu), choke groups (monophonic cut), Swing/Humanize, hot-swap, a pad
@@ -909,13 +919,19 @@ audio effects after it keep running and keep their settings; saved with the proj
   an existing Drum Rack or Rhythm to replace its pads / voices. The one-shots are synthesized on first launch rather than
   shipped as audio (nothing added to the installer) and appear in the Files tab under
   **Nota Kits**, ready to drag anywhere a sample goes.
-- **Nota Audio Effect Rack** — **Parallel / Series / Select** modes (by input level),
-  Dry/Wet + Gain, PDC, Fold, Save; chains with gain/meter/M·S; named macros and mappings;
-  the "+ Device" menu lists built-in effects and a Plug-ins submenu. ⌘G on a selected audio
-  effect wraps it in a new rack (**Group into rack**); ⌘⇧G puts a one-chain rack's devices back.
-- Devices inside chains appear as cards with knobs, a **Full** button (the device's
-  complete UI in a popup — the native GUI for a plugin, the tabbed editor for the
-  Sampler), a ✕ delete button, and drag-to-reorder.
+- **Nota Audio Effect Rack** — chains run **Parallel / Serial / Select**; in Select mode a
+  selector (dragged, mapped to a macro, or following the input level) picks the chains whose
+  select range holds it; Dry/wet, Gain, latency compensation; the add menu lists built-in
+  effects and a Plug-ins submenu. ⌘G on a selected audio effect wraps it in a new rack
+  (**Group into rack**); ⌘⇧G puts a one-chain rack's devices back.
+- **Nota MIDI Effect Rack** — a MIDI effect with up to 16 chains of MIDI effects (Arp, Chord,
+  Scale, Length, Velocity, Random). Each chain takes the notes its key and velocity zone lets in
+  (or, in Select mode, the chains whose select range holds the selector), can transpose them
+  and scale their velocity (Volume 0–200 %), and the chains' notes merge before the instrument.
+  Output: Merge duplicate notes, Pass through outside zones. MCP `get_midi_rack` and the
+  `midi_rack_*` tools.
+- Every rack: duplicate a chain with its mappings, map the selector or any chain parameter to a
+  macro, save it as a preset; edits are undoable.
 
 ---
 
@@ -1212,10 +1228,14 @@ Coverage:
   follow, insert / duplicate / capture / move / delete scenes, stop buttons, launch and
   release a slot, launch and stop a scene, launch quantization, the follow switch, slot and
   scene recording with a fixed length, back to arrangement, slot ↔ arrangement).
-- **Racks** (Instrument/Drum): chain snapshot, add and remove a chain and change its
+- **Racks** (Instrument/Drum): chain snapshot, add, duplicate and remove a chain and change its
   instrument, parameters, mix (gain/pan/mute/solo), key and velocity zones, trigger note,
-  8 macros and their mappings, rack volume and glide; for the Drum Rack, per-pad
-  choke/tune/decay and kit swing/humanize.
+  8 macros and their mappings (range, curve), rack volume, glide and mono, a chain's MIDI
+  effects (`*_rack_chain_midi_fx`); for the Drum Rack, per-pad choke/tune/decay and kit
+  swing/humanize.
+- **MIDI Effect Rack**: snapshot, chains and their MIDI effects, zones, select ranges,
+  transpose, velocity scale, Parallel/Select, selector, merge and pass-through, macros and
+  mappings (`get_midi_rack`, `midi_rack_*`).
 - **Samples**: create a Sampler or Grain with a file (optionally taking the root from the file
   name), load a sample onto a track or into a rack chain, read sample info, and read / shape a
   Sampler in real units (`read_sampler`, `set_sampler`).
@@ -1225,7 +1245,8 @@ Coverage:
 - **Presets**: factory (list, apply to a new track or in place) and user (list, apply,
   save).
 - **Audio Effect Rack**: snapshot, Parallel/Series/Select mode, dry/wet, volume,
-  chain-select, add and remove chains, parameters, 8 macros.
+  chain-select, add, duplicate and remove chains, parameters, 8 macros, the selector as a
+  macro target.
 - **Export** the master or stems to WAV (pcm16/pcm24/float32), FLAC (pcm16/pcm24) or
   MP3 (CBR 128–320 kbps) — `format` picks it, `bitrateKbps` tunes MP3, `startBeat` sets
   where the render starts.
