@@ -186,6 +186,24 @@ internal static class DeviceGroupTests
         var p2 = pe.RackChainMidiCcDest(pt, -1, 0, 0);
         yield return (p1 is { Chain: 0, Slot: 2 } && p2 is { Chain: 0, Slot: 0 },
             $"arp in a rack: undo of a paste of two effects before the target restores it ({p1} → undo {p2})");
+
+        // An Arp on a rack's own control loses it with Ungroup; undo brings it back, redo drops it
+        // again (a restored snapshot without the route clears the Arp's target).
+        using var ue = new NotaEngine();
+        int ut = ue.AddInstrumentTrack();
+        ue.SetTrackBuiltinInstrument(ut, Volt);
+        int ua = ue.AddMidiEffect(ut, Arp);
+        ue.AddBuiltinDevice(ut, Eq8);
+        ue.WrapDeviceInRack(ut, 0);
+        ue.SetMidiEffectCcDest(ut, ua, 0, 0);   // the rack itself
+        ue.UngroupRack(ut, DeviceFamily.Audio, 0, out _);
+        int afterUngroup = ue.MidiEffectCcDestDevice(ut, ua);
+        ue.Undo();
+        int afterUndo = ue.MidiEffectCcDestDevice(ut, ua);
+        ue.Redo();
+        int afterRedo = ue.MidiEffectCcDestDevice(ut, ua);
+        yield return (afterUngroup < 0 && afterUndo == 0 && afterRedo < 0,
+            $"arp in a rack: a target dropped by ungroup stays dropped after undo + redo ({afterUngroup} / {afterUndo} / {afterRedo})");
     }
 
     // Several devices pasted into a rack chain: what the chain takes, in order, one undo step.

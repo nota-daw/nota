@@ -331,15 +331,29 @@ void Engine::syncCcRoutes(Graph& g) {
 
 void Engine::reapplyCcRoutes() {
     if (!ccRoutesUsed_ || !authoring_) return;
+    // Every Arp of the restored snapshot takes its route, and one without a route loses its
+    // target (an ungroup that dropped it, then redo), or the next publish would revive it.
     auto apply = [](const Track& t) {
-        for (auto& e : t.ccRoutes) {
-            auto* m = const_cast<MidiDevice*>(e.arp);   // held by this snapshot
-            if (m->ccDestDevice() == e.dev && m->ccDestChainUid() == e.uid && m->ccDestSlot() == e.slot
-                && m->ccDestParam() == e.param)
-                continue;
-            m->setCcDest(e.dev, e.param);
-            if (e.uid) m->setCcDestNested(e.uid, e.slot);
+        auto one = [&](MidiDevice& m) {
+            const Track::CcRoute* rt = nullptr;
+            for (auto& e : t.ccRoutes)
+                if (e.arp == &m) { rt = &e; break; }
+            if (!rt) {
+                if (m.ccDestDevice() >= 0 || m.ccDestChainUid() != 0) m.setCcDest(-1, -1);
+                return;
+            }
+            if (m.ccDestDevice() == rt->dev && m.ccDestChainUid() == rt->uid && m.ccDestSlot() == rt->slot
+                && m.ccDestParam() == rt->param)
+                return;
+            m.setCcDest(rt->dev, rt->param);
+            if (rt->uid) m.setCcDestNested(rt->uid, rt->slot);
+        };
+        for (auto& md : t.midiEffects) {
+            if (!md) continue;
+            one(*md);
+            if (auto* r = md->asRack()) r->forEachChildMidi(one);
         }
+        if (auto* r = t.instrument ? t.instrument->asRack() : nullptr) r->forEachChildMidi(one);
     };
     for (auto& t : authoring_->tracks) apply(*t);
     if (authoring_->masterTrack) apply(*authoring_->masterTrack);
