@@ -387,6 +387,10 @@ internal sealed partial class RackCardView
         DropEffectOnChain(a, c, it);
     }
 
+    /// <summary>A Browser item dropped on the rack from outside the card (a Session column,
+    /// specs/043): the same as a drop on the card's empty chain area.</summary>
+    internal void DropAsNewChain(BrowserItem it) => RcDropAsNewChain(it);
+
     private void RcDropAsNewChain(BrowserItem it)
     {
         if (!RcAccepts(it, out var why)) { _ctx.Status(why); return; }
@@ -608,14 +612,35 @@ internal sealed partial class RackCardView
                 DeferRebuild();
             };
         }
-        var nameTb = RcName(name, NotaPalette.TextPrimary, NotaType.KnobLabel);
+        // An effect's card also holds the Remove control: like a compact track card it drops the
+        // family prefix ("Nota Reverb" → "Reverb") so the name still reads.
+        string label = slot != RcSlot.Instrument && name.StartsWith("Nota ", StringComparison.Ordinal) ? name[5..] : name;
+        var nameTb = RcName(label, NotaPalette.TextPrimary, NotaType.KnobLabel);
+        ToolTip.SetTip(nameTb, name);
         var tagTb = RcMono(tag, NotaPalette.TextTertiary, 7);
         dot.Margin = new Thickness(0, 0, 4, 0);
         tagTb.Margin = new Thickness(3, 0, 0, 0);
+        var headRow = new DockPanel { LastChildFill = true };
+        headRow.Children.Add(RcDock(dot, Dock.Left));
+        // The Remove control (#110), as on the track chain's cards; a chain's instrument is
+        // replaced from its menu, not removed.
+        if (slot != RcSlot.Instrument)
+        {
+            var remove = DeviceCardKit.RemoveButton("Remove device", () =>
+            {
+                if (RcSelOf(c, slot, idx) is { } sel) { RcDelete(sel); return; }
+                if (slot == RcSlot.Midi) a.RemoveChainMidi(c, idx); else a.RemoveChainDevice(c, idx);
+                DeferRebuild();
+            });
+            remove.Margin = new Thickness(2, 0, -4, 0);
+            headRow.Children.Add(RcDock(remove, Dock.Right));
+        }
+        headRow.Children.Add(RcDock(tagTb, Dock.Right));
+        headRow.Children.Add(nameTb);
         var head = new Border
         {
             Height = 18, Padding = new Thickness(5, 0), BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(0, 0, 0, 1),
-            Child = new DockPanel { LastChildFill = true, Children = { RcDock(dot, Dock.Left), RcDock(tagTb, Dock.Right), nameTb } },
+            Child = headRow,
         };
 
         // Parameters: the key ones at rest, every one while mapping (so any can be mapped).

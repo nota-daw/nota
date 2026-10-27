@@ -512,13 +512,21 @@ public interface IAudioEngine : IDisposable
     // Device clipboard (#238): a full clone held by the engine; paste is one undo step.
     bool CopyDevice(int trackId, int deviceIndex);
     bool CopyMidiEffect(int trackId, int index);
-    int DeviceClipboardKind();   // 0 empty, 1 audio effect, 2 MIDI effect
+    int DeviceClipboardKind();   // 0 empty, 1 audio effect, 2 MIDI effect, 3 instrument
     bool DeviceClipboardSidechain();   // the copied audio effect is keyed from another track
     int PasteDevice(int trackId, int atIndex);       // atIndex -1 = end; new index or -1
     int PasteMidiEffect(int trackId, int atIndex);
     // A full clone right after the device / MIDI effect, one undo step; clipboard untouched.
     int DuplicateDevice(int trackId, int deviceIndex);
     int DuplicateMidiEffect(int trackId, int index);
+    // The instrument on the same clipboard (specs/043). Paste replaces the track's instrument:
+    // 0 done, -1 nothing to paste, -2 not an instrument track, -3 the clone failed.
+    bool CopyInstrument(int trackId);
+    int PasteInstrument(int trackId);
+    // Move (or, keepSource, copy) a device to another track, both tracks in one undo step: the
+    // new index (0 for the instrument), -1 bad address, -2 the target can't take it, -3 the
+    // clone failed. A move takes the device's automation; the instrument's removes its track.
+    int TransferDevice(int srcTrackId, DeviceFamily family, int index, int dstTrackId, int atIndex, bool keepSource, out TransferFlags flags);
     // ⌘G / ⌘⇧G on a device (#257): wrap an audio effect in an Audio Effect Rack (its index or
     // -1: keyed / automated / CV-linked devices stay out), unwrap a one-chain rack (count or -1).
     int WrapDeviceInRack(int trackId, int deviceIndex);
@@ -1050,6 +1058,9 @@ public interface IAudioEngine : IDisposable
     // --- Project load (M7-6) -----------------------------------------------
     void Reset();
     int TrackInstrumentKind(int trackId);
+    /// <summary>Which instrument the track holds (specs/043): the same while it is edited, moved or
+    /// brought back by undo; another for a new, replaced or pasted one. 0 = none. Compare only.</summary>
+    long TrackInstrumentId(int trackId);
     /// <summary>The track's instrument responds to per-note expression (MPE).</summary>
     bool TrackInstrumentSupportsMpe(int trackId);
     int TrackDeviceBuiltinKind(int trackId, int deviceIndex);

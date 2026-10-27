@@ -61,6 +61,16 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_duplicate_midi_effect")]
     internal static partial int DuplicateMidiEffect(IntPtr engine, int trackId, int index);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_copy_instrument")]
+    internal static partial int CopyInstrument(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_paste_instrument")]
+    internal static partial int PasteInstrument(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_transfer_device")]
+    internal static partial int TransferDevice(IntPtr engine, int srcTrackId, int family, int index, int dstTrackId,
+                                               int atIndex, int keepSource, out int flags);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_wrap_device_in_rack")]
     internal static partial int WrapDeviceInRack(IntPtr engine, int trackId, int deviceIndex);
 
@@ -254,6 +264,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_kind")]
     internal static partial int TrackInstrumentKind(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_instrument_id")]
+    internal static partial long TrackInstrumentId(IntPtr engine, int trackId);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_supports_mpe")]
     internal static partial int TrackInstrumentSupportsMpe(IntPtr engine, int trackId);

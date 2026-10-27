@@ -1427,6 +1427,7 @@ public sealed partial class ArrangementView : UserControl
     private void OnLaneDragOver(object? sender, DragEventArgs e)
     {
         if (BrowserView.IsClipDrag) { OnClipDragOverLanes(e); return; }
+        if (DeviceDrag.IsActive) { OnDeviceDragOver(e); return; }
         bool ok = BrowserView.IsAcceptableDrag(e);
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
         SetDropTrack(ok ? RowAtY(e.GetPosition(_lanes).Y) : -1);
@@ -1459,6 +1460,14 @@ public sealed partial class ArrangementView : UserControl
 
     private void OnFooterDragOver(object? sender, DragEventArgs e)
     {
+        if (DeviceDrag.IsActive)   // returns and the master take audio effects
+        {
+            int id = FooterRowTrackId(FooterRowAt(e.GetPosition(_footerHeaders).Y));
+            bool can = id > 0 && _engine is not null && DeviceDrag.CanTake(_engine, id);
+            e.DragEffects = !can ? DragDropEffects.None : (e.KeyModifiers & KeyModifiers.Alt) != 0 ? DragDropEffects.Copy : DragDropEffects.Move;
+            SetFooterDropRow(can ? FooterRowAt(e.GetPosition(_footerHeaders).Y) : -1);
+            return;
+        }
         bool ok = IsBusDrop();
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
         SetFooterDropRow(ok ? FooterRowAt(e.GetPosition(_footerHeaders).Y) : -1);
@@ -1468,6 +1477,13 @@ public sealed partial class ArrangementView : UserControl
     {
         int row = FooterRowAt(e.GetPosition(_footerHeaders).Y);
         SetFooterDropRow(-1);
+        if (DeviceDrag.IsActive)
+        {
+            int id = FooterRowTrackId(row);
+            if (id > 0 && _engine is not null && DeviceDrag.CanTake(_engine, id) && DeviceDrag.RequestFor(id, e.KeyModifiers) is { } r)
+            { DeviceDropped?.Invoke(r); e.Handled = true; }
+            return;
+        }
         if (!IsBusDrop() || BrowserView.CurrentDrag is not { } item) return;
         int trackId = FooterRowTrackId(row);
         if (trackId <= 0) return;
@@ -1487,9 +1503,32 @@ public sealed partial class ArrangementView : UserControl
         _footerDropRing.Height = FooterRowH;
     }
 
+    // A device card dragged out of the Devices panel (specs/043): the row it is over lights when
+    // that track can take it; the drop moves it there (⌥ copies).
+    private void OnDeviceDragOver(DragEventArgs e)
+    {
+        int ti = RowAtY(e.GetPosition(_lanes).Y);
+        bool ok = ti >= 0 && ti < _tracks.Count && _engine is not null && DeviceDrag.CanTake(_engine, _tracks[ti].Id);
+        e.DragEffects = !ok ? DragDropEffects.None : (e.KeyModifiers & KeyModifiers.Alt) != 0 ? DragDropEffects.Copy : DragDropEffects.Move;
+        SetDropTrack(ok ? ti : -1);
+    }
+
+    private void OnDeviceDrop(DragEventArgs e)
+    {
+        SetDropTrack(-1);
+        int ti = RowAtY(e.GetPosition(_lanes).Y);
+        if (ti < 0 || ti >= _tracks.Count || _engine is null || !DeviceDrag.CanTake(_engine, _tracks[ti].Id)) return;
+        if (DeviceDrag.RequestFor(_tracks[ti].Id, e.KeyModifiers) is { } r) DeviceDropped?.Invoke(r);
+        e.Handled = true;
+    }
+
+    /// <summary>A device card was dropped on a track row or footer row (specs/043).</summary>
+    public event Action<DeviceMoveRequest>? DeviceDropped;
+
     private void OnLaneDrop(object? sender, DragEventArgs e)
     {
         if (BrowserView.IsClipDrag) { OnClipDropOnLanes(e); return; }
+        if (DeviceDrag.IsActive) { OnDeviceDrop(e); return; }
         SetDropTrack(-1);
         var items = BrowserView.DroppedItems(e);
         if (items.Count == 0) return;

@@ -48,6 +48,31 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     [McpServerTool(Name = "move_device"), Description("Reorder a device within a track's chain.")]
     public Task MoveDevice(int trackId, int fromIndex, int toIndex) => Mutate(() => E.MoveDevice(trackId, fromIndex, toIndex));
 
+    public sealed record DeviceMoveResult(int Index, bool SidechainCleared, bool LinksDropped, bool SourceTrackRemoved);
+
+    [McpServerTool(Name = "move_device_to_track"), Description("Move (or, with copy, copy) a device to another track in one undo step. chain: \"audio\" (an audio effect at index), \"midi\" (a MIDI effect at index) or \"instrument\" (the track's instrument; index is ignored). It lands at atIndex of the target's matching section (-1 = the end); an instrument replaces the target's instrument. A move takes the device's automation along and a moved instrument removes its source track; a copy carries no automation. MIDI effects and instruments go only to instrument tracks. Modulation links to the device stay on the source; a sidechain key on the target itself is cleared. Returns the new index and what else happened.")]
+    public Task<DeviceMoveResult> MoveDeviceToTrack(
+        [Description("Source track id")] int trackId,
+        [Description("\"audio\", \"midi\" or \"instrument\"")] string chain,
+        [Description("Device index in that chain (ignored for the instrument)")] int index,
+        [Description("Target track id")] int targetTrackId,
+        [Description("Position on the target, -1 = the end")] int atIndex = -1,
+        [Description("Copy instead of move: the source keeps its device")] bool copy = false) => Mutate(() =>
+    {
+        var family = chain switch
+        {
+            "audio" => DeviceFamily.Audio,
+            "midi" => DeviceFamily.Midi,
+            "instrument" => DeviceFamily.Instrument,
+            _ => throw new ArgumentException("chain must be 'audio', 'midi' or 'instrument'."),
+        };
+        int r = E.TransferDevice(trackId, family, index, targetTrackId, atIndex, copy, out var f);
+        if (r == -2) throw new InvalidOperationException($"Track {targetTrackId} can't take that device (MIDI effects and instruments need an instrument track).");
+        if (r == -3) throw new InvalidOperationException("The device couldn't be copied (a plug-in that won't load a second time).");
+        if (r < 0) throw new ArgumentException("No such device or track, or the target is the source track.");
+        return new DeviceMoveResult(r, f.HasFlag(TransferFlags.SidechainCleared), f.HasFlag(TransferFlags.LinksDropped), f.HasFlag(TransferFlags.SourceTrackRemoved));
+    });
+
     [McpServerTool(Name = "set_device_bypass"), Description("Bypass or enable a device. deviceIndex -1 is the track's instrument: bypassed, it makes no sound (its MIDI effects and audio effects keep running).")]
     public Task SetDeviceBypass(int trackId, int deviceIndex, bool bypassed) => Mutate(() => E.SetDeviceBypassed(trackId, deviceIndex, bypassed));
 

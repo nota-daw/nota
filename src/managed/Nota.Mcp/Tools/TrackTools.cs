@@ -23,7 +23,7 @@ public sealed class TrackTools(IAudioEngine engine, IEngineDispatch dispatch, IA
     [McpServerTool(Name = "add_group_track"), Description("Add an empty group (submix) track. Returns its track id.")]
     public Task<int> AddGroupTrack() => Mutate(() => E.AddGroupTrack());
 
-    [McpServerTool(Name = "remove_track"), Description("Remove a track by id.")]
+    [McpServerTool(Name = "remove_track"), Description("Remove a track by id. This is also how an instrument is deleted: an instrument track never stands without one (set_track_instrument swaps it).")]
     public Task<bool> RemoveTrack([Description("Track id")] int trackId) => Mutate(() => E.RemoveTrack(trackId));
 
     [McpServerTool(Name = "rename_track"), Description("Set a track's display name.")]

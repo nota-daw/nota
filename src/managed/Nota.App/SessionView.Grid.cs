@@ -273,6 +273,24 @@ public sealed partial class SessionView
             var stack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 3, 8, 0), Children = { top, kind } };
             Child = new Panel { Children = { stripe, stack } };
 
+            // A Browser drop on the header (#313): an instrument replaces this track's (or, on an
+            // audio / return column, starts a track after it); effects and presets go on the track.
+            DragDrop.SetAllowDrop(this, true);
+            DragDrop.AddDragOverHandler(this, (_, e) =>
+            {
+                e.DragEffects = o.DragEffectFor(e, c, header: true);
+                BorderBrush = e.DragEffects != DragDropEffects.None ? NotaPalette.Accent : BorderBrush;
+                e.Handled = true;
+            });
+            DragDrop.AddDragLeaveHandler(this, (_, _) => Sync());
+            DragDrop.AddDropHandler(this, (_, e) =>
+            {
+                Sync();
+                if (o.TryDeviceDrop(e, c)) return;
+                var items = BrowserView.DroppedItems(e);
+                if (items.Count > 0 && c.Kind != ColKind.Master) { o.RaiseDrop(items[0], c.TrackId, -1, c.IsInstrument); e.Handled = true; }
+            });
+
             PointerPressed += (_, e) =>
             {
                 var pp = e.GetCurrentPoint(this).Properties;
@@ -356,12 +374,13 @@ public sealed partial class SessionView
             }
 
             DragDrop.SetAllowDrop(this, true);
-            DragDrop.AddDragOverHandler(this, (_, e) => e.DragEffects = BrowserView.IsAcceptableDrag(e) ? DragDropEffects.Copy : DragDropEffects.None);
-            DragDrop.AddDragEnterHandler(this, (_, e) => { if (BrowserView.IsAcceptableDrag(e)) { _dropHover = true; InvalidateVisual(); } });
+            DragDrop.AddDragOverHandler(this, (_, e) => { e.DragEffects = o.DragEffectFor(e, c, header: false); e.Handled = true; });
+            DragDrop.AddDragEnterHandler(this, (_, e) => { if (o.DragEffectFor(e, c, header: false) != DragDropEffects.None) { _dropHover = true; InvalidateVisual(); } });
             DragDrop.AddDragLeaveHandler(this, (_, _) => { _dropHover = false; InvalidateVisual(); });
             DragDrop.AddDropHandler(this, (_, e) =>
             {
                 _dropHover = false; InvalidateVisual();
+                if (o.TryDeviceDrop(e, c)) return;
                 var items = BrowserView.DroppedItems(e);
                 if (items.Count > 0) { _o.RaiseDrop(items[0], c.TrackId, scene, c.IsInstrument); e.Handled = true; }
             });

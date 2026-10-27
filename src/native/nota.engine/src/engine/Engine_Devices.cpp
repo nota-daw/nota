@@ -6,6 +6,8 @@
 #include "Engine.h"
 #include "devices/DeviceFactory.h"
 #include "devices/racks/MidiRack.h"
+#include "devices/racks/RackInstrument.h"
+#include "devices/racks/DrumRack.h"
 #include "devices/effects/Amp.h"
 #include "devices/effects/AutoFilter.h"
 #include "media/AudioFile.h"
@@ -445,11 +447,7 @@ bool Engine::setTrackInstrumentPlugin(int32_t trackId, int32_t catalogIndex) {
     const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
     auto inst = createPluginInstrument(catalogIndex, sr, kMaxBlock);
     if (!inst) return false;
-    auto nt = cloneTrack(*old);
-    nt->instrument = inst;
-    republishWithTrack(trackId, nt);
-    recomputePdc();
-    return true;
+    return replaceTrackInstrument(trackId, std::move(inst));
 }
 
 int32_t Engine::addTrackEffectPlugin(int32_t trackId, int32_t catalogIndex) {
@@ -574,13 +572,16 @@ int32_t Engine::addTrackBuiltinDevice(int32_t trackId, int32_t kind) {
 }
 
 std::shared_ptr<Instrument> Engine::cloneInstrument(const Track& src) const {
-    if (!src.instrument) return nullptr;
+    return src.instrument ? cloneInstrumentFrom(*src.instrument) : nullptr;
+}
+
+std::shared_ptr<Instrument> Engine::cloneInstrumentFrom(const Instrument& src) const {
     const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
-    if (auto c = src.instrument->clone()) {
+    if (auto c = src.clone()) {
         c->setSampleRate(sr);
         return c;
     } // hosted plugin
-    switch (src.instrument->kind()) { // built-ins
+    switch (src.kind()) { // built-ins
     case 0: {
         auto s = std::make_shared<Synth>();
         s->setSampleRate(sr);
@@ -589,7 +590,7 @@ std::shared_ptr<Instrument> Engine::cloneInstrument(const Track& src) const {
     case 1: {
         auto sm = std::make_shared<Sampler>();
         sm->setSampleRate(sr);
-        if (auto* srcSm = dynamic_cast<Sampler*>(src.instrument.get()))
+        if (auto* srcSm = dynamic_cast<const Sampler*>(&src))
             sm->setSample(srcSm->sample(), srcSm->rootNote(), srcSm->loopEnabled());
         return sm;
     }
@@ -729,15 +730,33 @@ Device* Engine::deviceAt(int32_t trackId, int32_t deviceIndex) const {
 // Fresh built-in factories live in devices/DeviceFactory.cpp.
 
 // Replace an instrument track's instrument with a fresh built-in of `kind` (browser drag onto
-// an existing track). Racks and unknown kinds return false so the caller can add a new track.
+// an existing track, Replace… in the instrument's menu). 3 and 4 are an empty Instrument Rack /
+// Drum Rack (specs/043), as a new rack track starts. Unknown kinds return false so the caller
+// can add a new track.
 bool Engine::setTrackBuiltinInstrument(int32_t trackId, int32_t kind) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Instrument) return false;
-    auto inst = makeBuiltinInstrument(kind);
+    std::shared_ptr<Instrument> inst;
+    if (kind == 3) inst = std::make_shared<RackInstrument>();
+    else if (kind == 4) inst = std::make_shared<DrumRack>();
+    else inst = makeBuiltinInstrument(kind);
     if (!inst) return false;
     inst->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0);
+    return replaceTrackInstrument(trackId, std::move(inst));
+}
+
+int64_t Engine::trackInstrumentId(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t && t->instrument ? static_cast<int64_t>(t->instrument->uid()) : 0;
+}
+
+bool Engine::replaceTrackInstrument(int32_t trackId, std::shared_ptr<Instrument> inst) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || old->type() != TrackType::Instrument || !inst) return false;
+    // The old instrument survives in undo history, so only its window goes.
+    if (old->instrument) old->instrument->closeEditor();
     auto nt = cloneTrack(*old);
-    nt->instrument = inst;
+    nt->instrument = std::move(inst);
     republishWithTrack(trackId, nt);
     recomputePdc();
     return true;
@@ -771,6 +790,7 @@ bool Engine::copyDevice(int32_t trackId, int32_t deviceIndex) {
     if (!c) return false;
     clipDevice_ = std::move(c);
     clipMidi_.reset();
+    clipInstrument_.reset();
     return true;
 }
 
@@ -780,10 +800,191 @@ bool Engine::copyMidiEffect(int32_t trackId, int32_t index) {
     if (!c) return false;
     clipMidi_ = std::move(c);
     clipDevice_.reset();
+    clipInstrument_.reset();
     return true;
 }
 
-int32_t Engine::deviceClipboardKind() const { return clipDevice_ ? 1 : clipMidi_ ? 2 : 0; }
+bool Engine::copyInstrument(int32_t trackId) {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Instrument || !t->instrument) return false;
+    auto c = cloneInstrumentFrom(*t->instrument);
+    if (!c) return false;
+    c->setBypassed(t->instrument->bypassed());
+    clipInstrument_ = std::move(c);
+    clipDevice_.reset();
+    clipMidi_.reset();
+    return true;
+}
+
+int32_t Engine::pasteInstrument(int32_t trackId) {
+    if (!clipInstrument_) return -1;
+    auto t = findTrackAuthoring(trackId);
+    if (!t || t->type() != TrackType::Instrument) return -2;
+    auto c = cloneInstrumentFrom(*clipInstrument_);
+    if (!c) return -3;
+    c->setBypassed(clipInstrument_->bypassed());
+    return replaceTrackInstrument(trackId, std::move(c)) ? 0 : -2;
+}
+
+// ---- device transfer between tracks (specs/043) ----------------------------
+// Both tracks change in one published graph, so the device never plays on two tracks (or
+// none) and one undo puts both back. A move hands the device itself over (a plug-in that won't
+// load twice still moves, a Reverb keeps its tail); a copy, or a device whose settings must
+// change on the way (a key on the target itself, an Arp's CC target), gets a clone, so the
+// object the undo history holds is never edited.
+int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int32_t dstId, int32_t atIndex,
+                               bool keepSource, int32_t* outFlags) {
+    if (outFlags) *outFlags = 0;
+    if (srcId == dstId || family < 0 || family > 2) return -1;
+    auto src = findTrackAuthoring(srcId), dst = findTrackAuthoring(dstId);
+    if (!src || !dst) return -1;
+    const bool midi = family == 1, inst = family == 2;
+    if (inst) {
+        if (src->type() != TrackType::Instrument || !src->instrument) return -1;
+    } else {
+        const auto n = midi ? src->midiEffects.size() : src->devices.size();
+        if (index < 0 || index >= static_cast<int32_t>(n)) return -1;
+    }
+    if ((midi || inst) && dst->type() != TrackType::Instrument) return -2;
+    if (inst && !keepSource && srcId == kMasterTrackId) return -1;
+
+    int32_t flags = 0;
+    // A link to the moved device stays behind: CV links that target it or read it.
+    if (!keepSource && !inst) {
+        const auto tk = static_cast<int32_t>(midi ? CvTargetKind::MidiFx : CvTargetKind::Device);
+        for (auto& ot : authoring_->tracks)
+            for (auto& l : ot->cvLinks) {
+                const int32_t tgt = l.targetTrack < 0 ? ot->id() : l.targetTrack;
+                if ((tgt == srcId && l.targetKind == tk && l.targetDevice == index)
+                    || (!midi && ot->id() == srcId && l.sourceKind == static_cast<int32_t>(CvSourceKind::Param) && l.sourceDevice == index))
+                    flags |= kTransferLinksDropped;
+            }
+    }
+
+    auto ns = (keepSource || inst) ? nullptr : cloneTrack(*src);
+    auto nd = cloneTrack(*dst);
+    std::vector<AutomationLane> lanes;
+    if (!keepSource) lanes = deviceLanes(*src, family, index);
+    int32_t at = 0;
+
+    if (family == 0) {
+        auto& sd = src->devices[index];
+        std::shared_ptr<Device> dev = keepSource ? cloneDevice(*sd) : sd;
+        if (!dev) return -3;
+        if (dev->sidechainSourceTrackId() == dstId) {
+            if (dev == sd) dev = cloneDevice(*sd);
+            if (!dev) return -3;
+            dev->setSidechainSourceTrackId(-1);
+            flags |= kTransferSidechainCleared;
+        }
+        if (ns) {
+            ns->devices.erase(ns->devices.begin() + index);
+            remapAutomationAfterDeviceChange(*ns, false, index, -1, -1);
+            // An Arp's CC lane addresses the chain by index: drop it from the moved device,
+            // shift it past the gap.
+            for (auto& m : ns->midiEffects) {
+                const int32_t d = m->ccDestDevice();
+                if (d < index) continue;
+                auto c = cloneMidiDevice(*m);
+                if (!c) continue;
+                if (d == index) {
+                    c->setCcDest(-1, -1);
+                    flags |= kTransferLinksDropped;
+                } else
+                    c->setCcDest(d - 1, m->ccDestParam());
+                m = c;
+            }
+        }
+        const int32_t end = static_cast<int32_t>(nd->devices.size());
+        at = (atIndex < 0 || atIndex > end) ? end : atIndex;
+        nd->devices.insert(nd->devices.begin() + at, dev);
+        if (at != end) remapAutomationAfterDeviceChange(*nd, false, -1, end, at);
+    } else if (midi) {
+        auto& sm = src->midiEffects[index];
+        std::shared_ptr<MidiDevice> md = keepSource ? cloneMidiDevice(*sm) : sm;
+        if (!md) return -3;
+        if (md->ccDestDevice() >= 0) { // its CC target is a device on the old track
+            if (md == sm) md = cloneMidiDevice(*sm);
+            if (!md) return -3;
+            md->setCcDest(-1, -1);
+            flags |= kTransferLinksDropped;
+        }
+        if (ns) {
+            ns->midiEffects.erase(ns->midiEffects.begin() + index);
+            remapAutomationAfterDeviceChange(*ns, true, index, -1, -1);
+        }
+        const int32_t end = static_cast<int32_t>(nd->midiEffects.size());
+        at = (atIndex < 0 || atIndex > end) ? end : atIndex;
+        nd->midiEffects.insert(nd->midiEffects.begin() + at, md);
+        if (at != end) remapAutomationAfterDeviceChange(*nd, true, -1, end, at);
+    } else {
+        std::shared_ptr<Instrument> in = keepSource ? cloneInstrumentFrom(*src->instrument) : src->instrument;
+        if (!in) return -3;
+        if (keepSource) in->setBypassed(src->instrument->bypassed());
+        if (dst->instrument) dst->instrument->closeEditor();
+        nd->instrument = in;
+    }
+    for (auto& l : lanes) {
+        if (!inst) l.deviceIndex = at;
+        // An instrument lane for a parameter the new track already automates takes that lane's
+        // place, so there is one lane per parameter (edits and recording find the first one).
+        AutomationLane* same = nullptr;
+        if (inst)
+            for (auto& d : nd->automation)
+                if (d.target == AutomationTarget::PluginParam && d.deviceIndex < 0
+                    && (l.paramId.empty() ? d.paramId.empty() && d.paramIndex == l.paramIndex : d.paramId == l.paramId)) {
+                    same = &d;
+                    break;
+                }
+        if (same) {
+            same->paramIndex = l.paramIndex;
+            same->points = std::move(l.points);
+        } else
+            nd->automation.push_back(std::move(l));
+    }
+
+    const bool dropSource = inst && !keepSource;
+    if (dropSource) { // the track goes with its effects; it survives in undo history
+        for (auto& d : src->devices)
+            if (d) d->closeEditor();
+        flags |= kTransferSourceRemoved;
+    }
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    if (srcId == kMasterTrackId && ns) g->masterTrack = ns;
+    if (dstId == kMasterTrackId) g->masterTrack = nd;
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks) {
+        if (t->id() == srcId) {
+            if (dropSource) continue;
+            g->tracks.push_back(ns ? ns : t);
+        } else
+            g->tracks.push_back(t->id() == dstId ? nd : t);
+    }
+    publish(std::move(g));
+    // CV links into either chain follow the indices: links to the moved device are dropped on the
+    // old track, the devices after it shift, and on the new track the ones after the insert shift.
+    if (!inst) {
+        const int32_t last = static_cast<int32_t>(midi ? nd->midiEffects.size() : nd->devices.size()) - 1;
+        if (ns) remapCvLinksAfterDeviceChange(srcId, index, -1, -1, midi);
+        if (at != last) remapCvLinksAfterDeviceChange(dstId, -1, last, at, midi);
+    }
+    // Voices belong to the audio thread: ask it to silence them (AR-4). The old track loses the
+    // arp-driven notes of a moved MIDI effect; a moved instrument drops the notes it held there.
+    auto notesOff = [this](int32_t trackId) {
+        Command c;
+        c.type = CommandType::TrackNotesOff;
+        c.i0 = trackId;
+        commands_.push(c);
+    };
+    if (midi && ns) notesOff(srcId);
+    if (inst && !keepSource) notesOff(dstId);
+    recomputePdc();
+    if (outFlags) *outFlags = flags;
+    return inst ? 0 : at;
+}
+
+int32_t Engine::deviceClipboardKind() const { return clipDevice_ ? 1 : clipMidi_ ? 2 : clipInstrument_ ? 3 : 0; }
 
 bool Engine::deviceClipboardSidechain() const { return clipDevice_ && clipDevice_->sidechainSourceTrackId() >= 0; }
 

@@ -170,7 +170,9 @@ track count and closes with Escape.
   Arrangement; and moving material between Session and Arrangement — the clipboard works
   both ways, and **⌘⇧C** (**Copy to Session** / **Copy to Arrangement** / **Copy to
   scene**) sends clips, slots or a whole scene across with notes, envelopes, warp, pitch
-  and gain, as one undo step.
+  and gain, as one undo step. An instrument (or instrument preset) dropped from the Browser
+  on an instrument column replaces its instrument (a rack gets a chain or pad); on an audio
+  column or right of the last column it starts a new track.
 - **Modular View** — a signal-graph editor for the track's chain: MIDI FX → instrument →
   effects shown as nodes you can expand, bypass, duplicate, delete and reorder right on the
   canvas (node positions are saved with the project), plus a **Global view** that shows
@@ -234,7 +236,15 @@ track count and closes with Escape.
     its rotated name and on/off switch; double-click the strip to unfold. Saved with the project.
   - Click a device to select it: ⌘C / ⌘X / ⌘V copy, cut and paste it with all its settings
     (also into and out of rack chains), ⌘D duplicates it, Delete removes it; drag a header to
-    reorder.
+    reorder. Every device header, folded strip and rack chain card has a **×** that removes it
+    (also with Tab and Enter).
+  - The instrument card selects too: **Replace…** swaps it for any built-in instrument, an
+    empty Instrument Rack or Drum Rack, or an installed plug-in, clips and effects kept; a
+    copied instrument pasted on another instrument track replaces that track's; deleting the
+    instrument deletes its track (asking first when it has clips).
+  - **Move to track ▸** in a device's menu, or dragging its header onto a track in the
+    Arrangement or a Session column, moves it there with its automation; ⌥ copies instead.
+    The instrument replaces the other track's instrument and its own track goes.
 
 ---
 
@@ -1226,8 +1236,11 @@ Coverage:
   star). Deleting versions stays with the user.
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
 - **Instruments**: add by kind, read and write parameters (by index or by stable id), turn
-  on or off (`set_device_bypass` with device index -1; `get_overview` shows it); read /
-  shape Nota Keys in musical terms (`read_keys`, `set_keys`).
+  on or off (`set_device_bypass` with device index -1; `get_overview` shows it), replace with
+  another built-in or an empty rack (`set_track_instrument`); read / shape Nota Keys in
+  musical terms (`read_keys`, `set_keys`).
+- **Moving devices**: `move_device_to_track` moves or copies an audio effect, a MIDI effect or
+  the instrument to another track, with its automation.
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a
   device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move

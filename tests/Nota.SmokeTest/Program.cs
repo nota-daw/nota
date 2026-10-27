@@ -436,6 +436,14 @@ if (args.Length >= 1 && args[0] == "--device-copy")
     Console.WriteLine(failures == 0 ? "DEVICE COPY PASSED" : $"DEVICE COPY FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The instrument as a device in the chain (specs/043) alone: `--instrument-chain`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--instrument-chain")
+{
+    Console.WriteLine("-- instrument chain --");
+    foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "INSTRUMENT CHAIN PASSED" : $"INSTRUMENT CHAIN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Drum Rack one-shot pads, pad audition, warp off/on alone: `--pad-warp`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--pad-warp")
 {
@@ -14366,7 +14374,10 @@ Console.WriteLine("-- MCP tools --");
     Check(re.TrackInstrumentKind(t) == 9, $"instrument is now Operator ({re.TrackInstrumentKind(t)})");
     Check(re.SetTrackBuiltinInstrument(t, 1), "swap to Sampler succeeds");
     Check(re.TrackInstrumentKind(t) == 1, "instrument is now Sampler");
-    Check(!re.SetTrackBuiltinInstrument(t, 3), "swap to a Rack kind is rejected");
+    // specs/043: Replace… can pick a rack — an empty one, as a new rack track starts.
+    Check(re.SetTrackBuiltinInstrument(t, 3) && re.TrackInstrumentKind(t) == 3 && re.RackChainCount(t) == 0,
+        "swap to an Instrument Rack gives an empty rack");
+    Check(!re.SetTrackBuiltinInstrument(t, 99), "swap to an unknown kind is rejected");
     int at = re.AddAudioTrack();
     Check(!re.SetTrackBuiltinInstrument(at, 6), "audio track rejects an instrument swap");
 }
@@ -15138,6 +15149,8 @@ Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device copy + rack undo --");
 foreach (var (ok, label) in DeviceCopyTests.Run()) Check(ok, label);
+Console.WriteLine("-- instrument chain --");
+foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
 
 // --- racks redesign (specs/040): v8 compatibility, mapping rules, MIDI racks, chain MIDI effects ---
 foreach (var (title, run) in RackSections())

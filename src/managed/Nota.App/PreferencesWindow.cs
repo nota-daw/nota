@@ -1201,11 +1201,13 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         ("Devices (after a click on a device)", new[]
         {
-            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the device with all its settings · paste lands after the selected device, on any track or rack chain"),
+            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the device with all its settings · paste lands after the selected device, on any track or rack chain · a copied instrument replaces the instrument it is pasted on"),
             ("⌘D", "Duplicate the selected device"),
             ("⌘G", "Wrap the selected audio effect in an Audio Effect Rack"),
             ("⌘⇧G", "Take the devices out of a selected one-chain rack"),
-            ("Delete", "Delete the selected device"),
+            ("Delete", "Delete the selected device · on the instrument, its track"),
+            ("Drag a device onto a track", "Move it there (out of the panel, onto a track row or Session column) · the instrument replaces that track's and its own track goes"),
+            ("⌥-drag a device onto a track", "Copy it there"),
         }),
         ("Racks", new[]
         {

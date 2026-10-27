@@ -96,6 +96,23 @@ public sealed partial class NotaEngine
     public int DuplicateMidiEffect(int trackId, int index)
     { ThrowIfDisposed(); return NativeMethods.DuplicateMidiEffect(_handle, trackId, index); }
 
+    /// <summary>The track's instrument on the device clipboard (specs/043), a full clone.</summary>
+    public bool CopyInstrument(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.CopyInstrument(_handle, trackId) == 1; }
+    /// <summary>Replaces the track's instrument with a clone of the copied one, one undo step.
+    /// 0 done, -1 nothing to paste, -2 not an instrument track, -3 the clone failed.</summary>
+    public int PasteInstrument(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.PasteInstrument(_handle, trackId); }
+    /// <summary>Moves (or copies) a device to another track in one undo step (specs/043). The new
+    /// index (0 for the instrument), -1 bad address, -2 the target can't take it, -3 the clone failed.</summary>
+    public int TransferDevice(int srcTrackId, DeviceFamily family, int index, int dstTrackId, int atIndex, bool keepSource, out TransferFlags flags)
+    {
+        ThrowIfDisposed();
+        int r = NativeMethods.TransferDevice(_handle, srcTrackId, (int)family, index, dstTrackId, atIndex, keepSource ? 1 : 0, out int f);
+        flags = (TransferFlags)f;
+        return r;
+    }
+
     /// <summary>Wraps an audio effect in a new Audio Effect Rack in its place (#257). The rack's index, or -1.</summary>
     public int WrapDeviceInRack(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.WrapDeviceInRack(_handle, trackId, deviceIndex); }
@@ -331,6 +348,7 @@ public sealed partial class NotaEngine
 
     /// <summary>Instrument identity: 0=Synth, 1=Sampler, -1=plugin/unknown, -2=no instrument.</summary>
     public int TrackInstrumentKind(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentKind(_handle, trackId); }
+    public long TrackInstrumentId(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentId(_handle, trackId); }
     public bool TrackInstrumentSupportsMpe(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentSupportsMpe(_handle, trackId) != 0; }
 
     /// <summary>Built-in device kind (0=EQ,1=Comp,2=Reverb,3=Delay,4=Utility) or -1 for a plugin.</summary>

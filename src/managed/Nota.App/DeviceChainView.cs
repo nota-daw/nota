@@ -74,6 +74,15 @@ public sealed partial class DeviceChainView : UserControl
 
     /// <summary>A one-line message for the status bar (e.g. a kit that loaded incompletely).</summary>
     public event Action<string>? StatusMessage;
+    /// <summary>The instrument's Delete / Cut / Remove (specs/043): the host deletes the track
+    /// (trackId), asking first when it has clips. <c>cut</c>: the instrument was copied first.</summary>
+    public event Action<int, bool>? TrackDeleteRequested;
+    /// <summary>Replace… in the instrument's menu: the host swaps the shown track's instrument
+    /// for this one (racks included), one undo step.</summary>
+    public event Action<BrowserItem>? InstrumentReplaceRequested;
+    /// <summary>Move to track ▸ (and a card dragged onto a track header): the host moves the
+    /// device, one undo step, asking first when an instrument's move takes a track with clips.</summary>
+    public event Action<DeviceMoveRequest>? MoveRequested;
 
     /// <summary>The "+" at the end of the chain was clicked: MainWindow opens the browser on
     /// Audio effects with the keyboard in its search.</summary>
@@ -118,7 +127,7 @@ public sealed partial class DeviceChainView : UserControl
         HookBrowserDrop();
     }
 
-    public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; _selDeviceIndex = -1; _rackSel = null; _rackCmds = null; Rebuild(); }
+    public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; _selDeviceIndex = -1; _instrumentSelected = false; _rackSel = null; _rackCmds = null; Rebuild(); }
 
     /// <summary>Forgets every card's remembered preset label + A/B slots (a project was
     /// opened / created, so track ids no longer mean the same tracks).</summary>
@@ -181,6 +190,7 @@ public sealed partial class DeviceChainView : UserControl
         _row.Children.Clear();
         _selRings.Clear();
         _instrumentCard = null;
+        _instrumentRackView = null;
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)

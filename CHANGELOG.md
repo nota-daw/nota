@@ -77,8 +77,31 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   of a one-chain rack back out. Also in the device's right-click menu (**Group into rack** /
   **Ungroup rack**). A device with a sidechain key, automation or CV links stays where it is
   and the status line says why. ⌘G on tracks still groups tracks.
+- **The instrument is a device you can select** (nota-daw/nota#327, nota-daw/nota#146): click
+  the instrument card to select it. Its right-click menu has **Replace…** (any built-in
+  instrument, an empty Instrument Rack or Drum Rack, or an installed plug-in, swapped in place
+  with the clips and effects kept), **Copy**, **Cut** and **Paste** — a copied instrument,
+  settings, chains and pads and all, replaces the instrument of the track it is pasted on — and
+  **Delete track**.
+- **Move a device to another track** (nota-daw/nota#327): **Move to track ▸** in any device's
+  menu, or drag the device's header out of the Devices panel onto a track in the Arrangement or
+  a column in Session view; hold ⌥ (Alt) to copy it instead. A moved device takes its
+  automation along; one undo puts it back. Moving the instrument replaces the other track's
+  instrument and removes its own track.
+- **A Remove button on every device** (nota-daw/nota#110): a small × in each device's header,
+  folded strip and rack chain card removes it; it is reachable with Tab and Enter. One undo
+  brings the device back.
+- **Drop instruments in Session view** (nota-daw/nota#313): an instrument or instrument preset
+  dropped on a column header or slot replaces that track's instrument (on a rack it adds a
+  chain or pad); dropped on an audio column it starts a new track after it, and right of the
+  last column a new track at the end.
+- **MCP**: `set_track_instrument` replaces a track's instrument with a built-in one (racks
+  included); `move_device_to_track` moves or copies a device, the instrument included, to
+  another track.
 
 ### Changed
+- **Delete on the instrument deletes its track**, as an instrument track always has an
+  instrument; Nota asks first when the track has clips.
 - **A new Instrument Rack starts empty** instead of with a Nota Volt chain: drop an instrument
   or a preset on it to add the first chain.
 - **A Mosaic in a rack chain lists the presets a Mosaic track does** in its window — the factory

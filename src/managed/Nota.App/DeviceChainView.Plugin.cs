@@ -24,7 +24,7 @@ public sealed partial class DeviceChainView
         var spec = new ShellSpec(
             Name: info.Name, Subtitle: info.Format, DeviceIndex: di, Count: count,
             Bypassed: _engine.DeviceBypassed(_trackId, effect ? di : -1), Bypassable: true,
-            CanMove: effect, CanDelete: effect, PresetKind: -1, IsInstrument: !effect, Width: width, Kind: k,
+            CanMove: effect, CanDelete: true, PresetKind: -1, IsInstrument: !effect, Width: width, Kind: k,
             HeaderExtra: toggle, Compact: state.Mini);
         return BuildCardShell(spec, new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body });
     }

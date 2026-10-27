@@ -992,6 +992,11 @@ NOTA_API void    nota_engine_reset(NotaEngine* engine);
 /* Instrument identity for save: 0=Synth, 1=Sampler, -1=plugin/unknown,
  * -2=no instrument (audio/return track). */
 NOTA_API int32_t nota_track_instrument_kind(const NotaEngine* engine, int32_t track_id);
+/* Which instrument the track holds (specs/043), for UI state kept per instrument: the same value
+ * while it is edited (a rack edit included) and when it moves to another track or comes back by
+ * undo; a new, replaced, pasted or copied instrument has another. 0 = no instrument. Compare it,
+ * don't decode it. */
+NOTA_API int64_t nota_track_instrument_id(const NotaEngine* engine, int32_t track_id);
 /* 1 if the track's instrument responds to per-note expression (MPE), else 0. */
 NOTA_API int32_t nota_track_instrument_supports_mpe(const NotaEngine* engine, int32_t track_id);
 /* Built-in device kind (0=EQ,1=Comp,2=Reverb,3=Delay,4=Utility) or -1 for a
@@ -1385,8 +1390,9 @@ NOTA_API int32_t nota_engine_add_plugin_instrument_track(NotaEngine* engine, int
 /* Replace the instrument on an existing instrument track with a hosted plugin. */
 NOTA_API NotaResult nota_track_set_instrument_plugin(NotaEngine* engine, int32_t track_id, int32_t catalog_index);
 
-/* Replace the instrument on an existing instrument track with a fresh built-in synth `kind`.
- * Returns NOTA_ERR_UNKNOWN for Racks / unknown kinds or non-instrument tracks. */
+/* Replace the instrument on an existing instrument track with a fresh built-in synth `kind`;
+ * kind 3 = an empty Instrument Rack, 4 = an empty Drum Rack (specs/043). One undo step.
+ * Returns NOTA_ERR_UNKNOWN for unknown kinds or non-instrument tracks. */
 NOTA_API NotaResult nota_track_set_builtin_instrument(NotaEngine* engine, int32_t track_id, int32_t kind);
 
 /* Append catalog plugin `catalog_index` as an insert effect on the track's
@@ -1538,7 +1544,7 @@ NOTA_API NotaResult  nota_track_remove_device(NotaEngine* engine, int32_t track_
 /* Device clipboard (#238). Copy keeps a full clone of an audio effect (every param, its
  * state blob, bypass, sidechain key; a rack or plug-in copies itself) or a MIDI effect;
  * paste inserts a clone of it at at_index (-1 = the end) as one undo step and returns the
- * new index, or <0. clipboard_kind: 0 empty, 1 audio effect, 2 MIDI effect. */
+ * new index, or <0. clipboard_kind: 0 empty, 1 audio effect, 2 MIDI effect, 3 instrument. */
 NOTA_API NotaResult  nota_track_copy_device(NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API NotaResult  nota_track_copy_midi_effect(NotaEngine* engine, int32_t track_id, int32_t index);
 NOTA_API int32_t     nota_device_clipboard_kind(const NotaEngine* engine);
@@ -1548,6 +1554,29 @@ NOTA_API int32_t     nota_track_paste_midi_effect(NotaEngine* engine, int32_t tr
  * alone. Returns the clone's index or -1. */
 NOTA_API int32_t     nota_track_duplicate_device(NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API int32_t     nota_track_duplicate_midi_effect(NotaEngine* engine, int32_t track_id, int32_t index);
+/* The track's instrument on the shared device clipboard (specs/043): a full clone — every
+ * param, its state, a rack's chains / pads and macros, a plug-in's state, bypass. Replaces
+ * whatever the clipboard held. 1 = copied, 0 = no instrument (not an instrument track). */
+NOTA_API int32_t     nota_track_copy_instrument(NotaEngine* engine, int32_t track_id);
+/* Replace track_id's instrument with a fresh clone of the clipboard's instrument; one undo
+ * step, the clipboard kept. 0 = done, -1 nothing to paste (the clipboard holds no
+ * instrument), -2 not an instrument track, -3 the clone failed (a plug-in that won't load). */
+NOTA_API int32_t     nota_track_paste_instrument(NotaEngine* engine, int32_t track_id);
+/* Move (keep_source 0) or copy (keep_source 1) a device to another track, both tracks in one
+ * undo step (specs/043). family: 0 audio effect at `index`, 1 MIDI effect at `index`, 2 the
+ * instrument (index ignored). at_index: position on the target, -1 = the end of its section
+ * (ignored for the instrument, which replaces the target's).
+ * A move takes the device's automation lanes along (index rewritten); a copy takes none. A move
+ * of the instrument removes the source track. CV links to the device stay with the source, and
+ * a moved MIDI effect's CC target is cleared. A sidechain key whose source is the target track
+ * is cleared.
+ * Returns the new index (>= 0; 0 for the instrument), -1 bad address or dst == src, -2 the
+ * target can't take the family (an instrument / MIDI effect onto an audio, return, group or
+ * master track), -3 the clone failed. *out_flags (may be NULL): bit 0 sidechain cleared,
+ * bit 1 links dropped, bit 2 source track removed. */
+NOTA_API int32_t     nota_track_transfer_device(NotaEngine* engine, int32_t src_track_id, int32_t family,
+                                                int32_t index, int32_t dst_track_id, int32_t at_index,
+                                                int32_t keep_source, int32_t* out_flags);
 /* ⌘G on a device (#257): wrap the audio effect at device_index in a new Audio Effect Rack
  * in its place (one undo step). Returns the rack's index, or <0 when the device can't move
  * into a rack chain (not an effect; a sidechain key, automation or a CV link on it).

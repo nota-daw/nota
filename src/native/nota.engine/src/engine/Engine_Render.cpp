@@ -849,6 +849,9 @@ void Engine::drainCommands() {
                 releasePitches_[c.i1 >> 5] |= 1u << (c.i1 & 31);
             }
             break;
+        case CommandType::TrackNotesOff:
+            if (notesOffCount_ < 8) notesOffTracks_[notesOffCount_++] = c.i0;
+            break;
         case CommandType::Seek:
             seekedWhileRolling_ |= transport_.isPlaying(); // a jump mid-playback, not Stop→Seek→Play
             transport_.seekBeats(c.d0);
@@ -1709,6 +1712,20 @@ void Engine::processBlock(float* out, int32_t numFrames) {
     const bool seeked = seekedThisBlock_, seekedRolling = seekedWhileRolling_;
     seekedThisBlock_ = seekedWhileRolling_ = false;
     if ((!playing && renderWasPlaying_) || (playing && renderWasPlaying_ && seekedRolling)) flushArrangementVoices();
+    // A device moved between tracks (specs/043): the moved instrument's held notes, or the
+    // voices an arp drove on the track it left, stop here, on the thread that owns them.
+    if (g)
+        for (int32_t k = 0; k < notesOffCount_; ++k)
+            for (auto& tptr : g->tracks)
+                if (tptr->id() == notesOffTracks_[k]) {
+                    if (tptr->instrument) {
+                        tptr->instrument->allNotesOff();
+                        releaseHeldControllers(*tptr->instrument);
+                    }
+                    for (auto& md : tptr->midiEffects)
+                        if (md) md->reset();
+                }
+    notesOffCount_ = 0;
     // Note chase: when playback starts, the playhead jumps (seek) or the loop wraps, clip
     // notes that began before the playhead but are still held get re-triggered at the
     // jump point — otherwise a note you start in the middle of stays silent.

@@ -174,7 +174,7 @@ public sealed partial class DeviceChainView
         if (trackId != _trackId) return;                  // only the shown chain has moved cards to follow
         if (final != added) ExtrasMoved(k, added, final);
         if (replaced) ExtrasRemoved(k, final + 1);
-        _selChainKind = k; _selDeviceIndex = final;
+        _selChainKind = k; _selDeviceIndex = final; _instrumentSelected = false;
         Rebuild(); Changed?.Invoke();
     }
 
@@ -183,7 +183,7 @@ public sealed partial class DeviceChainView
     internal Nota.Application.Palette.InsertPoint CurrentInsertPoint()
     {
         if (_trackId <= 0) return Nota.Application.Palette.InsertPoint.None;
-        if (HasDeviceSelection)
+        if (HasEffectSelection)
         {
             bool midi = _selChainKind == ChainKind.Midi;
             int n = midi ? _engine.TrackMidiEffectCount(_trackId) : _engine.TrackDeviceCount(_trackId);

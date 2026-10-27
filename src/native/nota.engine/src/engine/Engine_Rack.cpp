@@ -225,6 +225,7 @@ static std::shared_ptr<RackInstrument> forkRackInstrument(const RackInstrument& 
     if (dynamic_cast<const DrumRack*>(&src)) r = std::make_shared<DrumRack>();
     else r = std::make_shared<RackInstrument>();
     r->forkFrom(src);
+    r->adoptUid(src);      // the same rack to the UI: its card keeps its preset label and A/B
     r->shareMonoWith(src); // held keys, the sounding note and a glide in progress play on
     r->setBypassed(src.bypassed());
     r->folded = src.folded;
@@ -357,6 +358,7 @@ bool Engine::rackChainDeviceCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
     if (!copy) return false;
     clipDevice_ = std::move(copy);
     clipMidi_.reset();
+    clipInstrument_.reset();
     return true;
 }
 bool Engine::rackChainMidiCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
@@ -366,6 +368,7 @@ bool Engine::rackChainMidiCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
     if (!copy) return false;
     clipMidi_ = std::move(copy);
     clipDevice_.reset();
+    clipInstrument_.reset();
     return true;
 }
 int32_t Engine::rackChainDevicePaste(int32_t t, int32_t di, int32_t c, int32_t at) {

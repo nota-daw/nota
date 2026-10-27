@@ -46,7 +46,9 @@ public sealed partial class DeviceChainView
     private static int KeyIndex(int key) => key >= 0 ? key : key == -1 ? -1 : -1000 - key;
     private string CardSig(int t, ChainKind k, int di) => k switch
     {
-        ChainKind.Instrument => $"{_engine.TrackInstrumentKind(t)}|{_engine.DeviceName(t, -1)}",
+        // The instrument's id too: undo can bring back another instrument of the same kind and
+        // name (one moved away, one replaced), and its card must not take this one's A/B.
+        ChainKind.Instrument => $"{_engine.TrackInstrumentKind(t)}|{_engine.DeviceName(t, -1)}|{_engine.TrackInstrumentId(t)}",
         ChainKind.Midi => $"{_engine.MidiEffectKind(t, di)}|{_engine.MidiEffectName(t, di)}",
         _ => $"{_engine.TrackDeviceBuiltinKind(t, di)}|{_engine.DeviceName(t, di)}",
     };
@@ -74,10 +76,11 @@ public sealed partial class DeviceChainView
 
     // Keep each card's extra glued to its device when this view reorders / removes devices.
     // map: old index → new index, or -1 when the device is gone.
-    private void RemapExtras(ChainKind k, Func<int, int> map)
+    private void RemapExtras(ChainKind k, Func<int, int> map) => RemapExtras(_trackId, k, map);
+    private void RemapExtras(int t, ChainKind k, Func<int, int> map)
     {
-        if (k != ChainKind.Instrument) DevicesRemapped?.Invoke(_trackId, k == ChainKind.Midi, map);
-        if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(_trackId, out var d)) return;
+        if (k != ChainKind.Instrument) DevicesRemapped?.Invoke(t, k == ChainKind.Midi, map);
+        if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(t, out var d)) return;
         var domain = d.Where(kv => KeyKind(kv.Key) == k).ToList();
         foreach (var kv in domain) d.Remove(kv.Key);
         foreach (var kv in domain) { int ni = map(KeyIndex(kv.Key)); if (ni >= 0) d[ExtraKey(k, ni)] = kv.Value; }
@@ -195,10 +198,21 @@ public sealed partial class DeviceChainView
         right.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         right.Children.Add(badges);
         Grid.SetColumn(power, 1); right.Children.Add(power);
+        // The Remove control (#110) after the power slot; on the instrument it takes the track.
+        if (!s.Utility && s.CanDelete)
+        {
+            right.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            var remove = RemoveButton(s.IsInstrument ? "Remove track" : "Remove device", () => RemoveDeviceAt(s.Kind, di));
+            remove.Margin = new Thickness(-4, 0, -6, 0);   // tucked against the card's right inset
+            Grid.SetColumn(remove, 2); right.Children.Add(remove);
+        }
         var headerGrid = new Grid { ColumnSpacing = 8 };
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        // A compact card has no room for equal halves: the right side (S / L, the power switch,
+        // the Remove control) takes what it needs and the name trims instead of the switches
+        // overlapping.
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition(s.Compact ? GridLength.Auto : GridLength.Star));
         headerGrid.Children.Add(name);
         Grid.SetColumn(right, 2); headerGrid.Children.Add(right);
         var headerBar = new Border
@@ -208,7 +222,8 @@ public sealed partial class DeviceChainView
             Cursor = s.CanMove && SelectableKind(s.Kind) ? new Cursor(StandardCursorType.SizeAll) : null,
         };
         headerBar.BindResource(Border.BoxShadowProperty, "Shadow.Raised");   // the raised strip's top bevel
-        if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · double-click to fold · right-click for A/B, move and delete" : "Double-click to fold · right-click for more");
+        if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · double-click to fold · right-click for A/B, move and delete"
+            : s.IsInstrument ? "Click to select · double-click to fold · right-click to replace, copy or move" : "Double-click to fold · right-click for more");
 
         // Factory presets for this device (or the card's own list), and applying one in place.
         List<(string Id, string Name)> presets;
@@ -390,7 +405,7 @@ public sealed partial class DeviceChainView
         // Bypassed: the body takes the inactive look but stays playable (no opacity for state).
         if (s.Bypassed) card.AttachedToVisualTree += (_, _) => Inactive.Set(bodyHost, true, interactive: true);
         // The whole header drags the card to a new slot within its domain (audio FX / MIDI FX).
-        if (s.CanMove && SelectableKind(s.Kind)) HookDeviceDrag(headerBar, card, s.Kind, di);
+        if ((s.CanMove || s.IsInstrument) && SelectableKind(s.Kind)) HookDeviceDrag(headerBar, card, s.Kind, di);   // the instrument drags onto other tracks only
         return card;
     }
 

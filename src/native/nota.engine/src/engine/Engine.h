@@ -609,6 +609,7 @@ class Engine {
     // Instrument identity for save: 0=Synth, 1=Sampler, -1=plugin/unknown,
     // -2=track has no instrument (audio/return). Message thread only.
     int32_t trackInstrumentKind(int32_t trackId) const;
+    int64_t trackInstrumentId(int32_t trackId) const; // nota_track_instrument_id (specs/043)
     bool trackInstrumentSupportsMpe(int32_t trackId) const; // per-note expression (MPE)
     // Built-in device kind for save (see Device::builtinKind), or -1 for a
     // hosted plugin. Message thread only.
@@ -735,7 +736,7 @@ class Engine {
     // Device clipboard (#238): copy a full clone of an audio / MIDI effect (every param, its
     // state blob, bypass, sidechain key; a rack or plug-in copies itself), paste a clone of it
     // into a chain at atIndex (-1 = the end) as one undo step. Paste returns the new index or
-    // -1. deviceClipboardKind: 0 empty, 1 audio effect, 2 MIDI effect.
+    // -1. deviceClipboardKind: 0 empty, 1 audio effect, 2 MIDI effect, 3 instrument (below).
     bool copyDevice(int32_t trackId, int32_t deviceIndex);
     bool copyMidiEffect(int32_t trackId, int32_t index);
     int32_t deviceClipboardKind() const;
@@ -744,6 +745,26 @@ class Engine {
     // A clone of the device right after it (one undo step), clipboard untouched. Returns its index or -1.
     int32_t duplicateDevice(int32_t trackId, int32_t deviceIndex);
     int32_t duplicateMidiEffect(int32_t trackId, int32_t index);
+    // The instrument on the same clipboard (specs/043): copy keeps a full clone (cloneInstrument:
+    // params, state, a rack's chains / pads / macros, a plug-in's state, bypass) and empties the
+    // other two families; deviceClipboardKind() is 3 then. Paste replaces the track's instrument
+    // with a fresh clone, one undo step: 0 done, -1 nothing to paste, -2 not an instrument
+    // track, -3 the clone failed.
+    bool copyInstrument(int32_t trackId);
+    int32_t pasteInstrument(int32_t trackId);
+    // The one place a track's instrument is swapped (Replace, Paste, the built-in / plug-in
+    // setters): the old instrument's editor closes, one undo step.
+    bool replaceTrackInstrument(int32_t trackId, std::shared_ptr<Instrument> inst);
+    // Move (keepSource false) or copy a device to another track, both tracks in one published
+    // graph and one undo step (specs/043). family: 0 audio effect, 1 MIDI effect, 2 the
+    // instrument (index ignored; it replaces dst's and a move removes the source track).
+    // atIndex: -1 = the end of dst's section. A move takes the device's automation lanes along;
+    // a copy takes none. Returns the new index (0 for the instrument), -1 bad address or
+    // dst == src, -2 dst can't take the family, -3 the clone failed. outFlags (may be null):
+    // kTransferSidechainCleared / kTransferLinksDropped / kTransferSourceRemoved.
+    static constexpr int32_t kTransferSidechainCleared = 1, kTransferLinksDropped = 2, kTransferSourceRemoved = 4;
+    int32_t transferDevice(int32_t srcTrackId, int32_t family, int32_t index, int32_t dstTrackId, int32_t atIndex,
+                           bool keepSource, int32_t* outFlags);
     const char* deviceName(int32_t trackId, int32_t deviceIndex) const;
     int32_t deviceScope(int32_t trackId, int32_t deviceIndex, float* out, int32_t maxSamples) const;
     // Interactive-device command channel + per-layer waveform (the looper).
@@ -1264,7 +1285,9 @@ class Engine {
     Modulator* modulatorPtr(Track& t, int32_t modId);
     // Keep CV-link targetDevice indices valid after a device on `track` was removed
     // (removedIndex>=0) or moved (from/to). Clones the affected owner tracks + republishes.
-    void remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to);
+    // midi: the edit was on the MIDI-effect chain — fix up MidiFx-target links (param sources
+    // name insert effects, so they stay); otherwise Device-target links and param sources.
+    void remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to, bool midi = false);
     // Keep automation-lane deviceIndex valid after an effect (midi=false) or MIDI effect
     // (midi=true) on `nt` was removed (removedIndex>=0; its lanes are dropped) or moved
     // (from/to). Edits `nt` in place before it is published, so it shares the device
@@ -1296,10 +1319,15 @@ class Engine {
     void reapplyRackMacros(); // after undo/redo: racks drive their shared children again
     static int32_t trackLatency(const Track& t);
     std::shared_ptr<Instrument> cloneInstrument(const Track& src) const; // duplicateTrack helper
+    std::shared_ptr<Instrument> cloneInstrumentFrom(const Instrument& src) const;
+    // Copies of the automation lanes on one device of `t` (family as transferDevice; for the
+    // instrument, PluginParam lanes with deviceIndex < 0), in lane order.
+    std::vector<AutomationLane> deviceLanes(const Track& t, int32_t family, int32_t index) const;
     std::shared_ptr<Device> cloneDevice(const Device& src) const;
     std::shared_ptr<MidiDevice> cloneMidiDevice(const MidiDevice& src) const;
     std::shared_ptr<Device> clipDevice_;   // device clipboard (#238): a clone of the copied audio effect
     std::shared_ptr<MidiDevice> clipMidi_;
+    std::shared_ptr<Instrument> clipInstrument_; // the instrument on the device clipboard (specs/043)
     int32_t insertDeviceClone(int32_t trackId, std::shared_ptr<Device> dev, int32_t atIndex);
     int32_t insertMidiEffectClone(int32_t trackId, std::shared_ptr<MidiDevice> md, int32_t atIndex); // ... or of the copied MIDI effect (one of the two at a time)
     void recomputePdc(); // message thread: realign all tracks
@@ -1668,6 +1696,9 @@ class Engine {
     // live is skipped.
     int32_t releaseTrack_ = -1;
     uint32_t releasePitches_[4] = {};
+    // Tracks whose voices go silent at the next block (TrackNotesOff command, audio thread).
+    int32_t notesOffTracks_[8] = {};
+    int32_t notesOffCount_ = 0;
 
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot
     // mode; recordSlotPlayer_/recordSlotLen_ are read on the audio thread to time
