@@ -405,10 +405,10 @@ class RackCore {
 
     // Drive every mapped target from its macro again. After an undo or redo swaps in another
     // copy of the rack, the children it shares with the copy still hold the values the other
-    // copy's mappings gave them (specs/040). Message thread.
-    void reapplyMacros() {
-        for (int32_t i = 0; i < kNumMacros; ++i) applyMacro(i, macros_[i].load(std::memory_order_relaxed));
-    }
+    // copy's mappings gave them (specs/040). A rack nested in a chain (a Drum Rack in an
+    // Instrument Rack chain, specs/041) shares its children with its undo copies too, so it is
+    // driven again as well. Message thread.
+    void reapplyMacros();
 
     // ---- undoable edits ---------------------------------------------------
     // Take over another rack's content (#236). The engine edits a copy of the rack instead

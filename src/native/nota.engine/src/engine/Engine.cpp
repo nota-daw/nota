@@ -702,16 +702,9 @@ bool Engine::undo() {
 // copies an edit made still hold what those copies' mappings gave them (specs/040).
 void Engine::reapplyRackMacros() {
     if (!authoring_) return;
-    // A rack and the racks nested in its chains (a Drum Rack in an Instrument Rack chain,
-    // specs/041): a nested rack's children are shared with its undo copies too.
-    auto rack = [](RackCore* r) {
-        r->reapplyMacros();
-        for (int32_t c = 0; c < r->chainCount(); ++c)
-            if (auto* inner = dynamic_cast<RackCore*>(r->chainInstrument(c))) inner->reapplyMacros();
-    };
-    auto each = [&rack](const std::shared_ptr<Track>& t) {
+    auto each = [](const std::shared_ptr<Track>& t) {
         if (!t) return;
-        if (auto* r = dynamic_cast<RackCore*>(t->instrument.get())) rack(r);
+        if (auto* r = dynamic_cast<RackCore*>(t->instrument.get())) r->reapplyMacros();
         for (auto& d : t->devices)
             if (auto* r = dynamic_cast<RackCore*>(d.get())) r->reapplyMacros();
         for (auto& m : t->midiEffects)

@@ -227,6 +227,12 @@ bool RackCore::replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument>
     return true;
 }
 
+void RackCore::reapplyMacros() {
+    for (int32_t i = 0; i < kNumMacros; ++i) applyMacro(i, macros_[i].load(std::memory_order_relaxed));
+    for (int32_t c = 0; c < chainCount(); ++c)
+        if (auto* inner = dynamic_cast<RackCore*>(chainInstrument(c))) inner->reapplyMacros();
+}
+
 uint64_t RackCore::chainUid(int32_t chain) const {
     RackState* st = live();
     if (!st || chain < 0 || chain >= static_cast<int32_t>(st->chains.size())) return 0;
