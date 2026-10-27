@@ -108,7 +108,9 @@ internal sealed partial class RackCardView
 
     private Control RcSlider(string label, Func<double> norm, Action<double> set, Func<string> text, Action? reset = null, bool bipolar = false)
     {
-        var row = SliderRow(label, norm, set, text, out var sync, reset: reset, bipolar: bipolar, labelWidth: RcRowLabel, valueWidth: 36);
+        var g = RcEditGesture();
+        var row = SliderRow(label, norm, set, text, out var sync, begin: g.Begin, end: g.End,
+            reset: reset is null ? null : () => RcStep(reset), bipolar: bipolar, labelWidth: RcRowLabel, valueWidth: 36);
         _irTick.Add(sync);
         return row;
     }
@@ -121,7 +123,7 @@ internal sealed partial class RackCardView
         {
             var labels = Array.ConvertAll(_rp.Modes, m => m.Label);
             int Cur() { int mode = a.RackMode(); return Array.FindIndex(_rp.Modes, m => m.Id == mode); }
-            var seg = Segments(labels, Cur, i => { a.SetRackMode(_rp.Modes[i].Id); DeferRebuild(); }, out var segSync, fill: true, padX: 2, fontSize: NotaType.KnobLabel);
+            var seg = Segments(labels, Cur, i => { RcStep(() => a.SetRackMode(_rp.Modes[i].Id)); DeferRebuild(); }, out var segSync, fill: true, padX: 2, fontSize: NotaType.KnobLabel);
             _irTick.Add(segSync);
             var hint = new TextBlock
             {
@@ -141,7 +143,7 @@ internal sealed partial class RackCardView
                 var glide = RcSlider("Glide", () => a.RackGlide(), v => a.SetRackGlide((float)v), () => NotaNum.Unit(a.RackGlide() * 500, "0", "ms"), reset: () => a.SetRackGlide(0f));
                 ToolTip.SetTip(glide, "Glides between notes in mono mode");
                 stack.Children.Add(glide);
-                toggles.Children.Add(Switch("Mono (last note)", () => a.RackMono(), () => a.SetRackMono(!a.RackMono()), out var monoSync));
+                toggles.Children.Add(Switch("Mono (last note)", () => a.RackMono(), () => RcStep(() => a.SetRackMono(!a.RackMono())), out var monoSync));
                 _irTick.Add(monoSync);
                 ToolTip.SetTip(toggles.Children[^1], "All chains share one voice, the last key wins");
                 break;
@@ -156,19 +158,19 @@ internal sealed partial class RackCardView
                     () => NotaNum.Db(20 * Math.Log10(Math.Max(1e-6, a.RackVolume())), signed: true), reset: () => a.SetRackVolume(1f), bipolar: true);
                 MidiLearn.Bind(gain, MidiTarget.RackVolume(T, a.LearnDeviceIndex), "Rack Gain");
                 stack.Children.Add(gain);
-                toggles.Children.Add(Switch("Follow input level", () => a.SelectorFollows(), () => { a.SetSelectorFollows(!a.SelectorFollows()); DeferRebuild(); }, out var followSync));
+                toggles.Children.Add(Switch("Follow input level", () => a.SelectorFollows(), () => RcStep(() => { a.SetSelectorFollows(!a.SelectorFollows()); DeferRebuild(); }), out var followSync));
                 _irTick.Add(followSync);
                 ToolTip.SetTip(toggles.Children[^1], "In Select mode the selector follows the input level instead of its handle");
-                toggles.Children.Add(Switch("Latency compensation", () => a.RackPdc(), () => a.SetRackPdc(!a.RackPdc()), out var pdcSync));
+                toggles.Children.Add(Switch("Latency compensation", () => a.RackPdc(), () => RcStep(() => a.SetRackPdc(!a.RackPdc())), out var pdcSync));
                 _irTick.Add(pdcSync);
                 ToolTip.SetTip(toggles.Children[^1], "Line up chains with different latency");
                 break;
             }
             default:
-                toggles.Children.Add(Switch("Merge duplicate notes", () => a.RackMerge(), () => a.SetRackMerge(!a.RackMerge()), out var mSync));
+                toggles.Children.Add(Switch("Merge duplicate notes", () => a.RackMerge(), () => RcStep(() => a.SetRackMerge(!a.RackMerge())), out var mSync));
                 _irTick.Add(mSync);
                 ToolTip.SetTip(toggles.Children[^1], "Two chains sending the same pitch play one note");
-                toggles.Children.Add(Switch("Pass through outside zones", () => a.RackThru(), () => a.SetRackThru(!a.RackThru()), out var tSync));
+                toggles.Children.Add(Switch("Pass through outside zones", () => a.RackThru(), () => RcStep(() => a.SetRackThru(!a.RackThru())), out var tSync));
                 _irTick.Add(tSync);
                 ToolTip.SetTip(toggles.Children[^1], "Notes no chain takes reach the instrument unchanged");
                 break;

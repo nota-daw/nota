@@ -35,18 +35,28 @@ internal sealed partial class RackCardView
 
     private bool RcIsSelected(int c, RcSlot slot, int idx) => RcSelOf(c, slot, idx) is { } s && _ctx.RackSelection == s;
 
+    // Index −1 is the chosen chain itself with no device selected: the keys' paste target stays
+    // in the rack (⌘V lands at the end of that chain); copy, cut, duplicate and delete do nothing.
     private void RcSelect(RackDeviceSel? s)
     {
         if (s is null) { _ctx.SelectRackDevice(null, null); return; }
+        if (s.Index < 0) { _ctx.SelectRackDevice(s, new RackDeviceCommands(() => { }, () => { }, () => RcPaste(s.Chain), () => { }, () => { })); return; }
         _ctx.SelectRackDevice(s, new RackDeviceCommands(() => RcCopy(s), () => RcCut(s), () => RcPaste(s.Chain, s), () => RcDuplicate(s), () => RcDelete(s)));
     }
 
-    // A selection on this rack that no longer points at a device of the chosen chain goes.
+    /// <summary>The user chose chain c of this rack: it becomes the paste target for the keys.</summary>
+    private void RcSelectChain(int c)
+    {
+        if (_ra.RackAddress is int rack) RcSelect(new RackDeviceSel(rack, c, false, -1));
+    }
+
+    // A selection on this rack that no longer points at a device of the chosen chain falls back
+    // to the chosen chain itself, so ⌘V keeps pasting into the rack.
     private void RcCheckSelection()
     {
         if (_ctx.RackSelection is not { } s || _ra.RackAddress != s.Rack) return;
         int n = s.Midi ? _ra.ChainMidiCount(s.Chain) : _ra.ChainDeviceCount(s.Chain);
-        if (s.Chain != Sel || s.Index >= n) RcSelect(null);
+        if (s.Chain != Sel || s.Index >= n) RcSelectChain(Sel);
         else RcSelect(s); // a rebuilt card hands the panel fresh commands
     }
 
@@ -108,7 +118,7 @@ internal sealed partial class RackCardView
         int kind = E.DeviceClipboardKind();
         if (kind == 0) { _ctx.Status("Nothing to paste"); return; }
         bool midi = kind == 2;
-        int at = after is { } s && s.Chain == c && s.Midi == midi ? s.Index + 1 : -1;
+        int at = after is { Index: >= 0 } s && s.Chain == c && s.Midi == midi ? s.Index + 1 : -1;
         bool keyed = !midi && E.DeviceClipboardSidechain();
         int r = midi ? E.RackDevChainMidiPaste(T, rack, c, at) : E.RackDevChainDevicePaste(T, rack, c, at);
         if (r < 0) { _ctx.Status(RcPasteRefusal(r, midi)); return; }
@@ -131,6 +141,25 @@ internal sealed partial class RackCardView
         -5 => "MIDI effects run in the first 16 chains.",
         _ => "Nothing to paste here.",
     };
+
+    // ---- undo for the card's value controls -------------------------------------------
+    // A rack's faders, modes and switches write in place; these make each gesture one undo step:
+    // a checkpoint forks the rack first (children and held notes carry over), and a drag's moves
+    // land inside one undo group, so a zone drag that forks on every move undoes as one.
+
+    private (Action Begin, Action End) RcEditGesture()
+    {
+        bool open = false;
+        return (() => { if (open) return; open = true; E.BeginUndoGroup(); _ra.Checkpoint(); },
+                () => { if (!open) return; open = false; E.EndUndoGroup(); });
+    }
+
+    private void RcStep(Action set)
+    {
+        E.BeginUndoGroup();
+        try { _ra.Checkpoint(); set(); }
+        finally { E.EndUndoGroup(); }
+    }
 
     // ---- menus ----------------------------------------------------------------------
 

@@ -331,6 +331,10 @@ int32_t Engine::rackDuplicateChain(int32_t t, int32_t di, int32_t c) {
     return rackForEdit(t, di)->duplicateChain(c);
 }
 bool Engine::rackCheckpoint(int32_t t, int32_t di) { return rackForEdit(t, di) != nullptr; }
+int64_t Engine::rackChainId(int32_t t, int32_t di, int32_t c) const {
+    auto* r = rackCoreAt(t, di);
+    return r ? static_cast<int64_t>(reinterpret_cast<uintptr_t>(r->chainInstrument(c))) : 0;
+}
 
 // ---- chain devices on the device clipboard (specs/042) ----------------------------------
 namespace {

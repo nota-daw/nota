@@ -223,6 +223,13 @@ int32_t nota_rackdev_duplicate_chain(NotaEngine* e, int32_t t, int32_t di, int32
     return e ? ENG(e)->rackDuplicateChain(t, di, chain) : -1;
 }
 
+int64_t nota_rackdev_chain_id(const NotaEngine* e, int32_t t, int32_t di, int32_t c) {
+    return e ? CENG(e)->rackChainId(t, di, c) : 0;
+}
+int32_t nota_rackdev_checkpoint(NotaEngine* e, int32_t t, int32_t di) {
+    return (e && ENG(e)->rackCheckpoint(t, di)) ? 1 : 0;
+}
+
 // Rack chain devices on the shared device clipboard (specs/042).
 int32_t nota_rackdev_chain_device_copy(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i) {
     return (e && ENG(e)->rackChainDeviceCopy(t, di, c, i)) ? 1 : 0;

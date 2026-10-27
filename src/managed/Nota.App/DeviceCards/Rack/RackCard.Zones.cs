@@ -57,8 +57,9 @@ internal sealed partial class RackCardView
             ToolTip.SetTip(bar, follows
                 ? "The selector follows the input level · turn Follow input off on the Rack out tab to set it by hand"
                 : "Drag to choose which chains play · right-click to map it to a macro");
-            bar.Changed += (lo, _) => { a.SetSelector(lo / 127f); RcProbeUpdate(); };
-            bar.Committed += DeferRebuild;
+            var barg = RcEditGesture();
+            bar.Changed += (lo, _) => { barg.Begin(); a.SetSelector(lo / 127f); RcProbeUpdate(); };
+            bar.Committed += () => { barg.End(); DeferRebuild(); };
             bar.ContextRequested += (_, e) => { e.Handled = true; RcSelectorMenu(bar); };
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions($"{RcZoneNameWidth},*{(vel ? $",{RcVelWidth}" : "")}"), ColumnSpacing = 8, Height = 14 };
             row.Children.Add(RcText("Selector", NotaPalette.TextSecondary, NotaType.KnobLabel));
@@ -85,8 +86,9 @@ internal sealed partial class RackCardView
             {
                 a.ChainZone(c, out int kl, out int kh, out int vl, out int vh);
                 var kb = new RackRangeBar { Lo = kl, Hi = kh, Hue = hue, Label = (lo, hi) => $"{NoteName(lo)}–{NoteName(hi)}" };
-                kb.Changed += (lo, hi) => { a.ChainZone(cc, out _, out _, out int l, out int h); a.SetChainZone(cc, lo, hi, l, h); RcProbeUpdate(); };
-                kb.Committed += () => { Sel = cc; DeferRebuild(); };
+                var kbg = RcEditGesture();
+                kb.Changed += (lo, hi) => { kbg.Begin(); a.ChainZone(cc, out _, out _, out int l, out int h); a.SetChainZone(cc, lo, hi, l, h); RcProbeUpdate(); };
+                kb.Committed += () => { kbg.End(); Sel = cc; DeferRebuild(); };
                 kb.Hover += v => { _rs.ProbePitch = v; RcProbeUpdate(); };
                 ToolTip.SetTip(kb, "Drag the edges to set the key zone · hover to test a note");
                 Grid.SetColumn(kb, 1); grid.Children.Add(kb);
@@ -94,8 +96,9 @@ internal sealed partial class RackCardView
                 if (vel)
                 {
                     var vb = new RackRangeBar { Lo = vl, Hi = vh, Hue = hue, Label = (lo, hi) => $"{lo}–{hi}" };
-                    vb.Changed += (lo, hi) => { a.ChainZone(cc, out int k0, out int k1, out _, out _); a.SetChainZone(cc, k0, k1, lo, hi); RcProbeUpdate(); };
-                    vb.Committed += () => { Sel = cc; DeferRebuild(); };
+                    var vbg = RcEditGesture();
+                    vb.Changed += (lo, hi) => { vbg.Begin(); a.ChainZone(cc, out int k0, out int k1, out _, out _); a.SetChainZone(cc, k0, k1, lo, hi); RcProbeUpdate(); };
+                    vb.Committed += () => { vbg.End(); Sel = cc; DeferRebuild(); };
                     ToolTip.SetTip(vb, "Drag the edges to set the velocity zone");
                     Grid.SetColumn(vb, 2); grid.Children.Add(vb);
                 }
@@ -104,8 +107,9 @@ internal sealed partial class RackCardView
                     // MIDI rack: the select range sits under the key zone, faint outside Select mode.
                     a.SelectRange(c, out int sl, out int sh);
                     var sb = new RackRangeBar { Lo = sl, Hi = sh, Hue = hue, Dim = !selectOn, Height = 6, Margin = new Thickness(0, 14, 0, 0), VerticalAlignment = VerticalAlignment.Top };
-                    sb.Changed += (lo, hi) => { a.SetSelectRange(cc, lo, hi); RcProbeUpdate(); };
-                    sb.Committed += () => { Sel = cc; DeferRebuild(); };
+                    var sbg = RcEditGesture();
+                    sb.Changed += (lo, hi) => { sbg.Begin(); a.SetSelectRange(cc, lo, hi); RcProbeUpdate(); };
+                    sb.Committed += () => { sbg.End(); Sel = cc; DeferRebuild(); };
                     ToolTip.SetTip(sb, "Select range: in Select mode this chain plays while the selector is inside it");
                     kb.VerticalAlignment = VerticalAlignment.Top;
                     kb.Height = 12;
@@ -119,8 +123,9 @@ internal sealed partial class RackCardView
             {
                 a.SelectRange(c, out int sl, out int sh);
                 var sb = new RackRangeBar { Lo = sl, Hi = sh, Hue = hue, Dim = !selectOn, Label = (lo, hi) => $"{lo}–{hi}" };
-                sb.Changed += (lo, hi) => { a.SetSelectRange(cc, lo, hi); RcProbeUpdate(); };
-                sb.Committed += () => { Sel = cc; DeferRebuild(); };
+                var sbg = RcEditGesture();
+                sb.Changed += (lo, hi) => { sbg.Begin(); a.SetSelectRange(cc, lo, hi); RcProbeUpdate(); };
+                sb.Committed += () => { sbg.End(); Sel = cc; DeferRebuild(); };
                 ToolTip.SetTip(sb, "Drag the edges to set the select range");
                 Grid.SetColumn(sb, 1); grid.Children.Add(sb);
             }

@@ -99,6 +99,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- A rack card's faders, mode buttons and switches (and zone or select-range drags) undo one
+  gesture at a time on every rack, the MIDI Effect Rack included; a nested Drum Rack's window
+  follows its chain when chains in front of it are removed or moved.
 - Undoing or redoing a rack edit puts back what the rack's macros drive, and changes to a
   mapping's range, curve or a macro's name are undoable.
 - "Save preset" on a MIDI effect's card saves that MIDI effect.

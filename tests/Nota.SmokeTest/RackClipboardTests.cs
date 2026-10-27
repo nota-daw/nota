@@ -22,6 +22,55 @@ internal static class RackClipboardTests
     public static IEnumerable<(string title, Func<IEnumerable<(bool ok, string label)>> run)> Sections()
     {
         yield return ("racks: chain device clipboard", Run);
+        yield return ("racks: review fixes (#348)", Review);
+    }
+
+    // PR #348 review: a rack's in-place edits undo after a checkpoint, and undo puts back what a
+    // nested Drum Rack's macros drive.
+    private static IEnumerable<(bool, string)> Review()
+    {
+        using (var e = new NotaEngine())
+        {
+            int t = e.AddInstrumentTrack();
+            int mi = e.AddMidiEffect(t, MidiRack);
+            e.ClearUndoHistory();
+            int tr0 = e.MidiRackChainTranspose(t, mi, 0);
+            e.RackDevCheckpoint(t, -1000 - mi);
+            e.MidiRackSetChainTranspose(t, mi, 0, tr0 + 7);
+            bool set = e.MidiRackChainTranspose(t, mi, 0) == tr0 + 7;
+            e.Undo();
+            yield return (set && e.MidiRackChainTranspose(t, mi, 0) == tr0, "a MIDI Effect Rack value edit after a checkpoint is one undo step");
+
+            int it = e.AddInstrumentRackTrack();
+            e.ClearUndoHistory();
+            float v0 = e.RackVolume(it);
+            e.RackDevCheckpoint(it, -1);
+            e.RackSetVolume(it, v0 * 0.5f);
+            e.Undo();
+            yield return (Math.Abs(e.RackVolume(it) - v0) < 1e-5, "an Instrument Rack's volume after a checkpoint undoes");
+        }
+
+        // A nested Drum Rack: a mapping range edit, then Undo, puts the pad's decay back.
+        using (var e = new NotaEngine())
+        {
+            int t = e.AddInstrumentRackTrack();
+            int c = e.RackAddChain(t, 4);
+            int n = RackMacroMapping.NestedRackBase - c;
+            int pad = e.RackDevAddChain(t, n, 1);
+            int map = e.RackDevAddMacroMapping(t, n, 0, pad, RackMacroMapping.PadControls, RackMacroMapping.PadDecay, 0.2f, 0.4f);
+            e.RackDevMacroSet(t, n, 0, 1f);
+            float before = e.RackDevChainDecay(t, n, pad);
+            e.ClearUndoHistory();
+            e.RackDevSetMappingRange(t, n, map, 0.2f, 0.9f);
+            e.RackDevMacroSet(t, n, 0, 1f);
+            float edited = e.RackDevChainDecay(t, n, pad);
+            e.Undo();
+            float after = e.RackDevChainDecay(t, n, pad);
+            yield return (Math.Abs(before - 0.4f) < 1e-3 && Math.Abs(edited - 0.9f) < 1e-3 && Math.Abs(after - before) < 1e-3,
+                $"undo of a nested mapping edit puts the pad back ({before:F2} → {edited:F2} → {after:F2})");
+            yield return (e.RackDevChainId(t, -1, c) != 0 && e.RackDevChainId(t, -1, c) != e.RackDevChainId(t, -1, e.RackAddChain(t, 14)),
+                "each chain has its own id");
+        }
     }
 
     // A device's params as one comparable line.

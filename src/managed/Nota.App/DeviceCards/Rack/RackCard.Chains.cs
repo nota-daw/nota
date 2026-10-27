@@ -167,6 +167,7 @@ internal sealed partial class RackCardView
             if (pt.IsRightButtonPressed) { e.Handled = true; RcChainMenu(row, c); return; }
             if (!pt.IsLeftButtonPressed) return;
             if (e.ClickCount == 2 && nameTb.IsPointerOver) { RcPromptRename(nameTb, name, n => a.SetChainName(c, n)); return; }
+            RcSelectChain(c); // ⌘V now pastes at the end of this chain
             if (Sel != c) { Sel = c; DeferRebuild(); }
         };
         DragDrop.SetAllowDrop(row, true);
@@ -412,8 +413,13 @@ internal sealed partial class RackCardView
         else if (it.Kind == BrowserItemKind.PluginInstrument) c = a.AddPluginInstrumentChain(it.CatalogIndex);
         else
         {
-            c = a.AddChain(-1);
-            if (c >= 0) RcDropOnChain(c, it);
+            E.BeginUndoGroup(); // the new chain and what lands on it are one step
+            try
+            {
+                c = a.AddChain(-1);
+                if (c >= 0) RcDropOnChain(c, it);
+            }
+            finally { E.EndUndoGroup(); }
         }
         if (c >= 0) Sel = c;
         DeferRebuild();

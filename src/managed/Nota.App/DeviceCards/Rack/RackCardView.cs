@@ -248,14 +248,29 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     private void OpenNestedDrumRackWindow(IRackAccess a, int sc, Control anchor)
     {
         var proxy = NestedRackEngineProxy.Create(E, sc);
+        var pp = (NestedRackEngineProxy)(object)proxy;
+        // The window follows its Drum Rack by identity, not by chain index: removing or moving
+        // chains in front of it shifts the index, and another chain's kit must never be driven.
+        // A chain that's gone (or no longer holds this Drum Rack) leaves the window inert.
+        long id = E.RackDevChainId(T, -1, sc);
+        int Resolve()
+        {
+            if (pp.Chain >= 0 && pp.Chain < a.ChainCount() && E.RackDevChainId(T, -1, pp.Chain) == id) return pp.Chain;
+            for (int c = 0; c < a.ChainCount(); c++)
+                if (E.RackDevChainId(T, -1, c) == id) return pp.Chain = c;
+            return pp.Chain = -1; // an address no rack has: every call from the old card goes nowhere
+        }
         int sel = 0;
         var kits = App.Services?.GetService(typeof(IDrumKits)) as IDrumKits;
         DeviceWindow win = null!;
         win = new DeviceWindow("Nota Drum Rack", E.GetTrackName(T), "Drums", tickReg =>
         {
-            // The chain may have changed under the open window: show nothing rather than drive another rack.
-            if (a.ChainInstrumentKind(sc) != 4)
-                return new DeviceWindowPage(new TextBlock { Text = "This chain no longer holds a Drum Rack.", Foreground = TextTertiary, Margin = new Thickness(12) }, 700, CardBodyH);
+            // The chain may have moved or gone under the open window: follow it, or show nothing
+            // rather than drive another rack.
+            int at = Resolve();
+            if (id == 0 || at < 0 || a.ChainInstrumentKind(at) != 4)
+                return new DeviceWindowPage(new TextBlock { Text = "This Drum Rack is no longer in the rack.", Foreground = TextTertiary, Margin = new Thickness(12) }, 700, CardBodyH);
+            tickReg(() => { if (Resolve() != at) win.Refill(); });
             var refreshers = new List<Action>();
             var ctx = new DeviceCardContext(proxy, T, tickReg, _ctx.NotifyChanged, (_, _, _, _) => { }, _ => { }, _ => { }, () => sel, v => sel = v,
                 refreshers.Add, () => { foreach (var r in refreshers) r(); }, () => Avalonia.Threading.Dispatcher.UIThread.Post(() => { win.Refill(); _ctx.RequestRebuild(); }),
@@ -277,7 +292,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
                 });
             }
             return new DeviceWindowPage(new Border { Width = 700, Height = CardBodyH, ClipToBounds = true, Child = body }, 700, CardBodyH, presets);
-        }, status: () => $"{ChainLocation(a, sc)} · {E.RackDevChainCount(T, RackMacroMapping.NestedRackBase - sc)} pads") { ContextTrackId = T };
+        }, status: () => pp.Chain < 0 ? "Removed" : $"{ChainLocation(a, pp.Chain)} · {E.RackDevChainCount(T, RackMacroMapping.NestedRackBase - pp.Chain)} pads") { ContextTrackId = T };
         win.ShowFrom(anchor);
     }
 

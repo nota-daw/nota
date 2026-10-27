@@ -927,6 +927,11 @@ public interface IAudioEngine : IDisposable
     /// the rack as the other RackDev calls do (−1 Instrument/Drum Rack, ≥0 Audio Effect Rack,
     /// −1000 − mi MIDI Effect Rack, NestedRackBase − chain). Paste returns the new index or −1 nothing,
     /// −2 wrong family, −3 a rack in a rack, −5 MIDI past chain 16; each edit is one undo step.</summary>
+    /// <summary>One undo step for the in-place edits that follow on a rack (a fader drag, a mode or
+    /// switch change): forks the rack now, keeping its children and held notes.</summary>
+    bool RackDevCheckpoint(int trackId, int deviceIndex);
+    /// <summary>A chain's identity while chains move (0 = none); compare it, don't decode it.</summary>
+    long RackDevChainId(int trackId, int deviceIndex, int chain);
     bool RackDevChainDeviceCopy(int trackId, int deviceIndex, int chain, int index);
     bool RackDevChainMidiCopy(int trackId, int deviceIndex, int chain, int index);
     int RackDevChainDevicePaste(int trackId, int deviceIndex, int chain, int atIndex);

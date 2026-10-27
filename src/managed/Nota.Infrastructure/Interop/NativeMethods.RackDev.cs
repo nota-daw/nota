@@ -194,6 +194,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_duplicate_chain")]
     internal static partial int RackDevDuplicateChain(IntPtr engine, int trackId, int deviceIndex, int chain);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_id")]
+    internal static partial long RackDevChainId(IntPtr engine, int trackId, int deviceIndex, int chain);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_checkpoint")]
+    internal static partial int RackDevCheckpoint(IntPtr engine, int trackId, int deviceIndex);
+
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_copy")]
     internal static partial int RackDevChainDeviceCopy(IntPtr engine, int trackId, int deviceIndex, int chain, int index);
 

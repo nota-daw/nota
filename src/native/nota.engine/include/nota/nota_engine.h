@@ -1743,6 +1743,13 @@ NOTA_API int32_t     nota_rackdev_chain_device_duplicate(NotaEngine* engine, int
 NOTA_API int32_t     nota_rackdev_chain_midi_duplicate(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index);
 NOTA_API int32_t     nota_rackdev_chain_device_move_to(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index, int32_t to_chain);
 NOTA_API int32_t     nota_rackdev_chain_midi_move_to(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index, int32_t to_chain);
+/* One undo step for the in-place edits that follow on any rack (a fader drag, a mode or switch
+ * change): the rack is forked now, keeping its children and held notes. device_index as above.
+ * 1 = done. */
+NOTA_API int32_t     nota_rackdev_checkpoint(NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* A chain's identity while chains are added, removed or reordered: the same value for as long as
+ * the chain keeps its instrument, 0 for no chain / no instrument. Compare it, don't decode it. */
+NOTA_API int64_t     nota_rackdev_chain_id(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain);
 /* 1 when the clipboard holds an audio effect keyed from another track. */
 NOTA_API int32_t     nota_device_clipboard_sidechain(const NotaEngine* engine);
 /* Instrument Rack mono (specs/040): one note at a time, last-note priority; the rack's glide
