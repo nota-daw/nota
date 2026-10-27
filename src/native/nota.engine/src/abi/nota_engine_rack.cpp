@@ -841,4 +841,112 @@ int32_t nota_midirack_set_mapping_curve(NotaEngine* e, int32_t t, int32_t mi, in
     return (e && ENG(e)->rackSetMappingCurve(t, MR(mi), index, curve)) ? 1 : 0;
 }
 
+
+// ---- specs/041: the nota_rack_* calls a Drum Rack card needs, for any rack address
+// (device_index −1, an effect rack, or NOTA_RACK_NESTED_BASE − chain: a nested Drum Rack).
+int32_t nota_rackdev_add_sampler_chain(NotaEngine* e, int32_t t, int32_t di, const char* path, int32_t root, int32_t loop) {
+    return (e && path) ? ENG(e)->rackAddSamplerChain(t, di, std::string(path), root, loop != 0) : -1;
+}
+int32_t nota_rackdev_set_chain_sampler_sample(NotaEngine* e, int32_t t, int32_t di, int32_t chain, const char* path, int32_t root) {
+    return (e && path && ENG(e)->rackSetChainSamplerSample(t, di, chain, std::string(path), root)) ? 1 : 0;
+}
+int32_t nota_rackdev_add_plugin_instrument_chain(NotaEngine* e, int32_t t, int32_t di, int32_t catalogIndex) {
+    return e ? ENG(e)->rackAddPluginInstrumentChain(t, di, catalogIndex) : -1;
+}
+const char* nota_rackdev_chain_name(const NotaEngine* e, int32_t t, int32_t di, int32_t c) {
+    static std::string s;
+    s = e ? CENG(e)->rackChainName(t, di, c) : std::string{};
+    return s.c_str();
+}
+void nota_rackdev_set_chain_name(NotaEngine* e, int32_t t, int32_t di, int32_t c, const char* name) {
+    if (e) ENG(e)->rackSetChainName(t, di, c, name ? name : "");
+}
+int32_t nota_rackdev_chain_choke(const NotaEngine* e, int32_t t, int32_t di, int32_t c) {
+    return e ? CENG(e)->rackChainChoke(t, di, c) : 0;
+}
+void nota_rackdev_set_chain_choke(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t g) {
+    if (e) ENG(e)->rackSetChainChoke(t, di, c, g);
+}
+int32_t nota_rackdev_chain_tune(const NotaEngine* e, int32_t t, int32_t di, int32_t c) {
+    return e ? CENG(e)->rackChainTune(t, di, c) : 0;
+}
+void nota_rackdev_set_chain_tune(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t st) {
+    if (e) ENG(e)->rackSetChainTune(t, di, c, st);
+}
+float nota_rackdev_chain_decay(const NotaEngine* e, int32_t t, int32_t di, int32_t c) {
+    return e ? CENG(e)->rackChainDecay(t, di, c) : 1.0f;
+}
+void nota_rackdev_set_chain_decay(NotaEngine* e, int32_t t, int32_t di, int32_t c, float v) {
+    if (e) ENG(e)->rackSetChainDecay(t, di, c, v);
+}
+float nota_rackdev_swing(const NotaEngine* e, int32_t t, int32_t di) {
+    return e ? CENG(e)->rackSwing(t, di) : 0.0f;
+}
+void nota_rackdev_set_swing(NotaEngine* e, int32_t t, int32_t di, float v) {
+    if (e) ENG(e)->rackSetSwing(t, di, v);
+}
+float nota_rackdev_humanize(const NotaEngine* e, int32_t t, int32_t di) {
+    return e ? CENG(e)->rackHumanize(t, di) : 0.0f;
+}
+void nota_rackdev_set_humanize(NotaEngine* e, int32_t t, int32_t di, float v) {
+    if (e) ENG(e)->rackSetHumanize(t, di, v);
+}
+int32_t nota_rackdev_chain_sampler_info(const NotaEngine* e, int32_t t, int32_t di, int32_t c, NotaSamplerInfo* out) {
+    return e && CENG(e)->rackChainSamplerInfo(t, di, c, out) ? 1 : 0;
+}
+int32_t nota_rackdev_set_chain_sampler_root(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t root) {
+    return e && ENG(e)->rackSetChainSamplerRoot(t, di, c, root) ? 1 : 0;
+}
+float nota_rackdev_chain_sampler_play_position(const NotaEngine* e, int32_t t, int32_t di, int32_t c) {
+    return e ? CENG(e)->rackChainSamplerPlayPosition(t, di, c) : -1.0f;
+}
+const char* nota_rackdev_chain_instrument_param_id(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t p) {
+    static std::string s;
+    s = e ? CENG(e)->rackChainInstrumentParamId(t, di, c, p) : std::string{};
+    return s.c_str();
+}
+float nota_rackdev_chain_instrument_param_default(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t p) {
+    return e ? CENG(e)->rackChainInstrumentParamDefault(t, di, c, p) : 0.0f;
+}
+int32_t nota_rackdev_chain_instrument_scope(const NotaEngine* e, int32_t t, int32_t di, int32_t c, float* out, int32_t n) {
+    return e ? CENG(e)->rackChainInstrumentScope(t, di, c, out, n) : 0;
+}
+int32_t nota_rackdev_chain_instrument_voice_count(const NotaEngine* e, int32_t t, int32_t di, int32_t c) {
+    return e ? CENG(e)->rackChainInstrumentVoiceCount(t, di, c) : -1;
+}
+int32_t nota_rackdev_chain_instrument_held_notes(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t* out, int32_t n) {
+    return e ? CENG(e)->rackChainInstrumentHeldNotes(t, di, c, out, n) : 0;
+}
+void nota_rackdev_chain_instrument_action(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t id, int32_t iarg, float farg) {
+    if (e) ENG(e)->rackChainInstrumentAction(t, di, c, id, iarg, farg);
+}
+void nota_rackdev_open_chain_instrument_editor(NotaEngine* e, int32_t t, int32_t di, int32_t c) {
+    if (e) ENG(e)->rackOpenChainInstrumentEditor(t, di, c);
+}
+const char* nota_rackdev_chain_instrument_plugin_id(const NotaEngine* e, int32_t t, int32_t di, int32_t c) {
+    static std::string s;
+    s = e ? CENG(e)->rackChainInstrumentPluginId(t, di, c) : std::string{};
+    return s.c_str();
+}
+int32_t nota_rackdev_chain_instrument_get_state(const NotaEngine* e, int32_t t, int32_t di, int32_t c, uint8_t* out, int32_t cap) {
+    return e ? CENG(e)->rackChainInstrumentGetState(t, di, c, out, cap) : 0;
+}
+
+// ---- Nota Mosaic as a chain instrument (specs/041) ----------------------------------
+int32_t nota_rackdev_chain_mosaic_set_program(NotaEngine* e, int32_t t, int32_t di, int32_t c, const char* text, int32_t undoable) {
+    return e && text && ENG(e)->rackChainMosaicSetProgram(t, di, c, std::string(text), undoable != 0) ? 1 : 0;
+}
+int32_t nota_rackdev_chain_mosaic_program(const NotaEngine* e, int32_t t, int32_t di, int32_t c, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string s = CENG(e)->rackChainMosaicProgram(t, di, c);
+    if (out && cap > 0) std::memcpy(out, s.data(), std::min<size_t>(s.size(), static_cast<size_t>(cap)));
+    return static_cast<int32_t>(s.size());
+}
+int32_t nota_rackdev_chain_mosaic_status(const NotaEngine* e, int32_t t, int32_t di, int32_t c, NotaMosaicStatus* out) {
+    return e && out && CENG(e)->rackChainMosaicStatus(t, di, c, out) ? 1 : 0;
+}
+int64_t nota_rackdev_chain_mosaic_zone_sample_id(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t zone) {
+    return e ? CENG(e)->rackChainMosaicZoneSampleId(t, di, c, zone) : 0;
+}
+
 } // extern "C"

@@ -22,6 +22,8 @@
 #include "devices/instruments/Keys.h"
 #include "devices/instruments/GrainSynth.h"
 #include "devices/instruments/Sampler.h"
+#include "devices/instruments/Mosaic.h"
+#include "DrumRack.h"
 #include "devices/DeviceFactory.h"
 
 #include <cmath>
@@ -210,6 +212,16 @@ bool RackCore::setChainInstrument(int32_t chain, int32_t instKind) {
     if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return false;
     inst->setSampleRate(sampleRate_);
     ns->chains[chain].instrument = inst;
+    commit(ns);
+    return true;
+}
+
+bool RackCore::replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst) {
+    if (!inst) return false;
+    auto ns = copyState();
+    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return false;
+    inst->setSampleRate(sampleRate_);
+    ns->chains[chain].instrument = std::move(inst);
     commit(ns);
     return true;
 }
@@ -601,8 +613,16 @@ std::vector<uint8_t> RackCore::serialize() const {
     return b;
 }
 
+// Depth of the rack blob being read on this thread: a chain of a blob read at depth > 0 is
+// itself inside a nested rack, and racks nest one level (specs/041).
+static thread_local int32_t tlReadDepth = 0;
+
 void RackCore::deserialize(const uint8_t* data, int32_t size) {
     if (!data || size < 8) return;
+    struct DepthScope {
+        DepthScope() { ++tlReadDepth; }
+        ~DepthScope() { --tlReadDepth; }
+    } depth;
     Cursor cur{data, size, 0};
     if (getU32(cur) != kMagic) return;
     const uint32_t ver = getU32(cur); // v1 = no triggerNote; v2 adds it per chain
@@ -667,7 +687,7 @@ void RackCore::deserialize(const uint8_t* data, int32_t size) {
         const uint8_t* isPtr = cur.take(isLen);
         if (ik == -1) // hosted plugin (via factory) or no instrument (empty id)
             c.instrument = instPluginId.empty() ? nullptr : pluginFactory().instrumentById(instPluginId);
-        else
+        else if (!isRackKind(ik) || tlReadDepth == 1)
             c.instrument = makeInstrument(ik);
         if (c.instrument) {
             c.instrument->setSampleRate(sampleRate_);
@@ -780,6 +800,8 @@ std::shared_ptr<Instrument> RackCore::makeInstrument(int32_t kind) {
     case 14: return std::make_shared<Pentad>();
     case 15: return std::make_shared<Consort>();
     case 16: return std::make_shared<Keys>();
+    case 17: return std::make_shared<Mosaic>(); // empty: the program rides its state or the engine
+    case 4: return std::make_shared<DrumRack>(); // nested Drum Rack (specs/041)
     default: return nullptr; // -1 = no instrument (effect rack); plugins are a follow-up
     }
 }

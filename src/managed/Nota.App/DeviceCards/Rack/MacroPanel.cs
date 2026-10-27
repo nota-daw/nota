@@ -161,7 +161,8 @@ internal static class MacroPanel
             if (!sel) select(m);   // the macro you turned is the one whose receivers show (after the drag)
         };
         tick.Add(() => { if (!knob.Dragging) { float v = Value(e, s, m); if (Math.Abs(v - knob.Value) > 1e-4) { knob.Value = v; value.Text = Pct(v); } } });
-        MidiLearn.Bind(knob, MidiTarget.PluginParam(track, di, pi), $"Macro {m + 1} · {s.MacroName(m)}");
+        // A Drum Rack nested in a chain isn't a learn target of its own: map an outer macro to it.
+        if (e is not NestedRackEngineProxy) MidiLearn.Bind(knob, MidiTarget.PluginParam(track, di, pi), $"Macro {m + 1} · {s.MacroName(m)}");
         // ⌥-click types, double-click resets; right-click stays the macro's own menu (the cell's).
         ValueEntry.Attach(knob, $"Macro {m + 1}", value, menu: false);
 

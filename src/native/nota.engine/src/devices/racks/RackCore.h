@@ -185,6 +185,9 @@ class RackCore {
     // Returns the new chain index or -1.
     int32_t duplicateChain(int32_t chain);
     bool setChainInstrument(int32_t chain, int32_t instKind);
+    // Puts a ready instrument at the head of a chain, keeping the chain's devices, MIDI effects,
+    // controls and mappings (a chain Mosaic's new program, a nested Drum Rack's fork). specs/041.
+    bool replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst);
     int32_t chainInstrumentKind(int32_t chain) const;
     Instrument* chainInstrument(int32_t chain) const;
     int32_t chainDeviceCount(int32_t chain) const;
@@ -401,8 +404,11 @@ class RackCore {
 
   public:
     // Built-in instrument factory (public so the Engine can read a fresh one's param
-    // defaults for a chain instrument, e.g. double-click reset on Sampler knobs).
+    // defaults for a chain instrument, e.g. double-click reset on Sampler knobs). Kind 17 is an
+    // empty Nota Mosaic; kind 4 an empty Drum Rack, built only outside a rack being read
+    // (racks nest one level, specs/041 — the engine decides where a Drum Rack may go).
     static std::shared_ptr<Instrument> makeInstrument(int32_t kind);
+    static bool isRackKind(int32_t kind) { return kind == 3 || kind == 4; }
 
   protected:
     static std::shared_ptr<Device> makeDevice(int32_t kind) { return makeChainDevice(kind); }

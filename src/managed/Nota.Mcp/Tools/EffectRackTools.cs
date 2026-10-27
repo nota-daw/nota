@@ -53,8 +53,8 @@ public sealed class EffectRackTools(IAudioEngine engine, IEngineDispatch dispatc
     [McpServerTool(Name = "set_effect_rack_chain_select"), Description("Select-mode: set the chain-select position (0..1) that picks/crossfades the active chain.")]
     public Task SetEffectRackChainSelect(int trackId, int deviceIndex, float value) => Mutate(() => E.RackDevSetChainSelect(trackId, deviceIndex, Math.Clamp(value, 0f, 1f)));
 
-    [McpServerTool(Name = "add_effect_rack_chain"), Description("Add a parallel effect chain to the rack (instrumentKind seeds the chain's source; typically 4 = Utility). Returns the chain index.")]
-    public Task<int> AddEffectRackChain(int trackId, int deviceIndex, int instrumentKind = 4) => Mutate(() => E.RackDevAddChain(trackId, deviceIndex, instrumentKind));
+    [McpServerTool(Name = "add_effect_rack_chain"), Description("Add an empty parallel effect chain to the rack (an effect chain holds no instrument; instrumentKind is ignored). Returns the chain index.")]
+    public Task<int> AddEffectRackChain(int trackId, int deviceIndex, int instrumentKind = -1) => Mutate(() => E.RackDevAddChain(trackId, deviceIndex, instrumentKind));
 
     [McpServerTool(Name = "remove_effect_rack_chain"), Description("Remove a chain from the rack by index.")]
     public Task<bool> RemoveEffectRackChain(int trackId, int deviceIndex, int chain) => Mutate(() => E.RackDevRemoveChain(trackId, deviceIndex, chain));

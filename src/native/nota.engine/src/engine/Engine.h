@@ -885,6 +885,19 @@ class Engine {
     bool rackCheckpoint(int32_t trackId, int32_t deviceIndex);
     // A MIDI Effect Rack is addressed as deviceIndex kMidiRackBase − its MIDI effect index.
     static constexpr int32_t kMidiRackBase = -1000;
+    // A Drum Rack in chain c of the track's Instrument Rack is addressed as kNestedRackBase − c
+    // (racks nest one level, specs/041). Below the MIDI-rack range: test it first.
+    static constexpr int32_t kNestedRackBase = -100000;
+    static bool isNestedRack(int32_t deviceIndex) { return deviceIndex <= kNestedRackBase; }
+    // Whether a chain of the rack at (trackId, deviceIndex) may take instrument `kind`.
+    bool rackKindAllowed(int32_t trackId, int32_t deviceIndex, int32_t kind) const;
+    // Nota Mosaic as a chain instrument (specs/041), mirroring mosaicSetProgram & co. for a
+    // track: checkpoint = an undoable edit (a fresh Mosaic swaps into a fork of the rack).
+    bool rackChainMosaicSetProgram(
+        int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& text, bool checkpoint);
+    std::string rackChainMosaicProgram(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    bool rackChainMosaicStatus(int32_t trackId, int32_t deviceIndex, int32_t chain, NotaMosaicStatus* out) const;
+    int64_t rackChainMosaicZoneSampleId(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t zone) const;
     // Chain MIDI effects (MIDI Effect Rack chains; Instrument Rack chains, #329).
     int32_t rackChainMidiCount(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     int32_t rackAddChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t kind);
@@ -1248,6 +1261,7 @@ class Engine {
     std::shared_ptr<Track> findTrackAuthoring(int32_t id) const;
     std::shared_ptr<Track> cloneTrack(const Track& t) const;
     std::shared_ptr<SampleBuffer> findSampleById(int64_t sampleId) const; // M7-6b
+    static std::shared_ptr<SampleBuffer> chainSampleById(const RackCore* rack, int64_t sampleId, int depth);
     void publish(std::shared_ptr<Graph> g);                               // checkpoints (undo), then publishRaw
     void publishRaw(std::shared_ptr<Graph> g);                            // swap live/authoring only, no undo entry
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)

@@ -646,7 +646,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   on built-in multisamples (felt piano with release samples, mallets, nylon guitar, brass, pad,
   music box) rendered on first use; Init in the card's preset list empties the instrument; MCP `read_mosaic`, `set_mosaic`, `set_mosaic_zone`,
   `set_mosaic_group`, `import_sfz`, `create_multisample`, `list_mosaic_presets`,
-  `load_mosaic_preset`, `scan_sample_packs`.
+  `load_mosaic_preset` (also into an Instrument Rack chain), `scan_sample_packs`. Also plays as
+  an Instrument Rack chain or a Drum Rack pad, with the same editor.
 
 ### Audio effects
 - **Nota EQ-8** (kind 0) — 8-band parametric: each band on / off, Low cut / Low shelf / Bell /
@@ -895,12 +896,16 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Nota Instrument Rack** — layered chains of MIDI effects → instrument → audio effects, each
   with **key and velocity zones**, gain, pan, M·S; Rack out: Volume, Glide and **Mono (last
   note)** — glide bends each new note from the last one on instruments that take per-note bend.
+  A chain can hold **Nota Mosaic** (its full editor, program saved with the rack) or a **Drum
+  Rack** — one level deep — whose card opens in a window with its pads, macros and factory kits;
+  outer macros can drive its macros. MCP `get_rack` with `nestedChain` reads it.
 - **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads, Mixer, Chain and Macro views,
   per-pad Volume/Pan/Tune/Decay, named pads (rename, re-choke or remove from a pad's
   right-click menu), choke groups (monophonic cut), Swing/Humanize, hot-swap, a pad
   oscillogram with a playhead, and each pad's own effect chain. Eight **macros** over the kit
   map onto pad controls (Volume / Pan / Tune / Decay), pad instruments and the pads' effects,
-  with draggable ranges per receiver. A **kit picker** in the
+  with draggable ranges per receiver. A pad plays Nota Sampler, a built-in synth or Nota Mosaic.
+  A **kit picker** in the
   card header loads any factory kit in place and names the kit a rack holds. Its clips can
   be stepped in the detail panel's **Pattern** tab (see below).
 - **25 factory kits** under Nota Drum Rack and Nota Rhythm in the browser and in their cards' kit pickers:

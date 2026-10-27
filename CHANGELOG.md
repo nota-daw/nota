@@ -54,6 +54,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Map a rack's selector to a macro** (Audio Effect and MIDI Effect Racks).
 - **Nota Vocoder in rack chains**: add it to an Instrument or Audio Effect Rack chain from the
   card's menu or the Browser; inside a rack it uses its own Saw or Noise carrier.
+- **Nota Mosaic and the Drum Rack in Instrument Rack chains**: drop either on a rack from the
+  Browser or pick it in the card's chain menus. A Mosaic chain opens the full Mosaic editor
+  (presets, zones, loading) and its program is saved with the rack; a Drum Rack chain opens
+  the Drum Rack card in a window — pads, pad editor, macros and the factory kits — so one
+  track can play a kit on one octave and an instrument on the rest. Outer macros can drive
+  the Drum Rack's macros. Racks nest one level: a Drum Rack goes in an Instrument Rack chain
+  only, and a Drum Rack inside a chain has no swing or humanize of its own. Drum Rack pads take
+  Mosaic too. MCP: `set_chain_instrument` takes 17 and 4, `load_mosaic_preset` takes a chain,
+  `get_rack` reads a nested Drum Rack.
 - **Move clips with the keyboard** (nota-daw/nota#302): in the Arrangement, ← / → nudge the
   selected clips by the grid step and ⌥← / ⌥→ by a 64th note, stopping at the song start;
   ⌥↑ / ⌥↓ move them to the next track up or down that takes them, at the same beats. Each

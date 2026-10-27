@@ -243,6 +243,8 @@ internal sealed partial class RackCardView
         why = "";
         if (RcIsInstrument(it))
         {
+            // A Drum Rack may sit in an Instrument Rack chain; an Instrument Rack can't (specs/041).
+            if (_rp.TakesInstrument && it.Kind == BrowserItemKind.BuiltinInstrument && it.BuiltinKind == 3) { why = "An Instrument Rack can't go inside a rack — add its instruments as chains."; return false; }
             if (_rp.TakesInstrument) return true;
             why = _rp.Kind == RackKind.MidiEffect ? "A MIDI Effect Rack takes MIDI effects only." : "An Audio Effect Rack takes audio effects only.";
             return false;
@@ -373,6 +375,9 @@ internal sealed partial class RackCardView
         void Add(string h, int k) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => { _ra.SetChainInstrument(c, k); DeferRebuild(); }; f.Items.Add(mi); }
         Add("Nota Volt", 6); Add("Nota Physical", 2); Add("Nota Aurora", 5); Add("Nota Pendulum", 8); Add("Nota Operator", 9); Add("Nota Grain", 10);
         Add("Nota Flux", 11); Add("Nota Monolith", 13); Add("Nota Pentad", 14); Add("Nota Consort", 15); Add("Nota Keys", 16);
+        Add("Nota Mosaic", 17);
+        // A Drum Rack in a chain: racks nest one level (specs/041).
+        f.Items.Add(new Separator()); Add("Nota Drum Rack", 4);
         f.ShowAt(anchor, showAtPointer: true);
     }
 

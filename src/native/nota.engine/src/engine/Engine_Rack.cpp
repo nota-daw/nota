@@ -4,7 +4,9 @@
 // Engine — Instrument / Audio-Effect / MIDI-Effect Rack (nested device containers). Resolves a
 // (trackId, deviceIndex) pair to the shared RackCore (deviceIndex −1 = the track's instrument
 // rack; >= 0 = the effect-rack device at that chain position; <= kMidiRackBase = the MIDI
-// effect rack at MIDI index kMidiRackBase − deviceIndex, specs/040) and delegates to its
+// effect rack at MIDI index kMidiRackBase − deviceIndex, specs/040; <= kNestedRackBase = the
+// Drum Rack in chain kNestedRackBase − deviceIndex of the track's Instrument Rack, specs/041)
+// and delegates to its
 // editing API. Rack-internal edits publish the rack's OWN
 // snapshot (thread-safe) and don't republish the graph — the rack object is
 // stable across graph snapshots.
@@ -18,6 +20,7 @@
 #include "devices/racks/DrumRack.h"
 #include "devices/racks/MidiRack.h"
 #include "devices/instruments/Sampler.h"
+#include "devices/instruments/Mosaic.h"
 #include "SnapshotHistory.h"
 
 #include <algorithm>
@@ -128,9 +131,20 @@ bool Engine::rackSetChainSamplerSample(
     return rackForEdit(t, di)->setChainInstrumentSample(chain, buf, rootNote, false);
 }
 
+// The track's plain Instrument Rack (not a Drum Rack): the only rack whose chains take a rack.
+static RackInstrument* nestingHost(const std::shared_ptr<Track>& t) {
+    auto* r = t ? dynamic_cast<RackInstrument*>(t->instrument.get()) : nullptr;
+    return (r && !dynamic_cast<DrumRack*>(r)) ? r : nullptr;
+}
+
 RackCore* Engine::rackCoreAt(int32_t trackId, int32_t deviceIndex) const {
     auto t = findTrackAuthoring(trackId);
     if (!t) return nullptr;
+    if (isNestedRack(deviceIndex)) {
+        auto* host = nestingHost(t);
+        return host ? dynamic_cast<RackCore*>(dynamic_cast<RackInstrument*>(host->chainInstrument(kNestedRackBase - deviceIndex)))
+                    : nullptr;
+    }
     if (deviceIndex <= kMidiRackBase) {
         const int32_t mi = kMidiRackBase - deviceIndex;
         if (mi >= static_cast<int32_t>(t->midiEffects.size()) || !t->midiEffects[mi]) return nullptr;
@@ -146,9 +160,23 @@ RackCore* Engine::rackCoreAt(int32_t trackId, int32_t deviceIndex) const {
 // graph snapshot, so undo had nothing to go back to (#236). An edit the user can undo
 // forks the rack into a new object (chain children shared, so nothing restarts) and
 // republishes the track with it; the snapshot on the undo stack keeps the old rack as it was.
+// A Drum Rack in a fork of an Instrument Rack chain: a fork of its own, put in its chain.
+static std::shared_ptr<RackInstrument> forkRackInstrument(const RackInstrument& src);
+
 RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
     auto old = findTrackAuthoring(trackId);
     if (!old || !rackCoreAt(trackId, deviceIndex)) return nullptr;
+    if (isNestedRack(deviceIndex)) {
+        // Fork the outer rack (one undo step: the snapshot keeps the old outer rack, which keeps
+        // the old nested one), then the nested rack inside the fork.
+        const int32_t c = kNestedRackBase - deviceIndex;
+        auto* outer = rackForEdit(trackId, -1);
+        auto* src = outer ? dynamic_cast<RackInstrument*>(outer->chainInstrument(c)) : nullptr;
+        if (!src) return nullptr;
+        auto r = forkRackInstrument(*src);
+        RackCore* fresh = r.get();
+        return outer->replaceChainInstrument(c, std::move(r)) ? fresh : nullptr;
+    }
     auto nt = cloneTrack(*old);
     RackCore* fresh = nullptr;
     if (deviceIndex <= kMidiRackBase) {
@@ -168,22 +196,7 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
     if (deviceIndex < 0) {
         auto* src = dynamic_cast<RackInstrument*>(old->instrument.get());
         if (!src) return nullptr;
-        std::shared_ptr<RackInstrument> r;
-        if (dynamic_cast<DrumRack*>(src)) r = std::make_shared<DrumRack>();
-        else r = std::make_shared<RackInstrument>();
-        r->forkFrom(*src);
-        r->shareMonoWith(*src); // held keys, the sounding note and a glide in progress play on
-        r->setBypassed(src->bypassed());
-        r->folded = src->folded;
-        // Playback state the audio thread owns: relaxed atomics, carried over so a held pedal
-        // still releases its notes after the edit.
-        constexpr auto rl = std::memory_order_relaxed;
-        r->offSettled.store(src->offSettled.load(rl), rl);
-        r->pedalDown.store(src->pedalDown.load(rl), rl);
-        r->pedalHeld[0].store(src->pedalHeld[0].load(rl), rl);
-        r->pedalHeld[1].store(src->pedalHeld[1].load(rl), rl);
-        for (int i = 0; i < kCtlCount; ++i)
-            r->deliveredCtl[i].store(src->deliveredCtl[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+        auto r = forkRackInstrument(*src);
         fresh = r.get();
         nt->instrument = std::move(r);
     } else {
@@ -202,6 +215,32 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
     }
     republishWithTrack(trackId, nt);
     return fresh;
+}
+
+static std::shared_ptr<RackInstrument> forkRackInstrument(const RackInstrument& src) {
+    std::shared_ptr<RackInstrument> r;
+    if (dynamic_cast<const DrumRack*>(&src)) r = std::make_shared<DrumRack>();
+    else r = std::make_shared<RackInstrument>();
+    r->forkFrom(src);
+    r->shareMonoWith(src); // held keys, the sounding note and a glide in progress play on
+    r->setBypassed(src.bypassed());
+    r->folded = src.folded;
+    // Playback state the audio thread owns: relaxed atomics, carried over so a held pedal
+    // still releases its notes after the edit.
+    constexpr auto rl = std::memory_order_relaxed;
+    r->offSettled.store(src.offSettled.load(rl), rl);
+    r->pedalDown.store(src.pedalDown.load(rl), rl);
+    r->pedalHeld[0].store(src.pedalHeld[0].load(rl), rl);
+    r->pedalHeld[1].store(src.pedalHeld[1].load(rl), rl);
+    for (int i = 0; i < kCtlCount; ++i) r->deliveredCtl[i].store(src.deliveredCtl[i].load(rl), rl);
+    return r;
+}
+
+// Racks nest one level (specs/041): an Instrument Rack chain may hold a Drum Rack; nothing
+// else takes a rack, and an Instrument Rack is never a chain instrument.
+bool Engine::rackKindAllowed(int32_t trackId, int32_t deviceIndex, int32_t kind) const {
+    if (!RackCore::isRackKind(kind)) return true;
+    return kind == 4 && deviceIndex == -1 && nestingHost(findTrackAuthoring(trackId)) != nullptr;
 }
 
 // ---- wrap a device in a rack / unwrap it (#257) ----------------------------
@@ -281,7 +320,7 @@ int32_t Engine::rackChainCount(int32_t t, int32_t di) const {
 int32_t Engine::rackDuplicateChain(int32_t t, int32_t di, int32_t c) {
     auto* r = rackCoreAt(t, di);
     if (!r || c < 0 || c >= r->chainCount()) return -1;
-    if (di <= kMidiRackBase && r->chainCount() >= MidiRack::kMaxChains) return -1;
+    if (!isNestedRack(di) && di <= kMidiRackBase && r->chainCount() >= MidiRack::kMaxChains) return -1;
     if (di == -1) {
         // The copy goes in after the source and the chains below move down: refuse when that
         // would push a chain's MIDI effects past the first 16 chains, where they don't run.
@@ -300,7 +339,13 @@ void Engine::rackSetMono(int32_t t, bool on) {
     if (auto* r = rackCoreAt(t, -1)) r->setRackMono(on);
 }
 int32_t Engine::rackAddChain(int32_t t, int32_t di, int32_t k) {
-    if (auto* cur = rackCoreAt(t, di); cur && di <= kMidiRackBase && cur->chainCount() >= MidiRack::kMaxChains) return -1;
+    // Audio Effect and MIDI Effect Rack chains hold no instrument, whatever kind is asked for
+    // (MCP add_effect_rack_chain long passed 4, which is now the Drum Rack).
+    if (!isNestedRack(di) && (di >= 0 || di <= kMidiRackBase)) k = -1;
+    if (!rackKindAllowed(t, di, k)) return -1;
+    if (auto* cur = rackCoreAt(t, di);
+        cur && !isNestedRack(di) && di <= kMidiRackBase && cur->chainCount() >= MidiRack::kMaxChains)
+        return -1;
     auto* r = rackForEdit(t, di);
     return r ? r->addChain(k) : -1;
 }
@@ -313,8 +358,10 @@ bool Engine::rackRemoveChain(int32_t t, int32_t di, int32_t c) {
 }
 bool Engine::rackSetChainInstrument(int32_t t, int32_t di, int32_t c, int32_t k) {
     auto* r = rackCoreAt(t, di);
-    if (!r || c < 0 || c >= r->chainCount() || !RackCore::makeInstrument(k)) return false;
-    return rackForEdit(t, di)->setChainInstrument(c, k);
+    if (!r || c < 0 || c >= r->chainCount() || !rackKindAllowed(t, di, k) || !RackCore::makeInstrument(k)) return false;
+    const bool ok = rackForEdit(t, di)->setChainInstrument(c, k);
+    recomputePdc();
+    return ok;
 }
 int32_t Engine::rackChainInstrumentKind(int32_t t, int32_t di, int32_t c) const {
     auto* r = rackCoreAt(t, di);
@@ -402,6 +449,51 @@ int32_t Engine::rackChainInstrumentGetState(int32_t t, int32_t di, int32_t c, ui
     std::vector<uint8_t> v = inst->getState();
     if (out && cap >= static_cast<int32_t>(v.size())) std::copy(v.begin(), v.end(), out);
     return static_cast<int32_t>(v.size());
+}
+
+// ---- chain Mosaic (built-in multisample instrument, specs/041) -------------
+// Mirrors mosaicSetProgram & co. (Engine_Devices.cpp) for a chain instrument.
+bool Engine::rackChainMosaicSetProgram(int32_t t, int32_t di, int32_t c, const std::string& text, bool checkpoint) {
+    auto* r = rackCoreAt(t, di);
+    auto* m = r ? dynamic_cast<Mosaic*>(r->chainInstrument(c)) : nullptr;
+    if (!m) return false;
+    if (!checkpoint) { // live edit: in place, voices keep going
+        m->setProgram(text);
+        return true;
+    }
+    // An undoable edit puts a fresh Mosaic (params + the samples it already holds, so a zone
+    // edit is ready at once) into a fork of the rack; undo brings the old one back.
+    auto fresh = std::static_pointer_cast<Mosaic>(m->clone());
+    fresh->setProgram(text);
+    auto* fr = rackForEdit(t, di);
+    return fr && fr->replaceChainInstrument(c, std::move(fresh));
+}
+std::string Engine::rackChainMosaicProgram(int32_t t, int32_t di, int32_t c) const {
+    auto* r = rackCoreAt(t, di);
+    auto* m = r ? dynamic_cast<Mosaic*>(r->chainInstrument(c)) : nullptr;
+    return m ? m->programText() : std::string{};
+}
+bool Engine::rackChainMosaicStatus(int32_t t, int32_t di, int32_t c, NotaMosaicStatus* out) const {
+    auto* r = rackCoreAt(t, di);
+    auto* m = r ? dynamic_cast<Mosaic*>(r->chainInstrument(c)) : nullptr;
+    if (!m || !out) return false;
+    const auto s = m->status();
+    out->state = s.state;
+    out->files_done = s.filesDone;
+    out->files_total = s.filesTotal;
+    out->missing = s.missing;
+    out->zones = s.zones;
+    out->serial = s.serial;
+    out->disk_done = s.diskDone;
+    out->disk_total = s.diskTotal;
+    out->ram_bytes = s.ram;
+    return true;
+}
+int64_t Engine::rackChainMosaicZoneSampleId(int32_t t, int32_t di, int32_t c, int32_t zone) const {
+    auto* r = rackCoreAt(t, di);
+    auto* m = r ? dynamic_cast<Mosaic*>(r->chainInstrument(c)) : nullptr;
+    auto b = m ? m->zoneSample(zone) : nullptr;
+    return b ? b->id : 0;
 }
 
 // ---- chain Sampler (built-in) --------------------------------------------

@@ -15191,4 +15191,4 @@ Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({fa
 return failures == 0 ? 0 : 1;
 
 static IEnumerable<(string title, Func<IEnumerable<(bool ok, string label)>> run)> RackSections() =>
-    RackRedesignTests.Sections().Concat(MidiRackTests.Sections()).Concat(RackChainMidiTests.Sections());
+    RackRedesignTests.Sections().Concat(MidiRackTests.Sections()).Concat(RackChainMidiTests.Sections()).Concat(RackNestingTests.Sections());

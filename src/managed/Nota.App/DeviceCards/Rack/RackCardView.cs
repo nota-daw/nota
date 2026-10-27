@@ -34,6 +34,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
 
     private readonly DeviceCardContext _ctx = ctx;
     private IAudioEngine E => _ctx.Engine;
+    // A Drum Rack nested in an Instrument Rack chain, shown through NestedRackEngineProxy
+    // (specs/041): no kit timing and no MIDI Learn targets of its own.
+    private bool Nested => E is NestedRackEngineProxy;
     private int T => _ctx.TrackId;
     // The chosen chain: each shared rack card keeps its own (several racks can sit on one
     // track); the Drum Rack uses the device view's.
@@ -220,6 +223,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         int ik = a.ChainInstrumentKind(sc);
         if (ik == -1) { try { E.RackOpenChainInstrumentEditor(T, sc); } catch { /* no-op */ } return; }
         if (ik == 1) { OpenChainSamplerWindow(a, anchor, sc, InstrumentPresets(a, sc, ik)); return; }
+        if (ik == 4 && a is InstrumentRackAccess && !Nested) { OpenNestedDrumRackWindow(a, sc, anchor); return; }
         string nm = string.IsNullOrEmpty(a.ChainInstrumentName(sc)) ? "Instrument" : a.ChainInstrumentName(sc);
         var strategy = _irFactory.Resolve(ik, true);
         var proxy = ChainInstrumentProxy(sc);
@@ -236,6 +240,45 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     }
 
     private const double CardBodyH = DeviceCardKit.CardH - DeviceCardKit.HeaderH;
+
+    // A Drum Rack in an Instrument Rack chain (specs/041): the Drum Rack card itself, built over
+    // a NestedRackEngineProxy so every call it makes addresses the nested rack, in the device
+    // window. The factory kits are the window's presets, as on a Drum Rack track.
+    private void OpenNestedDrumRackWindow(IRackAccess a, int sc, Control anchor)
+    {
+        var proxy = NestedRackEngineProxy.Create(E, sc);
+        int sel = 0;
+        var kits = App.Services?.GetService(typeof(IDrumKits)) as IDrumKits;
+        DeviceWindow win = null!;
+        win = new DeviceWindow("Nota Drum Rack", E.GetTrackName(T), "Drums", tickReg =>
+        {
+            // The chain may have changed under the open window: show nothing rather than drive another rack.
+            if (a.ChainInstrumentKind(sc) != 4)
+                return new DeviceWindowPage(new TextBlock { Text = "This chain no longer holds a Drum Rack.", Foreground = TextTertiary, Margin = new Thickness(12) }, 700, CardBodyH);
+            var refreshers = new List<Action>();
+            var ctx = new DeviceCardContext(proxy, T, tickReg, _ctx.NotifyChanged, (_, _, _, _) => { }, _ => { }, _ => { }, () => sel, v => sel = v,
+                refreshers.Add, () => { foreach (var r in refreshers) r(); }, () => Avalonia.Threading.Dispatcher.UIThread.Post(() => { win.Refill(); _ctx.RequestRebuild(); }),
+                _ => { }, () => { }, _ctx.Factory, _ctx.Status);
+            tickReg(() => { foreach (var r in refreshers) r(); });
+            var body = new RackCardView(ctx).BuildDrumRackBody(out _);
+            DeviceWindowPresets? presets = null;
+            if (kits is not null)
+            {
+                var all = kits.All().ToList();
+                string cur = kits.Identify(proxy, T);
+                presets = new DeviceWindowPresets(all.Select(k => k.Name).ToList(), all.FindIndex(k => k.Id == cur), i =>
+                {
+                    kits.LoadInto(proxy, T, all[i].Id, out string warn);
+                    if (warn.Length > 0) _ctx.Status(warn);
+                    sel = 0;
+                    win.Refill();
+                    _ctx.RequestRebuild();
+                });
+            }
+            return new DeviceWindowPage(new Border { Width = 700, Height = CardBodyH, ClipToBounds = true, Child = body }, 700, CardBodyH, presets);
+        }, status: () => $"{ChainLocation(a, sc)} · {E.RackDevChainCount(T, RackMacroMapping.NestedRackBase - sc)} pads") { ContextTrackId = T };
+        win.ShowFrom(anchor);
+    }
 
     // ---- device window: where the device lives + a live line for its status bar ----
 
@@ -324,12 +367,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         => new($"{a.GetType().Name}:{T}:{a.AutomationDeviceIndex}:{sc}:{d}:d{kind}", FactoryItems(kind, instrument: false),
             id => _ctx.Factory?.ApplyInPlace(ChainDeviceProxy(a, sc, d, kind), id, T, d));
 
-    private IAudioEngine ChainInstrumentProxy(int sc)
-    {
-        IAudioEngine proxy = System.Reflection.DispatchProxy.Create<IAudioEngine, RackChainEngineProxy>();
-        var pp = (RackChainEngineProxy)(object)proxy; pp.Inner = E; pp.Chain = sc;
-        return proxy;
-    }
+    private IAudioEngine ChainInstrumentProxy(int sc) => RackChainEngineProxy.Create(E, sc);
     private IAudioEngine ChainDeviceProxy(IRackAccess a, int sc, int d, int kind)
     {
         IAudioEngine proxy = System.Reflection.DispatchProxy.Create<IAudioEngine, RackChainDeviceEngineProxy>();
@@ -413,6 +451,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         void Add(string h, int k) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => { int c = a.AddChain(k); if (c >= 0) Sel = c; _ctx.RequestRebuild(); }; f.Items.Add(mi); }
         Add("Nota Volt", 6); Add("Nota Sampler", 1); Add("Nota Physical", 2); Add("Nota Aurora", 5);
         Add("Nota Pendulum", 8); Add("Nota Operator", 9); Add("Nota Grain", 10); Add("Nota Flux", 11); Add("Nota Monolith", 13); Add("Nota Pentad", 14); Add("Nota Consort", 15); Add("Nota Keys", 16);
+        Add("Nota Mosaic", 17);
+        f.Items.Add(new Separator()); Add("Nota Drum Rack", 4);   // racks nest one level (specs/041)
         f.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -509,7 +549,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         // A macro rides the rack's plugin-param surface, so it's MIDI-learnable like any
         // plugin param — this is the in-model path for driving nested chain params over MIDI
         // (map a param to a macro, then learn the macro).
-        MidiLearn.Bind(bar, MidiTarget.PluginParam(T, di, m), "Macro " + (m + 1));
+        if (!Nested) MidiLearn.Bind(bar, MidiTarget.PluginParam(T, di, m), "Macro " + (m + 1));
         bar.Format = x => Pct((float)x);
         ValueEntry.Attach(bar, "Macro " + (m + 1), val);
         if (di < 0) _ctx.AddInstFader(m, bar, val);   // live-refresh follows the instrument-rack macros
@@ -742,36 +782,6 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         };
         b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
         return b;
-    }
-}
-
-// Wraps an engine so a built-in instrument's own editor can drive a rack CHAIN instrument:
-// its plugin-param calls (trackId, deviceIndex −1, i) are redirected to the chain surface
-// (trackId, chain, i); automation writes are no-ops (chain params follow macros); everything
-// else delegates to the real engine.
-internal class RackChainEngineProxy : System.Reflection.DispatchProxy
-{
-    public Nota.Application.IAudioEngine Inner = null!;
-    public int Chain;
-    protected override object? Invoke(System.Reflection.MethodInfo? m, object?[]? args)
-    {
-        switch (m?.Name)
-        {
-            case nameof(Nota.Application.IAudioEngine.PluginParamCount):     return Inner.RackChainInstrumentParamCount((int)args![0]!, Chain);
-            case nameof(Nota.Application.IAudioEngine.PluginParamId):        return Inner.RackChainInstrumentParamId((int)args![0]!, Chain, (int)args![2]!);
-            case nameof(Nota.Application.IAudioEngine.PluginParamGet):       return Inner.RackChainInstrumentParamGet((int)args![0]!, Chain, (int)args![2]!);
-            case nameof(Nota.Application.IAudioEngine.PluginParamSet):       Inner.RackChainInstrumentParamSet((int)args![0]!, Chain, (int)args![2]!, (float)args![3]!); return null;
-            case nameof(Nota.Application.IAudioEngine.InstrumentParamDefault): return Inner.RackChainInstrumentParamDefault((int)args![0]!, Chain, (int)args![1]!);
-            case nameof(Nota.Application.IAudioEngine.TrackInstrumentKind):  return Inner.RackChainInstrumentKind((int)args![0]!, Chain);
-            case nameof(Nota.Application.IAudioEngine.BeginAutomationWrite):
-            case nameof(Nota.Application.IAudioEngine.EndAutomationWrite):   return null;
-            // Live telemetry comes from the chain instrument, not the track's rack instrument.
-            case nameof(Nota.Application.IAudioEngine.InstrumentScope):      return Inner.RackChainInstrumentScope((int)args![0]!, Chain, (float[])args![1]!);
-            case nameof(Nota.Application.IAudioEngine.InstrumentVoiceCount): return Inner.RackChainInstrumentVoiceCount((int)args![0]!, Chain);
-            case nameof(Nota.Application.IAudioEngine.InstrumentHeldNotes):  return Inner.RackChainInstrumentHeldNotes((int)args![0]!, Chain, (int[])args![1]!);
-            case nameof(Nota.Application.IAudioEngine.InstrumentAction):     Inner.RackChainInstrumentAction((int)args![0]!, Chain, (int)args![1]!, (int)args![2]!, (float)args![3]!); return null;
-            default: return m!.Invoke(Inner, args);
-        }
     }
 }
 
