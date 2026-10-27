@@ -21,6 +21,7 @@
 #include "devices/racks/MidiRack.h"
 #include "devices/instruments/Sampler.h"
 #include "devices/instruments/Mosaic.h"
+#include "devices/instruments/GrainSynth.h"
 #include "SnapshotHistory.h"
 
 #include <algorithm>
@@ -175,7 +176,9 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
         if (!src) return nullptr;
         auto r = forkRackInstrument(*src);
         RackCore* fresh = r.get();
-        return outer->replaceChainInstrument(c, std::move(r)) ? fresh : nullptr;
+        // The fork shares the playing Drum Rack's pads and effects, already prepared: install it
+        // without preparing them again (that would clear a reverb's tail mid-play).
+        return outer->replaceChainInstrument(c, std::move(r), /*prepare=*/false) ? fresh : nullptr;
     }
     auto nt = cloneTrack(*old);
     RackCore* fresh = nullptr;
@@ -333,7 +336,7 @@ int32_t Engine::rackDuplicateChain(int32_t t, int32_t di, int32_t c) {
 bool Engine::rackCheckpoint(int32_t t, int32_t di) { return rackForEdit(t, di) != nullptr; }
 int64_t Engine::rackChainId(int32_t t, int32_t di, int32_t c) const {
     auto* r = rackCoreAt(t, di);
-    return r ? static_cast<int64_t>(reinterpret_cast<uintptr_t>(r->chainInstrument(c))) : 0;
+    return r ? static_cast<int64_t>(r->chainUid(c)) : 0;
 }
 
 // ---- chain devices on the device clipboard (specs/042) ----------------------------------
@@ -555,6 +558,23 @@ bool Engine::rackChainMosaicSetProgram(int32_t t, int32_t di, int32_t c, const s
     auto* fr = rackForEdit(t, di);
     return fr && fr->replaceChainInstrument(c, std::move(fresh));
 }
+// ---- chain Grain sample (a factory Grain preset dropped on a rack, specs/041 review) --------
+// Mirrors setTrackGrainSample: a fresh Grain with the chain's values and the sample goes into a
+// fork of the rack, so undo brings the old one back.
+bool Engine::rackChainGrainSetSample(int32_t t, int32_t di, int32_t c, const std::string& path, int32_t rootNote) {
+    auto* r = rackCoreAt(t, di);
+    auto* gr = r ? dynamic_cast<GrainSynth*>(r->chainInstrument(c)) : nullptr;
+    if (!gr) return false;
+    auto sample = decodeAudioFile(path);
+    if (!sample || sample->empty()) return false;
+    auto fresh = std::make_shared<GrainSynth>();
+    fresh->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0);
+    for (int i = 0; i < gr->pluginParamCount(); ++i) fresh->pluginParamSet(i, gr->pluginParamGet(i));
+    fresh->setSample(sample, rootNote, false);
+    auto* fr = rackForEdit(t, di);
+    return fr && fr->replaceChainInstrument(c, std::move(fresh));
+}
+
 std::string Engine::rackChainMosaicProgram(int32_t t, int32_t di, int32_t c) const {
     auto* r = rackCoreAt(t, di);
     auto* m = r ? dynamic_cast<Mosaic*>(r->chainInstrument(c)) : nullptr;

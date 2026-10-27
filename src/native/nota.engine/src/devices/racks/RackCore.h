@@ -68,7 +68,15 @@ class RackCore {
         std::atomic<float> velScale{1.0f};  // 0..2
     };
 
+    // A chain's identity for the UI (a window that follows its chain): every new chain takes
+    // the next number, and copies of the rack state (forks for undo) keep it.
+    static uint64_t nextChainUid() {
+        static std::atomic<uint64_t> next{1};
+        return next.fetch_add(1, std::memory_order_relaxed);
+    }
+
     struct RackChain {
+        uint64_t uid = nextChainUid();
         std::shared_ptr<Instrument> instrument;       // null for effect-rack chains
         std::vector<std::shared_ptr<Device>> devices; // insert chain
         // MIDI effects in front of the chain (v9): a MIDI Effect Rack chain is only these;
@@ -187,7 +195,10 @@ class RackCore {
     bool setChainInstrument(int32_t chain, int32_t instKind);
     // Puts a ready instrument at the head of a chain, keeping the chain's devices, MIDI effects,
     // controls and mappings (a chain Mosaic's new program, a nested Drum Rack's fork). specs/041.
-    bool replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst);
+    // `prepare` = false for an instrument already prepared at this rate whose children are shared
+    // with a playing copy (a nested rack's fork): preparing them again would reset live effects.
+    bool replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst, bool prepare = true);
+    uint64_t chainUid(int32_t chain) const;
     int32_t chainInstrumentKind(int32_t chain) const;
     Instrument* chainInstrument(int32_t chain) const;
     int32_t chainDeviceCount(int32_t chain) const;

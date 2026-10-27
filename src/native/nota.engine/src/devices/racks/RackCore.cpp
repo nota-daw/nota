@@ -216,14 +216,19 @@ bool RackCore::setChainInstrument(int32_t chain, int32_t instKind) {
     return true;
 }
 
-bool RackCore::replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst) {
+bool RackCore::replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst, bool prepare) {
     if (!inst) return false;
     auto ns = copyState();
     if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return false;
-    inst->setSampleRate(sampleRate_);
+    if (prepare) inst->setSampleRate(sampleRate_);
     ns->chains[chain].instrument = std::move(inst);
     commit(ns);
     return true;
+}
+
+uint64_t RackCore::chainUid(int32_t chain) const {
+    RackState* st = live();
+    return st && chain >= 0 && chain < static_cast<int32_t>(st->chains.size()) ? st->chains[chain].uid : 0;
 }
 
 int32_t RackCore::chainInstrumentKind(int32_t chain) const {

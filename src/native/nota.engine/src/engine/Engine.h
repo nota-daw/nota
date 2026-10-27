@@ -898,9 +898,11 @@ class Engine {
     int32_t rackChainDeviceMoveTo(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, int32_t toChain);
     int32_t rackChainMidiMoveTo(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, int32_t toChain);
     bool deviceClipboardSidechain() const;
-    // A chain's identity for a window that must follow it while chains move: its instrument
-    // (shared by every fork of the rack), 0 for a chain with none or a bad address.
+    // A chain's identity for a window that must follow it while chains move: a number every new
+    // chain takes and every fork of the rack keeps (nested edits too), 0 for a bad address.
     int64_t rackChainId(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    // Load a sample into a chain's Nota Grain (a factory Grain preset's source), one undo step.
+    bool rackChainGrainSetSample(int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& path, int32_t rootNote);
     // A MIDI Effect Rack is addressed as deviceIndex kMidiRackBase − its MIDI effect index.
     static constexpr int32_t kMidiRackBase = -1000;
     // A Drum Rack in chain c of the track's Instrument Rack is addressed as kNestedRackBase − c

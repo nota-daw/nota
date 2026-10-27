@@ -71,6 +71,57 @@ internal static class RackClipboardTests
             yield return (e.RackDevChainId(t, -1, c) != 0 && e.RackDevChainId(t, -1, c) != e.RackDevChainId(t, -1, e.RackAddChain(t, 14)),
                 "each chain has its own id");
         }
+
+        // A chain keeps its id through an edit inside its nested Drum Rack (which forks it) and
+        // when the chain in front of it goes.
+        using (var e = new NotaEngine())
+        {
+            int t = e.AddInstrumentRackTrack();
+            e.RackAddChain(t, 14);
+            int c = e.RackAddChain(t, 4);   // chain 1
+            long id = e.RackDevChainId(t, -1, c);
+            e.RackDevAddChain(t, RackMacroMapping.NestedRackBase - c, 1);
+            bool keptOnEdit = e.RackDevChainId(t, -1, c) == id;
+            e.RackRemoveChain(t, 0);       // the Drum Rack moves up to chain 0
+            int now = Enumerable.Range(0, e.RackChainCount(t)).Where(i => e.RackDevChainId(t, -1, i) == id).DefaultIfEmpty(-1).First();
+            yield return (c == 1 && keptOnEdit && now == 0 && e.RackChainInstrumentKind(t, now) == 4,
+                $"a chain keeps its id through nested edits and moves (edit {keptOnEdit}, now chain {now})");
+        }
+
+        // An edit inside a nested Drum Rack doesn't re-prepare its playing pad effects: a reverb
+        // tail rings on through it.
+        using (var e = new NotaEngine())
+        {
+            string wav = Path.Combine(Path.GetTempPath(), "nota-rack-review-hit.wav");
+            WavWriter.WriteSine(wav, 0.08, 220.0, 48000);
+            int t = e.AddInstrumentRackTrack();
+            int c = e.RackAddChain(t, 4);
+            int n = RackMacroMapping.NestedRackBase - c;
+            int pad = e.RackDevAddSamplerChain(t, n, wav, 36, false);
+            e.RackDevSetChainTriggerNote(t, n, pad, 36);
+            e.RackDevAddChainDevice(t, n, pad, Reverb);
+            var buf = new float[512 * 2];
+            double Rms() { e.RenderOffline(buf, 512, 48000); double q = 0; foreach (var x in buf) q += x * x; return Math.Sqrt(q / buf.Length); }
+            e.TrackNoteOn(t, 36, 1f);
+            for (int i = 0; i < 6; i++) Rms();
+            e.TrackNoteOff(t, 36);
+            for (int i = 0; i < 6; i++) Rms();   // the sample is over: only the tail is left
+            double before = Rms();
+            e.RackDevAddChain(t, n, 1);          // a nested edit: the Drum Rack forks
+            double after = Rms();
+            yield return (before > 1e-4 && after > before * 0.3, $"a reverb tail rings on through a nested edit ({before:E1} → {after:E1})");
+        }
+
+        // A factory Grain preset applied to a chain loads its source sample into the chain's Grain.
+        using (var e = new NotaEngine())
+        {
+            int t = e.AddInstrumentRackTrack();
+            int c = e.RackAddChain(t, 10);
+            var factory = new FactoryPresetCatalog();
+            var grain = factory.All().FirstOrDefault(p => p.IsInstrument && p.BuiltinKind == 10 && p.DisplayName != "Init");
+            string warn = grain.Id is null ? "no Grain preset" : factory.ApplyInPlace(RackChainEngineProxy.Create(e, c), grain.Id, t, -1);
+            yield return (warn == "" && e.RackChainInstrumentKind(t, c) == 10, $"a Grain preset in a chain loads its sample ({(warn == "" ? "loaded" : warn)})");
+        }
     }
 
     // A device's params as one comparable line.

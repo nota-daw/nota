@@ -932,6 +932,8 @@ public interface IAudioEngine : IDisposable
     bool RackDevCheckpoint(int trackId, int deviceIndex);
     /// <summary>A chain's identity while chains move (0 = none); compare it, don't decode it.</summary>
     long RackDevChainId(int trackId, int deviceIndex, int chain);
+    /// <summary>Loads a sample into a chain's Nota Grain (a Grain preset's source); one undo step.</summary>
+    bool RackDevChainGrainSetSample(int trackId, int deviceIndex, int chain, string path, int rootNote = 60);
     bool RackDevChainDeviceCopy(int trackId, int deviceIndex, int chain, int index);
     bool RackDevChainMidiCopy(int trackId, int deviceIndex, int chain, int index);
     int RackDevChainDevicePaste(int trackId, int deviceIndex, int chain, int atIndex);

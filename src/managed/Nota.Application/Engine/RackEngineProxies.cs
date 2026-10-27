@@ -48,6 +48,8 @@ public class RackChainEngineProxy : DispatchProxy
             case nameof(IAudioEngine.InstrumentAction):     Inner.RackChainInstrumentAction((int)args![0]!, Chain, (int)args![1]!, (int)args![2]!, (float)args![3]!); return null;
             // Nota Mosaic in a chain (specs/041). Through Inner's rack address −1, which a
             // NestedRackEngineProxy under it turns into its nested Drum Rack (a Mosaic pad).
+            // A factory Nota Grain preset loads its source sample into the chain's Grain.
+            case nameof(IAudioEngine.SetTrackGrainSample): return Inner.RackDevChainGrainSetSample((int)args![0]!, -1, Chain, (string)args![1]!, (int)args![2]!);
             case nameof(IAudioEngine.MosaicSetProgram):     return Inner.RackDevChainMosaicSetProgram((int)args![0]!, -1, Chain, (string)args![1]!, (bool)args![2]!);
             case nameof(IAudioEngine.MosaicProgram):        return Inner.RackDevChainMosaicProgram((int)args![0]!, -1, Chain);
             case nameof(IAudioEngine.MosaicZoneSampleId):   return Inner.RackDevChainMosaicZoneSampleId((int)args![0]!, -1, Chain, (int)args![1]!);

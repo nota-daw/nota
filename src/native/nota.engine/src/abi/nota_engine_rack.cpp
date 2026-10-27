@@ -223,6 +223,10 @@ int32_t nota_rackdev_duplicate_chain(NotaEngine* e, int32_t t, int32_t di, int32
     return e ? ENG(e)->rackDuplicateChain(t, di, chain) : -1;
 }
 
+NotaResult nota_rackdev_chain_grain_set_sample(NotaEngine* e, int32_t t, int32_t di, int32_t c, const char* path, int32_t root) {
+    if (!e || !path) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->rackChainGrainSetSample(t, di, c, path, root) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 int64_t nota_rackdev_chain_id(const NotaEngine* e, int32_t t, int32_t di, int32_t c) {
     return e ? CENG(e)->rackChainId(t, di, c) : 0;
 }

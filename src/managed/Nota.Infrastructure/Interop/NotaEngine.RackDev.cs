@@ -197,6 +197,9 @@ public sealed partial class NotaEngine
     public int RackDevDuplicateChain(int trackId, int deviceIndex, int chain)
     { ThrowIfDisposed(); return NativeMethods.RackDevDuplicateChain(_handle, trackId, deviceIndex, chain); }
 
+    public bool RackDevChainGrainSetSample(int trackId, int deviceIndex, int chain, string path, int rootNote = 60)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainGrainSetSample(_handle, trackId, deviceIndex, chain, path, rootNote) == 0; }
+
     public long RackDevChainId(int trackId, int deviceIndex, int chain)
     { ThrowIfDisposed(); return NativeMethods.RackDevChainId(_handle, trackId, deviceIndex, chain); }
 

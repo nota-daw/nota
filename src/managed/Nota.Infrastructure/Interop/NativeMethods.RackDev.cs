@@ -194,6 +194,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_duplicate_chain")]
     internal static partial int RackDevDuplicateChain(IntPtr engine, int trackId, int deviceIndex, int chain);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_grain_set_sample", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int RackDevChainGrainSetSample(IntPtr engine, int trackId, int deviceIndex, int chain, string path, int rootNote);
+
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_id")]
     internal static partial long RackDevChainId(IntPtr engine, int trackId, int deviceIndex, int chain);
 
