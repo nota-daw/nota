@@ -49,7 +49,7 @@ internal sealed partial class RackCardView
         {
             var row = RcSlider("Volume", () => VolNorm(a.ChainGain(c)), v => a.SetChainGain(c, NormVol(v)),
                 () => VolText(a.ChainGain(c)), reset: () => a.SetChainGain(c, 1f));
-            MidiLearn.Bind(row, MidiTarget.RackChainGain(T, a.AutomationDeviceIndex, c), "Chain Volume");
+            MidiLearn.Bind(row, MidiTarget.RackChainGain(T, a.LearnDeviceIndex, c), "Chain Volume");
             stack.Children.Add(row);
         }
         if (_rp.ChainTranspose)
@@ -136,7 +136,7 @@ internal sealed partial class RackCardView
             case RackKind.Instrument:
             {
                 var vol = RcSlider("Volume", () => VolNorm(a.RackVolume()), v => a.SetRackVolume(NormVol(v)), () => VolText(a.RackVolume()), reset: () => a.SetRackVolume(1f));
-                MidiLearn.Bind(vol, MidiTarget.RackVolume(T, a.AutomationDeviceIndex), "Rack Volume");
+                MidiLearn.Bind(vol, MidiTarget.RackVolume(T, a.LearnDeviceIndex), "Rack Volume");
                 stack.Children.Add(vol);
                 var glide = RcSlider("Glide", () => a.RackGlide(), v => a.SetRackGlide((float)v), () => NotaNum.Unit(a.RackGlide() * 500, "0", "ms"), reset: () => a.SetRackGlide(0f));
                 ToolTip.SetTip(glide, "Glides between notes in mono mode");
@@ -154,7 +154,7 @@ internal sealed partial class RackCardView
                 static float NormGain(double v) => (float)Math.Pow(10, (v - 0.5) * 24 / 20);
                 var gain = RcSlider("Gain", () => GainNorm(a.RackVolume()), v => a.SetRackVolume(NormGain(v)),
                     () => NotaNum.Db(20 * Math.Log10(Math.Max(1e-6, a.RackVolume())), signed: true), reset: () => a.SetRackVolume(1f), bipolar: true);
-                MidiLearn.Bind(gain, MidiTarget.RackVolume(T, a.AutomationDeviceIndex), "Rack Gain");
+                MidiLearn.Bind(gain, MidiTarget.RackVolume(T, a.LearnDeviceIndex), "Rack Gain");
                 stack.Children.Add(gain);
                 toggles.Children.Add(Switch("Follow input level", () => a.SelectorFollows(), () => { a.SetSelectorFollows(!a.SelectorFollows()); DeferRebuild(); }, out var followSync));
                 _irTick.Add(followSync);

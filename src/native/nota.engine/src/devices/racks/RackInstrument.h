@@ -33,19 +33,16 @@ class RackInstrument : public Instrument, public RackCore {
 
     // Forward the DAW transport to every chain child (nested plugins sync too).
     void setTransportInfo(const TransportInfo& ti) override { forwardTransport(ti); }
-    void setTransport(double beatStart, double spb, bool playing) override {
-        beat_ = beatStart;
-        spb_ = spb;
-        playing_ = playing;
-        forwardTempo(beatStart, spb, playing);
-    }
+    void setTransport(double beatStart, double spb, bool playing) override { forwardTempo(beatStart, spb, playing); }
 
     // Chain MIDI effects (issue #329): a chain with any runs them on its share of the block's
     // notes up front; render then plays their output into that chain's instrument, sample-accurate.
     bool takesBlockMidi() const override;
-    void blockMidi(const MidiEv* evs, int n, int32_t frames) override;
+    void blockMidi(const MidiEv* evs, int n, int32_t frames, double beatStart, double spb, bool playing) override;
     void midiTimeJump(double deltaBeats) override;
-    static constexpr int32_t kMaxMidiChains = 64; // chains beyond this play their notes without MIDI effects
+    // MIDI effects run in the first 16 chains; the engine refuses one further down, and a chain
+    // with effects moved past them plays its notes as a plain chain.
+    static constexpr int32_t kMaxMidiChains = 16;
 
     // ---- note fan-out: a note reaches a chain only if it's inside its key/vel zone --
     void noteOn(int32_t pitch, float velocity) override;
@@ -89,6 +86,11 @@ class RackInstrument : public Instrument, public RackCore {
     void fanOff(int32_t pitch);
     void monoRemove(int32_t pitch);
     void syncMono(); // mono switched since the last call: reconcile the sounding keys
+    void endGlide(); // a glide stops half-way: the sounding note returns to its own pitch
+    // The chains or their MIDI effects changed since the last call: carry the held routes over
+    // to the chains' new places and end the notes whose MIDI effects went away.
+    void syncChains();
+    void deliver(int32_t c, Instrument& inst, const MidiEv& ev); // a MIDI chain's event into its instrument
 
     // Note state (audio thread only), shared by every fork of the rack so an edit that swaps
     // the rack object keeps it: held keys in press order (poly too, so switching mono on knows
@@ -102,23 +104,30 @@ class RackInstrument : public Instrument, public RackCore {
         float glideBend = 0.0f;
         int64_t glideTotal = 0, glideLeft = 0;
         bool wasMono = false;
-        uint64_t midiRoute[128] = {}; // chains each held key went to (MIDI chains, #329)
+        // MIDI chains (#329): the chains each held key went to, and the pitches each chain's
+        // MIDI effects started in its instrument and haven't ended. They are kept for the chains
+        // as they were at `structure`: chain c is the one playing `chainId[c]` (its instrument)
+        // with MIDI effects `chainSig[c]` (0 = a plain chain).
+        uint16_t midiRoute[128] = {};
+        uint8_t outHeld[kMaxMidiChains][128] = {};
+        const void* chainId[kMaxMidiChains] = {};
+        uint64_t chainSig[kMaxMidiChains] = {};
+        uint64_t structure = 0;
     };
     std::shared_ptr<MonoState> mono_ = std::make_shared<MonoState>();
 
-    // Chain MIDI effects (audio thread): the block clock from setTransport, each MIDI chain's
-    // processed events (grouped by chain, sorted), the render position within the block, and
-    // which chains each held input key went to so its note-off follows it.
-    double beat_ = 0.0, spb_ = 0.0;
-    bool playing_ = false;
-    static constexpr int32_t kChainEvents = 4096;
-    MidiEv* chainEvs_ = nullptr;                      // kChainEvents, allocated once in the ctor
+    // Chain MIDI effects (audio thread): each MIDI chain's processed events for this block (its
+    // own kChainEvents slots, sorted — a chain's effects emit at most that many per block, so
+    // nothing, a release least of all, is dropped), the render position within the block, and
+    // the chains each input event goes to.
+    static constexpr int32_t kChainEvents = 1024;
+    MidiEv* chainEvs_ = nullptr;                      // kMaxMidiChains × kChainEvents, allocated once in the ctor
     MidiEv* scratchA_ = nullptr;                      // 1024
     MidiEv* scratchB_ = nullptr;                      // 1024
     std::unique_ptr<MidiEv[]> evStore_;
-    int32_t chainStart_[kMaxMidiChains] = {}, chainCount_[kMaxMidiChains] = {}, chainCursor_[kMaxMidiChains] = {};
+    int32_t chainCount_[kMaxMidiChains] = {}, chainCursor_[kMaxMidiChains] = {};
     int32_t blockPos_ = 0;
-    uint64_t evMask_[1024] = {}; // per input event: the MIDI chains it goes to (in block order)
+    uint16_t evMask_[1024] = {}; // per input event: the MIDI chains it goes to (in block order)
     bool midiChainAt(int32_t c) const;
 };
 

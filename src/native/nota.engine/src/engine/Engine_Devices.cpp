@@ -5,6 +5,7 @@
 
 #include "Engine.h"
 #include "devices/DeviceFactory.h"
+#include "devices/racks/MidiRack.h"
 #include "devices/effects/Amp.h"
 #include "devices/effects/AutoFilter.h"
 #include "media/AudioFile.h"
@@ -924,6 +925,10 @@ bool Engine::midiEffectSetState(int32_t t, int32_t i, const uint8_t* data, int32
     auto fresh = cloneMidiDevice(*old->midiEffects[i]);
     if (!fresh) return false;
     fresh->setState(data, size);
+    // A MIDI Effect Rack's copy plays on with the held-note tables, so it ends what the old one
+    // started instead of leaving it hanging.
+    if (auto* to = dynamic_cast<MidiRack*>(fresh.get()))
+        if (auto* from = dynamic_cast<const MidiRack*>(old->midiEffects[i].get())) to->shareRuntimeWith(*from);
     auto nt = cloneTrack(*old);
     nt->midiEffects[i] = std::move(fresh);
     if (checkpoint) republishWithTrack(t, nt);

@@ -17,7 +17,7 @@ namespace Nota.SmokeTest;
 
 internal static class RackChainMidiTests
 {
-    private const int Rate = 48000, Block = 512, Arp = 0, Chord = 1, Pentad = 14;
+    private const int Rate = 48000, Block = 512, Arp = 0, Chord = 1, Length = 3, Pentad = 14;
 
     /// <summary>The smoke-test sections, in run order.</summary>
     public static IEnumerable<(string title, Func<IEnumerable<(bool ok, string label)>> run)> Sections()
@@ -171,7 +171,48 @@ internal static class RackChainMidiTests
             yield return (added == 1 && list.Length == 2 && list[1].Kind == 2, "add_rack_chain_midi_fx / list_rack_chain_midi_fx");
         }
 
-        // 5. A Drum Rack keeps its pads' note handling: no MIDI effects in pads.
+        // 5. A chain's MIDI effects decide when its notes end, and edits carry held notes along.
+        using (var e = new NotaEngine())
+        {
+            int t = e.AddInstrumentRackTrack();
+            while (e.RackChainCount(t) > 0) e.RackRemoveChain(t, 0);
+            int a = e.RackAddChain(t, Pentad), b = e.RackAddChain(t, Pentad);
+            e.RackChainMidiAdd(t, b, Length); // Sync 1/8: at 120 BPM a note lasts 0.25 s
+            e.TrackNoteOn(t, 60, 0.8f);
+            Render(e, 2);
+            e.TrackNoteOff(t, 60); // released after ~20 ms
+            Render(e, 3);
+            string held = Held(e, t, b), plain = Held(e, t, a);
+            Render(e, 40);
+            yield return (held == "60" && plain == "" && Held(e, t, b) == "",
+                $"a Length in a chain holds its note past the key and then ends it ({held} | plain chain {(plain == "" ? "released" : plain)})");
+
+            // A key held into an Arp; the chain in front goes away, the Arp's chain moves up.
+            e.RackChainMidiRemove(t, b, 0);
+            e.RackChainMidiAdd(t, b, Arp);
+            e.TrackNoteOn(t, 64, 0.8f);
+            Render(e, 8);
+            e.RackRemoveChain(t, a); // the Arp's chain is chain 0 now
+            e.TrackNoteOff(t, 64);
+            Render(e, 40);
+            yield return (Held(e, t, 0) == "", "removing a chain while a key is held still ends its notes in the chains that moved");
+
+            // Removing the last MIDI effect ends what it started.
+            e.TrackNoteOn(t, 67, 0.8f);
+            Render(e, 8);
+            e.RackChainMidiRemove(t, 0, 0);
+            Render(e, 2);
+            string afterRemove = Held(e, t, 0);
+            e.TrackNoteOff(t, 67);
+            Render(e, 8);
+            yield return (afterRemove == "" && Held(e, t, 0) == "", $"removing a chain's last MIDI effect ends the notes it was playing ({(afterRemove == "" ? "none" : afterRemove)})");
+
+            // MIDI effects run in the first 16 chains only.
+            while (e.RackChainCount(t) < 17) e.RackAddChain(t, Pentad);
+            yield return (e.RackChainMidiAdd(t, 16, Arp) < 0 && e.RackChainMidiAdd(t, 15, Arp) >= 0, "MIDI effects go into the first 16 chains only");
+        }
+
+        // 6. A Drum Rack keeps its pads' note handling: no MIDI effects in pads.
         using (var e = new NotaEngine())
         {
             int t = e.AddDrumRackTrack();

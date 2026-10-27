@@ -181,7 +181,7 @@ internal sealed partial class RackCardView
 
     private void RcMapSelector(int macro)
     {
-        _ra.AddMacroMapping(macro, 0, Nota.Application.RackMacroMapping.RackControl, 0, 0f, 1f);
+        RcAddMapping(macro, 0, Nota.Application.RackMacroMapping.RackControl, 0, 0f, 1f);
         _rs.SelectedMacro = macro;
         DeferRebuild();
     }

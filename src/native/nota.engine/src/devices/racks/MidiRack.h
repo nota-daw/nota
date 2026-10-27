@@ -67,6 +67,8 @@ class MidiRack final : public MidiDevice, public RackCore {
         bool thru[128] = {};                   // input pitch passed through (no chain took it)
         int8_t outPitch[kMaxChains][128];      // chain c, device-output pitch → transposed pitch sent (−1 none)
         uint8_t held[128] = {};                // merged output: how many sources hold each pitch
+        uint8_t rawHeld[128] = {};             // notes passed on untouched while bypassed
+        bool bypassed = false;                 // the last block ran bypassed
         uint64_t structure = 0;                // chains + devices the tables were filled for
         Runtime() { clearOut(); }
         void clearOut() {
@@ -88,7 +90,8 @@ class MidiRack final : public MidiDevice, public RackCore {
     MidiEv bufA_[kMaxEvents];
     MidiEv bufB_[kMaxEvents];
     Tagged pool_[kPoolEvents];
-    uint16_t evMask_[kMaxEvents] = {}; // per input event: the chains it goes to (in block order)
+    uint16_t evMask_[kMaxEvents] = {}; // per input event: the chains it goes to
+    uint16_t order_[kMaxEvents] = {};  // the input events in time order
     std::array<char[24], kNumMacros> paramNames_{};
 };
 

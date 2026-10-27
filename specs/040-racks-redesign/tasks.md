@@ -364,12 +364,12 @@ description: "Task list for the racks redesign, the MIDI Effect Rack and MIDI ef
 
 ### Nota closing tasks *(always include — these are the PR gates)*
 
-- [ ] T068 Run `scripts/build.sh` (and on CI `scripts/build-linux.sh` / `scripts/build-win.ps1`) until native + managed + smoke test are green
-- [ ] T069 AGPL-3.0-only SPDX two-line header on every new source file: `MidiRack.h/.cpp`, `RackKindProfile.cs`, `RackKeyParams.cs`, `RackCard*.cs`, `NativeMethods.MidiRack.cs`, `NotaEngine.MidiRack.cs`, `MidiRackTools.cs`, the three new test files
-- [ ] T070 New dependency: none → N/A in the PR
-- [ ] T071 `CHANGELOG.md` `[Unreleased]` entries: Added — MIDI Effect Rack; MIDI effects in Instrument Rack chains (#329); mono (last note) and working glide on the Instrument Rack; the selector as a macro target. Changed — redesigned Instrument and Audio Effect Rack cards, macro mapping without a separate screen
-- [ ] T072 `nota-features` (FEATURES.md), `nota-docs` (EN + RU rack pages, a new MIDI Effect Rack page, screenshots in all themes as the docs use them) and `nota-shortcuts` (Esc ends macro mapping in the Preferences → Shortcuts list in `src/managed/Nota.App/PreferencesWindow.cs`)
-- [ ] T073 Engine behaviour change: covered by T015, T016, T027, T036, T041–T043, T055 and T056. Confirm every section prints in the full smoke run
+- [X] T068 Run `scripts/build.sh` (and on CI `scripts/build-linux.sh` / `scripts/build-win.ps1`) until native + managed + smoke test are green
+- [X] T069 AGPL-3.0-only SPDX two-line header on every new source file: `MidiRack.h/.cpp`, `RackKindProfile.cs`, `RackKeyParams.cs`, `RackCard*.cs`, `NativeMethods.MidiRack.cs`, `NotaEngine.MidiRack.cs`, `MidiRackTools.cs`, the three new test files
+- [X] T070 New dependency: none → N/A in the PR
+- [X] T071 `CHANGELOG.md` `[Unreleased]` entries: Added — MIDI Effect Rack; MIDI effects in Instrument Rack chains (#329); mono (last note) and working glide on the Instrument Rack; the selector as a macro target. Changed — redesigned Instrument and Audio Effect Rack cards, macro mapping without a separate screen
+- [X] T072 `nota-features` (FEATURES.md), `nota-docs` (EN + RU rack pages, a new MIDI Effect Rack page, screenshots in all themes as the docs use them) and `nota-shortcuts` (Esc ends macro mapping in the Preferences → Shortcuts list in `src/managed/Nota.App/PreferencesWindow.cs`)
+- [X] T073 Engine behaviour change: covered by T015, T016, T027, T036, T041–T043, T055 and T056. Confirm every section prints in the full smoke run
 
 ---
 

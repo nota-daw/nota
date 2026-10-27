@@ -151,6 +151,38 @@ internal static class MidiRackTests
         e.SetMidiEffectBypassed(t, mi, true);
         yield return (r.Play(48) == "48", "a bypassed rack passes notes straight through");
         e.SetMidiEffectBypassed(t, mi, false);
+
+        // Bypass switched while notes sound: what the chains sent ends, and so does a note held
+        // through the bypass once the rack is back on.
+        e.MidiRackSetChainTranspose(t, mi, 0, 12);
+        e.TrackNoteOn(t, 72, 0.8f);
+        r.Render();
+        string sounding = r.Held();
+        e.SetMidiEffectBypassed(t, mi, true);
+        r.Render();
+        e.TrackNoteOff(t, 72);
+        r.Render(4);
+        string afterOff = r.Held();
+        e.TrackNoteOn(t, 72, 0.8f);
+        r.Render();
+        e.SetMidiEffectBypassed(t, mi, false);
+        r.Render();
+        e.TrackNoteOff(t, 72);
+        r.Render(4);
+        yield return (sounding.Contains("84") && afterOff == "" && r.Held() == "",
+            $"switching bypass with notes held leaves none hanging ({sounding} → {(afterOff == "" ? "none" : afterOff)} / {(r.Held() == "" ? "none" : r.Held())})");
+
+        // A key struck again within one block keeps sounding, then ends.
+        e.TrackNoteOn(t, 72, 0.8f);
+        r.Render();
+        e.TrackNoteOff(t, 72);
+        e.TrackNoteOn(t, 72, 0.8f);
+        r.Render();
+        string again = r.Held();
+        e.TrackNoteOff(t, 72);
+        r.Render(4);
+        yield return (again != "" && r.Held() == "", $"a key struck again in the same block keeps its route ({again}, then {(r.Held() == "" ? "none" : r.Held())})");
+        e.MidiRackSetChainTranspose(t, mi, 0, 0);
     }
 
     private static IEnumerable<(bool, string)> NoStuckNotes()
@@ -350,5 +382,20 @@ internal static class MidiRackTests
         var macros = rack.GetMacros(t, mi).Result;
         yield return (map >= 0 && macros[0].Name == "Section" && macros[0].Targets == 1 && Math.Abs(rack.GetMidiRack(t, mi).Result.Selector - 25) <= 1,
             "a macro mapped to the selector drives it");
+
+        // In-place edits over MCP undo one call at a time.
+        int tr = e.MidiRackChainTranspose(t, mi, 0), mode = e.MidiRackMode(t, mi);
+        float macro = e.MidiRackMacroGet(t, mi, 3);
+        rack.SetChainMix(t, mi, 0, transpose: tr + 5).Wait();
+        rack.SetMode(t, mi, mode == 2 ? "parallel" : "select").Wait();
+        rack.SetMacro(t, mi, 3, value: macro > 0.5f ? 0.1f : 0.9f).Wait();
+        bool changed = e.MidiRackChainTranspose(t, mi, 0) == tr + 5 && e.MidiRackMode(t, mi) != mode;
+        e.Undo();
+        bool macroBack = Math.Abs(e.MidiRackMacroGet(t, mi, 3) - macro) < 1e-4;
+        e.Undo();
+        bool modeBack = e.MidiRackMode(t, mi) == mode && e.MidiRackChainTranspose(t, mi, 0) == tr + 5;
+        e.Undo();
+        yield return (changed && macroBack && modeBack && e.MidiRackChainTranspose(t, mi, 0) == tr,
+            "set_midi_rack_chain_mix / _mode / _macro each undo as one step");
     }
 }

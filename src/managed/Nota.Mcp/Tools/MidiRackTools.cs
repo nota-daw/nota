@@ -106,26 +106,26 @@ public sealed class MidiRackTools(IAudioEngine engine, IEngineDispatch dispatch,
 
     [McpServerTool(Name = "set_midi_rack_chain_param"), Description("Set a chain MIDI effect's parameter (in its own min..max).")]
     public Task SetChainParam(int trackId, int midiIndex, int chain, int device, int param, float value)
-        => Mutate(() => E.MidiRackChainDeviceParamSet(trackId, midiIndex, chain, device, param, value));
+        => Mutate(() => InPlace(trackId, midiIndex, () => E.MidiRackChainDeviceParamSet(trackId, midiIndex, chain, device, param, value)));
 
     [McpServerTool(Name = "set_midi_rack_chain_bypass"), Description("Bypass or enable a chain MIDI effect.")]
     public Task SetChainBypass(int trackId, int midiIndex, int chain, int device, bool bypassed)
-        => Mutate(() => E.MidiRackChainDeviceSetBypassed(trackId, midiIndex, chain, device, bypassed));
+        => Mutate(() => InPlace(trackId, midiIndex, () => E.MidiRackChainDeviceSetBypassed(trackId, midiIndex, chain, device, bypassed)));
 
     [McpServerTool(Name = "set_midi_rack_chain_mix"), Description("Set a chain's mute, solo, transpose (−48..+48 semitones) and velocity scale (\"Volume\", 0..2: 1 = unchanged, 0 = silent). Omitted fields stay.")]
-    public Task SetChainMix(int trackId, int midiIndex, int chain, bool? mute = null, bool? solo = null, int? transpose = null, float? velScale = null) => Mutate(() =>
+    public Task SetChainMix(int trackId, int midiIndex, int chain, bool? mute = null, bool? solo = null, int? transpose = null, float? velScale = null) => Mutate(() => InPlace(trackId, midiIndex, () =>
     {
         if (mute is { } m) E.MidiRackSetChainMute(trackId, midiIndex, chain, m);
         if (solo is { } s) E.MidiRackSetChainSolo(trackId, midiIndex, chain, s);
         if (transpose is { } tr) E.MidiRackSetChainTranspose(trackId, midiIndex, chain, tr);
         if (velScale is { } v) E.MidiRackSetChainVelScale(trackId, midiIndex, chain, v);
-    });
+    }));
 
     [McpServerTool(Name = "set_midi_rack_chain_zone"), Description(
         "Set a chain's zones; omitted ends stay. Keys take note numbers or names (\"C3\", \"F#4\"; C4 = 60); velocity and "
         + "select ranges are 0..127. In Select mode a chain plays while the selector is inside its select range.")]
     public Task SetChainZone(int trackId, int midiIndex, int chain, string? keyLo = null, string? keyHi = null,
-        int? velLo = null, int? velHi = null, int? selLo = null, int? selHi = null) => Mutate(() =>
+        int? velLo = null, int? velHi = null, int? selLo = null, int? selHi = null) => Mutate(() => InPlace(trackId, midiIndex, () =>
     {
         E.MidiRackChainZone(trackId, midiIndex, chain, out int kl, out int kh, out int vl, out int vh);
         if (keyLo is not null) kl = Note(keyLo);
@@ -133,21 +133,22 @@ public sealed class MidiRackTools(IAudioEngine engine, IEngineDispatch dispatch,
         E.MidiRackSetChainZone(trackId, midiIndex, chain, kl, kh, velLo ?? vl, velHi ?? vh);
         E.MidiRackChainSelectRange(trackId, midiIndex, chain, out int sl, out int sh);
         if (selLo is not null || selHi is not null) E.MidiRackSetChainSelect(trackId, midiIndex, chain, selLo ?? sl, selHi ?? sh);
-    });
+    }));
 
     [McpServerTool(Name = "set_midi_rack_mode"), Description("How chains run: parallel (every chain whose zone a note hits) or select (only chains whose select range holds the selector).")]
     public Task SetMode(int trackId, int midiIndex, [Description("parallel | select")] string mode)
-        => Mutate(() => E.MidiRackSetMode(trackId, midiIndex, mode.Trim().Equals("select", StringComparison.OrdinalIgnoreCase) ? 2 : 0));
+        => Mutate(() => InPlace(trackId, midiIndex, () => E.MidiRackSetMode(trackId, midiIndex, mode.Trim().Equals("select", StringComparison.OrdinalIgnoreCase) ? 2 : 0)));
 
     [McpServerTool(Name = "set_midi_rack_selector"), Description("Set the Select-mode selector, 0..127.")]
-    public Task SetSelector(int trackId, int midiIndex, int value) => Mutate(() => E.MidiRackSetSelector(trackId, midiIndex, Math.Clamp(value, 0, 127) / 127f));
+    public Task SetSelector(int trackId, int midiIndex, int value)
+        => Mutate(() => InPlace(trackId, midiIndex, () => E.MidiRackSetSelector(trackId, midiIndex, Math.Clamp(value, 0, 127) / 127f)));
 
     [McpServerTool(Name = "set_midi_rack_output"), Description("Merge duplicate notes from different chains into one; pass notes no chain takes through unchanged. Omitted fields stay.")]
-    public Task SetOutput(int trackId, int midiIndex, bool? merge = null, bool? thru = null) => Mutate(() =>
+    public Task SetOutput(int trackId, int midiIndex, bool? merge = null, bool? thru = null) => Mutate(() => InPlace(trackId, midiIndex, () =>
     {
         if (merge is { } m) E.MidiRackSetMerge(trackId, midiIndex, m);
         if (thru is { } t) E.MidiRackSetThru(trackId, midiIndex, t);
-    });
+    }));
 
     [McpServerTool(Name = "get_midi_rack_macros"), Description("The rack's 8 macros: name, value 0..1, curve (lin/exp/log/s, \"mixed\" when targets differ, \"none\" without targets) and target count.")]
     public Task<Macro[]> GetMacros(int trackId, int midiIndex) => Read(() =>
@@ -164,11 +165,11 @@ public sealed class MidiRackTools(IAudioEngine engine, IEngineDispatch dispatch,
     });
 
     [McpServerTool(Name = "set_midi_rack_macro"), Description("Set a macro's value (0..1) and/or name.")]
-    public Task SetMacro(int trackId, int midiIndex, int macro, float? value = null, string? name = null) => Mutate(() =>
+    public Task SetMacro(int trackId, int midiIndex, int macro, float? value = null, string? name = null) => Mutate(() => InPlace(trackId, midiIndex, () =>
     {
         if (value is { } v) E.MidiRackMacroSet(trackId, midiIndex, macro, Math.Clamp(v, 0f, 1f));
         if (name is not null) E.MidiRackSetMacroName(trackId, midiIndex, macro, name);
-    });
+    }));
 
     [McpServerTool(Name = "list_midi_rack_mappings"), Description("The rack's macro mappings (index, macro, chain, device — or -3 for the selector — param, range, curve).")]
     public Task<Mapping[]> ListMappings(int trackId, int midiIndex) => Read(() =>
@@ -201,4 +202,15 @@ public sealed class MidiRackTools(IAudioEngine engine, IEngineDispatch dispatch,
         }
         if (curve is not null) E.MidiRackSetMappingCurve(trackId, midiIndex, index, RackTools.CurveId(curve));
     });
+
+    // An edit the engine applies to the rack in place (a chain's mix or a child's parameter, the
+    // mode, the selector, a macro's value) as one undo step: first an undoable write of the rack's
+    // own state swaps in a copy, then the edit lands on the copy, so Undo brings back the rack as
+    // it was. Inside the tool's Mutate group, so a call is still one step.
+    private void InPlace(int trackId, int midiIndex, Action edit)
+    {
+        var before = E.MidiEffectGetState(trackId, midiIndex);
+        if (before.Length > 0) E.MidiEffectSetState(trackId, midiIndex, before, checkpoint: true);
+        edit();
+    }
 }

@@ -17,6 +17,8 @@ internal interface IRackAccess
 {
     bool HasInstrumentChains { get; }
     int AutomationDeviceIndex { get; }
+    /// <summary>The rack in a MIDI Learn rack target (MidiTarget.DeviceIndex).</summary>
+    int LearnDeviceIndex => AutomationDeviceIndex;
     int ChainCount();
     int AddChain(int instKind);
     bool RemoveChain(int chain);
@@ -371,6 +373,7 @@ internal sealed class MidiRackAccess(IAudioEngine e, int t, int mi) : IRackAcces
     public bool HasInstrumentChains => false;
     public bool HostsPlugins => false;
     public int AutomationDeviceIndex => mi;
+    public int LearnDeviceIndex => MidiTarget.MidiRackBase - mi; // not an audio rack's index
     public (AutomationTarget Target, int Device, int Param, string Id) MacroAutomation(int i) => (AutomationTarget.MidiDeviceParam, mi, i, "");
     public MidiTarget MacroLearnTarget(int track, int i) => MidiTarget.MidiDeviceParam(track, mi, i);
 

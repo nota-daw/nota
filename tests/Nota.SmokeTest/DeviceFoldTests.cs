@@ -74,10 +74,12 @@ internal static class DeviceFoldTests
             try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch (IOException) { }
         }
 
-        // A v22 document has no folds: it migrates to v23 and every device opens unfolded.
+        // A v22 document has no folds: it migrates past v23 (to the current format) and every
+        // device opens unfolded.
         var old = ProjectMigrations.Migrate(new JsonObject { ["formatVersion"] = 22 });
-        yield return (ProjectService.CurrentFormatVersion == 23 && old["formatVersion"]?.GetValue<int>() == 23,
-            "fold: a v22 project migrates to v23");
+        int migrated = old["formatVersion"]?.GetValue<int>() ?? 0;
+        yield return (migrated >= 23 && migrated == ProjectService.CurrentFormatVersion,
+            "fold: a v22 project migrates to v23 and on");
         yield return (!new DeviceDto().Folded && !new MidiDeviceDto().Folded && !new InstrumentDto().Folded,
             "fold: absent means unfolded");
     }

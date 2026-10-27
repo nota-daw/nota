@@ -31,10 +31,12 @@ class Instrument {
 
     // MIDI effects inside the instrument (an Instrument Rack chain's, issue #329). An instrument
     // that wants the block's notes up front says so; the engine then hands it the block's sorted
-    // events once, before driving it event by event as usual (setTransport has run). The loop
-    // seam shifts their clock like the track's own MIDI effects; allNotesOff flushes them.
+    // events once, with the clock the track's own MIDI effects ran on (the arrangement's, or a
+    // Session slot's loop), before driving it event by event as usual. The loop seam shifts
+    // their clock like the track's own MIDI effects; allNotesOff flushes them.
     virtual bool takesBlockMidi() const { return false; }
-    virtual void blockMidi(const MidiEv* /*evs*/, int /*n*/, int32_t /*frames*/) {}
+    virtual void blockMidi(const MidiEv* /*evs*/, int /*n*/, int32_t /*frames*/, double /*beatStart*/, double /*spb*/,
+        bool /*playing*/) {}
     virtual void midiTimeJump(double /*deltaBeats*/) {}
 
     // Note events (applied at segment boundaries by the engine for sample accuracy).

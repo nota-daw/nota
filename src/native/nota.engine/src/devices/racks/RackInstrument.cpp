@@ -13,9 +13,9 @@
 
 namespace nota {
 
-RackInstrument::RackInstrument() : evStore_(new MidiEv[kChainEvents + 2048]) {
+RackInstrument::RackInstrument() : evStore_(new MidiEv[kMaxMidiChains * kChainEvents + 2048]) {
     chainEvs_ = evStore_.get();
-    scratchA_ = chainEvs_ + kChainEvents;
+    scratchA_ = chainEvs_ + kMaxMidiChains * kChainEvents;
     scratchB_ = scratchA_ + 1024;
 }
 
@@ -23,6 +23,15 @@ namespace {
 bool evBefore(const MidiEv& a, const MidiEv& b) {
     if (a.off != b.off) return a.off < b.off;
     return !a.on && b.on; // a note-off before a note-on at the same sample
+}
+
+// A chain's MIDI effects by identity (0 = none): a fork for an undoable edit shares them, so
+// it keeps the signature; adding, removing or replacing one changes it.
+template <class Chain> uint64_t midiSig(const Chain& c) {
+    if (c.midiDevices.empty()) return 0;
+    uint64_t h = 1469598103934665603ull ^ static_cast<uint64_t>(c.midiDevices.size());
+    for (const auto& d : c.midiDevices) h = (h ^ reinterpret_cast<uintptr_t>(d.get())) * 1099511628211ull;
+    return h | 1; // never 0
 }
 } // namespace
 
@@ -39,12 +48,80 @@ bool RackInstrument::midiChainAt(int32_t c) const {
     return st && c >= 0 && c < kMaxMidiChains && c < static_cast<int32_t>(st->chains.size()) && !st->chains[c].midiDevices.empty();
 }
 
-void RackInstrument::blockMidi(const MidiEv* evs, int n, int32_t frames) {
-    blockPos_ = 0;
+void RackInstrument::syncChains() {
     RackState* st = live();
-    int32_t total = 0;
+    if (!st) return;
+    auto& m = *mono_;
+    const int32_t n = static_cast<int32_t>(st->chains.size());
+    uint64_t h = 1469598103934665603ull ^ static_cast<uint64_t>(n);
+    for (int32_t c = 0; c < n; ++c) {
+        const auto& ch = st->chains[c];
+        h = (h ^ reinterpret_cast<uintptr_t>(ch.instrument.get())) * 1099511628211ull;
+        h = (h ^ (c < kMaxMidiChains ? midiSig(ch) : 0)) * 1099511628211ull;
+    }
+    if (h == m.structure) return;
+    const bool first = m.structure == 0;
+    m.structure = h;
+
+    // Old index of each chain still here (by its instrument), then the tables at the new places.
+    uint16_t route[128] = {};
+    uint8_t held[kMaxMidiChains][128] = {};
+    const void* ids[kMaxMidiChains] = {};
+    uint64_t sigs[kMaxMidiChains] = {};
+    for (int32_t c = 0; c < n; ++c) {
+        auto& ch = st->chains[c];
+        if (!ch.instrument) continue;
+        const uint64_t sig = c < kMaxMidiChains ? midiSig(ch) : 0;
+        int32_t o = -1;
+        for (int32_t k = 0; k < kMaxMidiChains && !first; ++k)
+            if (m.chainId[k] == ch.instrument.get()) o = k;
+        if (o >= 0 && m.chainSig[o] != 0) {
+            if (m.chainSig[o] == sig && c < kMaxMidiChains) {
+                // The same MIDI effects at a new place: its held keys and notes move with it.
+                std::memcpy(held[c], m.outHeld[o], 128);
+                for (int32_t p = 0; p < 128; ++p)
+                    if (m.midiRoute[p] & (1u << o)) route[p] |= static_cast<uint16_t>(1u << c);
+            } else {
+                // Its MIDI effects changed (or it's a plain chain now): end the notes they started
+                // and what the remaining ones still hold; a held key plays again when struck again.
+                for (int32_t p = 0; p < 128; ++p)
+                    if (m.outHeld[o][p]) ch.instrument->noteOff(p);
+                for (auto& d : ch.midiDevices)
+                    if (d) d->reset();
+            }
+        } else if (o >= 0 && sig != 0) {
+            // A plain chain took MIDI effects: the held keys it played directly end now (its
+            // ordinary note-offs skip MIDI chains).
+            for (int32_t i = 0; i < m.heldN; ++i) ch.instrument->noteOff(m.held[i]);
+        }
+        if (c < kMaxMidiChains) {
+            ids[c] = ch.instrument.get();
+            sigs[c] = sig;
+        }
+    }
+    std::memcpy(m.midiRoute, route, sizeof(route));
+    std::memcpy(m.outHeld, held, sizeof(held));
+    std::memcpy(m.chainId, ids, sizeof(ids));
+    std::memcpy(m.chainSig, sigs, sizeof(sigs));
+}
+
+void RackInstrument::deliver(int32_t c, Instrument& inst, const MidiEv& ev) {
+    uint8_t& h = mono_->outHeld[c][std::clamp(ev.pitch, 0, 127)];
+    if (ev.on) {
+        if (h < 255) ++h;
+        inst.noteOn(ev.pitch, ev.vel);
+    } else {
+        if (h > 0) --h;
+        inst.noteOff(ev.pitch);
+    }
+}
+
+void RackInstrument::blockMidi(const MidiEv* evs, int n, int32_t frames, double beatStart, double spb, bool playing) {
+    blockPos_ = 0;
+    syncChains();
+    RackState* st = live();
     const int32_t nc = st ? std::min<int32_t>(static_cast<int32_t>(st->chains.size()), kMaxMidiChains) : 0;
-    for (int32_t c = 0; c < kMaxMidiChains; ++c) chainStart_[c] = chainCount_[c] = chainCursor_[c] = 0;
+    for (int32_t c = 0; c < kMaxMidiChains; ++c) chainCount_[c] = chainCursor_[c] = 0;
     // Route in block order: a note-on goes to the MIDI chains whose zone holds it, its note-off to
     // the chains its note-on went to — even when the key is played again within the block.
     auto& route = mono_->midiRoute;
@@ -54,14 +131,14 @@ void RackInstrument::blockMidi(const MidiEv* evs, int n, int32_t frames) {
         const int32_t p = std::clamp(ev.pitch, 0, 127);
         if (ev.on) {
             const int32_t v = std::clamp(static_cast<int32_t>(std::lround(ev.vel * 127.0f)), 0, 127);
-            uint64_t mask = 0;
+            uint16_t mask = 0;
             for (int32_t c = 0; c < nc; ++c) {
                 const auto& chain = st->chains[c];
                 if (chain.midiDevices.empty() || !chain.instrument) continue;
                 const auto& z = *chain.ctl;
                 constexpr auto r = std::memory_order_relaxed;
                 if (p < z.keyLo.load(r) || p > z.keyHi.load(r) || v < z.velLo.load(r) || v > z.velHi.load(r)) continue;
-                mask |= 1ull << c;
+                mask |= static_cast<uint16_t>(1u << c);
             }
             route[p] |= mask;
             evMask_[i] = mask;
@@ -73,7 +150,7 @@ void RackInstrument::blockMidi(const MidiEv* evs, int n, int32_t frames) {
     for (int32_t c = 0; c < nc; ++c) {
         auto& chain = st->chains[c];
         if (chain.midiDevices.empty() || !chain.instrument) continue;
-        const uint64_t bit = 1ull << c;
+        const uint16_t bit = static_cast<uint16_t>(1u << c);
         int m = 0;
         for (int i = 0; i < n; ++i)
             if (evMask_[i] & bit) scratchA_[m++] = evs[i];
@@ -82,14 +159,14 @@ void RackInstrument::blockMidi(const MidiEv* evs, int n, int32_t frames) {
         for (auto& d : chain.midiDevices) {
             if (!d) continue;
             int out = 0;
-            d->process(a, m, b, out, 1024, frames, beat_, spb_, playing_);
+            d->process(a, m, b, out, 1024, frames, beatStart, spb, playing);
             std::swap(a, b);
             m = out;
         }
         std::sort(a, a + m, evBefore);
-        chainStart_[c] = total;
-        for (int i = 0; i < m && total < kChainEvents; ++i) chainEvs_[total++] = a[i];
-        chainCount_[c] = total - chainStart_[c];
+        m = std::min(m, kChainEvents);
+        std::copy_n(a, m, chainEvs_ + c * kChainEvents);
+        chainCount_[c] = m;
     }
 }
 
@@ -106,15 +183,18 @@ void RackInstrument::fanOn(int32_t pitch, float velocity, int32_t glideFrom) {
     if (!st) return;
     const int32_t v = std::clamp((int32_t)std::lround(velocity * 127.0f), 0, 127);
     const float bend = glideFrom >= 0 ? static_cast<float>(glideFrom - pitch) : 0.0f;
-    for (auto& c : st->chains) {
-        if (!c.instrument || !c.midiDevices.empty()) continue; // a MIDI chain plays its effects' notes (blockMidi)
+    syncChains();
+    const int32_t n = static_cast<int32_t>(st->chains.size());
+    for (int32_t ci = 0; ci < n; ++ci) {
+        auto& c = st->chains[ci];
+        if (!c.instrument || midiChainAt(ci)) continue; // a MIDI chain plays its effects' notes (blockMidi)
         auto* z = c.ctl.get();
         if (pitch < z->keyLo.load(std::memory_order_relaxed) || pitch > z->keyHi.load(std::memory_order_relaxed) ||
             v < z->velLo.load(std::memory_order_relaxed) || v > z->velHi.load(std::memory_order_relaxed))
             continue;
         c.instrument->noteOn(pitch, velocity);
         // Right after the note-on a bend lands without smoothing: the note starts at the old pitch.
-        if (bend != 0.0f && c.midiDevices.empty() && c.instrument->supportsMpe())
+        if (bend != 0.0f && c.instrument->supportsMpe())
             c.instrument->noteExpression(pitch, ExprBend, bend);
     }
 }
@@ -122,10 +202,26 @@ void RackInstrument::fanOn(int32_t pitch, float velocity, int32_t glideFrom) {
 void RackInstrument::fanOff(int32_t pitch) {
     RackState* st = live();
     if (!st) return;
-    // Every chain, MIDI chains too: one may have turned into a MIDI chain (or back) while the
-    // key was held, and a note-off for a pitch its instrument isn't playing is harmless.
-    for (auto& c : st->chains)
-        if (c.instrument) c.instrument->noteOff(pitch);
+    // Plain chains only: a MIDI chain's effects decide when its notes end (a Length may hold one
+    // past the key). A chain that turned into a MIDI chain or back is reconciled by syncChains.
+    syncChains();
+    const int32_t n = static_cast<int32_t>(st->chains.size());
+    for (int32_t ci = 0; ci < n; ++ci)
+        if (st->chains[ci].instrument && !midiChainAt(ci)) st->chains[ci].instrument->noteOff(pitch);
+}
+
+void RackInstrument::endGlide() {
+    auto& m = *mono_;
+    if (m.glideLeft > 0 && m.sounding >= 0)
+        if (RackState* st = live()) {
+            const int32_t n = static_cast<int32_t>(st->chains.size());
+            for (int32_t ci = 0; ci < n; ++ci) {
+                auto& c = st->chains[ci];
+                if (c.instrument && !midiChainAt(ci) && c.instrument->supportsMpe())
+                    c.instrument->noteExpression(m.sounding, ExprBend, 0.0f);
+            }
+        }
+    m.glideLeft = 0;
 }
 
 void RackInstrument::monoRemove(int32_t pitch) {
@@ -143,7 +239,7 @@ void RackInstrument::syncMono() {
     const bool mono = rackMono();
     if (mono == m.wasMono) return;
     m.wasMono = mono;
-    m.glideLeft = 0;
+    endGlide();
     if (mono) {
         // Poly → mono: only the last held key keeps sounding.
         for (int32_t i = 0; i + 1 < m.heldN; ++i) fanOff(m.held[i]);
@@ -207,6 +303,7 @@ void RackInstrument::allNotesOff() {
     m.sounding = -1;
     m.glideLeft = 0;
     std::memset(m.midiRoute, 0, sizeof(m.midiRoute));
+    std::memset(m.outHeld, 0, sizeof(m.outHeld));
     for (int32_t c = 0; c < kMaxMidiChains; ++c) chainCount_[c] = 0; // nothing queued plays after this
     RackState* st = live();
     if (!st) return;
@@ -252,13 +349,17 @@ void RackInstrument::render(float* out, int32_t frames) {
     const float rv = rackVolume_.load(std::memory_order_relaxed);
     // Mono glide: the sounding note's bend ramps back to 0 (block rate; the voices smooth it).
     syncMono();
+    syncChains();
     auto& m = *mono_;
     if (m.glideLeft > 0 && m.sounding >= 0) {
         m.glideLeft = std::max<int64_t>(0, m.glideLeft - frames);
         const float bend = m.glideBend * static_cast<float>(m.glideLeft) / static_cast<float>(m.glideTotal);
-        for (auto& c : st->chains)
-            if (c.instrument && c.midiDevices.empty() && c.instrument->supportsMpe())
+        const int32_t n = static_cast<int32_t>(st->chains.size());
+        for (int32_t ci = 0; ci < n; ++ci) {
+            auto& c = st->chains[ci];
+            if (c.instrument && !midiChainAt(ci) && c.instrument->supportsMpe())
                 c.instrument->noteExpression(m.sounding, ExprBend, bend);
+        }
     }
     for (auto& c : st->chains) {
         if (!c.instrument) continue;
@@ -270,11 +371,8 @@ void RackInstrument::render(float* out, int32_t frames) {
             const int32_t ci = static_cast<int32_t>(&c - st->chains.data());
             if (midiChainAt(ci)) {
                 int32_t& k = chainCursor_[ci];
-                for (; k < chainCount_[ci] && chainEvs_[chainStart_[ci] + k].off < blockPos_ + frames; ++k) {
-                    const MidiEv& ev = chainEvs_[chainStart_[ci] + k];
-                    if (ev.on) c.instrument->noteOn(ev.pitch, ev.vel);
-                    else c.instrument->noteOff(ev.pitch);
-                }
+                const MidiEv* evs = chainEvs_ + ci * kChainEvents;
+                for (; k < chainCount_[ci] && evs[k].off < blockPos_ + frames; ++k) deliver(ci, *c.instrument, evs[k]);
             }
             continue;
         }
@@ -285,16 +383,16 @@ void RackInstrument::render(float* out, int32_t frames) {
             int32_t cursor = 0;
             const int32_t end = blockPos_ + frames;
             int32_t& k = chainCursor_[ci];
+            const MidiEv* evs = chainEvs_ + ci * kChainEvents;
             while (k < chainCount_[ci]) {
-                const MidiEv& ev = chainEvs_[chainStart_[ci] + k];
+                const MidiEv& ev = evs[k];
                 if (ev.off >= end) break;
                 const int32_t at = std::clamp(ev.off - blockPos_, 0, frames);
                 if (at > cursor) {
                     c.instrument->render(&scratch_[cursor * 2], at - cursor);
                     cursor = at;
                 }
-                if (ev.on) c.instrument->noteOn(ev.pitch, ev.vel);
-                else c.instrument->noteOff(ev.pitch);
+                deliver(ci, *c.instrument, ev);
                 ++k;
             }
             if (cursor < frames) c.instrument->render(&scratch_[cursor * 2], frames - cursor);

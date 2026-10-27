@@ -555,7 +555,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
                 {
                     int cc = c, pp = p;
                     var pit = new MenuItem { Header = a.ChainInstrumentParamName(c, p) };
-                    pit.Click += (_, _) => { a.AddMacroMapping(m, cc, -1, pp, 0f, 1f); _ctx.RequestRebuild(); };
+                    pit.Click += (_, _) => { RcAddMapping(m, cc, -1, pp, 0f, 1f); _ctx.RequestRebuild(); };
                     instItem.Items.Add(pit);
                 }
                 if (ipc > 0) chainItem.Items.Add(instItem);
@@ -570,7 +570,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
                     int cc = c, dd = d, pp = p;
                     float lo = a.ChainDeviceParamMin(c, d, p), hi = a.ChainDeviceParamMax(c, d, p);
                     var pit = new MenuItem { Header = a.ChainDeviceParamName(c, d, p) };
-                    pit.Click += (_, _) => { a.AddMacroMapping(m, cc, dd, pp, lo, hi); _ctx.RequestRebuild(); };
+                    pit.Click += (_, _) => { RcAddMapping(m, cc, dd, pp, lo, hi); _ctx.RequestRebuild(); };
                     dItem.Items.Add(pit);
                 }
                 if (dpc > 0) chainItem.Items.Add(dItem);
@@ -581,7 +581,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         if (a.Kind != RackKind.Instrument)
         {
             var sel = new MenuItem { Header = "Map to the selector" };
-            sel.Click += (_, _) => { a.AddMacroMapping(m, 0, RackMacroMapping.RackControl, 0, 0f, 1f); _ctx.RequestRebuild(); };
+            sel.Click += (_, _) => { RcAddMapping(m, 0, RackMacroMapping.RackControl, 0, 0f, 1f); _ctx.RequestRebuild(); };
             f.Items.Add(sel);
         }
 

@@ -139,8 +139,8 @@ internal sealed partial class RackCardView
         var s = IrMsBtn("S", a.ChainSolo(c), NotaPalette.Solo, () => { a.SetChainSolo(c, !a.ChainSolo(c)); DeferRebuild(); });
         ToolTip.SetTip(m, "Mute chain");
         ToolTip.SetTip(s, "Solo chain");
-        MidiLearn.Bind(m, MidiTarget.RackChainMute(T, a.AutomationDeviceIndex, c), "Chain Mute");
-        MidiLearn.Bind(s, MidiTarget.RackChainSolo(T, a.AutomationDeviceIndex, c), "Chain Solo");
+        MidiLearn.Bind(m, MidiTarget.RackChainMute(T, a.LearnDeviceIndex, c), "Chain Mute");
+        MidiLearn.Bind(s, MidiTarget.RackChainSolo(T, a.LearnDeviceIndex, c), "Chain Solo");
         var top = new DockPanel { LastChildFill = true, Children = { RcDock(stripe, Dock.Left), RcDock(s, Dock.Right), RcDock(m, Dock.Right), nameTb } };
         stripe.Margin = new Thickness(0, 0, 4, 0);
         m.Margin = new Thickness(0, 0, 2, 0);
@@ -672,17 +672,24 @@ internal sealed partial class RackCardView
         if (m < 0) return;
         if (MappedMacro(a, c, target, p) == m) { RemoveParamMapping(a, c, target, p); DeferRebuild(); return; }
         float min = P.Min(p), max = P.Max(p), span = max - min, cur = P.Get(p);
-        int curve = RcMacroCurve(m);
+        RcAddMapping(m, c, target, p, Math.Max(min, cur - 0.3f * span), Math.Min(max, cur + 0.3f * span));
+        DeferRebuild();
+    }
+
+    /// <summary>Map a target to a macro as one undo step: a new target takes the macro's curve (a
+    /// Mixed macro gives it Lin); one moved from another macro keeps its own range and curve.</summary>
+    private void RcAddMapping(int macro, int c, int target, int p, float min, float max)
+    {
+        var a = _ra;
+        int curve = RcMacroCurve(macro);
         bool was = MappedMacro(a, c, target, p) >= 0;
-        E.BeginUndoGroup(); // the mapping and its curve are one step
+        E.BeginUndoGroup();
         try
         {
-            int i = a.AddMacroMapping(m, c, target, p, Math.Max(min, cur - 0.3f * span), Math.Min(max, cur + 0.3f * span));
-            // A new target takes its macro's curve; a Mixed macro gives it Lin. A moved one keeps its own.
+            int i = a.AddMacroMapping(macro, c, target, p, min, max);
             if (i >= 0 && !was && curve > 0) a.SetMappingCurve(i, curve);
         }
         finally { E.EndUndoGroup(); }
-        DeferRebuild();
     }
 
     /// <summary>A macro's curve: its targets' common curve, −1 when they differ (Mixed), 0 with none.</summary>

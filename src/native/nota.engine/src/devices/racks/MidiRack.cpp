@@ -98,11 +98,36 @@ void MidiRack::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int ma
     nOut = 0;
     const auto done = renderScope();
     RackState* st = live();
-    if (bypassed() || !st) {
+    if (!st) {
         for (int i = 0; i < nIn && nOut < maxOut; ++i) out[nOut++] = in[i];
         return;
     }
     auto& rt = *rt_;
+    if (bypassed()) {
+        // Switching off ends what the chains started (a transposed or generated pitch wouldn't
+        // get its note-off from the raw input); then the notes pass untouched, counted, so
+        // switching on again can end those.
+        if (!rt.bypassed) {
+            cutAll(*st, out, nOut, maxOut);
+            rt.bypassed = true;
+        }
+        for (int i = 0; i < nIn && nOut < maxOut; ++i) {
+            uint8_t& h = rt.rawHeld[std::clamp(in[i].pitch, 0, 127)];
+            if (in[i].on) {
+                if (h < 255) ++h;
+            } else if (h > 0) {
+                --h;
+            }
+            out[nOut++] = in[i];
+        }
+        return;
+    }
+    if (rt.bypassed) {
+        for (int32_t p = 0; p < 128; ++p)
+            for (; rt.rawHeld[p] > 0; --rt.rawHeld[p])
+                if (nOut < maxOut) out[nOut++] = MidiEv{0, false, p, 0.0f};
+        rt.bypassed = false;
+    }
 
     // A different set of chains or devices: end what this rack holds rather than guess.
     const uint64_t sig = structureOf(*st);
@@ -118,8 +143,9 @@ void MidiRack::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int ma
     const bool select = rackMode() == 2;
     const int32_t selector = static_cast<int32_t>(std::lround(chainSelect() * 127.0f));
 
-    // 1. Route the input: a note-on goes to every chain that takes it; its note-off follows it
-    //    to the same chains, whatever changed in between.
+    // 1. Route the input in time order (a note-off before a note-on at the same sample): a
+    //    note-on goes to every chain that takes it; its note-off follows it to the same chains,
+    //    whatever changed in between — and a key struck again keeps the new note's route.
     int nPool = 0;
     auto pool = [&](const MidiEv& ev, int16_t chain) {
         if (nPool < kPoolEvents) {
@@ -127,7 +153,15 @@ void MidiRack::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int ma
             ++nPool;
         }
     };
-    for (int i = 0; i < nIn; ++i) {
+    const int nEv = std::min(nIn, static_cast<int>(kMaxEvents));
+    for (int i = 0; i < nEv; ++i) order_[i] = static_cast<uint16_t>(i);
+    std::sort(order_, order_ + nEv, [in](uint16_t x, uint16_t y) {
+        if (before(in[x], in[y])) return true;
+        if (before(in[y], in[x])) return false;
+        return x < y;
+    });
+    for (int k = 0; k < nEv; ++k) {
+        const int i = order_[k];
         const MidiEv& ev = in[i];
         const int32_t p = std::clamp(ev.pitch, 0, 127);
         if (ev.on) {
@@ -141,15 +175,15 @@ void MidiRack::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int ma
                 if (select && (selector < z.selLo.load(r) || selector > z.selHi.load(r))) continue;
                 mask |= static_cast<uint16_t>(1u << c);
             }
-            rt.route[p] |= mask;
-            if (i < kMaxEvents) evMask_[i] = mask;
+            rt.route[p] |= mask; // a second note-on before the note-off: one note-off ends both
+            evMask_[i] = mask;
             if (mask == 0 && rackThru()) {
                 rt.thru[p] = true;
                 pool(ev, -1);
             }
         } else {
             // The note-off goes where its note-on went, even if the key comes back in this block.
-            if (i < kMaxEvents) evMask_[i] = rt.route[p];
+            evMask_[i] = rt.route[p];
             rt.route[p] = 0;
             if (rt.thru[p]) {
                 rt.thru[p] = false;
@@ -164,8 +198,8 @@ void MidiRack::process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int ma
         auto& chain = st->chains[c];
         const uint16_t bit = static_cast<uint16_t>(1u << c);
         int n = 0;
-        for (int i = 0; i < nIn && i < kMaxEvents; ++i)
-            if ((evMask_[i] & bit) && n < kMaxEvents) bufA_[n++] = in[i];
+        for (int k = 0; k < nEv; ++k)
+            if (evMask_[order_[k]] & bit) bufA_[n++] = in[order_[k]];
         MidiEv* a = bufA_;
         MidiEv* b = bufB_;
         for (auto& d : chain.midiDevices) {
@@ -219,6 +253,7 @@ void MidiRack::reset() {
     std::memset(rt.route, 0, sizeof(rt.route));
     std::memset(rt.thru, 0, sizeof(rt.thru));
     std::memset(rt.held, 0, sizeof(rt.held));
+    std::memset(rt.rawHeld, 0, sizeof(rt.rawHeld));
     rt.clearOut();
     RackState* st = live();
     if (!st) return;
