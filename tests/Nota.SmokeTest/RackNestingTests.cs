@@ -85,6 +85,7 @@ internal static class RackNestingTests
 
         using var e = new NotaEngine();
         int t = e.AddInstrumentRackTrack();
+        e.RackAddChain(t, 6); // a Nota Volt chain first (a new rack starts empty)
         e.RackSetChainMute(t, 0, true);   // the default Volt chain stays quiet
         int c = e.RackAddChain(t, Mosaic);
         yield return (c == 1 && e.RackChainInstrumentKind(t, c) == Mosaic && e.RackChainInstrumentName(t, c) == "Nota Mosaic",
@@ -144,6 +145,7 @@ internal static class RackNestingTests
         string kick = Sine("kick", 110), snare = Sine("snare", 330);
         using var e = new NotaEngine();
         int t = e.AddInstrumentRackTrack();
+        e.RackAddChain(t, 6); // a Nota Volt chain first (a new rack starts empty)
         e.RackSetChainMute(t, 0, true);
         int c = e.RackAddChain(t, DrumRack);
         int n = Nested - c;

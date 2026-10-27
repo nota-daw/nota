@@ -335,7 +335,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         var items = presets.Items;
         if (items.Count == 0) return null;
         int cur = -1;
-        if (_chainPresetIds.TryGetValue(presets.Key, out var curId))
+        string? curId = presets.Current?.Invoke();
+        if (string.IsNullOrEmpty(curId)) _chainPresetIds.TryGetValue(presets.Key, out curId);
+        if (!string.IsNullOrEmpty(curId))
             for (int i = 0; i < items.Count; i++) if (items[i].Id == curId) { cur = i; break; }
         return new DeviceWindowPresets(items.Select(p => p.Name).ToList(), cur, i =>
         {
@@ -350,7 +352,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
 
     // A chain slot's preset list and how to apply one in place. Key names the slot (rack
     // addressing + chain + device + kind) so the header remembers the last preset applied.
-    private sealed record ChainPresets(string Key, IReadOnlyList<(string Id, string Name)> Items, Action<string> Apply);
+    // Current, when given, names the preset the device holds now (Mosaic: by its program).
+    private sealed record ChainPresets(string Key, IReadOnlyList<(string Id, string Name)> Items, Action<string> Apply,
+        Func<string>? Current = null);
     private static readonly Dictionary<string, string> _chainPresetIds = new();
 
     private List<(string Id, string Name)> FactoryItems(int kind, bool instrument)
@@ -361,11 +365,27 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     // Factory presets apply through the same proxies the bespoke editors use, so the
     // preset code sees the chain instrument / device as if it were the track's own.
     private ChainPresets InstrumentPresets(IRackAccess a, int sc, int ik)
-        => new($"{a.GetType().Name}:{T}:{a.AutomationDeviceIndex}:{sc}:i{ik}", FactoryItems(ik, instrument: true),
+        => ik == Nota.Application.MosaicModel.Kind && _ctx.Factory is { } f ? MosaicChainPresets(a, sc, f) : new($"{a.GetType().Name}:{T}:{a.AutomationDeviceIndex}:{sc}:i{ik}", FactoryItems(ik, instrument: true),
             id => _ctx.Factory?.ApplyInPlace(ChainInstrumentProxy(sc), id, T, -1));
     private ChainPresets DevicePresets(IRackAccess a, int sc, int d, int kind)
         => new($"{a.GetType().Name}:{T}:{a.AutomationDeviceIndex}:{sc}:{d}:d{kind}", FactoryItems(kind, instrument: false),
             id => _ctx.Factory?.ApplyInPlace(ChainDeviceProxy(a, sc, d, kind), id, T, d));
+
+    // A Mosaic in a chain lists what a Mosaic track does — the factory multisamples, the pack
+    // presets, the program it holds and the card's Init — through the chain's proxy.
+    private ChainPresets MosaicChainPresets(IRackAccess a, int sc, IFactoryPresets factory)
+    {
+        var proxy = ChainInstrumentProxy(sc);
+        var cp = DeviceChainView.MosaicPresetsFor(factory, App.Services?.GetService(typeof(IMosaicPacks)) as IMosaicPacks, proxy, T);
+        var items = new List<(string Id, string Name)>();
+        if (cp.Init is not null) items.Add(("init:", "Init"));
+        items.AddRange(cp.Items);
+        return new($"{a.GetType().Name}:{T}:{a.AutomationDeviceIndex}:{sc}:i{Nota.Application.MosaicModel.Kind}", items, id =>
+        {
+            string w = id == "init:" ? cp.Init!() : cp.Apply(id);
+            if (w.Length > 0) _ctx.Status(w);
+        }, cp.Current);
+    }
 
     private IAudioEngine ChainInstrumentProxy(int sc) => RackChainEngineProxy.Create(E, sc);
     private IAudioEngine ChainDeviceProxy(IRackAccess a, int sc, int d, int kind)
@@ -782,6 +802,53 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         };
         b.PointerPressed += (_, e) => { e.Handled = true; onClick(); };
         return b;
+    }
+}
+
+// A rack chain's MIDI effect seen as a track MIDI effect, so a MIDI-effect preset applies to it
+// unchanged: its parameter calls (track, index, p) go to (chain, index) through the rack access.
+// Any other MIDI-effect call answers a default and never reaches the track's own MIDI effect at
+// that index; a chain MIDI effect has no state blob here, so a preset brings its parameters.
+internal class RackChainMidiEngineProxy : System.Reflection.DispatchProxy
+{
+    public Nota.Application.IAudioEngine Inner = null!;
+    public IRackAccess Access = null!;
+    public int Chain;
+
+    public static Nota.Application.IAudioEngine Create(Nota.Application.IAudioEngine inner, IRackAccess access, int chain)
+    {
+        var proxy = Create<Nota.Application.IAudioEngine, RackChainMidiEngineProxy>();
+        var pp = (RackChainMidiEngineProxy)(object)proxy; pp.Inner = inner; pp.Access = access; pp.Chain = chain;
+        return proxy;
+    }
+
+    protected override object? Invoke(System.Reflection.MethodInfo? m, object?[]? args)
+    {
+        string name = m?.Name ?? "";
+        int Idx() => (int)args![1]!;
+        int P() => (int)args![2]!;
+        switch (name)
+        {
+            case nameof(Nota.Application.IAudioEngine.MidiEffectKind):         return Access.ChainMidiKind(Chain, Idx());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectName):         return Access.ChainMidiName(Chain, Idx());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectParamCount):   return Access.ChainMidiParamCount(Chain, Idx());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectParamName):    return Access.ChainMidiParamName(Chain, Idx(), P());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectParamMin):     return Access.ChainMidiParamMin(Chain, Idx(), P());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectParamMax):     return Access.ChainMidiParamMax(Chain, Idx(), P());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectGetParam):     return Access.ChainMidiParamGet(Chain, Idx(), P());
+            // Presets land on a freshly added effect, whose values are its defaults.
+            case nameof(Nota.Application.IAudioEngine.MidiEffectParamDefault): return Access.ChainMidiParamGet(Chain, Idx(), P());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectSetParam):     Access.ChainMidiParamSet(Chain, Idx(), P(), (float)args![3]!); return null;
+        }
+        if (name.Contains("MidiEffect", StringComparison.Ordinal))
+        {
+            var rt = m!.ReturnType;
+            if (rt == typeof(void)) return null;
+            if (rt == typeof(byte[])) return Array.Empty<byte>();
+            if (rt == typeof(string)) return "";
+            return rt.IsValueType ? Activator.CreateInstance(rt) : null;
+        }
+        return m!.Invoke(Inner, args);
     }
 }
 

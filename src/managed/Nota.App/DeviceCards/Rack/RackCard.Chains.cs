@@ -233,7 +233,62 @@ internal sealed partial class RackCardView
     // ---- drops ------------------------------------------------------------------------
 
     private static bool RcIsDevice(BrowserItem it) => it.Kind is BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument
-        or BrowserItemKind.BuiltinEffect or BrowserItemKind.PluginEffect or BrowserItemKind.BuiltinMidiEffect;
+        or BrowserItemKind.BuiltinEffect or BrowserItemKind.PluginEffect or BrowserItemKind.BuiltinMidiEffect or BrowserItemKind.Preset;
+
+    // ---- presets dropped from the Browser -----------------------------------------------
+    // A factory preset, a preset file (user or Mosaic pack) or a drum kit: it brings the device
+    // it is for, which lands like that device, and then the preset is applied to it in place.
+
+    private enum RcPresetFor { None, Instrument, Effect, Midi, Plugin }
+    private readonly record struct RcPreset(RcPresetFor For, int Kind, string FactoryId = "", string File = "", string KitId = "");
+
+    private RcPreset RcResolvePreset(BrowserItem it)
+    {
+        if (it.Kind != BrowserItemKind.Preset) return default;
+        string path = it.Path;
+        if (path.StartsWith("kit:", StringComparison.Ordinal)) return new(RcPresetFor.Instrument, 4, KitId: path["kit:".Length..]);
+        if (path.StartsWith("rhythmkit:", StringComparison.Ordinal)) return default; // a Nota Rhythm kit fills a Rhythm track
+        if (path.StartsWith("factory:", StringComparison.Ordinal))
+        {
+            string id = path["factory:".Length..];
+            if (_ctx.Factory is { } f)
+                foreach (var fp in f.All())
+                    if (fp.Id == id)
+                        return new(fp.IsMidiEffect ? RcPresetFor.Midi : fp.IsInstrument ? RcPresetFor.Instrument : RcPresetFor.Effect, fp.BuiltinKind, FactoryId: id);
+            return default;
+        }
+        if (App.Services?.GetService(typeof(IPresetStore)) is not IPresetStore store || store.Describe(path) is not { } d) return default;
+        var to = d.Type switch
+        {
+            "builtin-instrument" => RcPresetFor.Instrument,
+            "builtin-effect" => RcPresetFor.Effect,
+            "builtin-midi-effect" => RcPresetFor.Midi,
+            "plugin-instrument" or "plugin-effect" => RcPresetFor.Plugin,
+            _ => RcPresetFor.None,
+        };
+        return new(to, d.BuiltinKind, File: path);
+    }
+
+    // Apply a resolved preset to the device it brought: the chain's instrument (device −1), or
+    // the effect / MIDI effect at `device` in chain c.
+    private void RcApplyPreset(RcPreset pr, int c, int device)
+    {
+        IAudioEngine target = pr.For switch
+        {
+            RcPresetFor.Instrument => pr.KitId.Length > 0 ? NestedRackEngineProxy.Create(E, c) : ChainInstrumentProxy(c),
+            RcPresetFor.Effect => ChainDeviceProxy(_ra, c, device, pr.Kind),
+            _ => RackChainMidiEngineProxy.Create(E, _ra, c),
+        };
+        string warn;
+        if (pr.KitId.Length > 0)
+        {
+            warn = "";
+            if (App.Services?.GetService(typeof(IDrumKits)) is IDrumKits kits) kits.LoadInto(target, T, pr.KitId, out warn);
+        }
+        else if (pr.FactoryId.Length > 0) warn = _ctx.Factory?.ApplyInPlace(target, pr.FactoryId, T, device) ?? "";
+        else warn = (App.Services?.GetService(typeof(IPresetStore)) as IPresetStore)?.ApplyFileInPlace(target, pr.File, T, device) ?? "";
+        if (warn.Length > 0) _ctx.Status(warn);
+    }
 
     private static bool RcIsInstrument(BrowserItem it) => it.Kind is BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument;
 
@@ -241,6 +296,22 @@ internal sealed partial class RackCardView
     private bool RcAccepts(BrowserItem it, out string why)
     {
         why = "";
+        if (it.Kind == BrowserItemKind.Preset)
+        {
+            var pr = RcResolvePreset(it);
+            switch (pr.For)
+            {
+                case RcPresetFor.Plugin: why = "Plug-in presets can't go in a rack chain yet."; return false;
+                case RcPresetFor.None: why = "This preset can't go in a rack."; return false;
+                case RcPresetFor.Instrument when !_rp.TakesInstrument:
+                    why = _rp.Kind == RackKind.MidiEffect ? "A MIDI Effect Rack takes MIDI effects only." : "An Audio Effect Rack takes audio effects only."; return false;
+                case RcPresetFor.Effect when !_rp.TakesAudioEffects: why = "A MIDI Effect Rack takes MIDI effects only."; return false;
+                case RcPresetFor.Effect when pr.Kind == 5: why = "A rack can't go inside a rack."; return false;
+                case RcPresetFor.Midi when !_rp.TakesMidiEffects: why = "An Audio Effect Rack takes audio effects only."; return false;
+                case RcPresetFor.Midi when pr.Kind is < 0 or > 5: why = "A rack can't go inside a rack."; return false;
+            }
+            return true;
+        }
         if (RcIsInstrument(it))
         {
             // A Drum Rack may sit in an Instrument Rack chain; an Instrument Rack can't (specs/041).
@@ -270,6 +341,38 @@ internal sealed partial class RackCardView
     {
         if (!RcAccepts(it, out var why)) { _ctx.Status(why); return; }
         var a = _ra;
+        if (it.Kind == BrowserItemKind.Preset)
+        {
+            var pr = RcResolvePreset(it);
+            E.BeginUndoGroup(); // the device and its preset are one step
+            try
+            {
+                switch (pr.For)
+                {
+                    case RcPresetFor.Instrument:
+                        // On a chain an instrument preset replaces the chain's instrument.
+                        if (!a.SetChainInstrument(c, pr.Kind)) { _ctx.Status($"Couldn't load {it.Name}."); return; }
+                        RcApplyPreset(pr, c, -1);
+                        break;
+                    case RcPresetFor.Effect:
+                    {
+                        int d = a.AddChainDevice(c, pr.Kind);
+                        if (d >= 0) RcApplyPreset(pr, c, d);
+                        break;
+                    }
+                    case RcPresetFor.Midi:
+                    {
+                        int j = a.AddChainMidi(c, pr.Kind);
+                        if (j >= 0) RcApplyPreset(pr, c, j);
+                        break;
+                    }
+                }
+            }
+            finally { E.EndUndoGroup(); }
+            Sel = c;
+            DeferRebuild();
+            return;
+        }
         if (RcIsInstrument(it))
         {
             // On a chain an instrument replaces the chain's own; a plug-in starts a new layer.
@@ -287,7 +390,23 @@ internal sealed partial class RackCardView
         var a = _ra;
         if (_rp.Kind == RackKind.MidiEffect && a.ChainCount() >= RcMidiChainLimit) { _ctx.Status($"A MIDI Effect Rack holds up to {RcMidiChainLimit} chains."); return; }
         int c = -1;
-        if (it.Kind == BrowserItemKind.BuiltinInstrument) c = a.AddChain(it.BuiltinKind);
+        if (it.Kind == BrowserItemKind.Preset && RcResolvePreset(it) is { For: RcPresetFor.Instrument } pr)
+        {
+            E.BeginUndoGroup(); // the chain and its preset are one step
+            try
+            {
+                c = a.AddChain(pr.Kind);
+                if (c >= 0 && a.ChainInstrumentKind(c) == pr.Kind) RcApplyPreset(pr, c, -1);
+                else if (c >= 0) { a.RemoveChain(c); c = -1; _ctx.Status($"Couldn't load {it.Name}."); }
+            }
+            finally { E.EndUndoGroup(); }
+        }
+        else if (it.Kind == BrowserItemKind.BuiltinInstrument)
+        {
+            // An instrument the rack can't host would leave an empty chain: take it back.
+            c = a.AddChain(it.BuiltinKind);
+            if (c >= 0 && a.ChainInstrumentKind(c) != it.BuiltinKind) { a.RemoveChain(c); c = -1; _ctx.Status($"{it.Name} can't go in a rack chain."); }
+        }
         else if (it.Kind == BrowserItemKind.PluginInstrument) c = a.AddPluginInstrumentChain(it.CatalogIndex);
         else
         {

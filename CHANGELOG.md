@@ -47,6 +47,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   only, and a Drum Rack inside a chain has no swing or humanize of its own. Drum Rack pads take
   Mosaic too. MCP: `set_chain_instrument` takes 17 and 4, `load_mosaic_preset` takes a chain,
   `get_rack` reads a nested Drum Rack.
+- **Presets drop onto racks**: drag a preset from the Browser onto a rack — an instrument preset
+  (a factory or user preset, a Mosaic pack preset or a drum kit) starts a new chain with it, or
+  replaces a chain's instrument when dropped on that chain; an effect or MIDI-effect preset adds
+  the device to the chain, preset applied, in one undo step. Plug-in presets don't go into a
+  rack chain yet; a MIDI-effect preset brings its parameters.
 - **Move clips with the keyboard** (nota-daw/nota#302): in the Arrangement, ← / → nudge the
   selected clips by the grid step and ⌥← / ⌥→ by a 64th note, stopping at the song start;
   ⌥↑ / ⌥↓ move them to the next track up or down that takes them, at the same beats. Each
@@ -67,6 +72,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and the status line says why. ⌘G on tracks still groups tracks.
 
 ### Changed
+- **A new Instrument Rack starts empty** instead of with a Nota Volt chain: drop an instrument
+  or a preset on it to add the first chain.
+- **A Mosaic in a rack chain lists the presets a Mosaic track does** in its window — the factory
+  multisamples, the pack presets, the program it holds and Init.
 - **The rack cards are redesigned** (Instrument, Audio Effect and the new MIDI Effect Rack share
   one card): eight macro knobs; Chains, Zones (Audio: Select) and Macros tabs; the chosen
   chain's devices as compact cards with their key parameters; a Chain / Rack out panel; a
