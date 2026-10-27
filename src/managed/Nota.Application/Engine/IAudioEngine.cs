@@ -848,6 +848,9 @@ public interface IAudioEngine : IDisposable
     int MidiRackAddChain(int trackId, int midiIndex);
     bool MidiRackRemoveChain(int trackId, int midiIndex, int chain);
     int MidiRackDuplicateChain(int trackId, int midiIndex, int chain);
+    /// <summary>One undo step for the in-place edits that follow (chain mix, mode, selector,
+    /// output, macro values): forks the rack, keeping its MIDI effects and held notes.</summary>
+    bool MidiRackCheckpoint(int trackId, int midiIndex);
     string MidiRackChainName(int trackId, int midiIndex, int chain);
     void MidiRackSetChainName(int trackId, int midiIndex, int chain, string name);
     void MidiRackSetChainMute(int trackId, int midiIndex, int chain, bool on);

@@ -383,6 +383,20 @@ internal static class MidiRackTests
         yield return (map >= 0 && macros[0].Name == "Section" && macros[0].Targets == 1 && Math.Abs(rack.GetMidiRack(t, mi).Result.Selector - 25) <= 1,
             "a macro mapped to the selector drives it");
 
+        // Value edits over MCP keep a held note sounding.
+        e.TrackNoteOn(t, 72, 0.8f);
+        r.Render();
+        string heldBefore = r.Held();
+        rack.SetSelector(t, mi, 30).Wait();
+        rack.SetMacro(t, mi, 3, value: 0.3f).Wait();
+        rack.SetChainMix(t, mi, 2, velScale: 1.2f).Wait();
+        r.Render();
+        string heldAfter = r.Held();
+        e.TrackNoteOff(t, 72);
+        r.Render(4);
+        yield return (heldBefore != "" && heldAfter == heldBefore && r.Held() == "",
+            $"selector, macro and mix edits over MCP leave held notes playing ({heldBefore} → {(heldAfter == "" ? "cut" : heldAfter)})");
+
         // In-place edits over MCP undo one call at a time.
         int tr = e.MidiRackChainTranspose(t, mi, 0), mode = e.MidiRackMode(t, mi);
         float macro = e.MidiRackMacroGet(t, mi, 3);

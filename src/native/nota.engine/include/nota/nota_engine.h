@@ -1479,6 +1479,9 @@ NOTA_API int32_t     nota_midirack_chain_count(const NotaEngine* e, int32_t t, i
 NOTA_API int32_t     nota_midirack_add_chain(NotaEngine* e, int32_t t, int32_t mi);
 NOTA_API int32_t     nota_midirack_remove_chain(NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
 NOTA_API int32_t     nota_midirack_duplicate_chain(NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
+/* One undo step for the in-place edits that follow (chain mix, mode, selector, output, macro
+   values): the rack is forked now, keeping its MIDI effects and held notes. 1 = done. */
+NOTA_API int32_t     nota_midirack_checkpoint(NotaEngine* e, int32_t t, int32_t mi);
 NOTA_API const char* nota_midirack_chain_name(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain);
 NOTA_API void        nota_midirack_set_chain_name(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, const char* name);
 /* Chain controls: mute, solo, key/velocity zone, select range (0..127), transpose (−48..+48), velocity scale (0..2, 0 = silent), note activity (0..1). */

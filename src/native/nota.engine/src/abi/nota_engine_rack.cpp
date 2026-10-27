@@ -713,6 +713,9 @@ int32_t nota_midirack_remove_chain(NotaEngine* e, int32_t t, int32_t mi, int32_t
 int32_t nota_midirack_duplicate_chain(NotaEngine* e, int32_t t, int32_t mi, int32_t chain) {
     return e ? ENG(e)->rackDuplicateChain(t, MR(mi), chain) : -1;
 }
+int32_t nota_midirack_checkpoint(NotaEngine* e, int32_t t, int32_t mi) {
+    return (e && ENG(e)->rackCheckpoint(t, MR(mi))) ? 1 : 0;
+}
 const char* nota_midirack_chain_name(const NotaEngine* e, int32_t t, int32_t mi, int32_t chain) {
     static std::string s;
     s = e ? CENG(e)->rackChainName(t, MR(mi), chain) : std::string{};

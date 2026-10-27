@@ -129,6 +129,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_midirack_duplicate_chain")]
     internal static partial int MidiRackDuplicateChain(IntPtr engine, int trackId, int midiIndex, int chain);
 
+    [LibraryImport(Lib, EntryPoint = "nota_midirack_checkpoint")]
+    internal static partial int MidiRackCheckpoint(IntPtr engine, int trackId, int midiIndex);
+
     [LibraryImport(Lib, EntryPoint = "nota_midirack_chain_name")]
     internal static partial IntPtr MidiRackChainName(IntPtr engine, int trackId, int midiIndex, int chain);
 

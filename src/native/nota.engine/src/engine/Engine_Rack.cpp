@@ -282,8 +282,16 @@ int32_t Engine::rackDuplicateChain(int32_t t, int32_t di, int32_t c) {
     auto* r = rackCoreAt(t, di);
     if (!r || c < 0 || c >= r->chainCount()) return -1;
     if (di <= kMidiRackBase && r->chainCount() >= MidiRack::kMaxChains) return -1;
+    if (di == -1) {
+        // The copy goes in after the source and the chains below move down: refuse when that
+        // would push a chain's MIDI effects past the first 16 chains, where they don't run.
+        const int32_t n = r->chainCount();
+        for (int32_t j = c; j < n; ++j)
+            if (r->chainMidiDeviceCount(j) > 0 && j + 1 >= RackInstrument::kMaxMidiChains) return -1;
+    }
     return rackForEdit(t, di)->duplicateChain(c);
 }
+bool Engine::rackCheckpoint(int32_t t, int32_t di) { return rackForEdit(t, di) != nullptr; }
 bool Engine::rackMono(int32_t t) const {
     auto* r = rackCoreAt(t, -1);
     return r && r->rackMono();

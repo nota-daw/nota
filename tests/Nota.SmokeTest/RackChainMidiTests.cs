@@ -210,6 +210,9 @@ internal static class RackChainMidiTests
             // MIDI effects run in the first 16 chains only.
             while (e.RackChainCount(t) < 17) e.RackAddChain(t, Pentad);
             yield return (e.RackChainMidiAdd(t, 16, Arp) < 0 && e.RackChainMidiAdd(t, 15, Arp) >= 0, "MIDI effects go into the first 16 chains only");
+            int count = e.RackChainCount(t);
+            yield return (e.RackDuplicateChain(t, 0) < 0 && e.RackChainCount(t) == count && e.RackChainMidiCount(t, 15) == 1,
+                "duplicating a chain that would push MIDI effects past chain 16 is refused");
         }
 
         // 6. A Drum Rack keeps its pads' note handling: no MIDI effects in pads.

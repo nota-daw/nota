@@ -106,11 +106,11 @@ public sealed class MidiRackTools(IAudioEngine engine, IEngineDispatch dispatch,
 
     [McpServerTool(Name = "set_midi_rack_chain_param"), Description("Set a chain MIDI effect's parameter (in its own min..max).")]
     public Task SetChainParam(int trackId, int midiIndex, int chain, int device, int param, float value)
-        => Mutate(() => InPlace(trackId, midiIndex, () => E.MidiRackChainDeviceParamSet(trackId, midiIndex, chain, device, param, value)));
+        => Mutate(() => ChildInPlace(trackId, midiIndex, () => E.MidiRackChainDeviceParamSet(trackId, midiIndex, chain, device, param, value)));
 
     [McpServerTool(Name = "set_midi_rack_chain_bypass"), Description("Bypass or enable a chain MIDI effect.")]
     public Task SetChainBypass(int trackId, int midiIndex, int chain, int device, bool bypassed)
-        => Mutate(() => InPlace(trackId, midiIndex, () => E.MidiRackChainDeviceSetBypassed(trackId, midiIndex, chain, device, bypassed)));
+        => Mutate(() => ChildInPlace(trackId, midiIndex, () => E.MidiRackChainDeviceSetBypassed(trackId, midiIndex, chain, device, bypassed)));
 
     [McpServerTool(Name = "set_midi_rack_chain_mix"), Description("Set a chain's mute, solo, transpose (−48..+48 semitones) and velocity scale (\"Volume\", 0..2: 1 = unchanged, 0 = silent). Omitted fields stay.")]
     public Task SetChainMix(int trackId, int midiIndex, int chain, bool? mute = null, bool? solo = null, int? transpose = null, float? velScale = null) => Mutate(() => InPlace(trackId, midiIndex, () =>
@@ -203,11 +203,20 @@ public sealed class MidiRackTools(IAudioEngine engine, IEngineDispatch dispatch,
         if (curve is not null) E.MidiRackSetMappingCurve(trackId, midiIndex, index, RackTools.CurveId(curve));
     });
 
-    // An edit the engine applies to the rack in place (a chain's mix or a child's parameter, the
-    // mode, the selector, a macro's value) as one undo step: first an undoable write of the rack's
-    // own state swaps in a copy, then the edit lands on the copy, so Undo brings back the rack as
-    // it was. Inside the tool's Mutate group, so a call is still one step.
+    // An edit the engine applies to the rack in place (a chain's mix, the mode, the selector, a
+    // macro's value) as one undo step: the rack is forked first — sharing its MIDI effects, so
+    // held notes play on — and the edit lands on the fork, so Undo brings back the rack as it was.
+    // Inside the tool's Mutate group, so a call is still one step.
     private void InPlace(int trackId, int midiIndex, Action edit)
+    {
+        E.MidiRackCheckpoint(trackId, midiIndex);
+        edit();
+    }
+
+    // A chain MIDI effect's own value (a parameter, its bypass) lives in the effect, which a fork
+    // shares, so the step needs copies of the effects: an undoable write of the rack's own state
+    // swaps them in. That ends the rack's held notes, as any change of its effects does.
+    private void ChildInPlace(int trackId, int midiIndex, Action edit)
     {
         var before = E.MidiEffectGetState(trackId, midiIndex);
         if (before.Length > 0) E.MidiEffectSetState(trackId, midiIndex, before, checkpoint: true);

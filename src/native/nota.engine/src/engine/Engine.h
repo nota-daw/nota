@@ -879,6 +879,10 @@ class Engine {
     void rackSetChainName(int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& name);
     int32_t rackChainCount(int32_t trackId, int32_t deviceIndex) const;
     int32_t rackDuplicateChain(int32_t trackId, int32_t deviceIndex, int32_t chain);
+    // One undo step for edits the rack takes in place (a chain mix, the mode, the selector, a
+    // macro value): fork the rack now, sharing its children and held notes, so the edits that
+    // follow land on the fork and Undo brings back the rack as it was.
+    bool rackCheckpoint(int32_t trackId, int32_t deviceIndex);
     // A MIDI Effect Rack is addressed as deviceIndex kMidiRackBase − its MIDI effect index.
     static constexpr int32_t kMidiRackBase = -1000;
     // Chain MIDI effects (MIDI Effect Rack chains; Instrument Rack chains, #329).

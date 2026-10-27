@@ -130,6 +130,9 @@ public sealed partial class NotaEngine
     public int MidiRackDuplicateChain(int trackId, int midiIndex, int chain)
     { ThrowIfDisposed(); return NativeMethods.MidiRackDuplicateChain(_handle, trackId, midiIndex, chain); }
 
+    public bool MidiRackCheckpoint(int trackId, int midiIndex)
+    { ThrowIfDisposed(); return NativeMethods.MidiRackCheckpoint(_handle, trackId, midiIndex) != 0; }
+
     public string MidiRackChainName(int trackId, int midiIndex, int chain)
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.MidiRackChainName(_handle, trackId, midiIndex, chain)) ?? ""; }
 
