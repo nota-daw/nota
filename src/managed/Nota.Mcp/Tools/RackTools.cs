@@ -48,9 +48,11 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
 
     [McpServerTool(Name = "get_rack"), Description(
         "Snapshot of an Instrument/Drum Rack on a track: rack volume and every chain "
-        + "(index, instrument kind+name, MIDI trigger note, gain/pan/mute/solo, device count).")]
-    public Task<RackSnapshot> GetRack(int trackId) => Read(() =>
+        + "(index, instrument kind+name, MIDI trigger note, gain/pan/mute/solo, device count). nestedChain >= 0 reads the "
+        + "Drum Rack held by that chain of the track's Instrument Rack instead.")]
+    public Task<RackSnapshot> GetRack(int trackId, [Description("-1 = the track's rack; >= 0 = the Drum Rack nested in that chain")] int nestedChain = -1) => Read(() =>
     {
+        var E = nestedChain >= 0 ? NestedRackEngineProxy.Create(this.E, nestedChain) : this.E;
         int n = E.RackChainCount(trackId);
         var chains = new ChainInfo[n];
         for (int c = 0; c < n; c++)
@@ -64,7 +66,7 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     // ---- chains -----------------------------------------------------------
 
     [McpServerTool(Name = "add_rack_chain"), Description("Add a parallel chain to the rack with the given built-in instrument kind. Returns the chain index.")]
-    public Task<int> AddRackChain(int trackId, [Description("Instrument kind id, e.g. 6=Volt, 2=Physical, 5=Aurora")] int instrumentKind)
+    public Task<int> AddRackChain(int trackId, [Description("Instrument kind id, e.g. 6=Volt, 2=Physical, 5=Aurora, 17=Mosaic, 4=Drum Rack (Instrument Rack chains only; reach it with get_rack nestedChain or the effect-rack tools at deviceIndex -100000 - chain)")] int instrumentKind)
         => Mutate(() => E.RackAddChain(trackId, instrumentKind));
 
     [McpServerTool(Name = "duplicate_rack_chain"), Description("Copy a chain right after itself: its instrument, devices, zone, mix and its macro mappings. Returns the new chain index.")]
@@ -73,7 +75,7 @@ public sealed class RackTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
     [McpServerTool(Name = "remove_rack_chain"), Description("Remove a chain from the rack by index.")]
     public Task<bool> RemoveRackChain(int trackId, int chain) => Mutate(() => E.RackRemoveChain(trackId, chain));
 
-    [McpServerTool(Name = "set_chain_instrument"), Description("Replace a chain's instrument with another built-in kind.")]
+    [McpServerTool(Name = "set_chain_instrument"), Description("Replace a chain's instrument with another built-in kind (17 = Nota Mosaic; 4 = a Drum Rack, in an Instrument Rack chain only: racks nest one level).")]
     public Task<bool> SetChainInstrument(int trackId, int chain, int instrumentKind)
         => Mutate(() => E.RackSetChainInstrument(trackId, chain, instrumentKind));
 

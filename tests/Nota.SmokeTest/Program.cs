@@ -9700,8 +9700,9 @@ Console.WriteLine("-- Instrument Rack: C ABI + persistence --");
     using var re = new NotaEngine();
     int rt = re.AddInstrumentRackTrack();
     Check(rt > 0, "rack track created");
-    Check(re.RackChainCount(rt) == 1, "rack starts with one chain");
-    Check(re.RackChainInstrumentKind(rt, 0) == 6, "default chain hosts Nota Volt");
+    Check(re.RackChainCount(rt) == 0, "a new rack starts with no chains");
+    re.RackAddChain(rt, 6);
+    Check(re.RackChainCount(rt) == 1 && re.RackChainInstrumentKind(rt, 0) == 6, "chain 0 hosts Nota Volt");
 
     int c2 = re.RackAddChain(rt, 2);   // Nota Physical
     Check(c2 == 1 && re.RackChainCount(rt) == 2, "second chain added");
@@ -15191,4 +15192,4 @@ Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({fa
 return failures == 0 ? 0 : 1;
 
 static IEnumerable<(string title, Func<IEnumerable<(bool ok, string label)>> run)> RackSections() =>
-    RackRedesignTests.Sections().Concat(MidiRackTests.Sections()).Concat(RackChainMidiTests.Sections());
+    RackRedesignTests.Sections().Concat(MidiRackTests.Sections()).Concat(RackChainMidiTests.Sections()).Concat(RackNestingTests.Sections()).Concat(RackClipboardTests.Sections());

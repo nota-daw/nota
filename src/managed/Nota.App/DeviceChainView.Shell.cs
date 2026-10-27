@@ -374,6 +374,7 @@ public sealed partial class DeviceChainView
             CornerRadius = new CornerRadius(NotaRadius.BodyValue + RingGap), Margin = new Thickness(-RingGap),
             IsHitTestVisible = false, IsVisible = sel,
         };
+        if (!s.Utility) _selRings.Add(selRing);
         var shell = new Border
         {
             Background = ShellBg, BorderBrush = BorderDef,

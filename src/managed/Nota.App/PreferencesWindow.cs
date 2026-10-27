@@ -1201,7 +1201,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         ("Devices (after a click on a device)", new[]
         {
-            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the device with all its settings · paste lands after the selected device, on any track"),
+            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the device with all its settings · paste lands after the selected device, on any track or rack chain"),
+            ("⌘D", "Duplicate the selected device"),
             ("⌘G", "Wrap the selected audio effect in an Audio Effect Rack"),
             ("⌘⇧G", "Take the devices out of a selected one-chain rack"),
             ("Delete", "Delete the selected device"),
@@ -1213,7 +1214,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Hover the zones", "See which chains a note would play"),
             ("Double-click a chain or macro name", "Rename it"),
             ("Right-click a macro", "Map it to a parameter or the selector · clear its mappings"),
-            ("Drag a card's grip", "Move a device within its chain"),
+            ("Drag a device's header", "Move it within its chain · onto another chain's row to move it there"),
+            ("Click a device", "Select it for ⌘C ⌘X ⌘V ⌘D and Delete"),
         }),
         ("Modular (after a click on the canvas)", new[]
         {

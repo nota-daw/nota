@@ -160,12 +160,14 @@ internal sealed partial class RackCardView
             Child = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { top, bottom } },
         };
         if (!audible) row.AttachedToVisualTree += (_, _) => Inactive.Set(row, true, interactive: true);
+        _rcRows.Add((row, c)); // a lane device dragged onto the row moves to this chain
         row.PointerPressed += (_, e) =>
         {
             var pt = e.GetCurrentPoint(row).Properties;
             if (pt.IsRightButtonPressed) { e.Handled = true; RcChainMenu(row, c); return; }
             if (!pt.IsLeftButtonPressed) return;
             if (e.ClickCount == 2 && nameTb.IsPointerOver) { RcPromptRename(nameTb, name, n => a.SetChainName(c, n)); return; }
+            RcSelectChain(c); // ⌘V now pastes at the end of this chain
             if (Sel != c) { Sel = c; DeferRebuild(); }
         };
         DragDrop.SetAllowDrop(row, true);
@@ -214,6 +216,7 @@ internal sealed partial class RackCardView
         var dup = new MenuItem { Header = "Duplicate", IsEnabled = !full };
         dup.Click += (_, _) => { int d = a.DuplicateChain(c); if (d >= 0) Sel = d; DeferRebuild(); };
         f.Items.Add(dup);
+        if (_ra.RackAddress is not null) { f.Items.Add(new Separator()); f.Items.Add(RcPasteItem(c)); }
         if (a.ChainCount() > 1)
         {
             f.Items.Add(new Separator());
@@ -233,7 +236,62 @@ internal sealed partial class RackCardView
     // ---- drops ------------------------------------------------------------------------
 
     private static bool RcIsDevice(BrowserItem it) => it.Kind is BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument
-        or BrowserItemKind.BuiltinEffect or BrowserItemKind.PluginEffect or BrowserItemKind.BuiltinMidiEffect;
+        or BrowserItemKind.BuiltinEffect or BrowserItemKind.PluginEffect or BrowserItemKind.BuiltinMidiEffect or BrowserItemKind.Preset;
+
+    // ---- presets dropped from the Browser -----------------------------------------------
+    // A factory preset, a preset file (user or Mosaic pack) or a drum kit: it brings the device
+    // it is for, which lands like that device, and then the preset is applied to it in place.
+
+    private enum RcPresetFor { None, Instrument, Effect, Midi, Plugin }
+    private readonly record struct RcPreset(RcPresetFor For, int Kind, string FactoryId = "", string File = "", string KitId = "");
+
+    private RcPreset RcResolvePreset(BrowserItem it)
+    {
+        if (it.Kind != BrowserItemKind.Preset) return default;
+        string path = it.Path;
+        if (path.StartsWith("kit:", StringComparison.Ordinal)) return new(RcPresetFor.Instrument, 4, KitId: path["kit:".Length..]);
+        if (path.StartsWith("rhythmkit:", StringComparison.Ordinal)) return default; // a Nota Rhythm kit fills a Rhythm track
+        if (path.StartsWith("factory:", StringComparison.Ordinal))
+        {
+            string id = path["factory:".Length..];
+            if (_ctx.Factory is { } f)
+                foreach (var fp in f.All())
+                    if (fp.Id == id)
+                        return new(fp.IsMidiEffect ? RcPresetFor.Midi : fp.IsInstrument ? RcPresetFor.Instrument : RcPresetFor.Effect, fp.BuiltinKind, FactoryId: id);
+            return default;
+        }
+        if (App.Services?.GetService(typeof(IPresetStore)) is not IPresetStore store || store.Describe(path) is not { } d) return default;
+        var to = d.Type switch
+        {
+            "builtin-instrument" => RcPresetFor.Instrument,
+            "builtin-effect" => RcPresetFor.Effect,
+            "builtin-midi-effect" => RcPresetFor.Midi,
+            "plugin-instrument" or "plugin-effect" => RcPresetFor.Plugin,
+            _ => RcPresetFor.None,
+        };
+        return new(to, d.BuiltinKind, File: path);
+    }
+
+    // Apply a resolved preset to the device it brought: the chain's instrument (device −1), or
+    // the effect / MIDI effect at `device` in chain c.
+    private void RcApplyPreset(RcPreset pr, int c, int device)
+    {
+        IAudioEngine target = pr.For switch
+        {
+            RcPresetFor.Instrument => pr.KitId.Length > 0 ? NestedRackEngineProxy.Create(E, c) : ChainInstrumentProxy(c),
+            RcPresetFor.Effect => ChainDeviceProxy(_ra, c, device, pr.Kind),
+            _ => RackChainMidiEngineProxy.Create(E, _ra, c),
+        };
+        string warn;
+        if (pr.KitId.Length > 0)
+        {
+            warn = "";
+            if (App.Services?.GetService(typeof(IDrumKits)) is IDrumKits kits) kits.LoadInto(target, T, pr.KitId, out warn);
+        }
+        else if (pr.FactoryId.Length > 0) warn = _ctx.Factory?.ApplyInPlace(target, pr.FactoryId, T, device) ?? "";
+        else warn = (App.Services?.GetService(typeof(IPresetStore)) as IPresetStore)?.ApplyFileInPlace(target, pr.File, T, device) ?? "";
+        if (warn.Length > 0) _ctx.Status(warn);
+    }
 
     private static bool RcIsInstrument(BrowserItem it) => it.Kind is BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument;
 
@@ -241,8 +299,26 @@ internal sealed partial class RackCardView
     private bool RcAccepts(BrowserItem it, out string why)
     {
         why = "";
+        if (it.Kind == BrowserItemKind.Preset)
+        {
+            var pr = RcResolvePreset(it);
+            switch (pr.For)
+            {
+                case RcPresetFor.Plugin: why = "Plug-in presets can't go in a rack chain yet."; return false;
+                case RcPresetFor.None: why = "This preset can't go in a rack."; return false;
+                case RcPresetFor.Instrument when !_rp.TakesInstrument:
+                    why = _rp.Kind == RackKind.MidiEffect ? "A MIDI Effect Rack takes MIDI effects only." : "An Audio Effect Rack takes audio effects only."; return false;
+                case RcPresetFor.Effect when !_rp.TakesAudioEffects: why = "A MIDI Effect Rack takes MIDI effects only."; return false;
+                case RcPresetFor.Effect when pr.Kind == 5: why = "A rack can't go inside a rack."; return false;
+                case RcPresetFor.Midi when !_rp.TakesMidiEffects: why = "An Audio Effect Rack takes audio effects only."; return false;
+                case RcPresetFor.Midi when pr.Kind is < 0 or > 5: why = "A rack can't go inside a rack."; return false;
+            }
+            return true;
+        }
         if (RcIsInstrument(it))
         {
+            // A Drum Rack may sit in an Instrument Rack chain; an Instrument Rack can't (specs/041).
+            if (_rp.TakesInstrument && it.Kind == BrowserItemKind.BuiltinInstrument && it.BuiltinKind == 3) { why = "An Instrument Rack can't go inside a rack — add its instruments as chains."; return false; }
             if (_rp.TakesInstrument) return true;
             why = _rp.Kind == RackKind.MidiEffect ? "A MIDI Effect Rack takes MIDI effects only." : "An Audio Effect Rack takes audio effects only.";
             return false;
@@ -268,6 +344,38 @@ internal sealed partial class RackCardView
     {
         if (!RcAccepts(it, out var why)) { _ctx.Status(why); return; }
         var a = _ra;
+        if (it.Kind == BrowserItemKind.Preset)
+        {
+            var pr = RcResolvePreset(it);
+            E.BeginUndoGroup(); // the device and its preset are one step
+            try
+            {
+                switch (pr.For)
+                {
+                    case RcPresetFor.Instrument:
+                        // On a chain an instrument preset replaces the chain's instrument.
+                        if (!a.SetChainInstrument(c, pr.Kind)) { _ctx.Status($"Couldn't load {it.Name}."); return; }
+                        RcApplyPreset(pr, c, -1);
+                        break;
+                    case RcPresetFor.Effect:
+                    {
+                        int d = a.AddChainDevice(c, pr.Kind);
+                        if (d >= 0) RcApplyPreset(pr, c, d);
+                        break;
+                    }
+                    case RcPresetFor.Midi:
+                    {
+                        int j = a.AddChainMidi(c, pr.Kind);
+                        if (j >= 0) RcApplyPreset(pr, c, j);
+                        break;
+                    }
+                }
+            }
+            finally { E.EndUndoGroup(); }
+            Sel = c;
+            DeferRebuild();
+            return;
+        }
         if (RcIsInstrument(it))
         {
             // On a chain an instrument replaces the chain's own; a plug-in starts a new layer.
@@ -285,12 +393,33 @@ internal sealed partial class RackCardView
         var a = _ra;
         if (_rp.Kind == RackKind.MidiEffect && a.ChainCount() >= RcMidiChainLimit) { _ctx.Status($"A MIDI Effect Rack holds up to {RcMidiChainLimit} chains."); return; }
         int c = -1;
-        if (it.Kind == BrowserItemKind.BuiltinInstrument) c = a.AddChain(it.BuiltinKind);
+        if (it.Kind == BrowserItemKind.Preset && RcResolvePreset(it) is { For: RcPresetFor.Instrument } pr)
+        {
+            E.BeginUndoGroup(); // the chain and its preset are one step
+            try
+            {
+                c = a.AddChain(pr.Kind);
+                if (c >= 0 && a.ChainInstrumentKind(c) == pr.Kind) RcApplyPreset(pr, c, -1);
+                else if (c >= 0) { a.RemoveChain(c); c = -1; _ctx.Status($"Couldn't load {it.Name}."); }
+            }
+            finally { E.EndUndoGroup(); }
+        }
+        else if (it.Kind == BrowserItemKind.BuiltinInstrument)
+        {
+            // An instrument the rack can't host would leave an empty chain: take it back.
+            c = a.AddChain(it.BuiltinKind);
+            if (c >= 0 && a.ChainInstrumentKind(c) != it.BuiltinKind) { a.RemoveChain(c); c = -1; _ctx.Status($"{it.Name} can't go in a rack chain."); }
+        }
         else if (it.Kind == BrowserItemKind.PluginInstrument) c = a.AddPluginInstrumentChain(it.CatalogIndex);
         else
         {
-            c = a.AddChain(-1);
-            if (c >= 0) RcDropOnChain(c, it);
+            E.BeginUndoGroup(); // the new chain and what lands on it are one step
+            try
+            {
+                c = a.AddChain(-1);
+                if (c >= 0) RcDropOnChain(c, it);
+            }
+            finally { E.EndUndoGroup(); }
         }
         if (c >= 0) Sel = c;
         DeferRebuild();
@@ -331,7 +460,11 @@ internal sealed partial class RackCardView
             };
         }
 
-        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
+        // The horizontal scrollbar floats over the bottom of the lane (16 px when it expands): keep the
+        // cards above it so it never covers their Open row.
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(0, 0, 0, 18) };
+        _rcStrip = strip;
+        RcCheckSelection();
         void Chev() => strip.Children.Add(new Glyph(GlyphKind.ChevronRight, 8) { Foreground = NotaPalette.TextDisabled, VerticalAlignment = VerticalAlignment.Center });
         bool first = true;
         void Add(Control card) { if (!first) Chev(); strip.Children.Add(card); first = false; }
@@ -373,6 +506,9 @@ internal sealed partial class RackCardView
         void Add(string h, int k) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => { _ra.SetChainInstrument(c, k); DeferRebuild(); }; f.Items.Add(mi); }
         Add("Nota Volt", 6); Add("Nota Physical", 2); Add("Nota Aurora", 5); Add("Nota Pendulum", 8); Add("Nota Operator", 9); Add("Nota Grain", 10);
         Add("Nota Flux", 11); Add("Nota Monolith", 13); Add("Nota Pentad", 14); Add("Nota Consort", 15); Add("Nota Keys", 16);
+        Add("Nota Mosaic", 17);
+        // A Drum Rack in a chain: racks nest one level (specs/041).
+        f.Items.Add(new Separator()); Add("Nota Drum Rack", 4);
         f.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -396,7 +532,7 @@ internal sealed partial class RackCardView
         {
             if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
-            if (slot == RcSlot.Midi) RcAddMidiMenu(box, c); else ShowAddDeviceMenu(_ra, c, box);
+            if (slot == RcSlot.Midi) RcAddMidiMenu(box, c); else ShowAddDeviceMenu(_ra, c, box, withPaste: _ra.RackAddress is not null);
         };
         DragDrop.SetAllowDrop(box, true);
         DragDrop.AddDragOverHandler(box, (_, e) =>
@@ -422,6 +558,7 @@ internal sealed partial class RackCardView
     private void RcAddMidiMenu(Control anchor, int c)
     {
         var f = new MenuFlyout();
+        if (_ra.RackAddress is not null && E.DeviceClipboardKind() == 2) { f.Items.Add(RcPasteItem(c)); f.Items.Add(new Separator()); }
         foreach (var (name, kind) in RcMidiKinds)
         {
             var mi = new MenuItem { Header = name };
@@ -529,9 +666,18 @@ internal sealed partial class RackCardView
             if (pt.IsRightButtonPressed) { e.Handled = true; RcCardMenu(card, c, slot, idx, bypassed, Open); }
             else if (pt.IsLeftButtonPressed && e.ClickCount == 2) { e.Handled = true; Open(); }
         };
-        if (slot != RcSlot.Instrument) RcGripReorder(grip, c, slot, idx);
-        else grip.IsVisible = false;
-        return card;
+        if (slot == RcSlot.Instrument) { grip.IsVisible = false; return card; }
+        // Selected: the track chain's focus ring, outside the card with a small gap.
+        var ring = new Border
+        {
+            BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1.5), Margin = new Thickness(-2),
+            CornerRadius = new CornerRadius(NotaRadius.PanelValue + 2), IsHitTestVisible = false, IsVisible = RcIsSelected(c, slot, idx),
+        };
+        var host = new Panel { Children = { card, ring }, Margin = new Thickness(2, 2, 2, 0) };
+        RcHookCardDrag(head, host, c, slot, idx);
+        RcHookCardDrag(grip, host, c, slot, idx);
+        _rcCards.Add((ring, (RcCardTag)host.Tag!));
+        return host;
     }
 
     private void RcCardMenu(Control anchor, int c, RcSlot slot, int idx, bool bypassed, Action open)
@@ -556,36 +702,18 @@ internal sealed partial class RackCardView
                 DeferRebuild();
             };
             f.Items.Add(b);
-            f.Items.Add(new Separator());
-            f.Items.Add(MenuKit.Danger("Remove", GlyphKind.Trash, () =>
+            if (_ra.RackAddress is not null) { f.Items.Add(new Separator()); RcAddDeviceMenuItems(f, c, slot, idx); }
+            else
             {
-                if (slot == RcSlot.Midi) a.RemoveChainMidi(c, idx); else a.RemoveChainDevice(c, idx);
-                DeferRebuild();
-            }));
+                f.Items.Add(new Separator());
+                f.Items.Add(MenuKit.Danger("Delete", GlyphKind.Trash, () =>
+                {
+                    if (slot == RcSlot.Midi) a.RemoveChainMidi(c, idx); else a.RemoveChainDevice(c, idx);
+                    DeferRebuild();
+                }, MenuKit.DeleteKey));
+            }
         }
         f.ShowAt(anchor, showAtPointer: true);
-    }
-
-    // Drag a card by its grip along the strip: it moves by whole cards within its section.
-    private void RcGripReorder(Control grip, int c, RcSlot slot, int idx)
-    {
-        double startX = 0;
-        bool down = false;
-        grip.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(grip).Properties.IsLeftButtonPressed) return;
-            down = true; startX = e.GetPosition(null).X; e.Pointer.Capture(grip); e.Handled = true;
-        };
-        grip.PointerReleased += (_, e) =>
-        {
-            if (!down) return;
-            down = false; e.Pointer.Capture(null);
-            int steps = (int)Math.Round((e.GetPosition(null).X - startX) / (RcCompactWidth + 14));
-            if (steps == 0) return;
-            if (slot == RcSlot.Midi) _ra.MoveChainMidi(c, idx, idx + steps); else _ra.MoveChainDevice(c, idx, idx + steps);
-            DeferRebuild();
-        };
-        grip.PointerCaptureLost += (_, _) => down = false;
     }
 
     // ---- a parameter row in a compact card --------------------------------------------

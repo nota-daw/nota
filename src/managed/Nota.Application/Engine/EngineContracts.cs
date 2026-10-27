@@ -422,6 +422,9 @@ public readonly record struct RackMacroMapping(
     public const int RackControl = -3;
     /// <summary>DeviceIndex of a chain's MIDI effect j is MidiDeviceBase − j (NOTA_RACK_MIDI_DEVICE_BASE).</summary>
     public const int MidiDeviceBase = -1000;
+    /// <summary>The rack address (RackDev* deviceIndex) of the Drum Rack in chain c of a track's
+    /// Instrument Rack is NestedRackBase − c (NOTA_RACK_NESTED_BASE, specs/041).</summary>
+    public const int NestedRackBase = -100000;
     /// <summary>The pad controls a mapping can drive, by ParamIndex, with their ranges (gain is linear,
     /// pan −1..1, tune in semitones, decay 0..1 with 1 = hold).</summary>
     public static readonly string[] PadParamNames = { "Volume", "Pan", "Tune", "Decay" };

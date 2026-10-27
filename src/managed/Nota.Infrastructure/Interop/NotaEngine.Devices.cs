@@ -81,6 +81,9 @@ public sealed partial class NotaEngine
     /// <summary>0 = empty, 1 = an audio effect, 2 = a MIDI effect.</summary>
     public int DeviceClipboardKind() { ThrowIfDisposed(); return NativeMethods.DeviceClipboardKind(_handle); }
 
+    /// <summary>True when the clipboard holds an audio effect keyed from another track.</summary>
+    public bool DeviceClipboardSidechain() { ThrowIfDisposed(); return NativeMethods.DeviceClipboardSidechain(_handle) != 0; }
+
     /// <summary>Inserts a clone of the copied audio effect at atIndex (-1 = end), one undo step. New index or -1.</summary>
     public int PasteDevice(int trackId, int atIndex)
     { ThrowIfDisposed(); return NativeMethods.PasteDevice(_handle, trackId, atIndex); }

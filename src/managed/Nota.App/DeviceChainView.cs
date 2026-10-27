@@ -118,7 +118,7 @@ public sealed partial class DeviceChainView : UserControl
         HookBrowserDrop();
     }
 
-    public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; _selDeviceIndex = -1; Rebuild(); }
+    public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; _selDeviceIndex = -1; _rackSel = null; _rackCmds = null; Rebuild(); }
 
     /// <summary>Forgets every card's remembered preset label + A/B slots (a project was
     /// opened / created, so track ids no longer mean the same tracks).</summary>
@@ -179,6 +179,7 @@ public sealed partial class DeviceChainView : UserControl
     private void RebuildRow()
     {
         _row.Children.Clear();
+        _selRings.Clear();
         _instrumentCard = null;
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
@@ -250,7 +251,10 @@ public sealed partial class DeviceChainView : UserControl
                c => RackPresetSaveRequested?.Invoke(c),
                ClearDropHints,
                _factory,
-               s => StatusMessage?.Invoke(s));
+               s => StatusMessage?.Invoke(s),
+               () => _rackSel,
+               SelectRackDevice,
+               RackCopied);
 
     // ---- instrument / sends / add ----------------------------------------
 

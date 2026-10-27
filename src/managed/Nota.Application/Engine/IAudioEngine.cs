@@ -513,6 +513,7 @@ public interface IAudioEngine : IDisposable
     bool CopyDevice(int trackId, int deviceIndex);
     bool CopyMidiEffect(int trackId, int index);
     int DeviceClipboardKind();   // 0 empty, 1 audio effect, 2 MIDI effect
+    bool DeviceClipboardSidechain();   // the copied audio effect is keyed from another track
     int PasteDevice(int trackId, int atIndex);       // atIndex -1 = end; new index or -1
     int PasteMidiEffect(int trackId, int atIndex);
     // A full clone right after the device / MIDI effect, one undo step; clipboard untouched.
@@ -806,6 +807,43 @@ public interface IAudioEngine : IDisposable
     int RackDevMode(int trackId, int deviceIndex);
     void RackDevSetMode(int trackId, int deviceIndex, int mode);
 
+    // ---- racks inside racks (specs/041) ---------------------------------------------
+    // One level: a chain of a track's Instrument Rack may hold a Drum Rack, addressed by every
+    // RackDev* call as deviceIndex RackMacroMapping.NestedRackBase − chain. These are the Rack*
+    // calls the Drum Rack card makes, for any rack address.
+    int RackDevAddSamplerChain(int trackId, int deviceIndex, string path, int rootNote, bool loop);
+    bool RackDevSetChainSamplerSample(int trackId, int deviceIndex, int chain, string path, int rootNote);
+    int RackDevAddPluginInstrumentChain(int trackId, int deviceIndex, int catalogIndex);
+    string RackDevChainName(int trackId, int deviceIndex, int chain);
+    void RackDevSetChainName(int trackId, int deviceIndex, int chain, string name);
+    int RackDevChainChoke(int trackId, int deviceIndex, int chain);
+    void RackDevSetChainChoke(int trackId, int deviceIndex, int chain, int group);
+    int RackDevChainTune(int trackId, int deviceIndex, int chain);
+    void RackDevSetChainTune(int trackId, int deviceIndex, int chain, int semitones);
+    float RackDevChainDecay(int trackId, int deviceIndex, int chain);
+    void RackDevSetChainDecay(int trackId, int deviceIndex, int chain, float v);
+    float RackDevSwing(int trackId, int deviceIndex);
+    void RackDevSetSwing(int trackId, int deviceIndex, float v);
+    float RackDevHumanize(int trackId, int deviceIndex);
+    void RackDevSetHumanize(int trackId, int deviceIndex, float v);
+    bool RackDevChainSamplerInfo(int trackId, int deviceIndex, int chain, out NotaSamplerInfo info);
+    bool RackDevSetChainSamplerRoot(int trackId, int deviceIndex, int chain, int rootNote);
+    float RackDevChainSamplerPlayPosition(int trackId, int deviceIndex, int chain);
+    string RackDevChainInstrumentParamId(int trackId, int deviceIndex, int chain, int param);
+    float RackDevChainInstrumentParamDefault(int trackId, int deviceIndex, int chain, int param);
+    int RackDevChainInstrumentScope(int trackId, int deviceIndex, int chain, float[] outv);
+    int RackDevChainInstrumentVoiceCount(int trackId, int deviceIndex, int chain);
+    int RackDevChainInstrumentHeldNotes(int trackId, int deviceIndex, int chain, int[] outNotes);
+    void RackDevChainInstrumentAction(int trackId, int deviceIndex, int chain, int id, int iarg, float farg);
+    void RackDevOpenChainInstrumentEditor(int trackId, int deviceIndex, int chain);
+    string RackDevChainInstrumentPluginId(int trackId, int deviceIndex, int chain);
+    byte[] RackDevGetChainInstrumentState(int trackId, int deviceIndex, int chain);
+    /// <summary>Nota Mosaic as a chain instrument, as <see cref="MosaicSetProgram"/> &amp; co. for a track.</summary>
+    bool RackDevChainMosaicSetProgram(int trackId, int deviceIndex, int chain, string text, bool undoable = true);
+    string RackDevChainMosaicProgram(int trackId, int deviceIndex, int chain);
+    bool RackDevTryGetChainMosaicStatus(int trackId, int deviceIndex, int chain, out NotaMosaicStatus status);
+    long RackDevChainMosaicZoneSampleId(int trackId, int deviceIndex, int chain, int zone);
+
     // ---- MIDI Effect Rack (MIDI kind 6, specs/040; midiIndex = its MIDI effect index) and the
     // MIDI effects in an Instrument Rack chain (#329). See nota_engine.h.
     int RackChainMidiCount(int trackId, int chain);
@@ -885,6 +923,25 @@ public interface IAudioEngine : IDisposable
     bool MidiRackSetMappingRange(int trackId, int midiIndex, int index, float lo, float hi);
     bool MidiRackSetMappingCurve(int trackId, int midiIndex, int index, int curve);
     int RackDevDuplicateChain(int trackId, int deviceIndex, int chain);
+    /// <summary>Rack chain devices on the shared device clipboard (specs/042); deviceIndex addresses
+    /// the rack as the other RackDev calls do (−1 Instrument/Drum Rack, ≥0 Audio Effect Rack,
+    /// −1000 − mi MIDI Effect Rack, NestedRackBase − chain). Paste returns the new index or −1 nothing,
+    /// −2 wrong family, −3 a rack in a rack, −5 MIDI past chain 16; each edit is one undo step.</summary>
+    /// <summary>One undo step for the in-place edits that follow on a rack (a fader drag, a mode or
+    /// switch change): forks the rack now, keeping its children and held notes.</summary>
+    bool RackDevCheckpoint(int trackId, int deviceIndex);
+    /// <summary>A chain's identity while chains move (0 = none); compare it, don't decode it.</summary>
+    long RackDevChainId(int trackId, int deviceIndex, int chain);
+    /// <summary>Loads a sample into a chain's Nota Grain (a Grain preset's source); one undo step.</summary>
+    bool RackDevChainGrainSetSample(int trackId, int deviceIndex, int chain, string path, int rootNote = 60);
+    bool RackDevChainDeviceCopy(int trackId, int deviceIndex, int chain, int index);
+    bool RackDevChainMidiCopy(int trackId, int deviceIndex, int chain, int index);
+    int RackDevChainDevicePaste(int trackId, int deviceIndex, int chain, int atIndex);
+    int RackDevChainMidiPaste(int trackId, int deviceIndex, int chain, int atIndex);
+    int RackDevChainDeviceDuplicate(int trackId, int deviceIndex, int chain, int index);
+    int RackDevChainMidiDuplicate(int trackId, int deviceIndex, int chain, int index);
+    int RackDevChainDeviceMoveTo(int trackId, int deviceIndex, int chain, int index, int toChain);
+    int RackDevChainMidiMoveTo(int trackId, int deviceIndex, int chain, int index, int toChain);
     float RackDevDryWet(int trackId, int deviceIndex);
     void RackDevSetDryWet(int trackId, int deviceIndex, float v);
     bool RackDevPdc(int trackId, int deviceIndex);

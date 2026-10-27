@@ -258,16 +258,20 @@ public sealed class MosaicTools(IAudioEngine engine, IEngineDispatch dispatch, I
 
     [McpServerTool(Name = "load_mosaic_preset"), Description(
         "Load a Nota Mosaic preset by name (a factory name, or a pack preset's name; folder narrows it) into trackId "
-        + "(<= 0: a new Mosaic track). Samples load in the background. Returns the track id, or -1 when no preset matches.")]
-    public Task<int> LoadMosaicPreset(string name, int trackId = -1, string? folder = null) => Mutate(() =>
+        + "(<= 0: a new Mosaic track), or with chain >= 0 into that Instrument Rack chain's Mosaic. Samples load in the "
+        + "background. Returns the track id, or -1 when no preset matches (or the chain holds no Mosaic).")]
+    public Task<int> LoadMosaicPreset(string name, int trackId = -1, string? folder = null, int chain = -1) => Mutate(() =>
     {
+        if (chain >= 0 && E.RackChainInstrumentKind(trackId, chain) != MosaicModel.Kind) return -1;
         var fp = factory.All().FirstOrDefault(p => p.IsInstrument && p.BuiltinKind == MosaicModel.Kind && string.Equals(p.DisplayName, name, StringComparison.OrdinalIgnoreCase));
         var pp = fp.Id is { Length: > 0 } ? null : packs.Presets().FirstOrDefault(p => string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase)
             && (folder is null || string.Equals(p.Folder, folder, StringComparison.OrdinalIgnoreCase)));
         if (fp.Id is not { Length: > 0 } && pp is null) return -1;
-        int t = trackId > 0 && IsMosaic(trackId) ? trackId : E.AddMosaicTrack();
-        if (pp is null) factory.ApplyInPlace(E, fp.Id!, t, -1);
-        else packs.ApplyInPlace(E, pp.Path, t);
+        // A chain's Mosaic takes the preset through the chain view the rack card's editor uses.
+        var e = chain >= 0 ? RackChainEngineProxy.Create(E, chain) : E;
+        int t = chain >= 0 ? trackId : trackId > 0 && IsMosaic(trackId) ? trackId : E.AddMosaicTrack();
+        if (pp is null) factory.ApplyInPlace(e, fp.Id!, t, -1);
+        else packs.ApplyInPlace(e, pp.Path, t);
         return t;
     });
 

@@ -20,22 +20,6 @@ the GitHub release and the news posts — comes from the curated, summarised
 
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
-### Changed
-- **The rack cards are redesigned** (Instrument, Audio Effect and the new MIDI Effect Rack share
-  one card): eight macro knobs; Chains, Zones (Audio: Select) and Macros tabs; the chosen
-  chain's devices as compact cards with their key parameters; a Chain / Rack out panel; a
-  status line. Every theme draws it in its own colours.
-- **Map a macro in place**: press Map and click parameters right on the chain's devices; Esc
-  ends it. The Macros tab sets each target's range (min above max inverts) and the macro's
-  curve, shown as Mixed when an older project gave its targets different curves.
-- **Zones are dragged by their edges**, and hovering the keyboard strip shows which chains a
-  note would play.
-
-### Fixed
-- Undoing or redoing a rack edit puts back what the rack's macros drive, and changes to a
-  mapping's range, curve or a macro's name are undoable.
-- "Save preset" on a MIDI effect's card saves that MIDI effect.
-
 ## [Unreleased]
 
 ### Added
@@ -54,6 +38,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Map a rack's selector to a macro** (Audio Effect and MIDI Effect Racks).
 - **Nota Vocoder in rack chains**: add it to an Instrument or Audio Effect Rack chain from the
   card's menu or the Browser; inside a rack it uses its own Saw or Noise carrier.
+- **Nota Mosaic and the Drum Rack in Instrument Rack chains**: drop either on a rack from the
+  Browser or pick it in the card's chain menus. A Mosaic chain opens the full Mosaic editor
+  (presets, zones, loading) and its program is saved with the rack; a Drum Rack chain opens
+  the Drum Rack card in a window — pads, pad editor, macros and the factory kits — so one
+  track can play a kit on one octave and an instrument on the rest. Outer macros can drive
+  the Drum Rack's macros. Racks nest one level: a Drum Rack goes in an Instrument Rack chain
+  only, and a Drum Rack inside a chain has no swing or humanize of its own. Drum Rack pads take
+  Mosaic too. MCP: `set_chain_instrument` takes 17 and 4, `load_mosaic_preset` takes a chain,
+  `get_rack` reads a nested Drum Rack.
+- **Presets drop onto racks**: drag a preset from the Browser onto a rack — an instrument preset
+  (a factory or user preset, a Mosaic pack preset or a drum kit) starts a new chain with it, or
+  replaces a chain's instrument when dropped on that chain; an effect or MIDI-effect preset adds
+  the device to the chain, preset applied, in one undo step. Plug-in presets don't go into a
+  rack chain yet; a MIDI-effect preset brings its parameters.
+- **Move, copy and paste devices in rack chains**: drag a device's header to reorder it in its
+  chain (a drop bar shows where), or onto another chain's row to move it there with its macro
+  mappings. Click one to select it, then Copy, Cut, Paste, Duplicate or Delete from its menu or
+  with ⌘C / ⌘X / ⌘V / ⌘D / Delete. The clipboard is shared with the track's device chain, so a
+  device copies between the track chain and any rack chain, settings and all (a sidechain key
+  is dropped inside a rack). Each step is one undo step.
+- **Duplicate a device with ⌘D** on the track's device chain (also in its right-click menu).
 - **Move clips with the keyboard** (nota-daw/nota#302): in the Arrangement, ← / → nudge the
   selected clips by the grid step and ⌥← / ⌥→ by a 64th note, stopping at the song start;
   ⌥↑ / ⌥↓ move them to the next track up or down that takes them, at the same beats. Each
@@ -74,6 +79,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and the status line says why. ⌘G on tracks still groups tracks.
 
 ### Changed
+- **A new Instrument Rack starts empty** instead of with a Nota Volt chain: drop an instrument
+  or a preset on it to add the first chain.
+- **A Mosaic in a rack chain lists the presets a Mosaic track does** in its window — the factory
+  multisamples, the pack presets, the program it holds and Init.
+- **The rack cards are redesigned** (Instrument, Audio Effect and the new MIDI Effect Rack share
+  one card): eight macro knobs; Chains, Zones (Audio: Select) and Macros tabs; the chosen
+  chain's devices as compact cards with their key parameters; a Chain / Rack out panel; a
+  status line. Every theme draws it in its own colours.
+- **Map a macro in place**: press Map and click parameters right on the chain's devices; Esc
+  ends it. The Macros tab sets each target's range (min above max inverts) and the macro's
+  curve, shown as Mixed when an older project gave its targets different curves.
+- **Zones are dragged by their edges**, and hovering the keyboard strip shows which chains a
+  note would play.
 - **Splitting a long warped clip is instant** (nota-daw/nota#299, nota-daw/nota#259): a split,
   trim or range cut of a warped clip reuses the stretch the clip already has instead of
   stretching both halves again on the UI thread (13 s for a 20-minute clip before), and the
@@ -81,6 +99,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- A rack card's faders, mode buttons and switches (and zone or select-range drags) undo one
+  gesture at a time on every rack, the MIDI Effect Rack included; a nested Drum Rack's window
+  follows its chain when chains in front of it are removed or moved.
+- Undoing or redoing a rack edit puts back what the rack's macros drive, and changes to a
+  mapping's range, curve or a macro's name are undoable.
+- "Save preset" on a MIDI effect's card saves that MIDI effect.
 - **Linux: file dialogs that never open** (nota-daw/nota#297): when xdg-desktop-portal has no
   working FileChooser backend, Open / Save / Export / Import used to do nothing. Nota now notices
   within 4 seconds (the request fails, answers without showing, or shows nothing) and opens its

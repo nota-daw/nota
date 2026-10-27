@@ -352,6 +352,8 @@ internal static class DeviceCopyTests
     {
         using var e = new NotaEngine();
         int t = e.AddInstrumentRackTrack();
+        e.RackAddChain(t, 6); // a Nota Volt chain first (a new rack starts empty)
+        e.ClearUndoHistory();
         int c = e.RackAddChain(t, 0);
         yield return (e.RackChainCount(t) == 2 && e.Undo() && e.RackChainCount(t) == 1, "rack undo: an added Instrument Rack chain");
         e.RackSetChainZone(t, 0, 36, 60, 0, 127);

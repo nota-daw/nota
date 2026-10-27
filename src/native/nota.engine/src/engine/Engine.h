@@ -883,8 +883,42 @@ class Engine {
     // macro value): fork the rack now, sharing its children and held notes, so the edits that
     // follow land on the fork and Undo brings back the rack as it was.
     bool rackCheckpoint(int32_t trackId, int32_t deviceIndex);
+    // Rack chain devices on the shared device clipboard (specs/042). Copy fills clipDevice_ /
+    // clipMidi_; Paste inserts a fresh clone at `at` (−1 = the end) and returns its index or
+    // −1 nothing / bad address, −2 wrong family for the section, −3 a rack inside a rack,
+    // −5 a MIDI effect past the Instrument Rack's 16 MIDI chains. A pasted audio effect loses
+    // its sidechain key. Duplicate inserts a clone right after; MoveTo moves a device to the end
+    // of another chain of the same rack, mappings and all. Each edit is one rack fork.
+    bool rackChainDeviceCopy(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    bool rackChainMidiCopy(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    int32_t rackChainDevicePaste(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t at);
+    int32_t rackChainMidiPaste(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t at);
+    int32_t rackChainDeviceDuplicate(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    int32_t rackChainMidiDuplicate(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    int32_t rackChainDeviceMoveTo(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, int32_t toChain);
+    int32_t rackChainMidiMoveTo(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, int32_t toChain);
+    bool deviceClipboardSidechain() const;
+    // A chain's identity for a window that must follow it while chains move: a number every new
+    // chain takes and every fork of the rack keeps (nested edits too), changed when the chain's
+    // instrument is swapped for another; 0 for a bad address.
+    int64_t rackChainId(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    // Load a sample into a chain's Nota Grain (a factory Grain preset's source), one undo step.
+    bool rackChainGrainSetSample(int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& path, int32_t rootNote);
     // A MIDI Effect Rack is addressed as deviceIndex kMidiRackBase − its MIDI effect index.
     static constexpr int32_t kMidiRackBase = -1000;
+    // A Drum Rack in chain c of the track's Instrument Rack is addressed as kNestedRackBase − c
+    // (racks nest one level, specs/041). Below the MIDI-rack range: test it first.
+    static constexpr int32_t kNestedRackBase = -100000;
+    static bool isNestedRack(int32_t deviceIndex) { return deviceIndex <= kNestedRackBase; }
+    // Whether a chain of the rack at (trackId, deviceIndex) may take instrument `kind`.
+    bool rackKindAllowed(int32_t trackId, int32_t deviceIndex, int32_t kind) const;
+    // Nota Mosaic as a chain instrument (specs/041), mirroring mosaicSetProgram & co. for a
+    // track: checkpoint = an undoable edit (a fresh Mosaic swaps into a fork of the rack).
+    bool rackChainMosaicSetProgram(
+        int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& text, bool checkpoint);
+    std::string rackChainMosaicProgram(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    bool rackChainMosaicStatus(int32_t trackId, int32_t deviceIndex, int32_t chain, NotaMosaicStatus* out) const;
+    int64_t rackChainMosaicZoneSampleId(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t zone) const;
     // Chain MIDI effects (MIDI Effect Rack chains; Instrument Rack chains, #329).
     int32_t rackChainMidiCount(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     int32_t rackAddChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t kind);
@@ -1248,6 +1282,7 @@ class Engine {
     std::shared_ptr<Track> findTrackAuthoring(int32_t id) const;
     std::shared_ptr<Track> cloneTrack(const Track& t) const;
     std::shared_ptr<SampleBuffer> findSampleById(int64_t sampleId) const; // M7-6b
+    static std::shared_ptr<SampleBuffer> chainSampleById(const RackCore* rack, int64_t sampleId, int depth);
     void publish(std::shared_ptr<Graph> g);                               // checkpoints (undo), then publishRaw
     void publishRaw(std::shared_ptr<Graph> g);                            // swap live/authoring only, no undo entry
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)

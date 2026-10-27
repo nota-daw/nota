@@ -68,7 +68,20 @@ class RackCore {
         std::atomic<float> velScale{1.0f};  // 0..2
     };
 
+    // A chain's identity for the UI (a window that follows its chain): every new chain takes
+    // the next number, and copies of the rack state (forks for undo) keep it.
+    static uint64_t nextChainUid() {
+        static std::atomic<uint64_t> next{1};
+        return next.fetch_add(1, std::memory_order_relaxed);
+    }
+
     struct RackChain {
+        uint64_t uid = nextChainUid();
+        // Bumped when the chain's instrument is swapped for another (setChainInstrument); an
+        // edit of the same instrument (a nested rack's fork, a Mosaic program, a Grain sample)
+        // keeps it. The chain id the UI follows is uid + this, so a window for the old
+        // instrument lets go of a replacement.
+        uint32_t instGen = 0;
         std::shared_ptr<Instrument> instrument;       // null for effect-rack chains
         std::vector<std::shared_ptr<Device>> devices; // insert chain
         // MIDI effects in front of the chain (v9): a MIDI Effect Rack chain is only these;
@@ -185,6 +198,12 @@ class RackCore {
     // Returns the new chain index or -1.
     int32_t duplicateChain(int32_t chain);
     bool setChainInstrument(int32_t chain, int32_t instKind);
+    // Puts a ready instrument at the head of a chain, keeping the chain's devices, MIDI effects,
+    // controls and mappings (a chain Mosaic's new program, a nested Drum Rack's fork). specs/041.
+    // `prepare` = false for an instrument already prepared at this rate whose children are shared
+    // with a playing copy (a nested rack's fork): preparing them again would reset live effects.
+    bool replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst, bool prepare = true);
+    uint64_t chainUid(int32_t chain) const; // uid and instrument generation, see RackChain
     int32_t chainInstrumentKind(int32_t chain) const;
     Instrument* chainInstrument(int32_t chain) const;
     int32_t chainDeviceCount(int32_t chain) const;
@@ -195,6 +214,12 @@ class RackCore {
     int32_t addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, bool prepare = true);
     bool removeChainDevice(int32_t chain, int32_t dev);
     bool moveChainDevice(int32_t chain, int32_t from, int32_t to);
+    // Insert a device at `at` (−1 or past the end = the end); the chain's mappings at or after
+    // `at` shift up, the new device has none (specs/042). Returns its index, or −1.
+    int32_t insertChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, int32_t at, bool prepare = true);
+    // Move device `idx` to the end of `toChain`'s effects; its mappings follow it (specs/042).
+    // Returns its new index, or −1 (bad address, or the same chain).
+    int32_t moveChainDeviceToChain(int32_t chain, int32_t idx, int32_t toChain);
     Device* chainDeviceAt(int32_t chain, int32_t dev) const;
 
     // Chain MIDI effects (v9): built-in kinds 0..5 only (a MIDI Effect Rack never nests).
@@ -203,6 +228,8 @@ class RackCore {
     int32_t addChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev);
     bool removeChainMidiDevice(int32_t chain, int32_t idx);
     bool moveChainMidiDevice(int32_t chain, int32_t from, int32_t to);
+    int32_t insertChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev, int32_t at);
+    int32_t moveChainMidiDeviceToChain(int32_t chain, int32_t idx, int32_t toChain);
     MidiDevice* chainMidiDeviceAt(int32_t chain, int32_t idx) const;
 
     ChainControls* chainControls(int32_t chain) const;
@@ -378,10 +405,10 @@ class RackCore {
 
     // Drive every mapped target from its macro again. After an undo or redo swaps in another
     // copy of the rack, the children it shares with the copy still hold the values the other
-    // copy's mappings gave them (specs/040). Message thread.
-    void reapplyMacros() {
-        for (int32_t i = 0; i < kNumMacros; ++i) applyMacro(i, macros_[i].load(std::memory_order_relaxed));
-    }
+    // copy's mappings gave them (specs/040). A rack nested in a chain (a Drum Rack in an
+    // Instrument Rack chain, specs/041) shares its children with its undo copies too, so it is
+    // driven again as well. Message thread.
+    void reapplyMacros();
 
     // ---- undoable edits ---------------------------------------------------
     // Take over another rack's content (#236). The engine edits a copy of the rack instead
@@ -401,8 +428,11 @@ class RackCore {
 
   public:
     // Built-in instrument factory (public so the Engine can read a fresh one's param
-    // defaults for a chain instrument, e.g. double-click reset on Sampler knobs).
+    // defaults for a chain instrument, e.g. double-click reset on Sampler knobs). Kind 17 is an
+    // empty Nota Mosaic; kind 4 an empty Drum Rack, built only outside a rack being read
+    // (racks nest one level, specs/041 — the engine decides where a Drum Rack may go).
     static std::shared_ptr<Instrument> makeInstrument(int32_t kind);
+    static bool isRackKind(int32_t kind) { return kind == 3 || kind == 4; }
 
   protected:
     static std::shared_ptr<Device> makeDevice(int32_t kind) { return makeChainDevice(kind); }

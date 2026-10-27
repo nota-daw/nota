@@ -34,6 +34,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
 
     private readonly DeviceCardContext _ctx = ctx;
     private IAudioEngine E => _ctx.Engine;
+    // A Drum Rack nested in an Instrument Rack chain, shown through NestedRackEngineProxy
+    // (specs/041): no kit timing and no MIDI Learn targets of its own.
+    private bool Nested => E is NestedRackEngineProxy;
     private int T => _ctx.TrackId;
     // The chosen chain: each shared rack card keeps its own (several racks can sit on one
     // track); the Drum Rack uses the device view's.
@@ -179,9 +182,10 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     }
 
     // Add-device menu: built-in effects + a "Plug-ins" submenu of installed effect plug-ins.
-    private void ShowAddDeviceMenu(IRackAccess a, int sc, Control anchor)
+    private void ShowAddDeviceMenu(IRackAccess a, int sc, Control anchor, bool withPaste = false)
     {
         var f = new MenuFlyout();
+        if (withPaste && E.DeviceClipboardKind() == 1) { f.Items.Add(RcPasteItem(sc)); f.Items.Add(new Separator()); }
         for (int k = 0; k < RackDeviceNames.Length; k++)
         {
             int kk = RackDeviceKinds[k];
@@ -220,6 +224,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         int ik = a.ChainInstrumentKind(sc);
         if (ik == -1) { try { E.RackOpenChainInstrumentEditor(T, sc); } catch { /* no-op */ } return; }
         if (ik == 1) { OpenChainSamplerWindow(a, anchor, sc, InstrumentPresets(a, sc, ik)); return; }
+        if (ik == 4 && a is InstrumentRackAccess && !Nested) { OpenNestedDrumRackWindow(a, sc, anchor); return; }
         string nm = string.IsNullOrEmpty(a.ChainInstrumentName(sc)) ? "Instrument" : a.ChainInstrumentName(sc);
         var strategy = _irFactory.Resolve(ik, true);
         var proxy = ChainInstrumentProxy(sc);
@@ -236,6 +241,60 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     }
 
     private const double CardBodyH = DeviceCardKit.CardH - DeviceCardKit.HeaderH;
+
+    // A Drum Rack in an Instrument Rack chain (specs/041): the Drum Rack card itself, built over
+    // a NestedRackEngineProxy so every call it makes addresses the nested rack, in the device
+    // window. The factory kits are the window's presets, as on a Drum Rack track.
+    private void OpenNestedDrumRackWindow(IRackAccess a, int sc, Control anchor)
+    {
+        var proxy = NestedRackEngineProxy.Create(E, sc);
+        var pp = (NestedRackEngineProxy)(object)proxy;
+        // The window follows its Drum Rack by identity, not by chain index: removing or moving
+        // chains in front of it shifts the index, and another chain's kit must never be driven.
+        // A chain that's gone (or no longer holds this Drum Rack) leaves the window inert.
+        long id = E.RackDevChainId(T, -1, sc);
+        int Resolve()
+        {
+            if (pp.Chain >= 0 && pp.Chain < a.ChainCount() && E.RackDevChainId(T, -1, pp.Chain) == id) return pp.Chain;
+            for (int c = 0; c < a.ChainCount(); c++)
+                if (E.RackDevChainId(T, -1, c) == id) return pp.Chain = c;
+            return pp.Chain = -1; // an address no rack has: every call from the old card goes nowhere
+        }
+        int sel = 0;
+        var kits = App.Services?.GetService(typeof(IDrumKits)) as IDrumKits;
+        DeviceWindow win = null!;
+        win = new DeviceWindow("Nota Drum Rack", E.GetTrackName(T), "Drums", tickReg =>
+        {
+            // The chain may have moved or gone under the open window: follow it, or show nothing
+            // rather than drive another rack.
+            int at = Resolve();
+            if (id == 0 || at < 0 || a.ChainInstrumentKind(at) != 4)
+                return new DeviceWindowPage(new TextBlock { Text = "This Drum Rack is no longer in the rack.", Foreground = TextTertiary, Margin = new Thickness(12) }, 700, CardBodyH);
+            tickReg(() => { if (Resolve() != at) win.Refill(); });
+            var refreshers = new List<Action>();
+            var ctx = new DeviceCardContext(proxy, T, tickReg, _ctx.NotifyChanged, (_, _, _, _) => { }, _ => { }, _ => { }, () => sel, v => sel = v,
+                refreshers.Add, () => { foreach (var r in refreshers) r(); }, () => Avalonia.Threading.Dispatcher.UIThread.Post(() => { win.Refill(); _ctx.RequestRebuild(); }),
+                _ => { }, () => { }, _ctx.Factory, _ctx.Status);
+            tickReg(() => { foreach (var r in refreshers) r(); });
+            var body = new RackCardView(ctx).BuildDrumRackBody(out _);
+            DeviceWindowPresets? presets = null;
+            if (kits is not null)
+            {
+                var all = kits.All().ToList();
+                string cur = kits.Identify(proxy, T);
+                presets = new DeviceWindowPresets(all.Select(k => k.Name).ToList(), all.FindIndex(k => k.Id == cur), i =>
+                {
+                    kits.LoadInto(proxy, T, all[i].Id, out string warn);
+                    if (warn.Length > 0) _ctx.Status(warn);
+                    sel = 0;
+                    win.Refill();
+                    _ctx.RequestRebuild();
+                });
+            }
+            return new DeviceWindowPage(new Border { Width = 700, Height = CardBodyH, ClipToBounds = true, Child = body }, 700, CardBodyH, presets);
+        }, status: () => pp.Chain < 0 ? "Removed" : $"{ChainLocation(a, pp.Chain)} · {E.RackDevChainCount(T, RackMacroMapping.NestedRackBase - pp.Chain)} pads") { ContextTrackId = T };
+        win.ShowFrom(anchor);
+    }
 
     // ---- device window: where the device lives + a live line for its status bar ----
 
@@ -292,7 +351,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         var items = presets.Items;
         if (items.Count == 0) return null;
         int cur = -1;
-        if (_chainPresetIds.TryGetValue(presets.Key, out var curId))
+        string? curId = presets.Current?.Invoke();
+        if (string.IsNullOrEmpty(curId)) _chainPresetIds.TryGetValue(presets.Key, out curId);
+        if (!string.IsNullOrEmpty(curId))
             for (int i = 0; i < items.Count; i++) if (items[i].Id == curId) { cur = i; break; }
         return new DeviceWindowPresets(items.Select(p => p.Name).ToList(), cur, i =>
         {
@@ -307,7 +368,9 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
 
     // A chain slot's preset list and how to apply one in place. Key names the slot (rack
     // addressing + chain + device + kind) so the header remembers the last preset applied.
-    private sealed record ChainPresets(string Key, IReadOnlyList<(string Id, string Name)> Items, Action<string> Apply);
+    // Current, when given, names the preset the device holds now (Mosaic: by its program).
+    private sealed record ChainPresets(string Key, IReadOnlyList<(string Id, string Name)> Items, Action<string> Apply,
+        Func<string>? Current = null);
     private static readonly Dictionary<string, string> _chainPresetIds = new();
 
     private List<(string Id, string Name)> FactoryItems(int kind, bool instrument)
@@ -318,18 +381,29 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     // Factory presets apply through the same proxies the bespoke editors use, so the
     // preset code sees the chain instrument / device as if it were the track's own.
     private ChainPresets InstrumentPresets(IRackAccess a, int sc, int ik)
-        => new($"{a.GetType().Name}:{T}:{a.AutomationDeviceIndex}:{sc}:i{ik}", FactoryItems(ik, instrument: true),
+        => ik == Nota.Application.MosaicModel.Kind && _ctx.Factory is { } f ? MosaicChainPresets(a, sc, f) : new($"{a.GetType().Name}:{T}:{a.AutomationDeviceIndex}:{sc}:i{ik}", FactoryItems(ik, instrument: true),
             id => _ctx.Factory?.ApplyInPlace(ChainInstrumentProxy(sc), id, T, -1));
     private ChainPresets DevicePresets(IRackAccess a, int sc, int d, int kind)
         => new($"{a.GetType().Name}:{T}:{a.AutomationDeviceIndex}:{sc}:{d}:d{kind}", FactoryItems(kind, instrument: false),
             id => _ctx.Factory?.ApplyInPlace(ChainDeviceProxy(a, sc, d, kind), id, T, d));
 
-    private IAudioEngine ChainInstrumentProxy(int sc)
+    // A Mosaic in a chain lists what a Mosaic track does — the factory multisamples, the pack
+    // presets, the program it holds and the card's Init — through the chain's proxy.
+    private ChainPresets MosaicChainPresets(IRackAccess a, int sc, IFactoryPresets factory)
     {
-        IAudioEngine proxy = System.Reflection.DispatchProxy.Create<IAudioEngine, RackChainEngineProxy>();
-        var pp = (RackChainEngineProxy)(object)proxy; pp.Inner = E; pp.Chain = sc;
-        return proxy;
+        var proxy = ChainInstrumentProxy(sc);
+        var cp = DeviceChainView.MosaicPresetsFor(factory, App.Services?.GetService(typeof(IMosaicPacks)) as IMosaicPacks, proxy, T);
+        var items = new List<(string Id, string Name)>();
+        if (cp.Init is not null) items.Add(("init:", "Init"));
+        items.AddRange(cp.Items);
+        return new($"{a.GetType().Name}:{T}:{a.AutomationDeviceIndex}:{sc}:i{Nota.Application.MosaicModel.Kind}", items, id =>
+        {
+            string w = id == "init:" ? cp.Init!() : cp.Apply(id);
+            if (w.Length > 0) _ctx.Status(w);
+        }, cp.Current);
     }
+
+    private IAudioEngine ChainInstrumentProxy(int sc) => RackChainEngineProxy.Create(E, sc);
     private IAudioEngine ChainDeviceProxy(IRackAccess a, int sc, int d, int kind)
     {
         IAudioEngine proxy = System.Reflection.DispatchProxy.Create<IAudioEngine, RackChainDeviceEngineProxy>();
@@ -413,6 +487,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         void Add(string h, int k) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => { int c = a.AddChain(k); if (c >= 0) Sel = c; _ctx.RequestRebuild(); }; f.Items.Add(mi); }
         Add("Nota Volt", 6); Add("Nota Sampler", 1); Add("Nota Physical", 2); Add("Nota Aurora", 5);
         Add("Nota Pendulum", 8); Add("Nota Operator", 9); Add("Nota Grain", 10); Add("Nota Flux", 11); Add("Nota Monolith", 13); Add("Nota Pentad", 14); Add("Nota Consort", 15); Add("Nota Keys", 16);
+        Add("Nota Mosaic", 17);
+        f.Items.Add(new Separator()); Add("Nota Drum Rack", 4);   // racks nest one level (specs/041)
         f.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -509,7 +585,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         // A macro rides the rack's plugin-param surface, so it's MIDI-learnable like any
         // plugin param — this is the in-model path for driving nested chain params over MIDI
         // (map a param to a macro, then learn the macro).
-        MidiLearn.Bind(bar, MidiTarget.PluginParam(T, di, m), "Macro " + (m + 1));
+        if (!Nested) MidiLearn.Bind(bar, MidiTarget.PluginParam(T, di, m), "Macro " + (m + 1));
         bar.Format = x => Pct((float)x);
         ValueEntry.Attach(bar, "Macro " + (m + 1), val);
         if (di < 0) _ctx.AddInstFader(m, bar, val);   // live-refresh follows the instrument-rack macros
@@ -745,33 +821,50 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     }
 }
 
-// Wraps an engine so a built-in instrument's own editor can drive a rack CHAIN instrument:
-// its plugin-param calls (trackId, deviceIndex −1, i) are redirected to the chain surface
-// (trackId, chain, i); automation writes are no-ops (chain params follow macros); everything
-// else delegates to the real engine.
-internal class RackChainEngineProxy : System.Reflection.DispatchProxy
+// A rack chain's MIDI effect seen as a track MIDI effect, so a MIDI-effect preset applies to it
+// unchanged: its parameter calls (track, index, p) go to (chain, index) through the rack access.
+// Any other MIDI-effect call answers a default and never reaches the track's own MIDI effect at
+// that index; a chain MIDI effect has no state blob here, so a preset brings its parameters.
+internal class RackChainMidiEngineProxy : System.Reflection.DispatchProxy
 {
     public Nota.Application.IAudioEngine Inner = null!;
+    public IRackAccess Access = null!;
     public int Chain;
+
+    public static Nota.Application.IAudioEngine Create(Nota.Application.IAudioEngine inner, IRackAccess access, int chain)
+    {
+        var proxy = Create<Nota.Application.IAudioEngine, RackChainMidiEngineProxy>();
+        var pp = (RackChainMidiEngineProxy)(object)proxy; pp.Inner = inner; pp.Access = access; pp.Chain = chain;
+        return proxy;
+    }
+
     protected override object? Invoke(System.Reflection.MethodInfo? m, object?[]? args)
     {
-        switch (m?.Name)
+        string name = m?.Name ?? "";
+        int Idx() => (int)args![1]!;
+        int P() => (int)args![2]!;
+        switch (name)
         {
-            case nameof(Nota.Application.IAudioEngine.PluginParamCount):     return Inner.RackChainInstrumentParamCount((int)args![0]!, Chain);
-            case nameof(Nota.Application.IAudioEngine.PluginParamId):        return Inner.RackChainInstrumentParamId((int)args![0]!, Chain, (int)args![2]!);
-            case nameof(Nota.Application.IAudioEngine.PluginParamGet):       return Inner.RackChainInstrumentParamGet((int)args![0]!, Chain, (int)args![2]!);
-            case nameof(Nota.Application.IAudioEngine.PluginParamSet):       Inner.RackChainInstrumentParamSet((int)args![0]!, Chain, (int)args![2]!, (float)args![3]!); return null;
-            case nameof(Nota.Application.IAudioEngine.InstrumentParamDefault): return Inner.RackChainInstrumentParamDefault((int)args![0]!, Chain, (int)args![1]!);
-            case nameof(Nota.Application.IAudioEngine.TrackInstrumentKind):  return Inner.RackChainInstrumentKind((int)args![0]!, Chain);
-            case nameof(Nota.Application.IAudioEngine.BeginAutomationWrite):
-            case nameof(Nota.Application.IAudioEngine.EndAutomationWrite):   return null;
-            // Live telemetry comes from the chain instrument, not the track's rack instrument.
-            case nameof(Nota.Application.IAudioEngine.InstrumentScope):      return Inner.RackChainInstrumentScope((int)args![0]!, Chain, (float[])args![1]!);
-            case nameof(Nota.Application.IAudioEngine.InstrumentVoiceCount): return Inner.RackChainInstrumentVoiceCount((int)args![0]!, Chain);
-            case nameof(Nota.Application.IAudioEngine.InstrumentHeldNotes):  return Inner.RackChainInstrumentHeldNotes((int)args![0]!, Chain, (int[])args![1]!);
-            case nameof(Nota.Application.IAudioEngine.InstrumentAction):     Inner.RackChainInstrumentAction((int)args![0]!, Chain, (int)args![1]!, (int)args![2]!, (float)args![3]!); return null;
-            default: return m!.Invoke(Inner, args);
+            case nameof(Nota.Application.IAudioEngine.MidiEffectKind):         return Access.ChainMidiKind(Chain, Idx());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectName):         return Access.ChainMidiName(Chain, Idx());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectParamCount):   return Access.ChainMidiParamCount(Chain, Idx());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectParamName):    return Access.ChainMidiParamName(Chain, Idx(), P());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectParamMin):     return Access.ChainMidiParamMin(Chain, Idx(), P());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectParamMax):     return Access.ChainMidiParamMax(Chain, Idx(), P());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectGetParam):     return Access.ChainMidiParamGet(Chain, Idx(), P());
+            // Presets land on a freshly added effect, whose values are its defaults.
+            case nameof(Nota.Application.IAudioEngine.MidiEffectParamDefault): return Access.ChainMidiParamGet(Chain, Idx(), P());
+            case nameof(Nota.Application.IAudioEngine.MidiEffectSetParam):     Access.ChainMidiParamSet(Chain, Idx(), P(), (float)args![3]!); return null;
         }
+        if (name.Contains("MidiEffect", StringComparison.Ordinal))
+        {
+            var rt = m!.ReturnType;
+            if (rt == typeof(void)) return null;
+            if (rt == typeof(byte[])) return Array.Empty<byte>();
+            if (rt == typeof(string)) return "";
+            return rt.IsValueType ? Activator.CreateInstance(rt) : null;
+        }
+        return m!.Invoke(Inner, args);
     }
 }
 

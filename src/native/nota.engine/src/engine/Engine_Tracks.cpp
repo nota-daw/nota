@@ -45,11 +45,23 @@ std::shared_ptr<SampleBuffer> Engine::findSampleById(int64_t sampleId) const {
             for (int v = 0; v < RhythmMachine::kVoices; ++v)
                 if (auto b = rh->voiceSampleBuf(v))
                     if (b->id == sampleId) return b;
-        // Samplers nested in a rack's chains (Drum Rack pads / Instrument Rack chains).
-        if (auto* rack = dynamic_cast<RackCore*>(t->instrument.get()))
-            for (int32_t c = 0; c < rack->chainCount(); ++c)
-                if (auto* smp = dynamic_cast<Sampler*>(rack->chainInstrument(c)))
-                    if (smp->sample() && smp->sample()->id == sampleId) return smp->sample();
+        // Samplers and Mosaics in a rack's chains (Drum Rack pads / Instrument Rack chains), and
+        // in the pads of a Drum Rack nested in a chain (specs/041).
+        if (auto b = chainSampleById(dynamic_cast<RackCore*>(t->instrument.get()), sampleId, 0)) return b;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<SampleBuffer> Engine::chainSampleById(const RackCore* rack, int64_t sampleId, int depth) {
+    if (!rack || depth > 1) return nullptr;
+    for (int32_t c = 0; c < rack->chainCount(); ++c) {
+        Instrument* inst = rack->chainInstrument(c);
+        if (auto* smp = dynamic_cast<Sampler*>(inst))
+            if (smp->sample() && smp->sample()->id == sampleId) return smp->sample();
+        if (auto* mo = dynamic_cast<Mosaic*>(inst))
+            for (auto& b : mo->samples())
+                if (b->id == sampleId) return b;
+        if (auto b = chainSampleById(dynamic_cast<RackCore*>(inst), sampleId, depth + 1)) return b;
     }
     return nullptr;
 }
