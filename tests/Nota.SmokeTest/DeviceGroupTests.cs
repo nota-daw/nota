@@ -34,6 +34,30 @@ internal static class DeviceGroupTests
         foreach (var r in ArpInMidiRack()) yield return r;
         foreach (var r in RackChainPaste()) yield return r;
         foreach (var r in RackRenders()) yield return r;
+        foreach (var r in MasterKey()) yield return r;
+    }
+
+    // A keyed Compressor grouped on the master keeps its key through save / reload.
+    private static IEnumerable<(bool, string)> MasterKey()
+    {
+        using var e = new NotaEngine();
+        int src = e.AddAudioTrack();
+        int m = e.MasterTrackId;
+        int cp = e.AddBuiltinDevice(m, Compressor);
+        e.SetDeviceSidechainSource(m, cp, src);
+        e.WrapDeviceInRack(m, cp);
+        string dir = Path.Combine(Path.GetTempPath(), "nota-smoke-group-master-" + Guid.NewGuid().ToString("N") + ".nota");
+        try
+        {
+            ProjectService.Save(ProjectService.Capture(e, new TransportState(120.0, 1.0, false, false), new List<string>()), dir, e);
+            using var x = new NotaEngine();
+            var w = ProjectService.Apply(ProjectService.Load(dir), x, dir);
+            int xs = -1;
+            for (int i = 0; i < x.TrackCount; i++) if (x.TryGetTrackInfo(i, out var ti) && !ti.IsInstrument) xs = ti.Id;
+            yield return (w.Count == 0 && x.RackChainSidechain(x.MasterTrackId, cp, 0, 0) is { SourceTrack: var k } && k == xs && xs > 0,
+                $"master: a keyed Compressor grouped on the master keeps its key through save / reload ({string.Join("; ", w)})");
+        }
+        finally { try { Directory.Delete(dir, true); } catch { } }
     }
 
     // FR-015: the new rack's chain is named after its first device (an Instrument Rack's after
@@ -76,6 +100,13 @@ internal static class DeviceGroupTests
         d = e.RackChainMidiCcDest(t, -1000, 0, 0);
         yield return (d is { Device: 1, Chain: 0, Slot: 0, Param: 1 },
             $"arp in a rack: grouping its target too makes the target nested ({d})");
+        // Undo / redo of grouping the target put the Arp's target back and forth (shadows, no clone).
+        e.Undo();
+        var u = e.RackChainMidiCcDest(t, -1000, 0, 0);
+        e.Redo();
+        var re = e.RackChainMidiCcDest(t, -1000, 0, 0);
+        yield return (u is { Device: 1, Chain: -1 } && re is { Device: 1, Chain: 0, Slot: 0 },
+            $"arp in a rack: undo / redo of grouping its target restore the target ({u} / {re})");
         string dir = Path.Combine(Path.GetTempPath(), "nota-smoke-group-arp-" + Guid.NewGuid().ToString("N") + ".nota");
         try
         {
@@ -104,6 +135,37 @@ internal static class DeviceGroupTests
         ie.GroupDevices(it, 0, 1, true, 0, 1);   // Arp, Volt, EQ-8 in; the Delay stays at index 0
         yield return (ie.RackChainMidiCount(it, 0) == 1 && ie.RackChainMidiCcDest(it, -1, 0, 0) is { Device: 0, Chain: -1, Param: 1 },
             $"arp in a rack: a target left outside an Instrument Rack group shifts once ({ie.RackChainMidiCcDest(it, -1, 0, 0)})");
+        // With no MIDI effects left on the track the grouped Arp's CC route still runs: its CC
+        // value (0 before any note) drives the Delay param to its minimum while playing.
+        float mn = ie.DeviceParamMin(it, 0, 1), mx = ie.DeviceParamMax(it, 0, 1);
+        ie.DeviceSetParam(it, 0, 1, mx);
+        var pb = new float[512 * 2];
+        ie.Seek(0); ie.Play();
+        for (int k = 0; k < 4; k++) ie.RenderOffline(pb, 512, 44100);
+        ie.StopTransport();
+        yield return (ie.TrackMidiEffectCount(it) == 0 && Math.Abs(ie.DeviceGetParam(it, 0, 1) - mn) < 1e-4f * Math.Max(1f, mx - mn),
+            $"arp in a rack: the grouped Arp still drives its target with no MIDI effects on the track ({ie.DeviceGetParam(it, 0, 1):F3}, min {mn:F3})");
+
+        // Arp and target in one Instrument Rack chain: a move inside the chain takes the target
+        // along, removing the target drops it.
+        using var je = new NotaEngine();
+        int jt = je.AddInstrumentTrack();
+        je.SetTrackBuiltinInstrument(jt, Volt);
+        int ja = je.AddMidiEffect(jt, Arp);
+        je.AddBuiltinDevice(jt, Eq8);
+        int jd = je.AddBuiltinDevice(jt, Delay);
+        je.SetMidiEffectCcDest(jt, ja, jd, 1);
+        je.GroupDevices(jt, 0, 1, true, 0, 2);
+        var j0 = je.RackChainMidiCcDest(jt, -1, 0, 0);
+        je.RackDevMoveChainDevice(jt, -1, 0, 1, 0);   // the Delay before the EQ-8
+        var j1 = je.RackChainMidiCcDest(jt, -1, 0, 0);
+        je.RackDevRemoveChainDevice(jt, -1, 0, 0);    // the Delay goes
+        var j2 = je.RackChainMidiCcDest(jt, -1, 0, 0);
+        je.Undo();
+        var j3 = je.RackChainMidiCcDest(jt, -1, 0, 0);
+        yield return (j0 is { Chain: 0, Slot: 1 } && j1 is { Chain: 0, Slot: 0 } && j2 is { Chain: -1 } && j2.Value.Device < 0
+                      && j3 is { Chain: 0, Slot: 0 },
+            $"arp in a rack: edits inside the rack keep the Arp's target ({j0} → {j1} → {j2}, undo {j3})");
     }
 
     // Several devices pasted into a rack chain: what the chain takes, in order, one undo step.
@@ -323,6 +385,11 @@ internal static class DeviceGroupTests
         var cvp = e.CvLinkPath(t, link);
         yield return (e.CvLinkDevice(t, link) == 1 && cvp.TargetChain == 0 && cvp.TargetSlot == 1,
             $"links: the LFO's CV link targets the Reverb in the rack ({e.CvLinkDevice(t, link)}, {cvp})");
+        float rlo = e.RackDevChainDeviceParamMin(t, 1, 0, 1, 0), rhi = e.RackDevChainDeviceParamMax(t, 1, 0, 1, 0);
+        float knob = rlo + 0.42f * (rhi - rlo);
+        e.RackDevChainDeviceParamSet(t, 1, 0, 1, 0, knob);
+        yield return (Same(e.CvLinkBase(t, link), knob),
+            $"links: turning the grouped Reverb's knob moves its CV link's base ({e.CvLinkBase(t, link):F3}, knob {knob:F3})");
         yield return (e.MidiEffectCcDestDevice(t, arp) == 1 && e.MidiEffectCcDestPath(t, arp) == (0, 0),
             $"links: the Arp's CC lane drives the Delay in the rack ({e.MidiEffectCcDestDevice(t, arp)}, {e.MidiEffectCcDestPath(t, arp)})");
         yield return (e.RackChainSidechain(t, 1, 0, 2) is { SourceTrack: var s } && s == src,

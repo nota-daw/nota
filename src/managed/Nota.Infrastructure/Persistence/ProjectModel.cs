@@ -63,6 +63,8 @@ public sealed class MasterDto
     public string? Name { get; set; }
     public int ColorIndex { get; set; } = -1;
     public List<DeviceDto> Devices { get; set; } = new();
+    // Sidechain keys of devices inside the master's racks (v25, specs/044), as on a track.
+    public List<NestedSidechainDto>? NestedSidechains { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

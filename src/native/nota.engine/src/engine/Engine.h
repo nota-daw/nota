@@ -967,10 +967,12 @@ class Engine {
     // fresh: a rack Group just built, whose Arps were rewritten already.
     void publishWithRefMap(int32_t trackId, std::shared_ptr<Track> nt, const DeviceRefMap& map, const RackCore* fresh = nullptr);
     // An Arp's CC target through map; a changed Arp becomes a clone (shared with undo snapshots).
-    void rewriteArpRef(std::shared_ptr<MidiDevice>& m, const DeviceRefMap& map);
+    // old: the track as the undo step keeps it (records the Arp's current target); nt: the new
+    // one (records the rewritten target).
+    void rewriteArpRef(MidiDevice& m, const DeviceRefMap& map, Track* old, Track& nt);
     // The same for Arps inside the track's racks (a MIDI Effect Rack, the Instrument Rack's
     // chains): a rack holding one to change is forked into nt with clones in its chains.
-    void rewriteRackArps(Track& nt, const DeviceRefMap& map, const RackCore* fresh = nullptr);
+    void rewriteRackArps(Track& nt, const DeviceRefMap& map, Track* old, const RackCore* fresh = nullptr);
     // Drum Rack pad note per chain (-1 = all notes; instrument/effect racks ignore it).
     int32_t rackChainTriggerNote(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     void rackSetChainTriggerNote(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t note);
@@ -1024,6 +1026,8 @@ class Engine {
     bool rackRemoveChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
     bool rackMoveChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t from, int32_t to);
     MidiDevice* rackChainMidiAt(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index) const;
+    // A chain MIDI effect's param, moving a CV link's base on it (specs/044).
+    void rackChainMidiParamSet(int32_t trackId, int32_t rack, int32_t chain, int32_t index, int32_t param, float value);
     void rackSetChainMidiBypassed(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, bool b);
     void rackChainSelectRange(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t& lo, int32_t& hi) const;
     void rackSetChainSelectRange(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t lo, int32_t hi);
@@ -1359,6 +1363,10 @@ class Engine {
     float modOutput(Track& t, int32_t modId, double beat, double timeSec);
     void restoreLinkTarget(int32_t ownerTrack, const CvLink& l); // drive target param back to base
     void routeCvBaseEdit(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float value);
+    // The same for a rack chain child (specs/044): a knob turned on a grouped, CV-linked device
+    // moves the link's base, or the next modulation block would overwrite it. slot as in
+    // ParamPath (>= 0 device, -1 the chain instrument, RackCore::midiTarget(i) MIDI effect).
+    void routeNestedCvBaseEdit(int32_t trackId, int32_t rack, int32_t chain, int32_t slot, int32_t param, float value);
     // The base a CV link holds for this target, if one targets it (what a UI edit sets).
     bool cvBaseValue(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float& out) const;
     int32_t addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId, int32_t srcDev, int32_t srcParam,
@@ -1398,6 +1406,8 @@ class Engine {
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
     void reapplyRackMacros(); // after undo/redo: racks drive their shared children again
+    void reapplyArpShadows(); // after undo/redo: Arps take the CC target their snapshot recorded
+    bool arpShadowsUsed_ = false; // no Arp was ever retargeted: undo / redo skip the walk
     static int32_t trackLatency(const Track& t);
     std::shared_ptr<Instrument> cloneInstrument(const Track& src) const; // duplicateTrack helper
     std::shared_ptr<Instrument> cloneInstrumentFrom(const Instrument& src) const;

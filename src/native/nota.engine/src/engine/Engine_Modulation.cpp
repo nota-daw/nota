@@ -390,6 +390,21 @@ void Engine::routeCvBaseEdit(int32_t targetKind, int32_t trackId, int32_t device
     }
 }
 
+void Engine::routeNestedCvBaseEdit(int32_t trackId, int32_t rack, int32_t chain, int32_t slot, int32_t param, float value) {
+    if (!authoring_) return;
+    const uint64_t uid = nestedChainUid(trackId, rack, chain);
+    if (!uid) return;
+    for (auto& op : authoring_->tracks) {
+        const int32_t owner = op->id();
+        for (auto& l : op->cvLinks) {
+            const int32_t tgt = l.targetTrack < 0 ? owner : l.targetTrack;
+            if (tgt == trackId && l.targetChainUid == uid && l.targetDevice == rack && l.targetSlot == slot
+                && l.targetParam == param)
+                l.base.store(value, std::memory_order_relaxed);
+        }
+    }
+}
+
 bool Engine::cvBaseValue(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float& out) const {
     if (!authoring_) return false;
     for (auto& op : authoring_->tracks) {

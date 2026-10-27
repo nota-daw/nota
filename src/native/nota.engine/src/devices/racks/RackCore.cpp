@@ -440,17 +440,6 @@ bool RackCore::moveChainMidiDevice(int32_t chain, int32_t from, int32_t to) {
     return true;
 }
 
-bool RackCore::replaceChainMidiDevice(int32_t chain, int32_t idx, std::shared_ptr<MidiDevice> dev) {
-    if (!dev) return false;
-    auto ns = copyState();
-    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return false;
-    auto& d = ns->chains[chain].midiDevices;
-    if (idx < 0 || idx >= static_cast<int32_t>(d.size())) return false;
-    d[idx] = std::move(dev);
-    commit(ns);
-    return true;
-}
-
 int32_t RackCore::insertChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev, int32_t at) {
     if (!dev || dev->midiKind() < 0 || dev->midiKind() > 5) return -1;
     auto ns = copyState();

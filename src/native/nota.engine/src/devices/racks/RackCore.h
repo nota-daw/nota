@@ -291,9 +291,6 @@ class RackCore {
     bool removeChainMidiDevice(int32_t chain, int32_t idx);
     bool moveChainMidiDevice(int32_t chain, int32_t from, int32_t to);
     int32_t insertChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev, int32_t at);
-    // Swap the MIDI effect at idx for another instance in place, its mappings kept (an Arp whose
-    // CC target was rewritten on a clone, specs/044). Message thread; call on a fork.
-    bool replaceChainMidiDevice(int32_t chain, int32_t idx, std::shared_ptr<MidiDevice> dev);
     int32_t moveChainMidiDeviceToChain(int32_t chain, int32_t idx, int32_t toChain);
     MidiDevice* chainMidiDeviceAt(int32_t chain, int32_t idx) const;
 

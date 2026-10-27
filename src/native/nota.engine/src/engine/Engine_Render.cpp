@@ -1241,7 +1241,8 @@ int Engine::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double 
         n = applyMidiEffects(t, evs, n, scratch, frames, spb > 0.0 ? blockStart / spb : 0.0, spb, playing);
         applyMidiCcRouting(t);
         std::sort(evs, evs + n, midiEvLess);
-    }
+    } else if (t.instrument && t.instrument->asRack())
+        applyMidiCcRouting(t); // Arps grouped into the Instrument Rack's chains (specs/044)
     t.updateMidiCv(evs, n); // MIDI→CV modulators read the post-FX note stream
     return n;
 }
@@ -1452,7 +1453,8 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
         n = applyMidiEffects(t, evs, n, scratch, frames, p, spb, true);
         applyMidiCcRouting(t);
         std::sort(evs, evs + n, midiEvLess);
-    }
+    } else if (t.instrument && t.instrument->asRack())
+        applyMidiCcRouting(t); // Arps grouped into the Instrument Rack's chains (specs/044)
 
     // The monitored live expression, after the offset-0 notes (as in renderInstrumentRaw).
     playEvents(*inst, dst, frames, evs, n, xev, xn, p, spb, true, [&] { // the slot's own loop clock

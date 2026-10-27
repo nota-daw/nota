@@ -1504,17 +1504,20 @@ void Engine::recomputeRouting() {
         if (next < kMaxRoutes) routeSlotTrackId_[next++].store(src, std::memory_order_relaxed);
     };
     for (auto& t : authoring_->tracks) {
-        if (t->instrument) claim(t->instrument->sidechainSourceTrackId());
-        for (auto& d : t->devices)
-            if (d) claim(d->sidechainSourceTrackId());
-        // Keyed children inside racks (specs/044).
+        // Keyed children inside racks claim too (specs/044).
         auto claimChildren = [&](const RackCore& r) {
             r.forEachChildDevice([&](Device& c) { claim(c.sidechainSourceTrackId()); });
             r.forEachChildInstrument([&](Instrument& i) { claim(i.sidechainSourceTrackId()); });
         };
-        if (auto* r = t->instrument ? t->instrument->asRack() : nullptr) claimChildren(*r);
+        if (t->instrument) {
+            claim(t->instrument->sidechainSourceTrackId());
+            if (auto* r = t->instrument->asRack()) claimChildren(*r);
+        }
         for (auto& d : t->devices)
-            if (auto* r = d ? d->asRack() : nullptr) claimChildren(*r);
+            if (d) {
+                claim(d->sidechainSourceTrackId());
+                if (auto* r = d->asRack()) claimChildren(*r);
+            }
         // A monitoring audio track hears its source track's post-fader tap.
         if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0) claim(t->recordInputSource());
     }

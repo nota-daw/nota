@@ -57,7 +57,19 @@ public sealed partial class DeviceChainView
         if ((mods & KeyModifiers.Shift) != 0) _sel.ExtendTo(slot, MidiCount, IsInstrumentTrack(_trackId), FxCount);
         else if ((mods & (KeyModifiers.Meta | KeyModifiers.Control)) != 0) _sel.Toggle(slot);
         else if (!hadRack && _sel.Count == 1 && _sel.Contains(slot)) return;
+        else if (!hadRack && _sel.Count > 1 && _sel.Contains(slot)) { _pendingClick = slot; return; }   // may be a drag
         else _sel.Click(slot);
+        Rebuild();
+    }
+
+    // A plain press on a device inside a multi-selection: the press may start a drag of the whole
+    // selection, so it narrows to this device only when the button comes up without a drag.
+    private ChainSlot? _pendingClick;
+    private void ApplyPendingClick()
+    {
+        if (_pendingClick is not { } s) return;
+        _pendingClick = null;
+        _sel.Click(s);
         Rebuild();
     }
 
@@ -624,9 +636,10 @@ public sealed partial class DeviceChainView
         };
         handle.PointerReleased += (_, e) =>
         {
-            if (inst) { EndDeviceDrag(e.Pointer); return; }
-            if (_devDragFrom < 0) return;
+            if (inst) { bool moved = _devDragging; EndDeviceDrag(e.Pointer); if (!moved) ApplyPendingClick(); else _pendingClick = null; return; }
+            if (_devDragFrom < 0) { ApplyPendingClick(); return; }
             var kindL = _devDragKind; int from = _devDragFrom; bool dragged = _devDragging;
+            if (dragged) _pendingClick = null; else ApplyPendingClick();
             int gap = _devDragging ? GapAt(e.GetPosition(_row).X) : -1;
             if (_devDragCard != null) _devDragCard.Opacity = 1.0;
             _devDragFrom = -1; _devDragging = false; _devDragCard = null;

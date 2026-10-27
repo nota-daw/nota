@@ -649,8 +649,7 @@ float nota_rack_chain_midi_param_get(const NotaEngine* e, int32_t t, int32_t cha
     return m ? m->getParam(param) : 0.0f;
 }
 void nota_rack_chain_midi_param_set(NotaEngine* e, int32_t t, int32_t chain, int32_t index, int32_t param, float value) {
-    auto* m = e ? ENG(e)->rackChainMidiAt(t, -1, chain, index) : nullptr;
-    if (m) m->setParam(param, value);
+    if (e) ENG(e)->rackChainMidiParamSet(t, -1, chain, index, param, value);
 }
 void nota_rack_chain_midi_set_bypassed(NotaEngine* e, int32_t t, int32_t chain, int32_t index, int32_t bypassed) {
     if (e) ENG(e)->rackSetChainMidiBypassed(t, -1, chain, index, bypassed != 0);
@@ -716,8 +715,7 @@ float nota_midirack_chain_device_param_get(const NotaEngine* e, int32_t t, int32
     return m ? m->getParam(param) : 0.0f;
 }
 void nota_midirack_chain_device_param_set(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index, int32_t param, float value) {
-    auto* m = e ? ENG(e)->rackChainMidiAt(t, MR(mi), chain, index) : nullptr;
-    if (m) m->setParam(param, value);
+    if (e) ENG(e)->rackChainMidiParamSet(t, MR(mi), chain, index, param, value);
 }
 void nota_midirack_chain_device_set_bypassed(NotaEngine* e, int32_t t, int32_t mi, int32_t chain, int32_t index, int32_t bypassed) {
     if (e) ENG(e)->rackSetChainMidiBypassed(t, MR(mi), chain, index, bypassed != 0);

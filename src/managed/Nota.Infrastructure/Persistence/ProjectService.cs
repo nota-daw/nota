@@ -351,6 +351,7 @@ public sealed class ProjectService
             Name = engine.GetTrackName(masterId) is { Length: > 0 } mName ? mName : null,
             ColorIndex = engine.GetTrackColorIndex(masterId),
             Devices = CaptureDevices(engine, masterId, doc, idToIndex, warnings, "Master"),
+            NestedSidechains = NestedLinks(engine, masterId, idToIndex).Item1,   // keys inside the master's racks
         };
 
         return doc;
@@ -405,6 +406,13 @@ public sealed class ProjectService
     // chain child's sidechain key (source as a doc index) and a chain MIDI effect's CC target.
     private static void SaveNestedLinks(IAudioEngine engine, int trackId, TrackDto t, Dictionary<int, int> idToIndex)
     {
+        var (scs, ccs) = NestedLinks(engine, trackId, idToIndex);
+        t.NestedSidechains = scs;
+        t.NestedCcRoutes = ccs;
+    }
+
+    private static (List<NestedSidechainDto>?, List<NestedCcRouteDto>?) NestedLinks(IAudioEngine engine, int trackId, Dictionary<int, int> idToIndex)
+    {
         var scs = new List<NestedSidechainDto>();
         var ccs = new List<NestedCcRouteDto>();
         void Rack(int host, int chains, System.Func<int, int> devCount, System.Func<int, int> midiCount, bool hasInstrument)
@@ -432,8 +440,7 @@ public sealed class ProjectService
         for (int m = 0; m < mids; m++)
             if (engine.MidiEffectKind(trackId, m) == 6)
                 Rack(-1000 - m, engine.MidiRackChainCount(trackId, m), _ => 0, c => engine.MidiRackChainDeviceCount(trackId, m, c), false);
-        t.NestedSidechains = scs.Count > 0 ? scs : null;
-        t.NestedCcRoutes = ccs.Count > 0 ? ccs : null;
+        return (scs.Count > 0 ? scs : null, ccs.Count > 0 ? ccs : null);
     }
 
     private static void ApplyDevices(IAudioEngine engine, int trackId, IEnumerable<DeviceDto> devices,
@@ -855,6 +862,8 @@ public sealed class ProjectService
             if (md.Name is { Length: > 0 } mnm) engine.SetTrackName(masterId, mnm);
             if (md.ColorIndex >= 0) engine.SetTrackColorIndex(masterId, md.ColorIndex);
             ApplyDevices(engine, masterId, md.Devices, bundleDir, scDeferred, warnings);
+            foreach (var n in md.NestedSidechains ?? new())
+                if (n.Source >= 0) nestedScDeferred.Add((masterId, n));
         }
 
         // Sidechain wiring, now that every track exists (Phase B). Source is a doc index.

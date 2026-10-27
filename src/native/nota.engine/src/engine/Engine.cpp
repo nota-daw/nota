@@ -567,6 +567,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->automation = t.automation;     // automation lanes (M9)
     nt->modulators = t.modulators;     // CV modulation sources (Phase 3)
     nt->cvLinks = t.cvLinks;           // CV modulation edges (Phase 3)
+    nt->arpCcShadow = t.arpCcShadow;   // Arp CC targets per snapshot (specs/044)
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
@@ -690,6 +691,7 @@ bool Engine::undo() {
             publishRaw(std::move(e.graph));
             recomputePdc();
             reapplyRackMacros();
+            reapplyArpShadows();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, false);
@@ -724,6 +726,7 @@ bool Engine::redo() {
             publishRaw(std::move(e.graph));
             recomputePdc();
             reapplyRackMacros();
+            reapplyArpShadows();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, true);
