@@ -77,6 +77,11 @@ class RackCore {
 
     struct RackChain {
         uint64_t uid = nextChainUid();
+        // Bumped when the chain's instrument is swapped for another (setChainInstrument); an
+        // edit of the same instrument (a nested rack's fork, a Mosaic program, a Grain sample)
+        // keeps it. The chain id the UI follows is uid + this, so a window for the old
+        // instrument lets go of a replacement.
+        uint32_t instGen = 0;
         std::shared_ptr<Instrument> instrument;       // null for effect-rack chains
         std::vector<std::shared_ptr<Device>> devices; // insert chain
         // MIDI effects in front of the chain (v9): a MIDI Effect Rack chain is only these;
@@ -198,7 +203,7 @@ class RackCore {
     // `prepare` = false for an instrument already prepared at this rate whose children are shared
     // with a playing copy (a nested rack's fork): preparing them again would reset live effects.
     bool replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst, bool prepare = true);
-    uint64_t chainUid(int32_t chain) const;
+    uint64_t chainUid(int32_t chain) const; // uid and instrument generation, see RackChain
     int32_t chainInstrumentKind(int32_t chain) const;
     Instrument* chainInstrument(int32_t chain) const;
     int32_t chainDeviceCount(int32_t chain) const;

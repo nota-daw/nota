@@ -86,6 +86,8 @@ internal static class RackClipboardTests
             int now = Enumerable.Range(0, e.RackChainCount(t)).Where(i => e.RackDevChainId(t, -1, i) == id).DefaultIfEmpty(-1).First();
             yield return (c == 1 && keptOnEdit && now == 0 && e.RackChainInstrumentKind(t, now) == 4,
                 $"a chain keeps its id through nested edits and moves (edit {keptOnEdit}, now chain {now})");
+            e.RackSetChainInstrument(t, now, 6);   // the Drum Rack swapped for Volt
+            yield return (e.RackDevChainId(t, -1, now) != id, "swapping a chain's instrument changes its id (an old window lets go)");
         }
 
         // An edit inside a nested Drum Rack doesn't re-prepare its playing pad effects: a reverb

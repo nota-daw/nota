@@ -1747,8 +1747,9 @@ NOTA_API int32_t     nota_rackdev_chain_midi_move_to(NotaEngine* engine, int32_t
  * change): the rack is forked now, keeping its children and held notes. device_index as above.
  * 1 = done. */
 NOTA_API int32_t     nota_rackdev_checkpoint(NotaEngine* engine, int32_t track_id, int32_t device_index);
-/* A chain's identity while chains are added, removed or reordered: the same value for as long as
- * the chain keeps its instrument, 0 for no chain / no instrument. Compare it, don't decode it. */
+/* A chain's identity while chains are added, removed or reordered and its instrument is edited:
+ * the same value until the chain's instrument is swapped for another; 0 for no chain. Compare it,
+ * don't decode it. */
 NOTA_API int64_t     nota_rackdev_chain_id(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain);
 /* Load an audio file into chain `chain`'s Nota Grain (kind 10) with its root note; one undo step.
  * NOTA_OK, or NOTA_ERR_INVALID_ARG when the chain holds no Grain or the file can't be decoded. */

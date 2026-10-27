@@ -212,6 +212,7 @@ bool RackCore::setChainInstrument(int32_t chain, int32_t instKind) {
     if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return false;
     inst->setSampleRate(sampleRate_);
     ns->chains[chain].instrument = inst;
+    ++ns->chains[chain].instGen; // another instrument: windows on the old one let go
     commit(ns);
     return true;
 }
@@ -228,7 +229,9 @@ bool RackCore::replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument>
 
 uint64_t RackCore::chainUid(int32_t chain) const {
     RackState* st = live();
-    return st && chain >= 0 && chain < static_cast<int32_t>(st->chains.size()) ? st->chains[chain].uid : 0;
+    if (!st || chain < 0 || chain >= static_cast<int32_t>(st->chains.size())) return 0;
+    const auto& c = st->chains[chain];
+    return (c.uid << 16) ^ (c.instGen & 0xFFFF);
 }
 
 int32_t RackCore::chainInstrumentKind(int32_t chain) const {
