@@ -316,11 +316,17 @@ int Engine::applyMidiEffects(
 // An Arp grouped into a rack (a MIDI Effect Rack or an Instrument Rack chain) keeps driving
 // its target, and a target grouped into a rack is reached through its nested address
 // (specs/044); both walks read published snapshots only.
+// The route comes from the published snapshot (Track::ccRoutes), never from the Arp's own fields:
+// a group or rack edit retargets those before the new device order is published.
 static void applyCcRoute(Track& t, const MidiDevice& md) {
-    const int di = md.ccDestDevice(), pi = md.ccDestParam();
+    const Track::CcRoute* rt = nullptr;
+    for (auto& r : t.ccRoutes)
+        if (r.arp == &md) { rt = &r; break; }
+    if (!rt) return;
+    const int di = rt->dev, pi = rt->param;
     if (pi < 0) return;
     Device* d = nullptr;
-    if (const uint64_t uid = md.ccDestChainUid()) d = resolveNested(t, di, uid, md.ccDestSlot()).device;
+    if (rt->uid) d = resolveNested(t, di, rt->uid, rt->slot).device;
     else if (di >= 0 && di < static_cast<int>(t.devices.size())) d = t.devices[di].get();
     if (!d || pi >= d->paramCount()) return;
     const float mn = d->paramMin(pi), mx = d->paramMax(pi);
@@ -329,6 +335,7 @@ static void applyCcRoute(Track& t, const MidiDevice& md) {
 }
 
 void Engine::applyMidiCcRouting(Track& t) {
+    if (t.ccRoutes.empty()) return;
     for (auto& md : t.midiEffects) {
         if (!md) continue;
         applyCcRoute(t, *md);

@@ -567,7 +567,8 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->automation = t.automation;     // automation lanes (M9)
     nt->modulators = t.modulators;     // CV modulation sources (Phase 3)
     nt->cvLinks = t.cvLinks;           // CV modulation edges (Phase 3)
-    nt->arpCcShadow = t.arpCcShadow;   // Arp CC targets per snapshot (specs/044)
+    nt->ccRoutes = t.ccRoutes;         // Arp CC routes (specs/044); rebuilt when published
+    nt->ccRoutesDirty = true;
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
@@ -611,6 +612,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
     authoring_ = g;
     retired_.push_back(g);
     if (g) ensureRenderScratch(g->tracks.size());
+    if (g) syncCcRoutes(*g);   // fresh track objects only: the audio thread never sees them change
     liveGraph_.store(g.get(), std::memory_order_release);
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
@@ -691,7 +693,7 @@ bool Engine::undo() {
             publishRaw(std::move(e.graph));
             recomputePdc();
             reapplyRackMacros();
-            reapplyArpShadows();
+            reapplyCcRoutes();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, false);
@@ -726,7 +728,7 @@ bool Engine::redo() {
             publishRaw(std::move(e.graph));
             recomputePdc();
             reapplyRackMacros();
-            reapplyArpShadows();
+            reapplyCcRoutes();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, true);

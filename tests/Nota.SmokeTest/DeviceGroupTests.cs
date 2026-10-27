@@ -166,6 +166,26 @@ internal static class DeviceGroupTests
         yield return (j0 is { Chain: 0, Slot: 1 } && j1 is { Chain: 0, Slot: 0 } && j2 is { Chain: -1 } && j2.Value.Device < 0
                       && j3 is { Chain: 0, Slot: 0 },
             $"arp in a rack: edits inside the rack keep the Arp's target ({j0} → {j1} → {j2}, undo {j3})");
+
+        // Two effects pasted before the target in one undo step: undo puts the target back
+        // exactly (the routes of the step's snapshot, not the last remap's).
+        using var pe = new NotaEngine();
+        int pt = pe.AddInstrumentTrack();
+        pe.SetTrackBuiltinInstrument(pt, Volt);
+        int pa = pe.AddMidiEffect(pt, Arp);
+        int pd = pe.AddBuiltinDevice(pt, Delay);
+        pe.SetMidiEffectCcDest(pt, pa, pd, 1);
+        pe.GroupDevices(pt, 0, 1, true, 0, 1);         // Arp, Volt, Delay in one chain
+        int other = pe.AddAudioTrack();
+        pe.AddBuiltinDevice(other, Eq8);
+        pe.AddBuiltinDevice(other, Utility);
+        pe.CopyDevices(other, Array.Empty<int>(), false, new[] { 0, 1 });
+        pe.RackDevChainPasteDevices(pt, -1, 0, -1, 0, out _, out _, out _);
+        var p1 = pe.RackChainMidiCcDest(pt, -1, 0, 0);
+        pe.Undo();
+        var p2 = pe.RackChainMidiCcDest(pt, -1, 0, 0);
+        yield return (p1 is { Chain: 0, Slot: 2 } && p2 is { Chain: 0, Slot: 0 },
+            $"arp in a rack: undo of a paste of two effects before the target restores it ({p1} → undo {p2})");
     }
 
     // Several devices pasted into a rack chain: what the chain takes, in order, one undo step.

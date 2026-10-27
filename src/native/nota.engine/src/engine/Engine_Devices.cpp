@@ -1287,7 +1287,16 @@ void Engine::midiEffectCommand(int32_t t, int32_t i, int32_t cmd) {
     if (auto* m = midiDeviceAt(t, i)) m->midiCommand(cmd);
 }
 void Engine::setMidiEffectCcDest(int32_t t, int32_t i, int32_t dev, int32_t param) {
-    if (auto* m = midiDeviceAt(t, i)) m->setCcDest(dev, param);
+    auto* m = midiDeviceAt(t, i);
+    if (!m) return;
+    m->setCcDest(dev, param);
+    republishCcRoutes(t);
+}
+
+// The audio thread plays the routes of the published track (Track::ccRoutes): after a live CC
+// target change, publish the track again so the route follows (no undo step, as before).
+void Engine::republishCcRoutes(int32_t trackId) {
+    if (auto old = findTrackAuthoring(trackId)) republishWithTrackRaw(trackId, cloneTrack(*old));
 }
 // The Arp's CC target inside a rack (specs/044), for save / load: (chain index, slot) in the
 // rack at its ccDestDevice; set it after setMidiEffectCcDest.
@@ -1305,6 +1314,7 @@ bool Engine::setMidiEffectCcDestPath(int32_t t, int32_t i, int32_t chainIndex, i
     const uint64_t uid = nestedChainUid(t, m->ccDestDevice(), chainIndex);
     if (!uid) return false;
     m->setCcDestNested(uid, slot);
+    republishCcRoutes(t);
     return true;
 }
 void Engine::setMidiEffectCcDepth(int32_t t, int32_t i, float d) {

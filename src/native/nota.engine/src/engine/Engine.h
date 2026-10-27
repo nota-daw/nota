@@ -967,12 +967,11 @@ class Engine {
     // fresh: a rack Group just built, whose Arps were rewritten already.
     void publishWithRefMap(int32_t trackId, std::shared_ptr<Track> nt, const DeviceRefMap& map, const RackCore* fresh = nullptr);
     // An Arp's CC target through map; a changed Arp becomes a clone (shared with undo snapshots).
-    // old: the track as the undo step keeps it (records the Arp's current target); nt: the new
-    // one (records the rewritten target).
-    void rewriteArpRef(MidiDevice& m, const DeviceRefMap& map, Track* old, Track& nt);
+    // Retarget an Arp's authoring copy; the route goes live with the next published track.
+    void rewriteArpRef(MidiDevice& m, const DeviceRefMap& map);
     // The same for Arps inside the track's racks (a MIDI Effect Rack, the Instrument Rack's
     // chains): a rack holding one to change is forked into nt with clones in its chains.
-    void rewriteRackArps(Track& nt, const DeviceRefMap& map, Track* old, const RackCore* fresh = nullptr);
+    void rewriteRackArps(Track& nt, const DeviceRefMap& map, const RackCore* fresh = nullptr);
     // Drum Rack pad note per chain (-1 = all notes; instrument/effect racks ignore it).
     int32_t rackChainTriggerNote(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     void rackSetChainTriggerNote(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t note);
@@ -1406,8 +1405,10 @@ class Engine {
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
     void reapplyRackMacros(); // after undo/redo: racks drive their shared children again
-    void reapplyArpShadows(); // after undo/redo: Arps take the CC target their snapshot recorded
-    bool arpShadowsUsed_ = false; // no Arp was ever retargeted: undo / redo skip the walk
+    void reapplyCcRoutes();             // after undo/redo: Arps take their restored snapshot's targets
+    void syncCcRoutes(Graph& g);        // before a publish: routes of fresh tracks from their Arps
+    void republishCcRoutes(int32_t trackId); // after a live CC target change: publish its route
+    bool ccRoutesUsed_ = false;         // no Arp has had a CC target yet: undo / redo skip the walk
     static int32_t trackLatency(const Track& t);
     std::shared_ptr<Instrument> cloneInstrument(const Track& src) const; // duplicateTrack helper
     std::shared_ptr<Instrument> cloneInstrumentFrom(const Instrument& src) const;

@@ -255,19 +255,21 @@ class Track {
     // Config lives in atomics (live-tweakable); add/remove is structural (clone).
     std::vector<Modulator> modulators;
     std::vector<CvLink> cvLinks;
-    // An Arp's CC target lives on the Arp (atomics the audio thread reads), which every snapshot
-    // shares. Group / Ungroup / rack edits retarget it in place — a clone would drop its held
-    // notes and pending note-offs — and record the value each snapshot had here, so undo and redo
-    // put it back (Engine::reapplyArpShadows). Message thread only; the key is never dereferenced
-    // unless the snapshot holding the entry also holds the Arp. specs/044.
-    struct ArpCcShadow {
+    // Where each Arp on this track (top level or in a rack chain) sends its CC lane, as published
+    // with this snapshot: the audio thread reads the route from here, so a new device order and
+    // the targets that fit it go live together (an Arp is shared by every snapshot and keeps
+    // its own fields only as the authoring copy). Filled from the Arps when a fresh track object
+    // is published (ccRoutesDirty), never on a published one; undo / redo copy a restored
+    // snapshot's routes back onto its Arps. specs/044.
+    struct CcRoute {
         const MidiDevice* arp = nullptr;
         int32_t dev = -2;
         uint64_t uid = 0;
         int32_t slot = -1;
         int32_t param = -1;
     };
-    std::vector<ArpCcShadow> arpCcShadow;
+    std::vector<CcRoute> ccRoutes;
+    bool ccRoutesDirty = true;
     int32_t nextModId = 1; // monotonic modulator-id source
 
     // UI metadata (message thread only; never read by the audio thread). `name` is the

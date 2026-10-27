@@ -307,19 +307,33 @@ constexpr int32_t kDropRef = -2;
 
 } // namespace
 
-// Records an Arp's CC target in a snapshot's shadow (see Track::ArpCcShadow).
-static void recordArpShadow(Track& t, const MidiDevice& m) {
-    Track::ArpCcShadow sh{&m, m.ccDestDevice(), m.ccDestChainUid(), m.ccDestSlot(), m.ccDestParam()};
-    for (auto& e : t.arpCcShadow)
-        if (e.arp == &m) { e = sh; return; }
-    t.arpCcShadow.push_back(sh);
+// ---- Arp CC routes in the published snapshot (specs/044) ---------------------
+void Engine::syncCcRoutes(Graph& g) {
+    auto sync = [&](Track& t) {
+        if (!t.ccRoutesDirty) return;   // published before: the audio thread may be reading it
+        t.ccRoutesDirty = false;
+        t.ccRoutes.clear();
+        auto add = [&](const MidiDevice& m) {
+            if (m.ccDestParam() < 0 || (m.ccDestDevice() < 0 && m.ccDestChainUid() == 0)) return;
+            t.ccRoutes.push_back({&m, m.ccDestDevice(), m.ccDestChainUid(), m.ccDestSlot(), m.ccDestParam()});
+        };
+        for (auto& md : t.midiEffects) {
+            if (!md) continue;
+            add(*md);
+            if (auto* r = md->asRack()) r->forEachChildMidi([&](MidiDevice& c) { add(c); });
+        }
+        if (auto* r = t.instrument ? t.instrument->asRack() : nullptr) r->forEachChildMidi([&](MidiDevice& c) { add(c); });
+        if (!t.ccRoutes.empty()) ccRoutesUsed_ = true;
+    };
+    for (auto& t : g.tracks) sync(*t);
+    if (g.masterTrack) sync(*g.masterTrack);
 }
 
-void Engine::reapplyArpShadows() {
-    if (!arpShadowsUsed_ || !authoring_) return;
+void Engine::reapplyCcRoutes() {
+    if (!ccRoutesUsed_ || !authoring_) return;
     auto apply = [](const Track& t) {
-        for (auto& e : t.arpCcShadow) {
-            auto* m = const_cast<MidiDevice*>(e.arp);
+        for (auto& e : t.ccRoutes) {
+            auto* m = const_cast<MidiDevice*>(e.arp);   // held by this snapshot
             if (m->ccDestDevice() == e.dev && m->ccDestChainUid() == e.uid && m->ccDestSlot() == e.slot
                 && m->ccDestParam() == e.param)
                 continue;
@@ -332,32 +346,30 @@ void Engine::reapplyArpShadows() {
 }
 
 // Every Arp inside the track's racks (a MIDI Effect Rack, the Instrument Rack's chains).
-void Engine::rewriteRackArps(Track& nt, const DeviceRefMap& map, Track* old, const RackCore* fresh) {
+void Engine::rewriteRackArps(Track& nt, const DeviceRefMap& map, const RackCore* fresh) {
     auto walk = [&](const RackCore& r) {
         if (&r == fresh) return;   // its Arps were rewritten on the way in
-        r.forEachChildMidi([&](MidiDevice& m) { rewriteArpRef(m, map, old, nt); });
+        r.forEachChildMidi([&](MidiDevice& m) { rewriteArpRef(m, map); });
     };
     for (auto& md : nt.midiEffects)
         if (auto* r = md ? md->asRack() : nullptr) walk(*r);
     if (auto* r = nt.instrument ? nt.instrument->asRack() : nullptr) walk(*r);
 }
 
-// Retargets the Arp in place: a clone would start with no held notes or pending note-offs and
-// interrupt a sustained pattern. The old snapshot records the target it had, the new one the
-// rewritten target, so undo / redo restore each (reapplyArpShadows).
-void Engine::rewriteArpRef(MidiDevice& m, const DeviceRefMap& map, Track* old, Track& nt) {
+// Retargets the Arp's authoring copy in place: a clone would start with no held notes or pending
+// note-offs and interrupt a sustained pattern. The audio thread keeps playing the route of the
+// snapshot it renders; the new one goes live with the published track (syncCcRoutes), and undo /
+// redo copy a restored snapshot's routes back (reapplyCcRoutes).
+void Engine::rewriteArpRef(MidiDevice& m, const DeviceRefMap& map) {
     const Ref r = ccRef(m);
     if (r.fam < 0) return;
     const Ref n = map(r);
     if (sameRef(r, n)) return;
-    arpShadowsUsed_ = true;
-    if (old) recordArpShadow(*old, m);
     if (n.fam == kDropRef) m.setCcDest(-1, -1);
     else {
         m.setCcDest(n.uid ? hostOf(n) : n.idx, m.ccDestParam());
         if (n.uid) m.setCcDestNested(n.uid, n.slot);
     }
-    recordArpShadow(nt, m);
 }
 
 // Rewrite every reference into `trackId` through `map` and publish the result as one undo
@@ -390,10 +402,9 @@ void Engine::publishWithRefMap(int32_t trackId, std::shared_ptr<Track> nt, const
     };
     std::erase_if(activeWrites_, [&](ActiveWrite& aw) { return aw.trackId == trackId && laneGone(aw.laneIndex); });
     std::erase_if(overrides_, [&](OverrideTarget& o) { return o.trackId == trackId && laneGone(o.laneIndex); });
-    Track* old = findTrackAuthoring(trackId).get();
     for (auto& m : nt->midiEffects)
-        if (m) rewriteArpRef(*m, map, old, *nt);
-    rewriteRackArps(*nt, map, old, fresh);
+        if (m) rewriteArpRef(*m, map);
+    rewriteRackArps(*nt, map, fresh);
     // CV links, on this track and on any track whose links target it.
     auto rewriteLinks = [&](Track& t, bool own) {
         std::vector<CvLink> keep;
@@ -496,7 +507,7 @@ int32_t Engine::groupDevices(int32_t trackId, int32_t midiFirst, int32_t midiCou
         };
         for (int32_t i = 0; i < midiCount; ++i) {
             auto& m = nt->midiEffects[midiFirst + i];
-            if (m) rewriteArpRef(*m, map, old.get(), *nt); // an Arp going in keeps driving its (maybe moved) target
+            if (m) rewriteArpRef(*m, map); // an Arp going in keeps driving its (maybe moved) target
             rack->addChainMidiDeviceInstance(c, m);
         }
         rack->replaceChainInstrument(c, nt->instrument, /*prepare=*/false);   // no chain name: it shows the instrument's
@@ -521,7 +532,7 @@ int32_t Engine::groupDevices(int32_t trackId, int32_t midiFirst, int32_t midiCou
         };
         for (int32_t i = 0; i < n; ++i) {
             auto& m = nt->midiEffects[a + i];
-            if (m) rewriteArpRef(*m, map, old.get(), *nt);
+            if (m) rewriteArpRef(*m, map);
             rack->addChainMidiDeviceInstance(c, m);
         }
         rack->setChainName(c, nt->midiEffects[a]->displayName());   // named after its first device (FR-015)
@@ -671,6 +682,7 @@ bool Engine::rackChainMidiSetCcDest(int32_t t, int32_t host, int32_t chain, int3
         m->setCcDestNested(uid, destSlot);
     }
     m->setCcDepth(depth);
+    republishCcRoutes(t);
     return true;
 }
 bool Engine::rackChainSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* src,
@@ -764,20 +776,15 @@ void Engine::remapNestedAfterRackEdit(int32_t trackId, int32_t host, const Neste
             std::erase_if(activeWrites_, [&](ActiveWrite& aw) { return aw.trackId == trackId && laneGone(aw.laneIndex); });
             std::erase_if(overrides_, [&](OverrideTarget& o) { return o.trackId == trackId && laneGone(o.laneIndex); });
             // The Arps' CC targets, on the track and inside its racks (an Instrument Rack chain
-            // often holds both the Arp and its target), retargeted in place. The undo step taken
-            // before this edit keeps the graph the target was set in: its track records the old one.
+            // often holds both the Arp and its target); the routes go live with nt.
             const DeviceRefMap refMap = [&](const DeviceRef& r) -> DeviceRef {
                 if (!r.uid || hostOf(r) != host) return r;
                 const auto [u, sl] = map(r.uid, r.slot);
                 return u == 0 ? DeviceRef{kDropRef} : DeviceRef{r.fam, r.idx, u, sl};
             };
-            Track* before = nullptr;
-            if (!undoStack_.empty() && undoStack_.back().graph)
-                for (auto& u : undoStack_.back().graph->tracks)
-                    if (u->id() == trackId) before = u.get();
             for (auto& m : nt->midiEffects)
-                if (m) rewriteArpRef(*m, refMap, before, *nt);
-            rewriteRackArps(*nt, refMap, before);
+                if (m) rewriteArpRef(*m, refMap);
+            rewriteRackArps(*nt, refMap);
         }
         std::vector<CvLink> keptLinks;
         keptLinks.reserve(nt->cvLinks.size());
