@@ -357,6 +357,7 @@ bool Engine::rackChainDeviceCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
     if (!copy) return false;
     clipDevice_ = std::move(copy);
     clipMidi_.reset();
+    clipInstrument_.reset();
     return true;
 }
 bool Engine::rackChainMidiCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
@@ -366,6 +367,7 @@ bool Engine::rackChainMidiCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
     if (!copy) return false;
     clipMidi_ = std::move(copy);
     clipDevice_.reset();
+    clipInstrument_.reset();
     return true;
 }
 int32_t Engine::rackChainDevicePaste(int32_t t, int32_t di, int32_t c, int32_t at) {

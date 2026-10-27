@@ -98,6 +98,37 @@ public sealed partial class SessionView : UserControl
     private void RaiseDrop(BrowserItem item, int trackId, int scene, bool instrument)
         => ItemDropped?.Invoke(item, trackId, scene, instrument);
 
+    /// <summary>A device card dropped on a column (specs/043): the host moves it there.</summary>
+    public event Action<DeviceMoveRequest>? DeviceDropped;
+
+    // What a drag over a column's header or slot may do: a Browser drag copies in (a header takes
+    // anything but the master; a slot what BrowserView accepts), a device card moves (⌥ copies)
+    // onto a track that can take it.
+    private DragDropEffects DragEffectFor(DragEventArgs e, Column c, bool header)
+    {
+        if (DeviceDrag.IsActive)
+        {
+            int id = c.Kind == ColKind.Master ? _engine.MasterTrackId : c.TrackId;
+            if (!DeviceDrag.CanTake(_engine, id)) return DragDropEffects.None;
+            return (e.KeyModifiers & KeyModifiers.Alt) != 0 ? DragDropEffects.Copy : DragDropEffects.Move;
+        }
+        if (header) return BrowserView.IsBrowserDrag && c.Kind != ColKind.Master ? DragDropEffects.Copy : DragDropEffects.None;
+        return BrowserView.IsAcceptableDrag(e) ? DragDropEffects.Copy : DragDropEffects.None;
+    }
+
+    private bool TryDeviceDrop(DragEventArgs e, Column c)
+    {
+        if (!DeviceDrag.IsActive) return false;
+        int id = c.Kind == ColKind.Master ? _engine.MasterTrackId : c.TrackId;
+        if (DeviceDrag.CanTake(_engine, id) && DeviceDrag.RequestFor(id, e.KeyModifiers) is { } r) DeviceDropped?.Invoke(r);
+        e.Handled = true;
+        return true;
+    }
+
+    // What can start a track from a drop off the columns: an instrument or an instrument preset.
+    private static bool StartsTrack(BrowserItem item)
+        => item.Kind is BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument or BrowserItemKind.Preset;
+
     public SessionView(IAudioEngine engine)
     {
         ValueEntry.SetScope(this, true);   // Tab in a value box walks the values shown here
@@ -121,7 +152,23 @@ public sealed partial class SessionView : UserControl
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
         };
-        var gridArea = new Border { Background = NotaPalette.BgSunken, Child = hScroll };
+        var gridArea = new Border { Background = NotaPalette.BgSunken, Child = hScroll, BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent };
+        // A Browser drop on the empty part of the grid — right of the last column, under the
+        // scenes — starts a new track (#313); cells and headers take their own drops first.
+        DragDrop.SetAllowDrop(gridArea, true);
+        DragDrop.AddDragOverHandler(gridArea, (_, e) =>
+        {
+            bool ok = BrowserView.IsBrowserDrag && BrowserView.CurrentDrag is { } it && StartsTrack(it);
+            e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
+            gridArea.BorderBrush = ok ? NotaPalette.AccentDim : Brushes.Transparent;
+        });
+        DragDrop.AddDragLeaveHandler(gridArea, (_, _) => gridArea.BorderBrush = Brushes.Transparent);
+        DragDrop.AddDropHandler(gridArea, (_, e) =>
+        {
+            gridArea.BorderBrush = Brushes.Transparent;
+            var items = BrowserView.DroppedItems(e);
+            if (items.Count > 0 && StartsTrack(items[0])) { RaiseDrop(items[0], -1, -1, false); e.Handled = true; }
+        });
         // Right-click on the empty part of the grid: add a track (cells and headers handle their own).
         gridArea.PointerPressed += (_, e) =>
         {

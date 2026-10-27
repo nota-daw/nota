@@ -195,6 +195,14 @@ public sealed partial class DeviceChainView
         right.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
         right.Children.Add(badges);
         Grid.SetColumn(power, 1); right.Children.Add(power);
+        // The Remove control (#110) after the power slot; on the instrument it takes the track.
+        if (!s.Utility && s.CanDelete)
+        {
+            right.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            var remove = RemoveButton(s.IsInstrument ? "Remove track" : "Remove device", () => RemoveDeviceAt(s.Kind, di));
+            remove.Margin = new Thickness(-4, 0, -6, 0);   // tucked against the card's right inset
+            Grid.SetColumn(remove, 2); right.Children.Add(remove);
+        }
         var headerGrid = new Grid { ColumnSpacing = 8 };
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
@@ -208,7 +216,8 @@ public sealed partial class DeviceChainView
             Cursor = s.CanMove && SelectableKind(s.Kind) ? new Cursor(StandardCursorType.SizeAll) : null,
         };
         headerBar.BindResource(Border.BoxShadowProperty, "Shadow.Raised");   // the raised strip's top bevel
-        if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · double-click to fold · right-click for A/B, move and delete" : "Double-click to fold · right-click for more");
+        if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · double-click to fold · right-click for A/B, move and delete"
+            : s.IsInstrument ? "Click to select · double-click to fold · right-click to replace, copy or move" : "Double-click to fold · right-click for more");
 
         // Factory presets for this device (or the card's own list), and applying one in place.
         List<(string Id, string Name)> presets;
@@ -390,7 +399,7 @@ public sealed partial class DeviceChainView
         // Bypassed: the body takes the inactive look but stays playable (no opacity for state).
         if (s.Bypassed) card.AttachedToVisualTree += (_, _) => Inactive.Set(bodyHost, true, interactive: true);
         // The whole header drags the card to a new slot within its domain (audio FX / MIDI FX).
-        if (s.CanMove && SelectableKind(s.Kind)) HookDeviceDrag(headerBar, card, s.Kind, di);
+        if ((s.CanMove || s.IsInstrument) && SelectableKind(s.Kind)) HookDeviceDrag(headerBar, card, s.Kind, di);   // the instrument drags onto other tracks only
         return card;
     }
 

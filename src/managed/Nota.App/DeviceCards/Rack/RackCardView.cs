@@ -113,17 +113,8 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         return slotCard;
     }
 
-    // Small borderless ✕ in a device slot header that removes that device from the chain.
-    private Border SlotDelBtn(Action onDelete)
-    {
-        var glyph = new Glyph(GlyphKind.Close, 8) { Foreground = IrMuted };
-        var b = new Border { Width = 13, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Stretch, Child = glyph };
-        ToolTip.SetTip(b, "Remove device");
-        b.PointerEntered += (_, _) => glyph.Foreground = IrRed;
-        b.PointerExited += (_, _) => glyph.Foreground = IrMuted;
-        b.PointerPressed += (_, e) => { e.Handled = true; onDelete(); };
-        return b;
-    }
+    // The Remove control in a device slot header (#110): the same one as the track chain's cards.
+    private static Border SlotDelBtn(Action onDelete) => DeviceCardKit.RemoveButton("Remove device", onDelete);
 
     private int MacrosOnTarget(IRackAccess a, int sc, int dev)
     {

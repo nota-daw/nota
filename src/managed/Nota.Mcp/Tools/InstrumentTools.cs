@@ -31,6 +31,14 @@ public sealed class InstrumentTools(IAudioEngine engine, IEngineDispatch dispatc
     [McpServerTool(Name = "list_instrument_kinds"), Description("List the built-in instrument kinds (kind id + name) you can add.")]
     public InstrumentKind[] ListInstrumentKinds() => Array.ConvertAll(Kinds, k => new InstrumentKind(k.Kind, k.Name));
 
+    [McpServerTool(Name = "set_track_instrument"), Description("Replace an instrument track's instrument with a fresh built-in kind (see list_instrument_kinds; 3 = an empty Instrument Rack, 4 = an empty Drum Rack). Clips, MIDI effects, audio effects and the mixer stay; one undo step. Plug-ins use set_track_instrument_plugin. An instrument track always has an instrument: to delete it, remove_track.")]
+    public Task<bool> SetTrackInstrument([Description("Instrument track id")] int trackId, [Description("Instrument kind id from list_instrument_kinds")] int kind) => Mutate(() =>
+    {
+        if (!E.SetTrackBuiltinInstrument(trackId, kind))
+            throw new InvalidOperationException($"Track {trackId} isn't an instrument track, or kind {kind} isn't a built-in instrument.");
+        return true;
+    });
+
     [McpServerTool(Name = "add_instrument_track"), Description("Add an instrument track with the given built-in kind (see list_instrument_kinds). Returns the track id.")]
     public Task<int> AddInstrumentTrack([Description("Instrument kind id from list_instrument_kinds")] int kind) => Mutate(() =>
     {

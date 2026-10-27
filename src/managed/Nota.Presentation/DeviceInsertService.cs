@@ -22,6 +22,10 @@ public enum InsertPlacement
     Insert,
     /// <summary>The effect at <see cref="InsertTarget.Index"/> is swapped for the new one.</summary>
     Replace,
+    /// <summary>An instrument swaps the track's instrument even when it is a rack — Replace…
+    /// in the instrument's menu (specs/043). A drop never asks for this: on a rack it adds a
+    /// chain / pad.</summary>
+    ReplaceInstrument,
 }
 
 /// <summary>Where an item goes. <paramref name="Midi"/>: the index refers to the MIDI-effect chain.
@@ -156,9 +160,9 @@ public sealed class DeviceInsertService
     }
 
     /// <summary>Swaps a plain instrument track's instrument. False — nothing changed — when it can't.</summary>
-    public bool TryReplaceInstrument(BrowserItem item, int trackId)
+    public bool TryReplaceInstrument(BrowserItem item, int trackId, bool evenRack = false)
     {
-        if (!CanReplaceInstrument(trackId)) return false;
+        if (evenRack ? !(TryTrackInfo(trackId, out var ti) && ti.IsInstrument && !ti.IsReturn && !ti.IsGroup) : !CanReplaceInstrument(trackId)) return false;
         if (item.Kind == BrowserItemKind.BuiltinInstrument)
         {
             if (!_engine.SetTrackBuiltinInstrument(trackId, item.BuiltinKind)) return false;
@@ -209,6 +213,36 @@ public sealed class DeviceInsertService
         return Group(() => RouteToTrack(item, trackId));
     }
 
+    /// <summary>A Browser drop in Session view (#313, specs/043) on a column (<paramref name="trackId"/>)
+    /// or right of the last one (≤ 0). An instrument replaces a plain instrument track's, adds a
+    /// chain / pad to a rack, and otherwise (an audio, return or group column, or no column) starts
+    /// a new instrument track — the caller places it after the column. An instrument preset loads
+    /// in place the same way; effects and other presets route to the track. One undo step.</summary>
+    public InsertResult DropOnSession(BrowserItem item, int trackId)
+    {
+        bool hostsInstrument = trackId > 0 && TryTrackInfo(trackId, out var ti) && ti.IsInstrument && !ti.IsGroup && !ti.IsReturn;
+        if (item.Kind is BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument)
+            return TagPlugin(item, Group(() =>
+            {
+                if (hostsInstrument)
+                {
+                    if (_engine.TrackInstrumentKind(trackId) is 3 or 4) return AddToTrack(item, trackId);
+                    return TryReplaceInstrument(item, trackId)
+                        ? new InsertResult { Ok = true, TrackId = trackId, InstrumentReplaced = true, Status = $"Changed instrument to {item.Name} (track {trackId})" }
+                        : InsertResult.Fail($"Couldn't load {item.Name}.");
+                }
+                int t = CreateInstrumentTrack(item, 0);
+                return t > 0 ? new InsertResult { Ok = true, TrackId = t, CreatedTrack = true, Status = $"Added {item.Name} (track {t})" }
+                             : InsertResult.Fail($"Couldn't load {item.Name}.");
+            }));
+        // A preset: in place on an instrument track; on another column an instrument preset
+        // spawns its own track and an effect preset lands on the column.
+        if (item.Kind == BrowserItemKind.Preset)
+            return hostsInstrument ? ApplyPreset(item, new InsertTarget(trackId, InPlace: true))
+                 : trackId > 0 ? Group(() => RouteToTrack(item, trackId)) : ApplyPreset(item, new InsertTarget(-1));
+        return Group(() => RouteToTrack(item, trackId));
+    }
+
     /// <summary>Drag & drop onto the Devices panel, the Modular canvas, or the palette's
     /// default: the item goes onto <paramref name="target"/>'s track — an effect into the
     /// gap or in place of the card the target names, an instrument in place of the track's
@@ -230,6 +264,10 @@ public sealed class DeviceInsertService
         }
         if (item.Kind == BrowserItemKind.Preset) return ApplyPreset(item, target);
         if (t <= 0) return InsertResult.Fail("Select a track first.");
+        if (isInstrument && target.Placement == InsertPlacement.ReplaceInstrument)
+            return TryReplaceInstrument(item, t, evenRack: true)
+                ? new InsertResult { Ok = true, TrackId = t, InstrumentReplaced = true, ShowDevices = true, Status = $"Changed instrument to {item.Name}" }
+                : InsertResult.Fail($"Couldn't load {item.Name}.");
 
         if (target.Placement != InsertPlacement.Default)
             switch (item.Kind)
@@ -292,7 +330,7 @@ public sealed class DeviceInsertService
             case BrowserItemKind.PluginInstrument:
                 if (TryReplaceInstrument(item, t))
                     return new InsertResult { Ok = true, TrackId = t, InstrumentReplaced = true, Status = $"Changed instrument to {item.Name} (track {t})" };
-                return InsertResult.Fail("Drop instruments onto the arrangement.");
+                return InsertResult.Fail($"Couldn't load {item.Name}.");
             case BrowserItemKind.Sample when kind == 4:                 // sample → drum pad (Sampler)
             {
                 int note = NextFreeDrumPad(t);

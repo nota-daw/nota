@@ -564,6 +564,26 @@ void Engine::remapAutomationAfterDeviceChange(Track& nt, bool midi, int32_t remo
     std::erase_if(overrides_, [&](OverrideTarget& o) { return o.trackId == trackId && laneGone(o.laneIndex); });
 }
 
+std::vector<AutomationLane> Engine::deviceLanes(const Track& t, int32_t family, int32_t index) const {
+    std::vector<AutomationLane> out;
+    for (const auto& l : t.automation) {
+        bool on = false;
+        switch (family) {
+        case 0:
+            on = (l.target == AutomationTarget::DeviceParam || l.target == AutomationTarget::PluginParam) && l.deviceIndex == index;
+            break;
+        case 1: on = l.target == AutomationTarget::MidiDeviceParam && l.deviceIndex == index; break;
+        case 2: on = l.target == AutomationTarget::PluginParam && l.deviceIndex < 0; break;
+        default: break;
+        }
+        if (on) {
+            out.push_back(l);
+            out.back().suppressRead = false; // a gesture on the old track doesn't follow it
+        }
+    }
+    return out;
+}
+
 bool Engine::automationDeviceRemapSelfTest() {
     // Two effects, a lane on each: reordering the chain keeps every lane on its own
     // device; removing a device drops its lanes and shifts the rest.

@@ -70,12 +70,15 @@ public sealed partial class DeviceChainView
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
         };
         DockPanel.SetDock(power, Dock.Top);
+        // The Remove control (#110) at the strip's foot; on the instrument it takes the track.
+        var remove = RemoveButton(k == ChainKind.Instrument ? "Remove track" : "Remove device", () => RemoveDeviceAt(k, di));
+        DockPanel.SetDock(remove, Dock.Bottom);
         var strip = new Border
         {
             Background = ShellHdr, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
             CornerRadius = NotaRadius.Body, ClipToBounds = true,
-            Padding = new Thickness(0, 0, 0, 8),
-            Child = new DockPanel { LastChildFill = true, Children = { power, rotated } },
+            Padding = new Thickness(0, 0, 0, 4),
+            Child = new DockPanel { LastChildFill = true, Children = { power, remove, rotated } },
             Cursor = movable ? new Cursor(StandardCursorType.SizeAll) : null,
         };
         strip.BindResource(Border.BoxShadowProperty, "Shadow.Raised");
@@ -104,7 +107,7 @@ public sealed partial class DeviceChainView
             if (e.ClickCount == 2) { e.Handled = true; SetFolded(k, di, false); return; }
             SelectDevice(k, di);
         };
-        if (movable) HookDeviceDrag(strip, card, k, di);
+        HookDeviceDrag(strip, card, k, di);   // the instrument's strip drags onto other tracks only
         return card;
     }
 }

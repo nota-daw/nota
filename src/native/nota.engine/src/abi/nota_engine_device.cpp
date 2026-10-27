@@ -68,6 +68,13 @@ NotaResult nota_track_copy_midi_effect(NotaEngine* e, int32_t track_id, int32_t 
     return ENG(e)->copyMidiEffect(track_id, index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
 int32_t nota_device_clipboard_kind(const NotaEngine* e) { return e ? CENG(e)->deviceClipboardKind() : 0; }
+int32_t nota_track_copy_instrument(NotaEngine* e, int32_t track_id) { return e && ENG(e)->copyInstrument(track_id) ? 1 : 0; }
+int32_t nota_track_paste_instrument(NotaEngine* e, int32_t track_id) { return e ? ENG(e)->pasteInstrument(track_id) : -1; }
+int32_t nota_track_transfer_device(NotaEngine* e, int32_t src_track_id, int32_t family, int32_t index, int32_t dst_track_id,
+                                   int32_t at_index, int32_t keep_source, int32_t* out_flags) {
+    if (out_flags) *out_flags = 0;
+    return e ? ENG(e)->transferDevice(src_track_id, family, index, dst_track_id, at_index, keep_source != 0, out_flags) : -1;
+}
 int32_t nota_device_clipboard_sidechain(const NotaEngine* e) { return (e && CENG(e)->deviceClipboardSidechain()) ? 1 : 0; }
 int32_t nota_track_paste_device(NotaEngine* e, int32_t track_id, int32_t at_index) {
     return e ? ENG(e)->pasteDevice(track_id, at_index) : -1;

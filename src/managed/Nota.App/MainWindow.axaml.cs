@@ -421,6 +421,7 @@ public partial class MainWindow : Window
         _deviceChain.ItemDropped += OnDevicePanelDrop;   // browser drag onto the device panel
         _deviceChain.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };
         _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
+        HookDeviceMoves();   // Replace… / Delete track on the instrument, Move to track (specs/043)
         Timeline.TrackSelected += OnTrackSelected;
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
         Timeline.ClipsMoved += OnClipsMoved;   // a block move can re-index the open editor's clips
@@ -436,6 +437,7 @@ public partial class MainWindow : Window
         };
         _session.SlotEditRequested += OpenSessionClipEditor;
         _session.ItemDropped += OnSessionDrop;                        // browser drag & drop (M7-5)
+        HookSessionDeviceMoves(_session);                             // a device card dropped on a column (specs/043)
         _session.ArrangementChanged += () => Timeline.Refresh();      // M5-6
         _session.Status += msg => vm.StatusText = msg;
         // Session context menus add tracks through the same path as the arrangement's.

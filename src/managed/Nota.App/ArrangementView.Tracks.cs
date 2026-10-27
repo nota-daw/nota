@@ -133,6 +133,10 @@ public sealed partial class ArrangementView
         return true;
     }
 
+    /// <summary>Deletes one track the way the header's Delete does (selection and refresh
+    /// included) — the Devices panel's route for deleting a track with its instrument (specs/043).</summary>
+    public bool DeleteTrack(int trackId) => DeleteTracks(new[] { trackId });
+
     private bool DeleteTracks(IReadOnlyList<int> ids)
     {
         if (_engine is null || ids.Count == 0 || !_engine.RemoveTracks(ids.ToArray())) return false;

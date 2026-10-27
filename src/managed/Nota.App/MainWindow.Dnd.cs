@@ -61,6 +61,12 @@ public partial class MainWindow
         try
         {
             bool landed = false;   // the drop's slot (and so its track) becomes the selection
+            // A column header or the empty grid has no slot for a clip.
+            if (scene < 0 && item.Kind is BrowserItemKind.Sample or BrowserItemKind.MidiFile)
+            {
+                _vm.StatusText = "Drop samples and MIDI files onto a slot.";
+                return;
+            }
             switch (item.Kind)
             {
                 case BrowserItemKind.Sample:
@@ -78,20 +84,34 @@ public partial class MainWindow
                 case BrowserItemKind.BuiltinEffect:
                 case BrowserItemKind.PluginEffect:
                 case BrowserItemKind.BuiltinMidiEffect:
-                case BrowserItemKind.Preset:
+                    if (trackId <= 0) { _vm.StatusText = "Drop effects onto a column."; break; }
                     var r = Insertion.RouteToTrack(item, trackId); // a session column is a track
                     ApplyInsertResult(r);
                     landed = r.Ok;
                     break;
-                default: // instruments
-                    _vm.StatusText = "Drop instruments onto the arrangement.";
+                default: // instruments and presets (#313): replace, add a chain / pad, or start a track
+                {
+                    InsertResult ir;
+                    Engine.BeginUndoGroup();
+                    try
+                    {
+                        ir = Insertion.DropOnSession(item, trackId);
+                        // A new track goes right after the column it was dropped on.
+                        if (ir.Ok && ir.CreatedTrack && trackId > 0) Timeline.PlaceNewTrack(ir.TrackId, trackId);
+                    }
+                    finally { Engine.EndUndoGroup(); }
+                    ApplyInsertResult(ir, revealDevices: !ir.CreatedTrack);
+                    if (ir.Ok && ir.TrackId > 0) { trackId = ir.TrackId; landed = true; }
                     break;
+                }
             }
             _session?.Refresh();
             Timeline.Refresh();
             if (landed && trackId > 0)
             {
-                _session?.SelectSlot(trackId, scene);   // the arrangement follows to the same track
+                // The drop's slot (and so its track) becomes the selection; a header or the empty
+                // grid has no slot, so the track's first scene stands in.
+                _session?.SelectSlot(trackId, Math.Max(0, scene));   // the arrangement follows to the same track
                 if (Timeline.SelectedTrackId != trackId) Timeline.Select(trackId, -1);
             }
         }

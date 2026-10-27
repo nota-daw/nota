@@ -251,6 +251,14 @@ public struct NotaMeter
 /// <summary>What a parameter-automation lane drives (M9). Matches native AutomationTarget.</summary>
 public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4 }
 
+/// <summary>What a device transfer (specs/043) moves: an audio effect, a MIDI effect or the
+/// track's instrument. Matches nota_track_transfer_device's family.</summary>
+public enum DeviceFamily { Audio = 0, Midi = 1, Instrument = 2 }
+
+/// <summary>What a device transfer did besides moving the device (nota_track_transfer_device's out_flags).</summary>
+[Flags]
+public enum TransferFlags { None = 0, SidechainCleared = 1, LinksDropped = 2, SourceTrackRemoved = 4 }
+
 /// <summary>Project pan law (specs/006). Matches NOTA_PAN_LAW_*: Balance drops the far
 /// channel as a track pans, Stereo folds it into the near side.</summary>
 public enum PanLaw { Balance = 0, Stereo = 1 }
