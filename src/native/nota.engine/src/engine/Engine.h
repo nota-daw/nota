@@ -1409,12 +1409,13 @@ class Engine {
     void syncCcRoutes(Graph& g);        // before a publish: routes of fresh tracks from their Arps
     void republishCcRoutes(int32_t trackId); // after a live CC target change: publish its route
     bool ccRoutesUsed_ = false;         // no Arp has had a CC target yet: undo / redo skip the walk
+    bool ccDestsSet_ = false;           // no CC target was ever set: publishes skip syncCcRoutes
     static int32_t trackLatency(const Track& t);
     std::shared_ptr<Instrument> cloneInstrument(const Track& src) const; // duplicateTrack helper
     std::shared_ptr<Instrument> cloneInstrumentFrom(const Instrument& src) const;
     // Copies of the automation lanes on one device of `t` (family as transferDevice; for the
     // instrument, PluginParam lanes with deviceIndex < 0), in lane order.
-    std::vector<AutomationLane> deviceLanes(const Track& t, int32_t family, int32_t index) const;
+    std::vector<TrackLane> deviceLanes(const Track& t, int32_t family, int32_t index) const;
     std::shared_ptr<Device> cloneDevice(const Device& src) const;
     std::shared_ptr<MidiDevice> cloneMidiDevice(const MidiDevice& src) const;
     std::shared_ptr<Device> clipDevice_;   // device clipboard (#238): a clone of the copied audio effect
@@ -1482,7 +1483,7 @@ class Engine {
     // the points inside the clip's span, beats stored RELATIVE to the clip start.
     // Reapplied on paste/duplicate. clipboardAutoTrack_ = the source track (so a paste
     // back onto it can restore device/plugin lanes, whose indices are track-positional).
-    std::vector<AutomationLane> clipboardAuto_;
+    std::vector<TrackLane> clipboardAuto_;
     int32_t clipboardAutoTrack_ = -1;
 
     // Block clip clipboard (multi-selection). Each entry is one captured clip with its
@@ -1496,7 +1497,7 @@ class Engine {
         bool sameTrack = true; // false once remapped to another track
         AudioClip audio;
         MidiClip midi;
-        std::vector<AutomationLane> autom; // clip-relative automation snippet
+        std::vector<TrackLane> autom; // clip-relative automation snippet
     };
     std::vector<BlockClip> clipboardBlock_;
     double clipboardBlockLen_ = 0.0;
@@ -1515,8 +1516,8 @@ class Engine {
     // applyClipAutomation re-lands them at placedStart (clearing that span first on each
     // matching lane); non-Volume/Pan lanes are applied only on the source track (sameTrack)
     // since device/param indices are positional. removeAutomationInRange clears a span.
-    std::vector<AutomationLane> captureClipAutomation(const Track& t, double start, double end) const;
-    void applyClipAutomation(Track& nt, int32_t trackId, const std::vector<AutomationLane>& snips, double placedStart,
+    std::vector<TrackLane> captureClipAutomation(const Track& t, double start, double end) const;
+    void applyClipAutomation(Track& nt, int32_t trackId, const std::vector<TrackLane>& snips, double placedStart,
         double len, bool sameTrack) const;
     static void removeAutomationInRange(Track& t, double start, double end);
     // Two tracks have an identical device layout (same instrument kind + same device kinds in

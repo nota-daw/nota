@@ -18,7 +18,7 @@ namespace nota {
 void Engine::applyAutomation(Graph* g, double beat) {
     for (auto& tptr : g->tracks) {
         Track& t = *tptr;
-        for (const AutomationLane& lane : t.automation) {
+        for (const TrackLane& lane : t.automation) {
             if (lane.points.empty() || lane.suppressRead) continue; // M9-C: control leads while writing
             const float v = lane.valueAt(beat);
             if (lane.nested()) { // a device grouped into a rack (specs/044)
@@ -62,7 +62,7 @@ void Engine::applyAutomation(Graph* g, double beat) {
 
 bool Engine::automationSelfTest() {
     // Volume lane: 1.0 at beat 0, 0.0 at beat 4 -> 0.5 at beat 2; hold at ends.
-    AutomationLane lane;
+    TrackLane lane;
     lane.target = AutomationTarget::Volume;
     lane.points = {{0.0, 1.0f}, {4.0, 0.0f}};
     if (std::fabs(lane.valueAt(2.0) - 0.5f) > 1e-4f) return false;
@@ -83,7 +83,7 @@ bool Engine::automationCurveSelfTest() {
     // Segment 0->4, value 0->1. At the midpoint (beat 2) a linear lane reads 0.5;
     // ease-out curve (+1) reads well above, ease-in (-1) well below, and the curve
     // rides on the LEFT point of the segment. Endpoints stay exact.
-    AutomationLane lane;
+    TrackLane lane;
     lane.target = AutomationTarget::Volume;
     lane.points = {{0.0, 0.0f, 0.0f}, {4.0, 1.0f, 0.0f}};
     if (std::fabs(lane.valueAt(2.0) - 0.5f) > 1e-4f) return false; // linear baseline
@@ -185,12 +185,12 @@ int32_t Engine::addPluginAutomationLane(int32_t trackId, int32_t deviceIndex, co
     const std::string id = paramId ? paramId : "";
     // Reuse an existing lane on the same (device, param).
     for (size_t i = 0; i < old->automation.size(); ++i) {
-        const AutomationLane& l = old->automation[i];
+        const TrackLane& l = old->automation[i];
         if (!l.nested() && l.target == AutomationTarget::PluginParam && l.deviceIndex == deviceIndex && l.paramId == id)
             return static_cast<int32_t>(i);
     }
     auto nt = cloneTrack(*old);
-    AutomationLane lane;
+    TrackLane lane;
     lane.target = AutomationTarget::PluginParam;
     lane.deviceIndex = deviceIndex;
     lane.paramId = id;
@@ -216,7 +216,7 @@ int32_t Engine::nestedChainIndex(int32_t trackId, int32_t host, uint64_t uid) co
 bool Engine::automationLanePath(int32_t trackId, int32_t laneIndex, int32_t* chainIndex, int32_t* slot) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || laneIndex < 0 || laneIndex >= static_cast<int32_t>(t->automation.size())) return false;
-    const AutomationLane& l = t->automation[laneIndex];
+    const TrackLane& l = t->automation[laneIndex];
     if (chainIndex) *chainIndex = l.nested() ? nestedChainIndex(trackId, l.deviceIndex, l.chainUid) : -1;
     if (slot) *slot = l.nested() ? l.slot : -1;
     return true;
@@ -230,7 +230,7 @@ int32_t Engine::addNestedAutomationLane(int32_t trackId, int32_t target, int32_t
     const auto tgt = static_cast<AutomationTarget>(target);
     if (tgt != AutomationTarget::DeviceParam && tgt != AutomationTarget::MidiDeviceParam && tgt != AutomationTarget::PluginParam)
         return -1;
-    AutomationLane lane;
+    TrackLane lane;
     lane.target = tgt;
     lane.deviceIndex = host;
     lane.chainUid = uid;
@@ -244,7 +244,7 @@ int32_t Engine::addNestedAutomationLane(int32_t trackId, int32_t target, int32_t
                                        : -1;
     }
     for (size_t i = 0; i < old->automation.size(); ++i) { // one lane per target
-        const AutomationLane& l = old->automation[i];
+        const TrackLane& l = old->automation[i];
         if (l.target == tgt && l.deviceIndex == host && l.chainUid == uid && l.slot == slot
             && (tgt == AutomationTarget::PluginParam ? l.paramId == lane.paramId : l.paramIndex == paramIndex))
             return static_cast<int32_t>(i);
@@ -317,7 +317,7 @@ void Engine::setAutomationRecord(bool on) {
 static int32_t findLaneFor(
     const Track& t, int32_t target, int32_t deviceIndex, int32_t paramIndex, const std::string& paramId) {
     for (size_t i = 0; i < t.automation.size(); ++i) {
-        const AutomationLane& l = t.automation[i];
+        const TrackLane& l = t.automation[i];
         if (l.nested() || l.target != static_cast<AutomationTarget>(target)) continue; // specs/044
         switch (l.target) {
         case AutomationTarget::DeviceParam:
@@ -535,7 +535,7 @@ bool Engine::pluginAutomationSelfTest() {
     auto g = std::make_shared<Graph>();
     auto t = std::make_shared<Track>(9998, TrackType::Instrument);
     t->instrument = std::make_shared<Synth>();
-    AutomationLane lane;
+    TrackLane lane;
     lane.target = AutomationTarget::PluginParam;
     lane.deviceIndex = -1; // instrument
     lane.paramIndex = 0;
@@ -555,12 +555,12 @@ int32_t Engine::addAutomationLane(int32_t trackId, int32_t target, int32_t devic
     const bool usesDev = tgt == AutomationTarget::DeviceParam || tgt == AutomationTarget::MidiDeviceParam;
     // Reuse an existing lane on the same target (no snapshot) — one lane per target.
     for (size_t i = 0; i < old->automation.size(); ++i) {
-        const AutomationLane& l = old->automation[i];
+        const TrackLane& l = old->automation[i];
         if (!l.nested() && l.target == tgt && (!usesDev || (l.deviceIndex == deviceIndex && l.paramIndex == paramIndex)))
             return static_cast<int32_t>(i);
     }
     auto nt = cloneTrack(*old);
-    AutomationLane lane;
+    TrackLane lane;
     lane.target = tgt;
     lane.deviceIndex = usesDev ? deviceIndex : -1;
     lane.paramIndex = usesDev ? paramIndex : -1;
@@ -574,7 +574,7 @@ int32_t Engine::addAutomationLane(int32_t trackId, int32_t target, int32_t devic
 
 void Engine::remapAutomationAfterDeviceChange(Track& nt, bool midi, int32_t removedIndex, int32_t from, int32_t to) {
     // Lanes on the effect chain (DeviceParam / PluginParam >= 0) or the MIDI-FX chain.
-    auto onChain = [midi](const AutomationLane& l) {
+    auto onChain = [midi](const TrackLane& l) {
         // A nested lane (specs/044) follows its rack: deviceIndex is the rack's address.
         if (l.nested()) return midi ? isMidiHost(l.deviceIndex) : l.deviceIndex >= 0;
         if (midi) return l.target == AutomationTarget::MidiDeviceParam;
@@ -595,10 +595,10 @@ void Engine::remapAutomationAfterDeviceChange(Track& nt, bool midi, int32_t remo
 
     // laneMap: old lane index → new lane index (-1 = dropped with its device).
     std::vector<int32_t> laneMap(nt.automation.size());
-    std::vector<AutomationLane> kept;
+    std::vector<TrackLane> kept;
     kept.reserve(nt.automation.size());
     for (size_t i = 0; i < nt.automation.size(); ++i) {
-        AutomationLane& l = nt.automation[i];
+        TrackLane& l = nt.automation[i];
         if (onChain(l)) {
             const bool midiRack = l.nested() && midi;
             const int32_t ni = remap(midiRack ? midiHostIndex(l.deviceIndex) : l.deviceIndex);
@@ -633,8 +633,8 @@ void Engine::remapAutomationAfterDeviceChange(Track& nt, bool midi, int32_t remo
     std::erase_if(overrides_, [&](OverrideTarget& o) { return o.trackId == trackId && laneGone(o.laneIndex); });
 }
 
-std::vector<AutomationLane> Engine::deviceLanes(const Track& t, int32_t family, int32_t index) const {
-    std::vector<AutomationLane> out;
+std::vector<TrackLane> Engine::deviceLanes(const Track& t, int32_t family, int32_t index) const {
+    std::vector<TrackLane> out;
     for (const auto& l : t.automation) {
         bool on = false;
         if (l.nested()) // lanes into a rack go where the rack goes (specs/044)
@@ -699,7 +699,7 @@ bool Engine::automationLaneInfo(int32_t trackId, int32_t laneIndex, int32_t* out
     int32_t* outParamIndex, int32_t* outPointCount) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || laneIndex < 0 || laneIndex >= static_cast<int32_t>(t->automation.size())) return false;
-    const AutomationLane& l = t->automation[laneIndex];
+    const TrackLane& l = t->automation[laneIndex];
     if (outTarget) *outTarget = static_cast<int32_t>(l.target);
     if (outDeviceIndex) *outDeviceIndex = l.deviceIndex;
     if (outParamIndex) *outParamIndex = l.paramIndex;

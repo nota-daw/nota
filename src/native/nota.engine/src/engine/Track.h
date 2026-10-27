@@ -249,7 +249,7 @@ class Track {
     std::vector<AudioClip> clips;           // audio tracks
     std::vector<MidiClip> midiClips;        // instrument tracks
     std::vector<SessionSlot> sessionSlots;  // Session view, one per scene (M5)
-    std::vector<AutomationLane> automation; // parameter automation lanes (M9)
+    std::vector<TrackLane> automation; // parameter automation lanes (M9)
 
     // CV modulation (Phase 3, Modular editor). Sources + edges to device params.
     // Config lives in atomics (live-tweakable); add/remove is structural (clone).

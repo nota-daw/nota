@@ -14,6 +14,7 @@
 #include "Engine.h"
 #include "media/AudioFile.h"
 #include "bridge/PluginHostBridge.h"
+#include "ParamPath.h"
 #include "devices/racks/RackCore.h"
 #include "devices/racks/RackInstrument.h"
 #include "devices/racks/RackDevice.h"
@@ -261,7 +262,7 @@ Ref hostRef(int32_t host, uint64_t uid, int32_t slot) {
 }
 int32_t hostOf(const Ref& r) { return r.fam == 1 ? midiHost(r.idx) : r.fam == 2 ? -1 : r.idx; }
 
-Ref laneRef(const AutomationLane& l) {
+Ref laneRef(const TrackLane& l) {
     if (l.nested()) return hostRef(l.deviceIndex, l.chainUid, l.slot);
     switch (l.target) {
     case AutomationTarget::DeviceParam: return {0, l.deviceIndex};
@@ -272,7 +273,7 @@ Ref laneRef(const AutomationLane& l) {
 }
 // The lane's target names the param surface of whatever it points at, and that surface is the
 // same before and after a move into or out of a rack, so only the address changes.
-void setLaneRef(AutomationLane& l, const Ref& r) {
+void setLaneRef(TrackLane& l, const Ref& r) {
     l.chainUid = r.uid;
     l.slot = r.uid ? r.slot : -1;
     l.deviceIndex = r.uid ? hostOf(r) : r.idx;
@@ -392,10 +393,10 @@ void Engine::rewriteArpRef(MidiDevice& m, const DeviceRefMap& map) {
 void Engine::publishWithRefMap(int32_t trackId, std::shared_ptr<Track> nt, const DeviceRefMap& map, const RackCore* fresh) {
     // Lanes.
     std::vector<int32_t> laneMap(nt->automation.size());
-    std::vector<AutomationLane> kept;
+    std::vector<TrackLane> kept;
     kept.reserve(nt->automation.size());
     for (size_t i = 0; i < nt->automation.size(); ++i) {
-        AutomationLane& l = nt->automation[i];
+        TrackLane& l = nt->automation[i];
         const Ref r = laneRef(l);
         if (r.fam >= 0) {
             const Ref n = map(r);
@@ -765,10 +766,10 @@ void Engine::remapNestedAfterRackEdit(int32_t trackId, int32_t host, const Neste
         if (own) {
             // Lanes: rewrite or drop, keeping in-flight gestures on the right lane index.
             std::vector<int32_t> laneMap(nt->automation.size());
-            std::vector<AutomationLane> kept;
+            std::vector<TrackLane> kept;
             kept.reserve(nt->automation.size());
             for (size_t i = 0; i < nt->automation.size(); ++i) {
-                AutomationLane& l = nt->automation[i];
+                TrackLane& l = nt->automation[i];
                 if (into(l.chainUid, l.deviceIndex)) {
                     const auto [u, sl] = map(l.chainUid, l.slot);
                     if (u == 0) {

@@ -868,7 +868,7 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
 
     auto ns = (keepSource || inst) ? nullptr : cloneTrack(*src);
     auto nd = cloneTrack(*dst);
-    std::vector<AutomationLane> lanes;
+    std::vector<TrackLane> lanes;
     if (!keepSource) lanes = deviceLanes(*src, family, index);
     int32_t at = 0;
 
@@ -935,7 +935,7 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
         if (!inst) l.deviceIndex = l.nested() && family == 1 ? midiHost(at) : at; // a MIDI rack's nested lanes keep its encoding
         // An instrument lane for a parameter the new track already automates takes that lane's
         // place, so there is one lane per parameter (edits and recording find the first one).
-        AutomationLane* same = nullptr;
+        TrackLane* same = nullptr;
         if (inst && !l.nested())
             for (auto& d : nd->automation)
                 if (!d.nested() && d.target == AutomationTarget::PluginParam && d.deviceIndex < 0
@@ -1296,6 +1296,9 @@ void Engine::setMidiEffectCcDest(int32_t t, int32_t i, int32_t dev, int32_t para
 // The audio thread plays the routes of the published track (Track::ccRoutes): after a live CC
 // target change, publish the track again so the route follows (no undo step, as before).
 void Engine::republishCcRoutes(int32_t trackId) {
+    // The first target ever set turns route syncing on. Until then no Arp has a target, so the
+    // tracks skipped meanwhile have no route to lose (their empty lists stay as they are).
+    ccDestsSet_ = true;
     if (auto old = findTrackAuthoring(trackId)) republishWithTrackRaw(trackId, cloneTrack(*old));
 }
 // The Arp's CC target inside a rack (specs/044), for save / load: (chain index, slot) in the
