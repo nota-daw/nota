@@ -348,6 +348,7 @@ public sealed partial class NotaEngine
 
     /// <summary>Instrument identity: 0=Synth, 1=Sampler, -1=plugin/unknown, -2=no instrument.</summary>
     public int TrackInstrumentKind(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentKind(_handle, trackId); }
+    public long TrackInstrumentId(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentId(_handle, trackId); }
     public bool TrackInstrumentSupportsMpe(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentSupportsMpe(_handle, trackId) != 0; }
 
     /// <summary>Built-in device kind (0=EQ,1=Comp,2=Reverb,3=Delay,4=Utility) or -1 for a plugin.</summary>

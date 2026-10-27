@@ -235,8 +235,19 @@ class Instrument {
     // copied state). Returns nullptr if the engine should handle it. Message thread.
     virtual std::shared_ptr<Instrument> clone() const { return nullptr; }
 
+    // Which instrument this is, for the UI's per-card state (specs/043): every new instrument
+    // (added, swapped in, copied, cloned) gets a fresh value; an edit that forks the object (a
+    // rack) keeps it with adoptUid, and undo brings back the object with its own. Message thread.
+    uint64_t uid() const { return uid_; }
+    void adoptUid(const Instrument& from) { uid_ = from.uid_; }
+
   private:
+    static uint64_t nextUid() {
+        static std::atomic<uint64_t> next{1};
+        return next.fetch_add(1, std::memory_order_relaxed);
+    }
     std::atomic<bool> bypassed_{false};
+    uint64_t uid_ = nextUid();
 };
 
 } // namespace nota

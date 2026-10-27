@@ -46,7 +46,9 @@ public sealed partial class DeviceChainView
     private static int KeyIndex(int key) => key >= 0 ? key : key == -1 ? -1 : -1000 - key;
     private string CardSig(int t, ChainKind k, int di) => k switch
     {
-        ChainKind.Instrument => $"{_engine.TrackInstrumentKind(t)}|{_engine.DeviceName(t, -1)}",
+        // The instrument's id too: undo can bring back another instrument of the same kind and
+        // name (one moved away, one replaced), and its card must not take this one's A/B.
+        ChainKind.Instrument => $"{_engine.TrackInstrumentKind(t)}|{_engine.DeviceName(t, -1)}|{_engine.TrackInstrumentId(t)}",
         ChainKind.Midi => $"{_engine.MidiEffectKind(t, di)}|{_engine.MidiEffectName(t, di)}",
         _ => $"{_engine.TrackDeviceBuiltinKind(t, di)}|{_engine.DeviceName(t, di)}",
     };

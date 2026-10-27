@@ -496,6 +496,9 @@ int32_t nota_pdc_selftest(void) {
 
 // ---- Plugin / device kind & id introspection (M7-6) -----------------------
 
+int64_t nota_track_instrument_id(const NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackInstrumentId(track_id) : 0;
+}
 int32_t nota_track_instrument_kind(const NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackInstrumentKind(track_id) : -2;
 }

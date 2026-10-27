@@ -1058,6 +1058,9 @@ public interface IAudioEngine : IDisposable
     // --- Project load (M7-6) -----------------------------------------------
     void Reset();
     int TrackInstrumentKind(int trackId);
+    /// <summary>Which instrument the track holds (specs/043): the same while it is edited, moved or
+    /// brought back by undo; another for a new, replaced or pasted one. 0 = none. Compare only.</summary>
+    long TrackInstrumentId(int trackId);
     /// <summary>The track's instrument responds to per-note expression (MPE).</summary>
     bool TrackInstrumentSupportsMpe(int trackId);
     int TrackDeviceBuiltinKind(int trackId, int deviceIndex);

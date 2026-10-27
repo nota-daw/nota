@@ -992,6 +992,11 @@ NOTA_API void    nota_engine_reset(NotaEngine* engine);
 /* Instrument identity for save: 0=Synth, 1=Sampler, -1=plugin/unknown,
  * -2=no instrument (audio/return track). */
 NOTA_API int32_t nota_track_instrument_kind(const NotaEngine* engine, int32_t track_id);
+/* Which instrument the track holds (specs/043), for UI state kept per instrument: the same value
+ * while it is edited (a rack edit included) and when it moves to another track or comes back by
+ * undo; a new, replaced, pasted or copied instrument has another. 0 = no instrument. Compare it,
+ * don't decode it. */
+NOTA_API int64_t nota_track_instrument_id(const NotaEngine* engine, int32_t track_id);
 /* 1 if the track's instrument responds to per-note expression (MPE), else 0. */
 NOTA_API int32_t nota_track_instrument_supports_mpe(const NotaEngine* engine, int32_t track_id);
 /* Built-in device kind (0=EQ,1=Comp,2=Reverb,3=Delay,4=Utility) or -1 for a

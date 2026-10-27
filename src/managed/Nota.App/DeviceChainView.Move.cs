@@ -60,11 +60,18 @@ public sealed partial class DeviceChainView
     // The shown track's Instrument Rack card, for drops that come from elsewhere (a Session column).
     private RackCardView? _instrumentRackView;
 
-    /// <summary>Hands an instrument preset to the shown Instrument Rack's card, which adds it as a new
-    /// chain. False when the shown track has no Instrument Rack card.</summary>
+    /// <summary>Hands an instrument preset to the shown track's Instrument Rack card, which adds it
+    /// as a new chain. A folded rack has no card on screen: one is built for the drop. False when
+    /// the shown track has no Instrument Rack.</summary>
     internal bool DropOnInstrumentRack(BrowserItem item)
     {
-        if (_instrumentRackView is not { } v || _engine.TrackInstrumentKind(_trackId) != 3) return false;
+        if (_engine.TrackInstrumentKind(_trackId) != 3) return false;
+        var v = _instrumentRackView;
+        if (v is null)
+        {
+            v = new RackCardView(NewCardContext());
+            v.BuildInstrumentRackBody(out _);
+        }
         v.DropAsNewChain(item);
         return true;
     }
@@ -78,22 +85,23 @@ public sealed partial class DeviceChainView
         var k = r.Family switch { DeviceFamily.Midi => ChainKind.Midi, DeviceFamily.Instrument => ChainKind.Instrument, _ => ChainKind.Effect };
         int srcIdx = k == ChainKind.Instrument ? -1 : r.Index, dstIdx = k == ChainKind.Instrument ? -1 : newIndex;
         TrackExtras(r.SrcTrackId).TryGetValue(ExtraKey(k, srcIdx), out var own);
-        if (!r.Copy)
-        {
-            if (k == ChainKind.Instrument) _cardExtra.Remove(r.SrcTrackId);
-            else RemapExtras(r.SrcTrackId, k, i => i == srcIdx ? -1 : i > srcIdx ? i - 1 : i);
-        }
+        // A moved instrument's track is gone; its card state stays under it for an undo.
+        if (!r.Copy && k != ChainKind.Instrument) RemapExtras(r.SrcTrackId, k, i => i == srcIdx ? -1 : i > srcIdx ? i - 1 : i);
         if (k != ChainKind.Instrument)
         {
             int last = (k == ChainKind.Midi ? _engine.TrackMidiEffectCount(r.DstTrackId) : _engine.TrackDeviceCount(r.DstTrackId)) - 1;
             if (dstIdx != last) RemapExtras(r.DstTrackId, k, i => i >= dstIdx ? i + 1 : i);
         }
         var dst = TrackExtras(r.DstTrackId);
-        dst.Remove(ExtraKey(k, dstIdx));
-        if (own is null) return;
+        // The instrument it replaced keeps its card state aside: an undo brings that instrument
+        // back (another id, so ExtraFor swaps the two), a redo this one.
+        dst.Remove(ExtraKey(k, dstIdx), out var displaced);
+        if (own is null) { if (displaced != null && k == ChainKind.Instrument) dst[ExtraKey(k, dstIdx)] = new CardExtra { Sig = CardSig(r.DstTrackId, k, dstIdx), Wrapped = displaced }; return; }
         string sig = CardSig(r.DstTrackId, k, dstIdx);
-        dst[ExtraKey(k, dstIdx)] = r.Copy ? new CardExtra { Sig = sig, Preset = own.Preset, PresetId = own.PresetId } : own;
-        own.Sig = r.Copy ? own.Sig : sig;
+        var landed = r.Copy ? new CardExtra { Sig = sig, Preset = own.Preset, PresetId = own.PresetId } : own;
+        if (!r.Copy) own.Sig = sig;
+        if (k == ChainKind.Instrument) landed.Wrapped = displaced;
+        dst[ExtraKey(k, dstIdx)] = landed;
     }
 
     // Move to track ▸: every track that can take the device, this one left out — audio effects

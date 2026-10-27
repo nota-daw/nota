@@ -609,6 +609,7 @@ class Engine {
     // Instrument identity for save: 0=Synth, 1=Sampler, -1=plugin/unknown,
     // -2=track has no instrument (audio/return). Message thread only.
     int32_t trackInstrumentKind(int32_t trackId) const;
+    int64_t trackInstrumentId(int32_t trackId) const; // nota_track_instrument_id (specs/043)
     bool trackInstrumentSupportsMpe(int32_t trackId) const; // per-note expression (MPE)
     // Built-in device kind for save (see Device::builtinKind), or -1 for a
     // hosted plugin. Message thread only.

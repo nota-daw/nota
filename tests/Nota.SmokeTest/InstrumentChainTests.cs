@@ -107,6 +107,25 @@ internal static class InstrumentChainTests
         int a = e.AddAudioTrack();
         yield return (!e.SetTrackBuiltinInstrument(a, InstrumentRack) && !e.SetTrackBuiltinInstrument(a, DrumRack),
             "instrument chain: an audio track takes no rack");
+
+        // The instrument's id (review of #350): the same through edits — a rack's forks included —
+        // and a move; another for a replacement; back by undo.
+        int r = e.AddInstrumentRackTrack();
+        long rid = e.TrackInstrumentId(r);
+        e.RackAddChain(r, Volt);
+        e.RackSetChainName(r, 0, "Lead");
+        bool sameAfterEdit = e.TrackInstrumentId(r) == rid && rid != 0;
+        int v = e.AddVoltSynthTrack();
+        long vid = e.TrackInstrumentId(v);
+        e.SetTrackBuiltinInstrument(v, Volt);
+        long replaced = e.TrackInstrumentId(v);
+        e.Undo();
+        bool backByUndo = e.TrackInstrumentId(v) == vid && replaced != vid;
+        int to = e.AddInstrumentTrack();
+        e.TransferDevice(v, DeviceFamily.Instrument, 0, to, -1, false, out _);
+        bool followsMove = e.TrackInstrumentId(to) == vid;
+        yield return (sameAfterEdit && backByUndo && followsMove,
+            $"instrument chain: the instrument id holds through rack edits and a move, changes on replace, comes back by undo ({sameAfterEdit}, {backByUndo}, {followsMove})");
     }
 
     private static IEnumerable<(bool, string)> Clipboard()

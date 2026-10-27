@@ -745,6 +745,11 @@ bool Engine::setTrackBuiltinInstrument(int32_t trackId, int32_t kind) {
     return replaceTrackInstrument(trackId, std::move(inst));
 }
 
+int64_t Engine::trackInstrumentId(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t && t->instrument ? static_cast<int64_t>(t->instrument->uid()) : 0;
+}
+
 bool Engine::replaceTrackInstrument(int32_t trackId, std::shared_ptr<Instrument> inst) {
     auto old = findTrackAuthoring(trackId);
     if (!old || old->type() != TrackType::Instrument || !inst) return false;

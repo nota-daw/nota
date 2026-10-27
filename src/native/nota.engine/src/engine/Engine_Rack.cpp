@@ -225,6 +225,7 @@ static std::shared_ptr<RackInstrument> forkRackInstrument(const RackInstrument& 
     if (dynamic_cast<const DrumRack*>(&src)) r = std::make_shared<DrumRack>();
     else r = std::make_shared<RackInstrument>();
     r->forkFrom(src);
+    r->adoptUid(src);      // the same rack to the UI: its card keeps its preset label and A/B
     r->shareMonoWith(src); // held keys, the sounding note and a glide in progress play on
     r->setBypassed(src.bypassed());
     r->folded = src.folded;
