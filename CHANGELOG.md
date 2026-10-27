@@ -20,22 +20,6 @@ the GitHub release and the news posts — comes from the curated, summarised
 
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
-### Changed
-- **The rack cards are redesigned** (Instrument, Audio Effect and the new MIDI Effect Rack share
-  one card): eight macro knobs; Chains, Zones (Audio: Select) and Macros tabs; the chosen
-  chain's devices as compact cards with their key parameters; a Chain / Rack out panel; a
-  status line. Every theme draws it in its own colours.
-- **Map a macro in place**: press Map and click parameters right on the chain's devices; Esc
-  ends it. The Macros tab sets each target's range (min above max inverts) and the macro's
-  curve, shown as Mixed when an older project gave its targets different curves.
-- **Zones are dragged by their edges**, and hovering the keyboard strip shows which chains a
-  note would play.
-
-### Fixed
-- Undoing or redoing a rack edit puts back what the rack's macros drive, and changes to a
-  mapping's range, curve or a macro's name are undoable.
-- "Save preset" on a MIDI effect's card saves that MIDI effect.
-
 ## [Unreleased]
 
 ### Added
@@ -74,6 +58,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   and the status line says why. ⌘G on tracks still groups tracks.
 
 ### Changed
+- **The rack cards are redesigned** (Instrument, Audio Effect and the new MIDI Effect Rack share
+  one card): eight macro knobs; Chains, Zones (Audio: Select) and Macros tabs; the chosen
+  chain's devices as compact cards with their key parameters; a Chain / Rack out panel; a
+  status line. Every theme draws it in its own colours.
+- **Map a macro in place**: press Map and click parameters right on the chain's devices; Esc
+  ends it. The Macros tab sets each target's range (min above max inverts) and the macro's
+  curve, shown as Mixed when an older project gave its targets different curves.
+- **Zones are dragged by their edges**, and hovering the keyboard strip shows which chains a
+  note would play.
 - **Splitting a long warped clip is instant** (nota-daw/nota#299, nota-daw/nota#259): a split,
   trim or range cut of a warped clip reuses the stretch the clip already has instead of
   stretching both halves again on the UI thread (13 s for a 20-minute clip before), and the
@@ -81,6 +74,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- Undoing or redoing a rack edit puts back what the rack's macros drive, and changes to a
+  mapping's range, curve or a macro's name are undoable.
+- "Save preset" on a MIDI effect's card saves that MIDI effect.
 - **Linux: file dialogs that never open** (nota-daw/nota#297): when xdg-desktop-portal has no
   working FileChooser backend, Open / Save / Export / Import used to do nothing. Nota now notices
   within 4 seconds (the request fails, answers without showing, or shows nothing) and opens its
