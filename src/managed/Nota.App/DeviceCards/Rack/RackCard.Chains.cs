@@ -387,6 +387,10 @@ internal sealed partial class RackCardView
         DropEffectOnChain(a, c, it);
     }
 
+    /// <summary>A Browser item dropped on the rack from outside the card (a Session column,
+    /// specs/043): the same as a drop on the card's empty chain area.</summary>
+    internal void DropAsNewChain(BrowserItem it) => RcDropAsNewChain(it);
+
     private void RcDropAsNewChain(BrowserItem it)
     {
         if (!RcAccepts(it, out var why)) { _ctx.Status(why); return; }

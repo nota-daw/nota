@@ -74,10 +74,11 @@ public sealed partial class DeviceChainView
 
     // Keep each card's extra glued to its device when this view reorders / removes devices.
     // map: old index → new index, or -1 when the device is gone.
-    private void RemapExtras(ChainKind k, Func<int, int> map)
+    private void RemapExtras(ChainKind k, Func<int, int> map) => RemapExtras(_trackId, k, map);
+    private void RemapExtras(int t, ChainKind k, Func<int, int> map)
     {
-        if (k != ChainKind.Instrument) DevicesRemapped?.Invoke(_trackId, k == ChainKind.Midi, map);
-        if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(_trackId, out var d)) return;
+        if (k != ChainKind.Instrument) DevicesRemapped?.Invoke(t, k == ChainKind.Midi, map);
+        if (k == ChainKind.Instrument || !_cardExtra.TryGetValue(t, out var d)) return;
         var domain = d.Where(kv => KeyKind(kv.Key) == k).ToList();
         foreach (var kv in domain) d.Remove(kv.Key);
         foreach (var kv in domain) { int ni = map(KeyIndex(kv.Key)); if (ni >= 0) d[ExtraKey(k, ni)] = kv.Value; }

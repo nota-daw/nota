@@ -190,6 +190,7 @@ public sealed partial class DeviceChainView : UserControl
         _row.Children.Clear();
         _selRings.Clear();
         _instrumentCard = null;
+        _instrumentRackView = null;
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)

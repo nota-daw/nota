@@ -47,6 +47,9 @@ public sealed record InsertResult
     public bool CreatedTrack { get; init; }
     /// <summary>The track's instrument was swapped in place — its card state is stale.</summary>
     public bool InstrumentReplaced { get; init; }
+    /// <summary>An instrument preset dropped on an Instrument Rack (specs/043): the rack card adds
+    /// it as a new chain, as a drop on the card does — the caller hands it over.</summary>
+    public bool ToRackCard { get; init; }
     /// <summary>The views should reveal the track's device chain.</summary>
     public bool ShowDevices { get; init; }
     /// <summary>An effect was appended at <c>Added</c> and then moved to <c>Final</c>
@@ -113,6 +116,13 @@ public sealed class DeviceInsertService
     public static bool IsKit(BrowserItem item)
         => item.Kind == BrowserItemKind.Preset
            && (item.Path.StartsWith(KitPrefix, StringComparison.Ordinal) || item.Path.StartsWith(RhythmKitPrefix, StringComparison.Ordinal));
+
+    /// <summary>A preset that brings an instrument: a kit, a factory instrument preset, or a user /
+    /// pack preset of a built-in or plug-in instrument.</summary>
+    public bool IsInstrumentPreset(BrowserItem item)
+        => item.Kind == BrowserItemKind.Preset
+           && (IsKit(item) || FactoryInfo(item) is { IsInstrument: true }
+               || _presets?.Describe(item.Path) is { Type: "builtin-instrument" or "plugin-instrument" });
 
     /// <summary>The factory preset behind a row, or null for a user preset / kit / non-preset.</summary>
     public FactoryPresetInfo? FactoryInfo(BrowserItem item)
@@ -237,6 +247,14 @@ public sealed class DeviceInsertService
             }));
         // A preset: in place on an instrument track; on another column an instrument preset
         // spawns its own track and an effect preset lands on the column.
+        // On a rack an instrument preset becomes a chain (Instrument Rack) or, a kit, the pads
+        // (Drum Rack) — never a track of its own.
+        if (item.Kind == BrowserItemKind.Preset && hostsInstrument && IsInstrumentPreset(item)
+            && _engine.TrackInstrumentKind(trackId) is int rk and (3 or 4))
+        {
+            if (rk == 3) return new InsertResult { Ok = true, TrackId = trackId, ToRackCard = true, ShowDevices = true };
+            if (!IsKit(item)) return InsertResult.Fail("A Drum Rack takes kits and instruments; load an instrument preset on a pad from its card.");
+        }
         if (item.Kind == BrowserItemKind.Preset)
             return hostsInstrument ? ApplyPreset(item, new InsertTarget(trackId, InPlace: true))
                  : trackId > 0 ? Group(() => RouteToTrack(item, trackId)) : ApplyPreset(item, new InsertTarget(-1));

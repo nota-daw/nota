@@ -100,7 +100,12 @@ public partial class MainWindow
                         if (ir.Ok && ir.CreatedTrack && trackId > 0) Timeline.PlaceNewTrack(ir.TrackId, trackId);
                     }
                     finally { Engine.EndUndoGroup(); }
-                    ApplyInsertResult(ir, revealDevices: !ir.CreatedTrack);
+                    if (ir.ToRackCard)   // an instrument preset on an Instrument Rack: a new chain, from its card
+                    {
+                        ShowDevices(ir.TrackId);
+                        if (_deviceChain?.DropOnInstrumentRack(item) != true) _vm.StatusText = $"Couldn't add {item.Name} to the rack.";
+                    }
+                    else ApplyInsertResult(ir, revealDevices: !ir.CreatedTrack);
                     if (ir.Ok && ir.TrackId > 0) { trackId = ir.TrackId; landed = true; }
                     break;
                 }

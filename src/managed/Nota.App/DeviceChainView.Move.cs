@@ -57,6 +57,45 @@ public sealed partial class DeviceChainView
         return list.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList();
     }
 
+    // The shown track's Instrument Rack card, for drops that come from elsewhere (a Session column).
+    private RackCardView? _instrumentRackView;
+
+    /// <summary>Hands an instrument preset to the shown Instrument Rack's card, which adds it as a new
+    /// chain. False when the shown track has no Instrument Rack card.</summary>
+    internal bool DropOnInstrumentRack(BrowserItem item)
+    {
+        if (_instrumentRackView is not { } v || _engine.TrackInstrumentKind(_trackId) != 3) return false;
+        v.DropAsNewChain(item);
+        return true;
+    }
+
+    /// <summary>After a device moved or was copied to another track (specs/043): on the source the
+    /// cards after it close the gap (a moved instrument's track is gone), on the target the cards
+    /// after the insert shift up, and the device's own preset label and A/B slots follow it — a
+    /// copy takes only the label, as a paste does. Call before the panel rebuilds.</summary>
+    internal void DeviceTransferred(DeviceMoveRequest r, int newIndex)
+    {
+        var k = r.Family switch { DeviceFamily.Midi => ChainKind.Midi, DeviceFamily.Instrument => ChainKind.Instrument, _ => ChainKind.Effect };
+        int srcIdx = k == ChainKind.Instrument ? -1 : r.Index, dstIdx = k == ChainKind.Instrument ? -1 : newIndex;
+        TrackExtras(r.SrcTrackId).TryGetValue(ExtraKey(k, srcIdx), out var own);
+        if (!r.Copy)
+        {
+            if (k == ChainKind.Instrument) _cardExtra.Remove(r.SrcTrackId);
+            else RemapExtras(r.SrcTrackId, k, i => i == srcIdx ? -1 : i > srcIdx ? i - 1 : i);
+        }
+        if (k != ChainKind.Instrument)
+        {
+            int last = (k == ChainKind.Midi ? _engine.TrackMidiEffectCount(r.DstTrackId) : _engine.TrackDeviceCount(r.DstTrackId)) - 1;
+            if (dstIdx != last) RemapExtras(r.DstTrackId, k, i => i >= dstIdx ? i + 1 : i);
+        }
+        var dst = TrackExtras(r.DstTrackId);
+        dst.Remove(ExtraKey(k, dstIdx));
+        if (own is null) return;
+        string sig = CardSig(r.DstTrackId, k, dstIdx);
+        dst[ExtraKey(k, dstIdx)] = r.Copy ? new CardExtra { Sig = sig, Preset = own.Preset, PresetId = own.PresetId } : own;
+        own.Sig = r.Copy ? own.Sig : sig;
+    }
+
     // Move to track ▸: every track that can take the device, this one left out — audio effects
     // go on any chain (returns and the master too), MIDI effects and the instrument only on
     // instrument tracks. The host does the move (one undo step) and asks before a track goes.

@@ -354,8 +354,9 @@ static int32_t remappedMoveIndex(int32_t idx, int32_t from, int32_t to) {
     return idx;
 }
 
-void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to) {
+void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to, bool midi) {
     if (!authoring_) return;
+    const auto chainKind = static_cast<int32_t>(midi ? CvTargetKind::MidiFx : CvTargetKind::Device);
     bool anyChange = false;
     auto g = std::make_shared<Graph>();
     inheritGraphLevel(*g, *authoring_);
@@ -365,7 +366,7 @@ void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, 
         bool needs = false;
         for (auto& l : ot->cvLinks) {
             const int32_t tgt = l.targetTrack < 0 ? ot->id() : l.targetTrack;
-            const bool paramSrcHere = ownerIsEdited && l.sourceKind == static_cast<int32_t>(CvSourceKind::Param);
+            const bool paramSrcHere = !midi && ownerIsEdited && l.sourceKind == static_cast<int32_t>(CvSourceKind::Param);
             if (tgt == track || paramSrcHere) {
                 needs = true;
                 break;
@@ -380,9 +381,9 @@ void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, 
         kept.reserve(nt->cvLinks.size());
         for (auto& l : nt->cvLinks) {
             bool drop = false;
-            // Target index fix-up (device-target links whose target is the edited track).
+            // Target index fix-up (links into the edited chain of the edited track).
             const int32_t tgt = l.targetTrack < 0 ? nt->id() : l.targetTrack;
-            if (tgt == track && l.targetKind == static_cast<int32_t>(CvTargetKind::Device)) {
+            if (tgt == track && l.targetKind == chainKind) {
                 if (removedIndex >= 0) {
                     if (l.targetDevice == removedIndex) drop = true;
                     else if (l.targetDevice > removedIndex)
@@ -391,7 +392,7 @@ void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, 
                     l.targetDevice = remappedMoveIndex(l.targetDevice, from, to);
             }
             // Source index fix-up (param source lives on the owner = edited track).
-            if (!drop && ownerIsEdited && l.sourceKind == static_cast<int32_t>(CvSourceKind::Param)) {
+            if (!drop && !midi && ownerIsEdited && l.sourceKind == static_cast<int32_t>(CvSourceKind::Param)) {
                 if (removedIndex >= 0) {
                     if (l.sourceDevice == removedIndex) drop = true;
                     else if (l.sourceDevice > removedIndex)

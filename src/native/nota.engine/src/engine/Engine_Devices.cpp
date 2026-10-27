@@ -921,7 +921,21 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
     }
     for (auto& l : lanes) {
         if (!inst) l.deviceIndex = at;
-        nd->automation.push_back(std::move(l));
+        // An instrument lane for a parameter the new track already automates takes that lane's
+        // place, so there is one lane per parameter (edits and recording find the first one).
+        AutomationLane* same = nullptr;
+        if (inst)
+            for (auto& d : nd->automation)
+                if (d.target == AutomationTarget::PluginParam && d.deviceIndex < 0
+                    && (l.paramId.empty() ? d.paramId.empty() && d.paramIndex == l.paramIndex : d.paramId == l.paramId)) {
+                    same = &d;
+                    break;
+                }
+        if (same) {
+            same->paramIndex = l.paramIndex;
+            same->points = std::move(l.points);
+        } else
+            nd->automation.push_back(std::move(l));
     }
 
     const bool dropSource = inst && !keepSource;
@@ -943,12 +957,23 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
             g->tracks.push_back(t->id() == dstId ? nd : t);
     }
     publish(std::move(g));
-    if (family == 0) {
-        if (ns) remapCvLinksAfterDeviceChange(srcId, index, -1, -1);
-        if (at != static_cast<int32_t>(nd->devices.size()) - 1) remapCvLinksAfterDeviceChange(dstId, -1, static_cast<int32_t>(nd->devices.size()) - 1, at);
+    // CV links into either chain follow the indices: links to the moved device are dropped on the
+    // old track, the devices after it shift, and on the new track the ones after the insert shift.
+    if (!inst) {
+        const int32_t last = static_cast<int32_t>(midi ? nd->midiEffects.size() : nd->devices.size()) - 1;
+        if (ns) remapCvLinksAfterDeviceChange(srcId, index, -1, -1, midi);
+        if (at != last) remapCvLinksAfterDeviceChange(dstId, -1, last, at, midi);
     }
-    if (midi && ns && ns->instrument) ns->instrument->allNotesOff(); // drop arp-driven voices on the old track
-    if (inst && !keepSource) nd->instrument->allNotesOff();      // notes held from the old track
+    // Voices belong to the audio thread: ask it to silence them (AR-4). The old track loses the
+    // arp-driven notes of a moved MIDI effect; a moved instrument drops the notes it held there.
+    auto notesOff = [this](int32_t trackId) {
+        Command c;
+        c.type = CommandType::TrackNotesOff;
+        c.i0 = trackId;
+        commands_.push(c);
+    };
+    if (midi && ns) notesOff(srcId);
+    if (inst && !keepSource) notesOff(dstId);
     recomputePdc();
     if (outFlags) *outFlags = flags;
     return inst ? 0 : at;

@@ -232,6 +232,33 @@ internal static class InstrumentChainTests
                       && !fc.HasFlag(TransferFlags.SourceTrackRemoved),
             "instrument chain: an instrument copy leaves the source track");
 
+        // CV links into the MIDI-effect chain follow it (review of #350): with two MIDI effects,
+        // moving the first drops the link to it and the second's link shifts to index 0.
+        int m1 = e.AddInstrumentTrack(), m2 = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(m1, Volt); e.SetTrackBuiltinInstrument(m2, Volt);
+        e.AddMidiEffect(m1, Arp); e.AddMidiEffect(m1, 1);
+        int lfo = e.ModulatorAdd(m1, 0);
+        e.CvLinkAddToTarget(m1, lfo, 2, -1, 0, 0);
+        e.CvLinkAddToTarget(m1, lfo, 2, -1, 1, 0);
+        e.TransferDevice(m1, DeviceFamily.Midi, 0, m2, -1, false, out var fm);
+        bool oneLeft = e.CvLinkCount(m1) == 1 && e.CvLinkDevice(m1, 0) == 0 && e.CvLinkTargetKind(m1, 0) == 2;
+        yield return (oneLeft && fm.HasFlag(TransferFlags.LinksDropped),
+            $"instrument chain: a moved MIDI effect's CV link is dropped and the next one's shifts (links {e.CvLinkCount(m1)}, device {(e.CvLinkCount(m1) > 0 ? e.CvLinkDevice(m1, 0) : -9)}, flags {fm})");
+
+        // One lane per instrument parameter (review of #350): moving an instrument onto a track
+        // that automates the same parameter replaces that lane instead of adding a second one.
+        int a1 = e.AddInstrumentTrack(), a2 = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(a1, Volt); e.SetTrackBuiltinInstrument(a2, Volt);
+        string pid = e.PluginParamId(a1, -1, 0);
+        int la = e.AddPluginAutomationLane(a1, -1, pid);
+        e.SetAutomationPoints(a1, la, new[] { new AutomationPoint(0, 0.1f), new AutomationPoint(2, 0.9f), new AutomationPoint(4, 0.5f) });
+        int lb = e.AddPluginAutomationLane(a2, -1, pid);
+        e.SetAutomationPoints(a2, lb, new[] { new AutomationPoint(0, 0.3f) });
+        int lanesBefore = e.AutomationLaneCount(a2);
+        e.TransferDevice(a1, DeviceFamily.Instrument, 0, a2, -1, false, out _);
+        yield return (e.AutomationLaneCount(a2) == lanesBefore && e.AutomationLaneInfo(a2, lb).PointCount == 3,
+            $"instrument chain: a moved instrument's lane takes the place of the target's lane for the same parameter ({e.AutomationLaneCount(a2)} lanes, {e.AutomationLaneInfo(a2, lb).PointCount} points)");
+
         // A sidechain key on the target itself is cleared.
         int k = e.AddAudioTrack();
         int comp = e.AddBuiltinDevice(t2, Compressor);

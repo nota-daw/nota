@@ -93,7 +93,8 @@ public sealed partial class DeviceChainView
     // The Instrument Rack in the shared shell; the badge counts its chains.
     private Control InstrumentRackCard()
     {
-        var body = new RackCardView(NewCardContext()).BuildInstrumentRackBody(out int chains);
+        var view = _instrumentRackView = new RackCardView(NewCardContext());
+        var body = view.BuildInstrumentRackBody(out int chains);
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: $"Rack · {chains} chain{(chains == 1 ? "" : "s")}", DeviceIndex: -1, Count: 1,
             Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: true,

@@ -90,9 +90,12 @@ public sealed partial class DeviceChainView
     private ChainKind ClipKind => _engine.DeviceClipboardKind() switch { 1 => ChainKind.Effect, 2 => ChainKind.Midi, _ => ChainKind.Instrument };
     private bool CanPaste => _trackId > 0 && _engine.DeviceClipboardKind() != 0;
 
-    private void CopySelectedDevice()
+    private void CopySelectedDevice() => TryCopySelectedDevice();
+
+    // False when nothing was copied (a plug-in that won't open a second instance): Cut stops then.
+    private bool TryCopySelectedDevice()
     {
-        if (!HasDeviceSelection) return;
+        if (!HasDeviceSelection) return false;
         int di = _selDeviceIndex;
         bool ok = _instrumentSelected ? _engine.CopyInstrument(_trackId) : _selChainKind switch
         {
@@ -100,10 +103,11 @@ public sealed partial class DeviceChainView
             ChainKind.Midi => _engine.CopyMidiEffect(_trackId, di),
             _ => false,
         };
-        if (!ok) return;
+        if (!ok) return false;
         _clipFromTrack = true;
         var ex = Extra(_selChainKind, di);
         _clip = new DeviceClip { Kind = _selChainKind, Preset = ex.Preset, PresetId = ex.PresetId };
+        return true;
     }
 
     private void DeleteSelectedDevice()
@@ -128,7 +132,12 @@ public sealed partial class DeviceChainView
 
     private void CutSelectedDevice()
     {
-        CopySelectedDevice();
+        // Nothing removed unless the copy landed: a cut device must stay pasteable.
+        if (!TryCopySelectedDevice())
+        {
+            if (HasDeviceSelection) StatusMessage?.Invoke("This device can't be copied, so it wasn't cut.");
+            return;
+        }
         if (_instrumentSelected) TrackDeleteRequested?.Invoke(_trackId, true);
         else DeleteSelectedDevice();
     }

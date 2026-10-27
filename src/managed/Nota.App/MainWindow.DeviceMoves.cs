@@ -87,9 +87,9 @@ public partial class MainWindow
             _vm.StatusText = at == -2 ? $"“{dst}” can't take {device}." : at == -3 ? $"Couldn't copy {device}." : $"Couldn't move {device}.";
             return;
         }
+        _deviceChain?.DeviceTransferred(r, at);   // card state (preset label, A/B) follows the device
         Timeline.Refresh();   // a moved instrument took its source track with it
         _session?.Refresh();
-        if (r.Family == DeviceFamily.Instrument) _deviceChain?.ForgetInstrumentState(r.DstTrackId);
         // The device panel follows the device to its new track.
         if (r.DstTrackId != Engine.MasterTrackId) Timeline.Select(r.DstTrackId, -1);
         ShowDevices(r.DstTrackId);

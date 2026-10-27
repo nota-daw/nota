@@ -1284,7 +1284,9 @@ class Engine {
     Modulator* modulatorPtr(Track& t, int32_t modId);
     // Keep CV-link targetDevice indices valid after a device on `track` was removed
     // (removedIndex>=0) or moved (from/to). Clones the affected owner tracks + republishes.
-    void remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to);
+    // midi: the edit was on the MIDI-effect chain — fix up MidiFx-target links (param sources
+    // name insert effects, so they stay); otherwise Device-target links and param sources.
+    void remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to, bool midi = false);
     // Keep automation-lane deviceIndex valid after an effect (midi=false) or MIDI effect
     // (midi=true) on `nt` was removed (removedIndex>=0; its lanes are dropped) or moved
     // (from/to). Edits `nt` in place before it is published, so it shares the device
@@ -1693,6 +1695,9 @@ class Engine {
     // live is skipped.
     int32_t releaseTrack_ = -1;
     uint32_t releasePitches_[4] = {};
+    // Tracks whose voices go silent at the next block (TrackNotesOff command, audio thread).
+    int32_t notesOffTracks_[8] = {};
+    int32_t notesOffCount_ = 0;
 
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot
     // mode; recordSlotPlayer_/recordSlotLen_ are read on the audio thread to time
