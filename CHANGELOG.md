@@ -23,6 +23,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Select several devices and group them into a rack** (#328): in the Devices panel ⇧-click
+  selects a range across MIDI effects, the instrument and audio effects, ⌘-click adds or
+  removes one, Esc clears. Copy, cut, paste, duplicate, delete, Move to track ▸ and dragging a
+  header act on the whole selection in one undo step; with the instrument selected along with
+  other devices, Delete always asks before its track goes. ⌘G (or **Group into rack**) folds
+  the selection into the matching rack — Audio Effect Rack, MIDI Effect Rack, or an Instrument
+  Rack whose first chain holds the MIDI effects, the instrument and the audio effects — in
+  place, sounding the same; ⌘⇧G takes any one-chain rack apart. Automation, modulation links,
+  an Arp's CC lane and sidechain keys follow the devices into the rack and back out, keep
+  working, and are saved with the project. MCP `group_devices`, `ungroup_rack`.
 - **MIDI Effect Rack**: a new MIDI effect with chains of MIDI effects. Each chain takes the
   notes its key and velocity zone lets in (or, in Select mode, the chains whose select range
   holds the selector), runs them through its Arp, Chord, Scale and so on, can transpose them

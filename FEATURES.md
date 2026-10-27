@@ -245,6 +245,17 @@ track count and closes with Escape.
   - **Move to track ▸** in a device's menu, or dragging its header onto a track in the
     Arrangement or a Session column, moves it there with its automation; ⌥ copies instead.
     The instrument replaces the other track's instrument and its own track goes.
+  - **Several devices at once**: ⇧-click selects a range across the MIDI effects, the
+    instrument and the audio effects, ⌘-click adds or removes one, Esc clears. Copy, cut, paste,
+    duplicate, delete, Move to track ▸ and dragging a header act on the whole selection, each in
+    one undo step (with the instrument selected too, Delete asks before its track goes).
+  - **Group into rack** (⌘G, or the device menu): the rack follows from the selection —
+    audio effects → Audio Effect Rack, MIDI effects → MIDI Effect Rack, the instrument with
+    the MIDI effects before it and / or the audio effects after it → Instrument Rack, its first
+    chain holding them in order. The track sounds the same; automation, modulation links, an
+    Arp's CC lane and sidechain keys follow the devices into the rack (and their lanes show in
+    the Arrangement as "Rack / Device · Param"). ⌘⇧G (**Ungroup rack**) takes a one-chain rack
+    apart. MCP `group_devices`, `ungroup_rack`.
 
 ---
 
@@ -944,7 +955,7 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Nota Audio Effect Rack** — chains run **Parallel / Serial / Select**; in Select mode a
   selector (dragged, mapped to a macro, or following the input level) picks the chains whose
   select range holds it; Dry/wet, Gain, latency compensation; the add menu lists built-in
-  effects and a Plug-ins submenu. ⌘G on a selected audio effect wraps it in a new rack
+  effects and a Plug-ins submenu. ⌘G on selected audio effects groups them into a new rack
   (**Group into rack**); ⌘⇧G puts a one-chain rack's devices back.
 - **Nota MIDI Effect Rack** — a MIDI effect with up to 16 chains of MIDI effects (Arp, Chord,
   Scale, Length, Velocity, Random). Each chain takes the notes its key and velocity zone lets in

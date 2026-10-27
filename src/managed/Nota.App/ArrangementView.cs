@@ -85,7 +85,7 @@ public sealed partial class ArrangementView : UserControl
     // properties instead of tearing down and rebuilding every header control (click latency).
     private readonly Dictionary<int, (Border card, TextBlock name, bool isGroup, Border spine, IBrush spineIdle)> _headerCards = new();
     // Per-track chosen automation target, kept across Refresh (which rebuilds VMs).
-    private readonly Dictionary<int, (AutomationTarget target, int dev, int param, string paramId)> _autoTargets = new();
+    private readonly Dictionary<int, (AutomationTarget target, int dev, int param, string paramId, int chain, int slot)> _autoTargets = new();
 
     // Header column width and track row heights are user-resizable (ArrangementView.Sizing.cs).
     private double HeaderW => _headerW;
@@ -997,7 +997,7 @@ public sealed partial class ArrangementView : UserControl
                     if (!_autoTargets.TryGetValue(ti.Id, out var sel) && FirstAutomatedTarget(eng, ti.Id) is { } first)
                         _autoTargets[ti.Id] = sel = first;
                     if (_autoTargets.ContainsKey(ti.Id))
-                        (tvm.AutoTarget, tvm.AutoDeviceIndex, tvm.AutoParamIndex, tvm.AutoParamId) = sel;
+                        (tvm.AutoTarget, tvm.AutoDeviceIndex, tvm.AutoParamIndex, tvm.AutoParamId, tvm.AutoChain, tvm.AutoSlot) = sel;
                     tvm.AutoLabel = AutoLabelFor(tvm);
                     LoadAutoPoints(tvm);
                 }

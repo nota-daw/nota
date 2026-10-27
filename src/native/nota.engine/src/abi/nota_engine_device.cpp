@@ -94,6 +94,45 @@ int32_t nota_track_wrap_device_in_rack(NotaEngine* e, int32_t track_id, int32_t 
 int32_t nota_track_unwrap_rack(NotaEngine* e, int32_t track_id, int32_t device_index) {
     return e ? ENG(e)->unwrapRack(track_id, device_index) : -1;
 }
+int32_t nota_track_group_devices(NotaEngine* e, int32_t track_id, int32_t midi_first, int32_t midi_count,
+    int32_t with_instrument, int32_t fx_first, int32_t fx_count) {
+    return e ? ENG(e)->groupDevices(track_id, midi_first, midi_count, with_instrument != 0, fx_first, fx_count) : -2;
+}
+int32_t nota_track_ungroup_rack(NotaEngine* e, int32_t track_id, int32_t family, int32_t index, int32_t* out_dropped) {
+    if (out_dropped) *out_dropped = 0;
+    return e ? ENG(e)->ungroupRack(track_id, family, index, out_dropped) : -2;
+}
+int32_t nota_track_copy_devices(NotaEngine* e, int32_t track_id, const int32_t* midi_idx, int32_t midi_n,
+    int32_t with_instrument, const int32_t* fx_idx, int32_t fx_n) {
+    return e ? ENG(e)->copyDevices(track_id, midi_idx, midi_n, with_instrument != 0, fx_idx, fx_n) : -1;
+}
+int32_t nota_device_clipboard_count(const NotaEngine* e) { return e ? CENG(e)->deviceClipboardCount() : 0; }
+int32_t nota_track_paste_devices(NotaEngine* e, int32_t track_id, int32_t midi_at, int32_t fx_at, int32_t* out_skipped) {
+    if (out_skipped) *out_skipped = 0;
+    return e ? ENG(e)->pasteDevices(track_id, midi_at, fx_at, out_skipped) : -1;
+}
+int32_t nota_midi_effect_cc_dest_path(const NotaEngine* e, int32_t t, int32_t i, int32_t* out_chain, int32_t* out_slot) {
+    return e && CENG(e)->midiEffectCcDestPath(t, i, out_chain, out_slot) ? 0 : -1;
+}
+int32_t nota_rack_chain_midi_cc_dest(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i,
+    int32_t* out_dev, int32_t* out_chain, int32_t* out_slot, int32_t* out_param, float* out_depth) {
+    return e && CENG(e)->rackChainMidiCcDest(t, di, c, i, out_dev, out_chain, out_slot, out_param, out_depth) ? 0 : -1;
+}
+int32_t nota_rack_chain_midi_set_cc_dest(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i, int32_t dev,
+    int32_t dest_chain, int32_t dest_slot, int32_t param, float depth) {
+    return e && ENG(e)->rackChainMidiSetCcDest(t, di, c, i, dev, dest_chain, dest_slot, param, depth) ? 0 : -1;
+}
+int32_t nota_rack_chain_sidechain(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot,
+    int32_t* out_src, int32_t* out_pre, float* out_gain, float* out_mix) {
+    return e && CENG(e)->rackChainSidechain(t, di, c, slot, out_src, out_pre, out_gain, out_mix) ? 0 : -1;
+}
+int32_t nota_rack_chain_set_sidechain(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t src,
+    int32_t pre, float gain, float mix) {
+    return e && ENG(e)->rackChainSetSidechain(t, di, c, slot, src, pre, gain, mix) ? 0 : -1;
+}
+int32_t nota_midi_effect_set_cc_dest_path(NotaEngine* e, int32_t t, int32_t i, int32_t chain, int32_t slot) {
+    return e && ENG(e)->setMidiEffectCcDestPath(t, i, chain, slot) ? 0 : -1;
+}
 const char* nota_device_name(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return e ? CENG(e)->deviceName(track_id, device_index) : "";
 }

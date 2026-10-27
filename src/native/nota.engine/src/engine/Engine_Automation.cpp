@@ -4,6 +4,7 @@
 // Engine — parameter automation (M9): read/apply, lane CRUD, hosted-plugin parameter surface, contextual write recording, self-tests.
 
 #include "Engine.h"
+#include "ParamResolve.h"
 #include "bridge/PluginHostBridge.h"
 #include "devices/instruments/Synth.h"
 
@@ -20,6 +21,16 @@ void Engine::applyAutomation(Graph* g, double beat) {
         for (const AutomationLane& lane : t.automation) {
             if (lane.points.empty() || lane.suppressRead) continue; // M9-C: control leads while writing
             const float v = lane.valueAt(beat);
+            if (lane.nested()) { // a device grouped into a rack (specs/044)
+                const ParamOwner o = resolveNested(t, lane.deviceIndex, lane.chainUid, lane.slot);
+                if (lane.target == AutomationTarget::PluginParam) {
+                    if (lane.paramIndex < 0) continue;
+                    if (o.instrument) o.instrument->pluginParamSet(lane.paramIndex, v);
+                    else if (o.device) o.device->pluginParamSet(lane.paramIndex, v);
+                } else if (o.device) o.device->setParam(lane.paramIndex, v);
+                else if (o.midi) o.midi->setParam(lane.paramIndex, v);
+                continue;
+            }
             switch (lane.target) {
             case AutomationTarget::Volume: t.setVolume(v); break;
             case AutomationTarget::Pan: t.setPan(v); break;
@@ -175,7 +186,7 @@ int32_t Engine::addPluginAutomationLane(int32_t trackId, int32_t deviceIndex, co
     // Reuse an existing lane on the same (device, param).
     for (size_t i = 0; i < old->automation.size(); ++i) {
         const AutomationLane& l = old->automation[i];
-        if (l.target == AutomationTarget::PluginParam && l.deviceIndex == deviceIndex && l.paramId == id)
+        if (!l.nested() && l.target == AutomationTarget::PluginParam && l.deviceIndex == deviceIndex && l.paramId == id)
             return static_cast<int32_t>(i);
     }
     auto nt = cloneTrack(*old);
@@ -184,6 +195,61 @@ int32_t Engine::addPluginAutomationLane(int32_t trackId, int32_t deviceIndex, co
     lane.deviceIndex = deviceIndex;
     lane.paramId = id;
     lane.paramIndex = pluginParamIndexOfId(trackId, deviceIndex, id); // resolve now; -1 if absent
+    nt->automation.push_back(std::move(lane));
+    const int32_t index = static_cast<int32_t>(nt->automation.size()) - 1;
+    republishWithTrack(trackId, nt);
+    return index;
+}
+
+// ---- nested addresses for save / load (specs/044) ---------------------------
+uint64_t Engine::nestedChainUid(int32_t trackId, int32_t host, int32_t chainIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    const RackCore* r = t ? rackAtHost(*t, host) : nullptr;
+    return r ? r->chainBaseUid(chainIndex) : 0;
+}
+int32_t Engine::nestedChainIndex(int32_t trackId, int32_t host, uint64_t uid) const {
+    auto t = findTrackAuthoring(trackId);
+    const RackCore* r = t ? rackAtHost(*t, host) : nullptr;
+    return r ? r->chainIndexOfUid(uid) : -1;
+}
+
+bool Engine::automationLanePath(int32_t trackId, int32_t laneIndex, int32_t* chainIndex, int32_t* slot) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || laneIndex < 0 || laneIndex >= static_cast<int32_t>(t->automation.size())) return false;
+    const AutomationLane& l = t->automation[laneIndex];
+    if (chainIndex) *chainIndex = l.nested() ? nestedChainIndex(trackId, l.deviceIndex, l.chainUid) : -1;
+    if (slot) *slot = l.nested() ? l.slot : -1;
+    return true;
+}
+
+int32_t Engine::addNestedAutomationLane(int32_t trackId, int32_t target, int32_t host, int32_t chainIndex,
+    int32_t slot, int32_t paramIndex, const char* paramId) {
+    auto old = findTrackAuthoring(trackId);
+    const uint64_t uid = nestedChainUid(trackId, host, chainIndex);
+    if (!old || uid == 0) return -1;
+    const auto tgt = static_cast<AutomationTarget>(target);
+    if (tgt != AutomationTarget::DeviceParam && tgt != AutomationTarget::MidiDeviceParam && tgt != AutomationTarget::PluginParam)
+        return -1;
+    AutomationLane lane;
+    lane.target = tgt;
+    lane.deviceIndex = host;
+    lane.chainUid = uid;
+    lane.slot = slot;
+    lane.paramId = paramId ? paramId : "";
+    lane.paramIndex = paramIndex;
+    if (tgt == AutomationTarget::PluginParam && !lane.paramId.empty()) {
+        const ParamOwner o = resolveNested(*old, host, uid, slot);
+        lane.paramIndex = o.instrument ? o.instrument->pluginParamIndexOfId(lane.paramId)
+                        : o.device     ? o.device->pluginParamIndexOfId(lane.paramId)
+                                       : -1;
+    }
+    for (size_t i = 0; i < old->automation.size(); ++i) { // one lane per target
+        const AutomationLane& l = old->automation[i];
+        if (l.target == tgt && l.deviceIndex == host && l.chainUid == uid && l.slot == slot
+            && (tgt == AutomationTarget::PluginParam ? l.paramId == lane.paramId : l.paramIndex == paramIndex))
+            return static_cast<int32_t>(i);
+    }
+    auto nt = cloneTrack(*old);
     nt->automation.push_back(std::move(lane));
     const int32_t index = static_cast<int32_t>(nt->automation.size()) - 1;
     republishWithTrack(trackId, nt);
@@ -252,7 +318,7 @@ static int32_t findLaneFor(
     const Track& t, int32_t target, int32_t deviceIndex, int32_t paramIndex, const std::string& paramId) {
     for (size_t i = 0; i < t.automation.size(); ++i) {
         const AutomationLane& l = t.automation[i];
-        if (l.target != static_cast<AutomationTarget>(target)) continue;
+        if (l.nested() || l.target != static_cast<AutomationTarget>(target)) continue; // specs/044
         switch (l.target) {
         case AutomationTarget::DeviceParam:
         case AutomationTarget::MidiDeviceParam:
@@ -490,7 +556,7 @@ int32_t Engine::addAutomationLane(int32_t trackId, int32_t target, int32_t devic
     // Reuse an existing lane on the same target (no snapshot) — one lane per target.
     for (size_t i = 0; i < old->automation.size(); ++i) {
         const AutomationLane& l = old->automation[i];
-        if (l.target == tgt && (!usesDev || (l.deviceIndex == deviceIndex && l.paramIndex == paramIndex)))
+        if (!l.nested() && l.target == tgt && (!usesDev || (l.deviceIndex == deviceIndex && l.paramIndex == paramIndex)))
             return static_cast<int32_t>(i);
     }
     auto nt = cloneTrack(*old);
@@ -509,6 +575,8 @@ int32_t Engine::addAutomationLane(int32_t trackId, int32_t target, int32_t devic
 void Engine::remapAutomationAfterDeviceChange(Track& nt, bool midi, int32_t removedIndex, int32_t from, int32_t to) {
     // Lanes on the effect chain (DeviceParam / PluginParam >= 0) or the MIDI-FX chain.
     auto onChain = [midi](const AutomationLane& l) {
+        // A nested lane (specs/044) follows its rack: deviceIndex is the rack's address.
+        if (l.nested()) return midi ? isMidiHost(l.deviceIndex) : l.deviceIndex >= 0;
         if (midi) return l.target == AutomationTarget::MidiDeviceParam;
         return l.target == AutomationTarget::DeviceParam ||
                (l.target == AutomationTarget::PluginParam && l.deviceIndex >= 0);
@@ -532,12 +600,13 @@ void Engine::remapAutomationAfterDeviceChange(Track& nt, bool midi, int32_t remo
     for (size_t i = 0; i < nt.automation.size(); ++i) {
         AutomationLane& l = nt.automation[i];
         if (onChain(l)) {
-            const int32_t ni = remap(l.deviceIndex);
+            const bool midiRack = l.nested() && midi;
+            const int32_t ni = remap(midiRack ? midiHostIndex(l.deviceIndex) : l.deviceIndex);
             if (ni < 0) {
                 laneMap[i] = -1;
                 continue;
             }
-            l.deviceIndex = ni;
+            l.deviceIndex = midiRack ? midiHost(ni) : ni;
         }
         laneMap[i] = static_cast<int32_t>(kept.size());
         kept.push_back(std::move(l));
@@ -568,7 +637,11 @@ std::vector<AutomationLane> Engine::deviceLanes(const Track& t, int32_t family, 
     std::vector<AutomationLane> out;
     for (const auto& l : t.automation) {
         bool on = false;
-        switch (family) {
+        if (l.nested()) // lanes into a rack go where the rack goes (specs/044)
+            on = family == 0 ? l.deviceIndex == index && index >= 0
+               : family == 1 ? l.deviceIndex == midiHost(index)
+               : family == 2 && l.deviceIndex == -1;
+        else switch (family) {
         case 0:
             on = (l.target == AutomationTarget::DeviceParam || l.target == AutomationTarget::PluginParam) && l.deviceIndex == index;
             break;

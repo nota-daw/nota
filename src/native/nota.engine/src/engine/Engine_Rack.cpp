@@ -247,73 +247,609 @@ bool Engine::rackKindAllowed(int32_t trackId, int32_t deviceIndex, int32_t kind)
     return kind == 4 && deviceIndex == -1 && nestingHost(findTrackAuthoring(trackId)) != nullptr;
 }
 
-// ---- wrap a device in a rack / unwrap it (#257) ----------------------------
-// Whether anything outside the device points at it by its chain index: automation lanes
-// CV links, or an Arp's CC target. Wrapping moves the device into a rack chain, where those can't follow it.
-bool Engine::deviceIsReferenced(const Track& t, int32_t deviceIndex) const {
-    for (auto& l : t.automation)
-        if ((l.target == AutomationTarget::DeviceParam || l.target == AutomationTarget::PluginParam) && l.deviceIndex == deviceIndex)
-            return true;
-    // An Arp's CC lane drives a device param by chain index (applyMidiCcRouting).
-    for (auto& md : t.midiEffects)
-        if (md && md->ccDestDevice() == deviceIndex) return true;
-    for (auto& l : t.cvLinks)
-        if (l.sourceKind == static_cast<int32_t>(CvSourceKind::Param) && l.sourceDevice == deviceIndex) return true;
-    for (auto& ot : authoring_->tracks)
-        for (auto& l : ot->cvLinks) {
-            const int32_t tgt = l.targetTrack < 0 ? ot->id() : l.targetTrack;
-            if (tgt == t.id() && l.targetKind == static_cast<int32_t>(CvTargetKind::Device) && l.targetDevice == deviceIndex)
-                return true;
+// ---- group devices into a rack / ungroup it (#257, #328, specs/044) ----------
+namespace {
+
+// Group and Ungroup are each a function from old references to new ones (Engine::DeviceRef).
+using Ref = Engine::DeviceRef;
+using RefMap = Engine::DeviceRefMap;
+
+Ref hostRef(int32_t host, uint64_t uid, int32_t slot) {
+    if (isMidiHost(host)) return {1, midiHostIndex(host), uid, slot};
+    if (host < 0) return {2, -1, uid, slot};
+    return {0, host, uid, slot};
+}
+int32_t hostOf(const Ref& r) { return r.fam == 1 ? midiHost(r.idx) : r.fam == 2 ? -1 : r.idx; }
+
+Ref laneRef(const AutomationLane& l) {
+    if (l.nested()) return hostRef(l.deviceIndex, l.chainUid, l.slot);
+    switch (l.target) {
+    case AutomationTarget::DeviceParam: return {0, l.deviceIndex};
+    case AutomationTarget::MidiDeviceParam: return {1, l.deviceIndex};
+    case AutomationTarget::PluginParam: return l.deviceIndex < 0 ? Ref{2, -1} : Ref{0, l.deviceIndex};
+    default: return {};
+    }
+}
+// The lane's target names the param surface of whatever it points at, and that surface is the
+// same before and after a move into or out of a rack, so only the address changes.
+void setLaneRef(AutomationLane& l, const Ref& r) {
+    l.chainUid = r.uid;
+    l.slot = r.uid ? r.slot : -1;
+    l.deviceIndex = r.uid ? hostOf(r) : r.idx;
+}
+Ref cvTargetRef(const CvLink& l) {
+    if (l.targetChainUid) return hostRef(l.targetDevice, l.targetChainUid, l.targetSlot);
+    if (l.targetKind == static_cast<int32_t>(CvTargetKind::Instrument)) return {2, -1};
+    return {l.targetKind == static_cast<int32_t>(CvTargetKind::MidiFx) ? 1 : 0, l.targetDevice};
+}
+void setCvTargetRef(CvLink& l, const Ref& r) {
+    l.targetChainUid = r.uid;
+    l.targetSlot = r.uid ? r.slot : -1;
+    l.targetDevice = r.uid ? hostOf(r) : r.idx;
+}
+Ref cvSourceRef(const CvLink& l) {
+    if (l.sourceKind != static_cast<int32_t>(CvSourceKind::Param)) return {};
+    return l.sourceChainUid ? hostRef(l.sourceDevice, l.sourceChainUid, l.sourceSlot) : Ref{0, l.sourceDevice};
+}
+void setCvSourceRef(CvLink& l, const Ref& r) {
+    l.sourceChainUid = r.uid;
+    l.sourceSlot = r.uid ? r.slot : -1;
+    l.sourceDevice = r.uid ? hostOf(r) : r.idx;
+}
+Ref ccRef(const MidiDevice& m) {
+    if (m.ccDestChainUid()) return hostRef(m.ccDestDevice(), m.ccDestChainUid(), m.ccDestSlot());
+    return m.ccDestDevice() >= 0 ? Ref{0, m.ccDestDevice()} : Ref{};
+}
+bool sameRef(const Ref& a, const Ref& b) { return a.fam == b.fam && a.idx == b.idx && a.uid == b.uid && a.slot == b.slot; }
+
+// A map result that removes the reference (a lane or link on the ungrouped rack's own macros).
+constexpr int32_t kDropRef = -2;
+
+} // namespace
+
+void Engine::rewriteRackArps(Track& nt, const DeviceRefMap& map, const RackCore* fresh) {
+    // Whether any Arp in the rack's chains would get a new target.
+    auto changes = [&](const RackCore& r) {
+        bool any = false;
+        RackCore::RackState* st = r.live();
+        if (!st) return false;
+        for (auto& c : st->chains)
+            for (auto& m : c.midiDevices)
+                if (m) {
+                    const Ref ref = ccRef(*m);
+                    any |= ref.fam >= 0 && !sameRef(ref, map(ref));
+                }
+        return any;
+    };
+    auto fixChains = [&](RackCore& f) {
+        for (int32_t c = 0; c < f.chainCount(); ++c)
+            for (int32_t i = 0; i < f.chainMidiDeviceCount(c); ++i) {
+                RackCore::RackState* st = f.live();
+                std::shared_ptr<MidiDevice> m = st->chains[c].midiDevices[i];
+                auto before = m;
+                rewriteArpRef(m, map);
+                if (m != before) f.replaceChainMidiDevice(c, i, std::move(m));
+            }
+    };
+    for (auto& md : nt.midiEffects) {
+        auto* src = dynamic_cast<MidiRack*>(md.get());
+        if (!src || static_cast<const RackCore*>(src) == fresh || !changes(*src)) continue;
+        auto f = std::make_shared<MidiRack>();   // as rackForEdit forks a MIDI Effect Rack
+        f->forkFrom(*src);
+        f->shareRuntimeWith(*src);
+        f->setBypassed(src->bypassed());
+        f->setFolded(src->folded());
+        fixChains(*f);
+        md = std::move(f);
+    }
+    if (auto* src = dynamic_cast<RackInstrument*>(nt.instrument.get());
+        src && static_cast<const RackCore*>(src) != fresh && changes(*src)) {
+        auto f = forkRackInstrument(*src);
+        fixChains(*f);
+        nt.instrument = std::move(f);
+    }
+}
+
+void Engine::rewriteArpRef(std::shared_ptr<MidiDevice>& m, const DeviceRefMap& map) {
+    if (!m) return;
+    const Ref r = ccRef(*m);
+    if (r.fam < 0) return;
+    const Ref n = map(r);
+    if (sameRef(r, n)) return;
+    auto c = cloneMidiDevice(*m);
+    if (!c) return;
+    if (n.fam == kDropRef) c->setCcDest(-1, -1);
+    else {
+        c->setCcDest(n.uid ? hostOf(n) : n.idx, m->ccDestParam());
+        if (n.uid) c->setCcDestNested(n.uid, n.slot);
+    }
+    m = std::move(c);
+}
+
+// Rewrite every reference into `trackId` through `map` and publish the result as one undo
+// step: lanes and CV sources of `nt` (the track's new state), CV targets on any track
+// pointing at it, and the CC targets of nt's MIDI effects (a changed Arp is replaced by a
+// clone: the object is shared with the undo snapshots).
+void Engine::publishWithRefMap(int32_t trackId, std::shared_ptr<Track> nt, const DeviceRefMap& map, const RackCore* fresh) {
+    // Lanes.
+    std::vector<int32_t> laneMap(nt->automation.size());
+    std::vector<AutomationLane> kept;
+    kept.reserve(nt->automation.size());
+    for (size_t i = 0; i < nt->automation.size(); ++i) {
+        AutomationLane& l = nt->automation[i];
+        const Ref r = laneRef(l);
+        if (r.fam >= 0) {
+            const Ref n = map(r);
+            if (n.fam == kDropRef) {
+                laneMap[i] = -1;
+                continue;
+            }
+            setLaneRef(l, n);
         }
-    return false;
+        laneMap[i] = static_cast<int32_t>(kept.size());
+        kept.push_back(std::move(l));
+    }
+    nt->automation = std::move(kept);
+    auto laneGone = [&](int32_t& li) {
+        if (li < 0 || li >= static_cast<int32_t>(laneMap.size())) return true;
+        li = laneMap[li];
+        return li < 0;
+    };
+    std::erase_if(activeWrites_, [&](ActiveWrite& aw) { return aw.trackId == trackId && laneGone(aw.laneIndex); });
+    std::erase_if(overrides_, [&](OverrideTarget& o) { return o.trackId == trackId && laneGone(o.laneIndex); });
+    for (auto& m : nt->midiEffects) rewriteArpRef(m, map);
+    rewriteRackArps(*nt, map, fresh);
+    // CV links, on this track and on any track whose links target it.
+    auto rewriteLinks = [&](Track& t, bool own) {
+        std::vector<CvLink> keep;
+        keep.reserve(t.cvLinks.size());
+        for (auto& l : t.cvLinks) {
+            const int32_t tgt = l.targetTrack < 0 ? t.id() : l.targetTrack;
+            if (tgt == trackId) {
+                const Ref n = map(cvTargetRef(l));
+                if (n.fam == kDropRef) continue;
+                setCvTargetRef(l, n);
+            }
+            if (own) {
+                const Ref r = cvSourceRef(l);
+                if (r.fam >= 0) {
+                    const Ref n = map(r);
+                    if (n.fam == kDropRef) continue;
+                    setCvSourceRef(l, n);
+                }
+            }
+            keep.push_back(l);
+        }
+        t.cvLinks = std::move(keep);
+    };
+    rewriteLinks(*nt, true);
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    if (trackId == kMasterTrackId) g->masterTrack = nt;
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks) {
+        if (t->id() == trackId) {
+            g->tracks.push_back(nt);
+            continue;
+        }
+        bool targets = false;
+        for (auto& l : t->cvLinks) targets |= l.targetTrack == trackId;
+        if (!targets) {
+            g->tracks.push_back(t);
+            continue;
+        }
+        auto ot = cloneTrack(*t);
+        rewriteLinks(*ot, false);
+        g->tracks.push_back(ot);
+    }
+    publish(std::move(g));
+}
+
+int32_t Engine::groupDevices(int32_t trackId, int32_t midiFirst, int32_t midiCount, bool withInstrument,
+    int32_t fxFirst, int32_t fxCount) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old) return -2;
+    const int32_t nMidi = static_cast<int32_t>(old->midiEffects.size());
+    const int32_t nFx = static_cast<int32_t>(old->devices.size());
+    midiCount = std::max(0, midiCount);
+    fxCount = std::max(0, fxCount);
+    if (midiCount + fxCount == 0 && !withInstrument) return -2;
+    if (midiCount && (midiFirst < 0 || midiFirst + midiCount > nMidi)) return -2;
+    if (fxCount && (fxFirst < 0 || fxFirst + fxCount > nFx)) return -2;
+    if ((midiCount || withInstrument) && (old->type() != TrackType::Instrument || !old->instrument)) return -7;
+    if (withInstrument) {
+        if (midiCount && midiFirst + midiCount != nMidi) return -3; // the MIDI run must reach the instrument
+        if (fxCount && fxFirst != 0) return -3;                     // the audio run must start at it
+    } else if (midiCount && fxCount)
+        return -3; // MIDI and audio effects share a rack only with the instrument between them
+    for (int32_t i = 0; i < fxCount; ++i) {
+        auto& d = old->devices[fxFirst + i];
+        if (!d) return -2;
+        if (dynamic_cast<const RackCore*>(d.get())) return -4;
+    }
+    for (int32_t i = 0; i < midiCount; ++i) {
+        auto& m = old->midiEffects[midiFirst + i];
+        if (!m) return -2;
+        if (dynamic_cast<const RackCore*>(m.get())) return -4;
+        if (m->midiKind() < 0 || m->midiKind() > 5) return -5; // chains take the built-in MIDI effects
+    }
+    if (withInstrument) {
+        auto* ri = dynamic_cast<const RackInstrument*>(old->instrument.get());
+        if (ri && !dynamic_cast<const DrumRack*>(ri)) return -6; // an Instrument Rack never nests
+    }
+
+    const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
+    auto nt = cloneTrack(*old);
+    uint64_t uid = 0;
+    const RackCore* freshRack = nullptr;   // its Arps are rewritten on the way in
+    int32_t result = 0;
+    RefMap map;
+    if (withInstrument) {
+        // Instrument Rack: chain 0 = MIDI tail → instrument → audio head; the track keeps the rest.
+        auto rack = std::make_shared<RackInstrument>();
+        freshRack = rack.get();
+        rack->setSampleRate(sr);
+        const int32_t c = rack->chainCount() > 0 ? 0 : rack->addChain(-1); // a MIDI Effect Rack starts with one
+        uid = rack->chainBaseUid(c);
+        const int32_t m0 = midiFirst, f0 = fxCount;
+        map = [=](const Ref& r) -> Ref {
+            if (r.uid) return r.fam == 0 && r.idx >= f0 ? Ref{0, r.idx - f0, r.uid, r.slot} : r;
+            if (r.fam == 2) return {2, -1, uid, -1};
+            if (r.fam == 1 && midiCount && r.idx >= m0) return {2, -1, uid, RackCore::midiTarget(r.idx - m0)};
+            if (r.fam == 0) return r.idx < f0 ? Ref{2, -1, uid, r.idx} : Ref{0, r.idx - f0};
+            return r;
+        };
+        for (int32_t i = 0; i < midiCount; ++i) {
+            auto& m = nt->midiEffects[midiFirst + i];
+            rewriteArpRef(m, map); // an Arp going in keeps driving its (maybe moved) target
+            rack->addChainMidiDeviceInstance(c, m);
+        }
+        rack->replaceChainInstrument(c, nt->instrument, /*prepare=*/false);   // no chain name: it shows the instrument's
+        for (int32_t i = 0; i < fxCount; ++i) rack->addChainDeviceInstance(c, nt->devices[i], /*prepare=*/false);
+        nt->midiEffects.erase(nt->midiEffects.begin() + midiFirst, nt->midiEffects.begin() + midiFirst + midiCount);
+        nt->devices.erase(nt->devices.begin(), nt->devices.begin() + fxCount);
+        if (old->instrument) old->instrument->closeEditor();
+        nt->instrument = rack;
+        result = -1;
+    } else if (midiCount) {
+        auto rack = std::make_shared<MidiRack>();
+        freshRack = rack.get();
+        rack->setSampleRate(sr, kMaxBlock);
+        const int32_t c = rack->chainCount() > 0 ? 0 : rack->addChain(-1); // a MIDI Effect Rack starts with one
+        uid = rack->chainBaseUid(c);
+        const int32_t a = midiFirst, n = midiCount;
+        map = [=](const Ref& r) -> Ref {
+            if (r.fam != 1) return r;
+            if (!r.uid && r.idx >= a && r.idx < a + n) return {1, a, uid, RackCore::midiTarget(r.idx - a)};
+            return r.idx >= a + n ? Ref{1, r.idx - n + 1, r.uid, r.slot} : r;
+        };
+        for (int32_t i = 0; i < n; ++i) {
+            auto& m = nt->midiEffects[a + i];
+            rewriteArpRef(m, map);
+            rack->addChainMidiDeviceInstance(c, m);
+        }
+        rack->setChainName(c, nt->midiEffects[a]->displayName());   // named after its first device (FR-015)
+        nt->midiEffects.erase(nt->midiEffects.begin() + a, nt->midiEffects.begin() + a + n);
+        nt->midiEffects.insert(nt->midiEffects.begin() + a, rack);
+        result = kMidiRackBase - a;
+    } else {
+        auto rack = std::make_shared<RackDevice>();
+        freshRack = rack.get();
+        rack->setSampleRate(sr, kMaxBlock);
+        const int32_t c = rack->chainCount() > 0 ? 0 : rack->addChain(-1); // a MIDI Effect Rack starts with one
+        uid = rack->chainBaseUid(c);
+        const int32_t a = fxFirst, n = fxCount;
+        map = [=](const Ref& r) -> Ref {
+            if (r.fam != 0) return r;
+            if (!r.uid && r.idx >= a && r.idx < a + n) return {0, a, uid, r.idx - a};
+            return r.idx >= a + n ? Ref{0, r.idx - n + 1, r.uid, r.slot} : r;
+        };
+        // The devices move in already prepared at this rate: preparing them again would reset
+        // them (a Reverb clears its tail) while the published graph may still be playing them.
+        for (int32_t i = 0; i < n; ++i) rack->addChainDeviceInstance(c, nt->devices[a + i], /*prepare=*/false);
+        rack->setChainName(c, nt->devices[a]->displayName());   // named after its first device (FR-015)
+        nt->devices.erase(nt->devices.begin() + a, nt->devices.begin() + a + n);
+        nt->devices.insert(nt->devices.begin() + a, rack);
+        result = a;
+    }
+    publishWithRefMap(trackId, nt, map, freshRack);
+    recomputePdc();
+    return result;
+}
+
+int32_t Engine::ungroupRack(int32_t trackId, int32_t family, int32_t index, int32_t* outDropped) {
+    if (outDropped) *outDropped = 0;
+    auto old = findTrackAuthoring(trackId);
+    if (!old) return -2;
+    RackCore* rack = nullptr;
+    if (family == 0 && index >= 0 && index < static_cast<int32_t>(old->devices.size()))
+        rack = dynamic_cast<RackDevice*>(old->devices[index].get());
+    else if (family == 1 && index >= 0 && index < static_cast<int32_t>(old->midiEffects.size()))
+        rack = dynamic_cast<MidiRack*>(old->midiEffects[index].get());
+    else if (family == 2 && old->instrument) {
+        if (dynamic_cast<DrumRack*>(old->instrument.get())) return -4;
+        rack = dynamic_cast<RackInstrument*>(old->instrument.get());
+    }
+    RackCore::RackState* st = rack ? rack->live() : nullptr;
+    if (!st) return -2;
+    if (st->chains.size() != 1) return -3;
+    const RackCore::RackChain& ch = st->chains[0];
+    if (family == 2 && !ch.instrument) return -5;
+    int32_t dropped = st->mappings.empty() ? 0 : 1;
+    {
+        const auto& k = *ch.ctl;
+        constexpr auto rl = std::memory_order_relaxed;
+        const bool mixDefault = std::fabs(k.gain.load(rl) - 1.0f) < 1e-6f && std::fabs(k.pan.load(rl)) < 1e-6f
+            && !k.mute.load(rl) && !k.solo.load(rl) && k.keyLo.load(rl) == 0 && k.keyHi.load(rl) == 127
+            && k.velLo.load(rl) == 0 && k.velHi.load(rl) == 127 && k.transpose.load(rl) == 0
+            && std::fabs(k.velScale.load(rl) - 1.0f) < 1e-6f && k.selLo.load(rl) == 0 && k.selHi.load(rl) == 127;
+        if (!mixDefault) dropped |= 2;
+    }
+    const uint64_t uid = ch.uid;
+    auto devs = ch.devices;
+    auto mids = ch.midiDevices;
+    auto inst = ch.instrument;
+
+    auto nt = cloneTrack(*old);
+    RefMap map;
+    int32_t restored = 0;
+    if (family == 0) {
+        const int32_t a = index, n = static_cast<int32_t>(devs.size());
+        map = [=](const Ref& r) -> Ref {
+            if (r.fam != 0) return r;
+            if (r.idx == a) return r.uid == uid && r.slot >= 0 ? Ref{0, a + r.slot} : Ref{kDropRef}; // its macros go
+            return r.idx > a ? Ref{0, r.idx + n - 1, r.uid, r.slot} : r;
+        };
+        nt->devices.erase(nt->devices.begin() + a);
+        nt->devices.insert(nt->devices.begin() + a, devs.begin(), devs.end());
+        restored = n;
+    } else if (family == 1) {
+        const int32_t a = index, n = static_cast<int32_t>(mids.size());
+        map = [=](const Ref& r) -> Ref {
+            if (r.fam != 1) return r;
+            if (r.idx == a)
+                return r.uid == uid && RackCore::isMidiTarget(r.slot) ? Ref{1, a + RackCore::midiTargetIndex(r.slot)}
+                                                                       : Ref{kDropRef};
+            return r.idx > a ? Ref{1, r.idx + n - 1, r.uid, r.slot} : r;
+        };
+        nt->midiEffects.erase(nt->midiEffects.begin() + a);
+        nt->midiEffects.insert(nt->midiEffects.begin() + a, mids.begin(), mids.end());
+        restored = n;
+    } else {
+        const int32_t m0 = static_cast<int32_t>(nt->midiEffects.size()), nA = static_cast<int32_t>(devs.size());
+        map = [=](const Ref& r) -> Ref {
+            if (r.fam == 2) {
+                if (r.uid != uid) return Ref{kDropRef}; // the rack's own macros
+                if (r.slot == -1) return {2, -1};
+                if (RackCore::isMidiTarget(r.slot)) return {1, m0 + RackCore::midiTargetIndex(r.slot)};
+                return {0, r.slot};
+            }
+            if (r.fam == 0) return {0, r.idx + nA, r.uid, r.slot};
+            return r;
+        };
+        nt->midiEffects.insert(nt->midiEffects.end(), mids.begin(), mids.end());
+        nt->devices.insert(nt->devices.begin(), devs.begin(), devs.end());
+        old->instrument->closeEditor();
+        nt->instrument = inst;
+        restored = static_cast<int32_t>(mids.size()) + 1 + nA;
+    }
+    publishWithRefMap(trackId, nt, map); // the MIDI effects taken out are among nt's now
+    recomputePdc();
+    if (outDropped) *outDropped = dropped;
+    return restored;
 }
 
 int32_t Engine::wrapDeviceInRack(int32_t trackId, int32_t deviceIndex) {
-    auto old = findTrackAuthoring(trackId);
-    if (!old || deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(old->devices.size())) return -1;
-    auto dev = old->devices[deviceIndex];
-    if (!dev || dev->sidechainSourceTrackId() > 0 || deviceIsReferenced(*old, deviceIndex)) return -1;
-    const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
-    auto rack = std::make_shared<RackDevice>();
-    rack->setSampleRate(sr, kMaxBlock);
-    const int32_t chain = rack->addChain(-1);
-    // The device itself moves in, already prepared at this rate: preparing it again would reset
-    // it (a Reverb clears its tail) while the published graph may still be playing it.
-    if (rack->addChainDeviceInstance(chain, dev, /*prepare=*/false) < 0) return -1;
-    auto nt = cloneTrack(*old);
-    nt->devices[deviceIndex] = rack;
-    republishWithTrack(trackId, nt);
-    recomputePdc();
-    return deviceIndex;
+    const int32_t r = groupDevices(trackId, -1, 0, false, deviceIndex, 1);
+    return r < 0 ? -1 : r;
 }
 
 int32_t Engine::unwrapRack(int32_t trackId, int32_t deviceIndex) {
-    auto old = findTrackAuthoring(trackId);
-    if (!old || deviceIndex < 0 || deviceIndex >= static_cast<int32_t>(old->devices.size())) return -1;
-    auto* rack = dynamic_cast<RackDevice*>(old->devices[deviceIndex].get());
-    RackCore::RackState* st = rack ? rack->live() : nullptr;
-    if (!st || st->chains.size() != 1 || deviceIsReferenced(*old, deviceIndex)) return -1;
-    auto devs = st->chains[0].devices;
-    // The devices after the rack shift by (n - 1). Lanes and CV links are remapped below; an
-    // Arp's CC target lives on the shared MIDI device, outside the undo snapshot, so rather
-    // than move it, don't unwrap under one.
-    if (devs.size() != 1)
-        for (auto& md : old->midiEffects)
-            if (md && md->ccDestDevice() > deviceIndex) return -1;
-    auto nt = cloneTrack(*old);
-    nt->devices.erase(nt->devices.begin() + deviceIndex);
-    nt->devices.insert(nt->devices.begin() + deviceIndex, devs.begin(), devs.end());
-    // The devices after the rack shift by (n - 1): their lanes and CV links follow.
-    const int32_t n = static_cast<int32_t>(devs.size());
-    if (n == 0) remapAutomationAfterDeviceChange(*nt, false, deviceIndex, -1, -1);
-    for (int32_t i = 1; i < n; ++i)
-        remapAutomationAfterDeviceChange(*nt, false, -1, static_cast<int32_t>(nt->devices.size()) - n + i, deviceIndex + i);
-    republishWithTrack(trackId, nt);
-    if (n == 0) remapCvLinksAfterDeviceChange(trackId, deviceIndex, -1, -1);
-    for (int32_t i = 1; i < n; ++i)
-        remapCvLinksAfterDeviceChange(trackId, -1, static_cast<int32_t>(nt->devices.size()) - n + i, deviceIndex + i);
-    recomputePdc();
-    return n;
+    const int32_t r = ungroupRack(trackId, 0, deviceIndex, nullptr);
+    return r < 0 ? -1 : r;
+}
+
+// ---- chain children's links, for save / load (specs/044) --------------------
+bool Engine::rackChainMidiCcDest(int32_t t, int32_t host, int32_t chain, int32_t idx, int32_t* dev,
+    int32_t* destChain, int32_t* destSlot, int32_t* param, float* depth) const {
+    auto* r = rackCoreAt(t, host);
+    MidiDevice* m = r && !isNestedRack(host) ? r->chainMidiDeviceAt(chain, idx) : nullptr;
+    if (!m) return false;
+    const uint64_t uid = m->ccDestChainUid();
+    if (dev) *dev = m->ccDestDevice();
+    if (destChain) *destChain = uid ? nestedChainIndex(t, m->ccDestDevice(), uid) : -1;
+    if (destSlot) *destSlot = uid ? m->ccDestSlot() : -1;
+    if (param) *param = m->ccDestParam();
+    if (depth) *depth = m->ccDepth();
+    return true;
+}
+bool Engine::rackChainMidiSetCcDest(int32_t t, int32_t host, int32_t chain, int32_t idx, int32_t dev,
+    int32_t destChain, int32_t destSlot, int32_t param, float depth) {
+    auto* r = rackCoreAt(t, host);
+    MidiDevice* m = r && !isNestedRack(host) ? r->chainMidiDeviceAt(chain, idx) : nullptr;
+    if (!m) return false;
+    m->setCcDest(dev, param);
+    if (destChain >= 0) {
+        const uint64_t uid = nestedChainUid(t, dev, destChain);
+        if (!uid) return false;
+        m->setCcDestNested(uid, destSlot);
+    }
+    m->setCcDepth(depth);
+    return true;
+}
+bool Engine::rackChainSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* src,
+    int32_t* tapPre, float* gainDb, float* mix) const {
+    auto* r = rackCoreAt(t, host);
+    if (!r || isNestedRack(host)) return false;
+    if (slot >= 0) {
+        Device* d = r->chainDeviceAt(chain, slot);
+        if (!d) return false;
+        if (src) *src = d->sidechainSourceTrackId();
+        if (tapPre) *tapPre = d->sidechainTapPre();
+        if (gainDb) *gainDb = d->sidechainGainDb();
+        if (mix) *mix = d->sidechainMix();
+        return true;
+    }
+    Instrument* in = r->chainInstrument(chain);
+    if (!in) return false;
+    if (src) *src = in->sidechainSourceTrackId();
+    if (tapPre) *tapPre = 0;
+    if (gainDb) *gainDb = 0.0f;
+    if (mix) *mix = 1.0f;
+    return true;
+}
+bool Engine::rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src,
+    int32_t tapPre, float gainDb, float mix) {
+    auto* r = rackCoreAt(t, host);
+    if (!r || isNestedRack(host)) return false;
+    if (slot >= 0) {
+        Device* d = r->chainDeviceAt(chain, slot);
+        if (!d) return false;
+        d->setSidechainSourceTrackId(src);
+        d->setSidechainTapPre(tapPre);
+        d->setSidechainGainDb(gainDb);
+        d->setSidechainMix(mix);
+    } else {
+        Instrument* in = r->chainInstrument(chain);
+        if (!in) return false;
+        in->setSidechainSourceTrackId(src);
+    }
+    recomputeRouting();
+    return true;
+}
+
+// ---- nested addresses follow rack edits (specs/044) -----------------------
+void Engine::remapNestedAfterRackEdit(int32_t trackId, int32_t host, const NestedMap& map) {
+    if (!authoring_ || isNestedRack(host)) return; // paths reach one rack level only
+    auto into = [&](uint64_t uid, int32_t dev) { return uid != 0 && dev == host; };
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    g->tracks.reserve(authoring_->tracks.size());
+    bool any = false;
+    for (auto& ot : authoring_->tracks) {
+        const bool own = ot->id() == trackId;
+        auto cvTouches = [&](const CvLink& l) {
+            const int32_t tgt = l.targetTrack < 0 ? ot->id() : l.targetTrack;
+            return (tgt == trackId && into(l.targetChainUid, l.targetDevice))
+                || (own && into(l.sourceChainUid, l.sourceDevice));
+        };
+        bool needs = false;
+        if (own) {
+            for (auto& l : ot->automation) needs |= into(l.chainUid, l.deviceIndex);
+            for (auto& m : ot->midiEffects) needs |= m && into(m->ccDestChainUid(), m->ccDestDevice());
+        }
+        for (auto& l : ot->cvLinks) needs |= cvTouches(l);
+        if (!needs) {
+            g->tracks.push_back(ot);
+            continue;
+        }
+        auto nt = cloneTrack(*ot);
+        if (own) {
+            // Lanes: rewrite or drop, keeping in-flight gestures on the right lane index.
+            std::vector<int32_t> laneMap(nt->automation.size());
+            std::vector<AutomationLane> kept;
+            kept.reserve(nt->automation.size());
+            for (size_t i = 0; i < nt->automation.size(); ++i) {
+                AutomationLane& l = nt->automation[i];
+                if (into(l.chainUid, l.deviceIndex)) {
+                    const auto [u, sl] = map(l.chainUid, l.slot);
+                    if (u == 0) {
+                        laneMap[i] = -1;
+                        continue;
+                    }
+                    l.chainUid = u;
+                    l.slot = sl;
+                }
+                laneMap[i] = static_cast<int32_t>(kept.size());
+                kept.push_back(std::move(l));
+            }
+            nt->automation = std::move(kept);
+            auto laneGone = [&](int32_t& li) {
+                if (li < 0 || li >= static_cast<int32_t>(laneMap.size())) return true;
+                li = laneMap[li];
+                return li < 0;
+            };
+            std::erase_if(activeWrites_, [&](ActiveWrite& aw) { return aw.trackId == trackId && laneGone(aw.laneIndex); });
+            std::erase_if(overrides_, [&](OverrideTarget& o) { return o.trackId == trackId && laneGone(o.laneIndex); });
+            // An Arp's CC target lives on the Arp, which every snapshot shares: rewrite a clone.
+            for (auto& m : nt->midiEffects) {
+                if (!m || !into(m->ccDestChainUid(), m->ccDestDevice())) continue;
+                const auto [u, sl] = map(m->ccDestChainUid(), m->ccDestSlot());
+                if (u == m->ccDestChainUid() && sl == m->ccDestSlot()) continue;
+                auto c = cloneMidiDevice(*m);
+                if (!c) continue;
+                if (u == 0) c->setCcDest(-1, -1);
+                else c->setCcDestNested(u, sl);
+                m = std::move(c);
+            }
+        }
+        std::vector<CvLink> keptLinks;
+        keptLinks.reserve(nt->cvLinks.size());
+        for (auto& l : nt->cvLinks) {
+            const int32_t tgt = l.targetTrack < 0 ? nt->id() : l.targetTrack;
+            if (tgt == trackId && into(l.targetChainUid, l.targetDevice)) {
+                const auto [u, sl] = map(l.targetChainUid, l.targetSlot);
+                if (u == 0) continue;
+                l.targetChainUid = u;
+                l.targetSlot = sl;
+            }
+            if (own && into(l.sourceChainUid, l.sourceDevice)) {
+                const auto [u, sl] = map(l.sourceChainUid, l.sourceSlot);
+                if (u == 0) continue;
+                l.sourceChainUid = u;
+                l.sourceSlot = sl;
+            }
+            keptLinks.push_back(l);
+        }
+        nt->cvLinks = std::move(keptLinks);
+        any = true;
+        g->tracks.push_back(nt);
+    }
+    if (any) publishRaw(std::move(g)); // no extra undo step: part of the rack edit
+}
+
+// Slot maps for the common chain edits: a child removed at `idx`, moved within its chain,
+// or a new one inserted at `at` (MIDI slots use RackCore::midiTarget encoding).
+static Engine::NestedMap slotRemoved(uint64_t uid, int32_t idx, bool midi) {
+    return [=](uint64_t u, int32_t sl) -> std::pair<uint64_t, int32_t> {
+        if (u != uid || (midi ? !RackCore::isMidiTarget(sl) : sl < 0)) return {u, sl};
+        const int32_t i = midi ? RackCore::midiTargetIndex(sl) : sl;
+        if (i == idx) return {0, -1};
+        const int32_t ni = i > idx ? i - 1 : i;
+        return {u, midi ? RackCore::midiTarget(ni) : ni};
+    };
+}
+static Engine::NestedMap slotInserted(uint64_t uid, int32_t at, bool midi) {
+    return [=](uint64_t u, int32_t sl) -> std::pair<uint64_t, int32_t> {
+        if (u != uid || (midi ? !RackCore::isMidiTarget(sl) : sl < 0)) return {u, sl};
+        const int32_t i = midi ? RackCore::midiTargetIndex(sl) : sl;
+        const int32_t ni = i >= at ? i + 1 : i;
+        return {u, midi ? RackCore::midiTarget(ni) : ni};
+    };
+}
+static Engine::NestedMap slotMoved(uint64_t uid, int32_t from, int32_t to, bool midi) {
+    return [=](uint64_t u, int32_t sl) -> std::pair<uint64_t, int32_t> {
+        if (u != uid || (midi ? !RackCore::isMidiTarget(sl) : sl < 0)) return {u, sl};
+        int32_t i = midi ? RackCore::midiTargetIndex(sl) : sl;
+        if (i == from) i = to;
+        else if (from < to && i > from && i <= to) --i;
+        else if (from > to && i >= to && i < from) ++i;
+        return {u, midi ? RackCore::midiTarget(i) : i};
+    };
+}
+static Engine::NestedMap slotToChain(uint64_t uid, int32_t idx, uint64_t toUid, int32_t toIdx, bool midi) {
+    auto removed = slotRemoved(uid, idx, midi);
+    return [=](uint64_t u, int32_t sl) -> std::pair<uint64_t, int32_t> {
+        if (u == uid && sl == (midi ? RackCore::midiTarget(idx) : idx))
+            return {toUid, midi ? RackCore::midiTarget(toIdx) : toIdx};
+        return removed(u, sl);
+    };
+}
+static Engine::NestedMap chainDropped(uint64_t uid, bool instrumentOnly) {
+    return [=](uint64_t u, int32_t sl) -> std::pair<uint64_t, int32_t> {
+        if (u == uid && (!instrumentOnly || sl == -1)) return {0, -1};
+        return {u, sl};
+    };
 }
 
 // ---- chains --------------------------------------------------------------
@@ -359,6 +895,7 @@ bool Engine::rackChainDeviceCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
     clipDevice_ = std::move(copy);
     clipMidi_.reset();
     clipInstrument_.reset();
+    clipMany_.clear();
     return true;
 }
 bool Engine::rackChainMidiCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
@@ -369,6 +906,7 @@ bool Engine::rackChainMidiCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
     clipMidi_ = std::move(copy);
     clipDevice_.reset();
     clipInstrument_.reset();
+    clipMany_.clear();
     return true;
 }
 int32_t Engine::rackChainDevicePaste(int32_t t, int32_t di, int32_t c, int32_t at) {
@@ -379,8 +917,10 @@ int32_t Engine::rackChainDevicePaste(int32_t t, int32_t di, int32_t c, int32_t a
     if (dynamic_cast<const RackDevice*>(clipDevice_.get())) return -3;
     auto dev = cloneDevice(*clipDevice_);
     if (!dev) return -1;
-    dev->setSidechainSourceTrackId(-1); // a chain has no sidechain input
+    dev->setSidechainSourceTrackId(-1); // a pasted device starts without a key
+    const uint64_t uid = r->chainBaseUid(c);
     const int32_t idx = rackForEdit(t, di)->insertChainDeviceInstance(c, std::move(dev), at);
+    if (idx >= 0) remapNestedAfterRackEdit(t, di, slotInserted(uid, idx, false));
     recomputePdc();
     return idx;
 }
@@ -393,14 +933,75 @@ int32_t Engine::rackChainMidiPaste(int32_t t, int32_t di, int32_t c, int32_t at)
     if (di == -1 && c >= RackInstrument::kMaxMidiChains) return -5;
     auto dev = cloneMidiDevice(*clipMidi_);
     if (!dev) return -1;
-    return rackForEdit(t, di)->insertChainMidiDeviceInstance(c, std::move(dev), at);
+    const uint64_t uid = r->chainBaseUid(c);
+    const int32_t idx = rackForEdit(t, di)->insertChainMidiDeviceInstance(c, std::move(dev), at);
+    if (idx >= 0) remapNestedAfterRackEdit(t, di, slotInserted(uid, idx, true));
+    return idx;
+}
+int32_t Engine::rackChainPasteDevices(int32_t t, int32_t di, int32_t c, int32_t midiAt, int32_t fxAt,
+    int32_t* outSkipped, int32_t* outFirstMidi, int32_t* outFirstFx) {
+    if (outSkipped) *outSkipped = 0;
+    if (outFirstMidi) *outFirstMidi = -1;
+    if (outFirstFx) *outFirstFx = -1;
+    auto* r = rackCoreAt(t, di);
+    if (!r || c < 0 || c >= r->chainCount()) return -1;
+    std::vector<ClipEntry> src = clipMany_;
+    if (src.empty()) {
+        if (clipMidi_) src.push_back({clipMidi_, nullptr, nullptr});
+        else if (clipInstrument_) src.push_back({nullptr, clipInstrument_, nullptr});
+        else if (clipDevice_) src.push_back({nullptr, nullptr, clipDevice_});
+    }
+    if (src.empty()) return -1;
+    const bool takesMidi = rackTakesMidi(r) && !(di == -1 && c >= RackInstrument::kMaxMidiChains);
+    const bool takesAudio = rackTakesAudio(r);
+    // Clone what fits first: a plug-in that won't load leaves the chain as it was.
+    std::vector<std::shared_ptr<MidiDevice>> mids;
+    std::vector<std::shared_ptr<Device>> devs;
+    int32_t skipped = 0;
+    for (auto& e : src) {
+        if (e.midi && takesMidi && e.midi->midiKind() >= 0 && e.midi->midiKind() <= 5) {
+            auto m = cloneMidiDevice(*e.midi);
+            if (!m) return -3;
+            m->setCcDest(-1, -1);
+            mids.push_back(std::move(m));
+        } else if (e.dev && takesAudio && !e.dev->asRack()) {
+            auto d = cloneDevice(*e.dev);
+            if (!d) return -3;
+            d->setSidechainSourceTrackId(-1); // a pasted device starts without a key
+            devs.push_back(std::move(d));
+        } else
+            ++skipped;
+    }
+    if (outSkipped) *outSkipped = skipped;
+    if (mids.empty() && devs.empty()) return 0;
+    const uint64_t uid = r->chainBaseUid(c);
+    RackCore* fr = rackForEdit(t, di);   // one fork: one undo step for the whole paste
+    if (!fr) return -1;
+    int32_t ma = midiAt < 0 || midiAt > fr->chainMidiDeviceCount(c) ? fr->chainMidiDeviceCount(c) : midiAt;
+    int32_t fa = fxAt < 0 || fxAt > fr->chainDeviceCount(c) ? fr->chainDeviceCount(c) : fxAt;
+    for (size_t i = 0; i < mids.size(); ++i) {
+        const int32_t idx = fr->insertChainMidiDeviceInstance(c, std::move(mids[i]), ma + static_cast<int32_t>(i));
+        if (idx < 0) continue;
+        if (outFirstMidi && *outFirstMidi < 0) *outFirstMidi = idx;
+        remapNestedAfterRackEdit(t, di, slotInserted(uid, idx, true));
+    }
+    for (size_t i = 0; i < devs.size(); ++i) {
+        const int32_t idx = fr->insertChainDeviceInstance(c, std::move(devs[i]), fa + static_cast<int32_t>(i));
+        if (idx < 0) continue;
+        if (outFirstFx && *outFirstFx < 0) *outFirstFx = idx;
+        remapNestedAfterRackEdit(t, di, slotInserted(uid, idx, false));
+    }
+    recomputePdc();
+    return static_cast<int32_t>(mids.size() + devs.size());
 }
 int32_t Engine::rackChainDeviceDuplicate(int32_t t, int32_t di, int32_t c, int32_t i) {
     auto* r = rackCoreAt(t, di);
     Device* src = r ? r->chainDeviceAt(c, i) : nullptr;
     auto dev = src ? cloneDevice(*src) : nullptr;
     if (!dev) return -1;
+    const uint64_t uid = r->chainBaseUid(c);
     const int32_t idx = rackForEdit(t, di)->insertChainDeviceInstance(c, std::move(dev), i + 1);
+    if (idx >= 0) remapNestedAfterRackEdit(t, di, slotInserted(uid, idx, false));
     recomputePdc();
     return idx;
 }
@@ -409,12 +1010,17 @@ int32_t Engine::rackChainMidiDuplicate(int32_t t, int32_t di, int32_t c, int32_t
     MidiDevice* src = r ? r->chainMidiDeviceAt(c, i) : nullptr;
     auto dev = src ? cloneMidiDevice(*src) : nullptr;
     if (!dev) return -1;
-    return rackForEdit(t, di)->insertChainMidiDeviceInstance(c, std::move(dev), i + 1);
+    const uint64_t uid = r->chainBaseUid(c);
+    const int32_t idx = rackForEdit(t, di)->insertChainMidiDeviceInstance(c, std::move(dev), i + 1);
+    if (idx >= 0) remapNestedAfterRackEdit(t, di, slotInserted(uid, idx, true));
+    return idx;
 }
 int32_t Engine::rackChainDeviceMoveTo(int32_t t, int32_t di, int32_t c, int32_t i, int32_t to) {
     auto* r = rackCoreAt(t, di);
     if (!r || !r->chainDeviceAt(c, i) || to < 0 || to >= r->chainCount() || to == c) return -1;
+    const uint64_t uid = r->chainBaseUid(c), toUid = r->chainBaseUid(to);
     const int32_t idx = rackForEdit(t, di)->moveChainDeviceToChain(c, i, to);
+    if (idx >= 0) remapNestedAfterRackEdit(t, di, slotToChain(uid, i, toUid, idx, false));
     recomputePdc();
     return idx;
 }
@@ -422,7 +1028,10 @@ int32_t Engine::rackChainMidiMoveTo(int32_t t, int32_t di, int32_t c, int32_t i,
     auto* r = rackCoreAt(t, di);
     if (!r || !r->chainMidiDeviceAt(c, i) || to < 0 || to >= r->chainCount() || to == c) return -1;
     if (di == -1 && to >= RackInstrument::kMaxMidiChains) return -5;
-    return rackForEdit(t, di)->moveChainMidiDeviceToChain(c, i, to);
+    const uint64_t uid = r->chainBaseUid(c), toUid = r->chainBaseUid(to);
+    const int32_t idx = rackForEdit(t, di)->moveChainMidiDeviceToChain(c, i, to);
+    if (idx >= 0) remapNestedAfterRackEdit(t, di, slotToChain(uid, i, toUid, idx, true));
+    return idx;
 }
 bool Engine::rackMono(int32_t t) const {
     auto* r = rackCoreAt(t, -1);
@@ -445,14 +1054,18 @@ int32_t Engine::rackAddChain(int32_t t, int32_t di, int32_t k) {
 bool Engine::rackRemoveChain(int32_t t, int32_t di, int32_t c) {
     auto* r = rackCoreAt(t, di);
     if (!r || c < 0 || c >= r->chainCount()) return false;
+    const uint64_t uid = r->chainBaseUid(c);
     const bool ok = rackForEdit(t, di)->removeChain(c);
+    if (ok) remapNestedAfterRackEdit(t, di, chainDropped(uid, false));
     recomputePdc(); // the chain may have held the rack's longest latency
     return ok;
 }
 bool Engine::rackSetChainInstrument(int32_t t, int32_t di, int32_t c, int32_t k) {
     auto* r = rackCoreAt(t, di);
     if (!r || c < 0 || c >= r->chainCount() || !rackKindAllowed(t, di, k) || !RackCore::makeInstrument(k)) return false;
+    const uint64_t uid = r->chainBaseUid(c);
     const bool ok = rackForEdit(t, di)->setChainInstrument(c, k);
+    if (ok) remapNestedAfterRackEdit(t, di, chainDropped(uid, /*instrumentOnly=*/true));
     recomputePdc();
     return ok;
 }
@@ -647,13 +1260,20 @@ int32_t Engine::rackAddChainDevice(int32_t t, int32_t di, int32_t c, int32_t k) 
 bool Engine::rackRemoveChainDevice(int32_t t, int32_t di, int32_t c, int32_t d) {
     auto* r = rackCoreAt(t, di);
     if (!r || d < 0 || d >= r->chainDeviceCount(c)) return false;
-    return rackForEdit(t, di)->removeChainDevice(c, d);
+    const uint64_t uid = r->chainBaseUid(c);
+    const bool ok = rackForEdit(t, di)->removeChainDevice(c, d);
+    if (ok) remapNestedAfterRackEdit(t, di, slotRemoved(uid, d, false));
+    return ok;
 }
 bool Engine::rackMoveChainDevice(int32_t t, int32_t di, int32_t c, int32_t from, int32_t to) {
     auto* r = rackCoreAt(t, di);
     if (!r || from < 0 || from >= r->chainDeviceCount(c)) return false;
-    if (std::clamp(to, 0, r->chainDeviceCount(c) - 1) == from) return true;
-    return rackForEdit(t, di)->moveChainDevice(c, from, to);
+    to = std::clamp(to, 0, r->chainDeviceCount(c) - 1);
+    if (to == from) return true;
+    const uint64_t uid = r->chainBaseUid(c);
+    const bool ok = rackForEdit(t, di)->moveChainDevice(c, from, to);
+    if (ok) remapNestedAfterRackEdit(t, di, slotMoved(uid, from, to, false));
+    return ok;
 }
 const char* Engine::rackChainDeviceName(int32_t t, int32_t di, int32_t c, int32_t d) const {
     auto* r = rackCoreAt(t, di);
@@ -705,12 +1325,20 @@ int32_t Engine::rackAddChainMidi(int32_t t, int32_t di, int32_t c, int32_t kind)
 bool Engine::rackRemoveChainMidi(int32_t t, int32_t di, int32_t c, int32_t i) {
     auto* r = rackCoreAt(t, di);
     if (!r || i < 0 || i >= r->chainMidiDeviceCount(c)) return false;
-    return rackForEdit(t, di)->removeChainMidiDevice(c, i);
+    const uint64_t uid = r->chainBaseUid(c);
+    const bool ok = rackForEdit(t, di)->removeChainMidiDevice(c, i);
+    if (ok) remapNestedAfterRackEdit(t, di, slotRemoved(uid, i, true));
+    return ok;
 }
 bool Engine::rackMoveChainMidi(int32_t t, int32_t di, int32_t c, int32_t from, int32_t to) {
     auto* r = rackCoreAt(t, di);
     if (!r || from < 0 || from >= r->chainMidiDeviceCount(c)) return false;
-    return rackForEdit(t, di)->moveChainMidiDevice(c, from, to);
+    to = std::clamp(to, 0, r->chainMidiDeviceCount(c) - 1);
+    if (to == from) return true;
+    const uint64_t uid = r->chainBaseUid(c);
+    const bool ok = rackForEdit(t, di)->moveChainMidiDevice(c, from, to);
+    if (ok) remapNestedAfterRackEdit(t, di, slotMoved(uid, from, to, true));
+    return ok;
 }
 MidiDevice* Engine::rackChainMidiAt(int32_t t, int32_t di, int32_t c, int32_t i) const {
     auto* r = rackCoreAt(t, di);

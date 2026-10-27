@@ -362,6 +362,17 @@ NOTA_API NotaResult nota_track_automation_set_points(NotaEngine* engine, int32_t
 NOTA_API NotaResult nota_track_automation_set_points_live(NotaEngine* engine, int32_t track_id,
                     int32_t lane_index, const NotaAutomationPoint* pts, int32_t count);
 NOTA_API NotaResult nota_track_remove_automation_lane(NotaEngine* engine, int32_t track_id, int32_t lane_index);
+/* A lane on a device grouped into a rack (specs/044): its device_index (lane_info) is the rack's
+ * address on the track (>= 0 effect, -1 instrument, -1000 - i MIDI effect) and the path names
+ * the chain child: chain index and slot (>= 0 a device, -1 the chain instrument, -1000 - i the
+ * chain's i-th MIDI effect). out_chain -1 = a track-level lane. */
+NOTA_API NotaResult nota_track_automation_lane_path(const NotaEngine* engine, int32_t track_id, int32_t lane_index,
+                                                    int32_t* out_chain, int32_t* out_slot);
+/* Project load: add (or reuse) a lane on a chain child; param_id for plug-in params (target 3),
+ * else param_index. Returns the lane index, or -1 when the address doesn't resolve. */
+NOTA_API int32_t nota_track_add_nested_automation_lane(NotaEngine* engine, int32_t track_id, int32_t target,
+                                                       int32_t device_index, int32_t chain, int32_t slot,
+                                                       int32_t param_index, const char* param_id);
 
 /* ---- CV modulation (Phase 3, Modular editor) ----------------------------
  * Modulator (LFO) sources + edges to built-in device params on the same track.
@@ -395,6 +406,16 @@ NOTA_API int32_t nota_track_cv_link_source(const NotaEngine* engine, int32_t tra
 NOTA_API int32_t nota_track_cv_link_target_track(const NotaEngine* engine, int32_t track_id, int32_t index);
 NOTA_API int32_t nota_track_cv_link_device(const NotaEngine* engine, int32_t track_id, int32_t index);
 NOTA_API int32_t nota_track_cv_link_param(const NotaEngine* engine, int32_t track_id, int32_t index);
+/* Links reaching into a rack (specs/044): source / target as (device, chain index, slot), chain
+ * -1 = track level; device is then the rack's address. path: 0 = done, -1 bad link. */
+NOTA_API int32_t nota_track_cv_link_path(const NotaEngine* engine, int32_t track_id, int32_t index,
+                                         int32_t* out_src_chain, int32_t* out_src_slot, int32_t* out_tgt_chain,
+                                         int32_t* out_tgt_slot);
+NOTA_API int32_t nota_track_add_nested_cv_link(NotaEngine* engine, int32_t track_id, int32_t source_kind,
+                                               int32_t mod_id, int32_t src_device, int32_t src_chain, int32_t src_slot,
+                                               int32_t src_param, int32_t target_kind, int32_t target_track,
+                                               int32_t target_device, int32_t tgt_chain, int32_t tgt_slot,
+                                               int32_t target_param);
 NOTA_API float   nota_track_cv_link_depth(const NotaEngine* engine, int32_t track_id, int32_t index);
 NOTA_API int32_t nota_track_cv_link_mode(const NotaEngine* engine, int32_t track_id, int32_t index);
 NOTA_API NotaResult nota_track_set_cv_link_depth(NotaEngine* engine, int32_t track_id, int32_t index, float depth);
@@ -1532,6 +1553,29 @@ NOTA_API void        nota_midi_effect_set_cc_dest(NotaEngine* engine, int32_t tr
 NOTA_API void        nota_midi_effect_set_cc_depth(NotaEngine* engine, int32_t track_id, int32_t index, float depth);
 NOTA_API int32_t     nota_midi_effect_cc_dest_device(const NotaEngine* engine, int32_t track_id, int32_t index);
 NOTA_API int32_t     nota_midi_effect_cc_dest_param(const NotaEngine* engine, int32_t track_id, int32_t index);
+/* The CC target inside a rack (specs/044): chain index + slot in the rack at cc_dest_device
+ * (slot >= 0 a device); chain -1 = track level. Set it after set_cc_dest. 0 = done, -1 not. */
+NOTA_API int32_t     nota_midi_effect_cc_dest_path(const NotaEngine* engine, int32_t track_id, int32_t index,
+                                                   int32_t* out_chain, int32_t* out_slot);
+NOTA_API int32_t     nota_midi_effect_set_cc_dest_path(NotaEngine* engine, int32_t track_id, int32_t index,
+                                                       int32_t chain, int32_t slot);
+/* The same for a MIDI effect inside a rack chain (rack at device_index on the track, as the
+ * rack calls address it), and a chain child's sidechain key (slot >= 0 a device, -1 the chain
+ * instrument; tap_pre / gain / mix for devices). For save / load: track ids and chain uids
+ * don't survive in the rack blob. 0 = done, -1 bad address. */
+NOTA_API int32_t     nota_rack_chain_midi_cc_dest(const NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                  int32_t chain, int32_t index, int32_t* out_dest_device,
+                                                  int32_t* out_dest_chain, int32_t* out_dest_slot, int32_t* out_param,
+                                                  float* out_depth);
+NOTA_API int32_t     nota_rack_chain_midi_set_cc_dest(NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                      int32_t chain, int32_t index, int32_t dest_device, int32_t dest_chain,
+                                                      int32_t dest_slot, int32_t param, float depth);
+NOTA_API int32_t     nota_rack_chain_sidechain(const NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                               int32_t chain, int32_t slot, int32_t* out_source_track,
+                                               int32_t* out_tap_pre, float* out_gain_db, float* out_mix);
+NOTA_API int32_t     nota_rack_chain_set_sidechain(NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                   int32_t chain, int32_t slot, int32_t source_track, int32_t tap_pre,
+                                                   float gain_db, float mix);
 NOTA_API float       nota_midi_effect_cc_depth(const NotaEngine* engine, int32_t track_id, int32_t index);
 
 /* ---- Built-in devices + generic params (M4-4/5) -------------------------- */
@@ -1544,10 +1588,24 @@ NOTA_API NotaResult  nota_track_remove_device(NotaEngine* engine, int32_t track_
 /* Device clipboard (#238). Copy keeps a full clone of an audio effect (every param, its
  * state blob, bypass, sidechain key; a rack or plug-in copies itself) or a MIDI effect;
  * paste inserts a clone of it at at_index (-1 = the end) as one undo step and returns the
- * new index, or <0. clipboard_kind: 0 empty, 1 audio effect, 2 MIDI effect, 3 instrument. */
+ * new index, or <0. clipboard_kind: 0 empty, 1 audio effect, 2 MIDI effect, 3 instrument, 4 several devices (specs/044). */
 NOTA_API NotaResult  nota_track_copy_device(NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API NotaResult  nota_track_copy_midi_effect(NotaEngine* engine, int32_t track_id, int32_t index);
 NOTA_API int32_t     nota_device_clipboard_kind(const NotaEngine* engine);
+/* Several devices on the device clipboard (specs/044): full clones of the listed MIDI effects,
+ * the instrument (with_instrument 1) and audio effects, in chain order; replaces the clipboard
+ * (clipboard_kind then 4; one device fills it as the single copies do). Returns the count, or -1. */
+NOTA_API int32_t     nota_track_copy_devices(NotaEngine* engine, int32_t track_id, const int32_t* midi_idx,
+                                             int32_t midi_n, int32_t with_instrument, const int32_t* fx_idx,
+                                             int32_t fx_n);
+NOTA_API int32_t     nota_device_clipboard_count(const NotaEngine* engine);
+/* Paste every clipboard entry the track can take, one undo step: MIDI effects at midi_at, audio
+ * effects at fx_at (-1 = the end of the section), an instrument replacing the track's. Pasted
+ * MIDI effects carry no CC target. Returns the number pasted (>= 0), *out_skipped (may be NULL)
+ * the ones the track can't take; -1 empty clipboard or bad track, -3 a clone failed (nothing
+ * changed). */
+NOTA_API int32_t     nota_track_paste_devices(NotaEngine* engine, int32_t track_id, int32_t midi_at, int32_t fx_at,
+                                              int32_t* out_skipped);
 NOTA_API int32_t     nota_track_paste_device(NotaEngine* engine, int32_t track_id, int32_t at_index);
 NOTA_API int32_t     nota_track_paste_midi_effect(NotaEngine* engine, int32_t track_id, int32_t at_index);
 /* A full clone of the device / MIDI effect right after it, one undo step; the clipboard is left
@@ -1578,11 +1636,35 @@ NOTA_API int32_t     nota_track_transfer_device(NotaEngine* engine, int32_t src_
                                                 int32_t index, int32_t dst_track_id, int32_t at_index,
                                                 int32_t keep_source, int32_t* out_flags);
 /* ⌘G on a device (#257): wrap the audio effect at device_index in a new Audio Effect Rack
- * in its place (one undo step). Returns the rack's index, or <0 when the device can't move
- * into a rack chain (not an effect; a sidechain key, automation or a CV link on it).
- * Unwrap replaces a one-chain rack with its chain's devices; returns their count, or <0. */
+ * in its place (one undo step); its links follow it in (specs/044). Returns the rack's index,
+ * or <0. Unwrap replaces a one-chain Audio Effect Rack with its chain's devices; returns their
+ * count, or <0. Both are the one-device cases of group_devices / ungroup_rack below. */
 NOTA_API int32_t     nota_track_wrap_device_in_rack(NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API int32_t     nota_track_unwrap_rack(NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* Group a contiguous run of a track's devices into a new rack in their place (#328), one undo
+ * step; wrap / unwrap above are its one-device cases and no longer refuse a linked device.
+ * midi_first/midi_count: the MIDI effects (count 0 = none); with_instrument 1 to include the
+ * instrument; fx_first/fx_count: the audio effects. Audio effects only -> an Audio Effect Rack at
+ * fx_first; MIDI effects only -> a MIDI Effect Rack at midi_first; with the instrument -> an
+ * Instrument Rack as the track's instrument, chain 0 = MIDI effects -> instrument -> audio
+ * effects (the MIDI run must end at the last MIDI effect, the audio run start at 0).
+ * The instances move in without being prepared again; automation lanes, CV links, Arp CC
+ * targets and sidechain keys on them follow into the rack chain.
+ * Returns the rack's address (>= 0 audio effect, -1 the instrument, -1000 - i the i-th MIDI
+ * effect) or: -2 bad run, -3 not contiguous / MIDI + audio effects without the instrument,
+ * -4 a rack in the run, -5 a device the rack can't host, -6 an instrument a chain can't hold
+ * (an Instrument Rack), -7 not an instrument track. Distinguish -1 (instrument) by the call. */
+NOTA_API int32_t     nota_track_group_devices(NotaEngine* engine, int32_t track_id, int32_t midi_first,
+                                              int32_t midi_count, int32_t with_instrument, int32_t fx_first,
+                                              int32_t fx_count);
+/* Ungroup a one-chain rack (family 0 audio effect at index, 1 MIDI effect at index, 2 the
+ * instrument) back into its chain's devices, in place, one undo step; references follow them,
+ * the rack's own macros, mappings, chain mix and settings are dropped (and lanes or links on
+ * its macros removed). Returns the number of devices restored, or -2 not a rack, -3 two or
+ * more chains, -4 a Drum Rack, -5 an Instrument Rack chain without an instrument.
+ * *out_dropped (may be NULL): bit 0 macro mappings dropped, bit 1 a non-default chain mix. */
+NOTA_API int32_t     nota_track_ungroup_rack(NotaEngine* engine, int32_t track_id, int32_t family, int32_t index,
+                                             int32_t* out_dropped);
 /* Device display name (built-ins: "EQ"/"Compressor"; plugins: plugin name). */
 NOTA_API const char* nota_device_name(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 /* Generic float params (built-ins expose these; hosted plugins report 0). */
@@ -1768,6 +1850,14 @@ NOTA_API int32_t     nota_rackdev_chain_device_copy(NotaEngine* engine, int32_t 
 NOTA_API int32_t     nota_rackdev_chain_midi_copy(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index);
 NOTA_API int32_t     nota_rackdev_chain_device_paste(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t at_index);
 NOTA_API int32_t     nota_rackdev_chain_midi_paste(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t at_index);
+/* Several devices on the clipboard into chain `chain` (specs/044): the MIDI effects at midi_at,
+ * the audio effects at fx_at (-1 = the end of the section), what the chain can't take skipped
+ * (an instrument, a rack, a non-built-in MIDI effect), keys dropped; one undo step. Returns the
+ * number pasted (>= 0) with the skipped count and the first new index per section (-1 none),
+ * or -1 bad address / empty clipboard, -3 a clone failed. */
+NOTA_API int32_t     nota_rackdev_chain_paste_devices(NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                      int32_t chain, int32_t midi_at, int32_t fx_at, int32_t* out_skipped,
+                                                      int32_t* out_first_midi, int32_t* out_first_fx);
 NOTA_API int32_t     nota_rackdev_chain_device_duplicate(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index);
 NOTA_API int32_t     nota_rackdev_chain_midi_duplicate(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index);
 NOTA_API int32_t     nota_rackdev_chain_device_move_to(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index, int32_t to_chain);

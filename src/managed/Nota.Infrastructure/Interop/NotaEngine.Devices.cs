@@ -121,6 +121,25 @@ public sealed partial class NotaEngine
     public int UnwrapRack(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.UnwrapRack(_handle, trackId, deviceIndex); }
 
+    public int GroupDevices(int trackId, int midiFirst, int midiCount, bool withInstrument, int fxFirst, int fxCount)
+    { ThrowIfDisposed(); return NativeMethods.GroupDevices(_handle, trackId, midiFirst, midiCount, withInstrument ? 1 : 0, fxFirst, fxCount); }
+
+    public int UngroupRack(int trackId, DeviceFamily family, int index, out UngroupDropped dropped)
+    {
+        ThrowIfDisposed();
+        int r = NativeMethods.UngroupRack(_handle, trackId, (int)family, index, out int d);
+        dropped = (UngroupDropped)d;
+        return r;
+    }
+
+    public int CopyDevices(int trackId, int[] midiIndices, bool withInstrument, int[] fxIndices)
+    { ThrowIfDisposed(); return NativeMethods.CopyDevices(_handle, trackId, midiIndices, midiIndices.Length, withInstrument ? 1 : 0, fxIndices, fxIndices.Length); }
+
+    public int DeviceClipboardCount() { ThrowIfDisposed(); return NativeMethods.DeviceClipboardCount(_handle); }
+
+    public int PasteDevices(int trackId, int midiAt, int fxAt, out int skipped)
+    { ThrowIfDisposed(); return NativeMethods.PasteDevices(_handle, trackId, midiAt, fxAt, out skipped); }
+
     public string DeviceName(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.DeviceName(_handle, trackId, deviceIndex)) ?? ""; }
 
@@ -232,6 +251,37 @@ public sealed partial class NotaEngine
     public void SetMidiEffectCcDepth(int trackId, int index, float depth) { ThrowIfDisposed(); NativeMethods.MidiEffectSetCcDepth(_handle, trackId, index, depth); }
     public int MidiEffectCcDestDevice(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectCcDestDevice(_handle, trackId, index); }
     public int MidiEffectCcDestParam(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectCcDestParam(_handle, trackId, index); }
+    public (int Chain, int Slot) MidiEffectCcDestPath(int trackId, int index)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.MidiEffectCcDestPath(_handle, trackId, index, out int c, out int s) == 0 ? (c, s) : (-1, -1);
+    }
+    public bool SetMidiEffectCcDestPath(int trackId, int index, int chain, int slot)
+    { ThrowIfDisposed(); return NativeMethods.MidiEffectSetCcDestPath(_handle, trackId, index, chain, slot) == 0; }
+    public NestedCcDest? RackChainMidiCcDest(int trackId, int rackAddress, int chain, int index)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackChainMidiCcDest(_handle, trackId, rackAddress, chain, index, out int dev, out int dc, out int ds,
+                                                 out int p, out float depth) == 0 ? new NestedCcDest(dev, dc, ds, p, depth) : null;
+    }
+    public bool RackChainMidiSetCcDest(int trackId, int rackAddress, int chain, int index, NestedCcDest dest)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackChainMidiSetCcDest(_handle, trackId, rackAddress, chain, index, dest.Device, dest.Chain,
+                                                    dest.Slot, dest.Param, dest.Depth) == 0;
+    }
+    public NestedSidechain? RackChainSidechain(int trackId, int rackAddress, int chain, int slot)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackChainSidechain(_handle, trackId, rackAddress, chain, slot, out int src, out int pre,
+                                                out float g, out float m) == 0 ? new NestedSidechain(src, pre != 0, g, m) : null;
+    }
+    public bool RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackChainSetSidechain(_handle, trackId, rackAddress, chain, slot, sc.SourceTrack, sc.TapPre ? 1 : 0,
+                                                   sc.GainDb, sc.Mix) == 0;
+    }
     public float MidiEffectCcDepth(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectCcDepth(_handle, trackId, index); }
 
     public void SetDeviceSidechainSource(int trackId, int deviceIndex, int sourceTrackId)
@@ -379,6 +429,13 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.AddPluginAutomationLane(_handle, trackId, deviceIndex, paramId); }
     public string AutomationLaneParamId(int trackId, int laneIndex)
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.AutomationLaneParamId(_handle, trackId, laneIndex)) ?? ""; }
+    public (int Chain, int Slot) AutomationLanePath(int trackId, int laneIndex)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.AutomationLanePath(_handle, trackId, laneIndex, out int c, out int sl) == NativeMethods.NotaResult.Ok ? (c, sl) : (-1, -1);
+    }
+    public int AddNestedAutomationLane(int trackId, AutomationTarget target, int deviceIndex, int chain, int slot, int paramIndex, string? paramId)
+    { ThrowIfDisposed(); return NativeMethods.AddNestedAutomationLane(_handle, trackId, (int)target, deviceIndex, chain, slot, paramIndex, paramId); }
     public int PluginLastTouchedParam(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.PluginLastTouchedParam(_handle, trackId, deviceIndex); }
 }

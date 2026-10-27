@@ -60,6 +60,21 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.CvLinkDevice(_handle, trackId, index); }
     public int CvLinkParam(int trackId, int index)
     { ThrowIfDisposed(); return NativeMethods.CvLinkParam(_handle, trackId, index); }
+
+    public CvLinkPath CvLinkPath(int trackId, int index)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.CvLinkPath(_handle, trackId, index, out int sc, out int ss, out int tc, out int ts) == 0
+            ? new CvLinkPath(sc, ss, tc, ts) : new CvLinkPath(-1, -1, -1, -1);
+    }
+
+    public int CvLinkAddNested(int trackId, int sourceKind, int modId, int srcDevice, int srcChain, int srcSlot, int srcParam,
+                               int targetKind, int targetTrack, int targetDevice, int tgtChain, int tgtSlot, int targetParam)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.AddNestedCvLink(_handle, trackId, sourceKind, modId, srcDevice, srcChain, srcSlot, srcParam,
+                                             targetKind, targetTrack, targetDevice, tgtChain, tgtSlot, targetParam);
+    }
     public float CvLinkDepth(int trackId, int index)
     { ThrowIfDisposed(); return NativeMethods.CvLinkDepth(_handle, trackId, index); }
     public int CvLinkMode(int trackId, int index)

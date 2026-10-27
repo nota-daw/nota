@@ -77,6 +77,46 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_unwrap_rack")]
     internal static partial int UnwrapRack(IntPtr engine, int trackId, int deviceIndex);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_group_devices")]
+    internal static partial int GroupDevices(IntPtr engine, int trackId, int midiFirst, int midiCount, int withInstrument,
+                                             int fxFirst, int fxCount);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_ungroup_rack")]
+    internal static partial int UngroupRack(IntPtr engine, int trackId, int family, int index, out int dropped);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_copy_devices")]
+    internal static partial int CopyDevices(IntPtr engine, int trackId, int[] midiIdx, int midiN, int withInstrument,
+                                            int[] fxIdx, int fxN);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_clipboard_count")]
+    internal static partial int DeviceClipboardCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_paste_devices")]
+    internal static partial int PasteDevices(IntPtr engine, int trackId, int midiAt, int fxAt, out int skipped);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_cc_dest_path")]
+    internal static partial int MidiEffectCcDestPath(IntPtr engine, int trackId, int index, out int chain, out int slot);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_set_cc_dest_path")]
+    internal static partial int MidiEffectSetCcDestPath(IntPtr engine, int trackId, int index, int chain, int slot);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_midi_cc_dest")]
+    internal static partial int RackChainMidiCcDest(IntPtr engine, int trackId, int deviceIndex, int chain, int index,
+                                                    out int destDevice, out int destChain, out int destSlot, out int param,
+                                                    out float depth);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_midi_set_cc_dest")]
+    internal static partial int RackChainMidiSetCcDest(IntPtr engine, int trackId, int deviceIndex, int chain, int index,
+                                                       int destDevice, int destChain, int destSlot, int param, float depth);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_sidechain")]
+    internal static partial int RackChainSidechain(IntPtr engine, int trackId, int deviceIndex, int chain, int slot,
+                                                   out int sourceTrack, out int tapPre, out float gainDb, out float mix);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_set_sidechain")]
+    internal static partial int RackChainSetSidechain(IntPtr engine, int trackId, int deviceIndex, int chain, int slot,
+                                                      int sourceTrack, int tapPre, float gainDb, float mix);
+
     [LibraryImport(Lib, EntryPoint = "nota_device_name")]
     internal static partial IntPtr DeviceName(IntPtr engine, int trackId, int deviceIndex);
 

@@ -94,6 +94,17 @@ int32_t nota_track_cv_link_target_track(const NotaEngine* e, int32_t track_id, i
 int32_t nota_track_cv_link_device(const NotaEngine* e, int32_t track_id, int32_t index) {
     return e ? CENG(e)->cvLinkDevice(track_id, index) : -1;
 }
+int32_t nota_track_cv_link_path(const NotaEngine* e, int32_t track_id, int32_t index, int32_t* out_src_chain,
+    int32_t* out_src_slot, int32_t* out_tgt_chain, int32_t* out_tgt_slot) {
+    return e && CENG(e)->cvLinkPath(track_id, index, out_src_chain, out_src_slot, out_tgt_chain, out_tgt_slot) ? 0 : -1;
+}
+int32_t nota_track_add_nested_cv_link(NotaEngine* e, int32_t track_id, int32_t source_kind, int32_t mod_id,
+    int32_t src_device, int32_t src_chain, int32_t src_slot, int32_t src_param, int32_t target_kind,
+    int32_t target_track, int32_t target_device, int32_t tgt_chain, int32_t tgt_slot, int32_t target_param) {
+    return e ? ENG(e)->addNestedCvLink(track_id, source_kind, mod_id, src_device, src_chain, src_slot, src_param,
+                   target_kind, target_track, target_device, tgt_chain, tgt_slot, target_param)
+             : -1;
+}
 int32_t nota_track_cv_link_param(const NotaEngine* e, int32_t track_id, int32_t index) {
     return e ? CENG(e)->cvLinkParam(track_id, index) : -1;
 }

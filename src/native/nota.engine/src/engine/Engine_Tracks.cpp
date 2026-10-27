@@ -2501,6 +2501,8 @@ std::vector<AutomationLane> Engine::captureClipAutomation(const Track& t, double
         snip.deviceIndex = lane.deviceIndex;
         snip.paramIndex = lane.paramIndex;
         snip.paramId = lane.paramId;
+        snip.chainUid = lane.chainUid; // a lane into a rack (specs/044)
+        snip.slot = lane.slot;
         for (const auto& p : lane.points)
             if (p.beat >= start - eps && p.beat <= end + eps) {
                 AutomationPoint q = p;
@@ -2547,7 +2549,7 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<A
         // Find the matching lane on nt, or create one bound to the same target.
         AutomationLane* lane = nullptr;
         for (auto& l : nt.automation) {
-            if (l.target != snip.target) continue;
+            if (l.target != snip.target || l.chainUid != snip.chainUid || l.slot != snip.slot) continue;
             bool match = true;
             switch (snip.target) {
             case AutomationTarget::DeviceParam:
@@ -2569,7 +2571,9 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<A
             nl.target = snip.target;
             nl.deviceIndex = snip.deviceIndex;
             nl.paramId = snip.paramId;
-            nl.paramIndex = snip.target == AutomationTarget::PluginParam
+            nl.chainUid = snip.chainUid;
+            nl.slot = snip.slot;
+            nl.paramIndex = snip.target == AutomationTarget::PluginParam && !snip.nested()
                                 ? pluginParamIndexOfId(trackId, snip.deviceIndex, snip.paramId)
                                 : snip.paramIndex;
             nt.automation.push_back(std::move(nl));

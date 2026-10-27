@@ -436,6 +436,15 @@ if (args.Length >= 1 && args[0] == "--device-copy")
     Console.WriteLine(failures == 0 ? "DEVICE COPY PASSED" : $"DEVICE COPY FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Group devices into a rack and back (specs/044) alone: `--device-group`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--device-group")
+{
+    Console.WriteLine("-- device group --");
+    foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in DeviceSelectionTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEVICE GROUP PASSED" : $"DEVICE GROUP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // The instrument as a device in the chain (specs/043) alone: `--instrument-chain`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--instrument-chain")
 {
@@ -15151,6 +15160,8 @@ Console.WriteLine("-- device copy + rack undo --");
 foreach (var (ok, label) in DeviceCopyTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument chain --");
 foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
+foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);
+foreach (var (ok, label) in DeviceSelectionTests.Run()) Check(ok, label);
 
 // --- racks redesign (specs/040): v8 compatibility, mapping rules, MIDI racks, chain MIDI effects ---
 foreach (var (title, run) in RackSections())

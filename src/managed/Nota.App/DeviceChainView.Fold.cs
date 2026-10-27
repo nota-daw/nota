@@ -105,7 +105,7 @@ public sealed partial class DeviceChainView
             if (pt.IsRightButtonPressed) { ShowDeviceContextMenu(strip, k, di, Menu); return; }
             if (!pt.IsLeftButtonPressed) return;
             if (e.ClickCount == 2) { e.Handled = true; SetFolded(k, di, false); return; }
-            SelectDevice(k, di);
+            SelectDevice(k, di, e.KeyModifiers);
         };
         HookDeviceDrag(strip, card, k, di);   // the instrument's strip drags onto other tracks only
         return card;

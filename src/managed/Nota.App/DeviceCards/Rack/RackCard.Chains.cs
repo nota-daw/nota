@@ -562,7 +562,7 @@ internal sealed partial class RackCardView
     private void RcAddMidiMenu(Control anchor, int c)
     {
         var f = new MenuFlyout();
-        if (_ra.RackAddress is not null && E.DeviceClipboardKind() == 2) { f.Items.Add(RcPasteItem(c)); f.Items.Add(new Separator()); }
+        if (_ra.RackAddress is not null && E.DeviceClipboardKind() is 2 or 4 && RcCanPaste(c)) { f.Items.Add(RcPasteItem(c)); f.Items.Add(new Separator()); }
         foreach (var (name, kind) in RcMidiKinds)
         {
             var mi = new MenuItem { Header = name };

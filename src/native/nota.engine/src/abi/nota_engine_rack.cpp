@@ -244,6 +244,10 @@ int32_t nota_rackdev_chain_midi_copy(NotaEngine* e, int32_t t, int32_t di, int32
 int32_t nota_rackdev_chain_device_paste(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t at) {
     return e ? ENG(e)->rackChainDevicePaste(t, di, c, at) : -1;
 }
+int32_t nota_rackdev_chain_paste_devices(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t midi_at, int32_t fx_at,
+    int32_t* out_skipped, int32_t* out_first_midi, int32_t* out_first_fx) {
+    return e ? ENG(e)->rackChainPasteDevices(t, di, c, midi_at, fx_at, out_skipped, out_first_midi, out_first_fx) : -1;
+}
 int32_t nota_rackdev_chain_midi_paste(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t at) {
     return e ? ENG(e)->rackChainMidiPaste(t, di, c, at) : -1;
 }

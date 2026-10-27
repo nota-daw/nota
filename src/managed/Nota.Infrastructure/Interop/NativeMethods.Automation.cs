@@ -24,6 +24,13 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_add_plugin_automation_lane", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int AddPluginAutomationLane(IntPtr engine, int trackId, int deviceIndex, string paramId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_automation_lane_path")]
+    internal static partial NotaResult AutomationLanePath(IntPtr engine, int trackId, int laneIndex, out int chain, out int slot);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_add_nested_automation_lane", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int AddNestedAutomationLane(IntPtr engine, int trackId, int target, int deviceIndex, int chain,
+                                                        int slot, int paramIndex, string? paramId);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_automation_lane_param_id")]
     internal static partial IntPtr AutomationLaneParamId(IntPtr engine, int trackId, int laneIndex);
 

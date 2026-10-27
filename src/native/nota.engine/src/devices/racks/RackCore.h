@@ -204,6 +204,68 @@ class RackCore {
     // with a playing copy (a nested rack's fork): preparing them again would reset live effects.
     bool replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst, bool prepare = true);
     uint64_t chainUid(int32_t chain) const; // uid and instrument generation, see RackChain
+
+    // ---- nested parameter addresses (specs/044) ------------------------------
+    // A lane, CV link or Arp CC route can point at a chain child by the chain's own uid
+    // (RackChain::uid, without the instrument generation: a swapped instrument keeps its
+    // chain's lanes) and a slot: >= 0 a device, -1 the chain instrument, midiTarget(i) the
+    // chain's i-th MIDI effect. The lookups read the live snapshot only and allocate
+    // nothing, so the audio thread may call them during a block: a snapshot retired
+    // meanwhile is freed only after two more renders of this rack (SnapshotHistory).
+    const RackChain* chainByUid(uint64_t uid) const {
+        RackState* st = live();
+        if (!st || uid == 0) return nullptr;
+        for (auto& c : st->chains)
+            if (c.uid == uid) return &c;
+        return nullptr;
+    }
+    uint64_t chainBaseUid(int32_t chain) const {
+        RackState* st = live();
+        return (st && chain >= 0 && chain < static_cast<int32_t>(st->chains.size())) ? st->chains[chain].uid : 0;
+    }
+    int32_t chainIndexOfUid(uint64_t uid) const {
+        RackState* st = live();
+        if (!st || uid == 0) return -1;
+        for (size_t i = 0; i < st->chains.size(); ++i)
+            if (st->chains[i].uid == uid) return static_cast<int32_t>(i);
+        return -1;
+    }
+    Device* childDevice(uint64_t uid, int32_t slot) const {
+        const RackChain* c = chainByUid(uid);
+        return c && slot >= 0 && slot < static_cast<int32_t>(c->devices.size()) ? c->devices[slot].get() : nullptr;
+    }
+    MidiDevice* childMidi(uint64_t uid, int32_t slot) const {
+        const RackChain* c = chainByUid(uid);
+        if (!c || !isMidiTarget(slot)) return nullptr;
+        const int32_t i = midiTargetIndex(slot);
+        return i >= 0 && i < static_cast<int32_t>(c->midiDevices.size()) ? c->midiDevices[i].get() : nullptr;
+    }
+    Instrument* childInstrument(uint64_t uid) const {
+        const RackChain* c = chainByUid(uid);
+        return c ? c->instrument.get() : nullptr;
+    }
+    // Every chain child on the live snapshot (devices, MIDI effects, instrument), for the
+    // sidechain feed. Audio thread safe; fn must not allocate.
+    template <class Fn> void forEachChildDevice(Fn&& fn) const {
+        RackState* st = live();
+        if (!st) return;
+        for (auto& c : st->chains)
+            for (auto& d : c.devices)
+                if (d) fn(*d);
+    }
+    template <class Fn> void forEachChildMidi(Fn&& fn) const {
+        RackState* st = live();
+        if (!st) return;
+        for (auto& c : st->chains)
+            for (auto& m : c.midiDevices)
+                if (m) fn(*m);
+    }
+    template <class Fn> void forEachChildInstrument(Fn&& fn) const {
+        RackState* st = live();
+        if (!st) return;
+        for (auto& c : st->chains)
+            if (c.instrument) fn(*c.instrument);
+    }
     int32_t chainInstrumentKind(int32_t chain) const;
     Instrument* chainInstrument(int32_t chain) const;
     int32_t chainDeviceCount(int32_t chain) const;
@@ -229,6 +291,9 @@ class RackCore {
     bool removeChainMidiDevice(int32_t chain, int32_t idx);
     bool moveChainMidiDevice(int32_t chain, int32_t from, int32_t to);
     int32_t insertChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev, int32_t at);
+    // Swap the MIDI effect at idx for another instance in place, its mappings kept (an Arp whose
+    // CC target was rewritten on a clone, specs/044). Message thread; call on a fork.
+    bool replaceChainMidiDevice(int32_t chain, int32_t idx, std::shared_ptr<MidiDevice> dev);
     int32_t moveChainMidiDeviceToChain(int32_t chain, int32_t idx, int32_t toChain);
     MidiDevice* chainMidiDeviceAt(int32_t chain, int32_t idx) const;
 

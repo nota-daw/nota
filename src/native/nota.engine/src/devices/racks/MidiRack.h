@@ -34,6 +34,7 @@ class MidiRack final : public MidiDevice, public RackCore {
     MidiRack();
 
     int32_t midiKind() const override { return kKind; }
+    const RackCore* asRack() const override { return this; }
     const char* displayName() const override { return "Nota MIDI Effect Rack"; }
     void setSampleRate(double sr, int32_t maxBlock) override { setRates(sr, maxBlock); }
 

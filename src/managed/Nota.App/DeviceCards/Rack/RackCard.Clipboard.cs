@@ -105,7 +105,9 @@ internal sealed partial class RackCardView
     {
         int kind = E.DeviceClipboardKind();
         if (_ra.RackAddress is null || kind == 0) return false;
-        if (kind == 2) return _rp.TakesMidiEffects && !(_rp.Kind == RackKind.Instrument && c >= RcMidiChainCount);
+        bool midiOk = _rp.TakesMidiEffects && !(_rp.Kind == RackKind.Instrument && c >= RcMidiChainCount);
+        if (kind == 2) return midiOk;
+        if (kind == 4) return midiOk || _rp.TakesAudioEffects;   // several devices: whatever of them fits (specs/044)
         return _rp.TakesAudioEffects;
     }
     private const int RcMidiChainCount = 16; // MIDI effects run in an Instrument Rack's first 16 chains
@@ -117,6 +119,7 @@ internal sealed partial class RackCardView
         if (_ra.RackAddress is not int rack) return;
         int kind = E.DeviceClipboardKind();
         if (kind == 0) { _ctx.Status("Nothing to paste"); return; }
+        if (kind == 4) { RcPasteMany(rack, c, after); return; }
         bool midi = kind == 2;
         int at = after is { Index: >= 0 } s && s.Chain == c && s.Midi == midi ? s.Index + 1 : -1;
         bool keyed = !midi && E.DeviceClipboardSidechain();
@@ -126,6 +129,21 @@ internal sealed partial class RackCardView
         _ctx.Status($"Pasted {RcDeviceName(pasted)}{(keyed ? " · sidechain dropped" : "")}");
         if (Sel != c) Sel = c;
         RcSelect(pasted);
+        DeferRebuild();
+    }
+
+    // Several devices copied (specs/044): each section takes its own, after the selected device
+    // of that section or at its end; the rest are skipped. One undo step.
+    private void RcPasteMany(int rack, int c, RackDeviceSel? after)
+    {
+        int midiAt = after is { Index: >= 0, Midi: true } m && m.Chain == c ? m.Index + 1 : -1;
+        int fxAt = after is { Index: >= 0, Midi: false } d && d.Chain == c ? d.Index + 1 : -1;
+        int n = E.RackDevChainPasteDevices(T, rack, c, midiAt, fxAt, out int skipped, out int firstMidi, out int firstFx);
+        if (n < 0) { _ctx.Status(n == -3 ? "Couldn't paste: a device failed to load." : "Nothing to paste here."); return; }
+        if (n == 0) { _ctx.Status("This chain can't take the copied devices."); return; }
+        _ctx.Status(skipped > 0 ? $"Pasted {n} devices, skipped {skipped} this chain can't take" : $"Pasted {n} devices");
+        if (Sel != c) Sel = c;
+        RcSelect(firstFx >= 0 ? new RackDeviceSel(rack, c, false, firstFx) : new RackDeviceSel(rack, c, true, firstMidi));
         DeferRebuild();
     }
 

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include "engine/ParamPath.h"
+
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -31,6 +33,14 @@ struct AutomationLane {
     int32_t deviceIndex = -1;  // DeviceParam / PluginParam (PluginParam: <0 = instrument)
     int32_t paramIndex = -1;   // DeviceParam; PluginParam: resolved from paramId
     std::string paramId;       // PluginParam only: stable JUCE parameter ID (M9-B)
+    // A device grouped into a rack (specs/044): deviceIndex is then the rack's address on the
+    // track (ParamPath host: >= 0 effect, -1 instrument, midiHost(i) MIDI effect) and the
+    // lane drives the child at (chainUid, slot); `target` names the child's param surface
+    // (DeviceParam / MidiDeviceParam generic params, PluginParam the plugin-param surface,
+    // slot -1 = the chain instrument). chainUid 0 = a track-level lane as before.
+    uint64_t chainUid = 0;
+    int32_t slot = -1;
+    bool nested() const { return chainUid != 0; }
     bool suppressRead = false; // transient (M9-C): while this target is being written,
                                // applyAutomation skips it so the user's control leads.
                                // Part of the snapshot (no audio-thread race); not persisted.

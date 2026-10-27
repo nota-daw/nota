@@ -9,6 +9,7 @@
 // presets, external files — lights the whole panel as before.
 
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -174,7 +175,7 @@ public sealed partial class DeviceChainView
         if (trackId != _trackId) return;                  // only the shown chain has moved cards to follow
         if (final != added) ExtrasMoved(k, added, final);
         if (replaced) ExtrasRemoved(k, final + 1);
-        _selChainKind = k; _selDeviceIndex = final; _instrumentSelected = false;
+        SelectDevices(new[] { (k, final) });
         Rebuild(); Changed?.Invoke();
     }
 
@@ -183,13 +184,14 @@ public sealed partial class DeviceChainView
     internal Nota.Application.Palette.InsertPoint CurrentInsertPoint()
     {
         if (_trackId <= 0) return Nota.Application.Palette.InsertPoint.None;
-        if (HasEffectSelection)
+        // The last selected effect (several selected: the palette inserts after the last one).
+        if (_sel.Members.LastOrDefault(m => m.Section != DeviceSection.Instrument) is { Section: var sec, Index: var di } && HasEffectSelection)
         {
-            bool midi = _selChainKind == ChainKind.Midi;
+            bool midi = sec == DeviceSection.Midi;
             int n = midi ? _engine.TrackMidiEffectCount(_trackId) : _engine.TrackDeviceCount(_trackId);
-            if (_selDeviceIndex < n)
-                return new(midi ? Nota.Application.Palette.ChainSection.Midi : Nota.Application.Palette.ChainSection.Audio, _selDeviceIndex,
-                    midi ? _engine.MidiEffectName(_trackId, _selDeviceIndex) : _engine.DeviceName(_trackId, _selDeviceIndex));
+            if (di < n)
+                return new(midi ? Nota.Application.Palette.ChainSection.Midi : Nota.Application.Palette.ChainSection.Audio, di,
+                    midi ? _engine.MidiEffectName(_trackId, di) : _engine.DeviceName(_trackId, di));
         }
         return Nota.Application.Palette.InsertPoint.None;
     }
