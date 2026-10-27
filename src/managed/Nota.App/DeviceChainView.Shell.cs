@@ -206,7 +206,10 @@ public sealed partial class DeviceChainView
         var headerGrid = new Grid { ColumnSpacing = 8 };
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        // A compact card has no room for equal halves: the right side (S / L, the power switch,
+        // the Remove control) takes what it needs and the name trims instead of the switches
+        // overlapping.
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition(s.Compact ? GridLength.Auto : GridLength.Star));
         headerGrid.Children.Add(name);
         Grid.SetColumn(right, 2); headerGrid.Children.Add(right);
         var headerBar = new Border
