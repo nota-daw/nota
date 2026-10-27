@@ -883,6 +883,21 @@ class Engine {
     // macro value): fork the rack now, sharing its children and held notes, so the edits that
     // follow land on the fork and Undo brings back the rack as it was.
     bool rackCheckpoint(int32_t trackId, int32_t deviceIndex);
+    // Rack chain devices on the shared device clipboard (specs/042). Copy fills clipDevice_ /
+    // clipMidi_; Paste inserts a fresh clone at `at` (−1 = the end) and returns its index or
+    // −1 nothing / bad address, −2 wrong family for the section, −3 a rack inside a rack,
+    // −5 a MIDI effect past the Instrument Rack's 16 MIDI chains. A pasted audio effect loses
+    // its sidechain key. Duplicate inserts a clone right after; MoveTo moves a device to the end
+    // of another chain of the same rack, mappings and all. Each edit is one rack fork.
+    bool rackChainDeviceCopy(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    bool rackChainMidiCopy(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    int32_t rackChainDevicePaste(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t at);
+    int32_t rackChainMidiPaste(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t at);
+    int32_t rackChainDeviceDuplicate(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    int32_t rackChainMidiDuplicate(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    int32_t rackChainDeviceMoveTo(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, int32_t toChain);
+    int32_t rackChainMidiMoveTo(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, int32_t toChain);
+    bool deviceClipboardSidechain() const;
     // A MIDI Effect Rack is addressed as deviceIndex kMidiRackBase − its MIDI effect index.
     static constexpr int32_t kMidiRackBase = -1000;
     // A Drum Rack in chain c of the track's Instrument Rack is addressed as kNestedRackBase − c

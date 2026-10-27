@@ -331,6 +331,89 @@ int32_t Engine::rackDuplicateChain(int32_t t, int32_t di, int32_t c) {
     return rackForEdit(t, di)->duplicateChain(c);
 }
 bool Engine::rackCheckpoint(int32_t t, int32_t di) { return rackForEdit(t, di) != nullptr; }
+
+// ---- chain devices on the device clipboard (specs/042) ----------------------------------
+namespace {
+// Which sections a rack's chains have: a MIDI Effect Rack only MIDI effects, an Audio Effect
+// Rack and a Drum Rack only audio effects, an Instrument Rack both.
+bool rackTakesAudio(const RackCore* r) { return !dynamic_cast<const MidiRack*>(r); }
+bool rackTakesMidi(const RackCore* r) {
+    if (dynamic_cast<const MidiRack*>(r)) return true;
+    return dynamic_cast<const RackInstrument*>(r) && !dynamic_cast<const DrumRack*>(r);
+}
+} // namespace
+
+bool Engine::rackChainDeviceCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
+    auto* r = rackCoreAt(t, di);
+    Device* src = r ? r->chainDeviceAt(c, i) : nullptr;
+    auto copy = src ? cloneDevice(*src) : nullptr;
+    if (!copy) return false;
+    clipDevice_ = std::move(copy);
+    clipMidi_.reset();
+    return true;
+}
+bool Engine::rackChainMidiCopy(int32_t t, int32_t di, int32_t c, int32_t i) {
+    auto* r = rackCoreAt(t, di);
+    MidiDevice* src = r ? r->chainMidiDeviceAt(c, i) : nullptr;
+    auto copy = src ? cloneMidiDevice(*src) : nullptr;
+    if (!copy) return false;
+    clipMidi_ = std::move(copy);
+    clipDevice_.reset();
+    return true;
+}
+int32_t Engine::rackChainDevicePaste(int32_t t, int32_t di, int32_t c, int32_t at) {
+    auto* r = rackCoreAt(t, di);
+    if (!r || c < 0 || c >= r->chainCount()) return -1;
+    if (!clipDevice_) return clipMidi_ ? -2 : -1;
+    if (!rackTakesAudio(r)) return -2;
+    if (dynamic_cast<const RackDevice*>(clipDevice_.get())) return -3;
+    auto dev = cloneDevice(*clipDevice_);
+    if (!dev) return -1;
+    dev->setSidechainSourceTrackId(-1); // a chain has no sidechain input
+    const int32_t idx = rackForEdit(t, di)->insertChainDeviceInstance(c, std::move(dev), at);
+    recomputePdc();
+    return idx;
+}
+int32_t Engine::rackChainMidiPaste(int32_t t, int32_t di, int32_t c, int32_t at) {
+    auto* r = rackCoreAt(t, di);
+    if (!r || c < 0 || c >= r->chainCount()) return -1;
+    if (!clipMidi_) return clipDevice_ ? -2 : -1;
+    if (!rackTakesMidi(r)) return -2;
+    if (clipMidi_->midiKind() < 0 || clipMidi_->midiKind() > 5) return -3; // a MIDI Effect Rack
+    if (di == -1 && c >= RackInstrument::kMaxMidiChains) return -5;
+    auto dev = cloneMidiDevice(*clipMidi_);
+    if (!dev) return -1;
+    return rackForEdit(t, di)->insertChainMidiDeviceInstance(c, std::move(dev), at);
+}
+int32_t Engine::rackChainDeviceDuplicate(int32_t t, int32_t di, int32_t c, int32_t i) {
+    auto* r = rackCoreAt(t, di);
+    Device* src = r ? r->chainDeviceAt(c, i) : nullptr;
+    auto dev = src ? cloneDevice(*src) : nullptr;
+    if (!dev) return -1;
+    const int32_t idx = rackForEdit(t, di)->insertChainDeviceInstance(c, std::move(dev), i + 1);
+    recomputePdc();
+    return idx;
+}
+int32_t Engine::rackChainMidiDuplicate(int32_t t, int32_t di, int32_t c, int32_t i) {
+    auto* r = rackCoreAt(t, di);
+    MidiDevice* src = r ? r->chainMidiDeviceAt(c, i) : nullptr;
+    auto dev = src ? cloneMidiDevice(*src) : nullptr;
+    if (!dev) return -1;
+    return rackForEdit(t, di)->insertChainMidiDeviceInstance(c, std::move(dev), i + 1);
+}
+int32_t Engine::rackChainDeviceMoveTo(int32_t t, int32_t di, int32_t c, int32_t i, int32_t to) {
+    auto* r = rackCoreAt(t, di);
+    if (!r || !r->chainDeviceAt(c, i) || to < 0 || to >= r->chainCount() || to == c) return -1;
+    const int32_t idx = rackForEdit(t, di)->moveChainDeviceToChain(c, i, to);
+    recomputePdc();
+    return idx;
+}
+int32_t Engine::rackChainMidiMoveTo(int32_t t, int32_t di, int32_t c, int32_t i, int32_t to) {
+    auto* r = rackCoreAt(t, di);
+    if (!r || !r->chainMidiDeviceAt(c, i) || to < 0 || to >= r->chainCount() || to == c) return -1;
+    if (di == -1 && to >= RackInstrument::kMaxMidiChains) return -5;
+    return rackForEdit(t, di)->moveChainMidiDeviceToChain(c, i, to);
+}
 bool Engine::rackMono(int32_t t) const {
     auto* r = rackCoreAt(t, -1);
     return r && r->rackMono();

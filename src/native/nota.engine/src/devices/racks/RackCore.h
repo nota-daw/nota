@@ -198,6 +198,12 @@ class RackCore {
     int32_t addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, bool prepare = true);
     bool removeChainDevice(int32_t chain, int32_t dev);
     bool moveChainDevice(int32_t chain, int32_t from, int32_t to);
+    // Insert a device at `at` (−1 or past the end = the end); the chain's mappings at or after
+    // `at` shift up, the new device has none (specs/042). Returns its index, or −1.
+    int32_t insertChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, int32_t at, bool prepare = true);
+    // Move device `idx` to the end of `toChain`'s effects; its mappings follow it (specs/042).
+    // Returns its new index, or −1 (bad address, or the same chain).
+    int32_t moveChainDeviceToChain(int32_t chain, int32_t idx, int32_t toChain);
     Device* chainDeviceAt(int32_t chain, int32_t dev) const;
 
     // Chain MIDI effects (v9): built-in kinds 0..5 only (a MIDI Effect Rack never nests).
@@ -206,6 +212,8 @@ class RackCore {
     int32_t addChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev);
     bool removeChainMidiDevice(int32_t chain, int32_t idx);
     bool moveChainMidiDevice(int32_t chain, int32_t from, int32_t to);
+    int32_t insertChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev, int32_t at);
+    int32_t moveChainMidiDeviceToChain(int32_t chain, int32_t idx, int32_t toChain);
     MidiDevice* chainMidiDeviceAt(int32_t chain, int32_t idx) const;
 
     ChainControls* chainControls(int32_t chain) const;

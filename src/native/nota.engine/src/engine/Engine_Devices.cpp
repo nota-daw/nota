@@ -785,6 +785,8 @@ bool Engine::copyMidiEffect(int32_t trackId, int32_t index) {
 
 int32_t Engine::deviceClipboardKind() const { return clipDevice_ ? 1 : clipMidi_ ? 2 : 0; }
 
+bool Engine::deviceClipboardSidechain() const { return clipDevice_ && clipDevice_->sidechainSourceTrackId() >= 0; }
+
 int32_t Engine::pasteDevice(int32_t trackId, int32_t atIndex) {
     return clipDevice_ ? insertDeviceClone(trackId, cloneDevice(*clipDevice_), atIndex) : -1;
 }

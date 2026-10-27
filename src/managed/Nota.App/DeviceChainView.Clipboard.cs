@@ -33,10 +33,32 @@ public sealed partial class DeviceChainView
     {
         if (!SelectableKind(kind)) return;
         Focus();   // route Ctrl+C/X/V + Delete here
-        if (_selChainKind == kind && _selDeviceIndex == index) return;
+        bool hadRack = _rackSel != null;
+        _rackSel = null; _rackCmds = null;   // one selection on the panel (specs/042)
+        if (_selChainKind == kind && _selDeviceIndex == index && !hadRack) return;
         _selChainKind = kind; _selDeviceIndex = index;
         Rebuild();
     }
+
+    // A device in a rack chain (specs/042): the rack card selects it and hands over what the
+    // keys do to it; the track chain's selection clears.
+    private RackDeviceSel? _rackSel;
+    private RackDeviceCommands? _rackCmds;
+
+    private void SelectRackDevice(RackDeviceSel? sel, RackDeviceCommands? cmds)
+    {
+        if (sel != null) Focus();
+        _rackSel = sel;
+        _rackCmds = sel != null ? cmds : null;
+        if (sel != null && _selDeviceIndex >= 0)
+        {
+            _selDeviceIndex = -1;
+            foreach (var r in _selRings) r.IsVisible = false; // no rebuild: the rack card may be mid-drag
+        }
+    }
+
+    // The track cards' selection rings, refilled on every rebuild.
+    private readonly System.Collections.Generic.List<Border> _selRings = new();
 
     private bool IsSelected(ChainKind kind, int index)
         => HasDeviceSelection && _selChainKind == kind && _selDeviceIndex == index;
@@ -52,6 +74,12 @@ public sealed partial class DeviceChainView
         public string Preset = "", PresetId = "";   // the source card's preset label follows the paste
     }
     private DeviceClip? _clip;
+    // The engine's clipboard is shared with the rack chains (specs/042): a rack copy replaces it,
+    // so the preset label in _clip rides along only while the clipboard still holds the track's copy.
+    private bool _clipFromTrack;
+    internal void RackCopied() => _clipFromTrack = false;
+    private ChainKind ClipKind => _engine.DeviceClipboardKind() switch { 1 => ChainKind.Effect, 2 => ChainKind.Midi, _ => ChainKind.Instrument };
+    private bool CanPaste => _trackId > 0 && _engine.DeviceClipboardKind() != 0;
 
     private void CopySelectedDevice()
     {
@@ -64,6 +92,7 @@ public sealed partial class DeviceChainView
             _ => false,
         };
         if (!ok) return;
+        _clipFromTrack = true;
         var ex = Extra(_selChainKind, di);
         _clip = new DeviceClip { Kind = _selChainKind, Preset = ex.Preset, PresetId = ex.PresetId };
     }
@@ -82,10 +111,26 @@ public sealed partial class DeviceChainView
 
     private void CutSelectedDevice() { CopySelectedDevice(); DeleteSelectedDevice(); }
 
+    // ⌘D: a copy right after the selected device, the clipboard untouched (specs/042).
+    private void DuplicateSelectedDevice()
+    {
+        if (!HasDeviceSelection) return;
+        int di = _selDeviceIndex; var k = _selChainKind;
+        int end = k == ChainKind.Midi ? _engine.TrackMidiEffectCount(_trackId) : _engine.TrackDeviceCount(_trackId);
+        int newIdx = k == ChainKind.Midi ? _engine.DuplicateMidiEffect(_trackId, di) : _engine.DuplicateDevice(_trackId, di);
+        if (newIdx < 0) { StatusMessage?.Invoke("This device can't be duplicated"); return; }
+        var src = Extra(k, di);
+        if (newIdx < end) ExtrasMoved(k, end, newIdx);
+        TrackExtras().Remove(ExtraKey(k, newIdx));
+        var copy = Extra(k, newIdx); copy.Preset = src.Preset; copy.PresetId = src.PresetId;
+        _selDeviceIndex = newIdx;
+        Rebuild(); Changed?.Invoke();
+    }
+
     private void PasteDevice()
     {
-        if (_clip is null || _trackId <= 0) return;
-        var c = _clip;
+        if (!CanPaste) return;
+        var c = _clipFromTrack && _clip is { } own && own.Kind == ClipKind ? own : new DeviceClip { Kind = ClipKind };
         if (c.Kind != ChainKind.Effect && c.Kind != ChainKind.Midi) return;
         // Drop it right after the selected device of the same domain, else at the end.
         int at = _selChainKind == c.Kind && _selDeviceIndex >= 0 ? _selDeviceIndex + 1 : -1;
@@ -161,9 +206,17 @@ public sealed partial class DeviceChainView
             if ((e.KeyModifiers & KeyModifiers.Shift) != 0) UngroupSelectedDevice(); else GroupSelectedDevice();
             e.Handled = true; return;
         }
+        // A selected rack chain device takes the clipboard keys (specs/042).
+        if (_rackSel != null && _rackCmds is { } rc)
+        {
+            Action? run = mod ? e.Key switch { Key.C => rc.Copy, Key.X => rc.Cut, Key.V => rc.Paste, Key.D => rc.Duplicate, _ => null }
+                : e.Key is Key.Delete or Key.Back ? rc.Delete : null;
+            if (run != null) { run(); e.Handled = true; return; }
+        }
         if (mod && e.Key == Key.C && HasDeviceSelection) { CopySelectedDevice(); e.Handled = true; return; }
         if (mod && e.Key == Key.X && HasDeviceSelection) { CutSelectedDevice(); e.Handled = true; return; }
-        if (mod && e.Key == Key.V && _clip != null) { PasteDevice(); e.Handled = true; return; }
+        if (mod && e.Key == Key.V && CanPaste) { PasteDevice(); e.Handled = true; return; }
+        if (mod && e.Key == Key.D && HasDeviceSelection) { DuplicateSelectedDevice(); e.Handled = true; return; }
         if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && HasDeviceSelection) { DeleteSelectedDevice(); e.Handled = true; return; }
         base.OnKeyDown(e);
     }
@@ -197,7 +250,8 @@ public sealed partial class DeviceChainView
             {
                 MenuKit.Item("Copy", GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey, selectable),
                 MenuKit.Item("Cut", GlyphKind.Cut, CutSelectedDevice, MenuKit.CutKey, selectable),
-                MenuKit.Item("Paste", GlyphKind.Paste, PasteDevice, MenuKit.PasteKey, _clip != null),
+                MenuKit.Item("Paste", GlyphKind.Paste, PasteDevice, MenuKit.PasteKey, CanPaste),
+                MenuKit.Item("Duplicate", GlyphKind.Duplicate, DuplicateSelectedDevice, MenuKit.DuplicateKey, selectable),
             },
             kind == ChainKind.Effect
                 ? new Control[]

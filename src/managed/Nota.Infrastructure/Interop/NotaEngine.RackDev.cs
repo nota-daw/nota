@@ -196,6 +196,30 @@ public sealed partial class NotaEngine
     /// <summary>Copies an Audio Effect Rack chain after itself (devices, controls, its mappings); the new index or &lt;0.</summary>
     public int RackDevDuplicateChain(int trackId, int deviceIndex, int chain)
     { ThrowIfDisposed(); return NativeMethods.RackDevDuplicateChain(_handle, trackId, deviceIndex, chain); }
+
+    public bool RackDevChainDeviceCopy(int trackId, int deviceIndex, int chain, int index)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainDeviceCopy(_handle, trackId, deviceIndex, chain, index) != 0; }
+
+    public bool RackDevChainMidiCopy(int trackId, int deviceIndex, int chain, int index)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainMidiCopy(_handle, trackId, deviceIndex, chain, index) != 0; }
+
+    public int RackDevChainDevicePaste(int trackId, int deviceIndex, int chain, int atIndex)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainDevicePaste(_handle, trackId, deviceIndex, chain, atIndex); }
+
+    public int RackDevChainMidiPaste(int trackId, int deviceIndex, int chain, int atIndex)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainMidiPaste(_handle, trackId, deviceIndex, chain, atIndex); }
+
+    public int RackDevChainDeviceDuplicate(int trackId, int deviceIndex, int chain, int index)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainDeviceDuplicate(_handle, trackId, deviceIndex, chain, index); }
+
+    public int RackDevChainMidiDuplicate(int trackId, int deviceIndex, int chain, int index)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainMidiDuplicate(_handle, trackId, deviceIndex, chain, index); }
+
+    public int RackDevChainDeviceMoveTo(int trackId, int deviceIndex, int chain, int index, int toChain)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainDeviceMoveTo(_handle, trackId, deviceIndex, chain, index, toChain); }
+
+    public int RackDevChainMidiMoveTo(int trackId, int deviceIndex, int chain, int index, int toChain)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainMidiMoveTo(_handle, trackId, deviceIndex, chain, index, toChain); }
     public float RackDevDryWet(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.RackDevDryWet(_handle, trackId, deviceIndex); }
     public void RackDevSetDryWet(int trackId, int deviceIndex, float v)

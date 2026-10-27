@@ -46,6 +46,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_device_clipboard_kind")]
     internal static partial int DeviceClipboardKind(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_device_clipboard_sidechain")]
+    internal static partial int DeviceClipboardSidechain(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_paste_device")]
     internal static partial int PasteDevice(IntPtr engine, int trackId, int atIndex);
 

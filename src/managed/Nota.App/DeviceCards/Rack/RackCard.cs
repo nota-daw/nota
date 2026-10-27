@@ -87,6 +87,8 @@ internal sealed partial class RackCardView
         _rs = RackCardState.For(T, a.Kind, rackIndex);
         _ownSel = true;
         _irTick.Clear();
+        _rcRows.Clear();
+        _rcCards.Clear();
         int n = a.ChainCount();
         Sel = n > 0 ? Math.Clamp(Sel, 0, n - 1) : 0;
         _rs.SelectedMacro = Math.Clamp(_rs.SelectedMacro, 0, 7);

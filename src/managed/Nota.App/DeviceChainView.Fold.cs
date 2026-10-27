@@ -88,6 +88,7 @@ public sealed partial class DeviceChainView
             CornerRadius = new CornerRadius(NotaRadius.BodyValue + RingGap), Margin = new Thickness(-RingGap),
             IsHitTestVisible = false, IsVisible = IsSelected(k, di),
         };
+        _selRings.Add(selRing);
         var card = new Border { Width = FoldedW, Height = CardH, Child = new Panel { Children = { strip, selRing } } };
 
         void Menu(MenuFlyout flyout)

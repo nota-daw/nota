@@ -513,6 +513,7 @@ public interface IAudioEngine : IDisposable
     bool CopyDevice(int trackId, int deviceIndex);
     bool CopyMidiEffect(int trackId, int index);
     int DeviceClipboardKind();   // 0 empty, 1 audio effect, 2 MIDI effect
+    bool DeviceClipboardSidechain();   // the copied audio effect is keyed from another track
     int PasteDevice(int trackId, int atIndex);       // atIndex -1 = end; new index or -1
     int PasteMidiEffect(int trackId, int atIndex);
     // A full clone right after the device / MIDI effect, one undo step; clipboard untouched.
@@ -922,6 +923,18 @@ public interface IAudioEngine : IDisposable
     bool MidiRackSetMappingRange(int trackId, int midiIndex, int index, float lo, float hi);
     bool MidiRackSetMappingCurve(int trackId, int midiIndex, int index, int curve);
     int RackDevDuplicateChain(int trackId, int deviceIndex, int chain);
+    /// <summary>Rack chain devices on the shared device clipboard (specs/042); deviceIndex addresses
+    /// the rack as the other RackDev calls do (−1 Instrument/Drum Rack, ≥0 Audio Effect Rack,
+    /// −1000 − mi MIDI Effect Rack, NestedRackBase − chain). Paste returns the new index or −1 nothing,
+    /// −2 wrong family, −3 a rack in a rack, −5 MIDI past chain 16; each edit is one undo step.</summary>
+    bool RackDevChainDeviceCopy(int trackId, int deviceIndex, int chain, int index);
+    bool RackDevChainMidiCopy(int trackId, int deviceIndex, int chain, int index);
+    int RackDevChainDevicePaste(int trackId, int deviceIndex, int chain, int atIndex);
+    int RackDevChainMidiPaste(int trackId, int deviceIndex, int chain, int atIndex);
+    int RackDevChainDeviceDuplicate(int trackId, int deviceIndex, int chain, int index);
+    int RackDevChainMidiDuplicate(int trackId, int deviceIndex, int chain, int index);
+    int RackDevChainDeviceMoveTo(int trackId, int deviceIndex, int chain, int index, int toChain);
+    int RackDevChainMidiMoveTo(int trackId, int deviceIndex, int chain, int index, int toChain);
     float RackDevDryWet(int trackId, int deviceIndex);
     void RackDevSetDryWet(int trackId, int deviceIndex, float v);
     bool RackDevPdc(int trackId, int deviceIndex);

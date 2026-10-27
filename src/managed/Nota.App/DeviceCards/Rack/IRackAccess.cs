@@ -19,6 +19,10 @@ internal interface IRackAccess
     int AutomationDeviceIndex { get; }
     /// <summary>The rack in a MIDI Learn rack target (MidiTarget.DeviceIndex).</summary>
     int LearnDeviceIndex => AutomationDeviceIndex;
+    /// <summary>The rack's address for the engine's RackDev* calls (−1 the track's Instrument or
+    /// Drum Rack, ≥0 an Audio Effect Rack, −1000 − mi a MIDI Effect Rack), used by the chain
+    /// device clipboard (specs/042); null for a strip that isn't a rack (Nota Rhythm's voices).</summary>
+    int? RackAddress => null;
     int ChainCount();
     int AddChain(int instKind);
     bool RemoveChain(int chain);
@@ -139,6 +143,7 @@ internal interface IRackAccess
 
 internal sealed class InstrumentRackAccess(IAudioEngine e, int t) : IRackAccess
 {
+    public int? RackAddress => -1;
     public bool HasInstrumentChains => true;
     public int AutomationDeviceIndex => -1;
     public int ChainCount() => e.RackChainCount(t);
@@ -226,6 +231,7 @@ internal sealed class InstrumentRackAccess(IAudioEngine e, int t) : IRackAccess
 
 internal sealed class EffectRackAccess(IAudioEngine e, int t, int di) : IRackAccess
 {
+    public int? RackAddress => di;
     public bool HasInstrumentChains => false;
     public int AutomationDeviceIndex => di;
     public int ChainCount() => e.RackDevChainCount(t, di);
@@ -366,6 +372,7 @@ internal sealed class RhythmVoiceAccess(IAudioEngine e, int t) : IRackAccess
 // are the MIDI effect's parameters 0..7 (automation, MIDI Learn).
 internal sealed class MidiRackAccess(IAudioEngine e, int t, int mi) : IRackAccess
 {
+    public int? RackAddress => -1000 - mi; // the engine's MIDI Effect Rack address
     private static int Plain(int target) => target <= RackMacroMapping.MidiDeviceBase ? RackMacroMapping.MidiDeviceBase - target : target;
     private static int Card(int device) => device >= 0 ? RackMacroMapping.MidiDeviceBase - device : device;
 

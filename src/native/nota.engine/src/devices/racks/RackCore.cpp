@@ -305,6 +305,45 @@ bool RackCore::moveChainDevice(int32_t chain, int32_t from, int32_t to) {
     return true;
 }
 
+int32_t RackCore::insertChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, int32_t at, bool prepare) {
+    if (!dev) return -1;
+    auto ns = copyState();
+    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return -1;
+    auto& d = ns->chains[chain].devices;
+    const int32_t n = static_cast<int32_t>(d.size());
+    if (at < 0 || at > n) at = n;
+    if (prepare) dev->setSampleRate(sampleRate_, maxBlock_);
+    d.insert(d.begin() + at, std::move(dev));
+    for (auto& m : ns->mappings)
+        if (m.chainIndex == chain && m.deviceIndex >= at) ++m.deviceIndex;
+    commit(ns);
+    return at;
+}
+
+int32_t RackCore::moveChainDeviceToChain(int32_t chain, int32_t idx, int32_t toChain) {
+    auto ns = copyState();
+    const int32_t nc = static_cast<int32_t>(ns->chains.size());
+    if (chain < 0 || chain >= nc || toChain < 0 || toChain >= nc || toChain == chain) return -1;
+    auto& from = ns->chains[chain].devices;
+    if (idx < 0 || idx >= static_cast<int32_t>(from.size())) return -1;
+    auto x = from[idx];
+    from.erase(from.begin() + idx);
+    auto& to = ns->chains[toChain].devices;
+    const int32_t at = static_cast<int32_t>(to.size());
+    to.push_back(std::move(x));
+    for (auto& m : ns->mappings) {
+        if (m.chainIndex != chain || m.deviceIndex < 0) continue;
+        if (m.deviceIndex == idx) {
+            m.chainIndex = toChain;
+            m.deviceIndex = at;
+        } else if (m.deviceIndex > idx) {
+            --m.deviceIndex;
+        }
+    }
+    commit(ns);
+    return at;
+}
+
 Device* RackCore::chainDeviceAt(int32_t chain, int32_t dev) const {
     RackState* st = live();
     if (!st || chain < 0 || chain >= static_cast<int32_t>(st->chains.size())) return nullptr;
@@ -385,6 +424,47 @@ bool RackCore::moveChainMidiDevice(int32_t chain, int32_t from, int32_t to) {
     }
     commit(ns);
     return true;
+}
+
+int32_t RackCore::insertChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev, int32_t at) {
+    if (!dev || dev->midiKind() < 0 || dev->midiKind() > 5) return -1;
+    auto ns = copyState();
+    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return -1;
+    auto& d = ns->chains[chain].midiDevices;
+    const int32_t n = static_cast<int32_t>(d.size());
+    if (at < 0 || at > n) at = n;
+    dev->setSampleRate(sampleRate_, maxBlock_);
+    d.insert(d.begin() + at, std::move(dev));
+    for (auto& m : ns->mappings)
+        if (m.chainIndex == chain && isMidiTarget(m.deviceIndex) && midiTargetIndex(m.deviceIndex) >= at)
+            m.deviceIndex = midiTarget(midiTargetIndex(m.deviceIndex) + 1);
+    commit(ns);
+    return at;
+}
+
+int32_t RackCore::moveChainMidiDeviceToChain(int32_t chain, int32_t idx, int32_t toChain) {
+    auto ns = copyState();
+    const int32_t nc = static_cast<int32_t>(ns->chains.size());
+    if (chain < 0 || chain >= nc || toChain < 0 || toChain >= nc || toChain == chain) return -1;
+    auto& from = ns->chains[chain].midiDevices;
+    if (idx < 0 || idx >= static_cast<int32_t>(from.size())) return -1;
+    auto x = from[idx];
+    from.erase(from.begin() + idx);
+    auto& to = ns->chains[toChain].midiDevices;
+    const int32_t at = static_cast<int32_t>(to.size());
+    to.push_back(std::move(x));
+    for (auto& m : ns->mappings) {
+        if (m.chainIndex != chain || !isMidiTarget(m.deviceIndex)) continue;
+        const int32_t j = midiTargetIndex(m.deviceIndex);
+        if (j == idx) {
+            m.chainIndex = toChain;
+            m.deviceIndex = midiTarget(at);
+        } else if (j > idx) {
+            m.deviceIndex = midiTarget(j - 1);
+        }
+    }
+    commit(ns);
+    return at;
 }
 
 MidiDevice* RackCore::chainMidiDeviceAt(int32_t chain, int32_t idx) const {

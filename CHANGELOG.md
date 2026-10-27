@@ -52,6 +52,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   replaces a chain's instrument when dropped on that chain; an effect or MIDI-effect preset adds
   the device to the chain, preset applied, in one undo step. Plug-in presets don't go into a
   rack chain yet; a MIDI-effect preset brings its parameters.
+- **Move, copy and paste devices in rack chains**: drag a device's header to reorder it in its
+  chain (a drop bar shows where), or onto another chain's row to move it there with its macro
+  mappings. Click one to select it, then Copy, Cut, Paste, Duplicate or Delete from its menu or
+  with ⌘C / ⌘X / ⌘V / ⌘D / Delete. The clipboard is shared with the track's device chain, so a
+  device copies between the track chain and any rack chain, settings and all (a sidechain key
+  is dropped inside a rack). Each step is one undo step.
+- **Duplicate a device with ⌘D** on the track's device chain (also in its right-click menu).
 - **Move clips with the keyboard** (nota-daw/nota#302): in the Arrangement, ← / → nudge the
   selected clips by the grid step and ⌥← / ⌥→ by a 64th note, stopping at the song start;
   ⌥↑ / ⌥↓ move them to the next track up or down that takes them, at the same beats. Each

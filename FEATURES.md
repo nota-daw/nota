@@ -232,6 +232,9 @@ track count and closes with Escape.
   **+** at its end opens the browser on Audio effects with the cursor in the search.
   - Double-click a device's header (or Fold in its menu) to fold it into a narrow strip with
     its rotated name and on/off switch; double-click the strip to unfold. Saved with the project.
+  - Click a device to select it: ⌘C / ⌘X / ⌘V copy, cut and paste it with all its settings
+    (also into and out of rack chains), ⌘D duplicates it, Delete removes it; drag a header to
+    reorder.
 
 ---
 
@@ -887,12 +890,16 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **One rack card** for the Instrument, Audio Effect and MIDI Effect Racks: eight macro knobs
   (name, value, target count) with a **Map** key; **Chains** (chain list with M·S, zone summary
   and level · the chosen chain's devices left to right as compact cards with their key
-  parameters, Browser drops, + Chain, grip reorder, Open for the full editor), **Zones** /
+  parameters, Browser drops (devices and presets), + Chain, Open for the full editor), **Zones** /
   **Select** (drag zone edges; hover the keyboard strip to see which chains a note plays) and
   **Macros** tabs (rename, curve Lin/Exp/Log/S — "Mixed" when targets differ — and each
   target's range, min above max inverts); a **Chain** panel (Volume, Pan or Transpose, zones,
   Duplicate, Delete) and a **Rack out** / **Output** panel; a status line. **Map** works in
-  place: click parameters on the chain's devices to add or remove them; Esc ends it.
+  place: click parameters on the chain's devices to add or remove them; Esc ends it. A chain's
+  devices drag by their header to a new place in their section (a drop bar shows where) or
+  onto another chain's row to move there with their macro mappings; click one to select it
+  for Copy / Cut / Paste / Duplicate / Delete (menu or ⌘C ⌘X ⌘V ⌘D Delete). The clipboard is
+  the device chain's too, so devices copy between the track chain and any rack chain.
 - **Nota Instrument Rack** — layered chains of MIDI effects → instrument → audio effects, each
   with **key and velocity zones**, gain, pan, M·S; Rack out: Volume, Glide and **Mono (last
   note)** — glide bends each new note from the last one on instruments that take per-note bend.

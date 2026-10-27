@@ -182,9 +182,10 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     }
 
     // Add-device menu: built-in effects + a "Plug-ins" submenu of installed effect plug-ins.
-    private void ShowAddDeviceMenu(IRackAccess a, int sc, Control anchor)
+    private void ShowAddDeviceMenu(IRackAccess a, int sc, Control anchor, bool withPaste = false)
     {
         var f = new MenuFlyout();
+        if (withPaste && E.DeviceClipboardKind() == 1) { f.Items.Add(RcPasteItem(sc)); f.Items.Add(new Separator()); }
         for (int k = 0; k < RackDeviceNames.Length; k++)
         {
             int kk = RackDeviceKinds[k];

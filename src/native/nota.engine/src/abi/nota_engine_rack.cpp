@@ -222,6 +222,32 @@ int32_t nota_rack_duplicate_chain(NotaEngine* e, int32_t t, int32_t chain) {
 int32_t nota_rackdev_duplicate_chain(NotaEngine* e, int32_t t, int32_t di, int32_t chain) {
     return e ? ENG(e)->rackDuplicateChain(t, di, chain) : -1;
 }
+
+// Rack chain devices on the shared device clipboard (specs/042).
+int32_t nota_rackdev_chain_device_copy(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i) {
+    return (e && ENG(e)->rackChainDeviceCopy(t, di, c, i)) ? 1 : 0;
+}
+int32_t nota_rackdev_chain_midi_copy(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i) {
+    return (e && ENG(e)->rackChainMidiCopy(t, di, c, i)) ? 1 : 0;
+}
+int32_t nota_rackdev_chain_device_paste(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t at) {
+    return e ? ENG(e)->rackChainDevicePaste(t, di, c, at) : -1;
+}
+int32_t nota_rackdev_chain_midi_paste(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t at) {
+    return e ? ENG(e)->rackChainMidiPaste(t, di, c, at) : -1;
+}
+int32_t nota_rackdev_chain_device_duplicate(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i) {
+    return e ? ENG(e)->rackChainDeviceDuplicate(t, di, c, i) : -1;
+}
+int32_t nota_rackdev_chain_midi_duplicate(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i) {
+    return e ? ENG(e)->rackChainMidiDuplicate(t, di, c, i) : -1;
+}
+int32_t nota_rackdev_chain_device_move_to(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i, int32_t to) {
+    return e ? ENG(e)->rackChainDeviceMoveTo(t, di, c, i, to) : -1;
+}
+int32_t nota_rackdev_chain_midi_move_to(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i, int32_t to) {
+    return e ? ENG(e)->rackChainMidiMoveTo(t, di, c, i, to) : -1;
+}
 void nota_rack_set_mono(NotaEngine* e, int32_t t, int32_t on) {
     if (e) ENG(e)->rackSetMono(t, on != 0);
 }

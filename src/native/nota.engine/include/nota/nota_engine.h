@@ -1722,6 +1722,29 @@ NOTA_API int32_t     nota_rack_mapping_count(const NotaEngine* engine, int32_t t
  * its macro mappings), one undo step. Returns the new chain index or <0. */
 NOTA_API int32_t     nota_rack_duplicate_chain(NotaEngine* engine, int32_t track_id, int32_t chain);
 NOTA_API int32_t     nota_rackdev_duplicate_chain(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain);
+/* Rack chain devices on the shared device clipboard (specs/042) — the one nota_track_copy_device /
+ * nota_track_paste_device use, so a copy pastes across the track chain and every rack chain.
+ * device_index addresses the rack as the other nota_rackdev_* calls do (−1 the track's Instrument
+ * or Drum Rack, >= 0 an Audio Effect Rack, −1000 − mi the MIDI Effect Rack at MIDI effect index mi,
+ * NOTA_RACK_NESTED_BASE − chain a nested Drum Rack). Each edit is one undo step.
+ * copy: 1 = copied, 0 = no such device.
+ * paste: a fresh clone at at_index (−1 = the end); the new index, or −1 nothing to paste / bad
+ *   address, −2 the clipboard holds the other family or the rack has no such section, −3 a rack
+ *   inside a rack, −5 a MIDI effect past the Instrument Rack's first 16 chains. A pasted audio
+ *   effect loses its sidechain key (see nota_device_clipboard_sidechain).
+ * duplicate: a clone right after the device, the clipboard untouched; new index or < 0.
+ * move_to: to the end of to_chain's matching section of the same rack, macro mappings and all;
+ *   new index, −1 bad address / the same chain, −5 as above. */
+NOTA_API int32_t     nota_rackdev_chain_device_copy(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_rackdev_chain_midi_copy(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_rackdev_chain_device_paste(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t at_index);
+NOTA_API int32_t     nota_rackdev_chain_midi_paste(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t at_index);
+NOTA_API int32_t     nota_rackdev_chain_device_duplicate(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_rackdev_chain_midi_duplicate(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index);
+NOTA_API int32_t     nota_rackdev_chain_device_move_to(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index, int32_t to_chain);
+NOTA_API int32_t     nota_rackdev_chain_midi_move_to(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t index, int32_t to_chain);
+/* 1 when the clipboard holds an audio effect keyed from another track. */
+NOTA_API int32_t     nota_device_clipboard_sidechain(const NotaEngine* engine);
 /* Instrument Rack mono (specs/040): one note at a time, last-note priority; the rack's glide
  * (nota_rack_set_glide, 0..1 = 0..500 ms) bends each new note from the previous pitch on chain
  * instruments that take per-note bend. Off by default. */

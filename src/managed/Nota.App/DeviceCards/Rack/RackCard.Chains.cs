@@ -160,6 +160,7 @@ internal sealed partial class RackCardView
             Child = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { top, bottom } },
         };
         if (!audible) row.AttachedToVisualTree += (_, _) => Inactive.Set(row, true, interactive: true);
+        _rcRows.Add((row, c)); // a lane device dragged onto the row moves to this chain
         row.PointerPressed += (_, e) =>
         {
             var pt = e.GetCurrentPoint(row).Properties;
@@ -214,6 +215,7 @@ internal sealed partial class RackCardView
         var dup = new MenuItem { Header = "Duplicate", IsEnabled = !full };
         dup.Click += (_, _) => { int d = a.DuplicateChain(c); if (d >= 0) Sel = d; DeferRebuild(); };
         f.Items.Add(dup);
+        if (_ra.RackAddress is not null) { f.Items.Add(new Separator()); f.Items.Add(RcPasteItem(c)); }
         if (a.ChainCount() > 1)
         {
             f.Items.Add(new Separator());
@@ -452,7 +454,11 @@ internal sealed partial class RackCardView
             };
         }
 
-        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3 };
+        // The horizontal scrollbar floats over the bottom of the lane (16 px when it expands): keep the
+        // cards above it so it never covers their Open row.
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(0, 0, 0, 18) };
+        _rcStrip = strip;
+        RcCheckSelection();
         void Chev() => strip.Children.Add(new Glyph(GlyphKind.ChevronRight, 8) { Foreground = NotaPalette.TextDisabled, VerticalAlignment = VerticalAlignment.Center });
         bool first = true;
         void Add(Control card) { if (!first) Chev(); strip.Children.Add(card); first = false; }
@@ -520,7 +526,7 @@ internal sealed partial class RackCardView
         {
             if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
-            if (slot == RcSlot.Midi) RcAddMidiMenu(box, c); else ShowAddDeviceMenu(_ra, c, box);
+            if (slot == RcSlot.Midi) RcAddMidiMenu(box, c); else ShowAddDeviceMenu(_ra, c, box, withPaste: _ra.RackAddress is not null);
         };
         DragDrop.SetAllowDrop(box, true);
         DragDrop.AddDragOverHandler(box, (_, e) =>
@@ -546,6 +552,7 @@ internal sealed partial class RackCardView
     private void RcAddMidiMenu(Control anchor, int c)
     {
         var f = new MenuFlyout();
+        if (_ra.RackAddress is not null && E.DeviceClipboardKind() == 2) { f.Items.Add(RcPasteItem(c)); f.Items.Add(new Separator()); }
         foreach (var (name, kind) in RcMidiKinds)
         {
             var mi = new MenuItem { Header = name };
@@ -653,9 +660,18 @@ internal sealed partial class RackCardView
             if (pt.IsRightButtonPressed) { e.Handled = true; RcCardMenu(card, c, slot, idx, bypassed, Open); }
             else if (pt.IsLeftButtonPressed && e.ClickCount == 2) { e.Handled = true; Open(); }
         };
-        if (slot != RcSlot.Instrument) RcGripReorder(grip, c, slot, idx);
-        else grip.IsVisible = false;
-        return card;
+        if (slot == RcSlot.Instrument) { grip.IsVisible = false; return card; }
+        // Selected: the track chain's focus ring, outside the card with a small gap.
+        var ring = new Border
+        {
+            BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1.5), Margin = new Thickness(-2),
+            CornerRadius = new CornerRadius(NotaRadius.PanelValue + 2), IsHitTestVisible = false, IsVisible = RcIsSelected(c, slot, idx),
+        };
+        var host = new Panel { Children = { card, ring }, Margin = new Thickness(2, 2, 2, 0) };
+        RcHookCardDrag(head, host, c, slot, idx);
+        RcHookCardDrag(grip, host, c, slot, idx);
+        _rcCards.Add((ring, (RcCardTag)host.Tag!));
+        return host;
     }
 
     private void RcCardMenu(Control anchor, int c, RcSlot slot, int idx, bool bypassed, Action open)
@@ -680,36 +696,18 @@ internal sealed partial class RackCardView
                 DeferRebuild();
             };
             f.Items.Add(b);
-            f.Items.Add(new Separator());
-            f.Items.Add(MenuKit.Danger("Remove", GlyphKind.Trash, () =>
+            if (_ra.RackAddress is not null) { f.Items.Add(new Separator()); RcAddDeviceMenuItems(f, c, slot, idx); }
+            else
             {
-                if (slot == RcSlot.Midi) a.RemoveChainMidi(c, idx); else a.RemoveChainDevice(c, idx);
-                DeferRebuild();
-            }));
+                f.Items.Add(new Separator());
+                f.Items.Add(MenuKit.Danger("Delete", GlyphKind.Trash, () =>
+                {
+                    if (slot == RcSlot.Midi) a.RemoveChainMidi(c, idx); else a.RemoveChainDevice(c, idx);
+                    DeferRebuild();
+                }, MenuKit.DeleteKey));
+            }
         }
         f.ShowAt(anchor, showAtPointer: true);
-    }
-
-    // Drag a card by its grip along the strip: it moves by whole cards within its section.
-    private void RcGripReorder(Control grip, int c, RcSlot slot, int idx)
-    {
-        double startX = 0;
-        bool down = false;
-        grip.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(grip).Properties.IsLeftButtonPressed) return;
-            down = true; startX = e.GetPosition(null).X; e.Pointer.Capture(grip); e.Handled = true;
-        };
-        grip.PointerReleased += (_, e) =>
-        {
-            if (!down) return;
-            down = false; e.Pointer.Capture(null);
-            int steps = (int)Math.Round((e.GetPosition(null).X - startX) / (RcCompactWidth + 14));
-            if (steps == 0) return;
-            if (slot == RcSlot.Midi) _ra.MoveChainMidi(c, idx, idx + steps); else _ra.MoveChainDevice(c, idx, idx + steps);
-            DeferRebuild();
-        };
-        grip.PointerCaptureLost += (_, _) => down = false;
     }
 
     // ---- a parameter row in a compact card --------------------------------------------
