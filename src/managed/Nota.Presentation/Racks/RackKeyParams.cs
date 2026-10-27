@@ -64,6 +64,7 @@ public static class RackKeyParams
         [23] = ["Rate", "Depth", "Feedback"],              // Nota Flanger
         [24] = ["Rate", "Depth", "Feedback"],              // Nota Phaser
         [25] = ["Rate", "Amount", "Mix"],                  // Nota Chorus
+        [26] = ["Formant", "Pitch", "Mix"],                // Nota Vocoder
     };
 
     // Built-in MIDI effects by MIDI kind.

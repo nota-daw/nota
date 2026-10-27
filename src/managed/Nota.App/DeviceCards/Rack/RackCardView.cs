@@ -28,14 +28,21 @@ namespace Nota.App;
 
 internal sealed partial class RackCardView(DeviceCardContext ctx)
 {
-    private static readonly string[] RackDeviceNames = { "Nota EQ-3", "Nota EQ-8", "Nota Dynamic EQ-8", "Nota Compressor", "Nota Prism", "Nota Reverb", "Nota Chamber", "Nota Delay", "Nota Utility", "Nota Level", "Nota Lens", "Nota Ceiling", "Nota Shutter", "Nota Valve", "Nota Auto Filter", "Nota Vintage", "Nota Forge", "Nota Crush", "Nota Chorus", "Nota Flanger", "Nota Phaser", "Nota Orbit", "Nota Auto Shift", "Nota Beat Repeat", "Nota Strata" };
-    private static readonly int[] RackDeviceKinds = { 16, 0, 13, 1, 21, 2, 20, 3, 4, 18, 22, 14, 19, 6, 7, 8, 17, 12, 25, 23, 24, 9, 10, 11, 15 };
+    private static readonly string[] RackDeviceNames = { "Nota EQ-3", "Nota EQ-8", "Nota Dynamic EQ-8", "Nota Compressor", "Nota Prism", "Nota Reverb", "Nota Chamber", "Nota Delay", "Nota Utility", "Nota Level", "Nota Lens", "Nota Ceiling", "Nota Shutter", "Nota Valve", "Nota Auto Filter", "Nota Vintage", "Nota Forge", "Nota Crush", "Nota Chorus", "Nota Flanger", "Nota Phaser", "Nota Orbit", "Nota Auto Shift", "Nota Beat Repeat", "Nota Strata", "Nota Vocoder" };
+    private static readonly int[] RackDeviceKinds = { 16, 0, 13, 1, 21, 2, 20, 3, 4, 18, 22, 14, 19, 6, 7, 8, 17, 12, 25, 23, 24, 9, 10, 11, 15, 26 };
     private static readonly IBrush RowSel = NotaPalette.Wash(NotaPalette.Accent, 0x22); // selected chain wash
 
     private readonly DeviceCardContext _ctx = ctx;
     private IAudioEngine E => _ctx.Engine;
     private int T => _ctx.TrackId;
-    private int Sel { get => _ctx.SelectedChain; set => _ctx.SelectedChain = value; }
+    // The chosen chain: each shared rack card keeps its own (several racks can sit on one
+    // track); the Drum Rack uses the device view's.
+    private bool _ownSel;
+    private int Sel
+    {
+        get => _ownSel ? _rs.SelectedChain : _ctx.SelectedChain;
+        set { if (_ownSel) _rs.SelectedChain = value; else _ctx.SelectedChain = value; }
+    }
 
     // ---- Instrument Rack (mockup 2p) shared bits ----
     private static readonly IBrush IrHdr = NotaPalette.SurfaceCard;

@@ -39,6 +39,7 @@ internal sealed class RackCardState
     public int SelectedMacro;
     public int MappingMacro = -1; // the macro being mapped in place, or -1
     public int ProbePitch = -1;   // the key under the pointer on the Zones tab, or -1
+    public int SelectedChain;     // the chain shown in the device lane and the Chain panel
 
     public bool Mapping => MappingMacro >= 0;
 
@@ -71,7 +72,7 @@ internal sealed class RackCardState
 
 internal sealed partial class RackCardView
 {
-    public const double RcMacroWidth = 116, RcRightWidth = 160, RcStatusHeight = 18, RcTabHeight = 20, RcGutter = 6;
+    public const double RcMacroWidth = 116, RcRightWidth = 166, RcStatusHeight = 18, RcTabHeight = 20, RcGutter = 6;
 
     private IRackAccess _ra = null!;
     private RackKindProfile _rp = RackKindProfile.Instrument;
@@ -84,6 +85,7 @@ internal sealed partial class RackCardView
         _ra = a;
         _rp = RackKindProfile.For(a.Kind);
         _rs = RackCardState.For(T, a.Kind, rackIndex);
+        _ownSel = true;
         _irTick.Clear();
         int n = a.ChainCount();
         Sel = n > 0 ? Math.Clamp(Sel, 0, n - 1) : 0;
@@ -97,9 +99,11 @@ internal sealed partial class RackCardView
             ColumnSpacing = RcGutter, RowSpacing = 3,
             Margin = new Thickness(NotaSpace.DeviceInset, NotaSpace.DeviceInset, NotaSpace.DeviceInset, 0),
         };
+        // A section's rule is on its left edge: pad the content off it by a gutter, so the rule
+        // sits halfway between the columns.
         RcPlace(grid, Section(RcMacroColumn()), 0, 0);
-        RcPlace(grid, Section(RcCentre()), 0, 1);
-        RcPlace(grid, Section(RcRightPanel()), 0, 2);
+        RcPlace(grid, new RuleSection { Padding = new Thickness(RcGutter, 0, 0, 0), Child = RcCentre() }, 0, 1);
+        RcPlace(grid, new RuleSection { Padding = new Thickness(RcGutter, 0, 0, 0), Child = RcRightPanel() }, 0, 2);
         var status = Section(RcStatusLine(), SectionEdge.Top);
         Grid.SetColumnSpan(status, 3);
         RcPlace(grid, status, 1, 0);

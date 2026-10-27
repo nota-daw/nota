@@ -52,6 +52,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   slides each new note from the previous pitch on instruments that take per-note bend.
 - **Duplicate a rack chain**, with its devices, zones, mix and macro mappings.
 - **Map a rack's selector to a macro** (Audio Effect and MIDI Effect Racks).
+- **Nota Vocoder in rack chains**: add it to an Instrument or Audio Effect Rack chain from the
+  card's menu or the Browser; inside a rack it uses its own Saw or Noise carrier.
 - **Move clips with the keyboard** (nota-daw/nota#302): in the Arrangement, ← / → nudge the
   selected clips by the grid step and ⌥← / ⌥→ by a 64th note, stopping at the song start;
   ⌥↑ / ⌥↓ move them to the next track up or down that takes them, at the same beats. Each
