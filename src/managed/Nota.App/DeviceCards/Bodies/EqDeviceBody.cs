@@ -204,7 +204,8 @@ internal sealed class EqDeviceBody : IDeviceBody
             var fly = new Flyout
             {
                 Content = new StackPanel { Width = 230, Spacing = 5, Children = { head, labelBox, noteBox, hint } },
-                Placement = atPointer ? PlacementMode.Pointer : PlacementMode.BottomEdgeAlignedLeft,
+                // From the graph it opens beside it, so the nodes stay in view.
+                Placement = atPointer ? PlacementMode.RightEdgeAlignedTop : PlacementMode.BottomEdgeAlignedLeft,
             };
             void Key(object? _, KeyEventArgs ke)
             {
@@ -215,7 +216,7 @@ internal sealed class EqDeviceBody : IDeviceBody
             labelBox.KeyDown += Key;
             noteBox.AddHandler(InputElement.KeyDownEvent, Key, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             fly.Closed += (_, _) => SetText(b, labelBox.Text ?? "", noteBox.Text ?? "");
-            fly.ShowAt(anchor, showAtPointer: atPointer);
+            fly.ShowAt(anchor);
             Avalonia.Threading.Dispatcher.UIThread.Post(() => { var f = LabelOf(b).Length == 0 ? labelBox : noteBox; f.Focus(); f.CaretIndex = f.Text?.Length ?? 0; },
                 Avalonia.Threading.DispatcherPriority.Input);
         }
@@ -299,12 +300,14 @@ internal sealed class EqDeviceBody : IDeviceBody
                 Text = LabelOf(b), MaxLength = 24, AcceptsReturn = false, FontSize = 9, MinHeight = 18, Height = 18,
                 Padding = new Thickness(4, 1), VerticalContentAlignment = VerticalAlignment.Center, Watermark = "Name this band",
             };
+            void Unfocus() { curve.Focusable = true; curve.Focus(); }   // hand the keys back to the card
             void CommitLabel() { if ((labelField.Text ?? "") != LabelOf(b)) SetText(b, labelField.Text ?? "", NoteOf(b)); }
             labelField.LostFocus += (_, _) => CommitLabel();
             labelField.KeyDown += (_, ke) =>
             {
-                if (ke.Key == Avalonia.Input.Key.Enter) { CommitLabel(); ke.Handled = true; }
-                else if (ke.Key == Avalonia.Input.Key.Escape) { labelField.Text = LabelOf(b); ke.Handled = true; }
+                // Enter keeps the text, Escape reverts it; both hand focus back to the card.
+                if (ke.Key == Avalonia.Input.Key.Enter) { CommitLabel(); ke.Handled = true; Unfocus(); }
+                else if (ke.Key == Avalonia.Input.Key.Escape) { labelField.Text = LabelOf(b); ke.Handled = true; Unfocus(); }
             };
             ToolTip.SetTip(labelField, "Label — a short name shown next to the band's node (up to 24 characters)");
             var noteBtn = new Button

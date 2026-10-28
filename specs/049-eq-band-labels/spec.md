@@ -44,7 +44,7 @@ label follow, save, reopen, and see it again.
 6. **Given** a band label field, **When** the user clears it, **Then** the node shows no label and
    the chip shows the band type again.
 7. **Given** a label longer than 24 characters, **Then** the field stops accepting more; leading
-   and trailing spaces are trimmed and line breaks are not allowed.
+   and trailing spaces are trimmed, and a pasted line break becomes a space.
 
 ---
 
@@ -116,8 +116,9 @@ readable, non-overlapping labels; switch Labels off and see none; switch them on
   popup closes, not one step per keystroke.
 - **Automation, MIDI learn, A/B**: labels are not parameters and can't be automated or learned.
   A/B compare swaps parameter values only and leaves labels as they are.
-- **Text content**: any Unicode text is allowed, including Cyrillic; control characters other
-  than line breaks (notes only) are dropped.
+- **Text content**: any Unicode text is allowed, including Cyrillic; a tab becomes a space, a
+  line break is kept in a note and becomes a space in a label, and other control characters are
+  dropped.
 - **Narrow card / small graph**: when a label can't be placed without overlapping after moving
   it apart, it is shortened with an ellipsis; the full label is in the tooltip.
 

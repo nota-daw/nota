@@ -561,8 +561,8 @@ std::string cleanText(const std::string& in, size_t max, bool multiline) {
         }
         if (len == 1 && (c < 0x20 || c == 0x7F)) { // control characters: only a note keeps line breaks
             i += 1;
-            if (c == '\t' || (multiline && c == '\n')) {
-                out += c == '\t' ? ' ' : '\n';
+            if (c == '\t' || c == '\n') { // a tab, or a line break in a label, reads as a space
+                out += multiline && c == '\n' ? '\n' : ' ';
                 ++cps;
             }
             continue;

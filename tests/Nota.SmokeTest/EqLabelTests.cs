@@ -57,8 +57,8 @@ internal static class EqLabelTests
         e.EqSetBandText(t, d, 0, "Гул\nснизу\tи", "");
         string longLabel = new string('x', 40), longNote = new string('n', 2500);
         e.EqSetBandText(t, d, 1, longLabel, longNote);
-        yield return (L(e, t, d, 0) == "Гулснизу и" && L(e, t, d, 1).Length == 24 && N(e, t, d, 1).Length == 2000,
-            $"labels keep Cyrillic, lose line breaks (\"{L(e, t, d, 0)}\") and stop at 24 characters, notes at 2000");
+        yield return (L(e, t, d, 0) == "Гул снизу и" && L(e, t, d, 1).Length == 24 && N(e, t, d, 1).Length == 2000,
+            $"labels keep Cyrillic, turn line breaks into spaces (\"{L(e, t, d, 0)}\") and stop at 24 characters, notes at 2000");
 
         bool same = e.EqSetBandText(t, d, 3, "Resonance", N(e, t, d, 3));
         bool bad = e.EqSetBandText(t, d, 8, "x", "") || e.EqSetBandText(t, d, -1, "x", "");
