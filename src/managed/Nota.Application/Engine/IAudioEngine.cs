@@ -1275,8 +1275,11 @@ public interface IAudioEngine : IDisposable
     void ModulatorSet(int trackId, int modId, int field, float value);
     /// <summary>Live modulator output at the current transport position (for the node viz), -1..1×depth.</summary>
     float ModulatorValue(int trackId, int modId);
-    /// <summary>Rolling CV history for a Scope modulator; fills <paramref name="outv"/> oldest→newest, returns count.</summary>
+    /// <summary>Rolling CV history for a Scope modulator: the newest values, oldest→newest; returns count.</summary>
     int ModulatorScope(int trackId, int modId, float[] outv);
+    /// <summary>Scope history with time steps (specs/047): the newest entries oldest→newest, and the
+    /// seconds each one follows the previous by (one audio block). Returns the count.</summary>
+    int ModulatorScopeTimed(int trackId, int modId, float[] values, float[] dts);
 
     // ---- preset tags (specs/048) ----
     /// <summary>The device's preset tag: 0 none, -1 no such device.</summary>
