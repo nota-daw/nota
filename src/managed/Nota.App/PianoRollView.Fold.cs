@@ -33,6 +33,9 @@ public sealed partial class PianoRollView
 
     /// <summary>Fires when the user toggles Fold, so the host stores it on the track.</summary>
     public event Action<bool>? FoldToggled;
+    /// <summary>Fold changed, by the user or the host (another track's clip became active), so
+    /// the toolbar switch can follow.</summary>
+    public event Action? FoldChanged;
 
     public bool Folded => _fold;
     /// <summary>The rows the keyboard shows now (for the toolbar's tooltip and the smoke test).</summary>
@@ -73,6 +76,7 @@ public sealed partial class PianoRollView
             }
         }
         if (user) FoldToggled?.Invoke(on);
+        FoldChanged?.Invoke();
     }
 
     private bool? _foldAfterDrag;

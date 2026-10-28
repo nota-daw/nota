@@ -182,6 +182,7 @@ public sealed class ClipEditorView : UserControl
         ToolTip.SetTip(_dropOutOfScale, "Delete every note outside the scale");
         Roll.Changed += () => _dropOutOfScale.IsEnabled = Roll.HasOutOfScaleNotes;
         Roll.FoldToggled += _ => PaintScale();   // ⌥⇧F flips it from the keyboard too
+        Roll.FoldChanged += PaintFold;           // …and the host switches it with the active clip's track
         // Fold (specs/045): the scale's rows, or a Drum Rack's pads, and nothing else.
         _fold = SwitchRow("Fold", () => Roll.Folded, () => { Roll.SetFold(!Roll.Folded, user: true); PaintScale(); }, out _syncFold);
         PaintScale();
