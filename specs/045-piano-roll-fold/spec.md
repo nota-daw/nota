@@ -160,8 +160,8 @@ Save, reopen, and check again. Check that a clip on another track opens unfolded
 
 ### Measurable Outcomes
 
-- **SC-001**: With a 7-note scale on a 128-pitch range, Fold shows no more than 75 rows plus one row
-  per out-of-scale pitch used in the clip.
+- **SC-001**: With a 7-note scale on the piano roll's 88-key range, Fold shows no more than 52 rows,
+  plus one row per out-of-scale pitch used in the clip.
 - **SC-002**: With a 16-pad kit, Fold shows exactly 16 rows, plus one per used pitch with no pad.
 - **SC-003**: In a folded clip, 100% of notes drawn, dragged or arrow-transposed land on a visible
   row's pitch, which smoke tests check against the row map.
