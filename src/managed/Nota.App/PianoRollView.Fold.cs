@@ -97,6 +97,13 @@ public sealed partial class PianoRollView
             bool wasPads = _rowsArePads;
             RebuildRows(force: true);
             if (_rowsArePads && (!wasPads || _padFit)) { _rowHBeforePadFit ??= _rowH; _padFit = true; FitPads(); }
+            else if (wasPads && !_rowsArePads && _rowHBeforePadFit is { } h0)
+            {
+                // Kit to scale rows: the keyboard's own row height comes back, as on unfolding.
+                _rowHBeforePadFit = null;
+                _padFit = false;
+                SetRowHeightAt(h0, 0);
+            }
             FoldChanged?.Invoke();
         }
         else FoldChanged?.Invoke();
@@ -134,6 +141,18 @@ public sealed partial class PianoRollView
     {
         if (!_fold || !_rowsArePads || !_padFit || _gridControl.Dragging) return;
         FitPads();
+    }
+
+    // Another clip loaded with its saved (keyboard) row height: a folded kit keeps that as
+    // the height to unfold to, and fits its pads again.
+    private void RefitPadsOnClipLoad()
+    {
+        if (!_fold) return;
+        if (!_rowsArePads) { _rowHBeforePadFit = null; _padFit = false; return; }
+        _rowHBeforePadFit = _rowH;
+        _padFit = true;
+        if (_bodyScroll.Viewport.Height <= 0) FitPadsWhenLaidOut();
+        else FitPads();
     }
 
     /// <summary>The rack's pads may have changed (renamed, added, a new sample): re-read them.</summary>

@@ -496,7 +496,8 @@ public sealed partial class PianoRollView : UserControl
     private void SaveView()
     {
         if (_clipKey.Item1 == int.MinValue || _pixelsPerBeat <= 0) return;
-        s_view[_clipKey] = new ViewState(_pixelsPerBeat, _scrollBeats, _bodyScroll.Offset.Y, true, _rowH);
+        // A fitted kit's height is refit on reopening; keep the keyboard's own for unfolding.
+        s_view[_clipKey] = new ViewState(_pixelsPerBeat, _scrollBeats, _bodyScroll.Offset.Y, true, _rowHBeforePadFit ?? _rowH);
     }
 
     private void ApplyPendingVOffset()
@@ -740,6 +741,7 @@ public sealed partial class PianoRollView : UserControl
             _pendingVOffset = null; _pendingCenter = true;
         }
         Invalidate();
+        RefitPadsOnClipLoad();   // the saved height is the keyboard's; a folded kit fits again
         Changed?.Invoke();
         ApplyPendingVOffset();   // apply now if laid out; LayoutUpdated retries otherwise
     }
