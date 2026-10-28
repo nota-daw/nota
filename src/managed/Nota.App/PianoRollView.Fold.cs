@@ -80,7 +80,32 @@ public sealed partial class PianoRollView
     }
 
     private bool? _foldAfterDrag;
-    internal void ApplyDeferredFold() { if (_foldAfterDrag is { } on && !_gridControl.Dragging) SetFold(on); }
+    private (Action Adopt, bool On)? _trackAfterDrag;
+
+    /// <summary>The rows are to follow another track (a multi-clip editor's active clip moved):
+    /// <paramref name="adopt"/> makes the host's pads and Fold read that track, and
+    /// <paramref name="on"/> is its Fold. Mid-drag this waits for the release.</summary>
+    public void SwitchFoldTrack(Action adopt, bool on)
+    {
+        if (_gridControl.Dragging) { _trackAfterDrag = (adopt, on); return; }
+        _trackAfterDrag = null;
+        adopt();
+        if (on != _fold) SetFold(on);
+        else if (_fold)
+        {
+            RebuildRows(force: true);
+            if (_rowsArePads) { _rowHBeforePadFit ??= _rowH; _padFit = true; FitPads(); }
+            FoldChanged?.Invoke();
+        }
+        else FoldChanged?.Invoke();
+    }
+
+    internal void ApplyDeferredFold()
+    {
+        if (_gridControl.Dragging) return;
+        if (_trackAfterDrag is { } t) SwitchFoldTrack(t.Adopt, t.On);
+        else if (_foldAfterDrag is { } on) SetFold(on);
+    }
 
     // Fold restored before the editor has a height (a reopened project or clip): fit the kit
     // on the first layout that gives it one.

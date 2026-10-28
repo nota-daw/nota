@@ -559,29 +559,29 @@ public partial class MainWindow
     // the track, so every clip of a folded drum track opens folded.
     private void WireFold(PianoRollView roll, Func<int> track)
     {
-        roll.FoldPads = () => track() is var t && IsDrumRackTrack(t)
-            ? Nota.Presentation.DrumPads.ByNote(Nota.Presentation.DrumPads.Scan(Engine, t)) : null;
-        roll.FoldToggled += on => Engine.SetTrackPianoFold(track(), on);
-        if (Engine.GetTrackPianoFold(track()))
+        // The rows are laid out for one track at a time: the one whose Fold the editor shows.
+        // It follows the active clip only when the switch lands, so a press that makes another
+        // track's clip active doesn't re-read pads under the note it grabbed.
+        int shown = track();
+        roll.FoldPads = () => IsDrumRackTrack(shown)
+            ? Nota.Presentation.DrumPads.ByNote(Nota.Presentation.DrumPads.Scan(Engine, shown)) : null;
+        roll.FoldToggled += on => Engine.SetTrackPianoFold(shown, on);
+        if (Engine.GetTrackPianoFold(shown))
         {
             roll.SetFold(true);
             roll.EnsureNotesVisible();
         }
         // A multi-clip editor's active clip can move to another track: take that track's
-        // Fold, and its pads.
-        int shown = track();
+        // Fold, and its pads. Raised from inside a press on another track's note, before its
+        // drag starts: switch once the press is handled, so the roll sees the drag and waits
+        // for the release instead of moving the rows under the grabbed note.
         roll.ActiveClipChanged += () =>
         {
-            int t = track();
-            if (t == shown) return;
-            shown = t;
-            // Raised from inside a press on another track's note, before its drag starts: switch
-            // once the press is handled, so SetFold sees the drag and waits for the release
-            // instead of moving the rows under the grabbed note.
+            if (track() == shown) return;
             Dispatcher.UIThread.Post(() =>
             {
-                bool want = Engine.GetTrackPianoFold(track());
-                if (want != roll.Folded) roll.SetFold(want); else roll.RefreshFold();
+                int t = track();
+                if (t != shown) roll.SwitchFoldTrack(() => shown = t, Engine.GetTrackPianoFold(t));
             }, DispatcherPriority.Input);
         };
     }
