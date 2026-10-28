@@ -367,6 +367,8 @@ public partial class MainWindow : Window
         vm.Transport.RecordArmTarget = () => Timeline.RecordArmTarget();
         vm.Transport.SelectionLoopRange = () => Timeline.SelectionLoopRange();
         vm.Transport.TracksChanged += () => { Timeline.Refresh(); ReloadEditorNotes(); };
+        TrackArming.OthersChanged -= OnArmsChanged;
+        TrackArming.OthersChanged += OnArmsChanged;   // an exclusive arm disarmed other tracks (#332)
         Timeline.FollowSuspendedChanged -= OnFollowSuspendedChanged;
         Timeline.FollowSuspendedChanged += OnFollowSuspendedChanged;
         Timeline.LoopChanged += () => vm.Transport.SyncLoop();   // ruler drag / "Loop selection" → transport bar
@@ -382,6 +384,7 @@ public partial class MainWindow : Window
         PianoRollView.AuditionToggled += OnAuditionToggled;
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         vm.Transport.LoopRecordReplace = vm.Settings.Current.LoopRecordReplace;
+        SetArmOnSelect(vm.Settings.Current.ArmOnSelect);
         vm.Transport.PropertyChanged += (_, e) =>
         {
             // The loop record mode is an app preference: every switch (toggle, ⌘⇧R, menu, MCP) persists.
@@ -414,7 +417,7 @@ public partial class MainWindow : Window
         _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>(), _kits, App.Services.GetService<IMosaicPacks>());
         InitMosaic();
         // A pad added / removed / renamed in the Drum Rack card changes the pattern grid's rows.
-        _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); SyncClipTab(); if (_modular?.IsVisible == true) _modular.Refresh(); };
+        _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); _editorRoll?.RefreshFold(); SyncClipTab(); if (_modular?.IsVisible == true) _modular.Refresh(); };
         _deviceChain.DevicesRemapped += Timeline.RemapAutoTargets;
         _deviceChain.PresetSaveRequested += OnSavePreset;
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;
@@ -863,6 +866,15 @@ public partial class MainWindow : Window
 
     // Follow pauses when the lanes are scrolled away during playback (#105); the Follow
     // button dims to say so and the status bar says how to pick it up again.
+    // Repaint every arm button once the click that disarmed the others has finished (the
+    // views rebuild the very header the click landed on).
+    private void OnArmsChanged() => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+    {
+        Timeline.Refresh();
+        _session?.Refresh();
+        _mixer?.Refresh();
+    });
+
     private void OnFollowSuspendedChanged()
     {
         bool paused = Timeline.FollowSuspended;

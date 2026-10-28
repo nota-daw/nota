@@ -118,10 +118,14 @@ public sealed class TrackDto
     public int ReturnIndex { get; set; } = -1; // >=0 for return tracks
     public int GroupId { get; set; } = -1;     // parent group's doc index, or -1 (top-level)
     public int ColorIndex { get; set; } = -1;  // palette slot; -1 = auto by position
+    public bool? PianoFold { get; set; }       // piano roll Fold (specs/045); written only when on
     // Record input: 0 hardware, -1 master, or (2 + track-list index) for another track's
     // output (encoded so it survives id reassignment across save/load).
     public int RecordInput { get; set; }
     public bool Monitor { get; set; }   // live input monitoring (audio tracks)
+    // Hardware input channels (audio tracks): 0 stereo pair, 1 input 1, 2 input 2. Absent in
+    // files saved before 0.58, which recorded the stereo pair.
+    public int? InputChannels { get; set; }
     // MIDI routing source ("MIDI In") as a doc-list index (survives id reassignment), or -1 = off.
     public int MidiFrom { get; set; } = -1;
     public float[] Sends { get; set; } = new float[4];
