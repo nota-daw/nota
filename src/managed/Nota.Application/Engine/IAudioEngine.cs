@@ -326,6 +326,10 @@ public interface IAudioEngine : IDisposable
     /// <summary>Audio-track record input source: 0 hardware, -1 master, &gt;0 source track id.</summary>
     void SetTrackRecordInput(int trackId, int source);
     int GetTrackRecordInput(int trackId);
+    /// <summary>Which hardware input channels an audio track takes: both as a stereo pair, or
+    /// input 1 / input 2 alone as a mono source in the middle (#340). Hardware input only.</summary>
+    void SetTrackInputChannels(int trackId, InputChannels channels);
+    InputChannels GetTrackInputChannels(int trackId);
     /// <summary>Live input monitoring (audio tracks, Monitor "In"): play the record-input
     /// source through the track in place of its clips. A master source stays silent.</summary>
     void SetTrackMonitor(int trackId, bool on);

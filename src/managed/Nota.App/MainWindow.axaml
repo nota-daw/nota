@@ -101,6 +101,7 @@
             <NativeMenuItem Header="Play / stop" app:Commands.Id="transport.playStop"/>
             <NativeMenuItem Header="Play / pause" app:Commands.Id="transport.playPause"/>
             <NativeMenuItem Header="Record" app:Commands.Id="transport.record"/>
+            <NativeMenuItem Header="Auto-arm selected track" app:Commands.Id="transport.armOnSelect" ToggleType="CheckBox"/>
             <NativeMenuItem Header="Loop" app:Commands.Id="transport.loop"/>
             <NativeMenuItem Header="Loop record: overdub / replace" app:Commands.Id="transport.loopRecordMode"/>
             <NativeMenuItem Header="Metronome" app:Commands.Id="transport.metronome"/>

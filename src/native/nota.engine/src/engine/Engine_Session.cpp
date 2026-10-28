@@ -295,6 +295,13 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         if (ok) {
             recordStartStatus_ = 0;
             recording_.store(true, std::memory_order_relaxed); // drives slot state = recording
+            // A track plays one slot at a time: the take replaces whatever this track was
+            // playing (or about to launch), from the moment capture starts (#337). Idle
+            // players are left alone (a stray stop request would flush their MIDI state).
+            if (auto& sp = t->sessionPlayer)
+                if (sp->playing.load(std::memory_order_relaxed) >= 0 ||
+                    sp->pending.load(std::memory_order_relaxed) != SessionPlayer::kNone)
+                    sp->requestStopNow();
             if (countIn) {
                 sessionCountIn_ = true;
                 transportPlayCountIn();
