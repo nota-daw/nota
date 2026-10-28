@@ -1886,6 +1886,7 @@ void Engine::renderMonitorInput(Graph* g, const Track& t, float* dst, int32_t fr
     const int32_t src = t.recordInputSource();
     if (src == 0) {
         std::copy_n(monitorHwBuf_.data(), frames * 2, dst);
+        Track::foldInputChannels(dst, static_cast<size_t>(frames), t.inputChannels()); // a mono pick (#340)
         return;
     }
     std::fill_n(dst, frames * 2, 0.0f);
@@ -2166,7 +2167,38 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             // while it is muted.
             const bool keying = !audible && routeSlotForTrack(t.id()) >= 0;
             const bool postTapMuted = keying && leafMute(t);
+            // Input monitoring (Monitor "In"): the track plays its record-input source live
+            // in place of its clips — hardware input this segment, or the source track's
+            // post-fader tap from the previous one. Master (-1) would feed back: silent.
+            const bool monitoring = !frozenActive && !capturing && t.type() == TrackType::Audio && t.monitor();
+
+            // 0) Session view (M5-2): apply quantized launch/stop; a playing slot
+            //    overrides this track's arrangement content. Requests apply on every track,
+            //    heard or not: a muted, solo-gated, monitoring or frozen track would otherwise
+            //    keep a launch queued forever (#343). Only the sound is skipped there — a
+            //    frozen or capturing track plays its buffer / arrangement, a monitoring one its
+            //    input. Serial: session clocks share followRng_ across tracks (deterministic
+            //    order = the old interleaved order).
+            bool sessionActive = false;
+            if (auto& sp = t.sessionPlayer) {
+                // Follow actions + Repeat launch mode queue the next request before it applies.
+                if (playing) sessionPreApply(t, frames / spb);
+                if (sp->maybeApply(
+                        blockStart / spb, frames / spb, launchQuant_.load(std::memory_order_relaxed), seamOffs_)) {
+                    if (t.instrument) t.instrument->allNotesOff();
+                    for (auto& md : t.midiEffects)
+                        if (md) md->reset(); // clock switch → flush arp
+                }
+                sessionActive =
+                    !frozenActive && !capturing && !monitoring && sp->playing.load(std::memory_order_relaxed) >= 0;
+            }
             if (!audible && !capturing && !feeding && !keying) {
+                // Silent this block, but a playing slot keeps its place in the loop, so it is
+                // in time again when the track is unmuted (and follow actions keep counting).
+                if (sessionActive) {
+                    t.sessionPlayer->localBeats += frames / spb;
+                    sessionPostRender(t, frames / spb);
+                }
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
@@ -2176,29 +2208,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             w.feeding = feeding;
             w.toMix = audible || capturing; // false: render only for the taps
             w.postTapMuted = postTapMuted;
-            // Input monitoring (Monitor "In"): the track plays its record-input source live
-            // in place of its clips — hardware input this segment, or the source track's
-            // post-fader tap from the previous one. Master (-1) would feed back: silent.
-            w.monitoring = !frozenActive && !capturing && t.type() == TrackType::Audio && t.monitor();
+            w.monitoring = monitoring;
             w.frozenActive = frozenActive;
-
-            // 0) Session view (M5-2): apply quantized launch/stop; a playing slot
-            //    overrides this track's arrangement content. (Skipped for a frozen or
-            //    capturing track — the buffer/arrangement is the source of truth.)
-            //    Serial: session clocks share followRng_ across tracks (deterministic
-            //    order = the old interleaved order).
-            bool sessionActive = false;
-            if (!frozenActive && !capturing && !w.monitoring)
-                if (auto& sp = t.sessionPlayer) {
-                    // Follow actions + Repeat launch mode queue the next request before it applies.
-                    if (playing) sessionPreApply(t, frames / spb);
-                    if (sp->maybeApply(blockStart / spb, frames / spb, launchQuant_.load(std::memory_order_relaxed))) {
-                        if (t.instrument) t.instrument->allNotesOff();
-                        for (auto& md : t.midiEffects)
-                            if (md) md->reset(); // clock switch → flush arp
-                    }
-                    sessionActive = sp->playing.load(std::memory_order_relaxed) >= 0;
-                }
             w.sessionActive = sessionActive;
 
             // Render-path selection (same condition chain as the old inline loop).
