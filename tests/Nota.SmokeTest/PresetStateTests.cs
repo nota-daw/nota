@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Infrastructure;
+using Nota.Presentation;
 
 namespace Nota.SmokeTest;
 
@@ -152,5 +153,33 @@ internal static class PresetStateTests
         yield return (old["formatVersion"]?.GetValue<int>() == ProjectService.CurrentFormatVersion
                       && new DeviceDto().Preset is null && new InstrumentDto().Preset is null && new MidiDeviceDto().Preset is null,
             "preset: a v25 project migrates and opens with no preset names");
+
+        foreach (var r in InPlaceDrops()) yield return r;
+    }
+
+    // A preset dropped (or picked in the palette) onto the same kind of instrument changes the
+    // sound in place: undo brings back the old sound together with the old name.
+    private static IEnumerable<(bool, string)> InPlaceDrops()
+    {
+        using var eng = new NotaEngine();
+        var cat = new FactoryPresetCatalog();
+        var svc = new DeviceInsertService(eng, cat, null, null);
+        var two = cat.All().Where(p => p.IsInstrument && p.BuiltinKind == 0 && p.DisplayName != "Init").Take(2).ToList();
+        if (two.Count < 2) { yield return (false, "preset: two Synth presets for the in-place drop"); yield break; }
+        int t = eng.AddInstrumentTrack();
+        eng.SetTrackBuiltinInstrument(t, 0);
+        BrowserItem Row(FactoryPresetInfo p) => new() { Name = p.DisplayName, Kind = BrowserItemKind.Preset, Path = "factory:" + p.Id };
+        float[] Sound() => Enumerable.Range(0, eng.PluginParamCount(t, -1)).Select(i => eng.PluginParamGet(t, -1, i)).ToArray();
+        const PresetSurface Ins = PresetSurface.Instrument;
+
+        var r1 = svc.ApplyPreset(Row(two[0]), new InsertTarget(t, InPlace: true));
+        var first = Sound();
+        var r2 = svc.ApplyPreset(Row(two[1]), new InsertTarget(t, InPlace: true));
+        var second = Sound();
+        yield return (r1.Ok && r2.Ok && !r2.InstrumentReplaced && PresetEdit.Name(eng, t, Ins, -1) == two[1].DisplayName
+                      && eng.DevicePresetModified(t, Ins, -1) == 0 && !first.SequenceEqual(second),
+            $"preset: \"{two[1].DisplayName}\" dropped on the same instrument loads in place and names it");
+        yield return (eng.Undo() && PresetEdit.Name(eng, t, Ins, -1) == two[0].DisplayName && Sound().SequenceEqual(first),
+            "preset: undoing an in-place drop brings back the old sound and the old name together");
     }
 }

@@ -64,8 +64,15 @@ bool Engine::setPresetTagIndex(int32_t trackId, int32_t surface, int32_t index, 
 bool Engine::presetSurfaceValues(int32_t trackId, int32_t surface, int32_t index, std::vector<float>& out) const {
     out.clear();
     int32_t n = 0;
+    bool hosted = false; // a hosted plug-in effect exposes its params as plug-in params
     switch (surface) {
-    case 0: { auto* d = deviceAt(trackId, index); if (!d) return false; n = d->paramCount(); break; }
+    case 0: {
+        auto* d = deviceAt(trackId, index);
+        if (!d) return false;
+        n = d->paramCount();
+        if (n == 0 && d->pluginParamCount() > 0) { n = d->pluginParamCount(); hosted = true; }
+        break;
+    }
     case 1: { auto t = findTrackAuthoring(trackId); if (!t || !t->instrument) return false; n = pluginParamCount(trackId, -1); break; }
     case 2: { auto* m = midiDeviceAt(trackId, index); if (!m) return false; n = m->paramCount(); break; }
     default: return false;
@@ -74,7 +81,8 @@ bool Engine::presetSurfaceValues(int32_t trackId, int32_t surface, int32_t index
     out.resize(static_cast<size_t>(std::max(0, n)));
     for (int32_t p = 0; p < n; ++p) {
         float v;
-        if (!cvBaseValue(surface, trackId, dev, p, v)) // a modulated param: its base
+        if (hosted) v = pluginParamGet(trackId, index, p);
+        else if (!cvBaseValue(surface, trackId, dev, p, v)) // a modulated param: its base
             v = surface == 0 ? deviceGetParam(trackId, index, p)
                 : surface == 2 ? midiEffectGetParam(trackId, index, p)
                                : pluginParamGet(trackId, -1, p);
@@ -111,11 +119,15 @@ int32_t Engine::presetModified(int32_t trackId, int32_t surface, int32_t index) 
     std::vector<float> now;
     if (!presetSurfaceValues(trackId, surface, index, now)) return -1;
     const size_t n = std::min(now.size(), tag->base.size());
+    const auto* dev = surface == 0 ? deviceAt(trackId, index) : nullptr;
+    const bool hosted = dev && dev->paramCount() == 0; // plug-in params, normalized
     for (size_t i = 0; i < n; ++i) {
         const auto p = static_cast<int32_t>(i);
         std::string name;
-        float lo = 0.0f, hi = 1.0f; // instrument params are normalized
-        if (surface == 0) {
+        float lo = 0.0f, hi = 1.0f; // instrument and plug-in params are normalized
+        if (hosted) {
+            name = pluginParamId(trackId, index, p);
+        } else if (surface == 0) {
             const char* nm = deviceParamName(trackId, index, p);
             name = nm ? nm : "";
             lo = deviceParamMin(trackId, index, p);

@@ -282,10 +282,14 @@ public sealed partial class DeviceChainView
             // from the browser, or a project reopened, still names its kit.
             string now = own.Current();
             if (now.Length > 0 && presets.FindIndex(p => p.Id == now) is var ni and >= 0) { extra.PresetId = now; extra.Preset = presets[ni].Name; }
+            // An own list (a kit, a program) isn't a parameter change the mix undo can hold, so
+            // its pick retags the device directly: the name and the mark follow the pick.
+            var ownSurface = SurfaceOf(s.Kind);
             applyById = id =>
             {
                 string warn = own.Apply(id);
                 if (warn.Length > 0) StatusMessage?.Invoke(warn);
+                else _engine.SetDevicePresetTag(_trackId, ownSurface, di, "own:" + id, presets.FirstOrDefault(p => p.Id == id).Name ?? "");
                 Changed?.Invoke();
             };
             if (own.Init is { } init)
@@ -293,6 +297,7 @@ public sealed partial class DeviceChainView
                 {
                     string warn = init();
                     if (warn.Length > 0) StatusMessage?.Invoke(warn);
+                    else _engine.SetDevicePresetTag(_trackId, ownSurface, di, "", "");
                     Changed?.Invoke();
                 };
         }
@@ -316,17 +321,32 @@ public sealed partial class DeviceChainView
         // and saved projects, so the card only caches it.
         bool tagged = s.Presets is null && presets.Count > 0;
         var surface = SurfaceOf(s.Kind);
-        if (tagged && _engine.DevicePresetTag(_trackId, surface, di) is var tagIx and >= 0)
+        int tagIx = s.Utility ? -1 : _engine.DevicePresetTag(_trackId, surface, di);
+        if (tagged && tagIx >= 0)
         {
             var tag = _engine.PresetTagInfo(tagIx);
             extra.PresetId = tag?.Id ?? ""; extra.Preset = tag?.Name ?? "";
         }
+        // A card with its own list, or a plug-in with none, still names a preset the browser
+        // or Save preset… tagged it with (a user preset, a plug-in's preset file).
+        bool ownTagged = !tagged && tagIx > 0;
+        if (ownTagged && _engine.PresetTagInfo(tagIx) is { } ot)
+        {
+            int oi = ot.Id.StartsWith("own:", StringComparison.Ordinal) ? presets.FindIndex(p => "own:" + p.Id == ot.Id) : -1;
+            bool known = presets.FindIndex(p => p.Id == extra.PresetId) >= 0;   // the device's own word wins
+            if (oi >= 0) { if (!known) { extra.PresetId = presets[oi].Id; extra.Preset = presets[oi].Name; } }
+            else if (!known) { extra.PresetId = ot.Id; extra.Preset = ot.Name; }
+        }
         int curPreset = presets.FindIndex(p => p.Id == extra.PresetId);
+        // A factory list's own "Init" entry stands for no tag.
+        if (tagged && curPreset < 0 && extra.PresetId.Length == 0) curPreset = presets.FindIndex(p => p.Name == "Init");
         bool atInit = curPreset < 0 && string.IsNullOrEmpty(extra.Preset);
         void ApplyPreset(int i)
         {
             var p = presets[i];
-            if (tagged) PresetStep(s.Kind, di, () => applyById(p.Id), p.Id, p.Name); else applyById(p.Id);
+            // The list's own "Init" entry is Init: no tag, no mark.
+            bool isInit = p.Name == "Init";
+            if (tagged) PresetStep(s.Kind, di, () => applyById(p.Id), isInit ? "" : p.Id, isInit ? "" : p.Name); else applyById(p.Id);
             extra.PresetId = p.Id; extra.Preset = p.Name; Rebuild();
         }
         void ApplyInit()
@@ -348,11 +368,11 @@ public sealed partial class DeviceChainView
         // The picker has its own centre slot: the badges' live voice count changes width
         // (Consort's "Duo 1/2" → "Poly 12/16") without moving it.
         Control? picker = null;
-        if (presets.Count > 0)
+        if (presets.Count > 0 || ownTagged)
         {
             picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
                 nameWidth: s.Compact ? 74 : 132, init: resetToInit != null ? ApplyInit : null,
-                modified: tagged ? Throttled(() => _engine.DevicePresetModified(_trackId, surface, di) == 1) : null,
+                modified: tagged || ownTagged ? Throttled(() => _engine.DevicePresetModified(_trackId, surface, di) == 1) : null,
                 addLive: _deviceLiveRefreshers.Add);
             Grid.SetColumn(picker, 1); headerGrid.Children.Add(picker);
         }
