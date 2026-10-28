@@ -40,7 +40,11 @@ float nota_track_modulator_value(const NotaEngine* e, int32_t track_id, int32_t 
     return e ? CENG(e)->modulatorValue(track_id, mod_id) : 0.0f;
 }
 int32_t nota_track_modulator_scope(const NotaEngine* e, int32_t track_id, int32_t mod_id, float* out, int32_t cap) {
-    return e ? CENG(e)->modulatorScope(track_id, mod_id, out, cap) : 0;
+    return e ? CENG(e)->modulatorScope(track_id, mod_id, out, nullptr, cap) : 0;
+}
+int32_t nota_track_modulator_scope_timed(
+    const NotaEngine* e, int32_t track_id, int32_t mod_id, float* values, float* dts, int32_t cap) {
+    return e && values && dts ? CENG(e)->modulatorScope(track_id, mod_id, values, dts, cap) : 0;
 }
 
 int32_t nota_track_add_cv_link(

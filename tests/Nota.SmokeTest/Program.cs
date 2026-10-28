@@ -485,6 +485,14 @@ if (args.Length >= 1 && args[0] == "--fold")
     Console.WriteLine(failures == 0 ? "FOLD PASSED" : $"FOLD FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The Modular Scope view alone: `--scope`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--scope")
+{
+    Console.WriteLine("-- scope view --");
+    foreach (var (ok, label) in ScopeViewTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SCOPE PASSED" : $"SCOPE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // The project pan law alone: `--panlaw`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--panlaw")
 {
@@ -15192,6 +15200,8 @@ foreach (var (ok, label) in DeviceFoldTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- eq analyzer --");
 foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);
+Console.WriteLine("-- scope view --");
+foreach (var (ok, label) in ScopeViewTests.Run()) Check(ok, label);
 
 // The Linux JUCE message pump (.specify/bugs/linux-plugin-black-window): exported on every
 // platform and a safe no-op before any hosted plugin exists (the app ticks it on Linux).
