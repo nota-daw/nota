@@ -567,8 +567,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->automation = t.automation;     // automation lanes (M9)
     nt->modulators = t.modulators;     // CV modulation sources (Phase 3)
     nt->cvLinks = t.cvLinks;           // CV modulation edges (Phase 3)
-    nt->ccRoutes = t.ccRoutes;         // Arp CC routes (specs/044); rebuilt when published
-    nt->ccRoutesDirty = true;
+    nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)

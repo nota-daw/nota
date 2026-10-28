@@ -313,10 +313,11 @@ void Engine::syncCcRoutes(Graph& g) {
     auto sync = [&](Track& t) {
         if (!t.ccRoutesDirty) return;   // published before: the audio thread may be reading it
         t.ccRoutesDirty = false;
-        t.ccRoutes.clear();
+        t.ccRoutes.reset();
         auto add = [&](const MidiDevice& m) {
             if (m.ccDestParam() < 0 || (m.ccDestDevice() < 0 && m.ccDestChainUid() == 0)) return;
-            t.ccRoutes.push_back({&m, m.ccDestDevice(), m.ccDestChainUid(), m.ccDestSlot(), m.ccDestParam()});
+            if (!t.ccRoutes) t.ccRoutes = std::make_unique<std::vector<Track::CcRoute>>();
+            t.ccRoutes->push_back({&m, m.ccDestDevice(), m.ccDestChainUid(), m.ccDestSlot(), m.ccDestParam()});
         };
         for (auto& md : t.midiEffects) {
             if (!md) continue;
@@ -324,7 +325,7 @@ void Engine::syncCcRoutes(Graph& g) {
             if (auto* r = md->asRack()) r->forEachChildMidi([&](MidiDevice& c) { add(c); });
         }
         if (auto* r = t.instrument ? t.instrument->asRack() : nullptr) r->forEachChildMidi([&](MidiDevice& c) { add(c); });
-        if (!t.ccRoutes.empty()) ccRoutesUsed_ = true;
+        if (t.ccRoutes) ccRoutesUsed_ = true;
     };
     for (auto& t : g.tracks) sync(*t);
     if (g.masterTrack) sync(*g.masterTrack);
@@ -337,8 +338,9 @@ void Engine::reapplyCcRoutes() {
     auto apply = [](const Track& t) {
         auto one = [&](MidiDevice& m) {
             const Track::CcRoute* rt = nullptr;
-            for (auto& e : t.ccRoutes)
-                if (e.arp == &m) { rt = &e; break; }
+            if (t.ccRoutes)
+                for (auto& e : *t.ccRoutes)
+                    if (e.arp == &m) { rt = &e; break; }
             if (!rt) {
                 if (m.ccDestDevice() >= 0 || m.ccDestChainUid() != 0) m.setCcDest(-1, -1);
                 return;

@@ -268,7 +268,9 @@ class Track {
         int32_t slot = -1;
         int32_t param = -1;
     };
-    std::vector<CcRoute> ccRoutes;
+    // Out of line and only when some Arp has a target: every edit clones a track, and a bigger
+    // track made small edits measurably costlier (the edit-path gate).
+    std::unique_ptr<std::vector<CcRoute>> ccRoutes;
     bool ccRoutesDirty = true;
     int32_t nextModId = 1; // monotonic modulator-id source
 

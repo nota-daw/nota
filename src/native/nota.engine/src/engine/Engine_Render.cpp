@@ -320,7 +320,7 @@ int Engine::applyMidiEffects(
 // a group or rack edit retargets those before the new device order is published.
 static void applyCcRoute(Track& t, const MidiDevice& md) {
     const Track::CcRoute* rt = nullptr;
-    for (auto& r : t.ccRoutes)
+    for (auto& r : *t.ccRoutes)
         if (r.arp == &md) { rt = &r; break; }
     if (!rt) return;
     const int di = rt->dev, pi = rt->param;
@@ -335,7 +335,7 @@ static void applyCcRoute(Track& t, const MidiDevice& md) {
 }
 
 void Engine::applyMidiCcRouting(Track& t) {
-    if (t.ccRoutes.empty()) return;
+    if (!t.ccRoutes) return;
     for (auto& md : t.midiEffects) {
         if (!md) continue;
         applyCcRoute(t, *md);
