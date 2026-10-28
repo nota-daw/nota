@@ -1991,12 +1991,24 @@ class Engine {
     static constexpr int kMaxLiveExpr = 256;
     MidiEvent liveExpr_[kMaxLiveExpr];
     int liveExprCount_ = 0;
-    // Tracks disarmed with keys still down (#366), from the live queue's release requests
-    // (expr kLiveReleaseExpr): this block releases the live notes each one was sounding.
+    // The untargeted live notes (keyboard, MIDI) each track was given and not yet the note-off
+    // of, by track id: kept here, not on the Track, which every edit replaces. A track disarmed
+    // with keys still down (#366) sends a release request (expr kLiveReleaseExpr) through the
+    // live queue; the track's next render releases them. Audio thread only.
     static constexpr int32_t kLiveReleaseExpr = -2;
-    static constexpr int kMaxLiveRelease = 16;
-    int32_t liveRelease_[kMaxLiveRelease] = {};
-    int liveReleaseCount_ = 0;
+    struct LiveSounding {
+        int32_t trackId = -1;
+        uint32_t bits[4] = {};
+        bool release = false;
+    };
+    static constexpr int kMaxLiveSounding = 128;
+    LiveSounding liveSounding_[kMaxLiveSounding];
+    int liveReleases_ = 0; // entries with release set (renders skip the lookup at 0)
+    LiveSounding* liveSoundingOf(int32_t trackId, bool create);
+    // Track t's share of the block's live notes, appended to evs: the untargeted ones and/or
+    // the ones addressed to it, then the release of what it was sounding if it was disarmed
+    // and no longer takes live input. Returns the new count.
+    int liveNotesFor(const Track& t, bool untargeted, bool targeted, bool stillTakes, MidiEv* evs, int n);
     // Whether a live event reaches track t (armed / audition, or addressed to it).
     bool takesLiveEvent(const Track& t, const MidiEvent& e) const;
     // Apply the live expression that reaches `t` (and its MIDI source track) to `inst`.

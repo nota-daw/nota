@@ -184,11 +184,6 @@ class Track {
     // isn't sent again every block. Audio thread only.
     bool sessionSilentReleased = false;
 
-    // The untargeted live notes (keyboard, MIDI) this track was given and has not yet been
-    // given the note-off of, 128 bits. Released when the track is disarmed with them still
-    // down (#366). Audio thread only.
-    uint32_t liveSounding[4] = {};
-
     // Metering (M6-2): post-fader block peak/RMS per channel. Written by the
     // audio thread each block, read by the UI. Transient — not copied across
     // snapshots (a freshly cloned track just re-populates on the next block).

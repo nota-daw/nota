@@ -915,7 +915,6 @@ void Engine::publishHeldSnapshot(double nowBeat) {
 void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     liveCount_ = 0;
     liveExprCount_ = 0;
-    liveReleaseCount_ = 0;
     const bool rec = recording_.load(std::memory_order_relaxed);
 
     // When recording into a Session slot, time notes against the slot's own loop
@@ -973,7 +972,10 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             continue;
         }
         if (e.expr == kLiveReleaseExpr) { // a track disarmed: release, the keys stay down
-            if (liveReleaseCount_ < kMaxLiveRelease) liveRelease_[liveReleaseCount_++] = e.trackId;
+            if (LiveSounding* s = liveSoundingOf(e.trackId, false); s && !s->release) {
+                s->release = true;
+                ++liveReleases_;
+            }
             continue;
         }
         const bool valid = e.pitch >= 0 && e.pitch < 128;
@@ -1177,25 +1179,48 @@ int Engine::gatherInstrumentNotes(
     // Live notes reach a track when it's armed, or when it's the audition target
     // (so clicking a rack/drum pad plays it without arming/recording).
     // A track-addressed event (Nota Remote) plays only its own track.
+    const bool takesUntargeted = t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed);
+    return liveNotesFor(t, takesUntargeted, true, takesUntargeted, evs, n);
+}
+
+Engine::LiveSounding* Engine::liveSoundingOf(int32_t trackId, bool create) {
+    LiveSounding* free = nullptr;
+    for (auto& s : liveSounding_) {
+        if (s.trackId == trackId) return &s;
+        if (!free && s.trackId < 0) free = &s;
+    }
+    if (!create || !free) return nullptr;
+    *free = LiveSounding{trackId};
+    return free;
+}
+
+int Engine::liveNotesFor(const Track& t, bool untargeted, bool targeted, bool stillTakes, MidiEv* evs, int n) {
     for (int i = 0; i < liveCount_ && n < 1024; ++i) {
         const MidiEvent& le = liveEvents_[i];
-        if (!takesLiveEvent(t, le)) continue;
+        if (le.trackId >= 0 ? !targeted || le.trackId != t.id() : !untargeted) continue;
         evs[n++] = {0, le.on, le.pitch, le.velocity};
-        if (le.trackId < 0 && le.pitch >= 0 && le.pitch < 128) {
-            const uint32_t bit = 1u << (le.pitch & 31);
-            if (le.on) t.liveSounding[le.pitch >> 5] |= bit;
-            else t.liveSounding[le.pitch >> 5] &= ~bit;
+        if (le.trackId >= 0 || le.pitch < 0 || le.pitch >= 128) continue;
+        const uint32_t bit = 1u << (le.pitch & 31);
+        if (LiveSounding* s = liveSoundingOf(t.id(), le.on)) {
+            if (le.on) s->bits[le.pitch >> 5] |= bit;
+            else s->bits[le.pitch >> 5] &= ~bit;
+            if (!(s->bits[0] | s->bits[1] | s->bits[2] | s->bits[3])) {
+                if (s->release) --liveReleases_;
+                *s = LiveSounding{};
+            }
         }
     }
-    // Disarmed with keys down (#366): release the live notes it was given, unless it still
-    // takes live input (re-armed, or the audition target).
-    for (int i = 0; i < liveReleaseCount_; ++i) {
-        if (liveRelease_[i] != t.id()) continue;
-        if (t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed)) break;
-        for (int p = 0; p < 128 && n < 1024; ++p)
-            if ((t.liveSounding[p >> 5] >> (p & 31)) & 1u) evs[n++] = {0, false, p, 0.0f};
-        for (auto& w : t.liveSounding) w = 0;
-        break;
+    // Disarmed with keys down (#366): release the live notes it was given, unless it takes
+    // live input again (re-armed, or the audition target).
+    LiveSounding* s = liveReleases_ > 0 ? liveSoundingOf(t.id(), false) : nullptr;
+    if (s && s->release) {
+        s->release = false;
+        --liveReleases_;
+        if (!stillTakes) {
+            for (int p = 0; p < 128 && n < 1024; ++p)
+                if ((s->bits[p >> 5] >> (p & 31)) & 1u) evs[n++] = {0, false, p, 0.0f};
+            *s = LiveSounding{};
+        }
     }
     return n;
 }
@@ -1468,10 +1493,8 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
 
     // Live monitoring while overdub-recording into this slot (M5-4).
     const bool monitoring = recordSlotPlayer_.load(std::memory_order_acquire) == &sp;
-    if (monitoring)
-        for (int i = 0; i < liveCount_ && n < 1024; ++i)
-            if (liveEvents_[i].trackId < 0 || liveEvents_[i].trackId == t.id()) // a phone plays only its own track
-                evs[n++] = {0, liveEvents_[i].on, liveEvents_[i].pitch, liveEvents_[i].velocity};
+    // A phone plays only its own track.
+    n = liveNotesFor(t, monitoring, monitoring, monitoring && t.armed(), evs, n);
 
     std::sort(evs, evs + n, midiEvLess);
 
