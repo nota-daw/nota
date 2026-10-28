@@ -915,6 +915,7 @@ void Engine::publishHeldSnapshot(double nowBeat) {
 void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     liveCount_ = 0;
     liveExprCount_ = 0;
+    liveReleaseCount_ = 0;
     const bool rec = recording_.load(std::memory_order_relaxed);
 
     // When recording into a Session slot, time notes against the slot's own loop
@@ -969,6 +970,10 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             if (k < liveExprCount_) liveExpr_[k].velocity = e.velocity;
             else if (liveExprCount_ < kMaxLiveExpr)
                 liveExpr_[liveExprCount_++] = e;
+            continue;
+        }
+        if (e.expr == kLiveReleaseExpr) { // a track disarmed: release, the keys stay down
+            if (liveReleaseCount_ < kMaxLiveRelease) liveRelease_[liveReleaseCount_++] = e.trackId;
             continue;
         }
         const bool valid = e.pitch >= 0 && e.pitch < 128;
@@ -1174,7 +1179,23 @@ int Engine::gatherInstrumentNotes(
     // A track-addressed event (Nota Remote) plays only its own track.
     for (int i = 0; i < liveCount_ && n < 1024; ++i) {
         const MidiEvent& le = liveEvents_[i];
-        if (takesLiveEvent(t, le)) evs[n++] = {0, le.on, le.pitch, le.velocity};
+        if (!takesLiveEvent(t, le)) continue;
+        evs[n++] = {0, le.on, le.pitch, le.velocity};
+        if (le.trackId < 0 && le.pitch >= 0 && le.pitch < 128) {
+            const uint32_t bit = 1u << (le.pitch & 31);
+            if (le.on) t.liveSounding[le.pitch >> 5] |= bit;
+            else t.liveSounding[le.pitch >> 5] &= ~bit;
+        }
+    }
+    // Disarmed with keys down (#366): release the live notes it was given, unless it still
+    // takes live input (re-armed, or the audition target).
+    for (int i = 0; i < liveReleaseCount_; ++i) {
+        if (liveRelease_[i] != t.id()) continue;
+        if (t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed)) break;
+        for (int p = 0; p < 128 && n < 1024; ++p)
+            if ((t.liveSounding[p >> 5] >> (p & 31)) & 1u) evs[n++] = {0, false, p, 0.0f};
+        for (auto& w : t.liveSounding) w = 0;
+        break;
     }
     return n;
 }

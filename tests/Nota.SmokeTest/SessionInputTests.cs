@@ -28,6 +28,8 @@ internal static class SessionInputTests
         foreach (var r in MonoInput()) yield return r;
         foreach (var r in ExclusiveArm()) yield return r;
         foreach (var r in DisarmReleasesHeldNotes()) yield return r;
+        foreach (var r in DisarmKeepsKeyForOtherTrack()) yield return r;
+        foreach (var r in DisarmSparesClipNotes()) yield return r;
     }
 
     private static void Beats(NotaEngine e, double beats, float[]? keep = null)
@@ -261,6 +263,70 @@ internal static class SessionInputTests
             yield return (held > 0.01f && after < 1e-4f && released < 1e-4f,
                 $"disarming by {how} while a key is held releases the note (peak {held:F3} → {after:G2})");
         }
+    }
+
+    // The key stays down for the other armed track: a take started there while it's still held
+    // records it (#366).
+    private static IEnumerable<(bool, string)> DisarmKeepsKeyForOtherTrack()
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        e.SetMetronome(false);
+        e.SetCountIn(0);
+        int a = e.AddInstrumentTrack(), b = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(a, 0);
+        e.SetTrackBuiltinInstrument(b, 0);
+        TrackArm.Set(e, a, true, additive: false);
+        TrackArm.Set(e, b, true, additive: true);
+        e.Play();
+        Beats(e, 1.0);
+        e.NoteOn(62, 0.8f);
+        Beats(e, 0.5);
+        TrackArm.Set(e, a, false, additive: true);
+        Beats(e, 0.5);
+        e.SetRecording(true);              // the take goes to b, the key still down
+        Beats(e, 1.0);
+        e.NoteOff(62);
+        Beats(e, 0.2);
+        e.Poll();
+        e.SetRecording(false);
+        e.Poll();
+        bool got = false;
+        for (int c = 0; c < 8 && e.TryGetClipInfo(b, c, out _); c++)
+            got |= e.GetClipNotes(b, c).Any(n => n.Pitch == 62);
+        yield return (got, "disarming one track leaves the key held for a take started on another armed track");
+        e.StopTransport();
+    }
+
+    // Disarming releases only the live notes that track was sounding: its clip's note on a
+    // pitch another track holds from Nota Remote keeps playing (#366).
+    private static IEnumerable<(bool, string)> DisarmSparesClipNotes()
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        e.SetMetronome(false);
+        int a = e.AddInstrumentTrack(), b = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(a, 0);
+        e.SetTrackBuiltinInstrument(b, 0);
+        int clip = e.AddMidiClip(a, 0.0, 8.0);
+        e.SetClipNotes(a, clip, new[] { new NotaNote(64, 0.0, 8.0, 0.8f) });
+        TrackArm.Set(e, a, true, additive: false);
+        e.Seek(0.0);
+        e.Play();
+        Beats(e, 0.5);
+        e.TrackNoteOn(b, 64, 0.8f);
+        Beats(e, 0.5);
+        TrackArm.Set(e, a, false, additive: false);
+        float peak = 0;
+        var buf = new float[Chunk * 2];
+        for (int k = 0; k < 64; k++)
+        {
+            e.RenderOffline(buf, Chunk, Sr);
+            if (k >= 8 && e.TryGetTrackMeter(a, out var m)) peak = Math.Max(peak, m.Peak);
+        }
+        e.TrackNoteOff(b, 64);
+        yield return (peak > 0.01f, $"disarming leaves the track's clip note sounding (peak {peak:F3})");
+        e.StopTransport();
     }
 
     private static int FirstAudio(NotaEngine e)

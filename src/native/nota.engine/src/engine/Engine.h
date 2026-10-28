@@ -1991,6 +1991,12 @@ class Engine {
     static constexpr int kMaxLiveExpr = 256;
     MidiEvent liveExpr_[kMaxLiveExpr];
     int liveExprCount_ = 0;
+    // Tracks disarmed with keys still down (#366), from the live queue's release requests
+    // (expr kLiveReleaseExpr): this block releases the live notes each one was sounding.
+    static constexpr int32_t kLiveReleaseExpr = -2;
+    static constexpr int kMaxLiveRelease = 16;
+    int32_t liveRelease_[kMaxLiveRelease] = {};
+    int liveReleaseCount_ = 0;
     // Whether a live event reaches track t (armed / audition, or addressed to it).
     bool takesLiveEvent(const Track& t, const MidiEvent& e) const;
     // Apply the live expression that reaches `t` (and its MIDI source track) to `inst`.

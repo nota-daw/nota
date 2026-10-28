@@ -19,12 +19,11 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     if (t) t->setArmed(armed);
     if (armed) return;
     // A key still held from live input loses its note-off once the track stops taking live
-    // notes (#366): release those notes on this track now. The key itself stays held.
+    // notes (#366): the audio thread releases the live notes this track is sounding. The key
+    // itself stays held, for other armed tracks and for a take started while it's down.
     if (wasArmed) {
         std::lock_guard<std::mutex> lk(remoteMidiMx_);
-        for (int p = 0; p < 128; ++p)
-            if ((liveHeld_[p >> 5].load(std::memory_order_relaxed) >> (p & 31)) & 1u)
-                remoteMidi_.push(MidiEvent{false, p, 0.0f, trackId});
+        remoteMidi_.push(MidiEvent{false, -1, 0.0f, trackId, kLiveReleaseExpr});
     }
     // Disarming a track that's currently recording finalizes its take (the audio clip is
     // materialised / MIDI capture stops), so toggling its REC button stops the recording.
