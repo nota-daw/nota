@@ -540,6 +540,7 @@ public partial class MainWindow
         roll.SetTrackColor(TrackBrush(set.ActiveClip.TrackId));
         if (!set.IsMulti) roll.SetClipIdentity(set.ActiveClip.TrackId, set.ActiveClip.ClipIndex);
         roll.SetClips(set, ClipNotesOf(set), TrackBrush);
+        WireFold(roll, () => roll.ActiveClip.TrackId);
 
         _editorTrackId = set.ActiveClip.TrackId;
         _editorClipIndex = set.ActiveClip.ClipIndex;
@@ -553,6 +554,37 @@ public partial class MainWindow
             _editorTrackId = roll.ActiveClip.TrackId;
             _editorClipIndex = roll.ActiveClip.ClipIndex;
             SetDetailChip(_editorTrackId);
+        };
+    }
+
+    // Fold (specs/045) follows the track: its pads on a Drum Rack, and the switch is saved on
+    // the track, so every clip of a folded drum track opens folded.
+    private void WireFold(PianoRollView roll, Func<int> track)
+    {
+        // The rows are laid out for one track at a time: the one whose Fold the editor shows.
+        // It follows the active clip only when the switch lands, so a press that makes another
+        // track's clip active doesn't re-read pads under the note it grabbed.
+        int shown = track();
+        roll.FoldPads = () => IsDrumRackTrack(shown)
+            ? Nota.Presentation.DrumPads.ByNote(Nota.Presentation.DrumPads.Scan(Engine, shown)) : null;
+        roll.FoldToggled += on => Engine.SetTrackPianoFold(shown, on);
+        if (Engine.GetTrackPianoFold(shown))
+        {
+            roll.SetFold(true);
+            roll.EnsureNotesVisible();
+        }
+        // A multi-clip editor's active clip can move to another track: take that track's
+        // Fold, and its pads. Raised from inside a press on another track's note, before its
+        // drag starts: switch once the press is handled, so the roll sees the drag and waits
+        // for the release instead of moving the rows under the grabbed note.
+        roll.ActiveClipChanged += () =>
+        {
+            if (track() == shown) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                int t = track();
+                if (t != shown) roll.SwitchFoldTrack(() => shown = t, Engine.GetTrackPianoFold(t));
+            }, DispatcherPriority.Input);
         };
     }
 
@@ -914,6 +946,7 @@ public partial class MainWindow
         roll.SetTrackColor(TrackBrush(trackId));
         roll.SetClipIdentity(trackId, -(scene + 2));   // distinct key from arrangement clips
         roll.SetNotes(Engine.GetSessionNotes(trackId, scene), slotLen > 0 ? slotLen : 4);
+        WireFold(roll, () => trackId);
 
         _editorRoll = roll;
         _editorTrackId = -1;  // session slot: recording-tick reload N/A

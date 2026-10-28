@@ -617,6 +617,9 @@ class Engine {
     int32_t trackName(int32_t trackId, char* out, int32_t cap) const;
     bool setTrackColorIndex(int32_t trackId, int32_t colorIndex);
     int32_t trackColorIndex(int32_t trackId) const;
+    // Piano roll Fold (specs/045): a per-track view flag, saved with the project.
+    bool setTrackPianoFold(int32_t trackId, bool on);
+    int32_t trackPianoFold(int32_t trackId) const; // 1 / 0, -1 unknown track
 
     // Track clipboard (copy/cut/paste). copyTracks stores fully independent clones of the
     // expanded set (a group brings its children); pasteTracks inserts fresh copies (new ids +

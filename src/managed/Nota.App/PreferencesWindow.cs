@@ -1271,6 +1271,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag on the keys", "Zoom rows · down taller, up shorter"),
             ("⌥ + pinch", "Zoom rows (trackpad)"),
             ("⇧F", "Fit to notes"),
+            ("⌥⇧F", "Fold: only the scale's notes, or a Drum Rack's pads"),
         }),
         ("Audio clip editor", new[]
         {
@@ -1318,6 +1319,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag a track's bottom edge", "Resize the track (header or lane) · snaps to compact / standard / large · a multi-selection resizes together"),
             ("Drag a track's bottom edge + ⌥", "Resize every track at once"),
             ("Double-click a track's bottom edge", "Back to the standard height"),
+            ("Drag a return's or the master's bottom edge", "Resize that row (header or lane) · same snaps · double-click goes back to compact"),
+            ("⌘-click / ⇧-click return headers", "Select several returns · they resize together"),
             ("⌥-click a height key in the track menu", "Set every track to Compact · Standard · Large"),
             ("Drag the track-list edge", "Widen or narrow the track headers · double-click resets"),
             ("Drag sections lane", "Mark a new section over the dragged bars"),

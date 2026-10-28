@@ -25,14 +25,18 @@ internal static class TrackArming
 
     private static int _followed = -1;
 
-    /// <summary>The selection moved to <paramref name="trackId"/>: arm it if it's an
-    /// instrument track (see TrackArm.FollowSelection). Only a move to another track counts,
-    /// so a track disarmed by hand stays disarmed while you keep working on it.</summary>
+    /// <summary>Arm-on-select is on (Transport ▸ Auto-arm selected track, a saved preference;
+    /// off by default, so a click on a track leaves the arms alone).</summary>
+    public static bool ArmOnSelect { get; set; }
+
+    /// <summary>The selection moved to <paramref name="trackId"/>: with <see cref="ArmOnSelect"/>
+    /// on, arm it if it's an instrument track (see TrackArm.FollowSelection). Only a move to
+    /// another track counts, so a track disarmed by hand stays disarmed while you keep working on it.</summary>
     public static void FollowSelection(IAudioEngine engine, int trackId)
     {
         if (trackId == _followed) return;
         _followed = trackId;
-        if (TrackArm.FollowSelection(engine, trackId)) OthersChanged?.Invoke();
+        if (ArmOnSelect && TrackArm.FollowSelection(engine, trackId)) OthersChanged?.Invoke();
     }
 
     /// <summary>A new or reopened project reuses track ids: its first selection is a move.</summary>

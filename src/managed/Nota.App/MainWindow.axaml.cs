@@ -384,6 +384,7 @@ public partial class MainWindow : Window
         PianoRollView.AuditionToggled += OnAuditionToggled;
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         vm.Transport.LoopRecordReplace = vm.Settings.Current.LoopRecordReplace;
+        SetArmOnSelect(vm.Settings.Current.ArmOnSelect);
         vm.Transport.PropertyChanged += (_, e) =>
         {
             // The loop record mode is an app preference: every switch (toggle, ⌘⇧R, menu, MCP) persists.
@@ -416,7 +417,7 @@ public partial class MainWindow : Window
         _deviceChain = new DeviceChainView(vm.Engine, _factory, App.Services.GetService<IPluginCatalog>(), _kits, App.Services.GetService<IMosaicPacks>());
         InitMosaic();
         // A pad added / removed / renamed in the Drum Rack card changes the pattern grid's rows.
-        _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); SyncClipTab(); if (_modular?.IsVisible == true) _modular.Refresh(); };
+        _deviceChain.Changed += () => { Timeline.Refresh(); _patternView?.Reload(); _editorRoll?.RefreshFold(); SyncClipTab(); if (_modular?.IsVisible == true) _modular.Refresh(); };
         _deviceChain.DevicesRemapped += Timeline.RemapAutoTargets;
         _deviceChain.PresetSaveRequested += OnSavePreset;
         _deviceChain.RackPresetSaveRequested += OnSaveRackChainPreset;

@@ -141,7 +141,12 @@ track count and closes with Escape.
     group's hue, shaded per sibling.
   - **Return and Master rows stay pinned** under the tracks, each with a level meter, a
     volume fader and its dB value (the Master fader is the same master volume as the
-    transport's and the Mixer's).
+    transport's and the Mixer's). They start Compact and resize like tracks — drag the
+    bottom edge, or **Height** (Compact · Standard · Large) in their context menu,
+    double-click the edge to go back to Compact; ⌘- or ⇧-click selects several returns to
+    size together. A return shows its mute at Standard and its pan at Large. Past about half
+    the arrangement the footer scrolls. Heights are saved with the project; ⌥-drag and the
+    all-tracks Height leave them alone.
   - **Clip names appear where a run begins** — a clip is a colour band over its waveform,
     and the name prints only at the head of each run so a repeated pattern reads as one
     block. View ▸ Clip names cycles every clip / first of a run / none; a clip named by
@@ -292,6 +297,10 @@ track count and closes with Escape.
     lengthen by the grid, ⌥↑/⌥↓ change velocity by 10 (⌥⇧ by 1).
   - **Remove out of scale** (next to the Scale key and mode) deletes every note outside the
     scale in one undo step.
+  - **Fold** (⌥⇧F) hides the rows you don't use. On a melodic track it keeps the scale's
+    notes, or the pitches in use when no scale is set. On a Drum Rack it keeps one row per pad,
+    named after it. A pitch that holds a note always keeps its row, and ↑/↓ and drags move
+    between the visible rows. Saved per track.
   - Zoomed out, the area past the clip's end is darkened and marked with a line.
   - **Vertical zoom**: rows from 6 to 36 px (all 88 keys fit at the smallest) with
     ⌘⌥ + wheel (Ctrl + Alt on Windows / Linux), a drag on the keys (down taller, up
@@ -498,8 +507,9 @@ track count and closes with Escape.
 
 ## Automation
 
-- **Automation lanes** on tracks, with curved segments (Alt+drag) and points (double-click
-  to add, double-click a point to remove).
+- **Automation lanes** on tracks and returns, with curved segments (Alt+drag) and points
+  (double-click to add, double-click a point to remove). A return's lane (Volume, Pan or a
+  device on its chain) is edited in its footer row, the master's volume in the Master row.
 - **Automation mode** (⌘⇧A): the first time it opens, each track that already has automation
   shows its first automated parameter.
 - **Draw mode** (the `A` key): drawn automation changes the device parameter in real time,

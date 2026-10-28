@@ -300,6 +300,7 @@ class Track {
     // slot (-1 = auto: assign by position).
     std::string name;
     int32_t colorIndex = -1;
+    bool pianoFold = false; // piano roll Fold (specs/045): the editor shows the folded rows
 
     // Stable across snapshots (voice/DSP state must survive structural edits).
     std::shared_ptr<Instrument> instrument;               // instrument tracks
