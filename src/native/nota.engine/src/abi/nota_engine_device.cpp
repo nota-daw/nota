@@ -210,6 +210,24 @@ int32_t nota_device_text(
     return n; // full length (probe with a null buffer, then fetch)
 }
 
+int32_t nota_eq_set_band_text(
+    NotaEngine* e, int32_t track_id, int32_t device_index, int32_t band, const char* label, const char* note) {
+    if (!e) return 0;
+    return ENG(e)->setEqBandText(track_id, device_index, band, label ? label : "", note ? note : "") ? 1 : 0;
+}
+int32_t nota_eq_band_text(
+    const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t band, int32_t which, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string s = CENG(e)->eqBandText(track_id, device_index, band, which);
+    const int32_t n = static_cast<int32_t>(s.size());
+    if (out && cap > 0) {
+        const int32_t m = std::min(n, cap - 1);
+        std::memcpy(out, s.data(), static_cast<size_t>(m));
+        out[m] = '\0';
+    }
+    return n;
+}
+
 // --- MIDI effects ---
 int32_t nota_track_add_midi_effect(NotaEngine* e, int32_t t, int32_t kind) {
     return e ? ENG(e)->addTrackMidiEffect(t, kind) : -1;
