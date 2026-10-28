@@ -23,6 +23,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A plug-in's card shows its interface** (#270): once you've opened a plug-in's window,
+  its device card stands on a picture of it, darkened by a wash in the theme's card colour
+  so the name, facts and buttons stay readable — the whole small card, and the info column
+  of the full one. The picture fills the card without stretching, is retaken each time the
+  window closes (by Close editor or its own close button), follows the device when it's
+  moved, duplicated or copied, and is saved with the project. macOS and Windows; on Linux
+  the card stays plain.
 - **A bigger, more useful Modular Scope** (#266): drag the bar under the trace to make it
   taller (76–320 px), or open the Scope in its own resizable window. New controls: a time
   window in milliseconds (50 ms–8 s) or, with **Sync**, in beats (1/16 to 8 bars) at the

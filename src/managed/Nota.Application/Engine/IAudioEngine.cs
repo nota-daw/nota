@@ -658,6 +658,11 @@ public interface IAudioEngine : IDisposable
     bool PluginEditorIsOpen(int trackId, int deviceIndex);
     byte[] GetPluginState(int trackId, int deviceIndex);
     void SetPluginState(int trackId, int deviceIndex, byte[] data);
+    /// <summary>Editor preview (specs/046): the plug-in window's last look as JPEG, kept on the device;
+    /// set returns false for an unknown device, serial is 0 when there is none.</summary>
+    byte[] GetPluginPreview(int trackId, int deviceIndex);
+    bool SetPluginPreview(int trackId, int deviceIndex, byte[] jpeg);
+    int PluginPreviewSerial(int trackId, int deviceIndex);
     void SetDeviceBypassed(int trackId, int deviceIndex, bool bypassed);
     bool DeviceBypassed(int trackId, int deviceIndex);
     /// <summary>Fold (specs/022): the Devices panel draws the device as a narrow strip.

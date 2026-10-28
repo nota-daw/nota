@@ -175,6 +175,10 @@ HSL lightness (hue kept) that passes the bar:
 6. **Flat docked, blur only floating.** No gradients, glow, textures or skeuomorphism.
    Depth is a tone step plus a 1px seam, with a faint top bevel on raised controls. Only
    floating layers (the command palette, in-window overlays) cast a blurred shadow.
+   One exception, which is the work and not the chrome: a hosted plug-in's card stands on
+   a picture of the plug-in's own window under `NotaPalette.PluginPreviewWash`, a vertical
+   wash of the card's own `SurfaceCard` (specs/046). It lives in `Theme/` like every
+   token; views still draw no gradients of their own.
 7. **Small, nearly square corners.** 2 for inner keys, rows, clips and menu items; 3 for
    controls, cards, graph windows and popovers; 4 only for modals. 0 for docked panels; 1
    for bars inside a plot.

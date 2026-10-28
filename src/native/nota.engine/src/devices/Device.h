@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "devices/EditorPreview.h"
 #include "engine/TransportInfo.h"
 
 namespace nota {
@@ -251,9 +252,15 @@ class Device {
     bool folded() const { return folded_; }
     void setFolded(bool f) { folded_ = f; }
 
+    // Editor preview (specs/046): the plug-in window's last look, drawn behind its card. View
+    // data saved with the project; message thread only, like the fold flag.
+    const EditorPreview& editorPreview() const { return preview_; }
+    void setEditorPreview(EditorPreview p) { preview_ = std::move(p); }
+
   private:
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
+    EditorPreview preview_;
     std::atomic<float> scGainDb_{0.0f};
     std::atomic<float> scMix_{1.0f};
     std::atomic<int32_t> scTapPre_{0};

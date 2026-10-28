@@ -35,7 +35,8 @@ public sealed class ProjectService
     /// v23 (specs/022) adds the Devices-panel fold on devices, MIDI effects and instruments.
     /// v25 (specs/044) adds references into rack chains (lanes, CV links, Arp CC targets) and
     /// chain children's sidechain keys / CC targets.
-    public const int CurrentFormatVersion = 25;
+    /// v26 (specs/046) adds Preview on hosted plug-ins: the picture of their window.
+    public const int CurrentFormatVersion = 26;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -169,6 +170,7 @@ public sealed class ProjectService
                 instDto.SidechainSource = instScSrc >= 0 && idToIndex.TryGetValue(instScSrc, out var isi) ? isi : -1;
                 instDto.Folded = engine.DeviceFolded(ti.Id, -1);
                 instDto.Bypassed = engine.DeviceBypassed(ti.Id, -1);
+                instDto.Preview = RegisterBlob(doc, engine.GetPluginPreview(ti.Id, -1));   // a plug-in's window picture (specs/046)
                 t.Instrument = instDto;
             }
 
@@ -403,6 +405,7 @@ public sealed class ProjectService
                 for (int p = 0; p < pc; p++) dev.Params[p] = engine.DeviceGetParam(trackId, d, p);
                 dev.State = RegisterBlob(doc, engine.DeviceGetState(trackId, d));
             }
+            dev.Preview = RegisterBlob(doc, engine.GetPluginPreview(trackId, d));   // a plug-in's window picture (specs/046)
             list.Add(dev);
         }
         return list;
@@ -496,6 +499,7 @@ public sealed class ProjectService
             }
             if (d.Bypassed) engine.SetDeviceBypassed(trackId, di, true);
             if (d.Folded) engine.SetDeviceFolded(trackId, di, true);
+            if (d.Preview is { } previewRel) engine.SetPluginPreview(trackId, di, ReadBlob(bundleDir, previewRel));
             if (d.SidechainSource >= 0) scDeferred.Add((trackId, di, d.SidechainSource));
             engine.SetDeviceSidechainGain(trackId, di, d.SidechainGain);
             engine.SetDeviceSidechainMix(trackId, di, d.SidechainMix);
@@ -660,6 +664,9 @@ public sealed class ProjectService
             }
 
             if (id > 0 && t.Instrument is { Folded: true }) engine.SetDeviceFolded(id, -1, true);
+            // Not onto the stand-in for a plug-in that isn't installed: it's another instrument.
+            if (id > 0 && t.Instrument is { Preview: { } instPreview } && engine.TrackInstrumentKind(id) == t.Instrument.Kind)
+                engine.SetPluginPreview(id, -1, ReadBlob(bundleDir, instPreview));
             if (id > 0 && t.Instrument is { Bypassed: true })
                 engine.SetDeviceBypassed(id, -1, true);           // the instrument card's switch is off (#148)
             if (id > 0 && t.Instrument is { SidechainSource: >= 0 } insc)

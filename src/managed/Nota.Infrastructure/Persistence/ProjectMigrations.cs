@@ -104,6 +104,9 @@ public static class ProjectMigrations
         // chain children keep sidechain keys and CC targets in the track (specs/044). All absent
         // in v24 documents, where every reference is track level — no-op.
         new Migration(24, _ => { }),
+        // v25 -> v26: hosted plug-ins and instruments gain Preview, the picture of their window
+        // (specs/046). Absent in v25 documents; null = no preview, the card stays plain — no-op.
+        new Migration(25, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

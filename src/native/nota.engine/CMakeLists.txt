@@ -315,6 +315,7 @@ add_library(nota_pluginhost STATIC
     pluginhost/hosting/PluginCommon.cpp
     pluginhost/hosting/NotaPlayHead.cpp
     pluginhost/hosting/PluginEditorWindow.cpp
+    pluginhost/hosting/EditorSnapshot.cpp  # editor preview capture (specs/046)
     pluginhost/hosting/PluginInstrument.cpp
     pluginhost/hosting/PluginEffect.cpp
     pluginhost/scanner/abi_pluginscanner.cpp
@@ -324,6 +325,7 @@ add_library(nota_pluginhost STATIC
 if(APPLE)
     set_source_files_properties(
         pluginhost/hosting/PluginEditorWindow.cpp
+        pluginhost/hosting/EditorSnapshot.cpp
         pluginhost/hosting/PluginHost.cpp
         PROPERTIES LANGUAGE OBJCXX)
 endif()

@@ -580,6 +580,7 @@ std::shared_ptr<Instrument> Engine::cloneInstrumentFrom(const Instrument& src) c
     const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
     if (auto c = src.clone()) {
         c->setSampleRate(sr);
+        c->editorPreview = src.editorPreview; // its window's picture comes along (specs/046)
         return c;
     } // hosted plugin
     switch (src.kind()) { // built-ins
@@ -682,6 +683,7 @@ std::shared_ptr<Device> Engine::cloneDevice(const Device& src) const {
     }
     d->setBypassed(src.bypassed());
     d->setFolded(src.folded());
+    d->setEditorPreview(src.editorPreview()); // shared bytes: the same picture (specs/046)
     d->setSidechainSourceTrackId(src.sidechainSourceTrackId()); // a keyed device keeps its key
     d->setSidechainTapPre(src.sidechainTapPre());
     d->setSidechainGainDb(src.sidechainGainDb());
@@ -1563,6 +1565,28 @@ bool Engine::trackEditorOpen(int32_t trackId, int32_t deviceIndex) const {
     if (deviceIndex < static_cast<int32_t>(t->devices.size()) && t->devices[deviceIndex])
         return t->devices[deviceIndex]->editorOpen();
     return false;
+}
+
+EditorPreview Engine::trackEditorPreview(int32_t trackId, int32_t deviceIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return {};
+    if (deviceIndex < 0) return t->instrument ? t->instrument->editorPreview : EditorPreview{};
+    if (deviceIndex < static_cast<int32_t>(t->devices.size()) && t->devices[deviceIndex])
+        return t->devices[deviceIndex]->editorPreview();
+    return {};
+}
+
+bool Engine::setTrackEditorPreview(int32_t trackId, int32_t deviceIndex, EditorPreview p) {
+    auto t = findTrackAuthoring(trackId);
+    if (!t) return false;
+    if (deviceIndex < 0) {
+        if (!t->instrument) return false;
+        t->instrument->editorPreview = std::move(p);
+        return true;
+    }
+    if (deviceIndex >= static_cast<int32_t>(t->devices.size()) || !t->devices[deviceIndex]) return false;
+    t->devices[deviceIndex]->setEditorPreview(std::move(p));
+    return true;
 }
 
 int32_t Engine::getPluginState(int32_t trackId, int32_t deviceIndex, uint8_t* out, int32_t cap) const {
