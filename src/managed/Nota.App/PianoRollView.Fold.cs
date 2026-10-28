@@ -24,6 +24,7 @@ public sealed partial class PianoRollView
     private bool _rowsArePads;                   // the rows are a Drum Rack's pads
     private bool _fold;
     private double? _rowHBeforePadFit;          // the row height to go back to when unfolding
+    private double? _padFitH;                   // the row height a kit was fitted to (null once zoomed)
     private readonly List<ColumnDefinition> _keyColumns = new();
 
     /// <summary>The host's pad scan for the clip's track: note → pad name on a Drum Rack
@@ -54,11 +55,11 @@ public sealed partial class PianoRollView
         else if (_rowsArePads && RangeH < _bodyScroll.Viewport.Height * 0.75)
         {
             _rowHBeforePadFit = _rowH;
-            FitToNotes();
+            FitPads();
         }
         else if (!on && _rowHBeforePadFit is { } h0)
         {
-            _rowHBeforePadFit = null;
+            _rowHBeforePadFit = null; _padFitH = null;
             SetRowHeightAt(h0, 0);
         }
         if (user) FoldToggled?.Invoke(on);
@@ -76,10 +77,20 @@ public sealed partial class PianoRollView
             if (_fold && _rowsArePads && _rowHBeforePadFit is null && RangeH < vh * 0.75)
             {
                 _rowHBeforePadFit = _rowH;
-                FitToNotes();
+                FitPads();
             }
         }
         _bodyScroll.LayoutUpdated += Once;
+    }
+
+    private void FitPads() { FitToNotes(); _padFitH = _rowH; }
+
+    // A fitted kit follows the editor's height (docked panel → pop-out) until the user zooms rows.
+    private void RefitPadsOnResize()
+    {
+        if (!_fold || !_rowsArePads || _padFitH is not { } fitted || _gridControl.Dragging) return;
+        if (Math.Abs(_rowH - fitted) > 0.01) { _padFitH = null; return; }   // zoomed by hand
+        FitPads();
     }
 
     /// <summary>The rack's pads may have changed (renamed, added, a new sample): re-read them.</summary>

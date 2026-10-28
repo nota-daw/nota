@@ -459,6 +459,7 @@ public sealed partial class PianoRollView : UserControl
         // Persist vertical scroll per clip; apply a pending restore once the body is laid out.
         _bodyScroll.ScrollChanged += (_, _) => { if (!_restoringView) SaveView(); };
         _bodyScroll.LayoutUpdated += (_, _) => ApplyPendingVOffset();
+        _bodyScroll.SizeChanged += (_, e) => { if (e.HeightChanged) RefitPadsOnResize(); };
 
         // Poll the pressed key(s) ~40 Hz while the editor is on screen.
         AttachedToVisualTree += (_, _) =>
