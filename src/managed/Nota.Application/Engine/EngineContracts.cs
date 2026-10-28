@@ -413,6 +413,13 @@ public readonly record struct AutomationLaneInfo(AutomationTarget Target, int De
 /// <summary>An audio device: a stable UID (persistence key) and a display name (M7-1).</summary>
 public readonly record struct AudioDevice(string Uid, string Name);
 
+/// <summary>The audio system on Windows (specs/049). Elsewhere always <see cref="Wasapi"/>, meaning
+/// the platform's native backend.</summary>
+public enum AudioSystem { Wasapi = 0, Asio = 1 }
+
+/// <summary>What the audio driver asked for since the last poll (NotaAudioDeviceEvent).</summary>
+public enum AudioDeviceEvent { None = 0, ResetRequested = 1, DriverFailed = 2 }
+
 /// <summary>A MIDI input source: a stable UID (persistence key) and a display name (M7-2).</summary>
 public readonly record struct MidiDevice(string Uid, string Name);
 

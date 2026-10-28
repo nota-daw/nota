@@ -42,8 +42,10 @@ Running ──resetRequested──▶ (event to app) ──apply──▶ Closed
   `Timeout`, `Stopped` (no buffer callback for 2 s while running). The engine then starts
   the miniaudio WASAPI backend with system defaults and keeps `audioSystem = Asio` in the
   saved config (FR-011).
-- Atomics set from `asioMessage` / `bufferSwitch` / watchdog: `resetRequested`,
-  `lastCallbackTick`, `xrunPending`.
+- Atomics set from `asioMessage` / `bufferSwitch`: `resetRequested`, `lastCallbackTick`.
+  Overloads call the engine's xrun counter directly (an atomic increment). The watchdog
+  runs inside `nota_audio_poll_device_event` (UI tick, ≈ 33 ms) rather than on its own
+  thread: a running driver silent for 2 s moves to `Failed(Stopped)` on the next poll.
 
 ## Device event (C ABI poll)
 

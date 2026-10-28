@@ -23,6 +23,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **ASIO on Windows**: Settings → Audio → **Audio system** now offers ASIO beside WASAPI.
+  Pick the driver and the output and input channel pairs by the driver's own names (the
+  other outputs stay silent); **Driver settings…** opens the driver's panel, where the buffer
+  size is set, and a change there is picked up within a couple of seconds without a restart
+  — playback carries on. Recording and playback share the driver's clock, so monitoring needs
+  no extra buffer, and recorded takes are moved earlier by the driver's reported latency. If
+  the driver is missing, busy or stops responding, Nota switches to WASAPI and the status bar
+  says why; **Try again** goes back to ASIO. The Steinberg ASIO SDK is used under its GPLv3
+  option (`LICENSES/third-party.md`).
 - **Devices remember their preset and show when you changed it** (#157): after you load a
   preset, the card header keeps its name and adds a " *" as soon as a sound parameter moves
   away from it (the tooltip says "Changed since you loaded …"); setting it back, undoing or

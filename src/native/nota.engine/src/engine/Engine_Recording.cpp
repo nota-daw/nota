@@ -67,7 +67,7 @@ bool Engine::trackMonitor(int32_t trackId) const {
 bool Engine::ensureAudioInput() {
     if (inputTestMode_) return true;
     if (input_ && input_->isRunning()) return true;
-    if (!input_) input_ = createAudioInput();
+    if (!input_) input_ = createAudioInput(activeSystem_); // ASIO: the running driver's inputs
     const uint32_t inputDev = resolveAudioDeviceId(config_.inputDeviceUid, /*inputScope=*/true);
     // The input thread only touches the lock-free rings (RT-safe).
     return input_->start(
@@ -123,7 +123,10 @@ void Engine::pullMonitorInput(int32_t frames) {
         monitorPrimed_ = false;
         return;
     }
-    const size_t cushion = static_cast<size_t>(std::clamp(inputBlockFrames_.load(std::memory_order_relaxed), 64, 4096));
+    // ASIO duplex pushes block n's input before block n renders (one clock): no cushion (R8).
+    const size_t cushion = monitorSharedClock_.load(std::memory_order_relaxed)
+                               ? 0
+                               : static_cast<size_t>(std::clamp(inputBlockFrames_.load(std::memory_order_relaxed), 64, 4096));
     size_t avail = monitorQueue_.size();
     const size_t n = static_cast<size_t>(frames);
     InputFrame f;
@@ -487,6 +490,9 @@ bool Engine::startAudioRecording(int32_t trackId) {
     // hardware input. The audio thread feeds the ring from mixGraph; no device is opened.
     const int32_t src = t->recordInputSource();
     captureChannels_ = src == 0 ? t->inputChannels() : Track::kInputStereo; // a mono pick is hardware-only
+    // A hardware take is late by the device's round trip (in + out); 0 on backends that don't
+    // report it, and for internal resampling (specs/049, research R7).
+    audioRecordLatencyFrames_ = src == 0 ? audioInputLatencyFrames() + audioOutputLatencyFrames() : 0;
     if (src != 0) {
         internalRecordSource_.store(src, std::memory_order_relaxed);
         audioRecordSampleRate_ = transport_.sampleRate();
@@ -613,14 +619,34 @@ void Engine::stopAudioRecording() {
             return; // loop armed but nothing captured
         }
     } else {
-        clip.startBeat = audioRecordStartBeat_;
+        // Linear take: move it earlier by the device latency so it lines up with what was
+        // playing when it was performed. (Loop and session takes keep their grid as before.)
+        double trimDevice = 0.0;
+        clip.startBeat = latencyCompensatedStart(audioRecordStartBeat_, audioRecordLatencyFrames_, spb, &trimDevice);
+        double kept = static_cast<double>(sample->frames);
+        if (trimDevice > 0.0 && devSR > 0.0) {
+            const double trim = std::min(kept, trimDevice * sampleSR / devSR);
+            clip.sourceOffsetFrames = trim;
+            kept -= trim;
+            clip.lengthFrames = static_cast<int64_t>(kept);
+        }
         ns = clip.startBeat;
-        ne = clip.startBeat + static_cast<double>(sample->frames) * beatsPerFrame;
+        ne = clip.startBeat + kept * beatsPerFrame;
     }
     if (ne <= ns) return;
     overwriteAudioClipsInRange(nt->clips, ns, ne);
     nt->clips.push_back(clip);
     republishWithTrack(trackId, nt);
+}
+
+double Engine::latencyCompensatedStart(double startBeat, int32_t latencyFrames, double samplesPerBeat,
+                                       double* trimFrames) {
+    if (trimFrames) *trimFrames = 0.0;
+    if (latencyFrames <= 0 || samplesPerBeat <= 0.0) return startBeat;
+    const double shift = latencyFrames / samplesPerBeat;
+    if (startBeat >= shift) return startBeat - shift;
+    if (trimFrames) *trimFrames = (shift - std::max(0.0, startBeat)) * samplesPerBeat;
+    return 0.0;
 }
 
 int32_t Engine::audioRecordPeaks(float* outMinMax, int32_t maxPoints) const {
@@ -660,6 +686,7 @@ bool Engine::audioRecordSelfTest() {
     audioRecordTrackId_ = tid;
     audioRecordStartBeat_ = 0.0;
     audioRecordSampleRate_ = 44100.0;
+    audioRecordLatencyFrames_ = 0;
     audioRecording_ = true; // simulate a take without opening a device
 
     constexpr int32_t kFrames = 4410; // 0.1 s
@@ -696,6 +723,7 @@ bool Engine::sessionAudioRecordSelfTest() {
     audioRecordTrackId_ = tid;
     audioRecordStartBeat_ = 0.0;
     audioRecordSampleRate_ = 44100.0;
+    audioRecordLatencyFrames_ = 0;
     audioRecording_ = true;
 
     constexpr int32_t kFrames = 4410; // 0.1 s

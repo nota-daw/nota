@@ -30,7 +30,8 @@ NOTA_API NotaResult  nota_audio_asio_open_control_panel(NotaEngine* engine);
 
 /* Device events since the last call: 0 none, 1 reset requested, 2 driver failed. Cleared on read. */
 NOTA_API int32_t     nota_audio_poll_device_event(NotaEngine* engine);
-/* Why the last ASIO open failed (UTF-8, engine-owned), "" if it didn't. */
+/* Why the last ASIO open failed — the human reason only; the app names the driver from
+ * nota_audio_asio_driver + the driver list (UTF-8, engine-owned), "" if it didn't. */
 NOTA_API const char* nota_audio_fallback_reason(const NotaEngine* engine);
 
 /* Device latencies of the running backend, in frames (0 if unknown). */

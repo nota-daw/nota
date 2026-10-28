@@ -82,6 +82,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         EngineInfo = $"{Engine.SampleRate:0}\u2009Hz";
         _log.Info($"Engine started · {Engine.SampleRate:0}\u2009Hz");
         if (NoAudioOutput is { } why) { _log.Warn(why); StatusText = why; }
+        else if (AsioFallbackStatus() is { } asio) { _log.Warn(asio); StatusText = asio; }
 
         Transport.Message += m => { if (m.Length > 0) StatusText = m; };
 
@@ -107,6 +108,28 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         PlayheadUpdated?.Invoke(Engine.PositionBeats);
         if (Engine.IsRecording) RecordingTick?.Invoke();
         ReportDropouts();
+        PollAudioDevice();
+    }
+
+    // The ASIO driver asked for a restart (its buffer size, rate or latencies changed in its
+    // own panel) or stopped calling back (specs/049, FR-009/FR-011). Restart through the one
+    // apply path — which falls back to WASAPI if the driver won't start — and carry on
+    // playing from the same spot. Never restarted from inside a driver callback.
+    private void PollAudioDevice()
+    {
+        var ev = Engine.PollDeviceEvent();
+        if (ev == AudioDeviceEvent.None) return;
+        bool wasPlaying = Engine.IsPlaying && !Engine.IsRecording;
+        double position = Engine.PositionBeats;
+        _log.Info(ev == AudioDeviceEvent.ResetRequested ? "Audio driver asked for a reset" : "Audio driver stopped responding");
+        ApplyAudioSettings();
+        if (ev == AudioDeviceEvent.ResetRequested && Engine.ActiveAudioSystem == AudioSystem.Asio)
+            StatusText = $"Audio: driver settings changed · {Engine.NegotiatedBufferFrames} frames";
+        if (wasPlaying && Engine.IsRunning)
+        {
+            Engine.Seek(position);
+            Engine.Play();
+        }
     }
 
     private void OnAutosaveTick()
@@ -161,6 +184,17 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             StatusText = why;
             return StatusText;
         }
+        if (AsioFallbackStatus() is { } asio)
+        {
+            _log.Warn(asio);
+            StatusText = asio;
+            return StatusText;
+        }
+        if (Engine.ActiveAudioSystem == AudioSystem.Asio)
+        {
+            StatusText = $"Audio: ASIO · {AsioDriverName()} · {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames";
+            return StatusText;
+        }
         bool fallback = Engine.AudioExclusiveFallback;
         if (fallback)
         {
@@ -172,6 +206,26 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ? $"Audio: {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames"
             : $"Audio: {Engine.NegotiatedSampleRate:0}\u2009Hz";
         return StatusText;
+    }
+
+    /// <summary>The ASIO driver chosen in Settings couldn't start and WASAPI runs instead
+    /// (FR-011): the status line naming the driver and the reason, else null.</summary>
+    public string? AsioFallbackStatus()
+    {
+        if (Engine.AudioSystem != AudioSystem.Asio || Engine.ActiveAudioSystem == AudioSystem.Asio) return null;
+        string reason = Engine.AudioFallbackReason;
+        if (reason.Length > 0) reason = char.ToUpperInvariant(reason[0]) + reason[1..] + ".";
+        return $"ASIO driver ‘{AsioDriverName()}’ couldn't start — using WASAPI. {reason}".TrimEnd();
+    }
+
+    /// <summary>Display name of the staged ASIO driver (the first installed when none is staged).</summary>
+    public string AsioDriverName()
+    {
+        var drivers = Engine.AsioDrivers();
+        string id = Engine.AsioDriver;
+        foreach (var d in drivers)
+            if (string.Equals(d.Uid, id, StringComparison.OrdinalIgnoreCase)) return d.Name;
+        return id.Length == 0 && drivers.Count > 0 ? drivers[0].Name : "ASIO";
     }
 
     /// <summary>Why nothing is heard when no output device opened (the engine runs silently

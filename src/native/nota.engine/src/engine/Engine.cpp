@@ -46,18 +46,43 @@ Engine::~Engine() {
 
 bool Engine::start() {
     if (backend_->isRunning()) return true;
+    // The audio system the config asks for (specs/049): ASIO only where the build has it.
+    const AudioSystem wanted = asioSupported() ? config_.audioSystem : AudioSystem::Wasapi;
+    if (wanted != activeSystem_) {
+        backend_ = createAudioBackend(wanted);
+        activeSystem_ = wanted;
+    }
+    audioFallbackReason_.clear();
     transport_.setSampleRate(backend_->sampleRate() > 0 ? backend_->sampleRate() : 44100.0);
     BackendConfig bc;
     bc.device = resolveAudioDeviceId(config_.outputDeviceUid, /*inputScope=*/false);
     bc.sampleRate = config_.sampleRate;
     bc.bufferFrames = config_.bufferFrames;
     bc.wasapiExclusive = config_.wasapiExclusive;
+    bc.asioDriverClsid = config_.asioDriverClsid;
+    bc.asioDriverName = config_.asioDriverName;
+    bc.asioOutputPair = config_.asioOutputPair;
+    bc.asioInputPair = config_.asioInputPair;
     backend_->setXrunCallback([this] { notifyXrun(); }); // device dropouts (M7-8)
     // The device rate is only known once the backend is open, so the nodes are re-prepared
     // after it starts. Until then the callback must stay out of the graph: prepare()
     // reallocates buffers (and hosted plugins run prepareToPlay) the audio thread would read.
     renderSuspended_.store(true, std::memory_order_release);
-    const bool ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, bc);
+    bool ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, bc);
+    if (!ok && activeSystem_ == AudioSystem::Asio) {
+        // FR-011: a missing, busy or broken ASIO driver never leaves Nota silent — run WASAPI
+        // on the system default device and say why. The saved choice stays ASIO, so the next
+        // apply (or launch) tries the driver again.
+        const char* why = backend_->fallbackReason();
+        audioFallbackReason_ = why && *why ? why : "the driver didn't start";
+        backend_ = createAudioBackend(AudioSystem::Wasapi);
+        activeSystem_ = AudioSystem::Wasapi;
+        BackendConfig fallback;
+        fallback.device = resolveAudioDeviceId(std::string{}, /*inputScope=*/false);
+        backend_->setXrunCallback([this] { notifyXrun(); });
+        ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, fallback);
+    }
+    monitorSharedClock_.store(ok && backend_->sharesInputClock(), std::memory_order_relaxed);
     if (ok) {
         transport_.setSampleRate(backend_->sampleRate());
         propagateSampleRate(backend_->sampleRate()); // re-prepare every node (incl. master + racks) at the new rate
@@ -165,6 +190,18 @@ void Engine::setAudioBufferFrames(int32_t f) {
 }
 void Engine::setAudioWasapiExclusive(bool on) {
     config_.wasapiExclusive = on;
+}
+void Engine::setAudioSystem(AudioSystem system) {
+    if (asioSupported()) config_.audioSystem = system;
+}
+void Engine::setAsioDriver(const std::string& clsid, const std::string& name) {
+    if (!asioSupported()) return;
+    config_.asioDriverClsid = clsid;
+    config_.asioDriverName = name;
+}
+void Engine::setAsioPair(bool input, int32_t firstChannel) {
+    if (!asioSupported()) return;
+    (input ? config_.asioInputPair : config_.asioOutputPair) = std::max(0, firstChannel);
 }
 
 bool Engine::applyAudioConfig() {

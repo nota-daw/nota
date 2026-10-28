@@ -9531,6 +9531,43 @@ Console.WriteLine("-- M7-1: audio device settings --");
     Check(engine.NegotiatedSampleRate == 0, "negotiated rate is 0 before the backend starts");
 }
 
+// ===================== specs/049: ASIO on Windows ===========================
+// Device-free: the ASIO core runs on a fake driver on every platform (formats, pair
+// routing + silence, duplex order, resets, failures, latency compensation, audio.json
+// keys). The C ABI must be a safe no-op where the build has no ASIO.
+Console.WriteLine("-- specs/049: ASIO --");
+{
+    Check(NotaEngine.AsioSelfTest(), "ASIO self-test (fake driver): formats, pair routing, duplex, reset, fallback, latency");
+    Check(engine.ActiveAudioSystem == AudioSystem.Wasapi, "the engine starts on the native audio system");
+    Check(engine.InputLatencyFrames == 0 && engine.OutputLatencyFrames == 0, "no device latency before the backend starts");
+    Check(engine.PollDeviceEvent() == AudioDeviceEvent.None, "no device event without a driver");
+    Check(engine.AudioFallbackReason == "", "no fallback reason without an ASIO start");
+    Check(engine.AsioChannels(false).Count == 0 && engine.AsioChannels(true).Count == 0, "no ASIO channels while ASIO isn't running");
+    Check(!engine.OpenAsioControlPanel(), "no driver panel while ASIO isn't running");
+    if (!engine.AsioAvailable)
+    {
+        Check(engine.AsioDrivers().Count == 0, "no ASIO drivers off Windows");
+        engine.SetAudioSystem(AudioSystem.Asio);
+        engine.SetAsioDriver("{00000000-0000-0000-0000-000000000000}");
+        engine.SetAsioPair(false, 2);
+        Check(engine.AudioSystem == AudioSystem.Wasapi && engine.AsioDriver == "" && engine.AsioPair(false) == 0,
+              "ASIO setters change nothing off Windows");
+    }
+    else
+    {
+        // Staging only (no apply): the real backend and audio.json stay untouched.
+        engine.SetAudioSystem(AudioSystem.Asio);
+        engine.SetAsioPair(false, 2);
+        engine.SetAsioPair(true, 4);
+        Check(engine.AudioSystem == AudioSystem.Asio && engine.AsioPair(false) == 2 && engine.AsioPair(true) == 4,
+              "staged ASIO system and pairs round-trip");
+        engine.SetAudioSystem(AudioSystem.Wasapi);
+        engine.SetAsioPair(false, 0);
+        engine.SetAsioPair(true, 0);
+        Console.WriteLine($"  [INFO] {engine.AsioDrivers().Count} ASIO driver(s) installed");
+    }
+}
+
 // ===================== M7-2: MIDI device settings ==========================
 // Device-free: enumeration + enable/disable staging round-trip. We do NOT call
 // ApplyMidi() (it writes midi.json and would clobber the user's file); the
