@@ -3,7 +3,8 @@
 //
 // Detail · Devices — a hosted plug-in (VST3 / AU) in the shared shell: the header names the
 // plug-in and its format, the S / L toggle picks the card size (see PluginCard). The size,
-// page and filter ride on the card's extra, so they follow the device through moves.
+// page and filter ride on the card's extra, so they follow the device through moves. The
+// body stands on a picture of the plug-in's window once it has been open (specs/046).
 
 using Avalonia;
 using Avalonia.Controls;
@@ -26,6 +27,10 @@ public sealed partial class DeviceChainView
             Bypassed: _engine.DeviceBypassed(_trackId, effect ? di : -1), Bypassable: true,
             CanMove: effect, CanDelete: true, PresetKind: -1, IsInstrument: !effect, Width: width, Kind: k,
             HeaderExtra: toggle, Compact: state.Mini);
-        return BuildCardShell(spec, new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body });
+        Control padded = new Border { Padding = new Thickness(NotaSpace.DeviceInset), Child = body };
+        // On S the picture of the plug-in's window fills the body (on L, PluginCard puts it
+        // behind the info column only).
+        if (state.Mini) padded = new Panel { Children = { PluginCard.Backdrop(ctx, di), padded } };
+        return BuildCardShell(spec, padded);
     }
 }

@@ -637,7 +637,7 @@ class RackCore {
 
     static constexpr uint32_t kMagic = 0x314B524E; // 'NRK1'
     static constexpr uint32_t kBlobVersion =
-        9; // v2 triggerNote; v3 Sampler; v4 plugins; v5 zones/names/rack-out/curve; v6 drum pad shaping + swing/humanize; v7 effect-rack mode/dry-wet/pdc/select; v8 chain name; v9 chain MIDI effects + select range/transpose/vel scale, mono/merge/thru (specs/040)
+        10; // v2 triggerNote; v3 Sampler; v4 plugins; v5 zones/names/rack-out/curve; v6 drum pad shaping + swing/humanize; v7 effect-rack mode/dry-wet/pdc/select; v8 chain name; v9 chain MIDI effects + select range/transpose/vel scale, mono/merge/thru (specs/040); v10 chain children's editor previews (specs/046)
 
     std::shared_ptr<RackState> authoring_;
     SnapshotHistory<RackState> states_;

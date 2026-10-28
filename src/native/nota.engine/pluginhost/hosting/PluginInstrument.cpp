@@ -22,6 +22,8 @@ PluginInstrument::PluginInstrument(std::unique_ptr<juce::AudioPluginInstance> p,
     // Editor-window computer keyboard -> this plugin (drained on the audio thread).
     editor_.onNoteOn = [this](int32_t pitch, float vel) { guiNotes_.push({true, pitch, vel}); };
     editor_.onNoteOff = [this](int32_t pitch) { guiNotes_.push({false, pitch, 0.0f}); };
+    // The window's picture, taken each time it is hidden, goes on the card (specs/046).
+    editor_.onPreview = [this](std::vector<uint8_t> jpeg) { editorPreview = nota::EditorPreview::make(std::move(jpeg)); };
 }
 
 PluginInstrument::~PluginInstrument() {

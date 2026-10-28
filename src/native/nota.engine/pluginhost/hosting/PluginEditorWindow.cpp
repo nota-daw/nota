@@ -6,6 +6,8 @@
 
 #include "PluginEditorWindow.h"
 
+#include "EditorSnapshot.h"
+
 #if JUCE_MAC
 #import <AppKit/AppKit.h> // NSEvent monitor for computer-keyboard MIDI
 #endif
@@ -110,6 +112,7 @@ void EditorHost::open(juce::AudioPluginInstance& p) {
         window = std::make_unique<PluginEditorWindow>(p);
         window->onNoteOn = onNoteOn;
         window->onNoteOff = onNoteOff;
+        window->onHide = [this] { snapshot(); };
     } else {
         window->setVisible(true);
         window->toFront(true);
@@ -117,7 +120,15 @@ void EditorHost::open(juce::AudioPluginInstance& p) {
 }
 
 void EditorHost::close() {
-    if (window) window->setVisible(false);
+    if (!isOpen()) return;
+    snapshot(); // while it is still on screen
+    window->setVisible(false);
+}
+
+void EditorHost::snapshot() {
+    if (!window || !onPreview) return;
+    auto jpeg = snapshotEditor(*window);
+    if (!jpeg.empty()) onPreview(std::move(jpeg));
 }
 
 } // namespace hosting

@@ -31,6 +31,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the device and older projects open at 90 dB, peak off. It also fixes why the old display
   jumped: half of every analysis window held stale audio. The sound is unchanged. MCP
   `set_eq8` `analyzerRangeDb` / `analyzerPeak`.
+- **A plug-in's card shows its interface** (#270): once you've opened a plug-in's window,
+  its device card stands on a picture of it, darkened by a wash in the theme's card colour
+  so the name, facts and buttons stay readable — the whole small card, and the info column
+  of the full one. The picture fills the card without stretching, is retaken each time the
+  window closes (by Close editor or its own close button), follows the device when it's
+  moved, duplicated or copied, and is saved with the project. macOS and Windows; on Linux
+  the card stays plain.
 - **Devices remember their preset and show when you changed it** (#157): after you load a
   preset, the card header keeps its name and adds a " *" as soon as a sound parameter moves
   away from it (the tooltip says "Changed since you loaded …"); setting it back, undoing or

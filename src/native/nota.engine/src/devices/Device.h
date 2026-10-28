@@ -16,6 +16,7 @@
 #include <string>
 #include <vector>
 
+#include "devices/EditorPreview.h"
 #include "engine/TransportInfo.h"
 
 namespace nota {
@@ -256,11 +257,16 @@ class Device {
     // copies and undo/redo.
     int32_t presetTag() const { return presetTag_; }
     void setPresetTag(int32_t t) { presetTag_ = t; }
+    // Editor preview (specs/046): the plug-in window's last look, drawn behind its card. View
+    // data saved with the project; message thread only, like the fold flag.
+    const EditorPreview& editorPreview() const { return preview_; }
+    void setEditorPreview(EditorPreview p) { preview_ = std::move(p); }
 
   private:
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
     int32_t presetTag_ = 0;
+    EditorPreview preview_;
     std::atomic<float> scGainDb_{0.0f};
     std::atomic<float> scMix_{1.0f};
     std::atomic<int32_t> scTapPre_{0};

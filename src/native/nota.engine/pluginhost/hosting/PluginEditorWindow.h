@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <vector>
 
 #include "engine/CommandQueue.h" // SpscRingBuffer: message-thread -> audio-thread notes
 
@@ -39,9 +40,16 @@ class PluginEditorWindow : public juce::DocumentWindow {
     std::function<void(int32_t, float)> onNoteOn;
     std::function<void(int32_t)> onNoteOff;
 
+    // Called while the window is still on screen, right before its close button hides it,
+    // so the owner can capture it (specs/046).
+    std::function<void()> onHide;
+
     explicit PluginEditorWindow(juce::AudioPluginInstance& p);
     ~PluginEditorWindow() override;
-    void closeButtonPressed() override { setVisible(false); }
+    void closeButtonPressed() override {
+        if (onHide) onHide();
+        setVisible(false);
+    }
 
   private:
     void installKeyMonitor();
@@ -54,15 +62,21 @@ class PluginEditorWindow : public juce::DocumentWindow {
 
 // Owns (at most one) editor window for a plugin; open() lazily creates it and
 // re-shows on subsequent calls. The adapter wires onNoteOn/onNoteOff so the
-// window's computer keyboard reaches its plugin.
+// window's computer keyboard reaches its plugin, and onPreview to keep the picture
+// of the window taken each time it is hidden (specs/046) — not called when the
+// capture fails or comes back blank.
 struct EditorHost {
     std::unique_ptr<PluginEditorWindow> window;
     std::function<void(int32_t, float)> onNoteOn;
     std::function<void(int32_t)> onNoteOff;
+    std::function<void(std::vector<uint8_t>)> onPreview;
 
     void open(juce::AudioPluginInstance& p);
     void close();
     bool isOpen() const { return window != nullptr && window->isVisible(); }
+
+  private:
+    void snapshot();
 };
 
 } // namespace hosting

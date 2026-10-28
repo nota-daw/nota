@@ -357,6 +357,33 @@ public sealed partial class NotaEngine
         Check(NativeMethods.PluginSetState(_handle, trackId, deviceIndex, data, data.Length));
     }
 
+    /// <summary>The picture of a hosted plug-in's window taken when it was last hidden (JPEG,
+    /// specs/046); empty when there is none.</summary>
+    public byte[] GetPluginPreview(int trackId, int deviceIndex)
+    {
+        ThrowIfDisposed();
+        int size = NativeMethods.PluginPreviewGet(_handle, trackId, deviceIndex, null, 0);
+        if (size <= 0) return Array.Empty<byte>();
+        var buf = new byte[size];
+        int got = NativeMethods.PluginPreviewGet(_handle, trackId, deviceIndex, buf, size);
+        return got == size ? buf : Array.Empty<byte>();   // replaced in between: next poll catches it
+    }
+
+    /// <summary>Replaces a device's editor preview (project load); empty clears it. False for an
+    /// unknown device or an oversized blob — the card then just stays plain.</summary>
+    public bool SetPluginPreview(int trackId, int deviceIndex, byte[] jpeg)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.PluginPreviewSet(_handle, trackId, deviceIndex, jpeg.Length > 0 ? jpeg : null, jpeg.Length) == NativeMethods.NotaResult.Ok;
+    }
+
+    /// <summary>Changes whenever the device's editor preview does; 0 = none.</summary>
+    public int PluginPreviewSerial(int trackId, int deviceIndex)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.PluginPreviewSerial(_handle, trackId, deviceIndex);
+    }
+
     /// <summary>Bypasses (or re-enables) the effect at deviceIndex on a track.</summary>
     public void SetDeviceBypassed(int trackId, int deviceIndex, bool bypassed)
     {
