@@ -18,10 +18,12 @@ namespace Nota.App;
 public sealed partial class PianoRollView
 {
     private const double FoldedPadKeysW = 96;   // room for "Hat closed" beside the rows
+    private const double MaxPadRowH = 24;       // a fitted kit's rows stop growing here
 
     private PianoRowMap _rows = PianoRowMap.Chromatic(MinPitch, MaxPitch);
     private bool _rowsArePads;                   // the rows are a Drum Rack's pads
     private bool _fold;
+    private double? _rowHBeforePadFit;          // the row height to go back to when unfolding
     private readonly List<ColumnDefinition> _keyColumns = new();
 
     /// <summary>The host's pad scan for the clip's track: note → pad name on a Drum Rack
@@ -45,6 +47,18 @@ public sealed partial class PianoRollView
         if (on == _fold) return;
         _fold = on;
         RebuildRows(force: true);
+        // A kit is a handful of rows: when they would leave the editor mostly empty, fit them,
+        // and give the keyboard its own row height back on unfolding.
+        if (_rowsArePads && RangeH < _bodyScroll.Viewport.Height * 0.75)
+        {
+            _rowHBeforePadFit = _rowH;
+            FitToNotes();
+        }
+        else if (!on && _rowHBeforePadFit is { } h0)
+        {
+            _rowHBeforePadFit = null;
+            SetRowHeightAt(h0, 0);
+        }
         if (user) FoldToggled?.Invoke(on);
     }
 

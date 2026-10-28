@@ -540,13 +540,15 @@ public sealed partial class PianoRollView : UserControl
         => (m & (KeyModifiers.Control | KeyModifiers.Meta)) != 0 && (m & KeyModifiers.Alt) != 0;
 
     /// <summary>Fit to notes (⇧F): every note of the clip in view, one row of margin above
-    /// and below, centred; an empty clip goes back to the default height around C5.</summary>
+    /// and below, centred; an empty clip goes back to the default height around C5. Folded to a
+    /// Drum Rack's pads, it fits every pad row instead, so the kit fills the editor.</summary>
     public void FitToNotes()
     {
         if (_gridControl.Dragging) return;
         double vh = _bodyScroll.Viewport.Height;
         double h = DefaultRowH;
-        if (_notes.Count > 0 && vh > 0)
+        if (_rowsArePads && vh > 0) h = Math.Min(MaxPadRowH, vh / _rows.Count);
+        else if (_notes.Count > 0 && vh > 0)
         {
             int minP = int.MaxValue, maxP = int.MinValue;
             foreach (var n in _notes) { if (n.Pitch < minP) minP = n.Pitch; if (n.Pitch > maxP) maxP = n.Pitch; }
