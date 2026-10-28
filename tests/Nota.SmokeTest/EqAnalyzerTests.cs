@@ -209,17 +209,25 @@ internal static class EqAnalyzerTests
         r.Feed(8192);
         var sum = new double[Points];
         var prev = (float[])r.Read().Clone();
-        double change = 0; int frames = 0;
-        for (int f = 0; f < 30; f++)
+        // The analyzer's ballistics run on wall-clock time, so a frame-to-frame change only means
+        // something at the display's cadence: read every ~35 ms (the render counts towards it) and
+        // count only the pairs that really were one display frame apart. A stalled CI runner
+        // otherwise sees 60-70 ms frames and less smoothing (#357 macOS CI).
+        double change = 0; int frames = 0, steady = 0;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        for (int f = 0; f < 120 && steady < 30; f++)
         {
+            long t0 = clock.ElapsedMilliseconds;
             r.Feed(1470);
-            var s = r.Read();
+            var s = r.Read(Math.Max(0, 35 - (int)(clock.ElapsedMilliseconds - t0)));
+            bool oneFrame = clock.ElapsedMilliseconds - t0 <= 45;
             for (int i = 0; i < Points; i++)
             {
                 sum[i] += s[PostAt + i];
-                if (PointHz(i) >= 100 && PointHz(i) <= 15000) change += Math.Abs(s[PostAt + i] - prev[PostAt + i]);
+                if (oneFrame && PointHz(i) >= 100 && PointHz(i) <= 15000) change += Math.Abs(s[PostAt + i] - prev[PostAt + i]);
             }
             frames++;
+            if (oneFrame) steady++;
             Array.Copy(s, prev, s.Length);
         }
         var band = Enumerable.Range(0, Points).Where(i => PointHz(i) >= 100 && PointHz(i) <= 15000).ToList();
@@ -227,8 +235,9 @@ internal static class EqAnalyzerTests
         double mid = avg.OrderBy(v => v).ElementAt(avg.Count / 2);
         double lo = avg.Min() - mid, hi = avg.Max() - mid;
         yield return (lo > -3 && hi < 3, $"pink noise reads flat from 100 Hz to 15 kHz ({lo:F1} / +{hi:F1} dB around {mid:F1} dB)");
-        double meanChange = change / (frames * band.Count);
-        yield return (meanChange < 1.5, $"pink noise holds steady (mean frame-to-frame change {meanChange:F2} dB)");
+        double meanChange = change / (Math.Max(1, steady) * band.Count);
+        yield return (steady >= 10 && meanChange < 1.5,
+            $"pink noise holds steady (mean frame-to-frame change {meanChange:F2} dB over {steady} display frames)");
     }
 
     private static IEnumerable<(bool, string)> Ballistics(List<string> tmp)
@@ -271,6 +280,15 @@ internal static class EqAnalyzerTests
             float peak2 = s[PeakAt + pk];
             yield return (curve1 < top - 20 && Math.Abs(peak1 - top) < 0.5 && peak2 < top - 10,
                 $"Peak holds the top ({top:F1} → {peak1:F1} dB at 0.9 s while the curve is at {curve1:F1}) and then falls ({peak2:F1} dB at 2.5 s)");
+            // Read at the display's cadence (a gap over 1.2 s restarts the analysis): once the curve
+            // has fallen to the floor, the held peak is still there, so the card keeps drawing it.
+            r.Reset();
+            r.Feed(8192);
+            s = r.Read();
+            var gone = Stopwatch.StartNew();
+            while (gone.ElapsedMilliseconds < 3500 && s[PostAt + pk] > -149.5f) s = r.Read(33);
+            yield return (s[Analysed] > 0.5f && s[PostAt + pk] <= -149.5f && s[PeakAt + pk] > -140,
+                $"the held peak keeps showing after the curve has gone (analysed {s[Analysed]}, curve {s[PostAt + pk]:F0} dB, peak {s[PeakAt + pk]:F0} dB)");
             r.E.DeviceSetParam(r.T, r.D, AnaPeak, 0);
             r.Reset();
             r.Feed(8192);

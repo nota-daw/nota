@@ -111,6 +111,7 @@ void SpectrumAnalyzer::analyse(const float* ring, uint32_t mask, uint32_t w, dou
             age += (float)dt;
             if (age > kPeakHoldS) pk = (float)std::max((double)c, pk - peakFall);
         }
+        if (peakHold && pk > kFloorDb + 1.0f) any = true; // a held peak still shows after the curve has gone
     }
     if (peakHold) { // keep the held line a line: limit its slope between neighbouring points
         for (int i = 1; i < kPoints; ++i) peak_[(size_t)i] = std::max(peak_[(size_t)i], peak_[(size_t)i - 1] - kPeakSlopeDb);

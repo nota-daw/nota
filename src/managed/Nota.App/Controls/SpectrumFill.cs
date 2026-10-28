@@ -46,15 +46,23 @@ internal static class SpectrumFill
         if (n >= 2) ctx.DrawGeometry(null, pen, Polyline(spec, n, w, h, range));
     }
 
+    // A line through the points, broken wherever it would run along the bottom edge (both ends
+    // below the range): a fading signal leaves no line there, and silence draws nothing.
     private static StreamGeometry Polyline(float[] spec, int n, double w, double h, double range)
     {
         var sg = new StreamGeometry();
         using var g = sg.Open();
+        bool open = false;
         for (int i = 0; i < n; i++)
         {
+            bool below = spec[i] <= -range, prevBelow = i > 0 && spec[i - 1] <= -range;
             var p = new Point(X(i, n, w), Y(spec[i], h, range));
-            if (i == 0) g.BeginFigure(p, false); else g.LineTo(p);
+            if (open && !(below && prevBelow)) { g.LineTo(p); continue; }
+            if (open) g.EndFigure(false);
+            g.BeginFigure(p, false);
+            open = true;
         }
+        if (open) g.EndFigure(false);
         return sg;
     }
 }
