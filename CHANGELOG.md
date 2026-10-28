@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A bigger, more useful Modular Scope** (#266): drag the bar under the trace to make it
+  taller (76–320 px), or open the Scope in its own resizable window. New controls: a time
+  window in milliseconds (50 ms–8 s) or, with **Sync**, in beats (1/16 to 8 bars) at the
+  current tempo; a 1×–8× vertical zoom; a **Rise** trigger that starts the trace where the
+  input rises through 0, so a repeating shape holds still; and **Freeze**. The settings and
+  the height are saved with the project; older projects open with a 1 s window, as before.
 - **Select several devices and group them into a rack** (#328): in the Devices panel ⇧-click
   selects a range across MIDI effects, the instrument and audio effects, ⌘-click adds or
   removes one, Esc clears. Copy, cut, paste, duplicate, delete, Move to track ▸ and dragging a

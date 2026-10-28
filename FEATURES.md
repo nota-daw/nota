@@ -182,8 +182,10 @@ track count and closes with Escape.
   Modulators: **LFO** (with phase), an **envelope follower**, **MIDI→CV**
   (velocity/gate/note), **ADSR** (gated by notes), **Macro** (a manual control → CV) and
   **Math** (two CV inputs → one output); any parameter can also be a CV source
-  (param → param). A **CV Scope** oscilloscope reads any modulator signal, and CV ports are
-  drawn only where they actually work.
+  (param → param). A **CV Scope** oscilloscope reads any modulator signal: drag its trace
+  taller (76–320 px) or open it in its own window, set its time window in ms or in beats,
+  zoom it 1–8×, hold a repeating shape still with a rising-edge trigger, or freeze it. CV
+  ports are drawn only where they actually work.
 
 ---
 
