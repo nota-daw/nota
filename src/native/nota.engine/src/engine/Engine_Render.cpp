@@ -2196,6 +2196,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 // Silent this block, but a playing slot keeps its place in the loop, so it is
                 // in time again when the track is unmuted (and follow actions keep counting).
                 if (sessionActive) {
+                    // The clip moves on without its note-offs reaching the instrument: release
+                    // what it holds, or a note crossed while silent would sound on after unmute.
+                    if (t.instrument) t.instrument->allNotesOff();
                     t.sessionPlayer->localBeats += frames / spb;
                     sessionPostRender(t, frames / spb);
                 }

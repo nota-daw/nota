@@ -35,6 +35,9 @@ internal static class TrackArming
         if (TrackArm.FollowSelection(engine, trackId)) OthersChanged?.Invoke();
     }
 
+    /// <summary>A new or reopened project reuses track ids: its first selection is a move.</summary>
+    public static void ForgetSelection() => _followed = -1;
+
     /// <summary>The arm buttons' tooltip, with the platform's modifier spelled out.</summary>
     public static string Tip => MenuKit.Keys("Arm for recording · ⌘-click to arm several tracks");
 

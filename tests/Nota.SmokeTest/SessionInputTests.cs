@@ -36,6 +36,19 @@ internal static class SessionInputTests
         for (int done = 0; done < frames; done += Chunk) e.RenderOffline(b, Chunk, Sr);
     }
 
+    private static float Peak(NotaEngine e, double beats)
+    {
+        var b = new float[Chunk * 2];
+        float peak = 0;
+        int frames = (int)Math.Round(beats * Spb);
+        for (int done = 0; done < frames; done += Chunk)
+        {
+            e.RenderOffline(b, Chunk, Sr);
+            foreach (var x in b) peak = Math.Max(peak, Math.Abs(x));
+        }
+        return peak;
+    }
+
     // A rolling engine (1-bar launch quantum) with one instrument track holding a 4-beat clip.
     private static NotaEngine Rolling(out int track)
     {
@@ -66,6 +79,21 @@ internal static class SessionInputTests
             Beats(e, 2.0);
             double pos = e.SessionSlotPosition(t);
             yield return (Math.Abs(pos - 2.5) < 0.1, $"…and its clip keeps time while muted (at {pos:F2} of 4 beats, want 2.5)");
+        }
+        using (var e = Rolling(out int t))
+        {
+            // The clip's note (beats 0–1) ends while the track is muted: it mustn't sound on
+            // once the track is heard again.
+            e.LaunchSlot(t, 0);
+            Beats(e, 3.5);   // launched at beat 4, now half a beat into the note
+            float sounding = Peak(e, 0.25);
+            e.SetTrackMute(t, true);
+            Beats(e, 1.5);   // past the note's end
+            e.SetTrackMute(t, false);
+            Beats(e, 0.5);   // the release tail
+            float after = Peak(e, 0.5);
+            yield return (sounding > 0.01f && after < sounding * 0.05f,
+                $"a note that ends while muted doesn't sound on after unmute (peak {after:F4} vs {sounding:F4} playing)");
         }
         using (var e = Rolling(out int t))
         {
