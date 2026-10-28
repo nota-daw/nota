@@ -451,6 +451,7 @@ public partial class MainWindow
         _blockMovesDone = 0;
         CloseDetail();                   // collapse the docked row too, not just hide the panel
         _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project
+        TrackArming.ForgetSelection();     // the arm-on-select memory too
         Timeline.Refresh();
         _session?.Refresh();
         // Popped out, the window stays up: show the new project's chain, not the old one's.

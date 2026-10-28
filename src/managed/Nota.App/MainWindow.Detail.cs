@@ -111,7 +111,7 @@ public partial class MainWindow
             {
                 parts.Add("audio");
                 int src = Engine.GetTrackRecordInput(trackId);
-                parts.Add("In " + (src == 0 ? "Ext" : src == -1 ? "Master" : ChipTrackName(src)));
+                parts.Add("In " + (src == 0 ? RecordInputPick.HardwareShort(Engine.GetTrackInputChannels(trackId)) : src == -1 ? "Master" : ChipTrackName(src)));
                 // A Master source stays silent while monitored (it would feed back).
                 if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add("Monitor in");
             }
@@ -142,6 +142,8 @@ public partial class MainWindow
 
     private void OnTrackSelected(int trackId)
     {
+        TrackArming.FollowSelection(Engine, trackId);   // arm-on-select (#332)
+
         // Switching to a different track abandons the previously edited clip. Reset the clip
         // editor to empty so a stale editor from the old track doesn't linger — most visible
         // in the popped-out Devices/Clip window, whose top pane isn't touched by ShowDevices.

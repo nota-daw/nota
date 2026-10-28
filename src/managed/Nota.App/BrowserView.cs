@@ -703,6 +703,9 @@ public sealed class BrowserView : UserControl
         _sampleChipsHost.IsVisible = index == FilesTab && _vm?.HasSampleIndex == true;
         _statusBar.IsVisible = !isMap;
         if (isMap) { _matchCount.Text = ""; _emptyWrap.IsVisible = false; return; }
+        // The shared search box may have changed on another tab (#342).
+        if (index <= PresetsTab) _vm?.ShowTab(index, _search.Text?.Trim() ?? "");
+        else ApplyFilter(index);
         RefreshCounts();
     }
 

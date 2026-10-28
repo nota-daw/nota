@@ -513,6 +513,14 @@ public sealed partial class NotaEngine
     public int GetTrackRecordInput(int trackId)
     { ThrowIfDisposed(); return NativeMethods.TrackGetRecordInput(_handle, trackId); }
 
+    /// <summary>Sets which hardware input channels an audio track takes (stereo 1/2, input 1 or input 2).</summary>
+    public void SetTrackInputChannels(int trackId, InputChannels channels)
+    { ThrowIfDisposed(); NativeMethods.TrackSetInputChannels(_handle, trackId, (int)channels); }
+
+    /// <summary>Gets which hardware input channels an audio track takes.</summary>
+    public InputChannels GetTrackInputChannels(int trackId)
+    { ThrowIfDisposed(); return (InputChannels)NativeMethods.TrackGetInputChannels(_handle, trackId); }
+
     /// <summary>Turns live input monitoring on/off for an audio track (hear its record input through the track).</summary>
     public void SetTrackMonitor(int trackId, bool on)
     { ThrowIfDisposed(); NativeMethods.TrackSetMonitor(_handle, trackId, on ? 1 : 0); }

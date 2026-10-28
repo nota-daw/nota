@@ -691,6 +691,14 @@ NotaResult nota_track_set_record_input(NotaEngine* e, int32_t track_id, int32_t 
 int32_t nota_track_get_record_input(NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackRecordInput(track_id) : 0;
 }
+NotaResult nota_track_set_input_channels(NotaEngine* e, int32_t track_id, int32_t channels) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    ENG(e)->setTrackInputChannels(track_id, channels);
+    return NOTA_OK;
+}
+int32_t nota_track_get_input_channels(NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackInputChannels(track_id) : 0;
+}
 NotaResult nota_track_set_monitor(NotaEngine* e, int32_t track_id, int32_t on) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setTrackMonitor(track_id, on != 0);

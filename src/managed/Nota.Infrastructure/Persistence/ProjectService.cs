@@ -108,6 +108,7 @@ public sealed class ProjectService
                     ? (idToIndex.TryGetValue(rin, out var rix) ? rix + 2 : 0)   // track source → doc index + 2
                     : rin,                                                       // 0 hardware / -1 master
                 Monitor = engine.GetTrackMonitor(ti.Id),
+                InputChannels = (int)engine.GetTrackInputChannels(ti.Id),
                 MidiFrom = engine.GetTrackMidiSource(ti.Id) is var mfrom && mfrom > 0
                     && idToIndex.TryGetValue(mfrom, out var mix) ? mix : -1,      // source → doc index, else off
             };
@@ -676,6 +677,7 @@ public sealed class ProjectService
             if (t.PianoFold == true) engine.SetTrackPianoFold(id, true);
             if (t.RecordInput != 0) recInputDeferred.Add((id, t.RecordInput));   // resolve after all tracks exist
             if (t.Monitor) monitorDeferred.Add((id, true));                        // after record inputs resolve
+            engine.SetTrackInputChannels(id, (InputChannels)(t.InputChannels ?? 0)); // older files: the stereo pair
             if (t.MidiFrom >= 0) midiFromDeferred.Add((id, t.MidiFrom));           // resolve after all tracks exist
             for (int b = 0; b < t.Sends.Length && b < 4; b++) engine.SetTrackSend(id, b, t.Sends[b]);
 
