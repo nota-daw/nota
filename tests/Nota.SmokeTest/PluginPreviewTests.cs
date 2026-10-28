@@ -92,6 +92,29 @@ internal static class PluginPreviewTests
             yield return (r > 0 && eng2.PluginPreviewSerial(r, 0) == 0 && Same(eng2.GetPluginPreview(r, 1), b)
                           && eng2.PluginPreviewSerial(r, 2) == 0 && Same(eng2.GetPluginPreview(r, -1), i1),
                 "preview: save/load keeps exactly the pictures there were");
+
+            // A picture that can't be read is decoration lost, not a project that won't open.
+            if (!OperatingSystem.IsWindows())
+            {
+                var rels = doc.Tracks.SelectMany(tr => tr.Devices.Select(d => d.Preview).Append(tr.Instrument?.Preview))
+                                     .OfType<string>().Distinct().ToList();
+                foreach (var rel in rels) File.SetUnixFileMode(Path.Combine(dir, rel), UnixFileMode.None);
+                bool opened; int r3 = -1; bool plain = false;
+                try
+                {
+                    using var eng3 = new NotaEngine();
+                    ProjectService.Apply(ProjectService.Load(dir), eng3, dir);
+                    for (int i = 0; i < eng3.TrackCount && r3 < 0; i++)
+                        if (eng3.TryGetTrackInfo(i, out var ti) && ti.IsInstrument) r3 = ti.Id;
+                    // Root reads a mode-000 file anyway; then the pictures are simply back.
+                    plain = Environment.UserName == "root"
+                            || (eng3.PluginPreviewSerial(r3, 1) == 0 && eng3.PluginPreviewSerial(r3, -1) == 0);
+                    opened = r3 > 0 && eng3.TrackDeviceCount(r3) == 3;
+                }
+                catch (Exception) { opened = false; }
+                foreach (var rel in rels) File.SetUnixFileMode(Path.Combine(dir, rel), UnixFileMode.UserRead | UnixFileMode.UserWrite);
+                yield return (rels.Count == 2 && opened && plain, "preview: unreadable pictures leave the cards plain and the project opens");
+            }
         }
         finally
         {

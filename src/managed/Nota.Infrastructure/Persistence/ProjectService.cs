@@ -515,7 +515,7 @@ public sealed class ProjectService
             if (d.Bypassed) engine.SetDeviceBypassed(trackId, di, true);
             if (d.Folded) engine.SetDeviceFolded(trackId, di, true);
             ApplyPresetTag(engine, trackId, PresetSurface.Effect, di, d.Preset);
-            if (d.Preview is { } previewRel) engine.SetPluginPreview(trackId, di, ReadBlob(bundleDir, previewRel));
+            if (d.Preview is { } previewRel) engine.SetPluginPreview(trackId, di, ReadPreview(bundleDir, previewRel));
             if (d.SidechainSource >= 0) scDeferred.Add((trackId, di, d.SidechainSource));
             engine.SetDeviceSidechainGain(trackId, di, d.SidechainGain);
             engine.SetDeviceSidechainMix(trackId, di, d.SidechainMix);
@@ -683,7 +683,7 @@ public sealed class ProjectService
             if (id > 0) ApplyPresetTag(engine, id, PresetSurface.Instrument, -1, t.Instrument?.Preset);
             // Not onto the stand-in for a plug-in that isn't installed: it's another instrument.
             if (id > 0 && t.Instrument is { Preview: { } instPreview } && engine.TrackInstrumentKind(id) == t.Instrument.Kind)
-                engine.SetPluginPreview(id, -1, ReadBlob(bundleDir, instPreview));
+                engine.SetPluginPreview(id, -1, ReadPreview(bundleDir, instPreview));
             if (id > 0 && t.Instrument is { Bypassed: true })
                 engine.SetDeviceBypassed(id, -1, true);           // the instrument card's switch is off (#148)
             if (id > 0 && t.Instrument is { SidechainSource: >= 0 } insc)
@@ -1118,6 +1118,23 @@ public sealed class ProjectService
     {
         string path = ResolveInBundle(bundleDir, relative);
         return File.Exists(path) ? File.ReadAllBytes(path) : Array.Empty<byte>();
+    }
+
+    // A plug-in window's picture (specs/046) is decoration: one that can't be read (permissions,
+    // a damaged bundle, an odd path) or is larger than the engine takes leaves the card plain
+    // instead of stopping the project from opening.
+    private const long MaxPreviewBytes = 4 * 1024 * 1024;
+    private static byte[] ReadPreview(string bundleDir, string relative)
+    {
+        try
+        {
+            var f = new FileInfo(ResolveInBundle(bundleDir, relative));
+            return f.Exists && f.Length <= MaxPreviewBytes ? File.ReadAllBytes(f.FullName) : Array.Empty<byte>();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return Array.Empty<byte>();
+        }
     }
 
     private static string ResolveInBundle(string bundleDir, string relative)
