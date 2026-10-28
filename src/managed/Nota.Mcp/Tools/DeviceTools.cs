@@ -1309,7 +1309,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
 
     private Eq3Reading Eq3Read(int trackId, int deviceIndex, bool spectrum)
     {
-        const int tele = 16, spec = 96;
+        const int tele = 16, spec = AnalyzerPoints;
         var sc = new float[tele + spec];
         int n = E.DeviceScope(trackId, deviceIndex, sc, spectrum ? sc.Length : tele);
         float V(int i) => n > i ? sc[i] : 0f;
@@ -1328,13 +1328,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         }
         var sp = new List<DynEqSpectrumBand>();
         bool valid = spectrum && n >= sc.Length && V(7) > 0.5f;
-        if (valid)
-            for (int k = 0; k < 24; k++)
-            {
-                double pw = 0;
-                for (int b = 4 * k; b < 4 * k + 4; b++) pw += Math.Pow(10, sc[tele + b] / 10);
-                sp.Add(new DynEqSpectrumBand(Math.Round(20 * Math.Pow(1000, (k + 0.5) / 24)), R1(Math.Max(-120, 10 * Math.Log10(Math.Max(1e-12, pw))))));
-            }
+        if (valid) sp.AddRange(AnalyzerBands(sc, tele));
         return new Eq3Reading(E.DeviceText(trackId, deviceIndex, 0), E.DeviceText(trackId, deviceIndex, 1),
             iso ? "Isolator" : "Classic", iso ? -24 : -15, iso ? 6 : 15,
             Math.Round(50 * Math.Pow(40, Pm(6))), Math.Round(500 * Math.Pow(36, Pm(7))), Pm(8) >= 0.5f ? 48 : 24, R1((Pm(9) - 0.5) * 48),
@@ -1414,11 +1408,29 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     public sealed record Eq8Band(int Band, bool On, string Type, double FreqHz, double GainDb, double EffectiveGainDb, double Q,
         int SlopeDbPerOct, string Channel);
     public sealed record Eq8Reading(string Summary, string Live, double ScalePercent, double OutputDb, bool AutoGain, double AutoGainNowDb,
-        string Analyzer, double InputPeakDb, double OutputPeakDb, double SampleRate, Eq8Band[] Bands,
+        string Analyzer, int AnalyzerRangeDb, bool AnalyzerPeak, double InputPeakDb, double OutputPeakDb, double SampleRate, Eq8Band[] Bands,
         bool SpectrumValid, DynEqSpectrumBand[] InputSpectrum, DynEqSpectrumBand[] OutputSpectrum);
 
     private static readonly string[] Eq8Channels = { "Stereo", "Mid", "Side", "Left", "Right" };
     private static readonly string[] Eq8Analyzer = { "Pre", "Post", "Off" };
+    private static readonly int[] Eq8RangeDb = { 60, 90, 120 };
+
+    // The EQ cards' spectrum (dsp::SpectrumAnalyzer): AnalyzerPoints log-spaced points from 20 Hz to
+    // 20 kHz in dBFS, each already a 1/6-octave band. For a reader: 24 bands, each the loudest
+    // point inside it, so a tone reads at its own level.
+    private const int AnalyzerPoints = 256;
+    private static DynEqSpectrumBand[] AnalyzerBands(float[] sc, int at)
+    {
+        var sp = new DynEqSpectrumBand[24];
+        for (int k = 0; k < 24; k++)
+        {
+            int i0 = (int)Math.Ceiling(k / 24.0 * (AnalyzerPoints - 1)), i1 = (int)Math.Floor((k + 1) / 24.0 * (AnalyzerPoints - 1));
+            double db = -120;
+            for (int i = i0; i <= Math.Max(i0, i1) && at + i < sc.Length; i++) db = Math.Max(db, sc[at + i]);
+            sp[k] = new DynEqSpectrumBand(Math.Round(20 * Math.Pow(1000, (k + 0.5) / 24)), Math.Round(db, 1));
+        }
+        return sp;
+    }
 
     private Eq8Band Eq8BandRead(int trackId, int deviceIndex, int b)
     {
@@ -1435,8 +1447,8 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     private Eq8Reading Eq8Read(int trackId, int deviceIndex, bool spectrum)
     {
         if (E.TrackDeviceBuiltinKind(trackId, deviceIndex) != 0) throw new ArgumentException("not a Nota EQ-8 (kind 0)");
-        const int tele = 16, spec = 96;
-        var sc = new float[tele + 2 * spec];
+        const int tele = 16, spec = AnalyzerPoints;
+        var sc = new float[tele + 3 * spec];
         int n = E.DeviceScope(trackId, deviceIndex, sc, spectrum ? sc.Length : tele);
         float V(int i) => n > i ? sc[i] : 0f;
         float Db(int i) => n > i ? sc[i] : -120f;
@@ -1446,29 +1458,20 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         var bands = new Eq8Band[8];
         for (int b = 0; b < 8; b++) bands[b] = Eq8BandRead(trackId, deviceIndex, b);
         bool valid = spectrum && n >= sc.Length && V(5) > 0.5f;
-        DynEqSpectrumBand[] Spec(int at)
-        {
-            var sp = new List<DynEqSpectrumBand>();
-            if (valid)
-                for (int k = 0; k < 24; k++)
-                {
-                    double pw = 0;
-                    for (int b = 4 * k; b < 4 * k + 4; b++) pw += Math.Pow(10, sc[at + b] / 10);
-                    sp.Add(new DynEqSpectrumBand(Math.Round(20 * Math.Pow(1000, (k + 0.5) / 24)), R1(Math.Max(-120, 10 * Math.Log10(Math.Max(1e-12, pw))))));
-                }
-            return sp.ToArray();
-        }
+        DynEqSpectrumBand[] Spec(int at) => valid ? AnalyzerBands(sc, at) : Array.Empty<DynEqSpectrumBand>();
         return new Eq8Reading(E.DeviceText(trackId, deviceIndex, 0), E.DeviceText(trackId, deviceIndex, 1), R1(Pm(56)), R1(Pm(57)),
-            Pm(58) >= 0.5f, R1(V(2)), Eq8Analyzer[Math.Clamp((int)Math.Round(Pm(59)), 0, 2)], R1(Db(0)), R1(Db(1)), V(3), bands,
+            Pm(58) >= 0.5f, R1(V(2)), Eq8Analyzer[Math.Clamp((int)Math.Round(Pm(59)), 0, 2)],
+            Eq8RangeDb[Math.Clamp((int)Math.Round(pc > 60 ? Pm(60) : 1f), 0, 2)], Pm(61) >= 0.5f, R1(Db(0)), R1(Db(1)), V(3), bands,
             valid, Spec(tele), Spec(tele + spec));
     }
 
     [McpServerTool(Name = "read_eq8"), Description(
         "Read a Nota EQ-8 (built-in effect kind 0 — eight-band parametric EQ): Scale (% applied to every shelf and bell gain), "
-        + "output, whether Auto gain is on and the gain it adds now, the analyzer mode the card shows (Pre / Post / Off), in / out "
+        + "output, whether Auto gain is on and the gain it adds now, the analyzer mode the card shows (Pre / Post / Off) with its range "
+        + "(60 / 90 / 120 dB) and peak hold, in / out "
         + "peaks; per band: on, type, frequency, gain, the effective gain after Scale, Q (the resonance on the cuts), slope "
         + "(12 / 24 / 48 dB/oct, cuts only) and channel (Stereo / Mid / Side / Left / Right); plus the input and output spectra "
-        + "in 24 log bands (dB). Levels read −120 while silent; they move only while audio runs through the track. "
+        + "in 24 log bands (dB, the loudest 1/6-octave reading in each). Levels read −120 while silent; they move only while audio runs through the track. "
         + "set_eq8_band edits a band, set_eq8 the globals.")]
     public Task<Eq8Reading> ReadEq8(int trackId, int deviceIndex) => Read(() => Eq8Read(trackId, deviceIndex, true));
 
@@ -1516,9 +1519,11 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         "Set the global controls of a Nota EQ-8 (built-in effect kind 0) — only the fields you pass change; each change is recorded "
         + "like a hand edit. scalePercent 0..200 multiplies every shelf and bell gain (100 = as set, 0 = flat). outputDb ±12. "
         + "autoGain adds the opposite of the average level of the shelves and bells (cuts and notches do not count; ±12 dB max). analyzer \"Pre\" | \"Post\" | \"Off\" picks the "
-        + "spectrum the card draws. Returns the device as read back (without the spectra).")]
+        + "spectrum the card draws; analyzerRangeDb 60, 90 or 120 sets how far below 0 dBFS its bottom edge is; analyzerPeak "
+        + "turns its peak-hold line on. All three are display only. Returns the device as read back (without the spectra).")]
     public Task<Eq8Reading> SetEq8(int trackId, int deviceIndex, [Description("0..200 %")] double? scalePercent = null,
-        [Description("−12..+12 dB")] double? outputDb = null, bool? autoGain = null, string? analyzer = null) => Mutate(() =>
+        [Description("−12..+12 dB")] double? outputDb = null, bool? autoGain = null, string? analyzer = null,
+        [Description("60, 90 or 120")] int? analyzerRangeDb = null, bool? analyzerPeak = null) => Mutate(() =>
     {
         if (E.TrackDeviceBuiltinKind(trackId, deviceIndex) != 0) throw new ArgumentException("not a Nota EQ-8 (kind 0)");
         int pc = E.DeviceParamCount(trackId, deviceIndex);
@@ -1538,6 +1543,13 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
             if (i < 0) throw new ArgumentException("analyzer must be Pre, Post or Off");
             S(59, i);
         }
+        if (analyzerRangeDb is { } rd)
+        {
+            int i = Array.IndexOf(Eq8RangeDb, rd);
+            if (i < 0) throw new ArgumentException("analyzerRangeDb must be 60, 90 or 120");
+            S(60, i);
+        }
+        if (analyzerPeak is { } ap) S(61, ap ? 1 : 0);
         return Eq8Read(trackId, deviceIndex, false);
     });
 

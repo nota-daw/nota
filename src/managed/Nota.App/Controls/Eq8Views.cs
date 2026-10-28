@@ -2,8 +2,10 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota EQ-8 (device kind 0) response graph, a build of the "Nota EQ-8" mockup. The window
-// draws the analyzer behind everything (the input spectrum dim, the output spectrum a step
-// brighter — Pre shows the input alone, Post both, Off neither), the selected band's own curve
+// draws the analyzer behind everything (specs/046: the output spectrum as a low-contrast filled
+// area with the input as a dim line over it — Pre fills the input alone, Off draws neither — and
+// with Peak on a thin line at each frequency's recent top, over the Range's 60 / 90 / 120 dB
+// below 0 dBFS), the selected band's own curve
 // as a faint accent line, the Side path as a teal line when any band works on the Side, and
 // the main response (stereo — or the Mid when the Side has its own curve) as the neutral primary
 // curve. Every band is a numbered node at its effective gain (Scale applied) — selected accent,
@@ -29,13 +31,14 @@ internal static class Eq8
 {
     public const int Bands = 8, PerBand = 5;
     public const int On = 0, TypeF = 1, FreqF = 2, GainF = 3, QF = 4;
-    public const int SlopeBase = 40, ChannelBase = 48, ScaleP = 56, OutputP = 57, AutoGainP = 58, AnalyzerP = 59, ParamCount = 60;
+    public const int SlopeBase = 40, ChannelBase = 48, ScaleP = 56, OutputP = 57, AutoGainP = 58, AnalyzerP = 59,
+        AnaRangeP = 60, AnaPeakP = 61, ParamCount = 62;
     public const int LowCut = 0, LowShelf = 1, Bell = 2, Notch = 3, HighShelf = 4, HighCut = 5;
     public const int St = 0, Mid = 1, Side = 2, Left = 3, Right = 4;
     public const int AnaPre = 0, AnaPost = 1, AnaOff = 2;
     // Telemetry (Eq::S_* / kTele / kSpec).
     public const int S_InPeak = 0, S_OutPeak = 1, S_AutoGain = 2, S_SampleRate = 3, S_Cpu = 4, S_Analysed = 5, S_Latency = 6,
-        kTele = 16, kSpec = 96, PreAt = kTele, PostAt = kTele + kSpec, kScope = kTele + 2 * kSpec;
+        kTele = 16, kSpec = 256, PreAt = kTele, PostAt = kTele + kSpec, PeakAt = kTele + 2 * kSpec, kScope = kTele + 3 * kSpec;
     public const double Fmin = 20, Fmax = 20000;
 
     public static readonly string[] TypeNames = DynEq.TypeNames;
@@ -46,6 +49,8 @@ internal static class Eq8
     public static readonly string[] ChannelShort = { "St", "M", "S", "L", "R" };
     public static readonly string[] SlopeSeg = { "12", "24", "48\u2009dB" };
     public static readonly string[] AnalyzerSeg = { "Pre", "Post", "Off" };
+    public static readonly string[] RangeSeg = { "60", "90", "120" };
+    public static double RangeDb(int i) => i switch { 0 => 60, 2 => 120, _ => 90 };
 
     public static bool HasGain(int type) => DynEq.HasGain(type);
     public static bool IsCut(int type) => type is LowCut or HighCut;
@@ -104,9 +109,7 @@ public sealed class Eq8Curve : Control
     private static readonly IPen GridFaint = new Pen(NotaPalette.GridSubBeat, 1);
     private static readonly IPen GridMid = new Pen(NotaPalette.GridBeat, 1);
     private static readonly IPen ZeroPen = new Pen(NotaPalette.TrackOff, 1);
-    private static readonly IPen PrePen = new Pen(NotaPalette.BorderDefault, 1);
-    private static readonly IPen PreDimPen = new Pen(NotaPalette.Wash(NotaPalette.BorderDefault, 0x99), 1);
-    private static readonly IPen PostPen = new Pen(NotaPalette.TextAxis, 1);
+    private static readonly IPen PreDimPen = new Pen(NotaPalette.Wash(NotaPalette.TextAxis, 0x66), 1);
     private static readonly IPen SelPen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x5A), 1);
     private static readonly IPen SidePen = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xE6), NotaGraph.SecondaryWidth, lineJoin: PenLineJoin.Round);
     private static readonly IPen RingPen = new Pen(NotaPalette.BgSunken, 2);
@@ -118,6 +121,7 @@ public sealed class Eq8Curve : Control
 
     private readonly float[] _pre = new float[Eq8.kSpec];
     private readonly float[] _post = new float[Eq8.kSpec];
+    private readonly float[] _peak = new float[Eq8.kSpec];
     private bool _specOk;
 
     public event Action? SelectionChanged;
@@ -155,6 +159,7 @@ public sealed class Eq8Curve : Control
         {
             Array.Copy(scope, Eq8.PreAt, _pre, 0, Eq8.kSpec);
             Array.Copy(scope, Eq8.PostAt, _post, 0, Eq8.kSpec);
+            Array.Copy(scope, Eq8.PeakAt, _peak, 0, Eq8.kSpec);
         }
         InvalidateVisual();
     }
@@ -176,6 +181,8 @@ public sealed class Eq8Curve : Control
     private int Chan(int b) => Math.Clamp((int)Math.Round(Pd(Eq8.ChannelBase + b)), 0, 4);
     private double ScaleK => _engine.DeviceParamCount(_track, _device) > Eq8.ScaleP ? Math.Clamp(Pd(Eq8.ScaleP), 0, 200) / 100.0 : 1.0;
     private int Analyzer => _engine.DeviceParamCount(_track, _device) > Eq8.AnalyzerP ? Math.Clamp((int)Math.Round(Pd(Eq8.AnalyzerP)), 0, 2) : Eq8.AnaPost;
+    private double RangeDb => Eq8.RangeDb(_engine.DeviceParamCount(_track, _device) > Eq8.AnaRangeP ? (int)Math.Round(Pd(Eq8.AnaRangeP)) : 1);
+    private bool PeakOn => _engine.DeviceParamCount(_track, _device) > Eq8.AnaPeakP && Pd(Eq8.AnaPeakP) >= 0.5f;
     private double Sr => _engine.SampleRate > 0 ? _engine.SampleRate : 48000;
 
     // ---- geometry: the plot is the whole control ----
@@ -318,7 +325,7 @@ public sealed class Eq8Curve : Control
             mi.Click += (_, _) => { Gesture(Eq8.P(b, Eq8.TypeF), () => SetP(b, Eq8.TypeF, tt)); Edited?.Invoke(); InvalidateVisual(); };
             fly.Items.Add(mi);
         }
-        bool extended = _engine.DeviceParamCount(_track, _device) >= Eq8.ParamCount;
+        bool extended = _engine.DeviceParamCount(_track, _device) > Eq8.AnalyzerP;
         if (extended)
         {
             fly.Items.Add(new Separator());
@@ -353,18 +360,6 @@ public sealed class Eq8Curve : Control
         => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             mono ? (bold ? NotaFonts.MonoBold : NotaFonts.Mono) : bold ? NotaFonts.SansSemiBold : NotaFonts.Sans, size, ink);
 
-    private StreamGeometry SpecLine(float[] spec, double w, double h)
-    {
-        var sg = new StreamGeometry();
-        using var g = sg.Open();
-        for (int i = 0; i < Eq8.kSpec; i++)
-        {
-            double x = (i + 0.5) / Eq8.kSpec * w;
-            double y = Math.Clamp(-spec[i] / 80.0, 0, 1) * h;   // 0 dBFS at the top … −80 at the bottom
-            if (i == 0) g.BeginFigure(new Point(x, y), false); else g.LineTo(new Point(x, y));
-        }
-        return sg;
-    }
 
     public override void Render(DrawingContext ctx)
     {
@@ -380,12 +375,16 @@ public sealed class Eq8Curve : Control
         foreach (var db in new[] { -12.0, -6.0, 6.0, 12.0 }) ctx.DrawLine(GridFaint, new Point(0, Y(db)), new Point(w, Y(db)));
         ctx.DrawLine(ZeroPen, new Point(0, Y(0)), new Point(w, Y(0)));
 
-        // analyzer: Pre — the input; Post — the output over a dimmer input; Off — neither
+        // analyzer: Pre — the input filled; Post — the output filled under a dim input line; Off —
+        // neither. Its points sit on the graph's own 20 Hz – 20 kHz axis.
         int ana = Analyzer;
         if (_specOk && ana != Eq8.AnaOff)
         {
-            ctx.DrawGeometry(null, ana == Eq8.AnaPre ? PrePen : PreDimPen, SpecLine(_pre, w, h));
-            if (ana == Eq8.AnaPost) ctx.DrawGeometry(null, PostPen, SpecLine(_post, w, h));
+            double range = RangeDb;
+            var shown = ana == Eq8.AnaPre ? _pre : _post;
+            SpectrumFill.Draw(ctx, shown, w, h, range);
+            if (ana == Eq8.AnaPost) SpectrumFill.Line(ctx, _pre, w, h, range, PreDimPen);
+            if (PeakOn) SpectrumFill.Line(ctx, _peak, w, h, range, SpectrumFill.PeakPen);
         }
 
         // band coefficients (effective gain = gain × Scale)

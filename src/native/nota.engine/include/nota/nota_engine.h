@@ -1768,6 +1768,12 @@ NOTA_API void        nota_device_set_sidechain_tap_pre(NotaEngine* engine, int32
 NOTA_API int32_t     nota_device_sidechain_tap_pre(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 /* Deterministic DSP self-test of the built-in EQ + Compressor: 1 = sane. */
 NOTA_API int32_t     nota_fx_selftest(void);
+/* Runs the EQ cards' spectrum analyzer (specs/046) over `n` mono samples on a fixed clock,
+   for tests: a frame every `hop` samples, `dt` seconds apart, from the first full window on.
+   Writes each frame's 256-point curve (dB) into `curves` (max_frames × 256); returns the
+   frames written. */
+NOTA_API int32_t     nota_spectrum_analyze_offline(const float* mono, int32_t n, double sample_rate,
+                                                   int32_t hop, double dt, float* curves, int32_t max_frames);
 
 /* ---- Instrument Rack (nested container instrument) ----------------- */
 /* A RackInstrument hosts N parallel chains (each an instrument + insert devices)
