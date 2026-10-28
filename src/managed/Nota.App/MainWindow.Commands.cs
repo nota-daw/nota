@@ -95,6 +95,7 @@ public partial class MainWindow
         B("transport.playPause", () => _vm?.Transport.PlayPauseCommand.Execute(null));
         B("transport.stop", () => _vm?.Transport.StopCommand.Execute(null));
         B("transport.record", () => OnMenuRecord(this, e));
+        B("transport.armOnSelect", ToggleArmOnSelect);
         B("transport.loop", () => OnMenuLoop(this, e));
         B("transport.metronome", () => OnMenuMetronome(this, e));
         B("transport.loopRecordMode", () => { if (_vm is not null) _vm.Transport.LoopRecordReplace = !_vm.Transport.LoopRecordReplace; });
@@ -193,6 +194,23 @@ public partial class MainWindow
         if (MenuItemFor("edit.lockEnvelopes") is { } mi) mi.IsChecked = locked;
         _vm.StatusText = locked ? "Envelopes locked — clip moves keep automation in place"
                                 : "Envelopes follow clips";
+    }
+
+    // Transport ▸ Auto-arm selected track (#332): arm-on-select, a saved preference, off by default.
+    private void ToggleArmOnSelect()
+    {
+        if (_vm is null) return;
+        bool on = !TrackArming.ArmOnSelect;
+        SetArmOnSelect(on);
+        _vm.Settings.Current.ArmOnSelect = on;
+        _vm.Settings.Save();
+        _vm.StatusText = on ? "Selecting an instrument track arms it" : "Selecting a track leaves the arms alone";
+    }
+
+    private void SetArmOnSelect(bool on)
+    {
+        TrackArming.ArmOnSelect = on;
+        if (MenuItemFor("transport.armOnSelect") is { } mi) mi.IsChecked = on;
     }
 
     // The grid shortcuts act on the clip editor (piano roll or audio — they share one setting)

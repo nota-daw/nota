@@ -74,6 +74,7 @@ public static class CommandCatalog
         C("transport.playPause", "Play / pause", "Transport", Shortcut.Shift("Space"), "resume continue hold"),
         C("transport.stop", "Stop", "Transport", Shortcut.None("Return"), "halt"),
         C("transport.record", "Record", "Transport", Shortcut.Cmd('R'), "arm capture"),
+        C("transport.armOnSelect", "Auto-arm selected track", "Transport", "", "arm on select follow selection record keyboard"),
         C("transport.loop", "Toggle loop", "Transport", Shortcut.Cmd('L'), "cycle repeat"),
         C("transport.metronome", "Metronome", "Transport", Shortcut.Cmd('M'), "click"),
         C("transport.loopRecordMode", "Loop record: overdub / replace", "Transport", Shortcut.CmdShift('R'), "overdub replace take pass loop record"),
