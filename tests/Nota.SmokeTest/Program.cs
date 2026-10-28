@@ -559,6 +559,14 @@ if (args.Length >= 1 && args[0] == "--vocoder")
     Console.WriteLine(failures == 0 ? "VOCODER PASSED" : $"VOCODER FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Session launches + recording input alone (fast iteration): `--session-input`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--session-input")
+{
+    Console.WriteLine("-- session launch + record input --");
+    foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--live-record")
 {
@@ -8394,7 +8402,8 @@ engine.StopTransport();
     e.SetTrackMute(sesT3, false);
     e.BackToArrangement();
     Check(e.ArrangementActive, "back to arrangement re-activates the timeline");
-    Check(e.SessionSlotState(sesT3, 0) != 3, "back to arrangement stopped the session clip");
+    e.RenderOffline(buf, 64);                          // the stop lands on the next block (the muted clip did launch, #343)
+    Check(e.SessionSlotState(sesT3, 0) == 1, "back to arrangement stopped the session clip");
     e.Seek(0); e.RenderOffline(buf, frames);
     Check(Rms(buf, frames) > 0.001f, $"arrangement plays after back to arrangement (rms={Rms(buf, frames):F4})");
     e.StopTransport();
@@ -15092,6 +15101,8 @@ Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop record mode --");
 foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
+Console.WriteLine("-- session launch + record input --");
+foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");

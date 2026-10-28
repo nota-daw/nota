@@ -443,7 +443,8 @@ track count and closes with Escape.
 ## Audio: recording, clips, warp
 
 - **Recording** from an input (microphone, line, interface) onto an audio track, with
-  monitoring (in/auto/off).
+  monitoring (in/auto/off). The input is **Ext 1** or **Ext 2** (mono, centred) or **Ext 1/2**
+  (stereo pair); new tracks take Ext 1.
 - **Audio clips as samples** — drag an arrangement clip onto a track with a Sampler, Nota
   Grain, Drum Rack (next free pad) or Instrument Rack, or anywhere a sample goes (a pad, a
   Rhythm voice, a Session slot); hovering an instrument track opens its devices. The sample
