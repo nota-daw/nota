@@ -6043,8 +6043,11 @@ Console.WriteLine("-- Nota Chamber --");
         Check(ce.DeviceLayerWave(ct, cd, 2, pv, pv.Length) == 128 && ce.DeviceLayerWave(ct, cd, 3, pv, pv.Length) == 128, "Chamber exposes result + echogram previews");
         ce.DeviceScope(ct, cd, csc, csc.Length);
         float res0 = csc[19], echo0 = csc[20];
-        ce.DeviceSetParam(ct, cd, IrSize, 1f); ce.DeviceSetParam(ct, cd, AlgoDecay, 0.9f); Settle();
-        ce.DeviceScope(ct, cd, csc, csc.Length);
+        ce.DeviceSetParam(ct, cd, IrSize, 1f); ce.DeviceSetParam(ct, cd, AlgoDecay, 0.9f);
+        // The IR worker publishes in the background: give a slow CI runner up to 3 s.
+        var pvClock = System.Diagnostics.Stopwatch.StartNew();
+        do { Settle(); ce.DeviceScope(ct, cd, csc, csc.Length); }
+        while (!(csc[19] > res0 * 1.8f && csc[20] > echo0 * 2f) && pvClock.ElapsedMilliseconds < 3000);
         Check(csc[19] > res0 * 1.8f && csc[20] > echo0 * 2f, $"previews follow Size + Decay (result {res0:F2}→{csc[19]:F2} s, echogram {echo0:F2}→{csc[20]:F2} s)");
         ce.DeviceSetParam(ct, cd, IrSize, 0.5f); ce.DeviceSetParam(ct, cd, AlgoDecay, ce.DeviceParamDefault(ct, cd, AlgoDecay)); Settle();
     }
