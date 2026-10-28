@@ -264,8 +264,9 @@ internal static class EqAnalyzerTests
         }
 
         // A large buffer (2048 frames ≈ 46 ms) with the display reading every ~10 ms: most reads
-        // fall between two callbacks, which is not silence, so a steady tone doesn't dip.
-        using (var r = new Rig(Sine(tmp, 1000)))
+        // fall between two callbacks, which is not silence, so a steady tone doesn't dip. The tone
+        // outlasts the loop: at most 4 s of 46 ms feeds (≈ 4.1 s of audio).
+        using (var r = new Rig(Sine(tmp, 1000, seconds: 6.0)))
         {
             r.Reset();
             r.Feed(8192);
