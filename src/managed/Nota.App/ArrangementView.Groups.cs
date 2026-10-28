@@ -7,6 +7,7 @@
 // selection (grouping + the track commands in ArrangementView.Tracks.cs), and the
 // create/ungroup commands.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Nota.Application.Editing;
@@ -105,6 +106,8 @@ public sealed partial class ArrangementView
 
     private void ToggleTrackInSelection(int trackId)
     {
+        // A track selection never carries returns (they select among themselves in the footer).
+        _selTracks.RemoveWhere(id => _returns.Any(r => r.Id == id));
         // Seed the set with the current primary so the click extends rather than replaces.
         if (_selTracks.Count == 0 && _tracks.Any(t => t.Id == SelTrackId)) _selTracks.Add(SelTrackId);
         if (_selTracks.Add(trackId)) { Select(trackId, -1, keepTrackSet: true); return; }   // make it primary + show its devices
@@ -117,6 +120,32 @@ public sealed partial class ArrangementView
     }
 
     private void ClearTrackMultiSelection() => _selTracks.Clear();
+
+    // Returns select among themselves in the footer (specs/045): ⌘/Ctrl-click adds or removes
+    // one, ⇧-click takes the range from the selected return. A selection never mixes returns
+    // with tracks, so track commands (group, duplicate, delete …) never reach a return; the
+    // selected returns resize together.
+    private void ToggleReturnInSelection(int returnId)
+    {
+        bool IsReturn(int id) => _returns.Any(r => r.Id == id);
+        _selTracks.RemoveWhere(id => !IsReturn(id));
+        if (_selTracks.Count == 0 && IsReturn(SelTrackId)) _selTracks.Add(SelTrackId);
+        if (_selTracks.Add(returnId)) { Select(returnId, -1, keepTrackSet: true); return; }
+        _selTracks.Remove(returnId);
+        int next = _returns.FirstOrDefault(r => _selTracks.Contains(r.Id))?.Id ?? -1;
+        if (next > 0) Select(next, -1, keepTrackSet: true);
+        else Select(-1, -1);
+    }
+
+    private void SelectReturnRange(int returnId)
+    {
+        int from = _returns.FindIndex(r => r.Id == SelTrackId), to = _returns.FindIndex(r => r.Id == returnId);
+        if (to < 0) return;
+        if (from < 0) from = to;
+        _selTracks.Clear();
+        for (int i = Math.Min(from, to); i <= Math.Max(from, to); i++) _selTracks.Add(_returns[i].Id);
+        Select(returnId, -1, keepTrackSet: true);
+    }
 
     // Where a Shift-click range starts: the last plain- or Ctrl/Cmd-clicked header (#249).
     private int _trackAnchorId = -1;

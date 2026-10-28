@@ -384,6 +384,7 @@ public partial class MainWindow : Window
         PianoRollView.AuditionToggled += OnAuditionToggled;
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         vm.Transport.LoopRecordReplace = vm.Settings.Current.LoopRecordReplace;
+        SetArmOnSelect(vm.Settings.Current.ArmOnSelect);
         vm.Transport.PropertyChanged += (_, e) =>
         {
             // The loop record mode is an app preference: every switch (toggle, ⌘⇧R, menu, MCP) persists.

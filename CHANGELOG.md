@@ -28,6 +28,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   pad, on a Drum Rack. Pitches that hold notes keep their rows, so nothing is hidden. ↑/↓ and
   drags move between the visible rows, so notes stay in key. Each track remembers its Fold,
   and it's saved with the project. MCP `set_piano_fold` / `get_piano_fold`.
+- **Automation on return tracks**: in automation mode each return row in the arrangement
+  footer has a lane like a track's — pick Volume, Pan or a parameter of a device on the
+  return's chain from its pill, then draw, drag, bend, select, copy and paste points. The
+  return plays its automation back, its fader and pan follow, and the lanes are saved with
+  the project and undo like track automation.
+- **Resizable return and master rows**: drag a return's or the master's bottom edge, or pick
+  Compact, Standard or Large under **Height** in its context menu; a double-click on the edge
+  goes back to Compact; ⌘- or ⇧-click returns to select several and size them together.
+  Their headers adapt like a track's (a return gains a mute button at Standard and its pan at
+  Large), the heights are saved with the project, and past about half the arrangement the
+  footer scrolls instead of crowding out the tracks.
 - **Select several devices and group them into a rack** (#328): in the Devices panel ⇧-click
   selects a range across MIDI effects, the instrument and audio effects, ⌘-click adds or
   removes one, Esc clears. Copy, cut, paste, duplicate, delete, Move to track ▸ and dragging a
@@ -120,11 +131,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   before keep the stereo pair. Saved with the project; MCP `set_input_channels`.
 
 ### Changed
+- **Return and master rows start compact**: new projects, new returns and projects saved
+  before this version show them at the Compact height, so the tracks get the room.
 - **One click arms one track** (nota-daw/nota#332): a click on a track's arm button arms that
   track and disarms the others, so picking which instrument the keyboard plays is one click.
   ⌘-click (Ctrl-click on Windows / Linux) arms several. While recording, a click never
-  disarms another track. Selecting an instrument track (a new one included) arms it the same
-  way, unless several tracks or an audio track are armed.
+  disarms another track. With **Transport ▸ Auto-arm selected track** on (off by default),
+  selecting an instrument track (a new one included) arms it the same way, unless several
+  tracks or an audio track are armed.
 - **The Envelope Follower is easier to find** (nota-daw/nota#133): searching Modular's palette
   for "peak controller", "ducking" or "loudness" finds it, and the docs walk through ducking one
   track under another.

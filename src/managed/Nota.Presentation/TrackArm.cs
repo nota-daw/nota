@@ -4,8 +4,8 @@
 // Exclusive record-arm (#332): arming a track with a plain click arms that track alone, so
 // picking which instrument the keyboard plays is one click; the additive form (⌘-click, or
 // Ctrl-click on Windows / Linux) arms or disarms one track and leaves the others as they are.
-// Selecting an instrument track arms it the same way, while the arms are still the one the
-// selection picked.
+// With arm-on-select on (Transport ▸ Auto-arm selected track, off by default), selecting an
+// instrument track arms it the same way, while the arms are still the one the selection picked.
 
 using Nota.Application;
 
