@@ -17,7 +17,7 @@ internal static class LensSyncTests
 {
     private const int LensKind = 22, Rate = 44100, Spb = Rate / 2;   // 120 BPM
     private const int RateP = 36, SyncP = 37, SpanP = 38, KeyShowP = 39, KeyGainP = 40, LayoutP = 41, TrigLevelP = 19;
-    private const int M_KeyLive = 20, kScope = 21, L_Trace = 2, L_KeyTrace = 5, L_Sync = 6;
+    private const int M_KeyLive = 20, M_Instance = 21, kScope = 22, L_Trace = 2, L_KeyTrace = 5, L_Sync = 6;
     private const int Head = 8, Cols = 1024, Col = 5;
     private const int S_Mode = 0, S_Playhead = 1, S_Bpm = 2, S_BeatsPerBar = 3, S_SpanBeats = 4, S_Start = 5, S_KeyLive = 6;
 
@@ -32,6 +32,7 @@ internal static class LensSyncTests
             foreach (var r in FreeAndSeek(beats)) yield return r;
             foreach (var r in Key(beats, offBeats)) yield return r;
             foreach (var r in Sound(beats, offBeats)) yield return r;
+            foreach (var r in ChannelAndInstance(beats)) yield return r;
         }
         finally { foreach (var f in tmp) try { File.Delete(f); } catch (IOException) { } }
     }
@@ -101,6 +102,32 @@ internal static class LensSyncTests
         => got.Count == want.Length && got.Zip(want).All(p => Math.Abs(p.First - p.Second) <= tol);
 
     private static string Show(List<double> v) => string.Join(", ", v.Select(x => x.ToString("0")));
+
+    // The long-span history is drawn only under the channel it was measured on: a mono click
+    // seen as Mid, then switched to Side (silent), leaves nothing of it. Each Lens reports its
+    // own serial, so a window can tell two Lenses apart.
+    private static IEnumerable<(bool, string)> ChannelAndInstance(string beats)
+    {
+        const int SourceP = 2, MidSideP = 3;
+        var (e, t, d) = NewLens(beats);
+        using var _ = e;
+        e.DeviceSetParam(t, d, SyncP, 1f);
+        e.DeviceSetParam(t, d, SpanP, SpanV(6));   // 4 bars: the history path
+        e.DeviceSetParam(t, d, MidSideP, 1f);
+        e.DeviceSetParam(t, d, SourceP, 0f);        // Mid
+        Play(e, 0.0, 10.0);
+        int mid = Peaks(Frame(e, t, d), 0).Count;
+        e.DeviceSetParam(t, d, SourceP, 1f);        // Side: a mono click has none
+        Play(e, 10.0, 10.05, seek: false);
+        int side = Peaks(Frame(e, t, d), 0).Count;
+        yield return (mid >= 8 && side == 0, $"long-span history follows the channel: {mid} clicks as Mid, {side} after switching to Side");
+
+        int d2 = e.AddBuiltinDevice(t, LensKind);
+        var a = new float[kScope]; var b = new float[kScope];
+        e.DeviceScope(t, d, a, kScope); e.DeviceScope(t, d2, b, kScope);
+        yield return (a[M_Instance] > 0 && b[M_Instance] > 0 && a[M_Instance] != b[M_Instance],
+            $"each Lens reports its own serial ({a[M_Instance]:0} vs {b[M_Instance]:0})");
+    }
 
     private static IEnumerable<(bool, string)> Params()
     {

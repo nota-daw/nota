@@ -105,7 +105,7 @@ void Lens::capture(const float* main, const float* key, int32_t keyFrames, int32
         if (ms) return src == 2 ? 0.5f * (l - r) : 0.5f * (l + r);
         return src == 1 ? l : src == 2 ? r : 0.5f * (l + r);
     };
-    const uint8_t flags = (uint8_t)((playing && spb > 0.0 ? kBinPlaying : 0) | (key ? kBinKey : 0));
+    const uint8_t flags = (uint8_t)((playing && spb > 0.0 ? kBinPlaying : 0) | (key ? kBinKey : 0) | chanBits(ms, src));
     uint32_t w = ringW_.load(std::memory_order_relaxed);
     for (int32_t i = 0; i < frames; ++i) {
         const float l = main[i * 2], r = main[i * 2 + 1];
@@ -163,7 +163,8 @@ void Lens::process(float* buf, int32_t frames) {
     if (frozen || lean)
         pendN_ = 0;
     else if (delay) {
-        if (pendN_ > 0) capture(pend_.data(), key, keyN, pendN_, pendBeat_, pendSpb_, pendPlaying_, sync);
+        // The bus holds the source's previous block: as long as the held one, whatever this one is.
+        if (pendN_ > 0) capture(pend_.data(), key, key ? pendN_ : 0, pendN_, pendBeat_, pendSpb_, pendPlaying_, sync);
         std::copy(buf, buf + (size_t)frames * 2, pend_.begin());
         pendN_ = frames;
         pendBeat_ = beat0_;
@@ -235,6 +236,7 @@ int32_t Lens::scopeRead(float* out, int32_t maxSamples) const {
     out[M_SampleRate] = (float)sr_;
     out[M_Held] = (get(Freeze) >= 0.5f || (trigModeIdx() == 2 && singleDone_)) ? 1.0f : 0.0f;
     out[M_KeyLive] = keyLive() ? 1.0f : 0.0f;
+    out[M_Instance] = (float)instance_;
     return kScope;
 }
 
@@ -779,6 +781,8 @@ void Lens::analyzeSync() const {
     h[S_Bpm] = (float)(60.0 * sr_ / spb);
     const bool ms = msOn();
     const int src = srcIdx();
+    const uint8_t chan = chanBits(ms, src);
+    auto sameChan = [chan](const Bin& b) { return (b.flags & kBinChan) == chan; };
     const uint32_t ringHead = ringW_.load(std::memory_order_acquire);
     const uint32_t newestEnd = nb.sample + (uint32_t)binLen_; // one past the newest bin's last sample
 
@@ -824,10 +828,13 @@ void Lens::analyzeSync() const {
                 putRaw(c, a, b, 0.0f);
             }
         } else {
-            const uint32_t nBins = std::min<uint32_t>(depth, std::max<uint32_t>(1, (uint32_t)(span / binLen_)));
+            // Scaled by the span asked for: history it doesn't have yet stays empty on the left.
+            const uint32_t want = std::max<uint32_t>(1, (uint32_t)(span / binLen_));
+            const uint32_t nBins = std::min<uint32_t>(depth, want);
             for (uint32_t k = 0; k < nBins; ++k) {
                 const Bin& b = bins_[(head - 1 - k) & mask];
-                const double x0 = 1.0 - (double)(k + 1) / nBins, x1 = 1.0 - (double)k / nBins;
+                if (!sameChan(b)) break;
+                const double x0 = 1.0 - (double)(k + 1) / want, x1 = 1.0 - (double)k / want;
                 const int c0 = std::clamp((int)(x0 * kSync), 0, kSync - 1), c1 = std::clamp((int)std::ceil(x1 * kSync) - 1, c0, kSync - 1);
                 for (int c = c0; c <= c1; ++c) put(c, b.mLo, b.mHi, b.kLo, b.kHi, 0.0f);
             }
@@ -883,7 +890,7 @@ void Lens::analyzeSync() const {
     // Long span: place each bin of the run by its own beat.
     for (uint32_t k = 0; k < depth; ++k) {
         const Bin& b = bins_[(head - 1 - k) & mask];
-        if (k > 0 && !follows(b, prev)) break;
+        if (!sameChan(b) || (k > 0 && !follows(b, prev))) break; // the raw path above reads any channel
         prev = b.beat;
         const double e = b.beat + binLen_ / (b.spb > 0.0 ? b.spb : spb);
         if (b.beat < W0 - S) break;

@@ -6430,7 +6430,7 @@ Console.WriteLine("-- Nota Lens --");
               AverageP = 6, SmoothP = 7, TiltP = 9, PeakHoldP = 11, TimeDivP = 15, TrigModeP = 17,
               TrigLevelP = 19, CursorAP = 26, CursorBP = 27, RateP = 36;
     const int M_PeakHz = 0, M_PeakDb = 1, M_RmsDb = 2, M_PeriodMs = 8, M_FreqHz = 9, M_Vpp = 10,
-              M_Vrms = 11, M_BinHz = 13, M_FftN = 14, M_SampleRate = 18, M_Held = 19, kLensScope = 21;
+              M_Vrms = 11, M_BinHz = 13, M_FftN = 14, M_SampleRate = 18, M_Held = 19, kLensScope = 22;
     const int L_Spectrum = 0, L_Peak = 1, L_Trace = 2, L_Raw = 3, L_Waterfall = 4;
     const int A_Rearm = 0, A_ResetPeak = 1;
 

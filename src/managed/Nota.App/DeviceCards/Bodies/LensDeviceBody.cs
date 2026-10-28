@@ -41,7 +41,7 @@ internal sealed class LensDeviceBody : IDeviceBody
     private const int M_PeakHz = 0, M_PeakDb = 1, M_RmsDb = 2, M_LevelDb = 3, M_CrestDb = 4, M_Corr = 5,
         M_Lufs = 6, M_TrigOk = 7, M_PeriodMs = 8, M_FreqHz = 9, M_Vpp = 10, M_Vrms = 11, M_WindowMs = 12,
         M_BinHz = 13, M_FftN = 14, M_FftMs = 15, M_CursorAv = 16, M_CursorBv = 17, M_SampleRate = 18,
-        M_Held = 19, M_KeyLive = 20, kScope = 21;
+        M_Held = 19, M_KeyLive = 20, M_Instance = 21, kScope = 22;
 
     private const int L_Spectrum = 0, L_Peak = 1, L_Trace = 2, L_Raw = 3, L_Waterfall = 4, L_KeyTrace = 5, L_Sync = 6;
     private static readonly string[] SpanNames = { "¼ b", "½ b", "1 b", "2 b", "1 bar", "2 bar", "4 bar" };
@@ -537,7 +537,8 @@ internal sealed class LensDeviceBody : IDeviceBody
             extras.Children.Add(pop);
         }
 
-        Control TabFrame(string[] tabs, int initial, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
+        Control TabFrame(string[] tabs, int initial, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl,
+            Action<Action<int>>? exposeSelect = null)
         {
             int sel = Math.Clamp(initial, 0, tabs.Length - 1);
             var btns = new Border[tabs.Length];
@@ -577,16 +578,19 @@ internal sealed class LensDeviceBody : IDeviceBody
             var barBorder = new Border { BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
             DockPanel.SetDock(barBorder, Dock.Top);
             Hi(); host.Content = body(sel);
+            // Select from outside (the param moved under us): no `changed`, the caller follows.
+            exposeSelect?.Invoke(i => { if (i == sel) return; sel = i; Hi(); host.Content = body(i); });
             return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
         }
 
+        Action<int>? selectCentre = null;
         var centre = TabFrame(new[] { "Spectrum", "Scope", "Waterfall" }, centreTab, centreHost, CentreBody, false, t =>
         {
             centreTab = t;
             SetP(ViewP, t / 2f);
             rightHost.Content = RightBody(rightTab == 1 ? 3 : t);   // Display is shared; Analyze follows the view
             foreach (var a in readouts) a();
-        }, extras);
+        }, extras, s => selectCentre = s);
 
         var rightFrame = TabFrame(new[] { "Analyze", "Display" }, rightTab, rightHost, t =>
         {
@@ -657,6 +661,15 @@ internal sealed class LensDeviceBody : IDeviceBody
             data.CursorsOn = On(CursorsP); data.CursorA = P(CursorAP); data.CursorB = P(CursorBP);
             data.CursorSnap = On(CursorSnapP);
             data.WfSpanSec = WfSpan();
+
+            // The view moved elsewhere (the pop-out window or the card, undo, MCP): follow it.
+            if (Sel(ViewP, 3) is var view && view != centreTab)
+            {
+                centreTab = view;
+                selectCentre?.Invoke(view);
+                rightHost.Content = RightBody(rightTab == 1 ? 3 : view);
+                foreach (var a in readouts) a();
+            }
 
             if (centreTab == 0)
             {

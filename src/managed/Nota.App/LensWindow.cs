@@ -17,17 +17,20 @@ namespace Nota.App;
 
 internal sealed class LensWindow : NotaWindow
 {
-    private const int LensKind = 22;
+    private const int LensKind = 22, M_Instance = 21, kScope = 22;
     private static readonly Dictionary<(int Track, int Device), LensWindow> Open_ = new();
 
     private readonly IAudioEngine _engine;
     private readonly int _trackId, _device;
     private readonly List<Action> _ticks = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(16) };
+    private readonly float[] _scope = new float[kScope];
+    private readonly float _instance;   // the Lens's serial: another Lens shifted to this index isn't it
 
     private LensWindow(DeviceCardContext card, int device)
     {
         _engine = card.Engine; _trackId = card.TrackId; _device = device;
+        _instance = Instance();
         Title = $"Nota Lens · {TrackNames.Of(_engine, _trackId)}";
         Width = 1100; Height = 520; MinWidth = 640; MinHeight = 260;
         CanResize = true;
@@ -62,9 +65,13 @@ internal sealed class LensWindow : NotaWindow
         Open_.Clear();
     }
 
+    private float Instance() =>
+        _engine.TrackDeviceBuiltinKind(_trackId, _device) == LensKind && _engine.DeviceScope(_trackId, _device, _scope, kScope) >= kScope
+            ? _scope[M_Instance] : -1f;
+
     private void Tick()
     {
-        if (_engine.TrackDeviceBuiltinKind(_trackId, _device) != LensKind) { Close(); return; }   // deleted or moved
+        if (_instance < 0 || Instance() != _instance) { Close(); return; }   // deleted, moved, or another Lens took its place
         for (int i = 0; i < _ticks.Count; i++) _ticks[i]();
     }
 

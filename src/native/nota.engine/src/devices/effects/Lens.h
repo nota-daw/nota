@@ -124,6 +124,7 @@ class Lens : public Device {
         M_SampleRate,
         M_Held,    // 1 = frozen or a finished Single capture
         M_KeyLive, // 1 = a sidechain key is arriving (specs/050)
+        M_Instance, // this Lens's serial, so a window can tell it from another Lens at its index
         kScope
     };
 
@@ -321,6 +322,8 @@ class Lens : public Device {
     bool playing_ = false;
     std::atomic<double> bpb_{4.0};
     std::atomic<int32_t> scTrackId_{-1};
+    static inline std::atomic<uint32_t> nextInstance_{1};
+    const uint32_t instance_ = nextInstance_.fetch_add(1, std::memory_order_relaxed) & 0xFFFFFF; // exact in a float
     const float* scBuf_ = nullptr;
     int32_t scFrames_ = 0;
     // The engine hands a sidechain key one block late, so with a key routed the capture runs a
@@ -341,9 +344,11 @@ class Lens : public Device {
         double beat;  // the transport beat at the bin's first sample
         double spb;      // samples per beat then
         uint32_t sample; // ringW_ at the bin's first sample
-        uint8_t flags;   // 1 playing · 2 key present
+        uint8_t flags;   // 1 playing · 2 key present · bits 2..4 the channel (Source, M/S)
     };
-    static constexpr uint8_t kBinPlaying = 1, kBinKey = 2;
+    static constexpr uint8_t kBinPlaying = 1, kBinKey = 2, kBinChan = 0x1C;
+    // A bin is drawn only under the channel it was measured on (Source, M/S).
+    static uint8_t chanBits(bool ms, int src) { return (uint8_t)(((ms ? 4 : 0) | (src & 3)) << 2); }
     std::vector<Bin> bins_;
     std::atomic<uint32_t> binW_{0};
     int binLen_ = 32, binN_ = 0; // audio thread

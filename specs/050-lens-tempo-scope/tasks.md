@@ -10,4 +10,4 @@
 - [x] T7 UI: `LensWindow` pop-out (expand button, closes with the device / on project load)
 - [x] T8 Smoke test `--lens-sync`; Lens param / scope counts in the main run
 - [x] T9 CHANGELOG, user guide EN + RU (nota-docs)
-- [ ] T10 Screenshots, macOS check
+- [x] T10 Screenshots, macOS check
