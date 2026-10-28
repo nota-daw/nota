@@ -564,7 +564,9 @@ public sealed class Eq8Curve : Control
                     double y = under ? n.Y + r + step * (LabelH + 2) : n.Y - r - LabelH - step * (LabelH + 2);
                     return new Rect(x, Math.Clamp(y, 2, Math.Max(2, h - LabelH - 2)), bw, LabelH);
                 }
-                for (int step = 0, tries = 0; tries < 10 && !found; tries++)
+                // Out on both sides as far as the graph's height allows (a pass clamped at the edge repeats).
+                int maxTries = 2 * ((int)(h / (LabelH + 2)) + 1);
+                for (int step = 0, tries = 0; tries < maxTries && !found; tries++)
                 {
                     var cand = At(tries % 2 == 0 ? below : !below, step);
                     if (!placed.Exists(q => q.Intersects(cand))) { box = cand; found = true; }
