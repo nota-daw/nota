@@ -108,8 +108,21 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **MCP**: `set_track_instrument` replaces a track's instrument with a built-in one (racks
   included); `move_device_to_track` moves or copies a device, the instrument included, to
   another track.
+- **Mono or stereo audio input** (nota-daw/nota#340): an audio track's record input lists the
+  hardware input as **Ext 1**, **Ext 2** and **Ext 1/2** (track menu, header box, Session I/O
+  row). A mono pick is recorded and monitored in the middle of both sides, so a mic on input 1
+  of a stereo interface is no longer left-only. New audio tracks take Ext 1; projects saved
+  before keep the stereo pair. Saved with the project; MCP `set_input_channels`.
 
 ### Changed
+- **One click arms one track** (nota-daw/nota#332): a click on a track's arm button arms that
+  track and disarms the others, so picking which instrument the keyboard plays is one click.
+  ⌘-click (Ctrl-click on Windows / Linux) arms several. While recording, a click never
+  disarms another track. Selecting an instrument track (a new one included) arms it the same
+  way, unless several tracks or an audio track are armed.
+- **The Envelope Follower is easier to find** (nota-daw/nota#133): searching Modular's palette
+  for "peak controller", "ducking" or "loudness" finds it, and the docs walk through ducking one
+  track under another.
 - **Delete on the instrument deletes its track**, as an instrument track always has an
   instrument; Nota asks first when the track has clips.
 - **A new Instrument Rack starts empty** instead of with a Nota Volt chain: drop an instrument
@@ -132,6 +145,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Session clips no longer wait forever to start** (nota-daw/nota#343): a clip launched on a
+  muted track, or one silenced by another track's solo, starts on the next launch point and
+  keeps time while silent; a transport loop with no bar line inside it now launches at the
+  loop start instead of never.
+- **An audio take in Session stops the track's playing clip** (nota-daw/nota#337), as a MIDI
+  take does, rather than letting it play on until the take ends.
+- **Audio effects vanishing from the Browser** (nota-daw/nota#342): a search typed on one tab
+  and cleared on another left the first tab filtered, empty under an empty search box ("No
+  audio effects yet"). A tab now follows the search box whenever it's shown.
 - A rack card's faders, mode buttons and switches (and zone or select-range drags) undo one
   gesture at a time on every rack, the MIDI Effect Rack included; a nested Drum Rack's window
   follows its chain when chains in front of it are removed or moved.

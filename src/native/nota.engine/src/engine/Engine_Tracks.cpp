@@ -959,7 +959,11 @@ int32_t Engine::instrumentScope(int32_t trackId, float* out, int32_t maxN) const
 int32_t Engine::addAudioTrack() {
     auto g = std::make_shared<Graph>(*authoring_);
     const int32_t id = nextTrackId_++;
-    g->tracks.push_back(std::make_shared<Track>(id, TrackType::Audio));
+    auto t = std::make_shared<Track>(id, TrackType::Audio);
+    // A new track records input 1 alone, as most microphones are mono (#340); stereo (1/2) is
+    // one pick away. Older projects keep the stereo pair they were made with.
+    t->setInputChannels(Track::kInputMono1);
+    g->tracks.push_back(std::move(t));
     publish(g);
     return id;
 }
@@ -3095,6 +3099,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     nt->setReturnIndex(src.returnIndex());
     nt->setGroupId(src.groupId()); // keep membership on duplicate (paste resets to top-level)
     nt->setRecordInputSource(src.recordInputSource());
+    nt->setInputChannels(src.inputChannels());
     nt->setMonitor(src.monitor());
     nt->setMidiFromTrackId(src.midiFromTrackId());
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, src.send(b));
