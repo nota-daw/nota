@@ -181,5 +181,15 @@ internal static class PresetStateTests
             $"preset: \"{two[1].DisplayName}\" dropped on the same instrument loads in place and names it");
         yield return (eng.Undo() && PresetEdit.Name(eng, t, Ins, -1) == two[0].DisplayName && Sound().SequenceEqual(first),
             "preset: undoing an in-place drop brings back the old sound and the old name together");
+        // Another kind of instrument replaces the tagged one: undo brings the old one back named.
+        var others = cat.All().Where(p => p.IsInstrument && p.BuiltinKind > 0 && p.DisplayName != "Init").Take(1).ToList();
+        if (others.Count == 0) { yield return (false, "preset: a preset for another instrument kind"); yield break; }
+        var other = others[0];
+        var r3 = svc.ApplyPreset(Row(other), new InsertTarget(t, InPlace: true));
+        bool swapped = r3.Ok && eng.TrackInstrumentKind(t) == other.BuiltinKind && PresetEdit.Name(eng, t, Ins, -1) == other.DisplayName;
+        yield return (swapped && eng.Undo() && eng.TrackInstrumentKind(t) == 0 && PresetEdit.Name(eng, t, Ins, -1) == two[0].DisplayName,
+            $"preset: undoing a swap to \"{other.DisplayName}\" brings back the old instrument with its name ({PresetEdit.Name(eng, t, Ins, -1)})");
+        yield return (eng.Redo() && eng.TrackInstrumentKind(t) == other.BuiltinKind && PresetEdit.Name(eng, t, Ins, -1) == other.DisplayName,
+            $"preset: redo brings the swap back with its name ({PresetEdit.Name(eng, t, Ins, -1)})");
     }
 }

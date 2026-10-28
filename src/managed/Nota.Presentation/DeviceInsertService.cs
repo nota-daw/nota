@@ -461,11 +461,11 @@ public sealed class DeviceInsertService
     /// instrument track when the target asks for it in place (the palette), swaps the
     /// instrument and loads the sound there; an effect preset lands on the target and, with a
     /// placement, moves to the aimed slot.</summary>
-    public InsertResult ApplyPreset(BrowserItem item, InsertTarget target) => Group(() => TagLanded(ApplyPresetCore(item, target), item));
+    public InsertResult ApplyPreset(BrowserItem item, InsertTarget target) => Group(() => TagLanded(ApplyPresetCore(item, target), item, target));
 
     // The device a preset landed on carries its name from here on (specs/048), inside the
     // same undo step. A preset file is tagged by its path.
-    private InsertResult TagLanded(InsertResult r, BrowserItem item)
+    private InsertResult TagLanded(InsertResult r, BrowserItem item, InsertTarget target)
     {
         if (r is not { Ok: true, PresetLanded: { } pl } || r.PresetTagged) return r;
         var surface = pl.Chain switch
@@ -475,7 +475,13 @@ public sealed class DeviceInsertService
             _ => PresetSurface.Effect,
         };
         string id = pl.FactoryId.Length > 0 ? pl.FactoryId : "file:" + item.Path;
-        Nota.Application.Editing.PresetEdit.Tag(_engine, pl.TrackId, surface, pl.Index, id, pl.Name);
+        // A device the apply just made (a new track, an inserted device, a swapped instrument)
+        // takes the name with no undo step of its own: undo brings back the old graph with its
+        // devices' names as they were, and redo the new one with this name. A value step here
+        // would write the new device's empty tag over the restored one's on undo.
+        bool fresh = r.InstrumentReplaced || pl.Chain != PresetChain.Instrument || pl.TrackId != target.TrackId;
+        if (fresh) _engine.SetDevicePresetTag(pl.TrackId, surface, pl.Index, id, pl.Name);
+        else Nota.Application.Editing.PresetEdit.Tag(_engine, pl.TrackId, surface, pl.Index, id, pl.Name);
         return r;
     }
 
