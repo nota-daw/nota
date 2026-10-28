@@ -335,7 +335,9 @@ public sealed partial class DeviceChainView
             int oi = ot.Id.StartsWith("own:", StringComparison.Ordinal) ? presets.FindIndex(p => "own:" + p.Id == ot.Id) : -1;
             bool known = presets.FindIndex(p => p.Id == extra.PresetId) >= 0;   // the device's own word wins
             if (oi >= 0) { if (!known) { extra.PresetId = presets[oi].Id; extra.Preset = presets[oi].Name; } }
-            else if (!known) { extra.PresetId = ot.Id; extra.Preset = ot.Name; }
+            // A preset from outside the list (the browser, Save preset…) is newer than the list's
+            // pick: any later pick from the list retags the device as "own:".
+            else if (!ot.Id.StartsWith("own:", StringComparison.Ordinal)) { extra.PresetId = ot.Id; extra.Preset = ot.Name; }
         }
         int curPreset = presets.FindIndex(p => p.Id == extra.PresetId);
         // A factory list's own "Init" entry stands for no tag.
