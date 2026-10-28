@@ -1993,14 +1993,14 @@ class Engine {
     int liveExprCount_ = 0;
     // Tracks disarmed with keys still down (#366), from the live queue's release requests
     // (expr kLiveReleaseExpr); one past capacity waits for the next block. Marked on their
-    // instruments once the block's graph is in hand.
+    // tracks once the block's graph is in hand.
     static constexpr int32_t kLiveReleaseExpr = -2;
     static constexpr int kMaxLiveRelease = 64;
     int32_t liveRelease_[kMaxLiveRelease] = {};
     int liveReleaseCount_ = 0;
     // Track t's share of the block's live notes, appended to evs: the untargeted ones and/or
-    // the ones addressed to it, then the release of what its instrument was sounding if it was
-    // disarmed and no longer takes live input. Returns the new count.
+    // the ones addressed to it, then the release of what it was sounding if it was disarmed
+    // and no longer takes live input. Returns the new count.
     int liveNotesFor(const Track& t, bool untargeted, bool targeted, bool stillTakes, MidiEv* evs, int n);
     // Whether a live event reaches track t (armed / audition, or addressed to it).
     bool takesLiveEvent(const Track& t, const MidiEvent& e) const;

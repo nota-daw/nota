@@ -103,11 +103,6 @@ class Instrument {
     // atomics because a rack edit forks the rack on the message thread and carries them over.
     std::atomic<bool> pedalDown{false};
     std::atomic<uint64_t> pedalHeld[2] = {0, 0}; // released keys the pedal is holding, one bit per pitch
-    // The untargeted live notes (keyboard, MIDI) it was given and not yet the note-off of, and
-    // whether its track was disarmed with them down (#366): released on its next render.
-    // Audio thread only, carried over a rack edit like the pedal.
-    std::atomic<uint64_t> liveSounding[2] = {0, 0};
-    std::atomic<bool> liveRelease{false};
 
     // Add `frames` of interleaved stereo into `out`. Continues current voices.
     virtual void render(float* out, int32_t frames) = 0;

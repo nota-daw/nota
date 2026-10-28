@@ -266,8 +266,9 @@ internal static class SessionInputTests
         }
     }
 
-    // A track edited while a key is held (its object replaced), a Session overdub, and many
-    // tracks disarmed at once still release the held note (#366).
+    // A track edited while a key is held (its object replaced), a Session overdub, a routed
+    // track whose source's instrument was replaced, and many tracks disarmed at once still
+    // release the held note (#366).
     private static IEnumerable<(bool, string)> DisarmAfterEditAndInSession()
     {
         using (var e = new NotaEngine())
@@ -311,6 +312,24 @@ internal static class SessionInputTests
             e.StopTransport();
             yield return (held > 0.01f && after < 1e-4f,
                 $"disarming during a Session overdub releases the held note (peak {held:F3} → {after:G2})");
+        }
+        using (var e = new NotaEngine())
+        {
+            int src = e.AddInstrumentTrack(), dst = e.AddInstrumentTrack();
+            e.SetTrackBuiltinInstrument(src, 0);
+            e.SetTrackBuiltinInstrument(dst, 0);
+            e.SetTrackMidiSource(dst, src);
+            TrackArm.Set(e, src, true, additive: false);
+            e.NoteOn(60, 0.9f);
+            float held = Peak(e, 0.5);
+            e.SetTrackBuiltinInstrument(src, 0);           // the source's instrument replaced
+            Beats(e, 0.5);
+            TrackArm.Set(e, src, false, additive: false);
+            Beats(e, 2.0);
+            float after = Peak(e, 0.5);
+            e.NoteOff(60);
+            yield return (held > 0.01f && after < 1e-4f,
+                $"a routed track still releases after its source's instrument is replaced (peak {held:F3} → {after:G2})");
         }
         using (var e = new NotaEngine())
         {
