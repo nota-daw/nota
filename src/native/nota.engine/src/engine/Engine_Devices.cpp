@@ -577,6 +577,12 @@ std::shared_ptr<Instrument> Engine::cloneInstrument(const Track& src) const {
 }
 
 std::shared_ptr<Instrument> Engine::cloneInstrumentFrom(const Instrument& src) const {
+    auto c = cloneInstrumentBody(src);
+    if (c) c->presetTag = src.presetTag; // the preset it was loaded from (specs/048)
+    return c;
+}
+
+std::shared_ptr<Instrument> Engine::cloneInstrumentBody(const Instrument& src) const {
     const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
     if (auto c = src.clone()) {
         c->setSampleRate(sr);
@@ -682,6 +688,7 @@ std::shared_ptr<Device> Engine::cloneDevice(const Device& src) const {
     }
     d->setBypassed(src.bypassed());
     d->setFolded(src.folded());
+    d->setPresetTag(src.presetTag()); // the preset it was loaded from (specs/048)
     d->setSidechainSourceTrackId(src.sidechainSourceTrackId()); // a keyed device keeps its key
     d->setSidechainTapPre(src.sidechainTapPre());
     d->setSidechainGainDb(src.sidechainGainDb());
@@ -779,6 +786,7 @@ std::shared_ptr<MidiDevice> Engine::cloneMidiDevice(const MidiDevice& src) const
     d->setCcDepth(src.ccDepth());
     d->setBypassed(src.bypassed());
     d->setFolded(src.folded());
+    d->setPresetTag(src.presetTag()); // the preset it was loaded from (specs/048)
     return d; // live state starts fresh
 }
 

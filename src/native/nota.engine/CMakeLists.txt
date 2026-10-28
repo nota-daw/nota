@@ -82,6 +82,7 @@ set(NOTA_ENGINE_SOURCES
     src/abi/nota_engine_device.cpp
     src/abi/nota_engine_automation.cpp
     src/abi/nota_engine_modulation.cpp
+    src/abi/nota_engine_presets.cpp
     src/abi/nota_engine_audio.cpp
     src/abi/nota_engine_rack.cpp
     src/abi/nota_engine_import.cpp
@@ -90,6 +91,7 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Engine.cpp
     src/engine/Engine_Automation.cpp
     src/engine/Engine_Modulation.cpp
+    src/engine/Engine_Presets.cpp
     src/engine/Engine_Tracks.cpp
     src/engine/Engine_Session.cpp
     src/engine/Engine_Devices.cpp

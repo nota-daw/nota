@@ -328,7 +328,8 @@ internal static class DeviceCardKit
     // neither select nor start dragging the card. Shared by the card shell and the rack chain
     // full-UI popups.
     internal static Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
-        Action<int> apply, Action<int> step, double nameWidth = 132, double height = 18, Action? init = null)
+        Action<int> apply, Action<int> step, double nameWidth = 132, double height = 18, Action? init = null,
+        Func<bool>? modified = null, Action<Action>? addLive = null)
     {
         double H = height;   // 18 in a card header, 22 in the device window's title bar
         var label = new TextBlock
@@ -345,6 +346,21 @@ internal static class DeviceCardKit
             Child = new DockPanel { Children = { chevron, label } },
         };
         ToolTip.SetTip(name, "Choose a preset");
+        // A sound parameter moved away from the loaded preset (specs/048): "Name *", read live.
+        if (modified != null && !string.IsNullOrEmpty(current))
+        {
+            bool shown = false;
+            void Mark()
+            {
+                bool m = modified();
+                if (m == shown) return;
+                shown = m;
+                label.Text = m ? current + " *" : current;
+                ToolTip.SetTip(name, m ? $"Changed since you loaded {current} · choose a preset" : "Choose a preset");
+            }
+            Mark();
+            addLive?.Invoke(Mark);
+        }
         name.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(name).Properties.IsLeftButtonPressed) return;

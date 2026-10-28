@@ -459,7 +459,23 @@ public sealed class DeviceInsertService
     /// instrument track when the target asks for it in place (the palette), swaps the
     /// instrument and loads the sound there; an effect preset lands on the target and, with a
     /// placement, moves to the aimed slot.</summary>
-    public InsertResult ApplyPreset(BrowserItem item, InsertTarget target) => Group(() => ApplyPresetCore(item, target));
+    public InsertResult ApplyPreset(BrowserItem item, InsertTarget target) => Group(() => TagLanded(ApplyPresetCore(item, target), item));
+
+    // The device a preset landed on carries its name from here on (specs/048), inside the
+    // same undo step. A preset file is tagged by its path.
+    private InsertResult TagLanded(InsertResult r, BrowserItem item)
+    {
+        if (r is not { Ok: true, PresetLanded: { } pl }) return r;
+        var surface = pl.Chain switch
+        {
+            PresetChain.Instrument => PresetSurface.Instrument,
+            PresetChain.Midi => PresetSurface.MidiEffect,
+            _ => PresetSurface.Effect,
+        };
+        string id = pl.FactoryId.Length > 0 ? pl.FactoryId : "file:" + item.Path;
+        Nota.Application.Editing.PresetEdit.Tag(_engine, pl.TrackId, surface, pl.Index, id, pl.Name);
+        return r;
+    }
 
     private InsertResult ApplyPresetCore(BrowserItem item, InsertTarget target)
     {

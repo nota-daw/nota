@@ -293,8 +293,19 @@ public sealed class ControllerCurveDto
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
+/// <summary>The preset a device was loaded from (v26, specs/048): its id, name and the
+/// parameter values it left, so a reopened project still shows "Name *" once they moved.</summary>
+public sealed class PresetTagDto
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public float[] Loaded { get; set; } = System.Array.Empty<float>();
+}
+
 public sealed class InstrumentDto
 {
+    /// <summary>The preset it was loaded from (v26); null = none / Init.</summary>
+    public PresetTagDto? Preset { get; set; }
     /// <summary>0 = Nota Synth, 1 = Sampler, 2 = Nota Physical, -1 = hosted plugin.</summary>
     public int Kind { get; set; }
     /// <summary>Set when Kind == 1 (built-in Sampler).</summary>
@@ -391,6 +402,8 @@ public sealed class WarpMarkerDto
 /// param values. Persisted before the instrument in the chain.</summary>
 public sealed class MidiDeviceDto
 {
+    /// <summary>The preset it was loaded from (v26); null = none / Init.</summary>
+    public PresetTagDto? Preset { get; set; }
     public int Kind { get; set; }        // 0 = Arpeggiator
     public bool Bypassed { get; set; }
     public bool Folded { get; set; }     // drawn as a strip in the Devices panel (v23, specs/022)
@@ -411,6 +424,8 @@ public sealed class MidiDeviceDto
 
 public sealed class DeviceDto
 {
+    /// <summary>The preset it was loaded from (v26); null = none / Init.</summary>
+    public PresetTagDto? Preset { get; set; }
     /// <summary>Built-in kind: 0=EQ, 1=Compressor, 2=Reverb, 3=Delay, 4=Utility; -1 = hosted plugin.</summary>
     public int BuiltinKind { get; set; }
     public bool Bypassed { get; set; }

@@ -192,6 +192,7 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
         r->shareRuntimeWith(*src); // held notes play on through the swap
         r->setBypassed(src->bypassed());
         r->setFolded(src->folded());
+        r->setPresetTag(src->presetTag());
         fresh = r.get();
         nt->midiEffects[mi] = std::move(r);
         republishWithTrack(trackId, nt);
@@ -210,6 +211,7 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
         r->forkFrom(*src);
         r->setBypassed(src->bypassed());
         r->setFolded(src->folded());
+        r->setPresetTag(src->presetTag());
         r->setSidechainSourceTrackId(src->sidechainSourceTrackId());
         r->setSidechainTapPre(src->sidechainTapPre());
         r->setSidechainGainDb(src->sidechainGainDb());
@@ -230,6 +232,7 @@ static std::shared_ptr<RackInstrument> forkRackInstrument(const RackInstrument& 
     r->shareMonoWith(src); // held keys, the sounding note and a glide in progress play on
     r->setBypassed(src.bypassed());
     r->folded = src.folded;
+    r->presetTag = src.presetTag;
     // Playback state the audio thread owns: relaxed atomics, carried over so a held pedal
     // still releases its notes after the edit.
     constexpr auto rl = std::memory_order_relaxed;

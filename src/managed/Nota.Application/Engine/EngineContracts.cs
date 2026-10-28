@@ -304,7 +304,7 @@ public struct StereoMeasure
 
 /// <summary>What a value gesture targets (specs/009 volume / pan, specs/016 device
 /// parameters). Matches NOTA_MIX_*.</summary>
-public enum MixKind { TrackVolume = 0, TrackPan = 1, MasterVolume = 2, DeviceParam = 3, MidiDeviceParam = 4, PluginParam = 5 }
+public enum MixKind { TrackVolume = 0, TrackPan = 1, MasterVolume = 2, DeviceParam = 3, MidiDeviceParam = 4, PluginParam = 5, PresetTag = 6 }
 
 /// <summary>One value a gesture records for undo; laid out like native NotaMixTarget.
 /// <see cref="TrackId"/> is ignored for the master volume; <see cref="DeviceIndex"/> /
@@ -322,7 +322,16 @@ public readonly record struct MixTarget(MixKind Kind, int TrackId, int DeviceInd
     public static MixTarget MidiDeviceParam(int trackId, int index, int paramIndex) => new(MixKind.MidiDeviceParam, trackId, index, paramIndex);
     /// <summary>A normalized plugin / built-in instrument parameter (device −1 = the instrument).</summary>
     public static MixTarget PluginParam(int trackId, int deviceIndex, int paramIndex) => new(MixKind.PluginParam, trackId, deviceIndex, paramIndex);
+    /// <summary>A device's preset tag (specs/048), so a preset applied in the gesture undoes with its name.</summary>
+    public static MixTarget PresetTag(int trackId, PresetSurface surface, int index) => new(MixKind.PresetTag, trackId, index, (int)surface);
 }
+
+/// <summary>Which of a track's devices a preset tag is on (specs/048).</summary>
+public enum PresetSurface { Effect = 0, Instrument = 1, MidiEffect = 2 }
+
+/// <summary>The preset a device was loaded from: its id ("" = a user preset by path), name
+/// and the parameter values right after it applied (specs/048).</summary>
+public sealed record PresetTag(string Id, string Name, float[] Loaded);
 
 /// <summary>A named span of arrangement time — Intro / Verse / Drop (specs/016). Project
 /// data held by the engine: undoable, saved with the project.</summary>

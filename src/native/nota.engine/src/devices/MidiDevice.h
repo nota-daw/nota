@@ -121,6 +121,10 @@ class MidiDevice {
     bool folded() const { return folded_; }
     void setFolded(bool f) { folded_ = f; }
 
+    // The preset this device was loaded from (specs/048): an engine preset tag index, 0 = none.
+    int32_t presetTag() const { return presetTag_; }
+    void setPresetTag(int32_t t) { presetTag_ = t; }
+
     // Map/CC routing: a device (the arpeggiator) can drive a target audio-device param
     // on the same track from its per-step CC lane. destDevice = the track's audio-device
     // chain index (-2 = no routing), destParam = that device's param index, depth 0..1
@@ -141,6 +145,7 @@ class MidiDevice {
   private:
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
+    int32_t presetTag_ = 0;
 };
 
 } // namespace nota

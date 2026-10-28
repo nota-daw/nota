@@ -44,7 +44,16 @@ public sealed class PresetTools(
         "Apply a factory preset onto an EXISTING instrument/device (deviceIndex -1 = the track instrument). "
         + "Returns \"\" on success or a warning.")]
     public Task<string> ApplyFactoryPresetInPlace(string id, int trackId, int deviceIndex)
-        => Mutate(() => _factory.ApplyInPlace(E, id, trackId, deviceIndex));
+        => Mutate(() =>
+        {
+            // One undo step that also names the device after the preset (specs/048).
+            var info = _factory.All().Where(p => p.Id == id).Take(1).ToList();
+            var surface = deviceIndex < 0 ? PresetSurface.Instrument
+                : info.Count > 0 && info[0].IsMidiEffect ? PresetSurface.MidiEffect : PresetSurface.Effect;
+            string name = info.Count > 0 ? info[0].DisplayName : id;
+            return Nota.Application.Editing.PresetEdit.Apply(E, trackId, surface, deviceIndex, id, name,
+                () => _factory.ApplyInPlace(E, id, trackId, deviceIndex));
+        });
 
     [McpServerTool(Name = "list_user_presets"), Description("List the user's saved presets from the app presets folder (path, display name, type).")]
     public Task<UserPreset[]> ListUserPresets() => Read(() =>

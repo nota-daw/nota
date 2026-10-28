@@ -930,6 +930,8 @@ NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
 #define NOTA_MIX_DEVICE_PARAM      3   /* audio effect: device_index = chain position */
 #define NOTA_MIX_MIDI_DEVICE_PARAM 4   /* MIDI effect: device_index = MIDI-FX chain position */
 #define NOTA_MIX_PLUGIN_PARAM      5   /* normalized 0..1; device_index -1 = the instrument */
+#define NOTA_MIX_PRESET_TAG        6   /* a device's preset tag (specs/048): device_index as the
+                                         * surface needs, param_index = the surface (below) */
 
 typedef struct NotaMixTarget {
     int32_t kind;          /* NOTA_MIX_* */
@@ -942,6 +944,27 @@ typedef struct NotaMixTarget {
 NOTA_API int32_t nota_mix_gesture_begin(NotaEngine* engine, const NotaMixTarget* targets, int32_t count);
 /* Ends the gesture; unknown / already-ended handles are ignored. */
 NOTA_API void    nota_mix_gesture_end(NotaEngine* engine, int32_t handle);
+
+/* ---- Preset tags (specs/048) --------------------------------------------- */
+/* Which preset a device was loaded from: its id, display name and the parameter values right
+ * after it applied. surface: 0 audio effect (index = chain position), 1 the track's instrument
+ * (index ignored), 2 MIDI effect (index = MIDI-FX chain position). A tag is an index into an
+ * engine table, 0 = none; copies, duplicates and moves keep it, and a mix gesture with a
+ * NOTA_MIX_PRESET_TAG target makes setting it part of that undo step. Message thread only. */
+NOTA_API int32_t nota_track_device_preset_tag(const NotaEngine* engine, int32_t track_id, int32_t surface, int32_t index); /* -1 no device */
+/* Sets a new tag (an empty or null preset_id clears it: Init). base = the loaded values
+ * (base_count of them); null = the values the device holds now. Returns the tag, -1 no device. */
+NOTA_API int32_t nota_track_device_set_preset_tag(NotaEngine* engine, int32_t track_id, int32_t surface, int32_t index,
+                                                  const char* preset_id, const char* name, const float* base, int32_t base_count);
+/* A tag's id and name (NUL-terminated, truncated to the caps) and up to base_cap loaded values;
+ * returns the number of values, -1 for no tag. */
+NOTA_API int32_t nota_preset_tag_info(const NotaEngine* engine, int32_t tag, char* preset_id, int32_t id_cap,
+                                      char* name, int32_t name_cap, float* base, int32_t base_cap);
+/* 1 when a sound parameter differs from the tag's values by more than 1/10000 of its range
+ * (view settings — the card size, EQ-8's analyzer — are left out; a CV-modulated parameter
+ * counts by its link base), 0 when it holds them, -1 with no tag or no device. */
+NOTA_API int32_t nota_track_device_preset_modified(const NotaEngine* engine, int32_t track_id, int32_t surface, int32_t index);
+NOTA_API int32_t nota_engine_preset_tag_selftest(NotaEngine* engine);
 
 /* ---- Stereo measurements (008) ------------------------------------------- */
 /* What each track, return and the master sends to the master, post-fader and post-pan,

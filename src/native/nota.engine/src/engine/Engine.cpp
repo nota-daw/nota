@@ -774,6 +774,12 @@ bool Engine::paramTargetExists(MixKind kind, int32_t trackId, int32_t deviceInde
 }
 
 bool Engine::mixValue(const MixTarget& t, float& v) const {
+    if (t.kind == MixKind::PresetTag) { // specs/048: the tag index, exact in a float
+        const int32_t tag = presetTagOf(t.trackId, t.paramIndex, t.deviceIndex);
+        if (tag < 0) return false;
+        v = static_cast<float>(tag);
+        return true;
+    }
     if (t.kind == MixKind::MasterVolume) {
         v = masterVolume();
         return true;
@@ -798,6 +804,8 @@ bool Engine::mixValue(const MixTarget& t, float& v) const {
 
 bool Engine::applyMix(const MixChange& c, bool after) {
     const float v = after ? c.after : c.before;
+    if (c.kind == MixKind::PresetTag)
+        return setPresetTagIndex(c.trackId, c.paramIndex, c.deviceIndex, static_cast<int32_t>(v)); // gone: skip
     if (c.kind == MixKind::MasterVolume) {
         setMasterVolume(v);
         return true;

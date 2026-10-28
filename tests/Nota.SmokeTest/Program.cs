@@ -461,6 +461,14 @@ if (args.Length >= 1 && args[0] == "--pad-warp")
     Console.WriteLine(failures == 0 ? "PAD WARP PASSED" : $"PAD WARP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Preset state alone: `--preset-state` (specs/048). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--preset-state")
+{
+    Console.WriteLine("-- preset state --");
+    foreach (var (ok, label) in PresetStateTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PRESET STATE PASSED" : $"PRESET STATE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Device fold alone: `--fold`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--fold")
 {
@@ -15141,6 +15149,8 @@ foreach (var (ok, label) in AuroraNullTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- device fold --");
 foreach (var (ok, label) in DeviceFoldTests.Run()) Check(ok, label);
+Console.WriteLine("-- preset state --");
+foreach (var (ok, label) in PresetStateTests.Run()) Check(ok, label);
 
 // The Linux JUCE message pump (.specify/bugs/linux-plugin-black-window): exported on every
 // platform and a safe no-op before any hosted plugin exists (the app ticks it on Linux).

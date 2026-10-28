@@ -141,6 +141,21 @@ public sealed partial class DeviceChainView
         Nota.Application.Editing.MixEdit.Step(_engine, () => { for (int i = 0; i < n; i++) if (i != view) SetPr(k, di, i, p[i]); }, targets.ToArray());
     }
 
+    private static PresetSurface SurfaceOf(ChainKind k)
+        => k == ChainKind.Instrument ? PresetSurface.Instrument : k == ChainKind.Midi ? PresetSurface.MidiEffect : PresetSurface.Effect;
+
+    /// <summary>Applies a preset (or Init, <paramref name="id"/> "") as one undo step that also
+    /// tags the device with it (specs/048), so undo brings back the old sound and its name.</summary>
+    private void PresetStep(ChainKind k, int di, Action apply, string id, string name)
+        => Nota.Application.Editing.PresetEdit.Apply(_engine, _trackId, SurfaceOf(k), di, id, name, () => { apply(); return ""; });
+
+    // The modified check walks every parameter: a few times a second is plenty for a label.
+    private static Func<bool> Throttled(Func<bool> check)
+    {
+        int tick = 0; bool last = false;
+        return () => { if (tick++ % 6 == 0) last = check(); return last; };
+    }
+
     internal readonly record struct ShellSpec(
         string Name, string Subtitle, int DeviceIndex, int Count, bool Bypassed, bool Bypassable,
         bool CanMove, bool CanDelete, int PresetKind, bool IsInstrument, double Width, ChainKind Kind,
@@ -297,10 +312,28 @@ public sealed partial class DeviceChainView
                     if (warn.Length > 0) StatusMessage?.Invoke(warn);
                 };
         }
+        // A factory list reads the device's own preset tag (specs/048): it follows undo, copies
+        // and saved projects, so the card only caches it.
+        bool tagged = s.Presets is null && presets.Count > 0;
+        var surface = SurfaceOf(s.Kind);
+        if (tagged && _engine.DevicePresetTag(_trackId, surface, di) is var tagIx and >= 0)
+        {
+            var tag = _engine.PresetTagInfo(tagIx);
+            extra.PresetId = tag?.Id ?? ""; extra.Preset = tag?.Name ?? "";
+        }
         int curPreset = presets.FindIndex(p => p.Id == extra.PresetId);
         bool atInit = curPreset < 0 && string.IsNullOrEmpty(extra.Preset);
-        void ApplyPreset(int i) { var p = presets[i]; applyById(p.Id); extra.PresetId = p.Id; extra.Preset = p.Name; Rebuild(); }
-        void ApplyInit() { resetToInit!(); extra.PresetId = ""; extra.Preset = ""; Rebuild(); }
+        void ApplyPreset(int i)
+        {
+            var p = presets[i];
+            if (tagged) PresetStep(s.Kind, di, () => applyById(p.Id), p.Id, p.Name); else applyById(p.Id);
+            extra.PresetId = p.Id; extra.Preset = p.Name; Rebuild();
+        }
+        void ApplyInit()
+        {
+            if (tagged) PresetStep(s.Kind, di, resetToInit!, "", ""); else resetToInit!();
+            extra.PresetId = ""; extra.Preset = ""; Rebuild();
+        }
         void StepPreset(int dir)
         {
             int n = presets.Count; if (n == 0) return;
@@ -318,7 +351,9 @@ public sealed partial class DeviceChainView
         if (presets.Count > 0)
         {
             picker = PresetPicker(presets.Select(p => p.Name).ToList(), curPreset, extra.Preset, ApplyPreset, StepPreset,
-                nameWidth: s.Compact ? 74 : 132, init: resetToInit != null ? ApplyInit : null);
+                nameWidth: s.Compact ? 74 : 132, init: resetToInit != null ? ApplyInit : null,
+                modified: tagged ? Throttled(() => _engine.DevicePresetModified(_trackId, surface, di) == 1) : null,
+                addLive: _deviceLiveRefreshers.Add);
             Grid.SetColumn(picker, 1); headerGrid.Children.Add(picker);
         }
 
