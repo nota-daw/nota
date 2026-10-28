@@ -23,6 +23,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Devices remember their preset and show when you changed it** (#157): after you load a
+  preset, the card header keeps its name and adds a " *" as soon as a sound parameter moves
+  away from it (the tooltip says "Changed since you loaded …"); setting it back, undoing or
+  picking the preset again clears it. Card size and EQ Eight's analyzer settings don't count.
+  The name follows the device through undo, copy and paste, duplicate and moves, and is saved
+  with the project. Applying a preset or Init is now one undo step. **Save preset…** starts
+  from the loaded preset's name. MCP: `read_preset_state`.
 - **Select several devices and group them into a rack** (#328): in the Devices panel ⇧-click
   selects a range across MIDI effects, the instrument and audio effects, ⌘-click adds or
   removes one, Esc clears. Copy, cut, paste, duplicate, delete, Move to track ▸ and dragging a

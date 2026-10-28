@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-28
 
-**Status**: Draft
+**Status**: Implemented (US1–US3; US4 rack chains is a follow-up)
 
 **Input**: User description: "Presets: show "(modified)" after a change, and keep the preset name
 across view switches and project reload (nota-daw/nota#157)."
@@ -109,11 +109,13 @@ keeps its preset name and mark in the rack card and its pop-out window, saved wi
   tag's values by more than 1/10000 of its range; view parameters are left out.
 - **FR-004**: Copy / paste, duplicate (device and track), move to track and rack grouping MUST
   keep the tag.
-- **FR-005**: The tag MUST be saved per device in the project (optional fields, no format bump);
-  older projects open without tags.
+- **FR-005**: The tag MUST be saved per device in the project (an optional `preset` field on
+  instruments, devices and MIDI effects, format v26 with a no-op migration); older projects
+  open without tags.
 - **FR-006**: Save preset… MUST start with the tag's name; saving sets the tag to the new
   preset.
-- **FR-007**: The MCP device readers MUST report the preset name and whether it is modified.
+- **FR-007**: MCP MUST report a device's preset name and whether it is modified
+  (`read_preset_state`); applying a factory preset in place through MCP tags the device.
 
 ### Key Entities
 
