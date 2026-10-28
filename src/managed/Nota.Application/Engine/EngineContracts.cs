@@ -287,6 +287,10 @@ public enum UngroupDropped { None = 0, MacroMappings = 1, ChainMix = 2 }
 /// channel as a track pans, Stereo folds it into the near side.</summary>
 public enum PanLaw { Balance = 0, Stereo = 1 }
 
+/// <summary>Which hardware input channels an audio track records and monitors (#340): both as a
+/// stereo pair (1/2), or input 1 / input 2 alone — a mono source, placed in the middle.</summary>
+public enum InputChannels { Stereo = 0, Mono1 = 1, Mono2 = 2 }
+
 /// <summary>One Stereo Map row (specs/008), laid out like native NotaStereoMeasure: what a
 /// track / return / the master sends to the master, averaged over ~300 ms. Balance is on the
 /// pan scale (a mono source panned to p reads p); width = 1 − correlation, clamped 0..1.</summary>

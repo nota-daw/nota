@@ -48,9 +48,11 @@ class SessionPlayer {
     }
 
     // Audio thread: if a pending request exists and a quantize boundary falls in
-    // this block (or quant<=0), apply it. Returns true if `playing` changed
-    // (so the caller can flush hanging notes).
-    bool maybeApply(double blockStartBeats, double blockBeats, double globalQuant);
+    // this block (or quant<=0), apply it. `loopSeam`: the block starts where the transport
+    // loop just wrapped — that counts as a boundary too, or a loop that holds no multiple of
+    // the quantum would keep a launch waiting forever (#343). Returns true if `playing`
+    // changed (so the caller can flush hanging notes).
+    bool maybeApply(double blockStartBeats, double blockBeats, double globalQuant, bool loopSeam = false);
 
     // Audio thread, after rendering a block: advance the played counter and publish the
     // loop position for the UI.

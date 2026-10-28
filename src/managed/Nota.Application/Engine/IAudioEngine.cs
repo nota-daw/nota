@@ -317,6 +317,9 @@ public interface IAudioEngine : IDisposable
     /// <summary>Sets/gets a track's palette colour slot (-1 = auto by position).</summary>
     void SetTrackColorIndex(int trackId, int colorIndex);
     int GetTrackColorIndex(int trackId);
+    /// <summary>Sets/gets a track's piano roll Fold (specs/045): a view flag saved with the project.</summary>
+    void SetTrackPianoFold(int trackId, bool on);
+    bool GetTrackPianoFold(int trackId);
     /// <summary>Copies a whole track to the clipboard; pastes it as a new track (-1 on fail).</summary>
     bool CopyTrack(int trackId);
     int PasteTrack();
@@ -326,6 +329,10 @@ public interface IAudioEngine : IDisposable
     /// <summary>Audio-track record input source: 0 hardware, -1 master, &gt;0 source track id.</summary>
     void SetTrackRecordInput(int trackId, int source);
     int GetTrackRecordInput(int trackId);
+    /// <summary>Which hardware input channels an audio track takes: both as a stereo pair, or
+    /// input 1 / input 2 alone as a mono source in the middle (#340). Hardware input only.</summary>
+    void SetTrackInputChannels(int trackId, InputChannels channels);
+    InputChannels GetTrackInputChannels(int trackId);
     /// <summary>Live input monitoring (audio tracks, Monitor "In"): play the record-input
     /// source through the track in place of its clips. A master source stays silent.</summary>
     void SetTrackMonitor(int trackId, bool on);

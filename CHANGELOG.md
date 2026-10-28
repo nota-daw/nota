@@ -31,6 +31,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the device and older projects open at 90 dB, peak off. It also fixes why the old display
   jumped: half of every analysis window held stale audio. The sound is unchanged. MCP
   `set_eq8` `analyzerRangeDb` / `analyzerPeak`.
+- **Fold the piano roll** (nota-daw/nota#344, #345): **Fold** in the piano roll toolbar (⌥⇧F)
+  shows only the scale's notes on a melodic track, or only the pads, each row named after its
+  pad, on a Drum Rack. Pitches that hold notes keep their rows, so nothing is hidden. ↑/↓ and
+  drags move between the visible rows, so notes stay in key. Each track remembers its Fold,
+  and it's saved with the project. MCP `set_piano_fold` / `get_piano_fold`.
+- **Automation on return tracks**: in automation mode each return row in the arrangement
+  footer has a lane like a track's — pick Volume, Pan or a parameter of a device on the
+  return's chain from its pill, then draw, drag, bend, select, copy and paste points. The
+  return plays its automation back, its fader and pan follow, and the lanes are saved with
+  the project and undo like track automation.
+- **Resizable return and master rows**: drag a return's or the master's bottom edge, or pick
+  Compact, Standard or Large under **Height** in its context menu; a double-click on the edge
+  goes back to Compact; ⌘- or ⇧-click returns to select several and size them together.
+  Their headers adapt like a track's (a return gains a mute button at Standard and its pan at
+  Large), the heights are saved with the project, and past about half the arrangement the
+  footer scrolls instead of crowding out the tracks.
 - **Select several devices and group them into a rack** (#328): in the Devices panel ⇧-click
   selects a range across MIDI effects, the instrument and audio effects, ⌘-click adds or
   removes one, Esc clears. Copy, cut, paste, duplicate, delete, Move to track ▸ and dragging a
@@ -116,8 +132,24 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **MCP**: `set_track_instrument` replaces a track's instrument with a built-in one (racks
   included); `move_device_to_track` moves or copies a device, the instrument included, to
   another track.
+- **Mono or stereo audio input** (nota-daw/nota#340): an audio track's record input lists the
+  hardware input as **Ext 1**, **Ext 2** and **Ext 1/2** (track menu, header box, Session I/O
+  row). A mono pick is recorded and monitored in the middle of both sides, so a mic on input 1
+  of a stereo interface is no longer left-only. New audio tracks take Ext 1; projects saved
+  before keep the stereo pair. Saved with the project; MCP `set_input_channels`.
 
 ### Changed
+- **Return and master rows start compact**: new projects, new returns and projects saved
+  before this version show them at the Compact height, so the tracks get the room.
+- **One click arms one track** (nota-daw/nota#332): a click on a track's arm button arms that
+  track and disarms the others, so picking which instrument the keyboard plays is one click.
+  ⌘-click (Ctrl-click on Windows / Linux) arms several. While recording, a click never
+  disarms another track. With **Transport ▸ Auto-arm selected track** on (off by default),
+  selecting an instrument track (a new one included) arms it the same way, unless several
+  tracks or an audio track are armed.
+- **The Envelope Follower is easier to find** (nota-daw/nota#133): searching Modular's palette
+  for "peak controller", "ducking" or "loudness" finds it, and the docs walk through ducking one
+  track under another.
 - **Delete on the instrument deletes its track**, as an instrument track always has an
   instrument; Nota asks first when the track has clips.
 - **A new Instrument Rack starts empty** instead of with a Nota Volt chain: drop an instrument
@@ -140,6 +172,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Session clips no longer wait forever to start** (nota-daw/nota#343): a clip launched on a
+  muted track, or one silenced by another track's solo, starts on the next launch point and
+  keeps time while silent; a transport loop with no bar line inside it now launches at the
+  loop start instead of never.
+- **An audio take in Session stops the track's playing clip** (nota-daw/nota#337), as a MIDI
+  take does, rather than letting it play on until the take ends.
+- **Audio effects vanishing from the Browser** (nota-daw/nota#342): a search typed on one tab
+  and cleared on another left the first tab filtered, empty under an empty search box ("No
+  audio effects yet"). A tab now follows the search box whenever it's shown.
 - A rack card's faders, mode buttons and switches (and zone or select-range drags) undo one
   gesture at a time on every rack, the MIDI Effect Rack included; a nested Drum Rack's window
   follows its chain when chains in front of it are removed or moved.

@@ -282,6 +282,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_get_color")]
     internal static partial int TrackGetColor(IntPtr engine, int trackId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_piano_fold")]
+    internal static partial NotaResult TrackSetPianoFold(IntPtr engine, int trackId, int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_piano_fold")]
+    internal static partial int TrackGetPianoFold(IntPtr engine, int trackId);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_copy")]
     internal static partial NotaResult TrackCopy(IntPtr engine, int trackId);
 
@@ -302,6 +308,12 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_get_record_input")]
     internal static partial int TrackGetRecordInput(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_input_channels")]
+    internal static partial NotaResult TrackSetInputChannels(IntPtr engine, int trackId, int channels);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_input_channels")]
+    internal static partial int TrackGetInputChannels(IntPtr engine, int trackId);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_set_monitor")]
     internal static partial NotaResult TrackSetMonitor(IntPtr engine, int trackId, int on);

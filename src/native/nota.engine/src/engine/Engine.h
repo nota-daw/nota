@@ -617,6 +617,9 @@ class Engine {
     int32_t trackName(int32_t trackId, char* out, int32_t cap) const;
     bool setTrackColorIndex(int32_t trackId, int32_t colorIndex);
     int32_t trackColorIndex(int32_t trackId) const;
+    // Piano roll Fold (specs/045): a per-track view flag, saved with the project.
+    bool setTrackPianoFold(int32_t trackId, bool on);
+    int32_t trackPianoFold(int32_t trackId) const; // 1 / 0, -1 unknown track
 
     // Track clipboard (copy/cut/paste). copyTracks stores fully independent clones of the
     // expanded set (a group brings its children); pasteTracks inserts fresh copies (new ids +
@@ -1184,6 +1187,8 @@ class Engine {
     // -1 = master bus, >0 = another track's post-fader output (by id).
     void setTrackRecordInput(int32_t trackId, int32_t source);
     int32_t trackRecordInput(int32_t trackId) const;
+    void setTrackInputChannels(int32_t trackId, int32_t channels); // Track::kInputStereo / kInputMono1 / kInputMono2
+    int32_t trackInputChannels(int32_t trackId) const;
     // Input monitoring (audio tracks): hear the record-input source live through the track.
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;
@@ -1918,6 +1923,7 @@ class Engine {
     // jitter) and wraps at the loop length, so each pass overwrites the previous in place.
     // Activated when loop is on at record start OR the moment loop is enabled mid-take.
     bool captureLoop_ = false;
+    int32_t captureChannels_ = Track::kInputStereo; // the take's hardware channel pick (#340)
     bool captureWrapped_ = false;
     size_t captureLoopFrames_ = 0; // loop length in capture-SR frames
     size_t captureOrigin_ = 0;     // cursor position where this take started (for partial clips)
