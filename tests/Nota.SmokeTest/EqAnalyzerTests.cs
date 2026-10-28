@@ -273,15 +273,22 @@ internal static class EqAnalyzerTests
             int pk = Argmax(s, PostAt);
             float lo = float.MaxValue, hi = float.MinValue;
             var sw = Stopwatch.StartNew();
-            long nextFeed = 0;
-            while (sw.ElapsedMilliseconds < 1000)
+            long nextFeed = 0, lastFeed = 0, feedGap = 0;
+            int counted = 0;
+            // Only reads while the "callbacks" keep their period count: a stalled CI runner that
+            // misses a feed by a whole period really has stopped the input for that long.
+            while (sw.ElapsedMilliseconds < 4000 && counted < 60)
             {
-                if (sw.ElapsedMilliseconds >= nextFeed) { r.Feed(2048); nextFeed += 46; }
+                long now = sw.ElapsedMilliseconds;
+                if (now >= nextFeed) { r.Feed(2048); feedGap = now - lastFeed; lastFeed = now; nextFeed += 46; }
                 s = r.Read(10);
+                if (feedGap > 70 || sw.ElapsedMilliseconds - lastFeed > 70) continue;
                 lo = Math.Min(lo, s[PostAt + pk]);
                 hi = Math.Max(hi, s[PostAt + pk]);
+                counted++;
             }
-            yield return (hi - lo < 1.0f, $"a steady tone in 2048-frame callbacks holds still between them ({hi - lo:F2} dB swing)");
+            yield return (counted >= 30 && hi - lo < 1.0f,
+                $"a steady tone in 2048-frame callbacks holds still between them ({hi - lo:F2} dB swing over {counted} reads)");
         }
 
         // Peak hold: the peak stays ~1.5 s after the curve falls, then falls too.

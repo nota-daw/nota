@@ -78,7 +78,7 @@ class SpectrumAnalyzer {
     double ref_ = 1.0, refBin_ = 1.0;
     uint32_t lastW_ = 0;
     double stalled_ = 0.0;   // seconds the write index hasn't moved
-    double gap_ = 0.0;       // seconds between its last two moves (≈ the callback period)
+    double gap_ = 0.0;       // seconds between its moves, held at the recent longest (≈ the callback period)
     bool primed_ = false, valid_ = false;
 };
 

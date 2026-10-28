@@ -74,7 +74,9 @@ void SpectrumAnalyzer::analyse(const float* ring, uint32_t mask, uint32_t w, dou
     // A shorter pause is a read between two callbacks: the same window measures again.
     if (primed_ && w == lastW_) stalled_ += elapsed;
     else {
-        if (primed_) gap_ = stalled_ + elapsed;
+        // The callback period, held at its recent longest: a burst of quick callbacks (a late
+        // one catching up) mustn't shrink it so the next ordinary wait reads as a stop.
+        if (primed_) gap_ = std::min(std::max(stalled_ + elapsed, 0.9 * gap_), kStalledMaxS);
         stalled_ = 0.0;
     }
     const bool silent = stalled_ > std::clamp(1.5 * gap_, kStalledMinS, kStalledMaxS);
