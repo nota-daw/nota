@@ -22,7 +22,9 @@ class AsioInput final : public AudioInput {
     double sampleRate() const override;
 
   private:
-    InputCallback cb_; // registered by address while running
+    // Registered by address while running. Heap-held: if unregistering finds a buffer switch
+    // that never returned, the callback is leaked rather than freed under it.
+    InputCallback* cb_ = nullptr;
     bool registered_ = false;
 };
 

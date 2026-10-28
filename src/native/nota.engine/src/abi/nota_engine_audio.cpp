@@ -20,6 +20,7 @@
 #endif
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -243,6 +244,16 @@ NotaResult nota_audio_asio_open_control_panel(NotaEngine* e) {
         return NOTA_OK;
 #endif
     return NOTA_ERR_AUDIO_DEVICE;
+}
+
+int32_t nota_audio_asio_panel_open(const NotaEngine* e) {
+#ifdef NOTA_HAS_ASIO
+    if (e && CENG(e)->activeAudioSystem() == nota::AudioSystem::Asio && nota::asio::sharedAsioSession().panelOpen())
+        return 1;
+#else
+    (void)e;
+#endif
+    return 0;
 }
 
 int32_t nota_audio_poll_device_event(NotaEngine* e) {
@@ -473,15 +484,18 @@ void checkResets(AsioCheck& check) {
 
     // A reset sent while the driver's panel is open waits for the panel to close — and so
     // does the watchdog: restarting now would queue behind the modal panel.
+    // The driver may also stop its buffers while its panel reconfigures it: once the panel
+    // closes, the pending reset wins over the watchdog (reopen ASIO, don't fall back).
     rig.fake->setPositionStep(0);
     rig.session.setWatchdogTimeout(std::chrono::milliseconds(30));
     rig.fake->setPanelOpen(true);
     rig.fake->sendMessage(nota::asio::kResetRequest);
     std::this_thread::sleep_for(std::chrono::milliseconds(60));
     check(rig.session.pollEvent() == AsioSession::kEventNone, "no restart while the driver's panel is open");
+    std::this_thread::sleep_for(std::chrono::milliseconds(60)); // silent past the watchdog, panel still open
     rig.fake->setPanelOpen(false);
-    rig.fake->pump(1);
-    check(rig.session.pollEvent() == AsioSession::kEventResetRequested, "the reset arrives once the panel closes");
+    check(rig.session.pollEvent() == AsioSession::kEventResetRequested,
+          "after the panel closes the deferred reset comes first, not DRIVER_FAILED");
 
     int xruns = 0;
     Rig ov;
@@ -536,6 +550,30 @@ void checkFailures(AsioCheck& check) {
     late.session.stop();
     late.fake->pump(1, /*evenIfStopped=*/true);
     check(renders == 2, "a bufferSwitch after stop() is ignored");
+
+    // A switch that never returns (a stalled plug-in): teardown must not free what it reads,
+    // and no driver may open next to it. Here the "stall" ends after teardown gave up.
+    AsioSession stuck;
+    auto drv = std::make_unique<FakeAsioDriver>(FakeAsioDriver::Config{});
+    FakeAsioDriver* fake = drv.get(); // leaked with the session's state when it wedges
+    check(stuck.open(std::move(drv), {}), "stall fake opens");
+    std::atomic<bool> inRender{false}, release{false};
+    stuck.setRenderCallback([&](float* out, int32_t n) {
+        inRender = true;
+        while (!release.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        std::fill(out, out + static_cast<size_t>(n) * 2, 0.5f);
+    });
+    stuck.start();
+    std::thread audio([fake] { fake->pump(1); });
+    while (!inRender.load()) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    stuck.close(); // gives up after its bounded wait and leaks the switch's state
+    check(stuck.wedged(), "a switch that never returns wedges the session");
+    release = true;
+    audio.join(); // the switch finishes on memory that is still alive
+    check(!fake->written(0).empty() && fake->written(0).front() == 0.5f, "the stalled switch completes safely");
+    check(!stuck.open(std::make_unique<FakeAsioDriver>(FakeAsioDriver::Config{}), {}) &&
+              stuck.failure() == AsioSession::Failure::Timeout,
+          "no driver opens next to a wedged switch");
 }
 
 void checkConfigKeys(AsioCheck& check) {
@@ -570,6 +608,10 @@ void checkConfigKeys(AsioCheck& check) {
 
 extern "C" int32_t nota_asio_selftest(void) {
     AsioCheck check;
+    {
+        nota::Engine engine;
+        check(engine.monitorSharedClockSelfTest(), "an ASIO block split by a loop reaches monitoring whole");
+    }
     checkFormats(check);
     checkRouting(check);
     checkDuplex(check);

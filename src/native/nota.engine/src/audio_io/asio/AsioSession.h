@@ -57,8 +57,9 @@ class AsioSession {
     void setRenderCallback(RenderCallback cb);
     void setXrunCallback(std::function<void()> cb);
     // Register (or, with nullptr, unregister) the capture callback; allowed while running.
-    // The pointee must outlive the registration; unregistering waits out a switch in flight.
-    void setInputCallback(const InputCallback* cb);
+    // The pointee must outlive the registration; unregistering waits out a switch in flight
+    // and returns false if one never finished — then the pointee must be kept alive for good.
+    bool setInputCallback(const InputCallback* cb);
 
     bool start();
     void stop();
@@ -76,11 +77,15 @@ class AsioSession {
     int32_t outputLatency() const { return outputLatency_; }
     bool sampleRateRefused() const { return rateRefused_; } // a requested rate the driver refused
     bool hasInputs() const { return inL_ >= 0; }
+    // A buffer switch never returned (a stalled plug-in or driver): its state is kept alive
+    // and no driver opens again in this process.
+    bool wedged() const { return wedged_; }
     const std::vector<ChannelInfo>& channels(bool input) const { return input ? inChannels_ : outChannels_; }
     int32_t outputPair() const { return outL_; }
     int32_t inputPair() const { return inL_; }
 
     bool openControlPanel();
+    bool panelOpen() const { return driver_ && driver_->panelOpen(); }
 
     // Device event since the last call (cleared on read). Also runs the watchdog: a running
     // driver silent for longer than the timeout moves to Failed(Stopped).
@@ -93,10 +98,30 @@ class AsioSession {
     int32_t message(int32_t selector, int32_t value);
 
   private:
+    // Everything the buffer switch reads, built by open() and handed to the audio thread by
+    // start(). Teardown takes it back only once no switch is running; a switch that never
+    // returns keeps it (and the driver) alive for good rather than freeing memory under it.
+    struct Io {
+        AsioDriverApi* driver = nullptr;
+        int32_t frames = 0;
+        bool outputReady = false;
+        std::vector<BufferInfo> buffers; // every output channel, then the chosen inputs
+        std::vector<SampleType> outTypes;
+        SampleType inLType = SampleType::Float32LSB, inRType = SampleType::Float32LSB;
+        int32_t outL = -1, outR = -1;     // output channels = their indices in buffers; R -1 = mono
+        int32_t inLBuf = -1, inRBuf = -1; // indices into buffers (-1 = none / mono)
+        std::vector<float> interleaved;   // `frames` stereo frames
+        RenderCallback render;            // copied at start(): never swapped under the switch
+    };
+
     void releaseDriver();
     bool failOpen(Failure why, std::string detail);
+    bool quiesce(); // detach the audio thread from io_; false if a switch never finished
 
     std::unique_ptr<AsioDriverApi> driver_;
+    std::unique_ptr<Io> io_;
+    std::atomic<Io*> live_{nullptr}; // non-null while the buffer switch may run
+    bool wedged_ = false;
     State state_ = State::Closed;
     Failure failure_ = Failure::None;
     std::string failureDetail_;
@@ -109,20 +134,15 @@ class AsioSession {
     int32_t inputLatency_ = 0;
     int32_t outputLatency_ = 0;
     bool rateRefused_ = false;
-    bool outputReady_ = false;
 
-    std::vector<ChannelInfo> inChannels_, outChannels_;
-    std::vector<BufferInfo> buffers_; // every output channel, then the chosen inputs
-    int32_t outL_ = -1, outR_ = -1;   // output channel indices (R -1 = mono)
-    int32_t inL_ = -1, inR_ = -1;     // input channel indices (-1 = none / mono)
-    int32_t outLBuf_ = -1, outRBuf_ = -1, inLBuf_ = -1, inRBuf_ = -1; // indices into buffers_
-    std::vector<float> interleaved_;  // n stereo frames, sized at open
+    std::vector<ChannelInfo> inChannels_, outChannels_; // for the UI (control side only)
+    int32_t outL_ = -1, outR_ = -1;                     // output channel indices (R -1 = mono)
+    int32_t inL_ = -1, inR_ = -1;                       // input channel indices (-1 = none / mono)
 
     RenderCallback render_;
     std::function<void()> xrun_;
     std::atomic<const InputCallback*> input_{nullptr};
 
-    std::atomic<bool> active_{false};
     std::atomic<bool> inSwitch_{false};
     std::atomic<bool> resetRequested_{false};
     std::atomic<int64_t> lastTickNs_{0};

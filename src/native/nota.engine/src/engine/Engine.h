@@ -1219,6 +1219,9 @@ class Engine {
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;
     void pushMonitorFramesForTest(const float* interleavedStereo, int32_t frames); // feed the hw monitor ring
+    // Device-free: under a shared input clock (ASIO) one driver block rendered in two segments
+    // (a loop boundary) reaches monitoring whole — the rest of the block isn't trimmed as stale.
+    bool monitorSharedClockSelfTest();
     // MIDI routing: forward an instrument track's MIDI to another instrument track (-1 = off).
     void setTrackMidiSource(int32_t trackId, int32_t sourceTrackId);
     int32_t trackMidiSource(int32_t trackId) const;

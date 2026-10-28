@@ -123,16 +123,19 @@ void Engine::pullMonitorInput(int32_t frames) {
         monitorPrimed_ = false;
         return;
     }
-    // ASIO duplex pushes block n's input before block n renders (one clock): no cushion (R8).
-    const size_t cushion = monitorSharedClock_.load(std::memory_order_relaxed)
-                               ? 0
-                               : static_cast<size_t>(std::clamp(inputBlockFrames_.load(std::memory_order_relaxed), 64, 4096));
-    size_t avail = monitorQueue_.size();
+    const size_t block = static_cast<size_t>(std::clamp(inputBlockFrames_.load(std::memory_order_relaxed), 64, 4096));
     const size_t n = static_cast<size_t>(frames);
+    // ASIO duplex pushes a whole driver block before rendering it (one clock), so nothing has
+    // to be primed (R8). But render may split that block into segments (a loop boundary): the
+    // rest of the current block is not a backlog — only input older than one block is.
+    const bool sharedClock = monitorSharedClock_.load(std::memory_order_relaxed);
+    const size_t cushion = sharedClock ? 0 : block;
+    const size_t keep = sharedClock ? std::max(block, n) : n + cushion;
+    size_t avail = monitorQueue_.size();
     InputFrame f;
-    if (avail > n + cushion * 2 + 256) { // drifted / stalled: drop the stale backlog
-        for (size_t k = avail - (n + cushion); k > 0 && monitorQueue_.pop(f); --k) {}
-        avail = n + cushion;
+    if (avail > keep + cushion + 256) { // drifted / stalled: drop the stale backlog
+        for (size_t k = avail - keep; k > 0 && monitorQueue_.pop(f); --k) {}
+        avail = keep;
     }
     if (!monitorPrimed_) {
         if (avail < n + cushion) return; // still filling the cushion: silence
@@ -152,6 +155,32 @@ void Engine::pushMonitorFramesForTest(const float* interleavedStereo, int32_t fr
     for (int32_t i = 0; i < frames; ++i)
         monitorQueue_.push(InputFrame{interleavedStereo[i * 2], interleavedStereo[i * 2 + 1]});
 }
+bool Engine::monitorSharedClockSelfTest() {
+    constexpr int32_t kBlock = 512, kFirst = 10;
+    const bool sharedWas = monitorSharedClock_.load();
+    const int32_t blockWas = inputBlockFrames_.load();
+    const bool tapWas = hwMonitorTap_.load();
+    InputFrame f;
+    while (monitorQueue_.pop(f)) {}
+    monitorSharedClock_.store(true);
+    inputBlockFrames_.store(kBlock);
+    hwMonitorTap_.store(true);
+    monitorPrimed_ = false;
+    for (int32_t i = 0; i < kBlock; ++i) monitorQueue_.push(InputFrame{static_cast<float>(i), -static_cast<float>(i)});
+    bool ok = true;
+    pullMonitorInput(kFirst);
+    for (int32_t i = 0; i < kFirst; ++i) ok = ok && monitorHwBuf_[i * 2] == static_cast<float>(i);
+    pullMonitorInput(kBlock - kFirst);
+    for (int32_t i = 0; i < kBlock - kFirst; ++i)
+        ok = ok && monitorHwBuf_[i * 2] == static_cast<float>(kFirst + i) && monitorHwBuf_[i * 2 + 1] == -static_cast<float>(kFirst + i);
+    while (monitorQueue_.pop(f)) {}
+    monitorSharedClock_.store(sharedWas);
+    inputBlockFrames_.store(blockWas);
+    hwMonitorTap_.store(tapWas);
+    monitorPrimed_ = false;
+    return ok;
+}
+
 void Engine::setTrackMidiSource(int32_t trackId, int32_t sourceTrackId) {
     if (sourceTrackId == trackId) sourceTrackId = -1; // no self-routing
     if (auto t = findTrackAuthoring(trackId)) t->setMidiFromTrackId(sourceTrackId);

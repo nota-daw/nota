@@ -111,8 +111,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         PlayheadUpdated?.Invoke(Engine.PositionBeats);
         if (Engine.IsRecording) RecordingTick?.Invoke();
         ReportDropouts();
+        if (_applyAfterPanel && !Engine.AsioPanelOpen) { _applyAfterPanel = false; ApplyAudioSettings(); AudioDeviceRestarted?.Invoke(); }
         PollAudioDevice();
     }
+
+    // A settings change made while the ASIO driver's panel was open, applied once it closes.
+    private bool _applyAfterPanel;
 
     // The ASIO driver asked for a restart (its buffer size, rate or latencies changed in its
     // own panel) or stopped calling back (specs/049, FR-009/FR-011). Restart through the one
@@ -160,6 +164,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// </summary>
     public string ApplyAudioSettings()
     {
+        // The driver's thread is inside its own (modal) panel: restarting now would wait on it
+        // and freeze the UI. Apply when the panel closes; the tick picks it up.
+        if (Engine.AsioPanelOpen)
+        {
+            _applyAfterPanel = true;
+            StatusText = "Close the driver's settings window to apply the change";
+            return StatusText;
+        }
+
         // Don't restart the backend mid-playback.
         if (Engine.IsPlaying) Transport.PlayStopCommand.Execute(null);
 

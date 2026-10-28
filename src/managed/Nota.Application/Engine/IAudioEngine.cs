@@ -1150,6 +1150,8 @@ public interface IAudioEngine : IDisposable
     int AsioPair(bool input);
     void SetAsioPair(bool input, int firstChannel);
     bool OpenAsioControlPanel();
+    /// <summary>The driver's panel is open: an apply now would wait for it, so hold it back.</summary>
+    bool AsioPanelOpen { get; }
     AudioDeviceEvent PollDeviceEvent();
     string AudioFallbackReason { get; }
     int InputLatencyFrames { get; }

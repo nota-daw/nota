@@ -121,6 +121,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_audio_asio_open_control_panel")]
     internal static partial NotaResult AudioAsioOpenControlPanel(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_panel_open")]
+    internal static partial int AudioAsioPanelOpen(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_audio_poll_device_event")]
     internal static partial int AudioPollDeviceEvent(IntPtr engine);
 

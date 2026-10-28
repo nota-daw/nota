@@ -179,13 +179,10 @@ template <class F> bool ComAsioDriver::call(F fn, unsigned timeoutMs) {
         fn();
         done->set_value();
     });
-    for (;;) {
-        if (fut.wait_for(std::chrono::milliseconds(timeoutMs)) == std::future_status::ready) return true;
-        // The driver's panel is open on the control thread: the call is queued behind a modal
-        // dialog, not hung. Wait for the panel, then give the call its full time again.
-        if (!sh_->panelOpen.load()) break;
-        while (sh_->panelOpen.load() && fut.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) {}
-    }
+    // Never wait open-ended here: the caller is the UI thread. While the driver's panel is open
+    // the app holds restarts back (nota_audio_asio_panel_open), so a call stuck behind the
+    // panel only happens on the way out of Nota — where giving up on the driver is fine.
+    if (fut.wait_for(std::chrono::milliseconds(timeoutMs)) == std::future_status::ready) return true;
     abandon(*sh_);
     return false;
 }

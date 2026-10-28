@@ -159,6 +159,10 @@ public sealed partial class NotaEngine
     public bool OpenAsioControlPanel()
     { ThrowIfDisposed(); return NativeMethods.AudioAsioOpenControlPanel(_handle) == NativeMethods.NotaResult.Ok; }
 
+    /// <summary>True while the ASIO driver's own settings panel is open: hold applies back.</summary>
+    public bool AsioPanelOpen
+    { get { ThrowIfDisposed(); return NativeMethods.AudioAsioPanelOpen(_handle) != 0; } }
+
     /// <summary>What the driver asked for since the last call (cleared on read).</summary>
     public AudioDeviceEvent PollDeviceEvent()
     { ThrowIfDisposed(); return (AudioDeviceEvent)NativeMethods.AudioPollDeviceEvent(_handle); }

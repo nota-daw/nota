@@ -2362,6 +2362,9 @@ NOTA_API int32_t     nota_audio_asio_pair(const NotaEngine* engine, int32_t is_i
 /* Open the running driver's own settings panel. Returns at once (NOTA_ERR_AUDIO_DEVICE
  * if no ASIO driver runs); a change there arrives as a reset-requested device event. */
 NOTA_API NotaResult  nota_audio_asio_open_control_panel(NotaEngine* engine);
+/* 1 while that panel is open. The driver's thread is busy with it, so hold
+ * nota_audio_apply() back until it closes (an apply would wait on the panel). */
+NOTA_API int32_t     nota_audio_asio_panel_open(const NotaEngine* engine);
 
 /* Device events since the last call, cleared on read: 0 none, 1 reset requested
  * (the driver changed its buffer size / rate / latencies: re-apply), 2 driver failed

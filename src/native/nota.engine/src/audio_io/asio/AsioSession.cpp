@@ -29,10 +29,12 @@ int64_t nowNs() {
         .count();
 }
 
-// A switch in flight finishes within one buffer; bound the wait in case the driver is wedged.
-void waitOutSwitch(const std::atomic<bool>& inSwitch) {
+// A switch in flight finishes within one buffer; bound the wait in case it never does.
+// False = it is still running: whatever it reads must not be freed.
+bool waitOutSwitch(const std::atomic<bool>& inSwitch) {
     for (int i = 0; i < 500 && inSwitch.load(std::memory_order_seq_cst); ++i)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    return !inSwitch.load(std::memory_order_seq_cst);
 }
 
 } // namespace
@@ -49,9 +51,16 @@ void AsioSession::setXrunCallback(std::function<void()> cb) {
     if (state_ != State::Running) xrun_ = std::move(cb);
 }
 
-void AsioSession::setInputCallback(const InputCallback* cb) {
-    input_.store(cb, std::memory_order_release);
-    if (!cb) waitOutSwitch(inSwitch_);
+bool AsioSession::setInputCallback(const InputCallback* cb) {
+    input_.store(cb, std::memory_order_seq_cst);
+    return cb || waitOutSwitch(inSwitch_);
+}
+
+bool AsioSession::quiesce() {
+    live_.store(nullptr, std::memory_order_seq_cst); // late switches are ignored from here on
+    if (waitOutSwitch(inSwitch_)) return true;
+    wedged_ = true;
+    return false;
 }
 
 bool AsioSession::failOpen(Failure why, std::string detail) {
@@ -74,6 +83,12 @@ bool AsioSession::open(std::unique_ptr<AsioDriverApi> driver, const Options& opt
     failureDetail_.clear();
     driverName_.clear();
     rateRefused_ = false;
+    if (wedged_) {
+        // The callbacks can't tell an old driver from a new one: never open next to a switch
+        // that is still stuck. The driver is released (its thread is the driver's problem).
+        driver.reset();
+        return failOpen(Failure::Timeout, "an earlier audio callback never returned — restart Nota to use ASIO again");
+    }
     driver_ = std::move(driver);
     if (!driver_) return failOpen(Failure::LoadFailed, {});
 
@@ -132,36 +147,43 @@ bool AsioSession::open(std::unique_ptr<AsioDriverApi> driver, const Options& opt
 
     // Buffers for every output (so the unused ones can be held at zero, FR-006) and the
     // chosen input pair.
-    buffers_.clear();
-    for (int32_t i = 0; i < outs; ++i) buffers_.push_back(BufferInfo{false, i, {nullptr, nullptr}});
-    outLBuf_ = outL_;
-    outRBuf_ = outR_;
-    inLBuf_ = inRBuf_ = -1;
+    io_ = std::make_unique<Io>();
+    Io& io = *io_;
+    io.driver = driver_.get();
+    io.frames = bufferFrames_;
+    for (int32_t i = 0; i < outs; ++i) {
+        io.buffers.push_back(BufferInfo{false, i, {nullptr, nullptr}});
+        io.outTypes.push_back(outChannels_[i].type);
+    }
+    io.outL = outL_;
+    io.outR = outR_;
     if (inL_ >= 0) {
-        inLBuf_ = static_cast<int32_t>(buffers_.size());
-        buffers_.push_back(BufferInfo{true, inL_, {nullptr, nullptr}});
+        io.inLBuf = static_cast<int32_t>(io.buffers.size());
+        io.inLType = inChannels_[inL_].type;
+        io.buffers.push_back(BufferInfo{true, inL_, {nullptr, nullptr}});
     }
     if (inR_ >= 0) {
-        inRBuf_ = static_cast<int32_t>(buffers_.size());
-        buffers_.push_back(BufferInfo{true, inR_, {nullptr, nullptr}});
+        io.inRBuf = static_cast<int32_t>(io.buffers.size());
+        io.inRType = inChannels_[inR_].type;
+        io.buffers.push_back(BufferInfo{true, inR_, {nullptr, nullptr}});
     }
-    interleaved_.assign(static_cast<size_t>(bufferFrames_) * 2, 0.0f);
+    io.interleaved.assign(static_cast<size_t>(bufferFrames_) * 2, 0.0f);
 
     g_active.store(this, std::memory_order_release); // the driver may message during createBuffers
     Callbacks cb;
     cb.bufferSwitch = &onBufferSwitch;
     cb.sampleRateDidChange = &onSampleRateDidChange;
     cb.message = &onMessage;
-    if (!driver_->createBuffers(buffers_.data(), static_cast<int32_t>(buffers_.size()), bufferFrames_, cb))
+    if (!driver_->createBuffers(io.buffers.data(), static_cast<int32_t>(io.buffers.size()), bufferFrames_, cb))
         return failOpen(Failure::InitFailed, driver_->errorMessage());
     buffersCreated_ = true;
-    for (const auto& b : buffers_)
+    for (const auto& b : io.buffers)
         if (!b.isInput)
-            for (void* half : b.buffers) clear(outChannels_[b.channel].type, half, bufferFrames_);
+            for (void* half : b.buffers) clear(io.outTypes[static_cast<size_t>(b.channel)], half, bufferFrames_);
 
     inputLatency_ = outputLatency_ = 0;
     driver_->getLatencies(inputLatency_, outputLatency_);
-    outputReady_ = driver_->outputReady(); // the probe call: ASE_OK means supported
+    io.outputReady = driver_->outputReady(); // the probe call: ASE_OK means supported
     resetRequested_.store(false, std::memory_order_relaxed);
     state_ = State::Prepared;
     return true;
@@ -169,13 +191,13 @@ bool AsioSession::open(std::unique_ptr<AsioDriverApi> driver, const Options& opt
 
 bool AsioSession::start() {
     if (state_ == State::Running) return true;
-    if (state_ != State::Prepared || !driver_) return false;
+    if (state_ != State::Prepared || !driver_ || !io_) return false;
     lastPosition_ = -1;
     lastTickNs_.store(nowNs(), std::memory_order_relaxed);
-    active_.store(true, std::memory_order_seq_cst); // drivers may call back from inside start()
+    io_->render = render_;
+    live_.store(io_.get(), std::memory_order_seq_cst); // drivers may call back from inside start()
     if (!driver_->start()) {
-        active_.store(false, std::memory_order_seq_cst);
-        waitOutSwitch(inSwitch_);
+        quiesce();
         return failOpen(Failure::InitFailed, driver_->errorMessage());
     }
     started_ = true;
@@ -184,8 +206,7 @@ bool AsioSession::start() {
 }
 
 void AsioSession::stop() {
-    active_.store(false, std::memory_order_seq_cst); // late switches are ignored from here on
-    waitOutSwitch(inSwitch_);
+    quiesce();
     if (started_ && driver_) driver_->stop();
     started_ = false;
     if (state_ == State::Running) state_ = State::Prepared;
@@ -198,26 +219,30 @@ void AsioSession::close() {
 }
 
 void AsioSession::releaseDriver() {
-    active_.store(false, std::memory_order_seq_cst);
-    waitOutSwitch(inSwitch_);
-    if (driver_) {
-        if (started_) driver_->stop();
-        if (buffersCreated_) driver_->disposeBuffers();
+    if (quiesce()) {
+        if (driver_) {
+            if (started_) driver_->stop();
+            if (buffersCreated_) driver_->disposeBuffers();
+        }
+        driver_.reset();
+        io_.reset();
+    } else {
+        // A switch is still inside the render (a stalled plug-in) or the driver: freeing the
+        // buffers, the driver or the scratch now would pull them out from under it. Leak them
+        // on purpose; open() refuses from here on.
+        (void)driver_.release();
+        (void)io_.release();
     }
     started_ = false;
     buffersCreated_ = false;
     AsioSession* self = this;
     g_active.compare_exchange_strong(self, nullptr, std::memory_order_acq_rel);
-    driver_.reset();
-    buffers_.clear();
     inChannels_.clear();
     outChannels_.clear();
     outL_ = outR_ = inL_ = inR_ = -1;
-    outLBuf_ = outRBuf_ = inLBuf_ = inRBuf_ = -1;
     sampleRate_ = 0.0;
     bufferFrames_ = 0;
     inputLatency_ = outputLatency_ = 0;
-    outputReady_ = false;
     if (state_ == State::Running || state_ == State::Prepared) state_ = State::Closed;
 }
 
@@ -242,21 +267,26 @@ bool AsioSession::openControlPanel() {
 }
 
 int32_t AsioSession::pollEvent() {
-    // A reset sent from the driver's open panel waits until the panel closes: restarting now
-    // would queue behind the panel and look like a hung driver.
-    if (driver_ && driver_->panelOpen()) return kEventNone;
+    // While the driver's own panel is open, events wait: restarting now would queue behind the
+    // panel. The watchdog waits too — a driver may pause its buffers while its panel
+    // reconfigures it, and that pause must not count as a failure once the panel closes.
+    if (driver_ && driver_->panelOpen()) {
+        lastTickNs_.store(nowNs(), std::memory_order_relaxed);
+        return kEventNone;
+    }
+    // A pending reset comes first: it explains a silent spell (the driver stopped its buffers
+    // to reconfigure) and reopening the driver is the right answer, not WASAPI.
+    if (resetRequested_.exchange(false, std::memory_order_acq_rel)) return kEventResetRequested;
     if (state_ == State::Running) {
         const int64_t silentNs = nowNs() - lastTickNs_.load(std::memory_order_relaxed);
         if (silentNs > std::chrono::duration_cast<std::chrono::nanoseconds>(watchdog_).count()) {
-            active_.store(false, std::memory_order_seq_cst);
-            waitOutSwitch(inSwitch_);
+            quiesce();
             failure_ = Failure::Stopped;
             failureDetail_.clear();
             state_ = State::Failed; // the driver is released by the next close() (the app re-applies)
             return kEventDriverFailed;
         }
     }
-    if (resetRequested_.exchange(false, std::memory_order_acq_rel)) return kEventResetRequested;
     return kEventNone;
 }
 
@@ -264,12 +294,14 @@ int32_t AsioSession::pollEvent() {
 
 void AsioSession::bufferSwitch(int32_t index, int64_t pos) {
     inSwitch_.store(true, std::memory_order_seq_cst);
-    if (!active_.load(std::memory_order_seq_cst) || index < 0 || index > 1) {
+    Io* const live = live_.load(std::memory_order_seq_cst); // pairs with quiesce()
+    if (!live || index < 0 || index > 1) {
         inSwitch_.store(false, std::memory_order_release);
         return;
     }
+    Io& s = *live; // everything below goes through this one object
     lastTickNs_.store(nowNs(), std::memory_order_relaxed);
-    const int32_t n = bufferFrames_;
+    const int32_t n = s.frames;
     // A driver that changed its buffer size without a reset message shows up as a position
     // step that isn't a whole number of buffers: treat it as a reset request.
     if (pos >= 0) {
@@ -280,32 +312,34 @@ void AsioSession::bufferSwitch(int32_t index, int64_t pos) {
         lastPosition_ = pos;
     }
 
-    float* io = interleaved_.data();
+    float* io = s.interleaved.data();
     // Input first, so the engine's input rings hold block n before block n renders (R2).
-    if (const InputCallback* in = input_.load(std::memory_order_acquire); in && inLBuf_ >= 0) {
-        toFloat(buffers_[inLBuf_].buffers[index], inChannels_[inL_].type, io, n, 2);
-        if (inRBuf_ >= 0) toFloat(buffers_[inRBuf_].buffers[index], inChannels_[inR_].type, io + 1, n, 2);
+    if (const InputCallback* in = input_.load(std::memory_order_seq_cst); in && s.inLBuf >= 0) {
+        toFloat(s.buffers[static_cast<size_t>(s.inLBuf)].buffers[index], s.inLType, io, n, 2);
+        if (s.inRBuf >= 0) toFloat(s.buffers[static_cast<size_t>(s.inRBuf)].buffers[index], s.inRType, io + 1, n, 2);
         else
             for (int32_t i = 0; i < n; ++i) io[i * 2 + 1] = io[i * 2]; // mono input: both sides
         (*in)(io, n);
     }
 
-    if (render_) render_(io, n);
+    if (s.render) s.render(io, n);
     else std::fill(io, io + static_cast<size_t>(n) * 2, 0.0f);
 
-    if (outRBuf_ >= 0) {
-        fromFloat(io, 2, outChannels_[outL_].type, buffers_[outLBuf_].buffers[index], n);
-        fromFloat(io + 1, 2, outChannels_[outR_].type, buffers_[outRBuf_].buffers[index], n);
+    const auto outBuf = [&](int32_t ch) { return s.buffers[static_cast<size_t>(ch)].buffers[index]; };
+    const auto outType = [&](int32_t ch) { return s.outTypes[static_cast<size_t>(ch)]; };
+    if (s.outR >= 0) {
+        fromFloat(io, 2, outType(s.outL), outBuf(s.outL), n);
+        fromFloat(io + 1, 2, outType(s.outR), outBuf(s.outR), n);
     } else {
         for (int32_t i = 0; i < n; ++i) io[i * 2] = 0.5f * (io[i * 2] + io[i * 2 + 1]); // mono output: down-sum
-        fromFloat(io, 2, outChannels_[outL_].type, buffers_[outLBuf_].buffers[index], n);
+        fromFloat(io, 2, outType(s.outL), outBuf(s.outL), n);
     }
     // Drivers may not keep buffer contents: hold every other output at zero each switch.
-    const auto outs = static_cast<int32_t>(outChannels_.size());
+    const auto outs = static_cast<int32_t>(s.outTypes.size());
     for (int32_t ch = 0; ch < outs; ++ch)
-        if (ch != outL_ && ch != outR_) clear(outChannels_[ch].type, buffers_[ch].buffers[index], n);
+        if (ch != s.outL && ch != s.outR) clear(outType(ch), outBuf(ch), n);
 
-    if (outputReady_) driver_->outputReady();
+    if (s.outputReady) s.driver->outputReady();
     inSwitch_.store(false, std::memory_order_release);
 }
 
