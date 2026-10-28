@@ -62,9 +62,14 @@ public sealed partial class PianoRollView
         if (_rowsArePads)
         {
             _rowHBeforePadFit ??= _rowH;
-            _padFit = true;
-            if (_bodyScroll.Viewport.Height <= 0) FitPadsWhenLaidOut();   // a reopened editor
-            else FitPads();
+            // A reopened editor takes the kit zoom saved with the clip; else the kit fits.
+            if (!user && SavedPadRowH() is { } ph) UsePadRowH(ph);
+            else
+            {
+                _padFit = true;
+                if (_bodyScroll.Viewport.Height <= 0) FitPadsWhenLaidOut();   // a reopened editor
+                else FitPads();
+            }
         }
         else
         {
@@ -130,6 +135,19 @@ public sealed partial class PianoRollView
         _bodyScroll.LayoutUpdated += Once;
     }
 
+    // A kit row height the user zoomed to: kept, and no fitting from here on.
+    private void UsePadRowH(double h)
+    {
+        _padFit = false;
+        _rowH = Math.Clamp(h, MinRowH, MaxRowH);
+        _keys.Height = RangeH;
+        _gridControl.Height = RangeH;
+        Invalidate();
+    }
+
+    private double? SavedPadRowH() =>
+        _clipKey.Item1 != int.MinValue && s_view.TryGetValue(_clipKey, out var vs) ? vs.PadRowH : null;
+
     private void FitPads() => FitToNotes();
 
     /// <summary>The user zoomed the rows: a fitted kit stays at their height from now on.</summary>
@@ -144,12 +162,13 @@ public sealed partial class PianoRollView
     }
 
     // Another clip loaded with its saved (keyboard) row height: a folded kit keeps that as
-    // the height to unfold to, and fits its pads again.
-    private void RefitPadsOnClipLoad()
+    // the height to unfold to, and takes the kit zoom saved with the clip, or fits its pads.
+    private void RefitPadsOnClipLoad(double? padRowH)
     {
         if (!_fold) return;
         if (!_rowsArePads) { _rowHBeforePadFit = null; _padFit = false; return; }
         _rowHBeforePadFit = _rowH;
+        if (padRowH is { } ph) { UsePadRowH(ph); return; }
         _padFit = true;
         if (_bodyScroll.Viewport.Height <= 0) FitPadsWhenLaidOut();
         else FitPads();

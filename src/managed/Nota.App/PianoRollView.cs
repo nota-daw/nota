@@ -136,7 +136,8 @@ public sealed partial class PianoRollView : UserControl
     private DispatcherTimer? _heldTimer;
 
     // --- per-clip view persistence (scroll/zoom don't reset when you re-enter a clip) ------
-    private readonly record struct ViewState(double Ppb, double Scroll, double VOffset, bool HasV, double RowH);
+    // RowH is the keyboard's row height; PadRowH a folded kit's, when zoomed by hand (null: fitted).
+    private readonly record struct ViewState(double Ppb, double Scroll, double VOffset, bool HasV, double RowH, double? PadRowH = null);
     private static readonly Dictionary<(int, int), ViewState> s_view = new();
     private (int, int) _clipKey = (int.MinValue, int.MinValue);
     private (int, int) _loadedKey = (int.MinValue, int.MinValue);   // the clip Load last showed
@@ -498,7 +499,8 @@ public sealed partial class PianoRollView : UserControl
     {
         if (_clipKey.Item1 == int.MinValue || _pixelsPerBeat <= 0) return;
         // A fitted kit's height is refit on reopening; keep the keyboard's own for unfolding.
-        s_view[_clipKey] = new ViewState(_pixelsPerBeat, _scrollBeats, _bodyScroll.Offset.Y, true, _rowHBeforePadFit ?? _rowH);
+        double? padRowH = _fold && _rowsArePads && !_padFit ? _rowH : null;
+        s_view[_clipKey] = new ViewState(_pixelsPerBeat, _scrollBeats, _bodyScroll.Offset.Y, true, _rowHBeforePadFit ?? _rowH, padRowH);
     }
 
     private void ApplyPendingVOffset()
@@ -747,7 +749,7 @@ public sealed partial class PianoRollView : UserControl
             _pendingVOffset = null; _pendingCenter = true;
         }
         Invalidate();
-        if (!keepKitRows) RefitPadsOnClipLoad();   // another clip: a folded kit fits again
+        if (!keepKitRows) RefitPadsOnClipLoad(saved ? vs.PadRowH : null);   // another clip: a folded kit fits (or takes its zoom) again
         Changed?.Invoke();
         ApplyPendingVOffset();   // apply now if laid out; LayoutUpdated retries otherwise
     }
