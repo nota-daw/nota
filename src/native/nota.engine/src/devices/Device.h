@@ -251,9 +251,16 @@ class Device {
     bool folded() const { return folded_; }
     void setFolded(bool f) { folded_ = f; }
 
+    // The preset this device was loaded from (specs/048): an index into the engine's preset
+    // tag table, 0 = none. Message thread only; kept on the device so it follows moves,
+    // copies and undo/redo.
+    int32_t presetTag() const { return presetTag_; }
+    void setPresetTag(int32_t t) { presetTag_ = t; }
+
   private:
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
+    int32_t presetTag_ = 0;
     std::atomic<float> scGainDb_{0.0f};
     std::atomic<float> scMix_{1.0f};
     std::atomic<int32_t> scTapPre_{0};

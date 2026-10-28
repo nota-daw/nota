@@ -35,7 +35,7 @@ public sealed class ProjectService
     /// v23 (specs/022) adds the Devices-panel fold on devices, MIDI effects and instruments.
     /// v25 (specs/044) adds references into rack chains (lanes, CV links, Arp CC targets) and
     /// chain children's sidechain keys / CC targets.
-    public const int CurrentFormatVersion = 25;
+    public const int CurrentFormatVersion = 26;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -169,6 +169,7 @@ public sealed class ProjectService
                 instDto.SidechainSource = instScSrc >= 0 && idToIndex.TryGetValue(instScSrc, out var isi) ? isi : -1;
                 instDto.Folded = engine.DeviceFolded(ti.Id, -1);
                 instDto.Bypassed = engine.DeviceBypassed(ti.Id, -1);
+                instDto.Preset = CapturePresetTag(engine, ti.Id, PresetSurface.Instrument, -1);
                 t.Instrument = instDto;
             }
 
@@ -187,6 +188,7 @@ public sealed class ProjectService
                 mdev.CcDepth = engine.MidiEffectCcDepth(ti.Id, m);
                 var mstate = engine.MidiEffectGetState(ti.Id, m);   // the MIDI Effect Rack's structure
                 if (mstate.Length > 0) mdev.State = RegisterBlob(doc, mstate);
+                mdev.Preset = CapturePresetTag(engine, ti.Id, PresetSurface.MidiEffect, m);
                 t.MidiEffects.Add(mdev);
             }
 
@@ -367,6 +369,17 @@ public sealed class ProjectService
 
     // Capture a track's device chain (built-in params / plugin identity+state / rack blob,
     // plus sidechain routing as a doc index). Shared by tracks and the master.
+    // A device's preset tag (specs/048): what it was loaded from and the values it left.
+    private static PresetTagDto? CapturePresetTag(IAudioEngine engine, int trackId, PresetSurface surface, int index)
+        => engine.PresetTagInfo(engine.DevicePresetTag(trackId, surface, index)) is { Id.Length: > 0 } tag
+            ? new PresetTagDto { Id = tag.Id, Name = tag.Name, Loaded = tag.Loaded } : null;
+
+    private static void ApplyPresetTag(IAudioEngine engine, int trackId, PresetSurface surface, int index, PresetTagDto? tag)
+    {
+        if (tag is { Id.Length: > 0 })
+            engine.SetDevicePresetTag(trackId, surface, index, tag.Id, tag.Name, tag.Loaded.Length > 0 ? tag.Loaded : null);
+    }
+
     private static List<DeviceDto> CaptureDevices(IAudioEngine engine, int trackId, ProjectDocument doc,
                                                   Dictionary<int, int> idToIndex, List<string> warnings, string label)
     {
@@ -403,6 +416,7 @@ public sealed class ProjectService
                 for (int p = 0; p < pc; p++) dev.Params[p] = engine.DeviceGetParam(trackId, d, p);
                 dev.State = RegisterBlob(doc, engine.DeviceGetState(trackId, d));
             }
+            dev.Preset = CapturePresetTag(engine, trackId, PresetSurface.Effect, d);
             list.Add(dev);
         }
         return list;
@@ -496,6 +510,7 @@ public sealed class ProjectService
             }
             if (d.Bypassed) engine.SetDeviceBypassed(trackId, di, true);
             if (d.Folded) engine.SetDeviceFolded(trackId, di, true);
+            ApplyPresetTag(engine, trackId, PresetSurface.Effect, di, d.Preset);
             if (d.SidechainSource >= 0) scDeferred.Add((trackId, di, d.SidechainSource));
             engine.SetDeviceSidechainGain(trackId, di, d.SidechainGain);
             engine.SetDeviceSidechainMix(trackId, di, d.SidechainMix);
@@ -660,6 +675,7 @@ public sealed class ProjectService
             }
 
             if (id > 0 && t.Instrument is { Folded: true }) engine.SetDeviceFolded(id, -1, true);
+            if (id > 0) ApplyPresetTag(engine, id, PresetSurface.Instrument, -1, t.Instrument?.Preset);
             if (id > 0 && t.Instrument is { Bypassed: true })
                 engine.SetDeviceBypassed(id, -1, true);           // the instrument card's switch is off (#148)
             if (id > 0 && t.Instrument is { SidechainSource: >= 0 } insc)
@@ -704,6 +720,7 @@ public sealed class ProjectService
                 }
                 if (m.Bypassed) engine.SetMidiEffectBypassed(id, mi, true);
                 if (m.Folded) engine.SetMidiEffectFolded(id, mi, true);
+                ApplyPresetTag(engine, id, PresetSurface.MidiEffect, mi, m.Preset);
                 if ((m.CcDestDevice >= 0 || m.CcDestChain is not null) && m.CcDestParam >= 0)
                 {
                     engine.SetMidiEffectCcDest(id, mi, m.CcDestDevice, m.CcDestParam);
