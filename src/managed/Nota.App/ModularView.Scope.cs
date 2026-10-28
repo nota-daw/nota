@@ -211,10 +211,10 @@ public sealed partial class ModularView
         var w = new ScopeWindow(this, _engine, t, modId, $"Scope {modId} · {TrackName(t)}");
         _scopeWindows[(t, modId)] = w;
         w.Closed += (_, _) => _scopeWindows.Remove((t, modId));
-        // Show once the press is over: shown inside it, the release lands on the main window
-        // and macOS raises that over the new one.
+        // After the click has finished (the button opens on release), owned by the window that
+        // holds the node, so it stays in front of it.
         var owner = TopLevel.GetTopLevel(anchor) as Window;
-        Dispatcher.UIThread.Post(() => { w.ShowOver(owner); w.Activate(); });
+        Dispatcher.UIThread.Post(() => { w.ShowOver(owner); w.Activate(); }, DispatcherPriority.Background);
     }
 
     internal sealed class ScopeViz : Control

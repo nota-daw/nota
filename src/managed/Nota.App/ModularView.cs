@@ -1433,7 +1433,9 @@ public sealed partial class ModularView : UserControl
             {
                 int scopeTrack = _trackId, scopeMod = n.ModId;
                 Control? pop = null;
-                pop = HeaderGlyph(GlyphKind.PopOut, Text3, "Open in a window", () => OpenScopeWindow(scopeTrack, scopeMod, pop!));
+                // Opens on release: opened on the press, the release raises the main window over it (macOS).
+                pop = HeaderGlyph(GlyphKind.PopOut, Text3, "Open in a window", () => { });
+                pop.PointerReleased += (_, e) => { OpenScopeWindow(scopeTrack, scopeMod, pop!); e.Handled = true; };
                 actions.Children.Add(pop);
             }
             actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, "Delete (⌫)", () => RemoveModulatorNode(n)));
