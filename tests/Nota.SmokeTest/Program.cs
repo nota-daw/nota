@@ -551,6 +551,14 @@ if (args.Length >= 1 && args[0] == "--vocoder")
     Console.WriteLine(failures == 0 ? "VOCODER PASSED" : $"VOCODER FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Session launches + recording input alone (fast iteration): `--session-input`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--session-input")
+{
+    Console.WriteLine("-- session launch + record input --");
+    foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--live-record")
 {
@@ -15084,6 +15092,8 @@ Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop record mode --");
 foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
+Console.WriteLine("-- session launch + record input --");
+foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");

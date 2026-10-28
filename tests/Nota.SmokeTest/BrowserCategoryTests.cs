@@ -118,6 +118,17 @@ internal static class BrowserCategoryTests
                       && pvm.CategoryFilter(0) == "Synths",
             "a rescan that empties the picked category clears the pick; other picks stay");
 
+        // The search box is shared by the tabs (#342): a search typed on Audio effects and
+        // cleared on Instruments must not leave Audio effects filtered when it is shown again.
+        var svm = new BrowserViewModel(new EmptyPluginCatalog(), new EmptyPresetLibrary(), new FactoryPresetCatalog());
+        int allFx = Devices(svm.Effects).Count;
+        svm.FilterTree(1, "zzz");                 // typed on the Audio effects tab
+        svm.ShowTab(0, "zzz");                    // switch to Instruments; the box still reads "zzz"
+        svm.FilterTree(0, "");                    // cleared there
+        svm.ShowTab(1, "");                       // back to Audio effects, box empty
+        yield return (Devices(svm.Effects).Count == allFx && allFx > 0,
+            $"a search cleared on another tab doesn't leave Audio effects empty ({Devices(svm.Effects).Count}/{allFx})");
+
         // An existing settings file has no key: the chips are on (FR-003).
         var old = JsonSerializer.Deserialize<Settings>("{}")!;
         yield return (old.BrowserCategoryChips, "settings without the new key show the category chips");
