@@ -284,6 +284,17 @@ internal static partial class NativeMethods
     internal static partial NotaResult PluginSetState(IntPtr engine, int trackId, int deviceIndex,
                                                       [In] byte[] data, int size);
 
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_preview_get")]
+    internal static partial int PluginPreviewGet(IntPtr engine, int trackId, int deviceIndex,
+                                                 [Out] byte[]? outBuffer, int capacity);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_preview_set")]
+    internal static partial NotaResult PluginPreviewSet(IntPtr engine, int trackId, int deviceIndex,
+                                                        [In] byte[]? data, int size);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_preview_serial")]
+    internal static partial int PluginPreviewSerial(IntPtr engine, int trackId, int deviceIndex);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_set_device_bypassed")]
     internal static partial NotaResult SetDeviceBypassed(IntPtr engine, int trackId, int deviceIndex, int bypassed);
 

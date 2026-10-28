@@ -107,6 +107,9 @@ public static class ProjectMigrations
         // v25 -> v26: instruments, devices and MIDI effects gain Preset (the preset they were
         // loaded from, specs/048). Absent in v25 documents = no preset named — no-op.
         new Migration(25, _ => { }),
+        // v26 -> v27: hosted plug-ins and instruments gain Preview, the picture of their window
+        // (specs/046). Absent in v26 documents; null = no preview, the card stays plain — no-op.
+        new Migration(26, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

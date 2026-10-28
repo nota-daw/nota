@@ -880,6 +880,10 @@ class Engine {
     void openTrackEditor(int32_t trackId, int32_t deviceIndex);
     void closeTrackEditor(int32_t trackId, int32_t deviceIndex);
     bool trackEditorOpen(int32_t trackId, int32_t deviceIndex) const;
+    // Editor preview (specs/046): the picture of a plug-in's window kept on the device.
+    // Message thread only; set returns false for an unknown track / index.
+    EditorPreview trackEditorPreview(int32_t trackId, int32_t deviceIndex) const;
+    bool setTrackEditorPreview(int32_t trackId, int32_t deviceIndex, EditorPreview p);
     // Plugin state (M3-5). getPluginState writes up to `cap` bytes into `out`
     // (pass out=null to query size) and returns the full state size.
     int32_t getPluginState(int32_t trackId, int32_t deviceIndex, uint8_t* out, int32_t cap) const;

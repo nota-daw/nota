@@ -477,6 +477,14 @@ if (args.Length >= 1 && args[0] == "--preset-state")
     Console.WriteLine(failures == 0 ? "PRESET STATE PASSED" : $"PRESET STATE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Plug-in card preview alone: `--preview`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--preview")
+{
+    Console.WriteLine("-- plug-in preview --");
+    foreach (var (ok, label) in PluginPreviewTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PREVIEW PASSED" : $"PREVIEW FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Device fold alone: `--fold`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--fold")
 {
@@ -15233,6 +15241,9 @@ foreach (var (ok, label) in PresetStateTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- scope view --");
 foreach (var (ok, label) in ScopeViewTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- plug-in preview --");
+foreach (var (ok, label) in PluginPreviewTests.Run()) Check(ok, label);
 
 // The Linux JUCE message pump (.specify/bugs/linux-plugin-black-window): exported on every
 // platform and a safe no-op before any hosted plugin exists (the app ticks it on Linux).

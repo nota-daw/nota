@@ -15,6 +15,7 @@
 #include <string>
 #include <vector>
 
+#include "devices/EditorPreview.h"
 #include "engine/MidiController.h"
 #include "engine/NoteExpression.h"
 #include "engine/TransportInfo.h"
@@ -77,6 +78,9 @@ class Instrument {
     // The preset this instrument was loaded from (specs/048): an engine preset tag index,
     // 0 = none. Message thread only.
     int32_t presetTag = 0;
+    // Editor preview (specs/046): a hosted plug-in's window as it last looked, drawn behind
+    // its card. Saved with the project; message thread only, like `folded`.
+    EditorPreview editorPreview;
     Instrument();
     virtual void controller(int32_t ctl, float value);
 
