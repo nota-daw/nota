@@ -15,6 +15,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_pluginhost_pump")]
     internal static partial int PluginHostPump();
 
+    [LibraryImport(Lib, EntryPoint = "nota_pluginhost_set_typing_keyboard")]
+    internal static partial void PluginHostSetTypingKeyboard(int octaveDelta, int velocity);
+
     [LibraryImport(Lib, EntryPoint = "nota_pluginhost_scan", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int PluginHostScan(string workerPath);
 

@@ -364,6 +364,7 @@ public partial class MainWindow
             else if (e.Key == Key.X) ShiftTypingOctave(+1);
             else if (e.Key == Key.C) ShiftTypingVelocity(-10);
             else ShiftTypingVelocity(+10);
+            PushTypingKeyboardToHost();
             e.Handled = true;
             return;
         }
@@ -447,5 +448,15 @@ public partial class MainWindow
         _typingVelocity = Math.Clamp(_typingVelocity + delta, 1, 127);
         if (_vm is not null && _typingVelocity != prev)
             _vm.StatusText = $"Keyboard velocity: {_typingVelocity}";
+    }
+
+    // Mirrors the typing octave/velocity into hosted plugin editors, so their
+    // audition keys play the same pitches as the main window. The editors read
+    // the state when a key lands, so pushing on change (and once at startup)
+    // is enough — no push needed when a note plays.
+    private void PushTypingKeyboardToHost()
+    {
+        if (_vm is null) return;
+        Engine.SetPluginTypingKeyboard(_typingOctave, _typingVelocity);
     }
 }

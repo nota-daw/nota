@@ -2199,6 +2199,13 @@ NOTA_API NotaResult nota_pluginhost_open_test_window(void);
  * Returns the number of message batches dispatched. */
 NOTA_API int32_t nota_pluginhost_pump(void);
 
+/* Mirrors the main window's typing-keyboard octave (Z/X, -4..+4) and velocity
+ * (C/V, 1..127) into hosted plugin editor windows, so auditioning a plugin
+ * plays the same pitches as the main window. Process-wide state, clamped on
+ * out-of-range input. Message (UI) thread; the audio thread never sees it —
+ * pitch resolution happens before the editor's note queue. */
+NOTA_API void nota_pluginhost_set_typing_keyboard(int32_t octave_delta, int32_t velocity);
+
 /* ---- Plugin scanning & catalog (M3-1, FR-33/NFR-5) ----------------------- */
 /* Scans installed plugins out-of-process, AudioUnit first then VST3. Each
  * candidate is probed in a separate `worker_path` child process with a timeout

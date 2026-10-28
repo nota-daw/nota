@@ -310,7 +310,7 @@ target_link_libraries(nota_engine PRIVATE FLAC lame nlohmann_json::nlohmann_json
 # One source, two languages: ObjC++ on macOS (AU hosting + NSEvent key monitor,
 # guarded by #if JUCE_MAC), plain C++ elsewhere (VST3-only).
 # hosting split (PluginHost/PluginCommon/NotaPlayHead/
-# PluginEditorWindow/PluginInstrument/PluginEffect) + scanner ABI
+# PluginEditorWindow/PluginInstrument/PluginEffect/TypingKeyboard) + scanner ABI
 # (abi_pluginscanner) and coordinator (PluginCatalog/OutOfProcessScanner).
 add_library(nota_pluginhost STATIC
     pluginhost/hosting/PluginHost.cpp
@@ -319,6 +319,7 @@ add_library(nota_pluginhost STATIC
     pluginhost/hosting/PluginEditorWindow.cpp
     pluginhost/hosting/PluginInstrument.cpp
     pluginhost/hosting/PluginEffect.cpp
+    pluginhost/hosting/TypingKeyboard.cpp
     pluginhost/scanner/abi_pluginscanner.cpp
     pluginhost/scanner/PluginCatalog.cpp  # thread-safe catalog
     pluginhost/scanner/OutOfProcessScanner.cpp  # scan coordinator

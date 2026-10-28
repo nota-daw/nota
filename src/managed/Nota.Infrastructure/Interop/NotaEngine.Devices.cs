@@ -339,6 +339,14 @@ public sealed partial class NotaEngine
         return NativeMethods.PluginEditorIsOpen(_handle, trackId, deviceIndex) != 0;
     }
 
+    /// <summary>Mirrors the typing-keyboard octave (Z/X) and velocity (C/V) into hosted
+    /// plugin editors, so auditioning a plugin plays the same pitches as the main window.</summary>
+    public void SetPluginTypingKeyboard(int octaveDelta, int velocity)
+    {
+        ThrowIfDisposed();
+        NativeMethods.PluginHostSetTypingKeyboard(octaveDelta, velocity);
+    }
+
     /// <summary>Reads a hosted plugin's opaque state blob (for project save). Empty for built-ins.</summary>
     public byte[] GetPluginState(int trackId, int deviceIndex)
     {

@@ -656,6 +656,9 @@ public interface IAudioEngine : IDisposable
     void ClosePluginEditor(int trackId, int deviceIndex);
     /// <summary>Whether the plugin's editor window is on screen (false when it failed to open).</summary>
     bool PluginEditorIsOpen(int trackId, int deviceIndex);
+    /// <summary>Mirrors the typing-keyboard octave (Z/X) and velocity (C/V) into hosted
+    /// plugin editors, so auditioning a plugin plays the same pitches as the main window.</summary>
+    void SetPluginTypingKeyboard(int octaveDelta, int velocity);
     byte[] GetPluginState(int trackId, int deviceIndex);
     void SetPluginState(int trackId, int deviceIndex, byte[] data);
     void SetDeviceBypassed(int trackId, int deviceIndex, bool bypassed);

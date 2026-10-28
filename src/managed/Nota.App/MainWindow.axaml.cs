@@ -483,6 +483,7 @@ public partial class MainWindow : Window
         vm.AutosaveRequested += OnAutosaveTick;
         vm.VersionHistoryTurnedOff += OnVersionHistoryTurnedOff;
         InitGamepad();   // poll pad buttons on each UI tick (live note source)
+        PushTypingKeyboardToHost();   // hosted editors audition at the same octave/velocity
         InitRemote();    // Nota Remote: phones as controllers (ticked on the same clock)
         Closing += OnMainWindowClosing;   // clean-shutdown marker (M7-7)
         Opened += OnOpenedRecoveryCheck;  // offer recovery snapshot (M7-7)

@@ -177,6 +177,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Plugin windows play the typing keyboard**: with a hosted instrument's editor focused,
+  `A W S E D F T G Y H U J K` auditions that plugin at the main window's octave (`Z/X`)
+  and velocity (`C/V`); everything else, Space and Return included, still belongs to the
+  plugin. Typing in a plugin's search box no longer starts notes, and closing the window
+  mid-press can't hang a voice.
 - **Session clips no longer wait forever to start** (nota-daw/nota#343): a clip launched on a
   muted track, or one silenced by another track's solo, starts on the next launch point and
   keeps time while silent; a transport loop with no bar line inside it now launches at the
