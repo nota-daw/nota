@@ -281,33 +281,72 @@ public sealed partial class ArrangementView
     }
 
     // ---- pinned return/master lanes --------------------------------------
-    private sealed class FooterLaneControl : Control
+    private sealed class FooterLaneControl : Control, IAutoRows
     {
         private static readonly IBrush AutomationText = NotaPalette.TextDisabled; // Brush.TextDisabled
         private readonly ArrangementView _o;
-        public FooterLaneControl(ArrangementView o) { _o = o; ClipToBounds = true; }
+        private readonly AutoEditor _auto;   // return rows edit their lanes like tracks (specs/045)
+        public FooterLaneControl(ArrangementView o) { _o = o; ClipToBounds = true; _auto = new AutoEditor(o, this); }
+
+        // The return rows, as the automation editor sees them; the master row below them keeps
+        // its own master-volume editing.
+        Control IAutoRows.Owner => this;
+        int IAutoRows.RowAtY(double y) { int r = _o.FooterRowAt(y); return r < _o._returns.Count ? r : -1; }
+        TrackVM IAutoRows.TrackAt(int i) => _o._returns[i];
+        int IAutoRows.IndexOf(TrackVM t) => _o._returns.IndexOf(t);
+        double IAutoRows.Top(int i) => _o.FooterRowTop(i);
+        double IAutoRows.Height(int i) => _o.FooterRowHeight(i);
+        bool IAutoRows.Editable(int i) => true;
+        (int lo, int hi) IAutoRows.VisibleRange => (0, _o._returns.Count - 1);
+
+        public bool IsEditingPoint => _auto.IsEditingPoint || _mDrag is not null;
 
         private AutoPt? _mDrag;   // master-automation point being dragged
 
-        private double MasterRowTop => _o._returns.Count * FooterRowH;
+        private int MasterRow => _o._returns.Count;
+        private double MasterRowTop => _o.FooterRowTop(MasterRow);
+        private double MasterRowH => _o.FooterRowHeight(MasterRow);
+        private double MasterInset => Math.Min(6, MasterRowH * 0.15);   // a compact row keeps most of its height for the curve
         private double MasterValueToY(float v)
         {
-            double top = MasterRowTop + 6, bot = MasterRowTop + FooterRowH - 6;
+            double top = MasterRowTop + MasterInset, bot = MasterRowTop + MasterRowH - MasterInset;
             double t = (v - ArrangementView.MasterAutoMin) / (ArrangementView.MasterAutoMax - ArrangementView.MasterAutoMin);
             return bot - Math.Clamp(t, 0, 1) * (bot - top);
         }
         private float MasterYToValue(double py)
         {
-            double top = MasterRowTop + 6, bot = MasterRowTop + FooterRowH - 6;
+            double top = MasterRowTop + MasterInset, bot = MasterRowTop + MasterRowH - MasterInset;
             double t = (bot - py) / Math.Max(1, bot - top);
             return ArrangementView.MasterAutoMin + (float)Math.Clamp(t, 0, 1) * (ArrangementView.MasterAutoMax - ArrangementView.MasterAutoMin);
         }
 
+        // Lane side of a footer row's bottom seam (specs/045): a thin band that resizes the row,
+        // checked before automation editing so the edge never adds a point.
+        private static readonly Cursor SeamCursor = new(StandardCursorType.SizeNorthSouth);
+        private bool _seamHover;
+
+        private void SetSeamHover(bool on)
+        {
+            if (on == _seamHover) return;
+            _seamHover = on;
+            Cursor = on ? SeamCursor : Cursor.Default;
+        }
+
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
+            var pt = e.GetCurrentPoint(this);
+            int seam = _o.FooterSeamAtY(pt.Position.Y);
+            if (seam >= 0 && pt.Properties.IsLeftButtonPressed)
+            {
+                e.Handled = true;
+                if (e.ClickCount == 2) { _o.ResetFooterRowHeight(seam); return; }
+                _o.BeginFooterResize(seam, e.GetPosition(_o).Y);
+                e.Pointer.Capture(this);
+                return;
+            }
             if (!_o._automationMode) return;
             var pos = e.GetPosition(this);
-            if (pos.Y < MasterRowTop) return;   // only the master row is editable
+            if (pos.Y < MasterRowTop) { _auto.AutoPointerPressed(e); return; }   // a return row
             bool right = e.GetCurrentPoint(this).Properties.IsRightButtonPressed;
             double beat = Math.Max(0, _o.Snap(_o._scrollBeats + pos.X / _o._pixelsPerBeat));
 
@@ -334,7 +373,14 @@ public sealed partial class ArrangementView
 
         protected override void OnPointerMoved(PointerEventArgs e)
         {
-            if (_mDrag is null) return;
+            if (_o.IsFooterResizing) { _o.UpdateFooterResize(e.GetPosition(_o).Y); return; }
+            if (_mDrag is null && _auto is { IsActive: false })
+            {
+                bool onSeam = _o.FooterSeamAtY(e.GetPosition(this).Y) >= 0;
+                SetSeamHover(onSeam);
+                if (onSeam) { _auto.ClearHover(); return; }
+            }
+            if (_mDrag is null) { if (_o._automationMode) _auto.AutoPointerMoved(e); return; }
             var pos = e.GetPosition(this);
             _mDrag.Beat = Math.Max(0, _o.Snap(_o._scrollBeats + pos.X / _o._pixelsPerBeat));
             _mDrag.Value = MasterYToValue(pos.Y);
@@ -343,10 +389,20 @@ public sealed partial class ArrangementView
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
-            if (_mDrag is null) return;
+            if (_o.IsFooterResizing) { e.Pointer.Capture(null); _o.EndFooterResize(); return; }
+            if (_mDrag is null) { if (_o._automationMode) _auto.AutoPointerReleased(e); return; }
             _mDrag = null;
             e.Pointer.Capture(null);
             _o.CommitMasterAuto();
+        }
+
+        protected override void OnPointerExited(PointerEventArgs e) { _auto.ClearHover(); SetSeamHover(false); base.OnPointerExited(e); }
+
+        protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+        {
+            _o.EndFooterResize();
+            if (_auto.Cancel()) InvalidateVisual();
+            base.OnPointerCaptureLost(e);
         }
 
         public override void Render(DrawingContext ctx)
@@ -356,26 +412,29 @@ public sealed partial class ArrangementView
 
             for (int i = 0; i < rows; i++)
             {
-                double y = i * FooterRowH;
-                ctx.FillRectangle(LaneBgB, new Rect(0, y, w, FooterRowH));
-                ctx.DrawLine(BeatPen, new Point(0, y + FooterRowH), new Point(w, y + FooterRowH));
+                double y = _o.FooterRowTop(i), rh = _o.FooterRowHeight(i);
+                ctx.FillRectangle(LaneBgB, new Rect(0, y, w, rh));
+                ctx.DrawLine(BeatPen, new Point(0, y + rh), new Point(w, y + rh));
             }
 
             // Vertical grid: the snap grid's lines at this zoom — what you see is what you snap to.
             _o.DrawGrid(ctx, w, h);
 
+            // Return rows: their lanes, edited like a track's (specs/045).
+            if (_o._automationMode) _auto.DrawAutomation(ctx, w);
+
             // Master row: master-volume automation (M9 follow-up) in automation mode,
             // else a quiet hint. Value axis 0..2 across the row.
-            double my = _o._returns.Count * FooterRowH;
+            double my = MasterRowTop, mh = MasterRowH;
             if (_o._automationMode)
             {
-                ctx.FillRectangle(AutoScrim, new Rect(0, my, w, FooterRowH));
+                ctx.FillRectangle(AutoScrim, new Rect(0, my, w, mh));
                 var pts = _o._masterAuto;
                 if (pts.Count == 0)
                 {
                     var hint = new FormattedText("click to add master volume points", CultureInfo.InvariantCulture,
                         FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
-                    ctx.DrawText(hint, new Point(12, my + (FooterRowH - hint.Height) / 2));
+                    ctx.DrawText(hint, new Point(12, my + (mh - hint.Height) / 2));
                 }
                 else
                 {
@@ -401,13 +460,13 @@ public sealed partial class ArrangementView
             {
                 var ft = new FormattedText("master volume", CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
-                ctx.DrawText(ft, new Point(12, my + (FooterRowH - ft.Height) / 2));
+                ctx.DrawText(ft, new Point(12, my + (mh - ft.Height) / 2));
             }
 
             // Browser drag-over: the return / master the drop would land on.
             if (_o.FooterDropRow >= 0)
             {
-                var r = new Rect(0, _o.FooterDropRow * FooterRowH, w, FooterRowH);
+                var r = new Rect(0, _o.FooterRowTop(_o.FooterDropRow), w, _o.FooterRowHeight(_o.FooterDropRow));
                 ctx.FillRectangle(DropWash, r);
                 ctx.DrawRectangle(null, DropEdgePen, r.Deflate(1));
             }

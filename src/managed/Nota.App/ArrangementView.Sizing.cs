@@ -75,13 +75,23 @@ public sealed partial class ArrangementView
 
     private double TrackRowHeight(TrackVM t) => StoredRowHeight(t.Id);
 
+    // Return and master rows sit in the pinned footer, so they start compact (specs/045):
+    // the tracks get the room. A track row starts at the standard height.
+    internal const double DefaultFooterRowHeight = CompactRowHeight;
+    private double _masterHeight = DefaultFooterRowHeight;
+
+    // Asks the engine rather than _returns: a project load stores heights before Refresh
+    // rebuilds the VMs.
+    private double DefaultHeightFor(int trackId)
+        => _engine is { } e && e.TrackReturnIndex(trackId) >= 0 ? DefaultFooterRowHeight : DefaultRowHeight;
+
     private double StoredRowHeight(int trackId)
-        => _trackHeights.TryGetValue(trackId, out var h) ? h : DefaultRowHeight;
+        => _trackHeights.TryGetValue(trackId, out var h) ? h : DefaultHeightFor(trackId);
 
     private void StoreRowHeight(int trackId, double h)
     {
         h = ClampRowHeight(h);
-        if (Math.Abs(h - DefaultRowHeight) < 0.5) _trackHeights.Remove(trackId);
+        if (Math.Abs(h - DefaultHeightFor(trackId)) < 0.5) _trackHeights.Remove(trackId);
         else _trackHeights[trackId] = h;
     }
 
@@ -96,11 +106,11 @@ public sealed partial class ArrangementView
         return ids;
     }
 
-    /// <summary>Drop heights of tracks that no longer exist (deleted, or undone away).</summary>
+    /// <summary>Drop heights of tracks and returns that no longer exist (deleted, or undone away).</summary>
     private void PruneTrackHeights()
     {
         if (_engine is null || _trackHeights.Count == 0) return;
-        var alive = new HashSet<int>(AllTrackRowIds());
+        var alive = new HashSet<int>(AllTrackRowIds().Concat(_returns.Select(r => r.Id)));
         foreach (var id in _trackHeights.Keys.Where(id => !alive.Contains(id)).ToList())
             _trackHeights.Remove(id);
     }
@@ -303,6 +313,141 @@ public sealed partial class ArrangementView
         return grip;
     }
 
+    // ---- footer row resize (return / master rows, specs/045) -----------------
+    // The same snap and limits as a track row, but never "all tracks": Alt is ignored, and a
+    // track-row gesture never reaches the footer. Five rows at most, so a drag simply rebuilds
+    // the footer headers each frame.
+
+    private bool _footerResizing, _footerResizeChanged;
+    private int[] _footerResizeReturns = Array.Empty<int>();
+    private bool _footerResizeMaster;
+    private double _footerResizeStartH, _footerResizeStartY;
+    private int _footerResizeRowsAbove;
+
+    internal bool IsFooterResizing => _footerResizing;
+
+    /// <summary>Footer row whose bottom edge is within the grab band of <paramref name="y"/>, or -1.</summary>
+    internal int FooterSeamAtY(double y)
+    {
+        for (int i = 0; i + 1 < _footerRowTops.Length; i++)
+            if (Math.Abs(y - _footerRowTops[i + 1]) <= SeamGrabPx / 2) return i;
+        return -1;
+    }
+
+    // A return inside the selection takes the selected returns with it; the master goes alone.
+    private (int[] returns, bool master) FooterResizeTargets(int footerRow)
+    {
+        if (footerRow >= _returns.Count) return (Array.Empty<int>(), true);
+        int id = _returns[footerRow].Id;
+        var sel = _returns.Where(r => IsTrackMultiSelected(r.Id)).Select(r => r.Id).ToArray();
+        return (sel.Length > 1 && sel.Contains(id) ? sel : new[] { id }, false);
+    }
+
+    // pointerY is in ArrangementView coordinates: the footer is docked to the bottom and grows
+    // upwards, so its own coordinates shift under the pointer while a row grows.
+    internal void BeginFooterResize(int footerRow, double pointerY)
+    {
+        if (footerRow < 0 || footerRow > _returns.Count) return;
+        (_footerResizeReturns, _footerResizeMaster) = FooterResizeTargets(footerRow);
+        _footerResizing = true;
+        _footerResizeChanged = false;
+        _footerResizeStartH = FooterRowHeight(footerRow);
+        _footerResizeStartY = pointerY;
+        var targets = new HashSet<int>(_footerResizeReturns);
+        _footerResizeRowsAbove = 0;
+        for (int i = 0; i < footerRow && i < _returns.Count; i++)
+            if (targets.Contains(_returns[i].Id)) _footerResizeRowsAbove++;
+    }
+
+    internal void UpdateFooterResize(double pointerY)
+    {
+        if (!_footerResizing) return;
+        double h = SnapRowHeight(_footerResizeStartH + (pointerY - _footerResizeStartY) / (_footerResizeRowsAbove + 1));
+        if (SetFooterHeightsRaw(_footerResizeReturns, _footerResizeMaster, h))
+        {
+            _footerResizeChanged = true;
+            RelayoutFooterLive();
+        }
+    }
+
+    internal void EndFooterResize()
+    {
+        if (!_footerResizing) return;
+        _footerResizing = false;
+        _footerResizeReturns = Array.Empty<int>();
+        // After a drag, one full rebuild settles the cards (posted: the grip still holds the pointer).
+        if (_footerResizeChanged) Dispatcher.UIThread.Post(RelayoutFooter, DispatcherPriority.Render);
+    }
+
+    /// <summary>Double-click on a footer seam: the row (or the selected returns) back to compact.</summary>
+    internal void ResetFooterRowHeight(int footerRow)
+    {
+        _footerResizing = false;
+        var (returns, master) = FooterResizeTargets(footerRow);
+        SetFooterHeights(returns, master, DefaultFooterRowHeight);
+    }
+
+    internal void SetFooterHeights(IEnumerable<int> returnIds, bool master, double h)
+    {
+        if (SetFooterHeightsRaw(returnIds, master, h)) RelayoutFooter();
+    }
+
+    private bool SetFooterHeightsRaw(IEnumerable<int> returnIds, bool master, double h)
+    {
+        bool changed = false;
+        foreach (var id in returnIds)
+        {
+            if (Math.Abs(StoredRowHeight(id) - h) < 0.5) continue;
+            StoreRowHeight(id, h);
+            changed = true;
+        }
+        if (master && Math.Abs(_masterHeight - ClampRowHeight(h)) >= 0.5)
+        {
+            _masterHeight = ClampRowHeight(h);
+            changed = true;
+        }
+        return changed;
+    }
+
+    private void RelayoutFooter()
+    {
+        RebuildFooterGeometry();
+        RebuildFooterHeaders();
+        ApplyFooterHeight();
+    }
+
+    // Header side of a footer row's bottom seam, like a track row's grip.
+    private Border FooterSeamGrip(int footerRow)
+    {
+        var line = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent };
+        var grip = new Border
+        {
+            Height = SeamGrabPx, Background = Brushes.Transparent, Child = line,
+            Cursor = new Cursor(StandardCursorType.SizeNorthSouth),
+        };
+        grip.PointerEntered += (_, _) => line.Background = Brush("Brush.BorderStrong");
+        grip.PointerExited += (_, _) => { if (!_footerResizing) line.Background = Brushes.Transparent; };
+        grip.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(grip).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            if (e.ClickCount == 2) { ResetFooterRowHeight(footerRow); return; }
+            BeginFooterResize(footerRow, e.GetPosition(this).Y);
+            e.Pointer.Capture(grip);
+        };
+        grip.PointerMoved += (_, e) => { if (_footerResizing) { UpdateFooterResize(e.GetPosition(this).Y); e.Handled = true; } };
+        grip.PointerReleased += (_, e) =>
+        {
+            if (!_footerResizing) return;
+            e.Handled = true;
+            e.Pointer.Capture(null);
+            line.Background = Brushes.Transparent;
+            EndFooterResize();
+        };
+        grip.PointerCaptureLost += (_, _) => { line.Background = Brushes.Transparent; EndFooterResize(); };
+        return grip;
+    }
+
     // ---- column resize (drag the seam between headers and lanes) -------------
 
     private bool _colResizing;
@@ -418,6 +563,8 @@ public sealed partial class ArrangementView
         [JsonPropertyName("version")] public int Version { get; set; } = 1;
         [JsonPropertyName("headerWidth")] public double? HeaderWidth { get; set; }
         [JsonPropertyName("trackHeights")] public List<TrackHeightDto> TrackHeights { get; set; } = new();
+        // specs/045: return rows ride in trackHeights by index; the master has no index.
+        [JsonPropertyName("masterHeight")] public double? MasterHeight { get; set; }
     }
 
     private sealed class TrackHeightDto
@@ -426,7 +573,7 @@ public sealed partial class ArrangementView
         [JsonPropertyName("height")] public double Height { get; set; }
     }
 
-    /// <summary>Write the track heights and header width into a .nota bundle, keyed by track
+    /// <summary>Write the track, return and master heights and the header width into a .nota bundle, keyed by track
     /// index (ids only last a session). Cosmetic — a failure here never fails the save.</summary>
     public void SaveTrackView(string bundleDir)
     {
@@ -439,7 +586,8 @@ public sealed partial class ArrangementView
                 for (int i = 0; i < _engine.TrackCount; i++)
                     if (_engine.TryGetTrackInfo(i, out var ti) && _trackHeights.TryGetValue(ti.Id, out var h))
                         dto.TrackHeights.Add(new TrackHeightDto { Index = i, Height = h });
-            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0)
+            if (Math.Abs(_masterHeight - DefaultFooterRowHeight) >= 0.5) dto.MasterHeight = _masterHeight;
+            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null)
             {
                 if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
                 return;
@@ -461,9 +609,10 @@ public sealed partial class ArrangementView
             var dto = JsonSerializer.Deserialize<TrackViewDto>(System.IO.File.ReadAllText(path));
             if (dto is null || dto.Version > 1) return;
             if (dto.HeaderWidth is { } w) _userHeaderW = Math.Round(Math.Clamp(w, MinHeaderW, MaxHeaderW));
-            foreach (var th in dto.TrackHeights)
-                if (th.Index >= 0 && _engine.TryGetTrackInfo(th.Index, out var ti) && !ti.IsReturn)
+            foreach (var th in dto.TrackHeights)   // tracks and returns alike (specs/045)
+                if (th.Index >= 0 && _engine.TryGetTrackInfo(th.Index, out var ti))
                     StoreRowHeight(ti.Id, th.Height);
+            if (dto.MasterHeight is { } mh) _masterHeight = ClampRowHeight(mh);
         }
         catch { /* a corrupt sidecar just means the default layout */ }
         finally { ApplyHeaderWidth(final: false); }
@@ -473,6 +622,7 @@ public sealed partial class ArrangementView
     public void ResetTrackView()
     {
         _trackHeights.Clear();
+        _masterHeight = DefaultFooterRowHeight;
         _clipboardHeights = null;
         _userHeaderW = DefaultHeaderW;
         ApplyHeaderWidth(final: false);
