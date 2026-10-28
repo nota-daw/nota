@@ -48,6 +48,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   its send to each return, two per row, as far as the height allows.
 
 ### Changed
+- **Bigger graphs in Nota Compressor and Nota Auto Filter** (Egor's review of
+  nota-daw/nota#296): each centre tab is now one graph that fills its panel, nearly twice as
+  tall as before. The knobs under the graphs and the old right-hand tabs are gone: the right
+  panel follows the centre tab and holds its controls as sliders. Compressor: Curve shows
+  Dynamics (character, detector, ratio, knee, mix, range, auto gain), Motion shows Timing
+  (attack, release, hold, lookahead, auto-release) and Sidechain shows Key (source, tap,
+  external, listen, HP, LP, Q, stereo link). Auto Filter: Filter, Envelope and LFO each show
+  their own controls, with Mod → Freq / Reso / Both on the Filter panel. The live read-outs
+  (in / out and crest, measured transient and recovery, the cutoff and its note) moved to the
+  right of the tab bar.
 - **Smaller shell text and a new key picker** (review of
   nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
   The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
