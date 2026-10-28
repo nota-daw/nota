@@ -5424,6 +5424,44 @@ Console.WriteLine("-- Nota Strata --");
     se.DeviceScope(st, sd, scope, scope.Length);
     Check((int)scope[3] == 0, $"undo removes the layer (count {(int)scope[3]})");
 
+    // Overdub during the first pass closes the loop and stacks layer 2 straight away.
+    var sx = new float[6 + 8 * 3 + 4];
+    se.Seek(0); se.Play();
+    se.DeviceAction(st, sd, 0, 0, 0); se.RenderOffline(rb, 8192);   // C_Record
+    se.DeviceAction(st, sd, 1, 0, 0); se.RenderOffline(rb, 4096);   // C_Overdub
+    int sxn = se.DeviceScope(st, sd, sx, sx.Length);
+    Check((int)sx[3] == 2 && (int)sx[4] == 1 && (int)sx[0] == 3, $"Overdub on the first pass closes the loop and records layer 2 (layers {(int)sx[3]}, rec {(int)sx[4]}, mode {(int)sx[0]})");
+    Check(sxn == sx.Length && sx[31] > 0, $"Strata scope carries the loop tempo ({sxn} floats, {sx[31]:F1} BPM)");
+
+    // A stopped loop holds its place; Play starts it from the top.
+    se.DeviceAction(st, sd, 3, 0, 0); se.RenderOffline(rb, 4096); se.RenderOffline(rb, 4096);   // C_Stop
+    se.DeviceScope(st, sd, sx, sx.Length);
+    Check((int)sx[0] == 4 && sx[2] == 0f, $"a stopped loop holds at the top (mode {(int)sx[0]}, phase {sx[2]:F3})");
+    se.DeviceAction(st, sd, 2, 0, 0); se.RenderOffline(rb, 1024);   // C_Play
+    se.DeviceScope(st, sd, sx, sx.Length);
+    Check((int)sx[0] == 2 && sx[2] > 0f && sx[2] < 0.5f, $"Play from stop starts at the top (mode {(int)sx[0]}, phase {sx[2]:F3})");
+
+    // Quantize 1/4: Play on the first pass lands on the next beat instead of waiting forever.
+    se.DeviceAction(st, sd, 5, 0, 0); se.RenderOffline(rb, 1024);   // C_Clear (one command per block)
+    se.DeviceSetParam(st, sd, 3, 2f);
+    se.DeviceAction(st, sd, 0, 0, 0); se.RenderOffline(rb, 8192);
+    se.DeviceAction(st, sd, 2, 0, 0);
+    for (int k = 0; k < 8; k++) se.RenderOffline(rb, 8192);
+    se.DeviceScope(st, sd, sx, sx.Length);
+    Check((int)sx[0] == 2 && (int)sx[3] == 1, $"quantized Play closes the first pass on the beat (mode {(int)sx[0]}, layers {(int)sx[3]})");
+
+    // Count-in: Record waits one bar before the first pass, and Stop cancels it.
+    se.DeviceAction(st, sd, 5, 0, 0); se.RenderOffline(rb, 1024);
+    se.DeviceSetParam(st, sd, 3, 0f); se.DeviceSetParam(st, sd, 4, 1f);
+    se.DeviceAction(st, sd, 0, 0, 0); se.RenderOffline(rb, 4096);
+    se.DeviceScope(st, sd, sx, sx.Length);
+    Check((int)sx[0] == 1 && sx[30] >= 1f, $"Count-in counts down before recording (mode {(int)sx[0]}, {sx[30]:0} beats left)");
+    se.DeviceAction(st, sd, 3, 0, 0); se.RenderOffline(rb, 1024);
+    se.DeviceScope(st, sd, sx, sx.Length);
+    Check((int)sx[0] == 0 && (int)sx[3] == 0 && sx[30] == 0f, $"Stop cancels a count-in (mode {(int)sx[0]}, layers {(int)sx[3]})");
+    se.DeviceSetParam(st, sd, 4, 0f);
+    se.StopTransport();
+
     // Automation drives Feedback.
     int slane = se.AddAutomationLane(st, AutomationTarget.DeviceParam, sd, 0);
     Check(slane >= 0, "add Strata Feedback automation lane");
