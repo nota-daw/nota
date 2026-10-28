@@ -388,6 +388,11 @@ NOTA_API float   nota_track_modulator_get(const NotaEngine* engine, int32_t trac
 NOTA_API NotaResult nota_track_modulator_set(NotaEngine* engine, int32_t track_id, int32_t mod_id, int32_t field, float value);
 NOTA_API float   nota_track_modulator_value(const NotaEngine* engine, int32_t track_id, int32_t mod_id);
 NOTA_API int32_t nota_track_modulator_scope(const NotaEngine* engine, int32_t track_id, int32_t mod_id, float* out, int32_t cap);
+/* Scope history with time steps (specs/047): the newest entries, oldest -> newest. dts[i] is
+ * the seconds between entry i-1 and i (one audio block). Fields 13..18 hold the Scope view
+ * settings: 13 window ms (50..8000), 14 sync, 15 window beats (0.25..32), 16 zoom (1/2/4/8),
+ * 17 trigger (0 free, 1 rising), 18 trace height px (76..320). */
+NOTA_API int32_t nota_track_modulator_scope_timed(const NotaEngine* engine, int32_t track_id, int32_t mod_id, float* values, float* dts, int32_t cap);
 NOTA_API int32_t nota_track_add_cv_link(NotaEngine* engine, int32_t track_id, int32_t mod_id, int32_t device_index, int32_t param_index);
 /* Cross-track: modulator on track_id modulates a param on target_track (-1 = self). */
 NOTA_API int32_t nota_track_add_cv_link_to(NotaEngine* engine, int32_t track_id, int32_t mod_id, int32_t target_track, int32_t device_index, int32_t param_index);

@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A bigger, more useful Modular Scope** (#266): drag the bar under the trace to make it
+  taller (76–320 px), or open the Scope in its own resizable window. New controls: a time
+  window in milliseconds (50 ms–8 s) or, with **Sync**, in beats (1/16 to 8 bars) at the
+  current tempo; a 1×–8× vertical zoom; a **Rise** trigger that starts the trace where the
+  input rises through 0, so a repeating shape holds still; and **Freeze**. The settings and
+  the height are saved with the project; older projects open with a 1 s window, as before.
 - **Fold the piano roll** (nota-daw/nota#344, #345): **Fold** in the piano roll toolbar (⌥⇧F)
   shows only the scale's notes on a melodic track, or only the pads, each row named after its
   pad, on a Drum Rack. Pitches that hold notes keep their rows, so nothing is hidden. ↑/↓ and

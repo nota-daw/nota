@@ -451,6 +451,7 @@ public partial class MainWindow
         _blockMovesDone = 0;
         CloseDetail();                   // collapse the docked row too, not just hide the panel
         _deviceChain?.ForgetCardState();   // per-track preset labels belong to the old project
+        _modular?.ForgetScopes();          // so do frozen Scope traces and Scope windows
         TrackArming.ForgetSelection();     // the arm-on-select memory too
         Timeline.Refresh();
         _session?.Refresh();
