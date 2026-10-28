@@ -93,8 +93,10 @@ public sealed partial class PianoRollView
         if (on != _fold) SetFold(on);
         else if (_fold)
         {
+            // Kit to kit keeps a row zoom the user chose; rows that just became a kit fit it.
+            bool wasPads = _rowsArePads;
             RebuildRows(force: true);
-            if (_rowsArePads) { _rowHBeforePadFit ??= _rowH; _padFit = true; FitPads(); }
+            if (_rowsArePads && (!wasPads || _padFit)) { _rowHBeforePadFit ??= _rowH; _padFit = true; FitPads(); }
             FoldChanged?.Invoke();
         }
         else FoldChanged?.Invoke();
