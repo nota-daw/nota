@@ -121,7 +121,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             var idx = Mono($"{i + 1}", 9, TextTertiary); idx.Width = 8;
             var nameTxt = new TextBlock { Text = $"Layer {i + 1}", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, Width = 46, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             waves[i] = new StrataWave { VerticalAlignment = VerticalAlignment.Stretch, Margin = new Thickness(0, 3) };
-            stateTxts[i] = new TextBlock { FontSize = 8, Width = 32, VerticalAlignment = VerticalAlignment.Center };
+            stateTxts[i] = new TextBlock { FontSize = 8, Width = 36, VerticalAlignment = VerticalAlignment.Center };
             // The layer's level: a value bar (drag, double-click resets to 0 dB, double-click the value to type one).
             double NormOf(double db) => (Math.Clamp(db, MinDb, MaxDb) - MinDb) / (MaxDb - MinDb);
             var level = SliderRow("", () => NormOf(Sc(7 + iv * 3)), n => Act(A_LayerGain, iv, (float)(MinDb + n * (MaxDb - MinDb))),
@@ -358,7 +358,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 layerRows[k].IsVisible = vis;
                 if (!vis) continue;
                 bool muted = Sc(8 + k * 3) > 0.5f, rec = recL == k && !counting;
-                stateTxts[k].Text = rec ? "Rec" : muted ? "Muted" : "Play";
+                stateTxts[k].Text = rec ? "Rec" : muted ? "Muted" : mode == M_Stop ? "Stopped" : "Play";
                 stateTxts[k].Foreground = rec ? NotaPalette.Record : muted ? TextTertiary : TextSecondary;
                 var mtxt = (TextBlock)muteBtns[k].Child!;
                 muteBtns[k].Background = muted ? NotaPalette.Mute : Brushes.Transparent;   // mute on = the amber mute fill

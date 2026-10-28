@@ -107,8 +107,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     level) to a WAV file.
   - The captions under the actions say what a press does now (for example "close, then play"
     or "layer 3, next bar"), and actions that would do nothing are dimmed. The first pass
-    draws its waveform as it records. Right-clicking a transport or mute button no longer
-    triggers it.
+    draws its waveform as it records, and a stopped loop's layers say Stopped. Right-clicking
+    a transport or mute button no longer triggers it.
 - **Linux: file dialogs that never open** (nota-daw/nota#297): when xdg-desktop-portal has no
   working FileChooser backend, Open / Save / Export / Import used to do nothing. Nota now notices
   within 4 seconds (the request fails, answers without showing, or shows nothing) and opens its
