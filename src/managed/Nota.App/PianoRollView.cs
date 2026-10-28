@@ -139,6 +139,7 @@ public sealed partial class PianoRollView : UserControl
     private readonly record struct ViewState(double Ppb, double Scroll, double VOffset, bool HasV, double RowH);
     private static readonly Dictionary<(int, int), ViewState> s_view = new();
     private (int, int) _clipKey = (int.MinValue, int.MinValue);
+    private (int, int) _loadedKey = (int.MinValue, int.MinValue);   // the clip Load last showed
     private double? _pendingVOffset;   // absolute vertical offset to apply once the body is laid out
     private bool _pendingCenter;       // instead: centre on the clip's notes once laid out
     private bool _restoringView;       // suppress view-saves while we programmatically restore
@@ -725,7 +726,12 @@ public sealed partial class PianoRollView : UserControl
         // length horizontally and centre vertically on the clip's own notes at the default
         // row height. Row heights are per clip: zooming one never changes another.
         bool saved = s_view.TryGetValue(_clipKey, out var vs) && vs.HasV;
-        _rowH = saved ? Math.Clamp(vs.RowH, MinRowH, MaxRowH) : DefaultRowH;
+        // The same clip reloaded (undo, a recording pass): a folded kit keeps the rows it has,
+        // fitted or zoomed by hand. The saved height is the keyboard's, for unfolding.
+        bool reload = _clipKey.Item1 != int.MinValue && _clipKey == _loadedKey;
+        _loadedKey = _clipKey;
+        bool keepKitRows = reload && _fold && _rowsArePads;
+        if (!keepKitRows) _rowH = saved ? Math.Clamp(vs.RowH, MinRowH, MaxRowH) : DefaultRowH;
         _keys.Height = RangeH;
         _gridControl.Height = RangeH;
         if (saved)
@@ -741,7 +747,7 @@ public sealed partial class PianoRollView : UserControl
             _pendingVOffset = null; _pendingCenter = true;
         }
         Invalidate();
-        RefitPadsOnClipLoad();   // the saved height is the keyboard's; a folded kit fits again
+        if (!keepKitRows) RefitPadsOnClipLoad();   // another clip: a folded kit fits again
         Changed?.Invoke();
         ApplyPendingVOffset();   // apply now if laid out; LayoutUpdated retries otherwise
     }
