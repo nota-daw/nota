@@ -267,6 +267,10 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_fx_selftest")]
     internal static partial int FxSelfTest();
 
+    [LibraryImport(Lib, EntryPoint = "nota_spectrum_analyze_offline")]
+    internal static partial int SpectrumAnalyzeOffline(float[] mono, int n, double sampleRate, int hop, double dt,
+        [Out] float[] curves, int maxFrames);
+
     [LibraryImport(Lib, EntryPoint = "nota_plugin_open_editor")]
     internal static partial NotaResult PluginOpenEditor(IntPtr engine, int trackId, int deviceIndex);
 

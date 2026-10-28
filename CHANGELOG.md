@@ -32,6 +32,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the driver is missing, busy or stops responding, Nota switches to WASAPI and the status bar
   says why; **Try again** goes back to ASIO. The Steinberg ASIO SDK is used under its GPLv3
   option (`LICENSES/third-party.md`).
+- **A proper spectrum analyzer in EQ-8 and EQ-3** (#265): the spectrum behind the curve is now
+  a smooth, filled area that rises at once and falls back over about 300 ms, read from 256
+  points in 1/6-octave bands, so a tone reads at its own level and pink noise reads flat. EQ-8
+  draws the output filled with the input as a dim line (Pre fills the input), and gains
+  **Range** (60 / 90 / 120 dB) and **Peak** hold next to Pre / Post / Off; both are saved with
+  the device and older projects open at 90 dB, peak off. It also fixes why the old display
+  jumped: half of every analysis window held stale audio. The sound is unchanged. MCP
+  `set_eq8` `analyzerRangeDb` / `analyzerPeak`.
 - **A plug-in's card shows its interface** (#270): once you've opened a plug-in's window,
   its device card stands on a picture of it, darkened by a wash in the theme's card colour
   so the name, facts and buttons stay readable — the whole small card, and the info column

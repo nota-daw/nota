@@ -5,15 +5,15 @@
 // ). Filter math runs through shared dsp::BiquadCascade sections in
 // 64-sample blocks (routing branch hoisted out of the loop); pitch/dB mapping
 // uses FastMath; silent stretches auto-sleep via the isIdle() contract.
-// Analyzer, params, blob layout and defaults are unchanged (: existing
-// .nota projects and presets load identically).
+// Params, blob layout and defaults are unchanged (: existing .nota projects and presets load
+// identically); the analyzer's Range and Peak (specs/046) are appended after Analyzer, so an
+// older project leaves them at their defaults. The spectra come from dsp::SpectrumAnalyzer.
 
 #pragma once
 
 #include "devices/Device.h"
 #include "dsp/primitives/BiquadCascade.h"
-
-#include <signalsmith-linear/fft.h>
+#include "dsp/primitives/SpectrumAnalyzer.h"
 
 #include <algorithm>
 #include <atomic>
@@ -46,8 +46,10 @@ class Eq : public Device {
         Output,
         AutoGain,
         Analyzer,
+        AnaRange, // 0 = 60, 1 = 90, 2 = 120 dB below 0 dBFS (display only)
+        AnaPeak,  // 0 / 1 peak hold (display only)
         kNumParams
-    }; // 60
+    }; // 62
     enum { AnaPre = 0, AnaPost = 1, AnaOff = 2 };
 
     // Telemetry slots (scopeRead).
@@ -62,10 +64,11 @@ class Eq : public Device {
         S_Bands,    // kSpec
         kTele = 16
     };
-    static constexpr int kSpec = 96;
-    static constexpr double kSpecLo = 20.0, kSpecHi = 20000.0;
-    static constexpr int kPreAt = kTele, kPostAt = kTele + kSpec;
-    static constexpr int kScope = kTele + 2 * kSpec;
+    // Then the input curve, the output curve and the peak of the shown one (the output on Post,
+    // the input on Pre), kSpec log-spaced points each from 20 Hz to 20 kHz, in dBFS.
+    static constexpr int kSpec = dsp::SpectrumAnalyzer::kPoints;
+    static constexpr int kPreAt = kTele, kPostAt = kTele + kSpec, kPeakAt = kTele + 2 * kSpec;
+    static constexpr int kScope = kTele + 3 * kSpec;
 
     Eq();
     void setSampleRate(double sr, int32_t maxBlock) override;
@@ -123,6 +126,7 @@ class Eq : public Device {
         const bool* on, const int* ty, const int* ch, const dsp::BiquadCoeffs (*c)[kMaxSec], double sr);
 
     bool analyse() const;
+    int analyzerMode() const { return std::clamp((int)std::lround(get(Analyzer)), 0, 2); }
     static double nowSeconds() {
         return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
     }
@@ -152,16 +156,9 @@ class Eq : public Device {
     std::vector<float> ring_[2];
     uint32_t ringMask_ = 0;
     std::atomic<uint32_t> ringW_{0};
-    int fftN_ = 0;
     mutable std::mutex mx_;
-    mutable signalsmith::linear::RealFFT<float> fft_;
-    std::vector<float> win_;
-    mutable std::vector<float> tBuf_;
-    mutable std::vector<std::complex<float>> fBuf_;
-    mutable double aSpec_[2][kSpec] = {};
-    mutable float spec_[2][kSpec] = {};
+    mutable dsp::SpectrumAnalyzer ana_[2];
     mutable double lastAnaS_ = -1.0;
-    mutable uint32_t lastAnaW_ = 0;
     mutable bool anaValid_ = false;
 };
 
