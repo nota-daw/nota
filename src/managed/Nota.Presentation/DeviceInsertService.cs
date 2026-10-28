@@ -57,6 +57,8 @@ public sealed record InsertResult
     public (bool Midi, int Added, int Final, bool Replaced)? Placed { get; init; }
     /// <summary>A preset that landed: chain, device index, its name and factory id ("" for a user preset).</summary>
     public (int TrackId, PresetChain Chain, int Index, string Name, string FactoryId)? PresetLanded { get; init; }
+    /// <summary>The preset was applied in place and tagged in its own undo step already.</summary>
+    internal bool PresetTagged { get; init; }
 
     /// <summary>The plug-in this insertion put on a track, for "Open plug-in window on insert"
     /// (#250): DeviceIndex -1 is the track's instrument.</summary>
@@ -459,7 +461,29 @@ public sealed class DeviceInsertService
     /// instrument track when the target asks for it in place (the palette), swaps the
     /// instrument and loads the sound there; an effect preset lands on the target and, with a
     /// placement, moves to the aimed slot.</summary>
-    public InsertResult ApplyPreset(BrowserItem item, InsertTarget target) => Group(() => ApplyPresetCore(item, target));
+    public InsertResult ApplyPreset(BrowserItem item, InsertTarget target) => Group(() => TagLanded(ApplyPresetCore(item, target), item, target));
+
+    // The device a preset landed on carries its name from here on (specs/048), inside the
+    // same undo step. A preset file is tagged by its path.
+    private InsertResult TagLanded(InsertResult r, BrowserItem item, InsertTarget target)
+    {
+        if (r is not { Ok: true, PresetLanded: { } pl } || r.PresetTagged) return r;
+        var surface = pl.Chain switch
+        {
+            PresetChain.Instrument => PresetSurface.Instrument,
+            PresetChain.Midi => PresetSurface.MidiEffect,
+            _ => PresetSurface.Effect,
+        };
+        string id = pl.FactoryId.Length > 0 ? pl.FactoryId : "file:" + item.Path;
+        // A device the apply just made (a new track, an inserted device, a swapped instrument)
+        // takes the name with no undo step of its own: undo brings back the old graph with its
+        // devices' names as they were, and redo the new one with this name. A value step here
+        // would write the new device's empty tag over the restored one's on undo.
+        bool fresh = r.InstrumentReplaced || pl.Chain != PresetChain.Instrument || pl.TrackId != target.TrackId;
+        if (fresh) _engine.SetDevicePresetTag(pl.TrackId, surface, pl.Index, id, pl.Name);
+        else Nota.Application.Editing.PresetEdit.Tag(_engine, pl.TrackId, surface, pl.Index, id, pl.Name);
+        return r;
+    }
 
     private InsertResult ApplyPresetCore(BrowserItem item, InsertTarget target)
     {
@@ -477,23 +501,42 @@ public sealed class DeviceInsertService
                 if (!_engine.SetTrackBuiltinInstrument(t, f.BuiltinKind)) return InsertResult.Fail($"Couldn't load {item.Name}.");
                 swapped = true;
             }
-            string w = _factory.ApplyInPlace(_engine, factoryId, t, -1);
+            // On the same instrument the sound and the name change as one undo step, so undo
+            // brings both back (a swap restores the old instrument whole).
+            string w = swapped ? _factory.ApplyInPlace(_engine, factoryId, t, -1)
+                : InstrumentInPlace(t, factoryId, item.Name, () => _factory.ApplyInPlace(_engine, factoryId, t, -1));
             if (w.Length == 0) InstrumentPresetApplied?.Invoke(t);
             return new InsertResult
             {
                 Ok = w.Length == 0, TrackId = t, InstrumentReplaced = swapped, ShowDevices = true,
                 Status = w.Length > 0 ? w : $"Applied preset {item.Name}",
-                PresetLanded = (t, PresetChain.Instrument, -1, item.Name, factoryId),
+                PresetLanded = (t, PresetChain.Instrument, -1, item.Name, factoryId), PresetTagged = !swapped,
             };
         }
         // …and a preset file (a user preset, a Mosaic pack preset) the same way.
+        // A built-in instrument's file preset on the same instrument is parameters only: one undo
+        // step with its name, as above.
         if (fp is null && !target.NewTrack && target.InPlace && CanReplaceInstrument(t)
-            && _presets?.ApplyInstrumentInPlace(_engine, item.Path, t, out bool fileSwapped) is { } fw)
+            && _presets?.Describe(item.Path) is ("builtin-instrument", var fileKind) && fileKind == _engine.TrackInstrumentKind(t))
+        {
+            bool fileSwapped = false;
+            string sw = InstrumentInPlace(t, "file:" + item.Path, item.Name,
+                () => _presets!.ApplyInstrumentInPlace(_engine, item.Path, t, out fileSwapped) ?? "Presets are unavailable.");
+            if (sw.Length == 0) InstrumentPresetApplied?.Invoke(t);
+            return new InsertResult
+            {
+                Ok = sw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped, ShowDevices = true,
+                Status = sw.Length > 0 ? sw : $"Applied preset {item.Name}",
+                PresetLanded = (t, PresetChain.Instrument, -1, item.Name, ""), PresetTagged = !fileSwapped,
+            };
+        }
+        if (fp is null && !target.NewTrack && target.InPlace && CanReplaceInstrument(t)
+            && _presets?.ApplyInstrumentInPlace(_engine, item.Path, t, out bool fileSwapped2) is { } fw)
         {
             if (fw.Length == 0) InstrumentPresetApplied?.Invoke(t);
             return new InsertResult
             {
-                Ok = fw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped, ShowDevices = true,
+                Ok = fw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped2, ShowDevices = true,
                 Status = fw.Length > 0 ? fw : $"Applied preset {item.Name}",
                 PresetLanded = (t, PresetChain.Instrument, -1, item.Name, ""),
             };
@@ -569,6 +612,9 @@ public sealed class DeviceInsertService
     }
 
     // One undo step per insertion (CP-25). Nests, so an outer group (a multi-item drop) holds.
+    private string InstrumentInPlace(int t, string id, string name, Func<string> apply)
+        => Nota.Application.Editing.PresetEdit.Apply(_engine, t, PresetSurface.Instrument, -1, id, name, apply);
+
     private InsertResult Group(Func<InsertResult> body)
     {
         _engine.BeginUndoGroup();

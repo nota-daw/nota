@@ -546,7 +546,9 @@ track count and closes with Escape.
 ## Built-in devices
 
 Every built-in device uses the same 700×260 shell with a shared header: on/bypass dot,
-name, subtitle, preset picker (with **Init** to return to every default), **A/B comparison** (parameter snapshots), stereo meter,
+name, subtitle, preset picker (with **Init** to return to every default; the loaded preset's name
+stays with the device, saved with the project, and shows " *" once a sound parameter changes),
+**A/B comparison** (parameter snapshots), stereo meter,
 voice count (on synths), move arrows, delete, and the ⠿ drag handle. All support factory
 and user presets, automation, persistence and cloning. Instrument cards (built-in, racks
 and hosted plug-ins) have the same on/off switch as effects: off silences the instrument

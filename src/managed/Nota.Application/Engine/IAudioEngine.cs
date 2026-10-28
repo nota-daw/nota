@@ -1280,6 +1280,17 @@ public interface IAudioEngine : IDisposable
     /// <summary>Scope history with time steps (specs/047): the newest entries oldest→newest, and the
     /// seconds each one follows the previous by (one audio block). Returns the count.</summary>
     int ModulatorScopeTimed(int trackId, int modId, float[] values, float[] dts);
+
+    // ---- preset tags (specs/048) ----
+    /// <summary>The device's preset tag: 0 none, -1 no such device.</summary>
+    int DevicePresetTag(int trackId, PresetSurface surface, int index);
+    /// <summary>Tag the device with a preset (empty id = Init, clears it). <paramref name="loaded"/>
+    /// = the values the preset left (null = what the device holds now). No undo step of its own:
+    /// set it inside a mix gesture with a <see cref="MixTarget.PresetTag"/> target.</summary>
+    int SetDevicePresetTag(int trackId, PresetSurface surface, int index, string presetId, string name, float[]? loaded = null);
+    PresetTag? PresetTagInfo(int tag);
+    /// <summary>1 when a sound parameter moved away from the preset's values, 0 when not, -1 with no tag.</summary>
+    int DevicePresetModified(int trackId, PresetSurface surface, int index);
     int CvLinkAdd(int trackId, int modId, int deviceIndex, int paramIndex);
     /// <summary>Cross-track link: modulator on trackId modulates a param on targetTrack (-1 = self).</summary>
     int CvLinkAddTo(int trackId, int modId, int targetTrack, int deviceIndex, int paramIndex);
