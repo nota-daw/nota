@@ -57,9 +57,20 @@ internal static class EqAnalyzerTests
     {
         var path = Path.Combine(Path.GetTempPath(), $"nota-eqa-pink-{Guid.NewGuid():N}.wav");
         int n = (int)(Rate * seconds);
+        var mono = PinkSamples(n);
+        var x = new float[n * 2];
+        for (int i = 0; i < n; i++) x[2 * i] = x[2 * i + 1] = mono[i];
+        using (var w = new Nota.Infrastructure.WavWriter(path, Rate, 2, WavBitDepth.Float32)) w.WriteFrames(x, n);
+        tmp.Add(path);
+        return path;
+    }
+
+    // Seeded pink noise (Paul Kellet's filter), mono.
+    private static float[] PinkSamples(int n)
+    {
         var rnd = new Random(46);
         double b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
-        var x = new float[n * 2];
+        var x = new float[n];
         for (int i = 0; i < n; i++)
         {
             double wv = rnd.NextDouble() * 2 - 1;
@@ -68,11 +79,9 @@ internal static class EqAnalyzerTests
             b4 = 0.55000 * b4 + wv * 0.5329522; b5 = -0.7616 * b5 - wv * 0.0168980;
             double p = b0 + b1 + b2 + b3 + b4 + b5 + b6 + wv * 0.5362;
             b6 = wv * 0.115926;
-            x[2 * i] = x[2 * i + 1] = (float)(p * 0.025);
+            x[i] = (float)(p * 0.025);
         }
-        using (var w = new Nota.Infrastructure.WavWriter(path, Rate, 2, WavBitDepth.Float32)) w.WriteFrames(x, n);
-        tmp.Add(path);
-        return path;
+        return x;
     }
 
     // A seeded drum loop at 120 BPM: a kick on the beat (a falling 55 Hz sine), a snare on 2 and
@@ -204,41 +213,39 @@ internal static class EqAnalyzerTests
 
     private static IEnumerable<(bool, string)> Pink(List<string> tmp)
     {
-        using var r = new Rig(PinkNoise(tmp, seconds: 15.0)); // outlasts 400 reads of 1470 frames
-        r.Reset();
-        r.Feed(8192);
-        var sum = new double[Points];
-        var prev = (float[])r.Read().Clone();
-        // The analyzer's ballistics run on wall-clock time, so a frame-to-frame change only means
-        // something at the display's cadence: read every ~35 ms (the render counts towards it) and
-        // count only the pairs that really were one display frame apart. A stalled CI runner
-        // otherwise sees 40-70 ms frames and less smoothing (#357 macOS CI).
-        double change = 0; int frames = 0, steady = 0;
-        var clock = System.Diagnostics.Stopwatch.StartNew();
-        for (int f = 0; f < 400 && steady < 30; f++)
+        // Flat: through the device, averaged over frames (timing doesn't matter for a mean).
+        using (var r = new Rig(PinkNoise(tmp)))
         {
-            long t0 = clock.ElapsedMilliseconds;
-            r.Feed(1470);
-            var s = r.Read(Math.Max(0, 35 - (int)(clock.ElapsedMilliseconds - t0)));
-            bool oneFrame = clock.ElapsedMilliseconds - t0 <= 38;
-            for (int i = 0; i < Points; i++)
+            r.Reset();
+            r.Feed(8192);
+            var sum = new double[Points];
+            int frames = 0;
+            for (; frames < 30; frames++)
             {
-                sum[i] += s[PostAt + i];
-                if (oneFrame && PointHz(i) >= 100 && PointHz(i) <= 15000) change += Math.Abs(s[PostAt + i] - prev[PostAt + i]);
+                r.Feed(1470);
+                var s = r.Read();
+                for (int i = 0; i < Points; i++) sum[i] += s[PostAt + i];
             }
-            frames++;
-            if (oneFrame) steady++;
-            Array.Copy(s, prev, s.Length);
+            var avg = Band().Select(i => sum[i] / frames).ToList();
+            double mid = avg.OrderBy(v => v).ElementAt(avg.Count / 2);
+            double lo = avg.Min() - mid, hi = avg.Max() - mid;
+            yield return (lo > -3 && hi < 3, $"pink noise reads flat from 100 Hz to 15 kHz ({lo:F1} / +{hi:F1} dB around {mid:F1} dB)");
         }
-        var band = Enumerable.Range(0, Points).Where(i => PointHz(i) >= 100 && PointHz(i) <= 15000).ToList();
-        var avg = band.Select(i => sum[i] / frames).ToList();
-        double mid = avg.OrderBy(v => v).ElementAt(avg.Count / 2);
-        double lo = avg.Min() - mid, hi = avg.Max() - mid;
-        yield return (lo > -3 && hi < 3, $"pink noise reads flat from 100 Hz to 15 kHz ({lo:F1} / +{hi:F1} dB around {mid:F1} dB)");
-        double meanChange = change / (Math.Max(1, steady) * band.Count);
-        yield return (steady >= 10 && meanChange < 1.5,
-            $"pink noise holds steady (mean frame-to-frame change {meanChange:F2} dB over {steady} display frames)");
+        // Steady (SC-003): the ballistics run on the display clock, so measure them on a fixed one,
+        // 1470 new samples every 1/30 s, rather than on a CI runner's scheduling.
+        {
+            var curves = NotaEngine.SpectrumAnalyzeOffline(PinkSamples(Rate * 3), Rate, 1470, 1470.0 / Rate, 80);
+            const int Settle = 10;   // the curve rises from the floor first
+            double change = 0; int pairs = 0;
+            for (int f = Settle + 1; f < curves.Length; f++, pairs++)
+                foreach (int i in Band()) change += Math.Abs(curves[f][i] - curves[f - 1][i]);
+            double meanChange = change / (Math.Max(1, pairs) * Band().Count);
+            yield return (pairs >= 30 && meanChange < 1.5,
+                $"pink noise holds steady (mean frame-to-frame change {meanChange:F2} dB over {pairs} display frames)");
+        }
     }
+
+    private static List<int> Band() => Enumerable.Range(0, Points).Where(i => PointHz(i) >= 100 && PointHz(i) <= 15000).ToList();
 
     private static IEnumerable<(bool, string)> Ballistics(List<string> tmp)
     {

@@ -9,6 +9,7 @@
 #include "nota_engine_internal.h"
 
 #include "dsp/primitives/CompensationDelay.h"
+#include "dsp/primitives/SpectrumAnalyzer.h"
 #include "devices/effects/Compressor.h"
 #include "devices/effects/Delay.h"
 #include "devices/effects/Eq.h"
@@ -338,6 +339,25 @@ void nota_device_set_sidechain_tap_pre(NotaEngine* e, int32_t track_id, int32_t 
 }
 int32_t nota_device_sidechain_tap_pre(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return e ? CENG(e)->deviceSidechainTapPre(track_id, device_index) : 0;
+}
+int32_t nota_spectrum_analyze_offline(const float* mono, int32_t n, double sample_rate, int32_t hop,
+                                      double dt, float* curves, int32_t max_frames) {
+    using nota::dsp::SpectrumAnalyzer;
+    if (!mono || !curves || n <= 0 || hop <= 0 || max_frames <= 0 || sample_rate <= 0) return 0;
+    SpectrumAnalyzer a;
+    a.prepare(sample_rate);
+    const int fft = a.fftSize();
+    if (n < fft) return 0;
+    uint32_t size = 1;
+    while (size < static_cast<uint32_t>(n)) size <<= 1;
+    std::vector<float> ring(size, 0.0f);
+    std::copy(mono, mono + n, ring.begin());
+    int32_t frames = 0;
+    for (int64_t w = fft; w <= n && frames < max_frames; w += hop, ++frames) {
+        a.analyse(ring.data(), size - 1, static_cast<uint32_t>(w), frames == 0 ? 0.0 : dt, false);
+        std::copy(a.curve(), a.curve() + SpectrumAnalyzer::kPoints, curves + frames * SpectrumAnalyzer::kPoints);
+    }
+    return frames;
 }
 int32_t nota_fx_selftest(void) {
     constexpr int N = 2048;
