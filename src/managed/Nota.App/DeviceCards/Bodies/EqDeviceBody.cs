@@ -191,9 +191,22 @@ internal sealed class EqDeviceBody : IDeviceBody
 
         // The note popup (specs/049): the band's label and a multiline note. Text is kept when it
         // closes (Escape, a click outside, Ctrl / Cmd+Enter), as one undo step.
+        // A label box takes Return so a pasted multi-line text arrives whole (a single-line box keeps
+        // only its first line); its breaks and tabs become spaces as it lands.
+        static void FlattenLabel(TextBox box) => box.TextChanged += (_, _) =>
+        {
+            var t = box.Text;
+            if (t is null || t.IndexOfAny(['\r', '\n', '\t']) < 0) return;
+            int caret = box.CaretIndex;
+            var flat = t.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ');
+            box.Text = flat;
+            box.CaretIndex = Math.Clamp(caret - (t.Length - flat.Length), 0, flat.Length);
+        };
+
         void OpenNote(int b, Control anchor, bool atPointer)
         {
-            var labelBox = new TextBox { Text = LabelOf(b), MaxLength = 24, AcceptsReturn = false, FontSize = 11, Watermark = "Label" };
+            var labelBox = new TextBox { Text = LabelOf(b), MaxLength = 24, AcceptsReturn = true, FontSize = 11, Watermark = "Label" };
+            FlattenLabel(labelBox);
             var noteBox = new TextBox
             {
                 Text = NoteOf(b), MaxLength = 2000, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, FontSize = 11,
@@ -213,7 +226,7 @@ internal sealed class EqDeviceBody : IDeviceBody
                 if (ke.Key == Avalonia.Input.Key.Escape || (ke.Key == Avalonia.Input.Key.Enter && (cmd || ke.Source == labelBox)))
                 { fly.Hide(); ke.Handled = true; }
             }
-            labelBox.KeyDown += Key;
+            labelBox.AddHandler(InputElement.KeyDownEvent, Key, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             noteBox.AddHandler(InputElement.KeyDownEvent, Key, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             fly.Closed += (_, _) => SetText(b, labelBox.Text ?? "", noteBox.Text ?? "");
             fly.ShowAt(anchor);
@@ -297,8 +310,7 @@ internal sealed class EqDeviceBody : IDeviceBody
             // ---- label + note ----
             var labelField = new TextBox
             {
-                // AcceptsReturn so a pasted multi-line text arrives whole (a single-line box keeps only
-                // its first line); its breaks and tabs become spaces as it lands, Enter commits.
+                // AcceptsReturn and FlattenLabel, so a pasted multi-line text arrives whole; Enter commits.
                 Text = LabelOf(b), MaxLength = 24, AcceptsReturn = true, FontSize = 9, MinHeight = 18, Height = 18,
                 Padding = new Thickness(4, 1), VerticalContentAlignment = VerticalAlignment.Center, Watermark = "Name this band",
             };
@@ -312,15 +324,7 @@ internal sealed class EqDeviceBody : IDeviceBody
                 if (ke.Key == Avalonia.Input.Key.Enter) { CommitLabel(); ke.Handled = true; Unfocus(); }
                 else if (ke.Key == Avalonia.Input.Key.Escape) { labelField.Text = LabelOf(b); ke.Handled = true; Unfocus(); }
             }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
-            labelField.TextChanged += (_, _) =>
-            {
-                var t = labelField.Text;
-                if (t is null || t.IndexOfAny(['\r', '\n', '\t']) < 0) return;
-                int caret = labelField.CaretIndex;
-                var flat = t.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ');
-                labelField.Text = flat;
-                labelField.CaretIndex = Math.Clamp(caret - (t.Length - flat.Length), 0, flat.Length);
-            };
+            FlattenLabel(labelField);
             ToolTip.SetTip(labelField, "Label — a short name shown next to the band's node (up to 24 characters)");
             var noteBtn = new Button
             {

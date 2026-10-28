@@ -541,7 +541,7 @@ std::string Eq::deviceText(int32_t id) const {
 namespace {
 
 // Keep at most `max` UTF-8 code points, drop control characters (line breaks too unless
-// `multiline`) and trim surrounding spaces. Invalid bytes are dropped.
+// `multiline`) and trim a label's surrounding spaces (a blank note is empty). Invalid bytes are dropped.
 std::string cleanText(const std::string& in, size_t max, bool multiline) {
     std::string out;
     size_t cps = 0;
@@ -573,6 +573,7 @@ std::string cleanText(const std::string& in, size_t max, bool multiline) {
     }
     const auto first = out.find_first_not_of(" \n");
     if (first == std::string::npos) return {};
+    if (multiline) return out; // a note is kept exactly
     const auto last = out.find_last_not_of(" \n");
     return out.substr(first, last - first + 1);
 }

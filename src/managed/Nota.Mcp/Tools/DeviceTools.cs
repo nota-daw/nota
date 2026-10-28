@@ -1491,9 +1491,6 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     {
         if (E.TrackDeviceBuiltinKind(trackId, deviceIndex) != 0) throw new ArgumentException("not a Nota EQ-8 (kind 0)");
         if (band < 1 || band > 8) throw new ArgumentException("band is 1..8");
-        if (label is not null || note is not null)
-            E.EqSetBandText(trackId, deviceIndex, band - 1, label ?? E.EqBandText(trackId, deviceIndex, band - 1, 0),
-                note ?? E.EqBandText(trackId, deviceIndex, band - 1, 1));
         int o = (band - 1) * 5, pc = E.DeviceParamCount(trackId, deviceIndex);
         void S(int p, double v)
         {
@@ -1508,16 +1505,19 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
             if (i < 0) throw new ArgumentException($"{what} must be one of: {string.Join(", ", names)}");
             return i;
         }
-        if (type is not null) S(o + 1, Idx(DynEqTypes, type, "type"));
+        // Check every argument before changing anything, so a refused call leaves the band as it was.
+        int? ti = type is null ? null : Idx(DynEqTypes, type, "type");
+        int? ci = channel is null ? null : Idx(Eq8Channels, channel, "channel");
+        if (slope is { } bad && bad is not (12 or 24 or 48)) throw new ArgumentException("slope is 12, 24 or 48");
+        if (label is not null || note is not null)
+            E.EqSetBandText(trackId, deviceIndex, band - 1, label ?? E.EqBandText(trackId, deviceIndex, band - 1, 0),
+                note ?? E.EqBandText(trackId, deviceIndex, band - 1, 1));
+        if (ti is { } tv) S(o + 1, tv);
         if (freqHz is { } f) S(o + 2, Math.Clamp(f, 20, 20000));
         if (gainDb is { } g) S(o + 3, Math.Clamp(g, -18, 18));
         if (q is { } qq) S(o + 4, Math.Clamp(qq, 0.1, 18));
-        if (slope is { } sl)
-        {
-            if (sl is not (12 or 24 or 48)) throw new ArgumentException("slope is 12, 24 or 48");
-            S(40 + band - 1, sl == 12 ? 0 : sl == 24 ? 1 : 2);
-        }
-        if (channel is not null) S(48 + band - 1, Idx(Eq8Channels, channel, "channel"));
+        if (slope is { } sl) S(40 + band - 1, sl == 12 ? 0 : sl == 24 ? 1 : 2);
+        if (ci is { } cv) S(48 + band - 1, cv);
         if (on is { } onv) S(o, onv ? 1 : 0);
         return Eq8BandRead(trackId, deviceIndex, band - 1);
     });

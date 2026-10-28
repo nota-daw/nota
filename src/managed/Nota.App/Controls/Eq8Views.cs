@@ -350,14 +350,19 @@ public sealed class Eq8Curve : Control
         {
             if (BandOn(b)) continue;
             double f = Eq8.NToFreq(p.X / Math.Max(1, Bounds.Width)), g = GainAtY(p.Y);
-            _engine.EqSetBandText(_track, _device, b, "", "");   // a new band: an old label no longer applies
-            Gesture(Eq8.P(b, Eq8.TypeF), () => SetP(b, Eq8.TypeF, Eq8.Bell));
-            Gesture(Eq8.P(b, Eq8.FreqF), () => SetP(b, Eq8.FreqF, f));
-            Gesture(Eq8.P(b, Eq8.GainF), () => SetP(b, Eq8.GainF, g));
-            Gesture(Eq8.P(b, Eq8.QF), () => SetP(b, Eq8.QF, 1.0));
-            if (_engine.DeviceParamCount(_track, _device) > Eq8.ChannelBase + b)
-                Gesture(Eq8.ChannelBase + b, () => SetRaw(Eq8.ChannelBase + b, Eq8.St));
-            Gesture(Eq8.P(b, Eq8.On), () => SetP(b, Eq8.On, 1));
+            _engine.BeginUndoGroup();   // one step: undo brings the old band back with its text
+            try
+            {
+                _engine.EqSetBandText(_track, _device, b, "", "");   // a new band: an old label no longer applies
+                Gesture(Eq8.P(b, Eq8.TypeF), () => SetP(b, Eq8.TypeF, Eq8.Bell));
+                Gesture(Eq8.P(b, Eq8.FreqF), () => SetP(b, Eq8.FreqF, f));
+                Gesture(Eq8.P(b, Eq8.GainF), () => SetP(b, Eq8.GainF, g));
+                Gesture(Eq8.P(b, Eq8.QF), () => SetP(b, Eq8.QF, 1.0));
+                if (_engine.DeviceParamCount(_track, _device) > Eq8.ChannelBase + b)
+                    Gesture(Eq8.ChannelBase + b, () => SetRaw(Eq8.ChannelBase + b, Eq8.St));
+                Gesture(Eq8.P(b, Eq8.On), () => SetP(b, Eq8.On, 1));
+            }
+            finally { _engine.EndUndoGroup(); }
             SelectedBand = b;
             return;
         }
@@ -517,15 +522,16 @@ public sealed class Eq8Curve : Control
     }
 
     // ---- band labels (specs/049) ----
-    private const double LabelH = 13, LabelMaxW = 112, NoteDot = 4;
+    private const double LabelH = 13, NoteDot = 4;
+    private static readonly double[] LabelWidths = [112, 64, 36, 22];
     private static readonly IBrush LabelFill = NotaPalette.Wash(NotaPalette.SurfaceCard, 0xE8);
     private static readonly IPen LabelEdge = new Pen(NotaPalette.BorderStrong, 1);
     private static readonly IPen LeaderPen = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0xA0), 1);
 
     // Each label is a pill centred over its node (under it when the node is near the top).
     // In frequency order, a label that would overlap one already placed (or the selected
-    // band's reading) tries the other side, then steps further out on both; it stays inside
-    // the graph, and one moved away from its node gets a thin leader line back to it.
+    // band's reading) tries the other side, then steps further out on both, then shorter; it
+    // stays inside the graph, and one moved away from its node gets a thin leader line back to it.
     private void DrawLabels(DrawingContext ctx, double w, double h, Rect tip)
     {
         Array.Clear(_labelBox);
@@ -540,24 +546,33 @@ public sealed class Eq8Curve : Control
             bool on = BandOn(b), note = HasNote(b);
             string text = Label(b);
             IBrush ink = on ? NotaPalette.TextPrimary : NotaPalette.TextDisabled;
-            var ft = text.Length > 0 ? Fit(text, ink, LabelMaxW - 10 - (note ? NoteDot + 3 : 0)) : null;
-            double bw = (ft?.Width ?? 0) + (ft is null ? 0 : 10) + (note ? NoteDot + (ft is null ? 8 : 3) : 0);
             var n = NodeAt(b);
             double r = NodeD / 2 + 3;
             bool below = n.Y < h * 0.34;
-            double x = Math.Clamp(n.X - bw / 2, 2, Math.Max(2, w - bw - 2));
-            Rect At(bool under, int step)
+            // Full width first; where no spot is free, the label is shortened (down to "…") and
+            // tried again. One that still can't be placed isn't drawn: its band's panel has it.
+            FormattedText? ft = null;
+            Rect box = default;
+            bool found = false;
+            foreach (double maxW in LabelWidths)
             {
-                double y = under ? n.Y + r + step * (LabelH + 2) : n.Y - r - LabelH - step * (LabelH + 2);
-                return new Rect(x, Math.Clamp(y, 2, Math.Max(2, h - LabelH - 2)), bw, LabelH);
+                ft = text.Length > 0 ? Fit(text, ink, maxW - 10 - (note ? NoteDot + 3 : 0)) : null;
+                double bw = (ft?.Width ?? 0) + (ft is null ? 0 : 10) + (note ? NoteDot + (ft is null ? 8 : 3) : 0);
+                double x = Math.Clamp(n.X - bw / 2, 2, Math.Max(2, w - bw - 2));
+                Rect At(bool under, int step)
+                {
+                    double y = under ? n.Y + r + step * (LabelH + 2) : n.Y - r - LabelH - step * (LabelH + 2);
+                    return new Rect(x, Math.Clamp(y, 2, Math.Max(2, h - LabelH - 2)), bw, LabelH);
+                }
+                for (int step = 0, tries = 0; tries < 10 && !found; tries++)
+                {
+                    var cand = At(tries % 2 == 0 ? below : !below, step);
+                    if (!placed.Exists(q => q.Intersects(cand))) { box = cand; found = true; }
+                    if (tries % 2 == 1) step++;
+                }
+                if (found || ft is null) break;   // a note dot alone can't shrink
             }
-            Rect box = At(below, 0);
-            for (int step = 0, tries = 0; tries < 10; tries++)
-            {
-                var cand = At(tries % 2 == 0 ? below : !below, step);
-                if (!placed.Exists(q => q.Intersects(cand))) { box = cand; break; }
-                if (tries % 2 == 1) step++;
-            }
+            if (!found) continue;
             placed.Add(box);
             _labelBox[b] = box;
             bool away = Math.Abs(box.Center.Y - n.Y) > r + LabelH;

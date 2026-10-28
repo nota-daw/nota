@@ -60,6 +60,12 @@ internal static class EqLabelTests
         yield return (L(e, t, d, 0) == "Гул снизу и" && L(e, t, d, 1).Length == 24 && N(e, t, d, 1).Length == 2000,
             $"labels keep Cyrillic, turn line breaks into spaces (\"{L(e, t, d, 0)}\") and stop at 24 characters, notes at 2000");
 
+        e.EqSetBandText(t, d, 2, " x ", "  - indented\nlast line\n\n");
+        string exact = N(e, t, d, 2);
+        e.EqSetBandText(t, d, 2, "", " \n ");
+        yield return (exact == "  - indented\nlast line\n\n" && N(e, t, d, 2) == "",
+            "a note is kept exactly (leading spaces, blank lines) and a blank note is empty");
+
         bool same = e.EqSetBandText(t, d, 3, "Resonance", N(e, t, d, 3));
         bool bad = e.EqSetBandText(t, d, 8, "x", "") || e.EqSetBandText(t, d, -1, "x", "");
         int other = e.AddBuiltinDevice(t, 3);   // a Delay
@@ -185,6 +191,13 @@ internal static class EqLabelTests
         var band = tools.SetEq8Band(t, d, 3, label: "Presence", note: "Keep it subtle").GetAwaiter().GetResult();
         yield return (band.Label == "Presence" && band.Note == "Keep it subtle" && L(e, t, d, 2) == "Presence",
             "MCP set_eq8_band sets a band's label and note, and read_eq8 reads them back");
+
+        float freqBefore = e.DeviceGetParam(t, d, 2 * 5 + 2);
+        bool refused = false;
+        try { tools.SetEq8Band(t, d, 3, label: "Changed", freqHz: 5000, slope: 36).GetAwaiter().GetResult(); }
+        catch (ArgumentException) { refused = true; }
+        yield return (refused && L(e, t, d, 2) == "Presence" && e.DeviceGetParam(t, d, 2 * 5 + 2) == freqBefore,
+            "a refused set_eq8_band (bad slope) changes neither the text nor the params");
     }
 
     private static IEnumerable<(bool, string)> Sound(List<string> tmp)
