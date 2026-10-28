@@ -2090,6 +2090,19 @@ NOTA_API int32_t    nota_plugin_get_state(const NotaEngine* engine, int32_t trac
 NOTA_API NotaResult nota_plugin_set_state(NotaEngine* engine, int32_t track_id, int32_t device_index,
                                           const uint8_t* data, int32_t size);
 
+/* Editor preview (specs/046): a small JPEG of a hosted plug-in's own window, captured when
+ * the window is hidden; the Devices panel draws it behind the plug-in card. Kept on the
+ * device, so it follows moves, copies and undo. get writes up to `capacity` bytes into
+ * `out` (out=NULL queries the size) and returns the full size, 0 when there is none. set
+ * replaces it with a copy of `data` (size 0 clears) — project load; NOTA_ERR_INVALID_ARG for
+ * an unknown device, a negative size or one over 4 MB. serial changes whenever the preview
+ * does (0 = none), so the UI can poll it cheaply. UI thread. */
+NOTA_API int32_t    nota_plugin_preview_get(const NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                            uint8_t* out, int32_t capacity);
+NOTA_API NotaResult nota_plugin_preview_set(NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                            const uint8_t* data, int32_t size);
+NOTA_API int32_t    nota_plugin_preview_serial(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+
 /* Device bypass (M3-6, FR-37). When bypassed, the effect is skipped in the
  * render chain (buffer passes through untouched). device_index -1 is the track's
  * instrument (#148): switched off, it fades out over one block, releases its voices

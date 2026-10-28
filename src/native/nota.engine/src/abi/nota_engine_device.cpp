@@ -502,6 +502,25 @@ NotaResult nota_plugin_set_state(
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setPluginState(track_id, device_index, data, size) ? NOTA_OK : NOTA_ERR_UNKNOWN;
 }
+int32_t nota_plugin_preview_get(
+    const NotaEngine* e, int32_t track_id, int32_t device_index, uint8_t* out, int32_t capacity) {
+    if (!e) return 0;
+    const auto p = CENG(e)->trackEditorPreview(track_id, device_index);
+    if (p.empty()) return 0;
+    const auto n = static_cast<int32_t>(p.jpeg->size());
+    if (out && capacity > 0) std::memcpy(out, p.jpeg->data(), static_cast<size_t>(std::min(n, capacity)));
+    return n;
+}
+NotaResult nota_plugin_preview_set(
+    NotaEngine* e, int32_t track_id, int32_t device_index, const uint8_t* data, int32_t size) {
+    constexpr int32_t kMaxPreviewBytes = 4 * 1024 * 1024;
+    if (!e || size < 0 || size > kMaxPreviewBytes || (size > 0 && !data)) return NOTA_ERR_INVALID_ARG;
+    auto p = size > 0 ? nota::EditorPreview::make(std::vector<uint8_t>(data, data + size)) : nota::EditorPreview{};
+    return ENG(e)->setTrackEditorPreview(track_id, device_index, std::move(p)) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_plugin_preview_serial(const NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? static_cast<int32_t>(CENG(e)->trackEditorPreview(track_id, device_index).serial) : 0;
+}
 NotaResult nota_track_set_device_bypassed(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t bypassed) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setTrackDeviceBypassed(track_id, device_index, bypassed != 0);

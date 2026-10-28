@@ -422,6 +422,13 @@ internal static class NotaPalette
     public static readonly Color[] TrackColors = { TrackSlots[0].Color, TrackSlots[1].Color, TrackSlots[2].Color, TrackSlots[3].Color, TrackSlots[4].Color, TrackSlots[5].Color, TrackSlots[6].Color, TrackSlots[7].Color, TrackSlots[8].Color };
     public static readonly Color[] ReturnColors = { ReturnSlots[0].Color, ReturnSlots[1].Color };
 
+    /// <summary>The one gradient in the device cards (specs/046): the card's own surface laid
+    /// over the picture of a plug-in's window, heavier at the top (name, facts) and bottom
+    /// (buttons) than in the middle, so the card's text reads as on the plain card in every
+    /// theme. Washes of SurfaceCard, so it re-tints with the theme.</summary>
+    public static readonly LinearGradientBrush PluginPreviewWash = VGradient(
+        (Wash(SurfaceCard, 0xDB), 0), (Wash(SurfaceCard, 0x9E), 0.5), (Wash(SurfaceCard, 0xE6), 1));
+
     // ---- Lookup by XAML key ------------------------------------------------
 
     // Code-built views that read a token by its XAML key resolve it here instead of

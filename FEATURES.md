@@ -1009,7 +1009,11 @@ audio effects after it keep running and keep their settings; saved with the proj
   and latency with Open editor (a toggle: Close editor while the window is open; a window
   that fails to open is reported in the status bar) and Save preset; the full card adds every parameter as a knob
   (with filter and pages, the plugin's own value text, double-click for its default) and a
-  sidechain source where the plugin has one.
+  sidechain source where the plugin has one. Once the plugin's window has been open, the
+  card stands on a picture of it (the whole small card, the info column of the full one),
+  under a wash of the theme's card colour so the text stays readable, scaled to fill without
+  stretching. It's taken each time the window closes and saved with the project (macOS and
+  Windows; Linux keeps the plain card).
 - **Loading** into a track or rack chain, with the plugin's **native GUI** (an editor
   window that opens on top and focused, and closes when the device is removed). Adding a
   plug-in by hand opens its window straight away (Preferences → Plug-ins → Open plug-in

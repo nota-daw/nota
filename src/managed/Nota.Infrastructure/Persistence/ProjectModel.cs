@@ -325,6 +325,9 @@ public sealed class InstrumentDto
     public string? PluginId { get; set; }
     /// <summary>Relative path to the plugin's state blob in <c>plugin-states/</c>.</summary>
     public string? State { get; set; }
+    /// <summary>Relative path to a JPEG of the plug-in's window, drawn behind its card (format
+    /// v27, specs/046); null = none.</summary>
+    public string? Preview { get; set; }
     /// <summary>Sidechain source ("React", Nota Flux) as a track INDEX in this document
     /// (-1 = none). Resolved to a live track id on load, since ids are reassigned.</summary>
     public int SidechainSource { get; set; } = -1;
@@ -447,6 +450,9 @@ public sealed class DeviceDto
     public string? PluginId { get; set; }
     /// <summary>Relative path to the plugin's state blob in <c>plugin-states/</c>.</summary>
     public string? State { get; set; }
+    /// <summary>Relative path to a JPEG of the plug-in's window, drawn behind its card (format
+    /// v27, specs/046); null = none.</summary>
+    public string? Preview { get; set; }
     /// <summary>Sidechain source as a track INDEX in this document (-1 = none). Resolved to a
     /// live track id on load, since ids are reassigned. Phase B (format v15).</summary>
     public int SidechainSource { get; set; } = -1;
