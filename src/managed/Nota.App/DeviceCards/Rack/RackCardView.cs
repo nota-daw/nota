@@ -883,6 +883,8 @@ internal class RackChainDeviceEngineProxy : System.Reflection.DispatchProxy
             case nameof(Nota.Application.IAudioEngine.DeviceBypassed):     return Access.ChainDeviceBypassed(Chain, Dev);
             case nameof(Nota.Application.IAudioEngine.SetDeviceBypassed):  Access.SetChainDeviceBypassed(Chain, Dev, (bool)args![2]!); return null;
             case nameof(Nota.Application.IAudioEngine.DeviceLoadFile):        return false;   // chain devices keep params only
+            case nameof(Nota.Application.IAudioEngine.EqSetBandText):         return false;   // … and no EQ-8 band labels (specs/049)
+            case nameof(Nota.Application.IAudioEngine.EqBandText):            return "";
             // Live telemetry (meters, scopes, curves) comes from the chain device itself —
             // passing through would read/command the track's top-level device at the same index.
             case nameof(Nota.Application.IAudioEngine.DeviceGainReduction):   return Access.ChainDeviceGainReduction(Chain, Dev);

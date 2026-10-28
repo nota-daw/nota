@@ -821,6 +821,12 @@ class Engine {
     // Load an auxiliary file into a device (the Chamber's user IR) / read its resource text.
     bool deviceLoadFile(int32_t trackId, int32_t deviceIndex, const std::string& path);
     std::string deviceText(int32_t trackId, int32_t deviceIndex, int32_t id) const;
+    // EQ-8 band labels and notes (specs/049). set replaces one band's label and note (cleaned
+    // to their limits) as one undo step; false when the device isn't an EQ-8, the band is out
+    // of range or nothing changed. get: which 0 = label, 1 = note ("" when none).
+    bool setEqBandText(int32_t trackId, int32_t deviceIndex, int32_t band, const std::string& label,
+        const std::string& note);
+    std::string eqBandText(int32_t trackId, int32_t deviceIndex, int32_t band, int32_t which) const;
     int32_t deviceParamCount(int32_t trackId, int32_t deviceIndex) const;
     const char* deviceParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float deviceParamMin(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
@@ -1642,6 +1648,9 @@ class Engine {
     bool presetTagSelfTest();
 
   private:
+    // The EQ-8 annotation states undo steps point at (specs/049): append-only, 0 = none. A step
+    // holds the indices of the device's whole state before and after the edit.
+    std::vector<std::vector<uint8_t>> noteStates_ = std::vector<std::vector<uint8_t>>(1);
     bool applyMix(const MixChange& c, bool after); // write before/after; false = gone
     static void mergeMix(std::vector<MixChange>& into, const std::vector<MixChange>& later);
     static constexpr size_t kMaxUndoDepth = 128;

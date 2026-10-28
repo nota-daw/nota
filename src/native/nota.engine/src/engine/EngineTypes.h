@@ -101,7 +101,8 @@ enum class MixKind : int32_t {
     DeviceParam = 3,
     MidiDeviceParam = 4,
     PluginParam = 5,
-    PresetTag = 6 // a device's preset tag (specs/048): deviceIndex as above, paramIndex = the surface
+    PresetTag = 6,  // a device's preset tag (specs/048): deviceIndex as above, paramIndex = the surface
+    DeviceNotes = 7 // an EQ-8's band labels and notes (specs/049): the value indexes Engine::noteStates_
 };
 struct MixTarget {
     MixKind kind;

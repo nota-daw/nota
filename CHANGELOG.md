@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Band labels and notes in EQ-8** (#135): name a band in the band panel's new **Label** field
+  and the name shows next to its node in the graph (and on its chip); click the label, or
+  **Note**, for a multiline note on what the band is for. Labels that would overlap move apart,
+  **Labels** next to Peak hides them, and they are saved with the project, in user presets and
+  in copies, each edit one undo step. The sound is unchanged. MCP `read_eq8` returns each band's
+  label and note and `set_eq8_band` sets them.
 - **A proper spectrum analyzer in EQ-8 and EQ-3** (#265): the spectrum behind the curve is now
   a smooth, filled area that rises at once and falls back over about 300 ms, read from 256
   points in 1/6-octave bands, so a tone reads at its own level and pink noise reads flat. EQ-8

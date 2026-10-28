@@ -76,6 +76,16 @@ internal sealed class EqDeviceBody : IDeviceBody
         bool Capable(int b) => Eq8.HasGain(TypeOf(b));
         bool Cut(int b) => Eq8.IsCut(TypeOf(b));
         bool AutoOn() => P(Eq8.AutoGainP) >= 0.5f;
+        // Band labels and notes (specs/049): text on the device, each edit one undo step. A rack
+        // chain's EQ-8 (hosted through a proxy engine) keeps params only, so it has none.
+        bool textOk = engine is not System.Reflection.DispatchProxy;
+        string LabelOf(int b) => engine.EqBandText(track, di, b, 0);
+        string NoteOf(int b) => engine.EqBandText(track, di, b, 1);
+        void SetText(int b, string label, string note)
+        {
+            engine.EqSetBandText(track, di, b, label, note);
+            RefreshAll();
+        }
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
@@ -93,10 +103,12 @@ internal sealed class EqDeviceBody : IDeviceBody
         {
             int bb = b;
             var num = Mono((b + 1).ToString(), 8, TextSecondary); num.FontWeight = FontWeight.Bold;
-            var type = new TextBlock { FontSize = 7, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
+            var type = new TextBlock { FontSize = 7, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0),
+                TextTrimming = TextTrimming.CharacterEllipsis };
             var chn = new TextBlock { FontSize = 7, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
-            var hz = Mono("", 7, TextPrimary); hz.HorizontalAlignment = HorizontalAlignment.Right;
-            var inner = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), Margin = new Thickness(4, 0) };
+            var hz = Mono("", 7, TextPrimary); hz.HorizontalAlignment = HorizontalAlignment.Right; hz.Margin = new Thickness(3, 0, 0, 0);
+            // The type (or the band's label) takes what the frequency leaves, shortened to fit.
+            var inner = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 0, Margin = new Thickness(4, 0) };
             inner.Children.Add(num); inner.Children.Add(Col(type, 1)); inner.Children.Add(Col(chn, 2)); inner.Children.Add(Col(hz, 3));
             var chip = new Border
             {
@@ -116,8 +128,9 @@ internal sealed class EqDeviceBody : IDeviceBody
                 bool on = BandOn(bb), sel = bb == Sel();
                 int c = ChanOf(bb);
                 num.Foreground = !on ? TextDisabled : sel ? AccentBright : TextSecondary;
-                type.Text = Eq8.TypeShort[TypeOf(bb)];
-                type.Foreground = on ? TextSecondary : TextDisabled;
+                string lab = LabelOf(bb);
+                type.Text = lab.Length > 0 ? lab : Eq8.TypeShort[TypeOf(bb)];   // the band's label in place of its type
+                type.Foreground = !on ? TextDisabled : lab.Length > 0 ? TextPrimary : TextSecondary;
                 chn.Text = c == Eq8.St ? "" : Eq8.ChannelShort[c];
                 chn.IsVisible = c != Eq8.St;
                 chn.Foreground = on ? Eq8.ChannelInk(c, bright: true) ?? TextSecondary : TextDisabled;
@@ -130,8 +143,9 @@ internal sealed class EqDeviceBody : IDeviceBody
         }
         var chipStrip = new Border { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = chipRow };
         DockPanel.SetDock(chipStrip, Dock.Top);
-        ToolTip.SetTip(curve, "Drag a node — frequency and gain · wheel over a node — Q · double-click a node — band on / off · "
-            + "double-click empty space — a new bell there · right-click a node — type, slope, channel");
+        curve.DefaultTip = "Drag a node — frequency and gain · wheel over a node — Q · double-click a node — band on / off · "
+            + "double-click empty space — a new bell there · right-click a node — type, slope, channel · click a label — its note";
+        ToolTip.SetTip(curve, curve.DefaultTip);
 
         // ANALYZER Pre / Post / Off over the graph's top-left corner.
         var anaSeg = Segments(Eq8.AnalyzerSeg, () => Math.Clamp((int)Math.Round(P(Eq8.AnalyzerP)), 0, 2),
@@ -150,13 +164,25 @@ internal sealed class EqDeviceBody : IDeviceBody
         Learn(peakSw, Eq8.AnaPeakP);
         ToolTip.SetTip(peakSw, "Peak hold — a thin line at each frequency's highest level of the last moments");
         readouts.Add(() => { rangeSync(); peakSync(); rangeSeg.IsVisible = peakSw.IsVisible = AnaOn() && pc > Eq8.AnaPeakP; });
+        bool LabelsOn() => pc <= Eq8.LabelsP || P(Eq8.LabelsP) >= 0.5f;
+        var labelsSw = Switch("Labels", LabelsOn, () => { SetP(Eq8.LabelsP, LabelsOn() ? 0 : 1); RefreshAll(); }, out var labelsSync);
+        labelsSw.Margin = new Thickness(6, 0, 0, 0);
+        Learn(labelsSw, Eq8.LabelsP);
+        ToolTip.SetTip(labelsSw, "Labels — show the bands' labels and note marks in the graph (the chips and the band panel keep them)");
+        readouts.Add(() => { labelsSync(); labelsSw.IsVisible = textOk && pc > Eq8.LabelsP; });
         var anaBar = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 5, Margin = new Thickness(5, 3), HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top, Children = { Caps("ANALYZER"), anaSeg, rangeSeg, peakSw },
+            VerticalAlignment = VerticalAlignment.Top, Children = { Caps("ANALYZER"), anaSeg, rangeSeg, peakSw, labelsSw },
         };
         anaBar.RenderTransform = new ScaleTransform(0.85, 0.85);
         anaBar.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
+        // Band labels stay clear of the bar (drawn at 85 %, from its margin's corner).
+        anaBar.LayoutUpdated += (_, _) =>
+        {
+            var r = new Rect(0, 0, anaBar.Margin.Left + anaBar.Bounds.Width * 0.85 + 2, anaBar.Margin.Top + anaBar.Bounds.Height * 0.85 + 2);
+            if (r != curve.Reserved) { curve.Reserved = r; curve.InvalidateVisual(); }
+        };
         var graphPanel = new RuleSection
         {
             Margin = new Thickness(0, 0, 5, 0),
@@ -168,6 +194,52 @@ internal sealed class EqDeviceBody : IDeviceBody
         // moves, so MIDI learn and automation bind to that band's own params)
         // ======================================================================
         var bandHost = new ContentControl();
+
+        // The note popup (specs/049): the band's label and a multiline note. Text is kept when it
+        // closes (Escape, a click outside, Ctrl / Cmd+Enter), as one undo step.
+        // A label box takes Return so a pasted multi-line text arrives whole (a single-line box keeps
+        // only its first line); its breaks and tabs become spaces as it lands.
+        static void FlattenLabel(TextBox box) => box.TextChanged += (_, _) =>
+        {
+            var t = box.Text;
+            if (t is null || t.IndexOfAny(['\r', '\n', '\t']) < 0) return;
+            int caret = box.CaretIndex;
+            var flat = t.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ');
+            box.Text = flat;
+            box.CaretIndex = Math.Clamp(caret - (t.Length - flat.Length), 0, flat.Length);
+        };
+
+        void OpenNote(int b, Control anchor, bool atPointer)
+        {
+            var labelBox = new TextBox { Text = LabelOf(b), MaxLength = 24, AcceptsReturn = true, FontSize = 11, Watermark = "Label" };
+            FlattenLabel(labelBox);
+            var noteBox = new TextBox
+            {
+                Text = NoteOf(b), MaxLength = 2000, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, FontSize = 11,
+                Height = 96, Watermark = "What this band is for",
+            };
+            var head = new TextBlock { Text = NotaNum.F($"BAND {b + 1} · {Eq8.TypeNames[TypeOf(b)]}"), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary };
+            var hint = new TextBlock { Text = (OperatingSystem.IsMacOS() ? "⌘" : "Ctrl+") + "Enter or Esc to close", FontSize = 9, Foreground = TextTertiary };
+            var fly = new Flyout
+            {
+                Content = new StackPanel { Width = 230, Spacing = 5, Children = { head, labelBox, noteBox, hint } },
+                // From the graph it opens beside it, so the nodes stay in view.
+                Placement = atPointer ? PlacementMode.RightEdgeAlignedTop : PlacementMode.BottomEdgeAlignedLeft,
+            };
+            void Key(object? _, KeyEventArgs ke)
+            {
+                bool cmd = (ke.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0;
+                if (ke.Key == Avalonia.Input.Key.Escape || (ke.Key == Avalonia.Input.Key.Enter && (cmd || ke.Source == labelBox)))
+                { fly.Hide(); ke.Handled = true; }
+            }
+            labelBox.AddHandler(InputElement.KeyDownEvent, Key, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            noteBox.AddHandler(InputElement.KeyDownEvent, Key, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            fly.Closed += (_, _) => SetText(b, labelBox.Text ?? "", noteBox.Text ?? "");
+            fly.ShowAt(anchor);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => { var f = LabelOf(b).Length == 0 ? labelBox : noteBox; f.Focus(); f.CaretIndex = f.Text?.Length ?? 0; },
+                Avalonia.Threading.DispatcherPriority.Input);
+        }
+        if (textOk) curve.NoteRequested += b => OpenNote(b, curve, atPointer: true);
 
         Control BandPanel(int b)
         {
@@ -241,6 +313,39 @@ internal sealed class EqDeviceBody : IDeviceBody
                     liveLabel: () => Cut(b) ? "Reso" : "Q"), 2),
             } };
 
+            // ---- label + note ----
+            var labelField = new TextBox
+            {
+                // AcceptsReturn and FlattenLabel, so a pasted multi-line text arrives whole; Enter commits.
+                Text = LabelOf(b), MaxLength = 24, AcceptsReturn = true, FontSize = 9, MinHeight = 18, Height = 18,
+                Padding = new Thickness(4, 1), VerticalContentAlignment = VerticalAlignment.Center, Watermark = "Name this band",
+            };
+            void Unfocus() { curve.Focusable = true; curve.Focus(); }   // hand the keys back to the card
+            void CommitLabel() { if ((labelField.Text ?? "") != LabelOf(b)) SetText(b, labelField.Text ?? "", NoteOf(b)); }
+            labelField.LostFocus += (_, _) => CommitLabel();
+            labelField.AddHandler(InputElement.KeyDownEvent, (_, ke) =>
+            {
+                // Enter keeps the text, Escape reverts it; both hand focus back to the card.
+                // Tunnelled, so Enter is ours before the box would take it as a line break.
+                if (ke.Key == Avalonia.Input.Key.Enter) { CommitLabel(); ke.Handled = true; Unfocus(); }
+                else if (ke.Key == Avalonia.Input.Key.Escape) { labelField.Text = LabelOf(b); ke.Handled = true; Unfocus(); }
+            }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            FlattenLabel(labelField);
+            ToolTip.SetTip(labelField, "Label — a short name shown next to the band's node (up to 24 characters)");
+            var noteBtn = new Button
+            {
+                Content = "Note", FontSize = 8, Height = 18, MinHeight = 18, Padding = new Thickness(6, 0), Margin = new Thickness(4, 0, 0, 0),
+                VerticalContentAlignment = VerticalAlignment.Center,
+            };
+            noteBtn.Click += (_, _) => { CommitLabel(); OpenNote(b, noteBtn, atPointer: false); };
+            ToolTip.SetTip(noteBtn, "Note — a longer note on what this band is for");
+            bandReadouts.Add(() =>
+            {
+                if (!labelField.IsFocused && (labelField.Text ?? "") != LabelOf(b)) labelField.Text = LabelOf(b);
+                noteBtn.Foreground = NoteOf(b).Length > 0 ? AccentBright : TextSecondary;
+            });
+            var labelRow = new DockPanel { IsVisible = textOk, Children = { Docked(new Border { Width = 40, Child = Caps("LABEL") }, Dock.Left), Docked(noteBtn, Dock.Right), labelField } };
+
             // ---- slope + channel ----
             Control SegRow(string label, Control seg, Func<bool>? dim = null, bool rule = false)
             {
@@ -310,13 +415,13 @@ internal sealed class EqDeviceBody : IDeviceBody
 
             var body = new Grid
             {
-                RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,4,Auto,*,Auto,5,Auto"), Margin = new Thickness(8, 6, 8, 6),
+                RowDefinitions = new RowDefinitions("Auto,4,Auto,*,Auto,*,Auto,4,Auto,*,Auto,5,Auto"), Margin = new Thickness(8, 6, 8, 6),
             };
             void Row(Control c, int r) { Grid.SetRow(c, r); body.Children.Add(c); }
-            Row(typeSeg, 0); Row(knobs, 2);
-            Row(SegRow("SLOPE", slopeSeg, () => !Cut(b), rule: true), 4);
-            Row(SegRow("CHANNEL", chanSeg), 6);
-            Row(globalRow, 8); Row(sliders, 10);
+            Row(labelRow, 0); Row(typeSeg, 2); Row(knobs, 4);
+            Row(SegRow("SLOPE", slopeSeg, () => !Cut(b), rule: true), 6);
+            Row(SegRow("CHANNEL", chanSeg), 8);
+            Row(globalRow, 10); Row(sliders, 12);
             var panel = new DockPanel { LastChildFill = true, Children = { Docked(headBorder, Dock.Top), body } };
             for (int i = 0; i < bandReadouts.Count; i++) bandReadouts[i]();
             return panel;
