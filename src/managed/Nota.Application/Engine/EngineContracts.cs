@@ -259,6 +259,30 @@ public enum DeviceFamily { Audio = 0, Midi = 1, Instrument = 2 }
 [Flags]
 public enum TransferFlags { None = 0, SidechainCleared = 1, LinksDropped = 2, SourceTrackRemoved = 4 }
 
+/// <summary>Where a CV link's source and target sit when they reach into a rack (specs/044):
+/// chain index and slot, -1 at track level.</summary>
+public readonly record struct CvLinkPath(int SourceChain, int SourceSlot, int TargetChain, int TargetSlot);
+
+/// <summary>A rack chain MIDI effect's CC target (specs/044): a device on the track, or the
+/// child (Chain, Slot) of the rack at Device; Chain -1 = track level.</summary>
+public readonly record struct NestedCcDest(int Device, int Chain, int Slot, int Param, float Depth);
+
+/// <summary>A rack chain child's sidechain key (specs/044); SourceTrack -1 = none.</summary>
+public readonly record struct NestedSidechain(int SourceTrack, bool TapPre, float GainDb, float Mix);
+
+/// <summary>Why nota_track_group_devices refused a run (specs/044).</summary>
+public enum GroupRefusal
+{
+    BadRun = -2, NotContiguous = -3, RackInRun = -4, CantHost = -5, InstrumentCantNest = -6, NotInstrumentTrack = -7,
+}
+
+/// <summary>Why nota_track_ungroup_rack refused (specs/044).</summary>
+public enum UngroupRefusal { NotARack = -2, SeveralChains = -3, DrumRack = -4, NoInstrument = -5 }
+
+/// <summary>What an ungroup left behind (nota_track_ungroup_rack's out_dropped).</summary>
+[Flags]
+public enum UngroupDropped { None = 0, MacroMappings = 1, ChainMix = 2 }
+
 /// <summary>Project pan law (specs/006). Matches NOTA_PAN_LAW_*: Balance drops the far
 /// channel as a track pans, Stereo folds it into the near side.</summary>
 public enum PanLaw { Balance = 0, Stereo = 1 }

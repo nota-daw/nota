@@ -512,7 +512,7 @@ public interface IAudioEngine : IDisposable
     // Device clipboard (#238): a full clone held by the engine; paste is one undo step.
     bool CopyDevice(int trackId, int deviceIndex);
     bool CopyMidiEffect(int trackId, int index);
-    int DeviceClipboardKind();   // 0 empty, 1 audio effect, 2 MIDI effect, 3 instrument
+    int DeviceClipboardKind();   // 0 empty, 1 audio effect, 2 MIDI effect, 3 instrument, 4 several
     bool DeviceClipboardSidechain();   // the copied audio effect is keyed from another track
     int PasteDevice(int trackId, int atIndex);       // atIndex -1 = end; new index or -1
     int PasteMidiEffect(int trackId, int atIndex);
@@ -528,9 +528,20 @@ public interface IAudioEngine : IDisposable
     // clone failed. A move takes the device's automation; the instrument's removes its track.
     int TransferDevice(int srcTrackId, DeviceFamily family, int index, int dstTrackId, int atIndex, bool keepSource, out TransferFlags flags);
     // ⌘G / ⌘⇧G on a device (#257): wrap an audio effect in an Audio Effect Rack (its index or
-    // -1: keyed / automated / CV-linked devices stay out), unwrap a one-chain rack (count or -1).
+    // -1), unwrap a one-chain Audio Effect Rack (count or -1). The one-device cases of:
     int WrapDeviceInRack(int trackId, int deviceIndex);
     int UnwrapRack(int trackId, int deviceIndex);
+    // Group a contiguous run into a rack in its place, links following (specs/044); one undo
+    // step. Returns the rack's address (>= 0 effect, -1 the instrument, -1000 - i MIDI effect)
+    // or a GroupRefusal (< -1). See nota_track_group_devices.
+    int GroupDevices(int trackId, int midiFirst, int midiCount, bool withInstrument, int fxFirst, int fxCount);
+    // Ungroup a one-chain rack: devices restored (>= 0) or an UngroupRefusal (< 0).
+    int UngroupRack(int trackId, DeviceFamily family, int index, out UngroupDropped dropped);
+    // Several devices on the clipboard (specs/044): count, or -1. Paste: the number pasted (>= 0,
+    // skipped = what the track can't take), -1 empty, -3 a clone failed.
+    int CopyDevices(int trackId, int[] midiIndices, bool withInstrument, int[] fxIndices);
+    int DeviceClipboardCount();
+    int PasteDevices(int trackId, int midiAt, int fxAt, out int skipped);
     string DeviceName(int trackId, int deviceIndex);
     int DeviceParamCount(int trackId, int deviceIndex);
     string DeviceParamName(int trackId, int deviceIndex, int paramIndex);
@@ -581,6 +592,16 @@ public interface IAudioEngine : IDisposable
     void SetMidiEffectCcDepth(int trackId, int index, float depth);
     int MidiEffectCcDestDevice(int trackId, int index);
     int MidiEffectCcDestParam(int trackId, int index);
+    // The CC target inside a rack (specs/044): chain index + slot, (-1, -1) at track level.
+    (int Chain, int Slot) MidiEffectCcDestPath(int trackId, int index);
+    bool SetMidiEffectCcDestPath(int trackId, int index, int chain, int slot);
+    // What lives on rack chain children outside the rack blob (specs/044; save / load): a chain
+    // MIDI effect's CC target and a child's sidechain key (slot >= 0 a device, -1 the chain
+    // instrument). rackAddress as the rack calls take it (>= 0 effect, -1 instrument, -1000 - i).
+    NestedCcDest? RackChainMidiCcDest(int trackId, int rackAddress, int chain, int index);
+    bool RackChainMidiSetCcDest(int trackId, int rackAddress, int chain, int index, NestedCcDest dest);
+    NestedSidechain? RackChainSidechain(int trackId, int rackAddress, int chain, int slot);
+    bool RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc);
     float MidiEffectCcDepth(int trackId, int index);
     /// <summary>Copies up to maxSamples of the device's live readings into outSamples; returns
     /// the count written. Each device defines its own layout (the analysers: a telemetry block,
@@ -946,6 +967,9 @@ public interface IAudioEngine : IDisposable
     bool RackDevChainMidiCopy(int trackId, int deviceIndex, int chain, int index);
     int RackDevChainDevicePaste(int trackId, int deviceIndex, int chain, int atIndex);
     int RackDevChainMidiPaste(int trackId, int deviceIndex, int chain, int atIndex);
+    // Several devices on the clipboard into a chain (specs/044): the number pasted (>= 0), with the
+    // skipped count and the first new index per section (-1 none); -1 nothing / bad address, -3 clone failed.
+    int RackDevChainPasteDevices(int trackId, int deviceIndex, int chain, int midiAt, int fxAt, out int skipped, out int firstMidi, out int firstFx);
     int RackDevChainDeviceDuplicate(int trackId, int deviceIndex, int chain, int index);
     int RackDevChainMidiDuplicate(int trackId, int deviceIndex, int chain, int index);
     int RackDevChainDeviceMoveTo(int trackId, int deviceIndex, int chain, int index, int toChain);
@@ -1174,6 +1198,10 @@ public interface IAudioEngine : IDisposable
     void PluginParamSet(int trackId, int deviceIndex, int paramIndex, float normalized);
     int AddPluginAutomationLane(int trackId, int deviceIndex, string paramId);
     string AutomationLaneParamId(int trackId, int laneIndex);
+    // A lane on a device grouped into a rack (specs/044): (chain index, slot) in the rack at the
+    // lane's device index; (-1, -1) for a track-level lane. AddNested is for project load.
+    (int Chain, int Slot) AutomationLanePath(int trackId, int laneIndex);
+    int AddNestedAutomationLane(int trackId, AutomationTarget target, int deviceIndex, int chain, int slot, int paramIndex, string? paramId);
     int PluginLastTouchedParam(int trackId, int deviceIndex);   // "Learn" (M9-B3)
     bool AutomationWriteSelfTest();   // M9-C: device-free write-path check
     bool AutomationDeviceRemapSelfTest();   // lanes follow their device on reorder / remove
@@ -1264,6 +1292,11 @@ public interface IAudioEngine : IDisposable
     int CvLinkTargetTrack(int trackId, int index);
     int CvLinkDevice(int trackId, int index);
     int CvLinkParam(int trackId, int index);
+    // Links reaching into a rack (specs/044): chain index + slot of the source / target, -1 at
+    // track level. AddNested is for project load (kinds as CvLinkAddFromParamToTarget).
+    CvLinkPath CvLinkPath(int trackId, int index);
+    int CvLinkAddNested(int trackId, int sourceKind, int modId, int srcDevice, int srcChain, int srcSlot, int srcParam,
+                        int targetKind, int targetTrack, int targetDevice, int tgtChain, int tgtSlot, int targetParam);
     float CvLinkDepth(int trackId, int index);
     int CvLinkMode(int trackId, int index);
     void SetCvLinkDepth(int trackId, int index, float depth);

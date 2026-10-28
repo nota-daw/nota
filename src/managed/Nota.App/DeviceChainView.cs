@@ -76,7 +76,11 @@ public sealed partial class DeviceChainView : UserControl
     public event Action<string>? StatusMessage;
     /// <summary>The instrument's Delete / Cut / Remove (specs/043): the host deletes the track
     /// (trackId), asking first when it has clips. <c>cut</c>: the instrument was copied first.</summary>
-    public event Action<int, bool>? TrackDeleteRequested;
+    // The instrument's Delete / Cut take its track (specs/043): (track, cut, how many devices were
+    // selected — more than one means the host asks every time, specs/044).
+    public event Action<int, bool, int>? TrackDeleteRequested;
+    // Move to track ▸ for several selected devices (specs/044), in chain order.
+    public event Action<System.Collections.Generic.IReadOnlyList<DeviceMoveRequest>>? MovesRequested;
     /// <summary>Replace… in the instrument's menu: the host swaps the shown track's instrument
     /// for this one (racks included), one undo step.</summary>
     public event Action<BrowserItem>? InstrumentReplaceRequested;
@@ -123,11 +127,19 @@ public sealed partial class DeviceChainView : UserControl
             scroller.Offset = scroller.Offset.WithX(x);
             e.Handled = true;
         };
+        // A click on the chain's empty space clears the selection (specs/044).
+        scroller.Background = Brushes.Transparent;
+        scroller.PointerPressed += (_, e) =>
+        {
+            if (!HasDeviceSelection || !e.GetCurrentPoint(scroller).Properties.IsLeftButtonPressed) return;
+            if (e.Source is ScrollViewer or Avalonia.Controls.Presenters.ScrollContentPresenter || ReferenceEquals(e.Source, _row))
+            { ClearDeviceSelection(); Rebuild(); }
+        };
         Content = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
         HookBrowserDrop();
     }
 
-    public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; _selDeviceIndex = -1; _instrumentSelected = false; _rackSel = null; _rackCmds = null; Rebuild(); }
+    public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; ClearDeviceSelection(); _rackSel = null; _rackCmds = null; Rebuild(); }
 
     /// <summary>Forgets every card's remembered preset label + A/B slots (a project was
     /// opened / created, so track ids no longer mean the same tracks).</summary>
@@ -198,6 +210,7 @@ public sealed partial class DeviceChainView : UserControl
 
         // MIDI effects sit before the instrument (they shape the note stream).
         int midiCount = _engine.TrackMidiEffectCount(_trackId);
+        _sel.Prune(midiCount, IsInstrumentTrack(_trackId), _engine.TrackDeviceCount(_trackId));   // an edit elsewhere shrank the chain
         for (int i = 0; i < midiCount; i++) _row.Children.Add(MidiDeviceCard(i, midiCount));
 
         if (IsInstrumentTrack(_trackId)) _row.Children.Add(_instrumentCard = InstrumentCard());

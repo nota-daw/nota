@@ -120,6 +120,13 @@ struct CvLink {
     int32_t targetTrack = -1;  // target track id (-1 = the owner track)
     int32_t targetDevice = -1; // insert-effect / MIDI-FX index on the target track
     int32_t targetParam = -1;
+    // A source or target grouped into a rack (specs/044): sourceDevice / targetDevice is then
+    // the rack's address on its track (ParamPath host) and these name the chain child; the
+    // kinds keep naming the child's param surface. 0 = track level as before.
+    uint64_t sourceChainUid = 0;
+    int32_t sourceSlot = -1;
+    uint64_t targetChainUid = 0;
+    int32_t targetSlot = -1;
     std::atomic<float> depth{1.0f}; // -1..1
     std::atomic<int32_t> mode{0};   // CvMode
     // The target param's *base* value (the centre the modulation swings around). The

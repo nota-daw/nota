@@ -1603,7 +1603,7 @@ bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
         AudioClip ac;
         double oldStart, len, newStart;
         bool sameTrack, layoutMatch;
-        std::vector<AutomationLane> snips;
+        std::vector<TrackLane> snips;
     };
     std::vector<Item> items;
     items.reserve(moves.size());
@@ -2492,15 +2492,17 @@ int32_t Engine::duplicateClip(int32_t trackId, int32_t clipIndex) {
 // Pull the points of every automation lane that fall in [start,end] out into a
 // per-lane snippet, with beats rebased to be relative to `start`. Empty lanes are
 // dropped so paste only touches targets the clip actually carried.
-std::vector<AutomationLane> Engine::captureClipAutomation(const Track& t, double start, double end) const {
+std::vector<TrackLane> Engine::captureClipAutomation(const Track& t, double start, double end) const {
     constexpr double eps = 1e-6;
-    std::vector<AutomationLane> out;
+    std::vector<TrackLane> out;
     for (const auto& lane : t.automation) {
-        AutomationLane snip;
+        TrackLane snip;
         snip.target = lane.target;
         snip.deviceIndex = lane.deviceIndex;
         snip.paramIndex = lane.paramIndex;
         snip.paramId = lane.paramId;
+        snip.chainUid = lane.chainUid; // a lane into a rack (specs/044)
+        snip.slot = lane.slot;
         for (const auto& p : lane.points)
             if (p.beat >= start - eps && p.beat <= end + eps) {
                 AutomationPoint q = p;
@@ -2539,15 +2541,15 @@ bool Engine::tracksDeviceLayoutMatch(const Track& a, const Track& b) {
 // the pasted envelope replaces (not overlaps) whatever was there. Device/plugin/MIDI
 // lanes only apply when sameTrack — their indices are positional, so a cross-track
 // paste would otherwise bind them to the wrong device.
-void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<AutomationLane>& snips,
+void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<TrackLane>& snips,
     double placedStart, double len, bool sameTrack) const {
     const double s = placedStart, e = placedStart + len;
     for (const auto& snip : snips) {
         if (!sameTrack && snip.target != AutomationTarget::Volume && snip.target != AutomationTarget::Pan) continue;
         // Find the matching lane on nt, or create one bound to the same target.
-        AutomationLane* lane = nullptr;
+        TrackLane* lane = nullptr;
         for (auto& l : nt.automation) {
-            if (l.target != snip.target) continue;
+            if (l.target != snip.target || l.chainUid != snip.chainUid || l.slot != snip.slot) continue;
             bool match = true;
             switch (snip.target) {
             case AutomationTarget::DeviceParam:
@@ -2565,11 +2567,13 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<A
             }
         }
         if (!lane) {
-            AutomationLane nl;
+            TrackLane nl;
             nl.target = snip.target;
             nl.deviceIndex = snip.deviceIndex;
             nl.paramId = snip.paramId;
-            nl.paramIndex = snip.target == AutomationTarget::PluginParam
+            nl.chainUid = snip.chainUid;
+            nl.slot = snip.slot;
+            nl.paramIndex = snip.target == AutomationTarget::PluginParam && !snip.nested()
                                 ? pluginParamIndexOfId(trackId, snip.deviceIndex, snip.paramId)
                                 : snip.paramIndex;
             nt.automation.push_back(std::move(nl));

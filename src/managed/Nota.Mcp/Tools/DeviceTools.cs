@@ -73,6 +73,60 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         return new DeviceMoveResult(r, f.HasFlag(TransferFlags.SidechainCleared), f.HasFlag(TransferFlags.LinksDropped), f.HasFlag(TransferFlags.SourceTrackRemoved));
     });
 
+    public sealed record GroupResult(string RackType, int Index);
+
+    [McpServerTool(Name = "group_devices"), Description("Group a contiguous run of a track's devices into a new rack in their place, one undo step (⌘G in the Devices panel). Audio effects only → an Audio Effect Rack at fxFirst; MIDI effects only → a MIDI Effect Rack at midiFirst; withInstrument → an Instrument Rack as the track's instrument whose first chain holds the MIDI effects, the instrument and the audio effects in order (the MIDI run must end at the last MIDI effect and the audio run start at 0). MIDI and audio effects share a rack only with the instrument between them. The devices keep their settings and sound; automation, modulation links, an Arp's CC lane and sidechain keys on them follow into the rack. Inspect the result with get_effect_rack, get_midi_rack or get_rack. Returns the rack type and its index (-1 for the instrument).")]
+    public Task<GroupResult> GroupDevices(
+        int trackId,
+        [Description("First MIDI effect of the run, -1 = none")] int midiFirst = -1,
+        [Description("How many MIDI effects")] int midiCount = 0,
+        [Description("Include the track's instrument")] bool withInstrument = false,
+        [Description("First audio effect of the run, -1 = none")] int fxFirst = -1,
+        [Description("How many audio effects")] int fxCount = 0) => Mutate(() =>
+    {
+        int r = E.GroupDevices(trackId, midiFirst, midiCount, withInstrument, fxFirst, fxCount);
+        bool ok = withInstrument ? r == -1 : r >= 0 || r <= -1000;
+        if (!ok)
+            throw new InvalidOperationException((GroupRefusal)r switch
+            {
+                GroupRefusal.NotContiguous => "Not contiguous: the MIDI run must end at the instrument and the audio run start after it, and MIDI + audio effects need the instrument.",
+                GroupRefusal.RackInRun => "A rack can't go inside another rack.",
+                GroupRefusal.CantHost => "A MIDI Effect Rack holds built-in MIDI effects only.",
+                GroupRefusal.InstrumentCantNest => "An Instrument Rack can't go inside another Instrument Rack.",
+                GroupRefusal.NotInstrumentTrack => "Only an instrument track has MIDI effects and an instrument.",
+                _ => "No such track or run.",
+            });
+        return withInstrument ? new GroupResult("instrument", -1)
+             : r <= -1000 ? new GroupResult("midi", -1000 - r)
+             : new GroupResult("audio", r);
+    });
+
+    public sealed record UngroupResult(int Restored, bool MacrosDropped, bool ChainMixDropped);
+
+    [McpServerTool(Name = "ungroup_rack"), Description("Take a one-chain rack apart: its chain's devices take its place in order, one undo step (⌘⇧G). chain: \"audio\" (an Audio Effect Rack at index), \"midi\" (a MIDI Effect Rack at index) or \"instrument\" (the track's Instrument Rack; index ignored — its MIDI effects go after the track's, its instrument becomes the track's, its audio effects go before the track's). The rack's macros, mappings and chain settings are dropped; automation and links on its devices follow them out.")]
+    public Task<UngroupResult> UngroupRack(int trackId,
+        [Description("\"audio\", \"midi\" or \"instrument\"")] string chain,
+        [Description("The rack's index in that chain (ignored for the instrument)")] int index = 0) => Mutate(() =>
+    {
+        var family = chain switch
+        {
+            "audio" => DeviceFamily.Audio,
+            "midi" => DeviceFamily.Midi,
+            "instrument" => DeviceFamily.Instrument,
+            _ => throw new ArgumentException("chain must be 'audio', 'midi' or 'instrument'."),
+        };
+        int n = E.UngroupRack(trackId, family, index, out var dropped);
+        if (n < 0)
+            throw new InvalidOperationException((UngroupRefusal)n switch
+            {
+                UngroupRefusal.SeveralChains => "Only a rack with one chain can be ungrouped.",
+                UngroupRefusal.DrumRack => "A Drum Rack can't be ungrouped.",
+                UngroupRefusal.NoInstrument => "The Instrument Rack's chain has no instrument.",
+                _ => "That device isn't a rack.",
+            });
+        return new UngroupResult(n, dropped.HasFlag(UngroupDropped.MacroMappings), dropped.HasFlag(UngroupDropped.ChainMix));
+    });
+
     [McpServerTool(Name = "set_device_bypass"), Description("Bypass or enable a device. deviceIndex -1 is the track's instrument: bypassed, it makes no sound (its MIDI effects and audio effects keep running).")]
     public Task SetDeviceBypass(int trackId, int deviceIndex, bool bypassed) => Mutate(() => E.SetDeviceBypassed(trackId, deviceIndex, bypassed));
 

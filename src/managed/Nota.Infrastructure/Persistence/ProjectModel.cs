@@ -63,6 +63,8 @@ public sealed class MasterDto
     public string? Name { get; set; }
     public int ColorIndex { get; set; } = -1;
     public List<DeviceDto> Devices { get; set; } = new();
+    // Sidechain keys of devices inside the master's racks (v25, specs/044), as on a track.
+    public List<NestedSidechainDto>? NestedSidechains { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -134,6 +136,11 @@ public sealed class TrackDto
     public List<AutomationLaneDto> Automation { get; set; } = new();   // M9-A4 (format v2)
     public List<ModulatorDto> Modulators { get; set; } = new();        // CV modulation sources (Phase 3)
     public List<CvLinkDto> CvLinks { get; set; } = new();              // CV modulation edges (Phase 3)
+    // Links on devices inside the track's racks that the rack blob can't hold (v25, specs/044):
+    // a chain child's sidechain key (its source is a doc index, like a device's) and a chain
+    // MIDI effect's CC target. Null = none.
+    public List<NestedSidechainDto>? NestedSidechains { get; set; }
+    public List<NestedCcRouteDto>? NestedCcRoutes { get; set; }
     /// <summary>Freeze (M7): relative path to the track's frozen-audio blob in
     /// <c>plugin-states/</c> (null = not frozen). Restored + re-flagged frozen on load.</summary>
     public string? FrozenState { get; set; }
@@ -176,6 +183,12 @@ public sealed class CvLinkDto
     public int TargetTrack { get; set; } = -1;
     public int Device { get; set; } = -1;
     public int Param { get; set; } = -1;
+    // A source / target inside a rack (v25, specs/044): SourceDevice / Device is then the rack's
+    // address and these the chain index and slot. Null = track level.
+    public int? SourceChain { get; set; }
+    public int? SourceSlot { get; set; }
+    public int? TargetChain { get; set; }
+    public int? TargetSlot { get; set; }
     public float Depth { get; set; } = 1.0f;
     public int Mode { get; set; }
     /// <summary>Modulation centre (base) value — the device param value the link swings around.</summary>
@@ -186,6 +199,37 @@ public sealed class CvLinkDto
 
 /// <summary>A parameter-automation lane and its breakpoints (M9-A4, format v2).
 /// Target: 0 = track volume, 1 = pan, 2 = built-in device param (Device/Param set).</summary>
+/// <summary>A rack chain child's sidechain key (v25, specs/044). Host is the rack's address on
+/// the track, Slot >= 0 a device, -1 the chain instrument; Source a doc index.</summary>
+public sealed class NestedSidechainDto
+{
+    public int Host { get; set; }
+    public int Chain { get; set; }
+    public int Slot { get; set; }
+    public int Source { get; set; } = -1;
+    public bool TapPre { get; set; }
+    public float GainDb { get; set; }
+    public float Mix { get; set; } = 1.0f;
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>A rack chain MIDI effect's CC target (v25, specs/044): the MIDI effect at (Host,
+/// Chain, Index) drives DestDevice's Param, or the child (DestChain, DestSlot) of the rack there.</summary>
+public sealed class NestedCcRouteDto
+{
+    public int Host { get; set; }
+    public int Chain { get; set; }
+    public int Index { get; set; }
+    public int DestDevice { get; set; } = -2;
+    public int DestChain { get; set; } = -1;
+    public int DestSlot { get; set; } = -1;
+    public int Param { get; set; } = -1;
+    public float Depth { get; set; } = 1.0f;
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
 public sealed class AutomationLaneDto
 {
     public int Target { get; set; }
@@ -194,6 +238,11 @@ public sealed class AutomationLaneDto
     /// <summary>Stable hosted-plugin parameter id when Target == 3 (PluginParam, M9-B4).
     /// Persisted instead of the version-unstable index; resolved on load.</summary>
     public string? PluginParamId { get; set; }
+    // A lane on a device grouped into a rack (v25, specs/044): DeviceIndex is then the rack's
+    // address (>= 0 effect, -1 instrument, -1000 - i MIDI effect) and these the chain index and
+    // slot (>= 0 device, -1 chain instrument, -1000 - i chain MIDI effect). Null = track level.
+    public int? Chain { get; set; }
+    public int? Slot { get; set; }
     public AutomationPointDto[] Points { get; set; } = System.Array.Empty<AutomationPointDto>();
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
@@ -349,6 +398,9 @@ public sealed class MidiDeviceDto
     // Map/CC routing (arp): CC lane → an audio-device param on the same track.
     public int CcDestDevice { get; set; } = -2;   // -2 = no routing
     public int CcDestParam { get; set; } = -1;
+    // A CC target inside a rack (v25, specs/044): chain index + slot in the rack at CcDestDevice.
+    public int? CcDestChain { get; set; }
+    public int? CcDestSlot { get; set; }
     public float CcDepth { get; set; } = 1.0f;
     // Opaque state blob (v24, specs/040): the MIDI Effect Rack's chains, devices, zones and
     // macros. Null for params-only MIDI effects.

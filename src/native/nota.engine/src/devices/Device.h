@@ -22,8 +22,13 @@ namespace nota {
 
 struct MidiEv;
 
+class RackCore;
+
 class Device {
   public:
+    // The rack behind this device, if it is one (specs/044): a virtual call where the audio
+    // thread walks rack chains every block, instead of a dynamic_cast per device.
+    virtual const RackCore* asRack() const { return nullptr; }
     virtual ~Device() = default;
 
     // Called on the message thread before the device is used (and on sample-rate

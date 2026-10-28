@@ -567,6 +567,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->automation = t.automation;     // automation lanes (M9)
     nt->modulators = t.modulators;     // CV modulation sources (Phase 3)
     nt->cvLinks = t.cvLinks;           // CV modulation edges (Phase 3)
+    nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
@@ -610,6 +611,14 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
     authoring_ = g;
     retired_.push_back(g);
     if (g) ensureRenderScratch(g->tracks.size());
+    // Fresh track objects only: the audio thread never sees them change. Before any CC target
+    // exists their routes are complete as they are (empty): marking them so keeps an undo to
+    // such a snapshot from rebuilding them from targets set later.
+    if (g && ccDestsSet_) syncCcRoutes(*g);
+    else if (g) {
+        for (auto& t : g->tracks) t->ccRoutesDirty = false;
+        if (g->masterTrack) g->masterTrack->ccRoutesDirty = false;
+    }
     liveGraph_.store(g.get(), std::memory_order_release);
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
@@ -690,6 +699,7 @@ bool Engine::undo() {
             publishRaw(std::move(e.graph));
             recomputePdc();
             reapplyRackMacros();
+            reapplyCcRoutes();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, false);
@@ -724,6 +734,7 @@ bool Engine::redo() {
             publishRaw(std::move(e.graph));
             recomputePdc();
             reapplyRackMacros();
+            reapplyCcRoutes();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, true);

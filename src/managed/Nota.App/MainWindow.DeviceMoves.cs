@@ -5,6 +5,8 @@
 // card, and moving a device to another track (menu or drag onto a track header). An instrument
 // track never stands without its instrument, so deleting it — or moving it away — takes the track.
 
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Nota.Application;
 using Nota.Presentation;
@@ -17,8 +19,9 @@ public partial class MainWindow
     {
         if (_deviceChain is null) return;
         _deviceChain.InstrumentReplaceRequested += OnInstrumentReplaceRequested;
-        _deviceChain.TrackDeleteRequested += (t, cut) => _ = OnTrackDeleteRequestedAsync(t, cut);
+        _deviceChain.TrackDeleteRequested += (t, cut, n) => _ = OnTrackDeleteRequestedAsync(t, cut, n);
         _deviceChain.MoveRequested += r => _ = OnDeviceMoveRequestedAsync(r);
+        _deviceChain.MovesRequested += m => _ = OnDevicesMoveRequestedAsync(m);
         Timeline.DeviceDropped += r => _ = OnDeviceMoveRequestedAsync(r);   // a card dragged onto a track row
     }
 
@@ -55,15 +58,60 @@ public partial class MainWindow
         return await new ConfirmWindow("Delete track", message, affirmative, "Cancel").ShowDialog<bool>(this);
     }
 
-    private async Task OnTrackDeleteRequestedAsync(int trackId, bool cut)
+    // selected: how many devices the panel had selected. With the instrument and more (specs/044)
+    // the host asks every time: a Shift-click range that swept over the instrument must not
+    // take the track silently.
+    private async Task OnTrackDeleteRequestedAsync(int trackId, bool cut, int selected = 1)
     {
         if (_vm is null || trackId <= 0) return;
         string name = TrackLabel(trackId), inst = Engine.DeviceName(trackId, -1);
-        if (!await ConfirmTrackGoesAsync(trackId, $"“{name}” has clips. Delete the track with its clips?", "Delete")) return;
+        if (selected > 1)
+        {
+            if (!await new ConfirmWindow("Delete track", $"Delete track “{name}”? The track and its {selected} selected devices will be removed.",
+                    "Delete", "Cancel").ShowDialog<bool>(this)) return;
+        }
+        else if (!await ConfirmTrackGoesAsync(trackId, $"“{name}” has clips. Delete the track with its clips?", "Delete")) return;
         if (!Timeline.DeleteTrack(trackId)) return;
         if (_deviceChain?.TrackId == trackId) ShowDevices(-1, takeOverPanel: false);   // its cards would edit a removed track
         _session?.Refresh();
         _vm.StatusText = cut ? $"Cut {inst} — deleted {name}" : $"Deleted {name}";
+    }
+
+    // Move to track ▸ for several selected devices (specs/044): one undo step, in chain order so
+    // they land in order at the end of the target's sections; the instrument goes last (it takes
+    // the source track) and, with others, always asks first.
+    private async Task OnDevicesMoveRequestedAsync(IReadOnlyList<DeviceMoveRequest> moves)
+    {
+        if (_vm is null || moves.Count == 0) return;
+        if (moves.Count == 1) { await OnDeviceMoveRequestedAsync(moves[0]); return; }
+        int srcId = moves[0].SrcTrackId, dstId = moves[0].DstTrackId;
+        string src = TrackLabel(srcId), dst = TrackLabel(dstId);
+        bool withInstrument = moves.Any(m => m.Family == DeviceFamily.Instrument);
+        if (withInstrument && !await new ConfirmWindow("Delete track",
+                $"Move {moves.Count} devices to “{dst}” and delete “{src}”?", "Move", "Cancel").ShowDialog<bool>(this))
+            return;
+        int moved = 0, failed = 0;
+        var shift = new Dictionary<DeviceFamily, int>();   // earlier moves of a section close its gaps
+        Engine.BeginUndoGroup();
+        try
+        {
+            foreach (var r in moves.Where(m => m.Family != DeviceFamily.Instrument).Concat(moves.Where(m => m.Family == DeviceFamily.Instrument)))
+            {
+                int gone = shift.TryGetValue(r.Family, out var g) ? g : 0;
+                var req = r with { Index = r.Family == DeviceFamily.Instrument ? r.Index : r.Index - gone };
+                int at = Engine.TransferDevice(req.SrcTrackId, req.Family, req.Index, req.DstTrackId, -1, false, out _);
+                if (at < 0) { failed++; continue; }
+                _deviceChain?.DeviceTransferred(req, at);
+                shift[r.Family] = gone + 1;
+                moved++;
+            }
+        }
+        finally { Engine.EndUndoGroup(); }
+        Timeline.Refresh();
+        _session?.Refresh();
+        if (dstId != Engine.MasterTrackId) Timeline.Select(dstId, -1);
+        ShowDevices(dstId);
+        _vm.StatusText = failed == 0 ? $"Moved {moved} devices to {dst}" : $"Moved {moved} devices to {dst} · {failed} couldn't move";
     }
 
     // Move to track ▸, or a device card dropped on a track header (⌥ = copy). One undo step; an

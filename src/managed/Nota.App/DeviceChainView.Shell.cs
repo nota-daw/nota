@@ -39,7 +39,8 @@ public sealed partial class DeviceChainView
     // don't collide. Sig ties an entry to the device it was made for: when that slot now
     // holds a different device (swapped, removed behind our back, undo), the card starts fresh.
     private sealed class CardExtra { public string Sig = ""; public float[]? A, B; public int Active; public string Preset = "", PresetId = ""; public PluginCard.ViewState Plugin = new();
-        public CardExtra? Wrapped; } // a rack's: the extra of the device ⌘G put in it, back when it comes out
+        public CardExtra? Wrapped;   // a rack's: the extra of the device ⌘G put in it, back when it comes out
+        public List<CardExtra>? WrappedMany; } // a rack's: those of several devices grouped into it (specs/044)
     private readonly System.Collections.Generic.Dictionary<int, System.Collections.Generic.Dictionary<int, CardExtra>> _cardExtra = new();   // trackId → key → extra
     private static int ExtraKey(ChainKind k, int di) => k switch { ChainKind.Instrument => -1, ChainKind.Midi => -1000 - di, _ => di };
     private static ChainKind KeyKind(int key) => key >= 0 ? ChainKind.Effect : key == -1 ? ChainKind.Instrument : ChainKind.Midi;
@@ -66,13 +67,43 @@ public sealed partial class DeviceChainView
             // Undo / redo of ⌘G swap the device and its rack in one slot: each keeps the other's
             // extra, so the A/B snapshots and preset label survive any number of swaps.
             var prev = e;
-            e = prev?.Wrapped is { } w && w.Sig == sig ? w : new CardExtra { Sig = sig };
+            e = prev?.Wrapped is { } w && w.Sig == sig ? w : null;
+            // Undo of a group of several devices (specs/044): the rack's card held all their
+            // states; hand each back to its device, which may sit in another slot.
+            if (e is null && prev?.WrappedMany is { } many) e = RestoreWrapped(t, d, many, key, sig);
+            e ??= new CardExtra { Sig = sig };
             if (prev != null) { prev.Wrapped = null; e.Wrapped = prev; }
             d[key] = e;
         }
         return e;
     }
     private CardExtra Extra(ChainKind k, int di) => ExtraFor(_trackId, k, di);
+
+    // Gives each saved card state to a device on track t whose signature matches and that has no
+    // state of its own yet; returns the one for `ownKey`, or null.
+    private CardExtra? RestoreWrapped(int t, Dictionary<int, CardExtra> d, List<CardExtra> many, int ownKey, string ownSig)
+    {
+        CardExtra? own = null;
+        var slots = new List<(ChainKind K, int I)>();
+        for (int i = 0; i < _engine.TrackMidiEffectCount(t); i++) slots.Add((ChainKind.Midi, i));
+        if (IsInstrumentTrack(t)) slots.Add((ChainKind.Instrument, -1));
+        for (int i = 0; i < _engine.TrackDeviceCount(t); i++) slots.Add((ChainKind.Effect, i));
+        foreach (var x in many)
+        {
+            foreach (var (k, i) in slots)
+            {
+                int key = ExtraKey(k, i);
+                string sig = key == ownKey ? ownSig : CardSig(t, k, i);
+                if (sig != x.Sig) continue;
+                if (key == ownKey) { if (own != null) continue; own = x; break; }
+                // A card built a moment earlier in this rebuild holds a blank state: take its place.
+                if (d.TryGetValue(key, out var cur) && cur.Sig == sig && (cur.A != null || cur.B != null || cur.Preset.Length > 0)) continue;
+                d[key] = x;
+                break;
+            }
+        }
+        return own;
+    }
 
     // Keep each card's extra glued to its device when this view reorders / removes devices.
     // map: old index → new index, or -1 when the device is gone.
@@ -371,7 +402,7 @@ public sealed partial class DeviceChainView
             // selects and rebuilds the row, so the second lands on a new header.
             if (e.ClickCount == 2 && !Within(e.Source, picker) && !Within(e.Source, power) && !Within(e.Source, s.HeaderExtra))
             { e.Handled = true; SetFolded(s.Kind, di, true); return; }
-            SelectDevice(s.Kind, di);
+            SelectDevice(s.Kind, di, e.KeyModifiers);   // Shift: a range, ⌘/Ctrl: toggle (specs/044)
         };
 
         DockPanel.SetDock(headerBar, Dock.Top);

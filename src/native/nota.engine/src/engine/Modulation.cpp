@@ -179,6 +179,10 @@ CvLink& CvLink::operator=(const CvLink& o) {
     targetTrack = o.targetTrack;
     targetDevice = o.targetDevice;
     targetParam = o.targetParam;
+    sourceChainUid = o.sourceChainUid;
+    sourceSlot = o.sourceSlot;
+    targetChainUid = o.targetChainUid;
+    targetSlot = o.targetSlot;
     depth.store(o.depth.load(std::memory_order_relaxed), std::memory_order_relaxed);
     mode.store(o.mode.load(std::memory_order_relaxed), std::memory_order_relaxed);
     base.store(o.base.load(std::memory_order_relaxed), std::memory_order_relaxed);

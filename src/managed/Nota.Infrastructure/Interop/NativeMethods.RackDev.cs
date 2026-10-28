@@ -215,6 +215,10 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_midi_paste")]
     internal static partial int RackDevChainMidiPaste(IntPtr engine, int trackId, int deviceIndex, int chain, int atIndex);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_paste_devices")]
+    internal static partial int RackDevChainPasteDevices(IntPtr engine, int trackId, int deviceIndex, int chain, int midiAt, int fxAt,
+                                                         out int skipped, out int firstMidi, out int firstFx);
+
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_duplicate")]
     internal static partial int RackDevChainDeviceDuplicate(IntPtr engine, int trackId, int deviceIndex, int chain, int index);
 

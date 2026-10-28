@@ -116,6 +116,23 @@ public sealed partial class DeviceChainView
         return new Control[] { menu };
     }
 
+    // Move to track ▸ for several selected devices (specs/044): tracks that can take all of them.
+    // The host moves them in one undo step, the instrument last (it takes the source track).
+    private IEnumerable<Control> MoveSelectionToTrackGroup()
+    {
+        var menu = MenuKit.Item("Move to track", GlyphKind.Track);
+        var kind = _sel.HasInstrument || _sel.Indices(DeviceSection.Midi).Any() ? ChainKind.Midi : ChainKind.Effect;
+        foreach (var (id, name) in TracksThatTake(_engine, kind, _trackId))
+            menu.Items.Add(MenuKit.Item(name, null, () =>
+            {
+                var moves = _sel.Members.Select(m => new DeviceMoveRequest(_trackId, FamilyOf(KindOf(m.Section)), m.Index, id, false)).ToList();
+                ClearDeviceSelection();
+                MovesRequested?.Invoke(moves);
+            }));
+        menu.IsEnabled = menu.Items.Count > 0;
+        return new Control[] { menu };
+    }
+
     internal static DeviceFamily FamilyOf(ChainKind k)
         => k switch { ChainKind.Midi => DeviceFamily.Midi, ChainKind.Instrument => DeviceFamily.Instrument, _ => DeviceFamily.Audio };
 

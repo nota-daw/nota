@@ -87,6 +87,15 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_cv_link_param")]
     internal static partial int CvLinkParam(IntPtr engine, int trackId, int index);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_cv_link_path")]
+    internal static partial int CvLinkPath(IntPtr engine, int trackId, int index, out int srcChain, out int srcSlot,
+                                           out int tgtChain, out int tgtSlot);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_add_nested_cv_link")]
+    internal static partial int AddNestedCvLink(IntPtr engine, int trackId, int sourceKind, int modId, int srcDevice,
+                                                int srcChain, int srcSlot, int srcParam, int targetKind, int targetTrack,
+                                                int targetDevice, int tgtChain, int tgtSlot, int targetParam);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_cv_link_depth")]
     internal static partial float CvLinkDepth(IntPtr engine, int trackId, int index);
 

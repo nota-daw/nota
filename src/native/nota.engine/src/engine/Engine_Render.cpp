@@ -7,6 +7,9 @@
 #include "dsp/core/ScopedNoDenormals.h"
 #include "dsp/math/SimdAudio.h"
 #include "devices/racks/DrumRack.h"
+#include "ParamResolve.h"
+#include "devices/racks/RackDevice.h"
+#include "devices/racks/RackInstrument.h"
 #include "bridge/PluginHostBridge.h"
 #include "media/WarpStream.h"
 
@@ -310,17 +313,36 @@ int Engine::applyMidiEffects(
 // Map/CC routing: a MIDI effect (the arpeggiator) drives a target audio-device param
 // on the same track from its per-step CC lane. Runs each block after the MIDI chain,
 // before the device chain processes, so the modulation applies this block.
+// An Arp grouped into a rack (a MIDI Effect Rack or an Instrument Rack chain) keeps driving
+// its target, and a target grouped into a rack is reached through its nested address
+// (specs/044); both walks read published snapshots only.
+// The route comes from the published snapshot (Track::ccRoutes), never from the Arp's own fields:
+// a group or rack edit retargets those before the new device order is published.
+static void applyCcRoute(Track& t, const MidiDevice& md) {
+    const Track::CcRoute* rt = nullptr;
+    for (auto& r : *t.ccRoutes)
+        if (r.arp == &md) { rt = &r; break; }
+    if (!rt) return;
+    const int di = rt->dev, pi = rt->param;
+    if (pi < 0) return;
+    Device* d = nullptr;
+    if (rt->uid) d = resolveNested(t, di, rt->uid, rt->slot).device;
+    else if (di >= 0 && di < static_cast<int>(t.devices.size())) d = t.devices[di].get();
+    if (!d || pi >= d->paramCount()) return;
+    const float mn = d->paramMin(pi), mx = d->paramMax(pi);
+    const float mod = std::clamp(md.ccValue() * md.ccDepth(), 0.0f, 1.0f);
+    d->setParam(pi, mn + (mx - mn) * mod);
+}
+
 void Engine::applyMidiCcRouting(Track& t) {
+    if (!t.ccRoutes) return;
     for (auto& md : t.midiEffects) {
         if (!md) continue;
-        const int di = md->ccDestDevice(), pi = md->ccDestParam();
-        if (di < 0 || pi < 0 || di >= static_cast<int>(t.devices.size())) continue;
-        auto* d = t.devices[di].get();
-        if (!d) continue;
-        const float mn = d->paramMin(pi), mx = d->paramMax(pi);
-        const float mod = std::clamp(md->ccValue() * md->ccDepth(), 0.0f, 1.0f);
-        d->setParam(pi, mn + (mx - mn) * mod);
+        applyCcRoute(t, *md);
+        if (auto* r = md->asRack()) r->forEachChildMidi([&](MidiDevice& c) { applyCcRoute(t, c); });
     }
+    if (auto* r = t.instrument ? t.instrument->asRack() : nullptr)
+        r->forEachChildMidi([&](MidiDevice& c) { applyCcRoute(t, c); });
 }
 
 void Engine::poll() {
@@ -1226,7 +1248,8 @@ int Engine::computeInstrumentMidi(Track& t, MidiEv* evs, int32_t frames, double 
         n = applyMidiEffects(t, evs, n, scratch, frames, spb > 0.0 ? blockStart / spb : 0.0, spb, playing);
         applyMidiCcRouting(t);
         std::sort(evs, evs + n, midiEvLess);
-    }
+    } else if (t.instrument && t.instrument->asRack())
+        applyMidiCcRouting(t); // Arps grouped into the Instrument Rack's chains (specs/044)
     t.updateMidiCv(evs, n); // MIDI→CV modulators read the post-FX note stream
     return n;
 }
@@ -1437,7 +1460,8 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
         n = applyMidiEffects(t, evs, n, scratch, frames, p, spb, true);
         applyMidiCcRouting(t);
         std::sort(evs, evs + n, midiEvLess);
-    }
+    } else if (t.instrument && t.instrument->asRack())
+        applyMidiCcRouting(t); // Arps grouped into the Instrument Rack's chains (specs/044)
 
     // The monitored live expression, after the offset-0 notes (as in renderInstrumentRaw).
     playEvents(*inst, dst, frames, evs, n, xev, xn, p, spb, true, [&] { // the slot's own loop clock
@@ -1908,12 +1932,41 @@ void Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, in
                 const int32_t s = routeSlotForTrack(iSc);
                 t.instrument->setSidechain(s < 0 ? nullptr : routeBus_[s].data(), frames);
             }
+            // Keyed devices and instruments inside an Instrument Rack's chains (specs/044).
+            if (auto* r = t.instrument->asRack()) feedRackChildKeys(g, *r, t.id(), frames);
         }
         renderInstrumentRaw(g, t, dst, frames, blockStart, spb, playing);
         break;
     case LeafPath::AudioClips: renderAudioClipsRaw(t.clips, dst, frames, blockStart, spb); break;
     case LeafPath::Skip: break; // unreachable (pre-pass filters Skip out)
     }
+}
+
+// Hand a device its sidechain key for this block (the source track's previous-block
+// signal, pre- or post-FX tap) or its MIDI key; a rack passes keys on to its chain
+// children, each with its own source (specs/044). Audio thread.
+void Engine::feedDeviceKey(Graph* g, Device& d, int32_t ownTrackId, int32_t frames) {
+    const int32_t src = d.sidechainSourceTrackId();
+    if (src >= 0) {
+        const int32_t s = routeSlotForTrack(src);
+        const float* sc = s < 0 ? nullptr : (d.sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
+        d.setSidechain(sc, frames);
+        if (d.wantsMidiKey()) feedMidiKey(g, d, src);
+    } else if (d.wantsOwnMidiKey())
+        feedMidiKey(g, d, ownTrackId); // no key track: this track's notes
+    if (auto* r = d.asRack()) feedRackChildKeys(g, *r, ownTrackId, frames);
+}
+
+void Engine::feedRackChildKeys(Graph* g, const RackCore& r, int32_t ownTrackId, int32_t frames) {
+    r.forEachChildDevice([&](Device& c) {
+        if (!c.bypassed() && !c.asRack()) feedDeviceKey(g, c, ownTrackId, frames);
+    });
+    r.forEachChildInstrument([&](Instrument& i) {
+        const int32_t src = i.sidechainSourceTrackId();
+        if (src < 0) return;
+        const int32_t s = routeSlotForTrack(src);
+        i.setSidechain(s < 0 ? nullptr : routeBus_[s].data(), frames);
+    });
 }
 
 // Step 2/2b for Pass 1: insert effect chain (M3) + PDC, in place. Verbatim
@@ -1928,15 +1981,7 @@ void Engine::processLeafDevices(Track& t, float* buf, const LeafWork& w, Graph* 
     if (!w.frozenActive)
         for (auto& d : t.devices)
             if (d && !d->bypassed()) {
-                const int32_t src = d->sidechainSourceTrackId();
-                if (src >= 0) {
-                    const int32_t s = routeSlotForTrack(src);
-                    const float* sc =
-                        s < 0 ? nullptr : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
-                    d->setSidechain(sc, frames);
-                    if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
-                } else if (d->wantsOwnMidiKey())
-                    feedMidiKey(g, *d, t.id());                                 // no key track: this track's notes
+                feedDeviceKey(g, *d, t.id(), frames);
                 if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing); // tempo-synced devices
                 d->setTransportInfo(ti);                                        // hosted-plugin sync
                 d->process(buf, frames);
@@ -2425,15 +2470,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 }
                 for (auto& d : t.devices)
                     if (d && !d->bypassed()) {
-                        const int32_t src = d->sidechainSourceTrackId();
-                        if (src >= 0) {
-                            const int32_t s = routeSlotForTrack(src);
-                            const float* sc =
-                                s < 0 ? nullptr : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
-                            d->setSidechain(sc, frames);
-                            if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
-                        } else if (d->wantsOwnMidiKey())
-                            feedMidiKey(g, *d, t.id()); // no key track: this track's notes
+                        feedDeviceKey(g, *d, t.id(), frames);
                         if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);
                         d->setTransportInfo(ti);
                         d->process(scratch_.data(), frames);
@@ -2498,15 +2535,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             }
             for (auto& d : t.devices)
                 if (d && !d->bypassed()) {
-                    const int32_t src = d->sidechainSourceTrackId();
-                    if (src >= 0) {
-                        const int32_t s = routeSlotForTrack(src);
-                        const float* sc =
-                            s < 0 ? nullptr : (d->sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
-                        d->setSidechain(sc, frames);
-                        if (d->wantsMidiKey()) feedMidiKey(g, *d, src);
-                    } else if (d->wantsOwnMidiKey())
-                        feedMidiKey(g, *d, t.id()); // no key track: this track's notes
+                    feedDeviceKey(g, *d, t.id(), frames);
                     if (spb > 0.0) d->setTransport(blockStart / spb, spb, playing);
                     d->setTransportInfo(ti); // hosted-plugin sync
                     d->process(scratch_.data(), frames);

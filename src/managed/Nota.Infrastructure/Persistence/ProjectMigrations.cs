@@ -100,6 +100,10 @@ public static class ProjectMigrations
         // v23 -> v24: MIDI effects gain State (the MIDI Effect Rack's blob, specs/040). Absent in
         // v23 documents, which hold no MIDI Effect Rack; null = params only — no-op.
         new Migration(23, _ => { }),
+        // v24 -> v25: lanes, CV links and Arp CC targets may point into a rack chain, and racks'
+        // chain children keep sidechain keys and CC targets in the track (specs/044). All absent
+        // in v24 documents, where every reference is track level — no-op.
+        new Migration(24, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

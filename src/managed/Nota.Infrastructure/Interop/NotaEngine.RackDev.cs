@@ -217,6 +217,8 @@ public sealed partial class NotaEngine
 
     public int RackDevChainMidiPaste(int trackId, int deviceIndex, int chain, int atIndex)
     { ThrowIfDisposed(); return NativeMethods.RackDevChainMidiPaste(_handle, trackId, deviceIndex, chain, atIndex); }
+    public int RackDevChainPasteDevices(int trackId, int deviceIndex, int chain, int midiAt, int fxAt, out int skipped, out int firstMidi, out int firstFx)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainPasteDevices(_handle, trackId, deviceIndex, chain, midiAt, fxAt, out skipped, out firstMidi, out firstFx); }
 
     public int RackDevChainDeviceDuplicate(int trackId, int deviceIndex, int chain, int index)
     { ThrowIfDisposed(); return NativeMethods.RackDevChainDeviceDuplicate(_handle, trackId, deviceIndex, chain, index); }

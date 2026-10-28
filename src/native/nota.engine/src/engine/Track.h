@@ -249,12 +249,29 @@ class Track {
     std::vector<AudioClip> clips;           // audio tracks
     std::vector<MidiClip> midiClips;        // instrument tracks
     std::vector<SessionSlot> sessionSlots;  // Session view, one per scene (M5)
-    std::vector<AutomationLane> automation; // parameter automation lanes (M9)
+    std::vector<TrackLane> automation; // parameter automation lanes (M9)
 
     // CV modulation (Phase 3, Modular editor). Sources + edges to device params.
     // Config lives in atomics (live-tweakable); add/remove is structural (clone).
     std::vector<Modulator> modulators;
     std::vector<CvLink> cvLinks;
+    // Where each Arp on this track (top level or in a rack chain) sends its CC lane, as published
+    // with this snapshot: the audio thread reads the route from here, so a new device order and
+    // the targets that fit it go live together (an Arp is shared by every snapshot and keeps
+    // its own fields only as the authoring copy). Filled from the Arps when a fresh track object
+    // is published (ccRoutesDirty), never on a published one; undo / redo copy a restored
+    // snapshot's routes back onto its Arps. specs/044.
+    struct CcRoute {
+        const MidiDevice* arp = nullptr;
+        int32_t dev = -2;
+        uint64_t uid = 0;
+        int32_t slot = -1;
+        int32_t param = -1;
+    };
+    // Out of line and only when some Arp has a target: every edit clones a track, and a bigger
+    // track made small edits measurably costlier (the edit-path gate).
+    std::unique_ptr<std::vector<CcRoute>> ccRoutes;
+    bool ccRoutesDirty = true;
     int32_t nextModId = 1; // monotonic modulator-id source
 
     // UI metadata (message thread only; never read by the audio thread). `name` is the
