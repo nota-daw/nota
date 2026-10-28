@@ -272,12 +272,17 @@ internal static class EqAnalyzerTests
             var s = r.Read();
             int pk = Argmax(s, PostAt);
             float top = s[PostAt + pk];
-            Thread.Sleep(900);
-            s = r.Read();
-            float curve1 = s[PostAt + pk], peak1 = s[PeakAt + pk];
-            Thread.Sleep(1600);
-            s = r.Read();
-            float peak2 = s[PeakAt + pk];
+            // Read at display cadence: the ballistics run on wall-clock time and a read after a
+            // gap over 1.2 s snaps everything to the floor, which a slow runner's long sleep can hit.
+            var sw = Stopwatch.StartNew();
+            float curve1 = float.NaN, peak1 = float.NaN, peak2 = float.NaN;
+            while (sw.ElapsedMilliseconds < 2500)
+            {
+                Thread.Sleep(33);
+                s = r.Read();
+                if (float.IsNaN(curve1) && sw.ElapsedMilliseconds >= 900) { curve1 = s[PostAt + pk]; peak1 = s[PeakAt + pk]; }
+                peak2 = s[PeakAt + pk];
+            }
             yield return (curve1 < top - 20 && Math.Abs(peak1 - top) < 0.5 && peak2 < top - 10,
                 $"Peak holds the top ({top:F1} → {peak1:F1} dB at 0.9 s while the curve is at {curve1:F1}) and then falls ({peak2:F1} dB at 2.5 s)");
             // Read at the display's cadence (a gap over 1.2 s restarts the analysis): once the curve
