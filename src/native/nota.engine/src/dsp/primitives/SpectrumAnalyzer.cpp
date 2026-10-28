@@ -68,12 +68,13 @@ void SpectrumAnalyzer::reset() {
 void SpectrumAnalyzer::analyse(const float* ring, uint32_t mask, uint32_t w, double dt, bool peakHold) {
     if (!ring || n_ <= 0 || mask + 1 < (uint32_t)n_) return;
     const bool snap = !primed_ || dt <= 0.0 || dt > 1.2;
+    const double elapsed = std::max(0.0, dt); // a long gap still counts as a pause
     dt = snap ? 0.0 : dt;
     // No new samples for longer than a callback: the input has stopped, so let the curve fall.
     // A shorter pause is a read between two callbacks: the same window measures again.
-    if (primed_ && w == lastW_) stalled_ += dt;
+    if (primed_ && w == lastW_) stalled_ += elapsed;
     else {
-        if (primed_) gap_ = stalled_ + dt;
+        if (primed_) gap_ = stalled_ + elapsed;
         stalled_ = 0.0;
     }
     const bool silent = stalled_ > std::clamp(1.5 * gap_, kStalledMinS, kStalledMaxS);
