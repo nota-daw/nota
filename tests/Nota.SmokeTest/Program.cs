@@ -355,6 +355,14 @@ if (args.Length >= 1 && args[0] == "--linux-desktop")
     return failures == 0 ? 0 : 1;
 }
 
+// Return-track automation alone: `--return-automation`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--return-automation")
+{
+    Console.WriteLine("-- return automation --");
+    foreach (var (ok, label) in ReturnAutomationTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "RETURN AUTOMATION PASSED" : $"RETURN AUTOMATION FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Deleting a return track alone: `--returns`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--returns")
 {
@@ -15134,6 +15142,9 @@ foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- return delete --");
 foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- return automation --");
+foreach (var (ok, label) in ReturnAutomationTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- arrangement moves --");
 foreach (var (ok, label) in ArrangementMovesTests.Run()) Check(ok, label);

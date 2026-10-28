@@ -254,6 +254,19 @@ public sealed partial class ArrangementView
         });
     }
 
+    // Compact / Standard / Large for a footer row (specs/045): the right-clicked return — or the
+    // selected returns it belongs to — or the master. Never "all tracks", so Alt/Option is ignored.
+    private MenuItem FooterHeightRow(int footerRow)
+    {
+        (string, double)[] presets = { ("Compact", CompactRowHeight), ("Standard", StandardRowHeight), ("Large", LargeRowHeight) };
+        var (returns, master) = FooterResizeTargets(footerRow);
+        var current = returns.Select(StoredRowHeight).Concat(master ? new[] { _masterHeight } : Array.Empty<double>()).ToList();
+        double? chosen = presets.Select(p => p.Item2)
+            .Where(h => current.Count > 0 && current.All(c => Math.Abs(c - h) < 0.5))
+            .Select(h => (double?)h).FirstOrDefault();
+        return MenuKit.Segments("Height", presets, chosen, (h, _) => SetFooterHeights(returns, master, h));
+    }
+
     // "Recent" instruments under Add track (spec 034 US5): the host (MainWindow) builds the
     // items from the recent-instruments list; each adds a track after the anchor.
     public Func<int, IReadOnlyList<MenuItem>>? RecentInstrumentItems;
