@@ -34,6 +34,7 @@ int32_t Engine::addModulator(int32_t trackId, int32_t kind) {
     Modulator m;
     m.id = nt->nextModId++;
     m.kind = static_cast<ModulatorKind>(kind);
+    if (m.kind == ModulatorKind::Scope) m.scope = std::make_shared<ScopeHistory>();
     const int32_t id = m.id;
     nt->modulators.push_back(m);
     republishWithTrack(trackId, nt);
@@ -587,17 +588,17 @@ void Engine::updateModulators(Graph* g, double beat, double timeSec, double dt) 
             } else if (m.kind == ModulatorKind::Scope) {
                 const float v = modOutput(t, m.inputA.load(std::memory_order_relaxed), beat, timeSec);
                 m.outValue.store(v, std::memory_order_relaxed); // pass-through
-                m.pushScope(v);
+                m.pushScope(v, static_cast<float>(dt));
             }
         }
     }
 }
 
-int32_t Engine::modulatorScope(int32_t trackId, int32_t modId, float* out, int32_t cap) const {
+int32_t Engine::modulatorScope(int32_t trackId, int32_t modId, float* values, float* dts, int32_t cap) const {
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0;
     for (auto& m : t->modulators)
-        if (m.id == modId) return m.readScope(out, cap);
+        if (m.id == modId) return m.readScope(values, dts, cap);
     return 0;
 }
 

@@ -158,7 +158,7 @@ class Engine {
     float modulatorGet(int32_t trackId, int32_t modId, int32_t field) const;
     void modulatorSet(int32_t trackId, int32_t modId, int32_t field, float value);
     float modulatorValue(int32_t trackId, int32_t modId) const;                            // live output for viz
-    int32_t modulatorScope(int32_t trackId, int32_t modId, float* out, int32_t cap) const; // CV scope history
+    int32_t modulatorScope(int32_t trackId, int32_t modId, float* values, float* dts, int32_t cap) const; // CV scope history, newest cap entries
     int32_t addCvLink(int32_t trackId, int32_t modId, int32_t device, int32_t param);
     // Cross-track: the modulator lives on trackId; the target param is on targetTrack
     // (-1 = trackId itself). The link is owned by the modulator's track.

@@ -309,6 +309,12 @@ public sealed class ProjectService
                     InputA = (int)engine.ModulatorGet(ti.Id, id, 10),
                     InputB = (int)engine.ModulatorGet(ti.Id, id, 11),
                     MathOffset = engine.ModulatorGet(ti.Id, id, 12),
+                    ScopeWindowMs = engine.ModulatorGet(ti.Id, id, 13),
+                    ScopeSync = engine.ModulatorGet(ti.Id, id, 14) > 0.5f,
+                    ScopeWindowBeats = engine.ModulatorGet(ti.Id, id, 15),
+                    ScopeZoom = (int)engine.ModulatorGet(ti.Id, id, 16),
+                    ScopeTrigger = (int)engine.ModulatorGet(ti.Id, id, 17),
+                    ScopeHeight = engine.ModulatorGet(ti.Id, id, 18),
                 });
             }
             int cvCount = engine.CvLinkCount(ti.Id);
@@ -817,6 +823,15 @@ public sealed class ProjectService
                 engine.ModulatorSet(id, newId, 7, m.Release);
                 engine.ModulatorSet(id, newId, 8, m.Decay);
                 engine.ModulatorSet(id, newId, 9, m.Sustain);
+                if (m.Kind == 6)   // Scope view settings (specs/047)
+                {
+                    engine.ModulatorSet(id, newId, 13, m.ScopeWindowMs);
+                    engine.ModulatorSet(id, newId, 14, m.ScopeSync ? 1f : 0f);
+                    engine.ModulatorSet(id, newId, 15, m.ScopeWindowBeats);
+                    engine.ModulatorSet(id, newId, 16, m.ScopeZoom);
+                    engine.ModulatorSet(id, newId, 17, m.ScopeTrigger);
+                    engine.ModulatorSet(id, newId, 18, m.ScopeHeight);
+                }
             }
             // Math/Scope inputs reference other modulators by id → remap after all exist.
             foreach (var m in t.Modulators)

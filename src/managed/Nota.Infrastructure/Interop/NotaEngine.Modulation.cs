@@ -27,6 +27,11 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.ModulatorValue(_handle, trackId, modId); }
     public int ModulatorScope(int trackId, int modId, float[] outv)
     { ThrowIfDisposed(); return NativeMethods.ModulatorScope(_handle, trackId, modId, outv, outv.Length); }
+    public int ModulatorScopeTimed(int trackId, int modId, float[] values, float[] dts)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.ModulatorScopeTimed(_handle, trackId, modId, values, dts, Math.Min(values.Length, dts.Length));
+    }
 
     public int CvLinkAdd(int trackId, int modId, int deviceIndex, int paramIndex)
     { ThrowIfDisposed(); return NativeMethods.AddCvLink(_handle, trackId, modId, deviceIndex, paramIndex); }

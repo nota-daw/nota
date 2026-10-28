@@ -166,6 +166,13 @@ public sealed class ModulatorDto
     public int InputA { get; set; } = -1;         // Math: source modulator ids (remapped on load)
     public int InputB { get; set; } = -1;
     public float MathOffset { get; set; }
+    // Scope view settings (specs/047); older projects read the defaults.
+    public float ScopeWindowMs { get; set; } = 1000f;
+    public bool ScopeSync { get; set; }
+    public float ScopeWindowBeats { get; set; } = 4f;
+    public int ScopeZoom { get; set; } = 1;
+    public int ScopeTrigger { get; set; }
+    public float ScopeHeight { get; set; } = 76f;
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

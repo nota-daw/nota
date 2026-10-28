@@ -39,6 +39,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_modulator_scope")]
     internal static partial int ModulatorScope(IntPtr engine, int trackId, int modId, [Out] float[] outv, int cap);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_modulator_scope_timed")]
+    internal static partial int ModulatorScopeTimed(IntPtr engine, int trackId, int modId, [Out] float[] values, [Out] float[] dts, int cap);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_add_cv_link")]
     internal static partial int AddCvLink(IntPtr engine, int trackId, int modId, int deviceIndex, int paramIndex);
 
