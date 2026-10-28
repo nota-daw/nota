@@ -461,6 +461,14 @@ if (args.Length >= 1 && args[0] == "--pad-warp")
     Console.WriteLine(failures == 0 ? "PAD WARP PASSED" : $"PAD WARP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The EQ cards' spectrum analyzer alone (specs/046): `--eq-analyzer`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--eq-analyzer")
+{
+    Console.WriteLine("-- eq analyzer --");
+    foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "EQ ANALYZER PASSED" : $"EQ ANALYZER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Device fold alone: `--fold`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--fold")
 {
@@ -15141,6 +15149,9 @@ foreach (var (ok, label) in AuroraNullTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- device fold --");
 foreach (var (ok, label) in DeviceFoldTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- eq analyzer --");
+foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);
 
 // The Linux JUCE message pump (.specify/bugs/linux-plugin-black-window): exported on every
 // platform and a safe no-op before any hosted plugin exists (the app ticks it on Linux).

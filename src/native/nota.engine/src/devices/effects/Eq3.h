@@ -9,8 +9,8 @@
 #pragma once
 
 #include "devices/Device.h"
+#include "dsp/primitives/SpectrumAnalyzer.h"
 
-#include <signalsmith-linear/fft.h>
 
 #include <algorithm>
 #include <atomic>
@@ -58,8 +58,7 @@ class Eq3 : public Device {
         S_Bands = 14, // kSpec
         kTele = 16
     };
-    static constexpr int kSpec = 96;
-    static constexpr double kSpecLo = 20.0, kSpecHi = 20000.0;
+    static constexpr int kSpec = dsp::SpectrumAnalyzer::kPoints; // log points 20 Hz..20 kHz, dBFS
     static constexpr int kScope = kTele + kSpec;
 
     Eq3();
@@ -176,16 +175,9 @@ class Eq3 : public Device {
     std::vector<float> ring_;
     uint32_t ringMask_ = 0;
     std::atomic<uint32_t> ringW_{0};
-    int fftN_ = 0;
     mutable std::mutex mx_;
-    mutable signalsmith::linear::RealFFT<float> fft_;
-    std::vector<float> win_;
-    mutable std::vector<float> tBuf_;
-    mutable std::vector<std::complex<float>> fBuf_;
-    mutable double aSpec_[kSpec] = {};
-    mutable float spec_[kSpec] = {};
+    mutable dsp::SpectrumAnalyzer ana_;
     mutable double lastAnaS_ = -1.0;
-    mutable uint32_t lastAnaW_ = 0;
     mutable bool anaValid_ = false;
 };
 

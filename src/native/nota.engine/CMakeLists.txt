@@ -189,6 +189,7 @@ set(NOTA_ENGINE_SOURCES
     src/dsp/primitives/Oversampler.cpp  # HIIR 2x/4x/8x
     src/dsp/primitives/Convolution.cpp  # partitioned FFT conv
     src/dsp/primitives/TruePeakMeter.cpp  # 4x SIMD true-peak
+    src/dsp/primitives/SpectrumAnalyzer.cpp  # EQ card spectra (control thread)
     src/dsp/primitives/CompensationDelay.cpp  # PDC + isIdle
     src/dsp/poly/SynthVoice.cpp  # voice state
     src/dsp/poly/PolyVoiceManager.cpp  # voice allocation
