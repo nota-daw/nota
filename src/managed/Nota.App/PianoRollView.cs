@@ -1735,8 +1735,9 @@ public sealed partial class PianoRollView : UserControl
 
         private void DrawKeyLabel(DrawingContext ctx, int pitch, double y, double w, IBrush ink)
         {
-            // The axis size once a row has room for it (the default 12px row does); 8 on squeezed rows.
-            double size = Math.Clamp(RowH - 2, 8, NotaType.Axis);
+            // The axis size once a row has room for it (the default 12px row does); down to the
+            // type floor on squeezed rows.
+            double size = Math.Clamp(RowH - 2, NotaType.Floor, NotaType.Axis);
             var ft = new NotaFormattedText(NoteName(pitch), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, ink);
             ctx.DrawText(ft, new Point(w - ft.Width - 5, y + (RowH - ft.Height) / 2));
         }
