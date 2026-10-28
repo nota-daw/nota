@@ -192,6 +192,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Disarming a track no longer leaves a held note sounding** (nota-daw/nota#366): turning record arm off
+  (or the arm moving to another selected track) while a key is down releases the notes that
+  came in through live input, instead of leaving them on until panic or stop.
 - **Session clips no longer wait forever to start** (nota-daw/nota#343): a clip launched on a
   muted track, or one silenced by another track's solo, starts on the next launch point and
   keeps time while silent; a transport loop with no bar line inside it now launches at the

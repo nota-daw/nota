@@ -6,7 +6,7 @@
 // in a Session slot replaces the clip its track was playing (#337), and an audio track can
 // take one channel of a stereo input as a mono source in the middle (#340), and a plain click
 // on an arm button arms that track alone, ⌘-click more than one, and selecting an instrument
-// track arms it (#332).
+// track arms it (#332), and disarming a track while a key is held releases its note (#366).
 
 using Nota.Application;
 using Nota.Infrastructure;
@@ -27,6 +27,7 @@ internal static class SessionInputTests
         foreach (var r in AudioTakeReplacesPlayingSlot()) yield return r;
         foreach (var r in MonoInput()) yield return r;
         foreach (var r in ExclusiveArm()) yield return r;
+        foreach (var r in DisarmReleasesHeldNotes()) yield return r;
     }
 
     private static void Beats(NotaEngine e, double beats, float[]? keep = null)
@@ -235,6 +236,31 @@ internal static class SessionInputTests
         TrackArm.Set(e, drums, false, additive: false);
         TrackArm.Set(e, aud, true, additive: false);
         yield return (!TrackArm.FollowSelection(e, synth) && Armed(aud), "an armed audio track keeps its arm");
+    }
+
+    // A key held on an armed track, then the track disarmed (by its button, or by the arm moving
+    // to another selected track) before the key comes up: disarming releases the note (#366).
+    private static IEnumerable<(bool, string)> DisarmReleasesHeldNotes()
+    {
+        foreach (bool bySelection in new[] { false, true })
+        {
+            using var e = new NotaEngine();
+            int keys = e.AddInstrumentTrack(), other = e.AddInstrumentTrack();
+            e.SetTrackBuiltinInstrument(keys, 0);
+            e.SetTrackBuiltinInstrument(other, 0);
+            TrackArm.Set(e, keys, true, additive: false);
+            e.NoteOn(60, 0.9f);
+            float held = Peak(e, 0.5);
+            if (bySelection) TrackArm.FollowSelection(e, other);
+            else TrackArm.Set(e, keys, false, additive: false);
+            Beats(e, 2.0);                     // past the release, the key still down
+            float after = Peak(e, 0.5);
+            e.NoteOff(60);
+            float released = Peak(e, 0.5);
+            string how = bySelection ? "the arm moving to another track" : "its arm button";
+            yield return (held > 0.01f && after < 1e-4f && released < 1e-4f,
+                $"disarming by {how} while a key is held releases the note (peak {held:F3} → {after:G2})");
+        }
     }
 
     private static int FirstAudio(NotaEngine e)
