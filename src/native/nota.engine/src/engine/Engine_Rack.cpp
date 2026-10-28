@@ -1200,6 +1200,7 @@ bool Engine::rackChainMosaicSetProgram(int32_t t, int32_t di, int32_t c, const s
     // edit is ready at once) into a fork of the rack; undo brings the old one back.
     auto fresh = std::static_pointer_cast<Mosaic>(m->clone());
     fresh->setProgram(text);
+    fresh->presetTag = m->presetTag; // still the preset it was loaded from (specs/048)
     auto* fr = rackForEdit(t, di);
     return fr && fr->replaceChainInstrument(c, std::move(fresh));
 }
@@ -1216,6 +1217,7 @@ bool Engine::rackChainGrainSetSample(int32_t t, int32_t di, int32_t c, const std
     fresh->setSampleRate(transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0);
     for (int i = 0; i < gr->pluginParamCount(); ++i) fresh->pluginParamSet(i, gr->pluginParamGet(i));
     fresh->setSample(sample, rootNote, false);
+    fresh->presetTag = gr->presetTag; // still the preset it was loaded from (specs/048)
     auto* fr = rackForEdit(t, di);
     return fr && fr->replaceChainInstrument(c, std::move(fresh));
 }

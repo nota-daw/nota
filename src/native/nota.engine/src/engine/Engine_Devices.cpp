@@ -286,6 +286,7 @@ bool Engine::mosaicSetProgram(int32_t trackId, const std::string& text, bool che
     // zone edit is ready at once) — undo brings the old instrument, with its program, back.
     auto fresh = std::static_pointer_cast<Mosaic>(m->clone());
     fresh->setProgram(text);
+    fresh->presetTag = m->presetTag; // still the preset it was loaded from (specs/048)
     auto nt = cloneTrack(*old);
     nt->instrument = fresh;
     republishWithTrack(trackId, nt);
@@ -334,6 +335,7 @@ bool Engine::setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::str
     if (!sample || sample->empty()) return false;
     auto fresh = std::static_pointer_cast<RhythmMachine>(rh->clone()); // copies params/patterns/samples
     fresh->setVoiceSample(voice, sample);
+    fresh->presetTag = rh->presetTag; // still the preset it was loaded from (specs/048)
     auto nt = cloneTrack(*old);
     nt->instrument = fresh;
     republishWithTrack(trackId, nt);
@@ -351,6 +353,7 @@ bool Engine::setTrackGrainSample(int32_t trackId, const std::string& path, int32
     fresh->setSampleRate(sr);
     for (int i = 0; i < gr->pluginParamCount(); ++i) fresh->pluginParamSet(i, gr->pluginParamGet(i));
     fresh->setSample(sample, rootNote, false);
+    fresh->presetTag = gr->presetTag; // still the preset it was loaded from (specs/048)
     auto nt = cloneTrack(*old);
     nt->instrument = fresh;
     republishWithTrack(trackId, nt);
@@ -406,6 +409,7 @@ bool Engine::setTrackSamplerSample(int32_t trackId, const std::string& path, int
     fresh->setSampleRate(sr);
     for (int i = 0; i < sm->pluginParamCount(); ++i) fresh->pluginParamSet(i, sm->pluginParamGet(i));
     fresh->setSample(sample, rootNote, sm->loopEnabled());
+    fresh->presetTag = sm->presetTag; // still the preset it was loaded from (specs/048)
     auto nt = cloneTrack(*old);
     nt->instrument = fresh;
     republishWithTrack(trackId, nt);

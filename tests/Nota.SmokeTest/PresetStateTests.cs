@@ -155,6 +155,7 @@ internal static class PresetStateTests
             "preset: a v25 project migrates and opens with no preset names");
 
         foreach (var r in InPlaceDrops()) yield return r;
+        foreach (var r in ReplacedInstruments()) yield return r;
     }
 
     // A preset dropped (or picked in the palette) onto the same kind of instrument changes the
@@ -191,5 +192,38 @@ internal static class PresetStateTests
             $"preset: undoing a swap to \"{other.DisplayName}\" brings back the old instrument with its name ({PresetEdit.Name(eng, t, Ins, -1)})");
         yield return (eng.Redo() && eng.TrackInstrumentKind(t) == other.BuiltinKind && PresetEdit.Name(eng, t, Ins, -1) == other.DisplayName,
             $"preset: redo brings the swap back with its name ({PresetEdit.Name(eng, t, Ins, -1)})");
+    }
+
+    // An edit that publishes a fresh instrument (a Mosaic program, a drum or Grain sample) is
+    // still the preset the old one was loaded from: the name stays, undo and redo keep it.
+    private static IEnumerable<(bool, string)> ReplacedInstruments()
+    {
+        using var eng = new NotaEngine();
+        string wav = Path.Combine(Path.GetTempPath(), $"nota-smoke-preset-{Guid.NewGuid():N}.wav");
+        WavWriter.WriteSine(wav, seconds: 0.2, freq: 330, sampleRate: 44100);
+        const PresetSurface Ins = PresetSurface.Instrument;
+        var cases = new (string Kind, Func<int> Add, Func<int, bool> Edit)[]
+        {
+            ("Mosaic", eng.AddMosaicTrack, t => eng.MosaicSetProgram(t, eng.MosaicProgram(t) + "\n")),
+            ("Rhythm", eng.AddRhythmTrack, t => eng.SetRhythmVoiceSample(t, 0, wav)),
+            ("Grain", eng.AddGrainSynthTrack, t => eng.SetTrackGrainSample(t, wav)),
+            ("Sampler", eng.AddSamplerInstrumentTrack, t => eng.SetTrackSamplerSample(t, wav)),
+        };
+        try
+        {
+            foreach (var (kind, add, edit) in cases)
+            {
+                int t = add();
+                eng.SetDevicePresetTag(t, Ins, -1, "smoke:" + kind, kind + " Preset");
+                eng.ClearUndoHistory();
+                bool edited = edit(t);
+                yield return (edited && PresetEdit.Name(eng, t, Ins, -1) == kind + " Preset",
+                    $"preset: a {kind} edit that swaps in a fresh instrument keeps its name ({PresetEdit.Name(eng, t, Ins, -1)})");
+                yield return (eng.Undo() && PresetEdit.Name(eng, t, Ins, -1) == kind + " Preset"
+                              && eng.Redo() && PresetEdit.Name(eng, t, Ins, -1) == kind + " Preset",
+                    $"preset: undo and redo of the {kind} edit keep the name");
+            }
+        }
+        finally { try { File.Delete(wav); } catch (IOException) { } }
     }
 }

@@ -145,9 +145,10 @@ public sealed partial class DeviceChainView
         => k == ChainKind.Instrument ? PresetSurface.Instrument : k == ChainKind.Midi ? PresetSurface.MidiEffect : PresetSurface.Effect;
 
     /// <summary>Applies a preset (or Init, <paramref name="id"/> "") as one undo step that also
-    /// tags the device with it (specs/048), so undo brings back the old sound and its name.</summary>
-    private void PresetStep(ChainKind k, int di, Action apply, string id, string name)
-        => Nota.Application.Editing.PresetEdit.Apply(_engine, _trackId, SurfaceOf(k), di, id, name, () => { apply(); return ""; });
+    /// tags the device with it (specs/048), so undo brings back the old sound and its name.
+    /// A preset that didn't apply (a warning back) leaves the tag as it was.</summary>
+    private string PresetStep(ChainKind k, int di, Func<string> apply, string id, string name)
+        => Nota.Application.Editing.PresetEdit.Apply(_engine, _trackId, SurfaceOf(k), di, id, name, apply);
 
     // The modified check walks every parameter: a few times a second is plenty for a label.
     private static Func<bool> Throttled(Func<bool> check)
@@ -273,8 +274,8 @@ public sealed partial class DeviceChainView
 
         // Factory presets for this device (or the card's own list), and applying one in place.
         List<(string Id, string Name)> presets;
-        Action<string> applyById;
-        Action? resetToInit = null;   // Init isn't a preset, it's every default (#57); an own list opts in (#165)
+        Func<string, string> applyById;   // each returns a warning, "" when it applied
+        Func<string>? resetToInit = null;   // Init isn't a preset, it's every default (#57); an own list opts in (#165)
         if (s.Presets is { } own)
         {
             presets = own.Items.ToList();
@@ -291,6 +292,7 @@ public sealed partial class DeviceChainView
                 if (warn.Length > 0) StatusMessage?.Invoke(warn);
                 else _engine.SetDevicePresetTag(_trackId, ownSurface, di, "own:" + id, presets.FirstOrDefault(p => p.Id == id).Name ?? "");
                 Changed?.Invoke();
+                return warn;
             };
             if (own.Init is { } init)
                 resetToInit = () =>
@@ -299,6 +301,7 @@ public sealed partial class DeviceChainView
                     if (warn.Length > 0) StatusMessage?.Invoke(warn);
                     else _engine.SetDevicePresetTag(_trackId, ownSurface, di, "", "");
                     Changed?.Invoke();
+                    return warn;
                 };
         }
         else
@@ -308,13 +311,19 @@ public sealed partial class DeviceChainView
                     && (s.Kind == ChainKind.Midi ? p.IsMidiEffect : (p.IsInstrument == s.IsInstrument && !p.IsMidiEffect)))
                     .Select(p => (p.Id, p.DisplayName)).ToList()
                 : new List<(string Id, string Name)>();
-            applyById = id => _factory.ApplyInPlace(_engine, id, _trackId, di);
+            applyById = id =>
+            {
+                string warn = _factory.ApplyInPlace(_engine, id, _trackId, di);
+                if (warn.Length > 0) StatusMessage?.Invoke(warn);
+                return warn;
+            };
             // A device whose factory list already starts from its own "Init" preset needs no second one.
             if (presets.Count > 0 && !presets.Any(p => p.Name == "Init"))
                 resetToInit = () =>
                 {
                     string warn = _factory.ResetInPlace(_engine, _trackId, di, s.Kind == ChainKind.Midi);
                     if (warn.Length > 0) StatusMessage?.Invoke(warn);
+                    return warn;
                 };
         }
         // A factory list reads the device's own preset tag (specs/048): it follows undo, copies
@@ -348,13 +357,15 @@ public sealed partial class DeviceChainView
             var p = presets[i];
             // The list's own "Init" entry is Init: no tag, no mark.
             bool isInit = p.Name == "Init";
-            if (tagged) PresetStep(s.Kind, di, () => applyById(p.Id), isInit ? "" : p.Id, isInit ? "" : p.Name); else applyById(p.Id);
-            extra.PresetId = p.Id; extra.Preset = p.Name; Rebuild();
+            string warn = tagged ? PresetStep(s.Kind, di, () => applyById(p.Id), isInit ? "" : p.Id, isInit ? "" : p.Name) : applyById(p.Id);
+            if (warn.Length == 0) { extra.PresetId = p.Id; extra.Preset = p.Name; }
+            Rebuild();
         }
         void ApplyInit()
         {
-            if (tagged) PresetStep(s.Kind, di, resetToInit!, "", ""); else resetToInit!();
-            extra.PresetId = ""; extra.Preset = ""; Rebuild();
+            string warn = tagged ? PresetStep(s.Kind, di, resetToInit!, "", "") : resetToInit!();
+            if (warn.Length == 0) { extra.PresetId = ""; extra.Preset = ""; }
+            Rebuild();
         }
         void StepPreset(int dir)
         {
