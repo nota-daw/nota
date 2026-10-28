@@ -612,7 +612,14 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
     authoring_ = g;
     retired_.push_back(g);
     if (g) ensureRenderScratch(g->tracks.size());
-    if (g && ccDestsSet_) syncCcRoutes(*g);   // fresh track objects only: the audio thread never sees them change
+    // Fresh track objects only: the audio thread never sees them change. Before any CC target
+    // exists their routes are complete as they are (empty): marking them so keeps an undo to
+    // such a snapshot from rebuilding them from targets set later.
+    if (g && ccDestsSet_) syncCcRoutes(*g);
+    else if (g) {
+        for (auto& t : g->tracks) t->ccRoutesDirty = false;
+        if (g->masterTrack) g->masterTrack->ccRoutesDirty = false;
+    }
     liveGraph_.store(g.get(), std::memory_order_release);
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)

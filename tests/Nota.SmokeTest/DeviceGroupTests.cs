@@ -35,6 +35,23 @@ internal static class DeviceGroupTests
         foreach (var r in RackChainPaste()) yield return r;
         foreach (var r in RackRenders()) yield return r;
         foreach (var r in MasterKey()) yield return r;
+        foreach (var r in UndoBeforeFirstTarget()) yield return r;
+    }
+
+    // A fresh engine: undoing to a snapshot from before any CC target existed drops the target
+    // (the snapshot's routes are empty, not rebuilt from the Arp's later setting).
+    private static IEnumerable<(bool, string)> UndoBeforeFirstTarget()
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(t, Volt);
+        int arp = e.AddMidiEffect(t, Arp);
+        e.AddBuiltinDevice(t, Eq8);
+        int dl = e.AddBuiltinDevice(t, Delay);
+        e.SetMidiEffectCcDest(t, arp, dl, 1);   // the first CC target in this engine (no undo step)
+        e.Undo();                               // the Delay's insertion
+        yield return (e.TrackDeviceCount(t) == 1 && e.MidiEffectCcDestDevice(t, arp) < 0,
+            $"undo before the first CC target: the removed Delay isn't targeted ({e.TrackDeviceCount(t)} devices, target {e.MidiEffectCcDestDevice(t, arp)})");
     }
 
     // A keyed Compressor grouped on the master keeps its key through save / reload.
