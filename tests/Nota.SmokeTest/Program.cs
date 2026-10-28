@@ -4307,7 +4307,7 @@ Check(m4Dry > 1e-4f, $"instrument audible (rms={m4Dry:0.0000})");
 int eqDev = engine.AddBuiltinDevice(fxT, 0); // 0 = EQ-8 (flat by default = passthrough)
 Check(eqDev >= 0, "add built-in EQ-8");
 Check(engine.DeviceName(fxT, eqDev) == "Nota EQ-8", "EQ-8 device name");
-Check(engine.DeviceParamCount(fxT, eqDev) == 60, "EQ-8 exposes 60 params (8 bands × 5, slopes, channels, globals)");
+Check(engine.DeviceParamCount(fxT, eqDev) == 62, "EQ-8 exposes 62 params (8 bands × 5, slopes, channels, globals, analyzer range and peak)");
 engine.Seek(0);
 engine.RenderOffline(buf, frames);
 Check(Rms(buf, frames) > 1e-4f, $"audio flows through flat EQ-8 (rms={Rms(buf, frames):0.0000})");
@@ -5597,12 +5597,12 @@ Console.WriteLine("-- Nota EQ-3 --");
     Render(4096);                          // the kill's 5 ms glide
     qe.DeviceAction(qt, qd, 0, 0, 0);      // fresh meters
     Render(8192);
-    var qs = new float[112];
+    var qs = new float[16 + 256];
     int qn = qe.DeviceScope(qt, qd, qs, qs.Length);
-    Check(qn == 112 && qs[3] > qs[2] + 20 && qs[3] > -30 && qs[11] < 0.01f && Math.Abs(qs[12] - 1) < 0.01f && Math.Abs(qs[9] - 250) < 5 && Math.Abs(qs[10] - 2500) < 30,
+    Check(qn == qs.Length && qs[3] > qs[2] + 20 && qs[3] > -30 && qs[11] < 0.01f && Math.Abs(qs[12] - 1) < 0.01f && Math.Abs(qs[9] - 250) < 5 && Math.Abs(qs[10] - 2500) < 30,
           $"telemetry: band levels L {qs[2]:F0} / M {qs[3]:F1} dBFS, low gain {qs[11]:F3} (killed), crossovers {qs[9]:F0} / {qs[10]:F0} Hz");
-    int pk = 0; for (int b = 1; b < 96; b++) if (qs[16 + b] > qs[16 + pk]) pk = b;
-    double pkHz = 20 * Math.Pow(1000, (pk + 0.5) / 96);
+    int pk = 0; for (int b = 1; b < 256; b++) if (qs[16 + b] > qs[16 + pk]) pk = b;
+    double pkHz = 20 * Math.Pow(1000, pk / 255.0);
     Check(qs[7] > 0.5f && pkHz > 380 && pkHz < 520, $"the output spectrum peaks at the sine (~{pkHz:0} Hz)");
 
     // Texts.
@@ -6929,7 +6929,7 @@ Console.WriteLine("-- EQ-8 --");
     engine.AddMidiClip(et, 0.0, 4.0);
     engine.SetClipNotes(et, 0, new[] { new NotaNote(69, 0.0, 3.0, 0.9f) });   // A4 = 440 Hz + harmonics
     int eq = engine.AddBuiltinDevice(et, 0);
-    Check(engine.DeviceParamCount(et, eq) == 60, "EQ-8 has 60 params on a fresh track");
+    Check(engine.DeviceParamCount(et, eq) == 62, "EQ-8 has 62 params on a fresh track");
 
     // Band 3 (index 2) is a bell; param base = 2*5. On=+0, Type=+1, Freq=+2, Gain=+3, Q=+4.
     int b2 = 2 * 5;
@@ -7041,11 +7041,11 @@ Console.WriteLine("-- EQ-8 --");
     // Spectra: pre and post peak at the sine; the shelf lifts post over pre.
     qe.DeviceAction(qt, qd, 0, 0, 0);
     Render(8192);
-    var sc = new float[16 + 2 * 96];
+    var sc = new float[16 + 3 * 256];
     int sn = qe.DeviceScope(qt, qd, sc, sc.Length);
     int pkPre = 0, pkPost = 0;
-    for (int b = 1; b < 96; b++) { if (sc[16 + b] > sc[16 + pkPre]) pkPre = b; if (sc[112 + b] > sc[112 + pkPost]) pkPost = b; }
-    double hzPre = 20 * Math.Pow(1000, (pkPre + 0.5) / 96), lift = sc[112 + pkPost] - sc[16 + pkPre];
+    for (int b = 1; b < 256; b++) { if (sc[16 + b] > sc[16 + pkPre]) pkPre = b; if (sc[272 + b] > sc[272 + pkPost]) pkPost = b; }
+    double hzPre = 20 * Math.Pow(1000, pkPre / 255.0), lift = sc[272 + pkPost] - sc[16 + pkPre];
     Check(sn == sc.Length && sc[5] > 0.5f && hzPre > 380 && hzPre < 520 && pkPre == pkPost && lift > 3 && sc[1] > sc[0] + 3,
           $"spectra: pre / post peak at the sine (~{hzPre:0} Hz), post {lift:+0.0} dB over pre; out peak {sc[1]:F1} over in {sc[0]:F1} dBFS");
 
@@ -7083,12 +7083,18 @@ Console.WriteLine("-- EQ-8 --");
     bool threw = false;
     try { tools.SetEq8Band(qt, qd, 1, channel: "Centre").GetAwaiter().GetResult(); } catch (ArgumentException) { threw = true; }
     Check(threw, "MCP set_eq8_band rejects an unknown channel");
+    var ma = tools.SetEq8(qt, qd, analyzerRangeDb: 120, analyzerPeak: true).Result;
+    Check(ma.AnalyzerRangeDb == 120 && ma.AnalyzerPeak && qe.DeviceGetParam(qt, qd, 60) == 2 && qe.DeviceGetParam(qt, qd, 61) == 1,
+          $"MCP set_eq8 sets the analyzer range and peak hold ({ma.AnalyzerRangeDb} dB, peak {ma.AnalyzerPeak})");
+    tools.SetEq8(qt, qd, analyzerRangeDb: 90, analyzerPeak: false).GetAwaiter().GetResult();
 
     // An original-EQ-8 preset (the 40 band params only) keeps the appended params at their defaults.
     var legacy = new PresetDocument { Type = "builtin-effect", BuiltinKind = 0, NamedParams = new Dictionary<string, float> { ["1 Type"] = 1f, ["1 Freq"] = 110f, ["1 Gain"] = 5f } };
     PresetService.ApplyInPlace(legacy, qe, qt, qd);
     Check(qe.DeviceGetParam(qt, qd, Scale) == 100 && qe.DeviceGetParam(qt, qd, AutoG) == 0 && qe.DeviceGetParam(qt, qd, Output) == 0
-          && qe.DeviceGetParam(qt, qd, SlopeB + 4) == 0 && qe.DeviceGetParam(qt, qd, ChanB + 4) == 0, "an original EQ-8 preset loads with scale 100 %, stereo, 12 dB/oct");
+          && qe.DeviceGetParam(qt, qd, SlopeB + 4) == 0 && qe.DeviceGetParam(qt, qd, ChanB + 4) == 0
+          && qe.DeviceGetParam(qt, qd, 60) == 1 && qe.DeviceGetParam(qt, qd, 61) == 0,
+          "an original EQ-8 preset loads with scale 100 %, stereo, 12 dB/oct, analyzer range 90 dB, peak off");
 
     // Every factory preset names only real params and renders finite.
     var cat = new FactoryPresetCatalog();

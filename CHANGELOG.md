@@ -23,6 +23,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **A proper spectrum analyzer in EQ-8 and EQ-3** (#265): the spectrum behind the curve is now
+  a smooth, filled area that rises at once and falls back over about 300 ms, read from 256
+  points in 1/6-octave bands, so a tone reads at its own level and pink noise reads flat. EQ-8
+  draws the output filled with the input as a dim line (Pre fills the input), and gains
+  **Range** (60 / 90 / 120 dB) and **Peak** hold next to Pre / Post / Off; both are saved with
+  the device and older projects open at 90 dB, peak off. It also fixes why the old display
+  jumped: half of every analysis window held stale audio. The sound is unchanged. MCP
+  `set_eq8` `analyzerRangeDb` / `analyzerPeak`.
 - **Select several devices and group them into a rack** (#328): in the Devices panel ⇧-click
   selects a range across MIDI effects, the instrument and audio effects, ⌘-click adds or
   removes one, Esc clears. Copy, cut, paste, duplicate, delete, Move to track ▸ and dragging a

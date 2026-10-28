@@ -182,7 +182,7 @@ internal sealed class Eq3Graph : Control
     private readonly bool[] _kill = new bool[3];
     private double _f1 = 250, _f2 = 2500, _top = 6;
     private bool _lr8, _iso = true, _specValid;
-    private readonly float[] _spec = new float[96];
+    private readonly float[] _spec = new float[256];   // dsp::SpectrumAnalyzer::kPoints
     private int _specN;
 
     // Drag state: 0 / 1 = a crossover handle, 2 + b = band b's gain.
@@ -345,22 +345,8 @@ internal sealed class Eq3Graph : Control
         double y0 = Math.Round(Y(0, h)) + 0.5;
         ctx.DrawLine(new Pen(NotaPalette.GridBar, 1), new Point(0, y0), new Point(w, y0));
 
-        // Output spectrum, behind everything: 0 dBFS at the top, −84 at the bottom.
-        if (_specValid)
-        {
-            var g = new StreamGeometry();
-            using (var gc = g.Open())
-            {
-                for (int i = 0; i < _specN; i++)
-                {
-                    double x = (i + 0.5) / _specN * w;
-                    double y = Math.Clamp(-_spec[i] / 84.0, 0, 1) * h;
-                    if (i == 0) gc.BeginFigure(new Point(x, y), false); else gc.LineTo(new Point(x, y));
-                }
-                gc.EndFigure(false);
-            }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.BorderStrong, 1, lineJoin: PenLineJoin.Round), g);
-        }
+        // Output spectrum, behind everything, filled as on EQ-8: 0 dBFS at the top, −90 at the bottom.
+        if (_specValid) SpectrumFill.Draw(ctx, _spec, w, h, 90, _specN);
 
         // Band curves and the sum.
         int n = (int)Math.Clamp(w / 2, 60, 320);

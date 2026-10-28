@@ -45,7 +45,8 @@ internal sealed class EqDeviceBody : IDeviceBody
             if (mx[p] <= mn[p]) mx[p] = mn[p] + 1;
         }
         // Defaults of the appended params, for a device that somehow lacks them.
-        float P(int p) => p < pc ? engine.DeviceGetParam(track, di, p) : p == Eq8.ScaleP ? 100f : p == Eq8.AnalyzerP ? Eq8.AnaPost : 0f;
+        float P(int p) => p < pc ? engine.DeviceGetParam(track, di, p)
+            : p == Eq8.ScaleP ? 100f : p == Eq8.AnalyzerP ? Eq8.AnaPost : p == Eq8.AnaRangeP ? 1f : 0f;
         float B(int b, int f) => P(Eq8.P(b, f));
         void Begin(int p) => engine.BeginAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
         void End(int p) => engine.EndAutomationWrite(track, AutomationTarget.DeviceParam, di, p, "");
@@ -138,10 +139,21 @@ internal sealed class EqDeviceBody : IDeviceBody
         Learn(anaSeg, Eq8.AnalyzerP);
         ToolTip.SetTip(anaSeg, "Analyzer — Pre: the input spectrum · Post: the output over a dimmer input · Off");
         readouts.Add(anaSync);
+        // Range (dB below 0 dBFS at the graph's bottom) and Peak hold, shown while the analyzer is on.
+        bool AnaOn() => Math.Clamp((int)Math.Round(P(Eq8.AnalyzerP)), 0, 2) != Eq8.AnaOff;
+        var rangeSeg = Segments(Eq8.RangeSeg, () => Math.Clamp((int)Math.Round(P(Eq8.AnaRangeP)), 0, 2),
+            i => { SetP(Eq8.AnaRangeP, i); RefreshAll(); curve.InvalidateVisual(); }, out var rangeSync, padX: 4);
+        Learn(rangeSeg, Eq8.AnaRangeP);
+        ToolTip.SetTip(rangeSeg, "Analyzer range — the graph's bottom edge, in dB below 0\u2009dBFS");
+        bool PeakOn() => P(Eq8.AnaPeakP) >= 0.5f;
+        var peakSw = Switch("Peak", PeakOn, () => { SetP(Eq8.AnaPeakP, PeakOn() ? 0 : 1); RefreshAll(); }, out var peakSync);
+        Learn(peakSw, Eq8.AnaPeakP);
+        ToolTip.SetTip(peakSw, "Peak hold — a thin line at each frequency's highest level of the last moments");
+        readouts.Add(() => { rangeSync(); peakSync(); rangeSeg.IsVisible = peakSw.IsVisible = AnaOn() && pc > Eq8.AnaPeakP; });
         var anaBar = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 5, Margin = new Thickness(5, 3), HorizontalAlignment = HorizontalAlignment.Left,
-            VerticalAlignment = VerticalAlignment.Top, Children = { Caps("ANALYZER"), anaSeg },
+            VerticalAlignment = VerticalAlignment.Top, Children = { Caps("ANALYZER"), anaSeg, rangeSeg, peakSw },
         };
         anaBar.RenderTransform = new ScaleTransform(0.85, 0.85);
         anaBar.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
