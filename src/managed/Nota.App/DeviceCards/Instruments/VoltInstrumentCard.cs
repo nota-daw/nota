@@ -333,7 +333,11 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             RowDefinitions = new RowDefinitions("*,*,*"),
         };
         void OscCell(Control c, int row, int col, int span = 1)
-        { Grid.SetRow(c, row); Grid.SetColumn(c, col); if (span > 1) Grid.SetColumnSpan(c, span); oscGrid.Children.Add(c); }
+        {
+            // Centred in the row, so a knob's ring keeps clear of the rule above it.
+            if (c.VerticalAlignment == VerticalAlignment.Stretch) c.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetRow(c, row); Grid.SetColumn(c, col); if (span > 1) Grid.SetColumnSpan(c, span); oscGrid.Children.Add(c);
+        }
 
         // "ROUTE" over the F1 / F2 chips, right-aligned like the almanac's route cell.
         Control RouteCell(string id)
@@ -561,7 +565,11 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             ColumnDefinitions = new ColumnDefinitions("52,Auto,*,*,*,*,Auto"), ColumnSpacing = 5,
             RowDefinitions = new RowDefinitions("*,*,*"),
         };
-        void LfoCell(Control c, int row, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); lfoGrid.Children.Add(c); }
+        void LfoCell(Control c, int row, int col)
+        {
+            if (c.VerticalAlignment == VerticalAlignment.Stretch) c.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetRow(c, row); Grid.SetColumn(c, col); lfoGrid.Children.Add(c);
+        }
         for (int l = 0; l < 2; l++)
         {
             string pre = l == 0 ? "lfo1" : "lfo2";

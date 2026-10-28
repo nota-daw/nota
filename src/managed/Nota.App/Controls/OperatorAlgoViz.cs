@@ -228,13 +228,16 @@ internal sealed class OperatorRoutingViz : Control
         double gx0 = padX, gx1 = w - padX;
         double outY = h - 6;
         double bw = Math.Min(38, (gx1 - gx0) / 4.6);
-        double bh = Math.Clamp((outY - 8 - top) / 2, 10, 14);
         var level = new int[4];
         for (int o = 3; o >= 0; o--) level[o] = tgt[o] == 4 ? 0 : level[tgt[o]] + 1;
         int maxL = OperatorTopo.Depth(tgt);
+        // Boxes shrink (to 10) so every level keeps a 6 px gap to the next, with its line visible.
+        const double MinGap = 6;
+        double avail = outY - 8 - top;
+        double bh = Math.Clamp(maxL == 0 ? avail : (avail - maxL * MinGap) / (maxL + 1), 10, 14);
         double cyLow = outY - 8 - bh / 2, cyTop = top + bh / 2;
         double step = maxL == 0 ? 0 : Math.Min(bh + 10, (cyLow - cyTop) / maxL);
-        double side = step < bh + 2 ? bw + 8 : 0;
+        double side = maxL > 0 && step < bh + MinGap ? bw + 8 : 0;
         Point Ctr(int o)
         {
             if (o == _drag) return _dragPt;
