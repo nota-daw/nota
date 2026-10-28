@@ -398,11 +398,27 @@ public sealed partial class ArrangementView
 
         protected override void OnPointerExited(PointerEventArgs e) { _auto.ClearHover(); SetSeamHover(false); base.OnPointerExited(e); }
 
+        // Like the track lanes, a lost capture never cancels an edit: on macOS it fires before
+        // the button-up that commits it. Esc and a lost window focus cancel through CancelGesture.
         protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
         {
             _o.EndFooterResize();
-            if (_auto.Cancel()) InvalidateVisual();
             base.OnPointerCaptureLost(e);
+        }
+
+        /// <summary>A return-lane edit, a master-volume point drag or a row resize is live.</summary>
+        public bool IsGesturing => _auto.IsActive || _mDrag is not null || _o.IsFooterResizing;
+
+        // Esc / lost window focus: drop a live edit with no model change and reload the lanes
+        // from the engine (a resize keeps the height it reached — heights are view state).
+        internal bool CancelGesture()
+        {
+            if (!IsGesturing) return false;
+            _auto.Cancel();
+            _mDrag = null;
+            _o.EndFooterResize();
+            _o.Refresh();
+            return true;
         }
 
         public override void Render(DrawingContext ctx)

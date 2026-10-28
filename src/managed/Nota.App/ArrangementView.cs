@@ -693,7 +693,7 @@ public sealed partial class ArrangementView : UserControl
         bool playing = _engine is { IsPlaying: true };
         if (playing && !_wasPlaying) SetFollowSuspended(false);
         _wasPlaying = playing;
-        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsEditingPoint && CenterOnPlayhead();
+        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && CenterOnPlayhead();
         if (scrolled) _lanes.InvalidateVisual();
         // Converge the loop highlight with the engine (~30 Hz) so transport-bar
         // toggles/changes reflect here too — except mid-drag, where we show a preview.
@@ -1684,11 +1684,11 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Esc: cancel an in-progress lane gesture if one is active (no model change),
     /// otherwise clear any selection (req 1.2.6 / 2.11). Returns true if it did something.</summary>
     /// <summary>Abort any in-progress lane gesture with no model change (window focus loss).</summary>
-    public void CancelActiveGesture() => _lanes.CancelGesture();
+    public void CancelActiveGesture() { _lanes.CancelGesture(); _footerLanes.CancelGesture(); }
 
     internal bool EscapePressed()
     {
-        if (_lanes.CancelGesture()) return true;
+        if (_lanes.CancelGesture() | _footerLanes.CancelGesture()) return true;
         bool had = _sel.Count > 0 || SelTrackId > 0 || HasAutoSelection || HasTimeSelection;
         if (HasAutoSelection) ClearAutoSelection();
         if (HasTimeSelection) ClearTimeSelection();

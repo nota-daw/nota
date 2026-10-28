@@ -50,6 +50,7 @@ public sealed partial class ArrangementView
             if (!IsActive) return false;
             _autoDrag = null; _autoDragTrack = null; _bendLeft = _bendRight = null; _bendTrack = null;
             _rangeTrack = null;
+            _autoLiveStarted = false;   // the next drag checkpoints undo again
             return true;
         }
 

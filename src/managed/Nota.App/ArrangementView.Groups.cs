@@ -106,6 +106,8 @@ public sealed partial class ArrangementView
 
     private void ToggleTrackInSelection(int trackId)
     {
+        // A track selection never carries returns (they select among themselves in the footer).
+        _selTracks.RemoveWhere(id => _returns.Any(r => r.Id == id));
         // Seed the set with the current primary so the click extends rather than replaces.
         if (_selTracks.Count == 0 && _tracks.Any(t => t.Id == SelTrackId)) _selTracks.Add(SelTrackId);
         if (_selTracks.Add(trackId)) { Select(trackId, -1, keepTrackSet: true); return; }   // make it primary + show its devices
