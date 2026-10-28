@@ -2463,27 +2463,28 @@ public sealed partial class ArrangementView : UserControl
         MenuItem? recInput = null;
         if (isAudio)
         {
-            int cur = _engine.GetTrackRecordInput(trackId);
+            var cur = RecordInputPick.Of(_engine, trackId);
             string curName = "Ext";
             var choices = new List<MenuItem>();
-            void Src(string label, string shortName, int source)
+            void Src(string label, string shortName, RecordInputPick pick)
             {
-                var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = cur == source };
-                mi.Click += (_, _) => _engine.SetTrackRecordInput(trackId, source);
+                bool on = pick.Matches(cur);
+                var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = on };
+                mi.Click += (_, _) => pick.ApplyTo(_engine, trackId);
                 choices.Add(mi);
-                if (cur == source) curName = shortName;
+                if (on) curName = shortName;
             }
-            Src("Audio input (hardware)", "Ext", 0);
-            Src("Master", "Master", -1);
+            foreach (var (pick, label, shortName) in RecordInputPick.Hardware) Src(label, shortName, pick);
+            int fixedCount = RecordInputPick.Hardware.Length + 1;   // the hardware entries + Master
+            Src("Master", "Master", RecordInputPick.Track(-1));
             foreach (var v in _tracks)
-                if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : $"Track {v.Id}"; Src(n, n, v.Id); }
+                if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : $"Track {v.Id}"; Src(n, n, RecordInputPick.Track(v.Id)); }
             foreach (var v in _returns)
-            { string n = v.Name.Length > 0 ? v.Name : $"Return {v.Id}"; Src(n, n, v.Id); }
+            { string n = v.Name.Length > 0 ? v.Name : $"Return {v.Id}"; Src(n, n, RecordInputPick.Track(v.Id)); }
             recInput = MenuKit.ValueItem("Record input", GlyphKind.Input, curName);
-            recInput.Items.Add(choices[0]);
-            recInput.Items.Add(choices[1]);
-            if (choices.Count > 2) recInput.Items.Add(new Separator());
-            foreach (var c in choices.Skip(2)) recInput.Items.Add(c);
+            foreach (var c in choices.Take(fixedCount)) recInput.Items.Add(c);
+            if (choices.Count > fixedCount) recInput.Items.Add(new Separator());
+            foreach (var c in choices.Skip(fixedCount)) recInput.Items.Add(c);
         }
 
         // MIDI from ▸ (instrument tracks only): play another instrument track's MIDI through
@@ -2547,9 +2548,9 @@ public sealed partial class ArrangementView : UserControl
             HorizontalContentAlignment = HorizontalAlignment.Stretch,   // let the item span the box (In left / name right)
             Margin = new Thickness(0, 0, 12, 0),   // a touch shorter than the row
         };
-        var sources = new List<int>();
+        var sources = new List<RecordInputPick>();
         // "In" pinned left (faded), the source name pinned right, so the name stands out.
-        void Add(string value, int src)
+        void Add(string value, RecordInputPick src)
         {
             var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
             var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
@@ -2566,19 +2567,19 @@ public sealed partial class ArrangementView : UserControl
             cb.Items.Add(new ComboBoxItem { Content = content, Padding = new Thickness(6, 2), MinHeight = 0, HorizontalContentAlignment = HorizontalAlignment.Stretch });
             sources.Add(src);
         }
-        Add("Ext", 0);
-        Add("Master", -1);
-        foreach (var v in _tracks) if (v.Id != trackId) Add(v.Name.Length > 0 ? v.Name : $"Track {v.Id}", v.Id);
-        foreach (var v in _returns) Add(v.Name.Length > 0 ? v.Name : $"Return {v.Id}", v.Id);
-        int cur = _engine?.GetTrackRecordInput(trackId) ?? 0;
-        int sel = sources.IndexOf(cur);
+        foreach (var (pick, _, shortName) in RecordInputPick.Hardware) Add(shortName, pick);
+        Add("Master", RecordInputPick.Track(-1));
+        foreach (var v in _tracks) if (v.Id != trackId) Add(v.Name.Length > 0 ? v.Name : $"Track {v.Id}", RecordInputPick.Track(v.Id));
+        foreach (var v in _returns) Add(v.Name.Length > 0 ? v.Name : $"Return {v.Id}", RecordInputPick.Track(v.Id));
+        var cur = _engine is null ? RecordInputPick.Hardware[0].Pick : RecordInputPick.Of(_engine, trackId);
+        int sel = sources.FindIndex(p => p.Matches(cur));
         cb.SelectedIndex = sel >= 0 ? sel : 0;
-        monitor?.SetSource(sel >= 0 ? cur : 0);
+        monitor?.SetSource(sel >= 0 ? cur.Source : 0);
         cb.SelectionChanged += (_, _) =>
         {
-            if (cb.SelectedIndex < 0 || cb.SelectedIndex >= sources.Count) return;
-            _engine?.SetTrackRecordInput(trackId, sources[cb.SelectedIndex]);
-            monitor?.SetSource(sources[cb.SelectedIndex]);
+            if (cb.SelectedIndex < 0 || cb.SelectedIndex >= sources.Count || _engine is null) return;
+            sources[cb.SelectedIndex].ApplyTo(_engine, trackId);
+            monitor?.SetSource(sources[cb.SelectedIndex].Source);
         };
         return cb;
     }

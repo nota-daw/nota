@@ -40,6 +40,14 @@ int32_t Engine::trackRecordInput(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return t ? t->recordInputSource() : 0;
 }
+void Engine::setTrackInputChannels(int32_t trackId, int32_t channels) {
+    auto t = findTrackAuthoring(trackId);
+    if (t && t->type() == TrackType::Audio) t->setInputChannels(channels);
+}
+int32_t Engine::trackInputChannels(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t ? t->inputChannels() : Track::kInputStereo;
+}
 
 // --- live input monitoring ---------------------------------------------------
 void Engine::setTrackMonitor(int32_t trackId, bool on) {
@@ -431,6 +439,7 @@ void Engine::drainInputQueue() {
         captureScratch_.push_back(f.l);
         captureScratch_.push_back(f.r);
     }
+    Track::foldInputChannels(captureScratch_.data(), captureScratch_.size() / 2, captureChannels_);
     // Frames the audio thread had to drop while this drain was stalled (ring full).
     // They are the newest samples — the ones that couldn't fit after the popped batch —
     // so append an equal run of silence *after* the drained frames. That keeps the take's
@@ -477,6 +486,7 @@ bool Engine::startAudioRecording(int32_t trackId) {
     // Internal resampling: capture another track / send / master output instead of the
     // hardware input. The audio thread feeds the ring from mixGraph; no device is opened.
     const int32_t src = t->recordInputSource();
+    captureChannels_ = src == 0 ? t->inputChannels() : Track::kInputStereo; // a mono pick is hardware-only
     if (src != 0) {
         internalRecordSource_.store(src, std::memory_order_relaxed);
         audioRecordSampleRate_ = transport_.sampleRate();

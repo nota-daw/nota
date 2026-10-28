@@ -250,32 +250,33 @@ public sealed partial class SessionView
             if (_engine.TryGetTrackInfo(i, out var t) && t.Id != c.TrackId && !t.IsGroup)
                 names.Add((t.Id, TrackNames.Of(_engine, t), t.IsInstrument));
 
-        var items = new List<(int Value, string Label)>();
-        int cur;
+        // An audio track's hardware input appears once per channel pick (#340): 1, 2, 1/2.
+        var items = new List<(RecordInputPick Value, string Label)>();
+        RecordInputPick cur;
         if (c.IsInstrument)
         {
-            items.Add((-1, "All ins"));
-            foreach (var n in names.Where(n => n.Instrument)) items.Add((n.Id, n.Name));
-            cur = _engine.GetTrackMidiSource(c.TrackId);
+            items.Add((RecordInputPick.Track(-1), "All ins"));
+            foreach (var n in names.Where(n => n.Instrument)) items.Add((RecordInputPick.Track(n.Id), n.Name));
+            cur = RecordInputPick.Track(_engine.GetTrackMidiSource(c.TrackId));
         }
         else
         {
-            items.Add((0, "Ext in"));
-            items.Add((-1, "Master"));
-            foreach (var n in names) items.Add((n.Id, n.Name));
-            cur = _engine.GetTrackRecordInput(c.TrackId);
+            foreach (var (pick, _, shortName) in RecordInputPick.Hardware) items.Add((pick, shortName));
+            items.Add((RecordInputPick.Track(-1), "Master"));
+            foreach (var n in names) items.Add((RecordInputPick.Track(n.Id), n.Name));
+            cur = RecordInputPick.Of(_engine, c.TrackId);
         }
         var cb = new ComboBox { Height = IoRowH, FontSize = 10, Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(4, 0) };
         foreach (var it in items) cb.Items.Add(new ComboBoxItem { Content = it.Label, FontSize = 10 });
-        int sel = items.FindIndex(it => it.Value == cur);
+        int sel = items.FindIndex(it => it.Value.Matches(cur));
         cb.SelectedIndex = sel >= 0 ? sel : 0;
         int id = c.TrackId;
         bool inst = c.IsInstrument;
         cb.SelectionChanged += (_, _) =>
         {
             if (cb.SelectedIndex < 0) return;
-            int v = items[cb.SelectedIndex].Value;
-            if (inst) _engine.SetTrackMidiSource(id, v); else _engine.SetTrackRecordInput(id, v);
+            var v = items[cb.SelectedIndex].Value;
+            if (inst) _engine.SetTrackMidiSource(id, v.Source); else v.ApplyTo(_engine, id);
         };
         ToolTip.SetTip(cb, inst ? "MIDI input: every input, or another instrument track" : "Record input");
         return cb;
