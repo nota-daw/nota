@@ -165,6 +165,7 @@ bool RackCore::setChainInstrumentSample(int32_t chain, std::shared_ptr<SampleBuf
     if (!sm) return false;
     sm->setSampleRate(sampleRate_);
     sm->setSample(std::move(buf), root, loop);
+    if (oldSm) fresh->presetTag = oldSm->presetTag; // still the preset it was loaded from (specs/048)
     ns->chains[chain].instrument = std::move(fresh);
     commit(ns);
     return true;

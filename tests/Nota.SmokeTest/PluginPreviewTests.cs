@@ -6,7 +6,7 @@
 // the storage is the device's, so built-ins exercise it here: the C ABI round trip, the serial,
 // clearing and bad input, a move / duplicate / copy-paste / duplicated track carrying it,
 // save/load, and a device grouped into a rack keeping it through the rack's blob (a duplicated
-// rack, a reopened project); a v25 project opens without previews. Also runnable alone:
+// rack, a reopened project); a v26 project opens without previews. Also runnable alone:
 // `dotnet run --project tests/Nota.SmokeTest -- --preview`.
 
 using System.Text.Json.Nodes;
@@ -132,9 +132,9 @@ internal static class PluginPreviewTests
             }
         }
 
-        var old = ProjectMigrations.Migrate(new JsonObject { ["formatVersion"] = 25 });
+        var old = ProjectMigrations.Migrate(new JsonObject { ["formatVersion"] = 26 });
         yield return ((old["formatVersion"]?.GetValue<int>() ?? 0) == ProjectService.CurrentFormatVersion
-                      && ProjectService.CurrentFormatVersion >= 26 && new DeviceDto().Preview is null && new InstrumentDto().Preview is null,
-            "preview: a v25 project migrates and opens with none");
+                      && ProjectService.CurrentFormatVersion >= 27 && new DeviceDto().Preview is null && new InstrumentDto().Preview is null,
+            "preview: a v26 project migrates and opens with none");
     }
 }

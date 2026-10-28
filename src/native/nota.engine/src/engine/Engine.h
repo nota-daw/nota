@@ -1422,6 +1422,7 @@ class Engine {
     static int32_t trackLatency(const Track& t);
     std::shared_ptr<Instrument> cloneInstrument(const Track& src) const; // duplicateTrack helper
     std::shared_ptr<Instrument> cloneInstrumentFrom(const Instrument& src) const;
+    std::shared_ptr<Instrument> cloneInstrumentBody(const Instrument& src) const;
     // Copies of the automation lanes on one device of `t` (family as transferDevice; for the
     // instrument, PluginParam lanes with deviceIndex < 0), in lane order.
     std::vector<TrackLane> deviceLanes(const Track& t, int32_t family, int32_t index) const;
@@ -1613,6 +1614,34 @@ class Engine {
     int32_t nextMixGesture_ = 1;
     bool mixValue(const MixTarget& t, float& v) const; // current value; false = gone
     bool paramTargetExists(MixKind kind, int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
+
+    // ---- preset tags (specs/048, Engine_Presets.cpp) ----
+    // What preset a device was loaded from: its id, display name and the parameter values
+    // right after it applied. Devices hold an index into this append-only table (0 = none),
+    // so a tag change is a float-valued mix step and undo/redo restore it.
+    struct PresetTagData {
+        std::string id, name;
+        std::vector<float> base;
+    };
+    std::vector<PresetTagData> presetTags_ = std::vector<PresetTagData>(1);
+    // The parameter values a tag compares (a CV-modulated param's link base, not its live value).
+    bool presetSurfaceValues(int32_t trackId, int32_t surface, int32_t index, std::vector<float>& out) const;
+
+  public:
+    // surface: 0 audio effect (index = chain position), 1 the instrument (index ignored),
+    // 2 MIDI effect (index = MIDI-FX chain position).
+    int32_t presetTagOf(int32_t trackId, int32_t surface, int32_t index) const; // -1 no device
+    bool setPresetTagIndex(int32_t trackId, int32_t surface, int32_t index, int32_t tag);
+    // A new tag for the device: base = `base` (n values) or, when null, the values it holds now.
+    // Sets it (no undo step of its own: call it inside a mix gesture that targets the tag).
+    int32_t setPresetTag(int32_t trackId, int32_t surface, int32_t index, const char* id, const char* name,
+        const float* base, int32_t n);
+    const PresetTagData* presetTagData(int32_t tag) const;
+    // -1: no tag / no device; 0: the device holds its preset's values; 1: modified.
+    int32_t presetModified(int32_t trackId, int32_t surface, int32_t index) const;
+    bool presetTagSelfTest();
+
+  private:
     bool applyMix(const MixChange& c, bool after); // write before/after; false = gone
     static void mergeMix(std::vector<MixChange>& into, const std::vector<MixChange>& later);
     static constexpr size_t kMaxUndoDepth = 128;

@@ -286,6 +286,7 @@ bool Engine::mosaicSetProgram(int32_t trackId, const std::string& text, bool che
     // zone edit is ready at once) — undo brings the old instrument, with its program, back.
     auto fresh = std::static_pointer_cast<Mosaic>(m->clone());
     fresh->setProgram(text);
+    fresh->presetTag = m->presetTag; // still the preset it was loaded from (specs/048)
     auto nt = cloneTrack(*old);
     nt->instrument = fresh;
     republishWithTrack(trackId, nt);
@@ -334,6 +335,7 @@ bool Engine::setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::str
     if (!sample || sample->empty()) return false;
     auto fresh = std::static_pointer_cast<RhythmMachine>(rh->clone()); // copies params/patterns/samples
     fresh->setVoiceSample(voice, sample);
+    fresh->presetTag = rh->presetTag; // still the preset it was loaded from (specs/048)
     auto nt = cloneTrack(*old);
     nt->instrument = fresh;
     republishWithTrack(trackId, nt);
@@ -351,6 +353,7 @@ bool Engine::setTrackGrainSample(int32_t trackId, const std::string& path, int32
     fresh->setSampleRate(sr);
     for (int i = 0; i < gr->pluginParamCount(); ++i) fresh->pluginParamSet(i, gr->pluginParamGet(i));
     fresh->setSample(sample, rootNote, false);
+    fresh->presetTag = gr->presetTag; // still the preset it was loaded from (specs/048)
     auto nt = cloneTrack(*old);
     nt->instrument = fresh;
     republishWithTrack(trackId, nt);
@@ -406,6 +409,7 @@ bool Engine::setTrackSamplerSample(int32_t trackId, const std::string& path, int
     fresh->setSampleRate(sr);
     for (int i = 0; i < sm->pluginParamCount(); ++i) fresh->pluginParamSet(i, sm->pluginParamGet(i));
     fresh->setSample(sample, rootNote, sm->loopEnabled());
+    fresh->presetTag = sm->presetTag; // still the preset it was loaded from (specs/048)
     auto nt = cloneTrack(*old);
     nt->instrument = fresh;
     republishWithTrack(trackId, nt);
@@ -577,6 +581,12 @@ std::shared_ptr<Instrument> Engine::cloneInstrument(const Track& src) const {
 }
 
 std::shared_ptr<Instrument> Engine::cloneInstrumentFrom(const Instrument& src) const {
+    auto c = cloneInstrumentBody(src);
+    if (c) c->presetTag = src.presetTag; // the preset it was loaded from (specs/048)
+    return c;
+}
+
+std::shared_ptr<Instrument> Engine::cloneInstrumentBody(const Instrument& src) const {
     const double sr = transport_.sampleRate() > 0 ? transport_.sampleRate() : 44100.0;
     if (auto c = src.clone()) {
         c->setSampleRate(sr);
@@ -683,6 +693,7 @@ std::shared_ptr<Device> Engine::cloneDevice(const Device& src) const {
     }
     d->setBypassed(src.bypassed());
     d->setFolded(src.folded());
+    d->setPresetTag(src.presetTag()); // the preset it was loaded from (specs/048)
     d->setEditorPreview(src.editorPreview()); // shared bytes: the same picture (specs/046)
     d->setSidechainSourceTrackId(src.sidechainSourceTrackId()); // a keyed device keeps its key
     d->setSidechainTapPre(src.sidechainTapPre());
@@ -781,6 +792,7 @@ std::shared_ptr<MidiDevice> Engine::cloneMidiDevice(const MidiDevice& src) const
     d->setCcDepth(src.ccDepth());
     d->setBypassed(src.bypassed());
     d->setFolded(src.folded());
+    d->setPresetTag(src.presetTag()); // the preset it was loaded from (specs/048)
     return d; // live state starts fresh
 }
 

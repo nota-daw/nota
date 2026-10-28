@@ -1,6 +1,6 @@
 # Contract: project format — plug-in preview blob
 
-Format **v26** (no-op migration from v25, `ProjectMigrations`), as the project bumps the
+Format **v27** (no-op migration from v26; v26 is specs/048's presets, `ProjectMigrations`), as the project bumps the
 version for every schema change.
 
 - `InstrumentDto.Preview` and `DeviceDto.Preview` (`string?`, JSON `preview`, omitted
@@ -15,7 +15,7 @@ version for every schema change.
   is skipped silently (the card stays plain).
 - An instrument's preview is not applied to the stand-in Volt track used when its plug-in
   isn't installed (`TrackInstrumentKind` must match the saved kind).
-- An older Nota refuses a v26 project, as with every format bump.
+- An older Nota refuses a v27 project, as with every format bump.
 - A device inside a rack chain has no DTO of its own: the rack's blob (`RackCore::serialize`,
   blob **v10**) carries each chain's instrument and device previews after the v9 chain data
   (`u32` length + JPEG bytes, 0 = none). So a grouped plug-in keeps its picture through save,
