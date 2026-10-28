@@ -12,5 +12,5 @@
 - [x] T010 MCP `read_preset_state`
 - [x] T011 Smoke tests `--preset-state` (engine self-test, undo/redo, Init, copy/duplicate/move, view params, save/load, migration)
 - [x] T012 CHANGELOG, FEATURES, docs EN + RU
-- [ ] T013 macOS check with before/after screenshots
+- [x] T013 macOS check with before/after screenshots (Mac mini, Oct 28: all 7 hands-on checks pass; `--preset-state` 156 PASS)
 - [ ] T014 Follow-up: rack chain devices (US4)
