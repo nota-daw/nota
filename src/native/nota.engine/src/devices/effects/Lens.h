@@ -272,8 +272,10 @@ class Lens : public Device {
     void analyzeScope() const;
     // The synced frame from the beat-stamped history (specs/050).
     void analyzeSync() const;
-    // Rings + history for one block of audio (main and, when routed, the key). Audio thread.
-    void capture(const float* main, const float* key, int32_t keyFrames, int32_t frames, double beat0, double spb, bool playing);
+    // Rings + history for one block of audio (main and, when routed, the key); the
+    // beat-stamped history only with `hist` (Sync on). Audio thread.
+    void capture(const float* main, const float* key, int32_t keyFrames, int32_t frames, double beat0, double spb,
+        bool playing, bool hist);
     float pickKey(uint32_t idx, bool ms, int src) const {
         const size_t i = idx & (kRing - 1);
         const float l = ringKL_[i], r = ringKR_[i];
@@ -327,6 +329,7 @@ class Lens : public Device {
     int32_t pendN_ = 0;
     double pendBeat_ = 0.0, pendSpb_ = 0.0;
     bool pendPlaying_ = false;
+    bool keyedPrev_ = false, syncPrev_ = false; // audio thread
     std::atomic<uint32_t> keySeen_{0}; // frameSeq_ of the last block a key arrived in
     std::vector<float> ringKL_, ringKR_; // the key, beside ringL_/ringR_ (same head)
 

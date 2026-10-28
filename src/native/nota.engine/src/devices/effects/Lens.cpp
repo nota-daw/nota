@@ -97,7 +97,8 @@ void Lens::setSampleRate(double sr, int32_t maxBlock) {
 }
 
 // Analyzer: the signal passes through untouched.
-void Lens::capture(const float* main, const float* key, int32_t keyFrames, int32_t frames, double beat0, double spb, bool playing) {
+void Lens::capture(const float* main, const float* key, int32_t keyFrames, int32_t frames, double beat0, double spb,
+    bool playing, bool hist) {
     const bool ms = msOn();
     const int src = srcIdx();
     auto sel = [ms, src](float l, float r) {
@@ -114,11 +115,13 @@ void Lens::capture(const float* main, const float* key, int32_t keyFrames, int32
         ringR_[w & (kRing - 1)] = r;
         ringKL_[w & (kRing - 1)] = kl;
         ringKR_[w & (kRing - 1)] = kr;
+        ++w;
         // The beat-stamped min/max history.
+        if (!hist) continue;
         if (binN_ == 0) {
             acc_.beat = spb > 0.0 ? beat0 + (playing ? i / spb : 0.0) : beat0;
             acc_.spb = spb;
-            acc_.sample = w;
+            acc_.sample = w - 1;
             acc_.flags = flags;
             acc_.mLo = acc_.kLo = 1e9f;
             acc_.mHi = acc_.kHi = -1e9f;
@@ -134,7 +137,6 @@ void Lens::capture(const float* main, const float* key, int32_t keyFrames, int32
             binW_.store(bw + 1, std::memory_order_release);
             binN_ = 0;
         }
-        ++w;
     }
     ringW_.store(w, std::memory_order_release);
 }
@@ -145,11 +147,23 @@ void Lens::process(float* buf, int32_t frames) {
     const float* key = scBuf_ && scFrames_ > 0 ? scBuf_ : nullptr;
     const int32_t keyN = scFrames_;
     scBuf_ = nullptr;
-    const bool delay = scTrackId_.load(std::memory_order_relaxed) >= 0 && (size_t)frames * 2 <= pend_.size();
-    if (frozen)
+    const bool keyed = scTrackId_.load(std::memory_order_relaxed) >= 0;
+    const bool sync = get(Sync) >= 0.5f;
+    // A key routed from now: no earlier key in its ring. Sync turned on: a fresh bin.
+    if (keyed && !keyedPrev_) {
+        std::fill(ringKL_.begin(), ringKL_.end(), 0.0f);
+        std::fill(ringKR_.begin(), ringKR_.end(), 0.0f);
+    }
+    if (sync && !syncPrev_) binN_ = 0;
+    keyedPrev_ = keyed;
+    syncPrev_ = sync;
+    // The plain scope (no key, no Sync) only fills the main ring, in the loop below.
+    const bool lean = !frozen && !keyed && !sync;
+    const bool delay = keyed && (size_t)frames * 2 <= pend_.size();
+    if (frozen || lean)
         pendN_ = 0;
     else if (delay) {
-        if (pendN_ > 0) capture(pend_.data(), key, keyN, pendN_, pendBeat_, pendSpb_, pendPlaying_);
+        if (pendN_ > 0) capture(pend_.data(), key, keyN, pendN_, pendBeat_, pendSpb_, pendPlaying_, sync);
         std::copy(buf, buf + (size_t)frames * 2, pend_.begin());
         pendN_ = frames;
         pendBeat_ = beat0_;
@@ -157,12 +171,18 @@ void Lens::process(float* buf, int32_t frames) {
         pendPlaying_ = playing_;
     } else {
         pendN_ = 0;
-        capture(buf, key, keyN, frames, beat0_, spb_, playing_);
+        capture(buf, key, keyN, frames, beat0_, spb_, playing_, sync);
     }
 
     double corrLR = 0, corrLL = 0, corrRR = 0;
+    uint32_t w = ringW_.load(std::memory_order_relaxed);
     for (int32_t i = 0; i < frames; ++i) {
         const float l = buf[i * 2], r = buf[i * 2 + 1];
+        if (lean) {
+            ringL_[w & (kRing - 1)] = l;
+            ringR_[w & (kRing - 1)] = r;
+            ++w;
+        }
         corrLR += (double)l * r;
         corrLL += (double)l * l;
         corrRR += (double)r * r;
@@ -180,6 +200,7 @@ void Lens::process(float* buf, int32_t frames) {
             lufs_.store(msq > 1e-12 ? (float)(-0.691 + 10.0 * std::log10(msq)) : -120.0f, std::memory_order_relaxed);
         }
     }
+    if (lean) ringW_.store(w, std::memory_order_release);
     if (corrLL > 1e-12 && corrRR > 1e-12) {
         const float c = (float)(corrLR / std::sqrt(corrLL * corrRR));
         const float prev = corr_.load(std::memory_order_relaxed);

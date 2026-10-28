@@ -111,6 +111,9 @@ closes.
   transport.
 - **Span longer than history**: the min/max history covers at least 4 bars at 40 BPM at 192 kHz;
   anything older than the history is drawn empty.
+- **Cost when unused**: the history is recorded only while Sync is on (and the key ring only
+  while a key is routed), so a plain Lens costs what it did before; turning Sync on starts the
+  history there, and the previous pass appears after one pass.
 - **Key timing**: the engine hands every sidechain consumer its source's previous block. With a
   key routed, Lens captures one block behind (the held block with the key that belongs to it),
   so the two traces line up sample for sample; the display lags by one block (about 10 ms).
