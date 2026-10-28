@@ -46,7 +46,11 @@ public sealed partial class PianoRollView
     public void SetFold(bool on, bool user = false)
     {
         // Not mid-drag: the grabbed notes' rows would change under the pointer (as row zoom).
-        if (on == _fold || _gridControl.Dragging) return;
+        // A switch that arrives during one (another track's note grabbed in a multi-clip
+        // editor) lands when the drag ends.
+        if (_gridControl.Dragging) { if (!user) _foldAfterDrag = on; return; }
+        _foldAfterDrag = null;
+        if (on == _fold) return;
         _fold = on;
         RebuildRows(force: true);
         // A kit is a handful of rows: when they would leave the editor mostly empty, fit them,
@@ -64,6 +68,9 @@ public sealed partial class PianoRollView
         }
         if (user) FoldToggled?.Invoke(on);
     }
+
+    private bool? _foldAfterDrag;
+    internal void ApplyDeferredFold() { if (_foldAfterDrag is { } on && !_gridControl.Dragging) SetFold(on); }
 
     // Fold restored before the editor has a height (a reopened project or clip): fit the kit
     // on the first layout that gives it one.

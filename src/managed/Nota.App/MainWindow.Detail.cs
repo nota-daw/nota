@@ -575,8 +575,14 @@ public partial class MainWindow
             int t = track();
             if (t == shown) return;
             shown = t;
-            bool want = Engine.GetTrackPianoFold(t);
-            if (want != roll.Folded) roll.SetFold(want); else roll.RefreshFold();
+            // Raised from inside a press on another track's note, before its drag starts: switch
+            // once the press is handled, so SetFold sees the drag and waits for the release
+            // instead of moving the rows under the grabbed note.
+            Dispatcher.UIThread.Post(() =>
+            {
+                bool want = Engine.GetTrackPianoFold(track());
+                if (want != roll.Folded) roll.SetFold(want); else roll.RefreshFold();
+            }, DispatcherPriority.Input);
         };
     }
 

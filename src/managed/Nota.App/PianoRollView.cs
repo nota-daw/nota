@@ -2295,6 +2295,7 @@ public sealed partial class PianoRollView : UserControl
             var was = _drag;
             _drag = Mode.None;
             e.Pointer.Capture(null);
+            Avalonia.Threading.Dispatcher.UIThread.Post(_o.ApplyDeferredFold);   // after the edit lands
             if (was is Mode.PlayheadPending or Mode.Scrub)
             {
                 // A click without movement on the line: what an empty-space click does — clear the selection.
