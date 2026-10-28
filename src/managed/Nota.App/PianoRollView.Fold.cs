@@ -159,6 +159,7 @@ public sealed partial class PianoRollView
         // Keep the pitch at the top of the view where it is.
         double rowH = RowH, top = _bodyScroll.Offset.Y;
         int anchor = _rows.PitchAt((int)Math.Floor(top / rowH));
+        bool kitResized = !force && padRows && _rowsArePads && next.Count != _rows.Count;
         _rows = next;
         _rowsArePads = padRows;
         double keysW = padRows ? FoldedPadKeysW : KeysW;
@@ -169,6 +170,8 @@ public sealed partial class PianoRollView
         _pendingCenter = false;
         _pendingVOffset = Math.Max(0, _rows.NearestRow(anchor) * rowH);
         ApplyPendingVOffset();
+        // A fitted kit that gained or lost pads fits again (a zoom the user chose stays).
+        if (kitResized && _padFit) FitPads();
     }
 
     // The pitches a folded keyboard keeps: every note's, and the keys held into a recording
