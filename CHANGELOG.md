@@ -23,6 +23,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Fold the piano roll** (nota-daw/nota#344, #345): **Fold** in the piano roll toolbar (⌥⇧F)
+  shows only the scale's notes on a melodic track, or only the pads, each row named after its
+  pad, on a Drum Rack. Pitches that hold notes keep their rows, so nothing is hidden. ↑/↓ and
+  drags move between the visible rows, so notes stay in key. Each track remembers its Fold,
+  and it's saved with the project. MCP `set_piano_fold` / `get_piano_fold`.
 - **Automation on return tracks**: in automation mode each return row in the arrangement
   footer has a lane like a track's — pick Volume, Pan or a parameter of a device on the
   return's chain from its pill, then draw, drag, bend, select, copy and paste points. The

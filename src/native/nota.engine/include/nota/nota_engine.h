@@ -1344,6 +1344,10 @@ NOTA_API NotaResult nota_track_set_name(NotaEngine* engine, int32_t track_id, co
 NOTA_API int32_t    nota_track_get_name(NotaEngine* engine, int32_t track_id, char* out, int32_t cap);
 NOTA_API NotaResult nota_track_set_color(NotaEngine* engine, int32_t track_id, int32_t color_index);
 NOTA_API int32_t    nota_track_get_color(NotaEngine* engine, int32_t track_id);
+/* Piano roll Fold (specs/045): a per-track view flag saved with the project; the audio thread
+   never reads it. get returns 1 folded, 0 not, -1 for an unknown track. */
+NOTA_API NotaResult nota_track_set_piano_fold(NotaEngine* engine, int32_t track_id, int32_t on);
+NOTA_API int32_t    nota_track_get_piano_fold(NotaEngine* engine, int32_t track_id);
 /* Track clipboard: copy stores independent clones (a group brings its children), paste
  * appends fresh copies (new ids) top-level. copy_many / paste_after are the multi-track forms:
  * paste_after lands the copies after after_track_id inside its group (-1 = top-level at the

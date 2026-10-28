@@ -317,6 +317,9 @@ public interface IAudioEngine : IDisposable
     /// <summary>Sets/gets a track's palette colour slot (-1 = auto by position).</summary>
     void SetTrackColorIndex(int trackId, int colorIndex);
     int GetTrackColorIndex(int trackId);
+    /// <summary>Sets/gets a track's piano roll Fold (specs/045): a view flag saved with the project.</summary>
+    void SetTrackPianoFold(int trackId, bool on);
+    bool GetTrackPianoFold(int trackId);
     /// <summary>Copies a whole track to the clipboard; pastes it as a new track (-1 on fail).</summary>
     bool CopyTrack(int trackId);
     int PasteTrack();

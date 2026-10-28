@@ -295,6 +295,10 @@ track count and closes with Escape.
     lengthen by the grid, ⌥↑/⌥↓ change velocity by 10 (⌥⇧ by 1).
   - **Remove out of scale** (next to the Scale key and mode) deletes every note outside the
     scale in one undo step.
+  - **Fold** (⌥⇧F) hides the rows you don't use. On a melodic track it keeps the scale's
+    notes, or the pitches in use when no scale is set. On a Drum Rack it keeps one row per pad,
+    named after it. A pitch that holds a note always keeps its row, and ↑/↓ and drags move
+    between the visible rows. Saved per track.
   - Zoomed out, the area past the clip's end is darkened and marked with a line.
   - **Vertical zoom**: rows from 6 to 36 px (all 88 keys fit at the smallest) with
     ⌘⌥ + wheel (Ctrl + Alt on Windows / Linux), a drag on the keys (down taller, up
