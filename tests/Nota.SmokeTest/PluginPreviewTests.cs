@@ -4,8 +4,9 @@
 // Plug-in card preview (specs/046): the picture of a plug-in's window lives on the engine
 // device. Only hosted plug-ins capture one (CI has none, so that part is checked by hand), but
 // the storage is the device's, so built-ins exercise it here: the C ABI round trip, the serial,
-// clearing and bad input, a move / duplicate / copy-paste / duplicated track carrying it, and
-// save/load; a v25 project opens without previews. Also runnable alone:
+// clearing and bad input, a move / duplicate / copy-paste / duplicated track carrying it,
+// save/load, and a device grouped into a rack keeping it through the rack's blob (a duplicated
+// rack, a reopened project); a v25 project opens without previews. Also runnable alone:
 // `dotnet run --project tests/Nota.SmokeTest -- --preview`.
 
 using System.Text.Json.Nodes;
@@ -95,6 +96,40 @@ internal static class PluginPreviewTests
         finally
         {
             try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch (IOException) { }
+        }
+
+        // Grouped into a rack, a device's picture rides the rack's blob: a duplicated rack and a
+        // saved and reopened one both give it back on ungroup.
+        using (var re = new NotaEngine())
+        {
+            int rt = re.AddAudioTrack();
+            int rEq = re.AddBuiltinDevice(rt, Eq);
+            re.SetPluginPreview(rt, rEq, b);
+            bool wrapped = re.WrapDeviceInRack(rt, rEq) >= 0 && re.TrackDeviceBuiltinKind(rt, 0) != Eq;
+            int copy = re.DuplicateDevice(rt, 0);
+            bool dupBack = copy == 1 && re.UngroupRack(rt, DeviceFamily.Audio, 1, out _) >= 0
+                           && re.TrackDeviceBuiltinKind(rt, 1) == Eq && Same(re.GetPluginPreview(rt, 1), b);
+            yield return (wrapped && dupBack, "preview: a duplicated rack's device gives its picture back on ungroup");
+            re.RemoveDevice(rt, 1);
+
+            string rdir = Path.Combine(Path.GetTempPath(), "nota-preview-rack-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var doc = ProjectService.Capture(re, new TransportState(120, 1, false, false), new List<string>());
+                ProjectService.Save(doc, rdir, re);
+                using var re2 = new NotaEngine();
+                ProjectService.Apply(ProjectService.Load(rdir), re2, rdir);
+                int rt2 = -1;
+                for (int i = 0; i < re2.TrackCount && rt2 < 0; i++)
+                    if (re2.TryGetTrackInfo(i, out var ti) && !ti.IsInstrument && re2.TrackDeviceCount(ti.Id) == 1) rt2 = ti.Id;
+                bool back = rt2 > 0 && re2.UngroupRack(rt2, DeviceFamily.Audio, 0, out _) >= 0
+                            && re2.TrackDeviceBuiltinKind(rt2, 0) == Eq && Same(re2.GetPluginPreview(rt2, 0), b);
+                yield return (back, "preview: a saved and reopened rack's device gives its picture back on ungroup");
+            }
+            finally
+            {
+                try { if (Directory.Exists(rdir)) Directory.Delete(rdir, recursive: true); } catch (IOException) { }
+            }
         }
 
         var old = ProjectMigrations.Migrate(new JsonObject { ["formatVersion"] = 25 });

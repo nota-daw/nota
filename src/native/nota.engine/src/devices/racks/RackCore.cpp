@@ -703,6 +703,16 @@ std::vector<uint8_t> RackCore::serialize() const {
             putU32(b, static_cast<uint32_t>(ms.size()));
             b.insert(b.end(), ms.begin(), ms.end());
         }
+        // v10: the pictures of hosted plug-ins' windows (specs/046) — the instrument's, then
+        // each device's — so a plug-in grouped into a rack keeps its card's picture through
+        // save, copy and ungroup. 0 = none.
+        auto putPreview = [&b](const EditorPreview& p) {
+            const uint32_t n = p.empty() ? 0 : static_cast<uint32_t>(p.jpeg->size());
+            putU32(b, n);
+            if (n > 0) b.insert(b.end(), p.jpeg->begin(), p.jpeg->end());
+        };
+        putPreview(c.instrument ? c.instrument->editorPreview : EditorPreview{});
+        for (auto& d : c.devices) putPreview(d ? d->editorPreview() : EditorPreview{});
     }
     return b;
 }
@@ -803,6 +813,7 @@ void RackCore::deserialize(const uint8_t* data, int32_t size) {
             if (auto* sm = dynamic_cast<Sampler*>(c.instrument.get())) sm->setSample(buf, root, loop);
         }
         const uint32_t devN = getU32(cur);
+        std::vector<Device*> devAt; // by blob position, null where a device wasn't rebuilt (v10 previews)
         for (uint32_t j = 0; j < devN && cur.ok(); ++j) {
             const int32_t dk = getI32(cur);
             const bool byp = getU8(cur) != 0;
@@ -828,6 +839,7 @@ void RackCore::deserialize(const uint8_t* data, int32_t size) {
                 dev->setBypassed(byp);
                 c.devices.push_back(dev);
             }
+            devAt.push_back(dev.get());
         }
         if (ver >= 9) {
             const int32_t sl = getI32(cur), sh = getI32(cur);
@@ -854,6 +866,19 @@ void RackCore::deserialize(const uint8_t* data, int32_t size) {
                     md->setBypassed(byp);
                     c.midiDevices.push_back(std::move(md));
                 }
+            }
+        }
+        if (ver >= 10) {
+            auto getPreview = [&cur]() {
+                const uint32_t n = getU32(cur);
+                const uint8_t* p = cur.take(n);
+                return (p && n > 0) ? EditorPreview::make(std::vector<uint8_t>(p, p + n)) : EditorPreview{};
+            };
+            auto ip = getPreview();
+            if (c.instrument) c.instrument->editorPreview = std::move(ip);
+            for (auto* d : devAt) {
+                auto dp = getPreview();
+                if (d) d->setEditorPreview(std::move(dp));
             }
         }
         ns->chains.push_back(std::move(c));
