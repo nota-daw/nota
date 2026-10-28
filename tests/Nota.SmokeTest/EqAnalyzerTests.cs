@@ -212,7 +212,7 @@ internal static class EqAnalyzerTests
         // The analyzer's ballistics run on wall-clock time, so a frame-to-frame change only means
         // something at the display's cadence: read every ~35 ms (the render counts towards it) and
         // count only the pairs that really were one display frame apart. A stalled CI runner
-        // otherwise sees 60-70 ms frames and less smoothing (#357 macOS CI).
+        // otherwise sees 40-70 ms frames and less smoothing (#357 macOS CI).
         double change = 0; int frames = 0, steady = 0;
         var clock = System.Diagnostics.Stopwatch.StartNew();
         for (int f = 0; f < 400 && steady < 30; f++)
@@ -220,7 +220,7 @@ internal static class EqAnalyzerTests
             long t0 = clock.ElapsedMilliseconds;
             r.Feed(1470);
             var s = r.Read(Math.Max(0, 35 - (int)(clock.ElapsedMilliseconds - t0)));
-            bool oneFrame = clock.ElapsedMilliseconds - t0 <= 45;
+            bool oneFrame = clock.ElapsedMilliseconds - t0 <= 38;
             for (int i = 0; i < Points; i++)
             {
                 sum[i] += s[PostAt + i];
@@ -236,7 +236,7 @@ internal static class EqAnalyzerTests
         double lo = avg.Min() - mid, hi = avg.Max() - mid;
         yield return (lo > -3 && hi < 3, $"pink noise reads flat from 100 Hz to 15 kHz ({lo:F1} / +{hi:F1} dB around {mid:F1} dB)");
         double meanChange = change / (Math.Max(1, steady) * band.Count);
-        yield return (steady >= 10 && meanChange < 2.0,
+        yield return (steady >= 10 && meanChange < 1.5,
             $"pink noise holds steady (mean frame-to-frame change {meanChange:F2} dB over {steady} display frames)");
     }
 
