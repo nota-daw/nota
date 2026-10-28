@@ -2198,7 +2198,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 if (sessionActive) {
                     // The clip moves on without its note-offs reaching the instrument: release
                     // what it holds, or a note crossed while silent would sound on after unmute.
-                    if (t.instrument) t.instrument->allNotesOff();
+                    // Once, on going silent: a hosted plug-in queues each release until it renders.
+                    if (t.instrument && !t.sessionSilentReleased) t.instrument->allNotesOff();
+                    t.sessionSilentReleased = true;
                     t.sessionPlayer->localBeats += frames / spb;
                     sessionPostRender(t, frames / spb);
                 }
@@ -2206,6 +2208,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
             }
+            t.sessionSilentReleased = false;
             w.audible = audible;
             w.capturing = capturing;
             w.feeding = feeding;

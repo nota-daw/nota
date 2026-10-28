@@ -180,6 +180,10 @@ class Track {
     float midiNoteNorm() const { return midiNote_.load(std::memory_order_relaxed); }
     bool midiGate() const { return midiHeld_.load(std::memory_order_relaxed) > 0; }
 
+    // A silent Session track released its instrument's notes on going silent (#343), so it
+    // isn't sent again every block. Audio thread only.
+    bool sessionSilentReleased = false;
+
     // Metering (M6-2): post-fader block peak/RMS per channel. Written by the
     // audio thread each block, read by the UI. Transient — not copied across
     // snapshots (a freshly cloned track just re-populates on the next block).
