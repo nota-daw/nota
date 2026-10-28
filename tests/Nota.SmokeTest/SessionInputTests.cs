@@ -4,10 +4,12 @@
 // Session launches and recording input (milestone 0.58.1): a clip launched on a muted,
 // solo-gated or looped track starts on time instead of waiting forever (#343), an audio take
 // in a Session slot replaces the clip its track was playing (#337), and an audio track can
-// take one channel of a stereo input as a mono source in the middle (#340).
+// take one channel of a stereo input as a mono source in the middle (#340), and a plain click
+// on an arm button arms that track alone, ⌘-click more than one (#332).
 
 using Nota.Application;
 using Nota.Infrastructure;
+using Nota.Presentation;
 
 namespace Nota.SmokeTest;
 
@@ -23,6 +25,7 @@ internal static class SessionInputTests
         foreach (var r in LaunchInsideShortLoop()) yield return r;
         foreach (var r in AudioTakeReplacesPlayingSlot()) yield return r;
         foreach (var r in MonoInput()) yield return r;
+        foreach (var r in ExclusiveArm()) yield return r;
     }
 
     private static void Beats(NotaEngine e, double beats, float[]? keep = null)
@@ -173,6 +176,21 @@ internal static class SessionInputTests
             }
         }
         finally { Directory.Delete(dir, true); }
+    }
+
+    // #332: a plain arm click picks the one track the keyboard plays; ⌘-click adds tracks.
+    private static IEnumerable<(bool, string)> ExclusiveArm()
+    {
+        using var e = new NotaEngine();
+        int keys = e.AddInstrumentTrack(), drums = e.AddInstrumentTrack(), aud = e.AddAudioTrack();
+        bool Armed(int id) { for (int i = 0; i < e.TrackCount; i++) if (e.TryGetTrackInfo(i, out var t) && t.Id == id) return t.Armed != 0; return false; }
+        TrackArm.Set(e, keys, true, additive: false);
+        bool changed = TrackArm.Set(e, drums, true, additive: false);
+        yield return (changed && Armed(drums) && !Armed(keys), "a plain arm click arms that track alone");
+        TrackArm.Set(e, aud, true, additive: true);
+        yield return (Armed(drums) && Armed(aud), "⌘-click arms another track and keeps the first");
+        TrackArm.Set(e, aud, false, additive: false);
+        yield return (Armed(drums) && !Armed(aud), "disarming leaves the other tracks armed");
     }
 
     private static int FirstAudio(NotaEngine e)

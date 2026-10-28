@@ -165,12 +165,12 @@ public sealed partial class SessionView
             if (hasTrack)
             {
                 int id = c.TrackId;
-                btns.Children.Add(MixToggle("M", ti.Muted != 0, false, v => _engine.SetTrackMute(id, v)));
-                btns.Children.Add(MixToggle("S", ti.Soloed != 0, false, v => _engine.SetTrackSolo(id, v)));
+                btns.Children.Add(MixToggle("M", ti.Muted != 0, false, (v, _) => _engine.SetTrackMute(id, v)));
+                btns.Children.Add(MixToggle("S", ti.Soloed != 0, false, (v, _) => _engine.SetTrackSolo(id, v)));
                 if (c.Kind == ColKind.Track)
-                    btns.Children.Add(MixToggle(null, ti.Armed != 0, true, v =>
+                    btns.Children.Add(MixToggle(null, ti.Armed != 0, true, (v, additive) =>
                     {
-                        _engine.SetTrackArmed(id, v);
+                        TrackArming.Set(_engine, id, v, additive);
                         if (v) _armed.Add(id); else _armed.Remove(id);
                         UpdateStates();
                     }));
@@ -204,7 +204,8 @@ public sealed partial class SessionView
 
     // M / S / record-arm: a 20px key. Engaged mute fills amber, solo blue, arm the record red
     // with its white disc (DESIGN.md § Controls), each with derived ink.
-    private static Control MixToggle(string? label, bool initial, bool arm, Action<bool> set)
+    // set(on, additive): additive = ⌘/Ctrl held (the arm button arms without disarming the others, #332).
+    private static Control MixToggle(string? label, bool initial, bool arm, Action<bool, bool> set)
     {
         bool on = initial;
         var text = new TextBlock { Text = label ?? "", FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -229,12 +230,12 @@ public sealed partial class SessionView
             b.BorderBrush = on ? fill : NotaPalette.Seam;
             text.Foreground = on ? NotaPalette.InkOn(fill) : NotaPalette.TextSecondary;
         }
-        ToolTip.SetTip(b, arm ? "Arm for recording" : label == "M" ? "Mute" : "Solo");
+        ToolTip.SetTip(b, arm ? TrackArming.Tip : label == "M" ? "Mute" : "Solo");
         b.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
-            on = !on; set(on); Paint();
+            on = !on; set(on, TrackArming.IsAdditive(e.KeyModifiers)); Paint();
         };
         Paint();
         return b;

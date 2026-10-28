@@ -8394,7 +8394,8 @@ engine.StopTransport();
     e.SetTrackMute(sesT3, false);
     e.BackToArrangement();
     Check(e.ArrangementActive, "back to arrangement re-activates the timeline");
-    Check(e.SessionSlotState(sesT3, 0) != 3, "back to arrangement stopped the session clip");
+    e.RenderOffline(buf, 64);                          // the stop lands on the next block (the muted clip did launch, #343)
+    Check(e.SessionSlotState(sesT3, 0) == 1, "back to arrangement stopped the session clip");
     e.Seek(0); e.RenderOffline(buf, frames);
     Check(Rms(buf, frames) > 0.001f, $"arrangement plays after back to arrangement (rms={Rms(buf, frames):F4})");
     e.StopTransport();

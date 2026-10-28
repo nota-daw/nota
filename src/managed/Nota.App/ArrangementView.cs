@@ -2164,7 +2164,11 @@ public sealed partial class ArrangementView : UserControl
         // Record-arm applies to instrument (MIDI capture) + audio (input capture) tracks;
         // return and group tracks have no input, so they get no arm chip.
         if (!t.IsReturn && !t.IsGroup)
-            btnRow.Children.Add(ArmToggle(t.Armed, v => { t.Armed = v; _engine?.SetTrackArmed(t.Id, v); }));
+            btnRow.Children.Add(ArmToggle(t.Armed, (v, additive) =>
+            {
+                t.Armed = v;
+                if (_engine is not null) TrackArming.Set(_engine, t.Id, v, additive);
+            }));
 
         // A compact routing selector sits with the arm button (the standard row leaves no
         // room for a 4th row): audio tracks get record-input, instrument tracks get "MIDI To".
@@ -2725,11 +2729,13 @@ public sealed partial class ArrangementView : UserControl
     // toggle's own colour — mute amber, solo blue, arm red — with
     // derived ink. Record-arm: at rest a neutral key with a red disc; armed, solid red with a
     // white disc.
-    private Control ArmToggle(bool initial, Action<bool> onChanged)
+    // onChanged(armed, additive): additive = ⌘/Ctrl held, arm without disarming the others (#332).
+    private Control ArmToggle(bool initial, Action<bool, bool> onChanged)
     {
         bool state = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
         var chip = new Border { Width = 18, Height = 16, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = disc, Cursor = new Cursor(StandardCursorType.Hand) };
+        ToolTip.SetTip(chip, TrackArming.Tip);
         void Paint()
         {
             chip.Background = state ? NotaPalette.Record : NotaPalette.SurfaceRaised;
@@ -2740,7 +2746,7 @@ public sealed partial class ArrangementView : UserControl
         chip.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
-            e.Handled = true; state = !state; Paint(); onChanged(state);
+            e.Handled = true; state = !state; Paint(); onChanged(state, TrackArming.IsAdditive(e.KeyModifiers));
         };
         return chip;
     }
