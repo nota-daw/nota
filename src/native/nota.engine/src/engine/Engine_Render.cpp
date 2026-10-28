@@ -14,6 +14,7 @@
 #include "media/WarpStream.h"
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -915,6 +916,7 @@ void Engine::publishHeldSnapshot(double nowBeat) {
 void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     liveCount_ = 0;
     liveExprCount_ = 0;
+    liveReleaseCount_ = 0;
     const bool rec = recording_.load(std::memory_order_relaxed);
 
     // When recording into a Session slot, time notes against the slot's own loop
@@ -972,10 +974,12 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             continue;
         }
         if (e.expr == kLiveReleaseExpr) { // a track disarmed: release, the keys stay down
-            if (LiveSounding* s = liveSoundingOf(e.trackId, false); s && !s->release) {
-                s->release = true;
-                ++liveReleases_;
+            if (liveReleaseCount_ >= kMaxLiveRelease) {
+                liveCarry_ = e;
+                liveCarried_ = true;
+                break;
             }
+            liveRelease_[liveReleaseCount_++] = e.trackId;
             continue;
         }
         const bool valid = e.pitch >= 0 && e.pitch < 128;
@@ -1183,43 +1187,30 @@ int Engine::gatherInstrumentNotes(
     return liveNotesFor(t, takesUntargeted, true, takesUntargeted, evs, n);
 }
 
-Engine::LiveSounding* Engine::liveSoundingOf(int32_t trackId, bool create) {
-    LiveSounding* free = nullptr;
-    for (auto& s : liveSounding_) {
-        if (s.trackId == trackId) return &s;
-        if (!free && s.trackId < 0) free = &s;
-    }
-    if (!create || !free) return nullptr;
-    *free = LiveSounding{trackId};
-    return free;
-}
-
 int Engine::liveNotesFor(const Track& t, bool untargeted, bool targeted, bool stillTakes, MidiEv* evs, int n) {
+    Instrument* inst = t.instrument.get();
+    constexpr auto rl = std::memory_order_relaxed;
     for (int i = 0; i < liveCount_ && n < 1024; ++i) {
         const MidiEvent& le = liveEvents_[i];
         if (le.trackId >= 0 ? !targeted || le.trackId != t.id() : !untargeted) continue;
         evs[n++] = {0, le.on, le.pitch, le.velocity};
-        if (le.trackId >= 0 || le.pitch < 0 || le.pitch >= 128) continue;
-        const uint32_t bit = 1u << (le.pitch & 31);
-        if (LiveSounding* s = liveSoundingOf(t.id(), le.on)) {
-            if (le.on) s->bits[le.pitch >> 5] |= bit;
-            else s->bits[le.pitch >> 5] &= ~bit;
-            if (!(s->bits[0] | s->bits[1] | s->bits[2] | s->bits[3])) {
-                if (s->release) --liveReleases_;
-                *s = LiveSounding{};
-            }
-        }
+        if (!inst || le.trackId >= 0 || le.pitch < 0 || le.pitch >= 128) continue;
+        const uint64_t bit = 1ull << (le.pitch & 63);
+        auto& w = inst->liveSounding[le.pitch >> 6];
+        w.store(le.on ? w.load(rl) | bit : w.load(rl) & ~bit, rl);
     }
     // Disarmed with keys down (#366): release the live notes it was given, unless it takes
     // live input again (re-armed, or the audition target).
-    LiveSounding* s = liveReleases_ > 0 ? liveSoundingOf(t.id(), false) : nullptr;
-    if (s && s->release) {
-        s->release = false;
-        --liveReleases_;
+    if (inst && inst->liveRelease.load(rl)) {
+        inst->liveRelease.store(false, rl);
         if (!stillTakes) {
-            for (int p = 0; p < 128 && n < 1024; ++p)
-                if ((s->bits[p >> 5] >> (p & 31)) & 1u) evs[n++] = {0, false, p, 0.0f};
-            *s = LiveSounding{};
+            for (int h = 0; h < 2; ++h) {
+                uint64_t bits = inst->liveSounding[h].exchange(0, rl);
+                while (bits && n < 1024) {
+                    evs[n++] = {0, false, h * 64 + std::countr_zero(bits), 0.0f};
+                    bits &= bits - 1;
+                }
+            }
         }
     }
     return n;
@@ -1794,6 +1785,12 @@ void Engine::processBlock(float* out, int32_t numFrames) {
                         if (md) md->reset();
                 }
     notesOffCount_ = 0;
+    // Tracks disarmed with keys down (#366): their instruments release on this render.
+    if (g)
+        for (int k = 0; k < liveReleaseCount_; ++k)
+            for (auto& tptr : g->tracks)
+                if (tptr->id() == liveRelease_[k] && tptr->instrument)
+                    tptr->instrument->liveRelease.store(true, std::memory_order_relaxed);
     // Note chase: when playback starts, the playhead jumps (seek) or the loop wraps, clip
     // notes that began before the playhead but are still held get re-triggered at the
     // jump point — otherwise a note you start in the middle of stays silent.

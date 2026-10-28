@@ -240,6 +240,9 @@ static std::shared_ptr<RackInstrument> forkRackInstrument(const RackInstrument& 
     r->pedalDown.store(src.pedalDown.load(rl), rl);
     r->pedalHeld[0].store(src.pedalHeld[0].load(rl), rl);
     r->pedalHeld[1].store(src.pedalHeld[1].load(rl), rl);
+    r->liveSounding[0].store(src.liveSounding[0].load(rl), rl);
+    r->liveSounding[1].store(src.liveSounding[1].load(rl), rl);
+    r->liveRelease.store(src.liveRelease.load(rl), rl);
     for (int i = 0; i < kCtlCount; ++i) r->deliveredCtl[i].store(src.deliveredCtl[i].load(rl), rl);
     return r;
 }

@@ -315,7 +315,7 @@ internal static class SessionInputTests
         using (var e = new NotaEngine())
         {
             var all = new List<int>();
-            for (int k = 0; k < 20; k++)
+            for (int k = 0; k < 70; k++)
             {
                 int t = e.AddInstrumentTrack();
                 e.SetTrackBuiltinInstrument(t, 0);
@@ -325,12 +325,12 @@ internal static class SessionInputTests
             int last = e.AddInstrumentTrack();
             e.NoteOn(60, 0.5f);
             float held = Peak(e, 0.5);
-            TrackArm.Set(e, last, true, additive: false); // disarms all twenty at once
+            TrackArm.Set(e, last, true, additive: false); // disarms all seventy at once (past one block's 64 releases)
             Beats(e, 1.0);
             float after = Peak(e, 0.5);
             e.NoteOff(60);
             yield return (held > 0.01f && after < 1e-4f,
-                $"twenty tracks disarmed at once all release the held note (peak {held:F3} → {after:G2})");
+                $"seventy tracks disarmed at once all release the held note (peak {held:F3} → {after:G2})");
         }
     }
 
