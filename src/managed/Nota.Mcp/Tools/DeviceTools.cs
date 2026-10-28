@@ -1406,7 +1406,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     });
 
     public sealed record Eq8Band(int Band, bool On, string Type, double FreqHz, double GainDb, double EffectiveGainDb, double Q,
-        int SlopeDbPerOct, string Channel);
+        int SlopeDbPerOct, string Channel, string Label, string Note);
     public sealed record Eq8Reading(string Summary, string Live, double ScalePercent, double OutputDb, bool AutoGain, double AutoGainNowDb,
         string Analyzer, int AnalyzerRangeDb, bool AnalyzerPeak, double InputPeakDb, double OutputPeakDb, double SampleRate, Eq8Band[] Bands,
         bool SpectrumValid, DynEqSpectrumBand[] InputSpectrum, DynEqSpectrumBand[] OutputSpectrum);
@@ -1441,7 +1441,8 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         double scale = Math.Clamp(Pm(56), 0, 200) / 100;
         return new Eq8Band(b + 1, Pm(o) > 0.5f, DynEqTypes[ty], Math.Round(Pm(o + 2)), gain ? Math.Round(Pm(o + 3), 1) : 0,
             gain ? Math.Round(Pm(o + 3) * scale, 1) : 0, Math.Round(Pm(o + 4), 2),
-            cut ? 12 << Math.Clamp((int)Math.Round(Pm(40 + b)), 0, 2) : 12, Eq8Channels[Math.Clamp((int)Math.Round(Pm(48 + b)), 0, 4)]);
+            cut ? 12 << Math.Clamp((int)Math.Round(Pm(40 + b)), 0, 2) : 12, Eq8Channels[Math.Clamp((int)Math.Round(Pm(48 + b)), 0, 4)],
+            E.EqBandText(trackId, deviceIndex, b, 0), E.EqBandText(trackId, deviceIndex, b, 1));
     }
 
     private Eq8Reading Eq8Read(int trackId, int deviceIndex, bool spectrum)
@@ -1470,7 +1471,8 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         + "output, whether Auto gain is on and the gain it adds now, the analyzer mode the card shows (Pre / Post / Off) with its range "
         + "(60 / 90 / 120 dB) and peak hold, in / out "
         + "peaks; per band: on, type, frequency, gain, the effective gain after Scale, Q (the resonance on the cuts), slope "
-        + "(12 / 24 / 48 dB/oct, cuts only) and channel (Stereo / Mid / Side / Left / Right); plus the input and output spectra "
+        + "(12 / 24 / 48 dB/oct, cuts only), channel (Stereo / Mid / Side / Left / Right) and the user's label and note for "
+        + "the band (what it is for; \"\" when none); plus the input and output spectra "
         + "in 24 log bands (dB, the loudest 1/6-octave reading in each). Levels read −120 while silent; they move only while audio runs through the track. "
         + "set_eq8_band edits a band, set_eq8 the globals.")]
     public Task<Eq8Reading> ReadEq8(int trackId, int deviceIndex) => Read(() => Eq8Read(trackId, deviceIndex, true));
@@ -1479,14 +1481,19 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         "Edit one band of a Nota EQ-8 (built-in effect kind 0) in one call — only the fields you pass change; each change is "
         + "recorded like a hand edit. type: \"Low cut\" | \"Low shelf\" | \"Bell\" | \"Notch\" | \"High shelf\" | \"High cut\" "
         + "(only shelves and bells take gain). slope: 12, 24 or 48 dB/oct (cuts only). channel: \"Stereo\" | \"Mid\" | \"Side\" | "
-        + "\"Left\" | \"Right\". Setting any field of an off band does not switch it on — pass on true. Returns the band as read back.")]
+        + "\"Left\" | \"Right\". Setting any field of an off band does not switch it on — pass on true. label (≤ 24 characters, one "
+        + "line) and note (≤ 2000, multiline) are the band's text shown on the card; \"\" clears one. Returns the band as read back.")]
     public Task<Eq8Band> SetEq8Band(int trackId, int deviceIndex, [Description("Band 1..8")] int band,
         bool? on = null, string? type = null, [Description("20..20000 Hz")] double? freqHz = null, [Description("−18..+18 dB")] double? gainDb = null,
         [Description("0.1..18 (0.71 = flat on the cuts)")] double? q = null, [Description("12, 24 or 48")] int? slope = null,
-        string? channel = null) => Mutate(() =>
+        string? channel = null, [Description("The band's label, ≤ 24 characters")] string? label = null,
+        [Description("The band's note, ≤ 2000 characters")] string? note = null) => Mutate(() =>
     {
         if (E.TrackDeviceBuiltinKind(trackId, deviceIndex) != 0) throw new ArgumentException("not a Nota EQ-8 (kind 0)");
         if (band < 1 || band > 8) throw new ArgumentException("band is 1..8");
+        if (label is not null || note is not null)
+            E.EqSetBandText(trackId, deviceIndex, band - 1, label ?? E.EqBandText(trackId, deviceIndex, band - 1, 0),
+                note ?? E.EqBandText(trackId, deviceIndex, band - 1, 1));
         int o = (band - 1) * 5, pc = E.DeviceParamCount(trackId, deviceIndex);
         void S(int p, double v)
         {

@@ -409,7 +409,7 @@ internal static class EqAnalyzerTests
         int t = e.AddAudioTrack();
         e.AddAudioClip(t, wav, 0.0);
         int d = e.AddBuiltinDevice(t, Eq8Kind);
-        yield return (e.DeviceParamCount(t, d) == 62 && e.DeviceGetParam(t, d, AnaRange) == 1f && e.DeviceGetParam(t, d, AnaPeak) == 0f
+        yield return (e.DeviceParamCount(t, d) >= 62 && e.DeviceGetParam(t, d, AnaRange) == 1f && e.DeviceGetParam(t, d, AnaPeak) == 0f
                       && e.DeviceParamName(t, d, AnaRange) == "Analyzer Range" && e.DeviceParamName(t, d, AnaPeak) == "Analyzer Peak",
             "EQ-8 appends Analyzer Range (default 90 dB) and Analyzer Peak (default off)");
 
@@ -430,7 +430,7 @@ internal static class EqAnalyzerTests
 
         var doc = ProjectService.Capture(e, new TransportState(120.0, 1.0, false, false), new List<string>());
         var dev = doc.Tracks.SelectMany(tr => tr.Devices).First(x => x.BuiltinKind == Eq8Kind);
-        bool saved = dev.Params.Length == 62 && dev.Params[AnaRange] == 2f && dev.Params[AnaPeak] == 1f;
+        bool saved = dev.Params.Length >= 62 && dev.Params[AnaRange] == 2f && dev.Params[AnaPeak] == 1f;
         dev.Params = dev.Params[..60];   // as written before 0.58.1
         string dir = Path.Combine(Path.GetTempPath(), "nota-smoke-eqa-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);

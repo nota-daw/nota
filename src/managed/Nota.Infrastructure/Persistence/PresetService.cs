@@ -73,6 +73,7 @@ public static class PresetService
             doc.NamedParams = new Dictionary<string, float>(pc);
             for (int i = 0; i < pc; i++)
                 doc.NamedParams[engine.DeviceParamName(trackId, deviceIndex, i)] = engine.DeviceGetParam(trackId, deviceIndex, i);
+            if (bk == EqKind) doc.BandText = CaptureBandText(engine, trackId, deviceIndex);
             return doc;
         }
 
@@ -219,6 +220,7 @@ public static class PresetService
                     for (int i = 0; i < doc.Params.Length; i++)
                         engine.DeviceSetParam(targetTrackId, di, i, doc.Params[i]);
                 LegacyRange(doc, engine, targetTrackId, di);
+                if (doc.BuiltinKind == EqKind) ApplyBandText(doc.BandText, engine, targetTrackId, di);
                 return "";
             }
             case "builtin-midi-effect":
@@ -349,8 +351,33 @@ public static class PresetService
             int pc = engine.DeviceParamCount(trackId, deviceIndex);
             for (int i = 0; i < pc; i++)
                 engine.DeviceSetParam(trackId, deviceIndex, i, engine.DeviceParamDefault(trackId, deviceIndex, i));
+            if (engine.TrackDeviceBuiltinKind(trackId, deviceIndex) == EqKind) ApplyBandText(null, engine, trackId, deviceIndex);
         }
         return "";
+    }
+
+    private const int EqKind = 0;   // Nota EQ-8
+
+    /// <summary>An EQ-8's band labels and notes for a preset (specs/049); null when it has none.</summary>
+    private static List<PresetBandText>? CaptureBandText(IAudioEngine engine, int trackId, int deviceIndex)
+    {
+        List<PresetBandText>? list = null;
+        for (int b = 0; b < 8; b++)
+        {
+            string label = engine.EqBandText(trackId, deviceIndex, b, 0), note = engine.EqBandText(trackId, deviceIndex, b, 1);
+            if (label.Length > 0 || note.Length > 0) (list ??= new()).Add(new PresetBandText { Band = b + 1, Label = label, Note = note });
+        }
+        return list;
+    }
+
+    /// <summary>Give an EQ-8 exactly the preset's band labels and notes (null clears them all).</summary>
+    private static void ApplyBandText(List<PresetBandText>? text, IAudioEngine engine, int trackId, int deviceIndex)
+    {
+        for (int b = 0; b < 8; b++)
+        {
+            var t = text?.Find(x => x.Band == b + 1);
+            engine.EqSetBandText(trackId, deviceIndex, b, t?.Label ?? "", t?.Note ?? "");
+        }
     }
 
     /// <summary>Applies a preset to an EXISTING instrument/device in place (no new track/
@@ -401,6 +428,8 @@ public static class PresetService
                         engine.DeviceSetParam(trackId, deviceIndex, i, doc.Params[i]);
                 }
                 LegacyRange(doc, engine, trackId, deviceIndex);
+                // The preset's band labels replace the device's (none for a factory preset).
+                if (engine.TrackDeviceBuiltinKind(trackId, deviceIndex) == EqKind) ApplyBandText(doc.BandText, engine, trackId, deviceIndex);
                 return "";
             }
             case "builtin-midi-effect":

@@ -477,6 +477,14 @@ if (args.Length >= 1 && args[0] == "--eq-analyzer")
     Console.WriteLine(failures == 0 ? "EQ ANALYZER PASSED" : $"EQ ANALYZER FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// EQ-8 band labels and notes alone (specs/049): `--eq-labels`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--eq-labels")
+{
+    Console.WriteLine("-- eq labels --");
+    foreach (var (ok, label) in EqLabelTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "EQ LABELS PASSED" : $"EQ LABELS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Preset state alone: `--preset-state` (specs/048). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--preset-state")
 {
@@ -15221,6 +15229,8 @@ foreach (var (ok, label) in PresetStateTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- eq analyzer --");
 foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);
+Console.WriteLine("-- eq labels --");
+foreach (var (ok, label) in EqLabelTests.Run()) Check(ok, label);
 Console.WriteLine("-- scope view --");
 foreach (var (ok, label) in ScopeViewTests.Run()) Check(ok, label);
 

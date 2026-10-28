@@ -11,6 +11,8 @@
 #include "dsp/math/FastMath.h"
 #include "dsp/math/SimdAudio.h"
 
+#include <cstring>
+
 namespace nota {
 namespace {
 
@@ -38,6 +40,7 @@ Eq::Eq() {
     p_[Analyzer].store((float)AnaPost);
     p_[AnaRange].store(1.0f);
     p_[AnaPeak].store(0.0f);
+    p_[Labels].store(1.0f);
     setSampleRate(44100.0, 0);
 }
 
@@ -363,6 +366,7 @@ const char* Eq::paramName(int32_t i) const {
     if (i == Analyzer) return "Analyzer";
     if (i == AnaRange) return "Analyzer Range";
     if (i == AnaPeak) return "Analyzer Peak";
+    if (i == Labels) return "Labels";
     static thread_local char buf[16];
     if (i >= SlopeBase && i < ChannelBase) {
         std::snprintf(buf, sizeof(buf), "%d Slope", i - SlopeBase + 1);
@@ -400,6 +404,7 @@ float Eq::paramMax(int32_t i) const {
     if (i == Analyzer) return 2.0f;
     if (i == AnaRange) return 2.0f;
     if (i == AnaPeak) return 1.0f;
+    if (i == Labels) return 1.0f;
     switch (i % kPerBand) {
     case On: return 1.0f;
     case Type: return kNumTypes - 1;
@@ -489,6 +494,14 @@ std::string Eq::deviceText(int32_t id) const {
         std::snprintf(b, sizeof b, " | output %+.1f dB%s | analyzer %s", get(Output),
             get(AutoGain) >= 0.5f ? " + auto gain" : "", anas[std::clamp((int)std::lround(get(Analyzer)), 0, 2)]);
         s += b;
+        // The user's band labels and notes (specs/049): what each band is for.
+        for (int k = 0; k < kBands; ++k) {
+            if (label_[k].empty() && note_[k].empty()) continue;
+            std::snprintf(b, sizeof b, " | B%d", k + 1);
+            s += b;
+            if (!label_[k].empty()) s += " label \"" + label_[k] + "\"";
+            if (!note_[k].empty()) s += " note \"" + note_[k] + "\"";
+        }
         return s;
     }
     if (id == 1) {
@@ -519,9 +532,101 @@ std::string Eq::deviceText(int32_t id) const {
                "the "
                "shelves and bells (cuts and notches do not count; max +-12 dB). 59 Analyzer 0 Pre, 1 Post, 2 Off "
                "(display only). 60 Analyzer Range 0 = 60, 1 = 90, 2 = 120 dB (display only). 61 Analyzer Peak "
-               "0/1 peak hold (display only).";
+               "0/1 peak hold (display only). 62 Labels 0/1 shows the band labels in the graph (display only). "
+               "Band labels and notes are text, not params: set them with the band-text tool.";
     }
     return {};
+}
+
+namespace {
+
+// Keep at most `max` UTF-8 code points, drop control characters (line breaks too unless
+// `multiline`) and trim surrounding spaces. Invalid bytes are dropped.
+std::string cleanText(const std::string& in, size_t max, bool multiline) {
+    std::string out;
+    size_t cps = 0;
+    for (size_t i = 0; i < in.size() && cps < max;) {
+        const auto c = static_cast<unsigned char>(in[i]);
+        const size_t len = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 0;
+        if (len == 0 || i + len > in.size()) {
+            ++i;
+            continue;
+        }
+        bool ok = true;
+        for (size_t k = 1; k < len; ++k)
+            if ((static_cast<unsigned char>(in[i + k]) & 0xC0) != 0x80) ok = false;
+        if (!ok) {
+            ++i;
+            continue;
+        }
+        if (len == 1 && (c < 0x20 || c == 0x7F)) { // control characters: only a note keeps line breaks
+            i += 1;
+            if (c == '\t' || (multiline && c == '\n')) {
+                out += c == '\t' ? ' ' : '\n';
+                ++cps;
+            }
+            continue;
+        }
+        out.append(in, i, len);
+        i += len;
+        ++cps;
+    }
+    const auto first = out.find_first_not_of(" \n");
+    if (first == std::string::npos) return {};
+    const auto last = out.find_last_not_of(" \n");
+    return out.substr(first, last - first + 1);
+}
+
+} // namespace
+
+void Eq::setBandText(int b, const std::string& label, const std::string& note) {
+    if (b < 0 || b >= kBands) return;
+    label_[b] = cleanText(label, kLabelMax, false);
+    note_[b] = cleanText(note, kNoteMax, true);
+}
+
+// "NEQ1", then per band: u16 label length, label bytes, u16 note length, note bytes (UTF-8).
+std::vector<uint8_t> Eq::getState() const {
+    bool any = false;
+    for (int b = 0; b < kBands; ++b) any |= !label_[b].empty() || !note_[b].empty();
+    if (!any) return {};
+    std::vector<uint8_t> v{'N', 'E', 'Q', '1'};
+    auto put = [&v](const std::string& s) {
+        const auto n = static_cast<uint16_t>(std::min<size_t>(s.size(), 0xFFFF));
+        v.push_back(static_cast<uint8_t>(n & 0xFF));
+        v.push_back(static_cast<uint8_t>(n >> 8));
+        v.insert(v.end(), s.begin(), s.begin() + n);
+    };
+    for (int b = 0; b < kBands; ++b) {
+        put(label_[b]);
+        put(note_[b]);
+    }
+    return v;
+}
+
+void Eq::setState(const uint8_t* data, int32_t size) {
+    std::string lab[kBands], nt[kBands];
+    if (data && size >= 4 && std::memcmp(data, "NEQ1", 4) == 0) {
+        size_t at = 4;
+        const auto n = static_cast<size_t>(size);
+        auto get = [&](std::string& out) {
+            if (at + 2 > n) return false;
+            const size_t len = data[at] | (static_cast<size_t>(data[at + 1]) << 8);
+            at += 2;
+            if (at + len > n) return false;
+            out.assign(reinterpret_cast<const char*>(data + at), len);
+            at += len;
+            return true;
+        };
+        for (int b = 0; b < kBands; ++b)
+            if (!get(lab[b]) || !get(nt[b])) {
+                lab[b].clear();
+                nt[b].clear();
+                break;
+            }
+    }
+    // Anything else (an empty blob, an unknown format) reads as no annotations.
+    for (int b = 0; b < kBands; ++b) setBandText(b, lab[b], nt[b]);
 }
 
 bool Eq::analyse() const {

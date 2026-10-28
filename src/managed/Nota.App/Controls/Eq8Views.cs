@@ -17,6 +17,7 @@
 // stereo bell; right-click a node — type, slope, channel and on. The maths mirrors Eq.h.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -32,7 +33,7 @@ internal static class Eq8
     public const int Bands = 8, PerBand = 5;
     public const int On = 0, TypeF = 1, FreqF = 2, GainF = 3, QF = 4;
     public const int SlopeBase = 40, ChannelBase = 48, ScaleP = 56, OutputP = 57, AutoGainP = 58, AnalyzerP = 59,
-        AnaRangeP = 60, AnaPeakP = 61, ParamCount = 62;
+        AnaRangeP = 60, AnaPeakP = 61, LabelsP = 62, ParamCount = 63;
     public const int LowCut = 0, LowShelf = 1, Bell = 2, Notch = 3, HighShelf = 4, HighCut = 5;
     public const int St = 0, Mid = 1, Side = 2, Left = 3, Right = 4;
     public const int AnaPre = 0, AnaPost = 1, AnaOff = 2;
@@ -127,6 +128,11 @@ public sealed class Eq8Curve : Control
     public event Action? SelectionChanged;
     /// <summary>Raised after a gesture on the graph wrote params (so the card repaints).</summary>
     public event Action? Edited;
+    /// <summary>A band's label (or note mark) was clicked: open its note (specs/049).</summary>
+    public event Action<int>? NoteRequested;
+
+    // Band labels drawn last frame (specs/049), for hit-testing; an empty rect = none.
+    private readonly Rect[] _labelBox = new Rect[Eq8.Bands];
 
     public Eq8Curve(IAudioEngine engine, int track, int device)
     {
@@ -184,6 +190,37 @@ public sealed class Eq8Curve : Control
     private double RangeDb => Eq8.RangeDb(_engine.DeviceParamCount(_track, _device) > Eq8.AnaRangeP ? (int)Math.Round(Pd(Eq8.AnaRangeP)) : 1);
     private bool PeakOn => _engine.DeviceParamCount(_track, _device) > Eq8.AnaPeakP && Pd(Eq8.AnaPeakP) >= 0.5f;
     private double Sr => _engine.SampleRate > 0 ? _engine.SampleRate : 48000;
+    private bool LabelsOn => _engine.DeviceParamCount(_track, _device) <= Eq8.LabelsP || Pd(Eq8.LabelsP) >= 0.5f;
+    private string Label(int b) => _engine.EqBandText(_track, _device, b, 0);
+    private bool HasNote(int b) => _engine.EqBandText(_track, _device, b, 1).Length > 0;
+
+    /// <summary>The graph's own help tooltip; over a label it shows that band's label and note.</summary>
+    public string DefaultTip { get; set; } = "";
+    private string? _tipShown;
+    private void ShowTip(string tip)
+    {
+        if (tip == _tipShown) return;
+        _tipShown = tip;
+        ToolTip.SetTip(this, tip.Length > 0 ? tip : null);
+    }
+    private string LabelTip(int b)
+    {
+        string label = Label(b), note = _engine.EqBandText(_track, _device, b, 1);
+        var lines = note.Split('\n');
+        string head = string.Join("\n", lines.Length > 6 ? lines[..6] : lines);
+        if (head.Length > 400) head = head[..400] + "…";
+        else if (lines.Length > 6) head += "\n…";
+        string title = NotaNum.F($"Band {b + 1}") + (label.Length > 0 ? " · " + label : "");
+        return (note.Length > 0 ? title + "\n" + head : title) + "\nClick to edit the label and note";
+    }
+
+    private int HitLabel(Point p)
+    {
+        if (!LabelsOn) return -1;
+        for (int b = 0; b < Eq8.Bands; b++)
+            if (_labelBox[b].Width > 0 && _labelBox[b].Inflate(1).Contains(p)) return b;
+        return -1;
+    }
 
     // ---- geometry: the plot is the whole control ----
     private double X(double f) => Eq8.FreqToN(f) * Bounds.Width;
@@ -215,7 +252,13 @@ public sealed class Eq8Curve : Control
     {
         base.OnPointerMoved(e);
         var p = e.GetPosition(this);
-        if (_drag < 0) { Cursor = Hit(p) >= 0 ? new Cursor(StandardCursorType.Hand) : Cursor.Default; return; }
+        if (_drag < 0)
+        {
+            int lb = Hit(p) < 0 ? HitLabel(p) : -1;
+            Cursor = Hit(p) >= 0 || lb >= 0 ? new Cursor(StandardCursorType.Hand) : Cursor.Default;
+            ShowTip(lb >= 0 ? LabelTip(lb) : DefaultTip);
+            return;
+        }
         SetP(_drag, Eq8.FreqF, Eq8.NToFreq(p.X / Math.Max(1, Bounds.Width)));
         if (_gestGain) SetP(_drag, Eq8.GainF, GainAtY(p.Y));
         Edited?.Invoke();
@@ -234,6 +277,13 @@ public sealed class Eq8Curve : Control
             return;
         }
         if (!props.IsLeftButtonPressed) return;
+        // A click on a label opens its note; the nodes keep every gesture they had (specs/049).
+        if (hit < 0 && HitLabel(p) is var lb and >= 0)
+        {
+            if (e.ClickCount == 1) { SelectedBand = lb; NoteRequested?.Invoke(lb); }
+            e.Handled = true;
+            return;
+        }
         if (e.ClickCount == 2)
         {
             if (hit >= 0) Gesture(Eq8.P(hit, Eq8.On), () => SetP(hit, Eq8.On, BandOn(hit) ? 0 : 1));
@@ -300,6 +350,7 @@ public sealed class Eq8Curve : Control
         {
             if (BandOn(b)) continue;
             double f = Eq8.NToFreq(p.X / Math.Max(1, Bounds.Width)), g = GainAtY(p.Y);
+            _engine.EqSetBandText(_track, _device, b, "", "");   // a new band: an old label no longer applies
             Gesture(Eq8.P(b, Eq8.TypeF), () => SetP(b, Eq8.TypeF, Eq8.Bell));
             Gesture(Eq8.P(b, Eq8.FreqF), () => SetP(b, Eq8.FreqF, f));
             Gesture(Eq8.P(b, Eq8.GainF), () => SetP(b, Eq8.GainF, g));
@@ -461,11 +512,85 @@ public sealed class Eq8Curve : Control
             ctx.DrawText(t, new Point(c.X - t.Width / 2, c.Y - t.Height / 2));
         }
 
-        DrawTip(ctx, w, h);
+        var tip = DrawTip(ctx, w, h);
+        DrawLabels(ctx, w, h, tip);
+    }
+
+    // ---- band labels (specs/049) ----
+    private const double LabelH = 13, LabelMaxW = 112, NoteDot = 4;
+    private static readonly IBrush LabelFill = NotaPalette.Wash(NotaPalette.SurfaceCard, 0xE8);
+    private static readonly IPen LabelEdge = new Pen(NotaPalette.BorderStrong, 1);
+    private static readonly IPen LeaderPen = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0xA0), 1);
+
+    // Each label is a pill centred over its node (under it when the node is near the top).
+    // In frequency order, a label that would overlap one already placed (or the selected
+    // band's reading) tries the other side, then steps further out on both; it stays inside
+    // the graph, and one moved away from its node gets a thin leader line back to it.
+    private void DrawLabels(DrawingContext ctx, double w, double h, Rect tip)
+    {
+        Array.Clear(_labelBox);
+        if (!LabelsOn) return;
+        var order = new List<(int B, double X)>();
+        for (int b = 0; b < Eq8.Bands; b++)
+            if (Label(b).Length > 0 || HasNote(b)) order.Add((b, NodeAt(b).X));
+        order.Sort((a, c) => a.X.CompareTo(c.X));
+        var placed = new List<Rect> { tip };
+        foreach (var (b, _) in order)
+        {
+            bool on = BandOn(b), note = HasNote(b);
+            string text = Label(b);
+            IBrush ink = on ? NotaPalette.TextPrimary : NotaPalette.TextDisabled;
+            var ft = text.Length > 0 ? Fit(text, ink, LabelMaxW - 10 - (note ? NoteDot + 3 : 0)) : null;
+            double bw = (ft?.Width ?? 0) + (ft is null ? 0 : 10) + (note ? NoteDot + (ft is null ? 8 : 3) : 0);
+            var n = NodeAt(b);
+            double r = NodeD / 2 + 3;
+            bool below = n.Y < h * 0.34;
+            double x = Math.Clamp(n.X - bw / 2, 2, Math.Max(2, w - bw - 2));
+            Rect At(bool under, int step)
+            {
+                double y = under ? n.Y + r + step * (LabelH + 2) : n.Y - r - LabelH - step * (LabelH + 2);
+                return new Rect(x, Math.Clamp(y, 2, Math.Max(2, h - LabelH - 2)), bw, LabelH);
+            }
+            Rect box = At(below, 0);
+            for (int step = 0, tries = 0; tries < 10; tries++)
+            {
+                var cand = At(tries % 2 == 0 ? below : !below, step);
+                if (!placed.Exists(q => q.Intersects(cand))) { box = cand; break; }
+                if (tries % 2 == 1) step++;
+            }
+            placed.Add(box);
+            _labelBox[b] = box;
+            bool away = Math.Abs(box.Center.Y - n.Y) > r + LabelH;
+            if (away)
+            {
+                var end = new Point(Math.Clamp(n.X, box.Left + 3, box.Right - 3), box.Center.Y < n.Y ? box.Bottom : box.Top);
+                ctx.DrawLine(LeaderPen, new Point(n.X, n.Y + (box.Center.Y < n.Y ? -r + 2 : r - 2)), end);
+            }
+            ctx.DrawRectangle(LabelFill, b == _selected ? new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xB0), 1) : LabelEdge,
+                new RoundedRect(box.Deflate(0.5), LabelH / 2));
+            double tx = box.X + (ft is null ? 4 : 5);
+            if (ft is not null) { ctx.DrawText(ft, new Point(tx, box.Y + (LabelH - ft.Height) / 2)); tx += ft.Width + 3; }
+            if (note)
+                ctx.DrawEllipse(on ? NotaPalette.AccentBright : NotaPalette.TextDisabled, null,
+                    new Point(tx + NoteDot / 2, box.Center.Y), NoteDot / 2, NoteDot / 2);
+        }
+    }
+
+    // The label at 7.5 px, shortened with an ellipsis to fit maxW.
+    private static FormattedText Fit(string s, IBrush ink, double maxW)
+    {
+        var ft = Text(s, ink, 7.5, bold: true, mono: false);
+        if (ft.Width <= maxW) return ft;
+        for (int n = s.Length - 1; n > 0; n--)
+        {
+            ft = Text(s[..n].TrimEnd() + "…", ink, 7.5, bold: true, mono: false);
+            if (ft.Width <= maxW) return ft;
+        }
+        return ft;
     }
 
     // The selected band's reading beside its node, clear of the node and inside the window.
-    private void DrawTip(DrawingContext ctx, double w, double h)
+    private Rect DrawTip(DrawingContext ctx, double w, double h)
     {
         int b = _selected, ty = BandType(b), chn = Chan(b);
         bool bOn = BandOn(b), g = Eq8.HasGain(ty);
@@ -482,5 +607,6 @@ public sealed class Eq8Curve : Control
         ctx.DrawRectangle(NotaPalette.SurfaceCard, new Pen(NotaPalette.BorderStrong, 1), new RoundedRect(box.Deflate(0.5), 3));
         ctx.DrawText(a, new Point(x + 6, y + 3));
         ctx.DrawText(l2, new Point(x + 6, y + 3 + a.Height));
+        return box;
     }
 }
