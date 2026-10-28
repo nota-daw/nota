@@ -297,17 +297,29 @@ internal sealed class EqDeviceBody : IDeviceBody
             // ---- label + note ----
             var labelField = new TextBox
             {
-                Text = LabelOf(b), MaxLength = 24, AcceptsReturn = false, FontSize = 9, MinHeight = 18, Height = 18,
+                // AcceptsReturn so a pasted multi-line text arrives whole (a single-line box keeps only
+                // its first line); its breaks and tabs become spaces as it lands, Enter commits.
+                Text = LabelOf(b), MaxLength = 24, AcceptsReturn = true, FontSize = 9, MinHeight = 18, Height = 18,
                 Padding = new Thickness(4, 1), VerticalContentAlignment = VerticalAlignment.Center, Watermark = "Name this band",
             };
             void Unfocus() { curve.Focusable = true; curve.Focus(); }   // hand the keys back to the card
             void CommitLabel() { if ((labelField.Text ?? "") != LabelOf(b)) SetText(b, labelField.Text ?? "", NoteOf(b)); }
             labelField.LostFocus += (_, _) => CommitLabel();
-            labelField.KeyDown += (_, ke) =>
+            labelField.AddHandler(InputElement.KeyDownEvent, (_, ke) =>
             {
                 // Enter keeps the text, Escape reverts it; both hand focus back to the card.
+                // Tunnelled, so Enter is ours before the box would take it as a line break.
                 if (ke.Key == Avalonia.Input.Key.Enter) { CommitLabel(); ke.Handled = true; Unfocus(); }
                 else if (ke.Key == Avalonia.Input.Key.Escape) { labelField.Text = LabelOf(b); ke.Handled = true; Unfocus(); }
+            }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+            labelField.TextChanged += (_, _) =>
+            {
+                var t = labelField.Text;
+                if (t is null || t.IndexOfAny(['\r', '\n', '\t']) < 0) return;
+                int caret = labelField.CaretIndex;
+                var flat = t.Replace("\r\n", " ").Replace('\r', ' ').Replace('\n', ' ').Replace('\t', ' ');
+                labelField.Text = flat;
+                labelField.CaretIndex = Math.Clamp(caret - (t.Length - flat.Length), 0, flat.Length);
             };
             ToolTip.SetTip(labelField, "Label — a short name shown next to the band's node (up to 24 characters)");
             var noteBtn = new Button

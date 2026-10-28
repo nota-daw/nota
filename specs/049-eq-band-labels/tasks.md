@@ -9,4 +9,4 @@
 - [x] T7 UI: new bell from empty space clears the slot's annotation
 - [x] T8 Smoke test `--eq-labels` (engine, undo, copy, state, project, preset, audio identical)
 - [x] T9 CHANGELOG, user guide EN + RU (nota-docs)
-- [ ] T10 Screenshots, macOS check
+- [x] T10 Screenshots, macOS check
