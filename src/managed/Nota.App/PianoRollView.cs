@@ -535,7 +535,7 @@ public sealed partial class PianoRollView : UserControl
         SaveView();
     }
 
-    internal void ZoomRowsAt(double factor, double viewportY) => SetRowHeightAt(_rowH * factor, viewportY);
+    internal void ZoomRowsAt(double factor, double viewportY) { PadRowsZoomed(); SetRowHeightAt(_rowH * factor, viewportY); }
 
     /// <summary>⌘⌥ (Ctrl+Alt) + wheel: the vertical-zoom wheel, checked before ⌘ + wheel.</summary>
     private static bool IsRowZoomWheel(KeyModifiers m)
@@ -1708,6 +1708,7 @@ public sealed partial class PianoRollView : UserControl
             if (_press == Press.Zoom)
             {
                 double dy = e.GetPosition(_o._bodyScroll).Y - _pressY;
+                _o.PadRowsZoomed();
                 _o.SetRowHeightAt(_pressRowH * Math.Exp(dy * 0.01), _pressY);
                 return;
             }
