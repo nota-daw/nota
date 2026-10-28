@@ -31,6 +31,15 @@ public sealed partial class ModularView
     internal bool ScopeFrozen(int trackId, int modId) => _scopeFrozen.ContainsKey((trackId, modId));
     internal ScopeSnapshot? ScopeHeld(int trackId, int modId) => _scopeFrozen.GetValueOrDefault((trackId, modId));
 
+    /// <summary>A new or reopened project reuses track and modulator ids: drop the held traces
+    /// and close the Scope windows, which belong to the old project.</summary>
+    public void ForgetScopes()
+    {
+        _scopeFrozen.Clear();
+        foreach (var w in new List<ScopeWindow>(_scopeWindows.Values)) w.Close();
+        _scopeWindows.Clear();
+    }
+
     private void SetScopeFrozen(int trackId, int modId, bool on)
     {
         if (!on) { _scopeFrozen.Remove((trackId, modId)); return; }
