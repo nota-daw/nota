@@ -263,6 +263,27 @@ internal static class EqAnalyzerTests
             yield return (s[Analysed] < 0.5f && s[PostAt + pk] < -120, $"silence falls away instead of freezing (analysed {s[Analysed]}, {s[PostAt + pk]:F0} dB)");
         }
 
+        // A large buffer (2048 frames ≈ 46 ms) with the display reading every ~10 ms: most reads
+        // fall between two callbacks, which is not silence, so a steady tone doesn't dip.
+        using (var r = new Rig(Sine(tmp, 1000)))
+        {
+            r.Reset();
+            r.Feed(8192);
+            var s = r.Read();
+            int pk = Argmax(s, PostAt);
+            float lo = float.MaxValue, hi = float.MinValue;
+            var sw = Stopwatch.StartNew();
+            long nextFeed = 0;
+            while (sw.ElapsedMilliseconds < 1000)
+            {
+                if (sw.ElapsedMilliseconds >= nextFeed) { r.Feed(2048); nextFeed += 46; }
+                s = r.Read(10);
+                lo = Math.Min(lo, s[PostAt + pk]);
+                hi = Math.Max(hi, s[PostAt + pk]);
+            }
+            yield return (hi - lo < 1.0f, $"a steady tone in 2048-frame callbacks holds still between them ({hi - lo:F2} dB swing)");
+        }
+
         // Peak hold: the peak stays ~1.5 s after the curve falls, then falls too.
         using (var r = new Rig(Sine(tmp, 1000)))
         {

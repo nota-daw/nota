@@ -33,6 +33,9 @@ class SpectrumAnalyzer {
     static constexpr double kFallDbPerS = 20.0 / 0.3;
     static constexpr double kPeakHoldS = 1.5;
     static constexpr double kPeakFallDbPerS = kFallDbPerS * 0.5;
+    // A pause past 1.5 callback periods (within these bounds) is the input stopping, not a
+    // read that fell between two callbacks (2048 frames at 44.1 kHz arrive 46 ms apart).
+    static constexpr double kStalledMinS = 0.03, kStalledMaxS = 0.25;
     // The held peak may not fall away from a neighbouring point faster than this (dB per point,
     // ~51 dB/octave): each point's hold runs out on its own, and without it the line breaks
     // into notches and spikes on drums.
@@ -74,6 +77,8 @@ class SpectrumAnalyzer {
     std::vector<float> peakAge_ = std::vector<float>(kPoints, 0.0f);
     double ref_ = 1.0, refBin_ = 1.0;
     uint32_t lastW_ = 0;
+    double stalled_ = 0.0;   // seconds the write index hasn't moved
+    double gap_ = 0.0;       // seconds between its last two moves (≈ the callback period)
     bool primed_ = false, valid_ = false;
 };
 

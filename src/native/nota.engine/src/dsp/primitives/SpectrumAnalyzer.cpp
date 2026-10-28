@@ -61,14 +61,22 @@ void SpectrumAnalyzer::reset() {
     std::fill(peakAge_.begin(), peakAge_.end(), 0.0f);
     primed_ = false;
     valid_ = false;
+    stalled_ = 0.0;
+    gap_ = 0.0;
 }
 
 void SpectrumAnalyzer::analyse(const float* ring, uint32_t mask, uint32_t w, double dt, bool peakHold) {
     if (!ring || n_ <= 0 || mask + 1 < (uint32_t)n_) return;
     const bool snap = !primed_ || dt <= 0.0 || dt > 1.2;
     dt = snap ? 0.0 : dt;
-    // No new samples since the last look: the input has stopped, so let the curve fall.
-    const bool silent = primed_ && w == lastW_;
+    // No new samples for longer than a callback: the input has stopped, so let the curve fall.
+    // A shorter pause is a read between two callbacks: the same window measures again.
+    if (primed_ && w == lastW_) stalled_ += dt;
+    else {
+        if (primed_) gap_ = stalled_ + dt;
+        stalled_ = 0.0;
+    }
+    const bool silent = stalled_ > std::clamp(1.5 * gap_, kStalledMinS, kStalledMaxS);
     if (!silent && w >= (uint32_t)n_) {
         const uint32_t start = w - (uint32_t)n_;
         for (int i = 0; i < n_; ++i) time_[(size_t)i] = ring[(start + (uint32_t)i) & mask] * win_[(size_t)i];
