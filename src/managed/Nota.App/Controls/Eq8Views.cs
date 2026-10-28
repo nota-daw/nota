@@ -532,6 +532,9 @@ public sealed class Eq8Curve : Control
     // In frequency order, a label that would overlap one already placed (or the selected
     // band's reading) tries the other side, then steps further out on both, then shorter; it
     // stays inside the graph, and one moved away from its node gets a thin leader line back to it.
+    /// <summary>Space over the graph that labels keep clear of (the card's analyzer bar).</summary>
+    public Rect Reserved { get; set; }
+
     private void DrawLabels(DrawingContext ctx, double w, double h, Rect tip)
     {
         Array.Clear(_labelBox);
@@ -540,7 +543,8 @@ public sealed class Eq8Curve : Control
         for (int b = 0; b < Eq8.Bands; b++)
             if (Label(b).Length > 0 || HasNote(b)) order.Add((b, NodeAt(b).X));
         order.Sort((a, c) => a.X.CompareTo(c.X));
-        var placed = new List<Rect> { tip };
+        var placed = new List<Rect> { tip, Reserved };
+        var chips = new List<(int B, Rect Box, FormattedText? Ft, bool Note, bool On, Point N, double R)>();
         foreach (var (b, _) in order)
         {
             bool on = BandOn(b), note = HasNote(b);
@@ -577,12 +581,17 @@ public sealed class Eq8Curve : Control
             if (!found) continue;
             placed.Add(box);
             _labelBox[b] = box;
-            bool away = Math.Abs(box.Center.Y - n.Y) > r + LabelH;
-            if (away)
+            chips.Add((b, box, ft, note, on, n, r));
+        }
+        // Leader lines first, so a chip in a stack covers the lines that run past it to outer chips.
+        foreach (var (_, box, _, _, _, n, r) in chips)
+            if (Math.Abs(box.Center.Y - n.Y) > r + LabelH)
             {
                 var end = new Point(Math.Clamp(n.X, box.Left + 3, box.Right - 3), box.Center.Y < n.Y ? box.Bottom : box.Top);
                 ctx.DrawLine(LeaderPen, new Point(n.X, n.Y + (box.Center.Y < n.Y ? -r + 2 : r - 2)), end);
             }
+        foreach (var (b, box, ft, note, on, _, _) in chips)
+        {
             ctx.DrawRectangle(LabelFill, b == _selected ? new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xB0), 1) : LabelEdge,
                 new RoundedRect(box.Deflate(0.5), LabelH / 2));
             double tx = box.X + (ft is null ? 4 : 5);

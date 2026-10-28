@@ -177,6 +177,12 @@ internal sealed class EqDeviceBody : IDeviceBody
         };
         anaBar.RenderTransform = new ScaleTransform(0.85, 0.85);
         anaBar.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
+        // Band labels stay clear of the bar (drawn at 85 %, from its margin's corner).
+        anaBar.LayoutUpdated += (_, _) =>
+        {
+            var r = new Rect(0, 0, anaBar.Margin.Left + anaBar.Bounds.Width * 0.85 + 2, anaBar.Margin.Top + anaBar.Bounds.Height * 0.85 + 2);
+            if (r != curve.Reserved) { curve.Reserved = r; curve.InvalidateVisual(); }
+        };
         var graphPanel = new RuleSection
         {
             Margin = new Thickness(0, 0, 5, 0),
