@@ -23,6 +23,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Tempo-synced scope in Nota Lens** (#119): the Scope view gains **Sync**, which lines the
+  trace up with the song: pick a **Span** from a quarter beat to four bars and the scope shows
+  that stretch of the beat grid, with beat and bar lines, a sweep line at the playhead and the
+  previous pass fading out to its right. It draws from a min/max history, so a one-sample
+  transient keeps its full height at any span, and a seek or loop wrap restarts the pass
+  cleanly. Lens also takes a sidechain **Key** (any other track): its waveform is drawn in teal
+  over the main one or **Stacked** under it, with its own display gain, in both the synced and
+  the triggered scope. A new button opens Lens in its own resizable window. The audio still
+  passes through untouched. Five params are appended (Sync, Span, Key, Key Gain, Layout);
+  older projects open with Sync off.
 - **A proper spectrum analyzer in EQ-8 and EQ-3** (#265): the spectrum behind the curve is now
   a smooth, filled area that rises at once and falls back over about 300 ms, read from 256
   points in 1/6-octave bands, so a tone reads at its own level and pink noise reads flat. EQ-8

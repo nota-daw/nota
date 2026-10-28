@@ -34,15 +34,17 @@ internal sealed class LensDeviceBody : IDeviceBody
         PersistP = 21, PersistTimeP = 22, TracesP = 23, BrightP = 24,
         CursorsP = 25, CursorAP = 26, CursorBP = 27, CursorSnapP = 28,
         WfSpeedP = 29, WfGainP = 30, WfFloorP = 31, WfContrastP = 32, WfOverlapP = 33,
-        LogFreqP = 34, NoteGridP = 35, RateP = 36;
+        LogFreqP = 34, NoteGridP = 35, RateP = 36,
+        SyncP = 37, SpanP = 38, KeyShowP = 39, KeyGainP = 40, LayoutP = 41;   // specs/050
 
     // ── Scope telemetry (Lens::M_*) ──────────────────────────────────────────
     private const int M_PeakHz = 0, M_PeakDb = 1, M_RmsDb = 2, M_LevelDb = 3, M_CrestDb = 4, M_Corr = 5,
         M_Lufs = 6, M_TrigOk = 7, M_PeriodMs = 8, M_FreqHz = 9, M_Vpp = 10, M_Vrms = 11, M_WindowMs = 12,
         M_BinHz = 13, M_FftN = 14, M_FftMs = 15, M_CursorAv = 16, M_CursorBv = 17, M_SampleRate = 18,
-        M_Held = 19, kScope = 20;
+        M_Held = 19, M_KeyLive = 20, kScope = 21;
 
-    private const int L_Spectrum = 0, L_Peak = 1, L_Trace = 2, L_Raw = 3, L_Waterfall = 4;
+    private const int L_Spectrum = 0, L_Peak = 1, L_Trace = 2, L_Raw = 3, L_Waterfall = 4, L_KeyTrace = 5, L_Sync = 6;
+    private static readonly string[] SpanNames = { "¼ b", "½ b", "1 b", "2 b", "1 bar", "2 bar", "4 bar" };
     private const int A_Rearm = 0, A_ResetPeak = 1, A_ResetTrigger = 2;
 
     private static readonly int[] FftSizes = { 512, 2048, 4096, 16384 };
@@ -62,6 +64,12 @@ internal sealed class LensDeviceBody : IDeviceBody
 
     /// <summary>The right panel's tab survives a card rebuild (keyed by track + device slot).</summary>
     private static readonly Dictionary<(int, int), int> RightTab = new();
+
+    private readonly bool _popout;
+
+    /// <summary><paramref name="popout"/>: built for <see cref="LensWindow"/>, which gives the
+    /// graph the room and has no expand button of its own.</summary>
+    public LensDeviceBody(bool popout = false) => _popout = popout;
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -100,6 +108,10 @@ internal sealed class LensDeviceBody : IDeviceBody
         double PersistS() => Exp(P(PersistTimeP), 0.05, 2.0);
         int TraceCount() => (int)Math.Round(1 + P(TracesP) * 7);
         double WfSpan() => WfSpans[Sel(WfSpeedP, 3)];
+        static double KeyDb(double v) => -24 + 48 * Math.Clamp(v, 0, 1);
+        bool scOk = engine.DeviceAcceptsSidechain(track, di);
+        int KeySrc() => scOk ? engine.DeviceSidechainSource(track, di) : -1;
+        string SrcName(int id) { string n = TrackNames.Of(engine, id); return n == "—" ? "None" : n; }
 
         static string Ms(double sec) => sec >= 1 ? Inv($"{sec:0.00} s") : sec >= 0.001 ? Inv($"{sec * 1000:0.00} ms") : Inv($"{sec * 1e6:0} µs");
         static string Sec(double s) => s >= 1 ? Inv($"{s:0.0} s") : Inv($"{s * 1000:0} ms");
@@ -247,19 +259,46 @@ internal sealed class LensDeviceBody : IDeviceBody
 
         Control ScopeTab()
         {
+            // Sync swaps the trigger chips for the span on the song's grid (specs/050).
             var trig = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
                 Children = { Seg(TrigModeP, new[] { "Auto", "Normal", "Single" }), Seg(TrigEdgeP, new[] { "↑", "↓" }) },
             };
+            var span = Seg(SpanP, SpanNames);
+            ToolTip.SetTip(span, "Span — how much of the song the scope shows, from a quarter beat to four bars");
+            var sync = Toggle(SyncP, "Sync");
+            ToolTip.SetTip(sync, "Sync — line the scope up with the song's beats and bars");
+            var caps = Caps("TRIG");
+            readouts.Add(() =>
+            {
+                bool on = On(SyncP);
+                trig.IsVisible = !on; span.IsVisible = on;
+                caps.Text = NotaText.Label(on ? "SPAN" : "TRIG");
+            });
+            var top = new DockPanel { Height = 18, LastChildFill = false, Margin = new Thickness(0, 0, 0, 4) };
+            top.Children.Add(Docked(new Border { Margin = new Thickness(0, 0, 8, 0), Child = sync }, Dock.Left));
+            top.Children.Add(Docked(caps, Dock.Left));
+            top.Children.Add(Docked(new Border { Margin = new Thickness(6, 0, 0, 0), Child = new Panel { Children = { trig, span } } }, Dock.Left));
+            scopeInfo.TextAlignment = TextAlignment.Right;
+            top.Children.Add(Docked(scopeInfo, Dock.Right));
+
+            // Time base and trigger knobs rest while Sync draws the beat grid.
+            var timeK = K(TimeDivP, "Time/Div", v => Ms(Exp(v, 0.00002, 0.02)), 34, 48);
+            var trigK = K(TrigLevelP, "Trig Lvl", v => Inv($"{(v - 0.5) * 2:+0.00;−0.00;0.00}"), 34, 48, TealC);
+            var holdK = K(HoldoffP, "Holdoff", v => Inv($"{v * 200:0} ms"), 34, 48, TealC);
+            var keyK = K(KeyGainP, "Key Gain", v => Inv($"{KeyDb(v):+0.#;−0.#;0} dB"), 34, 48, TealC);
+            ToolTip.SetTip(keyK, "Key gain — scales only the key's trace, for the eye (the sound is untouched)");
+            readouts.Add(() =>
+            {
+                bool on = On(SyncP);
+                foreach (var c in new[] { timeK, trigK, holdK }) { c.IsEnabled = !on; c.Opacity = on ? 0.4 : 1; }
+                keyK.IsEnabled = KeySrc() >= 0; keyK.Opacity = keyK.IsEnabled ? 1 : 0.4;
+            });
             return GraphHost(
-                TopRow("TRIG", trig, scopeInfo),
+                top,
                 scopeView,
-                KnobRow(K(TimeDivP, "Time/Div", v => Ms(Exp(v, 0.00002, 0.02)), 34, 48),
-                        K(VoltDivP, "Volt/Div", v => Inv($"{Exp(v, 0.02, 2.0):0.00}"), 34, 48),
-                        K(TrigLevelP, "Trig Lvl", v => Inv($"{(v - 0.5) * 2:+0.00;−0.00;0.00}"), 34, 48, TealC),
-                        K(HoldoffP, "Holdoff", v => Inv($"{v * 200:0} ms"), 34, 48, TealC),
-                        scopeNote.Ctl));
+                KnobRow(timeK, K(VoltDivP, "Volt/Div", v => Inv($"{Exp(v, 0.02, 2.0):0.00}"), 34, 48), trigK, holdK, keyK, scopeNote.Ctl));
         }
 
         Control WaterfallTab() => GraphHost(
@@ -308,14 +347,67 @@ internal sealed class LensDeviceBody : IDeviceBody
             Toggle(PeakHoldP, "Peak hold"),
             Toggle(MidSideP, "Mid / Side"));
 
+        // The sidechain key (specs/050): None, or any other track's post-FX audio.
+        Control KeyRow()
+        {
+            var name = new TextBlock { FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            readouts.Add(() =>
+            {
+                int src = KeySrc();
+                name.Text = !scOk ? "n/a in a rack" : src < 0 ? "no key" : SrcName(src);
+                name.Foreground = src >= 0 ? TxtC : Txt2;
+            });
+            var box = new Border
+            {
+                Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0),
+                Cursor = new Cursor(StandardCursorType.Hand), IsEnabled = scOk,
+                Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(5, 0, 0, 0) }, Dock.Right), name } },
+            };
+            ToolTip.SetTip(box, "Key — draw another track's audio over this one, in teal");
+            box.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed || !scOk) return;
+                var fly = new MenuFlyout();
+                int cur = KeySrc();
+                void Item(string n, int id)
+                {
+                    var mi = new MenuItem { Header = n, ToggleType = MenuItemToggleType.Radio, IsChecked = id == cur };
+                    mi.Click += (_, _) => { engine.SetDeviceSidechainSource(track, di, id); ctx.NotifyChanged(); foreach (var a in readouts) a(); };
+                    fly.Items.Add(mi);
+                }
+                Item("None", -1);
+                fly.Items.Add(new Separator());
+                for (int i = 0; i < engine.TrackCount; i++)
+                    if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track) Item(SrcName(ti.Id), ti.Id);
+                fly.ShowAt(box);
+                e.Handled = true;
+            };
+            var show = Switch("", () => On(KeyShowP), () => SetP(KeyShowP, On(KeyShowP) ? 0f : 1f), out var showSync);
+            readouts.Add(showSync);
+            Learn(show, KeyShowP);
+            ToolTip.SetTip(show, "Show the key's trace");
+            show.Margin = new Thickness(5, 0, 0, 0);
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*,Auto"), VerticalAlignment = VerticalAlignment.Center };
+            g.Children.Add(Caps("KEY")); g.Children.Add(Col(box, 1)); g.Children.Add(Col(show, 2));
+            return g;
+        }
+
+        Control TwoToggles(Control a, Control b)
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*") };
+            g.Children.Add(a); g.Children.Add(Col(b, 1));
+            return g;
+        }
+
         Control ScopeAnalyze() => Stack(
+            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("SOURCE"), Col(Seg(SourceP, new[] { "L+R", "L", "R" }), 1) } },
+            KeyRow(),
+            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("LAYOUT"), Col(Seg(LayoutP, new[] { "Overlay", "Stacked" }), 1) } },
             Row("PERSIST", PersistTimeP, v => Sec(Exp(v, 0.05, 2.0))),
             Row("TRACES", TracesP, v => Inv($"{1 + v * 7:0}")),
             Row("BRIGHT", BrightP, v => Pc(v)),
-            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("SOURCE"), Col(Seg(SourceP, new[] { "L+R", "L", "R" }), 1) } },
             captureBox.Box,
-            Toggle(PersistP, "Afterglow"),
-            Toggle(CursorsP, "Cursors"));
+            TwoToggles(Toggle(PersistP, "Afterglow"), Toggle(CursorsP, "Cursors")));
 
         Control CursorAnalyze() => Stack(
             measureBox.Box,
@@ -430,6 +522,20 @@ internal sealed class LensDeviceBody : IDeviceBody
 
         var headNote = Mono("", 7, MutedC);
         var extras = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { freezeToggle, headNote } };
+        // Expand: the same body in its own resizable window (specs/050). Top-level chain only —
+        // a rack chain's Lens has no window to follow.
+        if (!_popout && engine is not System.Reflection.DispatchProxy)
+        {
+            var pop = new Border
+            {
+                Background = Brushes.Transparent, Padding = new Thickness(3), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+                Child = new Glyph(GlyphKind.PopOut, 10) { Foreground = MutedC },
+            };
+            ToolTip.SetTip(pop, "Open Lens in its own window");
+            pop.PointerReleased += (_, e) => { LensWindow.Open(ctx, di, pop); e.Handled = true; };
+            pop.PointerPressed += (_, e) => e.Handled = true;
+            extras.Children.Add(pop);
+        }
 
         Control TabFrame(string[] tabs, int initial, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
         {
@@ -560,6 +666,13 @@ internal sealed class LensDeviceBody : IDeviceBody
             }
             else if (centreTab == 1)
             {
+                data.SyncOn = On(SyncP);
+                data.KeyOn = On(KeyShowP) && KeySrc() >= 0 && Sc(M_KeyLive) > 0.5;
+                data.KeyGain = Math.Pow(10, KeyDb(P(KeyGainP)) / 20);
+                data.Stacked = On(LayoutP);
+                data.KeyName = KeySrc() >= 0 ? SrcName(KeySrc()) : "key";
+                if (data.SyncOn) engine.DeviceLayerWave(track, di, L_Sync, data.Sync, data.Sync.Length);
+                else if (data.KeyOn) engine.DeviceLayerWave(track, di, L_KeyTrace, data.KeyTrace, LensData.TraceN);
                 engine.DeviceLayerWave(track, di, L_Trace, data.Trace, LensData.TraceN);
                 data.AgeGhosts(dt);
                 if (On(PersistP))
@@ -601,12 +714,15 @@ internal sealed class LensDeviceBody : IDeviceBody
 
             int fftN = (int)Sc(M_FftN);
             string winName = new[] { "Hann", "B-H", "Flat" }[Sel(WindowP, 3)];
+            bool synced = data.SyncOn && data.Sync[LensData.S_Mode] > 0.5f;
             headNote.Text = centreTab == 1
-                ? (data.Held ? "Held" : data.TrigOk ? "Trig’d" : "Free")
+                ? (data.Held ? "Held" : data.SyncOn ? (synced ? "Sync" : "Free") : data.TrigOk ? "Trig’d" : "Free")
                 : centreTab == 2 ? Inv($"{LensData.WfBins} bins") : Inv($"FFT {fftN}");
 
             specInfo.Text = Inv($"window {Sc(M_FftMs):0} ms · slope {P(TiltP) * 9:0.0} dB/oct");
-            scopeInfo.Text = Inv($"level {(P(TrigLevelP) - 0.5) * 2:0.00} · holdoff {P(HoldoffP) * 200:0} ms");
+            scopeInfo.Text = data.SyncOn
+                ? Inv($"{LensScopeView.SpanName(data.Sync[LensData.S_SpanBeats], data.Sync[LensData.S_BeatsPerBar])} · {data.Sync[LensData.S_Bpm]:0.#} BPM{(synced ? "" : " · stopped")}")
+                : Inv($"level {(P(TrigLevelP) - 0.5) * 2:0.00} · holdoff {P(HoldoffP) * 200:0} ms");
             wfInfo.Text = Inv($"floor {-120 + P(WfFloorP) * 80:0} dB · {(On(LogFreqP) ? "log" : "linear")} freq");
 
             specNote.A.Text = Inv($"peak {Sc(M_PeakDb):0.0} dB @ {Hz(Sc(M_PeakHz))}");
@@ -625,6 +741,7 @@ internal sealed class LensDeviceBody : IDeviceBody
 
             statusLeft.Text = centreTab switch
             {
+                1 when data.SyncOn => Inv($"Scope · sync {LensScopeView.SpanName(data.Sync[LensData.S_SpanBeats], data.Sync[LensData.S_BeatsPerBar])} · {VoltDiv():0.00}/div{(data.KeyOn ? " · key " + data.KeyName : "")}"),
                 1 => Inv($"Scope · {Ms(TimeDiv())}/div · {VoltDiv():0.00}/div · trig {(On(TrigEdgeP) ? "↓" : "↑")} {(P(TrigLevelP) - 0.5) * 2:0.00} {new[] { "auto", "normal", "single" }[Sel(TrigModeP, 3)]}{(On(PersistP) ? Inv($" · persist {Sec(PersistS())}") : "")}"),
                 2 => Inv($"Waterfall · {LensData.WfBins} bins · {winName} · overlap {Overlaps[Sel(WfOverlapP, 4)]:0.#} % · window {WfSpan():0} s · floor {-120 + P(WfFloorP) * 80:0} dB"),
                 _ => Inv($"Spectrum · FFT {fftN} · {winName} · avg {Avg()} · slope {P(TiltP) * 9:0.0} dB/oct{(On(MidSideP) ? " · Mid/Side" : "")}"),
