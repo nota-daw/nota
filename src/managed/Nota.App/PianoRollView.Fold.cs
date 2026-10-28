@@ -44,12 +44,14 @@ public sealed partial class PianoRollView
     /// <summary>Sets Fold; <paramref name="user"/> raises <see cref="FoldToggled"/>.</summary>
     public void SetFold(bool on, bool user = false)
     {
-        if (on == _fold) return;
+        // Not mid-drag: the grabbed notes' rows would change under the pointer (as row zoom).
+        if (on == _fold || _gridControl.Dragging) return;
         _fold = on;
         RebuildRows(force: true);
         // A kit is a handful of rows: when they would leave the editor mostly empty, fit them,
         // and give the keyboard its own row height back on unfolding.
-        if (_rowsArePads && RangeH < _bodyScroll.Viewport.Height * 0.75)
+        if (_rowsArePads && _bodyScroll.Viewport.Height <= 0) FitPadsWhenLaidOut();   // a reopened editor
+        else if (_rowsArePads && RangeH < _bodyScroll.Viewport.Height * 0.75)
         {
             _rowHBeforePadFit = _rowH;
             FitToNotes();
@@ -60,6 +62,24 @@ public sealed partial class PianoRollView
             SetRowHeightAt(h0, 0);
         }
         if (user) FoldToggled?.Invoke(on);
+    }
+
+    // Fold restored before the editor has a height (a reopened project or clip): fit the kit
+    // on the first layout that gives it one.
+    private void FitPadsWhenLaidOut()
+    {
+        void Once(object? sender, EventArgs e)
+        {
+            double vh = _bodyScroll.Viewport.Height;
+            if (vh <= 0) return;
+            _bodyScroll.LayoutUpdated -= Once;
+            if (_fold && _rowsArePads && _rowHBeforePadFit is null && RangeH < vh * 0.75)
+            {
+                _rowHBeforePadFit = _rowH;
+                FitToNotes();
+            }
+        }
+        _bodyScroll.LayoutUpdated += Once;
     }
 
     /// <summary>The rack's pads may have changed (renamed, added, a new sample): re-read them.</summary>
@@ -78,7 +98,7 @@ public sealed partial class PianoRollView
         var pads = _fold ? FoldPads?.Invoke() : null;
         if (!_fold) next = PianoRowMap.Chromatic(MinPitch, MaxPitch);
         else next = PianoRowMap.Folded(MinPitch, MaxPitch, pads,
-            pads is null && _scaleOn ? ScaleMasks[_scaleIndex] : null, _scaleRoot, _notes.Select(n => n.Pitch));
+            pads is null && _scaleOn ? ScaleMasks[_scaleIndex] : null, _scaleRoot, UsedPitches());
         bool padRows = pads is not null && !next.IsChromatic;
         if (!force && SameRows(next) && padRows == _rowsArePads) { _rows = next; return; }   // labels may change
 
@@ -95,6 +115,15 @@ public sealed partial class PianoRollView
         _pendingCenter = false;
         _pendingVOffset = Math.Max(0, _rows.NearestRow(anchor) * rowH);
         ApplyPendingVOffset();
+    }
+
+    // The pitches a folded keyboard keeps: every note's, and the keys held into a recording
+    // take, which aren't notes until they are released.
+    private List<int> UsedPitches()
+    {
+        var ps = _notes.Select(n => n.Pitch).ToList();
+        if (_recPreview is { } rp) foreach (var h in rp.Held) ps.Add(h.Pitch);
+        return ps;
     }
 
     private bool SameRows(PianoRowMap m)

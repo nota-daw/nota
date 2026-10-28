@@ -567,6 +567,17 @@ public partial class MainWindow
             roll.SetFold(true);
             roll.EnsureNotesVisible();
         }
+        // A multi-clip editor's active clip can move to another track: take that track's
+        // Fold, and its pads.
+        int shown = track();
+        roll.ActiveClipChanged += () =>
+        {
+            int t = track();
+            if (t == shown) return;
+            shown = t;
+            bool want = Engine.GetTrackPianoFold(t);
+            if (want != roll.Folded) roll.SetFold(want); else roll.RefreshFold();
+        };
     }
 
     // Every open clip's notes, as the engine holds them.

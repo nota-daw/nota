@@ -98,6 +98,7 @@ public sealed class ClipEditorView : UserControl
             Offset = Roll.Clips.EditorStart(Roll.Clips.Active),
         };
         if (_envMode) Roll.SetOverlay(_envOverlay);
+        PaintFold();   // another track's clip may be folded differently
     }
 
     // Note audition (#46): the speaker chip. One app-wide setting, so every open editor's

@@ -114,6 +114,7 @@ public sealed partial class PianoRollView : UserControl
         if (preview is null && _recPreview is null) return;
         _recPreview = preview;
         _recClipStart = clipStart;
+        if (_fold) RebuildRows();   // a held key on a pitch with no folded row gets one
         _gridControl.InvalidateVisual();
     }
     /// <summary>A note's recorded MPE by <see cref="NotaNote.ExprId"/>, drawn over the note.
