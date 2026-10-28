@@ -167,6 +167,13 @@ public sealed partial class PreferencesWindow : NotaWindow
         Jobs.Changed += RenderStoreLists;
         Jobs.ProgressChanged += UpdateDock;
         Closed += (_, _) => { StopTests(); Jobs.Changed -= RenderStoreLists; Jobs.ProgressChanged -= UpdateDock; };
+        // The driver restarted on its own (its panel changed the buffer, or it failed over to
+        // WASAPI): the Audio pane's rows and latency describe the old state — rebuild them.
+        if (_main is not null)
+        {
+            _main.AudioDeviceRestarted += OnAudioDeviceRestarted;
+            Closed += (_, _) => _main.AudioDeviceRestarted -= OnAudioDeviceRestarted;
+        }
         Select(0);
         EnsureStoreLoading();
         UpdateDock();
@@ -385,16 +392,20 @@ public sealed partial class PreferencesWindow : NotaWindow
         bool running = engine.ActiveAudioSystem == AudioSystem.Asio;
         var drivers = engine.AsioDrivers();
         var driverCombo = Combo(280);
+        string saved = engine.AsioDriver;
         int selected = -1;
         for (int i = 0; i < drivers.Count; i++)
-        {
-            driverCombo.Items.Add(drivers[i].Name);
-            if (string.Equals(drivers[i].Uid, engine.AsioDriver, StringComparison.OrdinalIgnoreCase)) selected = i;
-        }
-        driverCombo.SelectedIndex = selected >= 0 ? selected : (drivers.Count > 0 ? 0 : -1);
+            if (string.Equals(drivers[i].Uid, saved, StringComparison.OrdinalIgnoreCase)) selected = i;
+        // A saved driver that is no longer installed stays visible as the choice, so picking
+        // any installed one (even the only one) is a real change that stages and applies it.
+        bool missing = saved.Length > 0 && selected < 0;
+        int offset = missing ? 1 : 0;
+        if (missing) driverCombo.Items.Add("Saved driver not found");
+        foreach (var d in drivers) driverCombo.Items.Add(d.Name);
+        driverCombo.SelectedIndex = missing ? 0 : selected >= 0 ? selected : (drivers.Count > 0 ? 0 : -1);
         driverCombo.SelectionChanged += (_, _) =>
         {
-            int i = driverCombo.SelectedIndex;
+            int i = driverCombo.SelectedIndex - offset;
             if (_loading || i < 0 || i >= drivers.Count) return;
             engine.SetAsioDriver(drivers[i].Uid);   // a different driver: start from its first pairs
             engine.SetAsioPair(false, 0);
@@ -409,6 +420,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         panel.Click += (_, _) =>
         {
             if (running) { engine.OpenAsioControlPanel(); return; }
+            int i = driverCombo.SelectedIndex - offset;   // retry the driver shown, not a stale one
+            if (i >= 0 && i < drivers.Count) engine.SetAsioDriver(drivers[i].Uid);
             Apply();
             RebuildAudioPane();
         };
@@ -429,11 +442,12 @@ public sealed partial class PreferencesWindow : NotaWindow
         {
             int i = srCombo.SelectedIndex;
             if (_loading || i <= 0 || engine.ActiveAudioSystem != AudioSystem.Asio) return;
-            double asked = SampleRates[i], got = engine.NegotiatedSampleRate;
-            if (got <= 0 || got == asked) { refused.IsVisible = false; return; }
+            // The earlier handler applied the rate. A rate the driver refused is dropped by the
+            // engine — the saved config goes back to "device default" — so the row follows it.
+            double asked = SampleRates[i];
+            if (engine.GetAudioConfig().SampleRate == asked) { refused.IsVisible = false; return; }
             refused.Text = $"The driver doesn't support {NotaNum.Unit(asked / 1000, "0.#", "kHz")}";
             refused.IsVisible = true;
-            engine.SetAudioSampleRate(0);   // keep the driver's rate; don't persist the refused one
             _loading = true;
             srCombo.SelectedIndex = 0;
             _loading = false;
@@ -481,6 +495,11 @@ public sealed partial class PreferencesWindow : NotaWindow
     // The audio pane's rows depend on the audio system and the open driver: rebuild it after
     // the combo that changed them has finished its event.
     private void RebuildAudioPane() => Dispatcher.UIThread.Post(() => Select(_selected));
+
+    private void OnAudioDeviceRestarted()
+    {
+        if (_selected == 0) RebuildAudioPane();   // 0 = the Audio page
+    }
 
     private Control TestToneRow()
     {

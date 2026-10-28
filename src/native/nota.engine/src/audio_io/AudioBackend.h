@@ -92,8 +92,12 @@ class AudioBackend {
     // 1 reset requested, 2 driver failed). Polled from the UI thread.
     virtual int32_t pollDeviceEvent() { return 0; }
 
-    // Why the last start() failed, for the fallback message ("" if it didn't).
+    // Why the last start() failed, or why the running device failed (a DRIVER_FAILED event),
+    // for the fallback message ("" if neither).
     virtual const char* fallbackReason() const { return ""; }
+
+    // True if the last start() asked for a sample rate the device refused and kept its own.
+    virtual bool sampleRateRefused() const { return false; }
 };
 
 } // namespace nota

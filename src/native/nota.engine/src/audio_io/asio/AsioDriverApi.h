@@ -73,6 +73,9 @@ class AsioDriverApi {
     virtual bool outputReady() = 0;  // false = not supported by this driver
     // True once a call timed out: the driver is abandoned and every later call fails fast.
     virtual bool timedOut() const { return false; }
+    // True while the driver's own settings panel is open: it may hold the driver's thread
+    // for as long as the user likes, so the session defers restarts until it closes.
+    virtual bool panelOpen() const { return false; }
 };
 
 } // namespace nota::asio

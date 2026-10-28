@@ -3,6 +3,8 @@
 
 #include "AsioBackend.h"
 
+#if defined(_WIN32)
+
 #include "AsioDriverList.h"
 #include "ComAsioDriver.h"
 
@@ -90,7 +92,16 @@ int32_t AsioBackend::outputLatencyFrames() const {
 }
 
 int32_t AsioBackend::pollDeviceEvent() {
-    return sharedAsioSession().pollEvent();
+    AsioSession& s = sharedAsioSession();
+    const int32_t ev = s.pollEvent();
+    if (ev == AsioSession::kEventDriverFailed) reason_ = s.failureText(); // for the engine's fallback
+    return ev;
+}
+
+bool AsioBackend::sampleRateRefused() const {
+    return sharedAsioSession().sampleRateRefused();
 }
 
 } // namespace nota
+
+#endif // defined(_WIN32)

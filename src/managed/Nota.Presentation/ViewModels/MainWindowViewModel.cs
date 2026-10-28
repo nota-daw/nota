@@ -32,6 +32,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Version history was just turned off in Settings: the window erases the open
     /// project's history.</summary>
     public event Action? VersionHistoryTurnedOff;
+    /// <summary>The audio driver restarted (or fell back) on its own, after a device event:
+    /// an open Settings ▸ Audio pane re-reads the driver's buffer, latency and channels.</summary>
+    public event Action? AudioDeviceRestarted;
 
     /// <summary>Turns version history on or off and persists it. Turning it off (the caller has
     /// confirmed) erases the open project's history; other projects lose theirs on their next save.</summary>
@@ -130,6 +133,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             Engine.Seek(position);
             Engine.Play();
         }
+        AudioDeviceRestarted?.Invoke();
     }
 
     private void OnAutosaveTick()

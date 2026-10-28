@@ -55,12 +55,14 @@ class FakeAsioDriver final : public AsioDriverApi {
     bool getLatencies(int32_t& input, int32_t& output) override;
     bool controlPanel() override { return true; }
     bool outputReady() override;
+    bool panelOpen() const override { return panelOpen_; }
 
     // ---- test controls ----
     // Run `switches` buffer switches (alternating halves). Does nothing while stopped unless
     // `evenIfStopped` (a late callback after stop()), or while "stops calling back" is set.
     void pump(int32_t switches, bool evenIfStopped = false);
     void setStopsCallingBack(bool on) { silent_ = on; }
+    void setPanelOpen(bool on) { panelOpen_ = on; } // the user has the driver's panel open
     // Advance the reported sample position by this many frames per switch (0 = the buffer
     // size); a different value imitates a buffer-size change with no reset message.
     void setPositionStep(int32_t frames) { positionStep_ = frames; }
@@ -84,6 +86,7 @@ class FakeAsioDriver final : public AsioDriverApi {
     bool initialized_ = false;
     bool running_ = false;
     bool silent_ = false;
+    bool panelOpen_ = false;
     Callbacks cb_;
     int32_t bufferFrames_ = 0;
     std::vector<BufferInfo> infos_;

@@ -3,6 +3,8 @@
 
 #include "AsioInput.h"
 
+#if defined(_WIN32)
+
 #include "AsioBackend.h"
 
 namespace nota {
@@ -37,3 +39,5 @@ double AsioInput::sampleRate() const {
 }
 
 } // namespace nota
+
+#endif // defined(_WIN32)

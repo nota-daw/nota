@@ -3,6 +3,8 @@
 
 #include "AsioDriverList.h"
 
+#if defined(_WIN32)
+
 #include <windows.h>
 
 #include <algorithm>
@@ -84,3 +86,5 @@ const AsioDriverInfo* findAsioDriver(const std::vector<AsioDriverInfo>& drivers,
 }
 
 } // namespace nota::asio
+
+#endif // defined(_WIN32)

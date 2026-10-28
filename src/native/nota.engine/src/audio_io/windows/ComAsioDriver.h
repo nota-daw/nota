@@ -13,6 +13,7 @@
 
 #include "audio_io/asio/AsioDriverApi.h"
 
+#include <future>
 #include <memory>
 #include <string>
 #include <thread>
@@ -43,6 +44,7 @@ class ComAsioDriver final : public AsioDriverApi {
     bool controlPanel() override;
     bool outputReady() override;
     bool timedOut() const override;
+    bool panelOpen() const override;
 
     struct Shared; // the control thread's state; outlives this object if the thread is abandoned
 
@@ -51,6 +53,7 @@ class ComAsioDriver final : public AsioDriverApi {
     template <class F> bool call(F fn, unsigned timeoutMs);
 
     std::shared_ptr<Shared> sh_;
+    std::future<void> exited_; // ready once the control thread has released the driver
     std::thread thread_;
 };
 

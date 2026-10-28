@@ -471,6 +471,18 @@ void checkResets(AsioCheck& check) {
     check(rig.session.pollEvent() == AsioSession::kEventResetRequested, "silent buffer-size change -> RESET_REQUESTED");
     check(rig.session.pollEvent() == AsioSession::kEventNone, "buffer-size event cleared on read");
 
+    // A reset sent while the driver's panel is open waits for the panel to close — and so
+    // does the watchdog: restarting now would queue behind the modal panel.
+    rig.fake->setPositionStep(0);
+    rig.session.setWatchdogTimeout(std::chrono::milliseconds(30));
+    rig.fake->setPanelOpen(true);
+    rig.fake->sendMessage(nota::asio::kResetRequest);
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    check(rig.session.pollEvent() == AsioSession::kEventNone, "no restart while the driver's panel is open");
+    rig.fake->setPanelOpen(false);
+    rig.fake->pump(1);
+    check(rig.session.pollEvent() == AsioSession::kEventResetRequested, "the reset arrives once the panel closes");
+
     int xruns = 0;
     Rig ov;
     check(ov.open(FakeAsioDriver::Config{}), "overload fake opens");

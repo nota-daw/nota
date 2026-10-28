@@ -3,6 +3,8 @@
 
 #include "ComAsioDriver.h"
 
+#if defined(_WIN32)
+
 #include <windows.h>
 #include <objbase.h>
 #include <avrt.h>
@@ -31,6 +33,8 @@ struct ComAsioDriver::Shared {
     IASIO* drv = nullptr;        // created, used and released on the control thread
     HWND window = nullptr;       // the driver's sysHandle (parent of its panel)
     std::atomic<bool> abandoned{false};
+    std::atomic<bool> panelOpen{false}; // inside drv->controlPanel()
+    std::promise<void> exited;          // set by the thread after Release() + CoUninitialize()
 
     ~Shared() {
         if (wake) CloseHandle(wake);
@@ -52,6 +56,18 @@ constexpr unsigned kCallTimeoutMs = 2000;
 // The SDK's ASIOCallbacks hold plain function pointers and must stay valid while buffers
 // exist; one driver per process, so one static set forwards to the session's callbacks.
 Callbacks g_cb;
+// Open only between createBuffers and disposeBuffers of a live driver. An abandoned driver
+// (a call timed out) is cut off here, and no other driver opens until Nota restarts: its
+// thread may still be inside the driver and call back later, and ASIO callbacks carry
+// nothing that tells two drivers apart.
+std::atomic<bool> g_routeOpen{false};
+std::atomic<bool> g_driverAbandoned{false};
+
+void abandon(ComAsioDriver::Shared& sh) {
+    sh.abandoned.store(true);
+    g_routeOpen.store(false, std::memory_order_release);
+    g_driverAbandoned.store(true);
+}
 
 void ensureProAudioThread() {
     // The buffer thread is the engine's audio thread: make sure it runs under MMCSS
@@ -65,11 +81,13 @@ void ensureProAudioThread() {
 }
 
 void sdkBufferSwitch(long index, ASIOBool) {
+    if (!g_routeOpen.load(std::memory_order_acquire)) return;
     ensureProAudioThread();
     if (g_cb.bufferSwitch) g_cb.bufferSwitch(static_cast<int32_t>(index), -1);
 }
 
 ASIOTime* sdkBufferSwitchTimeInfo(ASIOTime* t, long index, ASIOBool) {
+    if (!g_routeOpen.load(std::memory_order_acquire)) return t;
     ensureProAudioThread();
     int64_t pos = -1;
     if (t && (t->timeInfo.flags & kSamplePositionValid))
@@ -80,11 +98,12 @@ ASIOTime* sdkBufferSwitchTimeInfo(ASIOTime* t, long index, ASIOBool) {
 }
 
 void sdkSampleRateDidChange(ASIOSampleRate rate) {
-    if (g_cb.sampleRateDidChange) g_cb.sampleRateDidChange(rate);
+    if (g_routeOpen.load(std::memory_order_acquire) && g_cb.sampleRateDidChange) g_cb.sampleRateDidChange(rate);
 }
 
 long sdkAsioMessage(long selector, long value, void*, double*) {
-    return g_cb.message ? g_cb.message(static_cast<int32_t>(selector), static_cast<int32_t>(value)) : 0;
+    // Messages also arrive inside createBuffers (time-info queries), before the route opens.
+    return g_cb.message && !g_driverAbandoned.load() ? g_cb.message(static_cast<int32_t>(selector), static_cast<int32_t>(value)) : 0;
 }
 
 ASIOCallbacks g_sdkCallbacks = {&sdkBufferSwitch, &sdkSampleRateDidChange, &sdkAsioMessage,
@@ -128,25 +147,24 @@ void controlThread(std::shared_ptr<ComAsioDriver::Shared> sh) {
     sh->drv = nullptr;
     if (sh->window) DestroyWindow(sh->window);
     CoUninitialize();
+    sh->exited.set_value();
 }
 
 } // namespace
 
-ComAsioDriver::ComAsioDriver() : sh_(std::make_shared<Shared>()), thread_(controlThread, sh_) {}
+ComAsioDriver::ComAsioDriver()
+    : sh_(std::make_shared<Shared>()), exited_(sh_->exited.get_future()), thread_(controlThread, sh_) {}
 
 ComAsioDriver::~ComAsioDriver() {
     if (!sh_->abandoned.load()) {
-        auto done = std::make_shared<std::promise<void>>();
-        auto fut = done->get_future();
-        sh_->post([sh = sh_, done] {
-            sh->quit = true; // the thread releases the driver on its way out
-            done->set_value();
-        });
-        if (fut.wait_for(std::chrono::milliseconds(kCallTimeoutMs)) == std::future_status::ready) {
+        // The thread releases the driver on its way out; wait for that, not just for the
+        // quit task, so a Release() that hangs can't hang the caller in join().
+        sh_->post([sh = sh_] { sh->quit = true; });
+        if (exited_.wait_for(std::chrono::milliseconds(kCallTimeoutMs)) == std::future_status::ready) {
             thread_.join();
             return;
         }
-        sh_->abandoned.store(true);
+        abandon(*sh_);
     }
     thread_.detach(); // stuck inside the driver: leave it (and the driver object) behind
 }
@@ -161,13 +179,23 @@ template <class F> bool ComAsioDriver::call(F fn, unsigned timeoutMs) {
         fn();
         done->set_value();
     });
-    if (fut.wait_for(std::chrono::milliseconds(timeoutMs)) == std::future_status::ready) return true;
-    sh_->abandoned.store(true);
+    for (;;) {
+        if (fut.wait_for(std::chrono::milliseconds(timeoutMs)) == std::future_status::ready) return true;
+        // The driver's panel is open on the control thread: the call is queued behind a modal
+        // dialog, not hung. Wait for the panel, then give the call its full time again.
+        if (!sh_->panelOpen.load()) break;
+        while (sh_->panelOpen.load() && fut.wait_for(std::chrono::milliseconds(100)) != std::future_status::ready) {}
+    }
+    abandon(*sh_);
     return false;
 }
 
 std::unique_ptr<ComAsioDriver> ComAsioDriver::create(const std::string& clsid, bool& timedOut, std::string& error) {
     timedOut = false;
+    if (g_driverAbandoned.load()) {
+        error = "an earlier ASIO driver stopped responding — restart Nota to use ASIO again";
+        return nullptr;
+    }
     const int wn = MultiByteToWideChar(CP_UTF8, 0, clsid.c_str(), -1, nullptr, 0);
     std::wstring w(static_cast<size_t>(wn > 0 ? wn : 1), L'\0');
     MultiByteToWideChar(CP_UTF8, 0, clsid.c_str(), -1, w.data(), wn);
@@ -201,6 +229,10 @@ std::unique_ptr<ComAsioDriver> ComAsioDriver::create(const std::string& clsid, b
 
 bool ComAsioDriver::timedOut() const {
     return sh_->abandoned.load();
+}
+
+bool ComAsioDriver::panelOpen() const {
+    return sh_->panelOpen.load();
 }
 
 bool ComAsioDriver::init() {
@@ -326,10 +358,12 @@ bool ComAsioDriver::createBuffers(BufferInfo* infos, int32_t count, int32_t buff
         infos[i].buffers[0] = (*sdk)[i].buffers[0];
         infos[i].buffers[1] = (*sdk)[i].buffers[1];
     }
+    g_routeOpen.store(true, std::memory_order_release);
     return true;
 }
 
 bool ComAsioDriver::disposeBuffers() {
+    g_routeOpen.store(false, std::memory_order_release); // the session has already stopped the driver
     auto e = std::make_shared<ASIOError>(ASE_NotPresent);
     return call([sh = sh_, e] { if (sh->drv) *e = sh->drv->disposeBuffers(); }, kCallTimeoutMs) && *e == ASE_OK;
 }
@@ -361,8 +395,10 @@ bool ComAsioDriver::getLatencies(int32_t& input, int32_t& output) {
 bool ComAsioDriver::controlPanel() {
     // Posted, not waited on: the panel may be modal and stay open for as long as the user likes.
     if (sh_->abandoned.load()) return false;
+    sh_->panelOpen.store(true); // before posting: a reset sent at once must already wait
     sh_->post([sh = sh_] {
         if (sh->drv) sh->drv->controlPanel();
+        sh->panelOpen.store(false);
     });
     return true;
 }
@@ -374,3 +410,5 @@ bool ComAsioDriver::outputReady() {
 }
 
 } // namespace nota::asio
+
+#endif // defined(_WIN32)

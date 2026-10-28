@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 namespace nota {
 
@@ -48,11 +49,17 @@ bool Engine::start() {
     if (backend_->isRunning()) return true;
     // The audio system the config asks for (specs/049): ASIO only where the build has it.
     const AudioSystem wanted = asioSupported() ? config_.audioSystem : AudioSystem::Wasapi;
-    if (wanted != activeSystem_) {
-        backend_ = createAudioBackend(wanted);
-        activeSystem_ = wanted;
+    // A driver that went silent while running isn't retried by the restart its failure
+    // triggers — it could start, stay silent and fail again forever. That restart runs
+    // WASAPI; the next apply (the user's) tries ASIO again.
+    const std::string skipAsio = std::exchange(asioSkipOnce_, std::string{});
+    const bool skipping = wanted == AudioSystem::Asio && !skipAsio.empty();
+    const AudioSystem first = skipping ? AudioSystem::Wasapi : wanted;
+    if (first != activeSystem_) {
+        backend_ = createAudioBackend(first);
+        activeSystem_ = first;
     }
-    audioFallbackReason_.clear();
+    audioFallbackReason_ = skipping ? skipAsio : std::string{};
     transport_.setSampleRate(backend_->sampleRate() > 0 ? backend_->sampleRate() : 44100.0);
     BackendConfig bc;
     bc.device = resolveAudioDeviceId(config_.outputDeviceUid, /*inputScope=*/false);
@@ -63,6 +70,10 @@ bool Engine::start() {
     bc.asioDriverName = config_.asioDriverName;
     bc.asioOutputPair = config_.asioOutputPair;
     bc.asioInputPair = config_.asioInputPair;
+    if (skipping) { // the fallback runs on the system default device
+        bc = BackendConfig{};
+        bc.device = resolveAudioDeviceId(std::string{}, /*inputScope=*/false);
+    }
     backend_->setXrunCallback([this] { notifyXrun(); }); // device dropouts (M7-8)
     // The device rate is only known once the backend is open, so the nodes are re-prepared
     // after it starts. Until then the callback must stay out of the graph: prepare()
@@ -191,6 +202,15 @@ void Engine::setAudioBufferFrames(int32_t f) {
 void Engine::setAudioWasapiExclusive(bool on) {
     config_.wasapiExclusive = on;
 }
+int32_t Engine::pollAudioDeviceEvent() {
+    const int32_t ev = backend_ ? backend_->pollDeviceEvent() : 0;
+    if (ev == 2 && activeSystem_ == AudioSystem::Asio) {
+        const char* why = backend_->fallbackReason();
+        asioSkipOnce_ = why && *why ? why : "the driver stopped sending audio";
+    }
+    return ev;
+}
+
 void Engine::setAudioSystem(AudioSystem system) {
     if (asioSupported()) config_.audioSystem = system;
 }
@@ -210,6 +230,12 @@ bool Engine::applyAudioConfig() {
     // Drop the cached input unit so the next capture re-opens the chosen device.
     if (input_) input_.reset();
     const bool ok = start();
+    // A rate the ASIO driver refused isn't kept: the driver's own rate runs, and the saved
+    // config says "device default" so the next launch doesn't ask again (FR-007).
+    if (activeSystem_ == AudioSystem::Asio && backend_->sampleRateRefused() && config_.sampleRate > 0.0) {
+        config_.sampleRate = 0.0;
+        saveAudioConfig(config_);
+    }
     // Live monitoring held the old capture device open: reopen on the chosen one.
     hwRecordTap_.store(false, std::memory_order_relaxed);
     hwMonitorTap_.store(false, std::memory_order_relaxed);

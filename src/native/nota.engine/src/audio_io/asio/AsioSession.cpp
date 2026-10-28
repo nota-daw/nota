@@ -242,6 +242,9 @@ bool AsioSession::openControlPanel() {
 }
 
 int32_t AsioSession::pollEvent() {
+    // A reset sent from the driver's open panel waits until the panel closes: restarting now
+    // would queue behind the panel and look like a hung driver.
+    if (driver_ && driver_->panelOpen()) return kEventNone;
     if (state_ == State::Running) {
         const int64_t silentNs = nowNs() - lastTickNs_.load(std::memory_order_relaxed);
         if (silentNs > std::chrono::duration_cast<std::chrono::nanoseconds>(watchdog_).count()) {

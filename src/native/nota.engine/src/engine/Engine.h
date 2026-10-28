@@ -87,7 +87,8 @@ class Engine {
     // Why the last ASIO start failed ("" if it didn't, or ASIO wasn't asked for).
     const std::string& audioFallbackReason() const { return audioFallbackReason_; }
     // Device event since the last call (0 none, 1 reset requested, 2 driver failed).
-    int32_t pollAudioDeviceEvent() { return backend_ ? backend_->pollDeviceEvent() : 0; }
+    // A driver that stopped calling back makes the next start skip ASIO once (FR-011).
+    int32_t pollAudioDeviceEvent();
     int32_t audioInputLatencyFrames() const { return backend_ ? backend_->inputLatencyFrames() : 0; }
     int32_t audioOutputLatencyFrames() const { return backend_ ? backend_->outputLatencyFrames() : 0; }
 
@@ -1478,6 +1479,7 @@ class Engine {
     AudioConfig config_;    // chosen device/rate/buffer (M7-1)
     AudioSystem activeSystem_ = AudioSystem::Wasapi; // what backend_ is (after any fallback)
     std::string audioFallbackReason_;                // why ASIO didn't start (specs/049)
+    std::string asioSkipOnce_; // set when the running driver went silent: the next start runs WASAPI
     MidiConfig midiConfig_; // enabled MIDI inputs (M7-2)
     std::unique_ptr<MidiInput> midiInput_;
     std::unique_ptr<GamepadInput> gamepadInput_; // game controller note input

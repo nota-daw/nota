@@ -46,6 +46,12 @@ Running ──resetRequested──▶ (event to app) ──apply──▶ Closed
   Overloads call the engine's xrun counter directly (an atomic increment). The watchdog
   runs inside `nota_audio_poll_device_event` (UI tick, ≈ 33 ms) rather than on its own
   thread: a running driver silent for 2 s moves to `Failed(Stopped)` on the next poll.
+  The restart that `DRIVER_FAILED` triggers runs WASAPI straight away (a driver that starts
+  but stays silent would otherwise fail forever); the user's next apply tries ASIO again.
+  Events are deferred while the driver's own panel is open.
+- A driver call that times out abandons the driver: its callbacks are cut off and no other
+  ASIO driver opens until Nota restarts (ASIO callbacks can't tell two drivers apart).
+- A sample rate the driver refuses is dropped from the saved config (back to device default).
 
 ## Device event (C ABI poll)
 

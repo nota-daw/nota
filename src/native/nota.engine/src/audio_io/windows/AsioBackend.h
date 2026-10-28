@@ -41,6 +41,7 @@ class AsioBackend final : public AudioBackend {
     bool sharesInputClock() const override { return true; }
     int32_t pollDeviceEvent() override;
     const char* fallbackReason() const override { return reason_.c_str(); }
+    bool sampleRateRefused() const override;
 
   private:
     std::function<void()> xrun_;
