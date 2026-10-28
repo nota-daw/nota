@@ -43,7 +43,7 @@ internal sealed class ScopeWindow : NotaWindow
     private void Refill()
     {
         _ticks.Clear();
-        var viz = new ModularView.ScopeViz(_engine, _trackId, _modId, () => _view.ScopeFrozen(_trackId, _modId));
+        var viz = new ModularView.ScopeViz(_engine, _trackId, _modId, () => _view.ScopeHeld(_trackId, _modId));
         _ticks.Add(viz.Update);
         var controls = _view.ScopeControls(_trackId, _modId, _ticks.Add, QueueRefill);
         var side = new Border { Width = 214, Child = controls, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top };
@@ -67,11 +67,13 @@ internal sealed class ScopeWindow : NotaWindow
         for (int i = 0; i < _ticks.Count; i++) _ticks[i]();
     }
 
-    /// <summary>Show over the window that holds <paramref name="anchor"/>; over the main
-    /// window, forward its keys (transport, undo …) as the device window does.</summary>
-    public void ShowFrom(Control anchor)
+    /// <summary>Show over <paramref name="owner"/> (the window that holds the node; the main
+    /// window when that is gone), so it stays in front of it; over the main window, forward
+    /// its keys (transport, undo …) as the device window does.</summary>
+    public void ShowOver(Window? owner)
     {
-        if (TopLevel.GetTopLevel(anchor) is not Window owner) { Show(); return; }
+        owner ??= (Avalonia.Application.Current?.ApplicationLifetime as Avalonia.Controls.ApplicationLifetimes.IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        if (owner is null) { Show(); return; }
         if (owner is MainWindow mw)
         {
             AddHandler(KeyDownEvent, (_, e) => mw.HandleTransportKeyTunnel(e), RoutingStrategies.Tunnel);

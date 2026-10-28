@@ -21,15 +21,22 @@ namespace Nota.App;
 
 public sealed partial class ModularView
 {
-    private readonly HashSet<(int Track, int Mod)> _scopeFrozen = new();
+    // A frozen Scope keeps the history it had when Freeze went on, so the node and its window
+    // (rebuilt on every chip change) both draw the held trace.
+    private readonly Dictionary<(int Track, int Mod), ScopeSnapshot> _scopeFrozen = new();
+    internal sealed record ScopeSnapshot(float[] Values, float[] Dts, int Count);
     private readonly Dictionary<(int Track, int Mod), ScopeWindow> _scopeWindows = new();
     private bool _rebuildQueued;
 
-    internal bool ScopeFrozen(int trackId, int modId) => _scopeFrozen.Contains((trackId, modId));
+    internal bool ScopeFrozen(int trackId, int modId) => _scopeFrozen.ContainsKey((trackId, modId));
+    internal ScopeSnapshot? ScopeHeld(int trackId, int modId) => _scopeFrozen.GetValueOrDefault((trackId, modId));
 
     private void SetScopeFrozen(int trackId, int modId, bool on)
     {
-        if (on) _scopeFrozen.Add((trackId, modId)); else _scopeFrozen.Remove((trackId, modId));
+        if (!on) { _scopeFrozen.Remove((trackId, modId)); return; }
+        var v = new float[ScopeTrace.HistoryLength]; var dt = new float[ScopeTrace.HistoryLength];
+        int n = _engine.ModulatorScopeTimed(trackId, modId, v, dt);
+        _scopeFrozen[(trackId, modId)] = new ScopeSnapshot(v, dt, Math.Max(0, n));
     }
 
     // Rebuild on the next dispatcher turn: safe from inside a live-follow tick, which
@@ -51,7 +58,7 @@ public sealed partial class ModularView
         col.Children.Add(Row(headBorder, 1));
 
         int t = _trackId; var e = _engine;
-        var viz = new ScopeViz(e, t, modId, () => ScopeFrozen(t, modId));
+        var viz = new ScopeViz(e, t, modId, () => ScopeHeld(t, modId));
         _liveKnobs.Add(viz.Update);
         // Unwired, the scope says what it can watch: a modulator's CV, patched into its input. It
         // doesn't tap audio — a first-time user tried to hang it off a filter's output (#261). The hint
@@ -128,7 +135,12 @@ public sealed partial class ModularView
         string Fmt(float v) => sync ? ScopeTrace.BeatsLabel(v) : ScopeTrace.MsLabel(v);
         float w0 = e.ModulatorGet(t, modId, wField);
         var wValue = MonoValue(Fmt(w0));
-        var wKnob = new Knob(ToFrac(w0), sync ? 1.0 : ScopeTrace.MsToKnob(ScopeTrace.DefaultWindowMs)) { Accent = true, Width = 30, Height = 30 };
+        // Full travel either way; double-click goes back to 1 s (or 4 beats).
+        var wKnob = new Knob(ToFrac(w0))
+        {
+            Accent = true, Width = 30, Height = 30,
+            Default = sync ? ToFrac((float)ScopeTrace.DefaultWindowBeats) : ScopeTrace.MsToKnob(ScopeTrace.DefaultWindowMs),
+        };
         wKnob.Format = f => Fmt(FromFrac(f));
         wKnob.ValueChanged += f => { float v = FromFrac(f); e.ModulatorSet(t, modId, wField, v); wValue.Text = Fmt(v); };
         ValueEntry.Attach(wKnob, "Window", wValue);
@@ -199,37 +211,40 @@ public sealed partial class ModularView
         var w = new ScopeWindow(this, _engine, t, modId, $"Scope {modId} · {TrackName(t)}");
         _scopeWindows[(t, modId)] = w;
         w.Closed += (_, _) => _scopeWindows.Remove((t, modId));
-        w.ShowFrom(anchor);
+        // Show once the press is over: shown inside it, the release lands on the main window
+        // and macOS raises that over the new one.
+        var owner = TopLevel.GetTopLevel(anchor) as Window;
+        Dispatcher.UIThread.Post(() => { w.ShowOver(owner); w.Activate(); });
     }
 
     internal sealed class ScopeViz : Control
     {
         private readonly IAudioEngine _e;
         private readonly int _t, _mod;
-        private readonly Func<bool> _frozen;
+        private readonly Func<ScopeSnapshot?> _held;
         private readonly float[] _v = new float[ScopeTrace.HistoryLength], _dt = new float[ScopeTrace.HistoryLength];
         private readonly double[] _xs = new double[ScopeTrace.HistoryLength];
         private readonly float[] _ys = new float[ScopeTrace.HistoryLength];
         private int _n, _zoom = 1;
         private bool _triggered;
 
-        public ScopeViz(IAudioEngine e, int trackId, int modId, Func<bool> frozen)
+        public ScopeViz(IAudioEngine e, int trackId, int modId, Func<ScopeSnapshot?> held)
         {
-            _e = e; _t = trackId; _mod = modId; _frozen = frozen;
+            _e = e; _t = trackId; _mod = modId; _held = held;
             IsHitTestVisible = false; ClipToBounds = true;
         }
 
         public void Update()
         {
             _zoom = ScopeTrace.Zooms[ScopeTrace.ZoomIndex(_e.ModulatorGet(_t, _mod, ScopeTrace.FieldZoom))];
-            if (!_frozen())
-            {
-                int m = _e.ModulatorScopeTimed(_t, _mod, _v, _dt);
-                double win = ScopeTrace.WindowSeconds(_e.ModulatorGet(_t, _mod, ScopeTrace.FieldSync) > 0.5f,
-                    _e.ModulatorGet(_t, _mod, ScopeTrace.FieldWindowMs), _e.ModulatorGet(_t, _mod, ScopeTrace.FieldWindowBeats), _e.Bpm);
-                bool trig = _e.ModulatorGet(_t, _mod, ScopeTrace.FieldTrigger) > 0.5f;
-                _n = ScopeTrace.Layout(_v.AsSpan(0, m), _dt.AsSpan(0, m), win, trig, _xs, _ys, out _triggered);
-            }
+            // Frozen: lay out the held history, so window, zoom and trigger still apply to it.
+            var held = _held();
+            float[] v = held?.Values ?? _v, dt = held?.Dts ?? _dt;
+            int m = held?.Count ?? _e.ModulatorScopeTimed(_t, _mod, _v, _dt);
+            double win = ScopeTrace.WindowSeconds(_e.ModulatorGet(_t, _mod, ScopeTrace.FieldSync) > 0.5f,
+                _e.ModulatorGet(_t, _mod, ScopeTrace.FieldWindowMs), _e.ModulatorGet(_t, _mod, ScopeTrace.FieldWindowBeats), _e.Bpm);
+            bool trig = _e.ModulatorGet(_t, _mod, ScopeTrace.FieldTrigger) > 0.5f;
+            _n = ScopeTrace.Layout(v.AsSpan(0, m), dt.AsSpan(0, m), win, trig, _xs, _ys, out _triggered);
             InvalidateVisual();
         }
 
