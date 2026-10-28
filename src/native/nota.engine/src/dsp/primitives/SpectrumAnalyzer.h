@@ -33,6 +33,10 @@ class SpectrumAnalyzer {
     static constexpr double kFallDbPerS = 20.0 / 0.3;
     static constexpr double kPeakHoldS = 1.5;
     static constexpr double kPeakFallDbPerS = kFallDbPerS * 0.5;
+    // The held peak may not fall away from a neighbouring point faster than this (dB per point,
+    // ~51 dB/octave): each point's hold runs out on its own, and without it the line breaks
+    // into notches and spikes on drums.
+    static constexpr float kPeakSlopeDb = 2.0f;
 
     /// FFT size for a sample rate (the ring must hold at least this many samples).
     static int fftSizeFor(double sampleRate) { return sampleRate > 50000.0 ? 8192 : 4096; }

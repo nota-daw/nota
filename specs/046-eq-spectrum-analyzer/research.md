@@ -68,3 +68,13 @@ A shared `SpectrumFill` helper in the app: a closed StreamGeometry from the curv
 bottom edge, filled with a low-alpha neutral wash; points below the range floor clamp to the
 bottom so silence draws nothing visible. The input on Post is a dim 1 px line; the peak a 1 px
 line at a slightly higher alpha. EQ-3 uses the same helper with its own dB mapping.
+
+## R6 — The Peak line on drums (macOS check)
+
+On a Drum Rack loop the held Peak line showed narrow notches and spikes. Each point's 1.5 s
+hold runs out on its own, so a point whose top came earlier than its neighbours' falls while
+they still hold: a notch up to tens of dB deep and one point wide. After each update the held
+line's slope between neighbouring points is now limited to 2 dB per point (about 51 dB per
+octave), in both directions; it only ever raises points, so the line stays at or above the
+curve. The drum-loop smoke check measures the deepest notch and tallest spike against the
+neighbours (before: 10.6 / 8.5 dB, after: 1.9 / 2.0 dB).

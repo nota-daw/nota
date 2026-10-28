@@ -112,6 +112,10 @@ void SpectrumAnalyzer::analyse(const float* ring, uint32_t mask, uint32_t w, dou
             if (age > kPeakHoldS) pk = (float)std::max((double)c, pk - peakFall);
         }
     }
+    if (peakHold) { // keep the held line a line: limit its slope between neighbouring points
+        for (int i = 1; i < kPoints; ++i) peak_[(size_t)i] = std::max(peak_[(size_t)i], peak_[(size_t)i - 1] - kPeakSlopeDb);
+        for (int i = kPoints - 2; i >= 0; --i) peak_[(size_t)i] = std::max(peak_[(size_t)i], peak_[(size_t)i + 1] - kPeakSlopeDb);
+    }
     valid_ = any;
 }
 

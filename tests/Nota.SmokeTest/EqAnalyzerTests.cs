@@ -75,6 +75,32 @@ internal static class EqAnalyzerTests
         return path;
     }
 
+    // A seeded drum loop at 120 BPM: a kick on the beat (a falling 55 Hz sine), a snare on 2 and
+    // 4 (noise and a 180 Hz body) and a closed hat on the eighths (bright noise), like the
+    // Drum Rack loop the Peak line was first seen spiking on.
+    private static string DrumLoop(List<string> tmp, double seconds = 5.0)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nota-eqa-drums-{Guid.NewGuid():N}.wav");
+        int n = (int)(Rate * seconds), eighth = Rate / 4;
+        var rnd = new Random(265);
+        var x = new float[n * 2];
+        double hp = 0, prev = 0;
+        for (int i = 0; i < n; i++)
+        {
+            int step = i / eighth, at = i % eighth;
+            double ts = at / (double)Rate, v = 0;
+            double noise = rnd.NextDouble() * 2 - 1;
+            hp = 0.85 * (hp + noise - prev); prev = noise;   // one-pole high-pass: the hat's brightness
+            if (step % 2 == 0) v += 0.7 * Math.Sin(2 * Math.PI * (55 * ts + 40 * (1 - Math.Exp(-ts * 30)) / 30)) * Math.Exp(-ts * 9);
+            if (step % 4 == 2) v += (0.35 * noise + 0.3 * Math.Sin(2 * Math.PI * 180 * ts)) * Math.Exp(-ts * 22);
+            v += 0.25 * hp * Math.Exp(-ts * 70);
+            x[2 * i] = x[2 * i + 1] = (float)v;
+        }
+        using (var w = new Nota.Infrastructure.WavWriter(path, Rate, 2, WavBitDepth.Float32)) w.WriteFrames(x, n);
+        tmp.Add(path);
+        return path;
+    }
+
     private sealed class Rig : IDisposable
     {
         public readonly NotaEngine E = new();
@@ -252,6 +278,31 @@ internal static class EqAnalyzerTests
             Thread.Sleep(600);
             s = r.Read();
             yield return (Math.Abs(s[PeakAt + pk] - s[PostAt + pk]) < 0.01, "Peak off: the peak curve is the curve");
+        }
+
+        // On drums the Peak line stays a line: no single point drops into a notch or sticks out as
+        // a spike against its neighbours (it did on the Mac, as points' holds ran out apart).
+        using (var r = new Rig(DrumLoop(tmp)))
+        {
+            r.E.DeviceSetParam(r.T, r.D, AnaPeak, 1);
+            r.Reset();
+            double notch = 0, spike = 0, below = 0;
+            for (int f = 0; f < 130; f++)
+            {
+                r.Feed(1470);
+                var s = r.Read(30);
+                if (f < 30) continue;
+                for (int i = 1; i < Points - 1; i++)
+                {
+                    if (PointHz(i) < 40 || PointHz(i) > 16000) continue;
+                    float p = s[PeakAt + i], a = s[PeakAt + i - 1], b = s[PeakAt + i + 1];
+                    notch = Math.Max(notch, Math.Min(a, b) - p);
+                    spike = Math.Max(spike, p - Math.Max(a, b));
+                    below = Math.Max(below, s[PostAt + i] - p);
+                }
+            }
+            yield return (notch < 3 && spike < 3 && below <= 0.01,
+                $"on a drum loop the Peak line has no notches or spikes (deepest notch {notch:F1} dB, tallest spike {spike:F1} dB) and never dips under the curve ({below:F2})");
         }
 
         // Pre shows the input with its peak; Off analyses nothing.
