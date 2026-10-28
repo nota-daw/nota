@@ -53,7 +53,9 @@
   `get_piano_fold`.
 - **Rationale**: Track colour already lives there for the same reasons: it survives duplicate,
   undo snapshots and save, and MCP can reach it. It is control-thread-only data, never read on the
-  audio thread (Principle I).
+  audio thread (Principle I). Setting it publishes without an undo checkpoint (FR-009). An undo
+  of an earlier edit restores that snapshot's flag, and the editor reads the flag again the
+  next time it opens a clip on the track.
 - **Alternatives**: A sidecar like `modular-layout.json` was rejected, because MCP can't reach it
   and track duplicate wouldn't copy it. A static per-session dictionary in the view was rejected
   because it isn't saved.

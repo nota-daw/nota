@@ -575,6 +575,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->frozenSpb = t.frozenSpb;
     nt->name = t.name; // UI metadata
     nt->colorIndex = t.colorIndex;
+    nt->pianoFold = t.pianoFold;
     return nt;
 }
 

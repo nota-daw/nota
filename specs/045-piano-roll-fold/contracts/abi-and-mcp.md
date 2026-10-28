@@ -16,8 +16,8 @@ Managed: `IAudioEngine.SetTrackPianoFold(int trackId, bool on)` and `bool GetTra
 
 | Tool | Arguments | Result |
 |---|---|---|
-| `set_piano_fold` | `track_id`, `on` | `{ track_id, on }`; the piano roll repaints if that track's clip is open |
-| `get_piano_fold` | `track_id` | `{ track_id, on }` |
+| `set_piano_fold` | `track_id`, `on` | none; an open piano roll picks it up when it next opens a clip on that track |
+| `get_piano_fold` | `track_id` | `true` / `false` |
 
 ## Project file
 

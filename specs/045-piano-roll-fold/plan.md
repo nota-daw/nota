@@ -16,7 +16,7 @@ saved as an optional project field, and exposed to MCP.
 **Language/Version**: C# / .NET 10 (app), C++20 (engine: one metadata field only)
 **Primary Dependencies**: Avalonia (existing), no new dependency
 **Storage**: Project track field `PianoFold` (optional; no format bump)
-**Testing**: `tests/Nota.SmokeTest`, a new `FoldTests` (`--fold`); macOS hands-on check
+**Testing**: `tests/Nota.SmokeTest`, a new `FoldTests` (`--piano-fold`); macOS hands-on check
 **Target Platform**: macOS, Windows, Linux desktop
 **Project Type**: Desktop app over a native engine
 **Performance Goals**: A fold of 2,000 notes rebuilds and redraws within 16 ms

@@ -538,6 +538,7 @@ public partial class MainWindow
         roll.SetTrackColor(TrackBrush(set.ActiveClip.TrackId));
         if (!set.IsMulti) roll.SetClipIdentity(set.ActiveClip.TrackId, set.ActiveClip.ClipIndex);
         roll.SetClips(set, ClipNotesOf(set), TrackBrush);
+        WireFold(roll, () => roll.ActiveClip.TrackId);
 
         _editorTrackId = set.ActiveClip.TrackId;
         _editorClipIndex = set.ActiveClip.ClipIndex;
@@ -552,6 +553,20 @@ public partial class MainWindow
             _editorClipIndex = roll.ActiveClip.ClipIndex;
             SetDetailChip(_editorTrackId);
         };
+    }
+
+    // Fold (specs/045) follows the track: its pads on a Drum Rack, and the switch is saved on
+    // the track, so every clip of a folded drum track opens folded.
+    private void WireFold(PianoRollView roll, Func<int> track)
+    {
+        roll.FoldPads = () => track() is var t && IsDrumRackTrack(t)
+            ? Nota.Presentation.DrumPads.ByNote(Nota.Presentation.DrumPads.Scan(Engine, t)) : null;
+        roll.FoldToggled += on => Engine.SetTrackPianoFold(track(), on);
+        if (Engine.GetTrackPianoFold(track()))
+        {
+            roll.SetFold(true);
+            roll.EnsureNotesVisible();
+        }
     }
 
     // Every open clip's notes, as the engine holds them.
@@ -912,6 +927,7 @@ public partial class MainWindow
         roll.SetTrackColor(TrackBrush(trackId));
         roll.SetClipIdentity(trackId, -(scene + 2));   // distinct key from arrangement clips
         roll.SetNotes(Engine.GetSessionNotes(trackId, scene), slotLen > 0 ? slotLen : 4);
+        WireFold(roll, () => trackId);
 
         _editorRoll = roll;
         _editorTrackId = -1;  // session slot: recording-tick reload N/A

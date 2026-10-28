@@ -9,4 +9,4 @@
 6. Rename a pad in the rack. The row label changes.
 7. Open another clip on the drum track; it opens folded. Save, reopen: still folded. The Volt
    track opens as you left it.
-8. Smoke: `CI=true dotnet tests/Nota.SmokeTest/bin/Release/net10.0/Nota.SmokeTest.dll --fold`.
+8. Smoke: `CI=true dotnet tests/Nota.SmokeTest/bin/Release/net10.0/Nota.SmokeTest.dll --piano-fold`.

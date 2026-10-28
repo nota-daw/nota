@@ -551,6 +551,14 @@ if (args.Length >= 1 && args[0] == "--vocoder")
     Console.WriteLine(failures == 0 ? "VOCODER PASSED" : $"VOCODER FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Piano roll Fold alone (fast iteration): `--piano-fold`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--piano-fold")
+{
+    Console.WriteLine("-- piano roll fold --");
+    foreach (var (ok, label) in FoldTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "FOLD PASSED" : $"FOLD FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--live-record")
 {
@@ -15042,6 +15050,10 @@ Console.WriteLine("-- background audio import --");
 // --- browser: device categories (spec 013) — category chips narrow the device tabs ---
 Console.WriteLine("-- browser: device categories --");
 foreach (var (ok, label) in BrowserCategoryTests.Run()) Check(ok, label);
+
+// --- piano roll Fold (specs/045): scale rows, Drum Rack pads, saved per track ---
+Console.WriteLine("-- piano roll fold --");
+foreach (var (ok, label) in FoldTests.Run()) Check(ok, label);
 
 // --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
 Console.WriteLine("-- browser: preset audition --");

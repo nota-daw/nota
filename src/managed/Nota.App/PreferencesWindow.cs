@@ -1271,6 +1271,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag on the keys", "Zoom rows · down taller, up shorter"),
             ("⌥ + pinch", "Zoom rows (trackpad)"),
             ("⇧F", "Fit to notes"),
+            ("⌥⇧F", "Fold: only the scale's notes, or a Drum Rack's pads"),
         }),
         ("Audio clip editor", new[]
         {
