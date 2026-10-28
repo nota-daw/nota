@@ -118,7 +118,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **One click arms one track** (nota-daw/nota#332): a click on a track's arm button arms that
   track and disarms the others, so picking which instrument the keyboard plays is one click.
   ⌘-click (Ctrl-click on Windows / Linux) arms several. While recording, a click never
-  disarms another track.
+  disarms another track. Selecting an instrument track (a new one included) arms it the same
+  way, unless several tracks or an audio track are armed.
+- **The Envelope Follower is easier to find** (nota-daw/nota#133): searching Modular's palette
+  for "peak controller", "ducking" or "loudness" finds it, and the docs walk through ducking one
+  track under another.
 - **Delete on the instrument deletes its track**, as an instrument track always has an
   instrument; Nota asks first when the track has clips.
 - **A new Instrument Rack starts empty** instead of with a Nota Volt chain: drop an instrument
