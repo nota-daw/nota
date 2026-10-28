@@ -198,10 +198,12 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             while (peak + 1 < EnvN && envGr[peak + 1] >= envGr[peak]) peak++;
             if (peak + 1 >= EnvN) return (Math.Max(peak - onset, 0.5), double.NaN);   // still attacking
             double pv = envGr[peak];
+            int reach = onset;
+            while (reach < peak && envGr[reach] < 0.9 * pv) reach++;
             int k = peak;
             while (k + 1 < EnvN && envGr[k] > 0.37 * pv && !(envGr[k + 1] > envGr[k] + 0.5)) k++;
             double recovery = envGr[k] <= 0.37 * pv ? k - peak : double.NaN;
-            return (Math.Max(peak - onset, 0.5), recovery);
+            return (Math.Max(reach - onset, 0.5), recovery);
         }
 
         // ======================================================================
@@ -433,8 +435,12 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 case 1:
                     var (tr, rec) = Timings((int)WindowMs());
                     int hits = Hits((int)WindowMs());
-                    extras.Text = double.IsNaN(tr) ? NotaNum.F($"attack {Ms(Sc(S_AtkMs))} · release {Ms(Sc(S_RelMs))} · no reduction to measure")
-                        : NotaNum.F($"transient {Ms(tr)} · recovery {(double.IsNaN(rec) ? "–" : Ms(rec))} · {hits} {(hits == 1 ? "hit" : "hits")}");
+                    double held = 0;
+                    for (int i = Math.Max(0, EnvN - (int)WindowMs()); i < EnvN; i++) held = Math.Max(held, envGr[i]);
+                    extras.Text = !double.IsNaN(tr)
+                        ? NotaNum.F($"transient {Ms(tr)} · recovery {(double.IsNaN(rec) ? "–" : Ms(rec))} · {hits} {(hits == 1 ? "hit" : "hits")}")
+                        : held > 1 ? NotaNum.F($"reduction held near −{held:0.0}\u2009dB · no separate hits to time")
+                        : NotaNum.F($"attack {Ms(Sc(S_AtkMs))} · release {Ms(Sc(S_RelMs))} · no reduction to measure");
                     extras.Foreground = TextTertiary; break;
                 case 2:
                     double kdb = KeyDb(), trig = Hits(EnvN) * (4 * 60000.0 / Bpm()) / EnvN;

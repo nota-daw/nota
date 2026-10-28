@@ -247,7 +247,8 @@ internal sealed class AutoFilterCurve : Control
         // 2b) base response curve (interactive) with its handle
         var baseFc = HzOf(_fcNorm);
         Stroke(CurvePen, Curve(baseFc, _res));
-        double cx = _fcNorm * w, cy = YForDb(MagDb(baseFc, baseFc, _res), h);
+        // Clamped above the floor labels: a notch's centre sits at the bottom of the scale.
+        double cx = _fcNorm * w, cy = Math.Min(YForDb(MagDb(baseFc, baseFc, _res), h), h - NotaGraph.PlotFloor - 2);
         NotaGraph.Node(ctx, new Point(cx, cy), active: true);   // the one point is always the picked one
 
         // Labels: title, legend, the range corners and the cutoff under its handle.

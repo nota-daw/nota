@@ -79,7 +79,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         static string Bip(double v) => NotaNum.F($"{(v - 0.5) * 200:+0;−0;0} %");
         static string Ms(double ms) => ms >= 100 ? NotaNum.F($"{ms:0} ms") : ms >= 10 ? NotaNum.F($"{ms:0.0} ms") : NotaNum.F($"{ms:0.0#} ms");
         static double Q(double res) => 0.5 + res * 14.5;
-        static string GainF(double v) => NotaNum.F($"{(v - 0.5) * 48:+0.0;−0.0;0.0}");
+        static string GainF(double v) => NotaNum.F($"{(v - 0.5) * 48:+0.0;−0.0;0.0}\u2009dB");
         static double AttMs(double v) => Exp(v, 0.1, 500);
         static double RelMs(double v) => Exp(v, 1, 2000);
         static bool HoldInf(double v) => v >= 0.995;
@@ -200,10 +200,10 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         }
 
         // Slider row: caps label · track · mono value.
-        Control SliderRow(string label, int p, Func<double, string> fmt, bool bipolar = false, bool modulation = false, Func<bool>? dim = null, double labW = 40)
+        Control SliderRow(string label, int p, Func<double, string> fmt, bool bipolar = false, bool modulation = false, Func<bool>? dim = null, double labW = 40, double valW = 34)
         {
             var bar = DeviceCardKit.SliderRow("", () => P(p), v => Raw(p, (float)v), () => fmt(P(p)), out var sync,
-                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), bipolar: bipolar, dim: dim, valueWidth: 34, modulation: modulation);
+                begin: () => Begin(p), end: () => End(p), reset: () => Reset(p), bipolar: bipolar, dim: dim, valueWidth: valW, modulation: modulation);
             readouts.Add(sync);
             Learn(bar, p);
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions(NotaNum.F($"{labW},*")), VerticalAlignment = VerticalAlignment.Center };
@@ -435,7 +435,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 SliderRow("MORPH", Morph, Pct),
                 SliderRow("DRIVE", Drive, v => v <= 0.001 ? "off" : Pct(v)),
                 SliderRow("DRY/WET", DryWet, Pct, modulation: true),
-                SliderRow("GAIN", Gain, GainF, bipolar: true),
+                SliderRow("GAIN", Gain, GainF, bipolar: true, valW: 44),
                 Rule(),
                 Labelled("MOD →", target));
         }
