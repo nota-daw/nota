@@ -13,13 +13,26 @@ namespace Nota.App;
 
 internal static class TrackArming
 {
-    /// <summary>Raised after an exclusive arm disarmed other tracks, so every view repaints them.</summary>
+    /// <summary>Raised after an arm changed tracks other than the button's own (an exclusive arm
+    /// disarmed them, or the selection armed one), so every view repaints them.</summary>
     public static event Action? OthersChanged;
 
     /// <summary>Arms or disarms a track, exclusively unless <paramref name="additive"/> (see TrackArm).</summary>
     public static void Set(IAudioEngine engine, int trackId, bool on, bool additive)
     {
         if (TrackArm.Set(engine, trackId, on, additive)) OthersChanged?.Invoke();
+    }
+
+    private static int _followed = -1;
+
+    /// <summary>The selection moved to <paramref name="trackId"/>: arm it if it's an
+    /// instrument track (see TrackArm.FollowSelection). Only a move to another track counts,
+    /// so a track disarmed by hand stays disarmed while you keep working on it.</summary>
+    public static void FollowSelection(IAudioEngine engine, int trackId)
+    {
+        if (trackId == _followed) return;
+        _followed = trackId;
+        if (TrackArm.FollowSelection(engine, trackId)) OthersChanged?.Invoke();
     }
 
     /// <summary>The arm buttons' tooltip, with the platform's modifier spelled out.</summary>

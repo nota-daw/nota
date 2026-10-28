@@ -5,7 +5,8 @@
 // solo-gated or looped track starts on time instead of waiting forever (#343), an audio take
 // in a Session slot replaces the clip its track was playing (#337), and an audio track can
 // take one channel of a stereo input as a mono source in the middle (#340), and a plain click
-// on an arm button arms that track alone, ⌘-click more than one (#332).
+// on an arm button arms that track alone, ⌘-click more than one, and selecting an instrument
+// track arms it (#332).
 
 using Nota.Application;
 using Nota.Infrastructure;
@@ -191,6 +192,21 @@ internal static class SessionInputTests
         yield return (Armed(drums) && Armed(aud), "⌘-click arms another track and keeps the first");
         TrackArm.Set(e, aud, false, additive: false);
         yield return (Armed(drums) && !Armed(aud), "disarming leaves the other tracks armed");
+
+        // Arm-on-select: the selection moves the one arm to the instrument track you're on…
+        TrackArm.Set(e, drums, false, additive: false);
+        yield return (TrackArm.FollowSelection(e, keys) && Armed(keys), "selecting an instrument track arms it");
+        yield return (TrackArm.FollowSelection(e, drums) && Armed(drums) && !Armed(keys), "…and selecting another moves the arm to it");
+        // …but leaves alone an audio track, and a set armed by hand.
+        yield return (!TrackArm.FollowSelection(e, aud) && !Armed(aud) && Armed(drums), "selecting an audio track doesn't arm it");
+        TrackArm.Set(e, keys, true, additive: true);
+        yield return (!TrackArm.FollowSelection(e, drums) && Armed(keys) && Armed(drums), "two armed tracks stay armed when the selection moves");
+        int synth = e.AddInstrumentTrack();
+        yield return (!TrackArm.FollowSelection(e, synth) && !Armed(synth), "…and a new track doesn't take the arm from them");
+        TrackArm.Set(e, keys, false, additive: false);
+        TrackArm.Set(e, drums, false, additive: false);
+        TrackArm.Set(e, aud, true, additive: false);
+        yield return (!TrackArm.FollowSelection(e, synth) && Armed(aud), "an armed audio track keeps its arm");
     }
 
     private static int FirstAudio(NotaEngine e)

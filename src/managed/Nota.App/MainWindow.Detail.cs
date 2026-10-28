@@ -142,6 +142,8 @@ public partial class MainWindow
 
     private void OnTrackSelected(int trackId)
     {
+        TrackArming.FollowSelection(Engine, trackId);   // arm-on-select (#332)
+
         // Switching to a different track abandons the previously edited clip. Reset the clip
         // editor to empty so a stale editor from the old track doesn't linger — most visible
         // in the popped-out Devices/Clip window, whose top pane isn't touched by ShowDevices.

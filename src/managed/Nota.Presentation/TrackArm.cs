@@ -4,6 +4,8 @@
 // Exclusive record-arm (#332): arming a track with a plain click arms that track alone, so
 // picking which instrument the keyboard plays is one click; the additive form (⌘-click, or
 // Ctrl-click on Windows / Linux) arms or disarms one track and leaves the others as they are.
+// Selecting an instrument track arms it the same way, while the arms are still the one the
+// selection picked.
 
 using Nota.Application;
 
@@ -26,5 +28,34 @@ public static class TrackArm
                 }
         engine.SetTrackArmed(trackId, on);
         return others;
+    }
+
+    /// <summary>Arm-on-select: selecting an instrument track arms it alone, so the keyboard
+    /// plays the track you're on. The arms are left as they are while recording, when the
+    /// track is already armed, and when they're a set built by hand — several tracks, or an
+    /// audio track. Returns true when any arm changed.</summary>
+    public static bool FollowSelection(IAudioEngine engine, int trackId)
+    {
+        if (engine.IsRecording) return false;
+        bool isInstrument = false;
+        int armedOthers = 0;
+        for (int i = 0; i < engine.TrackCount; i++)
+        {
+            if (!engine.TryGetTrackInfo(i, out var t)) continue;
+            bool inst = t.IsInstrument && !t.IsReturn && !t.IsGroup;
+            if (t.Id == trackId)
+            {
+                if (t.Armed != 0) return false;
+                isInstrument = inst;
+            }
+            else if (t.Armed != 0)
+            {
+                if (!inst) return false;
+                armedOthers++;
+            }
+        }
+        if (!isInstrument || armedOthers > 1) return false;
+        Set(engine, trackId, true, additive: false);
+        return true;
     }
 }
