@@ -523,6 +523,7 @@ public sealed partial class PianoRollView : UserControl
         if (_gridControl.Dragging) return;
         double h0 = _rowH, h1 = Math.Clamp(h, MinRowH, MaxRowH);
         if (Math.Abs(h1 - h0) < 1e-9) return;
+        PadRowsZoomed();   // a fitted kit keeps the height the user chose (a clamped no-op doesn't count)
         double c = (_pendingVOffset ?? _bodyScroll.Offset.Y) + viewportY;
         _rowH = h1;
         _keys.Height = RangeH;
@@ -535,7 +536,7 @@ public sealed partial class PianoRollView : UserControl
         SaveView();
     }
 
-    internal void ZoomRowsAt(double factor, double viewportY) { PadRowsZoomed(); SetRowHeightAt(_rowH * factor, viewportY); }
+    internal void ZoomRowsAt(double factor, double viewportY) => SetRowHeightAt(_rowH * factor, viewportY);
 
     /// <summary>⌘⌥ (Ctrl+Alt) + wheel: the vertical-zoom wheel, checked before ⌘ + wheel.</summary>
     private static bool IsRowZoomWheel(KeyModifiers m)
@@ -1708,7 +1709,6 @@ public sealed partial class PianoRollView : UserControl
             if (_press == Press.Zoom)
             {
                 double dy = e.GetPosition(_o._bodyScroll).Y - _pressY;
-                _o.PadRowsZoomed();
                 _o.SetRowHeightAt(_pressRowH * Math.Exp(dy * 0.01), _pressY);
                 return;
             }
