@@ -2319,11 +2319,12 @@ NOTA_API const char* nota_pluginhost_scan_path(int32_t index);
 
 /* --- audio device settings (M7-1) -----------------------------------------
  * The chosen output/input device (by stable UID), sample rate and buffer size
- * are persisted to ~/Library/Application Support/Nota/audio.json and applied on
+ * are persisted to audio.json in the data dir (nota_set_data_dir) and applied on
  * the next nota_audio_apply() (which restarts the audio backend). Setters only
- * stage the value; nothing changes until apply. */
+ * stage the value; nothing changes until apply. Devices come from CoreAudio on
+ * macOS, WASAPI on Windows (plus ASIO drivers, below) and PulseAudio/ALSA on Linux. */
 
-/* Rescan the connected CoreAudio devices (call before reading the lists). */
+/* Rescan the connected devices (and installed ASIO drivers; call before reading the lists). */
 NOTA_API void        nota_audio_refresh_devices(void);
 /* Number of playback- / capture-capable devices from the last refresh. */
 NOTA_API int32_t     nota_audio_output_device_count(void);
@@ -2373,6 +2374,63 @@ NOTA_API int32_t     nota_audio_exclusive_fallback(const NotaEngine* engine);
  * is heard. nota_engine_start / nota_audio_apply still return NOTA_OK. Desktop
  * (miniaudio) backend only; always 0 elsewhere. */
 NOTA_API int32_t     nota_audio_silent_fallback(const NotaEngine* engine);
+
+/* --- ASIO (Windows; specs/049) ---------------------------------------------
+ * A second audio system beside WASAPI. Like the calls above, setters only stage;
+ * nota_audio_apply() persists and restarts. On macOS/Linux every call is a no-op:
+ * counts return 0, nota_audio_asio_available() returns 0, setters return NOTA_OK
+ * and change nothing. If the chosen ASIO driver can't start, apply still returns
+ * NOTA_OK and runs WASAPI on the system default device: nota_audio_active_system()
+ * tells, nota_audio_fallback_reason() says why. */
+
+/* Audio system: 0 = WASAPI (default), 1 = ASIO. */
+NOTA_API NotaResult  nota_audio_set_system(NotaEngine* engine, int32_t system);
+NOTA_API int32_t     nota_audio_system(const NotaEngine* engine);          /* staged */
+NOTA_API int32_t     nota_audio_active_system(const NotaEngine* engine);   /* running (after fallback) */
+
+/* Installed ASIO drivers, refreshed by nota_audio_refresh_devices(). Strings are
+ * UTF-8, owned by the engine, valid until the next refresh; NULL if out of range. */
+NOTA_API int32_t     nota_audio_asio_available(void);                      /* 1 if this build has ASIO */
+NOTA_API int32_t     nota_audio_asio_driver_count(void);
+NOTA_API const char* nota_audio_asio_driver_id(int32_t index);             /* CLSID string */
+NOTA_API const char* nota_audio_asio_driver_name(int32_t index);           /* display name, de-duplicated */
+/* Stage the driver by id (from nota_audio_asio_driver_id). "" = the first installed. */
+NOTA_API NotaResult  nota_audio_set_asio_driver(NotaEngine* engine, const char* id);
+NOTA_API const char* nota_audio_asio_driver(const NotaEngine* engine);     /* staged id */
+
+/* Channels of the OPEN driver (0 when ASIO is not running). Names are the driver's
+ * own, UTF-8, valid until the next call. */
+NOTA_API int32_t     nota_audio_asio_channel_count(const NotaEngine* engine, int32_t is_input);
+NOTA_API const char* nota_audio_asio_channel_name(const NotaEngine* engine, int32_t is_input, int32_t index);
+/* Stage the pair by its first channel (0, 2, 4 …; a last odd channel is a mono pair). */
+NOTA_API NotaResult  nota_audio_set_asio_pair(NotaEngine* engine, int32_t is_input, int32_t first_channel);
+NOTA_API int32_t     nota_audio_asio_pair(const NotaEngine* engine, int32_t is_input);  /* staged */
+
+/* Open the running driver's own settings panel. Returns at once (NOTA_ERR_AUDIO_DEVICE
+ * if no ASIO driver runs); a change there arrives as a reset-requested device event. */
+NOTA_API NotaResult  nota_audio_asio_open_control_panel(NotaEngine* engine);
+/* 1 while that panel is open. The driver's thread is busy with it, so hold
+ * nota_audio_apply() back until it closes (an apply would wait on the panel). */
+NOTA_API int32_t     nota_audio_asio_panel_open(const NotaEngine* engine);
+
+/* Device events since the last call, cleared on read: 0 none, 1 reset requested
+ * (the driver changed its buffer size / rate / latencies: re-apply), 2 driver failed
+ * (stopped calling back: re-apply, which falls back to WASAPI). Poll from the UI tick. */
+NOTA_API int32_t     nota_audio_poll_device_event(NotaEngine* engine);
+/* Why the last ASIO start failed (human reason, UTF-8, engine-owned), "" if it didn't. */
+NOTA_API const char* nota_audio_fallback_reason(const NotaEngine* engine);
+
+/* Device latencies of the running backend in frames, as the driver reports them
+ * (0 if unknown — every non-ASIO backend). Recorded takes are moved earlier by
+ * input + output. */
+NOTA_API int32_t     nota_audio_input_latency_frames(const NotaEngine* engine);
+NOTA_API int32_t     nota_audio_output_latency_frames(const NotaEngine* engine);
+
+/* Device-free ASIO self-test on a fake driver: sample formats, pair routing and
+ * silence, duplex order, resets, failures, latency compensation, audio.json keys.
+ * Returns 1 if every case passes, else 0 (the failing case is printed to stderr).
+ * Runs on every platform. */
+NOTA_API int32_t     nota_asio_selftest(void);
 
 /* --- MIDI device settings (M7-2) ------------------------------------------
  * Which CoreMIDI inputs the engine listens to. The chosen set is persisted as a

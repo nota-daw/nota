@@ -33,6 +33,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   goes quiet while its pad is deleted (undo brings it back) and is saved with the project. MCP:
   `list_sidechain_sources`, `get_instrument_sidechain`, `set_instrument_sidechain`, and a
   `sourcePart` on `get_device_sidechain` / `set_device_sidechain`.
+- **ASIO on Windows**: Settings → Audio → **Audio system** now offers ASIO beside WASAPI.
+  Pick the driver and the output and input channel pairs by the driver's own names (the
+  other outputs stay silent); **Driver settings…** opens the driver's panel, where the buffer
+  size is set, and a change there is picked up within a couple of seconds without a restart
+  — playback carries on. Recording and playback share the driver's clock, so monitoring needs
+  no extra buffer, and recorded takes are moved earlier by the driver's reported latency. If
+  the driver is missing, busy or stops responding, Nota switches to WASAPI and the status bar
+  says why; **Try again** goes back to ASIO. The Steinberg ASIO SDK is used under its GPLv3
+  option (`LICENSES/third-party.md`).
 - **Tempo-synced scope in Nota Lens** (#119): the Scope view gains **Sync**, which lines the
   trace up with the song: pick a **Span** from a quarter beat to four bars and the scope shows
   that stretch of the beat grid, with beat and bar lines, a sweep line at the playhead and the

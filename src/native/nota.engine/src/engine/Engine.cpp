@@ -12,7 +12,9 @@
 #include "media/WarpStream.h" // complete ClipWarpStream for wb_.stream (unique_ptr) destruction
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <utility>
 
 namespace nota {
 
@@ -49,18 +51,62 @@ Engine::~Engine() {
 
 bool Engine::start() {
     if (backend_->isRunning()) return true;
+    // The audio system the config asks for (specs/049): ASIO only where the build has it.
+    const AudioSystem wanted = asioSupported() ? config_.audioSystem : AudioSystem::Wasapi;
+    // A driver that went silent while running isn't retried by the restart its failure
+    // triggers — it could start, stay silent and fail again forever. That restart runs
+    // WASAPI; the next apply (the user's) tries ASIO again.
+    const std::string skipAsio = std::exchange(asioSkipOnce_, std::string{});
+    const bool skipping = wanted == AudioSystem::Asio && !skipAsio.empty();
+    const AudioSystem first = skipping ? AudioSystem::Wasapi : wanted;
+    if (first != activeSystem_) {
+        backend_ = createAudioBackend(first);
+        activeSystem_ = first;
+    }
+    audioFallbackReason_ = skipping ? skipAsio : std::string{};
     transport_.setSampleRate(backend_->sampleRate() > 0 ? backend_->sampleRate() : 44100.0);
     BackendConfig bc;
     bc.device = resolveAudioDeviceId(config_.outputDeviceUid, /*inputScope=*/false);
     bc.sampleRate = config_.sampleRate;
     bc.bufferFrames = config_.bufferFrames;
     bc.wasapiExclusive = config_.wasapiExclusive;
+    bc.asioDriverClsid = config_.asioDriverClsid;
+    bc.asioDriverName = config_.asioDriverName;
+    bc.asioOutputPair = config_.asioOutputPair;
+    bc.asioInputPair = config_.asioInputPair;
+    if (skipping) { // the fallback runs on the system default device
+        bc = BackendConfig{};
+        bc.device = resolveAudioDeviceId(std::string{}, /*inputScope=*/false);
+    }
     backend_->setXrunCallback([this] { notifyXrun(); }); // device dropouts (M7-8)
     // The device rate is only known once the backend is open, so the nodes are re-prepared
     // after it starts. Until then the callback must stay out of the graph: prepare()
     // reallocates buffers (and hosted plugins run prepareToPlay) the audio thread would read.
-    renderSuspended_.store(true, std::memory_order_release);
-    const bool ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, bc);
+    renderSuspended_.store(true, std::memory_order_seq_cst);
+    // A previous device's callback may still be inside render() — an ASIO driver given up on
+    // while a plug-in stalled. Re-preparing the nodes under it would corrupt them: wait for it
+    // to leave, and if it never does, stay off rather than run two renders over one graph.
+    for (int i = 0; i < 2000 && rendersInFlight_.load(std::memory_order_seq_cst) > 0; ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    if (rendersInFlight_.load(std::memory_order_seq_cst) > 0) {
+        audioFallbackReason_ = "a plug-in stopped responding inside the audio callback — restart Nota";
+        return false;
+    }
+    bool ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, bc);
+    if (!ok && activeSystem_ == AudioSystem::Asio) {
+        // FR-011: a missing, busy or broken ASIO driver never leaves Nota silent — run WASAPI
+        // on the system default device and say why. The saved choice stays ASIO, so the next
+        // apply (or launch) tries the driver again.
+        const char* why = backend_->fallbackReason();
+        audioFallbackReason_ = why && *why ? why : "the driver didn't start";
+        backend_ = createAudioBackend(AudioSystem::Wasapi);
+        activeSystem_ = AudioSystem::Wasapi;
+        BackendConfig fallback;
+        fallback.device = resolveAudioDeviceId(std::string{}, /*inputScope=*/false);
+        backend_->setXrunCallback([this] { notifyXrun(); });
+        ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, fallback);
+    }
+    monitorSharedClock_.store(ok && backend_->sharesInputClock(), std::memory_order_relaxed);
     if (ok) {
         transport_.setSampleRate(backend_->sampleRate());
         propagateSampleRate(backend_->sampleRate()); // re-prepare every node (incl. master + racks) at the new rate
@@ -169,6 +215,33 @@ void Engine::setAudioBufferFrames(int32_t f) {
 void Engine::setAudioWasapiExclusive(bool on) {
     config_.wasapiExclusive = on;
 }
+int32_t Engine::pollAudioDeviceEvent() {
+    const int32_t ev = backend_ ? backend_->pollDeviceEvent() : 0;
+    if (ev == 1 && config_.sampleRate > 0.0 && backend_->deviceChangedRate() > 0.0) {
+        // The user changed the rate in the driver's panel: follow the driver from now on
+        // ("device default") instead of putting the old saved rate back on reopen.
+        config_.sampleRate = 0.0;
+        saveAudioConfig(config_);
+    }
+    if (ev == 2 && activeSystem_ == AudioSystem::Asio) {
+        const char* why = backend_->fallbackReason();
+        asioSkipOnce_ = why && *why ? why : "the driver stopped sending audio";
+    }
+    return ev;
+}
+
+void Engine::setAudioSystem(AudioSystem system) {
+    if (asioSupported()) config_.audioSystem = system;
+}
+void Engine::setAsioDriver(const std::string& clsid, const std::string& name) {
+    if (!asioSupported()) return;
+    config_.asioDriverClsid = clsid;
+    config_.asioDriverName = name;
+}
+void Engine::setAsioPair(bool input, int32_t firstChannel) {
+    if (!asioSupported()) return;
+    (input ? config_.asioInputPair : config_.asioOutputPair) = std::max(0, firstChannel);
+}
 
 bool Engine::applyAudioConfig() {
     saveAudioConfig(config_);
@@ -176,6 +249,12 @@ bool Engine::applyAudioConfig() {
     // Drop the cached input unit so the next capture re-opens the chosen device.
     if (input_) input_.reset();
     const bool ok = start();
+    // A rate the ASIO driver refused isn't kept: the driver's own rate runs, and the saved
+    // config says "device default" so the next launch doesn't ask again (FR-007).
+    if (activeSystem_ == AudioSystem::Asio && backend_->sampleRateRefused() && config_.sampleRate > 0.0) {
+        config_.sampleRate = 0.0;
+        saveAudioConfig(config_);
+    }
     // Live monitoring held the old capture device open: reopen on the chosen one.
     hwRecordTap_.store(false, std::memory_order_relaxed);
     hwMonitorTap_.store(false, std::memory_order_relaxed);

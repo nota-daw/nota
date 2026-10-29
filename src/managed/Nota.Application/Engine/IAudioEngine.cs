@@ -1161,6 +1161,29 @@ public interface IAudioEngine : IDisposable
     /// <summary>True when no output device opened and the engine runs on a silent stand-in.</summary>
     bool AudioSilentFallback { get; }
 
+    // --- ASIO (Windows; specs/049) -----------------------------------------
+    // Staged like the device settings; ApplyAudio() persists and restarts. No-ops off Windows.
+    AudioSystem AudioSystem { get; }
+    /// <summary>What actually runs: WASAPI after a failed ASIO start fell back.</summary>
+    AudioSystem ActiveAudioSystem { get; }
+    bool AsioAvailable { get; }
+    /// <summary>Installed ASIO drivers (re-scanned): Uid = CLSID, Name = display name.</summary>
+    IReadOnlyList<AudioDevice> AsioDrivers();
+    void SetAudioSystem(AudioSystem system);
+    void SetAsioDriver(string id);
+    string AsioDriver { get; }
+    /// <summary>Channel names of the open ASIO driver; empty when ASIO isn't running.</summary>
+    IReadOnlyList<string> AsioChannels(bool input);
+    int AsioPair(bool input);
+    void SetAsioPair(bool input, int firstChannel);
+    bool OpenAsioControlPanel();
+    /// <summary>The driver's panel is open: an apply now would wait for it, so hold it back.</summary>
+    bool AsioPanelOpen { get; }
+    AudioDeviceEvent PollDeviceEvent();
+    string AudioFallbackReason { get; }
+    int InputLatencyFrames { get; }
+    int OutputLatencyFrames { get; }
+
     // --- MIDI device settings (M7-2) ---------------------------------------
     bool IsMidiInputEnabled(string uid);
     void SetMidiInputEnabled(string uid, bool enabled);
