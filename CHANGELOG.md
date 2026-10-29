@@ -251,6 +251,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Lens shows all its read-outs again** after the graph-fills-the-panel layout: the spectrum's
+  FFT window length and crest factor and the waterfall's row duration sit beside the graph
+  titles; the scope shows held / stable / free-run with the holdoff and edge on the graph, and
+  its RMS next to the period; the spectrum cursor gives the FFT bin, and the scope cursors the
+  note of 1/Δt. The waterfall picture (and the spectrum and scope) no longer pokes out past the
+  graph's rounded corners.
 - **Disarming a track no longer leaves a held note sounding** (nota-daw/nota#366): turning record arm off
   (or the arm moving to another selected track) while a key is down releases the notes that
   came in through live input, instead of leaving them on until panic or stop.

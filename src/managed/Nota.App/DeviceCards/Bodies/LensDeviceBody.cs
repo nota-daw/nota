@@ -631,6 +631,12 @@ internal sealed class LensDeviceBody : IDeviceBody
             data.CursorsOn = On(CursorsP); data.CursorA = P(CursorAP); data.CursorB = P(CursorBP);
             data.CursorSnap = On(CursorSnapP);
             data.WfSpanSec = WfSpan();
+            // The graphs' own read-outs, next to each title: the FFT window and crest factor,
+            // the capture state with holdoff and edge, the waterfall's row duration.
+            data.SpecNote = Inv($"window {Sc(M_FftMs):0} ms · crest {Sc(M_CrestDb):0.0} dB");
+            data.ScopeNote = (data.Held ? "held" : data.TrigOk ? "stable" : "free-run")
+                + Inv($" · holdoff {P(HoldoffP) * 200:0} ms · edge {(On(TrigEdgeP) ? "↓" : "↑")}");
+            data.WfNote = Inv($"row {WfSpan() / LensData.WfRows * 1000:0} ms");
 
             // The view moved elsewhere (the pop-out window or the card, undo, MCP): follow it.
             if (Sel(ViewP, 3) is var view && view != centreTab)
@@ -701,13 +707,16 @@ internal sealed class LensDeviceBody : IDeviceBody
             double dtSec = Math.Abs(P(CursorBP) - P(CursorAP)) * TimeDiv() * 8;
             double curHz = centreTab == 0 ? spectrum.CursorHz : centreTab == 2 ? waterfall.CursorHz : 0;
             headNote.Text = curHz > 0
-                ? Inv($"{Hz(curHz)} · {LensInk.Note(curHz)} · ") + (centreTab == 0 ? Inv($"{spectrum.CursorDb:0.0} dB") : Inv($"−{waterfall.CursorAgeSec:0.0} s"))
+                ? Inv($"{Hz(curHz)} · {LensInk.Note(curHz)} · ") + (centreTab == 0
+                    ? Inv($"{spectrum.CursorDb:0.0} dB · bin {(Sc(M_BinHz) > 0 ? curHz / Sc(M_BinHz) : 0):0}")
+                    : Inv($"−{waterfall.CursorAgeSec:0.0} s"))
                 : centreTab switch
                 {
-                    1 when On(CursorsP) => Inv($"Δt {dtSec * 1000:0.000} ms → {(dtSec > 1e-9 ? 1 / dtSec : 0):0.0} Hz · ΔV {Sc(M_CursorBv) - Sc(M_CursorAv):0.000}"),
+                    1 when On(CursorsP) => Inv($"Δt {dtSec * 1000:0.000} ms → {(dtSec > 1e-9 ? 1 / dtSec : 0):0.0} Hz · ΔV {Sc(M_CursorBv) - Sc(M_CursorAv):0.000} · {LensInk.Note(dtSec > 1e-9 ? 1 / dtSec : 0)}"),
                     1 when data.SyncOn => Inv($"{LensScopeView.SpanName(data.Sync[LensData.S_SpanBeats], data.Sync[LensData.S_BeatsPerBar])} · {data.Sync[LensData.S_Bpm]:0.#} BPM{(synced ? "" : " · stopped")}"),
-                    1 => (data.Held ? "held · " : data.TrigOk ? "" : "free-run · ")
-                         + (Sc(M_PeriodMs) > 0 ? Inv($"{Sc(M_PeriodMs):0.000} ms · {Sc(M_FreqHz):0.0} Hz · Vpp {Sc(M_Vpp):0.000}") : Inv($"Vpp {Sc(M_Vpp):0.000} · RMS {Sc(M_Vrms):0.000}")),
+                    // Held / stable / free-run sits on the graph with holdoff and edge (ScopeNote).
+                    1 => (Sc(M_PeriodMs) > 0 ? Inv($"{Sc(M_PeriodMs):0.000} ms · {Sc(M_FreqHz):0.0} Hz · ") : "")
+                         + Inv($"Vpp {Sc(M_Vpp):0.000} · RMS {Sc(M_Vrms):0.000}"),
                     2 => Inv($"peak {Hz(Sc(M_PeakHz))} · {Sc(M_PeakDb):0.0} dB"),
                     _ => Inv($"peak {Sc(M_PeakDb):0.0} dB @ {Hz(Sc(M_PeakHz))} · LUFS {Sc(M_Lufs):0.0}"),
                 };
