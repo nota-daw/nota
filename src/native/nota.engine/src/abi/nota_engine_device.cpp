@@ -129,7 +129,7 @@ int32_t nota_rack_chain_sidechain(const NotaEngine* e, int32_t t, int32_t di, in
 }
 int32_t nota_rack_chain_set_sidechain(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t src,
     int32_t pre, float gain, float mix) {
-    return e && ENG(e)->rackChainSetSidechain(t, di, c, slot, src, pre, gain, mix) ? 0 : -1;
+    return e ? ENG(e)->rackChainSetSidechain(t, di, c, slot, src, pre, gain, mix) : -1;
 }
 int32_t nota_midi_effect_set_cc_dest_path(NotaEngine* e, int32_t t, int32_t i, int32_t chain, int32_t slot) {
     return e && ENG(e)->setMidiEffectCcDestPath(t, i, chain, slot) ? 0 : -1;
@@ -392,7 +392,7 @@ int32_t nota_rack_chain_sidechain_part(const NotaEngine* e, int32_t t, int32_t d
     return e && CENG(e)->rackChainSidechainPart(t, di, c, slot, out_part) ? 0 : -1;
 }
 int32_t nota_rack_chain_set_sidechain_part(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t part) {
-    return e && ENG(e)->rackChainSetSidechainPart(t, di, c, slot, part) ? 0 : -1;
+    return e ? ENG(e)->rackChainSetSidechainPart(t, di, c, slot, part) : -1;
 }
 int32_t nota_sidechain_route_capacity(const NotaEngine* e) {
     return e ? nota::Engine::kSidechainRoutes : 0;

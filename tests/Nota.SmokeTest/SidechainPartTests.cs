@@ -35,6 +35,7 @@ internal static class SidechainPartTests
         foreach (var r in SessionClipKeys()) yield return r;
         foreach (var r in NoEviction()) yield return r;
         foreach (var r in FreshRhythm()) yield return r;
+        foreach (var r in RhythmSampleEditKeepsKeys()) yield return r;
         foreach (var r in MissingPadIsSilent()) yield return r;
         foreach (var r in AutoShiftWholeTrackOnly()) yield return r;
         foreach (var r in RackChildPart()) yield return r;
@@ -513,6 +514,18 @@ internal static class SidechainPartTests
             "sc parts: a fresh Rhythm doesn't inherit the old voice key");
     }
 
+    // Loading a sample into a Rhythm voice is an edit, not a new instrument: keys stay put.
+    private static IEnumerable<(bool, string)> RhythmSampleEditKeepsKeys()
+    {
+        using var rig = new Rig();
+        var e = rig.E;
+        int rh = e.AddRhythmTrack();
+        e.SetDeviceSidechainKey(rig.Bass, rig.Comp, rh, 0);
+        bool loaded = e.SetRhythmVoiceSample(rh, 1, Wav(200));
+        yield return (loaded && e.DeviceSidechainKey(rig.Bass, rig.Comp) == new SidechainKey(rh, 0) && e.SidechainRouteInUse(rh, 0),
+            "sc parts: loading a sample into another Rhythm voice keeps the voice key");
+    }
+
     // The keyed pad deleted: the compressor hears a silent key, not its own input.
     private static IEnumerable<(bool, string)> MissingPadIsSilent()
     {
@@ -566,9 +579,27 @@ internal static class SidechainPartTests
         e.GroupDevices(rig.Bass, 0, 0, false, rig.Comp, 1);
         int rack = 0;
         yield return (e.RackChainSidechainPart(rig.Bass, rack, 0, 0) == kick, "sc parts: a keyed device grouped into a rack keeps its pad");
-        yield return (e.RackChainSetSidechainPart(rig.Bass, rack, 0, 0, hat) && e.RackChainSidechainPart(rig.Bass, rack, 0, 0) == hat
-                      && !e.RackChainSetSidechainPart(rig.Bass, rack, 0, 0, 9),
+        yield return (e.RackChainSetSidechainPart(rig.Bass, rack, 0, 0, hat) == 0 && e.RackChainSidechainPart(rig.Bass, rack, 0, 0) == hat
+                      && e.RackChainSetSidechainPart(rig.Bass, rack, 0, 0, 9) == -1,
             "sc parts: a rack child's pad can be set and read; no such pad is refused");
+        // With the pool full, a rack child's new source is refused when its old route is still
+        // needed (another device shares the hat), and pushes nobody out.
+        int host = e.AddAudioTrack();
+        int sharer = e.AddBuiltinDevice(host, CompKind);
+        e.SetDeviceSidechainKey(host, sharer, rig.Drums, hat);
+        var srcs = new List<int>();
+        for (int i = 0; i < 15; i++)
+        {
+            int d = e.AddBuiltinDevice(host, CompKind);
+            srcs.Add(e.AddAudioTrack());
+            e.SetDeviceSidechainKey(host, d, srcs[i], -1);
+        }
+        int extra = e.AddAudioTrack();
+        int rc = e.RackChainSetSidechain(rig.Bass, rack, 0, 0, new NestedSidechain(extra, false, 0f, 1f));
+        yield return (e.SidechainRoutesFree() == 0 && rc == -2 && e.RackChainSidechainPart(rig.Bass, rack, 0, 0) == hat
+                      && e.SidechainRouteInUse(rig.Drums, hat) && srcs.TrueForAll(x => e.SidechainRouteInUse(x, -1)),
+            "sc parts: with the pool full a rack child's new source is refused and keeps its pad");
+        e.RemoveTrack(host);
         string dir = Path.Combine(Path.GetTempPath(), "nota-scpart-rack-" + Guid.NewGuid().ToString("N"));
         try
         {

@@ -608,7 +608,8 @@ public interface IAudioEngine : IDisposable
     NestedCcDest? RackChainMidiCcDest(int trackId, int rackAddress, int chain, int index);
     bool RackChainMidiSetCcDest(int trackId, int rackAddress, int chain, int index, NestedCcDest dest);
     NestedSidechain? RackChainSidechain(int trackId, int rackAddress, int chain, int slot);
-    bool RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc);
+    /// <summary>0 = set, -1 = bad address, -2 = no free route (the key is left as it was).</summary>
+    int RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc);
     float MidiEffectCcDepth(int trackId, int index);
     /// <summary>Copies up to maxSamples of the device's live readings into outSamples; returns
     /// the count written. Each device defines its own layout (the analysers: a telemetry block,
@@ -664,7 +665,7 @@ public interface IAudioEngine : IDisposable
     SidechainKey InstrumentSidechainKey(int trackId);
     /// <summary>The part of a rack chain child's key (save / load; after RackChainSetSidechain).</summary>
     int RackChainSidechainPart(int trackId, int rackAddress, int chain, int slot);
-    bool RackChainSetSidechainPart(int trackId, int rackAddress, int chain, int slot, int part);
+    int RackChainSetSidechainPart(int trackId, int rackAddress, int chain, int slot, int part);   // 0 / -1 / -2 as above
     /// <summary>The route pool whole tracks and parts share: size, free now, and whether
     /// (source, part) already has a route (a further key on it needs none).</summary>
     int SidechainRouteCapacity();

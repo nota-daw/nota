@@ -334,6 +334,7 @@ bool Engine::setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::str
     auto sample = decodeAudioFile(path);
     if (!sample || sample->empty()) return false;
     auto fresh = std::static_pointer_cast<RhythmMachine>(rh->clone()); // copies params/patterns/samples
+    fresh->adoptUid(*rh); // an edit, not a new instrument: voice keys keep pointing here (specs/050)
     fresh->setVoiceSample(voice, sample);
     fresh->presetTag = rh->presetTag; // still the preset it was loaded from (specs/048)
     auto nt = cloneTrack(*old);
@@ -1639,7 +1640,13 @@ bool Engine::partIdAt(int32_t sourceTrackId, int32_t index, uint64_t* part) cons
 // (rather than counting free slots) lets a consumer move to another source while the pool is
 // full when it was its old source's only listener.
 template <typename Consumer>
-int32_t Engine::applySidechainKey(Consumer& c, int32_t src, uint64_t part) {
+int32_t Engine::applySidechainKey(Consumer& c, int32_t src, uint64_t part, bool routed) {
+    if (!routed) { // the master's devices are never fed a key (their key is only kept): no route to check
+        c.setSidechainSourceTrackId(src);
+        c.setSidechainPart(part);
+        recomputeRouting();
+        return 0;
+    }
     const int32_t oldSrc = c.sidechainSourceTrackId();
     const uint64_t oldPart = c.sidechainPart();
     std::pair<int32_t, uint64_t> before[kMaxRoutes];
@@ -1664,6 +1671,10 @@ int32_t Engine::applySidechainKey(Consumer& c, int32_t src, uint64_t part) {
     return -2;
 }
 
+// Rack children (Engine_Rack.cpp) set their keys through the same check.
+template int32_t Engine::applySidechainKey<Device>(Device&, int32_t, uint64_t, bool);
+template int32_t Engine::applySidechainKey<Instrument>(Instrument&, int32_t, uint64_t, bool);
+
 int32_t Engine::setDeviceSidechainKey(int32_t trackId, int32_t deviceIndex, int32_t sourceTrackId, int32_t part) {
     auto* d = deviceAt(trackId, deviceIndex);
     if (!d) return -1;
@@ -1675,7 +1686,7 @@ int32_t Engine::setDeviceSidechainKey(int32_t trackId, int32_t deviceIndex, int3
     if (part >= 0 && d->wantsMidiKey()) return -1;
     uint64_t id = 0;
     if (!findTrackAuthoring(sourceTrackId) || !partIdAt(sourceTrackId, part, &id)) return -1;
-    return applySidechainKey(*d, sourceTrackId, id);
+    return applySidechainKey(*d, sourceTrackId, id, trackId != kMasterTrackId);
 }
 
 bool Engine::deviceSidechainKey(int32_t trackId, int32_t deviceIndex, int32_t* source, int32_t* part) const {

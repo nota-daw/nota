@@ -929,13 +929,19 @@ public sealed class ProjectService
             if (srcIndex < newTrackIds.Count && newTrackIds[srcIndex] > 0)
                 if (engine.SetDeviceSidechainKey(track, dev, newTrackIds[srcIndex], part) == -2) unrouted++;
         }
-        // Keys of devices inside racks (specs/044), same deferral.
+        // Keys of devices inside racks (specs/044), same deferral and the same route check: a key
+        // the pool can't take is cleared and counted.
         foreach (var (track, n) in nestedScDeferred)
         {
-            if (n.Source < newTrackIds.Count && newTrackIds[n.Source] > 0
-                && engine.RackChainSetSidechain(track, n.Host, n.Chain, n.Slot,
-                    new NestedSidechain(newTrackIds[n.Source], n.TapPre, n.GainDb, n.Mix)) && n.Part >= 0)
-                engine.RackChainSetSidechainPart(track, n.Host, n.Chain, n.Slot, n.Part);
+            if (n.Source >= newTrackIds.Count || newTrackIds[n.Source] <= 0) continue;
+            var sc = new NestedSidechain(newTrackIds[n.Source], n.TapPre, n.GainDb, n.Mix);
+            int rc = engine.RackChainSetSidechain(track, n.Host, n.Chain, n.Slot, sc);
+            if (rc == 0 && n.Part >= 0) rc = engine.RackChainSetSidechainPart(track, n.Host, n.Chain, n.Slot, n.Part);
+            if (rc == -2)
+            {
+                unrouted++;
+                engine.RackChainSetSidechain(track, n.Host, n.Chain, n.Slot, sc with { SourceTrack = -1 });
+            }
         }
         // Instrument React source (Nota Flux), same deferral.
         foreach (var (track, srcIndex, part) in instScDeferred)

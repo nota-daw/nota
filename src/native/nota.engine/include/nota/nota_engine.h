@@ -1797,7 +1797,9 @@ NOTA_API int32_t     nota_track_set_instrument_sidechain_key(NotaEngine* engine,
 NOTA_API int32_t     nota_track_instrument_sidechain_key(const NotaEngine* engine, int32_t track_id, int32_t* out_source,
                                                          int32_t* out_part);
 /* The part of a rack chain child's key (save / load; addresses as nota_rack_chain_sidechain;
- * set it after nota_rack_chain_set_sidechain, which clears it). 0 = done, -1 not. */
+ * set it after nota_rack_chain_set_sidechain, which clears it). 0 = done, -1 not, -2 no free
+ * route (the key is left as it was). nota_rack_chain_set_sidechain likewise returns -2 when its
+ * source needs a route the pool can't give without pushing out another key's. */
 NOTA_API int32_t     nota_rack_chain_sidechain_part(const NotaEngine* engine, int32_t track_id, int32_t device_index,
                                                     int32_t chain, int32_t slot, int32_t* out_part);
 NOTA_API int32_t     nota_rack_chain_set_sidechain_part(NotaEngine* engine, int32_t track_id, int32_t device_index,

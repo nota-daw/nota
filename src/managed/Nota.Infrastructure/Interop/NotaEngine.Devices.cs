@@ -287,11 +287,11 @@ public sealed partial class NotaEngine
         return NativeMethods.RackChainSidechain(_handle, trackId, rackAddress, chain, slot, out int src, out int pre,
                                                 out float g, out float m) == 0 ? new NestedSidechain(src, pre != 0, g, m) : null;
     }
-    public bool RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc)
+    public int RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc)
     {
         ThrowIfDisposed();
         return NativeMethods.RackChainSetSidechain(_handle, trackId, rackAddress, chain, slot, sc.SourceTrack, sc.TapPre ? 1 : 0,
-                                                   sc.GainDb, sc.Mix) == 0;
+                                                   sc.GainDb, sc.Mix);
     }
     public float MidiEffectCcDepth(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectCcDepth(_handle, trackId, index); }
 
@@ -336,8 +336,8 @@ public sealed partial class NotaEngine
         ThrowIfDisposed();
         return NativeMethods.RackChainSidechainPart(_handle, trackId, rackAddress, chain, slot, out int part) == 0 ? part : SidechainKey.WholeTrack;
     }
-    public bool RackChainSetSidechainPart(int trackId, int rackAddress, int chain, int slot, int part)
-    { ThrowIfDisposed(); return NativeMethods.RackChainSetSidechainPart(_handle, trackId, rackAddress, chain, slot, part) == 0; }
+    public int RackChainSetSidechainPart(int trackId, int rackAddress, int chain, int slot, int part)
+    { ThrowIfDisposed(); return NativeMethods.RackChainSetSidechainPart(_handle, trackId, rackAddress, chain, slot, part); }
     public int SidechainRouteCapacity() { ThrowIfDisposed(); return NativeMethods.SidechainRouteCapacity(_handle); }
     public int SidechainRoutesFree() { ThrowIfDisposed(); return NativeMethods.SidechainRoutesFree(_handle); }
     public bool SidechainRouteInUse(int sourceTrackId, int part)

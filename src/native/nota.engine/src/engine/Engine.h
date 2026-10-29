@@ -294,10 +294,10 @@ class Engine {
         int32_t destSlot, int32_t param, float depth);
     bool rackChainSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* src, int32_t* tapPre,
         float* gainDb, float* mix) const;
-    bool rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t tapPre,
+    int32_t rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t tapPre,
         float gainDb, float mix);
     bool rackChainSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* part) const;
-    bool rackChainSetSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t part);
+    int32_t rackChainSetSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t part);
     int32_t nestedChainIndex(int32_t trackId, int32_t host, uint64_t uid) const;
 
     // --- automation write / record (M9-C) ---
@@ -901,7 +901,7 @@ class Engine {
     int32_t partIndexOf(int32_t sourceTrackId, uint64_t part) const;
     bool partIdAt(int32_t sourceTrackId, int32_t index, uint64_t* part) const;
     template <typename Consumer>
-    int32_t applySidechainKey(Consumer& c, int32_t src, uint64_t part);
+    int32_t applySidechainKey(Consumer& c, int32_t src, uint64_t part, bool routed = true);
     template <typename Fn>
     void forEachRouteKey(Fn&& fn) const;
     // Open/close a hosted plugin's native GUI. deviceIndex < 0 = the instrument;
