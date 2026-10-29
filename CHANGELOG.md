@@ -20,18 +20,9 @@ the GitHub release and the news posts — comes from the curated, summarised
 
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
-### Changed
-- ⌥-click a cell of Consort's patch matrix now types its depth (double-click or **Clear**
-  pulls the cable, as ⌥-click did); ⌥-click a Stereo Map handle types its pan and volume (⌥
-  double-click no longer resets the volume — type 0). (#240)
-
-### Fixed
-- Clearing a Volt or Aurora mod-matrix cell is one undo step and records as an automation
-  gesture, and a right-click on the Volt-family envelope and filter graphs no longer moves
-  the value under the pointer. (#240)
-
-
 ## [Unreleased]
+
+## [0.58.1] — 2026-10-29
 
 ### Added
 - **Type exact values into graphs, envelopes and mod matrices** (#240): ⌥-click (Alt-click on
@@ -218,6 +209,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   before keep the stereo pair. Saved with the project; MCP `set_input_channels`.
 
 ### Changed
+- ⌥-click a cell of Consort's patch matrix now types its depth (double-click or **Clear**
+  pulls the cable, as ⌥-click did); ⌥-click a Stereo Map handle types its pan and volume (⌥
+  double-click no longer resets the volume — type 0). (#240)
 - **16 sidechain routes instead of 8** (#190): whole tracks and single pads share the pool; a
   source picker greys out what no free route can take, and a project that needs more says how many
   keys it had to drop.
@@ -254,6 +248,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- Clearing a Volt or Aurora mod-matrix cell is one undo step and records as an automation
+  gesture, and a right-click on the Volt-family envelope and filter graphs no longer moves
+  the value under the pointer. (#240)
 - **Disarming a track no longer leaves a held note sounding** (nota-daw/nota#366): turning record arm off
   (or the arm moving to another selected track) while a key is down releases the notes that
   came in through live input, instead of leaving them on until panic or stop.
