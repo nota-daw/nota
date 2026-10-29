@@ -157,12 +157,14 @@ internal sealed class ChorusVoicesView : Control
             ctx.DrawGeometry(null, NotaGraph.SecondaryPen(ink, v == 0 ? 1.6 : 1.2), geo);
         }
 
-        // The scale's two ends, under the top line and over the bottom one (the dashed middle is
-        // half-way; the voices cross it there, so it carries no label).
+        // The scale: its two ends, under the top line and over the bottom one, and the dashed
+        // centre line named just above it (0 ct, or the base delay).
         var topL = NotaGraph.AxisText(_cents ? "+" + ChorusMath.Ct(cR * 0.75) + " ct" : ChorusMath.Ms(baseMs * 2) + " ms");
         ctx.DrawText(topL, new Point(5, Math.Max(1, gTop + 2)));
         var botL = NotaGraph.AxisText(_cents ? "−" + ChorusMath.Ct(cR * 0.75) + " ct" : "0 ms");
         ctx.DrawText(botL, new Point(5, Math.Min(h - botL.Height - 1, gBot - botL.Height - 1)));
+        var midL = NotaGraph.AxisText(_cents ? "0\u2009ct" : ChorusMath.Ms(baseMs) + "\u2009ms");
+        ctx.DrawText(midL, new Point(5, Math.Clamp(gMid - midL.Height - 1, 1, h - midL.Height - 1)));
         string span = "2 × " + (_periodMs >= 1000 ? NotaNum.F($"{_periodMs / 1000:0.0} s") : NotaNum.F($"{_periodMs:0} ms"));
         var br = NotaGraph.AxisText(span);
         ctx.DrawText(br, new Point(w - 5 - br.Width, h - 3 - br.Height));

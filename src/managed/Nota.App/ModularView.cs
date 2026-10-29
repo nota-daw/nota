@@ -1498,6 +1498,8 @@ public sealed partial class ModularView : UserControl
         }
         else if (!string.IsNullOrEmpty(n.Badge))
             actions.Children.Add(BadgeText(n.Badge));
+        // A fixed node (instrument, track in / out) shows a lock: it can't be deleted (#261).
+        if (FixedReason(n) is not null) actions.Children.Add(LockGlyph(n));
         if (actions.Children.Count > 0)
         {
             DockPanel.SetDock(actions, Dock.Right);
@@ -1510,10 +1512,18 @@ public sealed partial class ModularView : UserControl
             Height = HeaderH, Child = head, Background = HeaderFill(n), BorderBrush = HeaderEdge(n),
             BorderThickness = new Thickness(0, 0, 0, 1), CornerRadius = NotaRadius.Top(NotaRadius.GroupValue),
         };
-        // The fixed nodes (instrument, track in / out) say why they can't be deleted (#261) — the lock
-        // glyph that carried this is gone now the header has a power switch or a status dot.
+        // The fixed nodes (instrument, track in / out) say why they can't be deleted (#261): the lock
+        // glyph, and the same reason on the whole header.
         if (FixedReason(n) is { } why) ToolTip.SetTip(border, why);
         return border;
+    }
+
+    private static Control LockGlyph(GNode n)
+    {
+        var g = new Glyph(GlyphKind.Lock, 9) { Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Width = 16, Height = 16, Background = Brushes.Transparent, Child = g, VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(b, FixedReason(n));
+        return b;
     }
 
     private static TextBlock BadgeText(string badge) => new()

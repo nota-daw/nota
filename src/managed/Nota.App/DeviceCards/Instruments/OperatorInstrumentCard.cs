@@ -305,7 +305,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             }, op + 1, 0);
             Cell(Chips(pre + "wave", WaveShort), op + 1, 1);
             Cell(TableKnob(pre + "coarse", OperatorTopo.Names[op] + " Coarse", RatioText), op + 1, 2);
-            Cell(TableKnob(pre + "fine", OperatorTopo.Names[op] + " Fine", Cents, arc: null), op + 1, 3);
+            Cell(TableKnob(pre + "fine", OperatorTopo.Names[op] + " Fine", Cents, arc: Teal), op + 1, 3);
             Cell(Slider("", lid, () => Level(G(lid)), labelW: 0, valueW: 42), op + 1, 4);
         }
         var opsBody = new Border { Padding = new Thickness(7, 3), Child = opsGrid };

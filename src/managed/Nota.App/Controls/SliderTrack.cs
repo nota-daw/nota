@@ -3,7 +3,7 @@
 //
 // The value bar, the slider inside devices (style guide, spec 038): 9 high, corner 4, in a
 // groove; the soft orange tint fills up to the value and a 3px orange line marks it. While
-// dragged the fill deepens toward orange. Bipolar bars fill from the centre, with a 1px
+// hovered the fill lifts a little toward orange, and while dragged it deepens further. Bipolar bars fill from the centre, with a 1px
 // centre mark. An inactive bar (IsDim) keeps its position in ink 4, so the number next to
 // it stays meaningful. A role chroma (Ink) recolours the line. An upright bar (Vertical, for
 // a device's faders) is 16 wide and fills from the bottom; it drags up and down only.
@@ -34,6 +34,7 @@ internal sealed class SliderTrack : Control, IInlineReadout
 {
     private static readonly IBrush Fill = NotaPalette.AccentSoft;
     private static readonly IBrush FillDrag = NotaPalette.Derived(() => Mix(NotaPalette.AccentSoft.Color, NotaPalette.Accent.Color, 0.45));
+    private static readonly IBrush FillHover = NotaPalette.Derived(() => Mix(NotaPalette.AccentSoft.Color, NotaPalette.Accent.Color, 0.2));
     private static readonly IBrush Line = NotaPalette.Accent;
     private static readonly IBrush FillDim = NotaPalette.Well;
     private static readonly IBrush LineDim = NotaPalette.TextDisabled;
@@ -71,8 +72,8 @@ internal sealed class SliderTrack : Control, IInlineReadout
     bool IInlineReadout.ReadoutAt(Point p) => Text is not null && _textRect.Width > 0 && _textRect.Inflate(new Thickness(4, 0)).Contains(p);
 
     private bool _hover;
-    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; if (Shell) InvalidateVisual(); }
-    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; if (Shell) InvalidateVisual(); }
+    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; InvalidateVisual(); }
 
     /// <summary>An upright value bar (a device fader): 16 wide, filling from the bottom. Set it
     /// in the initializer; it swaps the default height for a width.</summary>
@@ -91,8 +92,8 @@ internal sealed class SliderTrack : Control, IInlineReadout
     }
     private bool _vertical;
 
-    /// <summary>A modulation depth. Drawn like any value bar: the guide keeps one orange for
-    /// every value inside a device.</summary>
+    /// <summary>A modulation depth: orange like any value bar, but its fill is hatched (the
+    /// modulation mark, DESIGN.md § Modulation) so it reads apart from a plain value.</summary>
     public bool Modulation { get; init; }
 
     /// <summary>A role chroma for the value line (rose for a destructive amount), overriding
@@ -200,13 +201,21 @@ internal sealed class SliderTrack : Control, IInlineReadout
         double a = Bipolar ? Math.Min(w / 2, x) : 0, b = Bipolar ? Math.Max(w / 2, x) : x;
         using (ctx.PushClip(bar))
         {
-            if (b - a > 0.5) ctx.FillRectangle(_dim ? FillDim : _drag ? FillDrag : Fill, new Rect(a, ty, b - a, bh));
+            if (b - a > 0.5) FillValue(ctx, _dim ? FillDim : _drag ? FillDrag : _hover ? FillHover : Fill, new Rect(a, ty, b - a, bh));
             if (Bipolar) ctx.FillRectangle(Centre, new Rect(Math.Round(w / 2) - 0.5, ty + 3, 1, bh - 6));
             if (!double.IsNaN(_marker) && !_dim)
                 ctx.FillRectangle(Mark, new Rect(Math.Round(Math.Clamp(_marker, 0, 1) * (w - 1)), ty, 1, bh));
             double lx = Math.Clamp(x, LineW / 2, w - LineW / 2) - LineW / 2;
             ctx.FillRectangle(_dim ? LineDim : _ink ?? Line, new Rect(lx, ty, LineW, bh));
         }
+    }
+
+    // The fill up to the value; a modulation depth hatches it (2 px on, 2 px off across the bar).
+    private void FillValue(DrawingContext ctx, IBrush ink, Rect r)
+    {
+        if (!Modulation) { ctx.FillRectangle(ink, r); return; }
+        if (_vertical) for (double y = r.Bottom - 2; y > r.Y - 2; y -= 4) ctx.FillRectangle(ink, new Rect(r.X, Math.Max(r.Y, y), r.Width, Math.Min(2, y + 2 - Math.Max(r.Y, y))));
+        else for (double x = r.X; x < r.Right; x += 4) ctx.FillRectangle(ink, new Rect(x, r.Y, Math.Min(2, r.Right - x), r.Height));
     }
 
     private void RenderShell(DrawingContext ctx, double w, double h)
@@ -246,7 +255,7 @@ internal sealed class SliderTrack : Control, IInlineReadout
         double a = Bipolar ? Math.Min(h / 2, y) : y, b = Bipolar ? Math.Max(h / 2, y) : h;
         using (ctx.PushClip(bar))
         {
-            if (b - a > 0.5) ctx.FillRectangle(_dim ? FillDim : _drag ? FillDrag : Fill, new Rect(tx, a, bw, b - a));
+            if (b - a > 0.5) FillValue(ctx, _dim ? FillDim : _drag ? FillDrag : _hover ? FillHover : Fill, new Rect(tx, a, bw, b - a));
             if (Bipolar) ctx.FillRectangle(Centre, new Rect(tx + 3, Math.Round(h / 2) - 0.5, bw - 6, 1));
             if (!double.IsNaN(_marker) && !_dim)
                 ctx.FillRectangle(Mark, new Rect(tx, Math.Round((1 - Math.Clamp(_marker, 0, 1)) * (h - 1)), bw, 1));
