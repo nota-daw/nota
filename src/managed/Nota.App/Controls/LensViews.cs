@@ -292,12 +292,16 @@ internal sealed class LensSpectrumView : Control
 
         // The axis lane: the decade labels sit under the plot, each on its grid line.
         ctx.DrawLine(LensInk.GridFaint, new Point(0, plotH), new Point(w, plotH));
+        double lastEnd = double.NegativeInfinity;   // a linear axis bunches the low decades: skip a label that would overlap
         foreach (double hz in LabelHz)
         {
             if (hz >= _d.FreqHi) continue;
             double x = _d.FracOf(hz) * w;
             string s = hz >= 1000 ? NotaNum.F($"{hz / 1000:0} kHz") : NotaNum.F($"{hz:0} Hz");
-            LensInk.Text(ctx, s, Math.Min(x + 3, w - LensInk.TextW(s) - 3), plotH + 2, LensInk.Axis);
+            double tw = LensInk.TextW(s), lx = Math.Min(x + 3, w - tw - 3);
+            if (lx < lastEnd + 6) continue;
+            LensInk.Text(ctx, s, lx, plotH + 2, LensInk.Axis);
+            lastEnd = lx + tw;
         }
     }
 
@@ -713,7 +717,10 @@ internal sealed class LensWaterfallView : Control
             ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.GridBeat, 0x88), 1), new Point(0, y), new Point(w, y));
             if (y - 9 < 18 || y + 1 > lastLab) continue;
             lastLab = y - 9;
-            LensInk.Text(ctx, hz >= 1000 ? NotaNum.F($"{hz / 1000:0} kHz") : NotaNum.F($"{hz:0} Hz"), 4, y - 9, LensInk.Axis);
+            string lab = hz >= 1000 ? NotaNum.F($"{hz / 1000:0} kHz") : NotaNum.F($"{hz:0} Hz");
+            // A dark plate keeps the label readable over a bright spectrogram.
+            ctx.DrawRectangle(NotaPalette.Wash(NotaPalette.SurfaceDeep, 0xCC), null, new Rect(2, y - 9, LensInk.TextW(lab) + 4, 9), 2, 2);
+            LensInk.Text(ctx, lab, 4, y - 9, LensInk.Axis);
         }
         if (_d.NoteGrid)
         {

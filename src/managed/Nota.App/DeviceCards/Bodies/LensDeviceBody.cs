@@ -44,7 +44,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         M_Held = 19, M_KeyLive = 20, M_Instance = 21, kScope = 22;
 
     private const int L_Spectrum = 0, L_Peak = 1, L_Trace = 2, L_Raw = 3, L_Waterfall = 4, L_KeyTrace = 5, L_Sync = 6;
-    private static readonly string[] SpanNames = { "¼ b", "½ b", "1 b", "2 b", "1 bar", "2 bar", "4 bar" };
+    private static readonly string[] SpanNames = { "¼ beat", "½ beat", "1 beat", "2 beats", "1 bar", "2 bars", "4 bars" };
     private const int A_Rearm = 0, A_ResetPeak = 1, A_ResetTrigger = 2;
 
     private static readonly int[] FftSizes = { 512, 2048, 4096, 16384 };
@@ -154,6 +154,36 @@ internal sealed class LensDeviceBody : IDeviceBody
             var seg = DeviceCardKit.Segments(names, () => Sel(p, n), iv => { SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); changed?.Invoke(); }, out var sync);
             readouts.Add(sync);
             return Learn(seg, p);
+        }
+
+        // More than four choices: a dropdown box (the style guide's rule for Segments).
+        Control Drop(int p, string[] names)
+        {
+            int n = names.Length;
+            var name = new TextBlock { FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+            readouts.Add(() => name.Text = names[Sel(p, n)]);
+            var box = new Border
+            {
+                Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0),
+                Cursor = new Cursor(StandardCursorType.Hand),
+                Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(5, 0, 0, 0) }, Dock.Right), name } },
+            };
+            box.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
+                var fly = new MenuFlyout();
+                int cur = Sel(p, n);
+                for (int i = 0; i < n; i++)
+                {
+                    int iv = i;
+                    var mi = new MenuItem { Header = names[i], ToggleType = MenuItemToggleType.Radio, IsChecked = i == cur };
+                    mi.Click += (_, _) => { SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); foreach (var a in readouts) a(); };
+                    fly.Items.Add(mi);
+                }
+                fly.ShowAt(box);
+                e.Handled = true;
+            };
+            return Learn(box, p);
         }
 
         Control Row(string label, int p, Func<double, string> fmt, double labW = 48, double valW = 34)
@@ -305,7 +335,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         {
             // Sync swaps the trigger mode for the span on the song's grid (specs/050).
             var mode = Seg(TrigModeP, new[] { "Auto", "Normal", "Single" });
-            var span = Seg(SpanP, SpanNames);
+            var span = Drop(SpanP, SpanNames);
             ToolTip.SetTip(span, "Span — how much of the song the scope shows, from a quarter beat to four bars");
             var sync = Toggle(SyncP, "Sync");
             ToolTip.SetTip(sync, "Sync — line the scope up with the song's beats and bars");
@@ -321,8 +351,8 @@ internal sealed class LensDeviceBody : IDeviceBody
             {
                 bool on = On(SyncP);
                 trigRow.IsVisible = !on; spanRow.IsVisible = on;
-                foreach (var c in new[] { edge, trigK, holdK }) c.IsEnabled = !on;
-                keyK.IsEnabled = KeySrc() >= 0;
+                foreach (var c in new[] { edge, trigK, holdK }) { c.IsEnabled = !on; c.Opacity = on ? 0.4 : 1; }
+                keyK.IsEnabled = KeySrc() >= 0; keyK.Opacity = keyK.IsEnabled ? 1 : 0.4;
             });
             return Rows(
                 Pair(sync, Toggle(CursorsP, "Cursors")),
@@ -686,7 +716,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             {
                 1 when data.SyncOn => Inv($"Scope · sync {LensScopeView.SpanName(data.Sync[LensData.S_SpanBeats], data.Sync[LensData.S_BeatsPerBar])} · {VoltDiv():0.00}/div{(data.KeyOn ? " · key " + data.KeyName : "")}"),
                 1 => Inv($"Scope · {Ms(TimeDiv())}/div · {VoltDiv():0.00}/div · trig {(On(TrigEdgeP) ? "↓" : "↑")} {(P(TrigLevelP) - 0.5) * 2:0.00} {new[] { "auto", "normal", "single" }[Sel(TrigModeP, 3)]}{(On(PersistP) ? Inv($" · persist {Sec(PersistS())}") : "")}"),
-                2 => Inv($"Waterfall · {LensData.WfBins} bins · {winName} · overlap {Overlaps[Sel(WfOverlapP, 4)]:0.#} % · window {WfSpan():0} s · floor {-120 + P(WfFloorP) * 80:0} dB"),
+                2 => Inv($"Waterfall · {LensData.WfBins} bins · {winName} · overlap {Overlaps[Sel(WfOverlapP, 4)]:0.#} % · window {WfSpan():0} s · floor {-120 + P(WfFloorP) * 80:0} dB{(On(MidSideP) ? " · Mid/Side" : "")}"),
                 _ => Inv($"Spectrum · FFT {fftN} · {winName} · avg {Avg()} · slope {P(TiltP) * 9:0.0} dB/oct{(On(MidSideP) ? " · Mid/Side" : "")}"),
             };
             statusLeft.Foreground = On(FreezeP) ? AmberLit : Txt2;
