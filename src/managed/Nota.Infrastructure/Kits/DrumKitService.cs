@@ -57,10 +57,16 @@ public sealed class DrumKitService : IDrumKits
     {
         var kit = KitCatalog.ById(id);
         if (kit is null) { warning = "Unknown drum kit."; return -1; }
-        int track = engine.AddDrumRackTrack();
-        if (track <= 0) { warning = "Couldn't create a Drum Rack track."; return -1; }
-        Fill(engine, track, kit, out warning);
-        return track;
+        // One undo step: the new track with its whole kit.
+        engine.BeginUndoGroup();
+        try
+        {
+            int track = engine.AddDrumRackTrack();
+            if (track <= 0) { warning = "Couldn't create a Drum Rack track."; return -1; }
+            Fill(engine, track, kit, out warning);
+            return track;
+        }
+        finally { engine.EndUndoGroup(); }
     }
 
     public int CreateRhythmTrack(IAudioEngine engine, string id, out string warning)
@@ -79,9 +85,14 @@ public sealed class DrumKitService : IDrumKits
         if (kit is null) { warning = "Unknown drum kit."; return false; }
         if (engine.TrackInstrumentKind(trackId) == RhythmModel.Kind) { FillRhythm(engine, trackId, kit, out warning); return true; }
         // Clear the existing pads first — a kit replaces the rack's contents rather than
-        // layering onto whatever was there.
-        for (int c = engine.RackChainCount(trackId) - 1; c >= 0; c--) engine.RackRemoveChain(trackId, c);
-        Fill(engine, trackId, kit, out warning);
+        // layering onto whatever was there. One undo step brings the old pads back.
+        engine.BeginUndoGroup();
+        try
+        {
+            for (int c = engine.RackChainCount(trackId) - 1; c >= 0; c--) engine.RackRemoveChain(trackId, c);
+            Fill(engine, trackId, kit, out warning);
+        }
+        finally { engine.EndUndoGroup(); }
         return true;
     }
 

@@ -111,7 +111,7 @@ public partial class MainWindow
             {
                 parts.Add("audio");
                 int src = Engine.GetTrackRecordInput(trackId);
-                parts.Add("In " + (src == 0 ? "Ext" : src == -1 ? "Master" : ChipTrackName(src)));
+                parts.Add("In " + (src == 0 ? RecordInputPick.HardwareShort(Engine.GetTrackInputChannels(trackId)) : src == -1 ? "Master" : ChipTrackName(src)));
                 // A Master source stays silent while monitored (it would feed back).
                 if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add("Monitor in");
             }
@@ -142,6 +142,8 @@ public partial class MainWindow
 
     private void OnTrackSelected(int trackId)
     {
+        TrackArming.FollowSelection(Engine, trackId);   // arm-on-select (#332)
+
         // Switching to a different track abandons the previously edited clip. Reset the clip
         // editor to empty so a stale editor from the old track doesn't linger — most visible
         // in the popped-out Devices/Clip window, whose top pane isn't touched by ShowDevices.
@@ -538,6 +540,7 @@ public partial class MainWindow
         roll.SetTrackColor(TrackBrush(set.ActiveClip.TrackId));
         if (!set.IsMulti) roll.SetClipIdentity(set.ActiveClip.TrackId, set.ActiveClip.ClipIndex);
         roll.SetClips(set, ClipNotesOf(set), TrackBrush);
+        WireFold(roll, () => roll.ActiveClip.TrackId);
 
         _editorTrackId = set.ActiveClip.TrackId;
         _editorClipIndex = set.ActiveClip.ClipIndex;
@@ -551,6 +554,37 @@ public partial class MainWindow
             _editorTrackId = roll.ActiveClip.TrackId;
             _editorClipIndex = roll.ActiveClip.ClipIndex;
             SetDetailChip(_editorTrackId);
+        };
+    }
+
+    // Fold (specs/045) follows the track: its pads on a Drum Rack, and the switch is saved on
+    // the track, so every clip of a folded drum track opens folded.
+    private void WireFold(PianoRollView roll, Func<int> track)
+    {
+        // The rows are laid out for one track at a time: the one whose Fold the editor shows.
+        // It follows the active clip only when the switch lands, so a press that makes another
+        // track's clip active doesn't re-read pads under the note it grabbed.
+        int shown = track();
+        roll.FoldPads = () => IsDrumRackTrack(shown)
+            ? Nota.Presentation.DrumPads.ByNote(Nota.Presentation.DrumPads.Scan(Engine, shown)) : null;
+        roll.FoldToggled += on => Engine.SetTrackPianoFold(shown, on);
+        if (Engine.GetTrackPianoFold(shown))
+        {
+            roll.SetFold(true);
+            roll.EnsureNotesVisible();
+        }
+        // A multi-clip editor's active clip can move to another track: take that track's
+        // Fold, and its pads. Raised from inside a press on another track's note, before its
+        // drag starts: switch once the press is handled, so the roll sees the drag and waits
+        // for the release instead of moving the rows under the grabbed note.
+        roll.ActiveClipChanged += () =>
+        {
+            if (track() == shown) return;
+            Dispatcher.UIThread.Post(() =>
+            {
+                int t = track();
+                if (t != shown) roll.SwitchFoldTrack(() => shown = t, Engine.GetTrackPianoFold(t));
+            }, DispatcherPriority.Input);
         };
     }
 
@@ -650,6 +684,118 @@ public partial class MainWindow
             _audioEditor.Reload();
         }
     }
+
+    // A block of clips moved in the arrangement (drag, ←/→, ⌥↑/⌥↓, a drop onto new tracks). The
+    // editors address clips by index, and a move can re-index them: a landing that carves away a
+    // clip in front shifts the ones after it, and a cross-track move appends. The open editors
+    // follow their clips (RetargetEditors); the move is kept so an undo / redo of exactly it
+    // takes them along (FollowMoveThroughHistory).
+    private void OnClipsMoved(ClipBlockMove move)
+    {
+        _blockMoves.RemoveRange(_blockMovesDone, _blockMoves.Count - _blockMovesDone);   // a new step drops the redo side
+        _blockMoves.Add(move);
+        if (_blockMoves.Count > 64) _blockMoves.RemoveAt(0);
+        _blockMovesDone = _blockMoves.Count;
+        RetargetEditors(move.Map);
+    }
+
+    // Recent block moves, oldest first; the first _blockMovesDone are done, the rest undone.
+    private readonly List<ClipBlockMove> _blockMoves = new();
+    private int _blockMovesDone;
+
+    // After an undo / redo: when it took back the latest done block move (redid the earliest
+    // undone one) — the touched tracks' clips are exactly as before (after) it — the editors'
+    // indices go back (forward) with it. Any other step leaves those tracks otherwise and the
+    // editors alone.
+    private void FollowMoveThroughHistory()
+    {
+        if (_blockMovesDone > 0 && _blockMoves[_blockMovesDone - 1] is var undo
+            && ArrangementMoves.SameStarts(Timeline.ClipStartsOf(undo.StartsBefore.Keys), undo.StartsBefore))
+        {
+            _blockMovesDone--;
+            RetargetEditors(ArrangementMoves.Invert(undo.Map, undo.StartsAfter));
+        }
+        else if (_blockMovesDone < _blockMoves.Count && _blockMoves[_blockMovesDone] is var redo
+                 && ArrangementMoves.SameStarts(Timeline.ClipStartsOf(redo.StartsAfter.Keys), redo.StartsAfter))
+        {
+            _blockMovesDone++;
+            RetargetEditors(redo.Map);
+        }
+    }
+
+    // An editor whose clips kept their indices only re-reads their geometry; one whose clips
+    // changed index is rebuilt on the new indices (dropping clips that no longer exist), so a
+    // later note edit never lands in another clip.
+    private void RetargetEditors(IReadOnlyDictionary<(int Track, int Clip), (int Track, int Clip)?> map)
+    {
+        (int Track, int Clip)? Where(int t, int c) => map.TryGetValue((t, c), out var to) ? to : (t, c);
+
+        if (_editorRoll is { } roll && _clipEditor is not null && _editorTrackId > 0)
+        {
+            var open = roll.Clips.Clips;
+            if (open.All(c => Where(c.TrackId, c.ClipIndex) == (c.TrackId, c.ClipIndex)))
+                foreach (var c in open.Where(c => map.ContainsKey((c.TrackId, c.ClipIndex))).ToList())
+                    OnClipGeometryChanged(c.TrackId, c.ClipIndex);
+            else
+            {
+                var now = open.Select(c => Where(c.TrackId, c.ClipIndex)).OfType<(int Track, int Clip)>().ToList();
+                if (now.Count == 0) InvalidateClipEditor();
+                else
+                {
+                    var active = Where(roll.ActiveClip.TrackId, roll.ActiveClip.ClipIndex) ?? now[0];
+                    bool shown = ClipEditorShown(_clipEditor);
+                    BuildClipEditor(now, active.Track, active.Clip);
+                    if (shown) ShowClipPanel();
+                }
+            }
+        }
+
+        if (_audioEditor is { } audio && _audioEditorTrackId > 0 && SessionClip.SceneOf(_audioEditorClipIndex) < 0)
+        {
+            var to = Where(_audioEditorTrackId, _audioEditorClipIndex);
+            if (to == (_audioEditorTrackId, _audioEditorClipIndex))
+            {
+                if (map.ContainsKey((_audioEditorTrackId, _audioEditorClipIndex))) audio.Reload();
+            }
+            else
+            {
+                bool shown = ClipEditorShown(audio);
+                if (to is { } a)
+                {
+                    BuildAudioClipEditor(a.Track, a.Clip);
+                    if (shown) ShowAudioClipPanel();
+                }
+                else
+                {
+                    _audioEditor = null;
+                    _audioEditorTrackId = -1;
+                    _audioEditorClipIndex = -1;
+                    if (shown && DetailFloating) SetHost(_detailWindow!.ClipHost, ClipPlaceholder());
+                    else if (shown) DetailPanel.IsVisible = false;
+                }
+            }
+        }
+
+        if (_patternView is not null && _patternTrackId > 0 && _patternScene < 0)
+        {
+            var to = Where(_patternTrackId, _patternClipIndex);
+            if (to is not { } p) InvalidatePatternView();
+            else if (p == (_patternTrackId, _patternClipIndex))
+            {
+                if (map.ContainsKey(p)) _patternView.Reload();   // a carve can shorten it
+            }
+            else
+            {
+                bool shown = ClipEditorShown(_patternView);
+                BuildPatternView(p.Track, p.Clip, -1);
+                if (shown) ShowPatternPanel();
+            }
+        }
+    }
+
+    // Whether this editor is the one on screen (the docked detail panel, or the floating window's top pane).
+    private bool ClipEditorShown(Control editor)
+        => ReferenceEquals(ClipDetailHost.Content, editor) && (DetailFloating || DetailPanel.IsVisible);
 
     private void ReloadEditorNotes()
     {
@@ -800,6 +946,7 @@ public partial class MainWindow
         roll.SetTrackColor(TrackBrush(trackId));
         roll.SetClipIdentity(trackId, -(scene + 2));   // distinct key from arrangement clips
         roll.SetNotes(Engine.GetSessionNotes(trackId, scene), slotLen > 0 ? slotLen : 4);
+        WireFold(roll, () => trackId);
 
         _editorRoll = roll;
         _editorTrackId = -1;  // session slot: recording-tick reload N/A

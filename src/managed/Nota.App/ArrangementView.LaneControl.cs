@@ -20,14 +20,60 @@ namespace Nota.App;
 public sealed partial class ArrangementView
 {
     // ---- lanes ------------------------------------------------------------
-    private sealed class LaneControl : Control
+    private sealed class LaneControl : Control, IAutoRows, IValueEntryHost
     {
         private readonly ArrangementView _o;
+        private readonly AutoEditor _auto;   // automation mode (M9-A3), shared with the footer's return rows
         public LaneControl(ArrangementView o)
         {
             _o = o;
             ClipToBounds = true;
+            _auto = new AutoEditor(o, this);
+            ValueEntry.AttachHost(this, menu: false);   // the right-press below shows the menu
         }
+
+        // ⌥-click an audio clip's ADSR handle to type its stage (specs/035); one engine edit each.
+        // The clip is found again by id on every read: a commit reloads the lane's clips.
+        public IReadOnlyList<ValueField>? FieldsAt(Point p)
+        {
+            if (_o._automationMode || HitAdsr(p) is not { } ah) return null;
+            int trackId = ah.track.Id, index = ah.clip.ClipIndex;
+            ClipVM? Clip() => _o._tracks.FirstOrDefault(t => t.Id == trackId)?.Clips.FirstOrDefault(c => c.ClipIndex == index);
+            var fs = ClipAdsrKit.Fields(ah.handle, () => Clip()?.Adsr ?? ah.clip.Adsr,
+                a => { if (Clip() is { } c) CommitAdsr(trackId, c, a); }, ah.clip.LengthBeats, () => _o._engine?.Bpm ?? 120);
+            _adsrFields = (trackId, index, ah.handle, fs);
+            return fs;
+        }
+        private (int track, int clip, AdsrHandle handle, IReadOnlyList<ValueField> fields)? _adsrFields;   // the handle last asked about
+
+        public Rect AnchorOf(ValueField field)
+        {
+            if (_adsrFields is not { } af) return default;
+            int row = _o._tracks.FindIndex(t => t.Id == af.track);
+            if (row < 0 || _o._tracks[row].Clips.FirstOrDefault(c => c.ClipIndex == af.clip) is not { } clip) return default;
+            var f = AdsrFrameOf(clip, row); var a = clip.Adsr.Fit(clip.LengthBeats);
+            var at = af.handle switch
+            {
+                AdsrHandle.Attack => ClipAdsrKit.AttackPt(f, a),
+                AdsrHandle.Release => ClipAdsrKit.ReleasePt(f, a),
+                _ => ClipAdsrKit.DecayPt(f, a),
+            };
+            return ValueEntry.Near(at, Bounds.Size);
+        }
+
+        public IReadOnlyList<ValueField> AllFields => _adsrFields?.fields ?? [];
+
+        // The scrolling track rows, as the automation editor sees them.
+        Control IAutoRows.Owner => this;
+        int IAutoRows.RowAtY(double y) => _o.RowAtY(y);
+        TrackVM IAutoRows.TrackAt(int i) => _o._tracks[i];
+        int IAutoRows.IndexOf(TrackVM t) => _o._tracks.IndexOf(t);
+        double IAutoRows.Top(int i) => _o.RowTop(i);
+        double IAutoRows.Height(int i) => _o.RowHeightAt(i);
+        bool IAutoRows.Editable(int i) => !_o.IsSlimRowAt(i);   // a slim group bar has no room for an envelope
+        (int lo, int hi) IAutoRows.VisibleRange => _o.VisibleRowRange();
+
+        public bool IsEditingPoint => _auto.IsEditingPoint;   // M9-C/D: don't clobber a hand-edit
 
         private enum Drag { None, Move, TrimL, TrimR }
         private Drag _drag;
@@ -42,6 +88,11 @@ public sealed partial class ArrangementView
         private float[]? _rpPeaks;
         private int _rpCount;
         private double _rpMTotal, _rpS0, _rpS1;   // material total + committed window (frames for unwarped, beats for warped)
+        private bool _rpWarped;
+        private int _rpTrack, _rpClip;
+        private float[]? _rpDetail;                // the lane's visible material at one bucket per pixel (#299)
+        private int _rpDetailCount;
+        private double _rpDetailM0, _rpDetailM1;
         private const double EdgePx = 6;
 
         // ADSR handles on audio clips (shown on hover / selection). A drag previews on the
@@ -103,6 +154,9 @@ public sealed partial class ArrangementView
         private double _grabOrigStart;   // grabbed clip's original start (delta reference)
         private int _grabRow;            // grabbed clip's row (vertical delta reference)
         private int _moveRowDelta;       // rows to shift the group (instrument→instrument only)
+        // Held below the last track (#301): each source track gets a new track like it, shown
+        // as ghost rows under the lanes; the ids are the sources, top to bottom.
+        private List<int>? _newTrackSources;
 
         // Audio clip → instrument (see ArrangementView.ClipDrag): the grabbed clip, the
         // sample-taking instrument row it's held over (-1 none: a plain move), and the press
@@ -124,51 +178,11 @@ public sealed partial class ArrangementView
         private int _shiftClipTrack = -1, _shiftClipIndex = -1;   // Shift-armed over a clip → click falls back to rectangular clip-select
         private const double DragThreshold = 4;
 
-        // Automation editing (M9-A3).
-        private AutoPt? _autoDrag;
-        private TrackVM? _autoDragTrack;
-        private double _autoDragLo, _autoDragHi;   // neighbour beats — a point can't be dragged past them (req 8.2.3)
-        private float _autoDragStartVal;           // value at grab (for Shift fine-mode, req 8.2.2)
-        private AutoPt? _bendLeft, _bendRight;   // segment being bent (M9-D)
-        private TrackVM? _bendTrack;
-        // While dragging/bending, the engine lane is updated live (no undo) so the device
-        // follows in real time; the first update checkpoints undo once, the rest are raw.
-        private bool _autoLiveStarted;
-        private AutoPt? _hoverPoint;             // point / segment-left under the cursor (hover feedback)
-        private AutoPt? _hoverSegLeft;
-        private TrackVM? _hoverTrack;
-        private TrackVM? _rangeTrack;            // Shift-drag time-range selection in progress (Phase 2)
-        private double _rangeAnchor;
-        public bool IsEditingPoint => _autoDrag != null || _bendLeft != null;   // M9-C/D: don't clobber a hand-edit
         /// <summary>A clip drag / trim, marquee, time-range or envelope edit is in progress:
         /// Follow must not scroll the lanes out from under it (#105).</summary>
-        public bool IsGesturing => _drag != Drag.None || _marquee is not null || _rangeTrack is not null || IsEditingPoint;
+        public bool IsGesturing => _drag != Drag.None || _marquee is not null || _auto.IsActive;
         private double RowTop(int i) => _o.RowTop(i);
         private double RowH(int i) => _o.RowHeightAt(i);
-        // Target-selector pill: width fits its label so nothing clips.
-        private const double PillH = 16;
-        private static double PillWidth(string label)
-        {
-            var ft = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                Typeface.Default, 9, NotaPalette.TextPrimary);
-            return Math.Clamp(Math.Ceiling(ft.Width) + 12, 34, 180);
-        }
-        private Rect PillRect(int i, double w) => new(4, RowTop(i) + 3, w, PillH);
-        private double ValueToY(TrackVM t, int row, float v)
-        {
-            var (min, max) = _o.AutoRange(t);
-            double top = RowTop(row) + 8, bot = RowTop(row) + RowH(row) - 8;
-            double frac = max > min ? Math.Clamp((v - min) / (max - min), 0, 1) : 0.5;
-            return bot - frac * (bot - top);
-        }
-        private float YToValue(TrackVM t, int row, double py)
-        {
-            var (min, max) = _o.AutoRange(t);
-            double top = RowTop(row) + 8, bot = RowTop(row) + RowH(row) - 8;
-            double frac = Math.Clamp((bot - py) / (bot - top), 0, 1);
-            return (float)(min + frac * (max - min));
-        }
-
         protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
             => _o.HandleLaneWheel(e, e.GetPosition(this).X);
 
@@ -217,13 +231,14 @@ public sealed partial class ArrangementView
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             if (RowSeamPressed(e)) return;
-            if (_o._automationMode) { AutoPointerPressed(e); return; }
+            if (_o._automationMode) { _auto.AutoPointerPressed(e); return; }
             var pt = e.GetCurrentPoint(this);
             var hit = HitTest(pt.Position, out double beat);
 
             if (pt.Properties.IsRightButtonPressed)
             {
-                if (hit is { } h) ShowClipMenu(h.track.Id, h.clip, beat);
+                if (FieldsAt(pt.Position) is { Count: > 0 } adsr) ValueEntry.ShowMenu(this, adsr);
+                else if (hit is { } h) ShowClipMenu(h.track.Id, h.clip, beat);
                 else ShowLaneMenu(pt.Position, beat);
                 return;
             }
@@ -368,7 +383,7 @@ public sealed partial class ArrangementView
             if (_o.IsRowResizing) { _o.UpdateRowResize(e.GetPosition(this).Y); return; }
             if (e.GetCurrentPoint(this).Properties is { IsLeftButtonPressed: false, IsRightButtonPressed: false }
                 && RowSeamHover(e.GetPosition(this))) return;
-            if (_o._automationMode) { AutoPointerMoved(e); return; }
+            if (_o._automationMode) { _auto.AutoPointerMoved(e); return; }
             var pos = e.GetPosition(this);
             _lastPos = pos;
             _lastMods = e.KeyModifiers;
@@ -484,6 +499,8 @@ public sealed partial class ArrangementView
                     foreach (var m in _groupMove) m.vm.StartBeat = m.origStart;
                     _moveRowDelta = 0;
                 }
+                SetNewTrackRows(_loadRow < 0 && _o._tracks.Count > 0 && pos.Y >= _o.RowsHeight);
+                if (_newTrackSources is not null) _moveRowDelta = 0;
                 InvalidateVisual();
                 return;
             }
@@ -534,7 +551,7 @@ public sealed partial class ArrangementView
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
             if (_o.IsRowResizing) { e.Pointer.Capture(null); _o.EndRowResize(); return; }
-            if (_o._automationMode) { AutoPointerReleased(e); return; }
+            if (_o._automationMode) { _auto.AutoPointerReleased(e); return; }
             var eng = _o._engine;
 
             if (_adsrDrag != AdsrHandle.None)
@@ -613,6 +630,16 @@ public sealed partial class ArrangementView
                 return;
             }
 
+            if (_drag == Drag.Move && _groupMove is not null && _newTrackSources is { } sources)
+            {
+                var clips = _groupMove.Select(m => (m.track, m.clip, m.vm.StartBeat)).ToList();
+                SetNewTrackRows(false);
+                _groupMove = null; _drag = Drag.None; _moveRowDelta = 0;
+                e.Pointer.Capture(null);
+                _o.MoveClipsToNewTracks(sources, clips);
+                return;
+            }
+
             if (_drag == Drag.Move && _groupMove is not null)
             {
                 int rowDelta = _moveRowDelta;
@@ -620,6 +647,7 @@ public sealed partial class ArrangementView
                 // the model, so a jiggle-and-release doesn't create a no-op undo step.
                 bool moved = rowDelta != 0 || _groupMove.Any(m => Math.Abs(m.vm.StartBeat - m.origStart) > 1e-9);
                 bool committed = false;
+                Nota.Application.Editing.ClipBlockMove? move = null;
                 if (eng is not null && moved)
                 {
                     // One atomic group move: moving the clips one by one let an early clip
@@ -631,11 +659,8 @@ public sealed partial class ArrangementView
                             ? _o._tracks[destRow].Id : m.track;
                         return (m.track, m.clip, destTrack, m.vm.StartBeat);
                     }).ToArray();
-                    committed = eng.MoveClipBlock(moves);
-                    // Same-track moves keep their clip index, so an open editor on one of
-                    // them stays valid — but its START read-out is now off.
-                    if (committed && rowDelta == 0)
-                        foreach (var m in _groupMove) _o.RaiseClipGeometryChanged(m.track, m.clip);
+                    move = _o.MoveBlock(moves);
+                    committed = move is not null;
                     if (committed && eng.LastMoveKeptDeviceAutomation())   // explicit hint: only Volume/Pan followed across tracks (req 8.3.4)
                         _o.StatusMessage?.Invoke("Moved across tracks — device automation stayed on the source");
                 }
@@ -644,7 +669,8 @@ public sealed partial class ArrangementView
                 if (moved)
                 {
                     _o.Refresh();   // also restores the preview if the engine rejected the move
-                    if (committed) _o.ReselectPlaced();   // cross-track moves change indices
+                    if (committed) _o.ReselectPlaced();   // a move can change clip indices
+                    if (move is not null) _o.RaiseClipsMoved(move);   // so can open editors' clips
                     if (committed && rowDelta != 0) _o.AnnounceSelectedTrack();   // the destination track is now the active one
                 }
                 else InvalidateVisual();
@@ -684,15 +710,15 @@ public sealed partial class ArrangementView
             // that a PointerCaptureLost fired around button-up doesn't wipe the latch before
             // OnPointerReleased turns it into a selection.
             bool active = _drag != Drag.None || _groupMove is not null || _rangeActive
-                          || _autoDrag is not null || _bendLeft is not null || _rangeTrack is not null
+                          || _auto.IsActive
                           || _adsrDrag != AdsrHandle.None;
             if (!active) return false;
             _pending = false; _drag = Drag.None; _groupMove = null; _moveRowDelta = 0; _dragClip = null; _rpPeaks = null;
             _marqueeArmed = false; _rangeActive = false; _marquee = null; _shiftClipTrack = -1; _shiftClipIndex = -1;
-            _autoDrag = null; _autoDragTrack = null; _bendLeft = _bendRight = null; _bendTrack = null;
-            _rangeTrack = null;
+            _auto.Cancel();
             _adsrDrag = AdsrHandle.None; _adsrClip = null;
             SetLoadRow(-1);
+            SetNewTrackRows(false);
             _autoScroll?.Stop();
             SetResizeCursor(false);
             _o.Refresh();   // reload authoritative clip/automation positions, discarding the preview
@@ -759,167 +785,7 @@ public sealed partial class ArrangementView
             _o.SetSelection(hits);
         }
 
-        // --- automation editing (M9-A3) ------------------------------------
-        private void AutoPointerPressed(PointerPressedEventArgs e)
-        {
-            var pt = e.GetCurrentPoint(this);
-            var pos = pt.Position;
-            int i = _o.RowAtY(pos.Y);
-            if (i < 0) return;
-            var t = _o._tracks[i];
-
-            double pillW = PillWidth(t.AutoLabel);
-            if (PillRect(i, pillW).Contains(pos)) { _o.ShowAutoTargetMenu(this, t); return; }
-
-            double curBeat = Math.Max(0, _o.SnapMaybe(_o._scrollBeats + pos.X / _o._pixelsPerBeat, e.KeyModifiers));
-
-            // Point under the cursor? (7px grab radius). Detected first so Shift can mean
-            // "fine-drag this point" (req 8.2.2) rather than always starting a range select.
-            AutoPt? hit = null;
-            foreach (var p in t.AutoPoints)
-            {
-                double dx = _o.BeatToX(p.Beat) - pos.X;
-                double dy = ValueToY(t, i, p.Value) - pos.Y;
-                if (dx * dx + dy * dy <= 49) { hit = p; break; }
-            }
-
-            bool right = pt.Properties.IsRightButtonPressed;
-            bool dbl = e.ClickCount == 2;
-
-            // Shift + left-drag authors a time-range selection (Phase 2) — including when the
-            // drag starts on a point, so a range bounded by points is selectable. Fine-drag of a
-            // point is still available by holding Shift *during* an already-started drag.
-            if ((e.KeyModifiers & KeyModifiers.Shift) != 0 && !right)
-            {
-                _rangeTrack = t; _rangeAnchor = curBeat;
-                _o.SetAutoSelection(t, curBeat, curBeat);
-                e.Pointer.Capture(this);
-                return;
-            }
-
-            if (hit is not null)
-            {
-                // On a point: right-click or double-click removes it; a single press grabs it to drag.
-                if (right || dbl) { t.AutoPoints.Remove(hit); _o.CommitAuto(t); InvalidateVisual(); return; }
-                // else: grab the existing point (drag logic below).
-            }
-            else
-            {
-                var seg = HitSegment(t, i, pos);
-                // Right-click resets a segment's curve, else opens the range menu.
-                if (right)
-                {
-                    if (seg is { } sr) { sr.left.Curve = 0f; _o.CommitAuto(t); InvalidateVisual(); }
-                    else ShowAutoMenu(t, curBeat);
-                    return;
-                }
-                // Alt+drag on a segment bends it (M9-D).
-                if (seg is { } sg && (e.KeyModifiers & KeyModifiers.Alt) != 0)
-                {
-                    _bendLeft = sg.left; _bendRight = sg.right; _bendTrack = t;
-                    e.Pointer.Capture(this);
-                    return;
-                }
-                if (dbl)
-                {
-                    // Double-click adds a breakpoint at the cursor, then grabs it for immediate drag.
-                    _o.ClearAutoSelection();
-                    hit = new AutoPt { Beat = curBeat, Value = YToValue(t, i, pos.Y) };
-                    t.AutoPoints.Add(hit);
-                }
-                else
-                {
-                    // Single click: behave like the arrangement — move the playhead when stopped, do
-                    // nothing while playing. Points come from double-clicking, never a single click.
-                    _o.ClearAutoSelection();
-                    if (_o._engine is not { IsPlaying: true })
-                        _o.SeekTo(_o._scrollBeats + pos.X / _o._pixelsPerBeat);
-                    return;
-                }
-            }
-
-            // Grab the point (existing on a single press, or the one just double-click-added) to drag.
-            _autoDrag = hit;
-            _autoDragTrack = t;
-            _autoDragStartVal = hit!.Value;
-            // Neighbour bounds: the point can't be dragged past its neighbours in time (req 8.2.3).
-            _autoDragLo = 0; _autoDragHi = double.MaxValue;
-            foreach (var p in t.AutoPoints)
-            {
-                if (ReferenceEquals(p, hit)) continue;
-                if (p.Beat <= hit.Beat) _autoDragLo = Math.Max(_autoDragLo, p.Beat);
-                else _autoDragHi = Math.Min(_autoDragHi, p.Beat);
-            }
-            e.Pointer.Capture(this);
-            InvalidateVisual();
-        }
-
-        // The (left,right) points of the segment whose curve line is under `pos`, or null.
-        private (AutoPt left, AutoPt right)? HitSegment(TrackVM t, int row, Point pos)
-        {
-            var ordered = t.AutoPoints.OrderBy(p => p.Beat).ToList();
-            double beat = _o._scrollBeats + pos.X / _o._pixelsPerBeat;
-            for (int k = 1; k < ordered.Count; k++)
-            {
-                var a = ordered[k - 1]; var b = ordered[k];
-                if (beat < a.Beat || beat > b.Beat) continue;
-                double span = b.Beat - a.Beat;
-                if (span <= 0) return null;
-                double tt = (beat - a.Beat) / span;
-                double vy = a.Value + (b.Value - a.Value) * Shape(tt, a.Curve);
-                double cy = ValueToY(t, row, (float)vy);
-                return Math.Abs(cy - pos.Y) <= 6 ? (a, b) : null;
-            }
-            return null;
-        }
-
-        private void AutoBendMoved(Point pos)
-        {
-            if (_bendLeft is null || _bendRight is null || _bendTrack is null) return;
-            int i = _o._tracks.IndexOf(_bendTrack);
-            if (i < 0) return;
-            float v0 = _bendLeft.Value, v1 = _bendRight.Value;
-            if (Math.Abs(v1 - v0) < 1e-4f) { _bendLeft.Curve = 0f; InvalidateVisual(); return; }
-            double val = YToValue(_bendTrack, i, pos.Y);
-            double frac = Math.Clamp((val - v0) / (v1 - v0), 0.02, 0.98);
-            // Solve Shape(0.5, curve) == frac  ->  0.5^e = frac  ->  e = ln(frac)/ln(0.5).
-            double e = Math.Log(frac) / Math.Log(0.5);
-            _bendLeft.Curve = (float)Math.Clamp(-Math.Log2(e) / 4.0, -1.0, 1.0);
-            CommitAutoDuringDrag(_bendTrack);   // engine follows the curve bend live
-            InvalidateVisual();
-        }
-
-        // Hover feedback (M9-D): highlight the point or segment under the cursor.
-        private void UpdateHover(Point pos)
-        {
-            AutoPt? pt = null, seg = null; TrackVM? tr = null;
-            int i = _o.RowAtY(pos.Y);
-            if (i >= 0)
-            {
-                var t = _o._tracks[i];
-                foreach (var p in t.AutoPoints)
-                {
-                    double dx = _o.BeatToX(p.Beat) - pos.X, dy = ValueToY(t, i, p.Value) - pos.Y;
-                    if (dx * dx + dy * dy <= 49) { pt = p; break; }   // 7px, matches grab radius
-                }
-                if (pt is null && HitSegment(t, i, pos) is { } sg) seg = sg.left;
-                if (pt is not null || seg is not null) tr = t;
-            }
-            if (!ReferenceEquals(pt, _hoverPoint) || !ReferenceEquals(seg, _hoverSegLeft) || !ReferenceEquals(tr, _hoverTrack))
-            {
-                _hoverPoint = pt; _hoverSegLeft = seg; _hoverTrack = tr;
-                InvalidateVisual();
-            }
-        }
-
-        private void ClearHover()
-        {
-            if (_hoverPoint is null && _hoverSegLeft is null) return;
-            _hoverPoint = null; _hoverSegLeft = null; _hoverTrack = null;
-            InvalidateVisual();
-        }
-
-        protected override void OnPointerExited(PointerEventArgs e) { ClearHover(); ClearEdgeHover(); ClearAdsrHover(); base.OnPointerExited(e); }
+        protected override void OnPointerExited(PointerEventArgs e) { _auto.ClearHover(); ClearEdgeHover(); ClearAdsrHover(); base.OnPointerExited(e); }
 
         // One engine edit (one undo step); an open clip editor re-reads it, the lane reloads.
         private void CommitAdsr(int trackId, ClipVM clip, ClipAdsr adsr)
@@ -995,69 +861,6 @@ public sealed partial class ArrangementView
             Cursor = on ? ResizeCursor : ArrowCursor;
         }
 
-        private void AutoPointerMoved(PointerEventArgs e)
-        {
-            if (_rangeTrack is not null)
-            {
-                double beat = Math.Max(0, _o.Snap(_o._scrollBeats + e.GetPosition(this).X / _o._pixelsPerBeat));
-                _o.SetAutoSelection(_rangeTrack, _rangeAnchor, beat);
-                return;
-            }
-            if (_bendLeft is not null) { AutoBendMoved(e.GetPosition(this)); return; }
-            if (_autoDrag is null || _autoDragTrack is null) { UpdateHover(e.GetPosition(this)); return; }
-            int i = _o._tracks.IndexOf(_autoDragTrack);
-            if (i < 0) return;
-            var pos = e.GetPosition(this);
-            // Time: snapped (Alt bypasses), clamped between neighbour points — no reordering (8.2.3).
-            double cand = Math.Max(0, _o.SnapMaybe(_o._scrollBeats + pos.X / _o._pixelsPerBeat, e.KeyModifiers));
-            _autoDrag.Beat = Math.Clamp(cand, _autoDragLo, _autoDragHi);
-            // Value: free, but Shift = fine-mode (quarter sensitivity, anchored at the grab value, 8.2.2).
-            float full = YToValue(_autoDragTrack, i, pos.Y);
-            _autoDrag.Value = (e.KeyModifiers & KeyModifiers.Shift) != 0
-                ? _autoDragStartVal + (full - _autoDragStartVal) * 0.25f
-                : full;
-            CommitAutoDuringDrag(_autoDragTrack);   // engine follows live (device updates at the playhead)
-            InvalidateVisual();
-        }
-
-        // First push of a drag checkpoints undo (CommitAuto); the rest are raw (CommitAutoLive),
-        // so a whole drag is one undo step while the device follows in real time.
-        private void CommitAutoDuringDrag(TrackVM t)
-        {
-            if (!_autoLiveStarted) { _o.CommitAuto(t); _autoLiveStarted = true; }
-            else _o.CommitAutoLive(t);
-        }
-
-        private void AutoPointerReleased(PointerReleasedEventArgs e)
-        {
-            if (_rangeTrack is not null)
-            {
-                // A zero-width drag (Shift-click, no move) is a deselect, not a selection.
-                if (_o._autoSelEnd - _o._autoSelStart <= 1e-6) _o.ClearAutoSelection();
-                _rangeTrack = null;
-                e.Pointer.Capture(null);
-                return;
-            }
-            if (_bendLeft is not null && _bendTrack is not null)
-            {
-                // Final state: a live drag already checkpointed at its start, so commit raw;
-                // a no-move press (shouldn't happen for bend) still gets a normal undo commit.
-                if (_autoLiveStarted) _o.CommitAutoLive(_bendTrack); else _o.CommitAuto(_bendTrack);
-                _autoLiveStarted = false;
-                _bendLeft = _bendRight = null; _bendTrack = null;
-                e.Pointer.Capture(null);
-                InvalidateVisual();
-                return;
-            }
-            if (_autoDrag is null || _autoDragTrack is null) return;
-            if (_autoLiveStarted) _o.CommitAutoLive(_autoDragTrack); else _o.CommitAuto(_autoDragTrack);
-            _autoLiveStarted = false;
-            _autoDrag = null;
-            _autoDragTrack = null;
-            e.Pointer.Capture(null);
-            InvalidateVisual();
-        }
-
         // A small inline rename popup (Enter commits, Esc cancels) anchored at the pointer.
         private void PromptRename(string current, Action<string> commit)
         {
@@ -1070,21 +873,6 @@ public sealed partial class ArrangementView
             };
             flyout.ShowAt(this);
             Dispatcher.UIThread.Post(() => { box.SelectAll(); box.Focus(); }, DispatcherPriority.Input);
-        }
-
-        // Automation-mode right-click: copy/cut/delete the selected time range and paste the
-        // range clipboard at the cursor (Phase 2). Copy/Cut/Delete need a selection on this
-        // track; Paste needs a filled clipboard.
-        private void ShowAutoMenu(TrackVM t, double beat)
-        {
-            bool hasSel = _o.HasAutoSelection && ReferenceEquals(_o._autoSelTrack, t);
-            var flyout = new MenuFlyout();
-            var copy = MenuKit.Item("Copy automation", GlyphKind.Copy, () => _o.CopyAutoSelection(), MenuKit.CopyKey, hasSel);
-            var cut = MenuKit.Item("Cut automation", GlyphKind.Cut, () => _o.CutAutoSelection(), MenuKit.CutKey, hasSel);
-            var paste = MenuKit.Item("Paste automation", GlyphKind.Paste, () => _o.PasteAutoAt(t, _o.Snap(beat)), MenuKit.PasteKey, _o.HasAutoClip);
-            var del = MenuKit.Danger("Delete automation", GlyphKind.Trash, () => _o.DeleteAutoSelection(), MenuKit.DeleteKey, hasSel);
-            MenuKit.AddGroups(flyout.Items, new Control[] { copy, cut, paste }, new Control[] { del });
-            flyout.ShowAt(this, showAtPointer: true);
         }
 
         // "Paste bounced audio" onto this track at `at`, or null when there's nothing to paste
@@ -1377,7 +1165,7 @@ public sealed partial class ArrangementView
             }
 
             // Automation overlay (M9-A3): scrim + envelope + target pill per row.
-            if (_o._automationMode) DrawAutomation(ctx, w);
+            if (_o._automationMode) _auto.DrawAutomation(ctx, w);
 
             // Cross-track drag: the dragged clips are hidden on their source lanes
             // (above) and previewed translucently on the destination lane here.
@@ -1391,6 +1179,8 @@ public sealed partial class ArrangementView
                         var pitches = TrackPitchRange(dest.Clips.Append(m.vm));
                         DrawClipBody(ctx, dest.ColorIndex, dest.Name, m.vm, RowTop(destRow), RowH(destRow), true, pitches: pitches);
                     }
+
+            if (_groupMove is not null && _newTrackSources is { } srcs) DrawNewTrackGhosts(ctx, w, srcs);
 
             // Clip marquee (plain drag on empty space).
             if (_marquee is { } mq) ctx.DrawRectangle(MarqueeFill, MarqueePen, mq);
@@ -1579,15 +1369,58 @@ public sealed partial class ArrangementView
                 {
                     double fx = r.X + (i / (double)n) * r.Width;
                     if (fx < 0 || fx > Bounds.Width) continue;
-                    float min = _recPeaks[i * 2];
-                    float max = _recPeaks[i * 2 + 1];
+                    // Input over 0 dBFS reads past ±1: pin it to the box's edges, as the take's
+                    // own waveform is once it lands (#208).
+                    float min = Math.Clamp(_recPeaks[i * 2], -1f, 1f);
+                    float max = Math.Clamp(_recPeaks[i * 2 + 1], -1f, 1f);
                     AddRect(g, fx, mid - max * amp, 1, Math.Max(1, (max - min) * amp));
                 }
-            ctx.DrawGeometry(RecWave, null, geo);
+            using (ctx.PushClip(r))   // and never paint over the tracks around it
+                ctx.DrawGeometry(RecWave, null, geo);
         }
 
         private bool IsDraggingCrossTrack(int track, int clip)
-            => _groupMove is not null && _moveRowDelta != 0 && _groupMove.Any(m => m.track == track && m.clip == clip);
+            => _groupMove is not null && (_moveRowDelta != 0 || _newTrackSources is not null)
+               && _groupMove.Any(m => m.track == track && m.clip == clip);
+
+        // Shows or drops the new-track ghost rows below the lanes (#301), growing the lanes
+        // so the rows can be scrolled to and drawn.
+        private void SetNewTrackRows(bool on)
+        {
+            List<int>? sources = on && _groupMove is not null
+                ? _groupMove.OrderBy(m => m.origRow).Select(m => m.track).Distinct().ToList()
+                : null;
+            if (sources is { Count: 0 }) sources = null;
+            if ((sources?.Count ?? 0) == (_newTrackSources?.Count ?? 0)) { _newTrackSources = sources; return; }
+            _newTrackSources = sources;
+            Height = Math.Max(DefaultRowHeight, _o.RowsHeight) + (sources?.Count ?? 0) * DefaultRowHeight;
+            _o._overlay.Height = Height;
+        }
+
+        // The rows a drop below the last track creates: a drop ring per new track, with the
+        // dragged clips previewed in it at their new beats.
+        private void DrawNewTrackGhosts(DrawingContext ctx, double w, List<int> sources)
+        {
+            double top = _o.RowsHeight;
+            for (int k = 0; k < sources.Count; k++)
+            {
+                var r = new Rect(0, top + k * DefaultRowHeight, w, DefaultRowHeight);
+                ctx.FillRectangle(DropWash, r);
+                ctx.DrawRectangle(null, DropEdgePen, r.Deflate(1));
+                var ft = new FormattedText("New track", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    Typeface.Default, 11, RulerText);
+                ctx.DrawText(ft, new Point(Math.Max(8, w - ft.Width - 12), r.Y + 4));   // clear of clips at the song start
+            }
+            using (ctx.PushOpacity(0.5))
+                foreach (var m in _groupMove!)
+                {
+                    int k = sources.IndexOf(m.track);
+                    var src = _o._tracks.FirstOrDefault(t => t.Id == m.track);
+                    if (k < 0 || src is null) continue;
+                    DrawClipBody(ctx, src.ColorIndex, src.Name, m.vm, top + k * DefaultRowHeight, DefaultRowHeight, true,
+                                 pitches: TrackPitchRange(new[] { m.vm }));
+                }
+        }
 
         // Draws one clip (fill + border + name strip + notes/waveform) at row-y with
         // the given track colour. Reused for the live cross-track drag preview.
@@ -1653,7 +1486,7 @@ public sealed partial class ArrangementView
             // DrawWaveform already clip themselves to the rect they are handed.
             var contentRect = new Rect(rect.X, rect.Y + BandH, rect.Width, Math.Max(0, rect.Height - BandH));
             if (c.IsMidi) DrawNotes(ctx, c, contentRect, content, pitches, appear);
-            else DrawWaveform(ctx, c, contentRect, content);
+            else DrawWaveform(ctx, c, contentRect, content, trackId);
 
             // The title band: the track colour mixed 30% toward black across the top, the
             // accent when the clip is selected; the name sits on it in derived ink. It is drawn
@@ -1721,7 +1554,8 @@ public sealed partial class ArrangementView
         // peaks over the whole warp, window = played beats. Cleared on release/cancel.
         private void CaptureResizePreview(int trackId, int clipIndex)
         {
-            _rpPeaks = null; _rpCount = 0;
+            _rpPeaks = null; _rpCount = 0; _rpDetail = null;
+            (_rpTrack, _rpClip) = (trackId, clipIndex);
             var eng = _o._engine;
             if (eng is null || !eng.TryGetAudioClipInfo(trackId, clipIndex, out var ai)) return;
             const int buckets = 2048;
@@ -1730,7 +1564,7 @@ public sealed partial class ArrangementView
             {
                 int n = eng.GetClipWarpFullPeaks(trackId, clipIndex, peaks, buckets);
                 if (n <= 0) return;
-                _rpCount = n; _rpPeaks = peaks;
+                _rpCount = n; _rpPeaks = peaks; _rpWarped = true;
                 _rpMTotal = ai.WarpBeats;
                 _rpS0 = ai.WarpPlayStart;
                 _rpS1 = ai.WarpPlayEnd > 0 ? ai.WarpPlayEnd : ai.WarpBeats;
@@ -1740,7 +1574,7 @@ public sealed partial class ArrangementView
                 if (ai.SampleId == 0 || !eng.TryGetSampleInfo(ai.SampleId, out var si) || si.Frames <= 0) return;
                 int n = eng.GetClipSourcePeaks(trackId, clipIndex, peaks, buckets);
                 if (n <= 0) return;
-                _rpCount = n; _rpPeaks = peaks;
+                _rpCount = n; _rpPeaks = peaks; _rpWarped = false;
                 _rpMTotal = si.Frames;
                 _rpS0 = ai.SourceOffsetFrames;
                 double len = ai.LengthFrames > 0 ? ai.LengthFrames : si.Frames - ai.SourceOffsetFrames;
@@ -1757,18 +1591,38 @@ public sealed partial class ArrangementView
             double ppb = _o._pixelsPerBeat, scroll = _o._scrollBeats;
             double rate = (_rpS1 - _rpS0) / _origLen;   // material units per timeline beat (committed)
             double vx0 = Math.Max(r.X, 0), vx1 = Math.Min(r.Right, Bounds.Width);
+            double MaterialAt(double px) => _rpS0 + (scroll + px / ppb - _origStart) * rate;
+            // The whole-material overview, or — when the lane shows it wider than it has buckets —
+            // the material under the whole lane at one bucket per pixel, fetched once per drag (#299).
+            float[] pk = _rpPeaks!;
+            int count = _rpCount;
+            double m0 = 0, m1 = _rpMTotal;
+            double lm0 = Math.Clamp(MaterialAt(0), 0, _rpMTotal), lm1 = Math.Clamp(MaterialAt(Bounds.Width), 0, _rpMTotal);
+            if (lm1 > lm0 && (lm1 - lm0) / _rpMTotal * _rpCount * 1.5 < Bounds.Width && _o._engine is { } eng)
+            {
+                int n = Math.Clamp((int)Math.Ceiling(Bounds.Width), 1, 8192);
+                if (_rpDetail is null || _rpDetailCount <= 0 || _rpDetailM0 != lm0 || _rpDetailM1 != lm1)
+                {
+                    _rpDetail ??= new float[8192 * 2];
+                    _rpDetailCount = _rpWarped
+                        ? eng.GetClipWarpPeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n)
+                        : eng.GetClipSourcePeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n);
+                    (_rpDetailM0, _rpDetailM1) = (lm0, lm1);
+                }
+                if (_rpDetailCount > 0) (pk, count, m0, m1) = (_rpDetail, _rpDetailCount, lm0, lm1);
+            }
             var geo = new StreamGeometry();
             using (var g = geo.Open())
                 ForEachWaveColumn(r.X, vx0, vx1, (cx0, cx1, x) =>
                 {
                     // Material span under this column, anchored to the committed window.
-                    double s0 = _rpS0 + (scroll + cx0 / ppb - _origStart) * rate;
-                    double s1 = _rpS0 + (scroll + cx1 / ppb - _origStart) * rate;
-                    double f0 = Math.Clamp(s0 / _rpMTotal, 0, 1), f1 = Math.Clamp(s1 / _rpMTotal, 0, 1);
-                    int b0 = Math.Clamp((int)(f0 * _rpCount), 0, _rpCount - 1);
-                    int b1 = Math.Clamp((int)Math.Ceiling(f1 * _rpCount), b0 + 1, _rpCount);
+                    double s0 = MaterialAt(cx0), s1 = MaterialAt(cx1);
+                    double f0 = Math.Clamp((s0 - m0) / (m1 - m0), 0, 1), f1 = Math.Clamp((s1 - m0) / (m1 - m0), 0, 1);
+                    if (s1 <= 0 || s0 >= _rpMTotal) return;   // past the material's ends: nothing to draw
+                    int b0 = Math.Clamp((int)(f0 * count), 0, count - 1);
+                    int b1 = Math.Clamp((int)Math.Ceiling(f1 * count), b0 + 1, count);
                     float min = 1f, max = -1f;
-                    for (int b = b0; b < b1; b++) { min = Math.Min(min, _rpPeaks![b * 2]); max = Math.Max(max, _rpPeaks[b * 2 + 1]); }
+                    for (int b = b0; b < b1; b++) { min = Math.Min(min, pk[b * 2]); max = Math.Max(max, pk[b * 2 + 1]); }
                     if (min > max) return;
                     min = Math.Clamp(min * gain, -1f, 1f); max = Math.Clamp(max * gain, -1f, 1f);
                     AddWaveColumn(g, x, mid, amp, min, max);
@@ -1811,7 +1665,7 @@ public sealed partial class ArrangementView
             AddRect(g, x, mid - a, 1, Math.Max(1, 2 * a));
         }
 
-        private void DrawWaveform(DrawingContext ctx, ClipVM c, Rect r, IBrush brush)
+        private void DrawWaveform(DrawingContext ctx, ClipVM c, Rect r, IBrush brush, int trackId = -1)
         {
             // While resizing THIS clip, show the real audio revealed/hidden by the drag.
             if ((_drag == Drag.TrimL || _drag == Drag.TrimR) && ReferenceEquals(c, _dragClip)
@@ -1826,16 +1680,29 @@ public sealed partial class ArrangementView
             // One column per stroke (see ForEachWaveColumn), aggregating every peak bucket that
             // falls in the span it stands for, so nothing between strokes is skipped.
             double vx0 = Math.Max(r.X, 0), vx1 = Math.Min(r.Right, Bounds.Width);
+            if (vx1 <= vx0) return;
+            // The whole-clip overview, or — when the clip is drawn wider than it has buckets —
+            // peaks for just the visible slice at one bucket per pixel (#299).
+            float[] pk = c.Peaks;
+            int count = c.PeakCount;
+            double fa = 0, fb = 1;
+            if (r.Width > c.PeakCount * 1.5 && EnsureDetailPeaks(c, trackId, (vx0 - r.X) / r.Width, (vx1 - r.X) / r.Width,
+                    (int)Math.Ceiling(vx1 - vx0), r.Width))
+            {
+                (pk, count, fa, fb) = (c.DetailPeaks!, c.DetailCount, c.DetailF0, c.DetailF1);
+            }
+            double span = (fb - fa) * r.Width;
             var adsr = c.Adsr.Fit(c.LengthBeats);
             bool shaped = !adsr.IsIdentity;
             var geo = new StreamGeometry();
             using (var gc = geo.Open())
                 ForEachWaveColumn(r.X, vx0, vx1, (cx0, cx1, x) =>
                 {
-                    int b0 = Math.Clamp((int)((cx0 - r.X) / r.Width * c.PeakCount), 0, c.PeakCount - 1);
-                    int b1 = Math.Clamp((int)Math.Ceiling((cx1 - r.X) / r.Width * c.PeakCount), b0 + 1, c.PeakCount);
+                    double ox = r.X + fa * r.Width;
+                    int b0 = Math.Clamp((int)((cx0 - ox) / span * count), 0, count - 1);
+                    int b1 = Math.Clamp((int)Math.Ceiling((cx1 - ox) / span * count), b0 + 1, count);
                     float min = 1f, max = -1f;
-                    for (int b = b0; b < b1; b++) { min = Math.Min(min, c.Peaks[b * 2]); max = Math.Max(max, c.Peaks[b * 2 + 1]); }
+                    for (int b = b0; b < b1; b++) { min = Math.Min(min, pk[b * 2]); max = Math.Max(max, pk[b * 2 + 1]); }
                     if (min > max) return;
                     // Clip gain (and the ADSR shape) scales the drawn waveform, matching the clip editor.
                     float g = c.Gain;
@@ -1846,89 +1713,44 @@ public sealed partial class ArrangementView
             ctx.DrawGeometry(brush, null, geo);
         }
 
-        private static readonly IPen AutoCurvePen = new Pen(NotaPalette.VizInk, 1.6);
-
-        private void DrawAutomation(DrawingContext ctx, double w)
+        // Fill c.DetailPeaks for the played-length fractions [f0, f1] at n buckets, unless what
+        // it holds already matches to within half a pixel. Played order, like Peaks: a reversed
+        // clip reads its window back to front. False when the engine has nothing for it.
+        private bool EnsureDetailPeaks(ClipVM c, int trackId, double f0, double f1, int n, double widthPx)
         {
-            var (rLo, rHi) = _o.VisibleRowRange();
-            for (int i = rLo; i <= rHi; i++)
+            n = Math.Clamp(n, 1, 8192);
+            if (c.DetailPeaks is not null && c.DetailCount == n
+                && Math.Abs(c.DetailF0 - f0) * widthPx < 0.5 && Math.Abs(c.DetailF1 - f1) * widthPx < 0.5)
+                return true;
+            var eng = _o._engine;
+            if (eng is null || trackId <= 0 || !eng.TryGetAudioClipInfo(trackId, c.ClipIndex, out var ai)) return false;
+            bool rev = ai.Reversed != 0;
+            double a = rev ? 1 - f1 : f0, b = rev ? 1 - f0 : f1;   // file-order fractions of the window
+            var buf = c.DetailPeaks is { } old && old.Length >= n * 2 ? old : new float[n * 2];
+            int got;
+            if (ai.WarpEnabled != 0 && ai.WarpBeats > 0)
             {
-                var t = _o._tracks[i];
-                double y = RowTop(i);
-                ctx.FillRectangle(AutoScrim, new Rect(0, y, w, RowH(i)));
-                if (_o.IsSlimRowAt(i)) continue;   // a slim group bar has no room for an envelope
-
-                // Automation: the curve and its points in neutral viz ink; only the
-                // point or segment under the pointer takes the accent.
-                var content = NotaPalette.VizInk;
-                var pen = AutoCurvePen;
-
-                var ordered = t.AutoPoints.OrderBy(p => p.Beat).ToList();
-                if (ordered.Count == 0)
-                {
-                    // Empty lane: dashed baseline at the current value (grab to start).
-                    double by = ValueToY(t, i, _o.AutoCurrent(t));
-                    ctx.DrawLine(AutoBasePen, new Point(0, by), new Point(w, by));
-                }
-                else
-                {
-                    double firstX = _o.BeatToX(ordered[0].Beat), firstY = ValueToY(t, i, ordered[0].Value);
-                    ctx.DrawLine(pen, new Point(0, firstY), new Point(firstX, firstY));   // left end-hold
-                    for (int k = 1; k < ordered.Count; k++)
-                    {
-                        var a = ordered[k - 1]; var b = ordered[k];
-                        var segPen = ReferenceEquals(t, _hoverTrack) && ReferenceEquals(a, _hoverSegLeft) ? AutoHoverPen : pen;
-                        double ax = _o.BeatToX(a.Beat), ay = ValueToY(t, i, a.Value);
-                        double bx = _o.BeatToX(b.Beat), by2 = ValueToY(t, i, b.Value);
-                        if (a.Curve == 0f) { ctx.DrawLine(segPen, new Point(ax, ay), new Point(bx, by2)); continue; }
-                        // Curved segment: polyline of shaped sub-samples (M9-D).
-                        const int steps = 16;
-                        var prev = new Point(ax, ay);
-                        for (int s = 1; s <= steps; s++)
-                        {
-                            double tt = s / (double)steps;
-                            double vy = a.Value + (b.Value - a.Value) * Shape(tt, a.Curve);
-                            var cur = new Point(ax + (bx - ax) * tt, ValueToY(t, i, (float)vy));
-                            ctx.DrawLine(segPen, prev, cur);
-                            prev = cur;
-                        }
-                    }
-                    double lastX = _o.BeatToX(ordered[^1].Beat), lastY = ValueToY(t, i, ordered[^1].Value);
-                    ctx.DrawLine(pen, new Point(lastX, lastY), new Point(w, lastY));       // right end-hold
-                    foreach (var p in ordered)
-                    {
-                        double dx = _o.BeatToX(p.Beat), dy = ValueToY(t, i, p.Value);
-                        if (dx < -4 || dx > w + 4) continue;
-                        bool ptHover = ReferenceEquals(t, _hoverTrack) && ReferenceEquals(p, _hoverPoint);
-                        ctx.DrawEllipse(ptHover ? PlayheadBrush : content, null, new Point(dx, dy), ptHover ? 4.5 : 3.5, ptHover ? 4.5 : 3.5);
-                        if (ptHover) ctx.DrawEllipse(null, AutoHoverRing, new Point(dx, dy), 7, 7);
-                    }
-                }
-
-                // Range selection band (Phase 2): teal wash + edges over the picked span.
-                if (ReferenceEquals(_o._autoSelTrack, t) && _o._autoSelEnd - _o._autoSelStart > 1e-6)
-                {
-                    double sx = _o.BeatToX(_o._autoSelStart), ex = _o.BeatToX(_o._autoSelEnd);
-                    double cx0 = Math.Max(0, sx), cx1 = Math.Min(w, ex);
-                    if (cx1 > cx0)
-                    {
-                        double arh = RowH(i);
-                        ctx.FillRectangle(AutoSelBand, new Rect(cx0, y, cx1 - cx0, arh));
-                        if (sx >= 0) ctx.DrawLine(AutoSelEdge, new Point(sx, y), new Point(sx, y + arh));
-                        if (ex <= w) ctx.DrawLine(AutoSelEdge, new Point(ex, y), new Point(ex, y + arh));
-                    }
-                }
-
-                // Target-selector pill (top-left) — width fits the label, text centred.
-                double pillW = PillWidth(t.AutoLabel);
-                var pill = PillRect(i, pillW);
-                ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, pill, NotaRadius.ControlValue, NotaRadius.ControlValue);
-                var ft = new FormattedText(t.AutoLabel, CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, NotaPalette.TextPrimary);
-                using (ctx.PushClip(pill))
-                    ctx.DrawText(ft, new Point(pill.X + 6, pill.Y + (PillH - ft.Height) / 2));
+                double ps = ai.WarpPlayStart, pe = ai.WarpPlayEnd > 0 ? ai.WarpPlayEnd : ai.WarpBeats;
+                got = eng.GetClipWarpPeaksRange(trackId, c.ClipIndex, ps + a * (pe - ps), ps + b * (pe - ps), buf, n);
             }
+            else
+            {
+                double len = ai.LengthFrames;
+                if (len <= 0 && eng.TryGetSampleInfo(ai.SampleId, out var si)) len = si.Frames - ai.SourceOffsetFrames;
+                if (len <= 0) return false;
+                got = eng.GetClipSourcePeaksRange(trackId, c.ClipIndex, ai.SourceOffsetFrames + a * len, ai.SourceOffsetFrames + b * len, buf, n);
+            }
+            if (got <= 0) return false;
+            if (rev)
+                for (int i = 0, j = got - 1; i < j; i++, j--)
+                {
+                    (buf[i * 2], buf[j * 2]) = (buf[j * 2], buf[i * 2]);
+                    (buf[i * 2 + 1], buf[j * 2 + 1]) = (buf[j * 2 + 1], buf[i * 2 + 1]);
+                }
+            (c.DetailPeaks, c.DetailCount, c.DetailF0, c.DetailF1) = (buf, got, f0, f1);
+            return true;
         }
+
     }
 
     // ---- playhead + loop overlay -----------------------------------------

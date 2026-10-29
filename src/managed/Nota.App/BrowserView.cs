@@ -16,6 +16,8 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
@@ -28,8 +30,10 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Nota.Application;
+using Nota.Application.Input;
 using Nota.Application.Samples;
 using Nota.Presentation;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Nota.App;
 
@@ -76,25 +80,49 @@ public sealed class BrowserView : UserControl
     /// or an external drag that carries file(s). Lenient by design — used in DragOver,
     /// where some backends don't expose the file list yet; the drop re-checks.</summary>
     public static bool IsAcceptableDrag(DragEventArgs e)
-        => IsBrowserDrag || e.DataTransfer.Contains(DataFormat.File);
+        => !DeviceDrag.IsActive   // a device card's drag carries text too, but isn't a file
+           && (IsBrowserDrag || e.DataTransfer.Contains(DataFormat.File) || HasPathText(e.DataTransfer));
+
+    // A drag that may name files without Avalonia's file list (#300): plain text or a
+    // file manager's own URI list. The drop parses it and ignores anything else.
+    private static bool HasPathText(IDataTransfer data)
+        => data.Formats.Any(f => f.Equals(DataFormat.Text) || UriListFormat(f) is not null);
+
+    private static DataFormat<byte[]>? UriListFormat(DataFormat f)
+        => f is DataFormat<byte[]> b && f.Kind == DataFormatKind.Platform
+           && DroppedFilePaths.UriListMimeTypes.Contains(f.Identifier) ? b : null;
+
+    /// <summary>Local paths (files or folders) an external drag carries: Avalonia's file
+    /// list, or when it has none (some sources / bridges on Linux, #300) the paths parsed
+    /// from its text or URI-list formats.</summary>
+    internal static List<string> ExternalPaths(DragEventArgs e)
+    {
+        var paths = new List<string>();
+        var data = e.DataTransfer;
+        if (data.Contains(DataFormat.File) && data.TryGetFiles() is { } files)
+            foreach (var f in files)
+                if (f.TryGetLocalPath() is { Length: > 0 } p) paths.Add(p);
+        if (paths.Count > 0 || IsBrowserDrag) return paths;
+        foreach (var f in data.Formats)
+        {
+            string? text = f.Equals(DataFormat.Text) ? data.TryGetText()
+                         : UriListFormat(f) is { } b ? DroppedFilePaths.Decode(data.TryGetValue(b))
+                         : null;
+            if (text is null || text == DragSentinel) continue;
+            foreach (var p in DroppedFilePaths.Parse(text))
+                if ((File.Exists(p) || Directory.Exists(p)) && !paths.Contains(p)) paths.Add(p);
+        }
+        if (paths.Count == 0)
+            App.Services.GetService<ILogSink>()?.Info(
+                $"External drop named no files Nota can read. Formats: {string.Join(", ", data.Formats.Select(f => $"{f.Kind}:{f.Identifier}"))}");
+        return paths;
+    }
 
     /// <summary>Local paths of the audio / MIDI files carried by an external drag (empty
     /// if none / not a file drag).</summary>
     private static List<string> ExternalFiles(DragEventArgs e)
-    {
-        var paths = new List<string>();
-        if (!e.DataTransfer.Contains(DataFormat.File)) return paths;
-        var files = e.DataTransfer.TryGetFiles();
-        if (files is null) return paths;
-        foreach (var f in files)
-        {
-            var p = f.TryGetLocalPath();
-            if (!string.IsNullOrEmpty(p)
-                && (AudioExts.Contains(System.IO.Path.GetExtension(p)) || Nota.Application.Midi.MidiFileReader.IsMidiFile(p)))
-                paths.Add(p!);
-        }
-        return paths;
-    }
+        => ExternalPaths(e).Where(p => AudioExts.Contains(System.IO.Path.GetExtension(p))
+                                       || Nota.Application.Midi.MidiFileReader.IsMidiFile(p)).ToList();
 
     /// <summary>The items a drop should load: the internal browser item (any kind), or
     /// one synthesized Sample / MidiFile item per external file. Empty when there's nothing
@@ -102,6 +130,7 @@ public sealed class BrowserView : UserControl
     public static IReadOnlyList<BrowserItem> DroppedItems(DragEventArgs e)
     {
         if (CurrentDrag is { } item) return new[] { item };
+        if (DeviceDrag.IsActive) return Array.Empty<BrowserItem>();   // a device card, not files
         var list = new List<BrowserItem>();
         foreach (var p in ExternalFiles(e))
             list.Add(new BrowserItem
@@ -674,6 +703,9 @@ public sealed class BrowserView : UserControl
         _sampleChipsHost.IsVisible = index == FilesTab && _vm?.HasSampleIndex == true;
         _statusBar.IsVisible = !isMap;
         if (isMap) { _matchCount.Text = ""; _emptyWrap.IsVisible = false; return; }
+        // The shared search box may have changed on another tab (#342).
+        if (index <= PresetsTab) _vm?.ShowTab(index, _search.Text?.Trim() ?? "");
+        else ApplyFilter(index);
         RefreshCounts();
     }
 

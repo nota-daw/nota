@@ -39,6 +39,8 @@ internal sealed class AutoFilterCurve : Control
     private float _morph;
     private bool _slope24;
     private bool _drag;
+    private Point _grab;
+    private double _fc0, _res0;                    // the settings when the drag began
     private double _liveCut = 0.5, _liveRes;       // live modulated cutoff / resonance (normalized)
     private double _rangeLo = 0.5, _rangeHi = 0.5; // where the modulation can take the cutoff
     private bool _modAssigned;
@@ -110,9 +112,9 @@ internal sealed class AutoFilterCurve : Control
     {
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         _drag = true;
+        _grab = e.GetPosition(this); _fc0 = _fcNorm; _res0 = _res;
         GestureBegin?.Invoke();
         e.Pointer.Capture(this);
-        Apply(e.GetPosition(this));
         e.Handled = true;
     }
 
@@ -136,12 +138,18 @@ internal sealed class AutoFilterCurve : Control
         base.OnPointerCaptureLost(e);
     }
 
+    // The drag moves the settings from where they were when grabbed, so a click changes nothing.
+    // The handle sits on the curve's peak, which isn't linear in resonance (and doesn't move at
+    // all for band-pass), so resonance can't come from the pointer's height as it used to: a grab
+    // at 10 % jumped it to ~80 %, and dragging down to where a low peak would be still left it
+    // above 50 % — the resonance looked stuck (#260). Up raises it, the full range over 80 % of
+    // the height; sideways moves the cutoff with the pointer, as the handle's x is linear in it.
     private void Apply(Point p)
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        _fcNorm = Math.Clamp(p.X / w, 0, 1);
-        _res = Math.Clamp(1 - p.Y / h, 0, 1);
+        _fcNorm = Math.Clamp(_fc0 + (p.X - _grab.X) / w, 0, 1);
+        _res = Math.Clamp(_res0 + (_grab.Y - p.Y) / (h * 0.8), 0, 1);
         CutoffChanged?.Invoke(_fcNorm);
         ResChanged?.Invoke(_res);
         InvalidateVisual();

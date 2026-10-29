@@ -45,11 +45,23 @@ std::shared_ptr<SampleBuffer> Engine::findSampleById(int64_t sampleId) const {
             for (int v = 0; v < RhythmMachine::kVoices; ++v)
                 if (auto b = rh->voiceSampleBuf(v))
                     if (b->id == sampleId) return b;
-        // Samplers nested in a rack's chains (Drum Rack pads / Instrument Rack chains).
-        if (auto* rack = dynamic_cast<RackCore*>(t->instrument.get()))
-            for (int32_t c = 0; c < rack->chainCount(); ++c)
-                if (auto* smp = dynamic_cast<Sampler*>(rack->chainInstrument(c)))
-                    if (smp->sample() && smp->sample()->id == sampleId) return smp->sample();
+        // Samplers and Mosaics in a rack's chains (Drum Rack pads / Instrument Rack chains), and
+        // in the pads of a Drum Rack nested in a chain (specs/041).
+        if (auto b = chainSampleById(dynamic_cast<RackCore*>(t->instrument.get()), sampleId, 0)) return b;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<SampleBuffer> Engine::chainSampleById(const RackCore* rack, int64_t sampleId, int depth) {
+    if (!rack || depth > 1) return nullptr;
+    for (int32_t c = 0; c < rack->chainCount(); ++c) {
+        Instrument* inst = rack->chainInstrument(c);
+        if (auto* smp = dynamic_cast<Sampler*>(inst))
+            if (smp->sample() && smp->sample()->id == sampleId) return smp->sample();
+        if (auto* mo = dynamic_cast<Mosaic*>(inst))
+            for (auto& b : mo->samples())
+                if (b->id == sampleId) return b;
+        if (auto b = chainSampleById(dynamic_cast<RackCore*>(inst), sampleId, depth + 1)) return b;
     }
     return nullptr;
 }
@@ -188,6 +200,43 @@ bool renderWarpWindow(const WarpInputs& in, const SampleBuffer& sample, float* o
 // block); the in-use cache retires with the old snapshot, so it's race-free.
 // For a big project this is heavy (stretches every clip's played window), so the load
 // path defers it to Engine::warpBuildStep — see Engine::configureClipWarp.
+// Make the clip's cache current without stretching, when its current cache already holds
+// the audio (#299): the same inputs → keep it; the same stretch over a window that contains
+// the clip's new played window (a split, a trim, a range carve) → a slice sharing its samples.
+// The slice is the very audio the wider window played there, so a cut is seamless. False when
+// the cache can't serve (a tempo / pitch / mode / marker change, or a wider window).
+bool reuseWarpCache(AudioClip& c, double spb, double devSR) {
+    if (!c.warpCache) return false;
+    const WarpCache& old = *c.warpCache;
+    WarpInputs want = warpInputsOf(c, spb, devSR);
+    if (old.inputs == want) return true;
+    WarpInputs same = want; // everything but the window must match
+    same.playStart = old.inputs.playStart;
+    same.playEnd = old.inputs.playEnd;
+    constexpr double eps = 1e-9;
+    if (!(old.inputs == same) || want.playStart < old.inputs.playStart - eps || want.playEnd > old.inputs.playEnd + eps)
+        return false;
+    // The offset is taken from the cache that owns the samples, not added up slice by
+    // slice, so repeated splits don't each round and drift off the original audio.
+    std::shared_ptr<const WarpCache> root = old.base ? old.base : c.warpCache;
+    // Both ends are rounded on the owner's frame grid, so neighbouring slices meet exactly.
+    const int64_t offset = std::clamp<int64_t>(
+        std::llround((want.playStart - root->inputs.playStart) * spb), 0, root->frames);
+    const int64_t end = std::clamp<int64_t>(
+        std::llround((want.playEnd - root->inputs.playStart) * spb), offset, root->frames);
+    const int64_t frames = end - offset;
+    if (frames <= 0) return false;
+    auto slice = std::make_shared<WarpCache>();
+    slice->frames = frames;
+    slice->spb = old.spb;
+    slice->devSR = old.devSR;
+    slice->inputs = std::move(want);
+    slice->base = std::move(root);
+    slice->baseOffset = offset;
+    c.warpCache = std::move(slice);
+    return true;
+}
+
 void buildWarpCache(AudioClip& c, double spb, double devSR) {
     if (c.warpMarkers.size() >= 2) c.warpBeats = c.warpMarkers.back().beat;
     const int64_t frames = warpCacheFrames(c, spb, devSR);
@@ -195,6 +244,7 @@ void buildWarpCache(AudioClip& c, double spb, double devSR) {
         c.warpCache = nullptr;
         return;
     }
+    if (reuseWarpCache(c, spb, devSR)) return;
 
     auto cache = std::make_shared<WarpCache>();
     cache->frames = frames;
@@ -239,6 +289,19 @@ double seedAutoWarp(AudioClip& c, double spb, double devSR, double knownBpm = 0.
     return bpm;
 }
 
+// Remember which unwarped region a warp-off clip's markers belong to (see AudioClip).
+void stampWarpOffRegion(AudioClip& c) {
+    c.warpOffRegionOffset = c.sourceOffsetFrames;
+    c.warpOffRegionLength = c.effectiveLength();
+}
+
+// A warp-off clip's markers can come back on re-enable only while the region is the one
+// they were stamped with — a split or trim made with warp off has moved it since.
+bool warpMarkersRestorable(const AudioClip& c) {
+    return c.warpMarkers.size() >= 2 && c.warpBeats > 0.0 && c.warpOffRegionLength >= 0 &&
+           c.warpOffRegionOffset == c.sourceOffsetFrames && c.warpOffRegionLength == c.effectiveLength();
+}
+
 // Keep the trim window valid after warpBeats changes (marker/length edits). Preserves
 // the window (clamped); an explicit end past the new length snaps back to full.
 void clampWarpPlay(AudioClip& c) {
@@ -258,6 +321,8 @@ void Engine::configureClipWarp(AudioClip& c, double spb, double devSR) {
         c.warpCache = nullptr;
         return;
     }
+    if (c.warpMarkers.size() >= 2) c.warpBeats = c.warpMarkers.back().beat;
+    if (warpCacheFrames(c, spb, devSR) > 0 && reuseWarpCache(c, spb, devSR)) return; // free, so even when deferred
     if (deferWarpBuild_) return; // stale (or no) cache until warpBuildStep / warpBuildPoll
     buildWarpCache(c, spb, devSR);
 }
@@ -537,10 +602,14 @@ bool Engine::setClipWarp(int32_t trackId, int32_t clipIndex, bool enabled, int32
     AudioClip& c = (*audioClipRef(*nt, clipIndex));
     const double spb = transport_.samplesPerBeat();
     const double devSR = transport_.sampleRate();
-    // On enable, auto-detect the source tempo and snap the clip's length to the
-    // beat grid so it conforms to the project BPM. If detection fails, fall back
-    // to a length-neutral seed (toggling warp then leaves audio where it is).
-    if (enabled && !c.warpEnabled && c.sample && spb > 0.0 && devSR > 0.0 && c.sample->sourceSampleRate > 0.0) {
+    // Off is a bypass (#310): the markers stay on the clip, stamped with the region they
+    // belong to, and turning warp back on restores them as they were. Only a first enable
+    // (or one after a split / trim moved the region) seeds: auto-detect the source tempo
+    // and snap the clip's length to the beat grid so it conforms to the project BPM; if
+    // detection fails, a length-neutral seed (toggling warp then leaves audio where it is).
+    if (!enabled && c.warpEnabled) stampWarpOffRegion(c);
+    if (enabled && !c.warpEnabled && !warpMarkersRestorable(c) && c.sample && spb > 0.0 && devSR > 0.0 &&
+        c.sample->sourceSampleRate > 0.0) {
         if (seedAutoWarp(c, spb, devSR) <= 0.0) seedNeutralWarp(c, spb, devSR);
     }
     c.warpEnabled = enabled;
@@ -655,6 +724,7 @@ bool Engine::setClipWarpMarkers(
         [](const WarpMarker& a, const WarpMarker& b) { return a.srcFrame < b.srcFrame; });
     c.warpBeats = c.warpMarkers.back().beat;
     clampWarpPlay(c); // preserve the trim window across marker edits (clamped to new length)
+    if (!c.warpEnabled) stampWarpOffRegion(c); // markers kept for a later re-enable (a project load)
     configureClipWarp(c, transport_.samplesPerBeat(), transport_.sampleRate());
     syncSessionAudioSlot(*nt, clipIndex);
     republishWithTrack(trackId, nt);
@@ -669,7 +739,8 @@ bool Engine::setClipWarpTrim(int32_t trackId, int32_t clipIndex, double playStar
     if (!old || old->type() != TrackType::Audio) return false;
     if (!audioClipRef(*old, clipIndex)) return false;
     const AudioClip& oc = (*audioClipRef(*old, clipIndex));
-    if (!oc.warpEnabled || oc.warpBeats <= 0.0) return false;
+    // A warp-off clip still takes the window of the markers it keeps (a project load).
+    if ((!oc.warpEnabled && !warpMarkersRestorable(oc)) || oc.warpBeats <= 0.0) return false;
     constexpr double kMinBeat = 0.05;
     double ps = std::clamp(playStart, 0.0, std::max(0.0, oc.warpBeats - kMinBeat));
     double pe = std::clamp(playEnd, ps + kMinBeat, oc.warpBeats);
@@ -688,7 +759,11 @@ int32_t Engine::clipWarpMarkers(
     auto t = findTrackAuthoring(trackId);
     if (!t || t->type() != TrackType::Audio) return 0;
     if (!audioClipRef(*t, clipIndex)) return 0;
-    const auto& m = (*audioClipRef(*t, clipIndex)).warpMarkers;
+    const AudioClip& c = (*audioClipRef(*t, clipIndex));
+    // A warp-off clip split or trimmed since has markers for a region it no longer
+    // plays: they'd be re-seeded on re-enable, so they aren't reported (nor saved).
+    if (!c.warpEnabled && !warpMarkersRestorable(c)) return 0;
+    const auto& m = c.warpMarkers;
     const int32_t n = std::min<int32_t>(maxCount, static_cast<int32_t>(m.size()));
     for (int32_t i = 0; i < n; ++i) {
         if (outSrc) outSrc[i] = m[i].srcFrame;
@@ -884,7 +959,11 @@ int32_t Engine::instrumentScope(int32_t trackId, float* out, int32_t maxN) const
 int32_t Engine::addAudioTrack() {
     auto g = std::make_shared<Graph>(*authoring_);
     const int32_t id = nextTrackId_++;
-    g->tracks.push_back(std::make_shared<Track>(id, TrackType::Audio));
+    auto t = std::make_shared<Track>(id, TrackType::Audio);
+    // A new track records input 1 alone, as most microphones are mono (#340); stereo (1/2) is
+    // one pick away. Older projects keep the stereo pair they were made with.
+    t->setInputChannels(Track::kInputMono1);
+    g->tracks.push_back(std::move(t));
     publish(g);
     return id;
 }
@@ -1528,7 +1607,7 @@ bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
         AudioClip ac;
         double oldStart, len, newStart;
         bool sameTrack, layoutMatch;
-        std::vector<AutomationLane> snips;
+        std::vector<TrackLane> snips;
     };
     std::vector<Item> items;
     items.reserve(moves.size());
@@ -2403,7 +2482,7 @@ int32_t Engine::duplicateClip(int32_t trackId, int32_t clipIndex) {
         auto snips = captureClipAutomation(*nt, srcStart, srcStart + len);
         d.startBeat = srcStart + len;
         audioOverwriteRange(nt->clips, d.startBeat, d.startBeat + len, spb, devSR);
-        if (d.warpEnabled) configureClipWarp(d, spb, devSR); // the copy needs its own stretcher
+        if (d.warpEnabled) configureClipWarp(d, spb, devSR); // shares the source's cache when it's current
         nt->clips.push_back(d);
         newIdx = static_cast<int32_t>(nt->clips.size()) - 1;
         applyClipAutomation(*nt, trackId, snips, d.startBeat, len, /*sameTrack*/ true);
@@ -2417,15 +2496,17 @@ int32_t Engine::duplicateClip(int32_t trackId, int32_t clipIndex) {
 // Pull the points of every automation lane that fall in [start,end] out into a
 // per-lane snippet, with beats rebased to be relative to `start`. Empty lanes are
 // dropped so paste only touches targets the clip actually carried.
-std::vector<AutomationLane> Engine::captureClipAutomation(const Track& t, double start, double end) const {
+std::vector<TrackLane> Engine::captureClipAutomation(const Track& t, double start, double end) const {
     constexpr double eps = 1e-6;
-    std::vector<AutomationLane> out;
+    std::vector<TrackLane> out;
     for (const auto& lane : t.automation) {
-        AutomationLane snip;
+        TrackLane snip;
         snip.target = lane.target;
         snip.deviceIndex = lane.deviceIndex;
         snip.paramIndex = lane.paramIndex;
         snip.paramId = lane.paramId;
+        snip.chainUid = lane.chainUid; // a lane into a rack (specs/044)
+        snip.slot = lane.slot;
         for (const auto& p : lane.points)
             if (p.beat >= start - eps && p.beat <= end + eps) {
                 AutomationPoint q = p;
@@ -2464,15 +2545,15 @@ bool Engine::tracksDeviceLayoutMatch(const Track& a, const Track& b) {
 // the pasted envelope replaces (not overlaps) whatever was there. Device/plugin/MIDI
 // lanes only apply when sameTrack — their indices are positional, so a cross-track
 // paste would otherwise bind them to the wrong device.
-void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<AutomationLane>& snips,
+void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<TrackLane>& snips,
     double placedStart, double len, bool sameTrack) const {
     const double s = placedStart, e = placedStart + len;
     for (const auto& snip : snips) {
         if (!sameTrack && snip.target != AutomationTarget::Volume && snip.target != AutomationTarget::Pan) continue;
         // Find the matching lane on nt, or create one bound to the same target.
-        AutomationLane* lane = nullptr;
+        TrackLane* lane = nullptr;
         for (auto& l : nt.automation) {
-            if (l.target != snip.target) continue;
+            if (l.target != snip.target || l.chainUid != snip.chainUid || l.slot != snip.slot) continue;
             bool match = true;
             switch (snip.target) {
             case AutomationTarget::DeviceParam:
@@ -2490,11 +2571,13 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<A
             }
         }
         if (!lane) {
-            AutomationLane nl;
+            TrackLane nl;
             nl.target = snip.target;
             nl.deviceIndex = snip.deviceIndex;
             nl.paramId = snip.paramId;
-            nl.paramIndex = snip.target == AutomationTarget::PluginParam
+            nl.chainUid = snip.chainUid;
+            nl.slot = snip.slot;
+            nl.paramIndex = snip.target == AutomationTarget::PluginParam && !snip.nested()
                                 ? pluginParamIndexOfId(trackId, snip.deviceIndex, snip.paramId)
                                 : snip.paramIndex;
             nt.automation.push_back(std::move(nl));
@@ -2529,7 +2612,6 @@ bool Engine::copyClip(int32_t trackId, int32_t clipIndex) {
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return false;
         clipboardAudio_ = t->clips[clipIndex];
-        clipboardAudio_.warpCache = nullptr; // paste rebuilds the cache
         clipboardKind_ = 0;
         start = clipboardAudio_.startBeat;
         len = audioDisplayLenBeats(clipboardAudio_, spb, devSR);
@@ -2555,7 +2637,6 @@ bool Engine::cutClip(int32_t trackId, int32_t clipIndex) {
     } else {
         if (clipIndex < 0 || clipIndex >= static_cast<int32_t>(nt->clips.size())) return false;
         clipboardAudio_ = nt->clips[clipIndex];
-        clipboardAudio_.warpCache = nullptr;
         clipboardKind_ = 0;
         start = clipboardAudio_.startBeat;
         len = audioDisplayLenBeats(clipboardAudio_, spb, devSR);
@@ -2626,7 +2707,6 @@ std::vector<Engine::BlockClip> Engine::captureBlock(
             if (ci < 0 || ci >= static_cast<int32_t>(t->clips.size())) continue;
             b.kind = 0;
             b.audio = t->clips[ci];
-            b.audio.warpCache = nullptr; // copy rebuilds the cache
             s = b.audio.startBeat;
             b.len = audioDisplayLenBeats(b.audio, spb, devSR);
         }
@@ -2728,7 +2808,7 @@ void Engine::placeBlock(const std::vector<BlockClip>& items, double placedStart,
         } else {
             AudioClip a = b.audio;
             a.startBeat = start;
-            if (a.warpEnabled) configureClipWarp(a, spb, devSR); // the copy needs its own stretcher
+            if (a.warpEnabled) configureClipWarp(a, spb, devSR); // reuses the copied cache when it is current
             nt.clips.push_back(a);
             newIdx = static_cast<int32_t>(nt.clips.size()) - 1;
         }
@@ -2793,7 +2873,6 @@ bool Engine::copyRange(const std::vector<int32_t>& trackIds, double start, doubl
                 BlockClip b;
                 b.kind = 0;
                 b.audio = audioSlice(c, start, end, spb, devSR);
-                b.audio.warpCache = nullptr; // the paste rebuilds the cache
                 b.len = audioDisplayLenBeats(b.audio, spb, devSR);
                 const double s = b.audio.startBeat;
                 add(std::move(b), s);
@@ -2991,6 +3070,19 @@ int32_t Engine::trackColorIndex(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return t ? t->colorIndex : -1;
 }
+bool Engine::setTrackPianoFold(int32_t trackId, bool on) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old) return false;
+    if (old->pianoFold == on) return true;
+    auto nt = cloneTrack(*old);
+    nt->pianoFold = on;
+    republishWithTrackRaw(trackId, nt); // a view change, not an edit: no undo step
+    return true;
+}
+int32_t Engine::trackPianoFold(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t ? (t->pianoFold ? 1 : 0) : -1;
+}
 
 bool Engine::deleteClip(int32_t trackId, int32_t clipIndex) {
     auto old = findTrackAuthoring(trackId);
@@ -3009,7 +3101,8 @@ bool Engine::deleteClip(int32_t trackId, int32_t clipIndex) {
 
 // Fully independent copy of a track: cloned instrument/MIDI-FX/insert devices (own DSP
 // state), copied clips/automation with fresh warp stretchers, and the UI metadata.
-std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId) {
+// withContent = false leaves out what it plays: clips, Session slots and automation.
+std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, bool withContent) {
     auto nt = std::make_shared<Track>(newId, src.type());
     nt->setVolume(src.volume());
     nt->setPan(src.pan());
@@ -3019,15 +3112,19 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId) {
     nt->setReturnIndex(src.returnIndex());
     nt->setGroupId(src.groupId()); // keep membership on duplicate (paste resets to top-level)
     nt->setRecordInputSource(src.recordInputSource());
+    nt->setInputChannels(src.inputChannels());
     nt->setMonitor(src.monitor());
     nt->setMidiFromTrackId(src.midiFromTrackId());
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, src.send(b));
-    nt->clips = src.clips; // sample buffers are shared_ptr (immutable) — fine
-    nt->midiClips = src.midiClips;
-    nt->sessionSlots = src.sessionSlots;
-    nt->automation = src.automation;
+    if (withContent) {
+        nt->clips = src.clips; // sample buffers are shared_ptr (immutable) — fine
+        nt->midiClips = src.midiClips;
+        nt->sessionSlots = src.sessionSlots;
+        nt->automation = src.automation;
+    }
     nt->name = src.name;
     nt->colorIndex = src.colorIndex;
+    nt->pianoFold = src.pianoFold;
     nt->instrument = cloneInstrument(src);
     if (nt->instrument && src.instrument) nt->instrument->setBypassed(src.instrument->bypassed());
     for (auto& m : src.midiEffects)
@@ -3054,6 +3151,41 @@ int32_t Engine::duplicateTrack(int32_t trackId) {
     for (auto& t : authoring_->tracks) {
         g->tracks.push_back(t);
         if (t->id() == trackId) g->tracks.push_back(nt);
+    }
+    publish(std::move(g));
+    recomputePdc();
+    return newId;
+}
+
+int32_t Engine::addTrackLike(int32_t trackId) {
+    if (trackId == kMasterTrackId) return -1;
+    auto src = findTrackAuthoring(trackId);
+    if (!src || src->type() == TrackType::Return || src->type() == TrackType::Group) return -1;
+    const int32_t newId = nextTrackId_++;
+    auto nt = deepCloneTrack(*src, newId, /*withContent=*/false); // publish sizes the Session slots, all empty
+    // The source's clips move onto this track, so it must sound the same: refuse it when the
+    // instrument or any device didn't copy (a plugin that won't load a second instance).
+    if (static_cast<bool>(src->instrument) != static_cast<bool>(nt->instrument)
+        || src->midiEffects.size() != nt->midiEffects.size() || src->devices.size() != nt->devices.size())
+        return -1;
+    nt->setGroupId(-1);
+    nt->setArmed(false);
+    nt->name.clear();
+    nt->colorIndex = -1;
+
+    // After the last regular track. Returns aren't always trailing in the graph (a track
+    // added later is appended after them), so place it by the last regular track, not
+    // in front of the first return.
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    g->tracks.reserve(authoring_->tracks.size() + 1);
+    std::ptrdiff_t lastRegular = -1;
+    for (std::size_t i = 0; i < authoring_->tracks.size(); ++i)
+        if (authoring_->tracks[i]->type() != TrackType::Return) lastRegular = static_cast<std::ptrdiff_t>(i);
+    if (lastRegular < 0) g->tracks.push_back(nt);
+    for (std::size_t i = 0; i < authoring_->tracks.size(); ++i) {
+        g->tracks.push_back(authoring_->tracks[i]);
+        if (static_cast<std::ptrdiff_t>(i) == lastRegular) g->tracks.push_back(nt);
     }
     publish(std::move(g));
     recomputePdc();

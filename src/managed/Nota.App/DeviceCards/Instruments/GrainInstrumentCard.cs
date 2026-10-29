@@ -165,7 +165,10 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             Begin("position"); SetP("position", engine.InstrumentParamDefault(track, pi)); End("position");
             Refresh();
         };
-        ToolTip.SetTip(wave, "Drag to move the read position · double-click to reset");
+        ToolTip.SetTip(wave, MenuKit.Keys("Drag to move the read position · ⌥-click to type it · double-click to reset"));
+        // ⌥-click types the read position (specs/035); double-click keeps its own reset.
+        if (I("position") is var gpi and >= 0)
+            ValueEntry.AttachAll(wave, ValueEntry.InstrumentParam(engine, track, gpi, "position", "Position", v => Pct((float)v), Refresh) with { Default = null });
         if (I("position") is var wpi and >= 0) MidiLearn.Bind(wave, MidiTarget.PluginParam(track, -1, wpi), "Position");
 
         // ---- shared builders --------------------------------------------------
@@ -310,7 +313,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
                 Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
                 Background = NotaPalette.BgSunken, Child = text,
             };
-            box.PointerWheelChanged += (_, e) => { SetRoot(rootNote + (e.Delta.Y > 0 ? 1 : -1)); e.Handled = true; };
+            box.PointerWheelChanged += (wt, e) => { if (WheelInput.Step(e, wt) is not { } s) return; e.Handled = true; if (s != 0) SetRoot(rootNote + s); };
             // Double-click: the note the file name names, else C4.
             box.DoubleTapped += (_, e) => { SetRoot(SamplerModel.DetectRoot(sampleName) is var d and >= 0 ? d : 60); e.Handled = true; };
             ToolTip.SetTip(box, "The root — the key that plays the sample as recorded. Scroll to step it · double-click takes it from the file name (C4 if none)");

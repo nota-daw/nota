@@ -16,14 +16,20 @@
 #include <string>
 #include <vector>
 
+#include "devices/EditorPreview.h"
 #include "engine/TransportInfo.h"
 
 namespace nota {
 
 struct MidiEv;
 
+class RackCore;
+
 class Device {
   public:
+    // The rack behind this device, if it is one (specs/044): a virtual call where the audio
+    // thread walks rack chains every block, instead of a dynamic_cast per device.
+    virtual const RackCore* asRack() const { return nullptr; }
     virtual ~Device() = default;
 
     // Called on the message thread before the device is used (and on sample-rate
@@ -224,6 +230,11 @@ class Device {
     void setSidechainMix(float m) { scMix_.store(std::clamp(m, 0.0f, 1.0f), std::memory_order_relaxed); }
     int32_t sidechainTapPre() const { return scTapPre_.load(std::memory_order_relaxed); }
     void setSidechainTapPre(int32_t pre) { scTapPre_.store(pre ? 1 : 0, std::memory_order_relaxed); }
+    //  - part (specs/050): which part of the source track's instrument the key comes from — a
+    //    Drum Rack pad / Instrument Rack chain (its chain uid) or a Rhythm voice (voice + 1);
+    //    0 = the whole track. Read by the engine, not the device.
+    uint64_t sidechainPart() const { return scPart_.load(std::memory_order_relaxed); }
+    void setSidechainPart(uint64_t part) { scPart_.store(part, std::memory_order_relaxed); }
 
     // Musical transport for tempo-synced devices (e.g. Beat Repeat). The engine calls
     // this on the audio thread just before process() with the block's start position in
@@ -246,12 +257,25 @@ class Device {
     bool folded() const { return folded_; }
     void setFolded(bool f) { folded_ = f; }
 
+    // The preset this device was loaded from (specs/048): an index into the engine's preset
+    // tag table, 0 = none. Message thread only; kept on the device so it follows moves,
+    // copies and undo/redo.
+    int32_t presetTag() const { return presetTag_; }
+    void setPresetTag(int32_t t) { presetTag_ = t; }
+    // Editor preview (specs/046): the plug-in window's last look, drawn behind its card. View
+    // data saved with the project; message thread only, like the fold flag.
+    const EditorPreview& editorPreview() const { return preview_; }
+    void setEditorPreview(EditorPreview p) { preview_ = std::move(p); }
+
   private:
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
+    int32_t presetTag_ = 0;
+    EditorPreview preview_;
     std::atomic<float> scGainDb_{0.0f};
     std::atomic<float> scMix_{1.0f};
     std::atomic<int32_t> scTapPre_{0};
+    std::atomic<uint64_t> scPart_{0};
 };
 
 } // namespace nota

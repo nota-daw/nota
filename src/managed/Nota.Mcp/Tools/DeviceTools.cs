@@ -48,6 +48,85 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     [McpServerTool(Name = "move_device"), Description("Reorder a device within a track's chain.")]
     public Task MoveDevice(int trackId, int fromIndex, int toIndex) => Mutate(() => E.MoveDevice(trackId, fromIndex, toIndex));
 
+    public sealed record DeviceMoveResult(int Index, bool SidechainCleared, bool LinksDropped, bool SourceTrackRemoved);
+
+    [McpServerTool(Name = "move_device_to_track"), Description("Move (or, with copy, copy) a device to another track in one undo step. chain: \"audio\" (an audio effect at index), \"midi\" (a MIDI effect at index) or \"instrument\" (the track's instrument; index is ignored). It lands at atIndex of the target's matching section (-1 = the end); an instrument replaces the target's instrument. A move takes the device's automation along and a moved instrument removes its source track; a copy carries no automation. MIDI effects and instruments go only to instrument tracks. Modulation links to the device stay on the source; a sidechain key on the target itself is cleared. Returns the new index and what else happened.")]
+    public Task<DeviceMoveResult> MoveDeviceToTrack(
+        [Description("Source track id")] int trackId,
+        [Description("\"audio\", \"midi\" or \"instrument\"")] string chain,
+        [Description("Device index in that chain (ignored for the instrument)")] int index,
+        [Description("Target track id")] int targetTrackId,
+        [Description("Position on the target, -1 = the end")] int atIndex = -1,
+        [Description("Copy instead of move: the source keeps its device")] bool copy = false) => Mutate(() =>
+    {
+        var family = chain switch
+        {
+            "audio" => DeviceFamily.Audio,
+            "midi" => DeviceFamily.Midi,
+            "instrument" => DeviceFamily.Instrument,
+            _ => throw new ArgumentException("chain must be 'audio', 'midi' or 'instrument'."),
+        };
+        int r = E.TransferDevice(trackId, family, index, targetTrackId, atIndex, copy, out var f);
+        if (r == -2) throw new InvalidOperationException($"Track {targetTrackId} can't take that device (MIDI effects and instruments need an instrument track).");
+        if (r == -3) throw new InvalidOperationException("The device couldn't be copied (a plug-in that won't load a second time).");
+        if (r < 0) throw new ArgumentException("No such device or track, or the target is the source track.");
+        return new DeviceMoveResult(r, f.HasFlag(TransferFlags.SidechainCleared), f.HasFlag(TransferFlags.LinksDropped), f.HasFlag(TransferFlags.SourceTrackRemoved));
+    });
+
+    public sealed record GroupResult(string RackType, int Index);
+
+    [McpServerTool(Name = "group_devices"), Description("Group a contiguous run of a track's devices into a new rack in their place, one undo step (⌘G in the Devices panel). Audio effects only → an Audio Effect Rack at fxFirst; MIDI effects only → a MIDI Effect Rack at midiFirst; withInstrument → an Instrument Rack as the track's instrument whose first chain holds the MIDI effects, the instrument and the audio effects in order (the MIDI run must end at the last MIDI effect and the audio run start at 0). MIDI and audio effects share a rack only with the instrument between them. The devices keep their settings and sound; automation, modulation links, an Arp's CC lane and sidechain keys on them follow into the rack. Inspect the result with get_effect_rack, get_midi_rack or get_rack. Returns the rack type and its index (-1 for the instrument).")]
+    public Task<GroupResult> GroupDevices(
+        int trackId,
+        [Description("First MIDI effect of the run, -1 = none")] int midiFirst = -1,
+        [Description("How many MIDI effects")] int midiCount = 0,
+        [Description("Include the track's instrument")] bool withInstrument = false,
+        [Description("First audio effect of the run, -1 = none")] int fxFirst = -1,
+        [Description("How many audio effects")] int fxCount = 0) => Mutate(() =>
+    {
+        int r = E.GroupDevices(trackId, midiFirst, midiCount, withInstrument, fxFirst, fxCount);
+        bool ok = withInstrument ? r == -1 : r >= 0 || r <= -1000;
+        if (!ok)
+            throw new InvalidOperationException((GroupRefusal)r switch
+            {
+                GroupRefusal.NotContiguous => "Not contiguous: the MIDI run must end at the instrument and the audio run start after it, and MIDI + audio effects need the instrument.",
+                GroupRefusal.RackInRun => "A rack can't go inside another rack.",
+                GroupRefusal.CantHost => "A MIDI Effect Rack holds built-in MIDI effects only.",
+                GroupRefusal.InstrumentCantNest => "An Instrument Rack can't go inside another Instrument Rack.",
+                GroupRefusal.NotInstrumentTrack => "Only an instrument track has MIDI effects and an instrument.",
+                _ => "No such track or run.",
+            });
+        return withInstrument ? new GroupResult("instrument", -1)
+             : r <= -1000 ? new GroupResult("midi", -1000 - r)
+             : new GroupResult("audio", r);
+    });
+
+    public sealed record UngroupResult(int Restored, bool MacrosDropped, bool ChainMixDropped);
+
+    [McpServerTool(Name = "ungroup_rack"), Description("Take a one-chain rack apart: its chain's devices take its place in order, one undo step (⌘⇧G). chain: \"audio\" (an Audio Effect Rack at index), \"midi\" (a MIDI Effect Rack at index) or \"instrument\" (the track's Instrument Rack; index ignored — its MIDI effects go after the track's, its instrument becomes the track's, its audio effects go before the track's). The rack's macros, mappings and chain settings are dropped; automation and links on its devices follow them out.")]
+    public Task<UngroupResult> UngroupRack(int trackId,
+        [Description("\"audio\", \"midi\" or \"instrument\"")] string chain,
+        [Description("The rack's index in that chain (ignored for the instrument)")] int index = 0) => Mutate(() =>
+    {
+        var family = chain switch
+        {
+            "audio" => DeviceFamily.Audio,
+            "midi" => DeviceFamily.Midi,
+            "instrument" => DeviceFamily.Instrument,
+            _ => throw new ArgumentException("chain must be 'audio', 'midi' or 'instrument'."),
+        };
+        int n = E.UngroupRack(trackId, family, index, out var dropped);
+        if (n < 0)
+            throw new InvalidOperationException((UngroupRefusal)n switch
+            {
+                UngroupRefusal.SeveralChains => "Only a rack with one chain can be ungrouped.",
+                UngroupRefusal.DrumRack => "A Drum Rack can't be ungrouped.",
+                UngroupRefusal.NoInstrument => "The Instrument Rack's chain has no instrument.",
+                _ => "That device isn't a rack.",
+            });
+        return new UngroupResult(n, dropped.HasFlag(UngroupDropped.MacroMappings), dropped.HasFlag(UngroupDropped.ChainMix));
+    });
+
     [McpServerTool(Name = "set_device_bypass"), Description("Bypass or enable a device. deviceIndex -1 is the track's instrument: bypassed, it makes no sound (its MIDI effects and audio effects keep running).")]
     public Task SetDeviceBypass(int trackId, int deviceIndex, bool bypassed) => Mutate(() => E.SetDeviceBypassed(trackId, deviceIndex, bypassed));
 
@@ -74,20 +153,85 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     public Task DeviceAction(int trackId, int deviceIndex, [Description("Command id — see the device's list in this description")] int id,
         int intArg = 0, float floatArg = 0) => Mutate(() => E.DeviceAction(trackId, deviceIndex, id, intArg, floatArg));
 
-    public sealed record Sidechain(bool Accepts, int SourceTrackId, bool TapPre, float GainDb, float Mix);
+    public sealed record Sidechain(bool Accepts, int SourceTrackId, int SourcePart, string SourceName, bool TapPre, float GainDb, float Mix);
 
-    [McpServerTool(Name = "get_device_sidechain"), Description("Read a device's sidechain routing: whether it can take a key at all (the Compressor, Ceiling, Nota Shutter, Nota Auto Shift — its MIDI source —, Nota Vocoder — its carrier track — and plugins with a sidechain bus), the source track id (-1 = the device keys off its own track), whether the source is tapped pre-FX (true) or post-fader (false), the detector gain in dB and the effect's sidechain dry/wet mix (0..1).")]
-    public Task<Sidechain> GetDeviceSidechain(int trackId, int deviceIndex) => Read(() => new Sidechain(
-        E.DeviceAcceptsSidechain(trackId, deviceIndex), E.DeviceSidechainSource(trackId, deviceIndex),
-        E.DeviceSidechainTapPre(trackId, deviceIndex), E.DeviceSidechainGain(trackId, deviceIndex), E.DeviceSidechainMix(trackId, deviceIndex)));
-
-    [McpServerTool(Name = "set_device_sidechain"), Description("Route a sidechain key into a device — e.g. duck a bass or pad under the kick with a Compressor (kind 1), or make a pad speak with a vocal through Nota Vocoder (kind 26, on the vocal track, which is the modulator: set its Carrier param to Track (1.0) and pass the pad track here as the carrier; tapPre true takes the pad before its effects, gainDb trims it; with Carrier Saw or Noise it needs no source): pass the kick track as sourceTrackId, then shape the key with the Compressor's params (SC HP / SC LP / SC Q / SC Gain / Hold; External Key must be on, which is its default). Nota Shutter (kind 19) gates or ducks against a key the same way (Flip = 1 for Duck; Det HP / Det LP shape the key; External Key on, its default). Nota Auto Shift (kind 10) takes an instrument track here as its MIDI source: with Key Source = 1 (MIDI) the voice is pulled to that track's notes (its clips after its MIDI effects, even while muted). sourceTrackId -1 clears the source (the device keys off its own track). Optional: tapPre (true = the source before its effects and fader, false = after), gainDb (extra detector gain, ±24 dB). Leave an optional argument out to keep its current value. No effect on devices that take no sidechain.")]
-    public Task SetDeviceSidechain(int trackId, int deviceIndex, [Description("Key source track id, or -1 for none")] int sourceTrackId,
-        bool? tapPre = null, float? gainDb = null) => Mutate(() =>
+    // "Drums" / "Drums · Kick" / "Drums · missing" (specs/050).
+    private string KeyName(SidechainKey k)
     {
-        E.SetDeviceSidechainSource(trackId, deviceIndex, sourceTrackId);
+        if (k.Source < 0) return "none";
+        string track = E.GetTrackName(k.Source) is { Length: > 0 } nm ? nm : $"track {k.Source}";
+        return k.Part switch
+        {
+            SidechainKey.WholeTrack => track,
+            SidechainKey.Missing => track + " · missing",
+            _ => track + " · " + E.TrackPartName(k.Source, k.Part),
+        };
+    }
+
+    private static void ThrowOnKey(int r, int sourceTrackId, int part)
+    {
+        if (r == -1) throw new ArgumentException(part >= 0
+            ? $"Track {sourceTrackId} has no part {part} (see list_sidechain_sources), or the device keys on MIDI (Nota Auto Shift), which takes whole tracks only."
+            : $"No such device or source track {sourceTrackId}.");
+        if (r == -2) throw new InvalidOperationException("No free sidechain route: all of them are in use (see list_sidechain_sources). The key was left as it was.");
+    }
+
+    [McpServerTool(Name = "get_device_sidechain"), Description("Read a device's sidechain routing: whether it can take a key at all (the Compressor, Ceiling, Nota Shutter, Nota Auto Shift — its MIDI source —, Nota Vocoder — its carrier track — and plugins with a sidechain bus), the source track id (-1 = the device keys off its own track), whether the source is tapped pre-FX (true) or post-fader (false), the detector gain in dB and the effect's sidechain dry/wet mix (0..1). sourcePart is the pad / chain / voice of the source track's instrument the key listens to (-1 = the whole track, -2 = the keyed part was deleted and the key is silent); sourceName reads it as \"Drums · Kick\".")]
+    public Task<Sidechain> GetDeviceSidechain(int trackId, int deviceIndex) => Read(() =>
+    {
+        var k = E.DeviceSidechainKey(trackId, deviceIndex);
+        return new Sidechain(E.DeviceAcceptsSidechain(trackId, deviceIndex), E.DeviceSidechainSource(trackId, deviceIndex), k.Part, KeyName(k),
+            E.DeviceSidechainTapPre(trackId, deviceIndex), E.DeviceSidechainGain(trackId, deviceIndex), E.DeviceSidechainMix(trackId, deviceIndex));
+    });
+
+    [McpServerTool(Name = "set_device_sidechain"), Description("Route a sidechain key into a device — e.g. duck a bass or pad under the kick with a Compressor (kind 1), or make a pad speak with a vocal through Nota Vocoder (kind 26, on the vocal track, which is the modulator: set its Carrier param to Track (1.0) and pass the pad track here as the carrier; tapPre true takes the pad before its effects, gainDb trims it; with Carrier Saw or Noise it needs no source): pass the kick track as sourceTrackId, then shape the key with the Compressor's params (SC HP / SC LP / SC Q / SC Gain / Hold; External Key must be on, which is its default). Nota Shutter (kind 19) gates or ducks against a key the same way (Flip = 1 for Duck; Det HP / Det LP shape the key; External Key on, its default). Nota Auto Shift (kind 10) takes an instrument track here as its MIDI source: with Key Source = 1 (MIDI) the voice is pulled to that track's notes (its clips after its MIDI effects, even while muted). sourceTrackId -1 clears the source (the device keys off its own track). Optional: tapPre (true = the source before its effects and fader, false = after), gainDb (extra detector gain, ±24 dB). Leave an optional argument out to keep its current value. No effect on devices that take no sidechain. To key off just one part of the source — a Drum Rack pad (duck the bass from the kick pad only), an Instrument Rack chain or a Nota Rhythm voice — pass its index as sourcePart (from list_sidechain_sources); for a part, tapPre true takes it before its own pad / chain effects, false after them and its level and pan. A muted pad still drives its key. Fails when all sidechain routes are in use.")]
+    public Task SetDeviceSidechain(int trackId, int deviceIndex, [Description("Key source track id, or -1 for none")] int sourceTrackId,
+        bool? tapPre = null, float? gainDb = null,
+        [Description("Part of the source track's instrument (pad / chain / voice index), -1 or omitted = the whole track")] int? sourcePart = null) => Mutate(() =>
+    {
+        int part = sourcePart ?? SidechainKey.WholeTrack;
+        if (sourceTrackId < 0) E.SetDeviceSidechainSource(trackId, deviceIndex, -1);
+        else ThrowOnKey(E.SetDeviceSidechainKey(trackId, deviceIndex, sourceTrackId, part), sourceTrackId, part);
         if (tapPre is { } pre) E.SetDeviceSidechainTapPre(trackId, deviceIndex, pre);
         if (gainDb is { } g) E.SetDeviceSidechainGain(trackId, deviceIndex, Math.Clamp(g, -24f, 24f));
+    });
+
+    public sealed record SidechainPart(int Index, string Name, bool RouteInUse);
+    public sealed record SidechainSource(int TrackId, string Name, bool Frozen, bool RouteInUse, SidechainPart[] Parts);
+    public sealed record SidechainSources(int RouteCapacity, int RoutesFree, SidechainSource[] Sources);
+
+    [McpServerTool(Name = "list_sidechain_sources"), Description("List what a sidechain key can listen to: every track, and for a track whose instrument has parts — a Drum Rack's pads, an Instrument Rack's chains, Nota Rhythm's eight voices — each part with its index (pass it as sourcePart to set_device_sidechain / set_instrument_sidechain). Whole tracks and parts share one pool of sidechain routes: routeInUse says a source already has one (a further key on it costs none); when routesFree is 0 only those can be picked. A frozen track's parts are silent until it is unfrozen.")]
+    public Task<SidechainSources> ListSidechainSources() => Read(() =>
+    {
+        var list = new List<SidechainSource>();
+        for (int i = 0; i < E.TrackCount; i++)
+        {
+            if (!E.TryGetTrackInfo(i, out var ti)) continue;
+            int n = E.TrackPartCount(ti.Id);
+            var parts = new SidechainPart[n];
+            for (int p = 0; p < n; p++) parts[p] = new SidechainPart(p, E.TrackPartName(ti.Id, p), E.SidechainRouteInUse(ti.Id, p));
+            list.Add(new SidechainSource(ti.Id, KeyName(new SidechainKey(ti.Id, SidechainKey.WholeTrack)), n > 0 && E.IsTrackFrozen(ti.Id),
+                E.SidechainRouteInUse(ti.Id, SidechainKey.WholeTrack), parts));
+        }
+        return new SidechainSources(E.SidechainRouteCapacity(), E.SidechainRoutesFree(), list.ToArray());
+    });
+
+    public sealed record InstrumentSidechain(bool Accepts, int SourceTrackId, int SourcePart, string SourceName);
+
+    [McpServerTool(Name = "get_instrument_sidechain"), Description("Read what a track's instrument listens to — Nota Flux's React (the synth moves with another track's level and onsets): whether the instrument listens at all, the source track id (-1 = none), the part of its instrument (-1 = the whole track, -2 = the part was deleted) and the source's name. React always hears the source after its effects.")]
+    public Task<InstrumentSidechain> GetInstrumentSidechain(int trackId) => Read(() =>
+    {
+        var k = E.InstrumentSidechainKey(trackId);
+        return new InstrumentSidechain(E.InstrumentAcceptsSidechain(trackId), k.Source, k.Part, KeyName(k));
+    });
+
+    [McpServerTool(Name = "set_instrument_sidechain"), Description("Point a track's listening instrument (Nota Flux's React) at another track, or at one pad / chain / voice of it with sourcePart (from list_sidechain_sources) — e.g. make Flux pulse with the kick pad of a Drum Rack. sourceTrackId -1 clears it. Fails when all sidechain routes are in use.")]
+    public Task SetInstrumentSidechain(int trackId, [Description("Source track id, or -1 for none")] int sourceTrackId,
+        [Description("Part of the source track's instrument, -1 or omitted = the whole track")] int? sourcePart = null) => Mutate(() =>
+    {
+        int part = sourcePart ?? SidechainKey.WholeTrack;
+        if (sourceTrackId < 0) E.SetInstrumentSidechainSource(trackId, -1);
+        else ThrowOnKey(E.SetInstrumentSidechainKey(trackId, sourceTrackId, part), sourceTrackId, part);
     });
 
     public sealed record DynamicsReading(string Summary, double GainReductionDb, double InputPeakDb, double InputRmsDb,
@@ -1230,7 +1374,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
 
     private Eq3Reading Eq3Read(int trackId, int deviceIndex, bool spectrum)
     {
-        const int tele = 16, spec = 96;
+        const int tele = 16, spec = AnalyzerPoints;
         var sc = new float[tele + spec];
         int n = E.DeviceScope(trackId, deviceIndex, sc, spectrum ? sc.Length : tele);
         float V(int i) => n > i ? sc[i] : 0f;
@@ -1249,13 +1393,7 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         }
         var sp = new List<DynEqSpectrumBand>();
         bool valid = spectrum && n >= sc.Length && V(7) > 0.5f;
-        if (valid)
-            for (int k = 0; k < 24; k++)
-            {
-                double pw = 0;
-                for (int b = 4 * k; b < 4 * k + 4; b++) pw += Math.Pow(10, sc[tele + b] / 10);
-                sp.Add(new DynEqSpectrumBand(Math.Round(20 * Math.Pow(1000, (k + 0.5) / 24)), R1(Math.Max(-120, 10 * Math.Log10(Math.Max(1e-12, pw))))));
-            }
+        if (valid) sp.AddRange(AnalyzerBands(sc, tele));
         return new Eq3Reading(E.DeviceText(trackId, deviceIndex, 0), E.DeviceText(trackId, deviceIndex, 1),
             iso ? "Isolator" : "Classic", iso ? -24 : -15, iso ? 6 : 15,
             Math.Round(50 * Math.Pow(40, Pm(6))), Math.Round(500 * Math.Pow(36, Pm(7))), Pm(8) >= 0.5f ? 48 : 24, R1((Pm(9) - 0.5) * 48),
@@ -1333,13 +1471,31 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     });
 
     public sealed record Eq8Band(int Band, bool On, string Type, double FreqHz, double GainDb, double EffectiveGainDb, double Q,
-        int SlopeDbPerOct, string Channel);
+        int SlopeDbPerOct, string Channel, string Label, string Note);
     public sealed record Eq8Reading(string Summary, string Live, double ScalePercent, double OutputDb, bool AutoGain, double AutoGainNowDb,
-        string Analyzer, double InputPeakDb, double OutputPeakDb, double SampleRate, Eq8Band[] Bands,
+        string Analyzer, int AnalyzerRangeDb, bool AnalyzerPeak, double InputPeakDb, double OutputPeakDb, double SampleRate, Eq8Band[] Bands,
         bool SpectrumValid, DynEqSpectrumBand[] InputSpectrum, DynEqSpectrumBand[] OutputSpectrum);
 
     private static readonly string[] Eq8Channels = { "Stereo", "Mid", "Side", "Left", "Right" };
     private static readonly string[] Eq8Analyzer = { "Pre", "Post", "Off" };
+    private static readonly int[] Eq8RangeDb = { 60, 90, 120 };
+
+    // The EQ cards' spectrum (dsp::SpectrumAnalyzer): AnalyzerPoints log-spaced points from 20 Hz to
+    // 20 kHz in dBFS, each already a 1/6-octave band. For a reader: 24 bands, each the loudest
+    // point inside it, so a tone reads at its own level.
+    private const int AnalyzerPoints = 256;
+    private static DynEqSpectrumBand[] AnalyzerBands(float[] sc, int at)
+    {
+        var sp = new DynEqSpectrumBand[24];
+        for (int k = 0; k < 24; k++)
+        {
+            int i0 = (int)Math.Ceiling(k / 24.0 * (AnalyzerPoints - 1)), i1 = (int)Math.Floor((k + 1) / 24.0 * (AnalyzerPoints - 1));
+            double db = -120;
+            for (int i = i0; i <= Math.Max(i0, i1) && at + i < sc.Length; i++) db = Math.Max(db, sc[at + i]);
+            sp[k] = new DynEqSpectrumBand(Math.Round(20 * Math.Pow(1000, (k + 0.5) / 24)), Math.Round(db, 1));
+        }
+        return sp;
+    }
 
     private Eq8Band Eq8BandRead(int trackId, int deviceIndex, int b)
     {
@@ -1350,14 +1506,15 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         double scale = Math.Clamp(Pm(56), 0, 200) / 100;
         return new Eq8Band(b + 1, Pm(o) > 0.5f, DynEqTypes[ty], Math.Round(Pm(o + 2)), gain ? Math.Round(Pm(o + 3), 1) : 0,
             gain ? Math.Round(Pm(o + 3) * scale, 1) : 0, Math.Round(Pm(o + 4), 2),
-            cut ? 12 << Math.Clamp((int)Math.Round(Pm(40 + b)), 0, 2) : 12, Eq8Channels[Math.Clamp((int)Math.Round(Pm(48 + b)), 0, 4)]);
+            cut ? 12 << Math.Clamp((int)Math.Round(Pm(40 + b)), 0, 2) : 12, Eq8Channels[Math.Clamp((int)Math.Round(Pm(48 + b)), 0, 4)],
+            E.EqBandText(trackId, deviceIndex, b, 0), E.EqBandText(trackId, deviceIndex, b, 1));
     }
 
     private Eq8Reading Eq8Read(int trackId, int deviceIndex, bool spectrum)
     {
         if (E.TrackDeviceBuiltinKind(trackId, deviceIndex) != 0) throw new ArgumentException("not a Nota EQ-8 (kind 0)");
-        const int tele = 16, spec = 96;
-        var sc = new float[tele + 2 * spec];
+        const int tele = 16, spec = AnalyzerPoints;
+        var sc = new float[tele + 3 * spec];
         int n = E.DeviceScope(trackId, deviceIndex, sc, spectrum ? sc.Length : tele);
         float V(int i) => n > i ? sc[i] : 0f;
         float Db(int i) => n > i ? sc[i] : -120f;
@@ -1367,29 +1524,21 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         var bands = new Eq8Band[8];
         for (int b = 0; b < 8; b++) bands[b] = Eq8BandRead(trackId, deviceIndex, b);
         bool valid = spectrum && n >= sc.Length && V(5) > 0.5f;
-        DynEqSpectrumBand[] Spec(int at)
-        {
-            var sp = new List<DynEqSpectrumBand>();
-            if (valid)
-                for (int k = 0; k < 24; k++)
-                {
-                    double pw = 0;
-                    for (int b = 4 * k; b < 4 * k + 4; b++) pw += Math.Pow(10, sc[at + b] / 10);
-                    sp.Add(new DynEqSpectrumBand(Math.Round(20 * Math.Pow(1000, (k + 0.5) / 24)), R1(Math.Max(-120, 10 * Math.Log10(Math.Max(1e-12, pw))))));
-                }
-            return sp.ToArray();
-        }
+        DynEqSpectrumBand[] Spec(int at) => valid ? AnalyzerBands(sc, at) : Array.Empty<DynEqSpectrumBand>();
         return new Eq8Reading(E.DeviceText(trackId, deviceIndex, 0), E.DeviceText(trackId, deviceIndex, 1), R1(Pm(56)), R1(Pm(57)),
-            Pm(58) >= 0.5f, R1(V(2)), Eq8Analyzer[Math.Clamp((int)Math.Round(Pm(59)), 0, 2)], R1(Db(0)), R1(Db(1)), V(3), bands,
+            Pm(58) >= 0.5f, R1(V(2)), Eq8Analyzer[Math.Clamp((int)Math.Round(Pm(59)), 0, 2)],
+            Eq8RangeDb[Math.Clamp((int)Math.Round(pc > 60 ? Pm(60) : 1f), 0, 2)], Pm(61) >= 0.5f, R1(Db(0)), R1(Db(1)), V(3), bands,
             valid, Spec(tele), Spec(tele + spec));
     }
 
     [McpServerTool(Name = "read_eq8"), Description(
         "Read a Nota EQ-8 (built-in effect kind 0 — eight-band parametric EQ): Scale (% applied to every shelf and bell gain), "
-        + "output, whether Auto gain is on and the gain it adds now, the analyzer mode the card shows (Pre / Post / Off), in / out "
+        + "output, whether Auto gain is on and the gain it adds now, the analyzer mode the card shows (Pre / Post / Off) with its range "
+        + "(60 / 90 / 120 dB) and peak hold, in / out "
         + "peaks; per band: on, type, frequency, gain, the effective gain after Scale, Q (the resonance on the cuts), slope "
-        + "(12 / 24 / 48 dB/oct, cuts only) and channel (Stereo / Mid / Side / Left / Right); plus the input and output spectra "
-        + "in 24 log bands (dB). Levels read −120 while silent; they move only while audio runs through the track. "
+        + "(12 / 24 / 48 dB/oct, cuts only), channel (Stereo / Mid / Side / Left / Right) and the user's label and note for "
+        + "the band (what it is for; \"\" when none); plus the input and output spectra "
+        + "in 24 log bands (dB, the loudest 1/6-octave reading in each). Levels read −120 while silent; they move only while audio runs through the track. "
         + "set_eq8_band edits a band, set_eq8 the globals.")]
     public Task<Eq8Reading> ReadEq8(int trackId, int deviceIndex) => Read(() => Eq8Read(trackId, deviceIndex, true));
 
@@ -1397,11 +1546,13 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         "Edit one band of a Nota EQ-8 (built-in effect kind 0) in one call — only the fields you pass change; each change is "
         + "recorded like a hand edit. type: \"Low cut\" | \"Low shelf\" | \"Bell\" | \"Notch\" | \"High shelf\" | \"High cut\" "
         + "(only shelves and bells take gain). slope: 12, 24 or 48 dB/oct (cuts only). channel: \"Stereo\" | \"Mid\" | \"Side\" | "
-        + "\"Left\" | \"Right\". Setting any field of an off band does not switch it on — pass on true. Returns the band as read back.")]
+        + "\"Left\" | \"Right\". Setting any field of an off band does not switch it on — pass on true. label (≤ 24 characters, one "
+        + "line) and note (≤ 2000, multiline) are the band's text shown on the card; \"\" clears one. Returns the band as read back.")]
     public Task<Eq8Band> SetEq8Band(int trackId, int deviceIndex, [Description("Band 1..8")] int band,
         bool? on = null, string? type = null, [Description("20..20000 Hz")] double? freqHz = null, [Description("−18..+18 dB")] double? gainDb = null,
         [Description("0.1..18 (0.71 = flat on the cuts)")] double? q = null, [Description("12, 24 or 48")] int? slope = null,
-        string? channel = null) => Mutate(() =>
+        string? channel = null, [Description("The band's label, ≤ 24 characters")] string? label = null,
+        [Description("The band's note, ≤ 2000 characters")] string? note = null) => Mutate(() =>
     {
         if (E.TrackDeviceBuiltinKind(trackId, deviceIndex) != 0) throw new ArgumentException("not a Nota EQ-8 (kind 0)");
         if (band < 1 || band > 8) throw new ArgumentException("band is 1..8");
@@ -1419,16 +1570,19 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
             if (i < 0) throw new ArgumentException($"{what} must be one of: {string.Join(", ", names)}");
             return i;
         }
-        if (type is not null) S(o + 1, Idx(DynEqTypes, type, "type"));
+        // Check every argument before changing anything, so a refused call leaves the band as it was.
+        int? ti = type is null ? null : Idx(DynEqTypes, type, "type");
+        int? ci = channel is null ? null : Idx(Eq8Channels, channel, "channel");
+        if (slope is { } bad && bad is not (12 or 24 or 48)) throw new ArgumentException("slope is 12, 24 or 48");
+        if (label is not null || note is not null)
+            E.EqSetBandText(trackId, deviceIndex, band - 1, label ?? E.EqBandText(trackId, deviceIndex, band - 1, 0),
+                note ?? E.EqBandText(trackId, deviceIndex, band - 1, 1));
+        if (ti is { } tv) S(o + 1, tv);
         if (freqHz is { } f) S(o + 2, Math.Clamp(f, 20, 20000));
         if (gainDb is { } g) S(o + 3, Math.Clamp(g, -18, 18));
         if (q is { } qq) S(o + 4, Math.Clamp(qq, 0.1, 18));
-        if (slope is { } sl)
-        {
-            if (sl is not (12 or 24 or 48)) throw new ArgumentException("slope is 12, 24 or 48");
-            S(40 + band - 1, sl == 12 ? 0 : sl == 24 ? 1 : 2);
-        }
-        if (channel is not null) S(48 + band - 1, Idx(Eq8Channels, channel, "channel"));
+        if (slope is { } sl) S(40 + band - 1, sl == 12 ? 0 : sl == 24 ? 1 : 2);
+        if (ci is { } cv) S(48 + band - 1, cv);
         if (on is { } onv) S(o, onv ? 1 : 0);
         return Eq8BandRead(trackId, deviceIndex, band - 1);
     });
@@ -1437,9 +1591,11 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
         "Set the global controls of a Nota EQ-8 (built-in effect kind 0) — only the fields you pass change; each change is recorded "
         + "like a hand edit. scalePercent 0..200 multiplies every shelf and bell gain (100 = as set, 0 = flat). outputDb ±12. "
         + "autoGain adds the opposite of the average level of the shelves and bells (cuts and notches do not count; ±12 dB max). analyzer \"Pre\" | \"Post\" | \"Off\" picks the "
-        + "spectrum the card draws. Returns the device as read back (without the spectra).")]
+        + "spectrum the card draws; analyzerRangeDb 60, 90 or 120 sets how far below 0 dBFS its bottom edge is; analyzerPeak "
+        + "turns its peak-hold line on. All three are display only. Returns the device as read back (without the spectra).")]
     public Task<Eq8Reading> SetEq8(int trackId, int deviceIndex, [Description("0..200 %")] double? scalePercent = null,
-        [Description("−12..+12 dB")] double? outputDb = null, bool? autoGain = null, string? analyzer = null) => Mutate(() =>
+        [Description("−12..+12 dB")] double? outputDb = null, bool? autoGain = null, string? analyzer = null,
+        [Description("60, 90 or 120")] int? analyzerRangeDb = null, bool? analyzerPeak = null) => Mutate(() =>
     {
         if (E.TrackDeviceBuiltinKind(trackId, deviceIndex) != 0) throw new ArgumentException("not a Nota EQ-8 (kind 0)");
         int pc = E.DeviceParamCount(trackId, deviceIndex);
@@ -1459,6 +1615,13 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
             if (i < 0) throw new ArgumentException("analyzer must be Pre, Post or Off");
             S(59, i);
         }
+        if (analyzerRangeDb is { } rd)
+        {
+            int i = Array.IndexOf(Eq8RangeDb, rd);
+            if (i < 0) throw new ArgumentException("analyzerRangeDb must be 60, 90 or 120");
+            S(60, i);
+        }
+        if (analyzerPeak is { } ap) S(61, ap ? 1 : 0);
         return Eq8Read(trackId, deviceIndex, false);
     });
 

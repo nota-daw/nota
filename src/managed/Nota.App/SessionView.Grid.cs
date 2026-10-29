@@ -273,11 +273,31 @@ public sealed partial class SessionView
             var stack = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 3, 8, 0), Children = { top, kind } };
             Child = new Panel { Children = { stripe, stack } };
 
+            // A Browser drop on the header (#313): an instrument replaces this track's (or, on an
+            // audio / return column, starts a track after it); effects and presets go on the track.
+            DragDrop.SetAllowDrop(this, true);
+            DragDrop.AddDragOverHandler(this, (_, e) =>
+            {
+                e.DragEffects = o.DragEffectFor(e, c, header: true);
+                BorderBrush = e.DragEffects != DragDropEffects.None ? NotaPalette.Accent : BorderBrush;
+                e.Handled = true;
+            });
+            DragDrop.AddDragLeaveHandler(this, (_, _) => Sync());
+            DragDrop.AddDropHandler(this, (_, e) =>
+            {
+                Sync();
+                if (o.TryDeviceDrop(e, c)) return;
+                var items = BrowserView.DroppedItems(e);
+                if (items.Count > 0 && c.Kind != ColKind.Master) { o.RaiseDrop(items[0], c.TrackId, -1, c.IsInstrument); e.Handled = true; }
+            });
+
             PointerPressed += (_, e) =>
             {
                 var pp = e.GetCurrentPoint(this).Properties;
                 if (pp.IsRightButtonPressed) { e.Handled = true; o.ShowHeaderMenu(this, c); return; }
-                if (!pp.IsLeftButtonPressed || c.Kind is not (ColKind.Track or ColKind.Group)) return;
+                if (!pp.IsLeftButtonPressed) return;
+                // A Return / Master column selects that track (Devices follow); it has no slots (#314).
+                if (c.Kind is ColKind.Return or ColKind.Master) { o.Select(new Selection(SelKind.Bus, o.BusId(c), o._sel.Scene)); return; }
                 if (e.ClickCount == 2) { o.PromptRenameTrack(this, c.TrackId); return; }
                 o.Select(new Selection(SelKind.Slot, c.TrackId, o._sel.Scene));
             };
@@ -286,7 +306,9 @@ public sealed partial class SessionView
 
         public void Sync()
         {
-            bool sel = _o._sel.Kind == SelKind.Slot && _o._sel.TrackId == _c.TrackId && _c.Kind is ColKind.Track or ColKind.Group;
+            bool sel = _c.Kind is ColKind.Track or ColKind.Group
+                ? _o._sel.Kind == SelKind.Slot && _o._sel.TrackId == _c.TrackId
+                : _o._sel.Kind == SelKind.Bus && _o._sel.TrackId == _o.BusId(_c);
             Background = sel ? NotaPalette.SelHeaderBg : _c.Kind is ColKind.Return or ColKind.Master ? NotaPalette.Panel : NotaPalette.SurfaceCard;
             BorderBrush = sel ? NotaPalette.AccentDim : Brushes.Transparent;
             if (_arr is not null) _arr.IsVisible = _o._engine.SessionPlayingSlot(_c.TrackId) >= 0;
@@ -352,12 +374,13 @@ public sealed partial class SessionView
             }
 
             DragDrop.SetAllowDrop(this, true);
-            DragDrop.AddDragOverHandler(this, (_, e) => e.DragEffects = BrowserView.IsAcceptableDrag(e) ? DragDropEffects.Copy : DragDropEffects.None);
-            DragDrop.AddDragEnterHandler(this, (_, e) => { if (BrowserView.IsAcceptableDrag(e)) { _dropHover = true; InvalidateVisual(); } });
+            DragDrop.AddDragOverHandler(this, (_, e) => { e.DragEffects = o.DragEffectFor(e, c, header: false); e.Handled = true; });
+            DragDrop.AddDragEnterHandler(this, (_, e) => { if (o.DragEffectFor(e, c, header: false) != DragDropEffects.None) { _dropHover = true; InvalidateVisual(); } });
             DragDrop.AddDragLeaveHandler(this, (_, _) => { _dropHover = false; InvalidateVisual(); });
             DragDrop.AddDropHandler(this, (_, e) =>
             {
                 _dropHover = false; InvalidateVisual();
+                if (o.TryDeviceDrop(e, c)) return;
                 var items = BrowserView.DroppedItems(e);
                 if (items.Count > 0) { _o.RaiseDrop(items[0], c.TrackId, scene, c.IsInstrument); e.Handled = true; }
             });

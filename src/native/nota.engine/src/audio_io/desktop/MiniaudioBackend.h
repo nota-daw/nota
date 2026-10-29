@@ -24,6 +24,7 @@ class MiniaudioBackend final : public AudioBackend {
     void setXrunCallback(std::function<void()> cb) override { onXrun_ = std::move(cb); }
     bool isRunning() const override { return running_; }
     bool exclusiveFallback() const override { return exclusiveFallback_; }
+    bool silentFallback() const override { return silentFallback_; }
 
     // Opaque to callers; public so the file-local data callback can reach it.
     struct Impl;
@@ -35,6 +36,7 @@ class MiniaudioBackend final : public AudioBackend {
     int32_t bufferFrames_ = 0;
     bool running_ = false;
     bool exclusiveFallback_ = false; // true if requested exclusive, fell back to shared
+    bool silentFallback_ = false;    // true if no output opened and the null device runs instead
 };
 
 } // namespace nota

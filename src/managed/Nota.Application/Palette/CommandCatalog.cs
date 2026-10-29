@@ -28,6 +28,7 @@ public static class CommandCatalog
         C("file.saveVersion", "Save version with note…", "File", Shortcut.CmdAlt('S'), "snapshot history commit"),
         C("file.import", "Import audio…", "File", "", "add file wav"),
         C("file.export", "Export audio…", "File", Shortcut.CmdShift('E'), "render bounce mixdown stems"),
+        C("file.exit", "Exit Nota", "File", Shortcut.Cmd('Q'), "quit close leave"),
 
         // ---- Edit -------------------------------------------------------------------------
         C("edit.undo", "Undo", "Edit", Shortcut.Cmd('Z'), "back revert"),
@@ -73,6 +74,7 @@ public static class CommandCatalog
         C("transport.playPause", "Play / pause", "Transport", Shortcut.Shift("Space"), "resume continue hold"),
         C("transport.stop", "Stop", "Transport", Shortcut.None("Return"), "halt"),
         C("transport.record", "Record", "Transport", Shortcut.Cmd('R'), "arm capture"),
+        C("transport.armOnSelect", "Auto-arm selected track", "Transport", "", "arm on select follow selection record keyboard"),
         C("transport.loop", "Toggle loop", "Transport", Shortcut.Cmd('L'), "cycle repeat"),
         C("transport.metronome", "Metronome", "Transport", Shortcut.Cmd('M'), "click"),
         C("transport.loopRecordMode", "Loop record: overdub / replace", "Transport", Shortcut.CmdShift('R'), "overdub replace take pass loop record"),
@@ -97,6 +99,7 @@ public static class CommandCatalog
         C("roll.octaveDown", "Transpose notes down an octave", "Piano roll", "", "pitch shift"),
         C("roll.removeOutOfScale", "Remove out-of-scale notes", "Piano roll", "", "key fix"),
         C("roll.fitNotes", "Fit to notes", "Piano roll", Shortcut.Shift('F'), "zoom vertical rows height"),
+        C("roll.fold", "Fold the piano roll", "Piano roll", Shortcut.Alt('F').WithShift(), "fold scale rows drum pads names hide keys"),
         C("roll.editSelected", "Edit selected clips together", "Piano roll", "", "multi clip several open piano roll", view: "Arrangement"),
 
         // ---- Grid (the arrangement or the piano roll — whichever was used last) -----------

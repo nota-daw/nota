@@ -22,6 +22,9 @@
 #include "devices/instruments/Keys.h"
 #include "devices/instruments/GrainSynth.h"
 #include "devices/instruments/Sampler.h"
+#include "devices/instruments/Mosaic.h"
+#include "DrumRack.h"
+#include "devices/DeviceFactory.h"
 
 #include <cmath>
 
@@ -67,7 +70,59 @@ void RackCore::setRates(double sr, int32_t maxBlock) {
         if (c.instrument) c.instrument->setSampleRate(sampleRate_);
         for (auto& d : c.devices)
             if (d) d->setSampleRate(sampleRate_, maxBlock_);
+        for (auto& m : c.midiDevices)
+            if (m) m->setSampleRate(sampleRate_, maxBlock_);
     }
+}
+
+void RackCore::forkFrom(const RackCore& o) {
+    auto ns = o.copyState();
+    for (auto& c : ns->chains) {
+        auto ctl = std::make_shared<ChainControls>();
+        if (c.ctl) {
+            const auto& s = *c.ctl;
+            constexpr auto r = std::memory_order_relaxed;
+            ctl->gain.store(s.gain.load(r), r);
+            ctl->pan.store(s.pan.load(r), r);
+            ctl->mute.store(s.mute.load(r), r);
+            ctl->solo.store(s.solo.load(r), r);
+            ctl->triggerNote.store(s.triggerNote.load(r), r);
+            ctl->keyLo.store(s.keyLo.load(r), r);
+            ctl->keyHi.store(s.keyHi.load(r), r);
+            ctl->velLo.store(s.velLo.load(r), r);
+            ctl->velHi.store(s.velHi.load(r), r);
+            ctl->chokeGroup.store(s.chokeGroup.load(r), r);
+            ctl->tune.store(s.tune.load(r), r);
+            ctl->decay.store(s.decay.load(r), r);
+            ctl->ampEnv.store(s.ampEnv.load(r), r); // a ringing pad keeps its level
+            ctl->selLo.store(s.selLo.load(r), r);
+            ctl->selHi.store(s.selHi.load(r), r);
+            ctl->transpose.store(s.transpose.load(r), r);
+            ctl->velScale.store(s.velScale.load(r), r);
+        }
+        c.ctl = std::move(ctl);
+    }
+    commit(ns);
+    constexpr auto r = std::memory_order_relaxed;
+    for (int32_t i = 0; i < kNumMacros; ++i) {
+        macros_[i].store(o.macros_[i].load(r), r);
+        macroNames_[i] = o.macroNames_[i];
+    }
+    rackVolume_.store(o.rackVolume_.load(r), r);
+    glide_.store(o.glide_.load(r), r);
+    swing_.store(o.swing_.load(r), r);
+    humanize_.store(o.humanize_.load(r), r);
+    mode_.store(o.mode_.load(r), r);
+    dryWet_.store(o.dryWet_.load(r), r);
+    pdc_.store(o.pdc_.load(r), r);
+    chainSelect_.store(o.chainSelect_.load(r), r);
+    selFollow_.store(o.selFollow_.load(r), r);
+    liveSel_.store(o.liveSel_.load(r), r);
+    mono_.store(o.mono_.load(r), r);
+    merge_.store(o.merge_.load(r), r);
+    thru_.store(o.thru_.load(r), r);
+    sampleRate_ = o.sampleRate_;
+    maxBlock_ = o.maxBlock_;
 }
 
 bool RackCore::setChainName(int32_t c, const std::string& name) {
@@ -110,6 +165,7 @@ bool RackCore::setChainInstrumentSample(int32_t chain, std::shared_ptr<SampleBuf
     if (!sm) return false;
     sm->setSampleRate(sampleRate_);
     sm->setSample(std::move(buf), root, loop);
+    if (oldSm) fresh->presetTag = oldSm->presetTag; // still the preset it was loaded from (specs/048)
     ns->chains[chain].instrument = std::move(fresh);
     commit(ns);
     return true;
@@ -124,6 +180,65 @@ bool RackCore::removeChain(int32_t chain) {
     return true;
 }
 
+// What the blob leaves out because it points outside the rack: the children's sidechain keys
+// and the Arps' CC targets. A target in the source chain itself moves to the copy.
+void RackCore::copyExternalLinks(const RackChain& src, RackChain& dst) {
+    if (src.devices.size() == dst.devices.size())
+        for (size_t i = 0; i < src.devices.size(); ++i) {
+            const Device* s = src.devices[i].get();
+            Device* d = dst.devices[i].get();
+            if (!s || !d) continue;
+            d->setSidechainSourceTrackId(s->sidechainSourceTrackId());
+            d->setSidechainPart(s->sidechainPart());
+            d->setSidechainTapPre(s->sidechainTapPre());
+            d->setSidechainGainDb(s->sidechainGainDb());
+            d->setSidechainMix(s->sidechainMix());
+        }
+    if (src.instrument && dst.instrument) {
+        dst.instrument->setSidechainSourceTrackId(src.instrument->sidechainSourceTrackId());
+        dst.instrument->setSidechainPart(src.instrument->sidechainPart());
+    }
+    if (src.midiDevices.size() == dst.midiDevices.size())
+        for (size_t i = 0; i < src.midiDevices.size(); ++i) {
+            const MidiDevice* s = src.midiDevices[i].get();
+            MidiDevice* d = dst.midiDevices[i].get();
+            if (!s || !d) continue;
+            d->setCcDepth(s->ccDepth());
+            if (s->ccDestDevice() < 0 && s->ccDestChainUid() == 0) continue;
+            d->setCcDest(s->ccDestDevice(), s->ccDestParam());
+            if (const uint64_t uid = s->ccDestChainUid())
+                d->setCcDestNested(uid == src.uid ? dst.uid : uid, s->ccDestSlot());
+        }
+}
+
+int32_t RackCore::duplicateChain(int32_t chain) {
+    if (chain < 0 || chain >= chainCount()) return -1;
+    // Rebuild the chain from this rack's own blob in a scratch rack: the blob already knows
+    // how to recreate every child kind with all of its state.
+    RackCore tmp;
+    tmp.setRates(sampleRate_, maxBlock_);
+    const auto blob = serialize();
+    tmp.deserialize(blob.data(), static_cast<int32_t>(blob.size()));
+    if (!tmp.authoring_ || chain >= static_cast<int32_t>(tmp.authoring_->chains.size())) return -1;
+    auto ns = copyState();
+    const int32_t at = chain + 1;
+    RackChain& copy = tmp.authoring_->chains[chain];
+    copyExternalLinks(ns->chains[chain], copy);
+    ns->chains.insert(ns->chains.begin() + at, std::move(copy));
+    std::vector<MacroMapping> copies;
+    for (auto& m : ns->mappings) {
+        if (m.chainIndex == chain) {
+            MacroMapping c = m;
+            c.chainIndex = at;
+            copies.push_back(c);
+        } else if (m.chainIndex >= at)
+            ++m.chainIndex;
+    }
+    ns->mappings.insert(ns->mappings.end(), copies.begin(), copies.end());
+    commit(ns);
+    return at;
+}
+
 bool RackCore::setChainInstrument(int32_t chain, int32_t instKind) {
     auto inst = makeInstrument(instKind);
     if (!inst) return false;
@@ -131,8 +246,32 @@ bool RackCore::setChainInstrument(int32_t chain, int32_t instKind) {
     if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return false;
     inst->setSampleRate(sampleRate_);
     ns->chains[chain].instrument = inst;
+    ++ns->chains[chain].instGen; // another instrument: windows on the old one let go
     commit(ns);
     return true;
+}
+
+bool RackCore::replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst, bool prepare) {
+    if (!inst) return false;
+    auto ns = copyState();
+    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return false;
+    if (prepare) inst->setSampleRate(sampleRate_);
+    ns->chains[chain].instrument = std::move(inst);
+    commit(ns);
+    return true;
+}
+
+void RackCore::reapplyMacros() {
+    for (int32_t i = 0; i < kNumMacros; ++i) applyMacro(i, macros_[i].load(std::memory_order_relaxed));
+    for (int32_t c = 0; c < chainCount(); ++c)
+        if (auto* inner = dynamic_cast<RackCore*>(chainInstrument(c))) inner->reapplyMacros();
+}
+
+uint64_t RackCore::chainUid(int32_t chain) const {
+    RackState* st = live();
+    if (!st || chain < 0 || chain >= static_cast<int32_t>(st->chains.size())) return 0;
+    const auto& c = st->chains[chain];
+    return (c.uid << 16) ^ (c.instGen & 0xFFFF);
 }
 
 int32_t RackCore::chainInstrumentKind(int32_t chain) const {
@@ -159,11 +298,11 @@ int32_t RackCore::addChainDevice(int32_t chain, int32_t deviceKind) {
     return addChainDeviceInstance(chain, dev);
 }
 
-int32_t RackCore::addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev) {
+int32_t RackCore::addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, bool prepare) {
     if (!dev) return -1;
     auto ns = copyState();
     if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return -1;
-    dev->setSampleRate(sampleRate_, maxBlock_);
+    if (prepare) dev->setSampleRate(sampleRate_, maxBlock_);
     ns->chains[chain].devices.push_back(std::move(dev));
     const int32_t idx = static_cast<int32_t>(ns->chains[chain].devices.size()) - 1;
     commit(ns);
@@ -214,12 +353,174 @@ bool RackCore::moveChainDevice(int32_t chain, int32_t from, int32_t to) {
     return true;
 }
 
+int32_t RackCore::insertChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, int32_t at, bool prepare) {
+    if (!dev) return -1;
+    auto ns = copyState();
+    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return -1;
+    auto& d = ns->chains[chain].devices;
+    const int32_t n = static_cast<int32_t>(d.size());
+    if (at < 0 || at > n) at = n;
+    if (prepare) dev->setSampleRate(sampleRate_, maxBlock_);
+    d.insert(d.begin() + at, std::move(dev));
+    for (auto& m : ns->mappings)
+        if (m.chainIndex == chain && m.deviceIndex >= at) ++m.deviceIndex;
+    commit(ns);
+    return at;
+}
+
+int32_t RackCore::moveChainDeviceToChain(int32_t chain, int32_t idx, int32_t toChain) {
+    auto ns = copyState();
+    const int32_t nc = static_cast<int32_t>(ns->chains.size());
+    if (chain < 0 || chain >= nc || toChain < 0 || toChain >= nc || toChain == chain) return -1;
+    auto& from = ns->chains[chain].devices;
+    if (idx < 0 || idx >= static_cast<int32_t>(from.size())) return -1;
+    auto x = from[idx];
+    from.erase(from.begin() + idx);
+    auto& to = ns->chains[toChain].devices;
+    const int32_t at = static_cast<int32_t>(to.size());
+    to.push_back(std::move(x));
+    for (auto& m : ns->mappings) {
+        if (m.chainIndex != chain || m.deviceIndex < 0) continue;
+        if (m.deviceIndex == idx) {
+            m.chainIndex = toChain;
+            m.deviceIndex = at;
+        } else if (m.deviceIndex > idx) {
+            --m.deviceIndex;
+        }
+    }
+    commit(ns);
+    return at;
+}
+
 Device* RackCore::chainDeviceAt(int32_t chain, int32_t dev) const {
     RackState* st = live();
     if (!st || chain < 0 || chain >= static_cast<int32_t>(st->chains.size())) return nullptr;
     auto& d = st->chains[chain].devices;
     if (dev < 0 || dev >= static_cast<int32_t>(d.size())) return nullptr;
     return d[dev].get();
+}
+
+std::shared_ptr<MidiDevice> RackCore::makeChainMidiDevice(int32_t kind) {
+    // Built-in MIDI effects only; kind 6 is the MIDI Effect Rack itself, which never nests.
+    if (kind < 0 || kind > 5) return nullptr;
+    return makeMidiDevice(kind);
+}
+
+int32_t RackCore::chainMidiDeviceCount(int32_t chain) const {
+    RackState* st = live();
+    if (!st || chain < 0 || chain >= static_cast<int32_t>(st->chains.size())) return 0;
+    return static_cast<int32_t>(st->chains[chain].midiDevices.size());
+}
+
+int32_t RackCore::addChainMidiDevice(int32_t chain, int32_t midiKind) {
+    return addChainMidiDeviceInstance(chain, makeChainMidiDevice(midiKind));
+}
+
+int32_t RackCore::addChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev) {
+    if (!dev || dev->midiKind() < 0 || dev->midiKind() > 5) return -1;
+    auto ns = copyState();
+    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return -1;
+    dev->setSampleRate(sampleRate_, maxBlock_);
+    ns->chains[chain].midiDevices.push_back(std::move(dev));
+    const int32_t idx = static_cast<int32_t>(ns->chains[chain].midiDevices.size()) - 1;
+    commit(ns);
+    return idx;
+}
+
+bool RackCore::removeChainMidiDevice(int32_t chain, int32_t idx) {
+    auto ns = copyState();
+    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return false;
+    auto& d = ns->chains[chain].midiDevices;
+    if (idx < 0 || idx >= static_cast<int32_t>(d.size())) return false;
+    d.erase(d.begin() + idx);
+    // Mappings follow their MIDI effect: the removed one's go, the ones after it shift down.
+    auto& mv = ns->mappings;
+    for (auto it = mv.begin(); it != mv.end();) {
+        if (it->chainIndex == chain && isMidiTarget(it->deviceIndex)) {
+            const int32_t j = midiTargetIndex(it->deviceIndex);
+            if (j == idx) {
+                it = mv.erase(it);
+                continue;
+            }
+            if (j > idx) it->deviceIndex = midiTarget(j - 1);
+        }
+        ++it;
+    }
+    commit(ns);
+    return true;
+}
+
+bool RackCore::moveChainMidiDevice(int32_t chain, int32_t from, int32_t to) {
+    auto ns = copyState();
+    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return false;
+    auto& d = ns->chains[chain].midiDevices;
+    const int32_t n = static_cast<int32_t>(d.size());
+    if (from < 0 || from >= n) return false;
+    to = std::clamp(to, 0, n - 1);
+    if (to == from) return true;
+    auto x = d[from];
+    d.erase(d.begin() + from);
+    d.insert(d.begin() + to, x);
+    for (auto& m : ns->mappings) {
+        if (m.chainIndex != chain || !isMidiTarget(m.deviceIndex)) continue;
+        const int32_t j = midiTargetIndex(m.deviceIndex);
+        if (j == from) m.deviceIndex = midiTarget(to);
+        else if (from < to && j > from && j <= to)
+            m.deviceIndex = midiTarget(j - 1);
+        else if (to < from && j >= to && j < from)
+            m.deviceIndex = midiTarget(j + 1);
+    }
+    commit(ns);
+    return true;
+}
+
+int32_t RackCore::insertChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev, int32_t at) {
+    if (!dev || dev->midiKind() < 0 || dev->midiKind() > 5) return -1;
+    auto ns = copyState();
+    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return -1;
+    auto& d = ns->chains[chain].midiDevices;
+    const int32_t n = static_cast<int32_t>(d.size());
+    if (at < 0 || at > n) at = n;
+    dev->setSampleRate(sampleRate_, maxBlock_);
+    d.insert(d.begin() + at, std::move(dev));
+    for (auto& m : ns->mappings)
+        if (m.chainIndex == chain && isMidiTarget(m.deviceIndex) && midiTargetIndex(m.deviceIndex) >= at)
+            m.deviceIndex = midiTarget(midiTargetIndex(m.deviceIndex) + 1);
+    commit(ns);
+    return at;
+}
+
+int32_t RackCore::moveChainMidiDeviceToChain(int32_t chain, int32_t idx, int32_t toChain) {
+    auto ns = copyState();
+    const int32_t nc = static_cast<int32_t>(ns->chains.size());
+    if (chain < 0 || chain >= nc || toChain < 0 || toChain >= nc || toChain == chain) return -1;
+    auto& from = ns->chains[chain].midiDevices;
+    if (idx < 0 || idx >= static_cast<int32_t>(from.size())) return -1;
+    auto x = from[idx];
+    from.erase(from.begin() + idx);
+    auto& to = ns->chains[toChain].midiDevices;
+    const int32_t at = static_cast<int32_t>(to.size());
+    to.push_back(std::move(x));
+    for (auto& m : ns->mappings) {
+        if (m.chainIndex != chain || !isMidiTarget(m.deviceIndex)) continue;
+        const int32_t j = midiTargetIndex(m.deviceIndex);
+        if (j == idx) {
+            m.chainIndex = toChain;
+            m.deviceIndex = midiTarget(at);
+        } else if (j > idx) {
+            m.deviceIndex = midiTarget(j - 1);
+        }
+    }
+    commit(ns);
+    return at;
+}
+
+MidiDevice* RackCore::chainMidiDeviceAt(int32_t chain, int32_t idx) const {
+    RackState* st = live();
+    if (!st || chain < 0 || chain >= static_cast<int32_t>(st->chains.size())) return nullptr;
+    auto& d = st->chains[chain].midiDevices;
+    if (idx < 0 || idx >= static_cast<int32_t>(d.size())) return nullptr;
+    return d[idx].get();
 }
 
 RackCore::ChainControls* RackCore::chainControls(int32_t chain) const {
@@ -230,11 +531,28 @@ RackCore::ChainControls* RackCore::chainControls(int32_t chain) const {
 
 void RackCore::setChainZone(int32_t c, int32_t keyLo, int32_t keyHi, int32_t velLo, int32_t velHi) {
     if (auto* x = chainControls(c)) {
-        x->keyLo.store(std::clamp(keyLo, 0, 127), std::memory_order_relaxed);
-        x->keyHi.store(std::clamp(keyHi, 0, 127), std::memory_order_relaxed);
-        x->velLo.store(std::clamp(velLo, 0, 127), std::memory_order_relaxed);
-        x->velHi.store(std::clamp(velHi, 0, 127), std::memory_order_relaxed);
+        // An edge never crosses the other: lo is held at or below hi.
+        keyHi = std::clamp(keyHi, 0, 127);
+        velHi = std::clamp(velHi, 0, 127);
+        x->keyLo.store(std::clamp(keyLo, 0, keyHi), std::memory_order_relaxed);
+        x->keyHi.store(keyHi, std::memory_order_relaxed);
+        x->velLo.store(std::clamp(velLo, 0, velHi), std::memory_order_relaxed);
+        x->velHi.store(velHi, std::memory_order_relaxed);
     }
+}
+
+void RackCore::setChainSelectRange(int32_t c, int32_t lo, int32_t hi) {
+    if (auto* x = chainControls(c)) {
+        hi = std::clamp(hi, 0, 127);
+        x->selLo.store(std::clamp(lo, 0, hi), std::memory_order_relaxed);
+        x->selHi.store(hi, std::memory_order_relaxed);
+    }
+}
+
+void RackCore::chainSelectRange(int32_t c, int32_t& lo, int32_t& hi) const {
+    auto* x = chainControls(c);
+    lo = x ? x->selLo.load(std::memory_order_relaxed) : 0;
+    hi = x ? x->selHi.load(std::memory_order_relaxed) : 127;
 }
 
 void RackCore::chainZone(int32_t c, int32_t& keyLo, int32_t& keyHi, int32_t& velLo, int32_t& velHi) const {
@@ -256,7 +574,20 @@ int32_t RackCore::addMacroMapping(
     int32_t macro, int32_t chain, int32_t deviceIndex, int32_t paramIndex, float rangeMin, float rangeMax) {
     if (macro < 0 || macro >= kNumMacros) return -1;
     auto ns = copyState();
-    if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size())) return -1;
+    if (deviceIndex == kRackControl) {
+        if (paramIndex < 0 || paramIndex >= kRackParams) return -1;
+        chain = -1;
+    } else if (chain < 0 || chain >= static_cast<int32_t>(ns->chains.size()))
+        return -1;
+    // One macro per target: an existing mapping of the same target moves to this macro.
+    for (size_t i = 0; i < ns->mappings.size(); ++i) {
+        auto& m = ns->mappings[i];
+        if (m.chainIndex != chain || m.deviceIndex != deviceIndex || m.paramIndex != paramIndex) continue;
+        m.macro = macro;
+        commit(ns);
+        applyMacro(macro, macros_[macro].load(std::memory_order_relaxed));
+        return static_cast<int32_t>(i);
+    }
     ns->mappings.push_back({macro, chain, deviceIndex, paramIndex, rangeMin, rangeMax});
     const int32_t idx = static_cast<int32_t>(ns->mappings.size()) - 1;
     commit(ns);
@@ -319,6 +650,10 @@ std::vector<uint8_t> RackCore::serialize() const {
     putU8(b, static_cast<uint8_t>(pdc_.load(std::memory_order_relaxed)));
     putF32(b, chainSelect_.load(std::memory_order_relaxed));
     putU8(b, static_cast<uint8_t>(selFollow_.load(std::memory_order_relaxed)));
+    // v9: Instrument Rack mono, MIDI Effect Rack output.
+    putU8(b, static_cast<uint8_t>(mono_.load(std::memory_order_relaxed)));
+    putU8(b, static_cast<uint8_t>(merge_.load(std::memory_order_relaxed)));
+    putU8(b, static_cast<uint8_t>(thru_.load(std::memory_order_relaxed)));
     if (!st) {
         putU32(b, 0);
         putU32(b, 0);
@@ -386,12 +721,53 @@ std::vector<uint8_t> RackCore::serialize() const {
             putU32(b, static_cast<uint32_t>(pc));
             for (int32_t p = 0; p < pc; ++p) putF32(b, d->getParam(p));
         }
+        // v9: select range, transpose, velocity scale, then the chain's MIDI effects.
+        putI32(b, c.ctl->selLo.load(std::memory_order_relaxed));
+        putI32(b, c.ctl->selHi.load(std::memory_order_relaxed));
+        putI32(b, c.ctl->transpose.load(std::memory_order_relaxed));
+        putF32(b, c.ctl->velScale.load(std::memory_order_relaxed));
+        putU32(b, static_cast<uint32_t>(c.midiDevices.size()));
+        for (auto& m : c.midiDevices) {
+            putI32(b, m ? m->midiKind() : -1);
+            putU8(b, (m && m->bypassed()) ? 1 : 0);
+            const int32_t pc = m ? m->paramCount() : 0;
+            putU32(b, static_cast<uint32_t>(pc));
+            for (int32_t p = 0; p < pc; ++p) putF32(b, m->getParam(p));
+            std::vector<uint8_t> ms = m ? m->getState() : std::vector<uint8_t>{};
+            putU32(b, static_cast<uint32_t>(ms.size()));
+            b.insert(b.end(), ms.begin(), ms.end());
+        }
+        // v10: the pictures of hosted plug-ins' windows (specs/046) — the instrument's, then
+        // each device's — so a plug-in grouped into a rack keeps its card's picture through
+        // save, copy and ungroup. 0 = none.
+        auto putPreview = [&b](const EditorPreview& p) {
+            const uint32_t n = p.empty() ? 0 : static_cast<uint32_t>(p.jpeg->size());
+            putU32(b, n);
+            if (n > 0) b.insert(b.end(), p.jpeg->begin(), p.jpeg->end());
+        };
+        putPreview(c.instrument ? c.instrument->editorPreview : EditorPreview{});
+        for (auto& d : c.devices) putPreview(d ? d->editorPreview() : EditorPreview{});
+        // v11: each built-in device's state blob (an EQ-8's band labels, a looper's take, a
+        // nested rack); a hosted plug-in's went in above. 0 = none.
+        for (auto& d : c.devices) {
+            std::vector<uint8_t> ds = d && d->builtinKind() >= 0 ? d->getState() : std::vector<uint8_t>{};
+            putU32(b, static_cast<uint32_t>(ds.size()));
+            b.insert(b.end(), ds.begin(), ds.end());
+        }
     }
     return b;
 }
 
+// Depth of the rack blob being read on this thread: a chain of a blob read at depth > 0 is
+// itself inside a nested rack, and racks nest one level (specs/041).
+static thread_local int32_t tlReadDepth = 0;
+
 void RackCore::deserialize(const uint8_t* data, int32_t size) {
     if (!data || size < 8) return;
+    struct DepthScope {
+        DepthScope() { ++tlReadDepth; }
+        ~DepthScope() { --tlReadDepth; }
+    } depth;
     Cursor cur{data, size, 0};
     if (getU32(cur) != kMagic) return;
     const uint32_t ver = getU32(cur); // v1 = no triggerNote; v2 adds it per chain
@@ -412,6 +788,10 @@ void RackCore::deserialize(const uint8_t* data, int32_t size) {
         chainSelect_.store(getF32(cur), std::memory_order_relaxed);
         selFollow_.store(getU8(cur), std::memory_order_relaxed);
     }
+    // v9 (older blobs: the defaults — mono off, merge and pass-through on).
+    mono_.store(ver >= 9 ? getU8(cur) : 0, std::memory_order_relaxed);
+    merge_.store(ver >= 9 ? getU8(cur) : 1, std::memory_order_relaxed);
+    thru_.store(ver >= 9 ? getU8(cur) : 1, std::memory_order_relaxed);
     auto ns = std::make_shared<RackState>();
     const uint32_t mapN = getU32(cur);
     for (uint32_t i = 0; i < mapN && cur.ok(); ++i) {
@@ -452,7 +832,7 @@ void RackCore::deserialize(const uint8_t* data, int32_t size) {
         const uint8_t* isPtr = cur.take(isLen);
         if (ik == -1) // hosted plugin (via factory) or no instrument (empty id)
             c.instrument = instPluginId.empty() ? nullptr : pluginFactory().instrumentById(instPluginId);
-        else
+        else if (!isRackKind(ik) || tlReadDepth == 1)
             c.instrument = makeInstrument(ik);
         if (c.instrument) {
             c.instrument->setSampleRate(sampleRate_);
@@ -474,6 +854,7 @@ void RackCore::deserialize(const uint8_t* data, int32_t size) {
             if (auto* sm = dynamic_cast<Sampler*>(c.instrument.get())) sm->setSample(buf, root, loop);
         }
         const uint32_t devN = getU32(cur);
+        std::vector<Device*> devAt; // by blob position, null where a device wasn't rebuilt (v10 previews)
         for (uint32_t j = 0; j < devN && cur.ok(); ++j) {
             const int32_t dk = getI32(cur);
             const bool byp = getU8(cur) != 0;
@@ -499,7 +880,54 @@ void RackCore::deserialize(const uint8_t* data, int32_t size) {
                 dev->setBypassed(byp);
                 c.devices.push_back(dev);
             }
+            devAt.push_back(dev.get());
         }
+        if (ver >= 9) {
+            const int32_t sl = getI32(cur), sh = getI32(cur);
+            c.ctl->selHi.store(std::clamp(sh, 0, 127), std::memory_order_relaxed);
+            c.ctl->selLo.store(std::clamp(sl, 0, std::clamp(sh, 0, 127)), std::memory_order_relaxed);
+            c.ctl->transpose.store(std::clamp(getI32(cur), -48, 48), std::memory_order_relaxed);
+            const float vs = getF32(cur);
+            c.ctl->velScale.store(std::isfinite(vs) ? std::clamp(vs, 0.0f, 2.0f) : 1.0f, std::memory_order_relaxed);
+            const uint32_t midiN = getU32(cur);
+            for (uint32_t j = 0; j < midiN && cur.ok(); ++j) {
+                const int32_t mk = getI32(cur);
+                const bool byp = getU8(cur) != 0;
+                const uint32_t pc = getU32(cur);
+                auto md = makeChainMidiDevice(mk);
+                if (md) md->setSampleRate(sampleRate_, maxBlock_);
+                for (uint32_t p = 0; p < pc && cur.ok(); ++p) {
+                    const float pv = getF32(cur);
+                    if (md) md->setParam(static_cast<int32_t>(p), pv);
+                }
+                const uint32_t msLen = getU32(cur);
+                const uint8_t* msPtr = cur.take(msLen);
+                if (md) {
+                    if (msPtr && msLen > 0) md->setState(msPtr, static_cast<int32_t>(msLen));
+                    md->setBypassed(byp);
+                    c.midiDevices.push_back(std::move(md));
+                }
+            }
+        }
+        if (ver >= 10) {
+            auto getPreview = [&cur]() {
+                const uint32_t n = getU32(cur);
+                const uint8_t* p = cur.take(n);
+                return (p && n > 0) ? EditorPreview::make(std::vector<uint8_t>(p, p + n)) : EditorPreview{};
+            };
+            auto ip = getPreview();
+            if (c.instrument) c.instrument->editorPreview = std::move(ip);
+            for (auto* d : devAt) {
+                auto dp = getPreview();
+                if (d) d->setEditorPreview(std::move(dp));
+            }
+        }
+        if (ver >= 11)
+            for (auto* d : devAt) {
+                const uint32_t n = getU32(cur);
+                const uint8_t* p = cur.take(n);
+                if (d && p && n > 0 && d->builtinKind() >= 0) d->setState(p, static_cast<int32_t>(n));
+            }
         ns->chains.push_back(std::move(c));
     }
     commit(ns);
@@ -538,6 +966,8 @@ std::shared_ptr<Instrument> RackCore::makeInstrument(int32_t kind) {
     case 14: return std::make_shared<Pentad>();
     case 15: return std::make_shared<Consort>();
     case 16: return std::make_shared<Keys>();
+    case 17: return std::make_shared<Mosaic>(); // empty: the program rides its state or the engine
+    case 4: return std::make_shared<DrumRack>(); // nested Drum Rack (specs/041)
     default: return nullptr; // -1 = no instrument (effect rack); plugins are a follow-up
     }
 }
@@ -558,6 +988,10 @@ void RackCore::applyMacro(int32_t macro, float value) {
     for (auto& m : st->mappings) {
         if (m.macro != macro) continue;
         const float target = m.rangeMin + applyCurve(value, m.curve) * (m.rangeMax - m.rangeMin);
+        if (m.deviceIndex == kRackControl) { // rack-level control, no chain
+            if (m.paramIndex == RackSelector) chainSelect_.store(std::clamp(target, 0.0f, 1.0f), std::memory_order_relaxed);
+            continue;
+        }
         if (m.chainIndex < 0 || m.chainIndex >= static_cast<int32_t>(st->chains.size())) continue;
         auto& c = st->chains[m.chainIndex];
         if (m.deviceIndex == kPadControls) {
@@ -571,6 +1005,10 @@ void RackCore::applyMacro(int32_t macro, float value) {
             case PadDecay: k.decay.store(std::clamp(target, 0.0f, 1.0f), std::memory_order_relaxed); break;
             default: break;
             }
+        } else if (isMidiTarget(m.deviceIndex)) {
+            const int32_t j = midiTargetIndex(m.deviceIndex);
+            if (j < static_cast<int32_t>(c.midiDevices.size()) && c.midiDevices[j])
+                c.midiDevices[j]->setParam(m.paramIndex, target);
         } else if (m.deviceIndex < 0) {
             if (c.instrument) c.instrument->pluginParamSet(m.paramIndex, target);
         } else if (m.deviceIndex < static_cast<int32_t>(c.devices.size())) {

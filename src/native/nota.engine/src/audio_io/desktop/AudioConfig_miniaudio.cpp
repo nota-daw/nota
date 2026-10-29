@@ -37,6 +37,9 @@ std::string idToUid(const ma_device_id& id) {
 bool enumerate(bool inputScope, std::vector<ma_device_info>& out) {
     ma_context ctx;
     if (ma_context_init(nullptr, 0, nullptr, &ctx) != MA_SUCCESS) return false;
+    // With no real backend loaded the context lands on the null backend: its stand-in
+    // device is the silent fallback, not something to list or pick.
+    if (ctx.backend == ma_backend_null) { ma_context_uninit(&ctx); return false; }
 
     ma_device_info* playback = nullptr;
     ma_uint32 playbackCount = 0;

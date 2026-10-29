@@ -352,6 +352,10 @@ internal sealed class MosaicCurveView : Control
 
     public MosaicCurveView() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.SizeNorthSouth); }
 
+    /// <summary>The value as a typeable field (⌥-click, specs/035); <paramref name="text"/> is its read-out.</summary>
+    public ValueField EntryField(string name, Func<double, string> text) => new(name, () => Get(), text,
+        v => SetValue?.Invoke((float)v), () => Begin?.Invoke(), () => End?.Invoke(), Default) { After = InvalidateVisual };
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);

@@ -42,6 +42,7 @@ public static class DeviceCategories
     {
         new("Generate", ["Nota Arp", "Nota Chord", "Nota Random"]),
         new("Shape", ["Nota Scale", "Nota Length", "Nota Velocity"]),
+        new("Racks", ["Nota MIDI Effect Rack"]),
     };
 
     /// <summary>The categories of one tab, in display order, with their built-in members.</summary>

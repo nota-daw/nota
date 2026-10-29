@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <limits>
@@ -15,17 +16,35 @@
 #include <string>
 #include <vector>
 
+#include "devices/EditorPreview.h"
 #include "engine/MidiController.h"
 #include "engine/NoteExpression.h"
 #include "engine/TransportInfo.h"
 
 namespace nota {
 
+struct MidiEv;
+
+class RackCore;
+
 class Instrument {
   public:
+    // The rack behind this device, if it is one (specs/044): a virtual call where the audio
+    // thread walks rack chains every block, instead of a dynamic_cast per device.
+    virtual const RackCore* asRack() const { return nullptr; }
     virtual ~Instrument() = default;
 
     virtual void setSampleRate(double sr) = 0;
+
+    // MIDI effects inside the instrument (an Instrument Rack chain's, issue #329). An instrument
+    // that wants the block's notes up front says so; the engine then hands it the block's sorted
+    // events once, with the clock the track's own MIDI effects ran on (the arrangement's, or a
+    // Session slot's loop), before driving it event by event as usual. The loop seam shifts
+    // their clock like the track's own MIDI effects; allNotesOff flushes them.
+    virtual bool takesBlockMidi() const { return false; }
+    virtual void blockMidi(const MidiEv* /*evs*/, int /*n*/, int32_t /*frames*/, double /*beatStart*/, double /*spb*/,
+        bool /*playing*/) {}
+    virtual void midiTimeJump(double /*deltaBeats*/) {}
 
     // Note events (applied at segment boundaries by the engine for sample accuracy).
     virtual void noteOn(int32_t pitch, float velocity) = 0;
@@ -57,6 +76,12 @@ class Instrument {
     // Fold (specs/022): the Devices panel draws the instrument as a narrow strip. A view flag
     // saved with the project; message thread only.
     bool folded = false;
+    // The preset this instrument was loaded from (specs/048): an engine preset tag index,
+    // 0 = none. Message thread only.
+    int32_t presetTag = 0;
+    // Editor preview (specs/046): a hosted plug-in's window as it last looked, drawn behind
+    // its card. Saved with the project; message thread only, like `folded`.
+    EditorPreview editorPreview;
     Instrument();
     virtual void controller(int32_t ctl, float value);
 
@@ -66,9 +91,19 @@ class Instrument {
     // playEvents / deliverExpr). An instrument that models the pedal itself (Keys, Mosaic, a
     // hosted plug-in) or ignores it on purpose (drums) returns true and is left alone.
     virtual bool handlesSustain() const { return false; }
-    // The engine's damper state for this instrument. Audio thread only.
-    bool pedalDown = false;
-    uint64_t pedalHeld[2] = {0, 0}; // released keys the pedal is holding, one bit per pitch
+    // True while every note it plays ends on its own (a sample that isn't looped), so a
+    // note-off would only cut the sound short. A Drum Rack pad then plays its hit as a
+    // one-shot, however short the MIDI note (#312); anything that would ring forever
+    // without a note-off (a looped sample, a synth) still gets it.
+    virtual bool playsOneShot() const { return false; }
+    // The note-off a one-shot pad held back. The note still plays through, but if the
+    // instrument stops playing one-shots mid-note (its loop turned on), it releases then
+    // instead of ringing on.
+    virtual void noteOffHeldBack(int32_t /*pitch*/) {}
+    // The engine's damper state for this instrument. Written on the audio thread only; relaxed
+    // atomics because a rack edit forks the rack on the message thread and carries them over.
+    std::atomic<bool> pedalDown{false};
+    std::atomic<uint64_t> pedalHeld[2] = {0, 0}; // released keys the pedal is holding, one bit per pitch
 
     // Add `frames` of interleaved stereo into `out`. Continues current voices.
     virtual void render(float* out, int32_t frames) = 0;
@@ -80,7 +115,7 @@ class Instrument {
     // fade-out has run.
     bool bypassed() const { return bypassed_.load(std::memory_order_relaxed); }
     void setBypassed(bool b) { bypassed_.store(b, std::memory_order_relaxed); }
-    bool offSettled = false;
+    std::atomic<bool> offSettled{false}; // relaxed, like pedalDown
 
     // Musical transport for generative instruments (e.g. Nota Pendulum): the engine
     // calls this once per block before render() with the block's start beat,
@@ -100,6 +135,60 @@ class Instrument {
     virtual int32_t sidechainSourceTrackId() const { return -1; }
     virtual void setSidechainSourceTrackId(int32_t /*trackId*/) {}
     virtual void setSidechain(const float* /*interleaved*/, int32_t /*frames*/) {}
+    // The part of the source track's instrument React listens to (specs/050), 0 = the whole
+    // track; see Device::sidechainPart. Read by the engine.
+    uint64_t sidechainPart() const { return scPart_.load(std::memory_order_relaxed); }
+    void setSidechainPart(uint64_t part) { scPart_.store(part, std::memory_order_relaxed); }
+
+    // --- Parts (specs/050): an instrument with several sounding parts — a Drum Rack's pads, an
+    // Instrument Rack's chains (first level), Nota Rhythm's voices — lets a sidechain key listen
+    // to one of them. A part has a stable id (survives reorder / insert / delete of others; 0 is
+    // never a part) and a current index. Message thread, except setPartTaps.
+    virtual int32_t partCount() const { return 0; }
+    virtual uint64_t partId(int32_t /*index*/) const { return 0; }
+    virtual int32_t partIndex(uint64_t /*id*/) const { return -1; }
+    virtual std::string partName(int32_t /*index*/) const { return {}; }
+    // Audio thread, right before a block's renders: the parts keys listen to this block and
+    // where their signal goes. pre = the part before its own inserts, post = after its inserts
+    // and its gain / pan, before the instrument sums it (stereo interleaved, the whole block,
+    // ADDED into). The instrument copies the table; the engine clears it with (nullptr, 0).
+    struct PartTap {
+        uint64_t part;
+        float* pre;
+        float* post;
+    };
+    virtual void setPartTaps(const PartTap* /*taps*/, int32_t /*n*/) {}
+
+    // The copy a multi-part instrument keeps. A block may render in several pieces (split at
+    // MIDI events), so it also tracks where in the block the next piece starts: take(frames)
+    // returns that offset and moves past the piece.
+    class PartTaps {
+      public:
+        static constexpr int32_t kMax = 16; // == the engine's route pool
+        void set(const PartTap* taps, int32_t n) {
+            n_ = taps ? std::min(n, kMax) : 0;
+            for (int32_t i = 0; i < n_; ++i) taps_[i] = taps[i];
+            pos_ = 0;
+        }
+        bool any() const { return n_ > 0; }
+        const PartTap* find(uint64_t part) const {
+            for (int32_t i = 0; i < n_; ++i)
+                if (taps_[i].part == part) return &taps_[i];
+            return nullptr;
+        }
+        int32_t count() const { return n_; }
+        const PartTap& at(int32_t i) const { return taps_[i]; }
+        int32_t take(int32_t frames) {
+            const int32_t p = pos_;
+            pos_ += frames;
+            return p;
+        }
+
+      private:
+        PartTap taps_[kMax] = {};
+        int32_t n_ = 0;
+        int32_t pos_ = 0;
+    };
 
     // Reported processing latency, for PDC (M3-7). 0 for built-ins.
     virtual int32_t latencySamples() const { return 0; }
@@ -213,8 +302,20 @@ class Instrument {
     // copied state). Returns nullptr if the engine should handle it. Message thread.
     virtual std::shared_ptr<Instrument> clone() const { return nullptr; }
 
+    // Which instrument this is, for the UI's per-card state (specs/043): every new instrument
+    // (added, swapped in, copied, cloned) gets a fresh value; an edit that forks the object (a
+    // rack) keeps it with adoptUid, and undo brings back the object with its own. Message thread.
+    uint64_t uid() const { return uid_; }
+    void adoptUid(const Instrument& from) { uid_ = from.uid_; }
+
   private:
+    static uint64_t nextUid() {
+        static std::atomic<uint64_t> next{1};
+        return next.fetch_add(1, std::memory_order_relaxed);
+    }
     std::atomic<bool> bypassed_{false};
+    uint64_t uid_ = nextUid();
+    std::atomic<uint64_t> scPart_{0};
 };
 
 } // namespace nota

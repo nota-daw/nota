@@ -33,7 +33,11 @@ public sealed class ProjectService
     /// v18 (Phase 3) adds CV modulation: per-track LFO modulators + CV links to device params.
     /// v22 (specs/020) adds MIDI controller curves on MIDI clips and Session slot clips.
     /// v23 (specs/022) adds the Devices-panel fold on devices, MIDI effects and instruments.
-    public const int CurrentFormatVersion = 23;
+    /// v25 (specs/044) adds references into rack chains (lanes, CV links, Arp CC targets) and
+    /// chain children's sidechain keys / CC targets.
+    /// v26 (specs/048) adds Preset on instruments, devices and MIDI effects.
+    /// v27 (specs/046) adds Preview on hosted plug-ins: the picture of their window.
+    public const int CurrentFormatVersion = 28;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -101,10 +105,12 @@ public sealed class ProjectService
                 ReturnIndex = engine.TrackReturnIndex(ti.Id),
                 GroupId = ti.GroupId >= 0 && idToIndex.TryGetValue(ti.GroupId, out var gix) ? gix : -1,   // parent → doc index
                 ColorIndex = engine.GetTrackColorIndex(ti.Id),
+                PianoFold = engine.GetTrackPianoFold(ti.Id) ? true : null,
                 RecordInput = engine.GetTrackRecordInput(ti.Id) is var rin && rin > 0
                     ? (idToIndex.TryGetValue(rin, out var rix) ? rix + 2 : 0)   // track source → doc index + 2
                     : rin,                                                       // 0 hardware / -1 master
                 Monitor = engine.GetTrackMonitor(ti.Id),
+                InputChannels = (int)engine.GetTrackInputChannels(ti.Id),
                 MidiFrom = engine.GetTrackMidiSource(ti.Id) is var mfrom && mfrom > 0
                     && idToIndex.TryGetValue(mfrom, out var mix) ? mix : -1,      // source → doc index, else off
             };
@@ -161,10 +167,16 @@ public sealed class ProjectService
                     if (vs.Count > 0) instDto.VoiceSamples = vs;
                 }
                 // React source (Nota Flux): store as a doc index, resolved on load.
-                int instScSrc = engine.InstrumentSidechainSource(ti.Id);
-                instDto.SidechainSource = instScSrc >= 0 && idToIndex.TryGetValue(instScSrc, out var isi) ? isi : -1;
+                // A key whose part is gone (Missing) saves as no key (specs/050).
+                var instKey = engine.InstrumentSidechainKey(ti.Id);
+                int isi = -1;
+                bool instKeyed = instKey.Source >= 0 && instKey.Part != SidechainKey.Missing && idToIndex.TryGetValue(instKey.Source, out isi);
+                instDto.SidechainSource = instKeyed ? isi : -1;
+                instDto.SidechainPart = instKeyed ? instKey.Part : -1;
                 instDto.Folded = engine.DeviceFolded(ti.Id, -1);
                 instDto.Bypassed = engine.DeviceBypassed(ti.Id, -1);
+                instDto.Preset = CapturePresetTag(engine, ti.Id, PresetSurface.Instrument, -1);
+                instDto.Preview = RegisterBlob(doc, engine.GetPluginPreview(ti.Id, -1));   // a plug-in's window picture (specs/046)
                 t.Instrument = instDto;
             }
 
@@ -178,7 +190,12 @@ public sealed class ProjectService
                 for (int p = 0; p < pc; p++) mdev.Params[p] = engine.MidiEffectGetParam(ti.Id, m, p);
                 mdev.CcDestDevice = engine.MidiEffectCcDestDevice(ti.Id, m);
                 mdev.CcDestParam = engine.MidiEffectCcDestParam(ti.Id, m);
+                var (ccChain, ccSlot) = engine.MidiEffectCcDestPath(ti.Id, m);
+                if (ccChain >= 0) { mdev.CcDestChain = ccChain; mdev.CcDestSlot = ccSlot; }
                 mdev.CcDepth = engine.MidiEffectCcDepth(ti.Id, m);
+                var mstate = engine.MidiEffectGetState(ti.Id, m);   // the MIDI Effect Rack's structure
+                if (mstate.Length > 0) mdev.State = RegisterBlob(doc, mstate);
+                mdev.Preset = CapturePresetTag(engine, ti.Id, PresetSurface.MidiEffect, m);
                 t.MidiEffects.Add(mdev);
             }
 
@@ -266,8 +283,11 @@ public sealed class ProjectService
             for (int l = 0; l < laneCount; l++)
             {
                 var info = engine.AutomationLaneInfo(ti.Id, l);
+                var (laneChain, laneSlot) = engine.AutomationLanePath(ti.Id, l);
                 t.Automation.Add(new AutomationLaneDto
                 {
+                    Chain = laneChain >= 0 ? laneChain : null,
+                    Slot = laneChain >= 0 ? laneSlot : null,
                     Target = (int)info.Target,
                     DeviceIndex = info.DeviceIndex,
                     ParamIndex = info.ParamIndex,
@@ -300,14 +320,25 @@ public sealed class ProjectService
                     InputA = (int)engine.ModulatorGet(ti.Id, id, 10),
                     InputB = (int)engine.ModulatorGet(ti.Id, id, 11),
                     MathOffset = engine.ModulatorGet(ti.Id, id, 12),
+                    ScopeWindowMs = engine.ModulatorGet(ti.Id, id, 13),
+                    ScopeSync = engine.ModulatorGet(ti.Id, id, 14) > 0.5f,
+                    ScopeWindowBeats = engine.ModulatorGet(ti.Id, id, 15),
+                    ScopeZoom = (int)engine.ModulatorGet(ti.Id, id, 16),
+                    ScopeTrigger = (int)engine.ModulatorGet(ti.Id, id, 17),
+                    ScopeHeight = engine.ModulatorGet(ti.Id, id, 18),
                 });
             }
             int cvCount = engine.CvLinkCount(ti.Id);
             for (int c = 0; c < cvCount; c++)
             {
                 int tgtId = engine.CvLinkTargetTrack(ti.Id, c);   // -1 = self
+                var path = engine.CvLinkPath(ti.Id, c);
                 t.CvLinks.Add(new CvLinkDto
                 {
+                    SourceChain = path.SourceChain >= 0 ? path.SourceChain : null,
+                    SourceSlot = path.SourceChain >= 0 ? path.SourceSlot : null,
+                    TargetChain = path.TargetChain >= 0 ? path.TargetChain : null,
+                    TargetSlot = path.TargetChain >= 0 ? path.TargetSlot : null,
                     Source = engine.CvLinkSource(ti.Id, c),
                     SourceKind = engine.CvLinkSourceKind(ti.Id, c),
                     SourceDevice = engine.CvLinkSourceDevice(ti.Id, c),
@@ -322,6 +353,7 @@ public sealed class ProjectService
                 });
             }
 
+            SaveNestedLinks(engine, ti.Id, t, idToIndex);
             doc.Tracks.Add(t);
         }
 
@@ -336,6 +368,7 @@ public sealed class ProjectService
             Name = engine.GetTrackName(masterId) is { Length: > 0 } mName ? mName : null,
             ColorIndex = engine.GetTrackColorIndex(masterId),
             Devices = CaptureDevices(engine, masterId, doc, idToIndex, warnings, "Master"),
+            NestedSidechains = NestedLinks(engine, masterId, idToIndex).Item1,   // keys inside the master's racks
         };
 
         return doc;
@@ -343,6 +376,17 @@ public sealed class ProjectService
 
     // Capture a track's device chain (built-in params / plugin identity+state / rack blob,
     // plus sidechain routing as a doc index). Shared by tracks and the master.
+    // A device's preset tag (specs/048): what it was loaded from and the values it left.
+    private static PresetTagDto? CapturePresetTag(IAudioEngine engine, int trackId, PresetSurface surface, int index)
+        => engine.PresetTagInfo(engine.DevicePresetTag(trackId, surface, index)) is { Id.Length: > 0 } tag
+            ? new PresetTagDto { Id = tag.Id, Name = tag.Name, Loaded = tag.Loaded } : null;
+
+    private static void ApplyPresetTag(IAudioEngine engine, int trackId, PresetSurface surface, int index, PresetTagDto? tag)
+    {
+        if (tag is { Id.Length: > 0 })
+            engine.SetDevicePresetTag(trackId, surface, index, tag.Id, tag.Name, tag.Loaded.Length > 0 ? tag.Loaded : null);
+    }
+
     private static List<DeviceDto> CaptureDevices(IAudioEngine engine, int trackId, ProjectDocument doc,
                                                   Dictionary<int, int> idToIndex, List<string> warnings, string label)
     {
@@ -352,8 +396,13 @@ public sealed class ProjectService
         {
             int bk = engine.TrackDeviceBuiltinKind(trackId, d);
             var dev = new DeviceDto { BuiltinKind = bk, Bypassed = engine.DeviceBypassed(trackId, d), Folded = engine.DeviceFolded(trackId, d) };
-            int scSrc = engine.DeviceSidechainSource(trackId, d);
-            dev.SidechainSource = scSrc >= 0 && idToIndex.TryGetValue(scSrc, out var si) ? si : -1;
+            // Source as a doc index, its part as an index on that track; a key whose part is
+            // gone (Missing) saves as no key (specs/050).
+            var key = engine.DeviceSidechainKey(trackId, d);
+            int si = -1;
+            bool keyed = key.Source >= 0 && key.Part != SidechainKey.Missing && idToIndex.TryGetValue(key.Source, out si);
+            dev.SidechainSource = keyed ? si : -1;
+            dev.SidechainPart = keyed ? key.Part : -1;
             dev.SidechainGain = engine.DeviceSidechainGain(trackId, d);
             dev.SidechainMix = engine.DeviceSidechainMix(trackId, d);
             dev.SidechainTapPre = engine.DeviceSidechainTapPre(trackId, d);
@@ -379,6 +428,8 @@ public sealed class ProjectService
                 for (int p = 0; p < pc; p++) dev.Params[p] = engine.DeviceGetParam(trackId, d, p);
                 dev.State = RegisterBlob(doc, engine.DeviceGetState(trackId, d));
             }
+            dev.Preset = CapturePresetTag(engine, trackId, PresetSurface.Effect, d);
+            dev.Preview = RegisterBlob(doc, engine.GetPluginPreview(trackId, d));   // a plug-in's window picture (specs/046)
             list.Add(dev);
         }
         return list;
@@ -386,8 +437,50 @@ public sealed class ProjectService
 
     // Recreate a device chain onto a track (or the master). Sidechain sources are deferred
     // (resolved once every track exists).
+    // Links on devices inside the track's racks that the rack blob can't hold (specs/044): a
+    // chain child's sidechain key (source as a doc index) and a chain MIDI effect's CC target.
+    private static void SaveNestedLinks(IAudioEngine engine, int trackId, TrackDto t, Dictionary<int, int> idToIndex)
+    {
+        var (scs, ccs) = NestedLinks(engine, trackId, idToIndex);
+        t.NestedSidechains = scs;
+        t.NestedCcRoutes = ccs;
+    }
+
+    private static (List<NestedSidechainDto>?, List<NestedCcRouteDto>?) NestedLinks(IAudioEngine engine, int trackId, Dictionary<int, int> idToIndex)
+    {
+        var scs = new List<NestedSidechainDto>();
+        var ccs = new List<NestedCcRouteDto>();
+        void Rack(int host, int chains, System.Func<int, int> devCount, System.Func<int, int> midiCount, bool hasInstrument)
+        {
+            for (int c = 0; c < chains; c++)
+            {
+                int n = devCount(c);
+                for (int slot = hasInstrument ? -1 : 0; slot < n; slot++)
+                    if (engine.RackChainSidechain(trackId, host, c, slot) is { SourceTrack: >= 0 } sc
+                        && idToIndex.TryGetValue(sc.SourceTrack, out int src)
+                        && engine.RackChainSidechainPart(trackId, host, c, slot) is var part && part != SidechainKey.Missing)
+                        scs.Add(new NestedSidechainDto { Host = host, Chain = c, Slot = slot, Source = src, Part = part, TapPre = sc.TapPre, GainDb = sc.GainDb, Mix = sc.Mix });
+                int mn = midiCount(c);
+                for (int i = 0; i < mn; i++)
+                    if (engine.RackChainMidiCcDest(trackId, host, c, i) is { } d && (d.Device >= 0 || d.Chain >= 0) && d.Param >= 0)
+                        ccs.Add(new NestedCcRouteDto { Host = host, Chain = c, Index = i, DestDevice = d.Device, DestChain = d.Chain, DestSlot = d.Slot, Param = d.Param, Depth = d.Depth });
+            }
+        }
+        if (engine.RackChainCount(trackId) > 0)   // 0 unless the instrument is a rack
+            Rack(-1, engine.RackChainCount(trackId), c => engine.RackChainDeviceCount(trackId, c), c => engine.RackChainMidiCount(trackId, c), true);
+        int devs = engine.TrackDeviceCount(trackId);
+        for (int d = 0; d < devs; d++)
+            if (engine.TrackDeviceBuiltinKind(trackId, d) == 5)
+                Rack(d, engine.RackDevChainCount(trackId, d), c => engine.RackDevChainDeviceCount(trackId, d, c), _ => 0, false);
+        int mids = engine.TrackMidiEffectCount(trackId);
+        for (int m = 0; m < mids; m++)
+            if (engine.MidiEffectKind(trackId, m) == 6)
+                Rack(-1000 - m, engine.MidiRackChainCount(trackId, m), _ => 0, c => engine.MidiRackChainDeviceCount(trackId, m, c), false);
+        return (scs.Count > 0 ? scs : null, ccs.Count > 0 ? ccs : null);
+    }
+
     private static void ApplyDevices(IAudioEngine engine, int trackId, IEnumerable<DeviceDto> devices,
-                                     string bundleDir, List<(int track, int dev, int srcIndex)> scDeferred, List<string> warnings)
+                                     string bundleDir, List<(int track, int dev, int srcIndex, int part)> scDeferred, List<string> warnings)
     {
         foreach (var d in devices)
         {
@@ -431,7 +524,9 @@ public sealed class ProjectService
             }
             if (d.Bypassed) engine.SetDeviceBypassed(trackId, di, true);
             if (d.Folded) engine.SetDeviceFolded(trackId, di, true);
-            if (d.SidechainSource >= 0) scDeferred.Add((trackId, di, d.SidechainSource));
+            ApplyPresetTag(engine, trackId, PresetSurface.Effect, di, d.Preset);
+            if (d.Preview is { } previewRel) engine.SetPluginPreview(trackId, di, ReadPreview(bundleDir, previewRel));
+            if (d.SidechainSource >= 0) scDeferred.Add((trackId, di, d.SidechainSource, d.SidechainPart));
             engine.SetDeviceSidechainGain(trackId, di, d.SidechainGain);
             engine.SetDeviceSidechainMix(trackId, di, d.SidechainMix);
             engine.SetDeviceSidechainTapPre(trackId, di, d.SidechainTapPre);
@@ -468,8 +563,9 @@ public sealed class ProjectService
         // Doc index -> new live track id, and deferred sidechain wiring (a source may be
         // a track created later), both resolved after every track exists (Phase B).
         var newTrackIds = new List<int>();
-        var scDeferred = new List<(int track, int dev, int srcIndex)>();
-        var instScDeferred = new List<(int track, int srcIndex)>();   // instrument React source (Nota Flux)
+        var scDeferred = new List<(int track, int dev, int srcIndex, int part)>();
+        var nestedScDeferred = new List<(int track, NestedSidechainDto dto)>();
+        var instScDeferred = new List<(int track, int srcIndex, int part)>();   // instrument React source (Nota Flux)
         var recInputDeferred = new List<(int trackId, int encoded)>();
         var monitorDeferred = new List<(int trackId, bool on)>();
         var groupDeferred = new List<(int trackId, int parentDocIndex)>();   // group membership
@@ -594,10 +690,14 @@ public sealed class ProjectService
             }
 
             if (id > 0 && t.Instrument is { Folded: true }) engine.SetDeviceFolded(id, -1, true);
+            if (id > 0) ApplyPresetTag(engine, id, PresetSurface.Instrument, -1, t.Instrument?.Preset);
+            // Not onto the stand-in for a plug-in that isn't installed: it's another instrument.
+            if (id > 0 && t.Instrument is { Preview: { } instPreview } && engine.TrackInstrumentKind(id) == t.Instrument.Kind)
+                engine.SetPluginPreview(id, -1, ReadPreview(bundleDir, instPreview));
             if (id > 0 && t.Instrument is { Bypassed: true })
                 engine.SetDeviceBypassed(id, -1, true);           // the instrument card's switch is off (#148)
             if (id > 0 && t.Instrument is { SidechainSource: >= 0 } insc)
-                instScDeferred.Add((id, insc.SidechainSource));   // wire React source once every track exists
+                instScDeferred.Add((id, insc.SidechainSource, insc.SidechainPart));   // wire React source once every track exists
             if (id > 0 && t.GroupId >= 0)
                 groupDeferred.Add((id, t.GroupId));               // reparent into its group once every track exists
             newTrackIds.Add(id);   // keep index aligned with doc.Tracks even on failure (id <= 0)
@@ -614,11 +714,14 @@ public sealed class ProjectService
             engine.SetTrackArmed(id, t.Armed);
             if (t.Name is { Length: > 0 } trackName) engine.SetTrackName(id, trackName);
             if (t.ColorIndex >= 0) engine.SetTrackColorIndex(id, t.ColorIndex);
+            if (t.PianoFold == true) engine.SetTrackPianoFold(id, true);
             if (t.RecordInput != 0) recInputDeferred.Add((id, t.RecordInput));   // resolve after all tracks exist
             if (t.Monitor) monitorDeferred.Add((id, true));                        // after record inputs resolve
+            engine.SetTrackInputChannels(id, (InputChannels)(t.InputChannels ?? 0)); // older files: the stereo pair
             if (t.MidiFrom >= 0) midiFromDeferred.Add((id, t.MidiFrom));           // resolve after all tracks exist
             for (int b = 0; b < t.Sends.Length && b < 4; b++) engine.SetTrackSend(id, b, t.Sends[b]);
 
+            var ccPaths = new List<(int mi, int chain, int slot)>();   // CC targets inside racks: after the devices
             foreach (var m in t.MidiEffects)
             {
                 int mi = engine.AddMidiEffect(id, m.Kind);
@@ -628,16 +731,30 @@ public sealed class ProjectService
                 if (m.Kind == 1 && m.Params.Length <= 16) PresetService.ChordLegacySwitches(engine, id, mi);   // pre-switch Nota Chord
                 if (m.Kind == 3 && m.Params.Length <= 11) PresetService.LengthLegacy(engine, id, mi);          // pre-Division Nota Length
                 if (m.Kind == 4 && m.Params.Length <= 7) PresetService.VelocityLegacy(engine, id, mi);         // pre-switch Nota Velocity
+                if (m.State is { } ms)
+                {
+                    var blob = ReadBlob(bundleDir, ms);
+                    if (blob.Length > 0) engine.MidiEffectSetState(id, mi, blob, false);
+                }
                 if (m.Bypassed) engine.SetMidiEffectBypassed(id, mi, true);
                 if (m.Folded) engine.SetMidiEffectFolded(id, mi, true);
-                if (m.CcDestDevice >= 0 && m.CcDestParam >= 0)
+                ApplyPresetTag(engine, id, PresetSurface.MidiEffect, mi, m.Preset);
+                if ((m.CcDestDevice >= 0 || m.CcDestChain is not null) && m.CcDestParam >= 0)
                 {
                     engine.SetMidiEffectCcDest(id, mi, m.CcDestDevice, m.CcDestParam);
                     engine.SetMidiEffectCcDepth(id, mi, m.CcDepth);
+                    if (m.CcDestChain is int cc) ccPaths.Add((mi, cc, m.CcDestSlot ?? 0));
                 }
             }
 
             ApplyDevices(engine, id, t.Devices, bundleDir, scDeferred, warnings);
+            foreach (var (mi, cc, cs) in ccPaths)
+                if (!engine.SetMidiEffectCcDestPath(id, mi, cc, cs)) warnings.Add("Couldn't reconnect an Arp's CC lane to a device in a rack.");
+            foreach (var r in t.NestedCcRoutes ?? new())
+                if (!engine.RackChainMidiSetCcDest(id, r.Host, r.Chain, r.Index, new NestedCcDest(r.DestDevice, r.DestChain, r.DestSlot, r.Param, r.Depth)))
+                    warnings.Add("Couldn't reconnect the CC lane of an Arp in a rack.");
+            foreach (var n in t.NestedSidechains ?? new())
+                if (n.Source >= 0) nestedScDeferred.Add((id, n));
 
             foreach (var c in t.MidiClips)
             {
@@ -701,7 +818,13 @@ public sealed class ProjectService
             foreach (var lane in t.Automation)
             {
                 int li;
-                if ((AutomationTarget)lane.Target == AutomationTarget.PluginParam)
+                if (lane.Chain is int lc) // a lane on a device grouped into a rack (specs/044)
+                {
+                    li = engine.AddNestedAutomationLane(id, (AutomationTarget)lane.Target, lane.DeviceIndex, lc, lane.Slot ?? 0,
+                                                        lane.ParamIndex, lane.PluginParamId);
+                    if (li < 0) { warnings.Add("Couldn't recreate an automation lane on a device in a rack."); continue; }
+                }
+                else if ((AutomationTarget)lane.Target == AutomationTarget.PluginParam)
                 {
                     string pid = lane.PluginParamId ?? "";
                     li = engine.AddPluginAutomationLane(id, lane.DeviceIndex, pid);
@@ -739,6 +862,15 @@ public sealed class ProjectService
                 engine.ModulatorSet(id, newId, 7, m.Release);
                 engine.ModulatorSet(id, newId, 8, m.Decay);
                 engine.ModulatorSet(id, newId, 9, m.Sustain);
+                if (m.Kind == 6)   // Scope view settings (specs/047)
+                {
+                    engine.ModulatorSet(id, newId, 13, m.ScopeWindowMs);
+                    engine.ModulatorSet(id, newId, 14, m.ScopeSync ? 1f : 0f);
+                    engine.ModulatorSet(id, newId, 15, m.ScopeWindowBeats);
+                    engine.ModulatorSet(id, newId, 16, m.ScopeZoom);
+                    engine.ModulatorSet(id, newId, 17, m.ScopeTrigger);
+                    engine.ModulatorSet(id, newId, 18, m.ScopeHeight);
+                }
             }
             // Math/Scope inputs reference other modulators by id → remap after all exist.
             foreach (var m in t.Modulators)
@@ -764,7 +896,10 @@ public sealed class ProjectService
         foreach (var (owner, l, modId) in cvLinkDeferred)
         {
             int targetTrack = l.TargetTrack >= 0 && l.TargetTrack < newTrackIds.Count ? newTrackIds[l.TargetTrack] : -1;
-            int idx = l.SourceKind == 1
+            int idx = l.SourceChain is not null || l.TargetChain is not null   // reaching into a rack (specs/044)
+                ? engine.CvLinkAddNested(owner, l.SourceKind, modId, l.SourceDevice, l.SourceChain ?? -1, l.SourceSlot ?? -1, l.SourceParam,
+                                         l.TargetKind, targetTrack, l.Device, l.TargetChain ?? -1, l.TargetSlot ?? -1, l.Param)
+                : l.SourceKind == 1
                 ? engine.CvLinkAddFromParamToTarget(owner, l.SourceDevice, l.SourceParam, l.TargetKind, targetTrack, l.Device, l.Param)
                 : engine.CvLinkAddToTarget(owner, modId, l.TargetKind, targetTrack, l.Device, l.Param);
             if (idx < 0) { warnings.Add("Couldn't recreate a CV link."); continue; }
@@ -781,20 +916,36 @@ public sealed class ProjectService
             if (md.Name is { Length: > 0 } mnm) engine.SetTrackName(masterId, mnm);
             if (md.ColorIndex >= 0) engine.SetTrackColorIndex(masterId, md.ColorIndex);
             ApplyDevices(engine, masterId, md.Devices, bundleDir, scDeferred, warnings);
+            foreach (var n in md.NestedSidechains ?? new())
+                if (n.Source >= 0) nestedScDeferred.Add((masterId, n));
         }
 
         // Sidechain wiring, now that every track exists (Phase B). Source is a doc index.
-        foreach (var (track, dev, srcIndex) in scDeferred)
+        // A key may name a part of its source's instrument (specs/050); the route pool is shared,
+        // so a key past it is dropped and reported once.
+        int unrouted = 0;
+        foreach (var (track, dev, srcIndex, part) in scDeferred)
         {
             if (srcIndex < newTrackIds.Count && newTrackIds[srcIndex] > 0)
-                engine.SetDeviceSidechainSource(track, dev, newTrackIds[srcIndex]);
+                if (engine.SetDeviceSidechainKey(track, dev, newTrackIds[srcIndex], part) == -2) unrouted++;
+        }
+        // Keys of devices inside racks (specs/044), same deferral and the same route check: a key
+        // the pool can't take is cleared and counted.
+        foreach (var (track, n) in nestedScDeferred)
+        {
+            if (n.Source >= newTrackIds.Count || newTrackIds[n.Source] <= 0) continue;
+            var sc = new NestedSidechain(newTrackIds[n.Source], n.TapPre, n.GainDb, n.Mix);
+            // Source and part together: only the saved key itself meets the route check.
+            if (engine.RackChainSetSidechainKey(track, n.Host, n.Chain, n.Slot, sc, n.Part) == -2) unrouted++;
         }
         // Instrument React source (Nota Flux), same deferral.
-        foreach (var (track, srcIndex) in instScDeferred)
+        foreach (var (track, srcIndex, part) in instScDeferred)
         {
             if (srcIndex < newTrackIds.Count && newTrackIds[srcIndex] > 0)
-                engine.SetInstrumentSidechainSource(track, newTrackIds[srcIndex]);
+                if (engine.SetInstrumentSidechainKey(track, newTrackIds[srcIndex], part) == -2) unrouted++;
         }
+        if (unrouted > 0)
+            warnings.Add($"{unrouted} sidechain key{(unrouted == 1 ? " was" : "s were")} cleared: all {engine.SidechainRouteCapacity()} sidechain routes are in use.");
         // Group membership (parent stored as a doc index), now that every track exists.
         foreach (var (trackId, parentDocIndex) in groupDeferred)
         {
@@ -984,6 +1135,23 @@ public sealed class ProjectService
     {
         string path = ResolveInBundle(bundleDir, relative);
         return File.Exists(path) ? File.ReadAllBytes(path) : Array.Empty<byte>();
+    }
+
+    // A plug-in window's picture (specs/046) is decoration: one that can't be read (permissions,
+    // a damaged bundle, an odd path) or is larger than the engine takes leaves the card plain
+    // instead of stopping the project from opening.
+    private const long MaxPreviewBytes = 4 * 1024 * 1024;
+    private static byte[] ReadPreview(string bundleDir, string relative)
+    {
+        try
+        {
+            var f = new FileInfo(ResolveInBundle(bundleDir, relative));
+            return f.Exists && f.Length <= MaxPreviewBytes ? File.ReadAllBytes(f.FullName) : Array.Empty<byte>();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return Array.Empty<byte>();
+        }
     }
 
     private static string ResolveInBundle(string bundleDir, string relative)

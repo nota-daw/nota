@@ -13,6 +13,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Collections;
 using Avalonia.Controls;
@@ -166,6 +167,13 @@ public sealed partial class PreferencesWindow : NotaWindow
         Jobs.Changed += RenderStoreLists;
         Jobs.ProgressChanged += UpdateDock;
         Closed += (_, _) => { StopTests(); Jobs.Changed -= RenderStoreLists; Jobs.ProgressChanged -= UpdateDock; };
+        // The driver restarted on its own (its panel changed the buffer, or it failed over to
+        // WASAPI): the Audio pane's rows and latency describe the old state — rebuild them.
+        if (_main is not null)
+        {
+            _main.AudioDeviceRestarted += OnAudioDeviceRestarted;
+            Closed += (_, _) => _main.AudioDeviceRestarted -= OnAudioDeviceRestarted;
+        }
         Select(0);
         EnsureStoreLoading();
         UpdateDock();
@@ -308,11 +316,26 @@ public sealed partial class PreferencesWindow : NotaWindow
         UpdateLatency();
         var latency = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { _latencyValue, _latencyDetail } };
 
-        var device = new List<Control>
+        var device = new List<Control>();
+        // Audio system (Windows, specs/049): WASAPI, or ASIO through the interface's own driver.
+        bool asioUi = OperatingSystem.IsWindows() && engine.AsioAvailable;
+        bool asio = asioUi && engine.AudioSystem == AudioSystem.Asio;
+        if (asioUi) AudioSystemRows(device, engine, asio);
+        if (asio)
+        {
+            AsioRows(device, engine, srCombo);
+            device.Add(Row("Latency", latency));
+            var asioBody = Sections(
+                Section("Audio device", 6, device.ToArray()),
+                Section("Test", 8, TestToneRow(), CpuCheckRow(engine)));
+            _loading = false;
+            return asioBody;
+        }
+        device.AddRange(new[]
         {
             Row("Output", outputCombo), Row("Input", inputCombo),
             Row("Sample rate", srCombo), Row("Buffer size", bufCombo),
-        };
+        });
         // WASAPI exclusive (Windows only): lets Nota own the output device for the lowest
         // latency, at the cost of muting other apps. The device then dictates the sample rate /
         // buffer, so those are ignored while it's on. If the device refuses exclusive (busy /
@@ -334,6 +357,154 @@ public sealed partial class PreferencesWindow : NotaWindow
             Section("Test", 8, TestToneRow(), CpuCheckRow(engine)));
         _loading = false;
         return body;
+    }
+
+    // "Audio system  [WASAPI | ASIO]". With no ASIO driver installed the ASIO item is disabled
+    // and a caption says what to install (contracts/preferences-ui.md).
+    private void AudioSystemRows(List<Control> device, IAudioEngine engine, bool asio)
+    {
+        var drivers = engine.AsioDrivers();
+        var combo = Combo(150);
+        combo.Items.Add("WASAPI");
+        combo.Items.Add(new ComboBoxItem { Content = "ASIO", IsEnabled = drivers.Count > 0 || asio });
+        combo.SelectedIndex = asio ? 1 : 0;
+        combo.SelectionChanged += (_, _) =>
+        {
+            if (_loading || combo.SelectedIndex < 0) return;
+            bool toAsio = combo.SelectedIndex == 1;
+            engine.SetAudioSystem(toAsio ? AudioSystem.Asio : AudioSystem.Wasapi);
+            if (toAsio && engine.AsioDriver.Length == 0 && drivers.Count > 0) engine.SetAsioDriver(drivers[0].Uid);
+            Apply();
+            RebuildAudioPane();
+        };
+        device.Add(Row("Audio system", combo));
+        if (drivers.Count == 0 && !asio)
+            device.Add(Row("", Caption(RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+                ? "No ASIO driver found. Few interfaces ship an ARM64 ASIO driver yet — install one from your interface's maker, or a generic one such as FlexASIO."
+                : "No ASIO driver found. Install your interface's driver, or a generic one such as FlexASIO.")));
+    }
+
+    // Driver · Output pair · Input pair · Sample rate · Buffer size (read-only) under ASIO.
+    // Pairs come from the open driver, so they show once it runs; the buffer size is the
+    // driver's own setting (FR-008), changed in its panel ("Driver settings…").
+    private void AsioRows(List<Control> device, IAudioEngine engine, ComboBox srCombo)
+    {
+        bool running = engine.ActiveAudioSystem == AudioSystem.Asio;
+        var drivers = engine.AsioDrivers();
+        var driverCombo = Combo(280);
+        string saved = engine.AsioDriver;
+        int selected = -1;
+        for (int i = 0; i < drivers.Count; i++)
+            if (string.Equals(drivers[i].Uid, saved, StringComparison.OrdinalIgnoreCase)) selected = i;
+        // A saved driver that is no longer installed stays visible as the choice, so picking
+        // any installed one (even the only one) is a real change that stages and applies it.
+        bool missing = saved.Length > 0 && selected < 0;
+        int offset = missing ? 1 : 0;
+        if (missing) driverCombo.Items.Add("Saved driver not found");
+        foreach (var d in drivers) driverCombo.Items.Add(d.Name);
+        driverCombo.SelectedIndex = missing ? 0 : selected >= 0 ? selected : (drivers.Count > 0 ? 0 : -1);
+        driverCombo.SelectionChanged += (_, _) =>
+        {
+            int i = driverCombo.SelectedIndex - offset;
+            if (_loading || i < 0 || i >= drivers.Count) return;
+            engine.SetAsioDriver(drivers[i].Uid);   // a different driver: start from its first pairs
+            engine.SetAsioPair(false, 0);
+            engine.SetAsioPair(true, 0);
+            Apply();
+            RebuildAudioPane();
+        };
+        // Running: the driver's own panel (a change there comes back as a reset event). In the
+        // WASAPI fallback: try the driver again — it may be free or plugged in now (US4-3).
+        var panel = Btn(running ? "Driver settings…" : "Try again");
+        panel.IsEnabled = running || drivers.Count > 0;
+        panel.Click += (_, _) =>
+        {
+            if (running) { engine.OpenAsioControlPanel(); return; }
+            int i = driverCombo.SelectedIndex - offset;   // retry the driver shown, not a stale one
+            if (i >= 0 && i < drivers.Count) engine.SetAsioDriver(drivers[i].Uid);
+            Apply();
+            RebuildAudioPane();
+        };
+        device.Add(Row("Driver", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { driverCombo, panel } }));
+
+        if (running)
+        {
+            device.Add(Row("Output", PairCombo(engine, input: false, engine.AsioChannels(false))));
+            var ins = engine.AsioChannels(true);
+            device.Add(Row("Input", ins.Count > 0 ? PairCombo(engine, input: true, ins) : Caption("No inputs on this driver")));
+        }
+
+        // Sample rate is a request: a rate the driver refuses is reverted and explained (FR-007).
+        // The view model remembers the refusal, so it also shows after an apply that waited for
+        // the driver's panel to close (the pane is rebuilt then).
+        var refused = Caption("");
+        refused.Foreground = NotaPalette.Warning;
+        void ShowRefusal()
+        {
+            double r = _main?.RefusedSampleRate ?? 0;
+            refused.Text = r > 0 ? $"The driver doesn't support {NotaNum.Unit(r / 1000, "0.#", "kHz")}" : "";
+            refused.IsVisible = r > 0;
+        }
+        ShowRefusal();
+        srCombo.SelectionChanged += (_, _) =>
+        {
+            int i = srCombo.SelectedIndex;
+            if (_loading || i <= 0 || engine.ActiveAudioSystem != AudioSystem.Asio) return;
+            // The earlier handler applied the rate. A rate the driver refused is dropped by the
+            // engine — the saved config goes back to "device default" — so the row follows it.
+            ShowRefusal();
+            if (_main?.RefusedSampleRate != SampleRates[i]) return;
+            _loading = true;
+            srCombo.SelectedIndex = 0;
+            _loading = false;
+        };
+        device.Add(Row("Sample rate", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { srCombo, refused } }));
+
+        int buf = engine.NegotiatedBufferFrames;
+        device.Add(Row("Buffer size", Caption(running && buf > 0
+            ? $"{buf} frames (set in the driver's settings)"
+            : "Set in the driver's settings")));
+    }
+
+    // Channel pairs of the open driver, labelled from its own names ("Out 1 + 2", "Analog 3 + 4");
+    // a last odd channel is a mono pair.
+    private ComboBox PairCombo(IAudioEngine engine, bool input, IReadOnlyList<string> channels)
+    {
+        var combo = Combo(280);
+        var firsts = new List<int>();
+        for (int c = 0; c < channels.Count; c += 2)
+        {
+            combo.Items.Add(PairLabel(channels[c], c + 1 < channels.Count ? channels[c + 1] : null));
+            firsts.Add(c);
+        }
+        int staged = engine.AsioPair(input);
+        combo.SelectedIndex = Math.Max(0, firsts.IndexOf(staged));
+        combo.SelectionChanged += (_, _) =>
+        {
+            int i = combo.SelectedIndex;
+            if (_loading || i < 0 || i >= firsts.Count) return;
+            engine.SetAsioPair(input, firsts[i]);
+            Apply();
+        };
+        return combo;
+    }
+
+    internal static string PairLabel(string a, string? b)
+    {
+        if (b is null) return a;
+        int p = 0;
+        while (p < a.Length && p < b.Length && a[p] == b[p]) p++;
+        while (p > 0 && a[p - 1] != ' ') p--;   // share whole words only ("Out 1" + "Out 2")
+        return p > 0 ? $"{a} + {b[p..]}" : $"{a} + {b}";
+    }
+
+    // The audio pane's rows depend on the audio system and the open driver: rebuild it after
+    // the combo that changed them has finished its event.
+    private void RebuildAudioPane() => Dispatcher.UIThread.Post(() => Select(_selected));
+
+    private void OnAudioDeviceRestarted()
+    {
+        if (_selected == 0) RebuildAudioPane();   // 0 = the Audio page
     }
 
     private Control TestToneRow()
@@ -427,11 +598,33 @@ public sealed partial class PreferencesWindow : NotaWindow
     }
 
     // "11.6 ms" · "512 frames @ 44.1 kHz" — the negotiated block, not the requested one.
+    // Under ASIO the driver's own output latency, and the round trip when it has inputs.
     private void UpdateLatency()
     {
         if (_main is null || _latencyValue is null || _latencyDetail is null) return;
         double sr = _main.Engine.NegotiatedSampleRate;
         int buf = _main.Engine.NegotiatedBufferFrames;
+        var eng = _main.Engine;
+        if (OperatingSystem.IsWindows() && eng.AudioSystem == AudioSystem.Asio && sr > 0)
+        {
+            string khz = NotaNum.Unit(sr / 1000, "0.#", "kHz");
+            if (eng.ActiveAudioSystem != AudioSystem.Asio)
+            {
+                string why = eng.AudioFallbackReason;
+                _latencyValue.Text = buf > 0 ? NotaNum.Unit(buf / sr * 1000, "0.0", "ms") : "";
+                _latencyDetail.Text = $"ASIO unavailable ({(why.Length > 0 ? why : "the driver didn't start")}) → WASAPI";
+            }
+            else
+            {
+                int outLat = eng.OutputLatencyFrames > 0 ? eng.OutputLatencyFrames : buf;
+                int inLat = eng.InputLatencyFrames;
+                string roundTrip = inLat > 0 ? $" · round trip {NotaNum.Unit((inLat + outLat) / sr * 1000, "0.0", "ms")}" : "";
+                _latencyValue.Text = NotaNum.Unit(outLat / sr * 1000, "0.0", "ms");
+                _latencyDetail.Text = $"ASIO · {buf} frames @ {khz}{roundTrip}";
+            }
+            _latencyValue.IsVisible = _latencyValue.Text.Length > 0;
+            return;
+        }
         string mode = OperatingSystem.IsWindows() && _main.Engine.AudioExclusiveFallback
             ? " · exclusive refused → shared"
             : OperatingSystem.IsWindows() && _main.Engine.GetAudioConfig().WasapiExclusive ? " · exclusive" : "";
@@ -681,7 +874,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         addBtn.Click += async (_, _) =>
         {
             Activate();
-            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "Add plugin scan folder", AllowMultiple = false });
+            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions { Title = "Add plugin scan folder", AllowMultiple = false });
             if (folders.Count == 0) return;
             var path = folders[0].TryGetLocalPath();
             if (path is null) return;
@@ -785,7 +978,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         choose.Click += async (_, _) =>
         {
             Activate();
-            var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = $"Choose {label} folder", AllowMultiple = false });
+            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions { Title = $"Choose {label} folder", AllowMultiple = false });
             if (folders.Count == 0) return;
             var p = folders[0].TryGetLocalPath();
             if (p is null) return;
@@ -1125,6 +1318,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌥⌘S", "Save a version with a note"),
             ("⌘⇧E", "Export audio"),
             ("⌘,", "Settings"),
+            ("⌘Q", "Quit Nota · asks about unsaved changes first"),
         }),
         ("Window", new[]
         {
@@ -1165,7 +1359,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘⇧M", "Toggle the Mixer view"),
             ("Tab", "Cycle Devices / Pattern / Clip in the detail panel"),
             ("Esc", "Cancel the current gesture / clear the selection · close the patch-bay overlay"),
-            ("⌘G   ⌘⇧G", "Group / ungroup selected tracks"),
+            ("⌘G   ⌘⇧G", "Group / ungroup selected tracks · on selected devices: group them into a rack / take a rack apart"),
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste clips, a time range or an automation range · pastes onto the track clicked last"),
             ("⌘⇧C", "Copy the selected clips to Session · the first scene row where they fit"),
             ("⌘⇧V", "Paste the last range as audio rendered through its devices"),
@@ -1175,6 +1369,10 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘E", "Split at the playhead · at the range edges"),
             ("⌘J", "Consolidate the selection into one clip per track"),
             ("0", "Deactivate / activate the selected clip(s)"),
+            ("←   →", "Nudge the selected clips by the grid step · stops at the song start"),
+            ("⌥←   ⌥→", "Nudge the selected clips by a 64th note"),
+            ("⌥↑   ⌥↓", "Move the selected clips to the next track that takes them, at the same beats"),
+            ("Drag below the last track", "Move the clips to a new track like their own · one per source track"),
             ("Delete", "Delete the selected clip / range"),
         }),
         ("Grid (Arrangement or clip editor — whichever you used last)", new[]
@@ -1189,9 +1387,41 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("Tracks (after a click in the track headers)", new[]
         {
             ("⌘A", "Select all tracks"),
+            ("⇧-click   ⌘-click", "Select a range of tracks / add or remove one track"),
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the selected tracks · paste lands after the last one"),
             ("⌘D", "Duplicate the selected tracks"),
             ("Delete", "Delete the selected tracks · a group goes with its tracks"),
+        }),
+        ("Devices (after a click on a device)", new[]
+        {
+            ("⇧-click   ⌘-click", "Select a range of devices (MIDI effects, instrument, audio effects) / add or remove one"),
+            ("Esc", "Clear the device selection · so does a click on the chain's empty space"),
+            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the selected devices with all their settings · each lands in its section after the selected device · a copied instrument replaces the instrument it is pasted on"),
+            ("⌘D", "Duplicate the selected devices · each run right after itself"),
+            ("⌘G", "Group the selected devices into a rack · audio effects: Audio Effect Rack · MIDI effects: MIDI Effect Rack · with the instrument: Instrument Rack"),
+            ("⌘⇧G", "Take the devices out of a selected one-chain rack"),
+            ("Delete", "Delete the selected devices · with the instrument, its track"),
+            ("Drag a selected device's header", "Move the selected devices of that section together"),
+            ("Drag a device onto a track", "Move it there (out of the panel, onto a track row or Session column) · the instrument replaces that track's and its own track goes"),
+            ("⌥-drag a device onto a track", "Copy it there"),
+        }),
+        ("Racks", new[]
+        {
+            ("Esc", "End macro mapping (Map on the rack card)"),
+            ("Drag a zone edge", "Set a chain's key, velocity or select range · edges never cross"),
+            ("Hover the zones", "See which chains a note would play"),
+            ("Double-click a chain or macro name", "Rename it"),
+            ("Right-click a macro", "Map it to a parameter or the selector · clear its mappings"),
+            ("Drag a device's header", "Move it within its chain · onto another chain's row to move it there"),
+            ("Click a device", "Select it for ⌘C ⌘X ⌘V ⌘D and Delete"),
+        }),
+        ("Modular (after a click on the canvas)", new[]
+        {
+            ("F", "Fit every node on screen"),
+            ("B", "Bypass the selected device"),
+            ("⌘D", "Duplicate the selected device with all its settings"),
+            ("Delete", "Delete the selected device, modulator or cable · the track's input, instrument and output are fixed"),
+            ("Esc", "Show fewer parameters on every opened node"),
         }),
         ("Session (after a click in the grid)", new[]
         {
@@ -1234,6 +1464,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag on the keys", "Zoom rows · down taller, up shorter"),
             ("⌥ + pinch", "Zoom rows (trackpad)"),
             ("⇧F", "Fit to notes"),
+            ("⌥⇧F", "Fold: only the scale's notes, or a Drum Rack's pads"),
         }),
         ("Audio clip editor", new[]
         {
@@ -1275,12 +1506,14 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Double-click a browser instrument", "Swap it onto the selected instrument track · clips and effects stay · no track selected starts one"),
             ("⌥ + double-click a browser instrument", "Always start a new track with it"),
             ("Right-click the metronome", "Count-in before Play / Record: off · 1 · 2 · 4 bars"),
-            ("Drag an audio clip's ADSR handle", "Shape attack · decay + sustain · release (top corners and the dot on hover) · double-click resets the stage"),
+            ("Drag an audio clip's ADSR handle", "Shape attack · decay + sustain · release (top corners and the dot on hover) · ⌥-click types the stage · double-click resets it"),
             ("⇧-click track header", "Add the track to the selection · again to remove it"),
             ("Right-click track headers", "A multi-selection gets its own menu: colour, height, freeze, group, copy, duplicate, delete"),
             ("Drag a track's bottom edge", "Resize the track (header or lane) · snaps to compact / standard / large · a multi-selection resizes together"),
             ("Drag a track's bottom edge + ⌥", "Resize every track at once"),
             ("Double-click a track's bottom edge", "Back to the standard height"),
+            ("Drag a return's or the master's bottom edge", "Resize that row (header or lane) · same snaps · double-click goes back to compact"),
+            ("⌘-click / ⇧-click return headers", "Select several returns · they resize together"),
             ("⌥-click a height key in the track menu", "Set every track to Compact · Standard · Large"),
             ("Drag the track-list edge", "Widen or narrow the track headers · double-click resets"),
             ("Drag sections lane", "Mark a new section over the dragged bars"),
@@ -1296,11 +1529,14 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag an audio clip onto an instrument track", "Load its audio into the Sampler, Grain, Drum Rack (next free pad) or Instrument Rack · rest there to open its devices"),
             ("Drag an audio clip out of the Arrangement", "Take it as a sample: drop on a pad, a Grain, a Rhythm voice, a Session slot — the clip stays put"),
             ("Drag clip + ⌥", "Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)"),
+            ("Wheel over the device chain", "Scroll it sideways · over an EQ band's handle the wheel sets its Q, over a value box it steps the value"),
             ("Drag knob", "Change a device value · hold ⌘ or ⇧ for fine steps"),
             ("Drag slider", "Left / right (or up / down) changes the value · hold ⌘ or ⇧ for fine steps"),
             ("⌥-click a knob, fader or slider", "Type a value (units like k, ms, dB, L / R work) · double-click its value does the same"),
             ("Return · Esc · Tab / ⇧Tab (typing a value)", "Set it · cancel · set it and type the next / previous value on the card"),
+            ("⌥-click a graph handle, envelope node or mod-matrix cell", "Type its values — a node with several (frequency · gain · Q, decay · sustain) takes Tab between them"),
             ("Double-click a knob, fader or slider", "Reset the value to its default"),
+            ("Double-click a mod-matrix cell", "Clear the route (Volt, Aurora) · pull the cable (Consort)"),
             ("Right-click a knob, fader or slider", "Type value… · Reset to default"),
             ("Drag jack → jack", "Patch a cable in Nota Consort · ⌥-click a jack to pull its cables"),
             ("Click · ⇧ · ⌥ a Rhythm step", "Step on / off · accent · quiet step — drag across to paint, up / down (or scroll) for its velocity"),

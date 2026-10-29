@@ -360,7 +360,7 @@ internal static partial class DesignTokenCheck
         // two device hue tables. Each is only ever painted through NotaPalette.Ink().
         var hexData = new[] { "TagEditorWindow.cs", "DeviceCards/Bodies/StrataDeviceBody.cs", "DeviceCards/Instruments/RhythmInstrumentCard.cs" };
         // Opacity is allowed for exactly one thing: the ghost of a card being dragged.
-        var dragGhost = new Regex(@"\b(card|_devDragCard)\.Opacity = (0\.55|1\.0);");
+        var dragGhost = new Regex(@"\b(card|_devDragCard|_rcDragCard)\.Opacity = (0\.55|1\.0);");
 
         var rules = new (string Name, Regex Re, Func<string, string, bool>? Allow)[]
         {

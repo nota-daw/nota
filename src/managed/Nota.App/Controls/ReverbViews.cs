@@ -18,7 +18,7 @@ using Avalonia.Media;
 
 namespace Nota.App;
 
-internal sealed class ReverbTailView : Control
+internal sealed class ReverbTailView : Control, IValueHandles
 {
     public const double AxisSec = 4.0;
     // The pre-delay marker sits between 3 % and 33 % of the width (0 … 200 ms); the early
@@ -68,6 +68,14 @@ internal sealed class ReverbTailView : Control
 
     private (double x0, double x1, double top, double bot) Geo() => (8, Bounds.Width - 8, 15, Bounds.Height - 12);
     private double PreX() { var (x0, x1, _, _) = Geo(); return x0 + (PreLo + PreSpan * _preNorm) * (x1 - x0); }
+
+    // Typed entry (specs/035): handle 0 = the decay (the tail anywhere), 1 = the pre-delay marker.
+    public int HandleAt(Point p) => Math.Abs(p.X - PreX()) <= 8 ? 1 : 0;
+    public Rect HandleRect(int handle)
+    {
+        var (x0, x1, top, _) = Geo();
+        return ValueEntry.Near(new Point(handle == 1 ? PreX() : (x0 + x1) / 2, top), Bounds.Size);
+    }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {

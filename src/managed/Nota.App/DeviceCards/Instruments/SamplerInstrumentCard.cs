@@ -222,11 +222,27 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         var wave = new SamplerWaveView();
         wave.SetEmpty("Drop a sample here");
         if (hasSample) wave.SetPeaks(SamplerModel.Peaks(raw, ch, 1200), durSec);
-        ToolTip.SetTip(wave, hasSample ? "Drag Start / End (and the loop markers when looping) · double-click a marker to reset it" : "Drag a sample from the Files tab or the browser");
+        ToolTip.SetTip(wave, hasSample ? MenuKit.Keys("Drag Start / End (and the loop markers when looping) · ⌥-click a marker to type it · double-click to reset it") : "Drag a sample from the Files tab or the browser");
         wave.DragBegin += hnd => Begin(SamplerWaveView.HandleId(hnd));
         wave.DragEnd += hnd => End(SamplerWaveView.HandleId(hnd));
         wave.Moved += (hnd, f) => { SetP(SamplerWaveView.HandleId(hnd), f); Refresh(); };
         wave.ResetHandle += hnd => { var id = SamplerWaveView.HandleId(hnd); Write(id, Def(id)); Refresh(); };
+        // ⌥-click a marker to type where it sits, in seconds into the file (specs/035).
+        // Held to the same limits a drag keeps: Start before End, the loop inside them.
+        ValueField WF(int h)
+        {
+            string id = SamplerWaveView.HandleId(h);
+            double Limit(double f) => h switch
+            {
+                0 => Math.Min(f, G("end") - 0.001),
+                1 => Math.Max(f, G("start") + 0.001),
+                2 => Math.Clamp(Math.Min(f, G("loopend") - 0.001), G("start"), G("end")),
+                _ => Math.Clamp(Math.Max(f, G("loopstart") + 0.001), G("start"), G("end")),
+            };
+            return PF(id, new[] { "Start", "End", "Loop start", "Loop end" }[h], v => NotaNum.Unit(v * durSec, "0.000", "s"))
+                with { Set = v => SetP(id, Limit(Math.Clamp(v, 0, 1))) };
+        }
+        ValueEntry.AttachHandles(wave, [WF(0)], [WF(1)], [WF(2)], [WF(3)]);
         readouts.Add(() => wave.Set(G("start"), G("end"), G("loopstart"), G("loopend"), LoopSel(), SamplerModel.CrossfadeSec(G("loopxfade")),
             hasSample ? $"{NotaNum.Str(sr / 1000, "0.#")} k · {NotaNum.Unit(durSec, "0.00", "s")} · root {SamplerModel.NoteName(rootv)}" : "",
             hasSample ? LoopWord() : ""));
@@ -294,7 +310,12 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
             Background = NotaPalette.BgSunken, Child = rootText,
         };
-        rootBox.PointerWheelChanged += (_, e) => { rootv = Math.Clamp(rootv + (e.Delta.Y > 0 ? 1 : -1), 0, 127); acc.SetRoot(rootv); Refresh(); e.Handled = true; };
+        rootBox.PointerWheelChanged += (wt, e) =>
+        {
+            if (WheelInput.Step(e, wt) is not { } s) return;
+            e.Handled = true; if (s == 0) return;
+            rootv = Math.Clamp(rootv + s, 0, 127); acc.SetRoot(rootv); Refresh();
+        };
         ToolTip.SetTip(rootBox, "The root note — scroll to step it");
         var rootStepper = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { StepBtn(GlyphKind.Minus, -1, "Root a semitone down"), rootBox, StepBtn(GlyphKind.Plus, +1, "Root a semitone up") } };
         int detected = SamplerModel.DetectRoot(sampleName);
@@ -312,7 +333,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
 
         // ================= Env tab =================
         var env = new SamplerEnvView();
-        ToolTip.SetTip(env, "Drag the nodes: attack, decay and sustain (up / down), release · Shift for fine steps · double-click resets");
+        ToolTip.SetTip(env, MenuKit.Keys("Drag the nodes: attack, decay and sustain (up / down), release · Shift for fine steps · ⌥-click to type · double-click resets"));
         env.DragBegin += Begin;
         env.DragEnd += End;
         env.Changed += (id, v) => { SetP(id, v); Refresh(); };
@@ -343,11 +364,19 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
 
         // ================= Filter tab =================
         var filt = new SamplerFilterView();
-        ToolTip.SetTip(filt, "Drag: left / right for the cutoff, up / down for the resonance · Shift for fine steps · double-click resets");
+        ToolTip.SetTip(filt, MenuKit.Keys("Drag: left / right for the cutoff, up / down for the resonance · Shift for fine steps · ⌥-click to type · double-click resets"));
         filt.DragBegin += () => { Begin("cutoff"); Begin("resonance"); };
         filt.DragEnd += () => { End("cutoff"); End("resonance"); };
         filt.Changed += (id, v) => { SetP(id, v); Refresh(); };
         filt.Reset += () => { Write("cutoff", Def("cutoff")); Write("resonance", Def("resonance")); Refresh(); };
+        // ⌥-click a node / the filter window to type it (specs/035).
+        ValueField PF(string id, string name, Func<float, string> fmt) => new(name, () => G(id), v => fmt((float)v), v => SetP(id, v),
+            () => Begin(id), () => End(id), I(id) >= 0 ? Def(id) : null) { After = Refresh };
+        ValueEntry.AttachHandles(env,
+            [PF("attack", "Attack", v => NotaNum.Time(SamplerModel.AttackSec(v)))],
+            [PF("decay", "Decay", v => NotaNum.Time(SamplerModel.DecaySec(v))), PF("sustain", "Sustain", DbLin)],
+            [PF("release", "Release", v => NotaNum.Time(SamplerModel.ReleaseSec(v)))]);
+        ValueEntry.AttachAll(filt, PF("cutoff", "Cutoff", v => NotaNum.Hz(SamplerModel.CutoffHz(v))), PF("resonance", "Resonance", v => NotaNum.Pct(v)));
         string FiltTl()
         {
             int t = Sel("filtertype", 4);

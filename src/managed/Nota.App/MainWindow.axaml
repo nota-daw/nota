@@ -31,6 +31,8 @@
             <NativeMenuItem Header="Export audio…" app:Commands.Id="file.export"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Settings…" app:Commands.Id="prefs.open"/>
+            <NativeMenuItemSeparator/>
+            <NativeMenuItem Header="Exit" app:Commands.Id="file.exit"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
@@ -99,6 +101,7 @@
             <NativeMenuItem Header="Play / stop" app:Commands.Id="transport.playStop"/>
             <NativeMenuItem Header="Play / pause" app:Commands.Id="transport.playPause"/>
             <NativeMenuItem Header="Record" app:Commands.Id="transport.record"/>
+            <NativeMenuItem Header="Auto-arm selected track" app:Commands.Id="transport.armOnSelect" ToggleType="CheckBox"/>
             <NativeMenuItem Header="Loop" app:Commands.Id="transport.loop"/>
             <NativeMenuItem Header="Loop record: overdub / replace" app:Commands.Id="transport.loopRecordMode"/>
             <NativeMenuItem Header="Metronome" app:Commands.Id="transport.metronome"/>
@@ -374,7 +377,7 @@
 
         <!-- DSP load (audio-callback time ÷ buffer); the tooltip adds process CPU (MainWindow.SetUpCpuTip) -->
         <StackPanel x:Name="CpuMeter" Grid.Column="8" Spacing="3" VerticalAlignment="Center" Background="Transparent">
-          <Border Width="52" Height="4" Background="{DynamicResource Brush.BgSunken}"
+          <Border x:Name="CpuBar" Width="52" Height="4" Background="{DynamicResource Brush.BgSunken}"
                   CornerRadius="{StaticResource Radius.Clip}" ClipToBounds="True">
             <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="{StaticResource Radius.Clip}"
                     Background="{DynamicResource Brush.Success}"/>

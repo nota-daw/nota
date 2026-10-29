@@ -75,6 +75,70 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_audio_exclusive_fallback")]
     internal static partial int AudioExclusiveFallback(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_audio_silent_fallback")]
+    internal static partial int AudioSilentFallback(IntPtr engine);
+
+    // --- ASIO (Windows; specs/049) ---
+    [LibraryImport(Lib, EntryPoint = "nota_audio_set_system")]
+    internal static partial NotaResult AudioSetSystem(IntPtr engine, int system);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_system")]
+    internal static partial int AudioSystem(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_active_system")]
+    internal static partial int AudioActiveSystem(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_available")]
+    internal static partial int AudioAsioAvailable();
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_driver_count")]
+    internal static partial int AudioAsioDriverCount();
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_driver_id")]
+    internal static partial IntPtr AudioAsioDriverId(int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_driver_name")]
+    internal static partial IntPtr AudioAsioDriverName(int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_set_asio_driver", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NotaResult AudioSetAsioDriver(IntPtr engine, string id);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_driver")]
+    internal static partial IntPtr AudioAsioDriver(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_channel_count")]
+    internal static partial int AudioAsioChannelCount(IntPtr engine, int isInput);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_channel_name")]
+    internal static partial IntPtr AudioAsioChannelName(IntPtr engine, int isInput, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_set_asio_pair")]
+    internal static partial NotaResult AudioSetAsioPair(IntPtr engine, int isInput, int firstChannel);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_pair")]
+    internal static partial int AudioAsioPair(IntPtr engine, int isInput);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_open_control_panel")]
+    internal static partial NotaResult AudioAsioOpenControlPanel(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_asio_panel_open")]
+    internal static partial int AudioAsioPanelOpen(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_poll_device_event")]
+    internal static partial int AudioPollDeviceEvent(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_fallback_reason")]
+    internal static partial IntPtr AudioFallbackReason(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_input_latency_frames")]
+    internal static partial int AudioInputLatencyFrames(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_audio_output_latency_frames")]
+    internal static partial int AudioOutputLatencyFrames(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_asio_selftest")]
+    internal static partial int AsioSelfTest();
+
     [LibraryImport(Lib, EntryPoint = "nota_midi_refresh_devices")]
     internal static partial void MidiRefreshDevices();
 

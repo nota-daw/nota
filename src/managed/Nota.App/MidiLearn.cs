@@ -77,7 +77,8 @@ public enum MidiTargetKind
     TrackVolume, TrackPan, TrackMute, TrackSolo,
     MasterVolume, TransportPlay, TransportStop, TransportRecord,
     // Rack controls. DeviceIndex encodes the rack: -1 = the track's Instrument Rack,
-    // >= 0 = an Audio Effect Rack device at that index. ParamIndex = chain (or unused).
+    // >= 0 = an Audio Effect Rack device at that index, <= MidiTarget.MidiRackBase (−1000) − mi =
+    // the MIDI Effect Rack at MIDI effect index mi. ParamIndex = chain (or unused).
     RackVolume, RackChainGain, RackChainMute, RackChainSolo,
 }
 
@@ -96,7 +97,9 @@ public readonly record struct MidiTarget(MidiTargetKind Kind, int TrackId, int D
     public static readonly MidiTarget TransportPlay = new(MidiTargetKind.TransportPlay, -1, -1, -1);
     public static readonly MidiTarget TransportStop = new(MidiTargetKind.TransportStop, -1, -1, -1);
     public static readonly MidiTarget TransportRecord = new(MidiTargetKind.TransportRecord, -1, -1, -1);
-    // Rack controls (di = -1 Instrument Rack / >= 0 Audio Effect Rack device index).
+    // Rack controls (di = -1 Instrument Rack / >= 0 Audio Effect Rack device index /
+    // MidiRackBase − mi MIDI Effect Rack).
+    public const int MidiRackBase = -1000;
     public static MidiTarget RackVolume(int track, int di) => new(MidiTargetKind.RackVolume, track, di, -1);
     public static MidiTarget RackChainGain(int track, int di, int chain) => new(MidiTargetKind.RackChainGain, track, di, chain);
     public static MidiTarget RackChainMute(int track, int di, int chain) => new(MidiTargetKind.RackChainMute, track, di, chain);

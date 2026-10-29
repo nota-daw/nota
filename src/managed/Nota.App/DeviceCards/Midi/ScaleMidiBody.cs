@@ -351,7 +351,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             readouts.Add(() => name.Text = Notes[Root()]);
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent,
                 Children = { Arrow(GlyphKind.ChevronLeft, -1), name, Arrow(GlyphKind.ChevronRight, 1) } };
-            row.PointerWheelChanged += (_, ev) => { StepRoot(ev.Delta.Y > 0 ? 1 : -1); ev.Handled = true; };
+            row.PointerWheelChanged += (wt, ev) => { if (WheelInput.Step(ev, wt) is not { } s) return; ev.Handled = true; if (s != 0) StepRoot(s); };
             ToolTip.SetTip(row, "Root — click the arrows or scroll");
             Learn(row, PRoot, "Root");
             return row;
@@ -393,10 +393,12 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
                 fly.ShowAt(box);
                 ev.Handled = true;
             };
-            box.PointerWheelChanged += (_, ev) =>
+            box.PointerWheelChanged += (wt, ev) =>
             {
+                if (WheelInput.Step(ev, wt) is not { } s) return;
+                ev.Handled = true; if (s == 0) return;
                 int at = Array.IndexOf(TypeRows, Sc()); if (at < 0) at = TypeRows.Length - 1;
-                PickType(TypeRows[Math.Clamp(at + (ev.Delta.Y < 0 ? 1 : -1), 0, TypeRows.Length - 1)]); ev.Handled = true;
+                PickType(TypeRows[Math.Clamp(at - s, 0, TypeRows.Length - 1)]);
             };
             ToolTip.SetTip(box, "Scale type");
             Learn(box, PScale, "Scale");
@@ -431,14 +433,16 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             void Stop() { if (!drag) return; drag = false; End(p); }
             valHit.PointerReleased += (_, ev) => { if (drag) ev.Pointer.Capture(null); Stop(); };
             valHit.PointerCaptureLost += (_, _) => Stop();
-            valHit.PointerWheelChanged += (_, ev) => { Begin(p); Put(Get() + (ev.Delta.Y > 0 ? 1 : -1)); End(p); ev.Handled = true; };
+            valHit.PointerWheelChanged += (wt, ev) => { if (WheelInput.Step(ev, wt) is not { } s) return; ev.Handled = true; if (s != 0) { Begin(p); Put(Get() + s); End(p); } };
             readouts.Add(() => val.Text = DeviceCardKit.NoteName(Get()));
             var box = new Border
             {
                 Height = 14, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
                 Child = new DockPanel { Children = { WithDock(dec, Dock.Left), WithDock(inc, Dock.Right), valHit } },
             };
-            ToolTip.SetTip(box, $"{label} — ± an octave, drag or scroll the note for semitones, double-click resets. Notes outside the range pass through.");
+            ToolTip.SetTip(box, MenuKit.Keys($"{label} — ± an octave, drag or scroll the note for semitones, ⌥-click the note to type it, double-click resets. Notes outside the range pass through."));
+            ValueEntry.Attach(valHit, new ValueField(label, () => Get() / 127.0, n => DeviceCardKit.NoteName((int)Math.Round(n * 127)),
+                n => Put((int)Math.Round(Math.Clamp(n, 0, 1) * 127)), () => Begin(p), () => End(p), p == PRangeLo ? 0 : 1), val);
             Learn(box, p, label);
             return box;
         }

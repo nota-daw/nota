@@ -35,6 +35,7 @@ internal static class NotaText
         ["PW"] = "PW", ["VCA"] = "VCA", ["VCF"] = "VCF", ["VCO"] = "VCO", ["THD"] = "THD",
         ["BBD"] = "BBD", ["FET"] = "FET", ["RR"] = "RR", ["CC"] = "CC",
         ["LUFS"] = "LUFS", ["USB"] = "USB", ["OK"] = "OK", ["DAW"] = "DAW",
+        ["ASIO"] = "ASIO", ["WASAPI"] = "WASAPI",
     };
 
     /// <summary>A label in sentence case: "PRE-DELAY" → "Pre-delay", "LFO RATE" → "LFO rate",

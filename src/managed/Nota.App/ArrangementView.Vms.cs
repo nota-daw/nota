@@ -44,6 +44,10 @@ public sealed partial class ArrangementView
         public int AutoDeviceIndex = -1;
         public int AutoParamIndex = -1;
         public string AutoParamId = "";      // PluginParam target (M9-B3)
+        // A device grouped into a rack (specs/044): AutoDeviceIndex is the rack's address and
+        // these the chain index and slot of the child the lane drives; -1 = track level.
+        public int AutoChain = -1, AutoSlot = -1;
+        public int AutoLane = -1;   // the nested lane itself: rack edits move its (chain, slot)
         public string AutoLabel = "Vol";
         public List<AutoPt> AutoPoints = new();
         // Group lane summary (M-groups): descendant clips aggregated for the lane preview —
@@ -76,6 +80,13 @@ public sealed partial class ArrangementView
         public bool Active = true;   // false = deactivated (key 0): stays but silent + greyed
         public float[]? Peaks;
         public int PeakCount;
+        /// <summary>Peaks over just the visible slice [DetailF0, DetailF1] of the clip (fractions
+        /// of its played length), at one bucket per pixel — fetched when the clip is drawn wider
+        /// than <see cref="Peaks"/> has buckets, so a long or zoomed-in clip doesn't draw as
+        /// blocks (#299).</summary>
+        public float[]? DetailPeaks;
+        public int DetailCount;
+        public double DetailF0, DetailF1;
         /// <summary>Clip gain (linear) — peaks are raw material, the lane scales them by this.</summary>
         public float Gain = 1f;
         /// <summary>Audio clip ADSR amplitude shape (identity = full length, full level).</summary>

@@ -60,7 +60,6 @@ internal sealed partial class RackCardView
     public Control BuildDrumRackBody(out int padCount)
     {
         var a = new InstrumentRackAccess(E, T);
-        E.SetAuditionTrack(T);   // so clicking a pad plays it without arming the track
         _irTick.Clear();
         var pads = LoadedPads(a);
         padCount = pads.Count;
@@ -177,8 +176,12 @@ internal sealed partial class RackCardView
         };
         g.Children.Add(DrumCap("BANK"));
         Grid.SetColumn(bank, 1); g.Children.Add(bank);
-        Grid.SetColumn(swing, 2); g.Children.Add(swing);
-        Grid.SetColumn(humanize, 3); g.Children.Add(humanize);
+        // Kit timing shifts the whole track's notes, so a Drum Rack in a chain has none (specs/041).
+        if (!Nested)
+        {
+            Grid.SetColumn(swing, 2); g.Children.Add(swing);
+            Grid.SetColumn(humanize, 3); g.Children.Add(humanize);
+        }
         Grid.SetColumn(fold, 4); g.Children.Add(fold);
         return new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 0, 0, 1), Child = g };
     }
@@ -260,12 +263,12 @@ internal sealed partial class RackCardView
                 var pt = e.GetCurrentPoint(pad).Properties;
                 if (pt.IsRightButtonPressed) { e.Handled = true; ShowPadMenu(a, pad, chain); return; }
                 if (!pt.IsLeftButtonPressed) return;
-                e.Handled = true; e.Pointer.Capture(pad); E.NoteOn(note, 1.0f);
+                e.Handled = true; e.Pointer.Capture(pad); E.TrackNoteOn(T, note, 1.0f);   // this rack only, not the armed tracks (#307)
             };
             pad.PointerReleased += (_, e) =>
             {
                 if (e.InitialPressMouseButton != MouseButton.Left) return;
-                E.NoteOff(note); e.Pointer.Capture(null); SelectPad(chain);
+                E.TrackNoteOff(T, note); e.Pointer.Capture(null); SelectPad(chain);
             };
         }
         else
@@ -292,8 +295,11 @@ internal sealed partial class RackCardView
             pad.BorderBrush = restBorder;
             var items = BrowserView.DroppedItems(e);
             if (items.Count == 0) return;
-            // Several samples fill this pad and the ones after it, up to the bank's last.
-            for (int i = 0; i < items.Count && note + i < BankBase + 16; i++) DropOnPad(a, note + i, items[i]);
+            // Several samples fill this pad and the ones after it, up to the bank's last; the
+            // whole drop is one undo step (#236).
+            E.BeginUndoGroup();
+            try { for (int i = 0; i < items.Count && note + i < BankBase + 16; i++) DropOnPad(a, note + i, items[i]); }
+            finally { E.EndUndoGroup(); }
             e.Handled = true;
         });
         return pad;
@@ -432,7 +438,7 @@ internal sealed partial class RackCardView
         ToolTip.SetTip(vol, "Pad volume · drag up or down, ⌥-click to type, double-click for 0\u2009dB");
         ValueEntry.Attach(vol, new ValueField("Pad volume", () => VolNorm(a.ChainGain(c)), n => VolText(NormVol(n)),
             n => { vol.Norm = n; a.SetChainGain(c, NormVol(n)); }, Default: VolNorm(1f)));
-        MidiLearn.Bind(vol, MidiTarget.RackChainGain(T, a.AutomationDeviceIndex, c), "Pad Volume");
+        if (!Nested) MidiLearn.Bind(vol, MidiTarget.RackChainGain(T, a.AutomationDeviceIndex, c), "Pad Volume");
         Grid.SetColumn(vol, 2); g.Children.Add(vol);
 
         var pan = PanDrag(a, c);
@@ -444,8 +450,8 @@ internal sealed partial class RackCardView
         var chk = MixBtn(choke > 0 ? choke.ToString() : "·", () => E.RackChainChoke(T, c) > 0, NotaPalette.Teal,
             () => { E.RackSetChainChoke(T, c, (E.RackChainChoke(T, c) + 1) % ChokeNames.Length); DeferRebuild(); }, choke: true);
         ToolTip.SetTip(mute, "Mute the pad"); ToolTip.SetTip(solo, "Solo the pad"); ToolTip.SetTip(chk, "Choke group: click for the next");
-        MidiLearn.Bind(mute, MidiTarget.RackChainMute(T, a.AutomationDeviceIndex, c), "Pad Mute");
-        MidiLearn.Bind(solo, MidiTarget.RackChainSolo(T, a.AutomationDeviceIndex, c), "Pad Solo");
+        if (!Nested) MidiLearn.Bind(mute, MidiTarget.RackChainMute(T, a.AutomationDeviceIndex, c), "Pad Mute");
+        if (!Nested) MidiLearn.Bind(solo, MidiTarget.RackChainSolo(T, a.AutomationDeviceIndex, c), "Pad Solo");
         var msc = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = { mute, solo, chk } };
         Grid.SetColumn(msc, 4); g.Children.Add(msc);
         return g;
@@ -457,7 +463,9 @@ internal sealed partial class RackCardView
         var tb = DrumMono(PanText(a.ChainPan(c)), TextSecondary, 7);
         tb.HorizontalAlignment = HorizontalAlignment.Center;
         var host = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = tb };
-        ToolTip.SetTip(host, "Pad pan · drag up or down, double-click to centre");
+        ToolTip.SetTip(host, MenuKit.Keys("Pad pan · drag up or down, ⌥-click to type, double-click to centre"));
+        ValueEntry.Attach(host, new ValueField("Pan", () => (a.ChainPan(c) + 1) / 2, n => PanText((float)(n * 2 - 1)),
+            n => a.SetChainPan(c, (float)Math.Clamp(n * 2 - 1, -1, 1)), Default: 0.5) { After = () => tb.Text = PanText(a.ChainPan(c)) }, tb);   // specs/035
         bool drag = false; double lastY = 0;
         host.PointerPressed += (_, e) =>
         {
@@ -611,7 +619,7 @@ internal sealed partial class RackCardView
             return r;
         }
         var volRow = Row("VOLUME", () => VolNorm(a.ChainGain(c)), v => a.SetChainGain(c, NormVol(v)), () => VolText(a.ChainGain(c)), () => a.SetChainGain(c, 1f));
-        MidiLearn.Bind(volRow, MidiTarget.RackChainGain(T, a.AutomationDeviceIndex, c), "Pad Volume");
+        if (!Nested) MidiLearn.Bind(volRow, MidiTarget.RackChainGain(T, a.AutomationDeviceIndex, c), "Pad Volume");
         var panRow = Row("PAN", () => (a.ChainPan(c) + 1) / 2, v => a.SetChainPan(c, (float)(v * 2 - 1)), () => PanText(a.ChainPan(c)), () => a.SetChainPan(c, 0f), bipolar: true);
         var tuneRow = Row("TUNE", () => (E.RackChainTune(T, c) + 48) / 96.0, v => E.RackSetChainTune(T, c, (int)Math.Round(v * 96 - 48)),
             () => NotaNum.Unit(E.RackChainTune(T, c), "+0;−0;0", "st"), () => E.RackSetChainTune(T, c, 0), bipolar: true);
@@ -662,7 +670,8 @@ internal sealed partial class RackCardView
         meta.Text = $"{pads.Count} pad{(pads.Count == 1 ? "" : "s")} · {groups} choke group{(groups == 1 ? "" : "s")}"
             + (E.SampleRate > 0 ? " · " + NotaNum.Unit(E.SampleRate / 1000.0, "0.#", "kHz") : "");
 
-        string Timing() => $"swing {NotaNum.Pct(E.RackSwing(T))} · humanize {NotaNum.Pct(E.RackHumanize(T))}";
+        // A Drum Rack in a chain has no kit timing (specs/041).
+        string Timing() => Nested ? "" : $" · swing {NotaNum.Pct(E.RackSwing(T))} · humanize {NotaNum.Pct(E.RackHumanize(T))}";
         string PadWords(int c)
         {
             string src = E.RackChainSamplerInfo(T, c, out var si) && si.SampleId != 0 && E.TryGetSampleInfo(si.SampleId, out var inf) && inf.SampleRate > 0
@@ -682,13 +691,13 @@ internal sealed partial class RackCardView
                     .Select(gr => $"choke group {gr.Key}: {string.Join(", ", gr.Select(c => PadName(a, c)))}").ToList();
                 return $"{bank} · {inBank.Count} pad{(inBank.Count == 1 ? "" : "s")}" + (chokes.Count > 0 ? " · " + string.Join(" · ", chokes) : " · no choke groups");
             }
-            if (!IsPad(a, Sel)) return $"{bank} · no pad selected · {Timing()}";
+            if (!IsPad(a, Sel)) return $"{bank} · no pad selected{Timing()}";
             if (_drumView == 2)
             {
                 int d = a.ChainDeviceCount(Sel);
                 return $"{PadName(a, Sel)} {NoteName(a.ChainTriggerNote(Sel))} · {a.ChainInstrumentName(Sel)} → {d} effect{(d == 1 ? "" : "s")} → pad volume, pan";
             }
-            return $"{bank} · {PadWords(Sel)} · {Timing()}";
+            return $"{bank} · {PadWords(Sel)}{Timing()}";
         }
         status.Text = Summary();
         _irTick.Add(() => status.Text = Summary());
@@ -753,6 +762,14 @@ internal sealed partial class RackCardView
     // → that instrument on this note. Either replaces what the pad held.
     private void DropOnPad(IRackAccess a, int note, Nota.Presentation.BrowserItem item)
     {
+        // Remove + add + note + name is one gesture: one undo step (#236).
+        E.BeginUndoGroup();
+        try { DropOnPadSteps(a, note, item); }
+        finally { E.EndUndoGroup(); }
+    }
+
+    private void DropOnPadSteps(IRackAccess a, int note, Nota.Presentation.BrowserItem item)
+    {
         int existing = ChainForNote(a, note);
         int added;
         switch (item.Kind)
@@ -776,6 +793,8 @@ internal sealed partial class RackCardView
                 if (added >= 0) E.RackSetChainName(T, added, System.IO.Path.GetFileNameWithoutExtension(item.Path));
                 break;
             case Nota.Presentation.BrowserItemKind.BuiltinInstrument:
+                // Racks nest one level, and only in an Instrument Rack chain (specs/041).
+                if (item.BuiltinKind is 3 or 4) { _ctx.Status("A rack can't go on a Drum Rack pad."); return; }
                 if (existing >= 0) a.RemoveChain(existing);
                 added = a.AddChain(item.BuiltinKind);
                 if (added >= 0) a.SetChainTriggerNote(added, note);
@@ -813,8 +832,10 @@ internal sealed partial class RackCardView
             var mi = new MenuItem { Header = header };
             mi.Click += (_, _) =>
             {
+                E.BeginUndoGroup();   // the chain and its note: one undo step
                 int c = a.AddChain(kind);
                 if (c >= 0) { a.SetChainTriggerNote(c, note); Sel = c; }
+                E.EndUndoGroup();
                 _ctx.NotifyChanged();
                 DeferRebuild();
             };
@@ -833,6 +854,7 @@ internal sealed partial class RackCardView
         Add("Nota Pentad", 14);
         Add("Nota Consort", 15);
         Add("Nota Keys", 16);
+        Add("Nota Mosaic", 17);
         f.ShowAt(anchor, showAtPointer: true);
     }
 

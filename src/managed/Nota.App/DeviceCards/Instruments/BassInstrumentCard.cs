@@ -430,6 +430,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             {
                 v => Secs(v, 0.001, 2.0), v => Secs(v, 0.002, 4.0), Pct, v => Secs(v, 0.002, 5.0),
             };
+            view.Format = (k, n) => fmt[k]((float)n);   // ⌥-click a breakpoint to type it
             var cells = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), ColumnSpacing = 3 };
             for (int k = 0; k < 4; k++)
             {
@@ -438,6 +439,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
                 var v = Mono(fk(G(id)), TextPrimary, NotaType.KnobValue);
                 v.HorizontalAlignment = HorizontalAlignment.Center;
                 readouts.Add(() => v.Text = fk(G(id)));
+                if (view.Field(k) is { } vf) ValueEntry.Attach(v, vf);   // double-click the read-out to type
                 var cap = Cap(stage[k]); cap.HorizontalAlignment = HorizontalAlignment.Center;
                 var cell = new Border
                 {

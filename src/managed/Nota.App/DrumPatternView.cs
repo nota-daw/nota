@@ -126,23 +126,7 @@ public sealed class DrumPatternView : UserControl
     // ---- pads -------------------------------------------------------------
 
     private List<Pad> ScanPads()
-    {
-        var pads = new List<Pad>();
-        int n = _e.RackChainCount(TrackId);
-        for (int c = 0; c < n; c++)
-        {
-            int note = _e.RackChainTriggerNote(TrackId, c);
-            // Prefer the pad's own name (kit voice / dropped sample) — every Sampler pad
-            // reports the same instrument name, which makes the grid unreadable.
-            if (note >= 0)
-            {
-                string nm = _e.RackChainName(TrackId, c);
-                pads.Add(new Pad(c, note, nm.Length > 0 ? nm : _e.RackChainInstrumentName(TrackId, c)));
-            }
-        }
-        pads.Sort((x, y) => x.Note.CompareTo(y.Note));   // kick (lowest pad) on top, as on the pad grid
-        return pads;
-    }
+        => Nota.Presentation.DrumPads.Scan(_e, TrackId).ConvertAll(p => new Pad(p.Chain, p.Note, p.Name));   // kick (lowest pad) on top, as on the pad grid
 
     private bool SamePads(List<Pad> pads)
     {
@@ -412,11 +396,10 @@ public sealed class DrumPatternView : UserControl
         {
             e.Handled = true;
             SelectRow(r);
-            _e.SetAuditionTrack(TrackId);   // audition without arming, as the pad grid does
-            _e.NoteOn(pad.Note, 1.0f);
+            _e.TrackNoteOn(TrackId, pad.Note, 1.0f);   // audition this rack only, as the pad grid does (#307)
             e.Pointer.Capture(cell);
         };
-        cell.PointerReleased += (_, e) => { _e.NoteOff(pad.Note); e.Pointer.Capture(null); };
+        cell.PointerReleased += (_, e) => { _e.TrackNoteOff(TrackId, pad.Note); e.Pointer.Capture(null); };
         _nameCells[r] = cell;
         _nameLabels[r] = name;
         return cell;

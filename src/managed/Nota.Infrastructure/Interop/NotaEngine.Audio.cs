@@ -9,7 +9,7 @@ public sealed partial class NotaEngine
 {
     // --- audio device settings (M7-1) ---
 
-    /// <summary>Re-scans connected CoreAudio devices and returns the playback-capable ones.</summary>
+    /// <summary>Re-scans connected audio devices and returns the playback-capable ones.</summary>
     public static IReadOnlyList<AudioDevice> AudioOutputDevices()
     {
         NativeMethods.AudioRefreshDevices();
@@ -22,7 +22,7 @@ public sealed partial class NotaEngine
         return list;
     }
 
-    /// <summary>Re-scans connected CoreAudio devices and returns the capture-capable ones.</summary>
+    /// <summary>Re-scans connected audio devices and returns the capture-capable ones.</summary>
     public static IReadOnlyList<AudioDevice> AudioInputDevices()
     {
         NativeMethods.AudioRefreshDevices();
@@ -88,6 +88,99 @@ public sealed partial class NotaEngine
     /// on platforms without exclusive mode. Read after ApplyAudio() to warn the user.</summary>
     public bool AudioExclusiveFallback
     { get { ThrowIfDisposed(); return NativeMethods.AudioExclusiveFallback(_handle) != 0; } }
+
+    /// <summary>True when no output device opened and the engine runs on a silent stand-in
+    /// device: everything works, nothing is heard until a device opens (Settings → Audio).</summary>
+    public bool AudioSilentFallback
+    { get { ThrowIfDisposed(); return NativeMethods.AudioSilentFallback(_handle) != 0; } }
+
+    // --- ASIO (Windows; specs/049) ---
+    // Staged like the device settings above: ApplyAudio() persists and restarts. Off Windows
+    // the setters change nothing and the lists are empty.
+
+    /// <summary>The staged audio system (WASAPI or ASIO).</summary>
+    public AudioSystem AudioSystem
+    { get { ThrowIfDisposed(); return NativeMethods.AudioSystem(_handle) == 1 ? AudioSystem.Asio : AudioSystem.Wasapi; } }
+
+    /// <summary>The audio system actually running: WASAPI after a failed ASIO start fell back.</summary>
+    public AudioSystem ActiveAudioSystem
+    { get { ThrowIfDisposed(); return NativeMethods.AudioActiveSystem(_handle) == 1 ? AudioSystem.Asio : AudioSystem.Wasapi; } }
+
+    /// <summary>True if this build can drive ASIO drivers (Windows).</summary>
+    public bool AsioAvailable => NativeMethods.AudioAsioAvailable() != 0;
+
+    /// <summary>Re-scans the installed ASIO drivers: Uid is the driver's CLSID, Name its
+    /// display name (duplicates numbered).</summary>
+    public IReadOnlyList<AudioDevice> AsioDrivers()
+    {
+        NativeMethods.AudioRefreshDevices();
+        int n = NativeMethods.AudioAsioDriverCount();
+        var list = new List<AudioDevice>(n);
+        for (int i = 0; i < n; i++)
+            list.Add(new AudioDevice(
+                Marshal.PtrToStringUTF8(NativeMethods.AudioAsioDriverId(i)) ?? "",
+                Marshal.PtrToStringUTF8(NativeMethods.AudioAsioDriverName(i)) ?? ""));
+        return list;
+    }
+
+    /// <summary>Stages the audio system. Call <see cref="ApplyAudio"/> to apply.</summary>
+    public void SetAudioSystem(AudioSystem system)
+    { ThrowIfDisposed(); Check(NativeMethods.AudioSetSystem(_handle, (int)system)); }
+
+    /// <summary>Stages the ASIO driver by id ("" = the first installed). Call <see cref="ApplyAudio"/>.</summary>
+    public void SetAsioDriver(string id)
+    { ThrowIfDisposed(); Check(NativeMethods.AudioSetAsioDriver(_handle, id ?? "")); }
+
+    /// <summary>The staged ASIO driver id ("" = none chosen).</summary>
+    public string AsioDriver
+    { get { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.AudioAsioDriver(_handle)) ?? ""; } }
+
+    /// <summary>Channel names of the open ASIO driver (empty when ASIO isn't running).</summary>
+    public IReadOnlyList<string> AsioChannels(bool input)
+    {
+        ThrowIfDisposed();
+        int flag = input ? 1 : 0;
+        int n = NativeMethods.AudioAsioChannelCount(_handle, flag);
+        var list = new List<string>(n);
+        for (int i = 0; i < n; i++)
+            list.Add(Marshal.PtrToStringUTF8(NativeMethods.AudioAsioChannelName(_handle, flag, i)) ?? $"{i + 1}");
+        return list;
+    }
+
+    /// <summary>The staged first channel of the ASIO input or output pair.</summary>
+    public int AsioPair(bool input)
+    { ThrowIfDisposed(); return NativeMethods.AudioAsioPair(_handle, input ? 1 : 0); }
+
+    /// <summary>Stages the ASIO pair by its first channel. Call <see cref="ApplyAudio"/>.</summary>
+    public void SetAsioPair(bool input, int firstChannel)
+    { ThrowIfDisposed(); Check(NativeMethods.AudioSetAsioPair(_handle, input ? 1 : 0, Math.Max(0, firstChannel))); }
+
+    /// <summary>Opens the running ASIO driver's own settings panel; false if none runs.</summary>
+    public bool OpenAsioControlPanel()
+    { ThrowIfDisposed(); return NativeMethods.AudioAsioOpenControlPanel(_handle) == NativeMethods.NotaResult.Ok; }
+
+    /// <summary>True while the ASIO driver's own settings panel is open: hold applies back.</summary>
+    public bool AsioPanelOpen
+    { get { ThrowIfDisposed(); return NativeMethods.AudioAsioPanelOpen(_handle) != 0; } }
+
+    /// <summary>What the driver asked for since the last call (cleared on read).</summary>
+    public AudioDeviceEvent PollDeviceEvent()
+    { ThrowIfDisposed(); return (AudioDeviceEvent)NativeMethods.AudioPollDeviceEvent(_handle); }
+
+    /// <summary>Why the last ASIO start failed and WASAPI runs instead ("" if it didn't).</summary>
+    public string AudioFallbackReason
+    { get { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.AudioFallbackReason(_handle)) ?? ""; } }
+
+    /// <summary>The running device's input latency in frames (0 = unknown).</summary>
+    public int InputLatencyFrames
+    { get { ThrowIfDisposed(); return NativeMethods.AudioInputLatencyFrames(_handle); } }
+
+    /// <summary>The running device's output latency in frames (0 = unknown).</summary>
+    public int OutputLatencyFrames
+    { get { ThrowIfDisposed(); return NativeMethods.AudioOutputLatencyFrames(_handle); } }
+
+    /// <summary>Device-free ASIO self-test on a fake driver (every platform).</summary>
+    public static bool AsioSelfTest() => NativeMethods.AsioSelfTest() == 1;
 
     // --- MIDI device settings (M7-2) ---
 

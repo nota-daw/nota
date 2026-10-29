@@ -5,12 +5,12 @@
 //  · Eq3Fader — a band's gain fader: a sunken slot, a fill from 0 dB to the value in the band's
 //    hue, the range's ends and 0 dB marked, a 22 × 9 cap. Vertical drag (relative — a click never
 //    jumps), 0.5 dB steps with a 0 dB detent; Shift / Ctrl / ⌘ for fine 0.1 dB steps;
-//    double-click resets (0 dB, and the kill off).
+//    double-click resets (0 dB, and the kill off); ⌥-click types the gain.
 //  · Eq3Graph — the response window: the output spectrum (engine FFT) behind, each band's own
 //    curve thin in its hue, the sum in neutral ink, the two crossovers as dashed lines with handles
 //    along the top that drag left / right (the low/mid one held to at most half the mid/high
 //    one). A drag anywhere else in a band's zone rides that band's gain up / down; double-click
-//    a handle or a zone to reset it.
+//    a handle or a zone to reset it, ⌥-click it to type the crossover / the band's gain.
 // Eq3Math mirrors Eq3.h (Linkwitz-Riley tree, the low band's allpass) so the curves are the DSP.
 
 using System;
@@ -176,13 +176,13 @@ internal sealed class Eq3Fader : Control
     }
 }
 
-internal sealed class Eq3Graph : Control
+internal sealed class Eq3Graph : Control, IValueHandles
 {
     private readonly double[] _db = new double[3];
     private readonly bool[] _kill = new bool[3];
     private double _f1 = 250, _f2 = 2500, _top = 6;
     private bool _lr8, _iso = true, _specValid;
-    private readonly float[] _spec = new float[96];
+    private readonly float[] _spec = new float[256];   // dsp::SpectrumAnalyzer::kPoints
     private int _specN;
 
     // Drag state: 0 / 1 = a crossover handle, 2 + b = band b's gain.
@@ -239,6 +239,17 @@ internal sealed class Eq3Graph : Control
     {
         double f = Eq3Math.F(x / Math.Max(1, Bounds.Width));
         return f < _f1 ? 0 : f < _f2 ? 1 : 2;
+    }
+
+    // Typed entry: handles 0 / 1 are the crossovers (the box over the handle), 2…4 the bands' zones.
+    public int HandleAt(Point p) => HitHandle(p) is var h and >= 0 ? h : 2 + ZoneAt(p.X);
+    public Rect HandleRect(int handle)
+    {
+        if (handle < 2) return Handle(handle, out _);
+        int b = handle - 2;
+        double lo = b == 0 ? Eq3Math.FMin : b == 1 ? _f1 : _f2, hi = b == 0 ? _f1 : b == 1 ? _f2 : Eq3Math.FMax;
+        double x = Eq3Math.X(Math.Sqrt(lo * hi)) * Bounds.Width;
+        return ValueEntry.Near(new Point(x, Y(_db[b], Bounds.Height)), Bounds.Size);
     }
 
     protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); if (_hover != -1) { _hover = -1; InvalidateVisual(); } }
@@ -345,22 +356,8 @@ internal sealed class Eq3Graph : Control
         double y0 = Math.Round(Y(0, h)) + 0.5;
         ctx.DrawLine(new Pen(NotaPalette.GridBar, 1), new Point(0, y0), new Point(w, y0));
 
-        // Output spectrum, behind everything: 0 dBFS at the top, −84 at the bottom.
-        if (_specValid)
-        {
-            var g = new StreamGeometry();
-            using (var gc = g.Open())
-            {
-                for (int i = 0; i < _specN; i++)
-                {
-                    double x = (i + 0.5) / _specN * w;
-                    double y = Math.Clamp(-_spec[i] / 84.0, 0, 1) * h;
-                    if (i == 0) gc.BeginFigure(new Point(x, y), false); else gc.LineTo(new Point(x, y));
-                }
-                gc.EndFigure(false);
-            }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.BorderStrong, 1, lineJoin: PenLineJoin.Round), g);
-        }
+        // Output spectrum, behind everything, filled as on EQ-8: 0 dBFS at the top, −90 at the bottom.
+        if (_specValid) SpectrumFill.Draw(ctx, _spec, w, h, 90, _specN);
 
         // Band curves and the sum.
         int n = (int)Math.Clamp(w / 2, 60, 320);

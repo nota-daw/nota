@@ -12,11 +12,13 @@
 // A tooltip beside the selected node reads the band, and for a dynamic band its gain now with
 // a 2-second history of it.
 //
-// Drag a node — frequency and gain; the wheel over a node — Q; double-click a node turns the
-// band on / off, double-click empty space switches on a free band there as a bell;
-// right-click a node — type, mode, on and solo. The magnitude maths mirrors DynamicEq.h.
+// Drag a node — frequency and gain; the wheel over a node — Q; ⌥-click a node types its
+// frequency, gain and Q (Tab between them); double-click a node turns the band on / off,
+// double-click empty space switches on a free band there as a bell; right-click a node —
+// type, mode, on, solo and Type value…. The magnitude maths mirrors DynamicEq.h.
 
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -48,6 +50,24 @@ internal static class DynEq
 
     public static bool HasGain(int type) => type is LowShelf or Bell or HighShelf;
     public static int P(int band, int field) => band * PerBand + field;
+
+    /// <summary>A band node's typeable values — frequency, gain (shelves and bells), Q — over the
+    /// raw-unit parameters <paramref name="freqP"/> / <paramref name="gainP"/> / <paramref name="qP"/>
+    /// (EQ-8 and Dynamic EQ share it, specs/035). No default: a double-click on a node keeps
+    /// switching the band on / off.</summary>
+    public static ValueField[] BandFields(IAudioEngine e, int track, int device, int band, int freqP, int gainP, int qP, bool hasGain, Action after)
+    {
+        ValueField F(string name, int p, Func<double, double> toN, Func<double, double> fromN, Func<double, string> text) => new(
+            NotaNum.F($"Band {band + 1} · {name}"), () => toN(e.DeviceGetParam(track, device, p)), n => text(fromN(n)),
+            n => e.DeviceSetParam(track, device, p, (float)fromN(Math.Clamp(n, 0, 1))),
+            () => e.BeginAutomationWrite(track, AutomationTarget.DeviceParam, device, p, ""),
+            () => e.EndAutomationWrite(track, AutomationTarget.DeviceParam, device, p, "")) { After = after };
+        var freq = F("Frequency", freqP, FreqToN, NToFreq, Hz);
+        var q = F("Q", qP, v => Math.Log(Math.Clamp(v, 0.1, 18) / 0.1) / Math.Log(180), n => 0.1 * Math.Pow(180, n), v => NotaNum.F($"{v:0.00}"));
+        return hasGain
+            ? [freq, F("Gain", gainP, g => (Math.Clamp(g, -18, 18) + 18) / 36, n => n * 36 - 18, g => Db(g) + "\u2009dB"), q]
+            : [freq, q];
+    }
 
     public static double FreqToN(double f) => Math.Log(Math.Clamp(f, Fmin, Fmax) / Fmin) / Math.Log(Fmax / Fmin);
     public static double NToFreq(double n) => Fmin * Math.Pow(Fmax / Fmin, Math.Clamp(n, 0, 1));
@@ -101,7 +121,7 @@ internal static class DynEq
     }
 }
 
-public sealed class DynamicEqCurve : Control
+public sealed class DynamicEqCurve : Control, IValueEntryHost
 {
     public const int HistLen = 120;   // 2 s at 60 Hz
     private const int Pts = 150;
@@ -133,6 +153,7 @@ public sealed class DynamicEqCurve : Control
 
     public DynamicEqCurve(IAudioEngine engine, int track, int device)
     {
+        ValueEntry.AttachHost(this, menu: false);   // the band menu carries Type value…
         _engine = engine; _track = track; _device = device;
         ClipToBounds = true;
         MinHeight = 60;
@@ -163,6 +184,36 @@ public sealed class DynamicEqCurve : Control
     }
 
     // ---- params ----
+    // ---- typed entry (specs/035): a node's frequency, gain and Q ----
+    // Cached per band (rebuilt when the band gains or loses its gain value): Tab finds the open
+    // field by reference, so every read must hand out the same objects.
+    private readonly (bool gain, ValueField[] fields)?[] _bandFields = new (bool, ValueField[])?[DynEq.Bands];
+    private ValueField[] BandFields(int b)
+    {
+        bool g = DynEq.HasGain(BandType(b));
+        if (_bandFields[b] is { } c && c.gain == g) return c.fields;
+        var fs = DynEq.BandFields(_engine, _track, _device, b, DynEq.P(b, DynEq.FreqF), DynEq.P(b, DynEq.GainF),
+            DynEq.P(b, DynEq.QF), g, () => { Edited?.Invoke(); InvalidateVisual(); });
+        _bandFields[b] = (g, fs);
+        return fs;
+    }
+    IReadOnlyList<ValueField>? IValueEntryHost.FieldsAt(Point p) => Hit(p) is var b and >= 0 ? BandFields(b) : null;
+    Rect IValueEntryHost.AnchorOf(ValueField field)
+    {
+        for (int b = 0; b < DynEq.Bands; b++)
+            if (field.Name.StartsWith(NotaNum.F($"Band {b + 1} "), StringComparison.Ordinal)) return ValueEntry.Near(NodeAt(b), Bounds.Size);
+        return default;
+    }
+    IReadOnlyList<ValueField> IValueEntryHost.AllFields
+    {
+        get
+        {
+            var list = new List<ValueField>();
+            for (int b = 0; b < DynEq.Bands; b++) if (BandOn(b)) list.AddRange(BandFields(b));
+            return list;
+        }
+    }
+
     private float P(int band, int field) => _engine.DeviceGetParam(_track, _device, DynEq.P(band, field));
     private void SetP(int band, int field, double v) => _engine.DeviceSetParam(_track, _device, DynEq.P(band, field), (float)v);
     private void Gesture(int p, Action a)
@@ -268,12 +319,14 @@ public sealed class DynamicEqCurve : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
+        // Only over a band's handle, and only a vertical wheel: anywhere else the wheel scrolls the
+        // device chain. It used to take every event over the graph for the selected band, and a
+        // trackpad's stream of pixel-sized events sent its Q to the end in one swipe (#262).
         int b = Hit(e.GetPosition(this));
-        if (b < 0) b = _selected;
+        if (b < 0 || !WheelInput.IsVertical(e)) return;
         SelectedBand = b;
         bool fine = (e.KeyModifiers & (KeyModifiers.Shift | KeyModifiers.Control | KeyModifiers.Meta)) != 0;
-        double step = fine ? 1.03 : 1.15;
-        double q = Math.Clamp(P(b, DynEq.QF) * (e.Delta.Y > 0 ? step : 1 / step), 0.1, 18);
+        double q = Math.Clamp(P(b, DynEq.QF) * WheelInput.ZoomFactor(e.Delta.Y, fine ? 1.03 : 1.15), 0.1, 18);
         Gesture(DynEq.P(b, DynEq.QF), () => SetP(b, DynEq.QF, q));
         Edited?.Invoke(); InvalidateVisual();
         e.Handled = true;
@@ -331,6 +384,8 @@ public sealed class DynamicEqCurve : Control
             Edited?.Invoke(); InvalidateVisual();
         };
         fly.Items.Add(solo);
+        fly.Items.Add(new Separator());
+        fly.Items.Add(MenuKit.Item("Type value…", GlyphKind.Edit, () => ValueEntry.Open(this, BandFields(b)[0])));
         fly.ShowAt(this, showAtPointer: true);
     }
 

@@ -337,6 +337,32 @@ if (args.Length >= 1 && args[0] == "--template")
     Console.WriteLine(failures == 0 ? "TEMPLATE PASSED" : $"TEMPLATE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Arrangement keyboard moves / new tracks from a drop alone: `--moves`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--moves")
+{
+    Console.WriteLine("-- arrangement moves --");
+    foreach (var (ok, label) in ArrangementMovesTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "MOVES PASSED" : $"MOVES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
+// Linux desktop robustness alone: `--linux-desktop`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--linux-desktop")
+{
+    Console.WriteLine("-- linux desktop --");
+    foreach (var (ok, label) in LinuxDesktopTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "LINUX DESKTOP PASSED" : $"LINUX DESKTOP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
+// Return-track automation alone: `--return-automation`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--return-automation")
+{
+    Console.WriteLine("-- return automation --");
+    foreach (var (ok, label) in ReturnAutomationTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "RETURN AUTOMATION PASSED" : $"RETURN AUTOMATION FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Deleting a return track alone: `--returns`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--returns")
 {
@@ -385,12 +411,126 @@ if (args.Length >= 1 && args[0] == "--device-undo")
     Console.WriteLine(failures == 0 ? "DEVICE UNDO PASSED" : $"DEVICE UNDO FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Warped clip split / range cut alone: `--warp-split`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--warp-split")
+{
+    Console.WriteLine("-- warp split --");
+    foreach (var (ok, label) in WarpSplitTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "WARP SPLIT PASSED" : $"WARP SPLIT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Writes the racks-redesign v8 fixtures (run on the engine from before specs/040 only).
+if (args.Length >= 1 && args[0] == "--rack-fixtures")
+{
+    RackRedesignTests.WriteFixtures();
+    return 0;
+}
+// Racks redesign (specs/040) alone: `--racks`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--racks")
+{
+    foreach (var (title, run) in RackSections())
+    {
+        Console.WriteLine($"-- {title} --");
+        foreach (var (ok, label) in run()) Check(ok, label);
+    }
+    Console.WriteLine(failures == 0 ? "RACKS PASSED" : $"RACKS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Device copy / duplicate audit + rack undo alone: `--device-copy`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--device-copy")
+{
+    Console.WriteLine("-- device copy + rack undo --");
+    foreach (var (ok, label) in DeviceCopyTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEVICE COPY PASSED" : $"DEVICE COPY FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Group devices into a rack and back (specs/044) alone: `--device-group`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--device-group")
+{
+    Console.WriteLine("-- device group --");
+    foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in DeviceSelectionTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "DEVICE GROUP PASSED" : $"DEVICE GROUP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// The instrument as a device in the chain (specs/043) alone: `--instrument-chain`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--instrument-chain")
+{
+    Console.WriteLine("-- instrument chain --");
+    foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "INSTRUMENT CHAIN PASSED" : $"INSTRUMENT CHAIN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Drum Rack one-shot pads, pad audition, warp off/on alone: `--pad-warp`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--pad-warp")
+{
+    Console.WriteLine("-- pads + warp toggle --");
+    foreach (var (ok, label) in PadAndWarpTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PAD WARP PASSED" : $"PAD WARP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// The EQ cards' spectrum analyzer alone (specs/046): `--eq-analyzer`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--eq-analyzer")
+{
+    Console.WriteLine("-- eq analyzer --");
+    foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "EQ ANALYZER PASSED" : $"EQ ANALYZER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Nota Lens tempo sync + key overlay alone (specs/050): `--lens-sync`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--lens-sync")
+{
+    Console.WriteLine("-- lens sync --");
+    foreach (var (ok, label) in LensSyncTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "LENS SYNC PASSED" : $"LENS SYNC FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// EQ-8 band labels and notes alone (specs/049): `--eq-labels`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--eq-labels")
+{
+    Console.WriteLine("-- eq labels --");
+    foreach (var (ok, label) in EqLabelTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "EQ LABELS PASSED" : $"EQ LABELS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Preset state alone: `--preset-state` (specs/048). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--preset-state")
+{
+    Console.WriteLine("-- preset state --");
+    foreach (var (ok, label) in PresetStateTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PRESET STATE PASSED" : $"PRESET STATE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Sidechain sub-sources alone: `--sidechain-parts` (specs/050). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--sidechain-parts")
+{
+    Console.WriteLine("-- sidechain parts --");
+    foreach (var (ok, label) in SidechainPartTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SIDECHAIN PARTS PASSED" : $"SIDECHAIN PARTS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Plug-in card preview alone: `--preview`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--preview")
+{
+    Console.WriteLine("-- plug-in preview --");
+    foreach (var (ok, label) in PluginPreviewTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "PREVIEW PASSED" : $"PREVIEW FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Device fold alone: `--fold`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--fold")
 {
     Console.WriteLine("-- device fold --");
     foreach (var (ok, label) in DeviceFoldTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "FOLD PASSED" : $"FOLD FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// The Modular Scope view alone: `--scope`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--scope")
+{
+    Console.WriteLine("-- scope view --");
+    foreach (var (ok, label) in ScopeViewTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SCOPE PASSED" : $"SCOPE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // The project pan law alone: `--panlaw`. Also part of the full run.
@@ -473,6 +613,22 @@ if (args.Length >= 1 && args[0] == "--vocoder")
     Console.WriteLine("-- nota vocoder --");
     foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "VOCODER PASSED" : $"VOCODER FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Piano roll Fold alone (fast iteration): `--piano-fold`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--piano-fold")
+{
+    Console.WriteLine("-- piano roll fold --");
+    foreach (var (ok, label) in FoldTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "FOLD PASSED" : $"FOLD FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Session launches + recording input alone (fast iteration): `--session-input`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--session-input")
+{
+    Console.WriteLine("-- session launch + record input --");
+    foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
@@ -4223,7 +4379,7 @@ Check(m4Dry > 1e-4f, $"instrument audible (rms={m4Dry:0.0000})");
 int eqDev = engine.AddBuiltinDevice(fxT, 0); // 0 = EQ-8 (flat by default = passthrough)
 Check(eqDev >= 0, "add built-in EQ-8");
 Check(engine.DeviceName(fxT, eqDev) == "Nota EQ-8", "EQ-8 device name");
-Check(engine.DeviceParamCount(fxT, eqDev) == 60, "EQ-8 exposes 60 params (8 bands × 5, slopes, channels, globals)");
+Check(engine.DeviceParamCount(fxT, eqDev) == 63, "EQ-8 exposes 63 params (8 bands × 5, slopes, channels, globals, analyzer range and peak, labels)");
 engine.Seek(0);
 engine.RenderOffline(buf, frames);
 Check(Rms(buf, frames) > 1e-4f, $"audio flows through flat EQ-8 (rms={Rms(buf, frames):0.0000})");
@@ -5513,12 +5669,12 @@ Console.WriteLine("-- Nota EQ-3 --");
     Render(4096);                          // the kill's 5 ms glide
     qe.DeviceAction(qt, qd, 0, 0, 0);      // fresh meters
     Render(8192);
-    var qs = new float[112];
+    var qs = new float[16 + 256];
     int qn = qe.DeviceScope(qt, qd, qs, qs.Length);
-    Check(qn == 112 && qs[3] > qs[2] + 20 && qs[3] > -30 && qs[11] < 0.01f && Math.Abs(qs[12] - 1) < 0.01f && Math.Abs(qs[9] - 250) < 5 && Math.Abs(qs[10] - 2500) < 30,
+    Check(qn == qs.Length && qs[3] > qs[2] + 20 && qs[3] > -30 && qs[11] < 0.01f && Math.Abs(qs[12] - 1) < 0.01f && Math.Abs(qs[9] - 250) < 5 && Math.Abs(qs[10] - 2500) < 30,
           $"telemetry: band levels L {qs[2]:F0} / M {qs[3]:F1} dBFS, low gain {qs[11]:F3} (killed), crossovers {qs[9]:F0} / {qs[10]:F0} Hz");
-    int pk = 0; for (int b = 1; b < 96; b++) if (qs[16 + b] > qs[16 + pk]) pk = b;
-    double pkHz = 20 * Math.Pow(1000, (pk + 0.5) / 96);
+    int pk = 0; for (int b = 1; b < 256; b++) if (qs[16 + b] > qs[16 + pk]) pk = b;
+    double pkHz = 20 * Math.Pow(1000, pk / 255.0);
     Check(qs[7] > 0.5f && pkHz > 380 && pkHz < 520, $"the output spectrum peaks at the sine (~{pkHz:0} Hz)");
 
     // Texts.
@@ -5919,8 +6075,11 @@ Console.WriteLine("-- Nota Chamber --");
         Check(ce.DeviceLayerWave(ct, cd, 2, pv, pv.Length) == 128 && ce.DeviceLayerWave(ct, cd, 3, pv, pv.Length) == 128, "Chamber exposes result + echogram previews");
         ce.DeviceScope(ct, cd, csc, csc.Length);
         float res0 = csc[19], echo0 = csc[20];
-        ce.DeviceSetParam(ct, cd, IrSize, 1f); ce.DeviceSetParam(ct, cd, AlgoDecay, 0.9f); Settle();
-        ce.DeviceScope(ct, cd, csc, csc.Length);
+        ce.DeviceSetParam(ct, cd, IrSize, 1f); ce.DeviceSetParam(ct, cd, AlgoDecay, 0.9f);
+        // The IR worker publishes in the background: give a slow CI runner up to 3 s.
+        var pvClock = System.Diagnostics.Stopwatch.StartNew();
+        do { Settle(); ce.DeviceScope(ct, cd, csc, csc.Length); }
+        while (!(csc[19] > res0 * 1.8f && csc[20] > echo0 * 2f) && pvClock.ElapsedMilliseconds < 3000);
         Check(csc[19] > res0 * 1.8f && csc[20] > echo0 * 2f, $"previews follow Size + Decay (result {res0:F2}→{csc[19]:F2} s, echogram {echo0:F2}→{csc[20]:F2} s)");
         ce.DeviceSetParam(ct, cd, IrSize, 0.5f); ce.DeviceSetParam(ct, cd, AlgoDecay, ce.DeviceParamDefault(ct, cd, AlgoDecay)); Settle();
     }
@@ -6287,7 +6446,7 @@ Console.WriteLine("-- Nota Lens --");
               AverageP = 6, SmoothP = 7, TiltP = 9, PeakHoldP = 11, TimeDivP = 15, TrigModeP = 17,
               TrigLevelP = 19, CursorAP = 26, CursorBP = 27, RateP = 36;
     const int M_PeakHz = 0, M_PeakDb = 1, M_RmsDb = 2, M_PeriodMs = 8, M_FreqHz = 9, M_Vpp = 10,
-              M_Vrms = 11, M_BinHz = 13, M_FftN = 14, M_SampleRate = 18, M_Held = 19, kLensScope = 20;
+              M_Vrms = 11, M_BinHz = 13, M_FftN = 14, M_SampleRate = 18, M_Held = 19, kLensScope = 22;
     const int L_Spectrum = 0, L_Peak = 1, L_Trace = 2, L_Raw = 3, L_Waterfall = 4;
     const int A_Rearm = 0, A_ResetPeak = 1;
 
@@ -6304,7 +6463,7 @@ Console.WriteLine("-- Nota Lens --");
         Check(le.DeviceName(lt, ld) == "Nota Lens", $"name is Nota Lens (got '{le.DeviceName(lt, ld)}')");
         Check(le.TrackDeviceBuiltinKind(lt, ld) == 22, $"builtin kind is 22 (got {le.TrackDeviceBuiltinKind(lt, ld)})");
         int lpc = le.DeviceParamCount(lt, ld);
-        Check(lpc == 37, $"Nota Lens exposes 37 params (got {lpc})");
+        Check(lpc == 42, $"Nota Lens exposes 42 params (got {lpc})");
         var lnames = Enumerable.Range(0, lpc).Select(i => le.DeviceParamName(lt, ld, i)).ToList();
         Check(lnames.Distinct().Count() == lpc && lnames.All(n => n.Length > 0), "Lens param names are unique and non-empty");
         le.DeviceSetParam(lt, ld, TiltP, 0.42f);
@@ -6845,7 +7004,7 @@ Console.WriteLine("-- EQ-8 --");
     engine.AddMidiClip(et, 0.0, 4.0);
     engine.SetClipNotes(et, 0, new[] { new NotaNote(69, 0.0, 3.0, 0.9f) });   // A4 = 440 Hz + harmonics
     int eq = engine.AddBuiltinDevice(et, 0);
-    Check(engine.DeviceParamCount(et, eq) == 60, "EQ-8 has 60 params on a fresh track");
+    Check(engine.DeviceParamCount(et, eq) == 63, "EQ-8 has 63 params on a fresh track");
 
     // Band 3 (index 2) is a bell; param base = 2*5. On=+0, Type=+1, Freq=+2, Gain=+3, Q=+4.
     int b2 = 2 * 5;
@@ -6957,11 +7116,11 @@ Console.WriteLine("-- EQ-8 --");
     // Spectra: pre and post peak at the sine; the shelf lifts post over pre.
     qe.DeviceAction(qt, qd, 0, 0, 0);
     Render(8192);
-    var sc = new float[16 + 2 * 96];
+    var sc = new float[16 + 3 * 256];
     int sn = qe.DeviceScope(qt, qd, sc, sc.Length);
     int pkPre = 0, pkPost = 0;
-    for (int b = 1; b < 96; b++) { if (sc[16 + b] > sc[16 + pkPre]) pkPre = b; if (sc[112 + b] > sc[112 + pkPost]) pkPost = b; }
-    double hzPre = 20 * Math.Pow(1000, (pkPre + 0.5) / 96), lift = sc[112 + pkPost] - sc[16 + pkPre];
+    for (int b = 1; b < 256; b++) { if (sc[16 + b] > sc[16 + pkPre]) pkPre = b; if (sc[272 + b] > sc[272 + pkPost]) pkPost = b; }
+    double hzPre = 20 * Math.Pow(1000, pkPre / 255.0), lift = sc[272 + pkPost] - sc[16 + pkPre];
     Check(sn == sc.Length && sc[5] > 0.5f && hzPre > 380 && hzPre < 520 && pkPre == pkPost && lift > 3 && sc[1] > sc[0] + 3,
           $"spectra: pre / post peak at the sine (~{hzPre:0} Hz), post {lift:+0.0} dB over pre; out peak {sc[1]:F1} over in {sc[0]:F1} dBFS");
 
@@ -6999,12 +7158,18 @@ Console.WriteLine("-- EQ-8 --");
     bool threw = false;
     try { tools.SetEq8Band(qt, qd, 1, channel: "Centre").GetAwaiter().GetResult(); } catch (ArgumentException) { threw = true; }
     Check(threw, "MCP set_eq8_band rejects an unknown channel");
+    var ma = tools.SetEq8(qt, qd, analyzerRangeDb: 120, analyzerPeak: true).Result;
+    Check(ma.AnalyzerRangeDb == 120 && ma.AnalyzerPeak && qe.DeviceGetParam(qt, qd, 60) == 2 && qe.DeviceGetParam(qt, qd, 61) == 1,
+          $"MCP set_eq8 sets the analyzer range and peak hold ({ma.AnalyzerRangeDb} dB, peak {ma.AnalyzerPeak})");
+    tools.SetEq8(qt, qd, analyzerRangeDb: 90, analyzerPeak: false).GetAwaiter().GetResult();
 
     // An original-EQ-8 preset (the 40 band params only) keeps the appended params at their defaults.
     var legacy = new PresetDocument { Type = "builtin-effect", BuiltinKind = 0, NamedParams = new Dictionary<string, float> { ["1 Type"] = 1f, ["1 Freq"] = 110f, ["1 Gain"] = 5f } };
     PresetService.ApplyInPlace(legacy, qe, qt, qd);
     Check(qe.DeviceGetParam(qt, qd, Scale) == 100 && qe.DeviceGetParam(qt, qd, AutoG) == 0 && qe.DeviceGetParam(qt, qd, Output) == 0
-          && qe.DeviceGetParam(qt, qd, SlopeB + 4) == 0 && qe.DeviceGetParam(qt, qd, ChanB + 4) == 0, "an original EQ-8 preset loads with scale 100 %, stereo, 12 dB/oct");
+          && qe.DeviceGetParam(qt, qd, SlopeB + 4) == 0 && qe.DeviceGetParam(qt, qd, ChanB + 4) == 0
+          && qe.DeviceGetParam(qt, qd, 60) == 1 && qe.DeviceGetParam(qt, qd, 61) == 0,
+          "an original EQ-8 preset loads with scale 100 %, stereo, 12 dB/oct, analyzer range 90 dB, peak off");
 
     // Every factory preset names only real params and renders finite.
     var cat = new FactoryPresetCatalog();
@@ -8310,7 +8475,8 @@ engine.StopTransport();
     e.SetTrackMute(sesT3, false);
     e.BackToArrangement();
     Check(e.ArrangementActive, "back to arrangement re-activates the timeline");
-    Check(e.SessionSlotState(sesT3, 0) != 3, "back to arrangement stopped the session clip");
+    e.RenderOffline(buf, 64);                          // the stop lands on the next block (the muted clip did launch, #343)
+    Check(e.SessionSlotState(sesT3, 0) == 1, "back to arrangement stopped the session clip");
     e.Seek(0); e.RenderOffline(buf, frames);
     Check(Rms(buf, frames) > 0.001f, $"arrangement plays after back to arrangement (rms={Rms(buf, frames):F4})");
     e.StopTransport();
@@ -9414,6 +9580,43 @@ Console.WriteLine("-- M7-1: audio device settings --");
     Check(engine.NegotiatedSampleRate == 0, "negotiated rate is 0 before the backend starts");
 }
 
+// ===================== specs/049: ASIO on Windows ===========================
+// Device-free: the ASIO core runs on a fake driver on every platform (formats, pair
+// routing + silence, duplex order, resets, failures, latency compensation, audio.json
+// keys). The C ABI must be a safe no-op where the build has no ASIO.
+Console.WriteLine("-- specs/049: ASIO --");
+{
+    Check(NotaEngine.AsioSelfTest(), "ASIO self-test (fake driver): formats, pair routing, duplex, reset, fallback, latency");
+    Check(engine.ActiveAudioSystem == AudioSystem.Wasapi, "the engine starts on the native audio system");
+    Check(engine.InputLatencyFrames == 0 && engine.OutputLatencyFrames == 0, "no device latency before the backend starts");
+    Check(engine.PollDeviceEvent() == AudioDeviceEvent.None, "no device event without a driver");
+    Check(engine.AudioFallbackReason == "", "no fallback reason without an ASIO start");
+    Check(engine.AsioChannels(false).Count == 0 && engine.AsioChannels(true).Count == 0, "no ASIO channels while ASIO isn't running");
+    Check(!engine.OpenAsioControlPanel(), "no driver panel while ASIO isn't running");
+    if (!engine.AsioAvailable)
+    {
+        Check(engine.AsioDrivers().Count == 0, "no ASIO drivers off Windows");
+        engine.SetAudioSystem(AudioSystem.Asio);
+        engine.SetAsioDriver("{00000000-0000-0000-0000-000000000000}");
+        engine.SetAsioPair(false, 2);
+        Check(engine.AudioSystem == AudioSystem.Wasapi && engine.AsioDriver == "" && engine.AsioPair(false) == 0,
+              "ASIO setters change nothing off Windows");
+    }
+    else
+    {
+        // Staging only (no apply): the real backend and audio.json stay untouched.
+        engine.SetAudioSystem(AudioSystem.Asio);
+        engine.SetAsioPair(false, 2);
+        engine.SetAsioPair(true, 4);
+        Check(engine.AudioSystem == AudioSystem.Asio && engine.AsioPair(false) == 2 && engine.AsioPair(true) == 4,
+              "staged ASIO system and pairs round-trip");
+        engine.SetAudioSystem(AudioSystem.Wasapi);
+        engine.SetAsioPair(false, 0);
+        engine.SetAsioPair(true, 0);
+        Console.WriteLine($"  [INFO] {engine.AsioDrivers().Count} ASIO driver(s) installed");
+    }
+}
+
 // ===================== M7-2: MIDI device settings ==========================
 // Device-free: enumeration + enable/disable staging round-trip. We do NOT call
 // ApplyMidi() (it writes midi.json and would clobber the user's file); the
@@ -9641,8 +9844,9 @@ Console.WriteLine("-- Instrument Rack: C ABI + persistence --");
     using var re = new NotaEngine();
     int rt = re.AddInstrumentRackTrack();
     Check(rt > 0, "rack track created");
-    Check(re.RackChainCount(rt) == 1, "rack starts with one chain");
-    Check(re.RackChainInstrumentKind(rt, 0) == 6, "default chain hosts Nota Volt");
+    Check(re.RackChainCount(rt) == 0, "a new rack starts with no chains");
+    re.RackAddChain(rt, 6);
+    Check(re.RackChainCount(rt) == 1 && re.RackChainInstrumentKind(rt, 0) == 6, "chain 0 hosts Nota Volt");
 
     int c2 = re.RackAddChain(rt, 2);   // Nota Physical
     Check(c2 == 1 && re.RackChainCount(rt) == 2, "second chain added");
@@ -14306,7 +14510,10 @@ Console.WriteLine("-- MCP tools --");
     Check(re.TrackInstrumentKind(t) == 9, $"instrument is now Operator ({re.TrackInstrumentKind(t)})");
     Check(re.SetTrackBuiltinInstrument(t, 1), "swap to Sampler succeeds");
     Check(re.TrackInstrumentKind(t) == 1, "instrument is now Sampler");
-    Check(!re.SetTrackBuiltinInstrument(t, 3), "swap to a Rack kind is rejected");
+    // specs/043: Replace… can pick a rack — an empty one, as a new rack track starts.
+    Check(re.SetTrackBuiltinInstrument(t, 3) && re.TrackInstrumentKind(t) == 3 && re.RackChainCount(t) == 0,
+        "swap to an Instrument Rack gives an empty rack");
+    Check(!re.SetTrackBuiltinInstrument(t, 99), "swap to an unknown kind is rejected");
     int at = re.AddAudioTrack();
     Check(!re.SetTrackBuiltinInstrument(at, 6), "audio track rejects an instrument swap");
 }
@@ -14963,6 +15170,10 @@ Console.WriteLine("-- background audio import --");
 Console.WriteLine("-- browser: device categories --");
 foreach (var (ok, label) in BrowserCategoryTests.Run()) Check(ok, label);
 
+// --- piano roll Fold (specs/045): scale rows, Drum Rack pads, saved per track ---
+Console.WriteLine("-- piano roll fold --");
+foreach (var (ok, label) in FoldTests.Run()) Check(ok, label);
+
 // --- browser: preset audition (offline-rendered, cached, played on the preview voice) ---
 Console.WriteLine("-- browser: preset audition --");
 foreach (var (ok, label) in AuditionTests.Run()) Check(ok, label);
@@ -15004,6 +15215,8 @@ Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop record mode --");
 foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
+Console.WriteLine("-- session launch + record input --");
+foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
@@ -15044,6 +15257,15 @@ foreach (var (ok, label) in ProjectTemplateTests.Run()) Check(ok, label);
 Console.WriteLine("-- return delete --");
 foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- return automation --");
+foreach (var (ok, label) in ReturnAutomationTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- arrangement moves --");
+foreach (var (ok, label) in ArrangementMovesTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- linux desktop --");
+foreach (var (ok, label) in LinuxDesktopTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- range clipboard --");
 foreach (var (ok, label) in RangeClipboardTests.Run()) Check(ok, label);
 
@@ -15055,6 +15277,23 @@ foreach (var (ok, label) in AuroraNullTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- device fold --");
 foreach (var (ok, label) in DeviceFoldTests.Run()) Check(ok, label);
+Console.WriteLine("-- preset state --");
+foreach (var (ok, label) in PresetStateTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- sidechain parts --");
+foreach (var (ok, label) in SidechainPartTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- eq analyzer --");
+foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);
+Console.WriteLine("-- eq labels --");
+foreach (var (ok, label) in EqLabelTests.Run()) Check(ok, label);
+Console.WriteLine("-- scope view --");
+foreach (var (ok, label) in ScopeViewTests.Run()) Check(ok, label);
+Console.WriteLine("-- lens sync --");
+foreach (var (ok, label) in LensSyncTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- plug-in preview --");
+foreach (var (ok, label) in PluginPreviewTests.Run()) Check(ok, label);
 
 // The Linux JUCE message pump (.specify/bugs/linux-plugin-black-window): exported on every
 // platform and a safe no-op before any hosted plugin exists (the app ticks it on Linux).
@@ -15070,9 +15309,26 @@ Console.WriteLine("-- param + section undo --");
 foreach (var (ok, label) in ParamSectionUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
+Console.WriteLine("-- device copy + rack undo --");
+foreach (var (ok, label) in DeviceCopyTests.Run()) Check(ok, label);
+Console.WriteLine("-- instrument chain --");
+foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
+foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);
+foreach (var (ok, label) in DeviceSelectionTests.Run()) Check(ok, label);
+
+// --- racks redesign (specs/040): v8 compatibility, mapping rules, MIDI racks, chain MIDI effects ---
+foreach (var (title, run) in RackSections())
+{
+    Console.WriteLine($"-- {title} --");
+    foreach (var (ok, label) in run()) Check(ok, label);
+}
+Console.WriteLine("-- pads + warp toggle --");
+foreach (var (ok, label) in PadAndWarpTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- stereo map --");
 foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);
+Console.WriteLine("-- warp split --");
+foreach (var (ok, label) in WarpSplitTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- filter knob glide --");
 foreach (var (ok, label) in FilterGlideTests.Run()) Check(ok, label);
@@ -15111,3 +15367,6 @@ foreach (var (ok, label) in AppUpdaterTests.Run()) Check(ok, label);
 
 Console.WriteLine(failures == 0 ? "SMOKE TEST PASSED" : $"SMOKE TEST FAILED ({failures})");
 return failures == 0 ? 0 : 1;
+
+static IEnumerable<(string title, Func<IEnumerable<(bool ok, string label)>> run)> RackSections() =>
+    RackRedesignTests.Sections().Concat(MidiRackTests.Sections()).Concat(RackChainMidiTests.Sections()).Concat(RackNestingTests.Sections()).Concat(RackClipboardTests.Sections());

@@ -74,6 +74,19 @@ public sealed partial class DeviceChainView : UserControl
 
     /// <summary>A one-line message for the status bar (e.g. a kit that loaded incompletely).</summary>
     public event Action<string>? StatusMessage;
+    /// <summary>The instrument's Delete / Cut / Remove (specs/043): the host deletes the track
+    /// (trackId), asking first when it has clips. <c>cut</c>: the instrument was copied first.</summary>
+    // The instrument's Delete / Cut take its track (specs/043): (track, cut, how many devices were
+    // selected — more than one means the host asks every time, specs/044).
+    public event Action<int, bool, int>? TrackDeleteRequested;
+    // Move to track ▸ for several selected devices (specs/044), in chain order.
+    public event Action<System.Collections.Generic.IReadOnlyList<DeviceMoveRequest>>? MovesRequested;
+    /// <summary>Replace… in the instrument's menu: the host swaps the shown track's instrument
+    /// for this one (racks included), one undo step.</summary>
+    public event Action<BrowserItem>? InstrumentReplaceRequested;
+    /// <summary>Move to track ▸ (and a card dragged onto a track header): the host moves the
+    /// device, one undo step, asking first when an instrument's move takes a track with clips.</summary>
+    public event Action<DeviceMoveRequest>? MoveRequested;
 
     /// <summary>The "+" at the end of the chain was clicked: MainWindow opens the browser on
     /// Audio effects with the keyboard in its search.</summary>
@@ -103,11 +116,30 @@ public sealed partial class DeviceChainView : UserControl
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
+        // The chain only scrolls sideways, and the scroller ignores a plain (vertical) mouse wheel,
+        // so a wheel no card control took moves the chain instead of doing nothing (#262).
+        scroller.PointerWheelChanged += (_, e) =>
+        {
+            if (e.Handled || !WheelInput.IsVertical(e)) return;
+            double max = Math.Max(0, scroller.Extent.Width - scroller.Viewport.Width);
+            double x = Math.Clamp(scroller.Offset.X - WheelInput.Pixels(e.Delta.Y), 0, max);
+            if (Math.Abs(x - scroller.Offset.X) < 0.01) return;
+            scroller.Offset = scroller.Offset.WithX(x);
+            e.Handled = true;
+        };
+        // A click on the chain's empty space clears the selection (specs/044).
+        scroller.Background = Brushes.Transparent;
+        scroller.PointerPressed += (_, e) =>
+        {
+            if (!HasDeviceSelection || !e.GetCurrentPoint(scroller).Properties.IsLeftButtonPressed) return;
+            if (e.Source is ScrollViewer or Avalonia.Controls.Presenters.ScrollContentPresenter || ReferenceEquals(e.Source, _row))
+            { ClearDeviceSelection(); Rebuild(); }
+        };
         Content = new Panel { Children = { scroller, _dropGlow, _dropLayer } };
         HookBrowserDrop();
     }
 
-    public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; _selDeviceIndex = -1; Rebuild(); }
+    public void Show(int trackId) { _trackId = trackId; _rackSelChain = 0; ClearDeviceSelection(); _rackSel = null; _rackCmds = null; Rebuild(); }
 
     /// <summary>Forgets every card's remembered preset label + A/B slots (a project was
     /// opened / created, so track ids no longer mean the same tracks).</summary>
@@ -149,18 +181,36 @@ public sealed partial class DeviceChainView : UserControl
         return false;
     }
 
+    // Clearing the row takes cards out of the tree, and a card losing pointer capture can
+    // ask for a rebuild from inside this one; the nested call then filled the row and this
+    // one appended a second set of cards after it (#202). Run it once more afterwards instead.
+    private bool _rebuilding, _rebuildAgain;
+
     private void Rebuild()
     {
+        if (_rebuilding) { _rebuildAgain = true; return; }
+        _rebuilding = true;
+        try
+        {
+            do { _rebuildAgain = false; RebuildRow(); } while (_rebuildAgain);
+        }
+        finally { _rebuilding = false; }
+    }
+
+    private void RebuildRow()
+    {
         _row.Children.Clear();
+        _selRings.Clear();
         _instrumentCard = null;
+        _instrumentRackView = null;
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)
-        _engine.SetAuditionTrack(-1);                // re-armed by the Drum Rack card if shown (pad audition)
         if (_trackId <= 0) { _row.Children.Add(Hint("Select a track")); return; }
 
         // MIDI effects sit before the instrument (they shape the note stream).
         int midiCount = _engine.TrackMidiEffectCount(_trackId);
+        _sel.Prune(midiCount, IsInstrumentTrack(_trackId), _engine.TrackDeviceCount(_trackId));   // an edit elsewhere shrank the chain
         for (int i = 0; i < midiCount; i++) _row.Children.Add(MidiDeviceCard(i, midiCount));
 
         if (IsInstrumentTrack(_trackId)) _row.Children.Add(_instrumentCard = InstrumentCard());
@@ -191,6 +241,8 @@ public sealed partial class DeviceChainView : UserControl
         if (kind == 5)   // Audio Effect Rack — full-bleed body (fills the shell; no body inset
         {                // that would overflow its fixed width and skew hit-testing).
             body = new RackCardView(NewCardContext()).BuildEffectRackBody(index); width = 700; fullBleed = true;
+            int chains = _engine.RackDevChainCount(_trackId, index);
+            tag = $"Rack · {chains} chain{(chains == 1 ? "" : "s")}";
         }
         else
         {
@@ -222,7 +274,10 @@ public sealed partial class DeviceChainView : UserControl
                c => RackPresetSaveRequested?.Invoke(c),
                ClearDropHints,
                _factory,
-               s => StatusMessage?.Invoke(s));
+               s => StatusMessage?.Invoke(s),
+               () => _rackSel,
+               SelectRackDevice,
+               RackCopied);
 
     // ---- instrument / sends / add ----------------------------------------
 

@@ -16,9 +16,13 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -90,6 +94,48 @@ void fillChords6(NotaEngine* e, int track, int transpose, double startBeat, doub
     nota_clip_set_notes(e, track, clip, notes.data(), (int)notes.size());
 }
 
+// An 8 s stereo 48 kHz WAV of a chord with a little noise (so the stretch has real work), in
+// the temp dir; the warp scenarios load it.
+// Each process writes its own file (perf-gate runs scenarios in parallel), removed once
+// the clip has loaded it.
+std::string warpTestWav() {
+    const auto path = (std::filesystem::temp_directory_path() /
+                       ("nota_perf_warp_" + std::to_string(std::random_device{}()) + ".wav")).string();
+    constexpr double kTwoPi = 6.283185307179586;
+    const int sr = 48000, frames = sr * 8;
+    std::vector<int16_t> pcm((size_t)frames * 2);
+    uint32_t rnd = 1;
+    for (int i = 0; i < frames; ++i) {
+        const double t = (double)i / sr;
+        rnd = rnd * 1664525u + 1013904223u;
+        const double v = 0.25 * (std::sin(kTwoPi * 220 * t) + std::sin(kTwoPi * 277 * t) + std::sin(kTwoPi * 330 * t)) +
+                         0.05 * ((double)(rnd >> 8) / (1 << 24) - 0.5);
+        pcm[(size_t)i * 2] = pcm[(size_t)i * 2 + 1] = (int16_t)(std::clamp(v, -1.0, 1.0) * 32000);
+    }
+    std::ofstream f(path, std::ios::binary);
+    auto u32 = [&](uint32_t v) { f.write(reinterpret_cast<const char*>(&v), 4); };
+    auto u16 = [&](uint16_t v) { f.write(reinterpret_cast<const char*>(&v), 2); };
+    const uint32_t bytes = (uint32_t)pcm.size() * 2;
+    f.write("RIFF", 4); u32(36 + bytes); f.write("WAVEfmt ", 8); u32(16); u16(1); u16(2); u32(sr); u32(sr * 4); u16(4); u16(16);
+    f.write("data", 4); u32(bytes);
+    f.write(reinterpret_cast<const char*>(pcm.data()), bytes);
+    return path;
+}
+
+int gWarpTrack = -1; // the track warpedClipTrack made last
+
+// One audio track holding the 8 s WAV warped (Complex) over 16 beats, its stretch built.
+int warpedClipTrack(NotaEngine* e) {
+    const int t = nota_engine_add_audio_track(e);
+    const std::string wav = warpTestWav();
+    const bool loaded = t >= 0 && nota_track_add_audio_clip(e, t, wav.c_str(), 0.0) == 0;
+    std::error_code ec;
+    std::filesystem::remove(wav, ec);
+    if (!loaded) return -1;
+    if (nota_clip_set_warp(e, t, 0, 1, 3) != NOTA_OK) return -1;
+    return gWarpTrack = t;
+}
+
 // Display names for the report; the scenario id (the kind number) is what is compared.
 std::string instrumentName(int kind) {
     switch (kind) {
@@ -143,6 +189,8 @@ std::vector<Scenario> scenarios() {
             std::snprintf(id, sizeof id, "instrument-%02d", k);
             s.push_back({id, instrumentName(k) + ", one track"});
         }
+    s.push_back({"drum-rack", "Drum Rack, 4 Synth pads with decay"});
+    s.push_back({"instrument-rack", "Instrument Rack, 2 Synth chains"});
     s.push_back({"effect-base", "Synth alone (effect baseline)"});
     s.push_back({"aurora-supersaw-2x", "Aurora Super Saw x2"});
     for (int k = 0; k < kMaxKind; ++k) {
@@ -154,6 +202,9 @@ std::vector<Scenario> scenarios() {
     for (int n : {1, 4, 8, 16, 32}) s.push_back({"mix-" + std::to_string(n), std::to_string(n) + " tracks, all playing"});
     s.push_back({"sparse-32", "32 tracks, 1 in 4 playing"});
     s.push_back({"silent-32", "32 tracks, no clips"});
+    s.push_back({"audio-warp-split", "Warped audio clip split in 8, playing"});
+    // An edit, not a render: the measured loop splits a warped clip 8 times and undoes it (#299).
+    s.push_back({"edit-warp-split", "Split a warped 8 s clip 8x + undo (ms per edit)"});
     return s;
 }
 
@@ -175,6 +226,31 @@ bool build(NotaEngine* e, const std::string& id) {
                 if (nota_track_add_builtin_device(e, t, kind) < 0) return false;
         return true;
     }
+    // The racks render their chains themselves (pad decay VCA, key zones), so they get their own rows.
+    if (id == "drum-rack") {
+        const int t = nota_engine_add_drum_rack_track(e);
+        if (t < 0) return false;
+        static const int pads[4] = {36, 38, 42, 46};
+        for (int p : pads) {
+            const int c = nota_rack_add_chain(e, t, 0);
+            if (c < 0) return false;
+            nota_rack_set_chain_trigger_note(e, t, c, p);
+            nota_rack_set_chain_decay(e, t, c, 0.5f);
+        }
+        const int clip = nota_track_add_midi_clip(e, t, 0.0, 16.0);
+        std::vector<NotaNoteData> notes;
+        for (int s16 = 0; s16 < 64; ++s16) notes.push_back({pads[s16 % 4], s16 * 0.25, 0.2, 0.9f, 0});
+        nota_clip_set_notes(e, t, clip, notes.data(), (int)notes.size());
+        return true;
+    }
+    if (id == "instrument-rack") {
+        const int t = nota_engine_add_instrument_rack_track(e);
+        if (t < 0) return false;
+        for (int i = 0; i < 2; ++i)
+            if (nota_rack_add_chain(e, t, 0) < 0) return false;
+        fillClip(e, t, 0, 0, 16);
+        return true;
+    }
     if (id == "aurora-supersaw-2x") {
         for (int t = 0; t < 2; ++t) {
             const int tr = instrumentTrack(e, 5);
@@ -182,6 +258,14 @@ bool build(NotaEngine* e, const std::string& id) {
             applySuperSaw(e, tr);
             fillChords6(e, tr, t == 0 ? 0 : 7, 0, 16);
         }
+        return true;
+    }
+    if (id == "audio-warp-split" || id == "edit-warp-split") {
+        const int t = warpedClipTrack(e);
+        if (t < 0) return false;
+        if (id == "audio-warp-split")
+            for (int i = 1; i < 8; ++i)
+                if (nota_clip_split(e, t, i - 1, i * 2.0) < 0) return false;
         return true;
     }
     int n = 0;
@@ -219,6 +303,26 @@ int run(const std::string& id, double seconds) {
         std::fprintf(stderr, "nota_perf: unknown or unsupported scenario '%s'\n", id.c_str());
         nota_engine_destroy(e);
         return 2;
+    }
+    if (id == "edit-warp-split") { // split the last piece 8 times, then undo them
+        constexpr int kEdits = 8;
+        // Warm-up, not measured: one split + undo first, so the counted edits don't include the
+        // first-call costs (lazy symbol binding, function-local statics). Those depend on the
+        // library's size and layout rather than on the edit path, and they made this tiny
+        // scenario move by a percent or two when unrelated code was added. The clip is back as
+        // it was after the undo.
+        nota_clip_split(e, gWarpTrack, 0, 1.0);
+        nota_engine_undo(e);
+        const auto t0 = std::chrono::steady_clock::now();
+        CALLGRIND_START_INSTRUMENTATION;
+        for (int i = 0; i < kEdits; ++i) nota_clip_split(e, gWarpTrack, i, 1.5 + i * 1.75);
+        for (int i = 0; i < kEdits; ++i) nota_engine_undo(e);
+        CALLGRIND_STOP_INSTRUMENTATION;
+        const auto t1 = std::chrono::steady_clock::now();
+        nota_engine_destroy(e);
+        const double ms = std::chrono::duration<double, std::milli>(t1 - t0).count() / (2 * kEdits);
+        std::printf("%s\t%s\t%.3f\t%.4f\n", id.c_str(), label.c_str(), ms, 0.0);
+        return 0;
     }
     nota_transport_set_loop(e, 1, 0.0, 16.0);
     nota_transport_seek(e, 0.0);

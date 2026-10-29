@@ -205,7 +205,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         {
             var topLevel = TopLevel.GetTopLevel(anchor);
             if (topLevel is null) return;
-            var files = await topLevel.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+            var files = await topLevel.PickFilesAsync(new FilePickerOpenOptions
             {
                 Title = $"Load a sample into {RM.VoiceNames[voice]}", AllowMultiple = false,
                 FileTypeFilter = new[] { new FilePickerFileType("Audio") { Patterns = new[] { "*.wav", "*.flac", "*.mp3", "*.aif", "*.aiff", "*.ogg" } } },
@@ -411,7 +411,19 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 string secs = sampleSecs > 0 ? " · " + NotaNum.Unit((en - st) * sampleSecs, "0.00", "s") : "";
                 sv.Set(sampleName, Hue(sel), st, en, G(P("reverse")) >= 0.5f, posSel, $"{RM.Pct(st)} → {RM.Pct(en)}{secs}");
             });
-            ToolTip.SetTip(sv, "Drag the Start and End lines to set them · double-click to load another file");
+            ToolTip.SetTip(sv, MenuKit.Keys("Drag the Start and End lines to set them · ⌥-click one to type it · double-click to load another file"));
+            {
+                // ⌥-click a line to type it (specs/035); double-click still loads a file, so no reset here.
+                string st = P("start"), ln = P("length");
+                ValueEntry.AttachHandles(sv,
+                    [new ValueField("Start", () => G(st), v => RM.Pct(v), v =>
+                    {
+                        float en = (float)RM.RegionEnd(G(st), G(ln)), ns = (float)Math.Clamp(v, 0, en - 0.01);
+                        SetP(st, ns); SetP(ln, en - ns);
+                    }, () => { Begin(st); Begin(ln); }, () => { End(st); End(ln); }) { After = Refresh }],
+                    [new ValueField("End", () => RM.RegionEnd(G(st), G(ln)), v => RM.Pct(v), v => SetP(ln, (float)Math.Clamp(v - G(st), 0.01, 1.0)),
+                        () => Begin(ln), () => End(ln)) { After = Refresh }]);
+            }
             AcceptDrops(sv, sel, _ => { });
             graph = sv;
         }
@@ -428,7 +440,13 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 string cap = pit > 0 ? $"{RM.Ms(pit)} · {RM.Ms(dec)}" : RM.Ms(dec);
                 hv.Set(RM.VoiceNames[sel], dec, pit, RM.DecaySeconds(sel, 1, 0) * 0.8, pu, flashSel, cap);
             });
-            ToolTip.SetTip(hv, "The hit: amp contour over the pitch drop · drag across for Decay, up / down for Tune (Shift = fine)");
+            ToolTip.SetTip(hv, MenuKit.Keys("The hit: amp contour over the pitch drop · drag across for Decay, up / down for Tune (Shift = fine) · ⌥-click to type them"));
+            {
+                string dk = P("decay"), tn = P("tune");
+                ValueEntry.AttachAll(hv,
+                    new ValueField("Decay", () => G(dk), v => RM.Pct(v), v => SetP(dk, (float)v), () => Begin(dk), () => End(dk)) { After = Refresh },
+                    new ValueField("Tune", () => G(tn), v => RM.Pct(v), v => SetP(tn, (float)v), () => Begin(tn), () => End(tn)) { After = Refresh });
+            }
             AcceptDrops(hv, sel, _ => { });
             graph = hv;
         }

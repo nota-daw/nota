@@ -30,7 +30,7 @@ stays under both. In the Strips view the map panel is removed and the strips tak
 | Selected | 22 px ring, 2 px `Accent`, around the handle; drawn on top |
 | Label | 10 px medium, right of the handle (+13, −7), max 84 px, ellipsis; `TextSecondary`, selected `TextPrimary`, dimmed `TextDisabled`; hidden if it would overlap a placed label |
 | Tooltip | 188 px, `TooltipBg`, 1 px `BorderStrong`, radius 4, padding 8 / 10; name row (8 px colour dot + 11 px semibold `TextPrimary`); rows PAN, VOLUME, BALANCE, WIDTH, CORRELATION, LEVEL — key 7 px bold `TextTertiary` 62 px wide, value Mono 9 px (correlation < −0.05 in `Danger`); notes separated by a hairline: "Image is off the pan" (title `Accent`), "Muted", "Silent" (title `TextSecondary`), body 9 px `TextTertiary`; placed right/below the handle, flipped left/up near the edges |
-| Bottom row (32 px, top hairline) | "MASTER CORR" 8 px bold `TextTertiary`; "−1"; a 180 × 6 well with a centre tick and a bar from centre to the value (`Success` ≥ −0.05, `Danger` < −0.05); "+1"; the value Mono 10 px (`Danger` when < −0.05); right-aligned hint 10 px `TextTertiary`: "Drag: pan + volume · Shift locks axis · double-click centres pan · ⌥ double-click 0 dB" |
+| Bottom row (32 px, top hairline) | "MASTER CORR" 8 px bold `TextTertiary`; "−1"; a 180 × 6 well with a centre tick and a bar from centre to the value (`Success` ≥ −0.05, `Danger` < −0.05); "+1"; the value Mono 10 px (`Danger` when < −0.05); right-aligned hint 10 px `TextTertiary`: "Drag: pan + volume · Shift locks axis · double-click centres pan · ⌥-click types" |
 
 ## Texts (exact)
 

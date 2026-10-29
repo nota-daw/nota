@@ -163,6 +163,13 @@ public partial class MainWindow
             e.Handled = true;
             return;
         }
+        // Esc ends macro mapping on a rack card (specs/040) before it touches the arrangement.
+        if (!mod && e.Key == Key.Escape && RackCardState.EndAllMapping())
+        {
+            if (DetailBody.Content is DeviceChainView chain) chain.Refresh();
+            e.Handled = true;
+            return;
+        }
         if (!mod && e.Key == Key.Escape && Timeline.EscapePressed())
         {
             e.Handled = true;
@@ -288,6 +295,21 @@ public partial class MainWindow
             if (e.Key == Key.C && Timeline.CopySelectedClip()) { _vm.StatusText = "Copied clip(s)"; e.Handled = true; return; }
             if (e.Key == Key.X && Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = "Cut clip(s)"; e.Handled = true; return; }
             if (e.Key == Key.V && Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = "Pasted clip(s)"; e.Handled = true; return; }
+        }
+
+        // ←/→ nudge the selected arrangement clips by the grid step (⌥: a 64th); ⌥↑/⌥↓ move them
+        // to the next track that takes them (#302). Only with clips selected, and not while the
+        // piano roll, the detail panel or the floating detail window has the keys.
+        if (e.Key is Key.Left or Key.Right or Key.Up or Key.Down && Timeline.IsVisible && !_detailWasLastFocused
+            && _detailWindow?.IsActive != true
+            && _editorRoll is not { GridFocused: true }
+            && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta | KeyModifiers.Shift)) == 0)
+        {
+            bool alt = (e.KeyModifiers & KeyModifiers.Alt) != 0;
+            bool done = e.Key is Key.Left or Key.Right
+                ? Timeline.NudgeSelectedClips(e.Key == Key.Right ? 1 : -1, fine: alt)
+                : alt && Timeline.MoveSelectedClipsToTrack(e.Key == Key.Down ? 1 : -1);
+            if (done) { _session?.Refresh(); e.Handled = true; return; }
         }
 
         // Delete/Backspace = clear the selected automation range (automation mode), else

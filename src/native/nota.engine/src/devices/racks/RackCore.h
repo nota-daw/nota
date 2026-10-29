@@ -20,6 +20,7 @@
 #include "devices/Instrument.h"
 #include "engine/SnapshotHistory.h"
 #include "devices/Device.h"
+#include "devices/MidiDevice.h"
 
 #include "media/SampleBuffer.h"
 #include "devices/BuiltinDevices.h"
@@ -56,13 +57,36 @@ class RackCore {
         std::atomic<int32_t> chokeGroup{0}; // 0 = none, 1..8 choke group
         std::atomic<int32_t> tune{0};       // pad transpose, semitones (-48..+48)
         std::atomic<float> decay{1.0f};     // pad decay 0..1 (1 = sustain / no shaping)
-        float ampEnv = 0.0f;                // audio-thread only: pad decay VCA state
+        std::atomic<float> ampEnv{0.0f};    // pad decay VCA state: written on the audio thread only;
+                                            // relaxed so a rack fork can carry it over
         bool retrig = false;                // audio-thread only: noteOn asks for an env kick
+        // v9 (specs/040): the MIDI Effect Rack's select range (the Audio Effect Rack keeps
+        // using velLo/velHi for it, so its v7/v8 blobs keep their meaning), and a MIDI
+        // chain's transpose and velocity scale (its "Volume": 1 = unchanged, 0 = silent).
+        std::atomic<int32_t> selLo{0}, selHi{127};
+        std::atomic<int32_t> transpose{0};  // semitones, -48..+48
+        std::atomic<float> velScale{1.0f};  // 0..2
     };
 
+    // A chain's identity for the UI (a window that follows its chain): every new chain takes
+    // the next number, and copies of the rack state (forks for undo) keep it.
+    static uint64_t nextChainUid() {
+        static std::atomic<uint64_t> next{1};
+        return next.fetch_add(1, std::memory_order_relaxed);
+    }
+
     struct RackChain {
+        uint64_t uid = nextChainUid();
+        // Bumped when the chain's instrument is swapped for another (setChainInstrument); an
+        // edit of the same instrument (a nested rack's fork, a Mosaic program, a Grain sample)
+        // keeps it. The chain id the UI follows is uid + this, so a window for the old
+        // instrument lets go of a replacement.
+        uint32_t instGen = 0;
         std::shared_ptr<Instrument> instrument;       // null for effect-rack chains
         std::vector<std::shared_ptr<Device>> devices; // insert chain
+        // MIDI effects in front of the chain (v9): a MIDI Effect Rack chain is only these;
+        // an Instrument Rack chain runs them before its instrument (issue #329).
+        std::vector<std::shared_ptr<MidiDevice>> midiDevices;
         std::shared_ptr<ChainControls> ctl = std::make_shared<ChainControls>();
         // Display name (v8). Message thread only — the audio thread never reads it.
         // Empty means "fall back to the chain instrument's name": a Drum Rack pad that
@@ -86,6 +110,16 @@ class RackCore {
     // A mapping with this deviceIndex targets the chain's own controls (a Drum Rack pad's
     // strip) rather than a child: paramIndex is a PadParam, in the control's own units.
     static constexpr int32_t kPadControls = -2;
+    // A mapping with this deviceIndex drives a rack-level control (paramIndex RackParam), not a
+    // chain child; its chainIndex is -1. v9.
+    static constexpr int32_t kRackControl = -3;
+    enum RackParam : int32_t { RackSelector = 0, kRackParams };
+    // Chain MIDI effect j is addressed as deviceIndex kMidiDeviceBase - j, so the audio-device
+    // indices (>= 0) keep their meaning in every rack kind. v9.
+    static constexpr int32_t kMidiDeviceBase = -1000;
+    static bool isMidiTarget(int32_t deviceIndex) { return deviceIndex <= kMidiDeviceBase; }
+    static int32_t midiTargetIndex(int32_t deviceIndex) { return kMidiDeviceBase - deviceIndex; }
+    static int32_t midiTarget(int32_t midiIndex) { return kMidiDeviceBase - midiIndex; }
     enum PadParam : int32_t { PadVolume = 0, PadPan, PadTune, PadDecay, kPadParams };
     static const char* padParamName(int32_t p) {
         static const char* n[kPadParams] = {"Volume", "Pan", "Tune", "Decay"};
@@ -159,16 +193,106 @@ class RackCore {
     // + devices. Publishes a fresh Sampler via a state swap (thread-safe, no in-place mutate).
     bool setChainInstrumentSample(int32_t chain, std::shared_ptr<SampleBuffer> buf, int32_t root, bool loop);
     bool removeChain(int32_t chain);
+    // Copies a chain right after itself: children rebuilt from the rack blob (so hosted plugins,
+    // Sampler audio and MIDI effects come along), its controls, and copies of its mappings.
+    // Returns the new chain index or -1.
+    int32_t duplicateChain(int32_t chain);
     bool setChainInstrument(int32_t chain, int32_t instKind);
+    // Puts a ready instrument at the head of a chain, keeping the chain's devices, MIDI effects,
+    // controls and mappings (a chain Mosaic's new program, a nested Drum Rack's fork). specs/041.
+    // `prepare` = false for an instrument already prepared at this rate whose children are shared
+    // with a playing copy (a nested rack's fork): preparing them again would reset live effects.
+    bool replaceChainInstrument(int32_t chain, std::shared_ptr<Instrument> inst, bool prepare = true);
+    uint64_t chainUid(int32_t chain) const; // uid and instrument generation, see RackChain
+
+    // ---- nested parameter addresses (specs/044) ------------------------------
+    // A lane, CV link or Arp CC route can point at a chain child by the chain's own uid
+    // (RackChain::uid, without the instrument generation: a swapped instrument keeps its
+    // chain's lanes) and a slot: >= 0 a device, -1 the chain instrument, midiTarget(i) the
+    // chain's i-th MIDI effect. The lookups read the live snapshot only and allocate
+    // nothing, so the audio thread may call them during a block: a snapshot retired
+    // meanwhile is freed only after two more renders of this rack (SnapshotHistory).
+    const RackChain* chainByUid(uint64_t uid) const {
+        RackState* st = live();
+        if (!st || uid == 0) return nullptr;
+        for (auto& c : st->chains)
+            if (c.uid == uid) return &c;
+        return nullptr;
+    }
+    uint64_t chainBaseUid(int32_t chain) const {
+        RackState* st = live();
+        return (st && chain >= 0 && chain < static_cast<int32_t>(st->chains.size())) ? st->chains[chain].uid : 0;
+    }
+    int32_t chainIndexOfUid(uint64_t uid) const {
+        RackState* st = live();
+        if (!st || uid == 0) return -1;
+        for (size_t i = 0; i < st->chains.size(); ++i)
+            if (st->chains[i].uid == uid) return static_cast<int32_t>(i);
+        return -1;
+    }
+    Device* childDevice(uint64_t uid, int32_t slot) const {
+        const RackChain* c = chainByUid(uid);
+        return c && slot >= 0 && slot < static_cast<int32_t>(c->devices.size()) ? c->devices[slot].get() : nullptr;
+    }
+    MidiDevice* childMidi(uint64_t uid, int32_t slot) const {
+        const RackChain* c = chainByUid(uid);
+        if (!c || !isMidiTarget(slot)) return nullptr;
+        const int32_t i = midiTargetIndex(slot);
+        return i >= 0 && i < static_cast<int32_t>(c->midiDevices.size()) ? c->midiDevices[i].get() : nullptr;
+    }
+    Instrument* childInstrument(uint64_t uid) const {
+        const RackChain* c = chainByUid(uid);
+        return c ? c->instrument.get() : nullptr;
+    }
+    // Every chain child on the live snapshot (devices, MIDI effects, instrument), for the
+    // sidechain feed. Audio thread safe; fn must not allocate.
+    template <class Fn> void forEachChildDevice(Fn&& fn) const {
+        RackState* st = live();
+        if (!st) return;
+        for (auto& c : st->chains)
+            for (auto& d : c.devices)
+                if (d) fn(*d);
+    }
+    template <class Fn> void forEachChildMidi(Fn&& fn) const {
+        RackState* st = live();
+        if (!st) return;
+        for (auto& c : st->chains)
+            for (auto& m : c.midiDevices)
+                if (m) fn(*m);
+    }
+    template <class Fn> void forEachChildInstrument(Fn&& fn) const {
+        RackState* st = live();
+        if (!st) return;
+        for (auto& c : st->chains)
+            if (c.instrument) fn(*c.instrument);
+    }
     int32_t chainInstrumentKind(int32_t chain) const;
     Instrument* chainInstrument(int32_t chain) const;
     int32_t chainDeviceCount(int32_t chain) const;
     int32_t addChainDevice(int32_t chain, int32_t deviceKind);
     // Adds a pre-built device (e.g. a hosted plugin the engine instantiated) to a chain.
-    int32_t addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev);
+    // prepare = false: the device is already prepared at this rack's rate and may be playing
+    // (moved in by wrapDeviceInRack), so it isn't reset.
+    int32_t addChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, bool prepare = true);
     bool removeChainDevice(int32_t chain, int32_t dev);
     bool moveChainDevice(int32_t chain, int32_t from, int32_t to);
+    // Insert a device at `at` (−1 or past the end = the end); the chain's mappings at or after
+    // `at` shift up, the new device has none (specs/042). Returns its index, or −1.
+    int32_t insertChainDeviceInstance(int32_t chain, std::shared_ptr<Device> dev, int32_t at, bool prepare = true);
+    // Move device `idx` to the end of `toChain`'s effects; its mappings follow it (specs/042).
+    // Returns its new index, or −1 (bad address, or the same chain).
+    int32_t moveChainDeviceToChain(int32_t chain, int32_t idx, int32_t toChain);
     Device* chainDeviceAt(int32_t chain, int32_t dev) const;
+
+    // Chain MIDI effects (v9): built-in kinds 0..5 only (a MIDI Effect Rack never nests).
+    int32_t chainMidiDeviceCount(int32_t chain) const;
+    int32_t addChainMidiDevice(int32_t chain, int32_t midiKind);
+    int32_t addChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev);
+    bool removeChainMidiDevice(int32_t chain, int32_t idx);
+    bool moveChainMidiDevice(int32_t chain, int32_t from, int32_t to);
+    int32_t insertChainMidiDeviceInstance(int32_t chain, std::shared_ptr<MidiDevice> dev, int32_t at);
+    int32_t moveChainMidiDeviceToChain(int32_t chain, int32_t idx, int32_t toChain);
+    MidiDevice* chainMidiDeviceAt(int32_t chain, int32_t idx) const;
 
     ChainControls* chainControls(int32_t chain) const;
     void setChainTriggerNote(int32_t c, int32_t note) {
@@ -233,6 +357,24 @@ class RackCore {
     // Key/velocity zone (Instrument Rack): only notes inside the range reach this chain.
     void setChainZone(int32_t c, int32_t keyLo, int32_t keyHi, int32_t velLo, int32_t velHi);
     void chainZone(int32_t c, int32_t& keyLo, int32_t& keyHi, int32_t& velLo, int32_t& velHi) const;
+    // MIDI Effect Rack select range (v9), 0..127, lo <= hi.
+    void setChainSelectRange(int32_t c, int32_t lo, int32_t hi);
+    void chainSelectRange(int32_t c, int32_t& lo, int32_t& hi) const;
+    void setChainTranspose(int32_t c, int32_t st) {
+        if (auto* x = chainControls(c)) x->transpose.store(std::clamp(st, -48, 48), std::memory_order_relaxed);
+    }
+    int32_t chainTranspose(int32_t c) const {
+        auto* x = chainControls(c);
+        return x ? x->transpose.load(std::memory_order_relaxed) : 0;
+    }
+    void setChainVelScale(int32_t c, float v) {
+        if (auto* x = chainControls(c))
+            x->velScale.store(std::isfinite(v) ? std::clamp(v, 0.0f, 2.0f) : 1.0f, std::memory_order_relaxed);
+    }
+    float chainVelScale(int32_t c) const {
+        auto* x = chainControls(c);
+        return x ? x->velScale.load(std::memory_order_relaxed) : 1.0f;
+    }
     float chainMeter(int32_t c) const {
         auto* x = chainControls(c);
         return x ? x->meter.load(std::memory_order_relaxed) : 0.0f;
@@ -268,6 +410,15 @@ class RackCore {
     void setSelFollow(bool b) { selFollow_.store(b ? 1 : 0, std::memory_order_relaxed); }
     float liveSelector() const { return liveSel_.load(std::memory_order_relaxed); }
 
+    // v9 (specs/040): Instrument Rack mono (last-note priority); MIDI Effect Rack output —
+    // merge duplicate notes from different chains, pass notes outside every zone through.
+    bool rackMono() const { return mono_.load(std::memory_order_relaxed) != 0; }
+    void setRackMono(bool b) { mono_.store(b ? 1 : 0, std::memory_order_relaxed); }
+    bool rackMerge() const { return merge_.load(std::memory_order_relaxed) != 0; }
+    void setRackMerge(bool b) { merge_.store(b ? 1 : 0, std::memory_order_relaxed); }
+    bool rackThru() const { return thru_.load(std::memory_order_relaxed) != 0; }
+    void setRackThru(bool b) { thru_.store(b ? 1 : 0, std::memory_order_relaxed); }
+
     // ---- macros -----------------------------------------------------------
     float macroGet(int32_t i) const {
         return (i >= 0 && i < kNumMacros) ? macros_[i].load(std::memory_order_relaxed) : 0.0f;
@@ -295,6 +446,9 @@ class RackCore {
     }
 
     // ---- mappings ---------------------------------------------------------
+    // A (chain, device, param) target belongs to one macro: adding a mapping for a target that
+    // is already mapped moves it to `macro` (keeping its range and curve) and returns its index.
+    // deviceIndex kRackControl targets the rack itself (chain is ignored and stored as -1).
     int32_t addMacroMapping(
         int32_t macro, int32_t chain, int32_t deviceIndex, int32_t paramIndex, float rangeMin, float rangeMax);
     int32_t mappingCount() const {
@@ -311,6 +465,21 @@ class RackCore {
         return (st && i >= 0 && i < static_cast<int32_t>(st->mappings.size())) ? st->mappings[i].curve : 0;
     }
 
+    // Drive every mapped target from its macro again. After an undo or redo swaps in another
+    // copy of the rack, the children it shares with the copy still hold the values the other
+    // copy's mappings gave them (specs/040). A rack nested in a chain (a Drum Rack in an
+    // Instrument Rack chain, specs/041) shares its children with its undo copies too, so it is
+    // driven again as well. Message thread.
+    void reapplyMacros();
+
+    // ---- undoable edits ---------------------------------------------------
+    // Take over another rack's content (#236). The engine edits a copy of the rack instead
+    // of the rack itself, so the graph snapshot on the undo stack keeps the old rack intact:
+    // the same chain children (shared, so DSP and voice state survive the edit), fresh chain
+    // controls holding the same values, the same mappings, macros and rack settings.
+    // Message thread, on a fresh rack that nothing renders yet.
+    void forkFrom(const RackCore& o);
+
     // ---- persistence blob (shared format; instKind -1 = no instrument) ----
     std::vector<uint8_t> serialize() const;
     void deserialize(const uint8_t* data, int32_t size);
@@ -321,8 +490,11 @@ class RackCore {
 
   public:
     // Built-in instrument factory (public so the Engine can read a fresh one's param
-    // defaults for a chain instrument, e.g. double-click reset on Sampler knobs).
+    // defaults for a chain instrument, e.g. double-click reset on Sampler knobs). Kind 17 is an
+    // empty Nota Mosaic; kind 4 an empty Drum Rack, built only outside a rack being read
+    // (racks nest one level, specs/041 — the engine decides where a Drum Rack may go).
     static std::shared_ptr<Instrument> makeInstrument(int32_t kind);
+    static bool isRackKind(int32_t kind) { return kind == 3 || kind == 4; }
 
   protected:
     static std::shared_ptr<Device> makeDevice(int32_t kind) { return makeChainDevice(kind); }
@@ -347,11 +519,16 @@ class RackCore {
     std::atomic<int32_t> pdc_{1};          // PDC compensation on(1)/off(0)
     std::atomic<float> chainSelect_{0.5f}; // Select-mode manual selector 0..1
     std::atomic<int32_t> selFollow_{0};    // Select follows input level
+    std::atomic<int32_t> mono_{0};         // Instrument Rack mono / last note (v9)
+    std::atomic<int32_t> merge_{1};        // MIDI Effect Rack: merge duplicate notes (v9)
+    std::atomic<int32_t> thru_{1};         // MIDI Effect Rack: pass notes outside every zone (v9)
     std::atomic<float> liveSel_{0.5f};     // runtime selector position (audio writes, UI reads)
     double sampleRate_ = 44100.0;
     int32_t maxBlock_ = kMaxBlock;
 
   private:
+    // duplicateChain: the keys and Arp targets the blob doesn't carry, from src to its copy.
+    static void copyExternalLinks(const RackChain& src, RackChain& dst);
     std::shared_ptr<RackState> copyState() const {
         return authoring_ ? std::make_shared<RackState>(*authoring_) : std::make_shared<RackState>();
     }
@@ -360,6 +537,7 @@ class RackCore {
         states_.publish(std::move(ns));
     }
     static void pruneMappings(std::shared_ptr<RackState>& ns, int32_t removedChain);
+    static std::shared_ptr<MidiDevice> makeChainMidiDevice(int32_t kind);
 
     static void putU8(std::vector<uint8_t>& b, uint8_t v) { b.push_back(v); }
     static void putU32(std::vector<uint8_t>& b, uint32_t v) {
@@ -461,7 +639,7 @@ class RackCore {
 
     static constexpr uint32_t kMagic = 0x314B524E; // 'NRK1'
     static constexpr uint32_t kBlobVersion =
-        8; // v2 triggerNote; v3 Sampler; v4 plugins; v5 zones/names/rack-out/curve; v6 drum pad shaping + swing/humanize; v7 effect-rack mode/dry-wet/pdc/select; v8 chain name
+        11; // v2 triggerNote; v3 Sampler; v4 plugins; v5 zones/names/rack-out/curve; v6 drum pad shaping + swing/humanize; v7 effect-rack mode/dry-wet/pdc/select; v8 chain name; v9 chain MIDI effects + select range/transpose/vel scale, mono/merge/thru (specs/040); v10 chain children's editor previews (specs/046); v11 built-in chain devices' state
 
     std::shared_ptr<RackState> authoring_;
     SnapshotHistory<RackState> states_;

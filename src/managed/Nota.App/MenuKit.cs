@@ -40,8 +40,8 @@ internal static partial class MenuKit
     public static readonly KeyGesture CopyKey = Cmd(Key.C);
     public static readonly KeyGesture CutKey = Cmd(Key.X);
     public static readonly KeyGesture PasteKey = Cmd(Key.V);
-    public static readonly KeyGesture PasteBouncedKey = Cmd(Key.V, shift: true);
     public static readonly KeyGesture DuplicateKey = Cmd(Key.D);
+    public static readonly KeyGesture PasteBouncedKey = Cmd(Key.V, shift: true);
     // Arrangement: Copy to Session · Session: Copy to Arrangement.
     public static readonly KeyGesture CopyToOtherViewKey = Cmd(Key.C, shift: true);
     public static readonly KeyGesture SplitKey = Cmd(Key.E);

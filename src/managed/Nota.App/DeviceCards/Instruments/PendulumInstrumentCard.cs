@@ -474,11 +474,13 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             fly.ShowAt(scaleBox);
             e.Handled = true;
         };
-        scaleBox.PointerWheelChanged += (_, e) =>
+        scaleBox.PointerWheelChanged += (wt, e) =>
         {
+            if (WheelInput.Step(e, wt) is not { } s) return;
+            e.Handled = true; if (s == 0) return;
             int n = PendulumModel.ModeNames.Length;
-            int m = Math.Clamp(Sel("scalemode", n) + (e.Delta.Y < 0 ? 1 : -1), 0, n - 1);
-            Write("scalemode", m / (float)(n - 1)); Refresh(); e.Handled = true;
+            int m = Math.Clamp(Sel("scalemode", n) - s, 0, n - 1);
+            Write("scalemode", m / (float)(n - 1)); Refresh();
         };
         if (I("scalemode") is var smi and >= 0) MidiLearn.Bind(scaleBox, MidiTarget.PluginParam(track, -1, smi), engine.PluginParamName(track, -1, smi));
         var scaleRow = Row((Cap("SCALE"), "Auto"), (scaleBox, "*"));

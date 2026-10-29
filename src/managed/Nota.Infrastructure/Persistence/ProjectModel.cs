@@ -63,6 +63,8 @@ public sealed class MasterDto
     public string? Name { get; set; }
     public int ColorIndex { get; set; } = -1;
     public List<DeviceDto> Devices { get; set; } = new();
+    // Sidechain keys of devices inside the master's racks (v25, specs/044), as on a track.
+    public List<NestedSidechainDto>? NestedSidechains { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -116,10 +118,14 @@ public sealed class TrackDto
     public int ReturnIndex { get; set; } = -1; // >=0 for return tracks
     public int GroupId { get; set; } = -1;     // parent group's doc index, or -1 (top-level)
     public int ColorIndex { get; set; } = -1;  // palette slot; -1 = auto by position
+    public bool? PianoFold { get; set; }       // piano roll Fold (specs/045); written only when on
     // Record input: 0 hardware, -1 master, or (2 + track-list index) for another track's
     // output (encoded so it survives id reassignment across save/load).
     public int RecordInput { get; set; }
     public bool Monitor { get; set; }   // live input monitoring (audio tracks)
+    // Hardware input channels (audio tracks): 0 stereo pair, 1 input 1, 2 input 2. Absent in
+    // files saved before 0.58, which recorded the stereo pair.
+    public int? InputChannels { get; set; }
     // MIDI routing source ("MIDI In") as a doc-list index (survives id reassignment), or -1 = off.
     public int MidiFrom { get; set; } = -1;
     public float[] Sends { get; set; } = new float[4];
@@ -134,6 +140,11 @@ public sealed class TrackDto
     public List<AutomationLaneDto> Automation { get; set; } = new();   // M9-A4 (format v2)
     public List<ModulatorDto> Modulators { get; set; } = new();        // CV modulation sources (Phase 3)
     public List<CvLinkDto> CvLinks { get; set; } = new();              // CV modulation edges (Phase 3)
+    // Links on devices inside the track's racks that the rack blob can't hold (v25, specs/044):
+    // a chain child's sidechain key (its source is a doc index, like a device's) and a chain
+    // MIDI effect's CC target. Null = none.
+    public List<NestedSidechainDto>? NestedSidechains { get; set; }
+    public List<NestedCcRouteDto>? NestedCcRoutes { get; set; }
     /// <summary>Freeze (M7): relative path to the track's frozen-audio blob in
     /// <c>plugin-states/</c> (null = not frozen). Restored + re-flagged frozen on load.</summary>
     public string? FrozenState { get; set; }
@@ -159,6 +170,13 @@ public sealed class ModulatorDto
     public int InputA { get; set; } = -1;         // Math: source modulator ids (remapped on load)
     public int InputB { get; set; } = -1;
     public float MathOffset { get; set; }
+    // Scope view settings (specs/047); older projects read the defaults.
+    public float ScopeWindowMs { get; set; } = 1000f;
+    public bool ScopeSync { get; set; }
+    public float ScopeWindowBeats { get; set; } = 4f;
+    public int ScopeZoom { get; set; } = 1;
+    public int ScopeTrigger { get; set; }
+    public float ScopeHeight { get; set; } = 76f;
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
@@ -176,6 +194,12 @@ public sealed class CvLinkDto
     public int TargetTrack { get; set; } = -1;
     public int Device { get; set; } = -1;
     public int Param { get; set; } = -1;
+    // A source / target inside a rack (v25, specs/044): SourceDevice / Device is then the rack's
+    // address and these the chain index and slot. Null = track level.
+    public int? SourceChain { get; set; }
+    public int? SourceSlot { get; set; }
+    public int? TargetChain { get; set; }
+    public int? TargetSlot { get; set; }
     public float Depth { get; set; } = 1.0f;
     public int Mode { get; set; }
     /// <summary>Modulation centre (base) value — the device param value the link swings around.</summary>
@@ -186,6 +210,40 @@ public sealed class CvLinkDto
 
 /// <summary>A parameter-automation lane and its breakpoints (M9-A4, format v2).
 /// Target: 0 = track volume, 1 = pan, 2 = built-in device param (Device/Param set).</summary>
+/// <summary>A rack chain child's sidechain key (v25, specs/044). Host is the rack's address on
+/// the track, Slot >= 0 a device, -1 the chain instrument; Source a doc index.</summary>
+public sealed class NestedSidechainDto
+{
+    public int Host { get; set; }
+    public int Chain { get; set; }
+    public int Slot { get; set; }
+    public int Source { get; set; } = -1;
+    /// <summary>The part of the source's instrument (index at save time; -1 = the whole track).
+    /// Format v28, specs/050.</summary>
+    public int Part { get; set; } = -1;
+    public bool TapPre { get; set; }
+    public float GainDb { get; set; }
+    public float Mix { get; set; } = 1.0f;
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>A rack chain MIDI effect's CC target (v25, specs/044): the MIDI effect at (Host,
+/// Chain, Index) drives DestDevice's Param, or the child (DestChain, DestSlot) of the rack there.</summary>
+public sealed class NestedCcRouteDto
+{
+    public int Host { get; set; }
+    public int Chain { get; set; }
+    public int Index { get; set; }
+    public int DestDevice { get; set; } = -2;
+    public int DestChain { get; set; } = -1;
+    public int DestSlot { get; set; } = -1;
+    public int Param { get; set; } = -1;
+    public float Depth { get; set; } = 1.0f;
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
 public sealed class AutomationLaneDto
 {
     public int Target { get; set; }
@@ -194,6 +252,11 @@ public sealed class AutomationLaneDto
     /// <summary>Stable hosted-plugin parameter id when Target == 3 (PluginParam, M9-B4).
     /// Persisted instead of the version-unstable index; resolved on load.</summary>
     public string? PluginParamId { get; set; }
+    // A lane on a device grouped into a rack (v25, specs/044): DeviceIndex is then the rack's
+    // address (>= 0 effect, -1 instrument, -1000 - i MIDI effect) and these the chain index and
+    // slot (>= 0 device, -1 chain instrument, -1000 - i chain MIDI effect). Null = track level.
+    public int? Chain { get; set; }
+    public int? Slot { get; set; }
     public AutomationPointDto[] Points { get; set; } = System.Array.Empty<AutomationPointDto>();
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
@@ -244,8 +307,19 @@ public sealed class ControllerCurveDto
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
+/// <summary>The preset a device was loaded from (v26, specs/048): its id, name and the
+/// parameter values it left, so a reopened project still shows "Name *" once they moved.</summary>
+public sealed class PresetTagDto
+{
+    public string Id { get; set; } = "";
+    public string Name { get; set; } = "";
+    public float[] Loaded { get; set; } = System.Array.Empty<float>();
+}
+
 public sealed class InstrumentDto
 {
+    /// <summary>The preset it was loaded from (v26); null = none / Init.</summary>
+    public PresetTagDto? Preset { get; set; }
     /// <summary>0 = Nota Synth, 1 = Sampler, 2 = Nota Physical, -1 = hosted plugin.</summary>
     public int Kind { get; set; }
     /// <summary>Set when Kind == 1 (built-in Sampler).</summary>
@@ -254,9 +328,15 @@ public sealed class InstrumentDto
     public string? PluginId { get; set; }
     /// <summary>Relative path to the plugin's state blob in <c>plugin-states/</c>.</summary>
     public string? State { get; set; }
+    /// <summary>Relative path to a JPEG of the plug-in's window, drawn behind its card (format
+    /// v27, specs/046); null = none.</summary>
+    public string? Preview { get; set; }
     /// <summary>Sidechain source ("React", Nota Flux) as a track INDEX in this document
     /// (-1 = none). Resolved to a live track id on load, since ids are reassigned.</summary>
     public int SidechainSource { get; set; } = -1;
+    /// <summary>The part of the source React listens to (index at save time; -1 = the whole
+    /// track). Format v28, specs/050.</summary>
+    public int SidechainPart { get; set; } = -1;
     /// <summary>Drawn as a narrow strip in the Devices panel (format v23, specs/022).</summary>
     public bool Folded { get; set; }
     /// <summary>Nota Rhythm (Kind == 12) per-voice one-shots (only sample-source voices).</summary>
@@ -342,6 +422,8 @@ public sealed class WarpMarkerDto
 /// param values. Persisted before the instrument in the chain.</summary>
 public sealed class MidiDeviceDto
 {
+    /// <summary>The preset it was loaded from (v26); null = none / Init.</summary>
+    public PresetTagDto? Preset { get; set; }
     public int Kind { get; set; }        // 0 = Arpeggiator
     public bool Bypassed { get; set; }
     public bool Folded { get; set; }     // drawn as a strip in the Devices panel (v23, specs/022)
@@ -349,13 +431,21 @@ public sealed class MidiDeviceDto
     // Map/CC routing (arp): CC lane → an audio-device param on the same track.
     public int CcDestDevice { get; set; } = -2;   // -2 = no routing
     public int CcDestParam { get; set; } = -1;
+    // A CC target inside a rack (v25, specs/044): chain index + slot in the rack at CcDestDevice.
+    public int? CcDestChain { get; set; }
+    public int? CcDestSlot { get; set; }
     public float CcDepth { get; set; } = 1.0f;
+    // Opaque state blob (v24, specs/040): the MIDI Effect Rack's chains, devices, zones and
+    // macros. Null for params-only MIDI effects.
+    public string? State { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
 public sealed class DeviceDto
 {
+    /// <summary>The preset it was loaded from (v26); null = none / Init.</summary>
+    public PresetTagDto? Preset { get; set; }
     /// <summary>Built-in kind: 0=EQ, 1=Compressor, 2=Reverb, 3=Delay, 4=Utility; -1 = hosted plugin.</summary>
     public int BuiltinKind { get; set; }
     public bool Bypassed { get; set; }
@@ -366,9 +456,16 @@ public sealed class DeviceDto
     public string? PluginId { get; set; }
     /// <summary>Relative path to the plugin's state blob in <c>plugin-states/</c>.</summary>
     public string? State { get; set; }
+    /// <summary>Relative path to a JPEG of the plug-in's window, drawn behind its card (format
+    /// v27, specs/046); null = none.</summary>
+    public string? Preview { get; set; }
     /// <summary>Sidechain source as a track INDEX in this document (-1 = none). Resolved to a
     /// live track id on load, since ids are reassigned. Phase B (format v15).</summary>
     public int SidechainSource { get; set; } = -1;
+    /// <summary>The part of the source track's instrument the key listens to — a Drum Rack pad,
+    /// an Instrument Rack chain or a Rhythm voice — as its index at save time; -1 = the whole
+    /// track (format v28, specs/050).</summary>
+    public int SidechainPart { get; set; } = -1;
     /// <summary>Sidechain detector gain in dB (Phase D, format v16).</summary>
     public float SidechainGain { get; set; }
     /// <summary>Sidechain dry/wet, 0..1 (Phase D, format v16). Default 1 = fully wet.</summary>

@@ -9,6 +9,7 @@
 #include "nota_engine_internal.h"
 
 #include "dsp/primitives/CompensationDelay.h"
+#include "dsp/primitives/SpectrumAnalyzer.h"
 #include "devices/effects/Compressor.h"
 #include "devices/effects/Delay.h"
 #include "devices/effects/Eq.h"
@@ -58,6 +59,80 @@ NotaResult nota_track_move_device(NotaEngine* e, int32_t track_id, int32_t from_
 NotaResult nota_track_remove_device(NotaEngine* e, int32_t track_id, int32_t device_index) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->removeDevice(track_id, device_index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_track_copy_device(NotaEngine* e, int32_t track_id, int32_t device_index) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->copyDevice(track_id, device_index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_track_copy_midi_effect(NotaEngine* e, int32_t track_id, int32_t index) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->copyMidiEffect(track_id, index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_device_clipboard_kind(const NotaEngine* e) { return e ? CENG(e)->deviceClipboardKind() : 0; }
+int32_t nota_track_copy_instrument(NotaEngine* e, int32_t track_id) { return e && ENG(e)->copyInstrument(track_id) ? 1 : 0; }
+int32_t nota_track_paste_instrument(NotaEngine* e, int32_t track_id) { return e ? ENG(e)->pasteInstrument(track_id) : -1; }
+int32_t nota_track_transfer_device(NotaEngine* e, int32_t src_track_id, int32_t family, int32_t index, int32_t dst_track_id,
+                                   int32_t at_index, int32_t keep_source, int32_t* out_flags) {
+    if (out_flags) *out_flags = 0;
+    return e ? ENG(e)->transferDevice(src_track_id, family, index, dst_track_id, at_index, keep_source != 0, out_flags) : -1;
+}
+int32_t nota_device_clipboard_sidechain(const NotaEngine* e) { return (e && CENG(e)->deviceClipboardSidechain()) ? 1 : 0; }
+int32_t nota_track_paste_device(NotaEngine* e, int32_t track_id, int32_t at_index) {
+    return e ? ENG(e)->pasteDevice(track_id, at_index) : -1;
+}
+int32_t nota_track_paste_midi_effect(NotaEngine* e, int32_t track_id, int32_t at_index) {
+    return e ? ENG(e)->pasteMidiEffect(track_id, at_index) : -1;
+}
+int32_t nota_track_duplicate_device(NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? ENG(e)->duplicateDevice(track_id, device_index) : -1;
+}
+int32_t nota_track_duplicate_midi_effect(NotaEngine* e, int32_t track_id, int32_t index) {
+    return e ? ENG(e)->duplicateMidiEffect(track_id, index) : -1;
+}
+int32_t nota_track_wrap_device_in_rack(NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? ENG(e)->wrapDeviceInRack(track_id, device_index) : -1;
+}
+int32_t nota_track_unwrap_rack(NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? ENG(e)->unwrapRack(track_id, device_index) : -1;
+}
+int32_t nota_track_group_devices(NotaEngine* e, int32_t track_id, int32_t midi_first, int32_t midi_count,
+    int32_t with_instrument, int32_t fx_first, int32_t fx_count) {
+    return e ? ENG(e)->groupDevices(track_id, midi_first, midi_count, with_instrument != 0, fx_first, fx_count) : -2;
+}
+int32_t nota_track_ungroup_rack(NotaEngine* e, int32_t track_id, int32_t family, int32_t index, int32_t* out_dropped) {
+    if (out_dropped) *out_dropped = 0;
+    return e ? ENG(e)->ungroupRack(track_id, family, index, out_dropped) : -2;
+}
+int32_t nota_track_copy_devices(NotaEngine* e, int32_t track_id, const int32_t* midi_idx, int32_t midi_n,
+    int32_t with_instrument, const int32_t* fx_idx, int32_t fx_n) {
+    return e ? ENG(e)->copyDevices(track_id, midi_idx, midi_n, with_instrument != 0, fx_idx, fx_n) : -1;
+}
+int32_t nota_device_clipboard_count(const NotaEngine* e) { return e ? CENG(e)->deviceClipboardCount() : 0; }
+int32_t nota_track_paste_devices(NotaEngine* e, int32_t track_id, int32_t midi_at, int32_t fx_at, int32_t* out_skipped) {
+    if (out_skipped) *out_skipped = 0;
+    return e ? ENG(e)->pasteDevices(track_id, midi_at, fx_at, out_skipped) : -1;
+}
+int32_t nota_midi_effect_cc_dest_path(const NotaEngine* e, int32_t t, int32_t i, int32_t* out_chain, int32_t* out_slot) {
+    return e && CENG(e)->midiEffectCcDestPath(t, i, out_chain, out_slot) ? 0 : -1;
+}
+int32_t nota_rack_chain_midi_cc_dest(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i,
+    int32_t* out_dev, int32_t* out_chain, int32_t* out_slot, int32_t* out_param, float* out_depth) {
+    return e && CENG(e)->rackChainMidiCcDest(t, di, c, i, out_dev, out_chain, out_slot, out_param, out_depth) ? 0 : -1;
+}
+int32_t nota_rack_chain_midi_set_cc_dest(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t i, int32_t dev,
+    int32_t dest_chain, int32_t dest_slot, int32_t param, float depth) {
+    return e && ENG(e)->rackChainMidiSetCcDest(t, di, c, i, dev, dest_chain, dest_slot, param, depth) ? 0 : -1;
+}
+int32_t nota_rack_chain_sidechain(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot,
+    int32_t* out_src, int32_t* out_pre, float* out_gain, float* out_mix) {
+    return e && CENG(e)->rackChainSidechain(t, di, c, slot, out_src, out_pre, out_gain, out_mix) ? 0 : -1;
+}
+int32_t nota_rack_chain_set_sidechain(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t src,
+    int32_t pre, float gain, float mix) {
+    return e ? ENG(e)->rackChainSetSidechain(t, di, c, slot, src, pre, gain, mix) : -1;
+}
+int32_t nota_midi_effect_set_cc_dest_path(NotaEngine* e, int32_t t, int32_t i, int32_t chain, int32_t slot) {
+    return e && ENG(e)->setMidiEffectCcDestPath(t, i, chain, slot) ? 0 : -1;
 }
 const char* nota_device_name(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return e ? CENG(e)->deviceName(track_id, device_index) : "";
@@ -135,6 +210,24 @@ int32_t nota_device_text(
     return n; // full length (probe with a null buffer, then fetch)
 }
 
+int32_t nota_eq_set_band_text(
+    NotaEngine* e, int32_t track_id, int32_t device_index, int32_t band, const char* label, const char* note) {
+    if (!e) return 0;
+    return ENG(e)->setEqBandText(track_id, device_index, band, label ? label : "", note ? note : "") ? 1 : 0;
+}
+int32_t nota_eq_band_text(
+    const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t band, int32_t which, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string s = CENG(e)->eqBandText(track_id, device_index, band, which);
+    const int32_t n = static_cast<int32_t>(s.size());
+    if (out && cap > 0) {
+        const int32_t m = std::min(n, cap - 1);
+        std::memcpy(out, s.data(), static_cast<size_t>(m));
+        out[m] = '\0';
+    }
+    return n;
+}
+
 // --- MIDI effects ---
 int32_t nota_track_add_midi_effect(NotaEngine* e, int32_t t, int32_t kind) {
     return e ? ENG(e)->addTrackMidiEffect(t, kind) : -1;
@@ -161,6 +254,20 @@ int32_t nota_midi_effect_last_out(const NotaEngine* e, int32_t t, int32_t i) {
 }
 int32_t nota_midi_effect_scope(const NotaEngine* e, int32_t t, int32_t i, float* out, int32_t max_n) {
     return e ? CENG(e)->midiEffectScope(t, i, out, max_n) : 0;
+}
+int32_t nota_midi_effect_get_state(const NotaEngine* e, int32_t t, int32_t i, uint8_t* out, int32_t cap) {
+    if (!e) return 0;
+    const auto st = CENG(e)->midiEffectGetState(t, i);
+    const int32_t n = static_cast<int32_t>(st.size());
+    if (!out) return n;
+    const int32_t w = std::min(n, cap);
+    if (w > 0) std::memcpy(out, st.data(), static_cast<size_t>(w));
+    return w;
+}
+NotaResult nota_midi_effect_set_state(
+    NotaEngine* e, int32_t t, int32_t i, const uint8_t* data, int32_t size, int32_t checkpoint) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->midiEffectSetState(t, i, data, size, checkpoint != 0) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
 void nota_midi_effect_command(NotaEngine* e, int32_t t, int32_t i, int32_t cmd) {
     if (e) ENG(e)->midiEffectCommand(t, i, cmd);
@@ -250,6 +357,74 @@ void nota_device_set_sidechain_tap_pre(NotaEngine* e, int32_t track_id, int32_t 
 }
 int32_t nota_device_sidechain_tap_pre(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return e ? CENG(e)->deviceSidechainTapPre(track_id, device_index) : 0;
+}
+
+// ---- sidechain sub-sources (specs/050) ----
+int32_t nota_track_part_count(const NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackPartCount(track_id) : 0;
+}
+int32_t nota_track_part_name(const NotaEngine* e, int32_t track_id, int32_t index, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string s = CENG(e)->trackPartName(track_id, index);
+    const int32_t n = static_cast<int32_t>(s.size());
+    if (out && cap > 0) {
+        const int32_t m = std::min(n, cap - 1);
+        std::memcpy(out, s.data(), static_cast<size_t>(m));
+        out[m] = '\0';
+    }
+    return n;
+}
+int32_t nota_device_set_sidechain_key(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t source_track_id,
+    int32_t part) {
+    return e ? ENG(e)->setDeviceSidechainKey(track_id, device_index, source_track_id, part) : -1;
+}
+int32_t nota_device_sidechain_key(const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t* out_source,
+    int32_t* out_part) {
+    return e && CENG(e)->deviceSidechainKey(track_id, device_index, out_source, out_part) ? 0 : -1;
+}
+int32_t nota_track_set_instrument_sidechain_key(NotaEngine* e, int32_t track_id, int32_t source_track_id, int32_t part) {
+    return e ? ENG(e)->setInstrumentSidechainKey(track_id, source_track_id, part) : -1;
+}
+int32_t nota_track_instrument_sidechain_key(const NotaEngine* e, int32_t track_id, int32_t* out_source, int32_t* out_part) {
+    return e && CENG(e)->instrumentSidechainKey(track_id, out_source, out_part) ? 0 : -1;
+}
+int32_t nota_rack_chain_sidechain_part(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t* out_part) {
+    return e && CENG(e)->rackChainSidechainPart(t, di, c, slot, out_part) ? 0 : -1;
+}
+int32_t nota_rack_chain_set_sidechain_key(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t src,
+    int32_t part, int32_t pre, float gain, float mix) {
+    return e ? ENG(e)->rackChainSetKey(t, di, c, slot, src, part, pre, gain, mix) : -1;
+}
+int32_t nota_rack_chain_set_sidechain_part(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t part) {
+    return e ? ENG(e)->rackChainSetSidechainPart(t, di, c, slot, part) : -1;
+}
+int32_t nota_sidechain_route_capacity(const NotaEngine* e) {
+    return e ? nota::Engine::kSidechainRoutes : 0;
+}
+int32_t nota_sidechain_routes_free(const NotaEngine* e) {
+    return e ? CENG(e)->sidechainRoutesFree() : 0;
+}
+int32_t nota_sidechain_route_in_use(const NotaEngine* e, int32_t source_track_id, int32_t part) {
+    return e && CENG(e)->sidechainRouteInUse(source_track_id, part) ? 1 : 0;
+}
+int32_t nota_spectrum_analyze_offline(const float* mono, int32_t n, double sample_rate, int32_t hop,
+                                      double dt, float* curves, int32_t max_frames) {
+    using nota::dsp::SpectrumAnalyzer;
+    if (!mono || !curves || n <= 0 || hop <= 0 || max_frames <= 0 || sample_rate <= 0) return 0;
+    SpectrumAnalyzer a;
+    a.prepare(sample_rate);
+    const int fft = a.fftSize();
+    if (n < fft) return 0;
+    uint32_t size = 1;
+    while (size < static_cast<uint32_t>(n)) size <<= 1;
+    std::vector<float> ring(size, 0.0f);
+    std::copy(mono, mono + n, ring.begin());
+    int32_t frames = 0;
+    for (int64_t w = fft; w <= n && frames < max_frames; w += hop, ++frames) {
+        a.analyse(ring.data(), size - 1, static_cast<uint32_t>(w), frames == 0 ? 0.0 : dt, false);
+        std::copy(a.curve(), a.curve() + SpectrumAnalyzer::kPoints, curves + frames * SpectrumAnalyzer::kPoints);
+    }
+    return frames;
 }
 int32_t nota_fx_selftest(void) {
     constexpr int N = 2048;
@@ -414,6 +589,25 @@ NotaResult nota_plugin_set_state(
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setPluginState(track_id, device_index, data, size) ? NOTA_OK : NOTA_ERR_UNKNOWN;
 }
+int32_t nota_plugin_preview_get(
+    const NotaEngine* e, int32_t track_id, int32_t device_index, uint8_t* out, int32_t capacity) {
+    if (!e) return 0;
+    const auto p = CENG(e)->trackEditorPreview(track_id, device_index);
+    if (p.empty()) return 0;
+    const auto n = static_cast<int32_t>(p.jpeg->size());
+    if (out && capacity > 0) std::memcpy(out, p.jpeg->data(), static_cast<size_t>(std::min(n, capacity)));
+    return n;
+}
+NotaResult nota_plugin_preview_set(
+    NotaEngine* e, int32_t track_id, int32_t device_index, const uint8_t* data, int32_t size) {
+    constexpr int32_t kMaxPreviewBytes = 4 * 1024 * 1024;
+    if (!e || size < 0 || size > kMaxPreviewBytes || (size > 0 && !data)) return NOTA_ERR_INVALID_ARG;
+    auto p = size > 0 ? nota::EditorPreview::make(std::vector<uint8_t>(data, data + size)) : nota::EditorPreview{};
+    return ENG(e)->setTrackEditorPreview(track_id, device_index, std::move(p)) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_plugin_preview_serial(const NotaEngine* e, int32_t track_id, int32_t device_index) {
+    return e ? static_cast<int32_t>(CENG(e)->trackEditorPreview(track_id, device_index).serial) : 0;
+}
 NotaResult nota_track_set_device_bypassed(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t bypassed) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     ENG(e)->setTrackDeviceBypassed(track_id, device_index, bypassed != 0);
@@ -447,6 +641,9 @@ int32_t nota_pdc_selftest(void) {
 
 // ---- Plugin / device kind & id introspection (M7-6) -----------------------
 
+int64_t nota_track_instrument_id(const NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackInstrumentId(track_id) : 0;
+}
 int32_t nota_track_instrument_kind(const NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackInstrumentKind(track_id) : -2;
 }

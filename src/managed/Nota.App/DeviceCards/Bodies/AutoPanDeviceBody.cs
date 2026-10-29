@@ -196,7 +196,8 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         graph.Changed += (a, ph) => { Raw(Amount, a); Raw(Phase, ph); RefreshAll(); };
         graph.ResetRequested += () => { Reset(Amount); Reset(Phase); RefreshAll(); };
         Learn(graph, Amount);
-        ToolTip.SetTip(graph, "Both channels' gain over two LFO cycles — L neutral, R teal, Phase later — with the floor the depth reaches. Drag up / down for Amount, left / right for Phase; double-click resets both.");
+        ToolTip.SetTip(graph, MenuKit.Keys("Both channels' gain over two LFO cycles — L neutral, R teal, Phase later — with the floor the depth reaches. Drag up / down for Amount, left / right for Phase; ⌥-click types, double-click resets both."));
+        ValueEntry.AttachAll(graph, ValueEntry.DeviceParam(engine, track, di, Amount, "Amount", PctF, RefreshAll), ValueEntry.DeviceParam(engine, track, di, Phase, "Phase", v => NotaNum.F($"{v * 360:0}°"), RefreshAll));
 
         var panBar = new OrbitPanBar { VerticalAlignment = VerticalAlignment.Center };
         var panTxt = Mono("", 8, TextPrimary); panTxt.TextAlignment = TextAlignment.Right; panTxt.Width = 28;

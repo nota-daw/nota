@@ -14,8 +14,17 @@ namespace nota {
 
 // --- live MIDI, arming, recording ------------------------------------------
 void Engine::setTrackArmed(int32_t trackId, bool armed) {
-    if (auto t = findTrackAuthoring(trackId)) t->setArmed(armed);
+    auto t = findTrackAuthoring(trackId);
+    const bool wasArmed = t && t->armed();
+    if (t) t->setArmed(armed);
     if (armed) return;
+    // A key still held from live input loses its note-off once the track stops taking live
+    // notes (#366): the audio thread releases the live notes this track is sounding. The key
+    // itself stays held, for other armed tracks and for a take started while it's down.
+    if (wasArmed) {
+        std::lock_guard<std::mutex> lk(remoteMidiMx_);
+        remoteMidi_.push(MidiEvent{false, -1, 0.0f, trackId, kLiveReleaseExpr});
+    }
     // Disarming a track that's currently recording finalizes its take (the audio clip is
     // materialised / MIDI capture stops), so toggling its REC button stops the recording.
     if (audioRecording_ && trackId == audioRecordTrackId_) stopAudioRecording();
@@ -40,6 +49,14 @@ int32_t Engine::trackRecordInput(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return t ? t->recordInputSource() : 0;
 }
+void Engine::setTrackInputChannels(int32_t trackId, int32_t channels) {
+    auto t = findTrackAuthoring(trackId);
+    if (t && t->type() == TrackType::Audio) t->setInputChannels(channels);
+}
+int32_t Engine::trackInputChannels(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t ? t->inputChannels() : Track::kInputStereo;
+}
 
 // --- live input monitoring ---------------------------------------------------
 void Engine::setTrackMonitor(int32_t trackId, bool on) {
@@ -59,8 +76,11 @@ bool Engine::trackMonitor(int32_t trackId) const {
 bool Engine::ensureAudioInput() {
     if (inputTestMode_) return true;
     if (input_ && input_->isRunning()) return true;
-    if (!input_) input_ = createAudioInput();
-    const uint32_t inputDev = resolveAudioDeviceId(config_.inputDeviceUid, /*inputScope=*/true);
+    if (!input_) input_ = createAudioInput(activeSystem_); // ASIO: the running driver's inputs
+    // In the ASIO → WASAPI fallback the output runs on the system default; so does capture.
+    // The saved WASAPI input stays as it is for when WASAPI is chosen.
+    const bool asioFallback = asioSupported() && config_.audioSystem == AudioSystem::Asio && activeSystem_ != AudioSystem::Asio;
+    const uint32_t inputDev = resolveAudioDeviceId(asioFallback ? std::string{} : config_.inputDeviceUid, /*inputScope=*/true);
     // The input thread only touches the lock-free rings (RT-safe).
     return input_->start(
         [this](const float* s, int32_t n) {
@@ -115,13 +135,19 @@ void Engine::pullMonitorInput(int32_t frames) {
         monitorPrimed_ = false;
         return;
     }
-    const size_t cushion = static_cast<size_t>(std::clamp(inputBlockFrames_.load(std::memory_order_relaxed), 64, 4096));
-    size_t avail = monitorQueue_.size();
+    const size_t block = static_cast<size_t>(std::clamp(inputBlockFrames_.load(std::memory_order_relaxed), 64, 4096));
     const size_t n = static_cast<size_t>(frames);
+    // ASIO duplex pushes a whole driver block before rendering it (one clock), so nothing has
+    // to be primed (R8). But render may split that block into segments (a loop boundary): the
+    // rest of the current block is not a backlog — only input older than one block is.
+    const bool sharedClock = monitorSharedClock_.load(std::memory_order_relaxed);
+    const size_t cushion = sharedClock ? 0 : block;
+    const size_t keep = sharedClock ? std::max(block, n) : n + cushion;
+    size_t avail = monitorQueue_.size();
     InputFrame f;
-    if (avail > n + cushion * 2 + 256) { // drifted / stalled: drop the stale backlog
-        for (size_t k = avail - (n + cushion); k > 0 && monitorQueue_.pop(f); --k) {}
-        avail = n + cushion;
+    if (avail > keep + cushion + 256) { // drifted / stalled: drop the stale backlog
+        for (size_t k = avail - keep; k > 0 && monitorQueue_.pop(f); --k) {}
+        avail = keep;
     }
     if (!monitorPrimed_) {
         if (avail < n + cushion) return; // still filling the cushion: silence
@@ -141,6 +167,32 @@ void Engine::pushMonitorFramesForTest(const float* interleavedStereo, int32_t fr
     for (int32_t i = 0; i < frames; ++i)
         monitorQueue_.push(InputFrame{interleavedStereo[i * 2], interleavedStereo[i * 2 + 1]});
 }
+bool Engine::monitorSharedClockSelfTest() {
+    constexpr int32_t kBlock = 512, kFirst = 10;
+    const bool sharedWas = monitorSharedClock_.load();
+    const int32_t blockWas = inputBlockFrames_.load();
+    const bool tapWas = hwMonitorTap_.load();
+    InputFrame f;
+    while (monitorQueue_.pop(f)) {}
+    monitorSharedClock_.store(true);
+    inputBlockFrames_.store(kBlock);
+    hwMonitorTap_.store(true);
+    monitorPrimed_ = false;
+    for (int32_t i = 0; i < kBlock; ++i) monitorQueue_.push(InputFrame{static_cast<float>(i), -static_cast<float>(i)});
+    bool ok = true;
+    pullMonitorInput(kFirst);
+    for (int32_t i = 0; i < kFirst; ++i) ok = ok && monitorHwBuf_[i * 2] == static_cast<float>(i);
+    pullMonitorInput(kBlock - kFirst);
+    for (int32_t i = 0; i < kBlock - kFirst; ++i)
+        ok = ok && monitorHwBuf_[i * 2] == static_cast<float>(kFirst + i) && monitorHwBuf_[i * 2 + 1] == -static_cast<float>(kFirst + i);
+    while (monitorQueue_.pop(f)) {}
+    monitorSharedClock_.store(sharedWas);
+    inputBlockFrames_.store(blockWas);
+    hwMonitorTap_.store(tapWas);
+    monitorPrimed_ = false;
+    return ok;
+}
+
 void Engine::setTrackMidiSource(int32_t trackId, int32_t sourceTrackId) {
     if (sourceTrackId == trackId) sourceTrackId = -1; // no self-routing
     if (auto t = findTrackAuthoring(trackId)) t->setMidiFromTrackId(sourceTrackId);
@@ -431,6 +483,7 @@ void Engine::drainInputQueue() {
         captureScratch_.push_back(f.l);
         captureScratch_.push_back(f.r);
     }
+    Track::foldInputChannels(captureScratch_.data(), captureScratch_.size() / 2, captureChannels_);
     // Frames the audio thread had to drop while this drain was stalled (ring full).
     // They are the newest samples — the ones that couldn't fit after the popped batch —
     // so append an equal run of silence *after* the drained frames. That keeps the take's
@@ -477,6 +530,10 @@ bool Engine::startAudioRecording(int32_t trackId) {
     // Internal resampling: capture another track / send / master output instead of the
     // hardware input. The audio thread feeds the ring from mixGraph; no device is opened.
     const int32_t src = t->recordInputSource();
+    captureChannels_ = src == 0 ? t->inputChannels() : Track::kInputStereo; // a mono pick is hardware-only
+    // A hardware take is late by the device's round trip (in + out); 0 on backends that don't
+    // report it, and for internal resampling (specs/049, research R7).
+    audioRecordLatencyFrames_ = src == 0 ? audioInputLatencyFrames() + audioOutputLatencyFrames() : 0;
     if (src != 0) {
         internalRecordSource_.store(src, std::memory_order_relaxed);
         audioRecordSampleRate_ = transport_.sampleRate();
@@ -603,14 +660,34 @@ void Engine::stopAudioRecording() {
             return; // loop armed but nothing captured
         }
     } else {
-        clip.startBeat = audioRecordStartBeat_;
+        // Linear take: move it earlier by the device latency so it lines up with what was
+        // playing when it was performed. (Loop and session takes keep their grid as before.)
+        double trimDevice = 0.0;
+        clip.startBeat = latencyCompensatedStart(audioRecordStartBeat_, audioRecordLatencyFrames_, spb, &trimDevice);
+        double kept = static_cast<double>(sample->frames);
+        if (trimDevice > 0.0 && devSR > 0.0) {
+            const double trim = std::min(kept, trimDevice * sampleSR / devSR);
+            clip.sourceOffsetFrames = trim;
+            kept -= trim;
+            clip.lengthFrames = static_cast<int64_t>(kept);
+        }
         ns = clip.startBeat;
-        ne = clip.startBeat + static_cast<double>(sample->frames) * beatsPerFrame;
+        ne = clip.startBeat + kept * beatsPerFrame;
     }
     if (ne <= ns) return;
     overwriteAudioClipsInRange(nt->clips, ns, ne);
     nt->clips.push_back(clip);
     republishWithTrack(trackId, nt);
+}
+
+double Engine::latencyCompensatedStart(double startBeat, int32_t latencyFrames, double samplesPerBeat,
+                                       double* trimFrames) {
+    if (trimFrames) *trimFrames = 0.0;
+    if (latencyFrames <= 0 || samplesPerBeat <= 0.0) return startBeat;
+    const double shift = latencyFrames / samplesPerBeat;
+    if (startBeat >= shift) return startBeat - shift;
+    if (trimFrames) *trimFrames = (shift - std::max(0.0, startBeat)) * samplesPerBeat;
+    return 0.0;
 }
 
 int32_t Engine::audioRecordPeaks(float* outMinMax, int32_t maxPoints) const {
@@ -650,6 +727,7 @@ bool Engine::audioRecordSelfTest() {
     audioRecordTrackId_ = tid;
     audioRecordStartBeat_ = 0.0;
     audioRecordSampleRate_ = 44100.0;
+    audioRecordLatencyFrames_ = 0;
     audioRecording_ = true; // simulate a take without opening a device
 
     constexpr int32_t kFrames = 4410; // 0.1 s
@@ -686,6 +764,7 @@ bool Engine::sessionAudioRecordSelfTest() {
     audioRecordTrackId_ = tid;
     audioRecordStartBeat_ = 0.0;
     audioRecordSampleRate_ = 44100.0;
+    audioRecordLatencyFrames_ = 0;
     audioRecording_ = true;
 
     constexpr int32_t kFrames = 4410; // 0.1 s

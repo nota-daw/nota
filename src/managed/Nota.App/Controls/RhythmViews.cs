@@ -10,6 +10,7 @@
 //   RhythmSampleView  the selected sample voice: the file as bars in the voice's hue, the
 //                     played region between a Start line and a dashed End line (drag
 //                     either; the dragged one turns accent), the part outside dimmed, the play position in teal.
+//                     ⌥-click a line (or the hit) to type its value — the card attaches the fields (specs/035).
 //   RhythmStepStrip   the sixteen steps of the selected voice and, under them, the velocity
 //                     lane. Click toggles, shift-click accents, alt-click makes a quiet step;
 //                     drag across paints, drag up / down (or the wheel) sets the velocity;
@@ -163,7 +164,7 @@ internal sealed class RhythmHitView : Control
     }
 }
 
-internal sealed class RhythmSampleView : Control
+internal sealed class RhythmSampleView : Control, IValueHandles
 {
     private float[] _peaks = Array.Empty<float>();
     private string _name = "", _caption = "";
@@ -218,6 +219,10 @@ internal sealed class RhythmSampleView : Control
         bool near = _has && (Math.Abs(p.X - X(_start)) < 6 || Math.Abs(p.X - X(_end)) < 6);
         Cursor = near ? new Cursor(StandardCursorType.SizeWestEast) : new Cursor(StandardCursorType.Hand);
     }
+
+    // Typed entry: handle 0 = Start, 1 = End (the nearer line, as a drag picks it); none without a file.
+    public int HandleAt(Point p) => !_has ? -1 : Math.Abs(p.X - X(_start)) <= Math.Abs(p.X - X(_end)) ? 0 : 1;
+    public Rect HandleRect(int handle) => ValueEntry.Near(new Point(X(handle == 0 ? _start : _end), 0), Bounds.Size);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -392,9 +397,9 @@ internal sealed class RhythmStepStrip : Control
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         int s = StepAt(e.GetPosition(this).X);
-        if (!On[s]) return;
-        Put(s, true, (float)Math.Clamp(Vel[s] + (e.Delta.Y > 0 ? 0.05 : -0.05), 0.05, 1.0), Acc[s]);
+        if (!On[s] || WheelInput.Step(e, this, s) is not { } dir) return;
         e.Handled = true;
+        if (dir != 0) Put(s, true, (float)Math.Clamp(Vel[s] + dir * 0.05, 0.05, 1.0), Acc[s]);
     }
 
     public override void Render(DrawingContext ctx)

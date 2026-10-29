@@ -651,7 +651,9 @@ internal sealed class ConsortJackField : Control
 }
 
 // ---- source × destination matrix: rows = sources, columns = destinations, cell = depth ----
-internal sealed class ConsortPatchMatrix : Control
+// Drag a cell for its depth (an empty one gets a cable); ⌥-click types it (−100…+100 %),
+// double-click or the menu's Clear pulls the cable (specs/035).
+internal sealed class ConsortPatchMatrix : Control, IValueEntryHost
 {
     private static readonly Typeface Mono = NotaFonts.Mono;
     private static readonly Typeface Sans = NotaFonts.Sans;
@@ -668,7 +670,52 @@ internal sealed class ConsortPatchMatrix : Control
     public event Action<int, int>? GestureEnd;
     public event Action<bool, int, Rect>? HeaderClicked;  // (isRow, index, rect)
 
-    public ConsortPatchMatrix() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.Hand); }
+    public ConsortPatchMatrix() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.Hand); ValueEntry.AttachHost(this); }
+
+    // ---- typed entry ------------------------------------------------------------
+    private readonly Dictionary<(int s, int d), ValueField> _fields = new();
+
+    private ValueField FieldOf(int s, int d) => _fields.TryGetValue((s, d), out var f) ? f : _fields[(s, d)] =
+        new ValueField($"{ConsortJacks.Src(s).Name} → {ConsortJacks.Dst(d).Name}", () => ((Find(s, d)?.Depth ?? 0) + 1) / 2,
+            n => NotaNum.F($"{(n * 2 - 1) * 100:+0;−0;0}\u2009%"),
+            n => DepthChanged?.Invoke(s, d, (float)Math.Round((Math.Clamp(n, 0, 1) * 2 - 1) * 100) / 100f),
+            () => GestureBegin?.Invoke(s, d), () => GestureEnd?.Invoke(s, d))
+        {
+            Clear = () => { if (Find(s, d) != null) Removed?.Invoke(s, d); },
+            After = InvalidateVisual,
+        };
+
+    private (int r, int c) CellAt(Point p)
+    {
+        if (p.X < RowHdrW || p.Y < HeadH || RowH <= 0 || ColW <= 0) return (-1, -1);
+        int r = (int)((p.Y - HeadH) / RowH), c = (int)((p.X - RowHdrW) / ColW);
+        return r < _rows.Length && c < _cols.Length ? (r, c) : (-1, -1);
+    }
+
+    public IReadOnlyList<ValueField>? FieldsAt(Point p)
+        => CellAt(p) is var (r, c) && r >= 0 ? [FieldOf(_rows[r], _cols[c])] : null;
+
+    public Rect AnchorOf(ValueField field)
+    {
+        for (int r = 0; r < _rows.Length; r++)
+            for (int c = 0; c < _cols.Length; c++)
+                if (_fields.TryGetValue((_rows[r], _cols[c]), out var f) && ReferenceEquals(f, field))
+                    return new Rect(RowHdrW + c * ColW + 2, HeadH + r * RowH + 3, ColW - 4, RowH - 6);
+        return default;
+    }
+
+    // Tab walks the cables on screen, row by row.
+    public IReadOnlyList<ValueField> AllFields
+    {
+        get
+        {
+            var list = new List<ValueField>();
+            for (int r = 0; r < _rows.Length; r++)
+                for (int c = 0; c < _cols.Length; c++)
+                    if (Find(_rows[r], _cols[c]) != null) list.Add(FieldOf(_rows[r], _cols[c]));
+            return list;
+        }
+    }
     public void Set(int[] rows, int[] cols, IReadOnlyList<ConsortCable> cables) { _rows = rows; _cols = cols; _cables = cables; InvalidateVisual(); }
 
     private double RowH => _rows.Length == 0 ? 0 : (Bounds.Height - HeadH) / _rows.Length;
@@ -688,7 +735,6 @@ internal sealed class ConsortPatchMatrix : Control
         if (ri < 0 || ri >= _rows.Length || ci < 0 || ci >= _cols.Length) return;
         int s = _rows[ri], d = _cols[ci];
         var cur = Find(s, d);
-        if ((e.KeyModifiers & KeyModifiers.Alt) != 0 || (e.ClickCount == 2 && cur != null)) { Removed?.Invoke(s, d); e.Handled = true; return; }
         _drag = (ri, ci); _dragY = p.Y; _dragV = cur?.Depth ?? 0;
         GestureBegin?.Invoke(s, d);
         if (cur == null) { _dragV = 0.5; DepthChanged?.Invoke(s, d, 0.5f); }

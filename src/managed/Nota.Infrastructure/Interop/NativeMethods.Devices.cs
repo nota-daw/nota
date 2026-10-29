@@ -37,6 +37,86 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_remove_device")]
     internal static partial NotaResult RemoveDevice(IntPtr engine, int trackId, int deviceIndex);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_copy_device")]
+    internal static partial NotaResult CopyDevice(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_copy_midi_effect")]
+    internal static partial NotaResult CopyMidiEffect(IntPtr engine, int trackId, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_clipboard_kind")]
+    internal static partial int DeviceClipboardKind(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_clipboard_sidechain")]
+    internal static partial int DeviceClipboardSidechain(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_paste_device")]
+    internal static partial int PasteDevice(IntPtr engine, int trackId, int atIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_paste_midi_effect")]
+    internal static partial int PasteMidiEffect(IntPtr engine, int trackId, int atIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_duplicate_device")]
+    internal static partial int DuplicateDevice(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_duplicate_midi_effect")]
+    internal static partial int DuplicateMidiEffect(IntPtr engine, int trackId, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_copy_instrument")]
+    internal static partial int CopyInstrument(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_paste_instrument")]
+    internal static partial int PasteInstrument(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_transfer_device")]
+    internal static partial int TransferDevice(IntPtr engine, int srcTrackId, int family, int index, int dstTrackId,
+                                               int atIndex, int keepSource, out int flags);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_wrap_device_in_rack")]
+    internal static partial int WrapDeviceInRack(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_unwrap_rack")]
+    internal static partial int UnwrapRack(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_group_devices")]
+    internal static partial int GroupDevices(IntPtr engine, int trackId, int midiFirst, int midiCount, int withInstrument,
+                                             int fxFirst, int fxCount);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_ungroup_rack")]
+    internal static partial int UngroupRack(IntPtr engine, int trackId, int family, int index, out int dropped);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_copy_devices")]
+    internal static partial int CopyDevices(IntPtr engine, int trackId, int[] midiIdx, int midiN, int withInstrument,
+                                            int[] fxIdx, int fxN);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_clipboard_count")]
+    internal static partial int DeviceClipboardCount(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_paste_devices")]
+    internal static partial int PasteDevices(IntPtr engine, int trackId, int midiAt, int fxAt, out int skipped);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_cc_dest_path")]
+    internal static partial int MidiEffectCcDestPath(IntPtr engine, int trackId, int index, out int chain, out int slot);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_set_cc_dest_path")]
+    internal static partial int MidiEffectSetCcDestPath(IntPtr engine, int trackId, int index, int chain, int slot);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_midi_cc_dest")]
+    internal static partial int RackChainMidiCcDest(IntPtr engine, int trackId, int deviceIndex, int chain, int index,
+                                                    out int destDevice, out int destChain, out int destSlot, out int param,
+                                                    out float depth);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_midi_set_cc_dest")]
+    internal static partial int RackChainMidiSetCcDest(IntPtr engine, int trackId, int deviceIndex, int chain, int index,
+                                                       int destDevice, int destChain, int destSlot, int param, float depth);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_sidechain")]
+    internal static partial int RackChainSidechain(IntPtr engine, int trackId, int deviceIndex, int chain, int slot,
+                                                   out int sourceTrack, out int tapPre, out float gainDb, out float mix);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_set_sidechain")]
+    internal static partial int RackChainSetSidechain(IntPtr engine, int trackId, int deviceIndex, int chain, int slot,
+                                                      int sourceTrack, int tapPre, float gainDb, float mix);
+
     [LibraryImport(Lib, EntryPoint = "nota_device_name")]
     internal static partial IntPtr DeviceName(IntPtr engine, int trackId, int deviceIndex);
 
@@ -88,6 +168,10 @@ internal static partial class NativeMethods
     internal static partial NotaResult DeviceLoadFile(IntPtr engine, int trackId, int deviceIndex, string path);
     [LibraryImport(Lib, EntryPoint = "nota_device_text")]
     internal static partial int DeviceText(IntPtr engine, int trackId, int deviceIndex, int id, [Out] byte[]? outBytes, int cap);
+    [LibraryImport(Lib, EntryPoint = "nota_eq_set_band_text", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int EqSetBandText(IntPtr engine, int trackId, int deviceIndex, int band, string label, string note);
+    [LibraryImport(Lib, EntryPoint = "nota_eq_band_text")]
+    internal static partial int EqBandText(IntPtr engine, int trackId, int deviceIndex, int band, int which, [Out] byte[]? outBytes, int cap);
 
     // --- MIDI effects ---
     [LibraryImport(Lib, EntryPoint = "nota_track_add_midi_effect")]
@@ -106,6 +190,12 @@ internal static partial class NativeMethods
     internal static partial int MidiEffectLastOut(IntPtr engine, int trackId, int index);
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_scope")]
     internal static partial int MidiEffectScope(IntPtr engine, int trackId, int index, [Out] float[] outv, int maxN);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_get_state")]
+    internal static partial int MidiEffectGetState(IntPtr engine, int trackId, int index, [Out] byte[]? outBuffer, int capacity);
+
+    [LibraryImport(Lib, EntryPoint = "nota_midi_effect_set_state")]
+    internal static partial NotaResult MidiEffectSetState(IntPtr engine, int trackId, int index, [In] byte[] data, int size, int checkpoint);
 
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_command")]
     internal static partial void MidiEffectCommand(IntPtr engine, int trackId, int index, int cmd);
@@ -141,6 +231,44 @@ internal static partial class NativeMethods
     internal static partial int MidiEffectCcDestParam(IntPtr engine, int trackId, int index);
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_cc_depth")]
     internal static partial float MidiEffectCcDepth(IntPtr engine, int trackId, int index);
+
+    // Sidechain sub-sources (specs/050).
+    [LibraryImport(Lib, EntryPoint = "nota_track_part_count")]
+    internal static partial int TrackPartCount(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_part_name")]
+    internal static partial int TrackPartName(IntPtr engine, int trackId, int index, [Out] byte[]? outBytes, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_set_sidechain_key")]
+    internal static partial int DeviceSetSidechainKey(IntPtr engine, int trackId, int deviceIndex, int sourceTrackId, int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_sidechain_key")]
+    internal static partial int DeviceSidechainKey(IntPtr engine, int trackId, int deviceIndex, out int source, out int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_instrument_sidechain_key")]
+    internal static partial int TrackSetInstrumentSidechainKey(IntPtr engine, int trackId, int sourceTrackId, int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_instrument_sidechain_key")]
+    internal static partial int TrackInstrumentSidechainKey(IntPtr engine, int trackId, out int source, out int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_sidechain_part")]
+    internal static partial int RackChainSidechainPart(IntPtr engine, int trackId, int deviceIndex, int chain, int slot, out int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_set_sidechain_key")]
+    internal static partial int RackChainSetSidechainKey(IntPtr engine, int trackId, int deviceIndex, int chain, int slot,
+                                                         int sourceTrack, int part, int tapPre, float gainDb, float mix);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_set_sidechain_part")]
+    internal static partial int RackChainSetSidechainPart(IntPtr engine, int trackId, int deviceIndex, int chain, int slot, int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_sidechain_route_capacity")]
+    internal static partial int SidechainRouteCapacity(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_sidechain_routes_free")]
+    internal static partial int SidechainRoutesFree(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_sidechain_route_in_use")]
+    internal static partial int SidechainRouteInUse(IntPtr engine, int sourceTrackId, int part);
 
     [LibraryImport(Lib, EntryPoint = "nota_device_set_sidechain_source")]
     internal static partial void DeviceSetSidechainSource(IntPtr engine, int trackId, int deviceIndex, int sourceTrackId);
@@ -181,6 +309,10 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_fx_selftest")]
     internal static partial int FxSelfTest();
 
+    [LibraryImport(Lib, EntryPoint = "nota_spectrum_analyze_offline")]
+    internal static partial int SpectrumAnalyzeOffline(float[] mono, int n, double sampleRate, int hop, double dt,
+        [Out] float[] curves, int maxFrames);
+
     [LibraryImport(Lib, EntryPoint = "nota_plugin_open_editor")]
     internal static partial NotaResult PluginOpenEditor(IntPtr engine, int trackId, int deviceIndex);
 
@@ -197,6 +329,17 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_plugin_set_state")]
     internal static partial NotaResult PluginSetState(IntPtr engine, int trackId, int deviceIndex,
                                                       [In] byte[] data, int size);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_preview_get")]
+    internal static partial int PluginPreviewGet(IntPtr engine, int trackId, int deviceIndex,
+                                                 [Out] byte[]? outBuffer, int capacity);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_preview_set")]
+    internal static partial NotaResult PluginPreviewSet(IntPtr engine, int trackId, int deviceIndex,
+                                                        [In] byte[]? data, int size);
+
+    [LibraryImport(Lib, EntryPoint = "nota_plugin_preview_serial")]
+    internal static partial int PluginPreviewSerial(IntPtr engine, int trackId, int deviceIndex);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_set_device_bypassed")]
     internal static partial NotaResult SetDeviceBypassed(IntPtr engine, int trackId, int deviceIndex, int bypassed);
@@ -218,6 +361,9 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_kind")]
     internal static partial int TrackInstrumentKind(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_instrument_id")]
+    internal static partial long TrackInstrumentId(IntPtr engine, int trackId);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_supports_mpe")]
     internal static partial int TrackInstrumentSupportsMpe(IntPtr engine, int trackId);

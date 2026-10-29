@@ -204,7 +204,7 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         readouts.Add(() =>
         {
             bool has = HasTrack(), use = CarrierI() == 2;
-            srcName.Text = has ? TrackNames.Of(engine, Source()) : "None";
+            srcName.Text = has ? SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di)) : "None";
             srcName.Foreground = has && use ? TextPrimary : TextDisabled;
             dot.Background = has ? ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(engine, Source())) : NotaPalette.Rule;
         });
@@ -214,21 +214,29 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         {
             if (!e.GetCurrentPoint(picker).Properties.IsLeftButtonPressed) return;
             var fly = new MenuFlyout();
-            void Add(int id, string name)
+            var cur = HasTrack() ? engine.DeviceSidechainKey(track, di) : SidechainKey.None;
+            void Add(SidechainKey k, string name, bool enabled = true, string? tip = null)
             {
-                // The current source is ticked, like every choice menu (spec 034).
-                var mi = new MenuItem { Header = name, ToggleType = MenuItemToggleType.Radio, IsChecked = id == (HasTrack() ? Source() : -1) };
+                // The current source is ticked, like every choice menu (spec 034); one the route
+                // pool can't take is shown disabled with the reason.
+                var mi = new MenuItem { Header = name, ToggleType = MenuItemToggleType.Radio, IsChecked = k == cur, IsEnabled = enabled };
+                if (tip != null) ToolTip.SetTip(mi, tip);
                 mi.Click += (_, _) =>
                 {
-                    engine.SetDeviceSidechainSource(track, di, id);
-                    if (id >= 0 && CarrierI() != 2) SetP(Carrier, 1);   // picking a track means using it
+                    if (!SidechainSourcePicker.SetDeviceKey(engine, track, di, k)) return;   // no free route
+                    if (k.Source >= 0 && CarrierI() != 2) SetP(Carrier, 1);   // picking a track means using it
                     ctx.NotifyChanged(); RefreshAll();
                 };
                 fly.Items.Add(mi);
             }
-            Add(-1, "None");
+            Add(SidechainKey.None, "None");
             fly.Items.Add(new Separator());
-            foreach (var (id, name, _) in Candidates()) Add(id, name);
+            // The candidate tracks, each with its pads / chains / voices (specs/050).
+            var ok = new HashSet<int>();
+            foreach (var c in Candidates()) ok.Add(c.Id);
+            foreach (var en in SidechainSourcePicker.Entries(engine, track, cur))
+                if (ok.Contains(en.Key.Source))
+                    Add(en.Key, SidechainSourcePicker.Name(engine, en.Key), en.Enabled, en.Tip);
             fly.ShowAt(picker);
             e.Handled = true;
         };
@@ -287,7 +295,9 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         };
         graph.ResetRequested += edge => { Reset(edge == 0 ? Low : High); RefreshAll(); };
         Learn(graph, Low);
-        ToolTip.SetTip(graph, "The modulator's level in each band (bars) and the carrier's (teal). Drag an edge to move Low or High; double-click an edge resets it.");
+        ToolTip.SetTip(graph, MenuKit.Keys("The modulator's level in each band (bars) and the carrier's (teal). Drag an edge to move Low or High; ⌥-click an edge to type it, double-click resets it."));
+        ValueEntry.AttachHandles(graph, [ValueEntry.DeviceParam(engine, track, di, Low, "Low", v => HzF(LowHz(v)), RefreshAll)],
+            [ValueEntry.DeviceParam(engine, track, di, High, "High", v => HzF(HighHz(v)), RefreshAll)]);
 
         var knobs = new UniformGrid { Rows = 1, Columns = 7, Margin = new Thickness(0, 4, 0, 0) };
         knobs.Children.Add(K(Bands, "Bands", v => BandsOf(v).ToString(NotaNum.Culture), "Bands — how many bands, 8 … 32: fewer is more robotic, more is clearer", steps: 25));

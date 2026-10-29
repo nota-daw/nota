@@ -73,7 +73,30 @@ class Engine {
     // device refused it and the backend fell back to shared mode. Always false
     // on platforms without exclusive mode. Read after applyAudioConfig() / start().
     bool audioExclusiveFallback() const { return backend_ ? backend_->exclusiveFallback() : false; }
+    bool audioSilentFallback() const { return backend_ ? backend_->silentFallback() : false; }
     int32_t bufferFrames() const { return backend_ ? backend_->bufferFrames() : 0; }
+
+    // --- ASIO (Windows; specs/049) ---
+    // Staged like the rest of the config; applyAudioConfig() persists and restarts. Off
+    // Windows the setters change nothing (the native backend is the only system).
+    void setAudioSystem(AudioSystem system);
+    void setAsioDriver(const std::string& clsid, const std::string& name);
+    void setAsioPair(bool input, int32_t firstChannel);
+    // What actually runs: Wasapi after a failed ASIO start fell back (FR-011).
+    AudioSystem activeAudioSystem() const { return activeSystem_; }
+    // Why the last ASIO start failed ("" if it didn't, or ASIO wasn't asked for).
+    const std::string& audioFallbackReason() const { return audioFallbackReason_; }
+    // Device event since the last call (0 none, 1 reset requested, 2 driver failed).
+    // A driver that stopped calling back makes the next start skip ASIO once (FR-011).
+    int32_t pollAudioDeviceEvent();
+    int32_t audioInputLatencyFrames() const { return backend_ ? backend_->inputLatencyFrames() : 0; }
+    int32_t audioOutputLatencyFrames() const { return backend_ ? backend_->outputLatencyFrames() : 0; }
+
+    // Where a hardware take really starts once the device's round-trip latency is taken
+    // out (research R7): `latencyFrames` earlier, in device frames. A take that would
+    // start before beat 0 stays at 0 and drops its first frames instead (`trimFrames`).
+    static double latencyCompensatedStart(double startBeat, int32_t latencyFrames, double samplesPerBeat,
+                                          double* trimFrames);
 
     // --- MIDI device settings (M7-2) ---
     // Which inputs the engine listens to; persisted as a blocklist of disabled
@@ -157,7 +180,7 @@ class Engine {
     float modulatorGet(int32_t trackId, int32_t modId, int32_t field) const;
     void modulatorSet(int32_t trackId, int32_t modId, int32_t field, float value);
     float modulatorValue(int32_t trackId, int32_t modId) const;                            // live output for viz
-    int32_t modulatorScope(int32_t trackId, int32_t modId, float* out, int32_t cap) const; // CV scope history
+    int32_t modulatorScope(int32_t trackId, int32_t modId, float* values, float* dts, int32_t cap) const; // CV scope history, newest cap entries
     int32_t addCvLink(int32_t trackId, int32_t modId, int32_t device, int32_t param);
     // Cross-track: the modulator lives on trackId; the target param is on targetTrack
     // (-1 = trackId itself). The link is owned by the modulator's track.
@@ -247,6 +270,37 @@ class Engine {
     // Add (or reuse) a PluginParam lane; resolves paramId -> current index now.
     int32_t addPluginAutomationLane(int32_t trackId, int32_t deviceIndex, const char* paramId);
     std::string automationLaneParamId(int32_t trackId, int32_t laneIndex) const;
+    // Nested addresses for save / load (specs/044): a path is (chain index, slot) in the rack at
+    // the lane's / link's / Arp target's device index; chain index -1 = track level.
+    bool automationLanePath(int32_t trackId, int32_t laneIndex, int32_t* chainIndex, int32_t* slot) const;
+    int32_t addNestedAutomationLane(int32_t trackId, int32_t target, int32_t host, int32_t chainIndex, int32_t slot,
+        int32_t paramIndex, const char* paramId);
+    bool cvLinkPath(int32_t trackId, int32_t index, int32_t* srcChain, int32_t* srcSlot, int32_t* tgtChain,
+        int32_t* tgtSlot) const;
+    int32_t addNestedCvLink(int32_t trackId, int32_t sourceKind, int32_t modId, int32_t srcDev, int32_t srcChain,
+        int32_t srcSlot, int32_t srcParam, int32_t targetKind, int32_t targetTrack, int32_t targetDevice,
+        int32_t tgtChain, int32_t tgtSlot, int32_t targetParam);
+    bool midiEffectCcDestPath(int32_t trackId, int32_t index, int32_t* chainIndex, int32_t* slot) const;
+    bool setMidiEffectCcDestPath(int32_t trackId, int32_t index, int32_t chainIndex, int32_t slot);
+    // The uid of chain `chainIndex` of the rack at `host` on trackId (0 if none), and back.
+    uint64_t nestedChainUid(int32_t trackId, int32_t host, int32_t chainIndex) const;
+    // What lives on chain children and must survive save / load outside the rack blob, whose
+    // track ids and chain uids don't (specs/044): an Arp's CC target (dest as device, chain
+    // index, slot) and a child's sidechain key (slot >= 0 a device, -1 the chain instrument).
+    // The setters edit the live child like the track-level ones (no undo; project load).
+    bool rackChainMidiCcDest(int32_t t, int32_t host, int32_t chain, int32_t idx, int32_t* dev, int32_t* destChain,
+        int32_t* destSlot, int32_t* param, float* depth) const;
+    bool rackChainMidiSetCcDest(int32_t t, int32_t host, int32_t chain, int32_t idx, int32_t dev, int32_t destChain,
+        int32_t destSlot, int32_t param, float depth);
+    bool rackChainSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* src, int32_t* tapPre,
+        float* gainDb, float* mix) const;
+    int32_t rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t tapPre,
+        float gainDb, float mix);
+    bool rackChainSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* part) const;
+    int32_t rackChainSetSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t part);
+    int32_t rackChainSetKey(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t part,
+        int32_t tapPre, float gainDb, float mix);
+    int32_t nestedChainIndex(int32_t trackId, int32_t host, uint64_t uid) const;
 
     // --- automation write / record (M9-C) ---
     // There are no record modes. Lanes always play back; recording is contextual:
@@ -335,6 +389,11 @@ class Engine {
     // plugins re-instantiate with state) and inserts the copy after the source;
     // returns the new id (or -1). removeTrack drops it. Both checkpoint undo.
     int32_t duplicateTrack(int32_t trackId);
+    // A new last regular track built like trackId: the same instrument, MIDI effects, devices,
+    // mixer and sends, but no clips, Session clips or automation, top level, default name and
+    // colour, not armed. Where clips dragged below the last track land (#301). New id or -1
+    // (unknown id, a return, a group, or an instrument / device that didn't copy). Checkpoints undo.
+    int32_t addTrackLike(int32_t trackId);
     bool removeTrack(int32_t trackId);
     // Reorders a non-return track to toIndex within the regular (non-return) track list;
     // returns/master keep their slots. Checkpoints undo. No-op for return tracks.
@@ -584,6 +643,9 @@ class Engine {
     int32_t trackName(int32_t trackId, char* out, int32_t cap) const;
     bool setTrackColorIndex(int32_t trackId, int32_t colorIndex);
     int32_t trackColorIndex(int32_t trackId) const;
+    // Piano roll Fold (specs/045): a per-track view flag, saved with the project.
+    bool setTrackPianoFold(int32_t trackId, bool on);
+    int32_t trackPianoFold(int32_t trackId) const; // 1 / 0, -1 unknown track
 
     // Track clipboard (copy/cut/paste). copyTracks stores fully independent clones of the
     // expanded set (a group brings its children); pasteTracks inserts fresh copies (new ids +
@@ -603,6 +665,7 @@ class Engine {
     // Instrument identity for save: 0=Synth, 1=Sampler, -1=plugin/unknown,
     // -2=track has no instrument (audio/return). Message thread only.
     int32_t trackInstrumentKind(int32_t trackId) const;
+    int64_t trackInstrumentId(int32_t trackId) const; // nota_track_instrument_id (specs/043)
     bool trackInstrumentSupportsMpe(int32_t trackId) const; // per-note expression (MPE)
     // Built-in device kind for save (see Device::builtinKind), or -1 for a
     // hosted plugin. Message thread only.
@@ -726,6 +789,53 @@ class Engine {
     int32_t addTrackBuiltinDevice(int32_t trackId, int32_t kind); // 0=EQ, 1=Compressor
     bool moveDevice(int32_t trackId, int32_t fromIndex, int32_t toIndex);
     bool removeDevice(int32_t trackId, int32_t deviceIndex);
+    // Device clipboard (#238): copy a full clone of an audio / MIDI effect (every param, its
+    // state blob, bypass, sidechain key; a rack or plug-in copies itself), paste a clone of it
+    // into a chain at atIndex (-1 = the end) as one undo step. Paste returns the new index or
+    // -1. deviceClipboardKind: 0 empty, 1 audio effect, 2 MIDI effect, 3 instrument (below).
+    bool copyDevice(int32_t trackId, int32_t deviceIndex);
+    bool copyMidiEffect(int32_t trackId, int32_t index);
+    int32_t deviceClipboardKind() const;
+    int32_t pasteDevice(int32_t trackId, int32_t atIndex);
+    int32_t pasteMidiEffect(int32_t trackId, int32_t atIndex);
+    // A clone of the device right after it (one undo step), clipboard untouched. Returns its index or -1.
+    int32_t duplicateDevice(int32_t trackId, int32_t deviceIndex);
+    int32_t duplicateMidiEffect(int32_t trackId, int32_t index);
+    // The instrument on the same clipboard (specs/043): copy keeps a full clone (cloneInstrument:
+    // params, state, a rack's chains / pads / macros, a plug-in's state, bypass) and empties the
+    // other two families; deviceClipboardKind() is 3 then. Paste replaces the track's instrument
+    // with a fresh clone, one undo step: 0 done, -1 nothing to paste, -2 not an instrument
+    // track, -3 the clone failed.
+    bool copyInstrument(int32_t trackId);
+    int32_t pasteInstrument(int32_t trackId);
+    // Several devices on the clipboard (specs/044): clones of the given MIDI effects, the
+    // instrument and audio effects, in chain order; one device fills the single clipboard as
+    // before. Returns the count, or -1. Paste puts every entry the track can take in one undo
+    // step — MIDI effects at midiAt, the instrument replacing the track's, audio effects at
+    // fxAt (-1 = the end) — and reports the skipped ones; -1 empty, -3 a clone failed.
+    int32_t copyDevices(int32_t trackId, const int32_t* midiIdx, int32_t midiN, bool withInstrument,
+        const int32_t* fxIdx, int32_t fxN);
+    int32_t deviceClipboardCount() const;
+    int32_t pasteDevices(int32_t trackId, int32_t midiAt, int32_t fxAt, int32_t* outSkipped);
+    // The same into chain c of the rack at (trackId, rack): the entries its sections take (an
+    // instrument, a rack, a plug-in into a MIDI Effect Rack are skipped), keys dropped, one undo
+    // step. Returns the number pasted (>= 0) and the first new index in each section (-1 none),
+    // or -1 bad address / nothing on the clipboard, -3 a clone failed.
+    int32_t rackChainPasteDevices(int32_t trackId, int32_t rack, int32_t chain, int32_t midiAt, int32_t fxAt,
+        int32_t* outSkipped, int32_t* outFirstMidi, int32_t* outFirstFx);
+    // The one place a track's instrument is swapped (Replace, Paste, the built-in / plug-in
+    // setters): the old instrument's editor closes, one undo step.
+    bool replaceTrackInstrument(int32_t trackId, std::shared_ptr<Instrument> inst);
+    // Move (keepSource false) or copy a device to another track, both tracks in one published
+    // graph and one undo step (specs/043). family: 0 audio effect, 1 MIDI effect, 2 the
+    // instrument (index ignored; it replaces dst's and a move removes the source track).
+    // atIndex: -1 = the end of dst's section. A move takes the device's automation lanes along;
+    // a copy takes none. Returns the new index (0 for the instrument), -1 bad address or
+    // dst == src, -2 dst can't take the family, -3 the clone failed. outFlags (may be null):
+    // kTransferSidechainCleared / kTransferLinksDropped / kTransferSourceRemoved.
+    static constexpr int32_t kTransferSidechainCleared = 1, kTransferLinksDropped = 2, kTransferSourceRemoved = 4;
+    int32_t transferDevice(int32_t srcTrackId, int32_t family, int32_t index, int32_t dstTrackId, int32_t atIndex,
+                           bool keepSource, int32_t* outFlags);
     const char* deviceName(int32_t trackId, int32_t deviceIndex) const;
     int32_t deviceScope(int32_t trackId, int32_t deviceIndex, float* out, int32_t maxSamples) const;
     // Interactive-device command channel + per-layer waveform (the looper).
@@ -737,6 +847,12 @@ class Engine {
     // Load an auxiliary file into a device (the Chamber's user IR) / read its resource text.
     bool deviceLoadFile(int32_t trackId, int32_t deviceIndex, const std::string& path);
     std::string deviceText(int32_t trackId, int32_t deviceIndex, int32_t id) const;
+    // EQ-8 band labels and notes (specs/049). set replaces one band's label and note (cleaned
+    // to their limits) as one undo step; false when the device isn't an EQ-8, the band is out
+    // of range or nothing changed. get: which 0 = label, 1 = note ("" when none).
+    bool setEqBandText(int32_t trackId, int32_t deviceIndex, int32_t band, const std::string& label,
+        const std::string& note);
+    std::string eqBandText(int32_t trackId, int32_t deviceIndex, int32_t band, int32_t which) const;
     int32_t deviceParamCount(int32_t trackId, int32_t deviceIndex) const;
     const char* deviceParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float deviceParamMin(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
@@ -769,11 +885,36 @@ class Engine {
     int32_t instrumentSidechainSource(int32_t trackId) const;
     bool instrumentAcceptsSidechain(int32_t trackId) const;
     void recomputeRouting(); // message thread: assign route-bus slots to source tracks
+    // Sidechain sub-sources (specs/050). Parts are addressed by their current index on the
+    // source track's instrument (-1 = the whole track); the key keeps the part's stable id.
+    // Set: 0 done, -1 bad address / part, -2 no free route (the key is left as it was).
+    // Get: *part -1 whole track, -2 the keyed part is gone (the key is silent).
+    int32_t trackPartCount(int32_t trackId) const;
+    std::string trackPartName(int32_t trackId, int32_t index) const;
+    int32_t setDeviceSidechainKey(int32_t trackId, int32_t deviceIndex, int32_t sourceTrackId, int32_t part);
+    bool deviceSidechainKey(int32_t trackId, int32_t deviceIndex, int32_t* source, int32_t* part) const;
+    int32_t setInstrumentSidechainKey(int32_t trackId, int32_t sourceTrackId, int32_t part);
+    bool instrumentSidechainKey(int32_t trackId, int32_t* source, int32_t* part) const;
+    int32_t sidechainRoutesFree() const;
+    static constexpr int32_t kSidechainRoutes = 16; // == kMaxRoutes (private)
+    bool sidechainRouteInUse(int32_t sourceTrackId, int32_t part) const;
+    // A key's part as an index on its source track now (-1 whole track, -2 gone), and back
+    // (index -1 → 0; an index that isn't a part → no value). Message thread.
+    int32_t partIndexOf(int32_t sourceTrackId, uint64_t part) const;
+    bool partIdAt(int32_t sourceTrackId, int32_t index, uint64_t* part) const;
+    template <typename Consumer>
+    int32_t applySidechainKey(Consumer& c, int32_t src, uint64_t part, bool routed = true);
+    template <typename Fn>
+    void forEachRouteKey(Fn&& fn) const;
     // Open/close a hosted plugin's native GUI. deviceIndex < 0 = the instrument;
     // otherwise the effect at that chain position. Message thread only.
     void openTrackEditor(int32_t trackId, int32_t deviceIndex);
     void closeTrackEditor(int32_t trackId, int32_t deviceIndex);
     bool trackEditorOpen(int32_t trackId, int32_t deviceIndex) const;
+    // Editor preview (specs/046): the picture of a plug-in's window kept on the device.
+    // Message thread only; set returns false for an unknown track / index.
+    EditorPreview trackEditorPreview(int32_t trackId, int32_t deviceIndex) const;
+    bool setTrackEditorPreview(int32_t trackId, int32_t deviceIndex, EditorPreview p);
     // Plugin state (M3-5). getPluginState writes up to `cap` bytes into `out`
     // (pass out=null to query size) and returns the full state size.
     int32_t getPluginState(int32_t trackId, int32_t deviceIndex, uint8_t* out, int32_t cap) const;
@@ -800,6 +941,10 @@ class Engine {
     int32_t midiEffectScope(int32_t trackId, int32_t index, float* out,
         int32_t maxN) const;                                             // float scope (Nota Velocity in/out pairs)
     void midiEffectCommand(int32_t trackId, int32_t index, int32_t cmd); // editor command (Nota Arp: 1 = restart)
+    // Opaque state blob of a MIDI effect (the MIDI Effect Rack: its whole structure). Setting
+    // it swaps in a restored copy, so the old one stays on the undo stack when checkpoint.
+    std::vector<uint8_t> midiEffectGetState(int32_t trackId, int32_t index) const;
+    bool midiEffectSetState(int32_t trackId, int32_t index, const uint8_t* data, int32_t size, bool checkpoint);
     const char* midiEffectName(int32_t trackId, int32_t index) const;
     int32_t midiEffectParamCount(int32_t trackId, int32_t index) const;
     const char* midiEffectParamName(int32_t trackId, int32_t index, int32_t paramIndex) const;
@@ -839,12 +984,122 @@ class Engine {
     int32_t rackAddPluginInstrumentChain(int32_t trackId, int32_t deviceIndex, int32_t catalogIndex);
     int32_t rackAddPluginChainDevice(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t catalogIndex);
     RackCore* rackCoreAt(int32_t trackId, int32_t deviceIndex) const; // null if not a rack
+    // specs/044: lanes, CV links and Arp CC targets that point into the rack at (trackId, host)
+    // follow an edit of its chain children. map(chainUid, slot) gives the new (chainUid, slot);
+    // a chainUid of 0 drops the reference. No undo step of its own: part of the rack edit.
+    using NestedMap = std::function<std::pair<uint64_t, int32_t>(uint64_t, int32_t)>;
+    void remapNestedAfterRackEdit(int32_t trackId, int32_t host, const NestedMap& map);
+    // The rack to apply an undoable edit to (#236): a fork of the rack at (trackId,
+    // deviceIndex), republished in its track as one undo step. Null if not a rack.
+    RackCore* rackForEdit(int32_t trackId, int32_t deviceIndex);
+    // ⌘G on a contiguous run of devices (#257, #328): one new rack in their place holding the
+    // instances themselves (nothing restarts), lanes / CV links / Arp CC targets / sidechain
+    // keys following them into its chain, one undo step. Audio effects only → Audio Effect Rack
+    // at fxFirst; MIDI effects only → MIDI Effect Rack at midiFirst; with the instrument → an
+    // Instrument Rack as the track's instrument, chain 0 = MIDI effects → instrument → audio
+    // effects (the MIDI run must end at the last MIDI effect, the audio run start at 0).
+    // Returns the rack's address (effect index, -1 instrument, kMidiRackBase - i), or a
+    // reason: -2 bad run, -3 not contiguous / MIDI + audio without the instrument, -4 a rack in
+    // the run, -5 a plug-in the rack can't host, -6 an instrument a chain can't hold,
+    // -7 not an instrument track.
+    int32_t groupDevices(int32_t trackId, int32_t midiFirst, int32_t midiCount, bool withInstrument,
+        int32_t fxFirst, int32_t fxCount);
+    // ⌘⇧G: a one-chain rack (family 0 effect at index, 1 MIDI effect at index, 2 the
+    // instrument) back into its chain's devices, references following them. Returns how many
+    // came out, or -2 not a rack, -3 two or more chains, -4 a Drum Rack, -5 an Instrument
+    // Rack chain without an instrument. *outDropped: bit 0 macro mappings, bit 1 chain mix.
+    int32_t ungroupRack(int32_t trackId, int32_t family, int32_t index, int32_t* outDropped);
+    int32_t wrapDeviceInRack(int32_t trackId, int32_t deviceIndex);
+    int32_t unwrapRack(int32_t trackId, int32_t deviceIndex);
+    // A reference to a parameter owner on one track, one shape for every kind of pointer
+    // (automation lane, CV link source / target, Arp CC target): fam 0 audio effect, 1 MIDI
+    // effect, 2 the instrument (idx -1); a chain uid + slot when it points into the rack at
+    // (fam, idx). fam -1 = not a device reference; a map returning fam -2 drops it.
+    struct DeviceRef {
+        int32_t fam = -1;
+        int32_t idx = -1;
+        uint64_t uid = 0;
+        int32_t slot = -1;
+    };
+    using DeviceRefMap = std::function<DeviceRef(const DeviceRef&)>;
+    // Group / Ungroup: rewrite every reference into trackId through map and publish nt with
+    // the rewritten links of every track as one undo step.
+    // fresh: a rack Group just built, whose Arps were rewritten already.
+    void publishWithRefMap(int32_t trackId, std::shared_ptr<Track> nt, const DeviceRefMap& map, const RackCore* fresh = nullptr);
+    // An Arp's CC target through map; a changed Arp becomes a clone (shared with undo snapshots).
+    // Retarget an Arp's authoring copy; the route goes live with the next published track.
+    void rewriteArpRef(MidiDevice& m, const DeviceRefMap& map);
+    // The same for Arps inside the track's racks (a MIDI Effect Rack, the Instrument Rack's
+    // chains): a rack holding one to change is forked into nt with clones in its chains.
+    void rewriteRackArps(Track& nt, const DeviceRefMap& map, const RackCore* fresh = nullptr);
     // Drum Rack pad note per chain (-1 = all notes; instrument/effect racks ignore it).
     int32_t rackChainTriggerNote(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     void rackSetChainTriggerNote(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t note);
     std::string rackChainName(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
     void rackSetChainName(int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& name);
     int32_t rackChainCount(int32_t trackId, int32_t deviceIndex) const;
+    int32_t rackDuplicateChain(int32_t trackId, int32_t deviceIndex, int32_t chain);
+    // One undo step for edits the rack takes in place (a chain mix, the mode, the selector, a
+    // macro value): fork the rack now, sharing its children and held notes, so the edits that
+    // follow land on the fork and Undo brings back the rack as it was.
+    bool rackCheckpoint(int32_t trackId, int32_t deviceIndex);
+    // Rack chain devices on the shared device clipboard (specs/042). Copy fills clipDevice_ /
+    // clipMidi_; Paste inserts a fresh clone at `at` (−1 = the end) and returns its index or
+    // −1 nothing / bad address, −2 wrong family for the section, −3 a rack inside a rack,
+    // −5 a MIDI effect past the Instrument Rack's 16 MIDI chains. A pasted audio effect loses
+    // its sidechain key. Duplicate inserts a clone right after; MoveTo moves a device to the end
+    // of another chain of the same rack, mappings and all. Each edit is one rack fork.
+    bool rackChainDeviceCopy(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    bool rackChainMidiCopy(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    int32_t rackChainDevicePaste(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t at);
+    int32_t rackChainMidiPaste(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t at);
+    int32_t rackChainDeviceDuplicate(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    int32_t rackChainMidiDuplicate(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    int32_t rackChainDeviceMoveTo(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, int32_t toChain);
+    int32_t rackChainMidiMoveTo(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, int32_t toChain);
+    bool deviceClipboardSidechain() const;
+    // A chain's identity for a window that must follow it while chains move: a number every new
+    // chain takes and every fork of the rack keeps (nested edits too), changed when the chain's
+    // instrument is swapped for another; 0 for a bad address.
+    int64_t rackChainId(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    // Load a sample into a chain's Nota Grain (a factory Grain preset's source), one undo step.
+    bool rackChainGrainSetSample(int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& path, int32_t rootNote);
+    // A MIDI Effect Rack is addressed as deviceIndex kMidiRackBase − its MIDI effect index.
+    static constexpr int32_t kMidiRackBase = -1000;
+    // A Drum Rack in chain c of the track's Instrument Rack is addressed as kNestedRackBase − c
+    // (racks nest one level, specs/041). Below the MIDI-rack range: test it first.
+    static constexpr int32_t kNestedRackBase = -100000;
+    static bool isNestedRack(int32_t deviceIndex) { return deviceIndex <= kNestedRackBase; }
+    // Whether a chain of the rack at (trackId, deviceIndex) may take instrument `kind`.
+    bool rackKindAllowed(int32_t trackId, int32_t deviceIndex, int32_t kind) const;
+    // Nota Mosaic as a chain instrument (specs/041), mirroring mosaicSetProgram & co. for a
+    // track: checkpoint = an undoable edit (a fresh Mosaic swaps into a fork of the rack).
+    bool rackChainMosaicSetProgram(
+        int32_t trackId, int32_t deviceIndex, int32_t chain, const std::string& text, bool checkpoint);
+    std::string rackChainMosaicProgram(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    bool rackChainMosaicStatus(int32_t trackId, int32_t deviceIndex, int32_t chain, NotaMosaicStatus* out) const;
+    int64_t rackChainMosaicZoneSampleId(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t zone) const;
+    // Chain MIDI effects (MIDI Effect Rack chains; Instrument Rack chains, #329).
+    int32_t rackChainMidiCount(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    int32_t rackAddChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t kind);
+    bool rackRemoveChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index);
+    bool rackMoveChainMidi(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t from, int32_t to);
+    MidiDevice* rackChainMidiAt(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index) const;
+    // A chain MIDI effect's param, moving a CV link's base on it (specs/044).
+    void rackChainMidiParamSet(int32_t trackId, int32_t rack, int32_t chain, int32_t index, int32_t param, float value);
+    void rackSetChainMidiBypassed(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t index, bool b);
+    void rackChainSelectRange(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t& lo, int32_t& hi) const;
+    void rackSetChainSelectRange(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t lo, int32_t hi);
+    int32_t rackChainTranspose(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    void rackSetChainTranspose(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t st);
+    float rackChainVelScale(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    void rackSetChainVelScale(int32_t trackId, int32_t deviceIndex, int32_t chain, float v);
+    bool rackMerge(int32_t trackId, int32_t deviceIndex) const;
+    void rackSetMerge(int32_t trackId, int32_t deviceIndex, bool on);
+    bool rackThru(int32_t trackId, int32_t deviceIndex) const;
+    void rackSetThru(int32_t trackId, int32_t deviceIndex, bool on);
+    bool rackMono(int32_t trackId) const;
+    void rackSetMono(int32_t trackId, bool on);
     int32_t rackAddChain(int32_t trackId, int32_t deviceIndex, int32_t instKind); // 0=Synth, 2=Physical, <0=none
     bool rackRemoveChain(int32_t trackId, int32_t deviceIndex, int32_t chain);
     bool rackSetChainInstrument(int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t instKind);
@@ -989,10 +1244,15 @@ class Engine {
     // -1 = master bus, >0 = another track's post-fader output (by id).
     void setTrackRecordInput(int32_t trackId, int32_t source);
     int32_t trackRecordInput(int32_t trackId) const;
+    void setTrackInputChannels(int32_t trackId, int32_t channels); // Track::kInputStereo / kInputMono1 / kInputMono2
+    int32_t trackInputChannels(int32_t trackId) const;
     // Input monitoring (audio tracks): hear the record-input source live through the track.
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;
     void pushMonitorFramesForTest(const float* interleavedStereo, int32_t frames); // feed the hw monitor ring
+    // Device-free: under a shared input clock (ASIO) one driver block rendered in two segments
+    // (a loop boundary) reaches monitoring whole — the rest of the block isn't trimmed as stale.
+    bool monitorSharedClockSelfTest();
     // MIDI routing: forward an instrument track's MIDI to another instrument track (-1 = off).
     void setTrackMidiSource(int32_t trackId, int32_t sourceTrackId);
     int32_t trackMidiSource(int32_t trackId) const;
@@ -1130,6 +1390,10 @@ class Engine {
         Graph* g, int32_t frames, double blockStart, double spb, bool playing, bool arrangementActive);
     // Hand a MIDI-keyed device its source track's notes for this block (from rs_->blockMidi).
     void feedMidiKey(Graph* g, Device& d, int32_t srcTrackId);
+    // Sidechain / MIDI key for a device and, for a rack, its chain children (specs/044).
+    void feedDeviceKey(Graph* g, Device& d, int32_t ownTrackId, int32_t frames);
+    void feedInstrumentKeys(Graph* g, Track& t, int32_t frames);
+    void feedRackChildKeys(Graph* g, const RackCore& r, int32_t ownTrackId, int32_t frames);
     void renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double spb);
     // Session P0 (audio thread): queue a follow action / Repeat retrigger before the launch
     // request applies, and after rendering advance the player + end a one-shot slot.
@@ -1164,6 +1428,10 @@ class Engine {
     float modOutput(Track& t, int32_t modId, double beat, double timeSec);
     void restoreLinkTarget(int32_t ownerTrack, const CvLink& l); // drive target param back to base
     void routeCvBaseEdit(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float value);
+    // The same for a rack chain child (specs/044): a knob turned on a grouped, CV-linked device
+    // moves the link's base, or the next modulation block would overwrite it. slot as in
+    // ParamPath (>= 0 device, -1 the chain instrument, RackCore::midiTarget(i) MIDI effect).
+    void routeNestedCvBaseEdit(int32_t trackId, int32_t rack, int32_t chain, int32_t slot, int32_t param, float value);
     // The base a CV link holds for this target, if one targets it (what a UI edit sets).
     bool cvBaseValue(int32_t targetKind, int32_t trackId, int32_t device, int32_t param, float& out) const;
     int32_t addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId, int32_t srcDev, int32_t srcParam,
@@ -1171,7 +1439,9 @@ class Engine {
     Modulator* modulatorPtr(Track& t, int32_t modId);
     // Keep CV-link targetDevice indices valid after a device on `track` was removed
     // (removedIndex>=0) or moved (from/to). Clones the affected owner tracks + republishes.
-    void remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to);
+    // midi: the edit was on the MIDI-effect chain — fix up MidiFx-target links (param sources
+    // name insert effects, so they stay); otherwise Device-target links and param sources.
+    void remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to, bool midi = false);
     // Keep automation-lane deviceIndex valid after an effect (midi=false) or MIDI effect
     // (midi=true) on `nt` was removed (removedIndex>=0; its lanes are dropped) or moved
     // (from/to). Edits `nt` in place before it is published, so it shares the device
@@ -1189,6 +1459,7 @@ class Engine {
     std::shared_ptr<Track> findTrackAuthoring(int32_t id) const;
     std::shared_ptr<Track> cloneTrack(const Track& t) const;
     std::shared_ptr<SampleBuffer> findSampleById(int64_t sampleId) const; // M7-6b
+    static std::shared_ptr<SampleBuffer> chainSampleById(const RackCore* rack, int64_t sampleId, int depth);
     void publish(std::shared_ptr<Graph> g);                               // checkpoints (undo), then publishRaw
     void publishRaw(std::shared_ptr<Graph> g);                            // swap live/authoring only, no undo entry
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)
@@ -1199,10 +1470,34 @@ class Engine {
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
+    void reapplyRackMacros(); // after undo/redo: racks drive their shared children again
+    void reapplyCcRoutes();             // after undo/redo: Arps take their restored snapshot's targets
+    void syncCcRoutes(Graph& g);        // before a publish: routes of fresh tracks from their Arps
+    void republishCcRoutes(int32_t trackId); // after a live CC target change: publish its route
+    bool ccRoutesUsed_ = false;         // no Arp has had a CC target yet: undo / redo skip the walk
+    bool ccDestsSet_ = false;           // no CC target was ever set: publishes skip syncCcRoutes
     static int32_t trackLatency(const Track& t);
     std::shared_ptr<Instrument> cloneInstrument(const Track& src) const; // duplicateTrack helper
+    std::shared_ptr<Instrument> cloneInstrumentFrom(const Instrument& src) const;
+    std::shared_ptr<Instrument> cloneInstrumentBody(const Instrument& src) const;
+    // Copies of the automation lanes on one device of `t` (family as transferDevice; for the
+    // instrument, PluginParam lanes with deviceIndex < 0), in lane order.
+    std::vector<TrackLane> deviceLanes(const Track& t, int32_t family, int32_t index) const;
     std::shared_ptr<Device> cloneDevice(const Device& src) const;
     std::shared_ptr<MidiDevice> cloneMidiDevice(const MidiDevice& src) const;
+    std::shared_ptr<Device> clipDevice_;   // device clipboard (#238): a clone of the copied audio effect
+    std::shared_ptr<MidiDevice> clipMidi_;
+    std::shared_ptr<Instrument> clipInstrument_; // the instrument on the device clipboard (specs/043)
+    // Several devices on the clipboard (specs/044), in chain order; empty while the single
+    // fields above hold it.
+    struct ClipEntry {
+        std::shared_ptr<MidiDevice> midi;
+        std::shared_ptr<Instrument> inst;
+        std::shared_ptr<Device> dev;
+    };
+    std::vector<ClipEntry> clipMany_;
+    int32_t insertDeviceClone(int32_t trackId, std::shared_ptr<Device> dev, int32_t atIndex);
+    int32_t insertMidiEffectClone(int32_t trackId, std::shared_ptr<MidiDevice> md, int32_t atIndex); // ... or of the copied MIDI effect (one of the two at a time)
     void recomputePdc(); // message thread: realign all tracks
     Device* deviceAt(int32_t trackId, int32_t deviceIndex) const;
     MidiDevice* midiDeviceAt(int32_t trackId, int32_t index) const;
@@ -1221,6 +1516,9 @@ class Engine {
 
     std::unique_ptr<AudioBackend> backend_;
     AudioConfig config_;    // chosen device/rate/buffer (M7-1)
+    AudioSystem activeSystem_ = AudioSystem::Wasapi; // what backend_ is (after any fallback)
+    std::string audioFallbackReason_;                // why ASIO didn't start (specs/049)
+    std::string asioSkipOnce_; // set when the running driver went silent: the next start runs WASAPI
     MidiConfig midiConfig_; // enabled MIDI inputs (M7-2)
     std::unique_ptr<MidiInput> midiInput_;
     std::unique_ptr<GamepadInput> gamepadInput_; // game controller note input
@@ -1255,7 +1553,7 @@ class Engine {
     // the points inside the clip's span, beats stored RELATIVE to the clip start.
     // Reapplied on paste/duplicate. clipboardAutoTrack_ = the source track (so a paste
     // back onto it can restore device/plugin lanes, whose indices are track-positional).
-    std::vector<AutomationLane> clipboardAuto_;
+    std::vector<TrackLane> clipboardAuto_;
     int32_t clipboardAutoTrack_ = -1;
 
     // Block clip clipboard (multi-selection). Each entry is one captured clip with its
@@ -1269,7 +1567,7 @@ class Engine {
         bool sameTrack = true; // false once remapped to another track
         AudioClip audio;
         MidiClip midi;
-        std::vector<AutomationLane> autom; // clip-relative automation snippet
+        std::vector<TrackLane> autom; // clip-relative automation snippet
     };
     std::vector<BlockClip> clipboardBlock_;
     double clipboardBlockLen_ = 0.0;
@@ -1288,8 +1586,8 @@ class Engine {
     // applyClipAutomation re-lands them at placedStart (clearing that span first on each
     // matching lane); non-Volume/Pan lanes are applied only on the source track (sameTrack)
     // since device/param indices are positional. removeAutomationInRange clears a span.
-    std::vector<AutomationLane> captureClipAutomation(const Track& t, double start, double end) const;
-    void applyClipAutomation(Track& nt, int32_t trackId, const std::vector<AutomationLane>& snips, double placedStart,
+    std::vector<TrackLane> captureClipAutomation(const Track& t, double start, double end) const;
+    void applyClipAutomation(Track& nt, int32_t trackId, const std::vector<TrackLane>& snips, double placedStart,
         double len, bool sameTrack) const;
     static void removeAutomationInRange(Track& t, double start, double end);
     // Two tracks have an identical device layout (same instrument kind + same device kinds in
@@ -1315,7 +1613,7 @@ class Engine {
     SessionSlot slotFromAudioClip(const AudioClip& a);
 
     // Build a fully independent copy of a track (fresh id + cloned instrument/devices).
-    std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId);
+    std::shared_ptr<Track> deepCloneTrack(const Track& src, int32_t newId, bool withContent = true);
     // The tracks in ids plus every descendant of a group among them, in engine order.
     std::vector<std::shared_ptr<Track>> expandTrackSet(const int32_t* ids, int32_t n) const;
     void compactReturns(Graph& g) const; // renumber return buses 0..n-1 + remap sends (after a delete)
@@ -1376,6 +1674,37 @@ class Engine {
     int32_t nextMixGesture_ = 1;
     bool mixValue(const MixTarget& t, float& v) const; // current value; false = gone
     bool paramTargetExists(MixKind kind, int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
+
+    // ---- preset tags (specs/048, Engine_Presets.cpp) ----
+    // What preset a device was loaded from: its id, display name and the parameter values
+    // right after it applied. Devices hold an index into this append-only table (0 = none),
+    // so a tag change is a float-valued mix step and undo/redo restore it.
+    struct PresetTagData {
+        std::string id, name;
+        std::vector<float> base;
+    };
+    std::vector<PresetTagData> presetTags_ = std::vector<PresetTagData>(1);
+    // The parameter values a tag compares (a CV-modulated param's link base, not its live value).
+    bool presetSurfaceValues(int32_t trackId, int32_t surface, int32_t index, std::vector<float>& out) const;
+
+  public:
+    // surface: 0 audio effect (index = chain position), 1 the instrument (index ignored),
+    // 2 MIDI effect (index = MIDI-FX chain position).
+    int32_t presetTagOf(int32_t trackId, int32_t surface, int32_t index) const; // -1 no device
+    bool setPresetTagIndex(int32_t trackId, int32_t surface, int32_t index, int32_t tag);
+    // A new tag for the device: base = `base` (n values) or, when null, the values it holds now.
+    // Sets it (no undo step of its own: call it inside a mix gesture that targets the tag).
+    int32_t setPresetTag(int32_t trackId, int32_t surface, int32_t index, const char* id, const char* name,
+        const float* base, int32_t n);
+    const PresetTagData* presetTagData(int32_t tag) const;
+    // -1: no tag / no device; 0: the device holds its preset's values; 1: modified.
+    int32_t presetModified(int32_t trackId, int32_t surface, int32_t index) const;
+    bool presetTagSelfTest();
+
+  private:
+    // The EQ-8 annotation states undo steps point at (specs/049): append-only, 0 = none. A step
+    // holds the indices of the device's whole state before and after the edit.
+    std::vector<std::vector<uint8_t>> noteStates_ = std::vector<std::vector<uint8_t>>(1);
     bool applyMix(const MixChange& c, bool after); // write before/after; false = gone
     static void mergeMix(std::vector<MixChange>& into, const std::vector<MixChange>& later);
     static constexpr size_t kMaxUndoDepth = 128;
@@ -1395,6 +1724,9 @@ class Engine {
     // Set by start() before the device opens, cleared (release) once every node is re-prepared
     // at the negotiated rate: while set, render() outputs silence and never touches the graph.
     std::atomic<bool> renderSuspended_{false};
+    // Device callbacks inside render() right now. start() waits for 0 before re-preparing
+    // nodes: a render stuck in a plug-in (an ASIO driver given up on) must not overlap it.
+    std::atomic<int32_t> rendersInFlight_{0};
     std::atomic<double> launchQuant_{4.0}; // Session launch quantize, beats (M5-2)
     // Arrangement playback active (M5): true after main Play / arrangement record; false in a
     // session-only jam. Read on the audio thread to gate arrangement clip content per track.
@@ -1569,6 +1901,9 @@ class Engine {
     // live is skipped.
     int32_t releaseTrack_ = -1;
     uint32_t releasePitches_[4] = {};
+    // Tracks whose voices go silent at the next block (TrackNotesOff command, audio thread).
+    int32_t notesOffTracks_[8] = {};
+    int32_t notesOffCount_ = 0;
 
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot
     // mode; recordSlotPlayer_/recordSlotLen_ are read on the audio thread to time
@@ -1667,6 +2002,7 @@ class Engine {
     std::vector<float> monitorHwBuf_;          // audio thread, this segment's hw input
     bool monitorPrimed_ = false;               // audio thread: cushion reached
     std::atomic<int32_t> inputBlockFrames_{0}; // largest capture callback seen (cushion size)
+    std::atomic<bool> monitorSharedClock_{false}; // capture shares the output callback (ASIO): no cushion
     std::atomic<bool> hwMonitorTap_{false};    // input thread -> monitorQueue_
     std::atomic<bool> hwRecordTap_{false};     // input thread -> inputQueue_ (hw take rolling)
     bool hwMonitorWanted_ = false;             // message thread: some track monitors hw input
@@ -1687,6 +2023,7 @@ class Engine {
     // jitter) and wraps at the loop length, so each pass overwrites the previous in place.
     // Activated when loop is on at record start OR the moment loop is enabled mid-take.
     bool captureLoop_ = false;
+    int32_t captureChannels_ = Track::kInputStereo; // the take's hardware channel pick (#340)
     bool captureWrapped_ = false;
     size_t captureLoopFrames_ = 0; // loop length in capture-SR frames
     size_t captureOrigin_ = 0;     // cursor position where this take started (for partial clips)
@@ -1697,6 +2034,7 @@ class Engine {
     int32_t audioRecordTrackId_ = 0;
     double audioRecordStartBeat_ = 0.0;
     double audioRecordSampleRate_ = 0.0;
+    int32_t audioRecordLatencyFrames_ = 0; // device round trip to take out of a hardware take
     // Internal-resampling source for the active take (0 = hardware/off, -1 = master,
     // >0 = source track id). Read on the audio thread in mixGraph to tap the ring.
     std::atomic<int32_t> internalRecordSource_{0};
@@ -1721,6 +2059,17 @@ class Engine {
     static constexpr int kMaxLiveExpr = 256;
     MidiEvent liveExpr_[kMaxLiveExpr];
     int liveExprCount_ = 0;
+    // Tracks disarmed with keys still down (#366), from the live queue's release requests
+    // (expr kLiveReleaseExpr); one past capacity waits for the next block. Marked on their
+    // tracks once the block's graph is in hand.
+    static constexpr int32_t kLiveReleaseExpr = -2;
+    static constexpr int kMaxLiveRelease = 64;
+    int32_t liveRelease_[kMaxLiveRelease] = {};
+    int liveReleaseCount_ = 0;
+    // Track t's share of the block's live notes, appended to evs: the untargeted ones and/or
+    // the ones addressed to it, then the release of what it was sounding if it was disarmed
+    // and no longer takes live input. Returns the new count.
+    int liveNotesFor(const Track& t, bool untargeted, bool targeted, bool stillTakes, MidiEv* evs, int n);
     // Whether a live event reaches track t (armed / audition, or addressed to it).
     bool takesLiveEvent(const Track& t, const MidiEvent& e) const;
     // Apply the live expression that reaches `t` (and its MIDI source track) to `inst`.
@@ -1906,14 +2255,41 @@ class Engine {
     // the cost of one block of detector latency — inaudible after attack/release.
     // Each source slot mirrors two tap points so consumers can pick (Phase D):
     // routeBus{Post,Pre}_ = post-FX post-fader and pre-FX pre-fader signal.
-    static constexpr int32_t kMaxRoutes = 8;
+    // A slot may also mirror one part of the source's instrument (specs/050): a Drum Rack pad,
+    // an Instrument Rack chain or a Rhythm voice, filled from inside the instrument's render
+    // (Instrument::setPartTaps). For a part, Pre = the part before its own inserts and Post =
+    // after its inserts and gain / pan, before the instrument sums it. Whole tracks and parts
+    // share the pool.
+    static constexpr int32_t kMaxRoutes = kSidechainRoutes;
     std::array<std::vector<float>, kMaxRoutes> routeBus_, routeBusNext_;       // post-FX (post-fader)
     std::array<std::vector<float>, kMaxRoutes> routeBusPre_, routeBusPreNext_; // pre-FX (pre-fader)
     std::atomic<int32_t> routeSlotTrackId_[kMaxRoutes]; // which source track each slot mirrors (-1 = free)
-    int32_t routeSlotForTrack(int32_t trackId) const {  // audio + message thread; scan is tiny
-        for (int32_t s = 0; s < kMaxRoutes; ++s)
-            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId) return s;
+    std::atomic<uint64_t> routeSlotPart_[kMaxRoutes];   // which part of it (0 = the whole track)
+    // recomputeRouting fills slots 0..count-1 in order, so lookups scan only the used ones — a
+    // project without sidechains pays one load per lookup, and these run several times per
+    // track per block. A reroute racing a block can mis-key that one block (as it always could:
+    // the table is cleared and refilled in place), never touch a buffer out of range.
+    std::atomic<int32_t> routeSlotCount_{0};
+    std::vector<float> silentKey_; // kMaxBlock stereo zeros: the key of a part that is gone
+    void feedPartTaps(const Track& t);                                  // audio thread
+    const float* keyBuffer(int32_t src, uint64_t part, bool pre) const; // audio thread
+    // Audio + message thread.
+    int32_t routeSlotFor(int32_t trackId, uint64_t part) const {
+        const int32_t n = routeSlotCount_.load(std::memory_order_acquire);
+        for (int32_t s = 0; s < n; ++s)
+            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId &&
+                routeSlotPart_[s].load(std::memory_order_relaxed) == part)
+                return s;
         return -1;
+    }
+    int32_t routeSlotForTrack(int32_t trackId) const { return routeSlotFor(trackId, 0); }
+    // Whether any slot (whole track or one of its parts) mirrors this track: it keeps rendering
+    // while muted or solo-gated, for its taps.
+    bool trackFeedsRoute(int32_t trackId) const {
+        const int32_t n = routeSlotCount_.load(std::memory_order_acquire);
+        for (int32_t s = 0; s < n; ++s)
+            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId) return true;
+        return false;
     }
 };
 

@@ -17,6 +17,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Infrastructure;
 using Nota.Presentation;
 
 namespace Nota.App;
@@ -209,8 +210,14 @@ public partial class MainWindow
         int trackId = _deviceChain.TrackId;
         if (trackId <= 0) { _vm.StatusText = "Select a track first."; return; }
 
-        string label = Engine.DeviceName(trackId, deviceIndex);
+        string label = deviceIndex <= PresetService.MidiEffectBase
+            ? Engine.MidiEffectName(trackId, PresetService.MidiEffectBase - deviceIndex)
+            : Engine.DeviceName(trackId, deviceIndex);
         if (string.IsNullOrEmpty(label)) label = "Instrument";
+        // The preset it was loaded from is the likelier name to start from (specs/048).
+        var (surface, index) = deviceIndex <= PresetService.MidiEffectBase ? (PresetSurface.MidiEffect, PresetService.MidiEffectBase - deviceIndex)
+            : deviceIndex < 0 ? (PresetSurface.Instrument, -1) : (PresetSurface.Effect, deviceIndex);
+        if (Nota.Application.Editing.PresetEdit.Name(Engine, trackId, surface, index) is { Length: > 0 } loaded) label = loaded;
         var name = await new TextPromptWindow("Save preset", "Preset name", label).ShowDialog<string?>(this);
         if (string.IsNullOrEmpty(name)) return;
 
@@ -218,6 +225,9 @@ public partial class MainWindow
         {
             if (!_presets.Save(Engine, trackId, deviceIndex, name, _vm.Settings.PresetsFolder()))
             { _vm.StatusText = "Nothing to save (built-in synth has no state)."; return; }
+            // The device now holds that preset: its name, no " *".
+            Engine.SetDevicePresetTag(trackId, surface, index, "user:" + name, name);
+            _deviceChain.Refresh();
             _vm.Browser.RebuildPresets();
             _vm.StatusText = $"Saved preset {name}";
         }

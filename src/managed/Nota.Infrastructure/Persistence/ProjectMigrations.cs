@@ -97,6 +97,24 @@ public static class ProjectMigrations
         // v22 -> v23: devices, MIDI effects and instruments gain Folded (drawn as a strip in
         // the Devices panel, specs/022). Absent in v22 documents; false = unfolded — no-op.
         new Migration(22, _ => { }),
+        // v23 -> v24: MIDI effects gain State (the MIDI Effect Rack's blob, specs/040). Absent in
+        // v23 documents, which hold no MIDI Effect Rack; null = params only — no-op.
+        new Migration(23, _ => { }),
+        // v24 -> v25: lanes, CV links and Arp CC targets may point into a rack chain, and racks'
+        // chain children keep sidechain keys and CC targets in the track (specs/044). All absent
+        // in v24 documents, where every reference is track level — no-op.
+        new Migration(24, _ => { }),
+        // v25 -> v26: instruments, devices and MIDI effects gain Preset (the preset they were
+        // loaded from, specs/048). Absent in v25 documents = no preset named — no-op.
+        new Migration(25, _ => { }),
+        // v26 -> v27: hosted plug-ins and instruments gain Preview, the picture of their window
+        // (specs/046). Absent in v26 documents; null = no preview, the card stays plain — no-op.
+        new Migration(26, _ => { }),
+        // v27 -> v28: sidechain keys may name one part of the source's instrument (a Drum Rack
+        // pad, an Instrument Rack chain, a Rhythm voice; specs/050): DeviceDto / InstrumentDto
+        // SidechainPart and NestedSidechainDto.Part. Absent in v27 documents = -1, the whole
+        // track — no-op.
+        new Migration(27, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

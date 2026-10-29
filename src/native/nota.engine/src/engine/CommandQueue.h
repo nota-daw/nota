@@ -36,6 +36,9 @@ enum class CommandType : uint32_t {
     // Loop record replace (#29): release a pitch on a track — a note just removed from the take
     // may still be sounding (played back from an earlier pass). i0 = track id, i1 = pitch.
     ReleaseNote,
+    // A device moved between tracks (specs/043): silence one track's instrument and flush its
+    // MIDI effects on the audio thread, which owns their voices. i0 = track id.
+    TrackNotesOff,
 };
 
 struct Command {

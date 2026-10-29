@@ -3,14 +3,16 @@
 //
 // Audio device backend abstraction.
 //
-// M0 ships a CoreAudio implementation. The engine talks only to this interface
-// so the device layer stays swappable (e.g. a future JUCE-based backend for the
-// Windows/Linux ports, or JUCE for plugin hosting). See ARCHITECTURE.md § Audio engine.
+// Implementations: CoreAudio (macOS), miniaudio (WASAPI on Windows, PulseAudio/ALSA on
+// Linux) and ASIO (Windows, audio_io/windows/AsioBackend over a shared AsioSession). The
+// engine talks only to this interface — AudioBackendFactory picks the implementation — so
+// the device layer stays swappable. See ARCHITECTURE.md § Audio engine.
 
 #pragma once
 
 #include <cstdint>
 #include <functional>
+#include <string>
 
 namespace nota {
 
@@ -21,8 +23,8 @@ using RenderCallback = std::function<void(float* out, int32_t numFrames)>;
 
 // Requested device configuration (M7-1). Zero fields mean "use the device
 // default": device 0 = system default output, sampleRate 0 / bufferFrames 0 =
-// whatever the device is already set to. `device` is a CoreAudio AudioDeviceID
-// carried as a plain integer so this header stays free of CoreAudio types.
+// whatever the device is already set to. `device` is a backend-specific device
+// handle carried as a plain integer so this header stays free of platform types.
 //
 // `wasapiExclusive` (Windows/WASAPI only; ignored on other platforms) asks
 // miniaudio to open the device in exclusive mode. The backend MUST fall back to
@@ -33,6 +35,12 @@ struct BackendConfig {
     double sampleRate = 0.0;
     int32_t bufferFrames = 0;
     bool wasapiExclusive = false;
+    // ASIO (Windows; specs/049): the driver by CLSID, else by registry name, and the first
+    // channel of each pair. bufferFrames is ignored under ASIO — the driver decides.
+    std::string asioDriverClsid;
+    std::string asioDriverName;
+    int32_t asioOutputPair = 0;
+    int32_t asioInputPair = 0;
 };
 
 class AudioBackend {
@@ -50,6 +58,11 @@ class AudioBackend {
     // that don't model exclusive mode leave it false.
     virtual bool exclusiveFallback() const { return false; }
 
+    // True if no real output device could be opened and the last start() fell back to
+    // a silent device that still runs the audio thread, so the app works (no sound)
+    // until the user picks a device that opens.
+    virtual bool silentFallback() const { return false; }
+
     // Stop the audio thread and close the device.
     virtual void stop() = 0;
 
@@ -65,6 +78,30 @@ class AudioBackend {
     virtual void setXrunCallback(std::function<void()> cb) { (void)cb; }
 
     virtual bool isRunning() const = 0;
+
+    // Device latencies in frames as the driver reports them (specs/049, research R7): the
+    // engine compensates recorded takes by input + output. 0 = unknown (CoreAudio, miniaudio).
+    virtual int32_t inputLatencyFrames() const { return 0; }
+    virtual int32_t outputLatencyFrames() const { return 0; }
+
+    // True when capture comes from the same callback and clock as output (ASIO duplex):
+    // input for block n is queued before block n renders, so monitoring needs no cushion (R8).
+    virtual bool sharesInputClock() const { return false; }
+
+    // Device event since the last call, cleared on read (NotaAudioDeviceEvent: 0 none,
+    // 1 reset requested, 2 driver failed). Polled from the UI thread.
+    virtual int32_t pollDeviceEvent() { return 0; }
+
+    // Why the last start() failed, or why the running device failed (a DRIVER_FAILED event),
+    // for the fallback message ("" if neither).
+    virtual const char* fallbackReason() const { return ""; }
+
+    // True if the last start() asked for a sample rate the device refused and kept its own.
+    virtual bool sampleRateRefused() const { return false; }
+
+    // After a reset-requested event: the rate the user picked in the device's own settings
+    // (0 = unchanged). The engine then stops requesting its saved rate, so a reopen keeps it.
+    virtual double deviceChangedRate() const { return 0.0; }
 };
 
 } // namespace nota

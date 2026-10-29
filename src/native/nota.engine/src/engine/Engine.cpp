@@ -4,13 +4,17 @@
 // Engine — lifecycle, audio/MIDI device config, preview, tone/transport setters, immutable-graph publish/clone/undo/reset, post-fader meters. Definitions of the rest of the class live in the sibling Engine_*.cpp slices.
 
 #include "Engine.h"
+#include "devices/effects/Eq.h"
+#include "devices/racks/RackCore.h"
 #include "audio_io/AudioBackendFactory.h"
 #include "media/AudioFile.h"
 #include "bridge/PluginHostBridge.h"
 #include "media/WarpStream.h" // complete ClipWarpStream for wb_.stream (unique_ptr) destruction
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
+#include <utility>
 
 namespace nota {
 
@@ -31,6 +35,8 @@ Engine::Engine()
     for (auto& b : routeBusPre_) b.assign(kMaxBlock * 2, 0.0f); // Phase D pre-FX tap
     for (auto& b : routeBusPreNext_) b.assign(kMaxBlock * 2, 0.0f);
     for (auto& s : routeSlotTrackId_) s.store(-1, std::memory_order_relaxed);
+    for (auto& s : routeSlotPart_) s.store(0, std::memory_order_relaxed);
+    silentKey_.assign(kMaxBlock * 2, 0.0f); // the key of a part that is gone (specs/050)
     ensureRenderScratch(authoring_->tracks.size());
     liveGraph_.store(authoring_.get(), std::memory_order_release);
     retired_.push_back(authoring_);
@@ -45,18 +51,62 @@ Engine::~Engine() {
 
 bool Engine::start() {
     if (backend_->isRunning()) return true;
+    // The audio system the config asks for (specs/049): ASIO only where the build has it.
+    const AudioSystem wanted = asioSupported() ? config_.audioSystem : AudioSystem::Wasapi;
+    // A driver that went silent while running isn't retried by the restart its failure
+    // triggers — it could start, stay silent and fail again forever. That restart runs
+    // WASAPI; the next apply (the user's) tries ASIO again.
+    const std::string skipAsio = std::exchange(asioSkipOnce_, std::string{});
+    const bool skipping = wanted == AudioSystem::Asio && !skipAsio.empty();
+    const AudioSystem first = skipping ? AudioSystem::Wasapi : wanted;
+    if (first != activeSystem_) {
+        backend_ = createAudioBackend(first);
+        activeSystem_ = first;
+    }
+    audioFallbackReason_ = skipping ? skipAsio : std::string{};
     transport_.setSampleRate(backend_->sampleRate() > 0 ? backend_->sampleRate() : 44100.0);
     BackendConfig bc;
     bc.device = resolveAudioDeviceId(config_.outputDeviceUid, /*inputScope=*/false);
     bc.sampleRate = config_.sampleRate;
     bc.bufferFrames = config_.bufferFrames;
     bc.wasapiExclusive = config_.wasapiExclusive;
+    bc.asioDriverClsid = config_.asioDriverClsid;
+    bc.asioDriverName = config_.asioDriverName;
+    bc.asioOutputPair = config_.asioOutputPair;
+    bc.asioInputPair = config_.asioInputPair;
+    if (skipping) { // the fallback runs on the system default device
+        bc = BackendConfig{};
+        bc.device = resolveAudioDeviceId(std::string{}, /*inputScope=*/false);
+    }
     backend_->setXrunCallback([this] { notifyXrun(); }); // device dropouts (M7-8)
     // The device rate is only known once the backend is open, so the nodes are re-prepared
     // after it starts. Until then the callback must stay out of the graph: prepare()
     // reallocates buffers (and hosted plugins run prepareToPlay) the audio thread would read.
-    renderSuspended_.store(true, std::memory_order_release);
-    const bool ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, bc);
+    renderSuspended_.store(true, std::memory_order_seq_cst);
+    // A previous device's callback may still be inside render() — an ASIO driver given up on
+    // while a plug-in stalled. Re-preparing the nodes under it would corrupt them: wait for it
+    // to leave, and if it never does, stay off rather than run two renders over one graph.
+    for (int i = 0; i < 2000 && rendersInFlight_.load(std::memory_order_seq_cst) > 0; ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    if (rendersInFlight_.load(std::memory_order_seq_cst) > 0) {
+        audioFallbackReason_ = "a plug-in stopped responding inside the audio callback — restart Nota";
+        return false;
+    }
+    bool ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, bc);
+    if (!ok && activeSystem_ == AudioSystem::Asio) {
+        // FR-011: a missing, busy or broken ASIO driver never leaves Nota silent — run WASAPI
+        // on the system default device and say why. The saved choice stays ASIO, so the next
+        // apply (or launch) tries the driver again.
+        const char* why = backend_->fallbackReason();
+        audioFallbackReason_ = why && *why ? why : "the driver didn't start";
+        backend_ = createAudioBackend(AudioSystem::Wasapi);
+        activeSystem_ = AudioSystem::Wasapi;
+        BackendConfig fallback;
+        fallback.device = resolveAudioDeviceId(std::string{}, /*inputScope=*/false);
+        backend_->setXrunCallback([this] { notifyXrun(); });
+        ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, fallback);
+    }
+    monitorSharedClock_.store(ok && backend_->sharesInputClock(), std::memory_order_relaxed);
     if (ok) {
         transport_.setSampleRate(backend_->sampleRate());
         propagateSampleRate(backend_->sampleRate()); // re-prepare every node (incl. master + racks) at the new rate
@@ -165,6 +215,33 @@ void Engine::setAudioBufferFrames(int32_t f) {
 void Engine::setAudioWasapiExclusive(bool on) {
     config_.wasapiExclusive = on;
 }
+int32_t Engine::pollAudioDeviceEvent() {
+    const int32_t ev = backend_ ? backend_->pollDeviceEvent() : 0;
+    if (ev == 1 && config_.sampleRate > 0.0 && backend_->deviceChangedRate() > 0.0) {
+        // The user changed the rate in the driver's panel: follow the driver from now on
+        // ("device default") instead of putting the old saved rate back on reopen.
+        config_.sampleRate = 0.0;
+        saveAudioConfig(config_);
+    }
+    if (ev == 2 && activeSystem_ == AudioSystem::Asio) {
+        const char* why = backend_->fallbackReason();
+        asioSkipOnce_ = why && *why ? why : "the driver stopped sending audio";
+    }
+    return ev;
+}
+
+void Engine::setAudioSystem(AudioSystem system) {
+    if (asioSupported()) config_.audioSystem = system;
+}
+void Engine::setAsioDriver(const std::string& clsid, const std::string& name) {
+    if (!asioSupported()) return;
+    config_.asioDriverClsid = clsid;
+    config_.asioDriverName = name;
+}
+void Engine::setAsioPair(bool input, int32_t firstChannel) {
+    if (!asioSupported()) return;
+    (input ? config_.asioInputPair : config_.asioOutputPair) = std::max(0, firstChannel);
+}
 
 bool Engine::applyAudioConfig() {
     saveAudioConfig(config_);
@@ -172,6 +249,12 @@ bool Engine::applyAudioConfig() {
     // Drop the cached input unit so the next capture re-opens the chosen device.
     if (input_) input_.reset();
     const bool ok = start();
+    // A rate the ASIO driver refused isn't kept: the driver's own rate runs, and the saved
+    // config says "device default" so the next launch doesn't ask again (FR-007).
+    if (activeSystem_ == AudioSystem::Asio && backend_->sampleRateRefused() && config_.sampleRate > 0.0) {
+        config_.sampleRate = 0.0;
+        saveAudioConfig(config_);
+    }
     // Live monitoring held the old capture device open: reopen on the chosen one.
     hwRecordTap_.store(false, std::memory_order_relaxed);
     hwMonitorTap_.store(false, std::memory_order_relaxed);
@@ -553,6 +636,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setReturnIndex(t.returnIndex());                             // M6-1
     nt->setGroupId(t.groupId());                                     // group membership
     nt->setRecordInputSource(t.recordInputSource());                 // internal record routing
+    nt->setInputChannels(t.inputChannels());                         // mono / stereo hardware input
     nt->setMonitor(t.monitor());                                     // live input monitoring
     nt->setMidiFromTrackId(t.midiFromTrackId());                     // MIDI routing
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, t.send(b)); // M6-1: send levels
@@ -566,13 +650,16 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->automation = t.automation;     // automation lanes (M9)
     nt->modulators = t.modulators;     // CV modulation sources (Phase 3)
     nt->cvLinks = t.cvLinks;           // CV modulation edges (Phase 3)
+    nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
+    nt->liveHeld = t.liveHeld;           // shared — held live notes persist (#366)
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
     nt->frozenSpb = t.frozenSpb;
     nt->name = t.name; // UI metadata
     nt->colorIndex = t.colorIndex;
+    nt->pianoFold = t.pianoFold;
     return nt;
 }
 
@@ -609,6 +696,14 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
     authoring_ = g;
     retired_.push_back(g);
     if (g) ensureRenderScratch(g->tracks.size());
+    // Fresh track objects only: the audio thread never sees them change. Before any CC target
+    // exists their routes are complete as they are (empty): marking them so keeps an undo to
+    // such a snapshot from rebuilding them from targets set later.
+    if (g && ccDestsSet_) syncCcRoutes(*g);
+    else if (g) {
+        for (auto& t : g->tracks) t->ccRoutesDirty = false;
+        if (g->masterTrack) g->masterTrack->ccRoutesDirty = false;
+    }
     liveGraph_.store(g.get(), std::memory_order_release);
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
@@ -616,6 +711,17 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
 
 void Engine::pushUndo() {
     if (!authoring_) return;
+    // Inside an undo group only the first snapshot counts (endUndoGroup keeps the pre-group
+    // graph), so later ones aren't stacked: a gesture of many edits (a kit filling a Drum
+    // Rack's pads) would otherwise push the older history off the depth limit.
+    if (undoGroupDepth_ > 0) {
+        for (size_t i = undoGroupBase_; i < undoStack_.size(); ++i)
+            if (undoStack_[i].graph) {
+                ++undoPushCount_;
+                redoStack_.clear();
+                return;
+            }
+    }
     undoStack_.push_back({authoring_, {}}); // authoring_ is immutable after publish
     ++undoPushCount_;
     if (undoStack_.size() > kMaxUndoDepth) {
@@ -677,12 +783,30 @@ bool Engine::undo() {
         if (e.graph) {
             publishRaw(std::move(e.graph));
             recomputePdc();
+            reapplyRackMacros();
+            reapplyCcRoutes();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, false);
         if (applied) return true;
     }
     return false;
+}
+
+// The restored racks drive their mapped targets again: the children they share with the
+// copies an edit made still hold what those copies' mappings gave them (specs/040).
+void Engine::reapplyRackMacros() {
+    if (!authoring_) return;
+    auto each = [](const std::shared_ptr<Track>& t) {
+        if (!t) return;
+        if (auto* r = dynamic_cast<RackCore*>(t->instrument.get())) r->reapplyMacros();
+        for (auto& d : t->devices)
+            if (auto* r = dynamic_cast<RackCore*>(d.get())) r->reapplyMacros();
+        for (auto& m : t->midiEffects)
+            if (auto* r = dynamic_cast<RackCore*>(m.get())) r->reapplyMacros();
+    };
+    for (auto& t : authoring_->tracks) each(t);
+    each(authoring_->masterTrack);
 }
 
 bool Engine::redo() {
@@ -694,6 +818,8 @@ bool Engine::redo() {
         if (e.graph) {
             publishRaw(std::move(e.graph));
             recomputePdc();
+            reapplyRackMacros();
+            reapplyCcRoutes();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, true);
@@ -733,6 +859,12 @@ bool Engine::paramTargetExists(MixKind kind, int32_t trackId, int32_t deviceInde
 }
 
 bool Engine::mixValue(const MixTarget& t, float& v) const {
+    if (t.kind == MixKind::PresetTag) { // specs/048: the tag index, exact in a float
+        const int32_t tag = presetTagOf(t.trackId, t.paramIndex, t.deviceIndex);
+        if (tag < 0) return false;
+        v = static_cast<float>(tag);
+        return true;
+    }
     if (t.kind == MixKind::MasterVolume) {
         v = masterVolume();
         return true;
@@ -757,6 +889,16 @@ bool Engine::mixValue(const MixTarget& t, float& v) const {
 
 bool Engine::applyMix(const MixChange& c, bool after) {
     const float v = after ? c.after : c.before;
+    if (c.kind == MixKind::PresetTag)
+        return setPresetTagIndex(c.trackId, c.paramIndex, c.deviceIndex, static_cast<int32_t>(v)); // gone: skip
+    if (c.kind == MixKind::DeviceNotes) { // specs/049: an EQ-8's labels and notes
+        auto* eq = dynamic_cast<Eq*>(deviceAt(c.trackId, c.deviceIndex));
+        const auto at = static_cast<size_t>(v);
+        if (!eq || at >= noteStates_.size()) return false; // gone (or no longer an EQ-8): skip
+        const auto& st = noteStates_[at];
+        eq->setState(st.data(), static_cast<int32_t>(st.size()));
+        return true;
+    }
     if (c.kind == MixKind::MasterVolume) {
         setMasterVolume(v);
         return true;
