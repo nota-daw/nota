@@ -88,18 +88,18 @@ C ABI and interop. US1 does not need this phase and can start right after Phase 
 
 **Independent Test**: quickstart § 1. Glacier Pad shows both tables, both type and warp selectors and 2 × 6 knobs with zero clicks; editing one leaves the other unchanged; old projects show the same values.
 
-- [ ] T018 [US1] Create `src/managed/Nota.App/Controls/AuroraTableView.cs` (SPDX header):
+- [x] T018 [US1] *(Done for US1 inside `Controls/AuroraStack.cs`: per-frame geometry cache and change-only invalidation; the class keeps its name until the imported-table source arrives in T034, which creates `AuroraTableView.cs`. The probe hook waits for T004.)* Create `src/managed/Nota.App/Controls/AuroraTableView.cs` (SPDX header):
   - a `NotaGraph` window whose title row carries the caption;
   - the built-in source drawn from `AuroraStack`'s shared shape cache (keep the cache in `Controls/AuroraStack.cs`, remove its view role);
   - one `StreamGeometry` cached per frame per bounds;
   - `Set(source, litPos, dim)` that invalidates only on a change of lit index, source, dim or bounds (FR-018 / FR-019);
   - the probe hook from T004.
-- [ ] T019 [US1] In `src/managed/Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs`, rebuild the Osc body as two 216 px columns: a header row 20, a window 216 × 60, a knob row 54 with the six existing `PKnob` cells at 34 px; then the shared sub / unison row (`:489-507`) spanning both columns (contracts/ui-osc-tab.md).
-- [ ] T020 [US1] In `AuroraInstrumentCard.cs`, give each oscillator its own type drop-down (built-ins) and warp drop-down, bound to `table` / `osc2table` and `osc1warpmode` / `osc2warpmode`, with MIDI learn, readouts and automation follow, as `Chips` does today (`:292-300`).
-- [ ] T021 [US1] In `AuroraInstrumentCard.cs`, remove `osel`, `oscPick`, `applyOsc`, `oscStrip`, `oscTableHosts` / `oscWarpHosts` and the single `tableWindow` (`:423-442, 480-487, 534`). Feed both windows in `Refresh` (`:164-176`) instead of `stack.Set` (`:168-169`). Update `Hint()` / `Summary()` and the header comment (`:8-11`).
-- [ ] T022 [US1] In `AuroraInstrumentCard.cs`, apply the `Inactive` look to a column when its oscillator is off (FR-004). Each caption names its own position modulation (adapt `:509-526` per oscillator).
-- [ ] T023 [P] [US1] Update `DESIGN.md` § Devices with an Aurora note: the Osc tab layout change, decided by spec 053.
-- [ ] T024 [US1] Check quickstart § 1 in Studio Dark and Studio Light at 100 % and 150 % scale, and with `DesignTokenCheck*` in the smoke test green. Fix any overlap in `AuroraInstrumentCard.cs` / `AuroraTableView.cs`.
+- [x] T019 [US1] In `src/managed/Nota.App/DeviceCards/Instruments/AuroraInstrumentCard.cs`, rebuild the Osc body as two 216 px columns: a header row 20, a window 216 × 60, a knob row 54 with the six existing `PKnob` cells at 34 px; then the shared sub / unison row (`:489-507`) spanning both columns (contracts/ui-osc-tab.md).
+- [x] T020 [US1] In `AuroraInstrumentCard.cs`, give each oscillator its own type drop-down (built-ins) and warp drop-down, bound to `table` / `osc2table` and `osc1warpmode` / `osc2warpmode`, with MIDI learn, readouts and automation follow, as `Chips` does today (`:292-300`).
+- [x] T021 [US1] In `AuroraInstrumentCard.cs`, remove `osel`, `oscPick`, `applyOsc`, `oscStrip`, `oscTableHosts` / `oscWarpHosts` and the single `tableWindow` (`:423-442, 480-487, 534`). Feed both windows in `Refresh` (`:164-176`) instead of `stack.Set` (`:168-169`). Update `Hint()` / `Summary()` and the header comment (`:8-11`).
+- [x] T022 [US1] In `AuroraInstrumentCard.cs`, apply the `Inactive` look to a column when its oscillator is off (FR-004). Each caption names its own position modulation (adapt `:509-526` per oscillator).
+- [x] T023 [P] [US1] Update `DESIGN.md` § Devices with an Aurora note: the Osc tab layout change, decided by spec 053.
+- [x] T024 [US1] Check quickstart § 1 in Studio Dark and Studio Light at 100 % and 150 % scale, and with `DesignTokenCheck*` in the smoke test green. Fix any overlap in `AuroraInstrumentCard.cs` / `AuroraTableView.cs`. *(Checked from the docs-shot renders at 2× in Studio Dark and Light, default and Glacier Pad; interface scale is a uniform transform and device cards ignore Text size (038 FR-038), so no extra case.)*
 
 **Checkpoint**: US1 is shippable alone (the UI only; the engine is untouched by this phase).
 

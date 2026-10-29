@@ -180,6 +180,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   its send to each return, two per row, as far as the height allows.
 
 ### Changed
+- **Nota Aurora: both oscillators on one Osc tab** (specs/053): the 1 / 2 switch is gone.
+  Osc 1 and Osc 2 sit side by side, each with its own table window, table and warp-mode
+  drop-downs, on switch and its Position, Warp, Level, Oct, Semi and Fine knobs, so both
+  tables are on screen together. An oscillator that is off greys out in place. The sub and
+  unison stay in one row under both. The table windows keep their drawing between paints,
+  so two of them cost no more than the one before. Sound, parameters, automation, MIDI
+  learn and presets are unchanged.
 - **Smaller shell text and a new key picker** (review of
   nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
   The key picker is a one-octave keyboard with a Major / Minor switch and the key named in

@@ -11,6 +11,9 @@
 // a thousand line segments on every one of the thirty ticks a second the device panel
 // runs, which is what made switching to an Aurora track stutter. Render now draws each
 // frame as a single geometry, and Set only invalidates when the picture actually changes.
+// The Osc tab shows two of these at once (specs/053), so the sixteen geometries are also
+// kept between paints and rebuilt only when the bank, the size or the inset changes: a
+// repaint for a new lit frame is sixteen DrawGeometry calls and nothing else.
 
 using System;
 using System.Threading;
@@ -50,6 +53,11 @@ internal sealed class AuroraStack : Control
 
     private int _bank = -1, _active = -1;
     private bool _dim;
+
+    // The geometry cache: the frames as laid out for (bank, size, inset).
+    private readonly StreamGeometry?[] _geo = new StreamGeometry?[Frames];
+    private int _geoBank = -1;
+    private double _geoW = -1, _geoH = -1, _geoInset = -1;
 
     /// <summary>Space kept clear at the top of the window for a caption drawn over it.</summary>
     public double TopInset { get; set; }
@@ -121,7 +129,6 @@ internal sealed class AuroraStack : Control
         if (w <= 2 || h <= 2 || _bank < 0) return;
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
 
-        var frames = Bank(_bank);
         // The stack is skewed up-and-right: frame 0 sits bottom-front, frame 15 top-back,
         // sized so every frame's centre ± amplitude stays inside the window.
         const double padX = 9, padY = 7;
@@ -134,21 +141,28 @@ internal sealed class AuroraStack : Control
         var pens = _dim ? DimPens : DepthPens;
         var hot = _dim ? DimPens[^1] : HotPen;
 
+        if (_geoBank != _bank || _geoW != w || _geoH != h || _geoInset != TopInset)
+        {
+            var frames = Bank(_bank);
+            for (int f = 0; f < Frames; f++)
+            {
+                var buf = frames[f];
+                double ox = padX + f * skewX;
+                double cy = cyBottom - (cyBottom - cyTop) * f / (Frames - 1);
+                var geo = new StreamGeometry();
+                using (var g = geo.Open())
+                {
+                    g.BeginFigure(new Point(ox, cy - buf[0] * amp), false);
+                    for (int j = 1; j <= N; j++)
+                        g.LineTo(new Point(ox + (double)j / N * waveW, cy - buf[j % N] * amp));
+                }
+                _geo[f] = geo;
+            }
+            _geoBank = _bank; _geoW = w; _geoH = h; _geoInset = TopInset;
+        }
+
         // Back to front, so a nearer frame overlaps the one behind it.
         for (int f = Frames - 1; f >= 0; f--)
-        {
-            bool on = f == _active;
-            var buf = frames[f];
-            double ox = padX + f * skewX;
-            double cy = cyBottom - (cyBottom - cyTop) * f / (Frames - 1);
-            var geo = new StreamGeometry();
-            using (var g = geo.Open())
-            {
-                g.BeginFigure(new Point(ox, cy - buf[0] * amp), false);
-                for (int j = 1; j <= N; j++)
-                    g.LineTo(new Point(ox + (double)j / N * waveW, cy - buf[j % N] * amp));
-            }
-            ctx.DrawGeometry(null, on ? hot : pens[f * Depth.Length / Frames], geo);
-        }
+            ctx.DrawGeometry(null, f == _active ? hot : pens[f * Depth.Length / Frames], _geo[f]!);
     }
 }

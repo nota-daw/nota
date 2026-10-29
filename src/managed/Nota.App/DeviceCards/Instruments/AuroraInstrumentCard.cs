@@ -6,9 +6,9 @@
 //
 //   Wheels 56   pitch bend and mod wheel, on screen on every tab.
 //   Centre      six tabs:
-//               Osc    — the 16-frame wavetable stack beside the two oscillators, the sub
-//                        and the unison stack; the strip on top carries the bank and the
-//                        warp mode of whichever oscillator you are looking at.
+//               Osc    — both oscillators side by side (specs/053), each with its own
+//                        table window, table and warp-mode drop-downs, on switch and six
+//                        knobs; the sub and the unison stack share a row under them.
 //               Filter — the selected filter's response as a drag pad, with its type,
 //                        slope, cutoff, resonance, env / LFO / key amounts and where each
 //                        source (Osc 1 / Osc 2 / Sub) is sent.
@@ -124,9 +124,12 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         (int, string) P(string id) => (I(id), id);
 
         var readouts = new List<Action>();
-        int tab = 0, railTab = 0, fsel = 0, osel = 0;   // Osc · Global · Filter 1 · Osc 1
+        int tab = 0, railTab = 0, fsel = 0;   // Osc · Global · Filter 1
 
-        var stack = new AuroraStack { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
+        // One table window per oscillator: both are on screen together (specs/053).
+        var stacks = new AuroraStack[2];
+        for (int o = 0; o < 2; o++) stacks[o] = new AuroraStack { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 40 };
+        var oscDimmed = new List<Control>[] { new(), new() };   // what an off oscillator greys
         var filtGraph = new VoltFilter(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 60 };
         var env1 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50 };
         var env2 = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 50, Accent = Teal };
@@ -141,7 +144,6 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily };
         Action applyFilter = () => { };
-        Action applyOsc = () => { };
         Action showTab = () => { };
 
         // ---- the live tick's gate -------------------------------------------------
@@ -164,12 +166,19 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         void Refresh(bool force)
         {
             if (!ParamsMoved() && !force) return;
-            applyOsc(); applyFilter();
-            stack.Set(Sel(osel == 0 ? "table" : "osc2table", 4), G(osel == 0 ? "position" : "osc2position"));
-            stack.Dimmed = G(osel == 0 ? "osc1on" : "osc2on") < 0.5f;
+            applyFilter();
+            for (int o = 0; o < 2; o++)
+            {
+                stacks[o].Set(Sel(o == 0 ? "table" : "osc2table", 4), G(o == 0 ? "position" : "osc2position"));
+                stacks[o].Dimmed = G(o == 0 ? "osc1on" : "osc2on") < 0.5f;
+            }
             env1.Refresh(); env2.Refresh();
             lfoStrip.Set(Sel("lfo1shape", 4), LfoCycles(0), G("lfo1depth"));
             foreach (var r in readouts) r();
+            // After the readouts' own paint: an oscillator that is off takes the unavailable
+            // look, its controls staying where they are and still usable.
+            for (int o = 0; o < 2; o++)
+                foreach (var c in oscDimmed[o]) Inactive.Set(c, G(o == 0 ? "osc1on" : "osc2on") < 0.5f, interactive: true);
             hint.Text = Hint();
             status.Text = Summary();
             meta.Text = Meta();
@@ -415,76 +424,135 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         wheelsPanel.Width = WheelsW;
 
         // ---- Osc tab --------------------------------------------------------------
-        // Both oscillators own a bank and a warp mode. Two chip strips per oscillator
-        // would not fit, so ONE strip across the top carries them for whichever oscillator
-        // is selected — the 1 / 2 pick leads it, and clicking an oscillator's name picks it
-        // too. The pick and the bank names say what they are, so they go without captions. Under it: the table window on the left, the two oscillator rows on the
-        // right, and a line of drag values for the sub and the unison stack.
-        var oscTableHosts = new Panel[2];
-        var oscWarpHosts = new Panel[2];
-        for (int o = 0; o < 2; o++)
-        {
-            string pre = o == 0 ? "osc1" : "osc2";
-            oscTableHosts[o] = new Panel { Children = { Chips(o == 0 ? "table" : "osc2table", Banks) } };
-            oscWarpHosts[o] = new Panel { Children = { Chips(pre + "warpmode", WarpModes) } };
-        }
-        var oscPick = Segments(new[] { "1", "2" }, () => osel, iv => { osel = iv; Touch(); }, out var oscPickSync);
-        readouts.Add(oscPickSync);
-        ToolTip.SetTip(oscPick, "The oscillator whose table and warp mode this strip edits");
-        var oscTableStack = new Panel();
-        foreach (var h in oscTableHosts) oscTableStack.Children.Add(h);
-        var oscWarpStack = new Panel();
-        foreach (var h in oscWarpHosts) oscWarpStack.Children.Add(h);
-        var oscStrip = new StackPanel
-        {
-            Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center,
-            Children = { oscPick, oscTableStack, Cap("WARP"), oscWarpStack },
-        };
+        // Both oscillators side by side, nothing behind a pick (specs/053): each column
+        // carries its name and on switch, its table and warp-mode drop-downs, its table
+        // window and its six knobs. Under both, a line of drag values for the sub and the
+        // unison stack. Four banks and five warp modes would not fit as segments in a
+        // 210 px column, so both are drop-downs (more than four choices is one anyway).
 
-        var oscGrid = new Grid
+        // A drop-down on a stepped parameter: the picked name in a groove with a chevron.
+        // A click opens the list, the wheel steps through it, right-click bubbles to the
+        // parameter menu; MIDI learn and automation follow as for the chips it replaces.
+        Control Drop(string id, string[] names, string learn, double width)
         {
-            ColumnDefinitions = new ColumnDefinitions("40,*,*,*,*,*,*"),
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
-            VerticalAlignment = VerticalAlignment.Top,
-        };
-        var oscNames = new TextBlock[2];
-        for (int o = 0; o < 2; o++)
-        {
-            int ov = o;
-            string pre = o == 0 ? "osc1" : "osc2";
-            string nm = o == 0 ? "OSC 1" : "OSC 2";
-            int row = o * 2;
-            if (o > 0) { var rule = Rule(); rule.Margin = new Thickness(0, 1); Grid.SetRow(rule, 1); Grid.SetColumnSpan(rule, 7); oscGrid.Children.Add(rule); }
-            var name = Section(nm);
-            oscNames[o] = name;
-            var head = new StackPanel
+            int n = names.Length;
+            var name = Mono("", TextPrimary, NotaType.RowLabel);
+            name.TextTrimming = TextTrimming.CharacterEllipsis;
+            var chev = new Glyph(GlyphKind.ChevronDown, 7)
             {
-                Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand),
-                Children = { name, Toggle("", pre + "on", () => G(pre + "on") >= 0.5f ? "on" : "off") },
+                Foreground = TextTertiary, Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
             };
-            head.PointerPressed += (_, e) =>
+            DockPanel.SetDock(chev, Dock.Right);
+            var box = new Border
             {
-                if (!e.GetCurrentPoint(head).Properties.IsLeftButtonPressed) return;
-                osel = ov; Touch();
+                Height = 16, Width = width, Background = NotaPalette.Groove, CornerRadius = NotaRadius.Cell,
+                Padding = new Thickness(6, 0, 5, 0), Cursor = new Cursor(StandardCursorType.Hand),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = new DockPanel { Children = { chev, name } },
             };
-            void Cell(Control c, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); oscGrid.Children.Add(c); }
-            Cell(head, 0);
-            // Position is what the modulators reach for on this synth, so it wears teal.
-            Cell(PKnob(o == 0 ? "position" : "osc2position", "POSITION", nm + " Position", FrameText, 34, 42, null), 1);
-            Cell(PKnob(o == 0 ? "warp" : "osc2warp", "WARP", nm + " Warp", Pct, 34, 42), 2);
-            Cell(PKnob(pre + "level", "LEVEL", nm + " Level", Pct, 34, 42), 3);
-            Cell(PKnob(pre + "oct", "OCT", nm + " Octave", Oct, 34, 42), 4);
-            Cell(PKnob(pre + "semi", "SEMI", nm + " Semi", Semi, 34, 42), 5);
-            Cell(PKnob(pre + "detune", "FINE", nm + " Fine", Cents, 34, 42, null), 6);
+            box.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
+            void Pick(int iv) { SetP(id, iv / (float)(n - 1)); Touch(); }
+            box.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
+                var fly = new MenuFlyout();
+                int cur = Sel(id, n);
+                for (int i = 0; i < n; i++)
+                {
+                    int iv = i;
+                    var mi = new MenuItem { Header = names[i], ToggleType = MenuItemToggleType.Radio, IsChecked = i == cur };
+                    mi.Click += (_, _) => Pick(iv);
+                    fly.Items.Add(mi);
+                }
+                fly.ShowAt(box);
+                e.Handled = true;
+            };
+            box.PointerWheelChanged += (wt, e) =>
+            {
+                if (WheelInput.Step(e, wt) is not { } st) return;
+                e.Handled = true; if (st == 0) return;
+                Pick(Math.Clamp(Sel(id, n) - st, 0, n - 1));
+            };
+            readouts.Add(() => name.Text = names[Sel(id, n)]);
+            ToolTip.SetTip(box, learn + " · click to pick, scroll to step");
+            if (I(id) is var pi and >= 0) MidiLearn.Bind(box, MidiTarget.PluginParam(track, -1, pi), learn);
+            return box;
         }
-        applyOsc = () =>
+
+        // What steers the position: the strongest matrix route into Position (it moves
+        // both oscillators, so both windows name it).
+        string PosModText()
         {
-            for (int o = 0; o < 2; o++)
+            int best = -1; double mag = 0.02;
+            for (int s = 0; s < SrcNames.Length; s++)
             {
-                oscTableHosts[o].IsVisible = oscWarpHosts[o].IsVisible = o == osel;
-                oscNames[o].Foreground = o == osel ? AccentBright : TextPrimary;
+                double a = Math.Abs(G($"mtx{s}_2") - 0.5) * 2;
+                if (a > mag) { mag = a; best = s; }
             }
-        };
+            return best < 0 ? "" : SrcNames[best].ToLowerInvariant() + " → pos";
+        }
+
+        Control OscColumn(int o)
+        {
+            string pre = o == 0 ? "osc1" : "osc2";
+            string nm = o == 0 ? "Osc 1" : "Osc 2";
+            string tableId = o == 0 ? "table" : "osc2table";
+            string posId = o == 0 ? "position" : "osc2position";
+
+            var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"), ColumnSpacing = 5, Height = 18 };
+            var tableDrop = Drop(tableId, Banks, nm + " Table", 74);
+            var warpDrop = Drop(pre + "warpmode", WarpModes, nm + " Warp mode", 52);
+            var headCells = new Control[] { Section(nm), Toggle("", pre + "on"), new Panel(), tableDrop, warpDrop };
+            for (int i = 0; i < headCells.Length; i++) { Grid.SetColumn(headCells[i], i); head.Children.Add(headCells[i]); }
+
+            // The window's caption, one line in its title row: the bank, the frame and what
+            // modulates the position.
+            var bankCap = Mono("", TextSecondary, NotaType.Axis);
+            var frameCap = Mono("", TextPrimary, NotaType.Axis);
+            var modCap = Mono("", Teal, NotaType.Axis);
+            modCap.HorizontalAlignment = HorizontalAlignment.Right;
+            readouts.Add(() =>
+            {
+                bankCap.Text = Banks[Sel(tableId, 4)];
+                frameCap.Text = FrameText(G(posId));
+                modCap.Text = PosModText();
+            });
+            var capRow = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5,
+                Margin = new Thickness(7, 3, 7, 0), VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false,
+            };
+            capRow.Children.Add(bankCap);
+            Grid.SetColumn(frameCap, 1); capRow.Children.Add(frameCap);
+            Grid.SetColumn(modCap, 2); capRow.Children.Add(modCap);
+            stacks[o].TopInset = 12;   // the caption line in the window's top edge
+            var window = new Panel { Children = { stacks[o], capRow } };
+
+            // Position is what the modulators reach for on this synth.
+            var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*,*,*") };
+            var cells = new[]
+            {
+                PKnob(posId, "Position", nm + " Position", FrameText, 34, 35),
+                PKnob(o == 0 ? "warp" : "osc2warp", "Warp", nm + " Warp", Pct, 34, 35),
+                PKnob(pre + "level", "Level", nm + " Level", Pct, 34, 35),
+                PKnob(pre + "oct", "Oct", nm + " Octave", Oct, 34, 35),
+                PKnob(pre + "semi", "Semi", nm + " Semi", Semi, 34, 35),
+                PKnob(pre + "detune", "Fine", nm + " Fine", Cents, 34, 35),
+            };
+            for (int i = 0; i < cells.Length; i++)
+            {
+                cells[i].HorizontalAlignment = HorizontalAlignment.Center;
+                Grid.SetColumn(cells[i], i); knobs.Children.Add(cells[i]);
+            }
+
+            var col = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 3 };
+            Grid.SetRow(window, 1); Grid.SetRow(knobs, 2);
+            col.Children.Add(head); col.Children.Add(window); col.Children.Add(knobs);
+            // Off: everything but the name and the switch takes the unavailable look (the
+            // stack greys itself through Dimmed).
+            oscDimmed[o].AddRange(new Control[] { tableDrop, warpDrop, capRow, knobs });
+            return col;
+        }
 
         // The sub and the unison stack are drag values, as the almanac draws them: a caps
         // label over a mono readout, dragged up or down, double-clicked back to default.
@@ -506,38 +574,15 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             Padding = new Thickness(0, 3, 0, 0), Child = subUni,
         };
 
-        // The table window carries its own caption: which bank, which frame, and what is
-        // steering the position.
-        var tableCap = Mono("", TextTertiary, NotaType.Axis);
-        var frameCap = Mono("", TextPrimary, NotaType.Axis);
-        var posMod = Mono("", Teal, NotaType.Axis);
-        readouts.Add(() =>
-        {
-            tableCap.Text = $"Table {osel + 1} · {Banks[Sel(osel == 0 ? "table" : "osc2table", 4)]}";
-            frameCap.Text = "frame " + FrameText(G(osel == 0 ? "position" : "osc2position"));
-            int best = -1; double mag = 0.02;
-            for (int s = 0; s < SrcNames.Length; s++)
-            {
-                double a = Math.Abs(G($"mtx{s}_2") - 0.5) * 2;
-                if (a > mag) { mag = a; best = s; }
-            }
-            posMod.Text = best < 0 ? "no modulation" : SrcNames[best].ToLowerInvariant() + " → pos";
-            posMod.Foreground = best < 0 ? TextDisabled : Teal;
-        });
-        var tableOverlay = new StackPanel
-        {
-            Margin = new Thickness(7, 5), VerticalAlignment = VerticalAlignment.Top,
-            HorizontalAlignment = HorizontalAlignment.Left, Spacing = 0, IsHitTestVisible = false,
-            Children = { tableCap, frameCap, posMod },
-        };
-        stack.TopInset = 26;   // the three caption lines the overlay puts in that corner
-        var tableWindow = new Panel { Width = 128, Children = { stack, tableOverlay } };
-        var oscMid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
-        oscMid.Children.Add(tableWindow);
-        Grid.SetColumn(oscGrid, 1); oscMid.Children.Add(oscGrid);
-        var oscBodyGrid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto"), RowSpacing = 3 };
-        var oscRows = new Control[] { oscStrip, oscMid, subUniRow };
-        for (int i = 0; i < oscRows.Length; i++) { Grid.SetRow(oscRows[i], i); oscBodyGrid.Children.Add(oscRows[i]); }
+        var oscPair = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,*"), ColumnSpacing = 5 };
+        var col1 = OscColumn(0);
+        var oscRule = new Border { Width = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 1) };
+        var col2 = OscColumn(1);
+        Grid.SetColumn(oscRule, 1); Grid.SetColumn(col2, 2);
+        oscPair.Children.Add(col1); oscPair.Children.Add(oscRule); oscPair.Children.Add(col2);
+        var oscBodyGrid = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 3 };
+        Grid.SetRow(subUniRow, 1);
+        oscBodyGrid.Children.Add(oscPair); oscBodyGrid.Children.Add(subUniRow);
         var oscBody = new Border { Padding = new Thickness(5, 3), Child = oscBodyGrid };
 
         // ---- Filter tab -----------------------------------------------------------
