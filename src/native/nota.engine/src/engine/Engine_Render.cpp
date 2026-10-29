@@ -773,8 +773,15 @@ void Engine::closeCtlRange(MidiClip& clip, int32_t ctl, double atLocal, double s
 // --- audio thread ----------------------------------------------------------
 
 void Engine::render(float* out, int32_t numFrames) {
+    // Counted before the suspend check (both seq_cst, paired with start()): once start() has
+    // suspended rendering and seen the count at zero, no render can be inside the graph.
+    rendersInFlight_.fetch_add(1, std::memory_order_seq_cst);
+    struct Leave {
+        std::atomic<int32_t>& n;
+        ~Leave() { n.fetch_sub(1, std::memory_order_release); }
+    } leave{rendersInFlight_};
     // start() is still re-preparing the nodes on the control thread: output silence.
-    if (renderSuspended_.load(std::memory_order_acquire)) {
+    if (renderSuspended_.load(std::memory_order_seq_cst)) {
         std::fill(out, out + static_cast<size_t>(numFrames) * 2, 0.0f);
         return;
     }

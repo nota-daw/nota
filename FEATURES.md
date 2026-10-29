@@ -29,8 +29,8 @@ Contents
 
 - **macOS** (≥ 13.0, arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
   hosting. Distributed as a separate `.dmg` for Apple Silicon and for Intel (ad-hoc signed).
-- **Windows** (x64): WASAPI (shared + **exclusive mode** for minimum latency), WinMM
-  MIDI, **VST3** hosting. Distributed as an Inno Setup installer
+- **Windows** (x64): WASAPI (shared + **exclusive mode** for minimum latency) or **ASIO**
+  (any installed driver; falls back to WASAPI if it can't start), WinMM MIDI, **VST3** hosting. Distributed as an Inno Setup installer
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).
 - **Linux**: PulseAudio/ALSA (via miniaudio), ALSA MIDI (RtMidi), **VST3** hosting.
   Distributed as a portable **AppImage** (`Nota-<version>-<arch>`) that runs on any distro
@@ -1226,7 +1226,12 @@ audio effects after it keep running and keep their settings; saved with the proj
 ## Preferences
 
 - **Audio**: device, sample rate, buffer size (latency); **WASAPI exclusive mode**
-  (Windows).
+  (Windows). On Windows, **Audio system** WASAPI / **ASIO**: the driver, the output and input
+  channel pairs (by the driver's channel names; other outputs silent), **Driver settings…**
+  for the driver's own panel (buffer size changes there are picked up without a restart);
+  the Latency line shows the driver's latency and round trip. Recorded takes are moved
+  earlier by the driver's reported latency; a missing or failed driver falls back to WASAPI
+  with the reason in the status bar, and **Try again** returns to ASIO.
 - **MIDI**: which MIDI inputs are enabled (the house checkboxes); **MPE** on/off (on by
   default) and the per-note bend range (±12 / 24 / 48 / 96 semitones).
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller

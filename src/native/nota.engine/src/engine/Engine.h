@@ -76,6 +76,28 @@ class Engine {
     bool audioSilentFallback() const { return backend_ ? backend_->silentFallback() : false; }
     int32_t bufferFrames() const { return backend_ ? backend_->bufferFrames() : 0; }
 
+    // --- ASIO (Windows; specs/049) ---
+    // Staged like the rest of the config; applyAudioConfig() persists and restarts. Off
+    // Windows the setters change nothing (the native backend is the only system).
+    void setAudioSystem(AudioSystem system);
+    void setAsioDriver(const std::string& clsid, const std::string& name);
+    void setAsioPair(bool input, int32_t firstChannel);
+    // What actually runs: Wasapi after a failed ASIO start fell back (FR-011).
+    AudioSystem activeAudioSystem() const { return activeSystem_; }
+    // Why the last ASIO start failed ("" if it didn't, or ASIO wasn't asked for).
+    const std::string& audioFallbackReason() const { return audioFallbackReason_; }
+    // Device event since the last call (0 none, 1 reset requested, 2 driver failed).
+    // A driver that stopped calling back makes the next start skip ASIO once (FR-011).
+    int32_t pollAudioDeviceEvent();
+    int32_t audioInputLatencyFrames() const { return backend_ ? backend_->inputLatencyFrames() : 0; }
+    int32_t audioOutputLatencyFrames() const { return backend_ ? backend_->outputLatencyFrames() : 0; }
+
+    // Where a hardware take really starts once the device's round-trip latency is taken
+    // out (research R7): `latencyFrames` earlier, in device frames. A take that would
+    // start before beat 0 stays at 0 and drops its first frames instead (`trimFrames`).
+    static double latencyCompensatedStart(double startBeat, int32_t latencyFrames, double samplesPerBeat,
+                                          double* trimFrames);
+
     // --- MIDI device settings (M7-2) ---
     // Which inputs the engine listens to; persisted as a blocklist of disabled
     // uids in midi.json (empty = all on). Setters stage midiConfig_; apply
@@ -1203,6 +1225,9 @@ class Engine {
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;
     void pushMonitorFramesForTest(const float* interleavedStereo, int32_t frames); // feed the hw monitor ring
+    // Device-free: under a shared input clock (ASIO) one driver block rendered in two segments
+    // (a loop boundary) reaches monitoring whole — the rest of the block isn't trimmed as stale.
+    bool monitorSharedClockSelfTest();
     // MIDI routing: forward an instrument track's MIDI to another instrument track (-1 = off).
     void setTrackMidiSource(int32_t trackId, int32_t sourceTrackId);
     int32_t trackMidiSource(int32_t trackId) const;
@@ -1465,6 +1490,9 @@ class Engine {
 
     std::unique_ptr<AudioBackend> backend_;
     AudioConfig config_;    // chosen device/rate/buffer (M7-1)
+    AudioSystem activeSystem_ = AudioSystem::Wasapi; // what backend_ is (after any fallback)
+    std::string audioFallbackReason_;                // why ASIO didn't start (specs/049)
+    std::string asioSkipOnce_; // set when the running driver went silent: the next start runs WASAPI
     MidiConfig midiConfig_; // enabled MIDI inputs (M7-2)
     std::unique_ptr<MidiInput> midiInput_;
     std::unique_ptr<GamepadInput> gamepadInput_; // game controller note input
@@ -1670,6 +1698,9 @@ class Engine {
     // Set by start() before the device opens, cleared (release) once every node is re-prepared
     // at the negotiated rate: while set, render() outputs silence and never touches the graph.
     std::atomic<bool> renderSuspended_{false};
+    // Device callbacks inside render() right now. start() waits for 0 before re-preparing
+    // nodes: a render stuck in a plug-in (an ASIO driver given up on) must not overlap it.
+    std::atomic<int32_t> rendersInFlight_{0};
     std::atomic<double> launchQuant_{4.0}; // Session launch quantize, beats (M5-2)
     // Arrangement playback active (M5): true after main Play / arrangement record; false in a
     // session-only jam. Read on the audio thread to gate arrangement clip content per track.
@@ -1945,6 +1976,7 @@ class Engine {
     std::vector<float> monitorHwBuf_;          // audio thread, this segment's hw input
     bool monitorPrimed_ = false;               // audio thread: cushion reached
     std::atomic<int32_t> inputBlockFrames_{0}; // largest capture callback seen (cushion size)
+    std::atomic<bool> monitorSharedClock_{false}; // capture shares the output callback (ASIO): no cushion
     std::atomic<bool> hwMonitorTap_{false};    // input thread -> monitorQueue_
     std::atomic<bool> hwRecordTap_{false};     // input thread -> inputQueue_ (hw take rolling)
     bool hwMonitorWanted_ = false;             // message thread: some track monitors hw input
@@ -1976,6 +2008,7 @@ class Engine {
     int32_t audioRecordTrackId_ = 0;
     double audioRecordStartBeat_ = 0.0;
     double audioRecordSampleRate_ = 0.0;
+    int32_t audioRecordLatencyFrames_ = 0; // device round trip to take out of a hardware take
     // Internal-resampling source for the active take (0 = hardware/off, -1 = master,
     // >0 = source track id). Read on the audio thread in mixGraph to tap the ring.
     std::atomic<int32_t> internalRecordSource_{0};
