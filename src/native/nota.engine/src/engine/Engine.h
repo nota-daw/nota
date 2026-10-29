@@ -1698,6 +1698,9 @@ class Engine {
     // Set by start() before the device opens, cleared (release) once every node is re-prepared
     // at the negotiated rate: while set, render() outputs silence and never touches the graph.
     std::atomic<bool> renderSuspended_{false};
+    // Device callbacks inside render() right now. start() waits for 0 before re-preparing
+    // nodes: a render stuck in a plug-in (an ASIO driver given up on) must not overlap it.
+    std::atomic<int32_t> rendersInFlight_{0};
     std::atomic<double> launchQuant_{4.0}; // Session launch quantize, beats (M5-2)
     // Arrangement playback active (M5): true after main Play / arrangement record; false in a
     // session-only jam. Read on the audio thread to gate arrangement clip content per track.

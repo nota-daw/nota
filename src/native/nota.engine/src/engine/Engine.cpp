@@ -12,6 +12,7 @@
 #include "media/WarpStream.h" // complete ClipWarpStream for wb_.stream (unique_ptr) destruction
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <utility>
 
@@ -79,7 +80,16 @@ bool Engine::start() {
     // The device rate is only known once the backend is open, so the nodes are re-prepared
     // after it starts. Until then the callback must stay out of the graph: prepare()
     // reallocates buffers (and hosted plugins run prepareToPlay) the audio thread would read.
-    renderSuspended_.store(true, std::memory_order_release);
+    renderSuspended_.store(true, std::memory_order_seq_cst);
+    // A previous device's callback may still be inside render() — an ASIO driver given up on
+    // while a plug-in stalled. Re-preparing the nodes under it would corrupt them: wait for it
+    // to leave, and if it never does, stay off rather than run two renders over one graph.
+    for (int i = 0; i < 2000 && rendersInFlight_.load(std::memory_order_seq_cst) > 0; ++i)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    if (rendersInFlight_.load(std::memory_order_seq_cst) > 0) {
+        audioFallbackReason_ = "a plug-in stopped responding inside the audio callback — restart Nota";
+        return false;
+    }
     bool ok = backend_->start([this](float* out, int32_t n) { render(out, n); }, bc);
     if (!ok && activeSystem_ == AudioSystem::Asio) {
         // FR-011: a missing, busy or broken ASIO driver never leaves Nota silent — run WASAPI

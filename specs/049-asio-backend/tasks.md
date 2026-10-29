@@ -161,11 +161,11 @@ Real-driver checks are manual ([quickstart.md](quickstart.md)).
 
 ### Nota closing tasks *(always include — these are the PR gates)*
 
-- [ ] T046 Run `scripts/build.sh` (macOS) until native + managed + smoke are green; run `pwsh scripts/build-win.ps1` on Windows (or confirm the Windows CI job) so the SDK fetch and the `windows/` layer compile and the smoke test passes without an ASIO driver
-  - *2026-10-28: macOS `scripts/build.sh` green (native, managed, smoke incl. ASIO self-test, scan-scale). Windows build (`build-win.ps1` / CI) not run yet — the `windows/` layer is uncompiled.*
+- [X] T046 Run `scripts/build.sh` (macOS) until native + managed + smoke are green; run `pwsh scripts/build-win.ps1` on Windows (or confirm the Windows CI job) so the SDK fetch and the `windows/` layer compile and the smoke test passes without an ASIO driver
+  - *2026-10-29: green on macOS, Linux and Windows CI (windows-2022: SDK fetch, `audio_io/windows/` compiled, smoke incl. `nota_asio_selftest` passed).*
 - [X] T047 AGPL-3.0-only SPDX two-line header on every new source file under `engine/src/audio_io/asio/` and `engine/src/audio_io/windows/`
-- [ ] T048 New dependency: ASIO SDK row + note 8 in `LICENSES/third-party.md` and notice in `LICENSES/THIRD-PARTY-NOTICES.md` done (T002, T003); the PR description carries the GPLv3 ↔ AGPLv3 rationale (nota-pr skill)
-  - *Register row, note 8, notice and `LICENSES/GPL-3.0-only.txt` done; the PR-description rationale remains (nota-pr).*
+- [X] T048 New dependency: ASIO SDK row + note 8 in `LICENSES/third-party.md` and notice in `LICENSES/THIRD-PARTY-NOTICES.md` done (T002, T003); the PR description carries the GPLv3 ↔ AGPLv3 rationale (nota-pr skill)
+  - *Register row, note 8, notice, `LICENSES/GPL-3.0-only.txt`; GPLv3 ↔ AGPLv3 rationale in the PR description.*
 - [X] T049 `CHANGELOG.md` `[Unreleased]` entry under Added: ASIO on Windows — choose the driver and channel pair, driver settings, low-latency recording with latency compensation, automatic WASAPI fallback
 - [X] T050 FEATURES.md via the `nota-features` skill (Windows platform line + Preferences → Audio); user manual EN + RU via the `nota-docs` skill (Preferences → Audio page, Windows setup); shortcuts: N/A
 - [X] T051 Engine behaviour change → smoke test covers it via `nota_asio_selftest` (T011–T013, T023, T030, T036) and the ABI no-op check (T022)

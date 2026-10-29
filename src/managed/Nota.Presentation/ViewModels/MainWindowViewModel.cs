@@ -172,6 +172,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (Engine.AsioPanelOpen)
         {
             _applyAfterPanel = true;
+            RefusedSampleRate = 0;   // the old refusal no longer answers this new request
             StatusText = "Close the driver's settings window to apply the change";
             return StatusText;
         }

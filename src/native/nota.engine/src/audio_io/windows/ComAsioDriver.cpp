@@ -239,25 +239,28 @@ bool ComAsioDriver::init() {
 
 std::string ComAsioDriver::driverName() {
     auto s = std::make_shared<std::string>();
-    call(
-        [sh = sh_, s] {
-            char name[128] = {};
-            if (sh->drv) sh->drv->getDriverName(name);
-            *s = ansiToUtf8(name);
-        },
-        kCallTimeoutMs);
+    // After a timeout the abandoned task may still write *s: never read it then.
+    if (!call(
+            [sh = sh_, s] {
+                char name[128] = {};
+                if (sh->drv) sh->drv->getDriverName(name);
+                *s = ansiToUtf8(name);
+            },
+            kCallTimeoutMs))
+        return {};
     return *s;
 }
 
 std::string ComAsioDriver::errorMessage() {
     auto s = std::make_shared<std::string>();
-    call(
-        [sh = sh_, s] {
-            char text[256] = {};
-            if (sh->drv) sh->drv->getErrorMessage(text);
-            *s = ansiToUtf8(text);
-        },
-        kCallTimeoutMs);
+    if (!call(
+            [sh = sh_, s] {
+                char text[256] = {};
+                if (sh->drv) sh->drv->getErrorMessage(text);
+                *s = ansiToUtf8(text);
+            },
+            kCallTimeoutMs))
+        return {};
     return *s;
 }
 
