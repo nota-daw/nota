@@ -208,144 +208,53 @@ internal sealed class LensDeviceBody : IDeviceBody
         var wfRow = new float[LensData.WfBins];
         var wfPend = new float[LensData.WfBins];   // the row being accumulated (see Overlap)
 
-        Control GraphHost(Control topRow, Control graph, Control knobRow) => new DockPanel
+        // Each centre tab is its graph alone; its controls sit in the right panel and its live
+        // read-out right of the tab bar.
+        static Control GraphHost(Control graph) => new Border { Margin = new Thickness(8, 6), Child = graph };
+
+        Control SpectrumTab() => GraphHost(spectrum);
+        Control ScopeTab() => GraphHost(scopeView);
+        Control WaterfallTab() => GraphHost(waterfall);
+
+        // ---- right panel: the open tab's controls, or Display ------------------------------
+        // Rows spread evenly down the panel; a rule keeps its own height.
+        Control Rows(params Control[] rows)
         {
-            LastChildFill = true,
-            Margin = new Thickness(6, 5),
-            Children = { Docked(topRow, Dock.Top), Docked(knobRow, Dock.Bottom), graph },
-        };
-
-        Control KnobRow(params Control[] cells)
-        {
-            var sp = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Height = 52, Margin = new Thickness(0, 4, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            foreach (var c in cells) sp.Children.Add(c);
-            return sp;
-        }
-
-        // A two-line mono summary that sits to the right of a knob row.
-        (Control Ctl, TextBlock A, TextBlock B) SideNote()
-        {
-            var a = Mono("", 7, MutedC);
-            var b = Mono("", 7, MutedC);
-            return (new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0), Children = { a, b } }, a, b);
-        }
-
-        var specNote = SideNote();
-        var scopeNote = SideNote();
-        var wfNote = SideNote();
-        var specInfo = Mono("", 7, MutedC);
-        var scopeInfo = Mono("", 7, MutedC);
-        var wfInfo = Mono("", 7, MutedC);
-
-        Control TopRow(string label, Control chips, TextBlock info)
-        {
-            var d = new DockPanel { Height = 18, LastChildFill = false, Margin = new Thickness(0, 0, 0, 4) };
-            d.Children.Add(Docked(Caps(label), Dock.Left));
-            var holder = new Border { Margin = new Thickness(6, 0, 0, 0), Child = chips };
-            d.Children.Add(Docked(holder, Dock.Left));
-            info.TextAlignment = TextAlignment.Right;
-            d.Children.Add(Docked(info, Dock.Right));
-            return d;
-        }
-
-        Control SpectrumTab() => GraphHost(
-            TopRow("FFT", Seg(FftSizeP, new[] { "512", "2048", "4096", "16384" }), specInfo),
-            spectrum,
-            KnobRow(K(SmoothP, "Smooth", v => Pc(v), 34, 48, TealC),
-                    K(DecayP, "Decay", v => Sec(Exp(v, 0.05, 8)), 34, 48),
-                    K(TiltP, "Tilt", v => Inv($"{v * 9:0.0} dB"), 34, 48, TealC),
-                    K(FloorP, "Floor", v => Inv($"{-120 + v * 80:0} dB"), 34, 48),
-                    specNote.Ctl));
-
-        Control ScopeTab()
-        {
-            // Sync swaps the trigger chips for the span on the song's grid (specs/050).
-            var trig = new StackPanel
+            var grid = new Grid { RowSpacing = 2 };
+            for (int r = 0; r < rows.Length; r++)
             {
-                Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
-                Children = { Seg(TrigModeP, new[] { "Auto", "Normal", "Single" }), Seg(TrigEdgeP, new[] { "↑", "↓" }) },
-            };
-            var span = Seg(SpanP, SpanNames);
-            ToolTip.SetTip(span, "Span — how much of the song the scope shows, from a quarter beat to four bars");
-            var sync = Toggle(SyncP, "Sync");
-            ToolTip.SetTip(sync, "Sync — line the scope up with the song's beats and bars");
-            var caps = Caps("TRIG");
-            readouts.Add(() =>
-            {
-                bool on = On(SyncP);
-                trig.IsVisible = !on; span.IsVisible = on;
-                caps.Text = NotaText.Label(on ? "SPAN" : "TRIG");
-            });
-            var top = new DockPanel { Height = 18, LastChildFill = false, Margin = new Thickness(0, 0, 0, 4) };
-            top.Children.Add(Docked(new Border { Margin = new Thickness(0, 0, 8, 0), Child = sync }, Dock.Left));
-            top.Children.Add(Docked(caps, Dock.Left));
-            top.Children.Add(Docked(new Border { Margin = new Thickness(6, 0, 0, 0), Child = new Panel { Children = { trig, span } } }, Dock.Left));
-            scopeInfo.TextAlignment = TextAlignment.Right;
-            top.Children.Add(Docked(scopeInfo, Dock.Right));
-
-            // Time base and trigger knobs rest while Sync draws the beat grid.
-            var timeK = K(TimeDivP, "Time/Div", v => Ms(Exp(v, 0.00002, 0.02)), 34, 48);
-            var trigK = K(TrigLevelP, "Trig Lvl", v => Inv($"{(v - 0.5) * 2:+0.00;−0.00;0.00}"), 34, 48, TealC);
-            var holdK = K(HoldoffP, "Holdoff", v => Inv($"{v * 200:0} ms"), 34, 48, TealC);
-            var keyK = K(KeyGainP, "Key Gain", v => Inv($"{KeyDb(v):+0.#;−0.#;0} dB"), 34, 48, TealC);
-            ToolTip.SetTip(keyK, "Key gain — scales only the key's trace, for the eye (the sound is untouched)");
-            readouts.Add(() =>
-            {
-                bool on = On(SyncP);
-                foreach (var c in new[] { timeK, trigK, holdK }) { c.IsEnabled = !on; c.Opacity = on ? 0.4 : 1; }
-                keyK.IsEnabled = KeySrc() >= 0; keyK.Opacity = keyK.IsEnabled ? 1 : 0.4;
-            });
-            return GraphHost(
-                top,
-                scopeView,
-                KnobRow(timeK, K(VoltDivP, "Volt/Div", v => Inv($"{Exp(v, 0.02, 2.0):0.00}"), 34, 48), trigK, holdK, keyK, scopeNote.Ctl));
+                grid.RowDefinitions.Add(new RowDefinition(rows[r] is Border { Height: 1 } ? GridLength.Auto : GridLength.Star));
+                Grid.SetRow(rows[r], r);
+                rows[r].VerticalAlignment = VerticalAlignment.Center;
+                grid.Children.Add(rows[r]);
+            }
+            return new Border { Padding = new Thickness(8, 4, 8, 5), Child = grid };
+        }
+        static Border Rule() => new() { Height = 1, Background = NotaPalette.GraphBorder, Margin = new Thickness(0, 1) };
+        static Grid Pair(Control a, Control b)
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
+            g.Children.Add(a); g.Children.Add(Col(b, 1));
+            return g;
+        }
+        Control SegRow(string label, Control seg)
+        {
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*") };
+            g.Children.Add(Caps(label)); g.Children.Add(Col(seg, 1));
+            return g;
         }
 
-        Control WaterfallTab() => GraphHost(
-            TopRow("SPEED", Seg(WfSpeedP, new[] { "4 s", "12 s", "60 s" }, () => data.ClearWaterfall()), wfInfo),
-            waterfall,
-            KnobRow(K(WfGainP, "Gain", v => Inv($"{-24 + v * 48:+0;−0;0} dB"), 34, 48),
-                    K(WfFloorP, "Floor", v => Inv($"{-120 + v * 80:0} dB"), 34, 48),
-                    K(WfContrastP, "Contrast", v => Pc(v), 34, 48, TealC),
-                    K(WfOverlapP, "Overlap", v => Inv($"{Overlaps[Math.Clamp((int)Math.Round(v * 3), 0, 3)]:0.#} %"), 34, 48, TealC),
-                    wfNote.Ctl));
-
-        // ---- right panel --------------------------------------------------------------
-        var cursorBox = ReadBox("CURSOR", "—", "move over the graph");
-        var captureBox = ReadBox("CAPTURE");
-        var measureBox = ReadBox("A → B");
-        var wfCursorBox = ReadBox("CURSOR", "—", "move over the graph");
-
-        spectrum.CursorMoved += () =>
-        {
-            double hz = spectrum.CursorHz;
-            if (hz <= 0) { cursorBox.A.Text = "—"; cursorBox.B.Text = "move over the graph"; return; }
-            cursorBox.A.Text = Inv($"{Hz(hz)} · {LensInk.Note(hz)}");
-            cursorBox.B.Text = Inv($"{spectrum.CursorDb:0.0} dB · bin {(Sc(M_BinHz) > 0 ? hz / Sc(M_BinHz) : 0):0}");
-        };
-        waterfall.CursorMoved += () =>
-        {
-            double hz = waterfall.CursorHz;
-            if (hz <= 0) { wfCursorBox.A.Text = "—"; wfCursorBox.B.Text = "move over the graph"; return; }
-            wfCursorBox.A.Text = Inv($"{Hz(hz)} · {LensInk.Note(hz)}");
-            wfCursorBox.B.Text = Inv($"−{waterfall.CursorAgeSec:0.0} s");
-        };
-
-        Control Stack(params Control[] cs)
-        {
-            var sp = new StackPanel { Spacing = 5, Margin = new Thickness(7, 6) };
-            foreach (var c in cs) sp.Children.Add(c);
-            return sp;
-        }
-
-        Control SpectrumAnalyze() => Stack(
-            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("WINDOW"), Col(Seg(WindowP, new[] { "Hann", "B-H", "Flat" }), 1) } },
+        Control SpectrumPanel() => Rows(
+            SegRow("FFT", Seg(FftSizeP, new[] { "512", "2048", "4096", "16k" })),
+            SegRow("WINDOW", Seg(WindowP, new[] { "Hann", "B-H", "Flat" })),
+            Row("SMOOTH", SmoothP, v => Pc(v)),
+            Row("DECAY", DecayP, v => Sec(Exp(v, 0.05, 8))),
+            Row("TILT", TiltP, v => Inv($"{v * 9:0.0} dB")),
+            Row("FLOOR", FloorP, v => Inv($"{-120 + v * 80:0} dB")),
             Row("AVG", AverageP, v => Inv($"{1 + v * 15:0}")),
             Row("PEAK", PeakTimeP, v => Sec(Exp(v, 0.5, 30))),
-            Row("RATE", RateP, v => Inv($"{10 + v * 50:0} fps")),
-            cursorBox.Box,
-            Toggle(PeakHoldP, "Peak hold"),
-            Toggle(MidSideP, "Mid / Side"));
+            Rule(),
+            Pair(Toggle(PeakHoldP, "Peak hold"), Toggle(MidSideP, "Mid / Side")));
 
         // The sidechain key (specs/050): None, or any other track's post-FX audio.
         Control KeyRow()
@@ -387,62 +296,81 @@ internal sealed class LensDeviceBody : IDeviceBody
             Learn(show, KeyShowP);
             ToolTip.SetTip(show, "Show the key's trace");
             show.Margin = new Thickness(5, 0, 0, 0);
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*,Auto"), VerticalAlignment = VerticalAlignment.Center };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*,Auto") };
             g.Children.Add(Caps("KEY")); g.Children.Add(Col(box, 1)); g.Children.Add(Col(show, 2));
             return g;
         }
 
-        Control TwoToggles(Control a, Control b)
+        Control ScopePanel()
         {
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*") };
-            g.Children.Add(a); g.Children.Add(Col(b, 1));
-            return g;
+            // Sync swaps the trigger mode for the span on the song's grid (specs/050).
+            var mode = Seg(TrigModeP, new[] { "Auto", "Normal", "Single" });
+            var span = Seg(SpanP, SpanNames);
+            ToolTip.SetTip(span, "Span — how much of the song the scope shows, from a quarter beat to four bars");
+            var sync = Toggle(SyncP, "Sync");
+            ToolTip.SetTip(sync, "Sync — line the scope up with the song's beats and bars");
+            var trigRow = SegRow("TRIG", mode);
+            var spanRow = SegRow("SPAN", span);
+            // The trigger rests while Sync draws the beat grid.
+            var edge = SegRow("EDGE", Seg(TrigEdgeP, new[] { "↑", "↓" }));
+            var trigK = Row("LEVEL", TrigLevelP, v => Inv($"{(v - 0.5) * 2:+0.00;−0.00;0.00}"));
+            var holdK = Row("HOLDOFF", HoldoffP, v => Inv($"{v * 200:0} ms"));
+            var keyK = Row("KEY GAIN", KeyGainP, v => Inv($"{KeyDb(v):+0.#;−0.#;0} dB"));
+            ToolTip.SetTip(keyK, "Key gain — scales only the key's trace, for the eye (the sound is untouched)");
+            readouts.Add(() =>
+            {
+                bool on = On(SyncP);
+                trigRow.IsVisible = !on; spanRow.IsVisible = on;
+                foreach (var c in new[] { edge, trigK, holdK }) c.IsEnabled = !on;
+                keyK.IsEnabled = KeySrc() >= 0;
+            });
+            return Rows(
+                Pair(sync, Toggle(CursorsP, "Cursors")),
+                new Panel { Children = { trigRow, spanRow } },
+                edge, trigK, holdK,
+                SegRow("SOURCE", Seg(SourceP, new[] { "L+R", "L", "R" })),
+                KeyRow(), keyK,
+                SegRow("LAYOUT", Seg(LayoutP, new[] { "Overlay", "Stacked" })));
         }
 
-        Control ScopeAnalyze() => Stack(
-            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("SOURCE"), Col(Seg(SourceP, new[] { "L+R", "L", "R" }), 1) } },
-            KeyRow(),
-            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("LAYOUT"), Col(Seg(LayoutP, new[] { "Overlay", "Stacked" }), 1) } },
-            Row("PERSIST", PersistTimeP, v => Sec(Exp(v, 0.05, 2.0))),
-            Row("TRACES", TracesP, v => Inv($"{1 + v * 7:0}")),
-            Row("BRIGHT", BrightP, v => Pc(v)),
-            captureBox.Box,
-            TwoToggles(Toggle(PersistP, "Afterglow"), Toggle(CursorsP, "Cursors")));
-
-        Control CursorAnalyze() => Stack(
-            measureBox.Box,
+        Control CursorPanel() => Rows(
+            Pair(Toggle(SyncP, "Sync"), Toggle(CursorsP, "Cursors")),
             Row("A POS", CursorAP, v => Ms(v * TimeDiv() * 8)),
             Row("B POS", CursorBP, v => Ms(v * TimeDiv() * 8)),
-            new StackPanel
-            {
-                Orientation = Orientation.Horizontal, Spacing = 5,
-                Children =
-                {
-                    new Border { Width = 82, Child = Button("Re-arm", "Arm the next Single capture", () => { engine.DeviceAction(track, di, A_Rearm, 0, 0f); foreach (var a in readouts) a(); }) },
-                    new Border { Width = 82, Child = Button("Export WAV", "Write the captured scope window to a WAV file", ExportWav) },
-                },
-            },
             Toggle(CursorSnapP, "Snap to peaks"),
-            Toggle(CursorsP, "Cursors"));
+            Rule(),
+            Pair(Button("Re-arm", "Arm the next Single capture", () => { engine.DeviceAction(track, di, A_Rearm, 0, 0f); foreach (var a in readouts) a(); }),
+                 Button("Export WAV", "Write the captured scope window to a WAV file", ExportWav)));
 
-        Control WaterfallAnalyze() => Stack(
-            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("WINDOW"), Col(Seg(WindowP, new[] { "Hann", "B-H", "Flat" }), 1) } },
+        Control WaterfallPanel() => Rows(
+            SegRow("SPEED", Seg(WfSpeedP, new[] { "4 s", "12 s", "60 s" }, () => data.ClearWaterfall())),
+            SegRow("WINDOW", Seg(WindowP, new[] { "Hann", "B-H", "Flat" })),
             Row("FFT", FftSizeP, v => Inv($"{FftSizes[Math.Clamp((int)Math.Round(v * 3), 0, 3)]}")),
             Row("OVERLAP", WfOverlapP, v => Inv($"{Overlaps[Math.Clamp((int)Math.Round(v * 3), 0, 3)]:0.#} %")),
             Row("AVG", AverageP, v => Inv($"{1 + v * 15:0}")),
-            wfCursorBox.Box,
-            Toggle(LogFreqP, "Log frequency"),
-            Toggle(NoteGridP, "Note grid"));
+            Row("GAIN", WfGainP, v => Inv($"{-24 + v * 48:+0;−0;0} dB")),
+            Row("FLOOR", WfFloorP, v => Inv($"{-120 + v * 80:0} dB")),
+            Row("CONTRAST", WfContrastP, v => Pc(v)),
+            Rule(),
+            Toggle(MidSideP, "Mid / Side"));
 
-        Control DisplayTab() => Stack(
-            new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), Children = { Caps("SOURCE"), Col(Seg(SourceP, new[] { "L+R", "L", "R" }), 1) } },
+        // Display: the scale, refresh and frequency axis for Spectrum and Waterfall; the afterglow for Scope.
+        Control DisplayTab() => Rows(
+            SegRow("SOURCE", Seg(SourceP, new[] { "L+R", "L", "R" })),
             Row("TOP", ScaleTopP, v => Inv($"{24 - v * 60:0} dB")),
             Row("RANGE", ScaleRangeP, v => Inv($"{30 + v * 90:0} dB")),
-            Row("RATE", RateP, v => Inv($"{10 + v * 50:0} fps")),
-            Toggle(MidSideP, "Mid / Side"),
-            Toggle(LogFreqP, "Log frequency"),
-            Toggle(NoteGridP, "Note grid"),
-            Toggle(PeakHoldP, "Peak hold"));
+            Row("RATE", RateP, v => Inv($"{10 + v * 50:0} fps")),
+            Rule(),
+            Pair(Toggle(LogFreqP, "Log freq"), Toggle(NoteGridP, "Note grid")));
+
+        Control ScopeDisplay() => Rows(
+            Toggle(PersistP, "Afterglow"),
+            Row("PERSIST", PersistTimeP, v => Sec(Exp(v, 0.05, 2.0))),
+            Row("TRACES", TracesP, v => Inv($"{1 + v * 7:0}")),
+            Row("BRIGHT", BrightP, v => Pc(v)),
+            Row("RATE", RateP, v => Inv($"{10 + v * 50:0} fps")),
+            Rule(),
+            Toggle(MidSideP, "Mid / Side"));
 
         // ---- Scale rail ---------------------------------------------------------------
         var railTopVal = Mono("", 7, TxtC);
@@ -497,31 +425,34 @@ internal sealed class LensDeviceBody : IDeviceBody
         var centreHost = new ContentControl();
         var rightHost = new ContentControl();
         var centreBodies = new Control?[3];
-        var rightBodies = new Control?[4];   // 0 spectrum · 1 scope · 2 waterfall · 3 display
+        var rightBodies = new Control?[5];   // 0 spectrum · 1 scope · 2 waterfall · 3 display · 4 scope display
 
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => ScopeTab(), 2 => WaterfallTab(), _ => SpectrumTab() };
         bool cursorPanel = false;
         Control RightBody(int t)
         {
-            if (t == 3) return rightBodies[3] ??= DisplayTab();
+            if (t == 3) return centreTab == 1 ? rightBodies[4] ??= ScopeDisplay() : rightBodies[3] ??= DisplayTab();
             if (t == 1)
             {
                 bool want = On(CursorsP);
-                if (rightBodies[1] is null || want != cursorPanel) { cursorPanel = want; rightBodies[1] = want ? CursorAnalyze() : ScopeAnalyze(); }
+                if (rightBodies[1] is null || want != cursorPanel) { cursorPanel = want; rightBodies[1] = want ? CursorPanel() : ScopePanel(); }
                 return rightBodies[1]!;
             }
-            return rightBodies[t] ??= t == 2 ? WaterfallAnalyze() : SpectrumAnalyze();
+            return rightBodies[t] ??= t == 2 ? WaterfallPanel() : SpectrumPanel();
         }
 
-        int rightTab = RightTab.TryGetValue((track, di), out var rt) ? rt : 0;   // 0 = Analyze, 1 = Display
+        int rightTab = RightTab.TryGetValue((track, di), out var rt) ? rt : 0;   // 0 = the open view's controls, 1 = Display
 
         var freezeToggle = Switch("Freeze", () => On(FreezeP), () => SetP(FreezeP, On(FreezeP) ? 0f : 1f), out var freezeSync);
         readouts.Add(freezeSync);
         Learn(freezeToggle, FreezeP);
         ToolTip.SetTip(freezeToggle, "Freeze — stop capturing and hold what is on screen");
 
+        // Right of the tabs: the open view's live read-out (or the reading under the cursor),
+        // then Freeze and the pop-out.
         var headNote = Mono("", 7, MutedC);
-        var extras = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { freezeToggle, headNote } };
+        headNote.TextTrimming = TextTrimming.CharacterEllipsis;
+        var extras = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { headNote, freezeToggle } };
         // Expand: the same body in its own resizable window (specs/050). Top-level chain only —
         // a rack chain's Lens has no window to follow.
         if (!_popout && engine is not System.Reflection.DispatchProxy)
@@ -538,7 +469,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         }
 
         Control TabFrame(string[] tabs, int initial, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl,
-            Action<Action<int>>? exposeSelect = null)
+            Action<Action<int>>? exposeSelect = null, Action<TextBlock[]>? exposeLabels = null)
         {
             int sel = Math.Clamp(initial, 0, tabs.Length - 1);
             var btns = new Border[tabs.Length];
@@ -578,25 +509,34 @@ internal sealed class LensDeviceBody : IDeviceBody
             var barBorder = new Border { BorderBrush = Border2, BorderThickness = new Thickness(0, 0, 0, 1), Child = barDock };
             DockPanel.SetDock(barBorder, Dock.Top);
             Hi(); host.Content = body(sel);
+            exposeLabels?.Invoke(Array.ConvertAll(btns, b => (TextBlock)b.Child!));
             // Select from outside (the param moved under us): no `changed`, the caller follows.
             exposeSelect?.Invoke(i => { if (i == sel) return; sel = i; Hi(); host.Content = body(i); });
             return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
         }
 
+        // The right panel's first tab is named for the open view and holds its controls.
+        string[] views = { "Spectrum", "Scope", "Waterfall" };
+        TextBlock[] rightLabels = Array.Empty<TextBlock>();
+        void ShowView(int t)
+        {
+            rightHost.Content = RightBody(rightTab == 1 ? 3 : t);
+            if (rightLabels.Length > 0) rightLabels[0].Text = views[t];
+        }
         Action<int>? selectCentre = null;
-        var centre = TabFrame(new[] { "Spectrum", "Scope", "Waterfall" }, centreTab, centreHost, CentreBody, false, t =>
+        var centre = TabFrame(views, centreTab, centreHost, CentreBody, false, t =>
         {
             centreTab = t;
             SetP(ViewP, t / 2f);
-            rightHost.Content = RightBody(rightTab == 1 ? 3 : t);   // Display is shared; Analyze follows the view
+            ShowView(t);
             foreach (var a in readouts) a();
         }, extras, s => selectCentre = s);
 
-        var rightFrame = TabFrame(new[] { "Analyze", "Display" }, rightTab, rightHost, t =>
+        var rightFrame = TabFrame(new[] { views[centreTab], "Display" }, rightTab, rightHost, t =>
         {
             rightTab = t; RightTab[(track, di)] = t;
             return RightBody(t == 1 ? 3 : centreTab);
-        }, true, null, null);
+        }, true, null, null, null, l => rightLabels = l);
 
         var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
@@ -667,7 +607,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             {
                 centreTab = view;
                 selectCentre?.Invoke(view);
-                rightHost.Content = RightBody(rightTab == 1 ? 3 : view);
+                ShowView(view);
                 foreach (var a in readouts) a();
             }
 
@@ -728,29 +668,19 @@ internal sealed class LensDeviceBody : IDeviceBody
             int fftN = (int)Sc(M_FftN);
             string winName = new[] { "Hann", "B-H", "Flat" }[Sel(WindowP, 3)];
             bool synced = data.SyncOn && data.Sync[LensData.S_Mode] > 0.5f;
-            headNote.Text = centreTab == 1
-                ? (data.Held ? "Held" : data.SyncOn ? (synced ? "Sync" : "Free") : data.TrigOk ? "Trig’d" : "Free")
-                : centreTab == 2 ? Inv($"{LensData.WfBins} bins") : Inv($"FFT {fftN}");
-
-            specInfo.Text = Inv($"window {Sc(M_FftMs):0} ms · slope {P(TiltP) * 9:0.0} dB/oct");
-            scopeInfo.Text = data.SyncOn
-                ? Inv($"{LensScopeView.SpanName(data.Sync[LensData.S_SpanBeats], data.Sync[LensData.S_BeatsPerBar])} · {data.Sync[LensData.S_Bpm]:0.#} BPM{(synced ? "" : " · stopped")}")
-                : Inv($"level {(P(TrigLevelP) - 0.5) * 2:0.00} · holdoff {P(HoldoffP) * 200:0} ms");
-            wfInfo.Text = Inv($"floor {-120 + P(WfFloorP) * 80:0} dB · {(On(LogFreqP) ? "log" : "linear")} freq");
-
-            specNote.A.Text = Inv($"peak {Sc(M_PeakDb):0.0} dB @ {Hz(Sc(M_PeakHz))}");
-            specNote.B.Text = Inv($"crest {Sc(M_CrestDb):0.0} dB · LUFS {Sc(M_Lufs):0.0}");
-            scopeNote.A.Text = Sc(M_PeriodMs) > 0 ? Inv($"period {Sc(M_PeriodMs):0.000} ms · {Sc(M_FreqHz):0.0} Hz") : "period —";
-            scopeNote.B.Text = Inv($"Vpp {Sc(M_Vpp):0.000} · RMS {Sc(M_Vrms):0.000}");
-            wfNote.A.Text = Inv($"row {WfSpan() / LensData.WfRows * 1000:0} ms · {LensData.WfBins} bins");
-            wfNote.B.Text = Inv($"peak {Hz(Sc(M_PeakHz))} · {Sc(M_PeakDb):0.0} dB");
-
-            captureBox.A.Text = data.Held ? "held" : data.TrigOk ? "stable" : "free-run";
-            captureBox.B.Text = Inv($"holdoff {P(HoldoffP) * 200:0} ms · edge {(On(TrigEdgeP) ? "↓" : "↑")}");
-
             double dtSec = Math.Abs(P(CursorBP) - P(CursorAP)) * TimeDiv() * 8;
-            measureBox.A.Text = Inv($"Δt {dtSec * 1000:0.000} ms → {(dtSec > 1e-9 ? 1 / dtSec : 0):0.0} Hz");
-            measureBox.B.Text = Inv($"ΔV {Sc(M_CursorBv) - Sc(M_CursorAv):0.000} · {LensInk.Note(dtSec > 1e-9 ? 1 / dtSec : 0)}");
+            double curHz = centreTab == 0 ? spectrum.CursorHz : centreTab == 2 ? waterfall.CursorHz : 0;
+            headNote.Text = curHz > 0
+                ? Inv($"{Hz(curHz)} · {LensInk.Note(curHz)} · ") + (centreTab == 0 ? Inv($"{spectrum.CursorDb:0.0} dB") : Inv($"−{waterfall.CursorAgeSec:0.0} s"))
+                : centreTab switch
+                {
+                    1 when On(CursorsP) => Inv($"Δt {dtSec * 1000:0.000} ms → {(dtSec > 1e-9 ? 1 / dtSec : 0):0.0} Hz · ΔV {Sc(M_CursorBv) - Sc(M_CursorAv):0.000}"),
+                    1 when data.SyncOn => Inv($"{LensScopeView.SpanName(data.Sync[LensData.S_SpanBeats], data.Sync[LensData.S_BeatsPerBar])} · {data.Sync[LensData.S_Bpm]:0.#} BPM{(synced ? "" : " · stopped")}"),
+                    1 => (data.Held ? "held · " : data.TrigOk ? "" : "free-run · ")
+                         + (Sc(M_PeriodMs) > 0 ? Inv($"{Sc(M_PeriodMs):0.000} ms · {Sc(M_FreqHz):0.0} Hz · Vpp {Sc(M_Vpp):0.000}") : Inv($"Vpp {Sc(M_Vpp):0.000} · RMS {Sc(M_Vrms):0.000}")),
+                    2 => Inv($"peak {Hz(Sc(M_PeakHz))} · {Sc(M_PeakDb):0.0} dB"),
+                    _ => Inv($"peak {Sc(M_PeakDb):0.0} dB @ {Hz(Sc(M_PeakHz))} · LUFS {Sc(M_Lufs):0.0}"),
+                };
 
             statusLeft.Text = centreTab switch
             {
@@ -762,7 +692,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             statusLeft.Foreground = On(FreezeP) ? AmberLit : Txt2;
             statusRight.Text = Inv($"{data.SampleRate / 1000:0.#} kHz · latency 0 smp · {(On(FreezeP) ? "frozen" : Inv($"{10 + P(RateP) * 50:0} fps"))} · corr {Sc(M_Corr):+0.00;−0.00;0.00}");
 
-            // The right Analyze panel follows the centre tab (and the Cursors switch).
+            // The right panel follows the centre tab (and the Cursors switch).
             if (rightTab == 0)
             {
                 var want = RightBody(centreTab);

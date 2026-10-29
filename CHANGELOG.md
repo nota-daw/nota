@@ -180,6 +180,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   its send to each return, two per row, as far as the height allows.
 
 ### Changed
+- **Lens: the graph fills the panel, controls on the right** (review of nota-daw/nota#296):
+  each view's graph takes the whole centre panel. The right panel's first tab is named after
+  the view and holds its controls (FFT, Window and the spectrum knobs; Sync, Trig, Key and the
+  trigger; the waterfall's speed and scale); Display keeps the scale and the afterglow. The
+  live reading, Freeze and the bigger-window button sit right of the view tabs. Every control
+  is the same parameter as before.
 - **Smaller shell text and a new key picker** (review of
   nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
   The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
