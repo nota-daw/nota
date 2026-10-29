@@ -8,7 +8,7 @@
 //   Release — a square on the sustain line at len−R (drag sideways).
 // At the identity (0, 0, 1, 0) the attack square and the D·S dot share the top-left corner:
 // the first move decides — sideways grabs the attack, up/down grabs the sustain.
-// Double-click on a handle resets its stage.
+// Double-click on a handle resets its stage; ⌥-click types its values (specs/035).
 
 using System;
 using System.Collections.Generic;
@@ -151,6 +151,44 @@ internal static class ClipAdsrKit
             AdsrHandle.Release => "Release " + T(a.ReleaseBeats),
             _ => "",
         };
+    }
+
+    /// <summary>The typeable values of handle <paramref name="h"/> (decay then sustain on the D·S dot).
+    /// Positions run over the room the other stages leave, so any typed time fits the clip.
+    /// <paramref name="commit"/> writes one ADSR (one undo step); a double-click's reset is one
+    /// commit too, carried by the handle's first field.</summary>
+    public static IReadOnlyList<ValueField> Fields(AdsrHandle h, Func<ClipAdsr> get, Action<ClipAdsr> commit, double len, Func<double> bpm)
+    {
+        string T(double beats) => NotaNum.Time(beats * 60.0 / Math.Max(1, bpm()));
+        ClipAdsr A() => get().Fit(len);
+        double Room(Func<ClipAdsr, double> others) => Math.Max(0, len - others(A()));
+        ValueField Time(string name, Func<ClipAdsr, double> others, Func<ClipAdsr, double> read, Func<ClipAdsr, double, ClipAdsr> write, AdsrHandle stage)
+            => new(name,
+                () => Room(others) is var r && r > 0 ? Math.Clamp(read(A()) / r, 0, 1) : 0,
+                n => T(n * Room(others)),
+                n => commit(write(A(), n * Room(others))))
+            { Reset = () => commit(Reset(stage, A())) };
+        var list = new List<ValueField>(2);
+        switch (h)
+        {
+            case AdsrHandle.Attack:
+                list.Add(Time("Attack", a => a.DecayBeats + a.ReleaseBeats, a => a.AttackBeats, (a, b) => { a.AttackBeats = b; return a; }, AdsrHandle.Attack));
+                break;
+            case AdsrHandle.DecaySustain:
+                list.Add(Time("Decay", a => a.AttackBeats + a.ReleaseBeats, a => a.DecayBeats, (a, b) => { a.DecayBeats = b; return a; }, AdsrHandle.DecaySustain));
+                list.Add(new ValueField("Sustain", () => A().Sustain, SustainText, n => { var a = A(); a.Sustain = (float)n; commit(a); }));
+                break;
+            case AdsrHandle.AttackOrSustain:   // the shared corner: attack, decay and sustain; one combined reset
+                list.Add(Time("Attack", a => a.DecayBeats + a.ReleaseBeats, a => a.AttackBeats, (a, b) => { a.AttackBeats = b; return a; }, AdsrHandle.AttackOrSustain));
+                list.Add(Time("Decay", a => a.AttackBeats + a.ReleaseBeats, a => a.DecayBeats, (a, b) => { a.DecayBeats = b; return a; }, AdsrHandle.DecaySustain)
+                    with { Reset = null });
+                list.Add(new ValueField("Sustain", () => A().Sustain, SustainText, n => { var a = A(); a.Sustain = (float)n; commit(a); }));
+                break;
+            case AdsrHandle.Release:
+                list.Add(Time("Release", a => a.AttackBeats + a.DecayBeats, a => a.ReleaseBeats, (a, b) => { a.ReleaseBeats = b; return a; }, AdsrHandle.Release));
+                break;
+        }
+        return list;
     }
 
     public static string SustainText(double s) => NotaNum.Db(s <= 0.0011 ? double.NegativeInfinity : AudioMath.LinToDb(s));

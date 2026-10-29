@@ -171,6 +171,11 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         pad.ValueChanged += (x, y) => { SetP("vecx", (float)x); SetP("vecy", (float)y); Refresh(); };
         pad.GestureBegin += () => { Begin("vecx"); Begin("vecy"); };
         pad.GestureEnd += () => { End("vecx"); End("vecy"); };
+        // ⌥-click types the vector, X then Y (specs/035); double-click keeps its own reset.
+        if (I("vecx") is var vx and >= 0 && I("vecy") is var vy and >= 0)
+            ValueEntry.AttachAll(pad,
+                ValueEntry.InstrumentParam(engine, track, vx, "vecx", "Vector X", NotaNum.Pct, Refresh) with { Default = null },
+                ValueEntry.InstrumentParam(engine, track, vy, "vecy", "Vector Y", NotaNum.Pct, Refresh) with { Default = null });
         pad.Reset = () =>
         {
             Begin("vecx"); Begin("vecy");
@@ -179,7 +184,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             End("vecx"); End("vecy");
             Refresh();
         };
-        ToolTip.SetTip(pad, "Drag to blend the four timbres · double-click to reset");
+        ToolTip.SetTip(pad, MenuKit.Keys("Drag to blend the four timbres · ⌥-click to type · double-click to reset"));
         if (I("vecx") is var vxi and >= 0) MidiLearn.Bind(pad, MidiTarget.PluginParam(track, -1, vxi), "Vector X");
 
         bool VectorPulled() => live && TargetIdx() == 3;

@@ -536,6 +536,14 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         // The four ADSR knobs belong to whichever operator is selected, so they are rebuilt
         // per operator once and swapped — a knob is bound to one param index for its life.
         var stageCells = new Control[4, 4];
+        Func<float, string> StageFmt(int s) => s switch
+        {
+            0 => v => Secs(v, 0.001, 4.0),
+            1 => v => Secs(v, 0.002, 6.0),
+            2 => v => Level(v),
+            _ => v => Secs(v, 0.002, 8.0),
+        };
+        env.Format = (s, n) => StageFmt(s)((float)n);   // ⌥-click a breakpoint to type it
         string[] stageIds = { "atk", "dec", "sus", "rel" };
         string[] stageNames = { "Attack", "Decay", "Sustain", "Release" };
         for (int o = 0; o < 4; o++)
@@ -543,14 +551,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             for (int s = 0; s < 4; s++)
             {
                 string id = OpId[o] + stageIds[s];
-                Func<float, string> fmt = s switch
-                {
-                    0 => v => Secs(v, 0.001, 4.0),
-                    1 => v => Secs(v, 0.002, 6.0),
-                    2 => v => Level(v),
-                    _ => v => Secs(v, 0.002, 8.0),
-                };
-                stageCells[o, s] = Knob(id, stageNames[s], fmt, cellW: 40);
+                stageCells[o, s] = Knob(id, stageNames[s], StageFmt(s), cellW: 40);
                 stageCells[o, s].IsVisible = false;
                 envKnobHosts[s].Children.Add(stageCells[o, s]);
             }

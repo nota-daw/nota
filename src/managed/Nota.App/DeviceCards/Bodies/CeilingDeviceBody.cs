@@ -331,8 +331,11 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
             Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
         };
-        void WireDrag(ShDragView v, int param)
+        void WireDrag<T>(T v, int param, string name, Func<double, string> fmt) where T : ShDragView
         {
+            // ⌥-click the handle to type it (specs/035).
+            ValueEntry.Attach(v, new ValueField(name, () => N(param), n => fmt(FromN(param, n)), n => SetN(param, n),
+                () => Begin(param), () => End(param), DefN(param)) { After = RefreshAll });
             v.Value = _ => N(param);
             v.Changed += (_, x) => { SetN(param, x); RefreshAll(); };
             v.GestureBegin += _ => Begin(param);
@@ -398,8 +401,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Control LevelTab()
         {
             level = new CeLevelView { CeilToNorm = db => ToN(Ceil, db) };
-            WireDrag(level, Ceil);
-            ToolTip.SetTip(level, "The last 4 s: the input (teal), the part over the ceiling (red) and the output (neutral ink), with the reduction under it. Drag the ceiling line; double-click resets.");
+            WireDrag(level, Ceil, "Ceiling", CeilF);
+            ToolTip.SetTip(level, MenuKit.Keys("The last 4 s: the input (teal), the part over the ceiling (red) and the output (neutral ink), with the reduction under it. Drag the ceiling line; ⌥-click to type, double-click resets."));
             var head = HeadRow(CharSeg(), Info(() => "ceiling " + CeilF(P(Ceil))));
             var knobs = KnobRow(
                 () => ScDb(S_WinInPeak) <= -119 ? "no signal" : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
@@ -421,8 +424,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Control LoudnessTab()
         {
             loudness = new CeLoudnessView { TargetToNorm = t => ToN(Target, t) };
-            WireDrag(loudness, Target);
-            ToolTip.SetTip(loudness, "Momentary (teal), short-term (neutral ink) and integrated (rose) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; double-click resets.");
+            WireDrag(loudness, Target, "Target", TargetF);
+            ToolTip.SetTip(loudness, MenuKit.Keys("Momentary (teal), short-term (neutral ink) and integrated (rose) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; ⌥-click to type, double-click resets."));
             var head = HeadRow(Row(6, CharSeg(false), Caps("TARGET"), TargetDrop()),
                 Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : "measuring…"));
             var knobs = KnobRow(

@@ -442,6 +442,11 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 Child = new DockPanel { Children = { WithDock(Btn("−", -1), Dock.Left), WithDock(Btn("+", +1), Dock.Right), val } } };
             box.PointerPressed += (_, ev) => { if ((ev.ClickCount == 2 || (ev.KeyModifiers & KeyModifiers.Alt) != 0)) { S(p, Def(p)); Refresh(); } };
             Learn(box, p, label);
+            // ⌥-click types the value, a double-click resets it (specs/035); the field sees both first.
+            double N(int v) => max > min ? (v - min) / (double)(max - min) : 0;
+            int V(double n) => (int)Math.Round(min + Math.Clamp(n, 0, 1) * (max - min));
+            ValueEntry.Attach(box, new ValueField(NotaText.Label(label), () => N(GI(p)), n => fmt(V(n)), n => S(p, V(n)),
+                () => Begin(p), () => End(p), N((int)Math.Round(Def(p)))) { After = Refresh }, val);
             readouts.Add(() =>
             {
                 int v = GI(p);

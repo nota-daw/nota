@@ -33,6 +33,9 @@ internal sealed record ValueField(string Name, Func<double> Get, Func<double, st
     /// parameters whose text is only readable at the current value); the position is restored
     /// before the gesture opens.</summary>
     public bool Probes { get; init; }
+    /// <summary>False: only the menu's Reset to default resets this value; a double-click on the
+    /// handle leaves it (the Stereo Map's volume — a double-click centres the pan).</summary>
+    public bool ResetOnDoubleClick { get; init; } = true;
 
     public bool CanReset => Reset is not null || Default is not null;
 }
@@ -51,4 +54,16 @@ internal interface IValueEntryHost
 
     /// <summary>Every field, in order, for the Tab chain.</summary>
     IReadOnlyList<ValueField> AllFields { get; }
+}
+
+/// <summary>A graph with handles that set parameter values: it says which handle is under the
+/// pointer and where it sits; the owner, which knows the parameters, supplies the fields
+/// (<see cref="ValueEntry.AttachHandles"/>).</summary>
+internal interface IValueHandles
+{
+    /// <summary>The handle at <paramref name="p"/> (an index into the owner's field lists), or −1.</summary>
+    int HandleAt(Point p);
+
+    /// <summary>Where handle <paramref name="handle"/> sits, in the control's coordinates.</summary>
+    Rect HandleRect(int handle);
 }

@@ -440,7 +440,9 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
                 Height = 14, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
                 Child = new DockPanel { Children = { WithDock(dec, Dock.Left), WithDock(inc, Dock.Right), valHit } },
             };
-            ToolTip.SetTip(box, $"{label} — ± an octave, drag or scroll the note for semitones, double-click resets. Notes outside the range pass through.");
+            ToolTip.SetTip(box, MenuKit.Keys($"{label} — ± an octave, drag or scroll the note for semitones, ⌥-click the note to type it, double-click resets. Notes outside the range pass through."));
+            ValueEntry.Attach(valHit, new ValueField(label, () => Get() / 127.0, n => DeviceCardKit.NoteName((int)Math.Round(n * 127)),
+                n => Put((int)Math.Round(Math.Clamp(n, 0, 1) * 127)), () => Begin(p), () => End(p), p == PRangeLo ? 0 : 1), val);
             Learn(box, p, label);
             return box;
         }

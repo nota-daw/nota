@@ -20,9 +20,33 @@ the GitHub release and the news posts — comes from the curated, summarised
 
 Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
+### Changed
+- ⌥-click a cell of Consort's patch matrix now types its depth (double-click or **Clear**
+  pulls the cable, as ⌥-click did); ⌥-click a Stereo Map handle types its pan and volume (⌥
+  double-click no longer resets the volume — type 0). (#240)
+
+### Fixed
+- Clearing a Volt or Aurora mod-matrix cell is one undo step and records as an automation
+  gesture, and a right-click on the Volt-family envelope and filter graphs no longer moves
+  the value under the pointer. (#240)
+
+
 ## [Unreleased]
 
 ### Added
+- **Type exact values into graphs, envelopes and mod matrices** (#240): ⌥-click (Alt-click on
+  Windows / Linux) a graph handle and type its value in the units shown, as on knobs and
+  faders; a handle with several values (an EQ band's frequency · gain · Q, an envelope's decay
+  · sustain) takes Tab between them, Return sets, Esc cancels, each value one undo step and
+  one automation gesture. Covered: the envelope graphs of Volt, Bass, Aurora, Operator,
+  Physical, Synth and Sampler / Mosaic, the ADSR handles of audio clips in the Arrangement,
+  the Volt / Aurora and Consort mod matrices, and the graphs of EQ-8, Dynamic EQ, EQ-3, Auto
+  Filter, Compressor, Delay, Chorus, Flanger, Phaser, Orbit, Crush, Auto Gain, Lens, Reverb,
+  Shutter, Vintage and Vocoder, the filter pads of Volt-family and Consort instruments, Flux's
+  vector pad, Grain's position, Keys' pickup, Rhythm's hit and sample views, Velocity's out
+  range and the Stereo Map. Right-click a handle for **Type value…** and **Reset to default**
+  (**Clear** on a matrix cell); EQ bands carry **Type value…** in their own menu. The A · D ·
+  S · R read-outs under the Volt, Bass and Aurora envelopes take a double-click to type too.
 - **Sidechain from a single pad, chain or voice** (#190): a sidechain key can now listen to one
   pad of a Drum Rack, one chain of an Instrument Rack or one voice of Nota Rhythm instead of the
   whole track — duck the bass from just the kick. Every key source picker lists the parts under

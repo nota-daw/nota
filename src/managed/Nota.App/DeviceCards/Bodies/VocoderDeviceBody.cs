@@ -295,7 +295,9 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         };
         graph.ResetRequested += edge => { Reset(edge == 0 ? Low : High); RefreshAll(); };
         Learn(graph, Low);
-        ToolTip.SetTip(graph, "The modulator's level in each band (bars) and the carrier's (teal). Drag an edge to move Low or High; double-click an edge resets it.");
+        ToolTip.SetTip(graph, MenuKit.Keys("The modulator's level in each band (bars) and the carrier's (teal). Drag an edge to move Low or High; ⌥-click an edge to type it, double-click resets it."));
+        ValueEntry.AttachHandles(graph, [ValueEntry.DeviceParam(engine, track, di, Low, "Low", v => HzF(LowHz(v)), RefreshAll)],
+            [ValueEntry.DeviceParam(engine, track, di, High, "High", v => HzF(HighHz(v)), RefreshAll)]);
 
         var knobs = new UniformGrid { Rows = 1, Columns = 7, Margin = new Thickness(0, 4, 0, 0) };
         knobs.Children.Add(K(Bands, "Bands", v => BandsOf(v).ToString(NotaNum.Culture), "Bands — how many bands, 8 … 32: fewer is more robotic, more is clearer", steps: 25));

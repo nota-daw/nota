@@ -460,7 +460,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         outBox.PointerReleased += (_, e) => { OutEnd(); e.Pointer.Capture(null); };
         outBox.PointerCaptureLost += (_, _) => OutEnd();
         Learn(outBox, DynEq.OutputP);
-        ToolTip.SetTip(outBox, "Output — drag up / down (Shift for fine), double-click for 0 dB");
+        ToolTip.SetTip(outBox, MenuKit.Keys("Output — drag up / down (Shift for fine), ⌥-click to type, double-click for 0 dB"));
+        ValueEntry.Attach(outBox, ValueEntry.DeviceRaw(engine, track, di, DynEq.OutputP, "Output", -18, 18, v => "Out " + DynEq.Db(v) + " dB", RefreshAll), outTb);
         readouts.Add(() =>
         {
             float o = P(DynEq.OutputP);

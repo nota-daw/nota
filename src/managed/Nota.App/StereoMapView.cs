@@ -7,7 +7,8 @@
 // master correlation. One custom-drawn control, refreshed on every animation frame while it is
 // visible: one native call per frame brings all measurements. Dragging a handle is one undo
 // step over pan and volume (specs/009), with the automation rules of the strip controls;
-// a click selects the track everywhere. Layout, tokens and texts: specs/008 contracts.
+// a click selects the track everywhere; ⌥-click a handle types its pan, then (Tab) its volume
+// (specs/035). Layout, tokens and texts: specs/008 contracts.
 
 using System;
 using System.Collections.Generic;
@@ -30,7 +31,7 @@ internal static class FaderScale
     public static double Gain(double frac) => Math.Clamp(frac, 0, 1) * Max;
 }
 
-public sealed class StereoMapView : Control
+public sealed class StereoMapView : Control, IValueEntryHost
 {
     // Panel geometry (contract): header and bottom rows, the well's inset and the plot padding.
     private const double HeaderH = 36, BottomH = 32, Inset = 8, Radius = 6;
@@ -88,7 +89,44 @@ public sealed class StereoMapView : Control
         _engine = engine;
         ClipToBounds = true;
         Focusable = false;
+        ValueEntry.AttachHost(this);
     }
+
+    // ---- typed entry (specs/035): a track's pan, then its volume; the master only selects ----
+    private (int id, ValueField[] fields)? _entry;   // the handle last asked about
+
+    private ValueField[] FieldsOf(int id)
+    {
+        if (_entry is { } en && en.id == id) return en.fields;
+        Item? Of() { int i = _items.FindIndex(x => x.Id == id); return i >= 0 ? _items[i] : null; }
+        ValueField One(string name, MixTarget target, AutomationTarget auto, Func<double> get, Func<double, string> text, Action<double> set)
+        {
+            MixGesture? g = null;
+            return new ValueField(name, get, text, set,
+                () => { g = new MixGesture(_engine, target); g.Begin(); _engine.BeginAutomationWrite(id, auto, -1, -1, ""); },
+                () => { _engine.EndAutomationWrite(id, auto, -1, -1, ""); g?.End(); g = null; }) { After = InvalidateVisual };
+        }
+        var pan = One("Pan", MixTarget.Pan(id), AutomationTarget.Pan, () => ((Of()?.Pan ?? 0f) + 1) / 2, n => NotaNum.Pan(n * 2 - 1),
+            n => _engine.SetTrackPan(id, (float)Math.Clamp(n * 2 - 1, -1, 1)))
+            with { Reset = () => _engine.SetTrackPan(id, 0f) };   // double-click centres the pan, as before
+        var vol = One("Volume", MixTarget.Volume(id), AutomationTarget.Volume, () => FaderScale.Frac(Of()?.Volume ?? 1f),
+            n => NotaNum.GainDb(FaderScale.Gain(n), signed: true), n => _engine.SetTrackVolume(id, (float)FaderScale.Gain(n)))
+            with { Default = FaderScale.Frac(1.0), ResetOnDoubleClick = false };   // 0 dB from the menu; a double-click centres the pan
+        _entry = (id, [pan, vol]);
+        return _entry.Value.fields;
+    }
+
+    IReadOnlyList<ValueField>? IValueEntryHost.FieldsAt(Point p)
+        => HitTest(p) is var i and >= 0 && !_items[i].Master ? FieldsOf(_items[i].Id) : null;
+
+    Rect IValueEntryHost.AnchorOf(ValueField field)
+    {
+        if (_entry is not { } en) return default;
+        int i = _items.FindIndex(x => x.Id == en.id);
+        return i < 0 ? default : ValueEntry.Near(HandleAt(Plot(), _items[i]), Bounds.Size);
+    }
+
+    IReadOnlyList<ValueField> IValueEntryHost.AllFields => _entry?.fields ?? [];
 
     // ---- frame loop ---------------------------------------------------------------------
 
@@ -297,7 +335,7 @@ public sealed class StereoMapView : Control
         x = bar.Right + 6;
         x += DrawText(ctx, "+1", NotaFonts.Mono, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
         DrawText(ctx, Signed(corr, 2), NotaFonts.Mono, 10, corr < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary, new Point(x, cy), vCenter: true);
-        DrawText(ctx, "Drag: pan + volume · Shift locks axis · double-click centres pan · ⌥ double-click 0 dB",
+        DrawText(ctx, MenuKit.Keys("Drag: pan + volume · Shift locks axis · double-click centres pan · ⌥-click types"),
                  NotaFonts.Sans, 10, NotaPalette.TextTertiary, new Point(b.Width - 10, cy), vCenter: true, rightAlign: true);
     }
 
@@ -403,10 +441,9 @@ public sealed class StereoMapView : Control
         e.Handled = true;
         if (it.Master) { SelectTrack?.Invoke(it.Id); return; }   // fixed: select only
         int id = it.Id;
-        if (e.ClickCount == 2)   // reset: pan to C, ⌥ volume to 0 dB — one step each
+        if (e.ClickCount == 2)   // reset: pan to C, one step (⌥-click types — the value entry takes it first)
         {
-            if ((e.KeyModifiers & KeyModifiers.Alt) != 0) MixEdit.Step(_engine, () => _engine.SetTrackVolume(id, 1f), MixTarget.Volume(id));
-            else MixEdit.Step(_engine, () => _engine.SetTrackPan(id, 0f), MixTarget.Pan(id));
+            MixEdit.Step(_engine, () => _engine.SetTrackPan(id, 0f), MixTarget.Pan(id));
             return;
         }
         _dragId = id;

@@ -7,6 +7,7 @@
 //   PrismTransfer  — the selected band's static curve (compression above + expansion / upward
 //                    compression below, knee, floor) with the live detector level riding on it;
 //                    drag a threshold dot ← → for the threshold, ↑ ↓ for the ratio.
+// ⌥-click a crossover line or a threshold dot to type its values (the card attaches them, specs/035).
 //   PrismEnvTrace  — the band's input peaks and its detector envelope against the threshold.
 //   PrismGrMeter   — a gain-reduction bar that grows down from the top (boost grows up), with
 //                    an optional peak-hold line.
@@ -47,7 +48,7 @@ internal static class PrismInk
 // ---------------------------------------------------------------------------------------------
 // Spectrum + crossovers
 // ---------------------------------------------------------------------------------------------
-internal sealed class PrismSpectrum : Control
+internal sealed class PrismSpectrum : Control, IValueHandles
 {
     private const int FftN = 2048, Bins = FftN / 2;
     private const double TopDb = -6, BottomDb = -96;
@@ -106,6 +107,10 @@ internal sealed class PrismSpectrum : Control
     }
 
     private double X(double v) => v * Bounds.Width;
+    // Typed entry: handle 0 = the low crossover, 1 = the high one.
+    public int HandleAt(Point p) => HitLine(p);
+    public Rect HandleRect(int handle) => ValueEntry.Near(new Point((handle == 0 ? _xl : _xh) * Bounds.Width, 0), Bounds.Size);
+
     private int HitLine(Point p)
     {
         if (_bands >= 2 && Math.Abs(p.X - X(_xl)) <= 6) return 0;
@@ -272,7 +277,7 @@ internal sealed class PrismSpectrum : Control
 // ---------------------------------------------------------------------------------------------
 // Transfer curve
 // ---------------------------------------------------------------------------------------------
-internal sealed class PrismTransfer : Control
+internal sealed class PrismTransfer : Control, IValueHandles
 {
     private const double Lo = -72;   // axes span −72 … 0 dB
     private double _thrA = -18, _slopeA = 0.5, _thrB = -40, _slopeB = 0.4, _floor = 24, _knee = 6, _level = -120;
@@ -317,6 +322,11 @@ internal sealed class PrismTransfer : Control
         if (db <= 8) return 2;
         return 0;
     }
+
+    // Typed entry: handle 0 = the above dot, 1 = the below dot.
+    public int HandleAt(Point p) => Hit(p) - 1;
+    public Rect HandleRect(int handle)
+        => ValueEntry.Near(handle == 0 ? Pt(_thrA, Out(_thrA)) : Pt(_thrB, Out(_thrB)), Bounds.Size);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {

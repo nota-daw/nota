@@ -74,6 +74,21 @@ internal sealed class Eq3DeviceBody : IDeviceBody
 
         // Band edits in dB (the Range law decides the param value).
         void GainRaw(int b, double db) => Raw(Low + b, Eq3Math.GainNorm(db, Iso()));
+        // Typeable values (⌥-click, specs/035): a band's gain (its reset also lifts the kill) and the
+        // crossovers (held an octave apart, as a drag holds them).
+        ValueField BandField(int b) => new(NotaText.Label(Eq3Math.Names[b]) + " gain", () => P(Low + b),
+            v => Eq3Math.Db(Eq3Math.GainDb(v, Iso())) + "\u2009dB", v => Raw(Low + b, v), () => Begin(Low + b), () => End(Low + b))
+        { Reset = () => ResetBand(b), After = RefreshAll };
+        ValueField XoverField(int w) => new(w == 0 ? "Low / mid crossover" : "Mid / high crossover", () => P(w == 0 ? FreqLo : FreqHi),
+            v => Eq3Math.Hz(w == 0 ? Eq3Math.LoHz(v) : Eq3Math.HiHz(v)),
+            v => { if (w == 0) Raw(FreqLo, Eq3Math.LoNorm(Math.Min(Eq3Math.LoHz(v), F2() / 2))); else Raw(FreqHi, Eq3Math.HiNorm(Math.Max(Eq3Math.HiHz(v), F1() * 2))); },
+            () => Begin(w == 0 ? FreqLo : FreqHi), () => End(w == 0 ? FreqLo : FreqHi))
+        { Reset = () => XoverReset(w), After = RefreshAll };
+        void XoverReset(int w)
+        {
+            if (w == 0) SetP(FreqLo, Eq3Math.LoNorm(Math.Min(250, F2() / 2)));
+            else SetP(FreqHi, Eq3Math.HiNorm(Math.Max(2500, F1() * 2)));
+        }
         void ResetBand(int b)
         {
             Begin(Low + b); GainRaw(b, 0); End(Low + b);
@@ -129,8 +144,9 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             fader.GestureEnd += () => End(Low + b);
             fader.Changed += db => { GainRaw(b, db); RefreshAll(); };
             fader.ResetRequested += () => ResetBand(b);
-            ToolTip.SetTip(fader, "Drag up / down for the band's gain (Shift for fine steps); double-click resets to 0\u2009dB and lifts the kill");
+            ToolTip.SetTip(fader, MenuKit.Keys("Drag up / down for the band's gain (Shift for fine steps); ⌥-click types it; double-click resets to 0\u2009dB and lifts the kill"));
             Learn(fader, Low + b);
+            ValueEntry.Attach(fader, BandField(b), val);
             readouts.Add(() =>
             {
                 bool k = Killed(b), iso = Iso();
@@ -166,18 +182,14 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         graph.XoverBegin += w => Begin(w == 0 ? FreqLo : FreqHi);
         graph.XoverEnd += w => End(w == 0 ? FreqLo : FreqHi);
         graph.XoverChanged += (w, hz) => { if (w == 0) Raw(FreqLo, Eq3Math.LoNorm(hz)); else Raw(FreqHi, Eq3Math.HiNorm(hz)); RefreshAll(); };
-        graph.XoverReset += w =>
-        {
-            if (w == 0) SetP(FreqLo, Eq3Math.LoNorm(Math.Min(250, F2() / 2)));
-            else SetP(FreqHi, Eq3Math.HiNorm(Math.Max(2500, F1() * 2)));
-            RefreshAll();
-        };
+        graph.XoverReset += w => { XoverReset(w); RefreshAll(); };
         graph.GainBegin += b => Begin(Low + b);
         graph.GainEnd += b => End(Low + b);
         graph.GainChanged += (b, db) => { GainRaw(b, db); RefreshAll(); };
         graph.GainReset += ResetBand;
         Learn(graph, FreqLo);
-        ToolTip.SetTip(graph, "Each band in its colour, the sum in brass, the output spectrum behind. Drag a crossover handle left / right; drag anywhere else to ride that band's gain. Double-click resets.");
+        ValueEntry.AttachHandles(graph, [XoverField(0)], [XoverField(1)], [BandField(0)], [BandField(1)], [BandField(2)]);
+        ToolTip.SetTip(graph, MenuKit.Keys("Each band in its colour, the sum in brass, the output spectrum behind. Drag a crossover handle left / right; drag anywhere else to ride that band's gain. Double-click resets, ⌥-click types."));
 
         // Header: crossover readouts · Output · Range · Slope.
         Control XRead(string label, Func<string> text)
@@ -218,8 +230,10 @@ internal sealed class Eq3DeviceBody : IDeviceBody
                 v.Text = Eq3Math.Db(db) + "\u2009dB";
                 v.Foreground = Math.Abs(db) > 0.05 ? TextPrimary : TextSecondary;
             });
-            ToolTip.SetTip(box, "Output gain, ±24\u2009dB — drag up / down (Shift for fine), double-click resets");
+            ToolTip.SetTip(box, MenuKit.Keys("Output gain, ±24\u2009dB — drag up / down (Shift for fine), ⌥-click types, double-click resets"));
             Learn(box, Gain);
+            ValueEntry.Attach(box, new ValueField("Output", () => P(Gain), x => Eq3Math.Db(OutDb(x)) + "\u2009dB", x => Raw(Gain, x),
+                () => Begin(Gain), () => End(Gain), 0.5) { After = RefreshAll }, v);
             return Row(4, Caps("OUT"), box);
         }
 

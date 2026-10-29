@@ -5,7 +5,8 @@
 // track, a brass fill between the handles and two 6×7 Brass Light handles. Works in
 // normalised 0..1 (the caller maps to its units and keeps a minimum gap). A press picks the
 // nearer handle and a horizontal drag moves it by the pointer's travel — a click never jumps
-// a value; Shift (or Ctrl/⌘) drags fine. Double-click resets. GestureBegin / GestureEnd
+// a value; Shift (or Ctrl/⌘) drags fine. Double-click resets; ⌥-click types the nearer
+// handle (the owner attaches the fields, specs/035). GestureBegin / GestureEnd
 // (with the handle: 0 = low, 1 = high) bracket the drag for automation writes.
 
 using System;
@@ -16,7 +17,7 @@ using Avalonia.Media;
 
 namespace Nota.App;
 
-internal sealed class RangeSliderTrack : Control
+internal sealed class RangeSliderTrack : Control, IValueHandles
 {
     private static readonly IBrush Groove = NotaPalette.BgSunken;
     private static readonly IBrush Fill = NotaPalette.VizInk;           // at rest: neutral
@@ -55,6 +56,10 @@ internal sealed class RangeSliderTrack : Control
         double w = Math.Max(1, Bounds.Width), dl = Math.Abs(x - _lo * w), dh = Math.Abs(x - _hi * w);
         return dl < dh || (dl == dh && x < _lo * w) ? 0 : 1;
     }
+
+    // Typed entry: handle 0 = low, 1 = high (the nearer one, as a drag picks it).
+    public int HandleAt(Point p) => Nearer(p.X);
+    public Rect HandleRect(int handle) => new(Math.Max(1, Bounds.Width) * (handle == 0 ? _lo : _hi) - 20, 0, 40, Bounds.Height);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {

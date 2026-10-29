@@ -12,9 +12,10 @@
 // a Side band teal, the rest Ink 3, an off band Ink 6; a Mid band wears a neutral ring and a
 // left / right band a rose one. A tooltip beside the selected node reads the band.
 //
-// Drag a node — frequency and gain; the wheel over a node — Q (Shift for fine); double-click a
-// node turns the band on / off, double-click empty space switches on a free band there as a
-// stereo bell; right-click a node — type, slope, channel and on. The maths mirrors Eq.h.
+// Drag a node — frequency and gain; the wheel over a node — Q (Shift for fine); ⌥-click a node
+// types its frequency, gain and Q (Tab between them); double-click a node turns the band on /
+// off, double-click empty space switches on a free band there as a stereo bell; right-click a
+// node — type, slope, channel, on and Type value…. The maths mirrors Eq.h.
 
 using System;
 using System.Collections.Generic;
@@ -102,7 +103,7 @@ internal static class Eq8
     }
 }
 
-public sealed class Eq8Curve : Control
+public sealed class Eq8Curve : Control, IValueEntryHost
 {
     private const int Pts = 150;
     private const double NodeD = 11, HitR = 9;
@@ -136,6 +137,7 @@ public sealed class Eq8Curve : Control
 
     public Eq8Curve(IAudioEngine engine, int track, int device)
     {
+        ValueEntry.AttachHost(this, menu: false);   // the band menu carries Type value…
         _engine = engine; _track = track; _device = device;
         ClipToBounds = true;
         MinHeight = 60;
@@ -172,6 +174,36 @@ public sealed class Eq8Curve : Control
 
     // ---- params ----
     private float Pd(int p) => p < _engine.DeviceParamCount(_track, _device) ? _engine.DeviceGetParam(_track, _device, p) : 0f;
+    // ---- typed entry (specs/035): a node's frequency, gain and Q ----
+    // Cached per band (rebuilt when the band gains or loses its gain value): Tab finds the open
+    // field by reference, so every read must hand out the same objects.
+    private readonly (bool gain, ValueField[] fields)?[] _bandFields = new (bool, ValueField[])?[Eq8.Bands];
+    private ValueField[] BandFields(int b)
+    {
+        bool g = Eq8.HasGain(BandType(b));
+        if (_bandFields[b] is { } c && c.gain == g) return c.fields;
+        var fs = DynEq.BandFields(_engine, _track, _device, b, Eq8.P(b, Eq8.FreqF), Eq8.P(b, Eq8.GainF),
+            Eq8.P(b, Eq8.QF), g, () => { Edited?.Invoke(); InvalidateVisual(); });
+        _bandFields[b] = (g, fs);
+        return fs;
+    }
+    IReadOnlyList<ValueField>? IValueEntryHost.FieldsAt(Point p) => Hit(p) is var b and >= 0 ? BandFields(b) : null;
+    Rect IValueEntryHost.AnchorOf(ValueField field)
+    {
+        for (int b = 0; b < Eq8.Bands; b++)
+            if (field.Name.StartsWith(NotaNum.F($"Band {b + 1} "), StringComparison.Ordinal)) return ValueEntry.Near(NodeAt(b), Bounds.Size);
+        return default;
+    }
+    IReadOnlyList<ValueField> IValueEntryHost.AllFields
+    {
+        get
+        {
+            var list = new List<ValueField>();
+            for (int b = 0; b < Eq8.Bands; b++) if (BandOn(b)) list.AddRange(BandFields(b));
+            return list;
+        }
+    }
+
     private float P(int band, int field) => _engine.DeviceGetParam(_track, _device, Eq8.P(band, field));
     private void SetRaw(int p, double v) => _engine.DeviceSetParam(_track, _device, p, (float)v);
     private void SetP(int band, int field, double v) => SetRaw(Eq8.P(band, field), v);
@@ -408,6 +440,8 @@ public sealed class Eq8Curve : Control
         var on = new MenuItem { Header = "Band on", ToggleType = MenuItemToggleType.CheckBox, IsChecked = BandOn(b) };
         on.Click += (_, _) => { Gesture(Eq8.P(b, Eq8.On), () => SetP(b, Eq8.On, BandOn(b) ? 0 : 1)); Edited?.Invoke(); InvalidateVisual(); };
         fly.Items.Add(on);
+        fly.Items.Add(new Separator());
+        fly.Items.Add(MenuKit.Item("Type value…", GlyphKind.Edit, () => ValueEntry.Open(this, BandFields(b)[0])));
         fly.ShowAt(this, showAtPointer: true);
     }
 

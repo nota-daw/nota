@@ -13,14 +13,14 @@ A/D/S/R read-out row.
 
 ## 1. Shared controls
 
-| ☐ | Control | File | Gesture today | Plan |
+| ☑ | Control | File | Gesture today | Plan |
 |---|---|---|---|---|
 | ☑ | `Knob` | Controls/Knob.cs | DC reset | A — `Format` property; `KnobCell` attaches when set; DC branch removed, ⌥ reset |
 | ☑ | `PanKnob` | Controls/PanKnob.cs | — | A — L/R/C read-out, default C |
 | ☑ | `MiniFader` | Controls/MiniFader.cs | DC reset | A — dB read-out; DC branch removed |
 | ☑ | `VFader` | Controls/VFader.cs | — (a click jumped the value) | A — dB read-out, default 0 dB; the drag is now relative, so the first click of a double-click moves nothing |
 | ☑ | `SliderTrack` | Controls/SliderTrack.cs | DC `Reset` | A via its row; `Reset` moves to ⌥ |
-| ☐ | `RangeSliderTrack` | Controls/RangeSliderTrack.cs | DC `Reset` | H — low / high fields; `Reset` on ⌥ |
+| ☑ | `RangeSliderTrack` | Controls/RangeSliderTrack.cs | DC `Reset` | H — `IValueHandles` (nearer handle); Velocity attaches Out low / Out high, the reset rides on the low field |
 | ☑ | `DragNumber` | Controls/DragNumber.cs | DC types | already typed — move to the shared box and parser, add ⌥ reset where it has a default |
 | ☑ | `PanBar` | Controls/PanBar.cs | DC reset to C | A — L/R/C read-out, default C |
 | ☑ | `ValueBar` | Controls/ValueBar.cs | DC reset | A — ⌥ fallback in the control; no call sites today, so nothing to attach |
@@ -33,14 +33,14 @@ A/D/S/R read-out row.
 
 ## 2. Knob factories and direct builders
 
-| ☐ | Site | Plan |
+| ☑ | Site | Plan |
 |---|---|---|
 | ☑ | DeviceCards/DeviceParamControls.cs (built-in device params; generic knob) | set `Format` |
 | ☑ | DeviceCards/InstrumentControls.cs | set `Format` |
 | ☑ | DeviceCards/PluginCard.cs (VST3/AU generic params) | `Format` from `PluginParamText` via probe — exempt from pure `TextAt` (plug-in text is only readable at the current value); probe path allowed here, documented |
 | ☑ | DeviceCards/Rack/RackCardView.cs (×5), Rack/MacroPanel.cs | set `Format`; merge menu into `MacroPanel.ShowMenu` |
 | ☑ | ModularView.cs (×5) | set `Format`; merge into `ShowModulateMenu` |
-| ☐ | DeviceChainView.cs | set `Format` |
+| ☑ | DeviceChainView.cs | `Format` set on the Sends knobs (attached by `KnobCell`) |
 | ☑ | Device bodies: AutoFilter, AutoShift, BeatRepeat, Ceiling, Chamber, Compressor, Crush, Delay, DynamicEq, Eq, Forge, Lens, Prism, Reverb, Shutter, Utility, Valve, Vintage, Vocoder | set `Format` in each body's knob helper |
 | ☑ | MIDI bodies: Arp, Chord, Generic, Length, Random, Velocity | set `Format` |
 | ☑ | Instrument cards: Aurora (×2), Bass, Consort, Flux, Grain, Monolith, Mosaic (×2), Pendulum, Physical, Rhythm, Sampler, Volt | set `Format` |
@@ -51,50 +51,53 @@ A/D/S/R read-out row.
 
 ## 3. Graph controls (handles that set numbers)
 
-| ☐ | Control | File | Plan |
+| ☑ | Control | File | Plan |
 |---|---|---|---|
-| ☐ | `AutoFilterCurve` | Controls/AutoFilterCurve.cs | H — cutoff → resonance |
-| ☐ | `AfFader`, `AfEnvView`, `AfLfoView` | Controls/AutoFilterViews.cs | A (fader) · H (env / LFO handles) |
-| ☐ | `ChorusVoicesView`, `ChorusFieldView` | Controls/ChorusViews.cs | H |
-| ☐ | `CompFader`, `CompTransferView` (threshold node), `CompMotionView`, `CompKeyView` | Controls/CompViews.cs | A · H; history view exempt (display only) |
-| ☐ | `ConsortFilterCurve`, `ConsortDelayView`, `ConsortPitchLane`, `ConsortStepGrid` | Controls/ConsortViews.cs | H for curve / delay; step and pitch lanes keep ⌥ paint — **exempt** (step editors, out of scope) unless they set a card parameter |
-| ☐ | `ConsortPatchMatrix` | Controls/ConsortViews.cs | H per cell — see §4 |
-| ☐ | `CrSpectrumView`, `CrTransferView` | Controls/CrushViews.cs | H |
-| ☐ | `DelayTaps`, `DelayFader`, `DelayFilterCurve` | Controls/DelayViews.cs | H · A · H (low cut → high cut) |
-| ☐ | `DynamicEqCurve` | Controls/DynamicEqCurve.cs | H — band freq → gain → Q; keep empty-space DC |
-| ☐ | `Eq3Fader`, `Eq3Graph` | Controls/Eq3Views.cs | A · H |
-| ☐ | `Eq8Curve` | Controls/Eq8Views.cs | H — band freq → gain → Q; keep empty-space DC |
-| ☐ | `FlangerSweepView`, `FlangerBar` | Controls/FlangerViews.cs | H · A; comb view exempt (display) |
-| ☐ | `FluxVectorPad` | Controls/FluxVectorPad.cs | H — X → Y |
-| ☐ | `GrainWaveViz` | Controls/GrainWaveViz.cs | H — position → spray |
-| ☐ | `KeysPickupView`, `KeysTremView` | Controls/KeysViews.cs | H — symmetry → drive (per its handle) |
-| ☐ | `LensVSlider` | Controls/LensViews.cs | A; spectrum / scope / waterfall exempt (display) |
-| ☐ | `LvHistoryView`, `LvGainFader` | Controls/LevelViews.cs | H · A |
-| ☐ | `OrbitGainView`, `OrbitPanBar` | Controls/OrbitViews.cs | H — amount → rate · A |
-| ☐ | `PhaserSweepView` | Controls/PhaserViews.cs | H; response view exempt (display) |
-| ☐ | `ReverbTailView` | Controls/ReverbViews.cs | H if it drags (verify) |
-| ☐ | `RhythmHitView`, `RhythmSampleView` | Controls/RhythmViews.cs | H; `RhythmStepStrip` exempt (step editor) |
-| ☐ | `ShSignalView`, `ShEnvelopeView`, `ShKeyView` | Controls/ShutterViews.cs | H; `ShPill`, `ShPatternView` verify |
-| ☐ | `VtCurveView`, `VtWearView`, `VtHarmView` | Controls/VintageViews.cs | H if they drag (verify) |
-| ☐ | `VocoderGraph` | Controls/VocoderGraph.cs | H — low edge → high edge |
-| ☐ | `VoltFilter` | Controls/VoltFilter.cs | H — cutoff → resonance |
-| ☐ | `SynthViz` Filter pad | Controls/SynthViz.cs | H — cutoff (X) → reso (Y) |
-| ☐ | `AuroraLfoStrip`, `AuroraStack`, `StrataWave`, `PadWave`, `ChordKeysViz` | Controls/ | verify: display only → exempt |
-| ☐ | `ArpGrid` | Controls/ArpGrid.cs | exempt (pattern editor, ⌥ already used) unless a handle sets a card parameter |
-| ☐ | `StereoMapView` handles | StereoMapView.cs | DC reset (pan → C, ⌥ volume → 0 dB) | H — pan → volume per track dot; ⌥ already resets volume, keep; reset pan via menu |
-| ☐ | Sampler / Mosaic views | DeviceCards/Sampler/SamplerViews.cs, Mosaic/MosaicViews.cs | H for start / end / loop / zone handles (verify) |
+| ☑ | `AutoFilterCurve` | Controls/AutoFilterCurve.cs | `AttachAll` — cutoff → resonance (a drag anywhere moves it) |
+| ☑ | `AfFader`, `AfEnvView`, `AfLfoView` | Controls/AutoFilterViews.cs | A (Shape faders, Vintage state faders) · `AttachAll` env amount · LFO amount → phase |
+| ☑ | `ChorusVoicesView`, `ChorusFieldView` | Controls/ChorusViews.cs | `AttachAll` Amount; field view **exempt** (display only) |
+| ☑ | `CompFader`, `CompTransferView` (threshold node), `CompMotionView`, `CompKeyView` | Controls/CompViews.cs | A (threshold, make-up / key gain) · `AttachAll` threshold → ratio · H HP → Q, LP → Q; motion and history **exempt** (display only) |
+| ☑ | `ConsortFilterCurve`, `ConsortDelayView`, `ConsortPitchLane`, `ConsortStepGrid` | Controls/ConsortViews.cs | `AttachAll` cutoff → reso; delay view **exempt** (display only); step and pitch lanes **exempt** (step editors) |
+| ☑ | `ConsortPatchMatrix` | Controls/ConsortViews.cs | H per cell — see §4 |
+| ☑ | `CrQuantView`, `CrSpectrumView`, `CrTransferView` | Controls/CrushViews.cs | `AttachAll` bits → rate · H Nyquist (rate) / post filter · H drive |
+| ☑ | `DelayTaps`, `DelayFader`, `DelayFilterCurve` | Controls/DelayViews.cs | taps **exempt** (display only) · A · H low cut / high cut |
+| ☑ | `DynamicEqCurve` | Controls/DynamicEqCurve.cs | H — band freq → gain → Q (`DynEq.BandFields`); DC keeps band on/off and empty-space add; **Type value…** in the band menu |
+| ☑ | `Eq3Fader`, `Eq3Graph` | Controls/Eq3Views.cs | A (reset lifts the kill) · H crossovers (box over the handle) and band zones |
+| ☑ | `Eq8Curve` | Controls/Eq8Views.cs | H — band freq → gain → Q; DC keeps band on/off and empty-space add; **Type value…** in the band menu |
+| ☑ | `FlangerCombView`, `FlangerSweepView`, `FlangerBar` | Controls/FlangerViews.cs | `AttachAll` delay → feedback on the comb (the view that drags); sweep and bar **exempt** (display only) |
+| ☑ | `FluxVectorPad` | Controls/FluxVectorPad.cs | `AttachAll` X → Y; DC keeps its `DoubleTapped` reset (fields carry no default) |
+| ☑ | `GrainWaveViz` | Controls/GrainWaveViz.cs | `AttachAll` position (spray is not dragged here); DC keeps `DoubleTapped` |
+| ☑ | `KeysPickupView`, `KeysTremView` | Controls/KeysViews.cs | host — symmetry → distance (none for Clav); trem view **exempt** (display only) |
+| ☑ | `LensVSlider` | Controls/LensViews.cs | A — the parameter the rail drives now; spectrum / scope / waterfall **exempt** (display) |
+| ☑ | `LvHistoryView`, `LvGainFader` | Controls/LevelViews.cs | A target · A gain (+ the ceiling box) |
+| ☑ | `OrbitGainView`, `OrbitPanBar` | Controls/OrbitViews.cs | `AttachAll` amount → phase; pan bar **exempt** (display only) |
+| ☑ | `PhaserResponseView`, `PhaserSweepView` | Controls/PhaserViews.cs | `AttachAll` center → feedback on the response (the view that drags); sweep **exempt** (display) |
+| ☑ | `ReverbTailView` | Controls/ReverbViews.cs | H — decay (the tail) / pre-delay (the marker) |
+| ☑ | `RhythmHitView`, `RhythmSampleView` | Controls/RhythmViews.cs | `AttachAll` decay → tune · H start / end (DC keeps loading a file); `RhythmStepStrip` **exempt** (step editor) |
+| ☑ | `ShSignalView`, `ShEnvelopeView`, `ShKeyView` | Controls/ShutterViews.cs | H via `ShDragView : IValueHandles` (also Crush, Ceiling, Forge, Beat Repeat views); the fill bars (Complexity / Smooth / Swing) A; `ShPill` **exempt** (display), `ShPatternView` **exempt** (step editor) |
+| ☑ | `VtCurveView`, `VtWearView`, `VtHarmView` | Controls/VintageViews.cs | `AttachAll` drive · depth → rate (of what the window shows) · drive |
+| ☑ | `VocoderGraph` | Controls/VocoderGraph.cs | H — low edge / high edge |
+| ☑ | `VoltFilter` | Controls/VoltFilter.cs | host — cutoff → reso (all four cards); right-click no longer drags |
+| ☑ | `SynthViz` Filter pad | Controls/SynthViz.cs | host — cutoff → reso |
+| ☑ | `AuroraLfoStrip`, `AuroraStack`, `StrataWave`, `PadWave`, `ChordKeysViz` | Controls/ | **exempt** — display only (no pointer input) |
+| ☑ | `ArpGrid` | Controls/ArpGrid.cs | **exempt** (pattern editor, ⌥ already used); the Arp steppers are A |
+| ☑ | `StereoMapView` handles | StereoMapView.cs | host — pan → volume per track dot (master: select only); DC centres the pan as before; ⌥ double-click 0 dB is gone (⌥-click types; type 0) |
+| ☑ | Sampler / Mosaic views | DeviceCards/Sampler/SamplerViews.cs, Mosaic/MosaicViews.cs | H wave markers (Sampler), env A · D→S · R, `AttachAll` filter cutoff → reso (both cards), A Mosaic curves; Mosaic zone markers and zone number boxes **exempt** (zone data in the program, not parameters) |
+| ☑ | `ChamberFader`, `ChamberIrView`, `ChamberDecayGraph`, `ChamberEqCurve` | Controls/ChamberViews.cs | A blend / dry-wet · H IR start / decay trims · H band RT60 markers · H low cut → shelf, high cut → shelf; LFO view **exempt** (display) |
+| ☑ | `PrismSpectrum`, `PrismTransfer`, Prism value boxes | Controls/PrismViews.cs | H crossovers · H threshold → ratio per dot · A |
+| ☑ | Output / value boxes: EQ-8, Dynamic EQ, EQ-3, Auto Gain ceiling, Forge stage outputs, Chord velocity offsets, Scale range, Arp steppers, Consort cable depth, drum-pad pan | bodies | A over their read-outs |
 
 ## 4. Envelopes and matrices
 
-| ☐ | Control | Plan |
+| ☑ | Control | Plan |
 |---|---|---|
-| ☐ | `VoltEnv` — Volt (amp, filter), Bass (amp, filter), Aurora (×2), Operator, Physical noise | H — A · D→S · R nodes and segments; R where the card has no A/D/S/R controls beside the graph |
-| ☐ | `SynthViz` Env tab | H — breakpoints; read-outs already in the graph |
-| ☐ | Clip ADSR handles (`ClipAdsrKit`, arrangement lane) | H — commit via `CommitAdsr`; DC reset → ⌥ (Shortcuts row "double-click resets the stage" changes) |
-| ☐ | Audio clip editor ADSR rows | K — already typed; reset → ⌥ |
-| ☐ | Other envelope strips (Monolith / Pentad / Consort inline-knob ADSR) | covered by `Knob` |
-| ☐ | `VoltMatrix` | H per cell, % −100…+100; DC types, ⌥ / menu **Clear**; RC → menu; clear wrapped in a gesture (undoable) |
-| ☐ | `ConsortPatchMatrix` | H per cell; DC types depth (creates the cable); ⌥ / menu **Clear** removes |
+| ☑ | `VoltEnv` — Volt (amp, filter), Bass (amp, filter), Aurora (×2), Operator, Physical noise | host — A · D→S · R nodes and segments, formatter per stage from the card; the cards' A/D/S/R read-out cells type too (Operator has knobs) — no extra `EnvReadouts` row needed |
+| ☑ | `SynthViz` Env tab | host — A · D→S · R breakpoints |
+| ☑ | Clip ADSR handles (`ClipAdsrKit`, arrangement lane) | host on the lane — each value one `CommitAdsr`; DC still resets the stage (gestures per #274) |
+| ☑ | Audio clip editor ADSR rows | K — already typed |
+| ☑ | Other envelope strips (Monolith / Pentad / Consort inline-knob ADSR) | covered by `Knob` |
+| ☑ | `VoltMatrix` | host per cell, % −100…+100; ⌥ types, DC / menu **Clear** (one gesture, undoable); RC → menu; Tab walks the routed cells |
+| ☑ | `ConsortPatchMatrix` | host per cell; ⌥ types the depth (creates the cable); DC / menu **Clear** pulls it |
 
 ## 5. Out of scope (recorded, not converted)
 
@@ -120,3 +123,11 @@ else there): EQ-8 / Dynamic EQ add-band and band on/off, Rhythm sample load, Con
 painting, Flux pad / Grain view (`DoubleTapped`), `StereoMapView`, `VoltMatrix` (PR 2).
 The rack macro knobs type and reset but keep their own right-click menu (no Type value…
 item there yet).
+
+## 7. Gestures after #274 (PR 2 / PR 3)
+
+Part 1 swapped the gestures after review: **⌥-click types** (and a double-click on a read-out),
+**double-click resets** (or clears a route). The graph, envelope and matrix hosts follow the
+same scheme, so the "DC types" wording in older rows reads as "⌥ types" now. A host's fields
+without a default let a double-click through to the control (EQ band on / off, Rhythm load,
+Flux / Grain `DoubleTapped`).

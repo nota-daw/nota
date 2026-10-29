@@ -100,6 +100,8 @@ internal sealed class ChamberDeviceBody : IDeviceBody
 
         // ---- formatters -------------------------------------------------------------
         static double Exp(double v, double lo, double hi) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0, 1));
+        // A typeable value for a fader or a graph handle (⌥-click it, specs/035).
+        ValueField CF(int p, string name, Func<double, string> fmt) => ValueEntry.DeviceParam(engine, track, di, p, name, fmt, () => { foreach (var a in readouts) a(); });
         static string Secs(double s) => s >= 10 ? NotaNum.F($"{s:0.0}\u2009s") : s >= 1 ? NotaNum.F($"{s:0.00}\u2009s") : NotaNum.F($"{s * 1000:0}\u2009ms");
         static string Ms(double ms) => ms >= 100 ? NotaNum.F($"{ms:0}\u2009ms") : ms >= 10 ? NotaNum.F($"{ms:0.0}\u2009ms") : NotaNum.F($"{ms:0.0}\u2009ms");
         static string Hz(double hz) => hz >= 1000 ? NotaNum.F($"{hz / 1000:0.0}\u2009k") : NotaNum.F($"{hz:0}\u2009Hz");
@@ -271,6 +273,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             f.DragEnded += () => End(p);
             readouts.Add(() => f.Set(P(p)));
             MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
+            ValueEntry.Attach(f, CF(p, split ? "Blend" : "Dry/wet", split ? v => NotaNum.F($"{v * 100:0}\u2009% algorithm") : Pct));
             ToolTip.SetTip(f, split ? "Blend — convolution (slate, top) ⇄ algorithm (neutral, bottom). Double-click: 50 / 50" : "Dry/Wet — double-click resets");
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
             if (!split) readouts.Add(() => lb.Foreground = P(DryWet) > 0.995f || On(WetOnly) ? TxtC : MutedC);
@@ -357,7 +360,9 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             irView.TrimChanged += (s, e) => { Raw(IrStart, (float)s); Raw(IrDecay, (float)e); };
             irView.DragStarted += h => Begin(h == 1 ? IrStart : IrDecay);
             irView.DragEnded += h => End(h == 1 ? IrStart : IrDecay);
-            ToolTip.SetTip(irView, "Drag the trim lines to trim the IR (Start · Decay); double-click resets. Drop an audio file here to load it.");
+            ValueEntry.AttachHandles(irView, [CF(IrStart, "IR start", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v))],
+                [CF(IrDecay, "IR decay", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v))]);
+            ToolTip.SetTip(irView, MenuKit.Keys("Drag the trim lines to trim the IR (Start · Decay); ⌥-click to type, double-click resets. Drop an audio file here to load it."));
             readouts.Add(() =>
             {
                 string sig = NotaNum.F($"{Sel(IrSelect, IrCount)}|{Sc(S_IrSeconds):0.000}|{Sc(S_IrChannels)}|{Sc(S_UserIr)}");
@@ -413,7 +418,9 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             };
             graph.DragStarted += b => Begin(b == 0 ? AlgoLowDecay : b == 1 ? AlgoDecay : AlgoHighDecay);
             graph.DragEnded += b => End(b == 0 ? AlgoLowDecay : b == 1 ? AlgoDecay : AlgoHighDecay);
-            ToolTip.SetTip(graph, "Drag a marker to set that band's RT60 (mid = Decay; low / high follow it as ratios). The Damping knob sets the high crossover.");
+            ValueEntry.AttachHandles(graph, [CF(AlgoLowDecay, "Low decay", v => Secs(RtMid() * Math.Pow(16, v - 0.5)))],
+                [CF(AlgoDecay, "Decay", v => Secs(Exp(v, 0.2, 20)))], [CF(AlgoHighDecay, "High decay", v => Secs(RtMid() * Math.Pow(16, v - 0.5)))]);
+            ToolTip.SetTip(graph, MenuKit.Keys("Drag a marker to set that band's RT60 (mid = Decay; low / high follow it as ratios). The Damping knob sets the high crossover. · ⌥-click to type"));
             readouts.Add(() =>
             {
                 FetchPreviews();
@@ -450,7 +457,9 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             };
             eq.DragStarted += h => { if (h == 0) { Begin(EqLowCut); Begin(EqLowGain); } else { Begin(EqHighCut); Begin(EqHighShelf); } };
             eq.DragEnded += h => { if (h == 0) { End(EqLowCut); End(EqLowGain); } else { End(EqHighCut); End(EqHighShelf); } };
-            ToolTip.SetTip(eq, "Left handle: low cut (X) + low shelf (Y) · right handle: high cut (X) + high shelf (Y)");
+            ValueEntry.AttachHandles(eq, [CF(EqLowCut, "Low cut", LowCutF), CF(EqLowGain, "Low shelf", GainF)],
+                [CF(EqHighCut, "High cut", HighCutF), CF(EqHighShelf, "High shelf", GainF)]);
+            ToolTip.SetTip(eq, MenuKit.Keys("Left handle: low cut (X) + low shelf (Y) · right handle: high cut (X) + high shelf (Y) · ⌥-click to type"));
             readouts.Add(() => eq.Set(P(EqLowCut), P(EqLowGain), P(EqHighShelf), P(EqHighCut)));
             var eqKnobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Height = 50 };
             eqKnobs.Children.Add(K(EqLowCut, "LOW-CUT", LowCutF, 30, 48));

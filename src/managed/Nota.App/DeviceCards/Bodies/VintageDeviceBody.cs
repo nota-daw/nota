@@ -60,6 +60,8 @@ internal sealed class VintageDeviceBody : IDeviceBody
         var readouts = new List<Action>();
         // by index: a panel built lazily inside a readout (the Tone tab's two bodies) adds its own
         void RefreshAll() { for (int i = 0; i < readouts.Count; i++) readouts[i](); }
+        // A typeable value for a fader or a graph (⌥-click it, specs/035).
+        ValueField F(int p, string name, Func<double, string> fmt) => ValueEntry.DeviceParam(engine, track, di, p, name, fmt, RefreshAll);
         var scope = new float[kScope];
         int scN = 0;
         double Sc(int i) => scN > i ? scope[i] : 0;
@@ -272,14 +274,15 @@ internal sealed class VintageDeviceBody : IDeviceBody
         // ======================================================================
         // LEFT — STATE column (drive · wear)
         // ======================================================================
-        Control StateFader(int p, string label, IBrush ink, string tip)
+        Control StateFader(int p, string label, IBrush ink, Func<double, string> fmt, string tip)
         {
             var f = new AfFader { Ink = ink, Width = 16, VerticalAlignment = VerticalAlignment.Stretch, Default = engine.DeviceParamDefault(track, di, p) };
             f.Changed += v => { Raw(p, (float)v); RefreshAll(); };
             f.GestureBegin += () => Begin(p);
             f.GestureEnd += () => End(p);
             Learn(f, p);
-            ToolTip.SetTip(f, tip);
+            ToolTip.SetTip(f, MenuKit.Keys(tip));
+            ValueEntry.Attach(f, F(p, NotaText.Label(label), fmt));
             readouts.Add(() => f.Set(P(p), double.NaN));
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
             return new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = f } } };
@@ -294,8 +297,8 @@ internal sealed class VintageDeviceBody : IDeviceBody
             stateTitle.Foreground = Sc(S_InPk) > 0.01 ? AccentBright : TextTertiary;   // lit while signal passes
         });
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(StateFader(Drive, "DRV", NotaPalette.VizInk, "Drive — how hard the signal hits the saturation. Double-click resets."));
-        faders.Children.Add(Col(StateFader(Wear, "WEAR", Teal, "Wear — the age of the medium: a narrower band, more hiss and crackle, a wandering flutter. Double-click resets."), 1));
+        faders.Children.Add(StateFader(Drive, "DRV", NotaPalette.VizInk, Pct, "Drive — how hard the signal hits the saturation. ⌥-click types, double-click resets."));
+        faders.Children.Add(Col(StateFader(Wear, "WEAR", Teal, Pct, "Wear — the age of the medium: a narrower band, more hiss and crackle, a wandering flutter. ⌥-click types, double-click resets."), 1));
         var stateCol = new RuleSection
         {
             Width = 56, Padding = new Thickness(0, 5, 0, 4),
@@ -314,7 +317,8 @@ internal sealed class VintageDeviceBody : IDeviceBody
             curve.DragV += v => Raw(Drive, (float)v);
             curve.GestureBegin += () => Begin(Drive);
             curve.GestureEnd += () => End(Drive);
-            ToolTip.SetTip(curve, "The transfer curve the saturation runs — input level across, output up; dashed is the dry line, teal what you hear with Mix and Output, the dot where the input peak sits. Drag up or down for the drive.");
+            ToolTip.SetTip(curve, MenuKit.Keys("The transfer curve the saturation runs — input level across, output up; dashed is the dry line, teal what you hear with Mix and Output, the dot where the input peak sits. Drag up or down for the drive, ⌥-click to type it."));
+            ValueEntry.AttachAll(curve, F(Drive, "Drive", Pct));
             Learn(curve, Drive);
 
             var thd = Mono("", 7, TextTertiary);
@@ -352,7 +356,13 @@ internal sealed class VintageDeviceBody : IDeviceBody
             wearView.DragH += v => Raw(wearShow == 1 ? FlutterRate : WowRate, (float)v);
             wearView.GestureBegin += () => { Begin(Wow); Begin(Flutter); Begin(WowRate); Begin(FlutterRate); };
             wearView.GestureEnd += () => { End(Wow); End(Flutter); End(WowRate); End(FlutterRate); };
-            ToolTip.SetTip(wearView, "The pitch drift over the last four seconds — wow in neutral ink, flutter in teal. Drag up or down for the depth of what is picked above, sideways for its rate.");
+            ToolTip.SetTip(wearView, MenuKit.Keys("The pitch drift over the last four seconds — wow in neutral ink, flutter in teal. Drag up or down for the depth of what is picked above, sideways for its rate; ⌥-click to type them."));
+            ValueEntry.AttachAll(wearView,
+                new ValueField("Depth", () => P(wearShow == 1 ? Flutter : Wow), Pct, v => Raw(wearShow == 1 ? Flutter : Wow, (float)v),
+                    () => Begin(wearShow == 1 ? Flutter : Wow), () => End(wearShow == 1 ? Flutter : Wow)) { After = RefreshAll },
+                new ValueField("Rate", () => P(wearShow == 1 ? FlutterRate : WowRate), v => wearShow == 1 ? FlutRateF(v) : WowRateF(v),
+                    v => Raw(wearShow == 1 ? FlutterRate : WowRate, (float)v),
+                    () => Begin(wearShow == 1 ? FlutterRate : WowRate), () => End(wearShow == 1 ? FlutterRate : WowRate)) { After = RefreshAll });
             Learn(wearView, Wow);
 
             var show = Chips(new[] { "Wow", "Flutter", "Both" }, i => wearShow == i, i => wearShow = i, -1);
@@ -397,7 +407,8 @@ internal sealed class VintageDeviceBody : IDeviceBody
             harm.DragV += v => Raw(Drive, (float)v);
             harm.GestureBegin += () => Begin(Drive);
             harm.GestureEnd += () => End(Drive);
-            ToolTip.SetTip(harm, "The harmonics the saturation adds at the input's level (the fundamental at the top), against the hiss floor in teal. Drag up or down for the drive.");
+            ToolTip.SetTip(harm, MenuKit.Keys("The harmonics the saturation adds at the input's level (the fundamental at the top), against the hiss floor in teal. Drag up or down for the drive, ⌥-click to type it."));
+            ValueEntry.AttachAll(harm, F(Drive, "Drive", Pct));
             Learn(harm, Drive);
 
             var peak = Mono("", 7, TextSecondary);
