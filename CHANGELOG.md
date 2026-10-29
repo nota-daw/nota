@@ -48,6 +48,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   its send to each return, two per row, as far as the height allows.
 
 ### Changed
+- **Live graphs in Nota Reverb and Nota Delay** (Egor's review of nota-daw/nota#296): the
+  graphs now draw your audio instead of the settings. Reverb's Space tab shows the last six
+  seconds of the input and the tail, with a guide falling from the tail's latest peak at the
+  set RT60; its Tone · Mod tab shows how long the tail rings at each frequency, the low and
+  high cut (drag the handles) and the tail's live spectrum. Delay's Time tab shows the input
+  and the echoes, on the project's beat grid in Sync while it plays, with dots where the
+  repeats of the latest hit land; its Loop · Wow tab shows each of the first six repeats
+  through the loop filter, and the echo spectrum. As on Compressor and Auto Filter, each graph
+  fills its panel and the right panel holds the open tab's controls, with Output beside them.
 - **Smaller shell text and a new key picker** (review of
   nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
   The key picker is a one-octave keyboard with a Major / Minor switch and the key named in

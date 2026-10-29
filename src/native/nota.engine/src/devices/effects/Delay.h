@@ -10,6 +10,7 @@
 
 #include "devices/Device.h"
 #include "dsp/primitives/DelayLine.h"
+#include "dsp/primitives/LevelHistory.h"
 
 #include <algorithm>
 #include <atomic>
@@ -52,7 +53,8 @@ class Delay : public Device {
         LatencyComp,
         kNumParams
     };
-    // Scope telemetry layout (read by the card).
+    // Scope telemetry layout (read by the card). After the kScope values comes the level
+    // history (dsp::LevelHistory: input dB, echoes dB before the mix, echo samples), oldest first.
     enum {
         S_WetPk = 0,
         S_OutL,
@@ -65,6 +67,8 @@ class Delay : public Device {
         S_MsL,
         S_MsR,
         S_Latency,
+        S_Beat,    // the transport's beat at the end of the last block (aligns the card's beat grid)
+        S_Playing, // 1 while the transport rolls
         kScope
     };
     // deviceAction ids.
@@ -145,13 +149,15 @@ class Delay : public Device {
     double delaySamples(int timeParam, int divParam, bool sync) const;
     void wipe();
 
-    double sr_ = 44100.0, spb_ = 0.0, wowPhase_ = 0.0;
+    double sr_ = 44100.0, spb_ = 0.0, wowPhase_ = 0.0, beat_ = 0.0;
+    bool playing_ = false;
     double curL_ = 0.0, curR_ = 0.0, oldL_ = 0.0, oldR_ = 0.0;
     int fadeLen_ = 1024, fadePos_ = 1024;
     dsp::DelayLine bufL_, bufR_;
     AllPass ap_[4];
     float hpL_ = 0, hpR_ = 0, lpL_ = 0, lpR_ = 0, tapeL_ = 0, tapeR_ = 0, monoL_ = 0, monoR_ = 0;
     double cpuS_ = 0.0;
+    dsp::LevelHistory hist_; // the card's live echo graph
 
     // Auto-sleep hangover.
     uint64_t quietSamples_ = 0;
@@ -159,7 +165,8 @@ class Delay : public Device {
     float loopPk_ = 0.0f; // peak loop-feed push (blocks sleep while the tail rings)
 
     std::atomic<bool> clear_{false};
-    std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, cpuA_{0}, srA_{44100.0f}, bpmA_{0}, diffA_{0}, msL_{0}, msR_{0};
+    std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, cpuA_{0}, srA_{44100.0f}, bpmA_{0}, diffA_{0}, msL_{0}, msR_{0},
+        beatA_{0}, playA_{0};
     std::atomic<float> p_[kNumParams] = {};
 };
 
