@@ -338,6 +338,7 @@ bool RackInstrument::supportsMpe() const {
 
 void RackInstrument::render(float* out, int32_t frames) {
     const auto done = renderScope();
+    const int32_t tapAt = taps_.take(frames) * 2; // this piece's place in the block's key buffers
     RackState* st = live();
     if (!st || frames <= 0 || frames > kMaxBlock) return;
     bool anySolo = false;
@@ -367,7 +368,7 @@ void RackInstrument::render(float* out, int32_t frames) {
         const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
         // A chain a sidechain key listens to (specs/050) renders even when muted or solo-gated
         // — the "ghost" chain feeds its key without being heard.
-        const PartTap* tap = nTaps_ > 0 ? tapFor(c.uid) : nullptr;
+        const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
         const bool silent = mute || (anySolo && !solo);
         if (silent && !tap) {
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);
@@ -403,7 +404,7 @@ void RackInstrument::render(float* out, int32_t frames) {
         } else {
             c.instrument->render(scratch_, frames);
         }
-        if (tap) addTap(tap->pre, scratch_, frames); // Pre: the chain before its inserts
+        if (tap) addTap(tap->pre + tapAt, scratch_, frames); // Pre: the chain before its inserts
         for (auto& d : c.devices)
             if (d && !d->bypassed()) d->process(scratch_, frames);
         const float g = c.ctl->gain.load(std::memory_order_relaxed);
@@ -412,8 +413,8 @@ void RackInstrument::render(float* out, int32_t frames) {
         const float pr = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
         if (tap) // Post: after its inserts and gain / pan, before the rack volume and the sum
             for (int32_t i = 0; i < frames; ++i) {
-                tap->post[i * 2] += scratch_[i * 2] * pl;
-                tap->post[i * 2 + 1] += scratch_[i * 2 + 1] * pr;
+                tap->post[tapAt + i * 2] += scratch_[i * 2] * pl;
+                tap->post[tapAt + i * 2 + 1] += scratch_[i * 2 + 1] * pr;
             }
         if (silent) {
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);

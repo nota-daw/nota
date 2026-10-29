@@ -1555,8 +1555,10 @@ bool Engine::instrumentAcceptsSidechain(int32_t trackId) const {
 // instrument pointers are stable across snapshots, so the table the audio thread reads
 // stays valid).
 void Engine::recomputeRouting() {
+    // Slots at and past the count are always free, so only the used ones need clearing.
+    const int32_t used = routeSlotCount_.load(std::memory_order_relaxed);
     routeSlotCount_.store(0, std::memory_order_release);
-    for (auto& s : routeSlotTrackId_) s.store(-1, std::memory_order_relaxed);
+    for (int32_t s = 0; s < used; ++s) routeSlotTrackId_[s].store(-1, std::memory_order_relaxed);
     int32_t next = 0;
     // A source that is not in the graph (its track was deleted; undo brings it back) gets no
     // slot, so its consumers see no key at all rather than a silent one. A part key whose part
@@ -1574,23 +1576,29 @@ void Engine::recomputeRouting() {
             routeSlotCount_.store(next, std::memory_order_release); // claim() looks up as it goes
         }
     };
+    forEachRouteKey([&](int32_t src, uint64_t part) { claim(src, part); });
+}
+
+// Every route a consumer asks for, in claim order: track instruments and devices (and keyed
+// children inside their racks, specs/044), then a monitoring audio track's input source.
+template <typename Fn>
+void Engine::forEachRouteKey(Fn&& fn) const {
     for (auto& t : authoring_->tracks) {
-        // Keyed children inside racks claim too (specs/044).
-        auto claimChildren = [&](const RackCore& r) {
-            r.forEachChildDevice([&](Device& c) { claim(c.sidechainSourceTrackId(), c.sidechainPart()); });
-            r.forEachChildInstrument([&](Instrument& i) { claim(i.sidechainSourceTrackId(), i.sidechainPart()); });
+        auto children = [&](const RackCore& r) {
+            r.forEachChildDevice([&](Device& c) { fn(c.sidechainSourceTrackId(), c.sidechainPart()); });
+            r.forEachChildInstrument([&](Instrument& i) { fn(i.sidechainSourceTrackId(), i.sidechainPart()); });
         };
         if (t->instrument) {
-            claim(t->instrument->sidechainSourceTrackId(), t->instrument->sidechainPart());
-            if (auto* r = t->instrument->asRack()) claimChildren(*r);
+            fn(t->instrument->sidechainSourceTrackId(), t->instrument->sidechainPart());
+            if (auto* r = t->instrument->asRack()) children(*r);
         }
         for (auto& d : t->devices)
             if (d) {
-                claim(d->sidechainSourceTrackId(), d->sidechainPart());
-                if (auto* r = d->asRack()) claimChildren(*r);
+                fn(d->sidechainSourceTrackId(), d->sidechainPart());
+                if (auto* r = d->asRack()) children(*r);
             }
         // A monitoring audio track hears its source track's post-fader tap.
-        if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0) claim(t->recordInputSource(), 0);
+        if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0) fn(t->recordInputSource(), uint64_t{0});
     }
 }
 
@@ -1625,17 +1633,31 @@ bool Engine::partIdAt(int32_t sourceTrackId, int32_t index, uint64_t* part) cons
     return *part != 0;
 }
 
-// Set a key, then keep it only if it got a route: a full pool leaves the previous key in place.
-// Re-deriving the table (rather than counting free slots) lets a consumer move from one source
-// to another while the pool is full when it was the old source's only listener.
+// Set a key, then keep it only if it got a route and took none from another listener: a full
+// pool leaves the previous key in place. Routes are claimed in track and chain order, so a new
+// source on an early device could otherwise push out a later device's. Re-deriving the table
+// (rather than counting free slots) lets a consumer move to another source while the pool is
+// full when it was its old source's only listener.
 template <typename Consumer>
 int32_t Engine::applySidechainKey(Consumer& c, int32_t src, uint64_t part) {
     const int32_t oldSrc = c.sidechainSourceTrackId();
     const uint64_t oldPart = c.sidechainPart();
+    std::pair<int32_t, uint64_t> before[kMaxRoutes];
+    const int32_t nBefore = routeSlotCount_.load(std::memory_order_relaxed);
+    for (int32_t s = 0; s < nBefore; ++s)
+        before[s] = {routeSlotTrackId_[s].load(std::memory_order_relaxed), routeSlotPart_[s].load(std::memory_order_relaxed)};
     c.setSidechainSourceTrackId(src);
     c.setSidechainPart(part);
     recomputeRouting();
-    if (routeSlotFor(src, part) >= 0) return 0;
+    bool kept = routeSlotFor(src, part) >= 0;
+    bool oldHeld = false; // does anyone still listen to the old key?
+    forEachRouteKey([&](int32_t t, uint64_t p) { oldHeld = oldHeld || (t == oldSrc && p == oldPart); });
+    for (int32_t s = 0; kept && s < nBefore; ++s) {
+        const auto [t, p] = before[s];
+        // The old key's route may go when this was its only listener; every other must stay.
+        if (routeSlotFor(t, p) < 0 && (oldHeld || !(t == oldSrc && p == oldPart))) kept = false;
+    }
+    if (kept) return 0;
     c.setSidechainSourceTrackId(oldSrc);
     c.setSidechainPart(oldPart);
     recomputeRouting();
@@ -1649,6 +1671,8 @@ int32_t Engine::setDeviceSidechainKey(int32_t trackId, int32_t deviceIndex, int3
         setDeviceSidechainSource(trackId, deviceIndex, -1);
         return 0;
     }
+    // A MIDI key (Nota Auto Shift) follows the source track's notes; a pad has none of its own.
+    if (part >= 0 && d->wantsMidiKey()) return -1;
     uint64_t id = 0;
     if (!findTrackAuthoring(sourceTrackId) || !partIdAt(sourceTrackId, part, &id)) return -1;
     return applySidechainKey(*d, sourceTrackId, id);

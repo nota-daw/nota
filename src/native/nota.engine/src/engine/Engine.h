@@ -880,6 +880,8 @@ class Engine {
     bool partIdAt(int32_t sourceTrackId, int32_t index, uint64_t* part) const;
     template <typename Consumer>
     int32_t applySidechainKey(Consumer& c, int32_t src, uint64_t part);
+    template <typename Fn>
+    void forEachRouteKey(Fn&& fn) const;
     // Open/close a hosted plugin's native GUI. deviceIndex < 0 = the instrument;
     // otherwise the effect at that chain position. Message thread only.
     void openTrackEditor(int32_t trackId, int32_t deviceIndex);
@@ -2232,6 +2234,9 @@ class Engine {
     // track per block. A reroute racing a block can mis-key that one block (as it always could:
     // the table is cleared and refilled in place), never touch a buffer out of range.
     std::atomic<int32_t> routeSlotCount_{0};
+    std::vector<float> silentKey_; // kMaxBlock stereo zeros: the key of a part that is gone
+    void feedPartTaps(const Track& t);                                  // audio thread
+    const float* keyBuffer(int32_t src, uint64_t part, bool pre) const; // audio thread
     // Audio + message thread.
     int32_t routeSlotFor(int32_t trackId, uint64_t part) const {
         const int32_t n = routeSlotCount_.load(std::memory_order_acquire);

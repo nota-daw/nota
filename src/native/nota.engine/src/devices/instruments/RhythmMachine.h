@@ -200,18 +200,22 @@ class RhythmMachine final : public Instrument {
 
     void render(float* out, int32_t frames) override;
 
-    // Parts (specs/050): each voice is a sidechain sub-source; voice v's id is v + 1. Pre = the
-    // voice (with its pan) before its voice FX, Post = after them, before Glue and Volume.
+    // Parts (specs/050): each voice is a sidechain sub-source. A voice's id carries this
+    // instrument's identity (its uid, kept through undo) and the top bit, so a fresh Rhythm put
+    // in its place — or a rack chain uid — never answers to an old key. Pre = the voice (with
+    // its pan) before its voice FX, Post = after them, before Glue and Volume.
     int32_t partCount() const override { return kVoices; }
-    uint64_t partId(int32_t index) const override { return index >= 0 && index < kVoices ? static_cast<uint64_t>(index) + 1 : 0; }
-    int32_t partIndex(uint64_t id) const override { return id >= 1 && id <= kVoices ? static_cast<int32_t>(id) - 1 : -1; }
+    uint64_t partId(int32_t index) const override {
+        return index >= 0 && index < kVoices ? kVoiceTag | (uid() << 4) | static_cast<uint64_t>(index + 1) : 0;
+    }
+    int32_t partIndex(uint64_t id) const override {
+        const int32_t v = static_cast<int32_t>(id & 0xF) - 1;
+        return v >= 0 && v < kVoices && id == partId(v) ? v : -1;
+    }
     std::string partName(int32_t index) const override {
         return index >= 0 && index < kVoices ? std::to_string(index + 1) + " " + kVoiceNames[index] : std::string{};
     }
-    void setPartTaps(const PartTap* taps, int32_t n) override {
-        taps_ = taps;
-        nTaps_ = n;
-    }
+    void setPartTaps(const PartTap* taps, int32_t n) override { taps_.set(taps, n); }
 
     // Sleep contract: see the header note. noteOn/action/pluginParamSet wake, as does a
     // transport start (a stopped machine with a pattern must not sleep through the downbeat).
@@ -308,8 +312,8 @@ class RhythmMachine final : public Instrument {
     std::string kit_;                      // factory kit label (message thread)
     std::string macroNames_[kMacros];      // custom macro names ("" = "Macro N"; message thread)
     float mix_[kChunk * 2];                // audio thread: the chunk's sum
-    const PartTap* taps_ = nullptr; // this block's keyed voices (specs/050); audio thread
-    int32_t nTaps_ = 0;
+    static constexpr uint64_t kVoiceTag = 1ull << 63;
+    PartTaps taps_; // this block's keyed voices (specs/050); audio thread
     float vbuf_[kVoices][kChunk * 2];      // audio thread: FX voices, pre-chain
 
     // Auto-sleep hangover.

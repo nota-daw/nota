@@ -171,7 +171,8 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     private static void ThrowOnKey(int r, int sourceTrackId, int part)
     {
         if (r == -1) throw new ArgumentException(part >= 0
-            ? $"Track {sourceTrackId} has no part {part} (see list_sidechain_sources)." : $"No such device or source track {sourceTrackId}.");
+            ? $"Track {sourceTrackId} has no part {part} (see list_sidechain_sources), or the device keys on MIDI (Nota Auto Shift), which takes whole tracks only."
+            : $"No such device or source track {sourceTrackId}.");
         if (r == -2) throw new InvalidOperationException("No free sidechain route: all of them are in use (see list_sidechain_sources). The key was left as it was.");
     }
 

@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <atomic>
 #include <cstdint>
 #include <limits>
@@ -147,16 +148,47 @@ class Instrument {
     virtual uint64_t partId(int32_t /*index*/) const { return 0; }
     virtual int32_t partIndex(uint64_t /*id*/) const { return -1; }
     virtual std::string partName(int32_t /*index*/) const { return {}; }
-    // Audio thread, right before render: the parts keys listen to this block and where their
-    // signal goes. pre = the part before its own inserts, post = after its inserts and its
-    // gain / pan, before the instrument sums it (stereo interleaved, `frames` long, ADDED into).
-    // The pointers are valid for the next render only; the engine clears them with (nullptr, 0).
+    // Audio thread, right before a block's renders: the parts keys listen to this block and
+    // where their signal goes. pre = the part before its own inserts, post = after its inserts
+    // and its gain / pan, before the instrument sums it (stereo interleaved, the whole block,
+    // ADDED into). The instrument copies the table; the engine clears it with (nullptr, 0).
     struct PartTap {
         uint64_t part;
         float* pre;
         float* post;
     };
     virtual void setPartTaps(const PartTap* /*taps*/, int32_t /*n*/) {}
+
+    // The copy a multi-part instrument keeps. A block may render in several pieces (split at
+    // MIDI events), so it also tracks where in the block the next piece starts: take(frames)
+    // returns that offset and moves past the piece.
+    class PartTaps {
+      public:
+        static constexpr int32_t kMax = 16; // == the engine's route pool
+        void set(const PartTap* taps, int32_t n) {
+            n_ = taps ? std::min(n, kMax) : 0;
+            for (int32_t i = 0; i < n_; ++i) taps_[i] = taps[i];
+            pos_ = 0;
+        }
+        bool any() const { return n_ > 0; }
+        const PartTap* find(uint64_t part) const {
+            for (int32_t i = 0; i < n_; ++i)
+                if (taps_[i].part == part) return &taps_[i];
+            return nullptr;
+        }
+        int32_t count() const { return n_; }
+        const PartTap& at(int32_t i) const { return taps_[i]; }
+        int32_t take(int32_t frames) {
+            const int32_t p = pos_;
+            pos_ += frames;
+            return p;
+        }
+
+      private:
+        PartTap taps_[kMax] = {};
+        int32_t n_ = 0;
+        int32_t pos_ = 0;
+    };
 
     // Reported processing latency, for PDC (M3-7). 0 for built-ins.
     virtual int32_t latencySamples() const { return 0; }

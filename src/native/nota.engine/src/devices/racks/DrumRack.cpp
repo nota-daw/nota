@@ -49,6 +49,7 @@ void DrumRack::allNotesOff() {
 
 void DrumRack::render(float* out, int32_t frames) {
     const auto done = renderScope();
+    const int32_t tapAt = taps_.take(frames) * 2; // this piece's place in the block's key buffers
     RackState* st = live();
     if (!st || frames <= 0 || frames > kMaxBlock) return;
     bool anySolo = false;
@@ -64,7 +65,7 @@ void DrumRack::render(float* out, int32_t frames) {
         const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
         // A pad a sidechain key listens to (specs/050) renders even when muted or solo-gated:
         // the "ghost kick" drives the key without being heard.
-        const PartTap* tap = nTaps_ > 0 ? tapFor(c.uid) : nullptr;
+        const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
         const bool silent = mute || (anySolo && !solo);
         if (silent && !tap) {
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);
@@ -73,7 +74,7 @@ void DrumRack::render(float* out, int32_t frames) {
         }
         std::memset(scratch_, 0, sizeof(float) * frames * 2);
         c.instrument->render(scratch_, frames);
-        if (tap) addTap(tap->pre, scratch_, frames); // Pre: the raw hit, before inserts and decay
+        if (tap) addTap(tap->pre + tapAt, scratch_, frames); // Pre: the raw hit, before inserts and decay
         for (auto& d : c.devices)
             if (d && !d->bypassed()) d->process(scratch_, frames);
         const float g = c.ctl->gain.load(std::memory_order_relaxed);
@@ -98,6 +99,20 @@ void DrumRack::render(float* out, int32_t frames) {
             coef = (float)std::exp(-1.0 / (tauMs * 0.001 * sampleRate_));
         }
 
+        // Post for a keyed pad: after inserts, decay and the pad's gain / pan, before the rack
+        // volume. Its own pass (the envelope run from the same start), so the sum loop below
+        // stays as lean as it is for an unkeyed pad.
+        if (tap) {
+            float e = env;
+            float* post = tap->post + tapAt;
+            for (int32_t i = 0; i < frames; ++i) {
+                const float k = shaped ? e : 1.0f;
+                post[i * 2] += scratch_[i * 2] * k * pl;
+                post[i * 2 + 1] += scratch_[i * 2 + 1] * k * pr;
+                if (shaped) e *= coef;
+            }
+        }
+
         float peak = 0.0f;
         for (int32_t i = 0; i < frames; ++i) {
             float l = scratch_[i * 2], r = scratch_[i * 2 + 1];
@@ -108,10 +123,6 @@ void DrumRack::render(float* out, int32_t frames) {
             }
             out[i * 2] += l * lg;
             out[i * 2 + 1] += r * rg;
-            if (tap) { // Post: after inserts, decay and the pad's gain / pan, before the rack volume
-                tap->post[i * 2] += l * pl;
-                tap->post[i * 2 + 1] += r * pr;
-            }
             const float a = std::max(std::fabs(l), std::fabs(r));
             if (a > peak) peak = a;
         }

@@ -15,6 +15,8 @@ using System.Text;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Nota.Application;
 
@@ -58,10 +60,15 @@ internal sealed class SidechainSourcePicker
         // track too ("Drums · Kick"), since two tracks may both have a "Kick".
         Combo.SelectionBoxItemTemplate = new FuncDataTemplate<Row>((row, _) => new TextBlock { Text = row?.Full ?? "" });
         Rebuild();
+        // Rows hold a part by its index, so they must be current when the list opens: rebuild
+        // before the ComboBox sees the click or key that opens it (tunnel = ahead of it).
+        Combo.AddHandler(InputElement.PointerPressedEvent, (_, _) => RefreshIfStale(), RoutingStrategies.Tunnel);
+        Combo.AddHandler(InputElement.KeyDownEvent, (_, _) => RefreshIfStale(), RoutingStrategies.Tunnel);
         Combo.SelectionChanged += (_, _) =>
         {
             int s = Combo.SelectedIndex;
             if (_syncing || s < 0 || s >= _keys.Count) return;
+            if (Shape() != _shape) { Rebuild(); return; }   // the rows went stale while open: pick again
             var k = _keys[s];
             if (k == _get()) return;
             if (_set(k.Source, k.Part) == -2)
@@ -89,6 +96,11 @@ internal sealed class SidechainSourcePicker
     }
 
     /// <summary>Follow the key while the list is closed — call from the card's readout tick.</summary>
+    private void RefreshIfStale()
+    {
+        if (!Combo.IsDropDownOpen && Shape() != _shape) Rebuild();
+    }
+
     public void Sync()
     {
         if (Combo.IsDropDownOpen) return;
@@ -97,19 +109,26 @@ internal sealed class SidechainSourcePicker
         if (Combo.SelectedIndex != want) Select(want);
     }
 
-    // What the list shows, as text: the tracks with their names and parts, frozen tracks, and
-    // whether the pool is full. Cheap enough for the readout tick.
+    // What the list shows, as text: the tracks with their names and parts, frozen tracks, and —
+    // while the pool is full — which sources hold a route (that decides which rows are enabled).
+    // Cheap enough for the readout tick.
     private string Shape()
     {
         var sb = new StringBuilder();
-        sb.Append(_engine.SidechainRoutesFree() == 0 ? 'F' : 'o');
+        bool full = _engine.SidechainRoutesFree() == 0;
+        sb.Append(full ? 'F' : 'o');
         for (int i = 0; i < _engine.TrackCount; i++)
         {
             if (!_engine.TryGetTrackInfo(i, out var ti) || ti.Id == _ownTrack) continue;
             sb.Append('|').Append(ti.Id).Append(':').Append(TrackNames.Of(_engine, ti));
+            if (full && _engine.SidechainRouteInUse(ti.Id, SidechainKey.WholeTrack)) sb.Append('^');
             int parts = _engine.TrackPartCount(ti.Id);
             if (parts > 0 && _engine.IsTrackFrozen(ti.Id)) sb.Append('*');
-            for (int p = 0; p < parts; p++) sb.Append('/').Append(_engine.TrackPartName(ti.Id, p));
+            for (int p = 0; p < parts; p++)
+            {
+                sb.Append('/').Append(_engine.TrackPartName(ti.Id, p));
+                if (full && _engine.SidechainRouteInUse(ti.Id, p)) sb.Append('^');
+            }
         }
         return sb.ToString();
     }

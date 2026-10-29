@@ -61,6 +61,12 @@ preallocated, written only by this track's render ⇒ safe under the parallel le
 Rejected: a persistent per-instrument tap table published from the message thread (needs its own
 snapshot/RCU lifetime; the per-block hand-off has none).
 
+Review follow-up (PR #381): the instrument **copies** the table (`Instrument::PartTaps`, ≤ 16
+entries) and keeps an offset into the block — `playEvents` renders a block in pieces split at MIDI
+events, and each piece must write its own stretch of the key. The hand-off runs for both the
+Arrangement and the Session instrument paths. A part key whose part is gone gets a silent buffer,
+not nullptr (a detector handed nullptr keys off its own input).
+
 ## R4. Stable part identity
 
 - Rack chains carry `RackChain::uid` (global counter, kept by rack forks for undo, used by lanes /
@@ -71,7 +77,8 @@ snapshot/RCU lifetime; the per-block hand-off has none).
 **Decision**: a part id is a `uint64_t`, 0 = whole track.
 - Rack chain → `RackChain::uid` (base uid, *without* `instGen`: swapping a pad's sample instrument
   keeps the key, like lanes do).
-- Rhythm voice v → `v + 1`.
+- Rhythm voice v → top bit | the Rhythm's instrument uid << 4 | `v + 1`, so a fresh Rhythm put in
+  its place (or a rack chain uid) never answers to an old key; the uid survives undo.
 Resolution (uid ↔ current index, name) is a virtual on `Instrument`, implemented by `RackCore`
 (first level only) and `RhythmMachine`. The C ABI speaks **part indices** (current position), like
 every other rack call; the engine converts to/from the stable id. Saving writes the index at save
@@ -102,7 +109,8 @@ Slot identity is two atomics (`routeSlotTrackId_`, `routeSlotPart_`). `recompute
 part before the track (release) and the audio thread reads track then part (acquire); a reroute can
 at worst mis-key one block, the same tolerance today's non-atomic clear-and-reclaim already has.
 
-Set calls return `-2` when the source needs a new slot and none is free; the source is then not set.
+Set calls return `-2` when the source needs a new slot and none is free, or when taking it would
+push out another listener's route (claims run in track order); the key is then left as it was.
 The picker greys out unused sources from `nota_sidechain_routes_free == 0` and
 `nota_sidechain_route_in_use(track, part)`. Project load counts `-2` results and shows one notice.
 

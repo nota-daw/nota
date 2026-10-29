@@ -31,6 +31,13 @@ internal static class SidechainPartTests
         foreach (var r in Mcp()) yield return r;
         foreach (var r in FrozenSource()) yield return r;
         foreach (var r in CopiesKeepTheKey()) yield return r;
+        foreach (var r in SegmentedBlocks()) yield return r;
+        foreach (var r in SessionClipKeys()) yield return r;
+        foreach (var r in NoEviction()) yield return r;
+        foreach (var r in FreshRhythm()) yield return r;
+        foreach (var r in MissingPadIsSilent()) yield return r;
+        foreach (var r in AutoShiftWholeTrackOnly()) yield return r;
+        foreach (var r in RackChildPart()) yield return r;
         foreach (var r in SaveReopen()) yield return r;
     }
 
@@ -402,6 +409,187 @@ internal static class SidechainPartTests
         yield return (dup > 0 && e.DeviceSidechainKey(dup, rig.Comp) == key, "sc parts: a duplicated track's Compressor keeps its pad key");
         yield return (e.SidechainRouteInUse(key.Source, key.Part) && e.SidechainRoutesFree() == 15,
             "sc parts: all those keys share the pad's one route");
+    }
+
+    // Hits off the block grid split a block's render at each note: every piece must land at its
+    // own place in the key. With one pad, no pad effects and unity levels, the pad's Post equals
+    // the track's pre-FX tap, so Listen must print the same key either way.
+    private static IEnumerable<(bool, string)> SegmentedBlocks()
+    {
+        using var rig = new Rig();
+        var e = rig.E;
+        const int ScListen = 15;
+        int kick = rig.Chain("Kick");
+        e.RackSetVolume(rig.Drums, 1f);
+        e.SetClipNotes(rig.Drums, 0, new[] { new NotaNote(KickNote, 0.13, 0.25, 1f), new NotaNote(KickNote, 1.37, 0.25, 1f), new NotaNote(KickNote, 2.71, 0.25, 1f) });
+        e.DeviceSetParam(rig.Bass, rig.Comp, ScListen, 1f);
+        float[] Listen()
+        {
+            var all = new List<float>();
+            var buf = new float[512 * 2];
+            e.Seek(0); e.Play();
+            for (int i = 0; i < 172; i++) { e.RenderOffline(buf, 512); all.AddRange(buf); }
+            e.StopTransport();
+            return all.ToArray();
+        }
+        e.SetDeviceSidechainSource(rig.Bass, rig.Comp, rig.Drums);
+        e.SetDeviceSidechainTapPre(rig.Bass, rig.Comp, true);
+        var whole = Listen();
+        e.SetDeviceSidechainKey(rig.Bass, rig.Comp, rig.Drums, kick);
+        e.SetDeviceSidechainTapPre(rig.Bass, rig.Comp, false);
+        var pad = Listen();
+        double diff = 0, energy = 0;
+        for (int i = 0; i < whole.Length; i++) { diff = Math.Max(diff, Math.Abs(whole[i] - pad[i])); energy += whole[i] * whole[i]; }
+        yield return (energy > 1 && diff < 1e-4, $"sc parts: a pad key split at off-grid hits matches the track's own key (max diff {diff:E1})");
+    }
+
+    // A Session clip plays the same pads: a pad key hears them. The keyed track plays an empty
+    // clip in the same scene, so it runs in Session too.
+    private static IEnumerable<(bool, string)> SessionClipKeys()
+    {
+        using var rig = new Rig();
+        var e = rig.E;
+        int bass = e.AddInstrumentTrack();
+        int comp = e.AddBuiltinDevice(bass, CompKind);
+        e.DeviceSetParam(bass, comp, Thresh, -40f);
+        e.DeviceSetParam(bass, comp, Ratio, 10f);
+        e.DeviceSetParam(bass, comp, Attack, 1f);
+        e.SetDeviceSidechainKey(bass, comp, rig.Drums, rig.Chain("Kick"));
+        e.AddSessionMidiClip(bass, 0, 4.0);
+        e.AddSessionMidiClip(rig.Drums, 0, 4.0);
+        var ns = new List<NotaNote>();
+        for (int b = 0; b < 4; b++) ns.Add(new NotaNote(KickNote, b, 0.25, 1f));
+        e.SetSessionNotes(rig.Drums, 0, ns.ToArray());
+        e.SetLaunchQuant(0.0);
+        e.StopTransport();
+        e.Seek(0);
+        var buf = new float[512 * 2];
+        e.RenderOffline(buf, 64);
+        e.LaunchScene(0);
+        e.Seek(0);
+        float gr = 0;
+        for (int i = 0; i < 172; i++) { e.RenderOffline(buf, 512); gr = Math.Max(gr, e.DeviceGainReduction(bass, comp)); }
+        e.StopSlot(rig.Drums);
+        e.StopSlot(bass);
+        e.StopTransport();
+        yield return (gr > 3, $"sc parts: a Session clip on the Drum Rack drives the pad key ({gr:F1} dB)");
+    }
+
+    // With the pool full, keying an earlier device to a new source must not push out a later
+    // device's route; it is refused instead.
+    private static IEnumerable<(bool, string)> NoEviction()
+    {
+        using var e = new NotaEngine();
+        int host = e.AddAudioTrack();
+        int first = e.AddBuiltinDevice(host, CompKind);   // earliest in the chain, no key yet
+        var srcs = new List<int>();
+        bool filled = true;
+        for (int i = 0; i < 16; i++)
+        {
+            int d = e.AddBuiltinDevice(host, CompKind);
+            srcs.Add(e.AddAudioTrack());
+            filled &= e.SetDeviceSidechainKey(host, d, srcs[i], -1) == 0;
+        }
+        int extra = e.AddAudioTrack();
+        int r = e.SetDeviceSidechainKey(host, first, extra, -1);
+        bool intact = srcs.TrueForAll(x => e.SidechainRouteInUse(x, -1));
+        yield return (filled && r == -2 && intact && e.DeviceSidechainKey(host, first).Source == -1,
+            "sc parts: a new key on an earlier device can't push out a later device's route");
+        r = e.SetDeviceSidechainKey(host, first, srcs[0], -1);
+        yield return (r == 0 && srcs.TrueForAll(x => e.SidechainRouteInUse(x, -1)), "sc parts: …and it can still share a route in use");
+    }
+
+    // A fresh Nota Rhythm in place of the keyed one is a different instrument: the key goes
+    // missing instead of following the new voice 1.
+    private static IEnumerable<(bool, string)> FreshRhythm()
+    {
+        using var rig = new Rig();
+        var e = rig.E;
+        int rh = e.AddRhythmTrack();
+        e.SetDeviceSidechainKey(rig.Bass, rig.Comp, rh, 0);
+        bool before = e.DeviceSidechainKey(rig.Bass, rig.Comp) == new SidechainKey(rh, 0);
+        bool swapped = e.SetTrackBuiltinInstrument(rh, 12);
+        yield return (before && swapped && e.TrackPartCount(rh) == 8 && e.DeviceSidechainKey(rig.Bass, rig.Comp).Part == SidechainKey.Missing,
+            "sc parts: a fresh Rhythm doesn't inherit the old voice key");
+    }
+
+    // The keyed pad deleted: the compressor hears a silent key, not its own input.
+    private static IEnumerable<(bool, string)> MissingPadIsSilent()
+    {
+        using var rig = new Rig();
+        var e = rig.E;
+        int synth = e.AddInstrumentTrack();
+        e.AddMidiClip(synth, 0.0, 4.0);
+        e.SetClipNotes(synth, 0, new[] { new NotaNote(48, 0.0, 4.0, 1f) });
+        int comp = e.AddBuiltinDevice(synth, CompKind);
+        e.DeviceSetParam(synth, comp, Thresh, -40f);
+        e.DeviceSetParam(synth, comp, Ratio, 10f);
+        // The deepest reduction after half a second — the release of the previous run is over.
+        float Gr()
+        {
+            var buf = new float[512 * 2];
+            float g = 0;
+            e.Seek(0); e.Play();
+            for (int i = 0; i < 172; i++) { e.RenderOffline(buf, 512); if (i >= 43) g = Math.Max(g, e.DeviceGainReduction(synth, comp)); }
+            e.StopTransport();
+            return g;
+        }
+        rig.Play(HatNote);   // the kick pad stays quiet throughout
+        float own = Gr();
+        e.SetDeviceSidechainKey(synth, comp, rig.Drums, rig.Chain("Kick"));
+        float keyed = Gr();
+        e.RackRemoveChain(rig.Drums, rig.Chain("Kick"));
+        float missing = Gr();
+        yield return (own > 3 && keyed < 0.1f && missing < 0.1f,
+            $"sc parts: with its pad deleted the key stays silent (own input {own:F1} dB, keyed {keyed:F2}, pad gone {missing:F2})");
+    }
+
+    // Auto Shift follows the source's notes, so it takes whole tracks only.
+    private static IEnumerable<(bool, string)> AutoShiftWholeTrackOnly()
+    {
+        using var rig = new Rig();
+        var e = rig.E;
+        int d = e.AddBuiltinDevice(rig.Bass, 10);
+        yield return (d >= 0 && e.SetDeviceSidechainKey(rig.Bass, d, rig.Drums, rig.Chain("Kick")) == -1
+                      && e.SetDeviceSidechainKey(rig.Bass, d, rig.Drums, -1) == 0,
+            "sc parts: Auto Shift refuses a pad and takes the whole track");
+    }
+
+    // A keyed Compressor grouped into a rack keeps its pad (the rack-child part calls), and so
+    // does a reopened project.
+    private static IEnumerable<(bool, string)> RackChildPart()
+    {
+        using var rig = new Rig();
+        var e = rig.E;
+        int kick = rig.Chain("Kick"), hat = rig.Chain("Hat");
+        e.SetDeviceSidechainKey(rig.Bass, rig.Comp, rig.Drums, kick);
+        e.GroupDevices(rig.Bass, 0, 0, false, rig.Comp, 1);
+        int rack = 0;
+        yield return (e.RackChainSidechainPart(rig.Bass, rack, 0, 0) == kick, "sc parts: a keyed device grouped into a rack keeps its pad");
+        yield return (e.RackChainSetSidechainPart(rig.Bass, rack, 0, 0, hat) && e.RackChainSidechainPart(rig.Bass, rack, 0, 0) == hat
+                      && !e.RackChainSetSidechainPart(rig.Bass, rack, 0, 0, 9),
+            "sc parts: a rack child's pad can be set and read; no such pad is refused");
+        string dir = Path.Combine(Path.GetTempPath(), "nota-scpart-rack-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            ProjectService.Save(ProjectService.Capture(e, new TransportState(120, 1, false, false), new List<string>()), dir, e);
+            using var e2 = new NotaEngine();
+            ProjectService.Apply(ProjectService.Load(dir), e2, dir);
+            int drums = -1, bass = -1;
+            for (int i = 0; i < e2.TrackCount; i++)
+                if (e2.TryGetTrackInfo(i, out var ti))
+                {
+                    if (e2.TrackPartCount(ti.Id) == 2) drums = ti.Id;
+                    else if (e2.TrackDeviceCount(ti.Id) == 1) bass = ti.Id;
+                }
+            var sc = bass > 0 ? e2.RackChainSidechain(bass, 0, 0, 0) : null;
+            yield return (drums > 0 && sc is { } k && k.SourceTrack == drums && e2.RackChainSidechainPart(bass, 0, 0, 0) == hat,
+                "sc parts: a reopened rack child is keyed to the same pad");
+        }
+        finally
+        {
+            try { if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true); } catch (IOException) { }
+        }
     }
 
     private static IEnumerable<(bool, string)> RoutePool()

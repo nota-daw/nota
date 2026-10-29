@@ -84,6 +84,7 @@ internal static class DeviceParamControls
         combo.HorizontalAlignment = HorizontalAlignment.Stretch;
         combo.FontSize = 9;
         picker.Picked += _ => ctx.NotifyChanged();
+        ctx.AddDeviceRefresher(picker.Sync);   // follow MCP / project edits, and pads coming and going
 
         // Tap point: a small two-state toggle (Post FX ⇄ Pre FX).
         var tapText = new TextBlock { FontSize = 9, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };
