@@ -190,7 +190,7 @@ C ABI and interop. US1 does not need this phase and can start right after Phase 
 - [x] T051 [P] Update `FEATURES.md` with the nota-features skill.
 - [ ] T052 [P] Update the user manual (EN + RU) page `instruments/aurora` with the nota-docs skill (`src/managed/Nota.App/NotaDocs.cs:23` lists it). *(Not done here: the manual lives in the sibling nota-docs repo, outside this worktree.)*
 - [x] T053 [P] Check that every new file has the two-line SPDX header (`AuroraTable.h/.cpp`, `AuroraTableView.cs`, `AuroraTableImporter.cs`, `UiProbe.cs`, `AuroraFixtures.cs`, `AuroraTableTests.cs`), and that `LICENSES/third-party.md` needs no change (no new dependency).
-- [ ] T054 Run `scripts/build-linux.sh` (and `scripts/build.sh` on macOS) and the whole of quickstart.md. Re-check the plan's Constitution Check and the spec's Nota Compliance Checklist.
+- [x] T054 Run `scripts/build-linux.sh` (and `scripts/build.sh` on macOS) and the whole of quickstart.md. Re-check the plan's Constitution Check and the spec's Nota Compliance Checklist. *(Linux: `CI=true scripts/build-linux.sh` to SMOKE TEST PASSED and SCAN SCALE PASSED; macOS not run here.)*
 - [ ] T055 Run `/speckit-converge` until it reports **Converged**. *(Not run in this pass.)*
 
 ---
