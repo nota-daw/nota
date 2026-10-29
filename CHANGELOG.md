@@ -94,6 +94,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Strata's layer list and beat strip are back as they were** after the restyle: the layer count
+  says "· one cycle shown" again, the beat tick strip is on screen before the first loop closes,
+  and every layer keeps its own shade of grey (with a matching outline), so all eight can be told
+  apart.
 - **Nota Strata looper** (review of nota-daw/nota#296):
   - Record and Overdub on the first pass close the loop (Overdub goes straight on to layer 2);
     before, only Play or Stop could end the first pass.

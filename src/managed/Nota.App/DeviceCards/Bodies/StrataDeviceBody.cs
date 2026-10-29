@@ -307,12 +307,12 @@ internal sealed class StrataDeviceBody : IDeviceBody
             if (count > 32) { count = Math.Min(32, loopBars); every = 4; }
             if (ticks.Count != count || tickBeats != every) { BuildTicks(count, every); tickBeats = every; }
             int lit = closed ? (int)Math.Floor(Math.Clamp(phase, 0, 0.9999) * count) + 1 : 0;
-            tickRow.IsVisible = closed;   // no grid until the first loop closes
+            // The strip is always there, as before the restyle: unlit until the first loop closes.
             bool rolling = mode is M_Rec or M_Over or M_Play;   // the progress is the playhead only while it runs
             for (int i = 0; i < ticks.Count; i++)
                 ticks[i].Background = closed && rolling && i < lit ? Brass : NotaPalette.BorderStrong;
             ofBars.Text = counting ? "count-in" : firstPass ? "recording the first loop" : closed ? NotaNum.F($"of {loopBars} {(loopBars == 1 ? "bar" : "bars")}") : "";
-            countLbl.Text = closed || firstPass ? NotaNum.F($"{lc} of {MaxLayers}") : "";
+            countLbl.Text = closed || firstPass ? NotaNum.F($"{lc} of {MaxLayers} · one cycle shown") : "";
 
             // Captions say what each action does now; one that would do nothing dims.
             string when = quant switch { 0 => "now", 1 => "next bar", _ => "next beat" };
@@ -348,10 +348,12 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 actName[i].Foreground = on ? (i == 0 ? NotaPalette.Record : AccentBright) : can[i] ? TextPrimary : TextDisabled;
             }
 
-            // Layers: neutral greys, newest brightest; the recording one in the record red.
+            // Layers: neutral greys told apart by shade, newest brightest; the recording one in the
+            // record red. The steps shrink as layers stack up so all eight keep their own shade.
             layerHint.IsVisible = lc == 0;
             if (lc != shownRows) { shownRows = lc; FitRows(); }
             var grey = NotaPalette.VizInk.Color;
+            int shadeStep = lc > 1 ? Math.Min(0x18, (0xE6 - 0x60) / (lc - 1)) : 0;
             for (int k = 0; k < MaxLayers; k++)
             {
                 bool vis = k < lc;
@@ -365,11 +367,13 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 muteBtns[k].BorderBrush = muted ? NotaPalette.Mute : NotaPalette.BorderStrong;
                 mtxt.Foreground = muted ? NotaPalette.InkOn(NotaPalette.Mute) : TextTertiary;
                 layerRows[k].Background = rec ? NotaPalette.Wash(NotaPalette.Record, 0x14) : Sunken;
-                layerRows[k].BorderBrush = rec ? NotaPalette.Record : NotaPalette.GraphBorder;
                 int wn = engine.DeviceLayerWave(track, di, k, waveBuf, waveBuf.Length);
                 var env = new float[Math.Max(1, wn)];
                 for (int i = 0; i < wn; i++) env[i] = Math.Clamp(waveBuf[i], 0f, 1f);
-                byte a = (byte)Math.Max(0x70, 0xE6 - (lc - 1 - k) * 0x18);   // older layers fade, as Feedback sinks them
+                byte a = (byte)(0xE6 - (lc - 1 - k) * shadeStep);   // older layers fade, as Feedback sinks them
+                // The row's outline carries the layer's shade too, as its colour did before the restyle.
+                layerRows[k].BorderBrush = rec ? NotaPalette.Record : muted ? NotaPalette.GraphBorder
+                    : new SolidColorBrush(Color.FromArgb((byte)(a * 0x73 / 0xFF), grey.R, grey.G, grey.B));
                 waves[k].Set(env, Color.FromArgb(a, grey.R, grey.G, grey.B), muted, rec, rec && !firstPass ? recProg : 1f);   // the first pass grows to fill the strip
             }
             foreach (var r in readouts) r();
