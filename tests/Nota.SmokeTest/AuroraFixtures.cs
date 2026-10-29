@@ -27,7 +27,9 @@ internal static class AuroraFixtures
 
         WriteMono(P("cycle-2048.wav"), Saw(Frame, 1));
         AuroraTableWav.Write(P("table-64x2048.wav"), Morph(64));
-        WriteMono(P("table-300x2048.wav"), Morph(300));
+        AuroraTableWav.Write(P("table-300x2048.wav"), Morph(300));            // clm: 300 frames, cut to 256
+        WriteMono(P("table-256x2048.wav"), Morph(256));                       // no clm: still a wavetable
+        WriteMono(P("rec-40s-2048x.wav"), Sweep(Frame * 862, 44100));         // 40 s that lands on a multiple of 2048
         WriteMono(P("cycle-600.wav"), Saw(600, 1));
         WriteMono(P("long-90s.wav"), Sweep(44100 * 90, 44100));
         WriteMono(P("silence.wav"), new float[44100]);

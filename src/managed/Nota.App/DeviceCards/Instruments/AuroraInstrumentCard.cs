@@ -133,8 +133,8 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         // One table window per oscillator: both are on screen together (specs/053).
         var stacks = new AuroraTableView[2];
         for (int o = 0; o < 2; o++) stacks[o] = new AuroraTableView { VerticalAlignment = VerticalAlignment.Stretch, MinHeight = 40 };
-        // Imported tables (specs/053): what each oscillator holds, re-read when its serial
-        // changes, plus a passing note (loading, an error, a shortened file) for the caption.
+        // Imported tables (specs/053): what each oscillator holds, re-read when its serial or
+        // its source changes, or a parameter moves (an undo, a preset), plus a passing note (loading, an error, a shortened file) for the caption.
         var tinfo = new AuroraTableInfo[2];
         bool canImport = engine.TryGetAuroraTableInfo(track, 0, out tinfo[0]);   // false inside a rack chain
         if (canImport) engine.TryGetAuroraTableInfo(track, 1, out tinfo[1]);
@@ -144,7 +144,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var loading = new bool[2];
         var dragging = new bool[2];
         var capUpdates = new Action?[2];
-        var scope = new float[5];
+        var scope = new float[6];
         bool Imported(int o) => tinfo[o].HasTable && tinfo[o].UseCustom;
         void ReloadInfo(int o)
         {
@@ -194,7 +194,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             int n = engine.InstrumentScope(track, scope);
             for (int o = 0; o < 2; o++)
             {
-                if (canImport && n >= 4 && (uint)scope[2 + o] != knownSerial[o]) { ReloadInfo(o); capUpdates[o]?.Invoke(); }
+                bool stale = n >= 4 && (uint)scope[2 + o] != knownSerial[o]
+                          || n >= 6 && ((((int)scope[5] >> o) & 1) != 0) != tinfo[o].UseCustom;
+                if (canImport && stale) { ReloadInfo(o); capUpdates[o]?.Invoke(); }
                 if (note[o] is not null && DateTime.UtcNow > noteUntil[o]) { note[o] = null; capUpdates[o]?.Invoke(); }
                 double pos = n >= 2 && scope[o] >= 0 ? scope[o] : G(o == 0 ? "position" : "osc2position");
                 if (Imported(o) && AuroraTableView.PreviewFor(tinfo[o].Serial, () => FetchPreview(o)) is { } pv)
@@ -217,6 +219,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             long t0 = UiProbe.Start();
             Follow();
             if (!ParamsMoved() && !force) { UiProbe.EndTick(t0); return; }
+            // A parameter moved underneath (an undo, a preset, another card): the table info
+            // may have changed with it, so read it again before the readouts use it.
+            for (int o = 0; o < 2; o++) { ReloadInfo(o); capUpdates[o]?.Invoke(); }
             applyFilter();
             for (int o = 0; o < 2; o++)
                 stacks[o].Dimmed = G(o == 0 ? "osc1on" : "osc2on") < 0.5f;
@@ -613,8 +618,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             box.BindResource(Border.BoxShadowProperty, "Shadow.Groove");
             void Pick(int iv)
             {
-                SetP(id, iv / (float)(n - 1));
-                if (Imported(o)) { engine.AuroraSetSource(track, o, false); ReloadInfo(o); ctx.NotifyChanged(); }
+                bool was = Imported(o);
+                if (I(id) >= 0) AuroraTableImporter.PickBank(engine, track, o, I(id), id, iv / (float)(n - 1));
+                if (was) { ReloadInfo(o); ctx.NotifyChanged(); }
                 Touch();
             }
             box.PointerPressed += (_, e) =>
@@ -637,7 +643,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                     if (tinfo[o].HasTable)
                     {
                         var own = new MenuItem { Header = tinfo[o].Name, ToggleType = MenuItemToggleType.Radio, IsChecked = imp };
-                        own.Click += (_, _) => { engine.AuroraSetSource(track, o, true); ReloadInfo(o); ctx.NotifyChanged(); Touch(); };
+                        own.Click += (_, _) => { engine.AuroraSetSource(track, o, true, undoable: true); ReloadInfo(o); ctx.NotifyChanged(); Touch(); };
                         fly.Items.Add(own);
                     }
                     var import = new MenuItem { Header = "Import…" };

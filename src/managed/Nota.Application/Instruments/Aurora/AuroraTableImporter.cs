@@ -71,4 +71,21 @@ public static class AuroraTableImporter
         }
         finally { engine.AuroraTableFree(table); }
     }
+
+    /// <summary>Picks built-in bank <paramref name="value"/> (the table parameter
+    /// <paramref name="paramId"/> at <paramref name="paramIndex"/>) for oscillator
+    /// <paramref name="osc"/>. When the oscillator was playing its imported table, it also goes
+    /// back to the bank. The two are one undo step: undo brings back both the old bank and the
+    /// imported table.</summary>
+    public static void PickBank(IAudioEngine engine, int trackId, int osc, int paramIndex, string paramId, float value)
+    {
+        engine.BeginAutomationWrite(trackId, AutomationTarget.PluginParam, -1, -1, paramId);
+        try
+        {
+            if (engine.TryGetAuroraTableInfo(trackId, osc, out var info) && info.UseCustom)
+                engine.AuroraSetSource(trackId, osc, false, undoable: true);
+            engine.PluginParamSet(trackId, -1, paramIndex, value);
+        }
+        finally { engine.EndAutomationWrite(trackId, AutomationTarget.PluginParam, -1, -1, paramId); }
+    }
 }

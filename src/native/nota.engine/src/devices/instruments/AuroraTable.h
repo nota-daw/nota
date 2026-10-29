@@ -10,7 +10,7 @@
 //
 // How a file becomes frames (spec FR-009, research R3):
 //   (a) a standard wavetable file — a `clm ` chunk names the frame size, or the length
-//       is an exact multiple of 2048 (at least two frames) — keeps its frames, ≤ 256;
+//       is an exact multiple of 2048 from two to 256 frames — keeps its frames, ≤ 256;
 //   (b) otherwise up to 4096 samples is one cycle, resampled to 2048 exactly;
 //   (c) otherwise a recording: 16 evenly spaced 2048-sample windows, each snapped to
 //       an upward zero crossing, with no pitch detection.

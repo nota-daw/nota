@@ -438,8 +438,9 @@ public interface IAudioEngine : IDisposable
     bool AuroraSetTable(int trackId, int osc, nint table, bool undoable = true);
     /// <summary>Removes the imported table (one undo step).</summary>
     bool AuroraClearTable(int trackId, int osc);
-    /// <summary>Imported table (true) or the built-in bank (false), in place, no undo.</summary>
-    bool AuroraSetSource(int trackId, int osc, bool useCustom);
+    /// <summary>Imported table (true) or the built-in bank (false). Undoable: one undo step
+    /// (the instrument is republished); otherwise in place with no undo (loads).</summary>
+    bool AuroraSetSource(int trackId, int osc, bool useCustom, bool undoable = false);
     /// <summary>Marks a table a project named but could not restore ("" clears).</summary>
     bool AuroraSetMissing(int trackId, int osc, string name);
     bool TryGetAuroraTableInfo(int trackId, int osc, out AuroraTableInfo info);

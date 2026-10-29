@@ -760,8 +760,13 @@ NOTA_API int32_t nota_track_aurora_set_table(NotaEngine* engine, int32_t track_i
                                              const NotaAuroraTable* table, int32_t checkpoint);
 /* Remove the imported table from osc (one undo step); it plays its built-in bank again. */
 NOTA_API int32_t nota_track_aurora_clear_table(NotaEngine* engine, int32_t track_id, int32_t osc);
-/* In place, lock-free, no undo: 1 = play the imported table, 0 = the built-in bank. */
-NOTA_API int32_t nota_track_aurora_set_source(NotaEngine* engine, int32_t track_id, int32_t osc, int32_t use_custom);
+/* 1 = play the imported table, 0 = the built-in bank. checkpoint 1 = one undo step (the
+ * instrument is republished, as for set_table; no step when nothing changes), 0 = in place,
+ * lock-free, no undo (a project or preset load). Inside an unlatched parameter gesture the
+ * parameter's value step merges into it, so a bank pick that leaves the imported table
+ * undoes as one step. */
+NOTA_API int32_t nota_track_aurora_set_source(NotaEngine* engine, int32_t track_id, int32_t osc, int32_t use_custom,
+                                              int32_t checkpoint);
 /* Mark osc as missing a table a project named ("" clears). No undo. */
 NOTA_API int32_t nota_track_aurora_set_missing(NotaEngine* engine, int32_t track_id, int32_t osc, const char* name_utf8);
 /* 1 and *out filled (frames 0 when the slot is empty), 0 when the track is not an Aurora. */

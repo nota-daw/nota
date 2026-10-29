@@ -727,7 +727,7 @@ class Engine {
     // live one takes it in place (a project load). Source and missing are in place, no undo.
     bool auroraSetTable(int32_t trackId, int32_t osc, std::shared_ptr<const AuroraTable> t, bool checkpoint);
     bool auroraClearTable(int32_t trackId, int32_t osc);
-    bool auroraSetSource(int32_t trackId, int32_t osc, bool custom);
+    bool auroraSetSource(int32_t trackId, int32_t osc, bool custom, bool checkpoint);
     bool auroraSetMissing(int32_t trackId, int32_t osc, const std::string& name);
     std::shared_ptr<const WavetableSynth> auroraOf(int32_t trackId) const; // null unless an Aurora
     bool setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::string& path); // Phase 2

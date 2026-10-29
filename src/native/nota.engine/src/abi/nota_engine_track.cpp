@@ -845,8 +845,9 @@ int32_t nota_track_aurora_set_table(NotaEngine* e, int32_t track_id, int32_t osc
 int32_t nota_track_aurora_clear_table(NotaEngine* e, int32_t track_id, int32_t osc) {
     return e && ENG(e)->auroraClearTable(track_id, osc) ? 1 : 0;
 }
-int32_t nota_track_aurora_set_source(NotaEngine* e, int32_t track_id, int32_t osc, int32_t use_custom) {
-    return e && ENG(e)->auroraSetSource(track_id, osc, use_custom != 0) ? 1 : 0;
+int32_t nota_track_aurora_set_source(NotaEngine* e, int32_t track_id, int32_t osc, int32_t use_custom,
+                                     int32_t checkpoint) {
+    return e && ENG(e)->auroraSetSource(track_id, osc, use_custom != 0, checkpoint != 0) ? 1 : 0;
 }
 int32_t nota_track_aurora_set_missing(NotaEngine* e, int32_t track_id, int32_t osc, const char* name) {
     return e && ENG(e)->auroraSetMissing(track_id, osc, name ? std::string(name) : std::string()) ? 1 : 0;

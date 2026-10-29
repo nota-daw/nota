@@ -384,12 +384,24 @@ bool Engine::auroraClearTable(int32_t trackId, int32_t osc) {
     return true;
 }
 
-bool Engine::auroraSetSource(int32_t trackId, int32_t osc, bool custom) {
+bool Engine::auroraSetSource(int32_t trackId, int32_t osc, bool custom, bool checkpoint) {
     auto t = findTrackAuthoring(trackId);
     auto* w = t && t->instrument ? dynamic_cast<WavetableSynth*>(t->instrument.get()) : nullptr;
     if (!w || osc < 0 || osc > 1) return false;
-    w->setSource(osc, custom);
-    w->wake();
+    if (!checkpoint) {
+        w->setSource(osc, custom); // a load: in place, lock-free
+        w->wake();
+        return true;
+    }
+    if (w->useCustom(osc) == custom) return true; // nothing to undo
+    // Undoable, like set_table: a fresh Aurora with the flag flipped, so undo brings back the
+    // instrument that still holds the old flag (and redo the new one).
+    auto fresh = std::static_pointer_cast<WavetableSynth>(w->clone());
+    fresh->setSource(osc, custom);
+    fresh->presetTag = w->presetTag;
+    auto nt = cloneTrack(*t);
+    nt->instrument = fresh;
+    republishWithTrack(trackId, nt);
     return true;
 }
 

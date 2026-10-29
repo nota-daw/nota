@@ -359,7 +359,7 @@ public static class PresetService
                 {
                     if (cur.HasTable) engine.AuroraClearTable(trackId, o);
                     else if (cur.Missing) engine.AuroraSetMissing(trackId, o, "");
-                    if (cur.UseCustom) engine.AuroraSetSource(trackId, o, false);
+                    if (cur.UseCustom) engine.AuroraSetSource(trackId, o, false, undoable && !cur.HasTable);
                 }
                 continue;
             }

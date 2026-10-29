@@ -993,8 +993,8 @@ public sealed partial class NotaEngine
     public bool AuroraClearTable(int trackId, int osc)
     { ThrowIfDisposed(); return NativeMethods.AuroraClearTable(_handle, trackId, osc) != 0; }
 
-    public bool AuroraSetSource(int trackId, int osc, bool useCustom)
-    { ThrowIfDisposed(); return NativeMethods.AuroraSetSource(_handle, trackId, osc, useCustom ? 1 : 0) != 0; }
+    public bool AuroraSetSource(int trackId, int osc, bool useCustom, bool undoable = false)
+    { ThrowIfDisposed(); return NativeMethods.AuroraSetSource(_handle, trackId, osc, useCustom ? 1 : 0, undoable ? 1 : 0) != 0; }
 
     public bool AuroraSetMissing(int trackId, int osc, string name)
     { ThrowIfDisposed(); return NativeMethods.AuroraSetMissing(_handle, trackId, osc, name ?? "") != 0; }

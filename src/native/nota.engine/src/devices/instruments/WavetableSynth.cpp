@@ -452,6 +452,9 @@ int32_t WavetableSynth::scopeRead(float* out, int32_t maxN) const {
     const auto cur = tableSet_.current();
     for (int o = 0; o < 2 && 2 + o < n; ++o)
         out[2 + o] = (cur && cur->slot[o]) ? (float)(cur->slot[o]->serial & 0xFFFFFFu) : 0.0f;
+    // Which oscillators play their imported table (bit 0 = Osc 1, bit 1 = Osc 2), so a card
+    // sees a source switch made anywhere else (another card, an undo, a state load).
+    if (n > 5) out[5] = (float)((useCustom(0) ? 1 : 0) | (useCustom(1) ? 2 : 0));
     return n;
 }
 

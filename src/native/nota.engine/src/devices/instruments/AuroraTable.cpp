@@ -163,7 +163,9 @@ int32_t AuroraTable::buildFromMono(const float* mono, int64_t n, int32_t declare
     std::vector<float>& base = t->level[0];
 
     const bool declared = declaredFrame >= 256 && declaredFrame <= 4096 && isPow2(declaredFrame) && n >= declaredFrame;
-    if (declared || (n % kSize == 0 && n >= 2 * kSize)) {
+    // Without a `clm ` chunk, an exact multiple of 2048 counts as a wavetable file only up
+    // to 256 frames: a longer recording that happens to land on a multiple is a recording.
+    if (declared || (n % kSize == 0 && n >= 2 * kSize && n <= (int64_t)kMaxFrames * kSize)) {
         // (a) A standard wavetable file.
         const int fs = declared ? declaredFrame : kSize;
         int64_t count = n / fs;

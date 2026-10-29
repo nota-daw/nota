@@ -63,8 +63,11 @@ NOTA_API int32_t nota_track_aurora_set_table(NotaEngine* e, int32_t track_id, in
                                              const NotaAuroraTable* t, int32_t checkpoint);
 /* Remove the imported table from osc (one undo step); the oscillator plays its built-in. */
 NOTA_API int32_t nota_track_aurora_clear_table(NotaEngine* e, int32_t track_id, int32_t osc);
-/* In place, lock-free: 1 = play the imported table, 0 = the built-in. No undo. */
-NOTA_API int32_t nota_track_aurora_set_source(NotaEngine* e, int32_t track_id, int32_t osc, int32_t use_custom);
+/* 1 = play the imported table, 0 = the built-in. checkpoint 1 = one undo step (republish,
+ * as set_table; inside a parameter gesture the bank change merges into it, so a bank pick
+ * that leaves the import undoes as one step), 0 = in place, lock-free, no undo (loads). */
+NOTA_API int32_t nota_track_aurora_set_source(NotaEngine* e, int32_t track_id, int32_t osc, int32_t use_custom,
+                                              int32_t checkpoint);
 /* Mark osc as missing (name shown as "Missing: <name>"); "" clears. No undo. */
 NOTA_API int32_t nota_track_aurora_set_missing(NotaEngine* e, int32_t track_id, int32_t osc, const char* name_utf8);
 ```

@@ -210,7 +210,7 @@ class WavetableSynth final : public Instrument {
     // Live follow (specs/053 data model § Scope telemetry): [0]/[1] the position Osc 1 /
     // Osc 2 of the most recently started sounding voice played at the end of the last
     // block (−1 = none), [2]/[3] the serials of the two tables (0 = none), [4] voices.
-    static constexpr int32_t kScopeN = 5;
+    static constexpr int32_t kScopeN = 6;
     int32_t scopeRead(float* out, int32_t maxN) const override;
 
     void noteOn(int32_t pitch, float velocity) override;
@@ -413,7 +413,7 @@ class WavetableSynth final : public Instrument {
         return cur ? std::make_shared<AuroraTableSet>(*cur) : std::make_shared<AuroraTableSet>();
     }
     uint64_t noteSeq_ = 0;
-    std::atomic<float> scope_[kScopeN] = {-1.0f, -1.0f, 0.0f, 0.0f, 0.0f};
+    std::atomic<float> scope_[kScopeN] = {-1.0f, -1.0f, 0.0f, 0.0f, 0.0f, 0.0f};
 
     // Auto-sleep hangover (flag only — the engine skips render while idle).
     static constexpr uint64_t kIdleSamples = 16384;

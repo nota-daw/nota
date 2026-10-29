@@ -72,6 +72,7 @@ load path.
 | 2 | Osc 1 table serial (0 = built-in) |
 | 3 | Osc 2 table serial |
 | 4 | active voices |
+| 5 | sources: bit 0 set when Osc 1 plays its imported table, bit 1 for Osc 2 |
 
 ## State blob trailer
 

@@ -459,7 +459,7 @@ internal static partial class NativeMethods
     internal static partial int AuroraClearTable(IntPtr engine, int trackId, int osc);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_aurora_set_source")]
-    internal static partial int AuroraSetSource(IntPtr engine, int trackId, int osc, int useCustom);
+    internal static partial int AuroraSetSource(IntPtr engine, int trackId, int osc, int useCustom, int checkpoint);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_aurora_set_missing", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int AuroraSetMissing(IntPtr engine, int trackId, int osc, string name);

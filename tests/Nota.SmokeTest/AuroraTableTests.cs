@@ -99,6 +99,12 @@ internal static class AuroraTableTests
         var t300 = B("table-300x2048.wav");
         yield return (t300.code == 0 && t300.info is { Frames: 256, TruncatedFrames: true },
             $"aurora tables: 300 frames are cut to 256 and say so ({t300.info.Frames}, truncated {t300.info.TruncatedFrames})");
+        var t256 = B("table-256x2048.wav");
+        yield return (t256.code == 0 && t256.info is { Frames: 256, Origin: 0, TruncatedFrames: false },
+            $"aurora tables: 256 × 2048 samples with no clm chunk is a wavetable ({t256.info.Frames}, origin {t256.info.Origin})");
+        var r40 = B("rec-40s-2048x.wav");
+        yield return (r40.code == 0 && r40.info is { Frames: 16, Origin: 2, TruncatedLength: false },
+            $"aurora tables: a 40 s recording on a multiple of 2048 is a recording, not 256 raw frames ({r40.info.Frames}, origin {r40.info.Origin})");
         var lng = B("long-90s.wav");
         yield return (lng.code == 0 && lng.info is { Frames: 16, Origin: 2, TruncatedLength: true },
             $"aurora tables: a 90 s recording gives 16 frames from its first 60 s ({lng.info.Frames}, origin {lng.info.Origin}, cut {lng.info.TruncatedLength})");
@@ -181,6 +187,42 @@ internal static class AuroraTableTests
         e.TryGetAuroraTableInfo(t, 0, out var i7);
         yield return (i7.Frames == 0, "aurora tables: the source switch adds no undo step");
         e.TrackNoteOff(t, 60);
+
+        // Picking a built-in bank while the imported table plays: the bank and the switch
+        // off the import are one undo step, and redo makes both again (the card's path).
+        using var g = new NotaEngine();
+        int u = g.AddWavetableSynthTrack();
+        int tp = -1;
+        for (int i = 0; i < g.PluginParamCount(u, -1); i++) if (g.PluginParamId(u, -1, i) == "table") tp = i;
+        float bank0 = g.PluginParamGet(u, -1, tp);
+        g.AuroraTableBuild(fx["table-64x2048.wav"], out var h2);
+        g.AuroraSetTable(u, 0, h2); g.AuroraTableFree(h2);
+        AuroraTableImporter.PickBank(g, u, 0, tp, "table", 1f);
+        g.TryGetAuroraTableInfo(u, 0, out var p1);
+        float bank1 = g.PluginParamGet(u, -1, tp);
+        yield return (!p1.UseCustom && p1.Frames == 64 && bank1 == 1f,
+            $"aurora tables: picking a bank leaves the imported table (custom {p1.UseCustom}, bank {bank1})");
+        g.Undo();
+        g.TryGetAuroraTableInfo(u, 0, out var p2);
+        float bank2 = g.PluginParamGet(u, -1, tp);
+        yield return (p2.UseCustom && p2.Frames == 64 && bank2 == bank0,
+            $"aurora tables: undo brings back the old bank and the imported table together (custom {p2.UseCustom}, bank {bank2})");
+        g.Redo();
+        g.TryGetAuroraTableInfo(u, 0, out var p3);
+        float bank3 = g.PluginParamGet(u, -1, tp);
+        yield return (!p3.UseCustom && p3.Frames == 64 && bank3 == 1f,
+            $"aurora tables: redo picks the bank and leaves the import again (custom {p3.UseCustom}, bank {bank3})");
+        g.Undo(); g.Undo();
+        g.TryGetAuroraTableInfo(u, 0, out var p4);
+        yield return (p4.Frames == 0 && g.PluginParamGet(u, -1, tp) == bank0, "aurora tables: one more undo takes the import back");
+        // The imported name in the drop-down is an undo step of its own.
+        g.Redo(); g.Redo();
+        g.AuroraSetSource(u, 0, true, undoable: true);
+        g.TryGetAuroraTableInfo(u, 0, out var p5);
+        g.Undo();
+        g.TryGetAuroraTableInfo(u, 0, out var p6);
+        yield return (p5.UseCustom && !p6.UseCustom && g.PluginParamGet(u, -1, tp) == 1f,
+            $"aurora tables: going back to the imported table is one undo step ({p5.UseCustom} → {p6.UseCustom})");
     }
 
     // ---- T027: the state blob, copies and duplicates ----
@@ -404,7 +446,7 @@ internal static class AuroraTableTests
         using var e = new NotaEngine();
         int t = e.AddWavetableSynthTrack();
         Set(e, t, "lfo1rate", 0.5f); Set(e, t, "lfo1depth", 1f); Set(e, t, "mtx2_2", 1f); Set(e, t, "position", 0.5f);
-        var sc = new float[5];
+        var sc = new float[6];
         Render(e, 512);
         e.InstrumentScope(t, sc);
         yield return (sc[0] == -1f && sc[1] == -1f && sc[2] == 0f, $"aurora tables: with no note the scope says none ({sc[0]}, serial {sc[2]})");
@@ -424,6 +466,10 @@ internal static class AuroraTableTests
         e.InstrumentScope(t, sc);
         e.TryGetAuroraTableInfo(t, 1, out var info);
         yield return (sc[3] > 0 && sc[3] == (info.Serial & 0xFFFFFF), $"aurora tables: the scope carries the table serial ({sc[3]})");
+        float srcOn = sc[5];
+        e.AuroraSetSource(t, 1, false);
+        e.InstrumentScope(t, sc);
+        yield return (srcOn == 2f && sc[5] == 0f, $"aurora tables: the scope says which oscillators play their imported table ({srcOn} → {sc[5]})");
         e.TrackNoteOff(t, 60);
     }
 
