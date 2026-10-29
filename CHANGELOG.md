@@ -252,6 +252,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Aurora's oscillator read-outs are back on the one-card Osc tab**: each oscillator's on switch
+  says on or off again, and a table window says "no modulation" (greyed) when nothing moves its
+  position.
 - **Disarming a track no longer leaves a held note sounding** (nota-daw/nota#366): turning record arm off
   (or the arm moving to another selected track) while a key is down releases the notes that
   came in through live input, instead of leaving them on until panic or stop.
