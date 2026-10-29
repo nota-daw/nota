@@ -631,6 +631,11 @@ public interface IAudioEngine : IDisposable
     /// <summary>A device's resource text (Nota Chamber: 0 IR name, 1 IR category, 2 user IR
     /// name, 10 the built-in IR list as "name\tcategory\tseconds" lines); "" when none.</summary>
     string DeviceText(int trackId, int deviceIndex, int id);
+    /// <summary>Nota EQ-8 band labels and notes (specs/049): replace band 0..7's label (≤ 24
+    /// characters, one line) and note (≤ 2000) as one undo step; false when nothing changed or the
+    /// device isn't an EQ-8. EqBandText: which 0 = label, 1 = note ("" when none).</summary>
+    bool EqSetBandText(int trackId, int deviceIndex, int band, string label, string note);
+    string EqBandText(int trackId, int deviceIndex, int band, int which);
     /// <summary>Sidechain routing: point a device's detector at another track's signal (-1 clears).</summary>
     void SetDeviceSidechainSource(int trackId, int deviceIndex, int sourceTrackId);
     int DeviceSidechainSource(int trackId, int deviceIndex);

@@ -48,8 +48,9 @@ class Eq : public Device {
         Analyzer,
         AnaRange, // 0 = 60, 1 = 90, 2 = 120 dB below 0 dBFS (display only)
         AnaPeak,  // 0 / 1 peak hold (display only)
+        Labels,   // 0 / 1 band labels shown in the graph (display only, specs/049)
         kNumParams
-    }; // 62
+    }; // 63
     enum { AnaPre = 0, AnaPost = 1, AnaOff = 2 };
 
     // Telemetry slots (scopeRead).
@@ -95,7 +96,20 @@ class Eq : public Device {
     void deviceAction(int32_t id, int32_t iarg, float farg) override;
     std::string deviceText(int32_t id) const override;
 
+    // Band labels and notes (specs/049): text the user attaches to a band slot. Message thread
+    // only — process() never reads them. They are the device's saved state (empty when none,
+    // so a plain EQ-8 saves exactly as before); Engine::setDeviceAnnotation edits them as
+    // one undo step.
+    static constexpr size_t kLabelMax = 24, kNoteMax = 2000; // UTF-8 code points
+    std::vector<uint8_t> getState() const override;
+    void setState(const uint8_t* data, int32_t size) override;
+    const std::string& bandLabel(int b) const { return label_[std::clamp(b, 0, kBands - 1)]; }
+    const std::string& bandNote(int b) const { return note_[std::clamp(b, 0, kBands - 1)]; }
+    void setBandText(int b, const std::string& label, const std::string& note);
+
   private:
+    std::string label_[kBands], note_[kBands];
+
     static constexpr int kMaxSec = 4;
     static constexpr int kCtrl = 16;                // control-rate cascade re-build while a band glides
     static constexpr int kAutoKeys = Scale + 1;     // band params, slopes, channels and Scale shape the curve

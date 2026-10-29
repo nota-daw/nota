@@ -843,6 +843,12 @@ class Engine {
     // Load an auxiliary file into a device (the Chamber's user IR) / read its resource text.
     bool deviceLoadFile(int32_t trackId, int32_t deviceIndex, const std::string& path);
     std::string deviceText(int32_t trackId, int32_t deviceIndex, int32_t id) const;
+    // EQ-8 band labels and notes (specs/049). set replaces one band's label and note (cleaned
+    // to their limits) as one undo step; false when the device isn't an EQ-8, the band is out
+    // of range or nothing changed. get: which 0 = label, 1 = note ("" when none).
+    bool setEqBandText(int32_t trackId, int32_t deviceIndex, int32_t band, const std::string& label,
+        const std::string& note);
+    std::string eqBandText(int32_t trackId, int32_t deviceIndex, int32_t band, int32_t which) const;
     int32_t deviceParamCount(int32_t trackId, int32_t deviceIndex) const;
     const char* deviceParamName(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
     float deviceParamMin(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const;
@@ -1670,6 +1676,9 @@ class Engine {
     bool presetTagSelfTest();
 
   private:
+    // The EQ-8 annotation states undo steps point at (specs/049): append-only, 0 = none. A step
+    // holds the indices of the device's whole state before and after the edit.
+    std::vector<std::vector<uint8_t>> noteStates_ = std::vector<std::vector<uint8_t>>(1);
     bool applyMix(const MixChange& c, bool after); // write before/after; false = gone
     static void mergeMix(std::vector<MixChange>& into, const std::vector<MixChange>& later);
     static constexpr size_t kMaxUndoDepth = 128;
@@ -2021,6 +2030,17 @@ class Engine {
     static constexpr int kMaxLiveExpr = 256;
     MidiEvent liveExpr_[kMaxLiveExpr];
     int liveExprCount_ = 0;
+    // Tracks disarmed with keys still down (#366), from the live queue's release requests
+    // (expr kLiveReleaseExpr); one past capacity waits for the next block. Marked on their
+    // tracks once the block's graph is in hand.
+    static constexpr int32_t kLiveReleaseExpr = -2;
+    static constexpr int kMaxLiveRelease = 64;
+    int32_t liveRelease_[kMaxLiveRelease] = {};
+    int liveReleaseCount_ = 0;
+    // Track t's share of the block's live notes, appended to evs: the untargeted ones and/or
+    // the ones addressed to it, then the release of what it was sounding if it was disarmed
+    // and no longer takes live input. Returns the new count.
+    int liveNotesFor(const Track& t, bool untargeted, bool targeted, bool stillTakes, MidiEv* evs, int n);
     // Whether a live event reaches track t (armed / audition, or addressed to it).
     bool takesLiveEvent(const Track& t, const MidiEvent& e) const;
     // Apply the live expression that reaches `t` (and its MIDI source track) to `inst`.

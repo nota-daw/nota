@@ -477,6 +477,22 @@ if (args.Length >= 1 && args[0] == "--eq-analyzer")
     Console.WriteLine(failures == 0 ? "EQ ANALYZER PASSED" : $"EQ ANALYZER FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Nota Lens tempo sync + key overlay alone (specs/050): `--lens-sync`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--lens-sync")
+{
+    Console.WriteLine("-- lens sync --");
+    foreach (var (ok, label) in LensSyncTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "LENS SYNC PASSED" : $"LENS SYNC FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// EQ-8 band labels and notes alone (specs/049): `--eq-labels`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--eq-labels")
+{
+    Console.WriteLine("-- eq labels --");
+    foreach (var (ok, label) in EqLabelTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "EQ LABELS PASSED" : $"EQ LABELS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Preset state alone: `--preset-state` (specs/048). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--preset-state")
 {
@@ -4355,7 +4371,7 @@ Check(m4Dry > 1e-4f, $"instrument audible (rms={m4Dry:0.0000})");
 int eqDev = engine.AddBuiltinDevice(fxT, 0); // 0 = EQ-8 (flat by default = passthrough)
 Check(eqDev >= 0, "add built-in EQ-8");
 Check(engine.DeviceName(fxT, eqDev) == "Nota EQ-8", "EQ-8 device name");
-Check(engine.DeviceParamCount(fxT, eqDev) == 62, "EQ-8 exposes 62 params (8 bands × 5, slopes, channels, globals, analyzer range and peak)");
+Check(engine.DeviceParamCount(fxT, eqDev) == 63, "EQ-8 exposes 63 params (8 bands × 5, slopes, channels, globals, analyzer range and peak, labels)");
 engine.Seek(0);
 engine.RenderOffline(buf, frames);
 Check(Rms(buf, frames) > 1e-4f, $"audio flows through flat EQ-8 (rms={Rms(buf, frames):0.0000})");
@@ -6422,7 +6438,7 @@ Console.WriteLine("-- Nota Lens --");
               AverageP = 6, SmoothP = 7, TiltP = 9, PeakHoldP = 11, TimeDivP = 15, TrigModeP = 17,
               TrigLevelP = 19, CursorAP = 26, CursorBP = 27, RateP = 36;
     const int M_PeakHz = 0, M_PeakDb = 1, M_RmsDb = 2, M_PeriodMs = 8, M_FreqHz = 9, M_Vpp = 10,
-              M_Vrms = 11, M_BinHz = 13, M_FftN = 14, M_SampleRate = 18, M_Held = 19, kLensScope = 20;
+              M_Vrms = 11, M_BinHz = 13, M_FftN = 14, M_SampleRate = 18, M_Held = 19, kLensScope = 22;
     const int L_Spectrum = 0, L_Peak = 1, L_Trace = 2, L_Raw = 3, L_Waterfall = 4;
     const int A_Rearm = 0, A_ResetPeak = 1;
 
@@ -6439,7 +6455,7 @@ Console.WriteLine("-- Nota Lens --");
         Check(le.DeviceName(lt, ld) == "Nota Lens", $"name is Nota Lens (got '{le.DeviceName(lt, ld)}')");
         Check(le.TrackDeviceBuiltinKind(lt, ld) == 22, $"builtin kind is 22 (got {le.TrackDeviceBuiltinKind(lt, ld)})");
         int lpc = le.DeviceParamCount(lt, ld);
-        Check(lpc == 37, $"Nota Lens exposes 37 params (got {lpc})");
+        Check(lpc == 42, $"Nota Lens exposes 42 params (got {lpc})");
         var lnames = Enumerable.Range(0, lpc).Select(i => le.DeviceParamName(lt, ld, i)).ToList();
         Check(lnames.Distinct().Count() == lpc && lnames.All(n => n.Length > 0), "Lens param names are unique and non-empty");
         le.DeviceSetParam(lt, ld, TiltP, 0.42f);
@@ -6980,7 +6996,7 @@ Console.WriteLine("-- EQ-8 --");
     engine.AddMidiClip(et, 0.0, 4.0);
     engine.SetClipNotes(et, 0, new[] { new NotaNote(69, 0.0, 3.0, 0.9f) });   // A4 = 440 Hz + harmonics
     int eq = engine.AddBuiltinDevice(et, 0);
-    Check(engine.DeviceParamCount(et, eq) == 62, "EQ-8 has 62 params on a fresh track");
+    Check(engine.DeviceParamCount(et, eq) == 63, "EQ-8 has 63 params on a fresh track");
 
     // Band 3 (index 2) is a bell; param base = 2*5. On=+0, Type=+1, Freq=+2, Gain=+3, Q=+4.
     int b2 = 2 * 5;
@@ -15258,8 +15274,12 @@ foreach (var (ok, label) in PresetStateTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- eq analyzer --");
 foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);
+Console.WriteLine("-- eq labels --");
+foreach (var (ok, label) in EqLabelTests.Run()) Check(ok, label);
 Console.WriteLine("-- scope view --");
 foreach (var (ok, label) in ScopeViewTests.Run()) Check(ok, label);
+Console.WriteLine("-- lens sync --");
+foreach (var (ok, label) in LensSyncTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- plug-in preview --");
 foreach (var (ok, label) in PluginPreviewTests.Run()) Check(ok, label);

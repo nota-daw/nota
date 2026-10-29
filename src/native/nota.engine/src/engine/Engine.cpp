@@ -4,6 +4,7 @@
 // Engine — lifecycle, audio/MIDI device config, preview, tone/transport setters, immutable-graph publish/clone/undo/reset, post-fader meters. Definitions of the rest of the class live in the sibling Engine_*.cpp slices.
 
 #include "Engine.h"
+#include "devices/effects/Eq.h"
 #include "devices/racks/RackCore.h"
 #include "audio_io/AudioBackendFactory.h"
 #include "media/AudioFile.h"
@@ -640,6 +641,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
+    nt->liveHeld = t.liveHeld;           // shared — held live notes persist (#366)
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
     nt->frozenSpb = t.frozenSpb;
@@ -877,6 +879,14 @@ bool Engine::applyMix(const MixChange& c, bool after) {
     const float v = after ? c.after : c.before;
     if (c.kind == MixKind::PresetTag)
         return setPresetTagIndex(c.trackId, c.paramIndex, c.deviceIndex, static_cast<int32_t>(v)); // gone: skip
+    if (c.kind == MixKind::DeviceNotes) { // specs/049: an EQ-8's labels and notes
+        auto* eq = dynamic_cast<Eq*>(deviceAt(c.trackId, c.deviceIndex));
+        const auto at = static_cast<size_t>(v);
+        if (!eq || at >= noteStates_.size()) return false; // gone (or no longer an EQ-8): skip
+        const auto& st = noteStates_[at];
+        eq->setState(st.data(), static_cast<int32_t>(st.size()));
+        return true;
+    }
     if (c.kind == MixKind::MasterVolume) {
         setMasterVolume(v);
         return true;

@@ -14,8 +14,17 @@ namespace nota {
 
 // --- live MIDI, arming, recording ------------------------------------------
 void Engine::setTrackArmed(int32_t trackId, bool armed) {
-    if (auto t = findTrackAuthoring(trackId)) t->setArmed(armed);
+    auto t = findTrackAuthoring(trackId);
+    const bool wasArmed = t && t->armed();
+    if (t) t->setArmed(armed);
     if (armed) return;
+    // A key still held from live input loses its note-off once the track stops taking live
+    // notes (#366): the audio thread releases the live notes this track is sounding. The key
+    // itself stays held, for other armed tracks and for a take started while it's down.
+    if (wasArmed) {
+        std::lock_guard<std::mutex> lk(remoteMidiMx_);
+        remoteMidi_.push(MidiEvent{false, -1, 0.0f, trackId, kLiveReleaseExpr});
+    }
     // Disarming a track that's currently recording finalizes its take (the audio clip is
     // materialised / MIDI capture stops), so toggling its REC button stops the recording.
     if (audioRecording_ && trackId == audioRecordTrackId_) stopAudioRecording();

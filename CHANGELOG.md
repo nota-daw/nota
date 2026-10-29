@@ -32,6 +32,22 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the driver is missing, busy or stops responding, Nota switches to WASAPI and the status bar
   says why; **Try again** goes back to ASIO. The Steinberg ASIO SDK is used under its GPLv3
   option (`LICENSES/third-party.md`).
+- **Tempo-synced scope in Nota Lens** (#119): the Scope view gains **Sync**, which lines the
+  trace up with the song: pick a **Span** from a quarter beat to four bars and the scope shows
+  that stretch of the beat grid, with beat and bar lines, a sweep line at the playhead and the
+  previous pass fading out to its right. It draws from a min/max history, so a one-sample
+  transient keeps its full height at any span, and a seek or loop wrap restarts the pass
+  cleanly. Lens also takes a sidechain **Key** (any other track): its waveform is drawn in teal
+  over the main one or **Stacked** under it, with its own display gain, in both the synced and
+  the triggered scope. A new button opens Lens in its own resizable window. The audio still
+  passes through untouched. Five params are appended (Sync, Span, Key, Key Gain, Layout);
+  older projects open with Sync off.
+- **Band labels and notes in EQ-8** (#135): name a band in the band panel's new **Label** field
+  and the name shows next to its node in the graph (and on its chip); click the label, or
+  **Note**, for a multiline note on what the band is for. Labels that would overlap move apart,
+  **Labels** next to Peak hides them, and they are saved with the project, in user presets and
+  in copies, each edit one undo step. The sound is unchanged. MCP `read_eq8` returns each band's
+  label and note and `set_eq8_band` sets them.
 - **A proper spectrum analyzer in EQ-8 and EQ-3** (#265): the spectrum behind the curve is now
   a smooth, filled area that rises at once and falls back over about 300 ms, read from 256
   points in 1/6-octave bands, so a tone reads at its own level and pink noise reads flat. EQ-8
@@ -201,6 +217,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Disarming a track no longer leaves a held note sounding** (nota-daw/nota#366): turning record arm off
+  (or the arm moving to another selected track) while a key is down releases the notes that
+  came in through live input, instead of leaving them on until panic or stop.
 - **Session clips no longer wait forever to start** (nota-daw/nota#343): a clip launched on a
   muted track, or one silenced by another track's solo, starts on the next launch point and
   keeps time while silent; a transport loop with no bar line inside it now launches at the

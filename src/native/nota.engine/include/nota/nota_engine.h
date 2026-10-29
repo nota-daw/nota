@@ -1744,6 +1744,13 @@ NOTA_API NotaResult  nota_device_load_file(NotaEngine* engine, int32_t track_id,
 /* A device's resource text (Chamber: 0 IR name, 1 category, 2 user IR name, 10 built-in IR list).
    Returns the full UTF-8 length; copies up to cap-1 bytes + NUL when out is non-null. */
 NOTA_API int32_t     nota_device_text(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t id, char* out, int32_t cap);
+/* Nota EQ-8 band labels and notes (specs/049): UTF-8 text attached to band 0..7, kept with
+ * the device's state (project, user preset, copies). set replaces one band's label (max 24
+ * characters, one line) and note (max 2000, line breaks kept) as one undo step; NULL = "".
+ * Returns 1 when something changed, 0 otherwise (not an EQ-8, bad band, same text).
+ * get: which 0 = label, 1 = note; returns the full length and copies up to cap-1 bytes + NUL. */
+NOTA_API int32_t     nota_eq_set_band_text(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t band, const char* label, const char* note);
+NOTA_API int32_t     nota_eq_band_text(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t band, int32_t which, char* out, int32_t cap);
 /* Sidechain routing (Phase B): point a device's detector at another track's signal.
  * source_track_id -1 clears it; get returns the current source (-1 = none). */
 NOTA_API void        nota_device_set_sidechain_source(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t source_track_id);

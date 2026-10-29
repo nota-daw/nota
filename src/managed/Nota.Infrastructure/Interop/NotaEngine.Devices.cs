@@ -207,6 +207,17 @@ public sealed partial class NotaEngine
         NativeMethods.DeviceText(_handle, trackId, deviceIndex, id, buf, buf.Length);
         return System.Text.Encoding.UTF8.GetString(buf, 0, n);
     }
+    public bool EqSetBandText(int trackId, int deviceIndex, int band, string label, string note)
+    { ThrowIfDisposed(); return NativeMethods.EqSetBandText(_handle, trackId, deviceIndex, band, label ?? "", note ?? "") != 0; }
+    public string EqBandText(int trackId, int deviceIndex, int band, int which)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.EqBandText(_handle, trackId, deviceIndex, band, which, null, 0);
+        if (n <= 0) return "";
+        var buf = new byte[n + 1];
+        NativeMethods.EqBandText(_handle, trackId, deviceIndex, band, which, buf, buf.Length);
+        return System.Text.Encoding.UTF8.GetString(buf, 0, n);
+    }
 
     // --- MIDI effects ---
     public int AddMidiEffect(int trackId, int kind) { ThrowIfDisposed(); return NativeMethods.AddMidiEffect(_handle, trackId, kind); }

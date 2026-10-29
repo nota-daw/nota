@@ -14,6 +14,7 @@
 #include "media/WarpStream.h"
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -915,6 +916,7 @@ void Engine::publishHeldSnapshot(double nowBeat) {
 void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     liveCount_ = 0;
     liveExprCount_ = 0;
+    liveReleaseCount_ = 0;
     const bool rec = recording_.load(std::memory_order_relaxed);
 
     // When recording into a Session slot, time notes against the slot's own loop
@@ -969,6 +971,15 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             if (k < liveExprCount_) liveExpr_[k].velocity = e.velocity;
             else if (liveExprCount_ < kMaxLiveExpr)
                 liveExpr_[liveExprCount_++] = e;
+            continue;
+        }
+        if (e.expr == kLiveReleaseExpr) { // a track disarmed: release, the keys stay down
+            if (liveReleaseCount_ >= kMaxLiveRelease) {
+                liveCarry_ = e;
+                liveCarried_ = true;
+                break;
+            }
+            liveRelease_[liveReleaseCount_++] = e.trackId;
             continue;
         }
         const bool valid = e.pitch >= 0 && e.pitch < 128;
@@ -1172,9 +1183,35 @@ int Engine::gatherInstrumentNotes(
     // Live notes reach a track when it's armed, or when it's the audition target
     // (so clicking a rack/drum pad plays it without arming/recording).
     // A track-addressed event (Nota Remote) plays only its own track.
+    const bool takesUntargeted = t.armed() || t.id() == auditionTrackId_.load(std::memory_order_relaxed);
+    return liveNotesFor(t, takesUntargeted, true, takesUntargeted, evs, n);
+}
+
+int Engine::liveNotesFor(const Track& t, bool untargeted, bool targeted, bool stillTakes, MidiEv* evs, int n) {
+    Track::LiveHeld* held = t.liveHeld.get();
     for (int i = 0; i < liveCount_ && n < 1024; ++i) {
         const MidiEvent& le = liveEvents_[i];
-        if (takesLiveEvent(t, le)) evs[n++] = {0, le.on, le.pitch, le.velocity};
+        if (le.trackId >= 0 ? !targeted || le.trackId != t.id() : !untargeted) continue;
+        evs[n++] = {0, le.on, le.pitch, le.velocity};
+        if (!held || le.trackId >= 0 || le.pitch < 0 || le.pitch >= 128) continue;
+        const uint64_t bit = 1ull << (le.pitch & 63);
+        if (le.on) held->bits[le.pitch >> 6] |= bit;
+        else held->bits[le.pitch >> 6] &= ~bit;
+    }
+    // Disarmed with keys down (#366): release the live notes it was given, unless it takes
+    // live input again (re-armed, or the audition target).
+    if (held && held->release) {
+        held->release = false;
+        if (!stillTakes) {
+            for (int h = 0; h < 2; ++h) {
+                uint64_t bits = held->bits[h];
+                held->bits[h] = 0;
+                while (bits && n < 1024) {
+                    evs[n++] = {0, false, h * 64 + std::countr_zero(bits), 0.0f};
+                    bits &= bits - 1;
+                }
+            }
+        }
     }
     return n;
 }
@@ -1447,10 +1484,8 @@ void Engine::renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double s
 
     // Live monitoring while overdub-recording into this slot (M5-4).
     const bool monitoring = recordSlotPlayer_.load(std::memory_order_acquire) == &sp;
-    if (monitoring)
-        for (int i = 0; i < liveCount_ && n < 1024; ++i)
-            if (liveEvents_[i].trackId < 0 || liveEvents_[i].trackId == t.id()) // a phone plays only its own track
-                evs[n++] = {0, liveEvents_[i].on, liveEvents_[i].pitch, liveEvents_[i].velocity};
+    // A phone plays only its own track.
+    n = liveNotesFor(t, monitoring, monitoring, monitoring && t.armed(), evs, n);
 
     std::sort(evs, evs + n, midiEvLess);
 
@@ -1750,6 +1785,11 @@ void Engine::processBlock(float* out, int32_t numFrames) {
                         if (md) md->reset();
                 }
     notesOffCount_ = 0;
+    // Tracks disarmed with keys down (#366): they release on this render.
+    if (g)
+        for (int k = 0; k < liveReleaseCount_; ++k)
+            for (auto& tptr : g->tracks)
+                if (tptr->id() == liveRelease_[k] && tptr->liveHeld) tptr->liveHeld->release = true;
     // Note chase: when playback starts, the playhead jumps (seek) or the loop wraps, clip
     // notes that began before the playhead but are still held get re-triggered at the
     // jump point — otherwise a note you start in the middle of stays silent.

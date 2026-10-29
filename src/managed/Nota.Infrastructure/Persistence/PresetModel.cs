@@ -48,10 +48,23 @@ public sealed class PresetDocument
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? MosaicProgram { get; set; }
 
+    /// <summary>Nota EQ-8: the user's band labels and notes (specs/049), one entry per annotated
+    /// band. Null = none (a factory preset, or one saved before labels existed).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public System.Collections.Generic.List<PresetBandText>? BandText { get; set; }
+
     // Plugin: stable identity + base64-encoded state blob.
     public string PluginId { get; set; } = "";
     public string StateBase64 { get; set; } = "";
 
     /// <summary>Forward-compat: unknown fields from newer versions round-trip.</summary>
     [JsonExtensionData] public System.Collections.Generic.Dictionary<string, System.Text.Json.JsonElement>? Extra { get; set; }
+}
+
+/// <summary>One EQ-8 band's label and note in a preset (band 1..8).</summary>
+public sealed class PresetBandText
+{
+    public int Band { get; set; }
+    public string Label { get; set; } = "";
+    public string Note { get; set; } = "";
 }
