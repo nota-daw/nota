@@ -12,6 +12,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -73,8 +74,10 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         // ---- units ----------------------------------------------------------------
         static double Exp(double v, double lo, double hi) => lo * Math.Pow(hi / lo, Math.Clamp(v, 0, 1));
         static double HzOf(double norm) => Exp(norm, 30, 18000);
+        static double NormOf(double hz) => Math.Clamp(Math.Log(hz / 30.0) / Math.Log(18000.0 / 30.0), 0, 1);
         static string Hz(double hz) => hz >= 1000 ? NotaNum.F($"{hz / 1000:0.00} k") : NotaNum.F($"{hz:0} Hz");
         static string HzLong(double hz) => hz >= 1000 ? NotaNum.F($"{hz / 1000:0.00} kHz") : NotaNum.F($"{hz:0} Hz");
+        static string DbF(double lin) => lin > 1e-5 ? NotaNum.F($"{20 * Math.Log10(lin):0.0;−0.0} dB") : "−∞ dB";
         static string Pct(double v) => NotaNum.F($"{v * 100:0} %");
         static string Bip(double v) => NotaNum.F($"{(v - 0.5) * 200:+0;−0;0} %");
         static string Ms(double ms) => ms >= 100 ? NotaNum.F($"{ms:0} ms") : ms >= 10 ? NotaNum.F($"{ms:0.0} ms") : NotaNum.F($"{ms:0.0#} ms");
@@ -420,6 +423,120 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             return g;
         }
 
+        Control ModTab()
+        {
+            var target = Chips(new[] { "Freq", "Reso", "Both" }, i => Target() == i, i => SetP(ModTarget, i / 2f), ModTarget, h: 15, padX: 6);
+            var tRow = new Grid { ColumnDefinitions = new ColumnDefinitions("40,*") };
+            tRow.Children.Add(Caps("TARGET")); tRow.Children.Add(Col(target, 1));
+
+            var env = SliderRow("ENV", EnvAmt, Bip, bipolar: true, dim: () => !On(EnvOn));
+            var lfo = SliderRow("LFO", LfoAmt, Pct, modulation: true, dim: () => !On(LfoOn));
+            var gain = SliderRow("GAIN", Gain, GainF, bipolar: true);
+            var smooth = SliderRow("SMOOTH", ModSmooth, SmoothF);
+            var ctxHost = new ContentControl();
+            readouts.Add(() => { Control want = centreTab == 0 ? gain : smooth; if (!ReferenceEquals(ctxHost.Content, want)) ctxHost.Content = want; });
+            var ctxRow = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = ctxHost };
+
+            // The cutoff, live: Hz · note · cents, and where the movement comes from.
+            var boxTitle = Caps("CUTOFF");
+            var boxHz = Mono("", 9, TextPrimary);
+            var boxSub = Mono("", 8, TextSecondary);
+            var box = new Border
+            {
+                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
+                Child = new StackPanel { Spacing = 2, Children = { boxTitle, boxHz, boxSub } },
+            };
+            readouts.Add(() =>
+            {
+                double live = LiveHz();
+                bool moving = Assigned() && Math.Abs(NormOf(live) - P(Freq)) > 0.01;
+                boxHz.Text = NotaNum.F($"{HzLong(live)} · {NoteOf(live)}");
+                box.BorderBrush = moving ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
+                boxTitle.Foreground = moving ? AccentBright : TextTertiary;
+                if (!Assigned()) boxSub.Text = "no modulation assigned";
+                else
+                {
+                    var parts = new List<string> { NotaNum.F($"base {Hz(BaseHz())}") };
+                    if (EnvAssigned()) parts.Add(NotaNum.F($"{Bip(P(EnvAmt))} ENV"));
+                    if (LfoAssigned()) parts.Add(NotaNum.F($"±{Pct(P(LfoAmt))} LFO"));
+                    boxSub.Text = string.Join(" · ", parts);
+                }
+            });
+
+            // Two switches that follow the centre tab.
+            var sc = SidechainSwitch();
+            var analog = Toggle(Circuit, "Analog model");
+            var envIn = Toggle(EnvOn, "Envelope on input", live: () => engine.DeviceSidechainSource(track, di) >= 0 ? "Envelope on key" : "Envelope on input");
+            var lfoOnSw = Toggle(LfoOn, "LFO on");
+            var retrig = Toggle(LfoRetrig, "Retrig on onsets");
+            var sw1 = new ContentControl();
+            var sw2 = new ContentControl();
+            readouts.Add(() =>
+            {
+                (Control a, Control b) = centreTab switch { 1 => (envIn, sc), 2 => (lfoOnSw, retrig), _ => (sc, analog) };
+                if (!ReferenceEquals(sw1.Content, a)) { sw1.Content = null; sw2.Content = null; sw1.Content = a; sw2.Content = b; }
+            });
+
+            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,*,Auto,*,Auto,*,Auto,*,Auto,5,Auto") };
+            grid.Children.Add(GRow(tRow, 0));
+            grid.Children.Add(GRow(env, 2));
+            grid.Children.Add(GRow(lfo, 4));
+            grid.Children.Add(GRow(ctxRow, 6));
+            grid.Children.Add(GRow(box, 8));
+            grid.Children.Add(GRow(sw1, 10));
+            grid.Children.Add(GRow(sw2, 12));
+            return new Border { Padding = new Thickness(8, 6), Child = grid };
+        }
+
+        Control OutputTab()
+        {
+            Control Line(string k, Func<string> v, IBrush? ink = null)
+            {
+                var val = Mono("", 8, ink ?? TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
+                readouts.Add(() => val.Text = v());
+                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+                g.Children.Add(new TextBlock { Text = k, FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center });
+                g.Children.Add(Col(val, 1));
+                return g;
+            }
+            var box = new Border
+            {
+                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
+                Child = new StackPanel { Spacing = 2, Children = {
+                    Caps("OUTPUT"),
+                    Line("in", () => DbF(Sc(S_InPk))),
+                    Line("out", () => DbF(Sc(S_OutPk))),
+                    Line("cutoff", () => HzLong(LiveHz()), TextPrimary) } },
+            };
+            var sliders = new StackPanel { Spacing = 6, Children = {
+                SliderRow("DRIVE", Drive, v => v <= 0.001 ? "off" : Pct(v)),
+                SliderRow("DRY/WET", DryWet, Pct),
+                SliderRow("GAIN", Gain, GainF, bipolar: true) } };
+            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
+            btns.Children.Add(Latch(LfoRetrig, () => "Retrig", "Retrig — restart the LFO on each input onset (−24 dBFS) and when play starts", fill: true));
+            btns.Children.Add(Col(Latch(Circuit, () => "Analog", "Analog — a gentle saturation after the filter, like an analog circuit", fill: true), 1));
+            var tempo = Toggle(LfoSync, "Tempo sync");
+            // Stereo phase: on sets 90°, a click on the value steps 45° → 180°.
+            var stereo = Switch("", () => P(LfoPhase) > 0.001f, () => SetP(LfoPhase, P(LfoPhase) > 0.001f ? 0f : 0.5f), out var stSync,
+                liveLabel: () => P(LfoPhase) > 0.001f ? NotaNum.F($"Stereo phase {P(LfoPhase) * 180:0}°") : "Stereo phase");
+            readouts.Add(stSync);
+            Learn(stereo, LfoPhase);
+            stereo.PointerReleased += (_, e) =>
+            {
+                if (e.InitialPressMouseButton != MouseButton.Right || P(LfoPhase) <= 0.001f) return;
+                float nx = P(LfoPhase) + 0.25f; if (nx > 1.001f) nx = 0.25f;
+                SetP(LfoPhase, nx); RefreshAll(); e.Handled = true;
+            };
+            ToolTip.SetTip(stereo, "Stereo phase — the right channel's LFO runs ahead of the left (90° when switched on; right-click steps 45° … 180°)");
+
+            var body = new DockPanel { LastChildFill = false, Children = {
+                Docked(box, Dock.Top),
+                Docked(new Border { Margin = new Thickness(0, 7, 0, 0), Child = sliders }, Dock.Top),
+                Docked(new StackPanel { Spacing = 5, Children = { tempo, stereo } }, Dock.Bottom),
+                Docked(new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 5), Child = btns }, Dock.Bottom) } };
+            return new Border { Padding = new Thickness(8, 6), Child = body };
+        }
+
         Control FilterPanel()
         {
             var types = Chips(TypeNames, i => Sel(Type, 4) == i, i => SetP(Type, i / 3f), Type, padX: 5);
@@ -531,13 +648,21 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => EnvelopeTab(), 2 => LfoTab(), _ => FilterTab() };
         Control PanelBody(int t) => panelBodies[t] ??= t switch { 1 => EnvelopePanel(), 2 => LfoPanel(), _ => FilterPanel() };
         string[] panelTitles = { "Filter", "Envelope", "LFO" };
-        var panelTitle = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        void ShowPanel(int t) { panelHost.Content = PanelBody(t); panelTitle.Text = panelTitles[t]; RefreshAll(); }
+        // The right panel's first tab follows the centre tab; Mod and Output stay beside it.
+        int rightTab = 0;
+        TextBlock[] rightLabels = System.Array.Empty<TextBlock>();
+        var rightBodies = new Control?[3];
+        Control RightBody(int t) => t == 0 ? PanelBody(centreTab) : rightBodies[t] ??= t == 1 ? ModTab() : OutputTab();
+        void ShowPanel(int t)
+        {
+            if (rightLabels.Length > 0) rightLabels[0].Text = panelTitles[t];
+            if (rightTab == 0) panelHost.Content = PanelBody(t);
+            RefreshAll();
+        }
 
         var centre = TabFrame(new[] { "Filter", "Envelope", "LFO" }, centreHost, CentreBody, false, t => { centreTab = t; ShowPanel(t); Refresh(); }, extras);
-        ShowPanel(0);
-        var panelHead = new Border { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = panelTitle };
-        var right = new RuleSection { Width = 186, Child = new DockPanel { LastChildFill = true, Children = { Docked(panelHead, Dock.Top), panelHost } } };
+        var rightFrame = TabFrame(new[] { panelTitles[0], "Mod", "Output" }, panelHost, RightBody, true, t => { rightTab = t; RefreshAll(); }, null, l => rightLabels = l);
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
         var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
@@ -607,7 +732,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         return root;
 
         // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
+        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl,
+                         Action<TextBlock[]>? labels = null)
         {
             int sel = 0;
             var btns = new Border[tabs.Length];
@@ -644,6 +770,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             DockPanel.SetDock(barBorder, Dock.Top);
             Hi();
             host.Content = body(sel);
+            labels?.Invoke(btns.Select(b => (TextBlock)b.Child!).ToArray());
             return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
         }
     }

@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -89,6 +90,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         static string RatioF(double r) => r >= 9.95 ? NotaNum.F($"{r:0}:1") : NotaNum.F($"{r:0.#}:1");
         static string PctF(double v) => NotaNum.F($"{v:0} %");
         static string RangeF(double v) => v >= 47.5 ? "off" : NotaNum.F($"{v:0} dB");
+        static string Gr(double g) => g > 0.05 ? NotaNum.F($"−{g:0.0}") : "0.0";
         static double LinDb(double lin) => lin > 1e-6 ? 20 * Math.Log10(lin) : -120;
         static string Lvl(double db) => db <= -99 ? "−∞" : NotaNum.F($"{db:0.0}");
         string HpF(double v) => v <= 20.5 ? "off" : Hz(v);
@@ -349,6 +351,66 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             return g;
         }
 
+        Border GrBox(bool levels)
+        {
+            var title = Caps(levels ? "OUTPUT" : "REDUCTION");
+            var stack = new StackPanel { Spacing = 2, Children = { title } };
+            var box = new Border { Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(NotaRadius.FieldValue), Padding = new Thickness(6, 4), Child = stack };
+            if (levels)
+            {
+                Control Line(string name, Func<string> v, Func<IBrush> ink)
+                {
+                    var val = Mono("", 8, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
+                    readouts.Add(() => { val.Text = v(); val.Foreground = ink(); });
+                    var gg = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+                    gg.Children.Add(new TextBlock { Text = name, FontSize = 8, Foreground = TextSecondary });
+                    gg.Children.Add(Col(val, 1));
+                    return gg;
+                }
+                stack.Children.Add(Line("in", () => NotaNum.F($"{Lvl(LinDb(Sc(S_InRms)))} dB"), () => TextPrimary));
+                stack.Children.Add(Line("out", () => NotaNum.F($"{Lvl(LinDb(Sc(S_OutRms)))} dB"), () => Sc(S_OutPk) > 0.5 ? NotaPalette.Warning : TextPrimary));
+                stack.Children.Add(Line("GR", () => NotaNum.F($"{Gr(Sc(S_Gr))} dB"), () => TextPrimary));
+            }
+            else
+            {
+                var now = Mono("", 9, TextPrimary);
+                var set = Mono("", 8, TextSecondary);
+                stack.Children.Add(now); stack.Children.Add(set);
+                readouts.Add(() =>
+                {
+                    now.Text = NotaNum.F($"{Gr(Sc(S_Gr))} dB · peak {Gr(grHist.Peak)}");
+                    set.Text = NotaNum.F($"thresh {P(Threshold):0.0} · {RatioF(P(Ratio))} · knee {P(Knee):0.#}");
+                    bool hot = grHist.Peak >= 10;   // heavy reduction: a caution, not the accent
+                    box.BorderBrush = hot ? NotaPalette.Warning : NotaPalette.GraphBorder;
+                    title.Foreground = hot ? NotaPalette.Warning : TextTertiary;
+                });
+            }
+            return box;
+        }
+
+        Control OutputTab()
+        {
+            var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
+            var listen = Latch(ScListen, "Listen", "Listen — hear the filtered key instead of the output, to set HP / LP by ear");
+            var autoGain = Latch(AutoGain, "Auto gain", "Auto gain — make-up that follows the threshold and ratio");
+            listen.HorizontalAlignment = HorizontalAlignment.Stretch; autoGain.HorizontalAlignment = HorizontalAlignment.Stretch;
+            btns.Children.Add(listen); btns.Children.Add(Col(autoGain, 1));
+            var rows = new Control[]
+            {
+                GrBox(true),
+                SliderRow("MAKEUP", Makeup, v => NotaNum.F($"{v:+0.0;−0.0;0.0}"), Lin(Makeup)),
+                SliderRow("MIX", Mix, PctF, Lin(Mix)),
+                SliderRow("RANGE", Range, RangeF, RangeMap(), teal: true),
+                new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = btns },
+                new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
+                    Toggle(External, "External key", "External key — key off the source picked on the Sidechain tab; off, the track keys itself"),
+                    Toggle(StereoLink, "Stereo link", "Stereo link — one reduction for both channels; off, left and right compress on their own") } },
+            };
+            var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,*,*,Auto,*"), RowSpacing = 3 };
+            for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
+            return new Border { Padding = new Thickness(8, 5), Child = grid };
+        }
+
         Control CurvePanel()
         {
             var charSeg = Segments(Chars, () => Sel(Character, 5), iv => SetP(Character, iv), out var charSync, fill: true, padX: 1, fontSize: 8);
@@ -365,6 +427,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 SliderRow("MIX", Mix, PctF, Lin(Mix)),
                 Rule(),
                 SliderRow("RANGE", Range, RangeF, RangeMap(), teal: true),
+                GrBox(false),
                 Toggle(AutoGain, "Auto gain", "Auto gain — make-up that follows the threshold and ratio"));
         }
 
@@ -449,20 +512,27 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                         : NotaNum.F($"key {Lvl(kdb)} dB{(key.PeakHz > 0 ? NotaNum.F($" · peak {Hz(key.PeakHz)}") : "")} · {trig:0.#} {(Math.Abs(trig - 1) < 0.05 ? "trigger" : "triggers")} / bar");
                     extras.Foreground = On(ScListen) ? AccentBright : TextTertiary; break;
                 default:
-                    extras.Text = NotaNum.F($"in {Lvl(LinDb(Sc(S_InRms)))} · out {Lvl(LinDb(Sc(S_OutRms)))} dB · crest {Crest(inPkHeld, Sc(S_InRms))} → {Crest(outPkHeld, Sc(S_OutRms))}");
+                    extras.Text = NotaNum.F($"GR avg {Gr(grHist.Average)} · peak {Gr(grHist.Peak)} dB · crest {Crest(inPkHeld, Sc(S_InRms))} → {Crest(outPkHeld, Sc(S_OutRms))}");
                     extras.Foreground = TextTertiary; break;
             }
         });
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => MotionTab(), 2 => SidechainTab(), _ => CurveTab() };
         Control PanelBody(int t) => panelBodies[t] ??= t switch { 1 => MotionPanel(), 2 => KeyPanel(), _ => CurvePanel() };
         string[] panelTitles = { "Dynamics", "Timing", "Key" };
-        var panelTitle = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-        void ShowPanel(int t) { panelHost.Content = PanelBody(t); panelTitle.Text = panelTitles[t]; }
+        // The right panel's first tab follows the centre tab; Output stays beside it.
+        int rightTab = 0;
+        TextBlock[] rightLabels = System.Array.Empty<TextBlock>();
+        Control? outputBody = null;
+        Control RightBody(int t) => t == 1 ? outputBody ??= OutputTab() : PanelBody(centreTab);
+        void ShowPanel(int t)
+        {
+            if (rightLabels.Length > 0) rightLabels[0].Text = panelTitles[t];
+            if (rightTab == 0) panelHost.Content = PanelBody(t);
+        }
 
         var centre = TabFrame(new[] { "Curve", "Motion", "Sidechain" }, centreHost, CentreBody, false, t => { centreTab = t; ShowPanel(t); Refresh(); }, extras);
-        ShowPanel(0);
-        var panelHead = new Border { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = panelTitle };
-        var right = new RuleSection { Width = 186, Child = new DockPanel { LastChildFill = true, Children = { Docked(panelHead, Dock.Top), panelHost } } };
+        var rightFrame = TabFrame(new[] { panelTitles[0], "Output" }, panelHost, RightBody, true, t => { rightTab = t; Refresh(); }, null, l => rightLabels = l);
+        var right = new RuleSection { Width = 186, Child = rightFrame };
         DockPanel.SetDock(right, Dock.Right);
         var centreBox = new RuleSection { Margin = new Thickness(5, 0), Child = centre };
 
@@ -515,7 +585,8 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         return root;
 
         // local: a tab frame (bar + swapping body), optional extras on the right of the bar.
-        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl)
+        Control TabFrame(string[] tabs, ContentControl host, Func<int, Control> body, bool centered, Action<int>? changed, Control? extrasCtl,
+                         Action<TextBlock[]>? labels = null)
         {
             int sel = 0;
             var btns = new Border[tabs.Length];
@@ -556,6 +627,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             DockPanel.SetDock(barBorder, Dock.Top);
             Hi();
             host.Content = body(sel);
+            labels?.Invoke(btns.Select(b => (TextBlock)b.Child!).ToArray());
             return new DockPanel { LastChildFill = true, Children = { barBorder, host } };
         }
     }
