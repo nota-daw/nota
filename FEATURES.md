@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.57.1** (plus changes in development on `main`). This document describes what is
+**0.58.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -35,7 +35,9 @@ Contents
 - **Linux**: PulseAudio/ALSA (via miniaudio), ALSA MIDI (RtMidi), **VST3** hosting.
   Distributed as a portable **AppImage** (`Nota-<version>-<arch>`) that runs on any distro
   with glibc ≥ 2.28 (RHEL/Alma/Rocky 8+, Debian 10+, Ubuntu 18.10+). Settings live in
-  `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`).
+  `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`). Without a working xdg-desktop-portal file
+  chooser Nota falls back to its own file dialog (`NOTA_FILE_DIALOG=builtin` forces it), and
+  with no audio output that opens it runs on a silent device and says so.
 
 Architecture: engine and DSP in C++20 (CMake + Ninja), UI in .NET 10 / Avalonia 12 (C#),
 with a C ABI + P/Invoke boundary between them. Plugin hosting is isolated in a separate
@@ -68,6 +70,7 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 - **Start window**: the logo follows the theme, recent projects sit in one compact list with
   their dates — click to select, double-click (or the arrow keys and Return) to open. Escape
   or a click outside closes it, keeping the current project.
+- **File → Exit** (Ctrl+Q) on Windows and Linux; Quit Nota (⌘Q) in the app menu on macOS.
 - **Quit without saving** dialog names the project and how long its changes have gone
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
 - **Project key** (KEY cell in the transport bar, saved with the project): loops dropped on
@@ -111,7 +114,10 @@ track count and closes with Escape.
   place, move, trim and duplicate clips; the snap grid (below); scroll and zoom;
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
-  ⌘A selects every clip; moving several selected clips is one undo step.
+  ⌘A selects every clip; moving several selected clips is one undo step. ← / → nudge the
+  selected clips by the grid step (⌥← / ⌥→ by a 64th), ⌥↑ / ⌥↓ move them to the next track
+  that takes them; clips dropped below the last track make a **New track** per source track,
+  with the same instrument, devices and mix.
   A selected time range (⇧-drag) copies, cuts, duplicates and deletes with ⌘C / ⌘X / ⌘D /
   Delete — just the covered part of each track, cut at the range edges; ⌘V pastes clips or a
   range at the playhead onto the track clicked last (a range replaces what it lands on).
@@ -204,12 +210,14 @@ track count and closes with Escape.
   it when it is a group). `Add track ▸ Recent` (Arrangement and Session) lists the five
   instruments added most recently — built-in or plug-in, however they were added — and
   adds one in a click; the list is per user, and an uninstalled plug-in drops out of it.
-- **Several tracks at once**: ⇧-click headers to build a selection (or ⌘A with the headers
-  focused); ⌘C / ⌘X / ⌘V / ⌘D and Delete copy, cut, paste, duplicate and delete the
+- **Several tracks at once**: ⇧-click headers to select a range, ⌘-click (Ctrl on Windows /
+  Linux) to add or remove one (or ⌘A with the headers focused); ⌘C / ⌘X / ⌘V / ⌘D and Delete copy, cut, paste, duplicate and delete the
   selected tracks, and right-clicking the selection groups, colours or freezes them all —
   each as one undo step. Copying, duplicating or deleting a group takes its tracks along;
   pasted tracks land after the selected track, in its group.
-- **Per track**: volume, pan (bipolar bar), mute, solo, arm (ready to record).
+- **Per track**: volume, pan (bipolar bar), mute, solo, arm (ready to record). A click on arm
+  arms that track alone, ⌘-click arms several; **Transport ▸ Auto-arm selected track** (off by
+  default) arms the instrument track you select.
   Double-click resets to the default.
 - **Pan law** (per project, in the Mixer footer: **Pan law** Stereo / Balance): under
   Stereo, panning a stereo track or return moves its whole image — at full pan both
@@ -459,7 +467,7 @@ track count and closes with Escape.
 
 - **Recording** from an input (microphone, line, interface) onto an audio track, with
   monitoring (in/auto/off). The input is **Ext 1** or **Ext 2** (mono, centred) or **Ext 1/2**
-  (stereo pair); new tracks take Ext 1.
+  (stereo pair); new tracks take Ext 1. MCP `set_input_channels`.
 - **Audio clips as samples** — drag an arrangement clip onto a track with a Sampler, Nota
   Grain, Drum Rack (next free pad) or Instrument Rack, or anywhere a sample goes (a pad, a
   Rhythm voice, a Session slot); hovering an instrument track opens its devices. The sample
@@ -701,7 +709,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   shelf and bell gain), Output ±12 dB and Auto gain. A full-width response graph (draggable
   numbered nodes, the selected band's curve, a separate Side curve, an input / output spectrum
   analyzer — a filled 1/6-octave curve with fast-rise / slow-fall ballistics, switched Pre / Post /
-  Off, with a 60 / 90 / 120 dB Range and Peak hold), band chips, a panel for the selected band; 34 factory
+  Off, with a 60 / 90 / 120 dB Range and Peak hold), band chips, a panel for the selected band
+  with a **Label** shown next to its node (**Labels** hides them) and a multiline **Note**; 34 factory
   presets; MCP `read_eq8`, `set_eq8_band`, `set_eq8`.
 - **Nota Compressor** (1) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
   look-ahead (reported as latency for PDC), Peak/RMS/Auto detection, hold, auto-release,
@@ -854,6 +863,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   on a rising or falling edge, a level dragged on the trace, holdoff, 20 µs–20 ms per division,
   A/B cursors for Δt / 1/Δt / ΔV with the matching note, and Export WAV of the captured window.
   *Waterfall*: a 4 / 12 / 60-second spectrogram with gain, floor, contrast and FFT overlap.
+  **Sync** lines the scope up with the song: a Span from a quarter beat to four bars, beat and
+  bar lines and a sweep at the playhead. A sidechain **Key** track is drawn in teal over the
+  trace or **Stacked** under it, with its own gain; Lens also opens in its own resizable window.
   A permanent SCALE rail, Freeze, a note grid, a linear or log frequency axis, an L+R / L / R
   source that can read Mid/Side, and a status line with peak, crest, momentary LUFS and L/R
   correlation. Readable from MCP with `read_analyzer`.
@@ -948,7 +960,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   note)** — glide bends each new note from the last one on instruments that take per-note bend.
   A chain can hold **Nota Mosaic** (its full editor, program saved with the rack) or a **Drum
   Rack** — one level deep — whose card opens in a window with its pads, macros and factory kits;
-  outer macros can drive its macros. MCP `get_rack` with `nestedChain` reads it.
+  outer macros can drive its macros. MCP `get_rack` with `nestedChain` reads it. A new rack
+  starts empty: drop an instrument or a preset on it for the first chain.
 - **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads, Mixer, Chain and Macro views,
   per-pad Volume/Pan/Tune/Decay, named pads (rename, re-choke or remove from a pad's
   right-click menu), choke groups (monophonic cut), Swing/Humanize, hot-swap, a pad
@@ -1317,7 +1330,7 @@ Coverage:
 - **Plugins**: list the AU/VST3 catalogue, look up by id, add as an instrument or insert
   effect, open and close the editor, read and write parameters and state.
 - **Presets**: factory (list, apply to a new track or in place) and user (list, apply,
-  save).
+  save); `read_preset_state` reads a device's loaded preset and whether it has changed.
 - **Audio Effect Rack**: snapshot, Parallel/Series/Select mode, dry/wet, volume,
   chain-select, add, duplicate and remove chains, parameters, 8 macros, the selector as a
   macro target.
