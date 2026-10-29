@@ -699,7 +699,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"), ColumnSpacing = 5, Height = 18 };
             var tableDrop = TableDrop(o, tableId, nm + " Table");
             var warpDrop = Drop(pre + "warpmode", WarpModes, nm + " Warp mode", 52);
-            var headCells = new Control[] { Section(nm), Toggle("", pre + "on"), new Panel(), tableDrop, warpDrop };
+            var headCells = new Control[] { Section(nm), Toggle("", pre + "on", () => G(pre + "on") >= 0.5f ? "on" : "off"), new Panel(), tableDrop, warpDrop };
             for (int i = 0; i < headCells.Length; i++) { Grid.SetColumn(headCells[i], i); head.Children.Add(headCells[i]); }
 
             // The window's caption, one line in its title row: the bank, the frame and what
@@ -732,7 +732,10 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             readouts.Add(() =>
             {
                 UpdateCap();
-                modCap.Text = PosModText();
+                // Nothing drives Position: say so, greyed, as the single window did.
+                string mod = PosModText();
+                modCap.Text = mod.Length > 0 ? mod : "no modulation";
+                modCap.Foreground = mod.Length > 0 ? Teal : TextDisabled;
             });
             bankCap.TextTrimming = TextTrimming.CharacterEllipsis;
             var capRow = new Grid
