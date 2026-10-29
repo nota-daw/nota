@@ -98,8 +98,16 @@ class Arpeggiator final : public MidiDevice {
     void setCcDest(int32_t dev, int32_t param) override {
         ccDev_.store(dev, std::memory_order_relaxed);
         ccParam_.store(param, std::memory_order_relaxed);
+        ccUid_.store(0, std::memory_order_relaxed);
+        ccSlot_.store(-1, std::memory_order_relaxed);
     }
     void setCcDepth(float d) override { ccDepth_.store(std::clamp(d, 0.0f, 1.0f), std::memory_order_relaxed); }
+    uint64_t ccDestChainUid() const override { return ccUid_.load(std::memory_order_relaxed); }
+    int32_t ccDestSlot() const override { return ccSlot_.load(std::memory_order_relaxed); }
+    void setCcDestNested(uint64_t uid, int32_t slot) override {
+        ccUid_.store(uid, std::memory_order_relaxed);
+        ccSlot_.store(slot, std::memory_order_relaxed);
+    }
 
     // ---- the arpeggiator -------------------------------------------------
     void process(const MidiEv* in, int nIn, MidiEv* out, int& nOut, int maxOut, int32_t frames, double beatStart,
@@ -197,6 +205,8 @@ class Arpeggiator final : public MidiDevice {
     std::atomic<int32_t> curLp_{-1}, curK_{-1}, heldLive_{0}, chordN_{0};
     std::atomic<int32_t> chord_[kMaxHeld]{};
     std::atomic<int32_t> ccDev_{-2}, ccParam_{-1};
+    std::atomic<uint64_t> ccUid_{0}; // nested CC target (specs/044)
+    std::atomic<int32_t> ccSlot_{-1};
     std::atomic<float> p_[kNumParams];
 };
 

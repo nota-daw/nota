@@ -46,7 +46,8 @@ internal static class NotaDocs
         string slug = kind switch
         {
             DeviceChainView.ChainKind.Instrument => Pick(Instruments, engineKind),
-            DeviceChainView.ChainKind.Midi => Pick(MidiEffects, engineKind) is { Length: > 0 } m ? "midi-effects/" + m : "",
+            DeviceChainView.ChainKind.Midi => engineKind == 6 ? "racks/midi-effect-rack"
+                : Pick(MidiEffects, engineKind) is { Length: > 0 } m ? "midi-effects/" + m : "",
             _ => engineKind == 5 ? "racks/audio-effect-rack"
                 : Pick(AudioEffects, engineKind) is { Length: > 0 } a ? "audio-effects/" + a : "",
         };

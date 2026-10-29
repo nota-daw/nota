@@ -42,6 +42,22 @@ public sealed class PresetStore : IPresetStore
         return PresetService.ApplyInPlace(doc, engine, trackId, -1);
     }
 
+    public (string Type, int BuiltinKind)? Describe(string path)
+    {
+        try
+        {
+            var doc = PresetService.Load(path);
+            return (doc.Type, doc.BuiltinKind);
+        }
+        catch { return null; }
+    }
+
+    public string ApplyFileInPlace(IAudioEngine engine, string path, int trackId, int deviceIndex)
+    {
+        try { return PresetService.ApplyInPlace(PresetService.Load(path), engine, trackId, deviceIndex); }
+        catch (Exception e) { return $"Couldn't load the preset: {e.Message}"; }
+    }
+
     public bool Save(IAudioEngine engine, int trackId, int deviceIndex, string displayName, string folder)
     {
         var doc = PresetService.Capture(engine, trackId, deviceIndex, displayName);

@@ -39,24 +39,15 @@ void Eq3::setSampleRate(double sr, int32_t /*maxBlock*/) {
     for (auto& v : bandPk_) v = 0.0f;
     quietSamples_ = 0;
     idle_ = false;
-    fftN_ = sr_ > 50000.0 ? 8192 : 4096;
+    const int fftN = dsp::SpectrumAnalyzer::fftSizeFor(sr_);
     size_t ring = 1;
-    while (ring < (size_t)fftN_ * 2) ring <<= 1;
+    while (ring < (size_t)fftN * 2) ring <<= 1;
     ring_.assign(ring, 0.0f);
     ringMask_ = (uint32_t)(ring - 1);
     ringW_.store(0, std::memory_order_relaxed);
-    fft_.resize((size_t)fftN_);
-    win_.assign((size_t)fftN_, 0.0f);
-    tBuf_.assign((size_t)fftN_, 0.0f);
-    fBuf_.assign((size_t)fftN_ / 2, {});
-    for (int i = 0; i < fftN_; ++i) win_[(size_t)i] = (float)(0.5 - 0.5 * std::cos(2.0 * 3.14159265358979 * i / fftN_));
+    ana_.prepare(sr_);
     lastAnaS_ = -1.0;
-    lastAnaW_ = 0;
     anaValid_ = false;
-    for (int b = 0; b < kSpec; ++b) {
-        aSpec_[b] = 0.0;
-        spec_[b] = -120.0f;
-    }
 }
 
 void Eq3::wake() {
@@ -262,7 +253,7 @@ int32_t Eq3::scopeRead(float* out, int32_t maxSamples) const {
         std::lock_guard<std::mutex> lock(mx_);
         t[S_Analysed] = analyse() ? 1.0f : 0.0f;
         for (int k = 0; k < kTele && n < maxSamples; ++k) out[n++] = t[k];
-        for (int b = 0; b < kSpec && n < maxSamples; ++b) out[n++] = spec_[b];
+        for (int b = 0; b < kSpec && n < maxSamples; ++b) out[n++] = ana_.curve()[b];
         return n;
     }
     for (int k = 0; k < kTele && n < maxSamples; ++k) out[n++] = t[k];
@@ -278,10 +269,7 @@ void Eq3::deviceAction(int32_t id, int32_t /*iarg*/, float /*farg*/) {
     for (auto& a : lvlA_) a.store(-120.0f, std::memory_order_relaxed);
     lastAnaS_ = -1.0;
     anaValid_ = false;
-    for (int b = 0; b < kSpec; ++b) {
-        aSpec_[b] = 0.0;
-        spec_[b] = -120.0f;
-    }
+    ana_.reset();
 }
 
 std::string Eq3::deviceText(int32_t id) const {
@@ -342,35 +330,13 @@ std::string Eq3::deviceText(int32_t id) const {
 }
 
 bool Eq3::analyse() const {
-    if (ring_.empty() || fftN_ <= 0) return false;
+    if (ring_.empty()) return false;
     const double now = nowSeconds();
-    const uint32_t w = ringW_.load(std::memory_order_acquire);
-    if (lastAnaS_ >= 0 && (now - lastAnaS_ < 1.0 / 30.0 || w == lastAnaW_)) return anaValid_;
-    if (w < (uint32_t)fftN_) return anaValid_;
-    const int n = fftN_;
-    const uint32_t start = w - (uint32_t)n;
-    for (int i = 0; i < n; ++i) tBuf_[(size_t)i] = ring_[(start + (uint32_t)i) & ringMask_] * win_[(size_t)i];
-    fft_.fft(tBuf_.data(), fBuf_.data());
-    const int half = n / 2;
-    const double binHz = sr_ / n;
-    const double ref = 0.25 * (double)n * n * 0.25; // Hann: a full-scale sine's bin power
-    const bool stale = lastAnaS_ < 0 || now - lastAnaS_ > 1.2;
-    const double a = stale ? 1.0 : 1.0 - std::exp(-(now - lastAnaS_) / 0.2);
-    double tot = 0.0;
-    for (int b = 0; b < kSpec; ++b) {
-        const double lo = kSpecLo * std::pow(kSpecHi / kSpecLo, (double)b / kSpec);
-        const double hi = kSpecLo * std::pow(kSpecHi / kSpecLo, (double)(b + 1) / kSpec);
-        int k0 = std::max(1, (int)std::ceil(lo / binHz)), k1 = std::min(half - 1, (int)std::ceil(hi / binHz) - 1);
-        if (k1 < k0) k0 = k1 = std::clamp((int)std::lround(std::sqrt(lo * hi) / binHz), 1, half - 1);
-        double s = 0.0;
-        for (int k = k0; k <= k1; ++k) s += std::norm(fBuf_[(size_t)k]);
-        tot += s;
-        aSpec_[b] += a * (s - aSpec_[b]);
-        spec_[b] = aSpec_[b] > ref * 1e-12 ? (float)std::max(-120.0, 10.0 * std::log10(aSpec_[b] / ref)) : -120.0f;
-    }
+    if (lastAnaS_ >= 0 && now - lastAnaS_ < 1.0 / 30.0) return anaValid_;
+    const double dt = lastAnaS_ < 0 ? 0.0 : now - lastAnaS_;
+    ana_.analyse(ring_.data(), ringMask_, ringW_.load(std::memory_order_acquire), dt, false);
     lastAnaS_ = now;
-    lastAnaW_ = w;
-    anaValid_ = tot > ref * 1e-10;
+    anaValid_ = ana_.valid();
     return anaValid_;
 }
 

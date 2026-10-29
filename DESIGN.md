@@ -178,7 +178,10 @@ changes.
    their controls sit in grooves; the picked option rises out of its groove. Modular nodes
    are raised like device cards. Nothing else looks raised. Depth comes from slightly
    different greys, thin lines and 1–2 px shadows: no gradients, no blur, no glow, no
-   texture.
+   texture. One exception, which is the work and not the chrome: a hosted plug-in's card
+   stands on a picture of the plug-in's own window under `NotaPalette.PluginPreviewWash`, a
+   vertical wash of the card's own `SurfaceCard` (specs/046). It lives in `Theme/` like
+   every token; views still draw no gradients of their own.
 4. **Orange has three jobs.** Solid for what is live, a soft tint with orange text for what
    you picked, orange lines for values inside a device. Nothing else is orange (§ Orange).
 5. **One typeface.** Geist for every word and number, with tabular figures so a value can

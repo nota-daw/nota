@@ -317,6 +317,9 @@ public interface IAudioEngine : IDisposable
     /// <summary>Sets/gets a track's palette colour slot (-1 = auto by position).</summary>
     void SetTrackColorIndex(int trackId, int colorIndex);
     int GetTrackColorIndex(int trackId);
+    /// <summary>Sets/gets a track's piano roll Fold (specs/045): a view flag saved with the project.</summary>
+    void SetTrackPianoFold(int trackId, bool on);
+    bool GetTrackPianoFold(int trackId);
     /// <summary>Copies a whole track to the clipboard; pastes it as a new track (-1 on fail).</summary>
     bool CopyTrack(int trackId);
     int PasteTrack();
@@ -326,6 +329,10 @@ public interface IAudioEngine : IDisposable
     /// <summary>Audio-track record input source: 0 hardware, -1 master, &gt;0 source track id.</summary>
     void SetTrackRecordInput(int trackId, int source);
     int GetTrackRecordInput(int trackId);
+    /// <summary>Which hardware input channels an audio track takes: both as a stereo pair, or
+    /// input 1 / input 2 alone as a mono source in the middle (#340). Hardware input only.</summary>
+    void SetTrackInputChannels(int trackId, InputChannels channels);
+    InputChannels GetTrackInputChannels(int trackId);
     /// <summary>Live input monitoring (audio tracks, Monitor "In"): play the record-input
     /// source through the track in place of its clips. A master source stays silent.</summary>
     void SetTrackMonitor(int trackId, bool on);
@@ -512,16 +519,36 @@ public interface IAudioEngine : IDisposable
     // Device clipboard (#238): a full clone held by the engine; paste is one undo step.
     bool CopyDevice(int trackId, int deviceIndex);
     bool CopyMidiEffect(int trackId, int index);
-    int DeviceClipboardKind();   // 0 empty, 1 audio effect, 2 MIDI effect
+    int DeviceClipboardKind();   // 0 empty, 1 audio effect, 2 MIDI effect, 3 instrument, 4 several
+    bool DeviceClipboardSidechain();   // the copied audio effect is keyed from another track
     int PasteDevice(int trackId, int atIndex);       // atIndex -1 = end; new index or -1
     int PasteMidiEffect(int trackId, int atIndex);
     // A full clone right after the device / MIDI effect, one undo step; clipboard untouched.
     int DuplicateDevice(int trackId, int deviceIndex);
     int DuplicateMidiEffect(int trackId, int index);
+    // The instrument on the same clipboard (specs/043). Paste replaces the track's instrument:
+    // 0 done, -1 nothing to paste, -2 not an instrument track, -3 the clone failed.
+    bool CopyInstrument(int trackId);
+    int PasteInstrument(int trackId);
+    // Move (or, keepSource, copy) a device to another track, both tracks in one undo step: the
+    // new index (0 for the instrument), -1 bad address, -2 the target can't take it, -3 the
+    // clone failed. A move takes the device's automation; the instrument's removes its track.
+    int TransferDevice(int srcTrackId, DeviceFamily family, int index, int dstTrackId, int atIndex, bool keepSource, out TransferFlags flags);
     // ⌘G / ⌘⇧G on a device (#257): wrap an audio effect in an Audio Effect Rack (its index or
-    // -1: keyed / automated / CV-linked devices stay out), unwrap a one-chain rack (count or -1).
+    // -1), unwrap a one-chain Audio Effect Rack (count or -1). The one-device cases of:
     int WrapDeviceInRack(int trackId, int deviceIndex);
     int UnwrapRack(int trackId, int deviceIndex);
+    // Group a contiguous run into a rack in its place, links following (specs/044); one undo
+    // step. Returns the rack's address (>= 0 effect, -1 the instrument, -1000 - i MIDI effect)
+    // or a GroupRefusal (< -1). See nota_track_group_devices.
+    int GroupDevices(int trackId, int midiFirst, int midiCount, bool withInstrument, int fxFirst, int fxCount);
+    // Ungroup a one-chain rack: devices restored (>= 0) or an UngroupRefusal (< 0).
+    int UngroupRack(int trackId, DeviceFamily family, int index, out UngroupDropped dropped);
+    // Several devices on the clipboard (specs/044): count, or -1. Paste: the number pasted (>= 0,
+    // skipped = what the track can't take), -1 empty, -3 a clone failed.
+    int CopyDevices(int trackId, int[] midiIndices, bool withInstrument, int[] fxIndices);
+    int DeviceClipboardCount();
+    int PasteDevices(int trackId, int midiAt, int fxAt, out int skipped);
     string DeviceName(int trackId, int deviceIndex);
     int DeviceParamCount(int trackId, int deviceIndex);
     string DeviceParamName(int trackId, int deviceIndex, int paramIndex);
@@ -551,6 +578,10 @@ public interface IAudioEngine : IDisposable
     int MidiEffectScope(int trackId, int index, float[] outv);
     /// <summary>Send an editor command to a MIDI effect (Nota Arp: 1 = restart the pattern).</summary>
     void MidiEffectCommand(int trackId, int index, int cmd);
+    /// <summary>A MIDI effect's opaque state blob (the MIDI Effect Rack: its whole structure); empty for params-only effects.</summary>
+    byte[] MidiEffectGetState(int trackId, int index);
+    /// <summary>Restores a MIDI effect's state blob; checkpoint makes it one undo step.</summary>
+    bool MidiEffectSetState(int trackId, int index, byte[] data, bool checkpoint);
     string MidiEffectName(int trackId, int index);
     int MidiEffectParamCount(int trackId, int index);
     string MidiEffectParamName(int trackId, int index, int paramIndex);
@@ -568,6 +599,16 @@ public interface IAudioEngine : IDisposable
     void SetMidiEffectCcDepth(int trackId, int index, float depth);
     int MidiEffectCcDestDevice(int trackId, int index);
     int MidiEffectCcDestParam(int trackId, int index);
+    // The CC target inside a rack (specs/044): chain index + slot, (-1, -1) at track level.
+    (int Chain, int Slot) MidiEffectCcDestPath(int trackId, int index);
+    bool SetMidiEffectCcDestPath(int trackId, int index, int chain, int slot);
+    // What lives on rack chain children outside the rack blob (specs/044; save / load): a chain
+    // MIDI effect's CC target and a child's sidechain key (slot >= 0 a device, -1 the chain
+    // instrument). rackAddress as the rack calls take it (>= 0 effect, -1 instrument, -1000 - i).
+    NestedCcDest? RackChainMidiCcDest(int trackId, int rackAddress, int chain, int index);
+    bool RackChainMidiSetCcDest(int trackId, int rackAddress, int chain, int index, NestedCcDest dest);
+    NestedSidechain? RackChainSidechain(int trackId, int rackAddress, int chain, int slot);
+    bool RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc);
     float MidiEffectCcDepth(int trackId, int index);
     /// <summary>Copies up to maxSamples of the device's live readings into outSamples; returns
     /// the count written. Each device defines its own layout (the analysers: a telemetry block,
@@ -590,6 +631,11 @@ public interface IAudioEngine : IDisposable
     /// <summary>A device's resource text (Nota Chamber: 0 IR name, 1 IR category, 2 user IR
     /// name, 10 the built-in IR list as "name\tcategory\tseconds" lines); "" when none.</summary>
     string DeviceText(int trackId, int deviceIndex, int id);
+    /// <summary>Nota EQ-8 band labels and notes (specs/049): replace band 0..7's label (≤ 24
+    /// characters, one line) and note (≤ 2000) as one undo step; false when nothing changed or the
+    /// device isn't an EQ-8. EqBandText: which 0 = label, 1 = note ("" when none).</summary>
+    bool EqSetBandText(int trackId, int deviceIndex, int band, string label, string note);
+    string EqBandText(int trackId, int deviceIndex, int band, int which);
     /// <summary>Sidechain routing: point a device's detector at another track's signal (-1 clears).</summary>
     void SetDeviceSidechainSource(int trackId, int deviceIndex, int sourceTrackId);
     int DeviceSidechainSource(int trackId, int deviceIndex);
@@ -617,6 +663,11 @@ public interface IAudioEngine : IDisposable
     bool PluginEditorIsOpen(int trackId, int deviceIndex);
     byte[] GetPluginState(int trackId, int deviceIndex);
     void SetPluginState(int trackId, int deviceIndex, byte[] data);
+    /// <summary>Editor preview (specs/046): the plug-in window's last look as JPEG, kept on the device;
+    /// set returns false for an unknown device, serial is 0 when there is none.</summary>
+    byte[] GetPluginPreview(int trackId, int deviceIndex);
+    bool SetPluginPreview(int trackId, int deviceIndex, byte[] jpeg);
+    int PluginPreviewSerial(int trackId, int deviceIndex);
     void SetDeviceBypassed(int trackId, int deviceIndex, bool bypassed);
     bool DeviceBypassed(int trackId, int deviceIndex);
     /// <summary>Fold (specs/022): the Devices panel draws the device as a narrow strip.
@@ -715,6 +766,11 @@ public interface IAudioEngine : IDisposable
     void RackSetMacroName(int trackId, int macro, string name);
     float RackVolume(int trackId);
     void RackSetVolume(int trackId, float v);
+    /// <summary>Copies an Instrument Rack chain after itself (children, controls, its mappings); the new index or &lt;0.</summary>
+    int RackDuplicateChain(int trackId, int chain);
+    /// <summary>Instrument Rack mono: one note at a time, last-note priority; glide bends between notes.</summary>
+    bool RackMono(int trackId);
+    void RackSetMono(int trackId, bool on);
     float RackGlide(int trackId);
     void RackSetGlide(int trackId, float v);
     bool RackSetMappingRange(int trackId, int index, float rangeMin, float rangeMax);
@@ -796,6 +852,145 @@ public interface IAudioEngine : IDisposable
     void RackDevSetVolume(int trackId, int deviceIndex, float v);
     int RackDevMode(int trackId, int deviceIndex);
     void RackDevSetMode(int trackId, int deviceIndex, int mode);
+
+    // ---- racks inside racks (specs/041) ---------------------------------------------
+    // One level: a chain of a track's Instrument Rack may hold a Drum Rack, addressed by every
+    // RackDev* call as deviceIndex RackMacroMapping.NestedRackBase − chain. These are the Rack*
+    // calls the Drum Rack card makes, for any rack address.
+    int RackDevAddSamplerChain(int trackId, int deviceIndex, string path, int rootNote, bool loop);
+    bool RackDevSetChainSamplerSample(int trackId, int deviceIndex, int chain, string path, int rootNote);
+    int RackDevAddPluginInstrumentChain(int trackId, int deviceIndex, int catalogIndex);
+    string RackDevChainName(int trackId, int deviceIndex, int chain);
+    void RackDevSetChainName(int trackId, int deviceIndex, int chain, string name);
+    int RackDevChainChoke(int trackId, int deviceIndex, int chain);
+    void RackDevSetChainChoke(int trackId, int deviceIndex, int chain, int group);
+    int RackDevChainTune(int trackId, int deviceIndex, int chain);
+    void RackDevSetChainTune(int trackId, int deviceIndex, int chain, int semitones);
+    float RackDevChainDecay(int trackId, int deviceIndex, int chain);
+    void RackDevSetChainDecay(int trackId, int deviceIndex, int chain, float v);
+    float RackDevSwing(int trackId, int deviceIndex);
+    void RackDevSetSwing(int trackId, int deviceIndex, float v);
+    float RackDevHumanize(int trackId, int deviceIndex);
+    void RackDevSetHumanize(int trackId, int deviceIndex, float v);
+    bool RackDevChainSamplerInfo(int trackId, int deviceIndex, int chain, out NotaSamplerInfo info);
+    bool RackDevSetChainSamplerRoot(int trackId, int deviceIndex, int chain, int rootNote);
+    float RackDevChainSamplerPlayPosition(int trackId, int deviceIndex, int chain);
+    string RackDevChainInstrumentParamId(int trackId, int deviceIndex, int chain, int param);
+    float RackDevChainInstrumentParamDefault(int trackId, int deviceIndex, int chain, int param);
+    int RackDevChainInstrumentScope(int trackId, int deviceIndex, int chain, float[] outv);
+    int RackDevChainInstrumentVoiceCount(int trackId, int deviceIndex, int chain);
+    int RackDevChainInstrumentHeldNotes(int trackId, int deviceIndex, int chain, int[] outNotes);
+    void RackDevChainInstrumentAction(int trackId, int deviceIndex, int chain, int id, int iarg, float farg);
+    void RackDevOpenChainInstrumentEditor(int trackId, int deviceIndex, int chain);
+    string RackDevChainInstrumentPluginId(int trackId, int deviceIndex, int chain);
+    byte[] RackDevGetChainInstrumentState(int trackId, int deviceIndex, int chain);
+    /// <summary>Nota Mosaic as a chain instrument, as <see cref="MosaicSetProgram"/> &amp; co. for a track.</summary>
+    bool RackDevChainMosaicSetProgram(int trackId, int deviceIndex, int chain, string text, bool undoable = true);
+    string RackDevChainMosaicProgram(int trackId, int deviceIndex, int chain);
+    bool RackDevTryGetChainMosaicStatus(int trackId, int deviceIndex, int chain, out NotaMosaicStatus status);
+    long RackDevChainMosaicZoneSampleId(int trackId, int deviceIndex, int chain, int zone);
+
+    // ---- MIDI Effect Rack (MIDI kind 6, specs/040; midiIndex = its MIDI effect index) and the
+    // MIDI effects in an Instrument Rack chain (#329). See nota_engine.h.
+    int RackChainMidiCount(int trackId, int chain);
+    int RackChainMidiAdd(int trackId, int chain, int midiKind);
+    bool RackChainMidiRemove(int trackId, int chain, int index);
+    bool RackChainMidiMove(int trackId, int chain, int fromIndex, int toIndex);
+    int RackChainMidiKind(int trackId, int chain, int index);
+    string RackChainMidiName(int trackId, int chain, int index);
+    int RackChainMidiParamCount(int trackId, int chain, int index);
+    string RackChainMidiParamName(int trackId, int chain, int index, int param);
+    float RackChainMidiParamMin(int trackId, int chain, int index, int param);
+    float RackChainMidiParamMax(int trackId, int chain, int index, int param);
+    float RackChainMidiParamGet(int trackId, int chain, int index, int param);
+    void RackChainMidiParamSet(int trackId, int chain, int index, int param, float value);
+    void RackChainMidiSetBypassed(int trackId, int chain, int index, bool bypassed);
+    bool RackChainMidiBypassed(int trackId, int chain, int index);
+    int RackChainMidiLastIn(int trackId, int chain, int index);
+    int RackChainMidiLastOut(int trackId, int chain, int index);
+    int RackChainMidiScope(int trackId, int chain, int index, float[] outv);
+    void RackChainMidiCommand(int trackId, int chain, int index, int cmd);
+    int MidiRackChainDeviceCount(int trackId, int midiIndex, int chain);
+    int MidiRackChainDeviceAdd(int trackId, int midiIndex, int chain, int midiKind);
+    bool MidiRackChainDeviceRemove(int trackId, int midiIndex, int chain, int index);
+    bool MidiRackChainDeviceMove(int trackId, int midiIndex, int chain, int fromIndex, int toIndex);
+    int MidiRackChainDeviceKind(int trackId, int midiIndex, int chain, int index);
+    string MidiRackChainDeviceName(int trackId, int midiIndex, int chain, int index);
+    int MidiRackChainDeviceParamCount(int trackId, int midiIndex, int chain, int index);
+    string MidiRackChainDeviceParamName(int trackId, int midiIndex, int chain, int index, int param);
+    float MidiRackChainDeviceParamMin(int trackId, int midiIndex, int chain, int index, int param);
+    float MidiRackChainDeviceParamMax(int trackId, int midiIndex, int chain, int index, int param);
+    float MidiRackChainDeviceParamGet(int trackId, int midiIndex, int chain, int index, int param);
+    void MidiRackChainDeviceParamSet(int trackId, int midiIndex, int chain, int index, int param, float value);
+    void MidiRackChainDeviceSetBypassed(int trackId, int midiIndex, int chain, int index, bool bypassed);
+    bool MidiRackChainDeviceBypassed(int trackId, int midiIndex, int chain, int index);
+    int MidiRackChainDeviceLastIn(int trackId, int midiIndex, int chain, int index);
+    int MidiRackChainDeviceLastOut(int trackId, int midiIndex, int chain, int index);
+    int MidiRackChainDeviceScope(int trackId, int midiIndex, int chain, int index, float[] outv);
+    void MidiRackChainDeviceCommand(int trackId, int midiIndex, int chain, int index, int cmd);
+    int MidiRackChainCount(int trackId, int midiIndex);
+    int MidiRackAddChain(int trackId, int midiIndex);
+    bool MidiRackRemoveChain(int trackId, int midiIndex, int chain);
+    int MidiRackDuplicateChain(int trackId, int midiIndex, int chain);
+    /// <summary>One undo step for the in-place edits that follow (chain mix, mode, selector,
+    /// output, macro values): forks the rack, keeping its MIDI effects and held notes.</summary>
+    bool MidiRackCheckpoint(int trackId, int midiIndex);
+    string MidiRackChainName(int trackId, int midiIndex, int chain);
+    void MidiRackSetChainName(int trackId, int midiIndex, int chain, string name);
+    void MidiRackSetChainMute(int trackId, int midiIndex, int chain, bool on);
+    bool MidiRackChainMute(int trackId, int midiIndex, int chain);
+    void MidiRackSetChainSolo(int trackId, int midiIndex, int chain, bool on);
+    bool MidiRackChainSolo(int trackId, int midiIndex, int chain);
+    void MidiRackSetChainZone(int trackId, int midiIndex, int chain, int keyLo, int keyHi, int velLo, int velHi);
+    void MidiRackChainZone(int trackId, int midiIndex, int chain, out int keyLo, out int keyHi, out int velLo, out int velHi);
+    void MidiRackSetChainSelect(int trackId, int midiIndex, int chain, int lo, int hi);
+    void MidiRackChainSelectRange(int trackId, int midiIndex, int chain, out int lo, out int hi);
+    void MidiRackSetChainTranspose(int trackId, int midiIndex, int chain, int semitones);
+    int MidiRackChainTranspose(int trackId, int midiIndex, int chain);
+    void MidiRackSetChainVelScale(int trackId, int midiIndex, int chain, float scale);
+    float MidiRackChainVelScale(int trackId, int midiIndex, int chain);
+    float MidiRackChainActivity(int trackId, int midiIndex, int chain);
+    void MidiRackSetMode(int trackId, int midiIndex, int mode);
+    int MidiRackMode(int trackId, int midiIndex);
+    void MidiRackSetSelector(int trackId, int midiIndex, float v);
+    float MidiRackSelector(int trackId, int midiIndex);
+    void MidiRackSetMerge(int trackId, int midiIndex, bool on);
+    bool MidiRackMerge(int trackId, int midiIndex);
+    void MidiRackSetThru(int trackId, int midiIndex, bool on);
+    bool MidiRackThru(int trackId, int midiIndex);
+    float MidiRackMacroGet(int trackId, int midiIndex, int macro);
+    void MidiRackMacroSet(int trackId, int midiIndex, int macro, float v);
+    string MidiRackMacroName(int trackId, int midiIndex, int macro);
+    void MidiRackSetMacroName(int trackId, int midiIndex, int macro, string name);
+    int MidiRackAddMacroMapping(int trackId, int midiIndex, int macro, int chain, int device, int param, float lo, float hi);
+    int MidiRackMappingCount(int trackId, int midiIndex);
+    int MidiRackMappingInfo(int trackId, int midiIndex, int index, out int macro, out int chain, out int device, out int param, out float lo, out float hi, out int curve);
+    bool MidiRackRemoveMapping(int trackId, int midiIndex, int index);
+    bool MidiRackSetMappingRange(int trackId, int midiIndex, int index, float lo, float hi);
+    bool MidiRackSetMappingCurve(int trackId, int midiIndex, int index, int curve);
+    int RackDevDuplicateChain(int trackId, int deviceIndex, int chain);
+    /// <summary>Rack chain devices on the shared device clipboard (specs/042); deviceIndex addresses
+    /// the rack as the other RackDev calls do (−1 Instrument/Drum Rack, ≥0 Audio Effect Rack,
+    /// −1000 − mi MIDI Effect Rack, NestedRackBase − chain). Paste returns the new index or −1 nothing,
+    /// −2 wrong family, −3 a rack in a rack, −5 MIDI past chain 16; each edit is one undo step.</summary>
+    /// <summary>One undo step for the in-place edits that follow on a rack (a fader drag, a mode or
+    /// switch change): forks the rack now, keeping its children and held notes.</summary>
+    bool RackDevCheckpoint(int trackId, int deviceIndex);
+    /// <summary>A chain's identity while chains move (0 = none); compare it, don't decode it.</summary>
+    long RackDevChainId(int trackId, int deviceIndex, int chain);
+    /// <summary>Loads a sample into a chain's Nota Grain (a Grain preset's source); one undo step.</summary>
+    bool RackDevChainGrainSetSample(int trackId, int deviceIndex, int chain, string path, int rootNote = 60);
+    bool RackDevChainDeviceCopy(int trackId, int deviceIndex, int chain, int index);
+    bool RackDevChainMidiCopy(int trackId, int deviceIndex, int chain, int index);
+    int RackDevChainDevicePaste(int trackId, int deviceIndex, int chain, int atIndex);
+    int RackDevChainMidiPaste(int trackId, int deviceIndex, int chain, int atIndex);
+    // Several devices on the clipboard into a chain (specs/044): the number pasted (>= 0), with the
+    // skipped count and the first new index per section (-1 none); -1 nothing / bad address, -3 clone failed.
+    int RackDevChainPasteDevices(int trackId, int deviceIndex, int chain, int midiAt, int fxAt, out int skipped, out int firstMidi, out int firstFx);
+    int RackDevChainDeviceDuplicate(int trackId, int deviceIndex, int chain, int index);
+    int RackDevChainMidiDuplicate(int trackId, int deviceIndex, int chain, int index);
+    int RackDevChainDeviceMoveTo(int trackId, int deviceIndex, int chain, int index, int toChain);
+    int RackDevChainMidiMoveTo(int trackId, int deviceIndex, int chain, int index, int toChain);
     float RackDevDryWet(int trackId, int deviceIndex);
     void RackDevSetDryWet(int trackId, int deviceIndex, float v);
     bool RackDevPdc(int trackId, int deviceIndex);
@@ -904,6 +1099,9 @@ public interface IAudioEngine : IDisposable
     // --- Project load (M7-6) -----------------------------------------------
     void Reset();
     int TrackInstrumentKind(int trackId);
+    /// <summary>Which instrument the track holds (specs/043): the same while it is edited, moved or
+    /// brought back by undo; another for a new, replaced or pasted one. 0 = none. Compare only.</summary>
+    long TrackInstrumentId(int trackId);
     /// <summary>The track's instrument responds to per-note expression (MPE).</summary>
     bool TrackInstrumentSupportsMpe(int trackId);
     int TrackDeviceBuiltinKind(int trackId, int deviceIndex);
@@ -1017,6 +1215,10 @@ public interface IAudioEngine : IDisposable
     void PluginParamSet(int trackId, int deviceIndex, int paramIndex, float normalized);
     int AddPluginAutomationLane(int trackId, int deviceIndex, string paramId);
     string AutomationLaneParamId(int trackId, int laneIndex);
+    // A lane on a device grouped into a rack (specs/044): (chain index, slot) in the rack at the
+    // lane's device index; (-1, -1) for a track-level lane. AddNested is for project load.
+    (int Chain, int Slot) AutomationLanePath(int trackId, int laneIndex);
+    int AddNestedAutomationLane(int trackId, AutomationTarget target, int deviceIndex, int chain, int slot, int paramIndex, string? paramId);
     int PluginLastTouchedParam(int trackId, int deviceIndex);   // "Learn" (M9-B3)
     bool AutomationWriteSelfTest();   // M9-C: device-free write-path check
     bool AutomationDeviceRemapSelfTest();   // lanes follow their device on reorder / remove
@@ -1083,8 +1285,22 @@ public interface IAudioEngine : IDisposable
     void ModulatorSet(int trackId, int modId, int field, float value);
     /// <summary>Live modulator output at the current transport position (for the node viz), -1..1×depth.</summary>
     float ModulatorValue(int trackId, int modId);
-    /// <summary>Rolling CV history for a Scope modulator; fills <paramref name="outv"/> oldest→newest, returns count.</summary>
+    /// <summary>Rolling CV history for a Scope modulator: the newest values, oldest→newest; returns count.</summary>
     int ModulatorScope(int trackId, int modId, float[] outv);
+    /// <summary>Scope history with time steps (specs/047): the newest entries oldest→newest, and the
+    /// seconds each one follows the previous by (one audio block). Returns the count.</summary>
+    int ModulatorScopeTimed(int trackId, int modId, float[] values, float[] dts);
+
+    // ---- preset tags (specs/048) ----
+    /// <summary>The device's preset tag: 0 none, -1 no such device.</summary>
+    int DevicePresetTag(int trackId, PresetSurface surface, int index);
+    /// <summary>Tag the device with a preset (empty id = Init, clears it). <paramref name="loaded"/>
+    /// = the values the preset left (null = what the device holds now). No undo step of its own:
+    /// set it inside a mix gesture with a <see cref="MixTarget.PresetTag"/> target.</summary>
+    int SetDevicePresetTag(int trackId, PresetSurface surface, int index, string presetId, string name, float[]? loaded = null);
+    PresetTag? PresetTagInfo(int tag);
+    /// <summary>1 when a sound parameter moved away from the preset's values, 0 when not, -1 with no tag.</summary>
+    int DevicePresetModified(int trackId, PresetSurface surface, int index);
     int CvLinkAdd(int trackId, int modId, int deviceIndex, int paramIndex);
     /// <summary>Cross-track link: modulator on trackId modulates a param on targetTrack (-1 = self).</summary>
     int CvLinkAddTo(int trackId, int modId, int targetTrack, int deviceIndex, int paramIndex);
@@ -1107,6 +1323,11 @@ public interface IAudioEngine : IDisposable
     int CvLinkTargetTrack(int trackId, int index);
     int CvLinkDevice(int trackId, int index);
     int CvLinkParam(int trackId, int index);
+    // Links reaching into a rack (specs/044): chain index + slot of the source / target, -1 at
+    // track level. AddNested is for project load (kinds as CvLinkAddFromParamToTarget).
+    CvLinkPath CvLinkPath(int trackId, int index);
+    int CvLinkAddNested(int trackId, int sourceKind, int modId, int srcDevice, int srcChain, int srcSlot, int srcParam,
+                        int targetKind, int targetTrack, int targetDevice, int tgtChain, int tgtSlot, int targetParam);
     float CvLinkDepth(int trackId, int index);
     int CvLinkMode(int trackId, int index);
     void SetCvLinkDepth(int trackId, int index, float depth);

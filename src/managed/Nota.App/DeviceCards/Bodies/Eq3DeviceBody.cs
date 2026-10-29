@@ -30,7 +30,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
                       FreqLo = 6, FreqHi = 7, Slope = 8, Gain = 9, Range = 10;
     // Scope layout (Eq3::S_* / kTele / kSpec).
     private const int S_SampleRate = 5, S_Cpu = 6, S_Analysed = 7, S_Latency = 8,
-        kTele = 16, kSpec = 96, kScope = kTele + kSpec;
+        kTele = 16, kSpec = 256, kScope = kTele + kSpec;
 
     public double Width => 700;
     public bool FullBleed => true;

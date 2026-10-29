@@ -29,7 +29,10 @@ internal sealed class DeviceCardContext(
     Action<int> requestRackPresetSave,
     Action hideDropGlow,
     IFactoryPresets? factory = null,
-    Action<string>? status = null)
+    Action<string>? status = null,
+    Func<RackDeviceSel?>? rackSelection = null,
+    Action<RackDeviceSel?, RackDeviceCommands?>? selectRackDevice = null,
+    Action? rackCopied = null)
 {
     public IAudioEngine Engine => engine;
     public int TrackId => trackId;
@@ -79,4 +82,22 @@ internal sealed class DeviceCardContext(
     /// <summary>Show a one-line message in the app's status bar (e.g. a plug-in window that
     /// failed to open). A no-op where the card isn't hosted by the chain view.</summary>
     public void Status(string message) => status?.Invoke(message);
+
+    /// <summary>The selected rack chain device (specs/042), or null. The device panel keeps one
+    /// selection: a rack chain device or a track-chain device, never both.</summary>
+    public RackDeviceSel? RackSelection => rackSelection?.Invoke();
+
+    /// <summary>Select a rack chain device (null clears it) and hand the panel the commands its
+    /// keys run on it. A no-op where the card isn't hosted by the chain view.</summary>
+    public void SelectRackDevice(RackDeviceSel? sel, RackDeviceCommands? commands) => selectRackDevice?.Invoke(sel, commands);
+
+    /// <summary>A rack chain device went onto the shared device clipboard.</summary>
+    public void RackCopied() => rackCopied?.Invoke();
 }
+
+/// <summary>A device in a rack chain: the rack (its RackDev address), the chain, the section
+/// (audio effects or MIDI effects) and the index in it (specs/042).</summary>
+internal sealed record RackDeviceSel(int Rack, int Chain, bool Midi, int Index);
+
+/// <summary>What the device panel's keys do to the selected rack chain device.</summary>
+internal sealed record RackDeviceCommands(Action Copy, Action Cut, Action Paste, Action Duplicate, Action Delete);

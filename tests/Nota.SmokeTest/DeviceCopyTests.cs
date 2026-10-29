@@ -9,7 +9,8 @@
 // - Drum Rack / Instrument Rack edits (a sample dropped on a pad, pad note + name, chains,
 //   chain devices, zones) are undoable, and a pad drop grouped as one gesture is one step.
 // - ⌘G wraps a device in an Audio Effect Rack and ⌘⇧G takes it out again (#257), keeping the
-//   device's settings and the chain order, one undo step each.
+//   device's settings and the chain order, one undo step each; its key and an Arp's CC target
+//   follow it in and out (specs/044).
 // Also runnable alone: `dotnet run --project tests/Nota.SmokeTest -- --device-copy`.
 
 using Nota.Application;
@@ -60,34 +61,33 @@ internal static class DeviceCopyTests
             $"wrap in rack: ⌘⇧G puts the chain's devices back in order ({Chain(e, t)})");
         yield return (e.Undo() && Chain(e, t) == "0,5,2", "wrap in rack: undo brings the rack back");
 
-        // A keyed device stays out: a rack chain has no sidechain input.
+        // A keyed device goes in with its key (specs/044: rack chains feed their children's keys).
         int src = e.AddAudioTrack();
         int keyed = e.AddBuiltinDevice(t, 1);
         e.SetDeviceSidechainSource(t, keyed, src);
-        yield return (e.WrapDeviceInRack(t, keyed) < 0 && Chain(e, t) == "0,5,2,1", $"wrap in rack: a device with a sidechain key isn't wrapped ({Chain(e, t)})");
+        int kr = e.WrapDeviceInRack(t, keyed);
+        yield return (kr == keyed && Chain(e, t) == "0,5,2,5" && e.RackChainSidechain(t, kr, 0, 0) is { SourceTrack: var ks } && ks == src,
+            $"wrap in rack: a keyed device goes in with its key ({Chain(e, t)})");
         // A rack with two chains isn't unwrapped (which chain would win?).
         e.RackDevAddChain(t, r, -1);
-        yield return (e.UnwrapRack(t, r) < 0 && Chain(e, t) == "0,5,2,1", $"wrap in rack: a rack with two chains isn't unwrapped ({Chain(e, t)})");
+        yield return (e.UnwrapRack(t, r) < 0 && Chain(e, t) == "0,5,2,5", $"wrap in rack: a rack with two chains isn't unwrapped ({Chain(e, t)})");
 
-        // A device an Arp's CC lane drives stays out: the Arp addresses it by chain index.
+        // A device an Arp's CC lane drives goes in, and the Arp follows it into the chain.
         int it = e.AddInstrumentTrack();
         e.SetTrackBuiltinInstrument(it, 0);
         int arp = e.AddMidiEffect(it, Arp);
         e.AddBuiltinDevice(it, 0);
         int target = e.AddBuiltinDevice(it, 1);
         e.SetMidiEffectCcDest(it, arp, target, 0);
-        yield return (e.WrapDeviceInRack(it, target) < 0 && Chain(e, it) == "0,1", $"wrap in rack: a device an Arp's CC targets isn't wrapped ({Chain(e, it)})");
-        e.SetMidiEffectCcDest(it, arp, -1, -1);
-        yield return (e.WrapDeviceInRack(it, target) == target, "wrap in rack: it wraps once the Arp lets go");
-        // Unwrapping a rack the Arp drives, or one whose devices would shift the Arp's target, is refused.
-        e.SetMidiEffectCcDest(it, arp, target, 0);
-        yield return (e.UnwrapRack(it, target) < 0 && Chain(e, it) == "0,5", "wrap in rack: a rack an Arp's CC lane drives isn't unwrapped");
+        yield return (e.WrapDeviceInRack(it, target) == target && Chain(e, it) == "0,5" && e.MidiEffectCcDestDevice(it, arp) == target
+                      && e.MidiEffectCcDestPath(it, arp) == (0, 0),
+            $"wrap in rack: a device an Arp's CC targets goes in, the Arp's target with it ({Chain(e, it)})");
+        // Unwrapping a rack whose devices shift the Arp's target moves the target along.
         int after = e.AddBuiltinDevice(it, 3);
         e.RackDevAddChainDevice(it, target, 0, 3);
         e.SetMidiEffectCcDest(it, arp, after, 0);
-        yield return (e.UnwrapRack(it, target) < 0 && Chain(e, it) == "0,5,3", "wrap in rack: an unwrap that would shift the Arp's target is refused");
-        e.SetMidiEffectCcDest(it, arp, -1, -1);
-        yield return (e.UnwrapRack(it, target) == 2 && Chain(e, it) == "0,1,3,3", $"wrap in rack: with the Arp unhooked it comes out ({Chain(e, it)})");
+        yield return (e.UnwrapRack(it, target) == 2 && Chain(e, it) == "0,1,3,3" && e.MidiEffectCcDestDevice(it, arp) == after + 1,
+            $"wrap in rack: an unwrap shifts the Arp's target with its device ({Chain(e, it)}, target {e.MidiEffectCcDestDevice(it, arp)})");
 
         foreach (var x in WrapKeepsTail()) yield return x;
     }
@@ -352,6 +352,8 @@ internal static class DeviceCopyTests
     {
         using var e = new NotaEngine();
         int t = e.AddInstrumentRackTrack();
+        e.RackAddChain(t, 6); // a Nota Volt chain first (a new rack starts empty)
+        e.ClearUndoHistory();
         int c = e.RackAddChain(t, 0);
         yield return (e.RackChainCount(t) == 2 && e.Undo() && e.RackChainCount(t) == 1, "rack undo: an added Instrument Rack chain");
         e.RackSetChainZone(t, 0, 36, 60, 0, 127);

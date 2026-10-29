@@ -8,6 +8,8 @@
 //   • L 700 × 260 — the same column on the left, then every automatable parameter as a
 //     knob grid (search + pages), and, for a plug-in with a sidechain bus, its source.
 // The size is editor state kept by the chain view (a hosted plug-in has no "view" param).
+// Once the plug-in's window has been open, the info column stands on a picture of it
+// (PluginPreviewBackdrop, specs/046): the whole S body, the info column on L.
 
 using System;
 using System.Collections.Generic;
@@ -61,7 +63,7 @@ internal static class PluginCard
         var e = ctx.Engine; int t = ctx.TrackId;
         bool sidechain = di >= 0 && e.DeviceAcceptsSidechain(t, di);
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions(sidechain ? $"{InfoW},*,{ScW}" : $"{InfoW},*"), ColumnSpacing = 5 };
-        grid.Children.Add(Section(InfoColumn(ctx, di, info, mini: false)));
+        grid.Children.Add(new Panel { Children = { Backdrop(ctx, di), Section(InfoColumn(ctx, di, info, mini: false)) } });
         var pars = Section(Params(ctx, di, state)); Grid.SetColumn(pars, 1); grid.Children.Add(pars);
         if (sidechain)
         {
@@ -69,6 +71,15 @@ internal static class PluginCard
             Grid.SetColumn(sc, 2); grid.Children.Add(sc);
         }
         return grid;
+    }
+
+    /// <summary>The picture of the plug-in's window to stand the card's text on, kept current
+    /// by the card's device refresher (a new capture lands when the window is hidden).</summary>
+    public static Control Backdrop(DeviceCardContext ctx, int di)
+    {
+        var b = new PluginPreviewBackdrop(ctx.Engine, ctx.TrackId, di);
+        ctx.AddDeviceRefresher(b.Sync);
+        return b;
     }
 
     // ---- who it is + the two actions ------------------------------------------

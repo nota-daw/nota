@@ -22,7 +22,7 @@ public sealed partial class ArrangementView
     // --- parameter automation (M9-A3) --------------------------------------
     internal bool AutomationModeActive => _automationMode;
 
-    private string AutoLabelFor(TrackVM t) => t.AutoTarget switch
+    private string AutoLabelFor(TrackVM t) => t.AutoChain >= 0 && _engine is { } ne ? Short(NestedParam(ne, t).Name) : t.AutoTarget switch
     {
         AutomationTarget.Volume => "Vol",
         AutomationTarget.Pan => "Pan",
@@ -35,7 +35,8 @@ public sealed partial class ArrangementView
     private static string Short(string s) => s.Length <= 10 ? s : s.Substring(0, 10);
 
     /// <summary>Value range of a track's current automation target (plugin params are 0..1).</summary>
-    internal (float min, float max) AutoRange(TrackVM t) => t.AutoTarget switch
+    internal (float min, float max) AutoRange(TrackVM t) => t.AutoChain >= 0 && _engine is { } ne
+        ? (NestedParam(ne, t).Min, NestedParam(ne, t).Max) : t.AutoTarget switch
     {
         AutomationTarget.Volume => (0f, 2f),
         AutomationTarget.Pan => (-1f, 1f),
@@ -51,7 +52,7 @@ public sealed partial class ArrangementView
     };
 
     /// <summary>Current live value of the target (baseline when the lane has no points).</summary>
-    internal float AutoCurrent(TrackVM t) => t.AutoTarget switch
+    internal float AutoCurrent(TrackVM t) => t.AutoChain >= 0 && _engine is { } ne ? NestedParam(ne, t).Value : t.AutoTarget switch
     {
         AutomationTarget.Volume => t.Volume,
         AutomationTarget.Pan => t.Pan,
@@ -73,11 +74,17 @@ public sealed partial class ArrangementView
     private int FindAutoLane(TrackVM t)
     {
         if (_engine is not { } e) return -1;
+        if (t.AutoChain >= 0 && NestedLaneStill(e, t, t.AutoLane)) return t.AutoLane;
         int n = e.AutomationLaneCount(t.Id);
         for (int i = 0; i < n; i++)
         {
             var info = e.AutomationLaneInfo(t.Id, i);
-            if (info.Target != t.AutoTarget) continue;
+            if (info.Target != t.AutoTarget || e.AutomationLanePath(t.Id, i) != (t.AutoChain, t.AutoSlot)) continue;
+            if (t.AutoChain >= 0)   // a lane into a rack: its param index is resolved (specs/044)
+            {
+                if (info.DeviceIndex == t.AutoDeviceIndex && info.ParamIndex == t.AutoParamIndex) return i;
+                continue;
+            }
             bool match = t.AutoTarget switch
             {
                 AutomationTarget.DeviceParam or AutomationTarget.MidiDeviceParam =>
@@ -126,7 +133,8 @@ public sealed partial class ArrangementView
         t.AutoDeviceIndex = target is AutomationTarget.DeviceParam or AutomationTarget.PluginParam or AutomationTarget.MidiDeviceParam ? dev : -1;
         t.AutoParamIndex = target is AutomationTarget.DeviceParam or AutomationTarget.MidiDeviceParam ? param : -1;
         t.AutoParamId = "";
-        _autoTargets[t.Id] = (t.AutoTarget, t.AutoDeviceIndex, t.AutoParamIndex, t.AutoParamId);
+        t.AutoChain = t.AutoSlot = t.AutoLane = -1;
+        _autoTargets[t.Id] = (t.AutoTarget, t.AutoDeviceIndex, t.AutoParamIndex, t.AutoParamId, -1, -1, -1);
         t.AutoLabel = AutoLabelFor(t);
         if (ReferenceEquals(_autoSelTrack, t)) _autoSelTrack = null;   // selection was for the old lane
         LoadAutoPoints(t);
@@ -135,18 +143,20 @@ public sealed partial class ArrangementView
 
     /// <summary>The first lane on a track that carries points — the top entry of the target
     /// menu's quick-access section — or null when the track has no automation yet.</summary>
-    private static (AutomationTarget target, int dev, int param, string paramId)? FirstAutomatedTarget(IAudioEngine e, int trackId)
+    private static (AutomationTarget target, int dev, int param, string paramId, int chain, int slot, int lane)? FirstAutomatedTarget(IAudioEngine e, int trackId)
     {
         int n = e.AutomationLaneCount(trackId);
         for (int i = 0; i < n; i++)
         {
             var info = e.AutomationLaneInfo(trackId, i);
             if (info.PointCount <= 0) continue;
+            var (chain, slot) = e.AutomationLanePath(trackId, i);
+            if (chain >= 0) return (info.Target, info.DeviceIndex, info.ParamIndex, e.AutomationLaneParamId(trackId, i), chain, slot, i);
             return info.Target switch
             {
-                AutomationTarget.Volume or AutomationTarget.Pan => (info.Target, -1, -1, ""),
-                AutomationTarget.PluginParam => (info.Target, info.DeviceIndex, -1, e.AutomationLaneParamId(trackId, i)),
-                _ => (info.Target, info.DeviceIndex, info.ParamIndex, ""),
+                AutomationTarget.Volume or AutomationTarget.Pan => (info.Target, -1, -1, "", -1, -1, -1),
+                AutomationTarget.PluginParam => (info.Target, info.DeviceIndex, -1, e.AutomationLaneParamId(trackId, i), -1, -1, -1),
+                _ => (info.Target, info.DeviceIndex, info.ParamIndex, "", -1, -1, -1),
             };
         }
         return null;
@@ -162,12 +172,20 @@ public sealed partial class ArrangementView
     internal void RemapAutoTargets(int trackId, bool midi, Func<int, int> map)
     {
         if (!_autoTargets.TryGetValue(trackId, out var sel)) return;
+        if (sel.chain >= 0)   // a lane into a rack follows the rack (specs/044)
+        {
+            bool midiRack = sel.dev <= -1000;
+            if (sel.dev == -1 || midiRack != midi) return;
+            int nh = map(midiRack ? -1000 - sel.dev : sel.dev);
+            _autoTargets[trackId] = nh >= 0 ? sel with { dev = midiRack ? -1000 - nh : nh } : (AutomationTarget.Volume, -1, -1, "", -1, -1, -1);
+            return;
+        }
         bool onChain = midi ? sel.target == AutomationTarget.MidiDeviceParam
                             : sel.target == AutomationTarget.DeviceParam
                               || (sel.target == AutomationTarget.PluginParam && sel.dev >= 0);
         if (!onChain) return;
         int ni = map(sel.dev);
-        _autoTargets[trackId] = ni >= 0 ? sel with { dev = ni } : (AutomationTarget.Volume, -1, -1, "");
+        _autoTargets[trackId] = ni >= 0 ? sel with { dev = ni } : (AutomationTarget.Volume, -1, -1, "", -1, -1, -1);
         // Refresh() (raised by the chain's Changed) rebuilds the lanes from _autoTargets.
     }
 
@@ -178,7 +196,8 @@ public sealed partial class ArrangementView
         t.AutoDeviceIndex = deviceIndex;
         t.AutoParamIndex = -1;
         t.AutoParamId = paramId;
-        _autoTargets[t.Id] = (t.AutoTarget, t.AutoDeviceIndex, t.AutoParamIndex, t.AutoParamId);
+        t.AutoChain = t.AutoSlot = t.AutoLane = -1;
+        _autoTargets[t.Id] = (t.AutoTarget, t.AutoDeviceIndex, t.AutoParamIndex, t.AutoParamId, -1, -1, -1);
         t.AutoLabel = AutoLabelFor(t);
         if (ReferenceEquals(_autoSelTrack, t)) _autoSelTrack = null;   // selection was for the old lane
         LoadAutoPoints(t);
@@ -340,7 +359,11 @@ public sealed partial class ArrangementView
     private void CommitAutoImpl(TrackVM t, bool live)
     {
         if (_engine is not { } e) return;
-        int lane = t.AutoTarget == AutomationTarget.PluginParam
+        int lane = t.AutoChain >= 0 && NestedLaneStill(e, t, t.AutoLane) ? t.AutoLane   // the lane itself, wherever its device moved
+            : t.AutoChain >= 0   // a lane into a rack (specs/044): reused, never a new track-level one
+            ? e.AddNestedAutomationLane(t.Id, t.AutoTarget, t.AutoDeviceIndex, t.AutoChain, t.AutoSlot, t.AutoParamIndex,
+                                        t.AutoParamId.Length > 0 ? t.AutoParamId : null)
+            : t.AutoTarget == AutomationTarget.PluginParam
             ? e.AddPluginAutomationLane(t.Id, t.AutoDeviceIndex, t.AutoParamId)
             : e.AddAutomationLane(t.Id, t.AutoTarget, t.AutoDeviceIndex, t.AutoParamIndex);
         if (lane < 0) return;
@@ -372,6 +395,10 @@ public sealed partial class ArrangementView
                 string key; Action apply;
                 switch (info.Target)
                 {
+                    case var _ when eA.AutomationLanePath(t.Id, i) is { Chain: >= 0 } np:   // a lane into a rack (specs/044)
+                    { var tg = info.Target; int dv = info.DeviceIndex, pr = info.ParamIndex; string pid = eA.AutomationLaneParamId(t.Id, i);
+                      int ln = i;
+                      key = $"N:{dv}:{np.Chain}:{np.Slot}:{(int)tg}:{pr}"; apply = () => SetAutoNestedTarget(t, tg, dv, np.Chain, np.Slot, pr, pid, ln); break; }
                     case AutomationTarget.Volume:
                         key = "V"; apply = () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1); break;
                     case AutomationTarget.Pan:
@@ -621,7 +648,10 @@ public sealed partial class ArrangementView
     }
 
     // Human-readable "Device · Param" label for an existing lane (used in the quick-access section).
-    private string AutoLaneLabel(IAudioEngine e, TrackVM t, AutomationLaneInfo info, int laneIndex) => info.Target switch
+    private string AutoLaneLabel(IAudioEngine e, TrackVM t, AutomationLaneInfo info, int laneIndex)
+        => e.AutomationLanePath(t.Id, laneIndex) is { Chain: >= 0 } p ? NestedLaneLabel(e, t.Id, info, p.Chain, p.Slot) : AutoLaneLabelTop(e, t, info, laneIndex);
+
+    private string AutoLaneLabelTop(IAudioEngine e, TrackVM t, AutomationLaneInfo info, int laneIndex) => info.Target switch
     {
         AutomationTarget.Volume => "Volume",
         AutomationTarget.Pan => "Pan",
@@ -629,6 +659,82 @@ public sealed partial class ArrangementView
         AutomationTarget.PluginParam => $"{e.DeviceName(t.Id, info.DeviceIndex)} · {PluginParamNameById(e, t, info.DeviceIndex, e.AutomationLaneParamId(t.Id, laneIndex))}",
         _ => $"{e.DeviceName(t.Id, info.DeviceIndex)} · {e.DeviceParamName(t.Id, info.DeviceIndex, info.ParamIndex)}",
     };
+
+    // ---- lanes on devices grouped into a rack (specs/044) ------------------------
+    // AutoDeviceIndex is the rack's address on the track (>= 0 effect, -1 instrument, -1000 - i
+    // MIDI effect); (AutoChain, AutoSlot) the child: slot >= 0 a device, -1 the chain
+    // instrument (plug-in surface, 0..1), -1000 - i the chain's i-th MIDI effect.
+    private static (string Name, float Min, float Max, float Value) NestedParam(IAudioEngine e, int track, int host, int c, int s, int p)
+    {
+        if (s >= 0)
+            return (e.RackDevChainDeviceParamName(track, host, c, s, p), e.RackDevChainDeviceParamMin(track, host, c, s, p),
+                    e.RackDevChainDeviceParamMax(track, host, c, s, p), e.RackDevChainDeviceParamGet(track, host, c, s, p));
+        if (s == -1)
+            return (e.RackDevChainInstrumentParamName(track, host, c, p), 0f, 1f, e.RackDevChainInstrumentParamGet(track, host, c, p));
+        int mi = -1000 - s;
+        if (host == -1)
+            return (e.RackChainMidiParamName(track, c, mi, p), e.RackChainMidiParamMin(track, c, mi, p),
+                    e.RackChainMidiParamMax(track, c, mi, p), e.RackChainMidiParamGet(track, c, mi, p));
+        int rm = -1000 - host;
+        return (e.MidiRackChainDeviceParamName(track, rm, c, mi, p), e.MidiRackChainDeviceParamMin(track, rm, c, mi, p),
+                e.MidiRackChainDeviceParamMax(track, rm, c, mi, p), e.MidiRackChainDeviceParamGet(track, rm, c, mi, p));
+    }
+    private static (string Name, float Min, float Max, float Value) NestedParam(IAudioEngine e, TrackVM t)
+        => NestedParam(e, t.Id, t.AutoDeviceIndex, t.AutoChain, t.AutoSlot, t.AutoParamIndex);
+
+    // "Audio Effect Rack / Reverb · Mix".
+    private static string NestedLaneLabel(IAudioEngine e, int track, AutomationLaneInfo info, int c, int s)
+    {
+        int host = info.DeviceIndex;
+        string rack = host <= -1000 ? e.MidiEffectName(track, -1000 - host) : e.DeviceName(track, host);
+        string child = s >= 0 ? e.RackDevChainDeviceName(track, host, c, s)
+                     : s == -1 ? e.RackDevChainInstrumentName(track, host, c)
+                     : host == -1 ? e.RackChainMidiName(track, c, -1000 - s)
+                     : e.MidiRackChainDeviceName(track, -1000 - host, c, -1000 - s);
+        return $"{rack} / {child} · {NestedParam(e, track, host, c, s, info.ParamIndex).Name}";
+    }
+
+    // Whether lane i is still the nested lane t shows: the same kind of target, rack and param.
+    private static bool NestedLaneStill(IAudioEngine e, TrackVM t, int i)
+    {
+        if (i < 0 || i >= e.AutomationLaneCount(t.Id)) return false;
+        var info = e.AutomationLaneInfo(t.Id, i);
+        return info.Target == t.AutoTarget && info.DeviceIndex == t.AutoDeviceIndex && info.ParamIndex == t.AutoParamIndex
+               && e.AutomationLanePath(t.Id, i).Chain >= 0;
+    }
+
+    // A rack edit moves a nested lane's (chain, slot) in the engine; follow the lane, so point edits
+    // never write to whichever device now sits at the old slot. A lane that is gone falls back to Volume.
+    private void ResyncNestedTarget(TrackVM t)
+    {
+        if (_engine is not { } e) return;
+        if (!NestedLaneStill(e, t, t.AutoLane))
+        {
+            t.AutoTarget = AutomationTarget.Volume;
+            t.AutoDeviceIndex = t.AutoParamIndex = t.AutoChain = t.AutoSlot = t.AutoLane = -1;
+            t.AutoParamId = "";
+            _autoTargets[t.Id] = (AutomationTarget.Volume, -1, -1, "", -1, -1, -1);
+            return;
+        }
+        (t.AutoChain, t.AutoSlot) = e.AutomationLanePath(t.Id, t.AutoLane);
+        _autoTargets[t.Id] = (t.AutoTarget, t.AutoDeviceIndex, t.AutoParamIndex, t.AutoParamId, t.AutoChain, t.AutoSlot, t.AutoLane);
+    }
+
+    internal void SetAutoNestedTarget(TrackVM t, AutomationTarget target, int host, int chain, int slot, int param, string paramId, int lane)
+    {
+        t.AutoTarget = target;
+        t.AutoDeviceIndex = host;
+        t.AutoParamIndex = param;
+        t.AutoParamId = paramId;
+        t.AutoChain = chain;
+        t.AutoSlot = slot;
+        t.AutoLane = lane;
+        _autoTargets[t.Id] = (target, host, param, paramId, chain, slot, lane);
+        t.AutoLabel = AutoLabelFor(t);
+        if (ReferenceEquals(_autoSelTrack, t)) _autoSelTrack = null;
+        LoadAutoPoints(t);
+        Redraw();
+    }
 
     private static string PluginParamNameById(IAudioEngine e, TrackVM t, int dev, string paramId)
     {

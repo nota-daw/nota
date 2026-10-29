@@ -30,10 +30,16 @@ namespace Nota.App;
 internal sealed class LensData
 {
     public const int Curve = 512, TraceN = 512, WfBins = 256, WfRows = 256;
+    // The synced frame (Lens::L_Sync, specs/050): a header, then SyncCols × (main min, main
+    // max, key min, key max, age).
+    public const int SyncHead = 8, SyncCols = 1024, SyncCol = 5;
+    public const int S_Mode = 0, S_Playhead = 1, S_Bpm = 2, S_BeatsPerBar = 3, S_SpanBeats = 4, S_Start = 5, S_KeyLive = 6;
 
     public readonly float[] Spec = new float[Curve];
     public readonly float[] Peak = new float[Curve];
     public readonly float[] Trace = new float[TraceN];
+    public readonly float[] KeyTrace = new float[TraceN];
+    public readonly float[] Sync = new float[SyncHead + SyncCols * SyncCol];
     public readonly float[] Wf = new float[WfBins * WfRows];   // ring of rows, oldest → newest
     public int WfHead;                                          // rows written (mod WfRows = next slot)
     public int WfFilled;
@@ -49,6 +55,11 @@ internal sealed class LensData
     public bool CursorsOn, CursorSnap, TrigRising = true, TrigOk;
     public double Bright = 0.66;
     public double WfSpanSec = 12;
+
+    // Tempo sync + the sidechain key (specs/050).
+    public bool SyncOn, KeyOn, Stacked;
+    public double KeyGain = 1;          // linear, display only
+    public string KeyName = "key";
 
     public double FreqLo => 20;
     public double FreqHi => Math.Min(20000, SampleRate * 0.45);
@@ -310,12 +321,19 @@ internal sealed class LensScopeView : Control
 
     public void Tick() => InvalidateVisual();
 
-    private double YOf(double v, double h) => h / 2 - Math.Clamp(v / Math.Max(1e-6, _d.VoltDiv * (Rows / 2.0)), -1.2, 1.2) * (h / 2);
-    private double VOf(double y, double h) => (h / 2 - y) / (h / 2) * (_d.VoltDiv * (Rows / 2.0));
+    // A lane is the band of the graph one trace uses: the whole height, or with the key
+    // Stacked, the top half (main) or the bottom half (key).
+    private bool StackedNow => _d.KeyOn && _d.Stacked;
+    private (double Mid, double Half) MainLane(double h) => StackedNow ? (h / 4, h / 4) : (h / 2, h / 2);
+    private (double Mid, double Half) KeyLane(double h) => StackedNow ? (h * 3 / 4, h / 4) : (h / 2, h / 2);
+    private double YIn(double v, (double Mid, double Half) lane, double gain = 1)
+        => lane.Mid - Math.Clamp(v * gain / Math.Max(1e-6, _d.VoltDiv * (Rows / 2.0)), -1.2, 1.2) * lane.Half;
+    private double YOf(double v, double h) => YIn(v, MainLane(h));
+    private double VOf(double y, double h) { var l = MainLane(h); return (l.Mid - y) / l.Half * (_d.VoltDiv * (Rows / 2.0)); }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || _d.SyncOn) return;   // synced: no trigger or cursors
         var p = e.GetPosition(this);
         double w = Bounds.Width, h = Bounds.Height;
         _drag = 0;
@@ -370,26 +388,25 @@ internal sealed class LensScopeView : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 2 || h <= 2) return;
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
+        if (_d.SyncOn) { RenderSync(ctx, w, h); return; }
 
         for (int c = 1; c < Cols; c++)
         {
             double x = w * c / Cols;
             ctx.DrawLine(c == Cols / 2 ? LensInk.GridStrong : LensInk.GridFaint, new Point(x, 0), new Point(x, h));
         }
-        for (int r = 1; r < Rows; r++)
-        {
-            double y = h * r / Rows;
-            ctx.DrawLine(r == Rows / 2 ? LensInk.Zero : LensInk.GridFaint, new Point(0, y), new Point(w, y));
-        }
+        LaneGrid(ctx, w, h);
 
         // Afterglow: older passes fade out behind the live trace.
         foreach (var (pts, age) in _d.Ghosts)
         {
             double k = Math.Clamp(1 - age / Math.Max(0.05, _ghostLife), 0, 1);
             if (k <= 0.02) continue;
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.VizInk, (byte)(k * 90)), 1.2), Path(pts, w, h));
+            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.VizInk, (byte)(k * 90)), 1.2), Path(pts, w, MainLane(h)));
         }
-        ctx.DrawGeometry(null, new Pen(LensInk.Trace, 1.1 + 1.0 * _d.Bright), Path(_d.Trace, w, h));
+        ctx.DrawGeometry(null, new Pen(LensInk.Trace, 1.1 + 1.0 * _d.Bright), Path(_d.Trace, w, MainLane(h)));
+        // The sidechain key on the same trigger and time base, in the second chroma.
+        if (_d.KeyOn) ctx.DrawGeometry(null, new Pen(KeyInk, 1.0 + 0.8 * _d.Bright), Path(_d.KeyTrace, w, KeyLane(h), _d.KeyGain));
 
         // Trigger level (draggable) + the trigger point, pinned at 25 % like a bench scope.
         double ty = YOf(_d.TrigLevel, h);
@@ -418,17 +435,170 @@ internal sealed class LensScopeView : Control
         LensInk.Text(ctx, "0", 4, h - 10, LensInk.Axis);
         string right = Ms(_d.TimeDivSec * Cols);
         LensInk.Text(ctx, right, w - LensInk.TextW(right) - 4, h - 10, LensInk.Axis);
+        Legend(ctx, h, "0");
+    }
+
+    private static SolidColorBrush KeyInk => NotaPalette.Teal;
+
+    // Horizontal divisions; Stacked, each half gets its own zero line under a divider.
+    private void LaneGrid(DrawingContext ctx, double w, double h)
+    {
+        if (!StackedNow)
+        {
+            for (int r = 1; r < Rows; r++)
+            {
+                double y = h * r / Rows;
+                ctx.DrawLine(r == Rows / 2 ? LensInk.Zero : LensInk.GridFaint, new Point(0, y), new Point(w, y));
+            }
+            return;
+        }
+        ctx.DrawLine(LensInk.GridStrong, new Point(0, h / 2), new Point(w, h / 2));
+        foreach (double y in new[] { h / 4, h * 3 / 4 }) ctx.DrawLine(LensInk.Zero, new Point(0, y), new Point(w, y));
+    }
+
+    // "main" and the key track's name, in their trace colours, when the key is drawn: after the
+    // bottom-left axis label, side by side (Overlay) or each at the foot of its lane (Stacked).
+    private void Legend(DrawingContext ctx, double h, string axisLabel)
+    {
+        if (!_d.KeyOn) return;
+        double x = 4 + LensInk.TextW(axisLabel) + 8;
+        string k = _d.KeyName + (Math.Abs(_d.KeyGain - 1) > 0.01 ? NotaNum.F($" {20 * Math.Log10(_d.KeyGain):+0.#;−0.#} dB") : "");
+        if (StackedNow)
+        {
+            LensInk.Text(ctx, "main", 4, h / 2 - 11, LensInk.Trace, 7, false);
+            LensInk.Text(ctx, k, x, h - 10, KeyInk, 7, false);
+            return;
+        }
+        LensInk.Text(ctx, "main", x, h - 10, LensInk.Trace, 7, false);
+        LensInk.Text(ctx, k, x + LensInk.TextW("main", 7, false) + 8, h - 10, KeyInk, 7, false);
+    }
+
+    // ---- tempo sync (specs/050) -----------------------------------------------------
+
+    /// <summary>"1 bar", "2 beats", "1/4 beat" for a span in beats.</summary>
+    public static string SpanName(double beats, double beatsPerBar)
+    {
+        double bars = beats / Math.Max(1, beatsPerBar);
+        if (beats > beatsPerBar - 1e-6 && Math.Abs(bars - Math.Round(bars)) < 1e-6)
+            return NotaNum.F($"{bars:0} bar{(Math.Round(bars) == 1 ? "" : "s")}");
+        if (beats < 1 - 1e-6) return NotaNum.F($"1/{Math.Round(1 / beats):0} beat");
+        return NotaNum.F($"{beats:0.##} beat{(Math.Abs(beats - 1) < 1e-6 ? "" : "s")}");
+    }
+
+    /// <summary>"5.3" — bar.beat (1-based) of a song beat.</summary>
+    public static string BarBeat(double beat, double beatsPerBar)
+    {
+        double bpb = Math.Max(1, beatsPerBar);
+        int bar = (int)Math.Floor(beat / bpb + 1e-9);
+        double inBar = beat - bar * bpb;
+        return Math.Abs(inBar - Math.Round(inBar)) < 1e-6
+            ? NotaNum.F($"{bar + 1}.{Math.Round(inBar) + 1:0}")
+            : NotaNum.F($"{bar + 1}.{inBar + 1:0.##}");
+    }
+
+    private static bool OnGrid(double beat, double step) => Math.Abs(beat / step - Math.Round(beat / step)) < 1e-6;
+
+    // The synced frame: the span on the song's grid, beat and bar lines, this pass up to the
+    // sweep line and the previous pass (faded) after it; the key in its own colour.
+    private void RenderSync(DrawingContext ctx, double w, double h)
+    {
+        var s = _d.Sync;
+        bool synced = s[LensData.S_Mode] > 0.5f;
+        double play = Math.Clamp(s[LensData.S_Playhead], 0, 1), bpm = s[LensData.S_Bpm];
+        double bpb = Math.Max(1, s[LensData.S_BeatsPerBar]), span = Math.Max(1e-3, s[LensData.S_SpanBeats]), start = s[LensData.S_Start];
+
+        // Beat lines (bar lines stronger); spans under a beat get quarters of the span.
+        double step = span <= 1 + 1e-6 ? span / 4 : 1;
+        int lines = (int)Math.Round(span / step);
+        var sub = new Pen(NotaPalette.Wash(NotaPalette.GridBeat, 0x88), 1);
+        var bar = new Pen(NotaPalette.GridBar, 1);
+        for (int k = 1; k < lines; k++)
+        {
+            double beat = start + k * step, x = w * k / lines;
+            IPen pen = !synced ? LensInk.GridFaint : OnGrid(beat, bpb) ? bar : OnGrid(beat, 1) ? LensInk.GridStrong : sub;
+            ctx.DrawLine(pen, new Point(x, 0), new Point(x, h));
+        }
+        LaneGrid(ctx, w, h);
+
+        Bands(ctx, w, 0, MainLane(h), 1, NotaPalette.VizInk);
+        if (_d.KeyOn) Bands(ctx, w, 2, KeyLane(h), _d.KeyGain, KeyInk);
+
+        if (synced)
+        {
+            double x = play * w;
+            ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0xC0), 1.2), new Point(x, 0), new Point(x, h));
+            ctx.DrawRectangle(LensInk.TraceLit, null, new Rect(x - 3.5, 0, 7, 5));
+        }
+
+        LensInk.Title(ctx, "SCOPE", NotaNum.F($"{SpanName(span, bpb)} · {bpm:0.#} BPM"));
+        string mode = synced ? "sync" : "free";
+        LensInk.Text(ctx, mode, w - LensInk.TextW(mode) - 4, 3, synced ? LensInk.TraceLit : LensInk.Axis);
+        string left = synced ? BarBeat(start, bpb) : NotaNum.F($"−{SpanName(span, bpb)}");
+        string right = synced ? BarBeat(start + span, bpb) : "now";
+        LensInk.Text(ctx, left, 4, h - 10, LensInk.Axis);
+        LensInk.Text(ctx, right, w - LensInk.TextW(right) - 4, h - 10, LensInk.Axis);
+        Legend(ctx, h, left);
+    }
+
+    // One trace of the synced frame as filled min/max bands, one pixel column at a time,
+    // this pass at full strength and the previous one at 45 %.
+    private void Bands(DrawingContext ctx, double w, int off, (double Mid, double Half) lane, double gain, SolidColorBrush ink)
+    {
+        var s = _d.Sync;
+        int cols = LensData.SyncCols, px = Math.Max(1, (int)Math.Ceiling(w));
+        foreach (int age in new[] { 1, 0 })
+        {
+            var g = new StreamGeometry();
+            bool any = false;
+            using (var gc = g.Open())
+            {
+                var top = new List<Point>();
+                var bot = new List<Point>();
+                void Flush()
+                {
+                    if (top.Count == 0) return;
+                    if (top.Count == 1) { top.Add(top[0] + new Point(1, 0)); bot.Add(bot[0] + new Point(1, 0)); }
+                    gc.BeginFigure(top[0], true);
+                    for (int i = 1; i < top.Count; i++) gc.LineTo(top[i]);
+                    for (int i = bot.Count - 1; i >= 0; i--) gc.LineTo(bot[i]);
+                    gc.EndFigure(true);
+                    any = true;
+                    top.Clear(); bot.Clear();
+                }
+                for (int x = 0; x < px; x++)
+                {
+                    int c0 = (int)((long)x * cols / px), c1 = Math.Max(c0 + 1, (int)((long)(x + 1) * cols / px));
+                    float lo = float.MaxValue, hi = float.MinValue;
+                    bool have = false;
+                    for (int c = c0; c < c1 && c < cols; c++)
+                    {
+                        int b = LensData.SyncHead + c * LensData.SyncCol;
+                        float a = s[b + 4];
+                        if (float.IsNaN(a) || (int)a != age) continue;
+                        lo = Math.Min(lo, s[b + off]); hi = Math.Max(hi, s[b + off + 1]);
+                        have = true;
+                    }
+                    if (!have) { Flush(); continue; }
+                    double yHi = YIn(hi, lane, gain), yLo = YIn(lo, lane, gain);
+                    if (yLo - yHi < 1) { double m = (yLo + yHi) / 2; yHi = m - 0.5; yLo = m + 0.5; }   // a flat run stays visible
+                    double xx = x * w / px;
+                    top.Add(new Point(xx, yHi)); bot.Add(new Point(xx, yLo));
+                }
+                Flush();
+            }
+            if (any) ctx.DrawGeometry(age == 0 ? ink : NotaPalette.Wash(ink, 0x73), null, g);
+        }
     }
 
     private double _ghostLife = 0.42;
     public double GhostLife { set => _ghostLife = value; }
 
-    private Geometry Path(float[] pts, double w, double h)
+    private Geometry Path(float[] pts, double w, (double Mid, double Half) lane, double gain = 1)
     {
         var g = new StreamGeometry();
         using var c = g.Open();
-        c.BeginFigure(new Point(0, YOf(pts[0], h)), false);
-        for (int i = 1; i < pts.Length; i++) c.LineTo(new Point(i * w / (pts.Length - 1), YOf(pts[i], h)));
+        c.BeginFigure(new Point(0, YIn(pts[0], lane, gain)), false);
+        for (int i = 1; i < pts.Length; i++) c.LineTo(new Point(i * w / (pts.Length - 1), YIn(pts[i], lane, gain)));
         c.EndFigure(false);
         return g;
     }

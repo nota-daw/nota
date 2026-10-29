@@ -38,6 +38,7 @@
 #include "devices/midi_fx/MidiChord.h"
 #include "devices/midi_fx/MidiNoteLength.h"
 #include "devices/midi_fx/MidiRandom.h"
+#include "devices/racks/MidiRack.h"
 #include "devices/midi_fx/MidiScale.h"
 #include "devices/midi_fx/MidiVelocity.h"
 #include "devices/instruments/Monolith.h"
@@ -125,6 +126,7 @@ std::shared_ptr<MidiDevice> makeMidiDevice(int32_t kind) {
     case 3: return std::make_shared<MidiNoteLength>();
     case 4: return std::make_shared<MidiVelocity>();
     case 5: return std::make_shared<MidiRandom>();
+    case MidiRack::kKind: return std::make_shared<MidiRack>(); // the MIDI Effect Rack (specs/040)
     default: return nullptr;
     }
 }

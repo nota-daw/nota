@@ -16,6 +16,16 @@ public interface IPresetStore
     /// Null — nothing done — when the file isn't an instrument preset; else a warning ("" = clean).</summary>
     string? ApplyInstrumentInPlace(IAudioEngine engine, string path, int trackId, out bool swapped);
 
+    /// <summary>What a preset file is for: its type ("builtin-instrument", "builtin-effect",
+    /// "builtin-midi-effect", "plugin-instrument", "plugin-effect") and built-in kind (−1 for a
+    /// plug-in). Null when the file can't be read.</summary>
+    (string Type, int BuiltinKind)? Describe(string path);
+
+    /// <summary>Applies a preset file to a device that already matches it, in place
+    /// (<paramref name="deviceIndex"/> −1 = the instrument, else the effect or MIDI effect at that
+    /// index). Returns a warning ("" = clean).</summary>
+    string ApplyFileInPlace(IAudioEngine engine, string path, int trackId, int deviceIndex);
+
     /// <summary>Captures a track's device/instrument as a preset and saves it to
     /// <paramref name="folder"/>. Returns false if there was nothing to capture
     /// (e.g. the built-in synth has no state).</summary>

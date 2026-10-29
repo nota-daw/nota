@@ -5,10 +5,17 @@
 
 namespace nota {
 
-int32_t Modulator::readScope(float* out, int32_t cap) const {
-    const int32_t w = scopeWrite.load(std::memory_order_relaxed);
-    const int32_t n = cap < kScopeLen ? cap : kScopeLen;
-    for (int32_t i = 0; i < n; ++i) out[i] = scopeBuf[(w + i) & (kScopeLen - 1)];
+int32_t Modulator::readScope(float* values, float* dts, int32_t cap) const {
+    if (!scope || cap <= 0) return 0;
+    const int64_t w = scope->write.load(std::memory_order_acquire);
+    // Leave a margin the audio thread may overwrite while we copy (a few blocks per UI read).
+    constexpr int64_t kReadable = kScopeLen - 256;
+    const int32_t n = static_cast<int32_t>(std::min<int64_t>({(int64_t)cap, w, kReadable}));
+    for (int32_t i = 0; i < n; ++i) {
+        const int64_t at = (w - n + i) & (kScopeLen - 1);
+        values[i] = scope->value[at];
+        if (dts) dts[i] = scope->dt[at];
+    }
     return n;
 }
 
@@ -32,8 +39,13 @@ Modulator& Modulator::operator=(const Modulator& o) {
     inputB.store(o.inputB.load(std::memory_order_relaxed), std::memory_order_relaxed);
     mathOffset.store(o.mathOffset.load(std::memory_order_relaxed), std::memory_order_relaxed);
     outValue.store(o.outValue.load(std::memory_order_relaxed), std::memory_order_relaxed);
-    for (int i = 0; i < kScopeLen; ++i) scopeBuf[i] = o.scopeBuf[i];
-    scopeWrite.store(o.scopeWrite.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    scopeWindowMs.store(o.scopeWindowMs.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    scopeSync.store(o.scopeSync.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    scopeWindowBeats.store(o.scopeWindowBeats.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    scopeZoom.store(o.scopeZoom.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    scopeTrigger.store(o.scopeTrigger.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    scopeHeight.store(o.scopeHeight.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    scope = o.scope; // shared: snapshot copies keep recording into the same history
     return *this;
 }
 
@@ -52,6 +64,12 @@ float Modulator::get(ModField f) const {
     case ModField::InputA: return (float)inputA.load(std::memory_order_relaxed);
     case ModField::InputB: return (float)inputB.load(std::memory_order_relaxed);
     case ModField::MathOffset: return mathOffset.load(std::memory_order_relaxed);
+    case ModField::ScopeWindowMs: return scopeWindowMs.load(std::memory_order_relaxed);
+    case ModField::ScopeSync: return (float)scopeSync.load(std::memory_order_relaxed);
+    case ModField::ScopeWindowBeats: return scopeWindowBeats.load(std::memory_order_relaxed);
+    case ModField::ScopeZoom: return (float)scopeZoom.load(std::memory_order_relaxed);
+    case ModField::ScopeTrigger: return (float)scopeTrigger.load(std::memory_order_relaxed);
+    case ModField::ScopeHeight: return scopeHeight.load(std::memory_order_relaxed);
     }
     return 0.0f;
 }
@@ -73,6 +91,16 @@ void Modulator::set(ModField f, float v) {
     case ModField::InputA: inputA.store((int32_t)std::lround(v), std::memory_order_relaxed); break;
     case ModField::InputB: inputB.store((int32_t)std::lround(v), std::memory_order_relaxed); break;
     case ModField::MathOffset: mathOffset.store(v, std::memory_order_relaxed); break;
+    case ModField::ScopeWindowMs: scopeWindowMs.store(std::clamp(v, 50.0f, 8000.0f), std::memory_order_relaxed); break;
+    case ModField::ScopeSync: scopeSync.store(v > 0.5f ? 1 : 0, std::memory_order_relaxed); break;
+    case ModField::ScopeWindowBeats: scopeWindowBeats.store(std::clamp(v, 0.25f, 32.0f), std::memory_order_relaxed); break;
+    case ModField::ScopeZoom: { // snap to 1 / 2 / 4 / 8
+        const int z = v >= 6.0f ? 8 : v >= 3.0f ? 4 : v >= 1.5f ? 2 : 1;
+        scopeZoom.store(z, std::memory_order_relaxed);
+        break;
+    }
+    case ModField::ScopeTrigger: scopeTrigger.store(v > 0.5f ? 1 : 0, std::memory_order_relaxed); break;
+    case ModField::ScopeHeight: scopeHeight.store(std::clamp(v, 76.0f, 320.0f), std::memory_order_relaxed); break;
     }
 }
 
@@ -179,6 +207,10 @@ CvLink& CvLink::operator=(const CvLink& o) {
     targetTrack = o.targetTrack;
     targetDevice = o.targetDevice;
     targetParam = o.targetParam;
+    sourceChainUid = o.sourceChainUid;
+    sourceSlot = o.sourceSlot;
+    targetChainUid = o.targetChainUid;
+    targetSlot = o.targetSlot;
     depth.store(o.depth.load(std::memory_order_relaxed), std::memory_order_relaxed);
     mode.store(o.mode.load(std::memory_order_relaxed), std::memory_order_relaxed);
     base.store(o.base.load(std::memory_order_relaxed), std::memory_order_relaxed);

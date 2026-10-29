@@ -350,7 +350,7 @@ int32_t nota_mix_gesture_begin(NotaEngine* e, const NotaMixTarget* targets, int3
     int32_t n = 0;
     for (int32_t i = 0; i < count; ++i) {
         const int32_t k = targets[i].kind;
-        if (k < NOTA_MIX_TRACK_VOLUME || k > NOTA_MIX_PLUGIN_PARAM) continue;
+        if (k < NOTA_MIX_TRACK_VOLUME || k > NOTA_MIX_PRESET_TAG) continue;
         t[n++] = {static_cast<nota::MixKind>(k), targets[i].track_id, targets[i].device_index, targets[i].param_index};
     }
     return n > 0 ? ENG(e)->beginMixGesture(t, n) : 0;

@@ -7,6 +7,7 @@
 
 using System;
 using Avalonia.Controls;
+using Nota.Application;
 using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
@@ -32,7 +33,7 @@ public sealed partial class DeviceChainView
         double width = strategy.WidthFor(_engine, _trackId);
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: strategy.Subtitle, DeviceIndex: -1, Count: 1,
-            Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: false,
+            Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: true,
             PresetKind: kind, IsInstrument: true, Width: width, Kind: ChainKind.Instrument,
             VoiceLabel: strategy.VoiceLabel,
             Presets: kind == Nota.Application.RhythmModel.Kind ? KitPresets() : kind == Nota.Application.MosaicModel.Kind ? MosaicPresets() : null,
@@ -56,25 +57,27 @@ public sealed partial class DeviceChainView
         });
     }
 
+    private CardPresets MosaicPresets() => MosaicPresetsFor(_factory, _mosaic, _engine, _trackId);
+
     // Nota Mosaic's presets: the factory multisamples, then every pack preset ("Pack / Name").
     // The one the instrument holds is named by its program (a pack preset keeps its name).
-    private CardPresets MosaicPresets()
+    // `engine` may be a rack chain's proxy, so a Mosaic in a chain lists the same presets.
+    internal static CardPresets MosaicPresetsFor(IFactoryPresets factory, IMosaicPacks? packs, IAudioEngine engine, int t)
     {
-        int t = _trackId;
         var items = new System.Collections.Generic.List<(string, string)>();
-        foreach (var p in _factory.All())
+        foreach (var p in factory.All())
             // The factory "Init" keeps the loaded program, so here it would read as the program's
             // name again: the card's own Init (every default, no program) takes its place (#165).
             if (p.IsInstrument && p.BuiltinKind == Nota.Application.MosaicModel.Kind && p.DisplayName != "Init") items.Add(("factory:" + p.Id, p.DisplayName));
-        if (_mosaic is not null)
-            foreach (var p in _mosaic.Presets()) items.Add((p.Path, $"{p.Folder} / {p.Name}"));
+        if (packs is not null)
+            foreach (var p in packs.Presets()) items.Add((p.Path, $"{p.Folder} / {p.Name}"));
         // A program that is no preset (an SFZ, dropped files) still names itself in the picker.
-        string held = Nota.Application.Mosaic.MosaicProgram.Parse(_engine.MosaicProgram(t)).Name;
+        string held = Nota.Application.Mosaic.MosaicProgram.Parse(engine.MosaicProgram(t)).Name;
         if (held.Length > 0 && !items.Exists(i => i.Item2 == held || i.Item2.EndsWith(" / " + held, StringComparison.Ordinal)))
             items.Insert(0, ("program:", held));
         string Current()
         {
-            string name = Nota.Application.Mosaic.MosaicProgram.Parse(_engine.MosaicProgram(t)).Name;
+            string name = Nota.Application.Mosaic.MosaicProgram.Parse(engine.MosaicProgram(t)).Name;
             if (name.Length == 0) return "";
             foreach (var (id, n) in items) if (n == name || n.EndsWith(" / " + name, StringComparison.Ordinal)) return id;
             return "";
@@ -82,18 +85,19 @@ public sealed partial class DeviceChainView
         return new CardPresets(items, Current, id =>
         {
             if (id == "program:") return "";
-            if (id.StartsWith("factory:", StringComparison.Ordinal)) return _factory.ApplyInPlace(_engine, id["factory:".Length..], t, -1);
-            return _mosaic?.ApplyInPlace(_engine, id, t) ?? "Presets are unavailable.";
-        }, Init: () => _factory.ResetInPlace(_engine, t, -1, false));   // every param to default, no program (#165)
+            if (id.StartsWith("factory:", StringComparison.Ordinal)) return factory.ApplyInPlace(engine, id["factory:".Length..], t, -1);
+            return packs?.ApplyInPlace(engine, id, t) ?? "Presets are unavailable.";
+        }, Init: () => factory.ResetInPlace(engine, t, -1, false));   // every param to default, no program (#165)
     }
 
     // The Instrument Rack in the shared shell; the badge counts its chains.
     private Control InstrumentRackCard()
     {
-        var body = new RackCardView(NewCardContext()).BuildInstrumentRackBody(out int chains);
+        var view = _instrumentRackView = new RackCardView(NewCardContext());
+        var body = view.BuildInstrumentRackBody(out int chains);
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: $"Rack · {chains} chain{(chains == 1 ? "" : "s")}", DeviceIndex: -1, Count: 1,
-            Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: false,
+            Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: true,
             PresetKind: 3, IsInstrument: true, Width: 700, Kind: ChainKind.Instrument);
         return BuildCardShell(spec, body);
     }
@@ -106,7 +110,7 @@ public sealed partial class DeviceChainView
         var kits = KitPresets();
         var spec = new ShellSpec(
             Name: _engine.DeviceName(_trackId, -1), Subtitle: $"Drums · {pads} pad{(pads == 1 ? "" : "s")}", DeviceIndex: -1, Count: 1,
-            Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: false,
+            Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: true,
             PresetKind: 4, IsInstrument: true, Width: 700, Kind: ChainKind.Instrument, Presets: kits);
         return BuildCardShell(spec, body);
     }

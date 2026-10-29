@@ -101,6 +101,7 @@ public sealed class ClipEditorView : UserControl
             Offset = Roll.Clips.EditorStart(Roll.Clips.Active),
         };
         if (_envMode) Roll.SetOverlay(_envOverlay);
+        PaintFold();   // another track's clip may be folded differently
     }
 
     // Note audition (#46): the speaker chip. One app-wide setting, so every open editor's
@@ -185,8 +186,24 @@ public sealed class ClipEditorView : UserControl
         _dropOutOfScale.VerticalAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(_dropOutOfScale, "Delete every note outside the scale");
         Roll.Changed += () => _dropOutOfScale.IsEnabled = Roll.HasOutOfScaleNotes;
+        Roll.FoldToggled += _ => PaintScale();   // ⌥⇧F flips it from the keyboard too
+        Roll.FoldChanged += PaintFold;           // …and the host switches it with the active clip's track
+        // Fold (specs/045): the scale's rows, or a Drum Rack's pads, and nothing else.
+        _fold = SwitchRow("Fold", () => Roll.Folded, () => { Roll.SetFold(!Roll.Folded, user: true); PaintScale(); }, out _syncFold);
         PaintScale();
-        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { sw, key, mode, _dropOutOfScale } };
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { sw, key, mode, _fold, _dropOutOfScale } };
+    }
+
+    private Action _syncFold = () => { };
+    private Control _fold = null!;
+
+    private void PaintFold()
+    {
+        _syncFold();
+        string what = Roll.FoldShowsPads ? "only the pads" : Roll.ScaleOn ? "only the scale's notes" : "only the notes in use";
+        string tip = MenuKit.Keys($"Fold: show {what} (⌥⇧F)");
+        if (Roll.FoldHasNothing) tip += Roll.FoldShowsPads ? "\nThe rack has no pads yet" : "\nSet a scale or add notes to fold";
+        ToolTip.SetTip(_fold, tip);
     }
 
     private void PaintScale()
@@ -198,6 +215,7 @@ public sealed class ClipEditorView : UserControl
         _keyText.Foreground = ink;
         _modeText.Foreground = ink;
         _dropOutOfScale.IsEnabled = Roll.HasOutOfScaleNotes;
+        PaintFold();
     }
 
     // ---- envelope overlay: a wash over the notes, the curve, a target picker ----------

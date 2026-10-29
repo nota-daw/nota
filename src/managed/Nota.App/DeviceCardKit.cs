@@ -346,7 +346,8 @@ internal static class DeviceCardKit
     // neither select nor start dragging the card. Shared by the card shell and the rack chain
     // full-UI popups.
     internal static Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
-        Action<int> apply, Action<int> step, double nameWidth = 132, double height = NotaSize.Dropdown, Action? init = null)
+        Action<int> apply, Action<int> step, double nameWidth = 132, double height = NotaSize.Dropdown, Action? init = null,
+        Func<bool>? modified = null, Action<Action>? addLive = null)
     {
         double H = height;   // 22: a card header and the device window's title bar
         var label = new TextBlock
@@ -365,6 +366,21 @@ internal static class DeviceCardKit
         };
         name.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
         ToolTip.SetTip(name, "Choose a preset");
+        // A sound parameter moved away from the loaded preset (specs/048): "Name *", read live.
+        if (modified != null && !string.IsNullOrEmpty(current))
+        {
+            bool shown = false;
+            void Mark()
+            {
+                bool m = modified();
+                if (m == shown) return;
+                shown = m;
+                label.Text = m ? current + " *" : current;
+                ToolTip.SetTip(name, m ? $"Changed since you loaded {current} · choose a preset" : "Choose a preset");
+            }
+            Mark();
+            addLive?.Invoke(Mark);
+        }
         name.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(name).Properties.IsLeftButtonPressed) return;
@@ -414,5 +430,40 @@ internal static class DeviceCardKit
         };
         return picker;
         static Control At(Control c, int col) { Grid.SetColumn(c, col); return c; }
+    }
+
+    /// <summary>The Remove control on a device header or folded strip (#110, specs/043): an 18 × 18
+    /// × in muted ink that brightens on hover and shows a seam ring while focused. Not red —
+    /// red means overload in Nota; a destructive key says what it does (DESIGN.md). Click, Enter
+    /// or Space runs <paramref name="onRemove"/>; the press never reaches the header (no drag,
+    /// no selection, no fold).</summary>
+    internal static Border RemoveButton(string tip, Action onRemove)
+    {
+        var glyph = new Glyph(GlyphKind.Close, 8) { Foreground = TextTertiary, IsHitTestVisible = false };
+        var b = new Border
+        {
+            Width = 18, Height = 18, CornerRadius = NotaRadius.Field, Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent, BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+            Cursor = new Cursor(StandardCursorType.Hand), Focusable = true, IsTabStop = true, Child = glyph,
+        };
+        ToolTip.SetTip(b, tip);
+        Avalonia.Automation.AutomationProperties.SetName(b, tip);
+        b.PointerEntered += (_, _) => glyph.Foreground = TextPrimary;
+        b.PointerExited += (_, _) => glyph.Foreground = b.IsFocused ? TextPrimary : TextTertiary;
+        b.GotFocus += (_, _) => { b.BorderBrush = BorderStrong; glyph.Foreground = TextPrimary; };
+        b.LostFocus += (_, _) => { b.BorderBrush = Brushes.Transparent; glyph.Foreground = TextTertiary; };
+        b.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            if (e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) onRemove();
+        };
+        b.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Enter or Key.Space)) return;
+            e.Handled = true;
+            onRemove();
+        };
+        return b;
     }
 }
