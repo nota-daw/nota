@@ -213,6 +213,7 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
         r->setFolded(src->folded());
         r->setPresetTag(src->presetTag());
         r->setSidechainSourceTrackId(src->sidechainSourceTrackId());
+        r->setSidechainPart(src->sidechainPart());
         r->setSidechainTapPre(src->sidechainTapPre());
         r->setSidechainGainDb(src->sidechainGainDb());
         r->setSidechainMix(src->sidechainMix());
@@ -734,6 +735,7 @@ bool Engine::rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32
         Device* d = r->chainDeviceAt(chain, slot);
         if (!d) return false;
         d->setSidechainSourceTrackId(src);
+        d->setSidechainPart(0); // a whole-track key; rackChainSetSidechainPart narrows it
         d->setSidechainTapPre(tapPre);
         d->setSidechainGainDb(gainDb);
         d->setSidechainMix(mix);
@@ -741,7 +743,43 @@ bool Engine::rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32
         Instrument* in = r->chainInstrument(chain);
         if (!in) return false;
         in->setSidechainSourceTrackId(src);
+        in->setSidechainPart(0);
     }
+    recomputeRouting();
+    return true;
+}
+// The part of a chain child's key (specs/050), as an index on its source track (-1 whole
+// track, -2 gone). For save / load, after rackChainSetSidechain.
+bool Engine::rackChainSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* part) const {
+    auto* r = rackCoreAt(t, host);
+    if (!r || isNestedRack(host)) return false;
+    int32_t src = -1;
+    uint64_t id = 0;
+    if (slot >= 0) {
+        Device* d = r->chainDeviceAt(chain, slot);
+        if (!d) return false;
+        src = d->sidechainSourceTrackId();
+        id = d->sidechainPart();
+    } else {
+        Instrument* in = r->chainInstrument(chain);
+        if (!in) return false;
+        src = in->sidechainSourceTrackId();
+        id = in->sidechainPart();
+    }
+    if (part) *part = src < 0 ? -1 : partIndexOf(src, id);
+    return true;
+}
+bool Engine::rackChainSetSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t part) {
+    auto* r = rackCoreAt(t, host);
+    if (!r || isNestedRack(host)) return false;
+    Device* d = slot >= 0 ? r->chainDeviceAt(chain, slot) : nullptr;
+    Instrument* in = slot < 0 ? r->chainInstrument(chain) : nullptr;
+    if (!d && !in) return false;
+    const int32_t src = d ? d->sidechainSourceTrackId() : in->sidechainSourceTrackId();
+    uint64_t id = 0;
+    if (src < 0 || !partIdAt(src, part, &id)) return false;
+    if (d) d->setSidechainPart(id);
+    else in->setSidechainPart(id);
     recomputeRouting();
     return true;
 }

@@ -1930,13 +1930,27 @@ void Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, in
             // previous-block, post-fader signal just before it renders.
             const int32_t iSc = t.instrument->sidechainSourceTrackId();
             if (iSc >= 0) {
-                const int32_t s = routeSlotForTrack(iSc);
+                const int32_t s = routeSlotFor(iSc, t.instrument->sidechainPart());
                 t.instrument->setSidechain(s < 0 ? nullptr : routeBus_[s].data(), frames);
             }
             // Keyed devices and instruments inside an Instrument Rack's chains (specs/044).
             if (auto* r = t.instrument->asRack()) feedRackChildKeys(g, *r, t.id(), frames);
         }
-        renderInstrumentRaw(g, t, dst, frames, blockStart, spb, playing);
+        {
+            // Parts of this instrument that keys listen to (specs/050): hand it where each one's
+            // Pre / Post goes this block. The Next buses are written by this track alone.
+            Instrument::PartTap taps[kMaxRoutes];
+            int32_t nTaps = 0;
+            if (t.instrument)
+                for (int32_t s = 0, n = routeSlotCount_.load(std::memory_order_acquire); s < n; ++s) {
+                    if (routeSlotTrackId_[s].load(std::memory_order_relaxed) != t.id()) continue;
+                    const uint64_t part = routeSlotPart_[s].load(std::memory_order_relaxed);
+                    if (part != 0) taps[nTaps++] = {part, routeBusPreNext_[s].data(), routeBusNext_[s].data()};
+                }
+            if (nTaps > 0) t.instrument->setPartTaps(taps, nTaps);
+            renderInstrumentRaw(g, t, dst, frames, blockStart, spb, playing);
+            if (nTaps > 0) t.instrument->setPartTaps(nullptr, 0);
+        }
         break;
     case LeafPath::AudioClips: renderAudioClipsRaw(t.clips, dst, frames, blockStart, spb); break;
     case LeafPath::Skip: break; // unreachable (pre-pass filters Skip out)
@@ -1949,7 +1963,7 @@ void Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, in
 void Engine::feedDeviceKey(Graph* g, Device& d, int32_t ownTrackId, int32_t frames) {
     const int32_t src = d.sidechainSourceTrackId();
     if (src >= 0) {
-        const int32_t s = routeSlotForTrack(src);
+        const int32_t s = routeSlotFor(src, d.sidechainPart());
         const float* sc = s < 0 ? nullptr : (d.sidechainTapPre() ? routeBusPre_[s].data() : routeBus_[s].data());
         d.setSidechain(sc, frames);
         if (d.wantsMidiKey()) feedMidiKey(g, d, src);
@@ -1965,7 +1979,7 @@ void Engine::feedRackChildKeys(Graph* g, const RackCore& r, int32_t ownTrackId, 
     r.forEachChildInstrument([&](Instrument& i) {
         const int32_t src = i.sidechainSourceTrackId();
         if (src < 0) return;
-        const int32_t s = routeSlotForTrack(src);
+        const int32_t s = routeSlotFor(src, i.sidechainPart());
         i.setSidechain(s < 0 ? nullptr : routeBus_[s].data(), frames);
     });
 }
@@ -2066,7 +2080,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         for (int b = 0; b < numReturns; ++b) // clear send buses for this block (M6-1)
             std::fill_n(returnBus_[b].data(), frames * 2, 0.0f);
         // Phase B/D: clear this block's route-write buffers (post + pre) for active slots.
-        for (int s = 0; s < kMaxRoutes; ++s)
+        for (int s = 0, n = routeSlotCount_.load(std::memory_order_acquire); s < n; ++s)
             if (routeSlotTrackId_[s].load(std::memory_order_relaxed) >= 0) {
                 std::fill_n(routeBusNext_[s].data(), frames * 2, 0.0f);
                 std::fill_n(routeBusPreNext_[s].data(), frames * 2, 0.0f);
@@ -2165,7 +2179,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             // console's pre-fader send outlives the channel mute: a vocoder's voice track can be
             // muted (or the pad soloed) and still drive the bands. Its post-fader tap is silent
             // while it is muted.
-            const bool keying = !audible && routeSlotForTrack(t.id()) >= 0;
+            const bool keying = !audible && trackFeedsRoute(t.id()); // whole track or a part (specs/050)
             const bool postTapMuted = keying && leafMute(t);
             // Input monitoring (Monitor "In"): the track plays its record-input source live
             // in place of its clips — hardware input this segment, or the source track's
@@ -2620,7 +2634,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         }
 
         // Phase B/D: publish this block's route taps (post + pre) for next block.
-        for (int s = 0; s < kMaxRoutes; ++s)
+        for (int s = 0, n = routeSlotCount_.load(std::memory_order_acquire); s < n; ++s)
             if (routeSlotTrackId_[s].load(std::memory_order_relaxed) >= 0) {
                 routeBus_[s].swap(routeBusNext_[s]);
                 routeBusPre_[s].swap(routeBusPreNext_[s]);

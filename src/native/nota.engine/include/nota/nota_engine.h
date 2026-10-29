@@ -1766,6 +1766,40 @@ NOTA_API void        nota_device_set_sidechain_mix(NotaEngine* engine, int32_t t
 NOTA_API float       nota_device_sidechain_mix(const NotaEngine* engine, int32_t track_id, int32_t device_index);
 NOTA_API void        nota_device_set_sidechain_tap_pre(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t pre);
 NOTA_API int32_t     nota_device_sidechain_tap_pre(const NotaEngine* engine, int32_t track_id, int32_t device_index);
+/* Sidechain sub-sources (specs/050): a key may name one part of the source track's
+ * instrument — a Drum Rack pad, an Instrument Rack chain (first level) or a Nota Rhythm voice.
+ * Parts are addressed by their CURRENT index; the engine keeps a key on the same part through
+ * reorder / insert / delete of the others. part -1 = the whole track. Pre on a part = before
+ * its own inserts; Post = after its inserts and its gain / pan, before the instrument sums it.
+ * A keyed part plays its key even while muted or solo-gated (it stays out of the mix). The
+ * whole-track setters above clear the part. Getters report part -2 when the keyed part is gone
+ * (the key is silent until an undo brings it back). */
+/* Parts of the track's instrument (0 = none), and part `index`'s display name (the chain name,
+ * else its instrument's): full UTF-8 length; copies up to cap-1 bytes + NUL when out is set. */
+NOTA_API int32_t     nota_track_part_count(const NotaEngine* engine, int32_t track_id);
+NOTA_API int32_t     nota_track_part_name(const NotaEngine* engine, int32_t track_id, int32_t index, char* out, int32_t cap);
+/* Set: 0 done, -1 bad address / part, -2 no free route (the key is left as it was).
+ * Get: 0 done, -1 bad address; *out_source -1 = none. */
+NOTA_API int32_t     nota_device_set_sidechain_key(NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                   int32_t source_track_id, int32_t part);
+NOTA_API int32_t     nota_device_sidechain_key(const NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                               int32_t* out_source, int32_t* out_part);
+/* The same for an instrument's React key (Nota Flux) — always the Post tap. */
+NOTA_API int32_t     nota_track_set_instrument_sidechain_key(NotaEngine* engine, int32_t track_id, int32_t source_track_id,
+                                                             int32_t part);
+NOTA_API int32_t     nota_track_instrument_sidechain_key(const NotaEngine* engine, int32_t track_id, int32_t* out_source,
+                                                         int32_t* out_part);
+/* The part of a rack chain child's key (save / load; addresses as nota_rack_chain_sidechain;
+ * set it after nota_rack_chain_set_sidechain, which clears it). 0 = done, -1 not. */
+NOTA_API int32_t     nota_rack_chain_sidechain_part(const NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                    int32_t chain, int32_t slot, int32_t* out_part);
+NOTA_API int32_t     nota_rack_chain_set_sidechain_part(NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                        int32_t chain, int32_t slot, int32_t part);
+/* The route pool whole tracks and parts share: its size (16), the routes free now, and whether
+ * (source, part) already has one — a further key on it needs none. */
+NOTA_API int32_t     nota_sidechain_route_capacity(const NotaEngine* engine);
+NOTA_API int32_t     nota_sidechain_routes_free(const NotaEngine* engine);
+NOTA_API int32_t     nota_sidechain_route_in_use(const NotaEngine* engine, int32_t source_track_id, int32_t part);
 /* Deterministic DSP self-test of the built-in EQ + Compressor: 1 = sane. */
 NOTA_API int32_t     nota_fx_selftest(void);
 

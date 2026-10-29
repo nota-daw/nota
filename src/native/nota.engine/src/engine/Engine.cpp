@@ -32,6 +32,7 @@ Engine::Engine()
     for (auto& b : routeBusPre_) b.assign(kMaxBlock * 2, 0.0f); // Phase D pre-FX tap
     for (auto& b : routeBusPreNext_) b.assign(kMaxBlock * 2, 0.0f);
     for (auto& s : routeSlotTrackId_) s.store(-1, std::memory_order_relaxed);
+    for (auto& s : routeSlotPart_) s.store(0, std::memory_order_relaxed);
     ensureRenderScratch(authoring_->tracks.size());
     liveGraph_.store(authoring_.get(), std::memory_order_release);
     retired_.push_back(authoring_);

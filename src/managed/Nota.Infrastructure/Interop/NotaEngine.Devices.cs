@@ -293,6 +293,45 @@ public sealed partial class NotaEngine
     public bool DeviceAcceptsSidechain(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.DeviceAcceptsSidechain(_handle, trackId, deviceIndex) != 0; }
 
+    // Sidechain sub-sources (specs/050).
+    public int TrackPartCount(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackPartCount(_handle, trackId); }
+    public string TrackPartName(int trackId, int index)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.TrackPartName(_handle, trackId, index, null, 0);
+        if (n <= 0) return "";
+        var buf = new byte[n + 1];
+        NativeMethods.TrackPartName(_handle, trackId, index, buf, buf.Length);
+        return System.Text.Encoding.UTF8.GetString(buf, 0, n);
+    }
+    public int SetDeviceSidechainKey(int trackId, int deviceIndex, int sourceTrackId, int part)
+    { ThrowIfDisposed(); return NativeMethods.DeviceSetSidechainKey(_handle, trackId, deviceIndex, sourceTrackId, part); }
+    public SidechainKey DeviceSidechainKey(int trackId, int deviceIndex)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.DeviceSidechainKey(_handle, trackId, deviceIndex, out int src, out int part) == 0
+            ? new SidechainKey(src, part) : SidechainKey.None;
+    }
+    public int SetInstrumentSidechainKey(int trackId, int sourceTrackId, int part)
+    { ThrowIfDisposed(); return NativeMethods.TrackSetInstrumentSidechainKey(_handle, trackId, sourceTrackId, part); }
+    public SidechainKey InstrumentSidechainKey(int trackId)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.TrackInstrumentSidechainKey(_handle, trackId, out int src, out int part) == 0
+            ? new SidechainKey(src, part) : SidechainKey.None;
+    }
+    public int RackChainSidechainPart(int trackId, int rackAddress, int chain, int slot)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackChainSidechainPart(_handle, trackId, rackAddress, chain, slot, out int part) == 0 ? part : SidechainKey.WholeTrack;
+    }
+    public bool RackChainSetSidechainPart(int trackId, int rackAddress, int chain, int slot, int part)
+    { ThrowIfDisposed(); return NativeMethods.RackChainSetSidechainPart(_handle, trackId, rackAddress, chain, slot, part) == 0; }
+    public int SidechainRouteCapacity() { ThrowIfDisposed(); return NativeMethods.SidechainRouteCapacity(_handle); }
+    public int SidechainRoutesFree() { ThrowIfDisposed(); return NativeMethods.SidechainRoutesFree(_handle); }
+    public bool SidechainRouteInUse(int sourceTrackId, int part)
+    { ThrowIfDisposed(); return NativeMethods.SidechainRouteInUse(_handle, sourceTrackId, part) != 0; }
+
     public void SetInstrumentSidechainSource(int trackId, int sourceTrackId)
     { ThrowIfDisposed(); NativeMethods.TrackSetInstrumentSidechainSource(_handle, trackId, sourceTrackId); }
     public int InstrumentSidechainSource(int trackId)

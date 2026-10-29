@@ -228,6 +228,40 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_midi_effect_cc_depth")]
     internal static partial float MidiEffectCcDepth(IntPtr engine, int trackId, int index);
 
+    // Sidechain sub-sources (specs/050).
+    [LibraryImport(Lib, EntryPoint = "nota_track_part_count")]
+    internal static partial int TrackPartCount(IntPtr engine, int trackId);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_part_name")]
+    internal static partial int TrackPartName(IntPtr engine, int trackId, int index, [Out] byte[]? outBytes, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_set_sidechain_key")]
+    internal static partial int DeviceSetSidechainKey(IntPtr engine, int trackId, int deviceIndex, int sourceTrackId, int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_device_sidechain_key")]
+    internal static partial int DeviceSidechainKey(IntPtr engine, int trackId, int deviceIndex, out int source, out int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_instrument_sidechain_key")]
+    internal static partial int TrackSetInstrumentSidechainKey(IntPtr engine, int trackId, int sourceTrackId, int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_instrument_sidechain_key")]
+    internal static partial int TrackInstrumentSidechainKey(IntPtr engine, int trackId, out int source, out int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_sidechain_part")]
+    internal static partial int RackChainSidechainPart(IntPtr engine, int trackId, int deviceIndex, int chain, int slot, out int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rack_chain_set_sidechain_part")]
+    internal static partial int RackChainSetSidechainPart(IntPtr engine, int trackId, int deviceIndex, int chain, int slot, int part);
+
+    [LibraryImport(Lib, EntryPoint = "nota_sidechain_route_capacity")]
+    internal static partial int SidechainRouteCapacity(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_sidechain_routes_free")]
+    internal static partial int SidechainRoutesFree(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_sidechain_route_in_use")]
+    internal static partial int SidechainRouteInUse(IntPtr engine, int sourceTrackId, int part);
+
     [LibraryImport(Lib, EntryPoint = "nota_device_set_sidechain_source")]
     internal static partial void DeviceSetSidechainSource(IntPtr engine, int trackId, int deviceIndex, int sourceTrackId);
 

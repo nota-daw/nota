@@ -643,6 +643,28 @@ public interface IAudioEngine : IDisposable
     int InstrumentSidechainSource(int trackId);
     /// <summary>Whether a track's instrument listens to a sidechain (Nota Flux).</summary>
     bool InstrumentAcceptsSidechain(int trackId);
+    // Sidechain sub-sources (specs/050): a key may name one part of the source track's
+    // instrument (a Drum Rack pad, an Instrument Rack chain, a Rhythm voice) by its current
+    // index; the engine keeps the key on that part through reorder / insert / delete of others.
+    /// <summary>Parts of the track's instrument (0 = not a multi-part instrument).</summary>
+    int TrackPartCount(int trackId);
+    /// <summary>Display name of a part: the chain name, else its instrument's.</summary>
+    string TrackPartName(int trackId, int index);
+    /// <summary>Key a device off a track (part -1) or one part of it. 0 = set, -1 = bad address
+    /// or part, -2 = no free route (the key is left as it was).</summary>
+    int SetDeviceSidechainKey(int trackId, int deviceIndex, int sourceTrackId, int part);
+    SidechainKey DeviceSidechainKey(int trackId, int deviceIndex);
+    /// <summary>The same for an instrument's React key (Nota Flux) — always the Post tap.</summary>
+    int SetInstrumentSidechainKey(int trackId, int sourceTrackId, int part);
+    SidechainKey InstrumentSidechainKey(int trackId);
+    /// <summary>The part of a rack chain child's key (save / load; after RackChainSetSidechain).</summary>
+    int RackChainSidechainPart(int trackId, int rackAddress, int chain, int slot);
+    bool RackChainSetSidechainPart(int trackId, int rackAddress, int chain, int slot, int part);
+    /// <summary>The route pool whole tracks and parts share: size, free now, and whether
+    /// (source, part) already has a route (a further key on it needs none).</summary>
+    int SidechainRouteCapacity();
+    int SidechainRoutesFree();
+    bool SidechainRouteInUse(int sourceTrackId, int part);
     /// <summary>Sidechain detector gain in dB (Phase D): how hard the source drives the effect.</summary>
     void SetDeviceSidechainGain(int trackId, int deviceIndex, float gainDb);
     float DeviceSidechainGain(int trackId, int deviceIndex);

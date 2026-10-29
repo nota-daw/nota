@@ -339,6 +339,51 @@ void nota_device_set_sidechain_tap_pre(NotaEngine* e, int32_t track_id, int32_t 
 int32_t nota_device_sidechain_tap_pre(const NotaEngine* e, int32_t track_id, int32_t device_index) {
     return e ? CENG(e)->deviceSidechainTapPre(track_id, device_index) : 0;
 }
+
+// ---- sidechain sub-sources (specs/050) ----
+int32_t nota_track_part_count(const NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackPartCount(track_id) : 0;
+}
+int32_t nota_track_part_name(const NotaEngine* e, int32_t track_id, int32_t index, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string s = CENG(e)->trackPartName(track_id, index);
+    const int32_t n = static_cast<int32_t>(s.size());
+    if (out && cap > 0) {
+        const int32_t m = std::min(n, cap - 1);
+        std::memcpy(out, s.data(), static_cast<size_t>(m));
+        out[m] = '\0';
+    }
+    return n;
+}
+int32_t nota_device_set_sidechain_key(NotaEngine* e, int32_t track_id, int32_t device_index, int32_t source_track_id,
+    int32_t part) {
+    return e ? ENG(e)->setDeviceSidechainKey(track_id, device_index, source_track_id, part) : -1;
+}
+int32_t nota_device_sidechain_key(const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t* out_source,
+    int32_t* out_part) {
+    return e && CENG(e)->deviceSidechainKey(track_id, device_index, out_source, out_part) ? 0 : -1;
+}
+int32_t nota_track_set_instrument_sidechain_key(NotaEngine* e, int32_t track_id, int32_t source_track_id, int32_t part) {
+    return e ? ENG(e)->setInstrumentSidechainKey(track_id, source_track_id, part) : -1;
+}
+int32_t nota_track_instrument_sidechain_key(const NotaEngine* e, int32_t track_id, int32_t* out_source, int32_t* out_part) {
+    return e && CENG(e)->instrumentSidechainKey(track_id, out_source, out_part) ? 0 : -1;
+}
+int32_t nota_rack_chain_sidechain_part(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t* out_part) {
+    return e && CENG(e)->rackChainSidechainPart(t, di, c, slot, out_part) ? 0 : -1;
+}
+int32_t nota_rack_chain_set_sidechain_part(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t part) {
+    return e && ENG(e)->rackChainSetSidechainPart(t, di, c, slot, part) ? 0 : -1;
+}
+int32_t nota_sidechain_route_capacity(const NotaEngine* e) {
+    return e ? nota::Engine::kSidechainRoutes : 0;
+}
+int32_t nota_sidechain_routes_free(const NotaEngine* e) {
+    return e ? CENG(e)->sidechainRoutesFree() : 0;
+}
+int32_t nota_sidechain_route_in_use(const NotaEngine* e, int32_t source_track_id, int32_t part) {
+    return e && CENG(e)->sidechainRouteInUse(source_track_id, part) ? 1 : 0;
+}
 int32_t nota_fx_selftest(void) {
     constexpr int N = 2048;
     constexpr double sr = 44100.0, kPi = 3.14159265358979323846;

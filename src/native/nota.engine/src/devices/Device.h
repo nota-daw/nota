@@ -230,6 +230,11 @@ class Device {
     void setSidechainMix(float m) { scMix_.store(std::clamp(m, 0.0f, 1.0f), std::memory_order_relaxed); }
     int32_t sidechainTapPre() const { return scTapPre_.load(std::memory_order_relaxed); }
     void setSidechainTapPre(int32_t pre) { scTapPre_.store(pre ? 1 : 0, std::memory_order_relaxed); }
+    //  - part (specs/050): which part of the source track's instrument the key comes from — a
+    //    Drum Rack pad / Instrument Rack chain (its chain uid) or a Rhythm voice (voice + 1);
+    //    0 = the whole track. Read by the engine, not the device.
+    uint64_t sidechainPart() const { return scPart_.load(std::memory_order_relaxed); }
+    void setSidechainPart(uint64_t part) { scPart_.store(part, std::memory_order_relaxed); }
 
     // Musical transport for tempo-synced devices (e.g. Beat Repeat). The engine calls
     // this on the audio thread just before process() with the block's start position in
@@ -270,6 +275,7 @@ class Device {
     std::atomic<float> scGainDb_{0.0f};
     std::atomic<float> scMix_{1.0f};
     std::atomic<int32_t> scTapPre_{0};
+    std::atomic<uint64_t> scPart_{0};
 };
 
 } // namespace nota

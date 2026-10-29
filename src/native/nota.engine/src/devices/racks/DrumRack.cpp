@@ -62,19 +62,26 @@ void DrumRack::render(float* out, int32_t frames) {
         if (!c.instrument) continue;
         const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
         const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
-        if (mute || (anySolo && !solo)) {
+        // A pad a sidechain key listens to (specs/050) renders even when muted or solo-gated:
+        // the "ghost kick" drives the key without being heard.
+        const PartTap* tap = nTaps_ > 0 ? tapFor(c.uid) : nullptr;
+        const bool silent = mute || (anySolo && !solo);
+        if (silent && !tap) {
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);
             c.ctl->retrig = false;
             continue;
         }
         std::memset(scratch_, 0, sizeof(float) * frames * 2);
         c.instrument->render(scratch_, frames);
+        if (tap) addTap(tap->pre, scratch_, frames); // Pre: the raw hit, before inserts and decay
         for (auto& d : c.devices)
             if (d && !d->bypassed()) d->process(scratch_, frames);
         const float g = c.ctl->gain.load(std::memory_order_relaxed);
         const float pan = c.ctl->pan.load(std::memory_order_relaxed);
-        const float lg = g * rv * (pan > 0.0f ? 1.0f - pan : 1.0f);
-        const float rg = g * rv * (pan < 0.0f ? 1.0f + pan : 1.0f);
+        const float pl = g * (pan > 0.0f ? 1.0f - pan : 1.0f); // the pad's own gain / pan
+        const float pr = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
+        const float lg = silent ? 0.0f : pl * rv; // a ghost pad adds nothing to the sum
+        const float rg = silent ? 0.0f : pr * rv;
 
         // Pad decay VCA: decay==1 (default) is transparent (sustain); below that,
         // each hit resets the envelope to 1 and it falls with a decay 20 ms..2 s.
@@ -101,11 +108,15 @@ void DrumRack::render(float* out, int32_t frames) {
             }
             out[i * 2] += l * lg;
             out[i * 2 + 1] += r * rg;
+            if (tap) { // Post: after inserts, decay and the pad's gain / pan, before the rack volume
+                tap->post[i * 2] += l * pl;
+                tap->post[i * 2 + 1] += r * pr;
+            }
             const float a = std::max(std::fabs(l), std::fabs(r));
             if (a > peak) peak = a;
         }
         if (shaped) c.ctl->ampEnv.store(env, std::memory_order_relaxed);
-        c.ctl->meter.store(peak * g, std::memory_order_relaxed);
+        c.ctl->meter.store(silent ? 0.0f : peak * g, std::memory_order_relaxed);
     }
 }
 

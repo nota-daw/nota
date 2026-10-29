@@ -134,6 +134,29 @@ class Instrument {
     virtual int32_t sidechainSourceTrackId() const { return -1; }
     virtual void setSidechainSourceTrackId(int32_t /*trackId*/) {}
     virtual void setSidechain(const float* /*interleaved*/, int32_t /*frames*/) {}
+    // The part of the source track's instrument React listens to (specs/050), 0 = the whole
+    // track; see Device::sidechainPart. Read by the engine.
+    uint64_t sidechainPart() const { return scPart_.load(std::memory_order_relaxed); }
+    void setSidechainPart(uint64_t part) { scPart_.store(part, std::memory_order_relaxed); }
+
+    // --- Parts (specs/050): an instrument with several sounding parts — a Drum Rack's pads, an
+    // Instrument Rack's chains (first level), Nota Rhythm's voices — lets a sidechain key listen
+    // to one of them. A part has a stable id (survives reorder / insert / delete of others; 0 is
+    // never a part) and a current index. Message thread, except setPartTaps.
+    virtual int32_t partCount() const { return 0; }
+    virtual uint64_t partId(int32_t /*index*/) const { return 0; }
+    virtual int32_t partIndex(uint64_t /*id*/) const { return -1; }
+    virtual std::string partName(int32_t /*index*/) const { return {}; }
+    // Audio thread, right before render: the parts keys listen to this block and where their
+    // signal goes. pre = the part before its own inserts, post = after its inserts and its
+    // gain / pan, before the instrument sums it (stereo interleaved, `frames` long, ADDED into).
+    // The pointers are valid for the next render only; the engine clears them with (nullptr, 0).
+    struct PartTap {
+        uint64_t part;
+        float* pre;
+        float* post;
+    };
+    virtual void setPartTaps(const PartTap* /*taps*/, int32_t /*n*/) {}
 
     // Reported processing latency, for PDC (M3-7). 0 for built-ins.
     virtual int32_t latencySamples() const { return 0; }
@@ -260,6 +283,7 @@ class Instrument {
     }
     std::atomic<bool> bypassed_{false};
     uint64_t uid_ = nextUid();
+    std::atomic<uint64_t> scPart_{0};
 };
 
 } // namespace nota

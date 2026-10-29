@@ -892,6 +892,8 @@ internal class RackChainDeviceEngineProxy : System.Reflection.DispatchProxy
             case nameof(Nota.Application.IAudioEngine.DeviceAction):          Access.ChainDeviceAction(Chain, Dev, (int)args![2]!, (int)args![3]!, (float)args![4]!); return null;
             case nameof(Nota.Application.IAudioEngine.DeviceAcceptsSidechain): return false;
             case nameof(Nota.Application.IAudioEngine.DeviceSidechainSource):  return -1;
+            case nameof(Nota.Application.IAudioEngine.DeviceSidechainKey):     return Nota.Application.SidechainKey.None;
+            case nameof(Nota.Application.IAudioEngine.SetDeviceSidechainKey):  return -1;
             case nameof(Nota.Application.IAudioEngine.DeviceSidechainGain):    return 0f;
             case nameof(Nota.Application.IAudioEngine.SetDeviceSidechainSource):
             case nameof(Nota.Application.IAudioEngine.SetDeviceSidechainGain):

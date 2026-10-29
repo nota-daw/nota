@@ -153,20 +153,84 @@ public sealed class DeviceTools(IAudioEngine engine, IEngineDispatch dispatch, I
     public Task DeviceAction(int trackId, int deviceIndex, [Description("Command id — see the device's list in this description")] int id,
         int intArg = 0, float floatArg = 0) => Mutate(() => E.DeviceAction(trackId, deviceIndex, id, intArg, floatArg));
 
-    public sealed record Sidechain(bool Accepts, int SourceTrackId, bool TapPre, float GainDb, float Mix);
+    public sealed record Sidechain(bool Accepts, int SourceTrackId, int SourcePart, string SourceName, bool TapPre, float GainDb, float Mix);
 
-    [McpServerTool(Name = "get_device_sidechain"), Description("Read a device's sidechain routing: whether it can take a key at all (the Compressor, Ceiling, Nota Shutter, Nota Auto Shift — its MIDI source —, Nota Vocoder — its carrier track — and plugins with a sidechain bus), the source track id (-1 = the device keys off its own track), whether the source is tapped pre-FX (true) or post-fader (false), the detector gain in dB and the effect's sidechain dry/wet mix (0..1).")]
-    public Task<Sidechain> GetDeviceSidechain(int trackId, int deviceIndex) => Read(() => new Sidechain(
-        E.DeviceAcceptsSidechain(trackId, deviceIndex), E.DeviceSidechainSource(trackId, deviceIndex),
-        E.DeviceSidechainTapPre(trackId, deviceIndex), E.DeviceSidechainGain(trackId, deviceIndex), E.DeviceSidechainMix(trackId, deviceIndex)));
-
-    [McpServerTool(Name = "set_device_sidechain"), Description("Route a sidechain key into a device — e.g. duck a bass or pad under the kick with a Compressor (kind 1), or make a pad speak with a vocal through Nota Vocoder (kind 26, on the vocal track, which is the modulator: set its Carrier param to Track (1.0) and pass the pad track here as the carrier; tapPre true takes the pad before its effects, gainDb trims it; with Carrier Saw or Noise it needs no source): pass the kick track as sourceTrackId, then shape the key with the Compressor's params (SC HP / SC LP / SC Q / SC Gain / Hold; External Key must be on, which is its default). Nota Shutter (kind 19) gates or ducks against a key the same way (Flip = 1 for Duck; Det HP / Det LP shape the key; External Key on, its default). Nota Auto Shift (kind 10) takes an instrument track here as its MIDI source: with Key Source = 1 (MIDI) the voice is pulled to that track's notes (its clips after its MIDI effects, even while muted). sourceTrackId -1 clears the source (the device keys off its own track). Optional: tapPre (true = the source before its effects and fader, false = after), gainDb (extra detector gain, ±24 dB). Leave an optional argument out to keep its current value. No effect on devices that take no sidechain.")]
-    public Task SetDeviceSidechain(int trackId, int deviceIndex, [Description("Key source track id, or -1 for none")] int sourceTrackId,
-        bool? tapPre = null, float? gainDb = null) => Mutate(() =>
+    // "Drums" / "Drums · Kick" / "Drums · missing" (specs/050).
+    private string KeyName(SidechainKey k)
     {
-        E.SetDeviceSidechainSource(trackId, deviceIndex, sourceTrackId);
+        if (k.Source < 0) return "none";
+        string track = E.GetTrackName(k.Source) is { Length: > 0 } nm ? nm : $"track {k.Source}";
+        return k.Part switch
+        {
+            SidechainKey.WholeTrack => track,
+            SidechainKey.Missing => track + " · missing",
+            _ => track + " · " + E.TrackPartName(k.Source, k.Part),
+        };
+    }
+
+    private static void ThrowOnKey(int r, int sourceTrackId, int part)
+    {
+        if (r == -1) throw new ArgumentException(part >= 0
+            ? $"Track {sourceTrackId} has no part {part} (see list_sidechain_sources)." : $"No such device or source track {sourceTrackId}.");
+        if (r == -2) throw new InvalidOperationException("No free sidechain route: all of them are in use (see list_sidechain_sources). The key was left as it was.");
+    }
+
+    [McpServerTool(Name = "get_device_sidechain"), Description("Read a device's sidechain routing: whether it can take a key at all (the Compressor, Ceiling, Nota Shutter, Nota Auto Shift — its MIDI source —, Nota Vocoder — its carrier track — and plugins with a sidechain bus), the source track id (-1 = the device keys off its own track), whether the source is tapped pre-FX (true) or post-fader (false), the detector gain in dB and the effect's sidechain dry/wet mix (0..1). sourcePart is the pad / chain / voice of the source track's instrument the key listens to (-1 = the whole track, -2 = the keyed part was deleted and the key is silent); sourceName reads it as \"Drums · Kick\".")]
+    public Task<Sidechain> GetDeviceSidechain(int trackId, int deviceIndex) => Read(() =>
+    {
+        var k = E.DeviceSidechainKey(trackId, deviceIndex);
+        return new Sidechain(E.DeviceAcceptsSidechain(trackId, deviceIndex), E.DeviceSidechainSource(trackId, deviceIndex), k.Part, KeyName(k),
+            E.DeviceSidechainTapPre(trackId, deviceIndex), E.DeviceSidechainGain(trackId, deviceIndex), E.DeviceSidechainMix(trackId, deviceIndex));
+    });
+
+    [McpServerTool(Name = "set_device_sidechain"), Description("Route a sidechain key into a device — e.g. duck a bass or pad under the kick with a Compressor (kind 1), or make a pad speak with a vocal through Nota Vocoder (kind 26, on the vocal track, which is the modulator: set its Carrier param to Track (1.0) and pass the pad track here as the carrier; tapPre true takes the pad before its effects, gainDb trims it; with Carrier Saw or Noise it needs no source): pass the kick track as sourceTrackId, then shape the key with the Compressor's params (SC HP / SC LP / SC Q / SC Gain / Hold; External Key must be on, which is its default). Nota Shutter (kind 19) gates or ducks against a key the same way (Flip = 1 for Duck; Det HP / Det LP shape the key; External Key on, its default). Nota Auto Shift (kind 10) takes an instrument track here as its MIDI source: with Key Source = 1 (MIDI) the voice is pulled to that track's notes (its clips after its MIDI effects, even while muted). sourceTrackId -1 clears the source (the device keys off its own track). Optional: tapPre (true = the source before its effects and fader, false = after), gainDb (extra detector gain, ±24 dB). Leave an optional argument out to keep its current value. No effect on devices that take no sidechain. To key off just one part of the source — a Drum Rack pad (duck the bass from the kick pad only), an Instrument Rack chain or a Nota Rhythm voice — pass its index as sourcePart (from list_sidechain_sources); for a part, tapPre true takes it before its own pad / chain effects, false after them and its level and pan. A muted pad still drives its key. Fails when all sidechain routes are in use.")]
+    public Task SetDeviceSidechain(int trackId, int deviceIndex, [Description("Key source track id, or -1 for none")] int sourceTrackId,
+        bool? tapPre = null, float? gainDb = null,
+        [Description("Part of the source track's instrument (pad / chain / voice index), -1 or omitted = the whole track")] int? sourcePart = null) => Mutate(() =>
+    {
+        int part = sourcePart ?? SidechainKey.WholeTrack;
+        if (sourceTrackId < 0) E.SetDeviceSidechainSource(trackId, deviceIndex, -1);
+        else ThrowOnKey(E.SetDeviceSidechainKey(trackId, deviceIndex, sourceTrackId, part), sourceTrackId, part);
         if (tapPre is { } pre) E.SetDeviceSidechainTapPre(trackId, deviceIndex, pre);
         if (gainDb is { } g) E.SetDeviceSidechainGain(trackId, deviceIndex, Math.Clamp(g, -24f, 24f));
+    });
+
+    public sealed record SidechainPart(int Index, string Name, bool RouteInUse);
+    public sealed record SidechainSource(int TrackId, string Name, bool Frozen, bool RouteInUse, SidechainPart[] Parts);
+    public sealed record SidechainSources(int RouteCapacity, int RoutesFree, SidechainSource[] Sources);
+
+    [McpServerTool(Name = "list_sidechain_sources"), Description("List what a sidechain key can listen to: every track, and for a track whose instrument has parts — a Drum Rack's pads, an Instrument Rack's chains, Nota Rhythm's eight voices — each part with its index (pass it as sourcePart to set_device_sidechain / set_instrument_sidechain). Whole tracks and parts share one pool of sidechain routes: routeInUse says a source already has one (a further key on it costs none); when routesFree is 0 only those can be picked. A frozen track's parts are silent until it is unfrozen.")]
+    public Task<SidechainSources> ListSidechainSources() => Read(() =>
+    {
+        var list = new List<SidechainSource>();
+        for (int i = 0; i < E.TrackCount; i++)
+        {
+            if (!E.TryGetTrackInfo(i, out var ti)) continue;
+            int n = E.TrackPartCount(ti.Id);
+            var parts = new SidechainPart[n];
+            for (int p = 0; p < n; p++) parts[p] = new SidechainPart(p, E.TrackPartName(ti.Id, p), E.SidechainRouteInUse(ti.Id, p));
+            list.Add(new SidechainSource(ti.Id, KeyName(new SidechainKey(ti.Id, SidechainKey.WholeTrack)), n > 0 && E.IsTrackFrozen(ti.Id),
+                E.SidechainRouteInUse(ti.Id, SidechainKey.WholeTrack), parts));
+        }
+        return new SidechainSources(E.SidechainRouteCapacity(), E.SidechainRoutesFree(), list.ToArray());
+    });
+
+    public sealed record InstrumentSidechain(bool Accepts, int SourceTrackId, int SourcePart, string SourceName);
+
+    [McpServerTool(Name = "get_instrument_sidechain"), Description("Read what a track's instrument listens to — Nota Flux's React (the synth moves with another track's level and onsets): whether the instrument listens at all, the source track id (-1 = none), the part of its instrument (-1 = the whole track, -2 = the part was deleted) and the source's name. React always hears the source after its effects.")]
+    public Task<InstrumentSidechain> GetInstrumentSidechain(int trackId) => Read(() =>
+    {
+        var k = E.InstrumentSidechainKey(trackId);
+        return new InstrumentSidechain(E.InstrumentAcceptsSidechain(trackId), k.Source, k.Part, KeyName(k));
+    });
+
+    [McpServerTool(Name = "set_instrument_sidechain"), Description("Point a track's listening instrument (Nota Flux's React) at another track, or at one pad / chain / voice of it with sourcePart (from list_sidechain_sources) — e.g. make Flux pulse with the kick pad of a Drum Rack. sourceTrackId -1 clears it. Fails when all sidechain routes are in use.")]
+    public Task SetInstrumentSidechain(int trackId, [Description("Source track id, or -1 for none")] int sourceTrackId,
+        [Description("Part of the source track's instrument, -1 or omitted = the whole track")] int? sourcePart = null) => Mutate(() =>
+    {
+        int part = sourcePart ?? SidechainKey.WholeTrack;
+        if (sourceTrackId < 0) E.SetInstrumentSidechainSource(trackId, -1);
+        else ThrowOnKey(E.SetInstrumentSidechainKey(trackId, sourceTrackId, part), sourceTrackId, part);
     });
 
     public sealed record DynamicsReading(string Summary, double GainReductionDb, double InputPeakDb, double InputRmsDb,

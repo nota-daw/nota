@@ -365,7 +365,11 @@ void RackInstrument::render(float* out, int32_t frames) {
         if (!c.instrument) continue;
         const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
         const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
-        if (mute || (anySolo && !solo)) {
+        // A chain a sidechain key listens to (specs/050) renders even when muted or solo-gated
+        // — the "ghost" chain feeds its key without being heard.
+        const PartTap* tap = nTaps_ > 0 ? tapFor(c.uid) : nullptr;
+        const bool silent = mute || (anySolo && !solo);
+        if (silent && !tap) {
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);
             // A silent MIDI chain still takes its notes, so a note held across an unmute ends.
             const int32_t ci = static_cast<int32_t>(&c - st->chains.data());
@@ -399,12 +403,23 @@ void RackInstrument::render(float* out, int32_t frames) {
         } else {
             c.instrument->render(scratch_, frames);
         }
+        if (tap) addTap(tap->pre, scratch_, frames); // Pre: the chain before its inserts
         for (auto& d : c.devices)
             if (d && !d->bypassed()) d->process(scratch_, frames);
         const float g = c.ctl->gain.load(std::memory_order_relaxed);
         const float pan = c.ctl->pan.load(std::memory_order_relaxed);
-        const float lg = g * rv * (pan > 0.0f ? 1.0f - pan : 1.0f);
-        const float rg = g * rv * (pan < 0.0f ? 1.0f + pan : 1.0f);
+        const float pl = g * (pan > 0.0f ? 1.0f - pan : 1.0f); // the chain's own gain / pan
+        const float pr = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
+        if (tap) // Post: after its inserts and gain / pan, before the rack volume and the sum
+            for (int32_t i = 0; i < frames; ++i) {
+                tap->post[i * 2] += scratch_[i * 2] * pl;
+                tap->post[i * 2 + 1] += scratch_[i * 2 + 1] * pr;
+            }
+        if (silent) {
+            c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+            continue;
+        }
+        const float lg = pl * rv, rg = pr * rv;
         float peak = 0.0f;
         for (int32_t i = 0; i < frames; ++i) {
             const float l = scratch_[i * 2], r = scratch_[i * 2 + 1];
@@ -416,6 +431,27 @@ void RackInstrument::render(float* out, int32_t frames) {
         c.ctl->meter.store(peak * g, std::memory_order_relaxed);
     }
     blockPos_ += frames; // the next segment of this block starts here
+}
+
+// ---- parts (specs/050) ------------------------------------------------------------------
+int32_t RackInstrument::partCount() const {
+    RackState* st = live();
+    return st ? static_cast<int32_t>(st->chains.size()) : 0;
+}
+
+int32_t RackInstrument::partIndex(uint64_t id) const {
+    RackState* st = live();
+    if (!st || id == 0) return -1;
+    for (size_t i = 0; i < st->chains.size(); ++i)
+        if (st->chains[i].uid == id) return static_cast<int32_t>(i);
+    return -1;
+}
+
+std::string RackInstrument::partName(int32_t index) const {
+    std::string n = chainName(index);
+    if (!n.empty()) return n;
+    Instrument* in = chainInstrument(index);
+    return in ? in->displayName() : std::string{};
 }
 
 std::shared_ptr<Instrument> RackInstrument::clone() const {

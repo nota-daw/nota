@@ -200,6 +200,19 @@ class RhythmMachine final : public Instrument {
 
     void render(float* out, int32_t frames) override;
 
+    // Parts (specs/050): each voice is a sidechain sub-source; voice v's id is v + 1. Pre = the
+    // voice (with its pan) before its voice FX, Post = after them, before Glue and Volume.
+    int32_t partCount() const override { return kVoices; }
+    uint64_t partId(int32_t index) const override { return index >= 0 && index < kVoices ? static_cast<uint64_t>(index) + 1 : 0; }
+    int32_t partIndex(uint64_t id) const override { return id >= 1 && id <= kVoices ? static_cast<int32_t>(id) - 1 : -1; }
+    std::string partName(int32_t index) const override {
+        return index >= 0 && index < kVoices ? std::to_string(index + 1) + " " + kVoiceNames[index] : std::string{};
+    }
+    void setPartTaps(const PartTap* taps, int32_t n) override {
+        taps_ = taps;
+        nTaps_ = n;
+    }
+
     // Sleep contract: see the header note. noteOn/action/pluginParamSet wake, as does a
     // transport start (a stopped machine with a pattern must not sleep through the downbeat).
     bool hasTail() const override { return true; }
@@ -295,6 +308,8 @@ class RhythmMachine final : public Instrument {
     std::string kit_;                      // factory kit label (message thread)
     std::string macroNames_[kMacros];      // custom macro names ("" = "Macro N"; message thread)
     float mix_[kChunk * 2];                // audio thread: the chunk's sum
+    const PartTap* taps_ = nullptr; // this block's keyed voices (specs/050); audio thread
+    int32_t nTaps_ = 0;
     float vbuf_[kVoices][kChunk * 2];      // audio thread: FX voices, pre-chain
 
     // Auto-sleep hangover.

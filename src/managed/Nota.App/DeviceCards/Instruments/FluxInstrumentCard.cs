@@ -231,10 +231,17 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             Padding = new Thickness(6, 0, 5, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = new DockPanel { Children = { Docked(srcChevron, Dock.Right), srcText } },
         };
-        ToolTip.SetTip(srcField, "Choose the track Flux listens to");
-        void SetSource(int id)
+        ToolTip.SetTip(srcField, "Choose the track Flux listens to — or one pad, chain or voice of it");
+        // The source may be one pad / chain / voice of a track (specs/050); React always hears it
+        // after its effects (Post).
+        string KeyName()
         {
-            engine.SetInstrumentSidechainSource(track, id);
+            var k = engine.InstrumentSidechainKey(track);
+            return k.Source >= 0 && k.Part != SidechainKey.WholeTrack ? SidechainSourcePicker.Name(engine, k, "No source") : SourceName(k.Source);
+        }
+        void SetSource(SidechainKey k)
+        {
+            if (engine.SetInstrumentSidechainKey(track, k.Source, k.Part) == -2) return;   // no free route
             live = engine.InstrumentSidechainSource(track) >= 0;
             onsetLog.Clear(); perBar = 0;
             ctx.NotifyChanged();
@@ -244,17 +251,22 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         {
             if (!e.GetCurrentPoint(srcField).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
-            int cur = engine.InstrumentSidechainSource(track);
+            var cur = engine.InstrumentSidechainKey(track);
             var flyout = new MenuFlyout();
-            var none = new MenuItem { Header = "No source", ToggleType = MenuItemToggleType.Radio, IsChecked = cur < 0 };
-            none.Click += (_, _) => SetSource(-1);
+            var none = new MenuItem { Header = "No source", ToggleType = MenuItemToggleType.Radio, IsChecked = cur.Source < 0 };
+            none.Click += (_, _) => SetSource(SidechainKey.None);
             flyout.Items.Add(none);
+            var number = new Dictionary<int, int>();   // track id → its row number
             for (int i = 0; i < engine.TrackCount; i++)
+                if (engine.TryGetTrackInfo(i, out var ti)) number[ti.Id] = i + 1;
+            foreach (var en in SidechainSourcePicker.Entries(engine, track, cur))
             {
-                if (!engine.TryGetTrackInfo(i, out var ti) || ti.Id == track) continue;
-                int id = ti.Id;
-                var mi = new MenuItem { Header = $"{i + 1} · {SourceName(id)}", ToggleType = MenuItemToggleType.Radio, IsChecked = id == cur };
-                mi.Click += (_, _) => SetSource(id);
+                var k = en.Key;
+                string header = en.IsPart ? SidechainSourcePicker.Name(engine, k) : $"{number[k.Source]} · {SourceName(k.Source)}";
+                // No free route, or a frozen track's part: shown disabled with the reason.
+                var mi = new MenuItem { Header = header, ToggleType = MenuItemToggleType.Radio, IsChecked = k == cur, IsEnabled = en.Enabled };
+                if (en.Tip != null) ToolTip.SetTip(mi, en.Tip);
+                mi.Click += (_, _) => SetSource(k);
                 flyout.Items.Add(mi);
             }
             flyout.ShowAt(srcField);
@@ -294,8 +306,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             listen.Knob.IsDim = !live;
             reactCap.Foreground = live ? NotaPalette.TealBright : TextTertiary;
             reactSub.Foreground = live ? NotaPalette.TextMuted : TextDisabled;
-            int src = engine.InstrumentSidechainSource(track);
-            srcText.Text = SourceName(src);
+            srcText.Text = KeyName();
             srcText.Foreground = live ? TextPrimary : TextDisabled;
             srcField.Background = live ? NotaPalette.SurfaceRaised : NotaPalette.BgSunken;
             targetHint.Text = TargetLine();
@@ -389,7 +400,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
                 for (int i = 0; i < 4; i++) parts.Add($"{WorldNames[i]} {Pct((float)w[i])}");
                 return $"Vector x {Coord(G("vecx"))} · y {Coord(G("vecy"))} → {string.Join(" · ", parts)} · react off";
             }
-            string src = SourceName(engine.InstrumentSidechainSource(track));
+            string src = KeyName();
             string what = TargetIdx() switch
             {
                 3 => $"vector x {Coord(G("vecx"))} → {Coord(effX)}",

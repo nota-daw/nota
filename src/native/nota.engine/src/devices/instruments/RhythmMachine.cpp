@@ -661,6 +661,10 @@ void RhythmMachine::render(float* out, int32_t frames) {
     // Per-block voice param snapshots (floats cross into the voice DSP by value).
     RhythmVoiceDsp::Params vp[kVoices];
     for (int v = 0; v < kVoices; ++v) vp[v] = voiceParams(v);
+    // Voices a sidechain key listens to (specs/050): where their Pre / Post go this block.
+    const PartTap* tap[kVoices] = {};
+    for (int32_t t = 0; t < nTaps_; ++t)
+        if (const int32_t v = partIndex(taps_[t].part); v >= 0) tap[v] = &taps_[t];
     float ownPeak = 0.0f;
     for (int32_t base = 0; base < frames; base += kChunk) {
         const int32_t n = std::min<int32_t>(kChunk, frames - base);
@@ -714,6 +718,16 @@ void RhythmMachine::render(float* out, int32_t frames) {
                 float* dst = hasFx[v] ? vbuf_[v] : mix_;
                 dst[j * 2] += sl * gl;
                 dst[j * 2 + 1] += sr * gr;
+                if (tap[v]) {
+                    float* pre = tap[v]->pre + (base + j) * 2;
+                    pre[0] += sl * gl;
+                    pre[1] += sr * gr;
+                    if (!hasFx[v]) { // no voice FX: Post is the same signal
+                        float* post = tap[v]->post + (base + j) * 2;
+                        post[0] += sl * gl;
+                        post[1] += sr * gr;
+                    }
+                }
             }
         }
 
@@ -724,6 +738,9 @@ void RhythmMachine::render(float* out, int32_t frames) {
                 for (auto& d : fx->chain[v])
                     if (d && !d->bypassed()) d->process(vbuf_[v], n);
                 for (int32_t k = 0; k < n * 2; ++k) mix_[k] += std::isfinite(vbuf_[v][k]) ? vbuf_[v][k] : 0.0f;
+                if (tap[v])
+                    for (int32_t k = 0; k < n * 2; ++k)
+                        tap[v]->post[base * 2 + k] += std::isfinite(vbuf_[v][k]) ? vbuf_[v][k] : 0.0f;
             }
 
         // --- bus: glue + volume ---

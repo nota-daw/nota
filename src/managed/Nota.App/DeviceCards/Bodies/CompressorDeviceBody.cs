@@ -352,44 +352,28 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         // ======================================================================
         // CENTRE — Sidechain
         // ======================================================================
-        var srcIds = new List<int> { -1 };
-        var srcNames = new List<string> { "Internal" };
-        for (int i = 0; i < engine.TrackCount; i++)
-        {
-            if (!engine.TryGetTrackInfo(i, out var ti) || ti.Id == track) continue;
-            srcIds.Add(ti.Id);
-            srcNames.Add(TrackNames.Of(engine, ti));
-        }
-        string SourceName() { int k = srcIds.IndexOf(engine.DeviceSidechainSource(track, di)); return k > 0 ? srcNames[k] : "Internal"; }
+        // The key source: a track, or one pad / chain / voice of it (specs/050).
+        var picker = new SidechainSourcePicker(engine, track, () => engine.DeviceSidechainKey(track, di),
+            (src, part) => engine.SetDeviceSidechainKey(track, di, src, part));
+        string SourceName() => picker.SourceName();
         bool ExtActive() => Sc(S_ExtKey) > 0.5;
 
         Control SidechainTab()
         {
-            var combo = new ComboBox { FontSize = 8, Height = 18, MinHeight = 18, MinWidth = 92, Padding = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Center };
-            foreach (var n in srcNames) combo.Items.Add(n);
-            combo.SelectedIndex = Math.Max(0, srcIds.IndexOf(engine.DeviceSidechainSource(track, di)));
-            bool syncing = false;
+            var combo = picker.Combo;
             // The source can change elsewhere (MCP, undo): follow it while the list is closed.
-            readouts.Add(() =>
+            readouts.Add(picker.Sync);
+            picker.Picked += k =>
             {
-                if (combo.IsDropDownOpen) return;
-                int want = Math.Max(0, srcIds.IndexOf(engine.DeviceSidechainSource(track, di)));
-                if (combo.SelectedIndex != want) { syncing = true; combo.SelectedIndex = want; syncing = false; }
-            });
-            combo.SelectionChanged += (_, _) =>
-            {
-                int s = combo.SelectedIndex;
-                if (syncing || s < 0 || s >= srcIds.Count) return;
-                engine.SetDeviceSidechainSource(track, di, srcIds[s]);
                 // Picking a source means using it.
-                if (srcIds[s] >= 0 && !On(External)) SetP(External, 1);
+                if (k.Source >= 0 && !On(External)) SetP(External, 1);
                 ctx.NotifyChanged();
             };
-            ToolTip.SetTip(combo, "Key source — Internal keys off this track; pick another track to duck or pump against it");
+            ToolTip.SetTip(combo, "Key source — Internal keys off this track; pick another track, or one pad or chain of it, to duck or pump against it");
             var tap = Segments(new[] { "Pre", "Post" }, () => engine.DeviceSidechainTapPre(track, di) ? 0 : 1,
                 i => { engine.SetDeviceSidechainTapPre(track, di, i == 0); ctx.NotifyChanged(); }, out var tapSync);
             readouts.Add(tapSync);
-            ToolTip.SetTip(tap, "Where the source track is tapped: before its effects and fader, or after");
+            ToolTip.SetTip(tap, "Where the source is tapped: before its effects and fader, or after — for a pad or chain, before its own effects, or after them and its level");
             var info = Mono("", 7, TextTertiary); info.HorizontalAlignment = HorizontalAlignment.Right;
             readouts.Add(() => info.Text = NotaNum.F($"HP {HpF(P(ScHP))} · LP {LpF(P(ScLP))} · Q {P(ScQ):0.0}"));
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), ColumnSpacing = 6, Height = 18 };

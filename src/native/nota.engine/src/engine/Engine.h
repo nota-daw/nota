@@ -274,6 +274,8 @@ class Engine {
         float* gainDb, float* mix) const;
     bool rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t tapPre,
         float gainDb, float mix);
+    bool rackChainSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* part) const;
+    bool rackChainSetSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t part);
     int32_t nestedChainIndex(int32_t trackId, int32_t host, uint64_t uid) const;
 
     // --- automation write / record (M9-C) ---
@@ -853,6 +855,25 @@ class Engine {
     int32_t instrumentSidechainSource(int32_t trackId) const;
     bool instrumentAcceptsSidechain(int32_t trackId) const;
     void recomputeRouting(); // message thread: assign route-bus slots to source tracks
+    // Sidechain sub-sources (specs/050). Parts are addressed by their current index on the
+    // source track's instrument (-1 = the whole track); the key keeps the part's stable id.
+    // Set: 0 done, -1 bad address / part, -2 no free route (the key is left as it was).
+    // Get: *part -1 whole track, -2 the keyed part is gone (the key is silent).
+    int32_t trackPartCount(int32_t trackId) const;
+    std::string trackPartName(int32_t trackId, int32_t index) const;
+    int32_t setDeviceSidechainKey(int32_t trackId, int32_t deviceIndex, int32_t sourceTrackId, int32_t part);
+    bool deviceSidechainKey(int32_t trackId, int32_t deviceIndex, int32_t* source, int32_t* part) const;
+    int32_t setInstrumentSidechainKey(int32_t trackId, int32_t sourceTrackId, int32_t part);
+    bool instrumentSidechainKey(int32_t trackId, int32_t* source, int32_t* part) const;
+    int32_t sidechainRoutesFree() const;
+    static constexpr int32_t kSidechainRoutes = 16; // == kMaxRoutes (private)
+    bool sidechainRouteInUse(int32_t sourceTrackId, int32_t part) const;
+    // A key's part as an index on its source track now (-1 whole track, -2 gone), and back
+    // (index -1 → 0; an index that isn't a part → no value). Message thread.
+    int32_t partIndexOf(int32_t sourceTrackId, uint64_t part) const;
+    bool partIdAt(int32_t sourceTrackId, int32_t index, uint64_t* part) const;
+    template <typename Consumer>
+    int32_t applySidechainKey(Consumer& c, int32_t src, uint64_t part);
     // Open/close a hosted plugin's native GUI. deviceIndex < 0 = the instrument;
     // otherwise the effect at that chain position. Message thread only.
     void openTrackEditor(int32_t trackId, int32_t deviceIndex);
@@ -2176,14 +2197,38 @@ class Engine {
     // the cost of one block of detector latency — inaudible after attack/release.
     // Each source slot mirrors two tap points so consumers can pick (Phase D):
     // routeBus{Post,Pre}_ = post-FX post-fader and pre-FX pre-fader signal.
-    static constexpr int32_t kMaxRoutes = 8;
+    // A slot may also mirror one part of the source's instrument (specs/050): a Drum Rack pad,
+    // an Instrument Rack chain or a Rhythm voice, filled from inside the instrument's render
+    // (Instrument::setPartTaps). For a part, Pre = the part before its own inserts and Post =
+    // after its inserts and gain / pan, before the instrument sums it. Whole tracks and parts
+    // share the pool.
+    static constexpr int32_t kMaxRoutes = kSidechainRoutes;
     std::array<std::vector<float>, kMaxRoutes> routeBus_, routeBusNext_;       // post-FX (post-fader)
     std::array<std::vector<float>, kMaxRoutes> routeBusPre_, routeBusPreNext_; // pre-FX (pre-fader)
     std::atomic<int32_t> routeSlotTrackId_[kMaxRoutes]; // which source track each slot mirrors (-1 = free)
-    int32_t routeSlotForTrack(int32_t trackId) const {  // audio + message thread; scan is tiny
-        for (int32_t s = 0; s < kMaxRoutes; ++s)
-            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId) return s;
+    std::atomic<uint64_t> routeSlotPart_[kMaxRoutes];   // which part of it (0 = the whole track)
+    // recomputeRouting fills slots 0..count-1 in order, so lookups scan only the used ones — a
+    // project without sidechains pays one load per lookup, and these run several times per
+    // track per block. A reroute racing a block can mis-key that one block (as it always could:
+    // the table is cleared and refilled in place), never touch a buffer out of range.
+    std::atomic<int32_t> routeSlotCount_{0};
+    // Audio + message thread.
+    int32_t routeSlotFor(int32_t trackId, uint64_t part) const {
+        const int32_t n = routeSlotCount_.load(std::memory_order_acquire);
+        for (int32_t s = 0; s < n; ++s)
+            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId &&
+                routeSlotPart_[s].load(std::memory_order_relaxed) == part)
+                return s;
         return -1;
+    }
+    int32_t routeSlotForTrack(int32_t trackId) const { return routeSlotFor(trackId, 0); }
+    // Whether any slot (whole track or one of its parts) mirrors this track: it keeps rendering
+    // while muted or solo-gated, for its taps.
+    bool trackFeedsRoute(int32_t trackId) const {
+        const int32_t n = routeSlotCount_.load(std::memory_order_acquire);
+        for (int32_t s = 0; s < n; ++s)
+            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId) return true;
+        return false;
     }
 };
 
