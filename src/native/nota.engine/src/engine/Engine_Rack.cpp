@@ -947,7 +947,13 @@ int32_t Engine::rackDuplicateChain(int32_t t, int32_t di, int32_t c) {
         for (int32_t j = c; j < n; ++j)
             if (r->chainMidiDeviceCount(j) > 0 && j + 1 >= RackInstrument::kMaxMidiChains) return -1;
     }
-    return rackForEdit(t, di)->duplicateChain(c);
+    auto* fork = rackForEdit(t, di);
+    const int32_t at = fork ? fork->duplicateChain(c) : -1;
+    if (at < 0) return at;
+    // The copy keeps its children's keys and Arp targets: give them their routes.
+    recomputeRouting();
+    if (ccDestsSet_) republishCcRoutes(t);
+    return at;
 }
 bool Engine::rackCheckpoint(int32_t t, int32_t di) { return rackForEdit(t, di) != nullptr; }
 int64_t Engine::rackChainId(int32_t t, int32_t di, int32_t c) const {

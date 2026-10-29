@@ -1963,6 +1963,7 @@ void Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, in
     case LeafPath::Frozen: fillFrozen(t, dst, frames, blockStart, spb); break;
     case LeafPath::Monitor: renderMonitorInput(g, t, dst, frames); break;
     case LeafPath::SessionInst:
+        feedInstrumentKeys(g, t, frames); // a Session clip plays the same instrument: its keys too
         feedPartTaps(t); // a Session clip plays the same pads: their keys too (specs/050)
         renderSessionSlotRaw(t, dst, frames, spb);
         if (t.instrument) t.instrument->setPartTaps(nullptr, 0);
@@ -1975,14 +1976,7 @@ void Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, in
     case LeafPath::Instrument:
         if (t.instrument) {
             t.instrument->setTransportInfo(ti); // hosted-plugin sync
-            // React (Nota Flux): hand a listening instrument its source track's
-            // previous-block, post-fader signal just before it renders.
-            const int32_t iSc = t.instrument->sidechainSourceTrackId();
-            if (iSc >= 0) {
-                t.instrument->setSidechain(keyBuffer(iSc, t.instrument->sidechainPart(), false), frames);
-            }
-            // Keyed devices and instruments inside an Instrument Rack's chains (specs/044).
-            if (auto* r = t.instrument->asRack()) feedRackChildKeys(g, *r, t.id(), frames);
+            feedInstrumentKeys(g, t, frames);
         }
         feedPartTaps(t);
         renderInstrumentRaw(g, t, dst, frames, blockStart, spb, playing);
@@ -2028,6 +2022,16 @@ void Engine::feedDeviceKey(Graph* g, Device& d, int32_t ownTrackId, int32_t fram
     } else if (d.wantsOwnMidiKey())
         feedMidiKey(g, d, ownTrackId); // no key track: this track's notes
     if (auto* r = d.asRack()) feedRackChildKeys(g, *r, ownTrackId, frames);
+}
+
+// React (Nota Flux): hand a listening instrument its source track's previous-block, post-fader
+// signal just before it renders; and the keyed devices and instruments inside an Instrument
+// Rack's chains theirs (specs/044). Audio thread.
+void Engine::feedInstrumentKeys(Graph* g, Track& t, int32_t frames) {
+    if (!t.instrument) return;
+    const int32_t iSc = t.instrument->sidechainSourceTrackId();
+    if (iSc >= 0) t.instrument->setSidechain(keyBuffer(iSc, t.instrument->sidechainPart(), false), frames);
+    if (auto* r = t.instrument->asRack()) feedRackChildKeys(g, *r, t.id(), frames);
 }
 
 void Engine::feedRackChildKeys(Graph* g, const RackCore& r, int32_t ownTrackId, int32_t frames) {

@@ -1392,6 +1392,7 @@ class Engine {
     void feedMidiKey(Graph* g, Device& d, int32_t srcTrackId);
     // Sidechain / MIDI key for a device and, for a rack, its chain children (specs/044).
     void feedDeviceKey(Graph* g, Device& d, int32_t ownTrackId, int32_t frames);
+    void feedInstrumentKeys(Graph* g, Track& t, int32_t frames);
     void feedRackChildKeys(Graph* g, const RackCore& r, int32_t ownTrackId, int32_t frames);
     void renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double spb);
     // Session P0 (audio thread): queue a follow action / Repeat retrigger before the launch

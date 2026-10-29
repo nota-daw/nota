@@ -1143,10 +1143,10 @@ int32_t Engine::insertDeviceClone(int32_t trackId, std::shared_ptr<Device> dev, 
     const int32_t end = static_cast<int32_t>(nt->devices.size());
     const int32_t at = (atIndex < 0 || atIndex > end) ? end : atIndex;
     nt->devices.insert(nt->devices.begin() + at, dev);
-    // An insert is a move from just past the end: the lanes and CV links after it shift up.
-    if (at != end) remapAutomationAfterDeviceChange(*nt, false, -1, end, at);
-    republishWithTrack(trackId, nt);
-    if (at != end) remapCvLinksAfterDeviceChange(trackId, -1, end, at);
+    // The lanes, CV links and Arp CC targets on the devices after it shift up; the copy has none.
+    publishWithRefMap(trackId, nt, [at](const DeviceRef& r) -> DeviceRef {
+        return r.fam == 0 && r.idx >= at ? DeviceRef{0, r.idx + 1, r.uid, r.slot} : r;
+    });
     recomputePdc();
     return at;
 }
@@ -1167,8 +1167,10 @@ int32_t Engine::insertMidiEffectClone(int32_t trackId, std::shared_ptr<MidiDevic
     const int32_t end = static_cast<int32_t>(nt->midiEffects.size());
     const int32_t at = (atIndex < 0 || atIndex > end) ? end : atIndex;
     nt->midiEffects.insert(nt->midiEffects.begin() + at, md);
-    if (at != end) remapAutomationAfterDeviceChange(*nt, true, -1, end, at);
-    republishWithTrack(trackId, nt);
+    // As for an audio effect; a duplicated Arp's own target is rewritten with the rest.
+    publishWithRefMap(trackId, nt, [at](const DeviceRef& r) -> DeviceRef {
+        return r.fam == 1 && r.idx >= at ? DeviceRef{1, r.idx + 1, r.uid, r.slot} : r;
+    });
     return at;
 }
 
