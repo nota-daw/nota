@@ -336,6 +336,12 @@ public sealed partial class NotaEngine
         ThrowIfDisposed();
         return NativeMethods.RackChainSidechainPart(_handle, trackId, rackAddress, chain, slot, out int part) == 0 ? part : SidechainKey.WholeTrack;
     }
+    public int RackChainSetSidechainKey(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc, int part)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackChainSetSidechainKey(_handle, trackId, rackAddress, chain, slot, sc.SourceTrack, part,
+                                                      sc.TapPre ? 1 : 0, sc.GainDb, sc.Mix);
+    }
     public int RackChainSetSidechainPart(int trackId, int rackAddress, int chain, int slot, int part)
     { ThrowIfDisposed(); return NativeMethods.RackChainSetSidechainPart(_handle, trackId, rackAddress, chain, slot, part); }
     public int SidechainRouteCapacity() { ThrowIfDisposed(); return NativeMethods.SidechainRouteCapacity(_handle); }

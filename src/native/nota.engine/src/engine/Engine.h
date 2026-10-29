@@ -298,6 +298,8 @@ class Engine {
         float gainDb, float mix);
     bool rackChainSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* part) const;
     int32_t rackChainSetSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t part);
+    int32_t rackChainSetKey(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t part,
+        int32_t tapPre, float gainDb, float mix);
     int32_t nestedChainIndex(int32_t trackId, int32_t host, uint64_t uid) const;
 
     // --- automation write / record (M9-C) ---

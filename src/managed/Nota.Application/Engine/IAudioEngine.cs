@@ -666,6 +666,9 @@ public interface IAudioEngine : IDisposable
     /// <summary>The part of a rack chain child's key (save / load; after RackChainSetSidechain).</summary>
     int RackChainSidechainPart(int trackId, int rackAddress, int chain, int slot);
     int RackChainSetSidechainPart(int trackId, int rackAddress, int chain, int slot, int part);   // 0 / -1 / -2 as above
+    /// <summary>A rack child's whole key in one step (source, part — -1 whole track — and shaping), so
+    /// only the final key meets the route check. 0 / -1 / -2 as above; on -2 nothing changes.</summary>
+    int RackChainSetSidechainKey(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc, int part);
     /// <summary>The route pool whole tracks and parts share: size, free now, and whether
     /// (source, part) already has a route (a further key on it needs none).</summary>
     int SidechainRouteCapacity();

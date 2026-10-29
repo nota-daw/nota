@@ -38,6 +38,11 @@ NOTA_API int32_t nota_rack_chain_sidechain_part(const NotaEngine* engine, int32_
                                                 int32_t chain, int32_t slot, int32_t* out_part);
 NOTA_API int32_t nota_rack_chain_set_sidechain_part(NotaEngine* engine, int32_t track_id, int32_t device_index,
                                                     int32_t chain, int32_t slot, int32_t part);
+/* The whole key in one step (source, part, tap, gain, mix): only the final key meets the
+ * route check; -2 leaves key and shaping as they were. Used by project load. */
+NOTA_API int32_t nota_rack_chain_set_sidechain_key(NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                   int32_t chain, int32_t slot, int32_t source_track, int32_t part,
+                                                   int32_t tap_pre, float gain_db, float mix);
 
 /* Route pool: capacity (16), free slots now, and whether (source, part) already has a slot
  * (a further consumer of it needs no new one). */

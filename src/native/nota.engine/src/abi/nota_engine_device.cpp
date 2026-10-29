@@ -391,6 +391,10 @@ int32_t nota_track_instrument_sidechain_key(const NotaEngine* e, int32_t track_i
 int32_t nota_rack_chain_sidechain_part(const NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t* out_part) {
     return e && CENG(e)->rackChainSidechainPart(t, di, c, slot, out_part) ? 0 : -1;
 }
+int32_t nota_rack_chain_set_sidechain_key(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t src,
+    int32_t part, int32_t pre, float gain, float mix) {
+    return e ? ENG(e)->rackChainSetKey(t, di, c, slot, src, part, pre, gain, mix) : -1;
+}
 int32_t nota_rack_chain_set_sidechain_part(NotaEngine* e, int32_t t, int32_t di, int32_t c, int32_t slot, int32_t part) {
     return e ? ENG(e)->rackChainSetSidechainPart(t, di, c, slot, part) : -1;
 }

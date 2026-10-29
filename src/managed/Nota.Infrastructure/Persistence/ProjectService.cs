@@ -935,13 +935,8 @@ public sealed class ProjectService
         {
             if (n.Source >= newTrackIds.Count || newTrackIds[n.Source] <= 0) continue;
             var sc = new NestedSidechain(newTrackIds[n.Source], n.TapPre, n.GainDb, n.Mix);
-            int rc = engine.RackChainSetSidechain(track, n.Host, n.Chain, n.Slot, sc);
-            if (rc == 0 && n.Part >= 0) rc = engine.RackChainSetSidechainPart(track, n.Host, n.Chain, n.Slot, n.Part);
-            if (rc == -2)
-            {
-                unrouted++;
-                engine.RackChainSetSidechain(track, n.Host, n.Chain, n.Slot, sc with { SourceTrack = -1 });
-            }
+            // Source and part together: only the saved key itself meets the route check.
+            if (engine.RackChainSetSidechainKey(track, n.Host, n.Chain, n.Slot, sc, n.Part) == -2) unrouted++;
         }
         // Instrument React source (Nota Flux), same deferral.
         foreach (var (track, srcIndex, part) in instScDeferred)

@@ -729,35 +729,43 @@ bool Engine::rackChainSidechain(int32_t t, int32_t host, int32_t chain, int32_t 
 }
 // Keys go through the same route-pool check as a track device's (specs/050): one that would
 // need a route the pool can't give — or would push out another listener's — is refused with -2
-// and the key is left as it was.
+// and the key, tap, gain and mix are left as they were.
 int32_t Engine::rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src,
+    int32_t tapPre, float gainDb, float mix) {
+    return rackChainSetKey(t, host, chain, slot, src, -1, tapPre, gainDb, mix);
+}
+// Source and part in one step, so only the final key is checked against the pool (a whole-track
+// key on the way to a part could be refused while the part itself already has a route).
+int32_t Engine::rackChainSetKey(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t part,
     int32_t tapPre, float gainDb, float mix) {
     auto* r = rackCoreAt(t, host);
     if (!r || isNestedRack(host)) return -1;
-    if (slot >= 0) {
-        Device* d = r->chainDeviceAt(chain, slot);
-        if (!d) return -1;
+    Device* d = slot >= 0 ? r->chainDeviceAt(chain, slot) : nullptr;
+    Instrument* in = slot < 0 ? r->chainInstrument(chain) : nullptr;
+    if (!d && !in) return -1;
+    int32_t rc = 0;
+    if (src < 0) {
+        if (d) {
+            d->setSidechainSourceTrackId(-1);
+            d->setSidechainPart(0);
+        } else {
+            in->setSidechainSourceTrackId(-1);
+            in->setSidechainPart(0);
+        }
+        recomputeRouting();
+    } else {
+        uint64_t id = 0;
+        if (!findTrackAuthoring(src) || !partIdAt(src, part, &id)) return -1;
+        if (d && part >= 0 && d->wantsMidiKey()) return -1; // a MIDI key takes whole tracks only
+        const bool routed = t != kMasterTrackId;
+        rc = d ? applySidechainKey(*d, src, id, routed) : applySidechainKey(*in, src, id, routed);
+    }
+    if (rc == 0 && d) { // shaping follows the key only once the key is in
         d->setSidechainTapPre(tapPre);
         d->setSidechainGainDb(gainDb);
         d->setSidechainMix(mix);
-        // a whole-track key; rackChainSetSidechainPart narrows it
-        if (src < 0) {
-            d->setSidechainSourceTrackId(-1);
-            d->setSidechainPart(0);
-            recomputeRouting();
-            return 0;
-        }
-        return applySidechainKey(*d, src, 0, t != kMasterTrackId);
     }
-    Instrument* in = r->chainInstrument(chain);
-    if (!in) return -1;
-    if (src < 0) {
-        in->setSidechainSourceTrackId(-1);
-        in->setSidechainPart(0);
-        recomputeRouting();
-        return 0;
-    }
-    return applySidechainKey(*in, src, 0, t != kMasterTrackId);
+    return rc;
 }
 // The part of a chain child's key (specs/050), as an index on its source track (-1 whole
 // track, -2 gone). For save / load, after rackChainSetSidechain.

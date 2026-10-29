@@ -595,10 +595,33 @@ internal static class SidechainPartTests
             e.SetDeviceSidechainKey(host, d, srcs[i], -1);
         }
         int extra = e.AddAudioTrack();
-        int rc = e.RackChainSetSidechain(rig.Bass, rack, 0, 0, new NestedSidechain(extra, false, 0f, 1f));
+        float gainBefore = e.RackChainSidechain(rig.Bass, rack, 0, 0)?.GainDb ?? float.NaN;
+        int rc = e.RackChainSetSidechain(rig.Bass, rack, 0, 0, new NestedSidechain(extra, true, 12f, 0.5f));
         yield return (e.SidechainRoutesFree() == 0 && rc == -2 && e.RackChainSidechainPart(rig.Bass, rack, 0, 0) == hat
                       && e.SidechainRouteInUse(rig.Drums, hat) && srcs.TrueForAll(x => e.SidechainRouteInUse(x, -1)),
             "sc parts: with the pool full a rack child's new source is refused and keeps its pad");
+        yield return (e.RackChainSidechain(rig.Bass, rack, 0, 0) is { } kept && kept.GainDb == gainBefore && !kept.TapPre && kept.Mix == 1f,
+            "sc parts: a refused rack-child edit leaves its tap, gain and mix alone");
+
+        // Saved with the pool full: the rack child's pad shares a route already in use, so it
+        // reopens (the loader asks for source and part together, not the whole track first).
+        string full = Path.Combine(Path.GetTempPath(), "nota-scpart-full-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var warn = new List<string>();
+            ProjectService.Save(ProjectService.Capture(e, new TransportState(120, 1, false, false), warn), full, e);
+            using var e3 = new NotaEngine();
+            var w3 = ProjectService.Apply(ProjectService.Load(full), e3, full);
+            int bass3 = -1;   // the track whose first device is the keyed rack
+            for (int i = 0; i < e3.TrackCount && bass3 < 0; i++)
+                if (e3.TryGetTrackInfo(i, out var ti) && e3.RackChainSidechain(ti.Id, 0, 0, 0) is { SourceTrack: >= 0 }) bass3 = ti.Id;
+            yield return (w3.Count == 0 && bass3 > 0 && e3.RackChainSidechainPart(bass3, 0, 0, 0) == hat && e3.SidechainRoutesFree() == 0,
+                $"sc parts: with the pool full a rack child's saved pad still reopens ({string.Join("; ", w3)})");
+        }
+        finally
+        {
+            try { if (Directory.Exists(full)) Directory.Delete(full, recursive: true); } catch (IOException) { }
+        }
         e.RemoveTrack(host);
         string dir = Path.Combine(Path.GetTempPath(), "nota-scpart-rack-" + Guid.NewGuid().ToString("N"));
         try

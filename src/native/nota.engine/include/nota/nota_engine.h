@@ -1804,6 +1804,12 @@ NOTA_API int32_t     nota_rack_chain_sidechain_part(const NotaEngine* engine, in
                                                     int32_t chain, int32_t slot, int32_t* out_part);
 NOTA_API int32_t     nota_rack_chain_set_sidechain_part(NotaEngine* engine, int32_t track_id, int32_t device_index,
                                                         int32_t chain, int32_t slot, int32_t part);
+/* A chain child's whole key in one step — source, part (-1 whole track), tap, gain, mix — so
+ * only the final key is checked against the route pool. 0 = done, -1 bad address / part, -2 no
+ * free route (key and shaping left as they were). Project load restores rack keys with this. */
+NOTA_API int32_t     nota_rack_chain_set_sidechain_key(NotaEngine* engine, int32_t track_id, int32_t device_index,
+                                                       int32_t chain, int32_t slot, int32_t source_track, int32_t part,
+                                                       int32_t tap_pre, float gain_db, float mix);
 /* The route pool whole tracks and parts share: its size (16), the routes free now, and whether
  * (source, part) already has one — a further key on it needs none. */
 NOTA_API int32_t     nota_sidechain_route_capacity(const NotaEngine* engine);
