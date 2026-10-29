@@ -4,9 +4,10 @@
 // Test material for Nota Aurora's custom wavetables (specs/053, quickstart § 2 and § 4):
 // generated, deterministic files for each way a file becomes a table, and the projects the
 // UI budget is measured with. `--aurora-fixtures <dir>` writes the files;
-// `--aurora-ui-fixture <dir> [--builtin]` writes the measurement project (with --builtin the
-// v27-era baseline on the built-in tables, without it the same project with a generated
-// 256-frame table on both oscillators of every Aurora).
+// `--aurora-ui-fixture <dir> [--builtin]` writes the measurement project: <dir>/baseline.nota
+// with --builtin (the built-in tables, stamped format 27 so the base build opens it), else
+// <dir>/scenario.nota (the same project with a generated 256-frame table on both
+// oscillators of every Aurora).
 
 using Nota.Application;
 using Nota.Infrastructure;
@@ -159,10 +160,20 @@ internal static class AuroraFixtures
                 finally { eng.AuroraTableFree(h); }
             }
         }
+        eng.SetLoop(true, 0, 16);   // the four bars loop
         var warnings = new List<string>();
         var doc = ProjectService.Capture(eng, new TransportState(120.0, 1.0, false, true), warnings);
-        ProjectService.Save(doc, dir, eng);
-        Console.WriteLine($"wrote {dir} ({(builtin ? "built-in tables, v27-era content" : "256-frame tables on both oscillators")}, format {doc.FormatVersion})");
+        string bundle = Path.Combine(dir, builtin ? "baseline.nota" : "scenario.nota");
+        ProjectService.Save(doc, bundle, eng);
+        if (builtin)
+        {
+            // Nothing in it needs format 28, so stamp it 27: the base build opens it too.
+            string mf = Path.Combine(bundle, ProjectService.ManifestName);
+            var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(mf))!.AsObject();
+            node["formatVersion"] = 27;
+            File.WriteAllText(mf, node.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+        }
+        Console.WriteLine($"wrote {bundle} ({(builtin ? "built-in tables, format 27" : $"256-frame tables on both oscillators, format {doc.FormatVersion}")})");
         return 0;
     }
 

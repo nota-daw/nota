@@ -28,6 +28,7 @@ public sealed partial class DeviceChainView
         bool hasParams = _engine.PluginParamCount(_trackId, -1) > 0;
         var strategy = _instrumentFactory.Resolve(kind, hasParams);
         var ctx = NewCardContext();
+        if (kind == 5) UiProbe.BuildBegin();   // card build → first table paint (specs/053)
         var body = strategy.Build(ctx);
         if (!strategy.BodyOnly) return body;   // card owns its whole frame (not yet migrated)
         double width = strategy.WidthFor(_engine, _trackId);

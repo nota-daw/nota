@@ -893,19 +893,27 @@ int32_t nota_track_aurora_table_preview(const NotaEngine* e, int32_t track_id, i
     const int64_t need = (int64_t)(rep_frames + grid_frames) * points;
     if (!out) return (int32_t)need;
     if (cap < need) return 0;
-    // The mip level with about points / 2 harmonics keeps every shape a `points`-wide
-    // drawing can show, and none of the ripple it cannot.
-    int k = 0;
-    while (k < nota::AuroraTable::kLevels - 1 && nota::AuroraTable::harmonics(k + 1) * 2 >= points) ++k;
-    const int len = nota::AuroraTable::len(k);
-    const int nf = t->frames;
+    // Each pair of points is the low and the high of one slice of the frame, in the order
+    // they occur: a slow wave draws as its own shape, a frame full of fast cycles as the
+    // band they fill, which a plain resample of a few hundred points would alias.
+    const int len = nota::AuroraTable::kSize, nf = t->frames, slices = points / 2;
     float* p = out;
     for (int pass = 0; pass < 2; ++pass) {
         const int count = pass == 0 ? rep_frames : grid_frames;
         for (int i = 0; i < count; ++i) {
             const int f = count > 1 ? (int)std::lround((double)i * (nf - 1) / (count - 1)) : 0;
-            const float* src = t->frame(k, std::clamp(f, 0, nf - 1));
-            for (int j = 0; j < points; ++j) *p++ = src[(int64_t)j * len / points];
+            const float* src = t->frame(0, std::clamp(f, 0, nf - 1));
+            for (int s = 0; s < slices; ++s) {
+                const int a = s * len / slices, b = (s + 1) * len / slices;
+                int lo = a, hi = a;
+                for (int k = a + 1; k < b; ++k) {
+                    if (src[k] < src[lo]) lo = k;
+                    if (src[k] > src[hi]) hi = k;
+                }
+                *p++ = src[std::min(lo, hi)];
+                *p++ = src[std::max(lo, hi)];
+            }
+            if (points & 1) *p++ = src[len - 1];
         }
     }
     return (int32_t)need;

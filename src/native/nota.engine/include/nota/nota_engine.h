@@ -771,8 +771,9 @@ NOTA_API int32_t nota_track_aurora_table_info(const NotaEngine* engine, int32_t 
 NOTA_API int64_t nota_track_aurora_table_read(const NotaEngine* engine, int32_t track_id, int32_t osc, float* out,
                                               int64_t cap);
 /* Drawing preview: rep_frames (≤ 16) evenly chosen frames, then grid_frames (≤ 64) evenly chosen
- * frames, each `points` (≤ 256) samples read from the lowest mip level that keeps the shape,
- * back to back. Returns floats written (the count needed when out is null). */
+ * frames, each `points` (≤ 256) values back to back: for each of points / 2 slices of the
+ * frame, its lowest and highest sample in the order they occur (a min / max outline).
+ * Returns floats written (the count needed when out is null). */
 NOTA_API int32_t nota_track_aurora_table_preview(const NotaEngine* engine, int32_t track_id, int32_t osc,
                                                  int32_t rep_frames, int32_t grid_frames, int32_t points, float* out,
                                                  int32_t cap);
