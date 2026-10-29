@@ -74,6 +74,9 @@ public partial class MainWindow
         if (!dim && !_chainDimmed) return;
         _chainDimmed = dim;
         Inactive.Set(_deviceChain, dim);
+        // The undim pass also lifts the off looks the cards keep for themselves; rebuilding
+        // the cards gives each its own state back.
+        if (!dim) _deviceChain.Refresh();
     }
     private bool _chainDimmed;
 
