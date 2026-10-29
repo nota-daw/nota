@@ -689,7 +689,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Default = Def("velcurve"), UpIsMore = false,
         };
         ToolTip.SetTip(velCurve, MenuKit.Keys("Velocity → level: drag up for soft (quiet notes louder), down for hard; ⌥-click to type"));
-        ValueEntry.Attach(velCurve, velCurve.EntryField("Vel curve", v => { int c = MosaicModel.VelCurve((float)v); return c == 0 ? "linear" : c < 0 ? $"soft {-c}" : $"hard {c}"; }));
+        ValueEntry.Attach(velCurve, velCurve.EntryField("Vel curve", v => { int c = MosaicModel.VelCurve((float)v); return c == 0 ? "0 linear" : c < 0 ? $"−{-c} soft" : $"+{c} hard"; }));
         var velWord = Mono("", TextSecondary, 7.5);
         string VelCurveWord() { int c = MosaicModel.VelCurve(G("velcurve")); return c == 0 ? "linear" : c < 0 ? $"soft +{-c}" : $"hard +{c}"; }
         readouts.Add(() => { velWord.Text = VelCurveWord(); velCurve.InvalidateVisual(); });

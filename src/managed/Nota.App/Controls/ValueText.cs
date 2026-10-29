@@ -11,7 +11,8 @@
 // shows that quantity is searched for: the read-out is sampled across the range, the
 // bracketing step is bisected, and on a match the middle of the run of positions that
 // display it is taken — so typing "0" lands on 0 dB, not on the edge of the "0.0" bucket.
-// A word the read-out shows (off, HOLD) is matched as text.
+// A word the read-out shows (off, HOLD) is matched as text. A note name (C4, F#2) reads as its
+// MIDI number, and a word before the number ("Out −6 dB", "Swing 30 %") is skipped.
 
 using System;
 using System.Collections.Generic;
@@ -153,6 +154,27 @@ internal static partial class ValueText
     {
         mul = 1; hasUnit = false;
         string s = Clean(text).Replace('−', '-').Replace(',', '.').Replace("±", "");
+        if (Note().Match(s) is { Success: true } nm)   // a note name: C-1 = 0, C4 = 60 (DeviceCardKit.NoteName)
+        {
+            int pc = "C D EF G A B".IndexOf(char.ToUpperInvariant(nm.Groups["n"].Value[0]));
+            int acc = nm.Groups["acc"].Value switch { "#" or "♯" => 1, "b" or "♭" => -1, _ => 0 };
+            hasUnit = true;
+            return (int.Parse(nm.Groups["oct"].Value, CultureInfo.InvariantCulture) + 1) * 12 + pc + acc;
+        }
+        if (ReadQuantity(s, out mul, out hasUnit) is { } v) return v;
+        // A label before the number: "Out −6 dB", "Complexity 40 %".
+        return Label().Match(s) is { Success: true } lm ? ReadQuantity(s[lm.Length..], out mul, out hasUnit) : null;
+    }
+
+    [GeneratedRegex(@"^(?<n>[A-Ga-g])(?<acc>[#♯♭b]?)(?<oct>-?\d+)$")]
+    private static partial Regex Note();
+
+    [GeneratedRegex(@"^[A-Za-z][A-Za-z/]+\s+(?=[+\-∞\d.])")]
+    private static partial Regex Label();
+
+    private static double? ReadQuantity(string s, out double mul, out bool hasUnit)
+    {
+        mul = 1; hasUnit = false;
         var m = Quantity().Match(s);
         if (!m.Success) return null;
         string pan = m.Groups["pan"].Value.ToUpperInvariant();

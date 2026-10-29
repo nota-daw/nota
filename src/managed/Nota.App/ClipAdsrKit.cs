@@ -174,8 +174,14 @@ internal static class ClipAdsrKit
             case AdsrHandle.Attack:
                 list.Add(Time("Attack", a => a.DecayBeats + a.ReleaseBeats, a => a.AttackBeats, (a, b) => { a.AttackBeats = b; return a; }, AdsrHandle.Attack));
                 break;
-            case AdsrHandle.DecaySustain or AdsrHandle.AttackOrSustain:
+            case AdsrHandle.DecaySustain:
                 list.Add(Time("Decay", a => a.AttackBeats + a.ReleaseBeats, a => a.DecayBeats, (a, b) => { a.DecayBeats = b; return a; }, AdsrHandle.DecaySustain));
+                list.Add(new ValueField("Sustain", () => A().Sustain, SustainText, n => { var a = A(); a.Sustain = (float)n; commit(a); }));
+                break;
+            case AdsrHandle.AttackOrSustain:   // the shared corner: attack, decay and sustain; one combined reset
+                list.Add(Time("Attack", a => a.DecayBeats + a.ReleaseBeats, a => a.AttackBeats, (a, b) => { a.AttackBeats = b; return a; }, AdsrHandle.AttackOrSustain));
+                list.Add(Time("Decay", a => a.AttackBeats + a.ReleaseBeats, a => a.DecayBeats, (a, b) => { a.DecayBeats = b; return a; }, AdsrHandle.DecaySustain)
+                    with { Reset = null });
                 list.Add(new ValueField("Sustain", () => A().Sustain, SustainText, n => { var a = A(); a.Sustain = (float)n; commit(a); }));
                 break;
             case AdsrHandle.Release:

@@ -175,8 +175,18 @@ public sealed class Eq8Curve : Control, IValueEntryHost
     // ---- params ----
     private float Pd(int p) => p < _engine.DeviceParamCount(_track, _device) ? _engine.DeviceGetParam(_track, _device, p) : 0f;
     // ---- typed entry (specs/035): a node's frequency, gain and Q ----
-    private ValueField[] BandFields(int b) => DynEq.BandFields(_engine, _track, _device, b, Eq8.P(b, Eq8.FreqF), Eq8.P(b, Eq8.GainF),
-        Eq8.P(b, Eq8.QF), Eq8.HasGain(BandType(b)), () => { Edited?.Invoke(); InvalidateVisual(); });
+    // Cached per band (rebuilt when the band gains or loses its gain value): Tab finds the open
+    // field by reference, so every read must hand out the same objects.
+    private readonly (bool gain, ValueField[] fields)?[] _bandFields = new (bool, ValueField[])?[Eq8.Bands];
+    private ValueField[] BandFields(int b)
+    {
+        bool g = Eq8.HasGain(BandType(b));
+        if (_bandFields[b] is { } c && c.gain == g) return c.fields;
+        var fs = DynEq.BandFields(_engine, _track, _device, b, Eq8.P(b, Eq8.FreqF), Eq8.P(b, Eq8.GainF),
+            Eq8.P(b, Eq8.QF), g, () => { Edited?.Invoke(); InvalidateVisual(); });
+        _bandFields[b] = (g, fs);
+        return fs;
+    }
     IReadOnlyList<ValueField>? IValueEntryHost.FieldsAt(Point p) => Hit(p) is var b and >= 0 ? BandFields(b) : null;
     Rect IValueEntryHost.AnchorOf(ValueField field)
     {

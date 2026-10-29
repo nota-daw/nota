@@ -228,8 +228,20 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         wave.Moved += (hnd, f) => { SetP(SamplerWaveView.HandleId(hnd), f); Refresh(); };
         wave.ResetHandle += hnd => { var id = SamplerWaveView.HandleId(hnd); Write(id, Def(id)); Refresh(); };
         // ⌥-click a marker to type where it sits, in seconds into the file (specs/035).
-        ValueField WF(int h) => PF(SamplerWaveView.HandleId(h), new[] { "Start", "End", "Loop start", "Loop end" }[h],
-            v => NotaNum.Unit(v * durSec, "0.000", "s"));
+        // Held to the same limits a drag keeps: Start before End, the loop inside them.
+        ValueField WF(int h)
+        {
+            string id = SamplerWaveView.HandleId(h);
+            double Limit(double f) => h switch
+            {
+                0 => Math.Min(f, G("end") - 0.001),
+                1 => Math.Max(f, G("start") + 0.001),
+                2 => Math.Clamp(Math.Min(f, G("loopend") - 0.001), G("start"), G("end")),
+                _ => Math.Clamp(Math.Max(f, G("loopstart") + 0.001), G("start"), G("end")),
+            };
+            return PF(id, new[] { "Start", "End", "Loop start", "Loop end" }[h], v => NotaNum.Unit(v * durSec, "0.000", "s"))
+                with { Set = v => SetP(id, Limit(Math.Clamp(v, 0, 1))) };
+        }
         ValueEntry.AttachHandles(wave, [WF(0)], [WF(1)], [WF(2)], [WF(3)]);
         readouts.Add(() => wave.Set(G("start"), G("end"), G("loopstart"), G("loopend"), LoopSel(), SamplerModel.CrossfadeSec(G("loopxfade")),
             hasSample ? $"{NotaNum.Str(sr / 1000, "0.#")} k · {NotaNum.Unit(durSec, "0.00", "s")} · root {SamplerModel.NoteName(rootv)}" : "",

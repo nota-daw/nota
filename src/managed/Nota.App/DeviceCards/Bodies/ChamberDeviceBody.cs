@@ -273,7 +273,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             f.DragEnded += () => End(p);
             readouts.Add(() => f.Set(P(p)));
             MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
-            ValueEntry.Attach(f, CF(p, split ? "Blend" : "Dry/wet", split ? v => NotaNum.F($"{(1 - v) * 100:0} / {v * 100:0}") : Pct));
+            ValueEntry.Attach(f, CF(p, split ? "Blend" : "Dry/wet", split ? v => NotaNum.F($"{v * 100:0}\u2009% algorithm") : Pct));
             ToolTip.SetTip(f, split ? "Blend — convolution (slate, top) ⇄ algorithm (neutral, bottom). Double-click: 50 / 50" : "Dry/Wet — double-click resets");
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
             if (!split) readouts.Add(() => lb.Foreground = P(DryWet) > 0.995f || On(WetOnly) ? TxtC : MutedC);
