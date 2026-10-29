@@ -215,7 +215,9 @@ internal abstract class CutHandleGraph : Control
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         int h = Nearest(e.GetPosition(this).X);
-        if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) { Reset?.Invoke(h - 1); e.Handled = true; return; }
+        // A reset takes no drag; the press's implicit capture goes too, or the next click
+        // anywhere would still come here.
+        if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) { Reset?.Invoke(h - 1); e.Pointer.Capture(null); e.Handled = true; return; }
         _drag = h; GestureBegin?.Invoke(h - 1); e.Pointer.Capture(this); Apply(e); e.Handled = true;
     }
     protected override void OnPointerMoved(PointerEventArgs e)
@@ -230,8 +232,9 @@ internal abstract class CutHandleGraph : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (ReferenceEquals(e.Pointer.Captured, this)) e.Pointer.Capture(null);
         if (_drag == 0) return;
-        GestureEnd?.Invoke(_drag - 1); _drag = 0; e.Pointer.Capture(null); InvalidateVisual();
+        GestureEnd?.Invoke(_drag - 1); _drag = 0; InvalidateVisual();
     }
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
@@ -297,7 +300,7 @@ internal sealed class ReverbSpaceView : Control
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) { Reset?.Invoke(); e.Handled = true; return; }
+        if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) { Reset?.Invoke(); e.Pointer.Capture(null); e.Handled = true; return; }   // as CutHandleGraph
         var p = e.GetPosition(this);
         _drag = true; _dragX = p.X; _dragY = p.Y; _dragV = DecayValue?.Invoke() ?? 0.5;
         GestureBegin?.Invoke();
@@ -315,8 +318,9 @@ internal sealed class ReverbSpaceView : Control
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (ReferenceEquals(e.Pointer.Captured, this)) e.Pointer.Capture(null);
         if (!_drag) return;
-        _drag = false; e.Pointer.Capture(null); GestureEnd?.Invoke();
+        _drag = false; GestureEnd?.Invoke();
     }
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
@@ -495,6 +499,7 @@ internal sealed class DelayEchoView : Control
     private int _off;
     private bool _has, _freeze, _grid;
     private double _windowSec = 2, _msL = 500, _msR = 500, _fb = 0.4, _beat, _bpm = 120;
+    private static readonly IPen BeatPen = new Pen(NotaPalette.GridBeat, 1), BarPen = new Pen(NotaPalette.GridBar, 1);
 
     public DelayEchoView()
     {
@@ -514,13 +519,19 @@ internal sealed class DelayEchoView : Control
     }
 
     // The latest hit whose first repeat has already come round: a jump of 9 dB within 12 ms, above −50 dB.
-    private int Onset(int n, double firstMs)
+    // The hit whose repeats to mark: the latest one old enough for a few of the longer channel's
+    // repeats to fit (up to most of the window), or failing that the latest with one in the past.
+    private int Onset(int n, double firstMs, double lastMs)
     {
-        int minAge = (int)(firstMs / 1000 / SpaceDraw.PointSec);
-        for (int k = SpaceDraw.Points - 1 - minAge; k >= 3; k--)
+        double want = Math.Max(firstMs, Math.Min(3 * lastMs, n * SpaceDraw.PointSec * 1000 * 0.6));
+        foreach (double ms in want > firstMs ? new[] { want, firstMs } : new[] { firstMs })
         {
-            float v = _s[_off + k];
-            if (v > -50 && v - _s[_off + k - 3] > 9 && v >= _s[_off + k - 1]) return k;
+            int minAge = (int)(ms / 1000 / SpaceDraw.PointSec);
+            for (int k = SpaceDraw.Points - 1 - minAge; k >= Math.Max(3, SpaceDraw.Points - n); k--)
+            {
+                float v = _s[_off + k];
+                if (v > -50 && v - _s[_off + k - 3] > 9 && v >= _s[_off + k - 1]) return k;
+            }
         }
         return -1;
     }
@@ -543,8 +554,9 @@ internal sealed class DelayEchoView : Control
         double Y(double db) => bot - Math.Clamp((db + 60) / 60, 0, 1) * span;
         double XAge(double sec) => x1 - sec / win * (x1 - x0);
 
-        // Grid: the project's beats (every fourth a little stronger), or four even divisions.
-        if (_grid)
+        // Grid: the project's beats (every fourth a little stronger), drawn over the input so a
+        // beat that lands on a hit still shows; without them, four even divisions.
+        void BeatGrid()
         {
             double beatSec = 60.0 / _bpm, frac = _beat - Math.Floor(_beat);
             long b0 = (long)Math.Floor(_beat);
@@ -553,20 +565,25 @@ internal sealed class DelayEchoView : Control
                 double age = (frac + j) * beatSec;
                 if (age > win) break;
                 bool bar = (b0 - j) % 4 == 0;
-                ctx.DrawLine(bar ? new Pen(NotaPalette.GridBeat, 1) : NotaGraph.GridPen, new Point(XAge(age), top), new Point(XAge(age), bot));
+                ctx.DrawLine(bar ? BarPen : BeatPen, new Point(XAge(age), top), new Point(XAge(age), bot));
             }
         }
-        else for (int i = 1; i < 4; i++) ctx.DrawLine(NotaGraph.GridPen, new Point(XAge(win * i / 4), top), new Point(XAge(win * i / 4), bot));
+        if (!_grid) for (int i = 1; i < 4; i++) ctx.DrawLine(NotaGraph.GridPen, new Point(XAge(win * i / 4), top), new Point(XAge(win * i / 4), bot));
         foreach (double db in new[] { -20.0, -40 }) ctx.DrawLine(NotaGraph.GridPen, new Point(x0, Y(db)), new Point(x1, Y(db)));
 
         bool any = _has && Math.Max(SpaceDraw.Max(_s, _off, n), SpaceDraw.Max(_s, _off + SpaceDraw.Points, n)) > -90;
         if (any)
         {
             SpaceDraw.Area(ctx, SpaceDraw.InputWash, SpaceDraw.Trace(_s, _off, n, x0, x1, Y), bot);
+            if (_grid) BeatGrid();
             CompDraw.Polyline(ctx, NotaGraph.PrimaryPen, SpaceDraw.Trace(_s, _off + SpaceDraw.Points, n, x0, x1, Y));
             if (!_freeze) DrawRepeats(ctx, n, x0, x1, Y, XAge);
         }
-        else SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), "Play audio to see its echoes");
+        else
+        {
+            if (_grid) BeatGrid();
+            SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), "Play audio to see its echoes");
+        }
 
         if (_freeze) ctx.DrawText(new NotaFormattedText("Loop held · no decay", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));
@@ -582,7 +599,7 @@ internal sealed class DelayEchoView : Control
     {
         double first = Math.Min(_msL, _msR);
         if (first < 5) return;
-        int k0 = Onset(n, first);
+        int k0 = Onset(n, first, Math.Max(_msL, _msR));
         if (k0 < 0) return;
         float pk = -120;
         for (int k = k0; k < Math.Min(SpaceDraw.Points, k0 + 5); k++) pk = Math.Max(pk, _s[_off + k]);

@@ -377,7 +377,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         void Refresh()
         {
             scN = engine.DeviceScope(track, di, scope, ScopeLen);
-            foreach (var a in readouts) a();
+            for (int i = 0; i < readouts.Count; i++) readouts[i]();
         }
         ctx.AddDeviceRefresher(Refresh);
         Refresh();

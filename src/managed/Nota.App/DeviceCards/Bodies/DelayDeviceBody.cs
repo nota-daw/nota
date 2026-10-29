@@ -302,9 +302,11 @@ internal sealed class DelayDeviceBody : IDeviceBody
                     return g;
                 }
                 Control MsRow() => SliderRow(ch + " TIME", timeP, v => dim?.Invoke() == true ? Ms(P(TimeL) * 2000) : Ms(v * 2000), 52, dim, 40);
-                void Refill() => host.Content = On(SyncMode) ? div ??= Div() : ms ??= MsRow();
-                Refill();
-                readouts.Add(() => { bool want = On(SyncMode); if (want != (host.Content == div && div != null)) Refill(); });
+                // Both rows are built up front: building one inside a readout would add readouts
+                // while they run, which stops the pass (and every readout after it).
+                div = Div(); ms = MsRow();
+                host.Content = On(SyncMode) ? div : ms;
+                readouts.Add(() => { var want = On(SyncMode) ? div : ms; if (!ReferenceEquals(host.Content, want)) host.Content = want; });
                 return host;
             }
             var modeSeg = Seg(SyncMode, new[] { "ms", "Sync" }, onPick: SyncTaps);
@@ -466,7 +468,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         void Refresh()
         {
             scN = engine.DeviceScope(track, di, scope, ScopeLen);
-            foreach (var a in readouts) a();
+            for (int i = 0; i < readouts.Count; i++) readouts[i]();
         }
         ctx.AddDeviceRefresher(Refresh);
         Refresh();
