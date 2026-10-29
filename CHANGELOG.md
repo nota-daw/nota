@@ -245,6 +245,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Shell read-outs and controls lost in the restyle are back**: the Loop key writes the loop
+  range beside its icon again; the arrangement's header column names the **Sections** and
+  **Overview** lanes and the zoom keys carry their "Zoom" caption; the Return and Master rows'
+  dB number follows a drag, opens typed entry on double-click, and the bar writes its value
+  inside; the input picker stays on Standard-height track headers (it shrinks in a narrow
+  column) and the mouse wheel steps through its sources again; the piano roll's Loop switch
+  shows on (clips always loop); clip names show on rows taller than 34 px again; and the piano
+  roll's selection read-out labels its fields again (Pitch, Start, Length, Velocity / Notes,
+  Range, Velocity) while the gesture hint wraps to a second line instead of being cut off.
 - **Disarming a track no longer leaves a held note sounding** (nota-daw/nota#366): turning record arm off
   (or the arm moving to another selected track) while a key is down releases the notes that
   came in through live input, instead of leaving them on until panic or stop.
