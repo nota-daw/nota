@@ -42,6 +42,7 @@ class AsioBackend final : public AudioBackend {
     int32_t pollDeviceEvent() override;
     const char* fallbackReason() const override { return reason_.c_str(); }
     bool sampleRateRefused() const override;
+    double deviceChangedRate() const override;
 
   private:
     std::function<void()> xrun_;

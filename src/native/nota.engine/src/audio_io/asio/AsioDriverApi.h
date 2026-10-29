@@ -70,7 +70,10 @@ class AsioDriverApi {
     virtual bool stop() = 0;
     virtual bool getLatencies(int32_t& input, int32_t& output) = 0;
     virtual bool controlPanel() = 0; // may return before the panel closes
-    virtual bool outputReady() = 0;  // false = not supported by this driver
+    virtual bool outputReady() = 0;  // false = not supported by this driver (buffer switch only)
+    // The one-time "does it support outputReady" probe at open, from the control side: timed
+    // like every other control call (outputReady() itself is direct, for the buffer switch).
+    virtual bool probeOutputReady() { return outputReady(); }
     // True once a call timed out: the driver is abandoned and every later call fails fast.
     virtual bool timedOut() const { return false; }
     // True while the driver's own settings panel is open: it may hold the driver's thread

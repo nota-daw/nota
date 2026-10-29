@@ -400,6 +400,11 @@ bool ComAsioDriver::controlPanel() {
     return true;
 }
 
+bool ComAsioDriver::probeOutputReady() {
+    auto e = std::make_shared<ASIOError>(ASE_NotPresent);
+    return call([sh = sh_, e] { if (sh->drv) *e = sh->drv->outputReady(); }, kCallTimeoutMs) && *e == ASE_OK;
+}
+
 bool ComAsioDriver::outputReady() {
     // From the buffer switch (and once from the session to probe support): a direct call.
     IASIO* d = sh_->drv;

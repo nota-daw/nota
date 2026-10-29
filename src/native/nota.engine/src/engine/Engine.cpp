@@ -204,6 +204,12 @@ void Engine::setAudioWasapiExclusive(bool on) {
 }
 int32_t Engine::pollAudioDeviceEvent() {
     const int32_t ev = backend_ ? backend_->pollDeviceEvent() : 0;
+    if (ev == 1 && config_.sampleRate > 0.0 && backend_->deviceChangedRate() > 0.0) {
+        // The user changed the rate in the driver's panel: follow the driver from now on
+        // ("device default") instead of putting the old saved rate back on reopen.
+        config_.sampleRate = 0.0;
+        saveAudioConfig(config_);
+    }
     if (ev == 2 && activeSystem_ == AudioSystem::Asio) {
         const char* why = backend_->fallbackReason();
         asioSkipOnce_ = why && *why ? why : "the driver stopped sending audio";

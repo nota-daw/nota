@@ -435,19 +435,25 @@ public sealed partial class PreferencesWindow : NotaWindow
         }
 
         // Sample rate is a request: a rate the driver refuses is reverted and explained (FR-007).
+        // The view model remembers the refusal, so it also shows after an apply that waited for
+        // the driver's panel to close (the pane is rebuilt then).
         var refused = Caption("");
         refused.Foreground = NotaPalette.Warning;
-        refused.IsVisible = false;
+        void ShowRefusal()
+        {
+            double r = _main?.RefusedSampleRate ?? 0;
+            refused.Text = r > 0 ? $"The driver doesn't support {NotaNum.Unit(r / 1000, "0.#", "kHz")}" : "";
+            refused.IsVisible = r > 0;
+        }
+        ShowRefusal();
         srCombo.SelectionChanged += (_, _) =>
         {
             int i = srCombo.SelectedIndex;
             if (_loading || i <= 0 || engine.ActiveAudioSystem != AudioSystem.Asio) return;
             // The earlier handler applied the rate. A rate the driver refused is dropped by the
             // engine — the saved config goes back to "device default" — so the row follows it.
-            double asked = SampleRates[i];
-            if (engine.GetAudioConfig().SampleRate == asked) { refused.IsVisible = false; return; }
-            refused.Text = $"The driver doesn't support {NotaNum.Unit(asked / 1000, "0.#", "kHz")}";
-            refused.IsVisible = true;
+            ShowRefusal();
+            if (_main?.RefusedSampleRate != SampleRates[i]) return;
             _loading = true;
             srCombo.SelectedIndex = 0;
             _loading = false;

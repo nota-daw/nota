@@ -25,6 +25,7 @@
 #include <cmath>
 #include <cstdio>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -474,6 +475,7 @@ void checkResets(AsioCheck& check) {
     }
     rig.fake->changeSampleRate(44100.0);
     check(rig.session.pollEvent() == AsioSession::kEventResetRequested, "sampleRateDidChange -> RESET_REQUESTED");
+    check(rig.session.driverChangedRate() == 44100.0, "a rate set in the driver's panel is reported with the reset");
     check(rig.session.pollEvent() == AsioSession::kEventNone, "rate event cleared on read");
     rig.fake->pump(3);
     check(rig.session.pollEvent() == AsioSession::kEventNone, "steady positions raise nothing");
@@ -609,8 +611,9 @@ void checkConfigKeys(AsioCheck& check) {
 extern "C" int32_t nota_asio_selftest(void) {
     AsioCheck check;
     {
-        nota::Engine engine;
-        check(engine.monitorSharedClockSelfTest(), "an ASIO block split by a loop reaches monitoring whole");
+        // On the heap: an Engine is far bigger than a 1 MB Windows main-thread stack.
+        auto engine = std::make_unique<nota::Engine>();
+        check(engine->monitorSharedClockSelfTest(), "an ASIO block split by a loop reaches monitoring whole");
     }
     checkFormats(check);
     checkRouting(check);

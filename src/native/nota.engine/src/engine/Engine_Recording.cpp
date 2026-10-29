@@ -68,7 +68,10 @@ bool Engine::ensureAudioInput() {
     if (inputTestMode_) return true;
     if (input_ && input_->isRunning()) return true;
     if (!input_) input_ = createAudioInput(activeSystem_); // ASIO: the running driver's inputs
-    const uint32_t inputDev = resolveAudioDeviceId(config_.inputDeviceUid, /*inputScope=*/true);
+    // In the ASIO → WASAPI fallback the output runs on the system default; so does capture.
+    // The saved WASAPI input stays as it is for when WASAPI is chosen.
+    const bool asioFallback = asioSupported() && config_.audioSystem == AudioSystem::Asio && activeSystem_ != AudioSystem::Asio;
+    const uint32_t inputDev = resolveAudioDeviceId(asioFallback ? std::string{} : config_.inputDeviceUid, /*inputScope=*/true);
     // The input thread only touches the lock-free rings (RT-safe).
     return input_->start(
         [this](const float* s, int32_t n) {

@@ -83,6 +83,7 @@ bool AsioSession::open(std::unique_ptr<AsioDriverApi> driver, const Options& opt
     failureDetail_.clear();
     driverName_.clear();
     rateRefused_ = false;
+    driverRate_ = 0.0;
     if (wedged_) {
         // The callbacks can't tell an old driver from a new one: never open next to a switch
         // that is still stuck. The driver is released (its thread is the driver's problem).
@@ -183,7 +184,7 @@ bool AsioSession::open(std::unique_ptr<AsioDriverApi> driver, const Options& opt
 
     inputLatency_ = outputLatency_ = 0;
     driver_->getLatencies(inputLatency_, outputLatency_);
-    io.outputReady = driver_->outputReady(); // the probe call: ASE_OK means supported
+    io.outputReady = driver_->probeOutputReady(); // ASE_OK means supported
     resetRequested_.store(false, std::memory_order_relaxed);
     state_ = State::Prepared;
     return true;
@@ -276,7 +277,13 @@ int32_t AsioSession::pollEvent() {
     }
     // A pending reset comes first: it explains a silent spell (the driver stopped its buffers
     // to reconfigure) and reopening the driver is the right answer, not WASAPI.
-    if (resetRequested_.exchange(false, std::memory_order_acq_rel)) return kEventResetRequested;
+    if (resetRequested_.exchange(false, std::memory_order_acq_rel)) {
+        // Whatever the message was (many drivers send a plain reset request), a rate changed
+        // in the driver's panel must survive the reopen — the engine stops asking for its own.
+        double now = 0.0;
+        if (driver_ && driver_->getSampleRate(now) && now > 0.0 && now != sampleRate_) driverRate_ = now;
+        return kEventResetRequested;
+    }
     if (state_ == State::Running) {
         const int64_t silentNs = nowNs() - lastTickNs_.load(std::memory_order_relaxed);
         if (silentNs > std::chrono::duration_cast<std::chrono::nanoseconds>(watchdog_).count()) {

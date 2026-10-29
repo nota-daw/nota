@@ -43,6 +43,7 @@ class ComAsioDriver final : public AsioDriverApi {
     bool getLatencies(int32_t& input, int32_t& output) override;
     bool controlPanel() override;
     bool outputReady() override;
+    bool probeOutputReady() override;
     bool timedOut() const override;
     bool panelOpen() const override;
 

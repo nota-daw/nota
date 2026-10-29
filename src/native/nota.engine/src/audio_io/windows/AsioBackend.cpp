@@ -98,6 +98,10 @@ int32_t AsioBackend::pollDeviceEvent() {
     return ev;
 }
 
+double AsioBackend::deviceChangedRate() const {
+    return sharedAsioSession().driverChangedRate();
+}
+
 bool AsioBackend::sampleRateRefused() const {
     return sharedAsioSession().sampleRateRefused();
 }

@@ -118,6 +118,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     // A settings change made while the ASIO driver's panel was open, applied once it closes.
     private bool _applyAfterPanel;
 
+    /// <summary>The sample rate the ASIO driver refused at the last apply (0 = none).</summary>
+    public double RefusedSampleRate { get; private set; }
+
     // The ASIO driver asked for a restart (its buffer size, rate or latencies changed in its
     // own panel) or stopped calling back (specs/049, FR-009/FR-011). Restart through the one
     // apply path — which falls back to WASAPI if the driver won't start — and carry on
@@ -176,6 +179,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // Don't restart the backend mid-playback.
         if (Engine.IsPlaying) Transport.PlayStopCommand.Execute(null);
 
+        double askedRate = Engine.GetAudioConfig().SampleRate;
         SuspendEnginePolling = true;
         try
         {
@@ -192,6 +196,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             SuspendEnginePolling = false;
         }
 
+        // The engine drops a rate the ASIO driver refused (back to device default). Remember
+        // it here, so Settings can say why — also when the apply waited for the driver's panel.
+        RefusedSampleRate = askedRate > 0 && Engine.ActiveAudioSystem == AudioSystem.Asio
+                            && Engine.GetAudioConfig().SampleRate == 0 ? askedRate : 0;
         EngineInfo = $"{Engine.SampleRate:0}\u2009Hz";   // the version sits beside it, as its own button (#127)
         int buf = Engine.NegotiatedBufferFrames;
         _log.Info($"Audio applied · {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames");

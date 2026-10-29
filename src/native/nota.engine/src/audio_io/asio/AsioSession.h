@@ -76,6 +76,9 @@ class AsioSession {
     int32_t inputLatency() const { return inputLatency_; }
     int32_t outputLatency() const { return outputLatency_; }
     bool sampleRateRefused() const { return rateRefused_; } // a requested rate the driver refused
+    // The driver now runs at a different rate than the session opened with — set in the
+    // driver's own panel. Read when a reset is reported; 0 if the rate didn't change.
+    double driverChangedRate() const { return driverRate_; }
     bool hasInputs() const { return inL_ >= 0; }
     // A buffer switch never returned (a stalled plug-in or driver): its state is kept alive
     // and no driver opens again in this process.
@@ -134,6 +137,7 @@ class AsioSession {
     int32_t inputLatency_ = 0;
     int32_t outputLatency_ = 0;
     bool rateRefused_ = false;
+    double driverRate_ = 0.0; // see driverChangedRate()
 
     std::vector<ChannelInfo> inChannels_, outChannels_; // for the UI (control side only)
     int32_t outL_ = -1, outR_ = -1;                     // output channel indices (R -1 = mono)
