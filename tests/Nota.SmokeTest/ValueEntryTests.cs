@@ -67,6 +67,8 @@ internal static class ValueEntryTests
         yield return (Near(ValueText.Read("C4", out _, out _), 60) && Near(ValueText.Read("F#2", out _, out _), 42)
                       && Near(ValueText.Read("C-1", out _, out _), 0) && Near(ValueText.Read("bb3", out _, out _), 58),
             "value entry: note names read as MIDI numbers (C4 = 60, F#2, C-1, Bb3)");
+        yield return (ValueText.Read("C99999999999", out _, out _) is null && ValueText.Read("C10", out _, out _) is null,
+            "value entry: a note outside MIDI's octaves reads as nothing (no overflow)");
 
         // ---- the search against a read-out ----
         string s;

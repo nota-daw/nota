@@ -158,8 +158,11 @@ internal static partial class ValueText
         {
             int pc = "C D EF G A B".IndexOf(char.ToUpperInvariant(nm.Groups["n"].Value[0]));
             int acc = nm.Groups["acc"].Value switch { "#" or "♯" => 1, "b" or "♭" => -1, _ => 0 };
+            // MIDI's range only (C-1 … G9); a runaway octave ("C99999999999") reads as nothing.
+            if (!int.TryParse(nm.Groups["oct"].Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int oct) || oct is < -1 or > 9)
+                return null;
             hasUnit = true;
-            return (int.Parse(nm.Groups["oct"].Value, CultureInfo.InvariantCulture) + 1) * 12 + pc + acc;
+            return (oct + 1) * 12 + pc + acc;
         }
         if (ReadQuantity(s, out mul, out hasUnit) is { } v) return v;
         // A label before the number: "Out −6 dB", "Complexity 40 %".
