@@ -1455,6 +1455,33 @@ void Engine::deviceSetState(int32_t trackId, int32_t deviceIndex, const uint8_t*
     if (auto* d = deviceAt(trackId, deviceIndex)) d->setState(data, size);
 }
 
+bool Engine::setEqBandText(
+    int32_t trackId, int32_t deviceIndex, int32_t band, const std::string& label, const std::string& note) {
+    auto* eq = dynamic_cast<Eq*>(deviceAt(trackId, deviceIndex));
+    if (!eq || band < 0 || band >= Eq::kBands) return false;
+    auto before = eq->getState();
+    eq->setBandText(band, label, note);
+    auto after = eq->getState();
+    if (after == before) return false;
+    // One mix-only undo step that swaps the device's annotation state (specs/049).
+    noteStates_.push_back(std::move(before));
+    noteStates_.push_back(std::move(after));
+    const auto at = static_cast<float>(noteStates_.size() - 2);
+    undoStack_.push_back({nullptr, {MixChange{MixKind::DeviceNotes, trackId, at, at + 1.0f, deviceIndex, -1}}});
+    if (undoStack_.size() > kMaxUndoDepth) {
+        undoStack_.erase(undoStack_.begin());
+        if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_;
+    }
+    redoStack_.clear();
+    return true;
+}
+
+std::string Engine::eqBandText(int32_t trackId, int32_t deviceIndex, int32_t band, int32_t which) const {
+    auto* eq = dynamic_cast<Eq*>(deviceAt(trackId, deviceIndex));
+    if (!eq || band < 0 || band >= Eq::kBands) return {};
+    return which == 1 ? eq->bandNote(band) : eq->bandLabel(band);
+}
+
 bool Engine::deviceLoadFile(int32_t trackId, int32_t deviceIndex, const std::string& path) {
     auto* d = deviceAt(trackId, deviceIndex);
     return d && d->loadFile(path);

@@ -184,6 +184,16 @@ class Track {
     // isn't sent again every block. Audio thread only.
     bool sessionSilentReleased = false;
 
+    // The untargeted live notes (keyboard, MIDI) the track was given and not yet the note-off
+    // of, and whether it was disarmed with them down (#366): released on its next render.
+    // Shared by every version of the track (edits, undo) and with no other track, so it
+    // follows the track whatever happens to its instrument. Audio thread only.
+    struct LiveHeld {
+        uint64_t bits[2] = {0, 0};
+        bool release = false;
+    };
+    std::shared_ptr<LiveHeld> liveHeld = std::make_shared<LiveHeld>();
+
     // Metering (M6-2): post-fader block peak/RMS per channel. Written by the
     // audio thread each block, read by the UI. Transient — not copied across
     // snapshots (a freshly cloned track just re-populates on the next block).

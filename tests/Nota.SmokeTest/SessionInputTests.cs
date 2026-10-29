@@ -6,7 +6,7 @@
 // in a Session slot replaces the clip its track was playing (#337), and an audio track can
 // take one channel of a stereo input as a mono source in the middle (#340), and a plain click
 // on an arm button arms that track alone, ⌘-click more than one, and selecting an instrument
-// track arms it (#332).
+// track arms it (#332), and disarming a track while a key is held releases its note (#366).
 
 using Nota.Application;
 using Nota.Infrastructure;
@@ -27,6 +27,10 @@ internal static class SessionInputTests
         foreach (var r in AudioTakeReplacesPlayingSlot()) yield return r;
         foreach (var r in MonoInput()) yield return r;
         foreach (var r in ExclusiveArm()) yield return r;
+        foreach (var r in DisarmReleasesHeldNotes()) yield return r;
+        foreach (var r in DisarmKeepsKeyForOtherTrack()) yield return r;
+        foreach (var r in DisarmSparesClipNotes()) yield return r;
+        foreach (var r in DisarmAfterEditAndInSession()) yield return r;
     }
 
     private static void Beats(NotaEngine e, double beats, float[]? keep = null)
@@ -235,6 +239,182 @@ internal static class SessionInputTests
         TrackArm.Set(e, drums, false, additive: false);
         TrackArm.Set(e, aud, true, additive: false);
         yield return (!TrackArm.FollowSelection(e, synth) && Armed(aud), "an armed audio track keeps its arm");
+    }
+
+    // A key held on an armed track, then the track disarmed (by its button, or by the arm moving
+    // to another selected track) before the key comes up: disarming releases the note (#366).
+    private static IEnumerable<(bool, string)> DisarmReleasesHeldNotes()
+    {
+        foreach (bool bySelection in new[] { false, true })
+        {
+            using var e = new NotaEngine();
+            int keys = e.AddInstrumentTrack(), other = e.AddInstrumentTrack();
+            e.SetTrackBuiltinInstrument(keys, 0);
+            e.SetTrackBuiltinInstrument(other, 0);
+            TrackArm.Set(e, keys, true, additive: false);
+            e.NoteOn(60, 0.9f);
+            float held = Peak(e, 0.5);
+            if (bySelection) TrackArm.FollowSelection(e, other);
+            else TrackArm.Set(e, keys, false, additive: false);
+            Beats(e, 2.0);                     // past the release, the key still down
+            float after = Peak(e, 0.5);
+            e.NoteOff(60);
+            float released = Peak(e, 0.5);
+            string how = bySelection ? "the arm moving to another track" : "its arm button";
+            yield return (held > 0.01f && after < 1e-4f && released < 1e-4f,
+                $"disarming by {how} while a key is held releases the note (peak {held:F3} → {after:G2})");
+        }
+    }
+
+    // A track edited while a key is held (its object replaced), a Session overdub, a routed
+    // track whose source's instrument was replaced, and many tracks disarmed at once still
+    // release the held note (#366).
+    private static IEnumerable<(bool, string)> DisarmAfterEditAndInSession()
+    {
+        using (var e = new NotaEngine())
+        {
+            int keys = e.AddInstrumentTrack();
+            e.SetTrackBuiltinInstrument(keys, 0);
+            int clip = e.AddMidiClip(keys, 16.0, 4.0);
+            TrackArm.Set(e, keys, true, additive: false);
+            e.NoteOn(60, 0.9f);
+            float held = Peak(e, 0.5);
+            e.SetClipNotes(keys, clip, new[] { new NotaNote(67, 0.0, 1.0, 0.8f) });
+            Beats(e, 0.5);
+            TrackArm.Set(e, keys, false, additive: false);
+            Beats(e, 2.0);
+            float after = Peak(e, 0.5);
+            e.NoteOff(60);
+            yield return (held > 0.01f && after < 1e-4f,
+                $"a track edited while a key is held still releases it on disarm (peak {held:F3} → {after:G2})");
+        }
+        using (var e = new NotaEngine())
+        {
+            e.SetBpm(120);
+            e.SetMetronome(false);
+            e.SetLaunchQuant(0.0);
+            int keys = e.AddInstrumentTrack();
+            e.SetTrackBuiltinInstrument(keys, 0);
+            TrackArm.Set(e, keys, true, additive: false);
+            e.Seek(0);
+            Beats(e, 0.01);
+            e.RecordSessionSlot(keys, 0);
+            Beats(e, 1.0);
+            e.NoteOn(64, 0.9f);
+            float held = Peak(e, 0.5);
+            TrackArm.Set(e, keys, false, additive: false);
+            Beats(e, 2.0);
+            float after = Peak(e, 0.5);
+            e.NoteOff(64);
+            Beats(e, 0.2);
+            e.StopSessionRecord();
+            e.StopAllSession();
+            e.StopTransport();
+            yield return (held > 0.01f && after < 1e-4f,
+                $"disarming during a Session overdub releases the held note (peak {held:F3} → {after:G2})");
+        }
+        using (var e = new NotaEngine())
+        {
+            int src = e.AddInstrumentTrack(), dst = e.AddInstrumentTrack();
+            e.SetTrackBuiltinInstrument(src, 0);
+            e.SetTrackBuiltinInstrument(dst, 0);
+            e.SetTrackMidiSource(dst, src);
+            TrackArm.Set(e, src, true, additive: false);
+            e.NoteOn(60, 0.9f);
+            float held = Peak(e, 0.5);
+            e.SetTrackBuiltinInstrument(src, 0);           // the source's instrument replaced
+            Beats(e, 0.5);
+            TrackArm.Set(e, src, false, additive: false);
+            Beats(e, 2.0);
+            float after = Peak(e, 0.5);
+            e.NoteOff(60);
+            yield return (held > 0.01f && after < 1e-4f,
+                $"a routed track still releases after its source's instrument is replaced (peak {held:F3} → {after:G2})");
+        }
+        using (var e = new NotaEngine())
+        {
+            var all = new List<int>();
+            for (int k = 0; k < 70; k++)
+            {
+                int t = e.AddInstrumentTrack();
+                e.SetTrackBuiltinInstrument(t, 0);
+                TrackArm.Set(e, t, true, additive: k > 0);
+                all.Add(t);
+            }
+            int last = e.AddInstrumentTrack();
+            e.NoteOn(60, 0.5f);
+            float held = Peak(e, 0.5);
+            TrackArm.Set(e, last, true, additive: false); // disarms all seventy at once (past one block's 64 releases)
+            Beats(e, 1.0);
+            float after = Peak(e, 0.5);
+            e.NoteOff(60);
+            yield return (held > 0.01f && after < 1e-4f,
+                $"seventy tracks disarmed at once all release the held note (peak {held:F3} → {after:G2})");
+        }
+    }
+
+    // The key stays down for the other armed track: a take started there while it's still held
+    // records it (#366).
+    private static IEnumerable<(bool, string)> DisarmKeepsKeyForOtherTrack()
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        e.SetMetronome(false);
+        e.SetCountIn(0);
+        int a = e.AddInstrumentTrack(), b = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(a, 0);
+        e.SetTrackBuiltinInstrument(b, 0);
+        TrackArm.Set(e, a, true, additive: false);
+        TrackArm.Set(e, b, true, additive: true);
+        e.Play();
+        Beats(e, 1.0);
+        e.NoteOn(62, 0.8f);
+        Beats(e, 0.5);
+        TrackArm.Set(e, a, false, additive: true);
+        Beats(e, 0.5);
+        e.SetRecording(true);              // the take goes to b, the key still down
+        Beats(e, 1.0);
+        e.NoteOff(62);
+        Beats(e, 0.2);
+        e.Poll();
+        e.SetRecording(false);
+        e.Poll();
+        bool got = false;
+        for (int c = 0; c < 8 && e.TryGetClipInfo(b, c, out _); c++)
+            got |= e.GetClipNotes(b, c).Any(n => n.Pitch == 62);
+        yield return (got, "disarming one track leaves the key held for a take started on another armed track");
+        e.StopTransport();
+    }
+
+    // Disarming releases only the live notes that track was sounding: its clip's note on a
+    // pitch another track holds from Nota Remote keeps playing (#366).
+    private static IEnumerable<(bool, string)> DisarmSparesClipNotes()
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        e.SetMetronome(false);
+        int a = e.AddInstrumentTrack(), b = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(a, 0);
+        e.SetTrackBuiltinInstrument(b, 0);
+        int clip = e.AddMidiClip(a, 0.0, 8.0);
+        e.SetClipNotes(a, clip, new[] { new NotaNote(64, 0.0, 8.0, 0.8f) });
+        TrackArm.Set(e, a, true, additive: false);
+        e.Seek(0.0);
+        e.Play();
+        Beats(e, 0.5);
+        e.TrackNoteOn(b, 64, 0.8f);
+        Beats(e, 0.5);
+        TrackArm.Set(e, a, false, additive: false);
+        float peak = 0;
+        var buf = new float[Chunk * 2];
+        for (int k = 0; k < 64; k++)
+        {
+            e.RenderOffline(buf, Chunk, Sr);
+            if (k >= 8 && e.TryGetTrackMeter(a, out var m)) peak = Math.Max(peak, m.Peak);
+        }
+        e.TrackNoteOff(b, 64);
+        yield return (peak > 0.01f, $"disarming leaves the track's clip note sounding (peak {peak:F3})");
+        e.StopTransport();
     }
 
     private static int FirstAudio(NotaEngine e)

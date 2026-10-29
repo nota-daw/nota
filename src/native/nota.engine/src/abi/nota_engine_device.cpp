@@ -9,6 +9,7 @@
 #include "nota_engine_internal.h"
 
 #include "dsp/primitives/CompensationDelay.h"
+#include "dsp/primitives/SpectrumAnalyzer.h"
 #include "devices/effects/Compressor.h"
 #include "devices/effects/Delay.h"
 #include "devices/effects/Eq.h"
@@ -209,6 +210,24 @@ int32_t nota_device_text(
     return n; // full length (probe with a null buffer, then fetch)
 }
 
+int32_t nota_eq_set_band_text(
+    NotaEngine* e, int32_t track_id, int32_t device_index, int32_t band, const char* label, const char* note) {
+    if (!e) return 0;
+    return ENG(e)->setEqBandText(track_id, device_index, band, label ? label : "", note ? note : "") ? 1 : 0;
+}
+int32_t nota_eq_band_text(
+    const NotaEngine* e, int32_t track_id, int32_t device_index, int32_t band, int32_t which, char* out, int32_t cap) {
+    if (!e) return 0;
+    const std::string s = CENG(e)->eqBandText(track_id, device_index, band, which);
+    const int32_t n = static_cast<int32_t>(s.size());
+    if (out && cap > 0) {
+        const int32_t m = std::min(n, cap - 1);
+        std::memcpy(out, s.data(), static_cast<size_t>(m));
+        out[m] = '\0';
+    }
+    return n;
+}
+
 // --- MIDI effects ---
 int32_t nota_track_add_midi_effect(NotaEngine* e, int32_t t, int32_t kind) {
     return e ? ENG(e)->addTrackMidiEffect(t, kind) : -1;
@@ -383,6 +402,25 @@ int32_t nota_sidechain_routes_free(const NotaEngine* e) {
 }
 int32_t nota_sidechain_route_in_use(const NotaEngine* e, int32_t source_track_id, int32_t part) {
     return e && CENG(e)->sidechainRouteInUse(source_track_id, part) ? 1 : 0;
+}
+int32_t nota_spectrum_analyze_offline(const float* mono, int32_t n, double sample_rate, int32_t hop,
+                                      double dt, float* curves, int32_t max_frames) {
+    using nota::dsp::SpectrumAnalyzer;
+    if (!mono || !curves || n <= 0 || hop <= 0 || max_frames <= 0 || sample_rate <= 0) return 0;
+    SpectrumAnalyzer a;
+    a.prepare(sample_rate);
+    const int fft = a.fftSize();
+    if (n < fft) return 0;
+    uint32_t size = 1;
+    while (size < static_cast<uint32_t>(n)) size <<= 1;
+    std::vector<float> ring(size, 0.0f);
+    std::copy(mono, mono + n, ring.begin());
+    int32_t frames = 0;
+    for (int64_t w = fft; w <= n && frames < max_frames; w += hop, ++frames) {
+        a.analyse(ring.data(), size - 1, static_cast<uint32_t>(w), frames == 0 ? 0.0 : dt, false);
+        std::copy(a.curve(), a.curve() + SpectrumAnalyzer::kPoints, curves + frames * SpectrumAnalyzer::kPoints);
+    }
+    return frames;
 }
 int32_t nota_fx_selftest(void) {
     constexpr int N = 2048;

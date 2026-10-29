@@ -700,7 +700,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   slope for the cuts and a channel — stereo, Mid, Side, Left or Right. Scale (0–200 % of every
   shelf and bell gain), Output ±12 dB and Auto gain. A full-width response graph (draggable
   numbered nodes, the selected band's curve, a separate Side curve, an input / output spectrum
-  analyzer switched Pre / Post / Off), band chips, a panel for the selected band; 34 factory
+  analyzer — a filled 1/6-octave curve with fast-rise / slow-fall ballistics, switched Pre / Post /
+  Off, with a 60 / 90 / 120 dB Range and Peak hold), band chips, a panel for the selected band; 34 factory
   presets; MCP `read_eq8`, `set_eq8_band`, `set_eq8`.
 - **Nota Compressor** (1) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
   look-ahead (reported as latency for PDC), Peak/RMS/Auto detection, hold, auto-release,
@@ -809,7 +810,7 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Nota EQ-3** (16) — three-band DJ isolator: Low / Mid / High faders (−24 … +6 dB, or the
   Classic ±15 dB range) with a 0 dB detent and KILL buttons, two crossovers, 24 / 48 dB/oct
   Linkwitz-Riley slopes (phase-aligned, flat at unity), output gain. A response graph with each
-  band's curve, the brass sum and the output spectrum (engine FFT) — drag the crossover handles,
+  band's curve, the brass sum and the output spectrum (the same filled analyzer as EQ-8) — drag the crossover handles,
   or ride a band's gain in its zone; a status strip; 30 factory presets; MCP `read_eq3`,
   `set_eq3`.
 - **Nota Level** (18) — loudness leveler (BS.1770 LUFS): Auto rides the gain to a Target

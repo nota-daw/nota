@@ -168,6 +168,10 @@ internal static partial class NativeMethods
     internal static partial NotaResult DeviceLoadFile(IntPtr engine, int trackId, int deviceIndex, string path);
     [LibraryImport(Lib, EntryPoint = "nota_device_text")]
     internal static partial int DeviceText(IntPtr engine, int trackId, int deviceIndex, int id, [Out] byte[]? outBytes, int cap);
+    [LibraryImport(Lib, EntryPoint = "nota_eq_set_band_text", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int EqSetBandText(IntPtr engine, int trackId, int deviceIndex, int band, string label, string note);
+    [LibraryImport(Lib, EntryPoint = "nota_eq_band_text")]
+    internal static partial int EqBandText(IntPtr engine, int trackId, int deviceIndex, int band, int which, [Out] byte[]? outBytes, int cap);
 
     // --- MIDI effects ---
     [LibraryImport(Lib, EntryPoint = "nota_track_add_midi_effect")]
@@ -300,6 +304,10 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_fx_selftest")]
     internal static partial int FxSelfTest();
+
+    [LibraryImport(Lib, EntryPoint = "nota_spectrum_analyze_offline")]
+    internal static partial int SpectrumAnalyzeOffline(float[] mono, int n, double sampleRate, int hop, double dt,
+        [Out] float[] curves, int maxFrames);
 
     [LibraryImport(Lib, EntryPoint = "nota_plugin_open_editor")]
     internal static partial NotaResult PluginOpenEditor(IntPtr engine, int trackId, int deviceIndex);
