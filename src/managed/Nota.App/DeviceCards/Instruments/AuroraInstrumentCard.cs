@@ -1437,6 +1437,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         ctx.SetInstLiveViz(() => Refresh(false));
         showRailTab();
         showTab();
+        // The first paint ran before the card was in the window, where the off look can't
+        // reach templated parts: an oscillator that starts off (a preset) greys again here.
+        root.AttachedToVisualTree += (_, _) => Touch();
         return root;
     }
 
