@@ -81,6 +81,8 @@ internal sealed class DelayDeviceBody : IDeviceBody
         static double HighHz(double v) => Exp(v, 200, 20000);
         string LowCutF(double v) => v <= 0.001 ? "off" : Hz(LowHz(v));
         string HighCutF(double v) => v >= 0.999 ? "off" : Hz(HighHz(v));
+        // "filter 80 Hz — 6 kHz", or "filter off" when neither cut is on.
+        string FilterF() => P(LowCut) <= 0.001 && P(HighCut) >= 0.999 ? "filter off" : NotaNum.F($"filter {LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}");
         static string Window(double s) => s >= 1 ? NotaNum.F($"{s:0.#} s") : NotaNum.F($"{s * 1000:0} ms");
         static double NiceWindow(double seconds)
         {
@@ -405,7 +407,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 double sr = Sc(S_SampleRate) > 1000 ? Sc(S_SampleRate) : 48000;
                 double depth = P(WowDepth) * (On(TapeMode) ? 12 : 6) * sr / 44100, rate = Exp(P(WowRate), 0.05, 8);
                 double cents = 1200 * Math.Log2(1 + 2 * Math.PI * rate * depth / sr);
-                extras.Text = NotaNum.F($"filter {LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}{(cents >= 0.5 ? NotaNum.F($" · wow ±{cents:0} cents") : "")}");
+                extras.Text = NotaNum.F($"{FilterF()}{(cents >= 0.5 ? NotaNum.F($" · wow ±{cents:0} cents") : "")}");
                 extras.Foreground = TextTertiary;
             }
         });
@@ -434,7 +436,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         string StatusText()
         {
             if (On(Freeze))
-                return NotaNum.F($"Freeze: loop held, input muted · filter {LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}");
+                return NotaNum.F($"Freeze: loop held, input muted · {FilterF()}");
             string time = On(SyncMode)
                 ? NotaNum.F($"Sync {DivNames[Sel(DivL, 8)]}{(On(LinkLR) ? "" : NotaNum.F($" / {DivNames[Sel(DivR, 8)]}"))}")
                 : NotaNum.F($"ms · L {MsL():0} / R {(On(LinkLR) ? MsL() : MsR()):0}");
