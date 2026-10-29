@@ -69,8 +69,13 @@ public partial class MainWindow
         bool inPlace = IsFreezable(trackId) && Engine.IsTrackFrozen(trackId);
         bool sleeping = LinkForSource(trackId) is { State: LinkState.Frozen };
         bool dim = inPlace || sleeping;
+        // Undim only what this dimmed: a pass over a chain that was never dimmed would wipe
+        // the off look its own cards keep (a bypassed device, an oscillator switched off).
+        if (!dim && !_chainDimmed) return;
+        _chainDimmed = dim;
         Inactive.Set(_deviceChain, dim);
     }
+    private bool _chainDimmed;
 
     private void EnsureFreezeMenu()
     {
