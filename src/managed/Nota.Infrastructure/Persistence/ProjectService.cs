@@ -37,7 +37,8 @@ public sealed class ProjectService
     /// chain children's sidechain keys / CC targets.
     /// v26 (specs/048) adds Preset on instruments, devices and MIDI effects.
     /// v27 (specs/046) adds Preview on hosted plug-ins: the picture of their window.
-    public const int CurrentFormatVersion = 27;
+    /// v28 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
+    public const int CurrentFormatVersion = 28;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -148,7 +149,12 @@ public sealed class ProjectService
                         instDto.State = RegisterBlob(doc, engine.GetPluginState(ti.Id, -1));
                     }
                 }
-                else   // every other built-in instrument (Synth/Physical/Aurora/Volt/Instrument
+                else if (kind == 5)   // Nota Aurora: the blob without its tables, which go to samples/
+                {
+                    instDto.State = RegisterBlob(doc, engine.AuroraState(ti.Id, includeTables: false));
+                    instDto.Wavetables = CaptureWavetables(doc, engine, ti.Id);
+                }
+                else   // every other built-in instrument (Synth/Physical/Volt/Instrument
                 {      // Rack/Drum Rack/Flux) persists its state blob — the load path rebuilds from it.
                     instDto.State = RegisterBlob(doc, engine.GetPluginState(ti.Id, -1));
                 }
@@ -653,6 +659,9 @@ public sealed class ProjectService
                         var blob = ReadBlob(bundleDir, synthState);
                         if (blob.Length > 0) engine.SetPluginState(id, -1, blob);
                     }
+                    // Nota Aurora: its imported tables, from samples/ (specs/053).
+                    if (id > 0 && t.Instrument is { Kind: 5, Wavetables: { } wts })
+                        RestoreWavetables(engine, id, bundleDir, wts, warnings, newTrackIds.Count + 1);
                     // Nota Rhythm Phase 2: reload each voice's one-shot from the bundle.
                     if (id > 0 && t.Instrument is { Kind: 12, VoiceSamples: { } vsl })
                         foreach (var vs in vsl)
@@ -983,6 +992,17 @@ public sealed class ProjectService
                 WriteSampleWav(engine, kv.Value, ResolveInBundle(bundleDir, kv.Key));
         }
 
+        if (doc.TableRefs.Count > 0)
+        {
+            Directory.CreateDirectory(Path.Combine(bundleDir, BundleContent.SamplesDir));
+            foreach (var kv in doc.TableRefs)
+            {
+                string path = ResolveInBundle(bundleDir, kv.Key);
+                if (File.Exists(path) && new FileInfo(path).Length >= kv.Value.Length * sizeof(float)) continue;
+                BundleContent.WriteAtomic(path, tmp => AuroraTableWav.Write(tmp, kv.Value));
+            }
+        }
+
         if (doc.StateBlobs.Count > 0)
         {
             Directory.CreateDirectory(Path.Combine(bundleDir, BundleContent.StatesDir));
@@ -1085,6 +1105,68 @@ public sealed class ProjectService
         }
         doc.SampleRefs.TryAdd(rel, sampleId);
         return rel;
+    }
+
+    // Nota Aurora's imported tables (specs/053): each one a content-named float32 WAV, so two
+    // Auroras with the same table share one file. A table a project could not restore stays
+    // listed as missing, so the next save keeps its name.
+    private static List<WavetableDto>? CaptureWavetables(ProjectDocument doc, IAudioEngine engine, int trackId)
+    {
+        List<WavetableDto>? list = null;
+        for (int o = 0; o < 2; o++)
+        {
+            if (!engine.TryGetAuroraTableInfo(trackId, o, out var info)) return null;
+            if (info.HasTable)
+            {
+                string rel;
+                if (doc.SessionNames) rel = $"{BundleContent.SamplesDir}/table-{trackId}-{o}-{info.Serial}.wav";
+                else
+                {
+                    var frames = engine.AuroraTableRead(trackId, o);
+                    if (frames.Length == 0) continue;
+                    var bytes = new byte[frames.Length * sizeof(float)];
+                    Buffer.BlockCopy(frames, 0, bytes, 0, bytes.Length);
+                    rel = BundleContent.SampleRel(BundleContent.BlobHash(bytes));
+                    doc.TableRefs.TryAdd(rel, frames);
+                }
+                (list ??= new()).Add(new WavetableDto
+                {
+                    Osc = o, Sample = rel, Name = info.Name, Origin = info.Origin, Frames = info.Frames,
+                    UseCustom = info.UseCustom,
+                });
+            }
+            else if (info.Missing)
+                (list ??= new()).Add(new WavetableDto { Osc = o, Name = info.Name, Missing = true, UseCustom = false });
+        }
+        return list;
+    }
+
+    // Puts each saved table back (no undo step: this is a load). A table that cannot be read
+    // leaves its oscillator on the built-in bank, marked missing under the name it had.
+    private static void RestoreWavetables(IAudioEngine engine, int id, string bundleDir, List<WavetableDto> tables,
+        List<string> warnings, int trackNo)
+    {
+        foreach (var w in tables)
+        {
+            if (w.Osc is < 0 or > 1) continue;
+            bool ok = false;
+            if (!w.Missing && w.Sample.Length > 0 && w.Frames is > 0 and <= 256)
+            {
+                string path = ResolveInBundle(bundleDir, w.Sample);
+                float[]? mono = File.Exists(path) ? NotaEngine.DecodeMono(path, 60.0, out _) : null;
+                if (mono is not null && mono.Length == w.Frames * 2048
+                    && engine.AuroraTableFromFrames(mono, w.Frames, w.Name, w.Origin, out var h) == AuroraTableResult.Ok)
+                {
+                    try { ok = engine.AuroraSetTable(id, w.Osc, h, undoable: false); }
+                    finally { engine.AuroraTableFree(h); }
+                    if (ok) engine.AuroraSetSource(id, w.Osc, w.UseCustom);
+                }
+            }
+            if (ok) continue;
+            warnings.Add($"Track {trackNo}: Aurora Osc {w.Osc + 1} table \"{w.Name}\" is missing — it plays its built-in table.");
+            engine.AuroraSetMissing(id, w.Osc, w.Name.Length > 0 ? w.Name : "table");
+            engine.AuroraSetSource(id, w.Osc, false);
+        }
     }
 
     // Writes a sample unless its content-named file is already complete on disk.

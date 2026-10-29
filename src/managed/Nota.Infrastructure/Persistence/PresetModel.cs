@@ -48,6 +48,12 @@ public sealed class PresetDocument
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? MosaicProgram { get; set; }
 
+    /// <summary>Nota Aurora: the imported wavetables (specs/053), one entry per oscillator that
+    /// holds one. Null = none: applying the preset puts both oscillators back on their built-in
+    /// tables (every factory preset).</summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public System.Collections.Generic.List<PresetAuroraTable>? AuroraTables { get; set; }
+
     /// <summary>Nota EQ-8: the user's band labels and notes (specs/049), one entry per annotated
     /// band. Null = none (a factory preset, or one saved before labels existed).</summary>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
@@ -67,4 +73,16 @@ public sealed class PresetBandText
     public int Band { get; set; }
     public string Label { get; set; } = "";
     public string Note { get; set; } = "";
+}
+
+/// <summary>One Nota Aurora oscillator's imported table in a preset (specs/053): the frames as
+/// base64 of little-endian float32 (2048 per frame), and whether the oscillator plays it.</summary>
+public sealed class PresetAuroraTable
+{
+    public int Osc { get; set; }
+    public string Name { get; set; } = "";
+    public int Origin { get; set; }
+    public int Frames { get; set; }
+    public bool UseCustom { get; set; } = true;
+    public string Data { get; set; } = "";
 }

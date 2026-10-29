@@ -110,6 +110,9 @@ public static class ProjectMigrations
         // v26 -> v27: hosted plug-ins and instruments gain Preview, the picture of their window
         // (specs/046). Absent in v26 documents; null = no preview, the card stays plain — no-op.
         new Migration(26, _ => { }),
+        // v27 -> v28: Nota Aurora instruments gain Wavetables, their imported tables
+        // (specs/053). Absent in v27 documents; null = the built-in tables — no-op.
+        new Migration(27, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

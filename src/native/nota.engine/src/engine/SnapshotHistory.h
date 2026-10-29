@@ -30,6 +30,9 @@ template <class T> class SnapshotHistory {
     // that read it.
     T* live() const { return live_.load(std::memory_order_acquire); }
 
+    // The snapshot last published (message thread), e.g. for a clone to share.
+    std::shared_ptr<T> current() const { return current_; }
+
     // Publish `next` and retire the current one; frees retirees no render can still hold.
     void publish(std::shared_ptr<T> next) {
         live_.store(next.get(), std::memory_order_seq_cst);

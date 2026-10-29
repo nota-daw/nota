@@ -7,6 +7,7 @@
 
 #include "nota_engine_internal.h"
 #include "devices/instruments/Mosaic.h"
+#include "devices/instruments/WavetableSynth.h"
 
 #include <algorithm>
 #include <cstring>
@@ -833,6 +834,89 @@ NotaResult nota_midi_clip_ctl_set(
     NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t ctl, const NotaAutomationPoint* pts, int32_t count) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->ctlSet(track_id, false, clip_index, ctl, pts, count) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+
+
+// ---- Nota Aurora custom wavetables (specs/053), message thread ----
+int32_t nota_track_aurora_set_table(NotaEngine* e, int32_t track_id, int32_t osc, const NotaAuroraTable* t, int32_t checkpoint) {
+    if (!e || !t || !t->table) return 0;
+    return ENG(e)->auroraSetTable(track_id, osc, t->table, checkpoint != 0) ? 1 : 0;
+}
+int32_t nota_track_aurora_clear_table(NotaEngine* e, int32_t track_id, int32_t osc) {
+    return e && ENG(e)->auroraClearTable(track_id, osc) ? 1 : 0;
+}
+int32_t nota_track_aurora_set_source(NotaEngine* e, int32_t track_id, int32_t osc, int32_t use_custom) {
+    return e && ENG(e)->auroraSetSource(track_id, osc, use_custom != 0) ? 1 : 0;
+}
+int32_t nota_track_aurora_set_missing(NotaEngine* e, int32_t track_id, int32_t osc, const char* name) {
+    return e && ENG(e)->auroraSetMissing(track_id, osc, name ? std::string(name) : std::string()) ? 1 : 0;
+}
+int32_t nota_track_aurora_table_info(const NotaEngine* e, int32_t track_id, int32_t osc, NotaAuroraTableInfo* out) {
+    if (!e || !out || osc < 0 || osc > 1) return 0;
+    auto w = CENG(e)->auroraOf(track_id);
+    if (!w) return 0;
+    const auto t = w->table(osc);
+    notaFillAuroraInfo(t.get(), out);
+    out->use_custom = w->useCustom(osc) ? 1 : 0;
+    const std::string miss = w->missingName(osc);
+    if (!miss.empty()) {
+        out->missing = 1;
+        if (!t) {
+            const size_t n = std::min(miss.size(), sizeof(out->name) - 1);
+            std::memcpy(out->name, miss.data(), n);
+            out->name[n] = 0;
+        }
+    }
+    return 1;
+}
+int64_t nota_track_aurora_table_read(const NotaEngine* e, int32_t track_id, int32_t osc, float* out, int64_t cap) {
+    if (!e || osc < 0 || osc > 1) return 0;
+    auto w = CENG(e)->auroraOf(track_id);
+    const auto t = w ? w->table(osc) : nullptr;
+    if (!t) return 0;
+    const int64_t n = (int64_t)t->level[0].size();
+    if (!out) return n;
+    const int64_t k = std::min(n, cap);
+    if (k <= 0) return 0;
+    std::memcpy(out, t->base(), (size_t)k * sizeof(float));
+    return k;
+}
+int32_t nota_track_aurora_table_preview(const NotaEngine* e, int32_t track_id, int32_t osc, int32_t rep_frames,
+    int32_t grid_frames, int32_t points, float* out, int32_t cap) {
+    if (!e || osc < 0 || osc > 1) return 0;
+    auto w = CENG(e)->auroraOf(track_id);
+    const auto t = w ? w->table(osc) : nullptr;
+    if (!t) return 0;
+    rep_frames = std::clamp(rep_frames, 0, 16);
+    grid_frames = std::clamp(grid_frames, 0, 64);
+    points = std::clamp(points, 2, 256);
+    const int64_t need = (int64_t)(rep_frames + grid_frames) * points;
+    if (!out) return (int32_t)need;
+    if (cap < need) return 0;
+    // The mip level with about points / 2 harmonics keeps every shape a `points`-wide
+    // drawing can show, and none of the ripple it cannot.
+    int k = 0;
+    while (k < nota::AuroraTable::kLevels - 1 && nota::AuroraTable::harmonics(k + 1) * 2 >= points) ++k;
+    const int len = nota::AuroraTable::len(k);
+    const int nf = t->frames;
+    float* p = out;
+    for (int pass = 0; pass < 2; ++pass) {
+        const int count = pass == 0 ? rep_frames : grid_frames;
+        for (int i = 0; i < count; ++i) {
+            const int f = count > 1 ? (int)std::lround((double)i * (nf - 1) / (count - 1)) : 0;
+            const float* src = t->frame(k, std::clamp(f, 0, nf - 1));
+            for (int j = 0; j < points; ++j) *p++ = src[(int64_t)j * len / points];
+        }
+    }
+    return (int32_t)need;
+}
+int32_t nota_track_aurora_state(const NotaEngine* e, int32_t track_id, int32_t include_tables, uint8_t* out, int32_t cap) {
+    if (!e) return 0;
+    auto w = CENG(e)->auroraOf(track_id);
+    if (!w) return 0;
+    const auto v = w->stateWith(include_tables != 0);
+    if (out && cap >= (int32_t)v.size()) std::copy(v.begin(), v.end(), out);
+    return (int32_t)v.size();
 }
 
 } // extern "C"

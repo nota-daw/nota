@@ -51,6 +51,11 @@ public sealed class ProjectDocument
     /// Capture, written to <c>plugin-states/</c> by Save; not serialized.</summary>
     [JsonIgnore] public Dictionary<string, byte[]> StateBlobs { get; } = new();
 
+    /// <summary>Nota Aurora custom wavetables (format v28, specs/053): relative bundle path
+    /// -&gt; the table's frames (2048 floats each). Populated by Capture, written to
+    /// <c>samples/</c> as float32 WAV by Save; not serialized.</summary>
+    [JsonIgnore] public Dictionary<string, float[]> TableRefs { get; } = new();
+
     /// <summary>Name binaries by live id / position (<c>sample-N.wav</c>, <c>state-N.bin</c>)
     /// instead of by content hash. Cheap — nothing is read or hashed — but only stable within
     /// a session, so it is for change detection (<see cref="ProjectService.Capture"/> with
@@ -335,6 +340,9 @@ public sealed class InstrumentDto
     public bool Folded { get; set; }
     /// <summary>Nota Rhythm (Kind == 12) per-voice one-shots (only sample-source voices).</summary>
     public List<VoiceSampleDto>? VoiceSamples { get; set; }
+    /// <summary>Nota Aurora (Kind == 5) imported wavetables, one per oscillator that holds one
+    /// (format v28, specs/053); null = none.</summary>
+    public List<WavetableDto>? Wavetables { get; set; }
     /// <summary>The card's on/off switch is off: the instrument makes no sound (#148).</summary>
     public bool Bypassed { get; set; }
 
@@ -343,6 +351,22 @@ public sealed class InstrumentDto
 
 /// <summary>One drum voice's sample for Nota Rhythm: the voice index + a bundle-relative
 /// path into <c>samples/</c>.</summary>
+/// <summary>One Nota Aurora oscillator's imported wavetable (format v28, specs/053): its frames
+/// as a float32 WAV in <c>samples/</c> (a <c>clm </c> chunk names the 2048-sample frame), the
+/// name it was imported as, how the file was read (0 wavetable file, 1 single cycle,
+/// 2 recording) and whether the oscillator plays it. <see cref="Missing"/>: the table could not
+/// be restored when the project was last opened; <see cref="Sample"/> is empty then.</summary>
+public sealed class WavetableDto
+{
+    public int Osc { get; set; }
+    public string Sample { get; set; } = "";
+    public string Name { get; set; } = "";
+    public int Origin { get; set; }
+    public int Frames { get; set; }
+    public bool UseCustom { get; set; } = true;
+    public bool Missing { get; set; }
+}
+
 public sealed class VoiceSampleDto
 {
     public int Voice { get; set; }

@@ -436,6 +436,46 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_file_decode_mono", StringMarshalling = StringMarshalling.Utf8)]
     internal static unsafe partial long FileDecodeMono(string path, double maxSeconds, float* output, long cap, out double sampleRate);
 
+    // ---- Nota Aurora custom wavetables (specs/053) ----
+    [LibraryImport(Lib, EntryPoint = "nota_aurora_table_build", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int AuroraTableBuild(string path, out IntPtr table);
+
+    [LibraryImport(Lib, EntryPoint = "nota_aurora_table_from_frames", StringMarshalling = StringMarshalling.Utf8)]
+    internal static unsafe partial int AuroraTableFromFrames(float* frames, int count, string name, int origin, out IntPtr table);
+
+    [LibraryImport(Lib, EntryPoint = "nota_aurora_table_info")]
+    internal static partial int AuroraTableInfo(IntPtr table, out NotaAuroraTableInfoRaw info);
+
+    [LibraryImport(Lib, EntryPoint = "nota_aurora_table_frames")]
+    internal static unsafe partial long AuroraTableFrames(IntPtr table, float* output, long cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_aurora_table_free")]
+    internal static partial void AuroraTableFree(IntPtr table);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_set_table")]
+    internal static partial int AuroraSetTable(IntPtr engine, int trackId, int osc, IntPtr table, int checkpoint);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_clear_table")]
+    internal static partial int AuroraClearTable(IntPtr engine, int trackId, int osc);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_set_source")]
+    internal static partial int AuroraSetSource(IntPtr engine, int trackId, int osc, int useCustom);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_set_missing", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int AuroraSetMissing(IntPtr engine, int trackId, int osc, string name);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_table_info")]
+    internal static partial int AuroraTrackTableInfo(IntPtr engine, int trackId, int osc, out NotaAuroraTableInfoRaw info);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_table_read")]
+    internal static unsafe partial long AuroraTableRead(IntPtr engine, int trackId, int osc, float* output, long cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_table_preview")]
+    internal static unsafe partial int AuroraTablePreview(IntPtr engine, int trackId, int osc, int repFrames, int gridFrames, int points, float* output, int cap);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_aurora_state")]
+    internal static unsafe partial int AuroraState(IntPtr engine, int trackId, int includeTables, byte* output, int cap);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_action")]
     internal static partial void InstrumentAction(IntPtr engine, int trackId, int id, int iarg, float farg);
 
@@ -618,4 +658,20 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_sampler_info")]
     internal static partial int TrackSamplerInfo(IntPtr engine, int trackId, out NotaSamplerInfo info);
+}
+
+/// <summary>Native NotaAuroraTableInfo (specs/053), turned into
+/// <see cref="Nota.Application.AuroraTableInfo"/> by <see cref="NotaEngine"/>.</summary>
+[StructLayout(LayoutKind.Sequential)]
+internal unsafe struct NotaAuroraTableInfoRaw
+{
+    public int Frames;
+    public int Origin;
+    public int TruncatedLength;
+    public int TruncatedFrames;
+    public int UseCustom;
+    public int Missing;
+    public uint Serial;
+    public fixed byte Hash[16];
+    public fixed byte Name[256];
 }

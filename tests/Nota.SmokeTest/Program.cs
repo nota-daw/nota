@@ -541,6 +541,24 @@ if (args.Length >= 1 && args[0] == "--aurora-null")
     Console.WriteLine(failures == 0 ? "AURORA-NULL PASSED" : $"AURORA-NULL FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Aurora custom wavetables alone: `--aurora-tables` (specs/053). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--aurora-tables")
+{
+    Console.WriteLine("-- aurora tables --");
+    foreach (var (ok, label) in AuroraTableTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in AuroraNullTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AURORA-TABLES PASSED" : $"AURORA-TABLES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// The Aurora import test files: `--aurora-fixtures <dir>` (specs/053 quickstart § 2).
+if (args.Length >= 2 && args[0] == "--aurora-fixtures")
+{
+    foreach (var kv in AuroraFixtures.Write(args[1])) Console.WriteLine(kv.Value);
+    return 0;
+}
+// The Aurora UI measurement project: `--aurora-ui-fixture <dir> [--builtin]` (quickstart § 4).
+if (args.Length >= 2 && args[0] == "--aurora-ui-fixture")
+    return AuroraFixtures.WriteUiProject(args[1], builtin: args.Length >= 3 && args[2] == "--builtin");
 // Dump Aurora reference renders: `--aurora-null-dump <dir>`.
 if (args.Length >= 2 && args[0] == "--aurora-null-dump")
 {
@@ -15229,6 +15247,8 @@ foreach (var (ok, label) in PanLawTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- aurora null --");
 foreach (var (ok, label) in AuroraNullTests.Run()) Check(ok, label);
+Console.WriteLine("-- aurora tables --");
+foreach (var (ok, label) in AuroraTableTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- device fold --");
 foreach (var (ok, label) in DeviceFoldTests.Run()) Check(ok, label);

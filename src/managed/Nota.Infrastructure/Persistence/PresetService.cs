@@ -60,6 +60,8 @@ public static class PresetService
                 }
                 // Nota Mosaic: the zone map travels with the sound (its samples stay referenced).
                 if (ik == MosaicModel.Kind && engine.MosaicProgram(trackId) is { Length: > 0 } prog) doc.MosaicProgram = prog;
+                // Nota Aurora: its imported tables travel with the sound (specs/053).
+                if (ik == 5) doc.AuroraTables = CaptureAuroraTables(engine, trackId);
                 return doc;
             }
         }
@@ -271,6 +273,7 @@ public static class PresetService
                             && doc.NamedParams.TryGetValue(pid, out var v))
                             engine.PluginParamSet(t, -1, i, v);
                 }
+                if (doc.BuiltinKind == 5) return LoadAuroraTables(doc, engine, t, undoable: false);
                 string mw = LoadMosaicProgram(doc, engine, t);
                 return mw.Length > 0 ? mw : LoadGrainSource(doc, engine, t);
             }
@@ -306,6 +309,81 @@ public static class PresetService
         var path = Grain.GrainSourceLibrary.Ensure(doc.GrainSource);
         if (src is null || path is null) return $"Couldn't prepare the sample \"{doc.GrainSource}\".";
         return engine.SetTrackGrainSample(trackId, path, src.Root) ? "" : $"Couldn't load the sample \"{src.Name}\".";
+    }
+
+    // A built-in instrument's parameters in place: the named ones, every other one back to its
+    // default (the card size excepted). The Aurora path above shares it.
+    private static void ApplyInstrumentParams(PresetDocument doc, IAudioEngine engine, int trackId)
+    {
+        int pc = engine.PluginParamCount(trackId, -1);
+        for (int i = 0; i < pc; i++)
+        {
+            string id = engine.PluginParamId(trackId, -1, i);
+            if (InstrumentView.IsViewParam(id)) continue;
+            bool named = doc.NamedParams is { Count: > 0 } && doc.NamedParams.ContainsKey(id);
+            engine.PluginParamSet(trackId, -1, i, named ? doc.NamedParams![id] : engine.InstrumentParamDefault(trackId, i));
+        }
+    }
+
+    // Nota Aurora's imported tables into a preset: the frames, as base64 float32.
+    private static List<PresetAuroraTable>? CaptureAuroraTables(IAudioEngine engine, int trackId)
+    {
+        List<PresetAuroraTable>? list = null;
+        for (int o = 0; o < 2; o++)
+        {
+            if (!engine.TryGetAuroraTableInfo(trackId, o, out var info) || !info.HasTable) continue;
+            var frames = engine.AuroraTableRead(trackId, o);
+            if (frames.Length == 0) continue;
+            var bytes = new byte[frames.Length * sizeof(float)];
+            Buffer.BlockCopy(frames, 0, bytes, 0, bytes.Length);
+            (list ??= new()).Add(new PresetAuroraTable
+            {
+                Osc = o, Name = info.Name, Origin = info.Origin, Frames = info.Frames, UseCustom = info.UseCustom,
+                Data = Convert.ToBase64String(bytes),
+            });
+        }
+        return list;
+    }
+
+    // A Nota Aurora preset sets exactly its tables: the ones it carries, and the built-in bank
+    // on every oscillator it does not name (so a factory preset clears an imported table).
+    private static string LoadAuroraTables(PresetDocument doc, IAudioEngine engine, int trackId, bool undoable)
+    {
+        string warn = "";
+        for (int o = 0; o < 2; o++)
+        {
+            var entry = doc.AuroraTables?.Find(x => x.Osc == o);
+            if (entry is null)
+            {
+                if (engine.TryGetAuroraTableInfo(trackId, o, out var cur))
+                {
+                    if (cur.HasTable) engine.AuroraClearTable(trackId, o);
+                    else if (cur.Missing) engine.AuroraSetMissing(trackId, o, "");
+                    if (cur.UseCustom) engine.AuroraSetSource(trackId, o, false);
+                }
+                continue;
+            }
+            float[]? frames = null;
+            try
+            {
+                var bytes = Convert.FromBase64String(entry.Data);
+                if (entry.Frames is > 0 and <= 256 && bytes.Length == entry.Frames * 2048 * sizeof(float))
+                {
+                    frames = new float[bytes.Length / sizeof(float)];
+                    Buffer.BlockCopy(bytes, 0, frames, 0, bytes.Length);
+                }
+            }
+            catch (FormatException) { }
+            if (frames is null || engine.AuroraTableFromFrames(frames, entry.Frames, entry.Name, entry.Origin, out var h) != AuroraTableResult.Ok)
+            {
+                warn = $"The preset's Osc {o + 1} table \"{entry.Name}\" couldn't be read.";
+                continue;
+            }
+            try { engine.AuroraSetTable(trackId, o, h, undoable); }
+            finally { engine.AuroraTableFree(h); }
+            engine.AuroraSetSource(trackId, o, entry.UseCustom);
+        }
+        return warn;
     }
 
     // A Nota Mosaic preset loads its program: a factory multisample (rendered on first use) or
@@ -388,6 +466,18 @@ public static class PresetService
         if (trackId <= 0) return "Select a track first.";
         switch (doc.Type)
         {
+            case "builtin-instrument" when engine.TrackInstrumentKind(trackId) == 5:
+            {
+                // Nota Aurora: the parameters and the imported tables are one undo step.
+                engine.BeginUndoGroup();
+                try
+                {
+                    var parms = new PresetDocument { Type = "builtin-instrument-params", NamedParams = doc.NamedParams };
+                    ApplyInstrumentParams(parms, engine, trackId);
+                    return LoadAuroraTables(doc, engine, trackId, undoable: true);
+                }
+                finally { engine.EndUndoGroup(); }
+            }
             case "builtin-instrument":
             {
                 int pc = engine.PluginParamCount(trackId, -1);

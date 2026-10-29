@@ -342,6 +342,65 @@ bool Engine::setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::str
     return true;
 }
 
+// ---- Nota Aurora custom wavetables (specs/053) --------------------------------
+std::shared_ptr<const WavetableSynth> Engine::auroraOf(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !t->instrument) return nullptr;
+    auto w = std::dynamic_pointer_cast<WavetableSynth>(t->instrument);
+    return w;
+}
+
+bool Engine::auroraSetTable(int32_t trackId, int32_t osc, std::shared_ptr<const AuroraTable> table, bool checkpoint) {
+    if (osc < 0 || osc > 1 || !table) return false;
+    auto old = findTrackAuthoring(trackId);
+    auto* w = old && old->instrument ? dynamic_cast<WavetableSynth*>(old->instrument.get()) : nullptr;
+    if (!w) return false;
+    if (!checkpoint) {
+        w->setTable(osc, std::move(table)); // a project load: in place, through the table history
+        return true;
+    }
+    // Undoable: a fresh Aurora with the table (the clone shares the other slot), so undo
+    // brings the old instrument, and its tables, back.
+    auto fresh = std::static_pointer_cast<WavetableSynth>(w->clone());
+    fresh->setTable(osc, std::move(table));
+    fresh->presetTag = w->presetTag;
+    auto nt = cloneTrack(*old);
+    nt->instrument = fresh;
+    republishWithTrack(trackId, nt);
+    return true;
+}
+
+bool Engine::auroraClearTable(int32_t trackId, int32_t osc) {
+    if (osc < 0 || osc > 1) return false;
+    auto old = findTrackAuthoring(trackId);
+    auto* w = old && old->instrument ? dynamic_cast<WavetableSynth*>(old->instrument.get()) : nullptr;
+    if (!w) return false;
+    auto fresh = std::static_pointer_cast<WavetableSynth>(w->clone());
+    fresh->clearTable(osc);
+    fresh->presetTag = w->presetTag;
+    auto nt = cloneTrack(*old);
+    nt->instrument = fresh;
+    republishWithTrack(trackId, nt);
+    return true;
+}
+
+bool Engine::auroraSetSource(int32_t trackId, int32_t osc, bool custom) {
+    auto t = findTrackAuthoring(trackId);
+    auto* w = t && t->instrument ? dynamic_cast<WavetableSynth*>(t->instrument.get()) : nullptr;
+    if (!w || osc < 0 || osc > 1) return false;
+    w->setSource(osc, custom);
+    w->wake();
+    return true;
+}
+
+bool Engine::auroraSetMissing(int32_t trackId, int32_t osc, const std::string& name) {
+    auto t = findTrackAuthoring(trackId);
+    auto* w = t && t->instrument ? dynamic_cast<WavetableSynth*>(t->instrument.get()) : nullptr;
+    if (!w || osc < 0 || osc > 1) return false;
+    w->setMissing(osc, name);
+    return true;
+}
+
 bool Engine::setTrackGrainSample(int32_t trackId, const std::string& path, int32_t rootNote) {
     auto old = findTrackAuthoring(trackId);
     auto* gr = old && old->instrument ? dynamic_cast<GrainSynth*>(old->instrument.get()) : nullptr;
