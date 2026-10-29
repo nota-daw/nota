@@ -136,8 +136,7 @@ identity colours, so the two oscillators are told apart by shade and label
   aligned to zero crossings, no pitch detection.
 - Q: Does each window follow the modulated position live? → A: Yes; the performance budget
   covers both windows following live.
-- Q: Does the card stay 700 wide or move to the Wide 1050 size? → Open, put to the
-  project owner.
+- Q: Does the card stay 700 wide or move to the Wide 1050 size? → A: Stays 700 wide.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -330,11 +329,8 @@ travel through the stack once a second. With no note held, it rests at the set P
 - **FR-004**: The two oscillators MUST be told apart by their labels and position on the
   card, not by identity colours (style guide). An oscillator that is off MUST take the
   unavailable look without moving anything.
-- **FR-005**: The card MUST stay 260 high, with every control it has today still on it
-  [NEEDS CLARIFICATION: does the card stay 700 wide, fitting both oscillators into the
-  current ~438 px centre panel (type selectors become compact drop-downs and the windows
-  get smaller), or move to the Wide 1050 size so each oscillator gets a full-width row
-  with its chips and a window as large as today's?]. The other five tabs, the wheels and
+- **FR-005**: The card MUST stay 260 high, with every control it has today still on it and stays 700 wide, both oscillators side by side in the
+  centre panel (decided Oct 29, see Clarifications). The other five tabs, the wheels and
   the rail keep their content.
 - **FR-006**: Factory presets, saved projects and saved user presets MUST load with the
   same values and sound bit-identical (null test as in 036 FR-003). This feature changes
