@@ -463,8 +463,10 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         // ======================================================================
         int centreTab = 0;
 
-        // Sidechain key: the switch picks a source (a flyout with the tracks and the key gain).
-        string SrcName(int id) => TrackNames.Of(engine, id);
+        // Sidechain key: the switch picks a source (a flyout with the tracks — and the pads / chains
+        // / voices of a track's instrument, indented under it, specs/050 — and the key gain).
+        SidechainKey Key() => engine.DeviceSidechainKey(track, di);
+        string KeyName() => SidechainSourcePicker.Name(engine, Key());
         Control SidechainSwitch()
         {
             Border? host = null;
@@ -472,17 +474,19 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             {
                 var list = new StackPanel { Spacing = 1 };
                 var fly = new Flyout();
-                void Item(string name, int id)
+                void Item(string name, SidechainKey k, bool indent = false, bool enabled = true, string? tip = null)
                 {
-                    bool cur = engine.DeviceSidechainSource(track, di) == id;
-                    var tb = new TextBlock { Text = name, FontSize = 10, Foreground = cur ? AccentBright : TextPrimary, FontWeight = cur ? FontWeight.SemiBold : FontWeight.Normal };
-                    var b = new Border { Padding = new Thickness(8, 3), CornerRadius = NotaRadius.Badge, Background = cur ? NotaPalette.AccentSubtle : Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
-                    b.PointerPressed += (_, e) => { engine.SetDeviceSidechainSource(track, di, id); ctx.NotifyChanged(); RefreshAll(); fly.Hide(); e.Handled = true; };
+                    bool cur = Key() == k;
+                    var tb = new TextBlock { Text = name, FontSize = 10, Foreground = !enabled ? TextDisabled : cur ? AccentBright : TextPrimary, FontWeight = cur ? FontWeight.SemiBold : FontWeight.Normal };
+                    var b = new Border { Padding = new Thickness(indent ? 20 : 8, 3, 8, 3), CornerRadius = NotaRadius.Badge, Background = cur ? NotaPalette.AccentSubtle : Brushes.Transparent, Cursor = enabled ? new Cursor(StandardCursorType.Hand) : Cursor.Default, Child = tb };
+                    if (tip != null) ToolTip.SetTip(b, tip);
+                    if (enabled)
+                        b.PointerPressed += (_, e) => { SidechainSourcePicker.SetDeviceKey(engine, track, di, k); ctx.NotifyChanged(); RefreshAll(); fly.Hide(); e.Handled = true; };
                     list.Children.Add(b);
                 }
-                Item("None — this track's input", -1);
-                for (int i = 0; i < engine.TrackCount; i++)
-                    if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track) Item(SrcName(ti.Id), ti.Id);
+                Item("None — this track's input", SidechainKey.None);
+                foreach (var en in SidechainSourcePicker.Entries(engine, track, Key()))
+                    Item(en.Label, en.Key, en.IsPart, en.Enabled, en.Tip);
                 var gain = DeviceCardKit.SliderRow("KEY GAIN", () => (engine.DeviceSidechainGain(track, di) + 24) / 48.0,
                     v => engine.SetDeviceSidechainGain(track, di, (float)(v * 48 - 24)),
                     () => NotaNum.F($"{engine.DeviceSidechainGain(track, di):+0.0;−0.0;0.0} dB"), out _, bipolar: true,
@@ -496,8 +500,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 else ShowPicker();
             }, out var sync, liveLabel: () =>
             {
-                int src = engine.DeviceSidechainSource(track, di);
-                return src >= 0 ? "Key: " + SrcName(src) : "Sidechain key";
+                return engine.DeviceSidechainSource(track, di) >= 0 ? "Key: " + KeyName() : "Sidechain key";
             });
             host = sw;
             readouts.Add(sync);
@@ -675,7 +678,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                     parts.Add(NotaNum.F($"mix {Pct(P(DryWet))}"));
                     break;
             }
-            if (engine.DeviceSidechainSource(track, di) >= 0) parts.Add("key: " + SrcName(engine.DeviceSidechainSource(track, di)));
+            if (engine.DeviceSidechainSource(track, di) >= 0) parts.Add("key: " + KeyName());
             return string.Join(" · ", parts);
         }
         readouts.Add(() =>

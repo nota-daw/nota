@@ -23,6 +23,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Sidechain from a single pad, chain or voice** (#190): a sidechain key can now listen to one
+  pad of a Drum Rack, one chain of an Instrument Rack or one voice of Nota Rhythm instead of the
+  whole track — duck the bass from just the kick. Every key source picker lists the parts under
+  their track (Compressor, Auto Filter, Auto Gain, Ceiling, Dynamic EQ, Prism, Shutter, Vocoder,
+  plug-in sidechain inputs and Nota Flux's React). Pre takes the part before its own effects (the
+  raw hit), Post after its effects and its level and pan. A muted or solo-silenced pad still drives
+  its key — the "ghost kick". The key stays on its pad when pads are added, removed or renamed,
+  goes quiet while its pad is deleted (undo brings it back) and is saved with the project. MCP:
+  `list_sidechain_sources`, `get_instrument_sidechain`, `set_instrument_sidechain`, and a
+  `sourcePart` on `get_device_sidechain` / `set_device_sidechain`.
 - **ASIO on Windows**: Settings → Audio → **Audio system** now offers ASIO beside WASAPI.
   Pick the driver and the output and input channel pairs by the driver's own names (the
   other outputs stay silent); **Driver settings…** opens the driver's panel, where the buffer
@@ -184,6 +194,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   before keep the stereo pair. Saved with the project; MCP `set_input_channels`.
 
 ### Changed
+- **16 sidechain routes instead of 8** (#190): whole tracks and single pads share the pool; a
+  source picker greys out what no free route can take, and a project that needs more says how many
+  keys it had to drop.
 - **Return and master rows start compact**: new projects, new returns and projects saved
   before this version show them at the Compact height, so the tracks get the room.
 - **One click arms one track** (nota-daw/nota#332): a click on a track's arm button arms that

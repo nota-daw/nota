@@ -591,6 +591,7 @@ void RhythmMachine::allNotesOff() {
 
 void RhythmMachine::render(float* out, int32_t frames) {
     const SnapshotHistory<FxState>::RenderScope done(fxStates_);
+    const int32_t tapAt = taps_.take(frames); // this piece's first frame in the block's key buffers
     if (idle_) {
         // Mirror the sequencer clock over the skipped span (no step can trigger while
         // idle — a sounding step would have kept us awake — but arming and the step
@@ -661,13 +662,25 @@ void RhythmMachine::render(float* out, int32_t frames) {
     // Per-block voice param snapshots (floats cross into the voice DSP by value).
     RhythmVoiceDsp::Params vp[kVoices];
     for (int v = 0; v < kVoices; ++v) vp[v] = voiceParams(v);
+    // Voices a sidechain key listens to (specs/050): where their Pre / Post go this block.
+    // A keyed voice renders into its own buffer like a voice with FX does, and its Pre / Post
+    // are taken from that buffer once per chunk — the per-sample voice loop stays as it is.
+    const PartTap* tap[kVoices] = {};
+    bool own[kVoices] = {false};
+    bool anyOwn = anyFx;
+    for (int v = 0; v < kVoices; ++v) own[v] = hasFx[v];
+    for (int32_t t = 0; t < taps_.count(); ++t)
+        if (const int32_t v = partIndex(taps_.at(t).part); v >= 0) {
+            tap[v] = &taps_.at(t);
+            own[v] = anyOwn = true;
+        }
     float ownPeak = 0.0f;
     for (int32_t base = 0; base < frames; base += kChunk) {
         const int32_t n = std::min<int32_t>(kChunk, frames - base);
         std::memset(mix_, 0, sizeof(float) * n * 2);
-        if (anyFx)
+        if (anyOwn)
             for (int v = 0; v < kVoices; ++v)
-                if (hasFx[v]) std::memset(vbuf_[v], 0, sizeof(float) * n * 2);
+                if (own[v]) std::memset(vbuf_[v], 0, sizeof(float) * n * 2);
         for (int32_t j = 0; j < n; ++j) {
             const int32_t i = base + j;
             // --- sequencer clock ---
@@ -711,19 +724,26 @@ void RhythmMachine::render(float* out, int32_t frames) {
                 const float pan = std::clamp(get2(v, Pan) * 2.0f - 1.0f, -1.0f, 1.0f);
                 const float gl = (pan <= 0.0f ? 1.0f : 1.0f - pan);
                 const float gr = (pan >= 0.0f ? 1.0f : 1.0f + pan);
-                float* dst = hasFx[v] ? vbuf_[v] : mix_;
+                float* dst = own[v] ? vbuf_[v] : mix_;
                 dst[j * 2] += sl * gl;
                 dst[j * 2 + 1] += sr * gr;
             }
         }
 
         // --- voice FX: every chain runs each chunk, so its tail rings out after the hit ---
-        if (anyFx)
+        // (and keyed voices: Pre before the FX, Post after them)
+        if (anyOwn)
             for (int v = 0; v < kVoices; ++v) {
-                if (!hasFx[v]) continue;
-                for (auto& d : fx->chain[v])
-                    if (d && !d->bypassed()) d->process(vbuf_[v], n);
+                if (!own[v]) continue;
+                if (tap[v])
+                    for (int32_t k = 0; k < n * 2; ++k) tap[v]->pre[(tapAt + base) * 2 + k] += vbuf_[v][k];
+                if (hasFx[v])
+                    for (auto& d : fx->chain[v])
+                        if (d && !d->bypassed()) d->process(vbuf_[v], n);
                 for (int32_t k = 0; k < n * 2; ++k) mix_[k] += std::isfinite(vbuf_[v][k]) ? vbuf_[v][k] : 0.0f;
+                if (tap[v])
+                    for (int32_t k = 0; k < n * 2; ++k)
+                        tap[v]->post[(tapAt + base) * 2 + k] += std::isfinite(vbuf_[v][k]) ? vbuf_[v][k] : 0.0f;
             }
 
         // --- bus: glue + volume ---

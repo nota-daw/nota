@@ -501,6 +501,14 @@ if (args.Length >= 1 && args[0] == "--preset-state")
     Console.WriteLine(failures == 0 ? "PRESET STATE PASSED" : $"PRESET STATE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Sidechain sub-sources alone: `--sidechain-parts` (specs/050). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--sidechain-parts")
+{
+    Console.WriteLine("-- sidechain parts --");
+    foreach (var (ok, label) in SidechainPartTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SIDECHAIN PARTS PASSED" : $"SIDECHAIN PARTS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Plug-in card preview alone: `--preview`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--preview")
 {
@@ -15271,6 +15279,9 @@ Console.WriteLine("-- device fold --");
 foreach (var (ok, label) in DeviceFoldTests.Run()) Check(ok, label);
 Console.WriteLine("-- preset state --");
 foreach (var (ok, label) in PresetStateTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- sidechain parts --");
+foreach (var (ok, label) in SidechainPartTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- eq analyzer --");
 foreach (var (ok, label) in EqAnalyzerTests.Run()) Check(ok, label);

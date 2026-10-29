@@ -334,6 +334,7 @@ bool Engine::setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::str
     auto sample = decodeAudioFile(path);
     if (!sample || sample->empty()) return false;
     auto fresh = std::static_pointer_cast<RhythmMachine>(rh->clone()); // copies params/patterns/samples
+    fresh->adoptUid(*rh); // an edit, not a new instrument: voice keys keep pointing here (specs/050)
     fresh->setVoiceSample(voice, sample);
     fresh->presetTag = rh->presetTag; // still the preset it was loaded from (specs/048)
     auto nt = cloneTrack(*old);
@@ -696,6 +697,7 @@ std::shared_ptr<Device> Engine::cloneDevice(const Device& src) const {
     d->setPresetTag(src.presetTag()); // the preset it was loaded from (specs/048)
     d->setEditorPreview(src.editorPreview()); // shared bytes: the same picture (specs/046)
     d->setSidechainSourceTrackId(src.sidechainSourceTrackId()); // a keyed device keeps its key
+    d->setSidechainPart(src.sidechainPart());
     d->setSidechainTapPre(src.sidechainTapPre());
     d->setSidechainGainDb(src.sidechainGainDb());
     d->setSidechainMix(src.sidechainMix());
@@ -894,6 +896,7 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
             if (dev == sd) dev = cloneDevice(*sd);
             if (!dev) return -3;
             dev->setSidechainSourceTrackId(-1);
+            dev->setSidechainPart(0);
             flags |= kTransferSidechainCleared;
         }
         if (ns) {
@@ -1090,7 +1093,10 @@ int32_t Engine::pasteDevices(int32_t trackId, int32_t midiAt, int32_t fxAt, int3
         } else if (e.dev) {
             auto c = cloneDevice(*e.dev);
             if (!c) return -3;
-            if (c->sidechainSourceTrackId() == trackId) c->setSidechainSourceTrackId(-1); // no key from itself
+            if (c->sidechainSourceTrackId() == trackId) { // no key from itself
+                c->setSidechainSourceTrackId(-1);
+                c->setSidechainPart(0);
+            }
             devs.push_back(std::move(c));
         }
     }
@@ -1488,7 +1494,10 @@ std::string Engine::deviceText(int32_t trackId, int32_t deviceIndex, int32_t id)
 }
 
 void Engine::setDeviceSidechainSource(int32_t trackId, int32_t deviceIndex, int32_t sourceTrackId) {
-    if (auto* d = deviceAt(trackId, deviceIndex)) d->setSidechainSourceTrackId(sourceTrackId);
+    if (auto* d = deviceAt(trackId, deviceIndex)) {
+        d->setSidechainSourceTrackId(sourceTrackId);
+        d->setSidechainPart(0); // a whole-track key
+    }
     recomputeRouting();
 }
 
@@ -1527,7 +1536,10 @@ int32_t Engine::deviceSidechainTapPre(int32_t trackId, int32_t deviceIndex) cons
 // Instrument sidechain ("React", Nota Flux): route a listening instrument to a source track.
 void Engine::setInstrumentSidechainSource(int32_t trackId, int32_t sourceTrackId) {
     auto t = findTrackAuthoring(trackId);
-    if (t && t->instrument) t->instrument->setSidechainSourceTrackId(sourceTrackId);
+    if (t && t->instrument) {
+        t->instrument->setSidechainSourceTrackId(sourceTrackId);
+        t->instrument->setSidechainPart(0); // a whole-track key
+    }
     recomputeRouting();
 }
 int32_t Engine::instrumentSidechainSource(int32_t trackId) const {
@@ -1544,37 +1556,179 @@ bool Engine::instrumentAcceptsSidechain(int32_t trackId) const {
 // instrument pointers are stable across snapshots, so the table the audio thread reads
 // stays valid).
 void Engine::recomputeRouting() {
-    for (auto& s : routeSlotTrackId_) s.store(-1, std::memory_order_relaxed);
+    // Slots at and past the count are always free, so only the used ones need clearing.
+    const int32_t used = routeSlotCount_.load(std::memory_order_relaxed);
+    routeSlotCount_.store(0, std::memory_order_release);
+    for (int32_t s = 0; s < used; ++s) routeSlotTrackId_[s].store(-1, std::memory_order_relaxed);
     int32_t next = 0;
     // A source that is not in the graph (its track was deleted; undo brings it back) gets no
-    // slot, so its consumers see no key at all rather than a silent one.
-    auto exists = [&](int32_t id) {
+    // slot, so its consumers see no key at all rather than a silent one. A part key whose part
+    // is gone (the pad deleted, the rack replaced; specs/050) likewise.
+    auto exists = [&](int32_t id, uint64_t part) {
         for (auto& t : authoring_->tracks)
-            if (t->id() == id) return true;
+            if (t->id() == id) return part == 0 || (t->instrument && t->instrument->partIndex(part) >= 0);
         return false;
     };
-    auto claim = [&](int32_t src) {
-        if (src < 0 || routeSlotForTrack(src) >= 0 || !exists(src)) return; // none / already assigned / gone
-        if (next < kMaxRoutes) routeSlotTrackId_[next++].store(src, std::memory_order_relaxed);
+    auto claim = [&](int32_t src, uint64_t part) {
+        if (src < 0 || routeSlotFor(src, part) >= 0 || !exists(src, part)) return; // none / already assigned / gone
+        if (next < kMaxRoutes) {
+            routeSlotPart_[next].store(part, std::memory_order_relaxed);
+            routeSlotTrackId_[next++].store(src, std::memory_order_relaxed);
+            routeSlotCount_.store(next, std::memory_order_release); // claim() looks up as it goes
+        }
     };
+    forEachRouteKey([&](int32_t src, uint64_t part) { claim(src, part); });
+}
+
+// Every route a consumer asks for, in claim order: track instruments and devices (and keyed
+// children inside their racks, specs/044), then a monitoring audio track's input source.
+template <typename Fn>
+void Engine::forEachRouteKey(Fn&& fn) const {
     for (auto& t : authoring_->tracks) {
-        // Keyed children inside racks claim too (specs/044).
-        auto claimChildren = [&](const RackCore& r) {
-            r.forEachChildDevice([&](Device& c) { claim(c.sidechainSourceTrackId()); });
-            r.forEachChildInstrument([&](Instrument& i) { claim(i.sidechainSourceTrackId()); });
+        auto children = [&](const RackCore& r) {
+            r.forEachChildDevice([&](Device& c) { fn(c.sidechainSourceTrackId(), c.sidechainPart()); });
+            r.forEachChildInstrument([&](Instrument& i) { fn(i.sidechainSourceTrackId(), i.sidechainPart()); });
         };
         if (t->instrument) {
-            claim(t->instrument->sidechainSourceTrackId());
-            if (auto* r = t->instrument->asRack()) claimChildren(*r);
+            fn(t->instrument->sidechainSourceTrackId(), t->instrument->sidechainPart());
+            if (auto* r = t->instrument->asRack()) children(*r);
         }
         for (auto& d : t->devices)
             if (d) {
-                claim(d->sidechainSourceTrackId());
-                if (auto* r = d->asRack()) claimChildren(*r);
+                fn(d->sidechainSourceTrackId(), d->sidechainPart());
+                if (auto* r = d->asRack()) children(*r);
             }
         // A monitoring audio track hears its source track's post-fader tap.
-        if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0) claim(t->recordInputSource());
+        if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0) fn(t->recordInputSource(), uint64_t{0});
     }
+}
+
+// ---- Sidechain sub-sources (specs/050) -------------------------------------------------
+
+int32_t Engine::trackPartCount(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t && t->instrument ? t->instrument->partCount() : 0;
+}
+
+std::string Engine::trackPartName(int32_t trackId, int32_t index) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !t->instrument || index < 0 || index >= t->instrument->partCount()) return {};
+    return t->instrument->partName(index);
+}
+
+int32_t Engine::partIndexOf(int32_t sourceTrackId, uint64_t part) const {
+    if (part == 0) return -1;
+    auto t = findTrackAuthoring(sourceTrackId);
+    const int32_t i = t && t->instrument ? t->instrument->partIndex(part) : -1;
+    return i >= 0 ? i : -2;
+}
+
+bool Engine::partIdAt(int32_t sourceTrackId, int32_t index, uint64_t* part) const {
+    if (index == -1) {
+        *part = 0;
+        return true;
+    }
+    auto t = findTrackAuthoring(sourceTrackId);
+    if (!t || !t->instrument || index < 0 || index >= t->instrument->partCount()) return false;
+    *part = t->instrument->partId(index);
+    return *part != 0;
+}
+
+// Set a key, then keep it only if it got a route and took none from another listener: a full
+// pool leaves the previous key in place. Routes are claimed in track and chain order, so a new
+// source on an early device could otherwise push out a later device's. Re-deriving the table
+// (rather than counting free slots) lets a consumer move to another source while the pool is
+// full when it was its old source's only listener.
+template <typename Consumer>
+int32_t Engine::applySidechainKey(Consumer& c, int32_t src, uint64_t part, bool routed) {
+    if (!routed) { // the master's devices are never fed a key (their key is only kept): no route to check
+        c.setSidechainSourceTrackId(src);
+        c.setSidechainPart(part);
+        recomputeRouting();
+        return 0;
+    }
+    const int32_t oldSrc = c.sidechainSourceTrackId();
+    const uint64_t oldPart = c.sidechainPart();
+    std::pair<int32_t, uint64_t> before[kMaxRoutes];
+    const int32_t nBefore = routeSlotCount_.load(std::memory_order_relaxed);
+    for (int32_t s = 0; s < nBefore; ++s)
+        before[s] = {routeSlotTrackId_[s].load(std::memory_order_relaxed), routeSlotPart_[s].load(std::memory_order_relaxed)};
+    c.setSidechainSourceTrackId(src);
+    c.setSidechainPart(part);
+    recomputeRouting();
+    bool kept = routeSlotFor(src, part) >= 0;
+    bool oldHeld = false; // does anyone still listen to the old key?
+    forEachRouteKey([&](int32_t t, uint64_t p) { oldHeld = oldHeld || (t == oldSrc && p == oldPart); });
+    for (int32_t s = 0; kept && s < nBefore; ++s) {
+        const auto [t, p] = before[s];
+        // The old key's route may go when this was its only listener; every other must stay.
+        if (routeSlotFor(t, p) < 0 && (oldHeld || !(t == oldSrc && p == oldPart))) kept = false;
+    }
+    if (kept) return 0;
+    c.setSidechainSourceTrackId(oldSrc);
+    c.setSidechainPart(oldPart);
+    recomputeRouting();
+    return -2;
+}
+
+// Rack children (Engine_Rack.cpp) set their keys through the same check.
+template int32_t Engine::applySidechainKey<Device>(Device&, int32_t, uint64_t, bool);
+template int32_t Engine::applySidechainKey<Instrument>(Instrument&, int32_t, uint64_t, bool);
+
+int32_t Engine::setDeviceSidechainKey(int32_t trackId, int32_t deviceIndex, int32_t sourceTrackId, int32_t part) {
+    auto* d = deviceAt(trackId, deviceIndex);
+    if (!d) return -1;
+    if (sourceTrackId < 0) {
+        setDeviceSidechainSource(trackId, deviceIndex, -1);
+        return 0;
+    }
+    // A MIDI key (Nota Auto Shift) follows the source track's notes; a pad has none of its own.
+    if (part >= 0 && d->wantsMidiKey()) return -1;
+    uint64_t id = 0;
+    if (!findTrackAuthoring(sourceTrackId) || !partIdAt(sourceTrackId, part, &id)) return -1;
+    return applySidechainKey(*d, sourceTrackId, id, trackId != kMasterTrackId);
+}
+
+bool Engine::deviceSidechainKey(int32_t trackId, int32_t deviceIndex, int32_t* source, int32_t* part) const {
+    auto* d = deviceAt(trackId, deviceIndex);
+    if (!d) return false;
+    const int32_t src = d->sidechainSourceTrackId();
+    if (source) *source = src;
+    if (part) *part = src < 0 ? -1 : partIndexOf(src, d->sidechainPart());
+    return true;
+}
+
+int32_t Engine::setInstrumentSidechainKey(int32_t trackId, int32_t sourceTrackId, int32_t part) {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !t->instrument) return -1;
+    if (sourceTrackId < 0) {
+        setInstrumentSidechainSource(trackId, -1);
+        return 0;
+    }
+    uint64_t id = 0;
+    if (!findTrackAuthoring(sourceTrackId) || !partIdAt(sourceTrackId, part, &id)) return -1;
+    return applySidechainKey(*t->instrument, sourceTrackId, id);
+}
+
+bool Engine::instrumentSidechainKey(int32_t trackId, int32_t* source, int32_t* part) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || !t->instrument) return false;
+    const int32_t src = t->instrument->sidechainSourceTrackId();
+    if (source) *source = src;
+    if (part) *part = src < 0 ? -1 : partIndexOf(src, t->instrument->sidechainPart());
+    return true;
+}
+
+int32_t Engine::sidechainRoutesFree() const {
+    int32_t n = 0;
+    for (auto& s : routeSlotTrackId_)
+        if (s.load(std::memory_order_relaxed) < 0) ++n;
+    return n;
+}
+
+bool Engine::sidechainRouteInUse(int32_t sourceTrackId, int32_t part) const {
+    uint64_t id = 0;
+    return partIdAt(sourceTrackId, part, &id) && routeSlotFor(sourceTrackId, id) >= 0;
 }
 
 void Engine::openTrackEditor(int32_t trackId, int32_t deviceIndex) {
