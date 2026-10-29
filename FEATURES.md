@@ -1214,7 +1214,11 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Popup rack editors** (full UI / Params).
 - **Typed values** — ⌥-click any knob, fader or slider (or double-click the number next to
   it) and type the value: "−6", "1.5k", "250 ms", "L 30", "1/16". Double-click the control
-  itself resets it to the default.
+  itself resets it to the default; right-click offers **Type value…** and **Reset to
+  default**. The same works on graph handles (EQ bands — frequency, gain, Q — filter
+  pads, crossovers, thresholds, trim and loop markers, the Stereo Map dots), envelope nodes
+  (instrument envelopes and audio clips' ADSR handles) and mod-matrix cells (double-click
+  or **Clear** removes a route); Tab moves to the handle's next value.
 - **User manual** (EN / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
   opens it in the system language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.

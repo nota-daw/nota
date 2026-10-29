@@ -195,6 +195,7 @@ public partial class MainWindow : Window
         _exporter = App.Services.GetRequiredService<IAudioExporter>();
 
         Timeline.Engine = vm.Engine;
+        ValueEntry.UndoGroup = (vm.Engine.BeginUndoGroup, vm.Engine.EndUndoGroup);   // a handle's reset is one step
         Timeline.GetMasterVolume = () => (float)vm.Transport.MasterVolume;   // Master row fader
         Timeline.SetMasterVolume = v => vm.Transport.MasterVolume = v;
         Timeline.FreezeRole = FreezeRoleOf;   // live-freeze (v1.1) header badges

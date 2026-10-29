@@ -80,6 +80,11 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         (Func<double, double> N, Func<double, double> V) RangeMap() =>
             (v => v >= 47.5 ? 0 : Math.Clamp((48 - v) / 47, 0, 1), n => n <= 0.005 ? 48 : 48 - 47 * Math.Clamp(n, 0, 1));
 
+        // A typeable value over a raw-unit parameter through its 0..1 map (⌥-click, specs/035).
+        ValueField F(string name, Func<int> param, Func<int, (Func<double, double> N, Func<double, double> V)> map, Func<double, string> fmt, bool reset = true)
+            => new(name, () => map(param()).N(P(param())), n => fmt(map(param()).V(n)), n => Raw(param(), map(param()).V(n)),
+                () => Begin(param()), () => End(param()), reset ? map(param()).N(Def(param())) : null) { After = () => { foreach (var a in readouts) a(); } };
+
         // ---- formatters -------------------------------------------------------------------
         static string Ms(double ms) => ms >= 100 ? NotaNum.F($"{ms:0} ms") : NotaNum.F($"{ms:0.0} ms");
         static string MsShort(double ms) => ms >= 100 ? NotaNum.F($"{ms:0}") : NotaNum.F($"{ms:0.0}");
@@ -231,7 +236,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         thrFader.GestureBegin += () => Begin(Threshold);
         thrFader.GestureEnd += () => End(Threshold);
         MidiLearn.Bind(thrFader, MidiTarget.DeviceParam(track, di, Threshold), "Thresh");
-        ToolTip.SetTip(thrFader, "Threshold — the tick is the key's level right now. Double-click resets.");
+        ToolTip.SetTip(thrFader, MenuKit.Keys("Threshold — the tick is the key's level right now. ⌥-click types, double-click resets."));
 
         // The second fader is make-up on Curve / Motion and the key's gain on Sidechain.
         int F2() => centreTab == 2 ? ScGain : Makeup;
@@ -255,8 +260,10 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             thrVal.Text = Db(P(Threshold));
             f2Val.Text = SDb(P(p2));
             f2Lbl.Text = NotaText.Label(p2 == ScGain ? "SC IN" : "MKP");
-            ToolTip.SetTip(f2, p2 == ScGain ? "Key gain — drives the detector harder or softer. Double-click resets." : "Make-up gain. Double-click resets.");
+            ToolTip.SetTip(f2, MenuKit.Keys(p2 == ScGain ? "Key gain — drives the detector harder or softer. ⌥-click types, double-click resets." : "Make-up gain. ⌥-click types, double-click resets."));
         });
+        ValueEntry.Attach(thrFader, F("Threshold", () => Threshold, Lin, Db), thrVal);
+        ValueEntry.Attach(f2, F("Make-up", F2, Lin, SDb), f2Val);
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
         faders.Children.Add(new DockPanel { Children = { Docked(thrLbl, Dock.Bottom), thrFader } });
         faders.Children.Add(Col(new DockPanel { Children = { Docked(f2Lbl, Dock.Bottom), f2 } }, 1));
@@ -311,6 +318,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             transfer.GestureEnd += () => { End(Threshold); End(Ratio); };
             transfer.Changed += (thr, ratio) => { Raw(Threshold, thr); Raw(Ratio, ratio); };
             transfer.Reset += () => { Reset(Threshold); Reset(Ratio); };
+            ValueEntry.AttachAll(transfer, F("Threshold", () => Threshold, Lin, Db), F("Ratio", () => Ratio, Log, RatioF));
             MidiLearn.Bind(transfer, MidiTarget.DeviceParam(track, di, Threshold), "Thresh");
             readouts.Add(() => { if (!transfer.Dragging) transfer.Set(P(Threshold), P(Ratio), P(Knee), P(Range), KeyDb()); });
 
@@ -399,13 +407,15 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             head.Children.Add(Col(info, 3));
 
             var key = new CompKeyView();
-            ToolTip.SetTip(key, "The key's spectrum under its filters — drag a handle sideways to move HP / LP, up / down for Q. Double-click a handle to open it.");
+            ToolTip.SetTip(key, MenuKit.Keys("The key's spectrum under its filters — drag a handle sideways to move HP / LP, up / down for Q. ⌥-click a handle to type it, double-click to open it."));
             int KParam(int h) => h == 0 ? ScHP : h == 1 ? ScLP : ScQ;
             key.GestureBegin += h => Begin(KParam(h));
             key.GestureEnd += h => End(KParam(h));
             key.FreqChanged += (h, hz) => Raw(h == 0 ? ScHP : ScLP, hz);
             key.QChanged += q => Raw(ScQ, q);
             key.Reset += h => Reset(h == 0 ? ScHP : ScLP);
+            var keyQ = F("SC Q", () => ScQ, Log, v => NotaNum.F($"{v:0.00}"), reset: false);
+            ValueEntry.AttachHandles(key, [F("SC HP", () => ScHP, Log, HpF), keyQ], [F("SC LP", () => ScLP, Log, LpF), keyQ]);
             MidiLearn.Bind(key, MidiTarget.DeviceParam(track, di, ScHP), "SC HP");
             readouts.Add(() =>
             {

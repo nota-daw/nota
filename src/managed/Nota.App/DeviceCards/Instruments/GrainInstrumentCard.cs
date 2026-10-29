@@ -165,7 +165,10 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             Begin("position"); SetP("position", engine.InstrumentParamDefault(track, pi)); End("position");
             Refresh();
         };
-        ToolTip.SetTip(wave, "Drag to move the read position · double-click to reset");
+        ToolTip.SetTip(wave, MenuKit.Keys("Drag to move the read position · ⌥-click to type it · double-click to reset"));
+        // ⌥-click types the read position (specs/035); double-click keeps its own reset.
+        if (I("position") is var gpi and >= 0)
+            ValueEntry.AttachAll(wave, ValueEntry.InstrumentParam(engine, track, gpi, "position", "Position", v => Pct((float)v), Refresh) with { Default = null });
         if (I("position") is var wpi and >= 0) MidiLearn.Bind(wave, MidiTarget.PluginParam(track, -1, wpi), "Position");
 
         // ---- shared builders --------------------------------------------------

@@ -16,6 +16,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -88,6 +89,8 @@ internal sealed class ShutterDeviceBody : IDeviceBody
 
         var readouts = new List<Action>();
         void RefreshAll() { for (int i = 0; i < readouts.Count; i++) readouts[i](); }
+        // A typeable value for a graph handle (⌥-click it, specs/035).
+        ValueField F(int p, string name, Func<double, string> fmt) => ValueEntry.DeviceParam(engine, track, di, p, name, fmt, RefreshAll);
         var scope = new float[kScope];
         var frozen = new float[kScope];
         int scN = 0;
@@ -351,8 +354,9 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
             Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
         };
-        void WireDrag(ShDragView v, Func<int, int> param)
+        void WireDrag<T>(T v, Func<int, int> param, params ValueField[] fields) where T : ShDragView
         {
+            ValueEntry.AttachHandles(v, fields.Select(f => (IReadOnlyList<ValueField>)new[] { f }).ToArray());
             v.Value = h => P(param(h));
             v.Changed += (h, x) => { Raw(param(h), x); Refresh(); };   // the graph redraws from the new value at once
             v.GestureBegin += h => Begin(param(h));
@@ -402,8 +406,9 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         Control SignalTab()
         {
             signal = new ShSignalView();
-            WireDrag(signal, h => h == ShSignalView.HThreshold ? Threshold : Return);
-            ToolTip.SetTip(signal, "The input (teal) and what passes (neutral ink) over the window, with the threshold (dashed) and where the gate closes again (dashed). Drag a line up or down; double-click resets it.");
+            WireDrag(signal, h => h == ShSignalView.HThreshold ? Threshold : Return,
+                F(Threshold, "Threshold", v => ThrShort(v) + "\u2009dB"), F(Return, "Return", RetF));
+            ToolTip.SetTip(signal, MenuKit.Keys("The input (teal) and what passes (neutral ink) over the window, with the threshold (dashed) and where the gate closes again (dashed). Drag a line up or down; double-click resets it, ⌥-click types it."));
             Learn(signal, Threshold);
 
             var liveBtn = Latch(-1, () => live, () => { live = !live; if (!live) Array.Copy(scope, frozen, kScope); }, () => live ? "Live" : "Frozen",
@@ -431,8 +436,9 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         Control EnvelopeTab()
         {
             envView = new ShEnvelopeView();
-            WireDrag(envView, h => h switch { ShEnvelopeView.HAttack => Attack, ShEnvelopeView.HHold => Hold, ShEnvelopeView.HRelease => Release, _ => Floor });
-            ToolTip.SetTip(envView, "One opening: attack, hold, release in the chosen shape, down to the floor (inverted for Duck). Drag a node sideways for its time, the teal floor up or down; double-click resets.");
+            WireDrag(envView, h => h switch { ShEnvelopeView.HAttack => Attack, ShEnvelopeView.HHold => Hold, ShEnvelopeView.HRelease => Release, _ => Floor },
+                F(Attack, "Attack", AtkF), F(Hold, "Hold", HoldF), F(Release, "Release", RelF), F(Floor, "Floor", FloorF));
+            ToolTip.SetTip(envView, MenuKit.Keys("One opening: attack, hold, release in the chosen shape, down to the floor (inverted for Duck). Drag a node sideways for its time, the teal floor up or down; double-click resets, ⌥-click types."));
             Learn(envView, Release);
 
             var shapes = Chips(Shapes, i => Sel(Shape, 3) == i, i => SetP(Shape, i / 2f), Shape,
@@ -460,8 +466,8 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         Control SidechainTab()
         {
             keyView = new ShKeyView();
-            WireDrag(keyView, h => h == ShKeyView.HHp ? DetHP : DetLP);
-            ToolTip.SetTip(keyView, "The detector's band-pass (teal) — only this part of the key opens the gate — over the reduction in the window (neutral ink). Drag the nodes sideways; double-click resets.");
+            WireDrag(keyView, h => h == ShKeyView.HHp ? DetHP : DetLP, F(DetHP, "SC HP", HpF), F(DetLP, "SC LP", LpF));
+            ToolTip.SetTip(keyView, MenuKit.Keys("The detector's band-pass (teal) — only this part of the key opens the gate — over the reduction in the window (neutral ink). Drag the nodes sideways; double-click resets, ⌥-click types."));
             Learn(keyView, DetHP);
 
             var eq = Latch(DetFilter, () => On(DetFilter), () => SetP(DetFilter, On(DetFilter) ? 0f : 1f), () => On(DetFilter) ? "SC EQ on" : "SC EQ off",
@@ -519,7 +525,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         int patTool = 0;
 
         // A slider drawn as a filled bar with its value inside (Complexity / Smooth / Swing).
-        Control FillBar(int p, Func<string> text, string tip)
+        Control FillBar(int p, string name, Func<double, string> fmt, string tip)
         {
             var fill = new Border { HorizontalAlignment = HorizontalAlignment.Left, Background = NotaPalette.Wash(NotaPalette.VizInk, 0x30) };
             var tb = new TextBlock { FontSize = 9, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -534,7 +540,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             {
                 double v = P(p);
                 fill.Width = Math.Max(0, grid.Bounds.Width * v);
-                tb.Text = text();
+                tb.Text = fmt(P(p));
                 host.BorderBrush = drag ? Brass : v > 0.004 ? NotaPalette.BorderStrong : BorderDef;
                 tb.Foreground = v > 0.004 ? TextPrimary : TextSecondary;
             }
@@ -551,7 +557,8 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             grid.SizeChanged += (_, _) => Paint();
             readouts.Add(() => { if (!drag) Paint(); });
             Learn(host, p);
-            ToolTip.SetTip(host, tip);
+            ToolTip.SetTip(host, MenuKit.Keys(tip + " · ⌥-click to type"));
+            ValueEntry.Attach(host, F(p, name, fmt), tb);
             return host;
         }
 
@@ -629,12 +636,12 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             };
             ToolTip.SetTip(browser, "Pattern shapes — the arrows step through them (fitted to the grid)");
             var rnd = Button("Rnd", Randomize, "Roll a new pattern — Complexity sets how busy and how varied it is");
-            var cx = FillBar(PatComplexity, () => "Complexity " + Pct(P(PatComplexity)), "Complexity — how busy and varied Rnd makes the pattern");
+            var cx = FillBar(PatComplexity, "Complexity", v => "Complexity " + Pct((float)v), "Complexity — how busy and varied Rnd makes the pattern");
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,110"), ColumnSpacing = 5, Height = 20 };
             head.Children.Add(tools); head.Children.Add(Col(browser, 1)); head.Children.Add(Col(rnd, 2)); head.Children.Add(Col(cx, 3));
 
-            var smooth = FillBar(PatSmooth, () => "Smooth " + Pct(P(PatSmooth)), "Smooth — ramps into each step instead of jumping (up to half a step)");
-            var swing = FillBar(PatSwing, () => NotaNum.F($"Swing {P(PatSwing) * 75:0} %"), "Swing — every second step comes late");
+            var smooth = FillBar(PatSmooth, "Smooth", v => "Smooth " + Pct((float)v), "Smooth — ramps into each step instead of jumping (up to half a step)");
+            var swing = FillBar(PatSwing, "Swing", v => NotaNum.F($"Swing {v * 75:0} %"), "Swing — every second step comes late");
             var nSt = Mono("", 9, TextPrimary); var nLv = Mono("", 9, TextPrimary);
             readouts.Add(() => { nSt.Text = NSteps().ToString(); nLv.Text = NLevels().ToString(); });
             Border Cycle(TextBlock t, Action a, string tip)

@@ -16,7 +16,8 @@
 //                      and resonance (y); the cutoff the loudest voice hears after key
 //                      tracking and the envelope shows as a teal line.
 //
-// All in the NotaGraph window (well, hairline, radius 4, corner labels in mono 7).
+// ⌥-click a marker, a node or the filter window to type its values (the card attaches the
+// fields, specs/035). All in the NotaGraph window (well, hairline, radius 4, corner labels in mono 7).
 
 using System;
 using System.Collections.Generic;
@@ -46,7 +47,7 @@ internal static class SamplerInk
 }
 
 // ---- the sample -------------------------------------------------------------------------
-internal sealed class SamplerWaveView : Control
+internal sealed class SamplerWaveView : Control, IValueHandles
 {
     private float[] _peaks = Array.Empty<float>();
     private double _start, _end = 1, _ls, _le = 1, _xf, _dur, _play = -1;
@@ -73,6 +74,11 @@ internal sealed class SamplerWaveView : Control
     }
 
     private double[] Handles() => _loop > 0 ? new[] { _start, _end, _ls, _le } : new[] { _start, _end };
+
+    // Typed entry: the markers, in HandleId order (start · end · loop start · loop end).
+    public int HandleAt(Point p) => Bounds.Width <= 0 || _peaks.Length == 0 ? -1 : Hit(p.X / Bounds.Width, Bounds.Width);
+    public Rect HandleRect(int handle)
+        => handle < Handles().Length ? ValueEntry.Near(new Point(Handles()[handle] * Bounds.Width, 0), Bounds.Size) : default;
 
     private int Hit(double xFrac, double w)
     {
@@ -270,7 +276,7 @@ internal sealed class SamplerKeysView : Control
 }
 
 // ---- the amp envelope -------------------------------------------------------------------
-internal sealed class SamplerEnvView : Control
+internal sealed class SamplerEnvView : Control, IValueHandles
 {
     private double _a, _d = 0.3, _s = 1, _r = 0.06;
     private SamplerModel.Snapshot? _live;
@@ -308,6 +314,22 @@ internal sealed class SamplerEnvView : Control
     }
 
     private static readonly string[] Ids = { "attack", "decay", "release" };
+
+    // Typed entry: 0 = the attack node, 1 = decay / sustain, 2 = release (as a drag picks them).
+    private int NodeAt(Point p)
+    {
+        var n = Nodes();
+        var pts = new[] { n.A, n.D, n.R };
+        int best = -1; double bd = 10;
+        for (int i = 0; i < 3; i++) { double dd = Math.Abs(p.X - pts[i].X) + Math.Abs(p.Y - pts[i].Y) * 0.5; if (dd < bd) { bd = dd; best = i; } }
+        return best;
+    }
+    public int HandleAt(Point p) => NodeAt(p);
+    public Rect HandleRect(int handle)
+    {
+        var n = Nodes();
+        return ValueEntry.Near(handle switch { 0 => n.A, 1 => n.D, _ => n.R }, Bounds.Size);
+    }
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {

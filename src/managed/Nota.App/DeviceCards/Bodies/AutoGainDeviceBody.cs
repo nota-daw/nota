@@ -216,7 +216,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         fader.Changed += db => { Raw(Gain, GainNorm(db)); RefreshAll(); };
         fader.ResetRequested += () => { Reset(Gain); RefreshAll(); };
         Learn(fader, Gain);
-        ToolTip.SetTip(fader, "The correction around 0\u2009dB, ±Max Gain. In Manual drag it (Shift for fine steps); double-click resets to 0\u2009dB. In Auto it shows the ride");
+        ToolTip.SetTip(fader, MenuKit.Keys("The correction around 0\u2009dB, ±Max Gain. In Manual drag it (Shift for fine steps); ⌥-click types, double-click resets to 0\u2009dB. In Auto it shows the ride"));
+        ValueEntry.Attach(fader, ValueEntry.DeviceParam(engine, track, di, Gain, "Gain", v => Sgn(GainDb(v)) + "\u2009dB", RefreshAll));
 
         var maxTop = Mono("", 7, TextDisabled);
         var modeTag = Mono("", 7, TextDisabled);
@@ -291,7 +292,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         hist.Changed += v => { Raw(Target, v); RefreshAll(); };
         hist.ResetRequested += () => { Reset(Target); RefreshAll(); };
         Learn(hist, Target);
-        ToolTip.SetTip(hist, "The last 8\u2009s: input, output and the target with its ±1\u2009LU band (momentary loudness). Drag up / down to move the target; double-click resets it");
+        ToolTip.SetTip(hist, MenuKit.Keys("The last 8\u2009s: input, output and the target with its ±1\u2009LU band (momentary loudness). Drag up / down to move the target; ⌥-click types, double-click resets it"));
+        ValueEntry.Attach(hist, ValueEntry.DeviceParam(engine, track, di, Target, "Target", TargetF, RefreshAll));
 
         IBrush Dim() => TextDisabled;
         var rIn = Mono("", 8, TextSecondary); var rOut = Mono("", 8, TextPrimary); var rDelta = Mono("", 8, TextSecondary); var rTp = Mono("", 8, TextSecondary);
@@ -363,7 +365,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         ceilBox.PointerReleased += (_, e) => { if (cd) { cd = false; End(Ceiling); e.Pointer.Capture(null); } };
         ceilBox.PointerCaptureLost += (_, _) => { if (cd) { cd = false; End(Ceiling); } };
         Learn(ceilBox, Ceiling);
-        ToolTip.SetTip(ceilBox, "Ceiling, −6 … 0\u2009dBTP — drag up / down (Shift for fine steps), double-click resets to −1.0");
+        ToolTip.SetTip(ceilBox, MenuKit.Keys("Ceiling, −6 … 0\u2009dBTP — drag up / down (Shift for fine steps), ⌥-click to type, double-click resets to −1.0"));
+        ValueEntry.Attach(ceilBox, ValueEntry.DeviceParam(engine, track, di, Ceiling, "Ceiling", v => NotaNum.F($"{CeilingDb(v):0.0;−0.0;0.0}\u2009dBTP"), RefreshAll), ceilTxt);
         readouts.Add(() =>
         {
             ceilTxt.Text = NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0}\u2009dBTP");

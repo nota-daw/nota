@@ -6,7 +6,8 @@
 // gain-reduction history, the Motion envelope (reduction against the input, at a time scale
 // where attack and release can be read) and the sidechain key spectrum with its filters
 // (drag the HP / LP handles; up/down sets Q). They draw what the card hands them and own
-// no engine state — every edit goes out through events.
+// no engine state — every edit goes out through events; ⌥-click a fader, the transfer curve
+// or a key handle to type its values (the card supplies the fields, specs/035).
 
 using System;
 using System.Collections.Generic;
@@ -383,7 +384,7 @@ internal sealed class CompMotionView : Control
 // laid over it (teal dashed — the 2-pole HP × LP response with its Q). Drag a handle
 // sideways to move its corner, up / down to change Q; double-click opens that filter.
 // Framed in accent while Listen is on (the key is what you hear).
-internal sealed class CompKeyView : Control
+internal sealed class CompKeyView : Control, IValueHandles
 {
     private const int FftN = 2048, Bins = FftN / 2;
     private const double FMin = 20, FMax = 20000;
@@ -451,6 +452,10 @@ internal sealed class CompKeyView : Control
     private static double XOf(double hz, double w) => Math.Log(Math.Clamp(hz, FMin, FMax) / FMin) / Math.Log(FMax / FMin) * w;
     private static double HzOf(double x, double w) => FMin * Math.Pow(FMax / FMin, Math.Clamp(x / Math.Max(1, w), 0, 1));
     private int Nearest(double x) => Math.Abs(x - XOf(_hp, Bounds.Width)) <= Math.Abs(x - XOf(_lp, Bounds.Width)) ? 1 : 2;
+
+    // Typed entry: handle 0 = HP, 1 = LP (the nearer one, as a drag picks it).
+    public int HandleAt(Point p) => Nearest(p.X) - 1;
+    public Rect HandleRect(int handle) => ValueEntry.Near(new Point(XOf(handle == 0 ? _hp : _lp, Bounds.Width), 14), Bounds.Size);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {

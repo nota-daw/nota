@@ -18,7 +18,7 @@ using Avalonia.Media;
 
 namespace Nota.App;
 
-internal sealed class VocoderGraph : Control
+internal sealed class VocoderGraph : Control, IValueHandles
 {
     private const double LoHz = 20, HiHz = 20000, Top = 16, Bottom = 13;
     private const int Max = 32;
@@ -61,6 +61,10 @@ internal sealed class VocoderGraph : Control
         if (Math.Min(dl, dh) > 6) return -1;
         return dl <= dh ? 0 : 1;
     }
+
+    // Typed entry (specs/035): handle 0 = the Low edge, 1 = the High edge.
+    public int HandleAt(Point p) => EdgeAt(p);
+    public Rect HandleRect(int handle) => ValueEntry.Near(new Point(X(handle == 0 ? _low : _high), Top), Bounds.Size);
 
     protected override void OnPointerMoved(PointerEventArgs e)
     {

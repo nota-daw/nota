@@ -677,7 +677,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Get = () => G("rellen"), SetValue = v => { SetP("rellen", v); Refresh(); }, Begin = () => Begin("rellen"), End = () => End("rellen"),
             Default = Def("rellen"), UpIsMore = false, Node = 0.5,
         };
-        ToolTip.SetTip(lenCurve, "How much quieter a release sample gets the longer the key was held — drag up / down");
+        ToolTip.SetTip(lenCurve, MenuKit.Keys("How much quieter a release sample gets the longer the key was held — drag up / down, ⌥-click to type"));
+        ValueEntry.Attach(lenCurve, lenCurve.EntryField("Release length", v => NotaNum.Db(MosaicModel.RelLenDb((float)v), signed: true)));
         var lenWord = Mono("", TextSecondary, 7.5);
         readouts.Add(() => { lenWord.Text = $"{NotaNum.Db(MosaicModel.RelLenDb(G("rellen")), signed: true)} after 2 s hold"; lenCurve.InvalidateVisual(); });
         var velCurve = new MosaicCurveView
@@ -687,7 +688,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Get = () => G("velcurve"), SetValue = v => { SetP("velcurve", v); Refresh(); }, Begin = () => Begin("velcurve"), End = () => End("velcurve"),
             Default = Def("velcurve"), UpIsMore = false,
         };
-        ToolTip.SetTip(velCurve, "Velocity → level: drag up for soft (quiet notes louder), down for hard");
+        ToolTip.SetTip(velCurve, MenuKit.Keys("Velocity → level: drag up for soft (quiet notes louder), down for hard; ⌥-click to type"));
+        ValueEntry.Attach(velCurve, velCurve.EntryField("Vel curve", v => { int c = MosaicModel.VelCurve((float)v); return c == 0 ? "linear" : c < 0 ? $"soft {-c}" : $"hard {c}"; }));
         var velWord = Mono("", TextSecondary, 7.5);
         string VelCurveWord() { int c = MosaicModel.VelCurve(G("velcurve")); return c == 0 ? "linear" : c < 0 ? $"soft +{-c}" : $"hard +{c}"; }
         readouts.Add(() => { velWord.Text = VelCurveWord(); velCurve.InvalidateVisual(); });
@@ -725,7 +727,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
 
         // ======================= Env tab =========================================================
         var env = new SamplerEnvView();
-        ToolTip.SetTip(env, "Drag the nodes: attack, decay and sustain (up / down), release · Shift for fine steps · double-click resets");
+        ToolTip.SetTip(env, MenuKit.Keys("Drag the nodes: attack, decay and sustain (up / down), release · Shift for fine steps · ⌥-click to type · double-click resets"));
         env.DragBegin += Begin;
         env.DragEnd += End;
         env.Changed += (id, v) => { SetP(id, v); Refresh(); };
@@ -743,11 +745,19 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
 
         // ======================= Filter tab ======================================================
         var filt = new SamplerFilterView();
-        ToolTip.SetTip(filt, "Drag: left / right for the cutoff, up / down for the resonance · Shift for fine steps · double-click resets");
+        ToolTip.SetTip(filt, MenuKit.Keys("Drag: left / right for the cutoff, up / down for the resonance · Shift for fine steps · ⌥-click to type · double-click resets"));
         filt.DragBegin += () => { Begin("cutoff"); Begin("resonance"); };
         filt.DragEnd += () => { End("cutoff"); End("resonance"); };
         filt.Changed += (id, v) => { SetP(id, v); Refresh(); };
         filt.Reset += () => { Write("cutoff", Def("cutoff")); Write("resonance", Def("resonance")); Refresh(); };
+        // ⌥-click a node / the filter window to type it (specs/035).
+        ValueField PF(string id, string name, Func<float, string> fmt) => new(name, () => G(id), v => fmt((float)v), v => SetP(id, v),
+            () => Begin(id), () => End(id), I(id) >= 0 ? Def(id) : null) { After = Refresh };
+        ValueEntry.AttachHandles(env,
+            [PF("attack", "Attack", v => NotaNum.Time(MosaicModel.AttackSec(v)))],
+            [PF("decay", "Decay", v => NotaNum.Time(MosaicModel.DecaySec(v))), PF("sustain", "Sustain", DbLin)],
+            [PF("release", "Release", v => NotaNum.Time(MosaicModel.ReleaseSec(v)))]);
+        ValueEntry.AttachAll(filt, PF("cutoff", "Cutoff", v => NotaNum.Hz(MosaicModel.CutoffHz(v))), PF("resonance", "Resonance", v => NotaNum.Pct(v)));
         string FiltTl()
         {
             int t = Sel("filtertype", 4);

@@ -64,6 +64,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
 
         var readouts = new List<Action>();
         void RefreshAll() { foreach (var a in readouts) a(); }
+        // A typeable value for a graph handle (⌥-click it, specs/035).
+        ValueField F(int p, string name, Func<double, string> fmt) => ValueEntry.DeviceParam(engine, track, di, p, name, fmt, RefreshAll);
         var scope = new float[kScope];
         int scN = 0;
         double Sc(int i) => scN > i ? scope[i] : 0;
@@ -265,7 +267,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             f.GestureBegin += () => Begin(p);
             f.GestureEnd += () => End(p);
             Learn(f, p);
-            ToolTip.SetTip(f, tip);
+            ToolTip.SetTip(f, MenuKit.Keys(tip));
+            ValueEntry.Attach(f, F(p, p == Freq ? "Cutoff" : "Resonance", p == Freq ? v => Hz(HzOf(v)) : Pct));
             readouts.Add(() => f.Set(P(p), scN > liveSlot && Assigned() ? Sc(liveSlot) : double.NaN));
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
             return new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = f } } };
@@ -280,8 +283,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             shapeTitle.Foreground = Assigned() && scN > 0 && Math.Abs(Sc(S_Cut) - P(Freq)) > 0.01 ? AccentBright : TextTertiary;
         });
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(ShapeFader(Freq, "FRQ", NotaPalette.VizInk, S_Cut, "Cutoff — the base the modulation moves from; the dashed mark is where it is now. Double-click resets."));
-        faders.Children.Add(Col(ShapeFader(Res, "RES", Teal, S_Res, "Resonance — the peak at the cutoff; the dashed mark is where it is now. Double-click resets."), 1));
+        faders.Children.Add(ShapeFader(Freq, "FRQ", NotaPalette.VizInk, S_Cut, "Cutoff — the base the modulation moves from; the dashed mark is where it is now. Double-click resets, ⌥-click types a value."));
+        faders.Children.Add(Col(ShapeFader(Res, "RES", Teal, S_Res, "Resonance — the peak at the cutoff; the dashed mark is where it is now. Double-click resets, ⌥-click types a value."), 1));
         var shapeCol = new RuleSection
         {
             Width = 56, Padding = new Thickness(0, 5, 0, 4),
@@ -302,6 +305,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             curve.ResChanged += v => Raw(Res, (float)v);
             ToolTip.SetTip(curve, "Drag sideways for the cutoff, up and down for the resonance. The teal band is how far the envelope and LFO can move the cutoff; the dashed curve is where they have it now.");
             Learn(curve, Freq);
+            ValueEntry.AttachAll(curve, F(Freq, "Cutoff", v => Hz(HzOf(v))), F(Res, "Resonance", Pct));
 
             var q = Mono("", 7, TextTertiary);
             readouts.Add(() => q.Text = NotaNum.F($"Q {Q(P(Res)):0.00}"));
@@ -342,6 +346,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             envView.GestureEnd += () => End(EnvAmt);
             ToolTip.SetTip(envView, "The input's envelope (teal) and the cutoff it drives (neutral ink), the base cutoff dashed. Drag up or down for the amount.");
             Learn(envView, EnvAmt);
+            ValueEntry.AttachAll(envView, F(EnvAmt, "Env amount", Bip));
 
             // → Freq / → Reso: the shared Mod Target, as two switches that can both be lit.
             void PickTarget(int i)
@@ -419,6 +424,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             lfoView.GestureEnd += () => { End(LfoAmt); End(LfoOffset); };
             ToolTip.SetTip(lfoView, "The LFO's movement over the window — raw shape dashed, what the filter follows (after Smooth) in neutral ink, the right channel in rose when stereo is on. Drag up or down for the amount, sideways for the start phase.");
             Learn(lfoView, LfoAmt);
+            ValueEntry.AttachAll(lfoView, F(LfoAmt, "LFO amount", Pct), F(LfoOffset, "LFO phase", v => Deg(v, 360)));
 
             var waves = Chips(WaveNames, i => Sel(LfoWave, 5) == i, i => SetP(LfoWave, i / 4f), LfoWave, padX: 6);
             var rate = Mono("", 7, TextSecondary);

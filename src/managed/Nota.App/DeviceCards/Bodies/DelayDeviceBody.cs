@@ -247,16 +247,18 @@ internal sealed class DelayDeviceBody : IDeviceBody
         // ======================================================================
         // LEFT — Loop column (Feedback · Spread)
         // ======================================================================
-        Control LoopFader(int p, string label, IBrush ink, IBrush handle, Func<string> value, string tip)
+        Control LoopFader(int p, string label, IBrush ink, IBrush handle, Func<double, string> fmt, string tip)
         {
             var f = new DelayFader { Ink = ink, Handle = handle, Width = 18, VerticalAlignment = VerticalAlignment.Stretch, Default = engine.DeviceParamDefault(track, di, p) };
             f.Changed += v => Raw(p, (float)v);
             f.GestureBegin += () => Begin(p);
             f.GestureEnd += () => End(p);
             MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
-            ToolTip.SetTip(f, tip);
+            ToolTip.SetTip(f, MenuKit.Keys(tip));
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
             var val = Mono("", 7, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Center;
+            ValueEntry.Attach(f, ValueEntry.DeviceParam(engine, track, di, p, NotaText.Label(label), fmt), val);
+            string value() => fmt(P(p));
             readouts.Add(() =>
             {
                 f.Set(P(p));
@@ -270,11 +272,11 @@ internal sealed class DelayDeviceBody : IDeviceBody
         var loopTitle = Caps("LOOP"); loopTitle.HorizontalAlignment = HorizontalAlignment.Center;
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 2) };
         faders.Children.Add(LoopFader(Feedback, "FEEDBACK", NotaPalette.VizInk, NotaPalette.VizInk,
-            () => On(Freeze) ? "Hold" : Pct(P(Feedback)),
-            "Feedback — how much of each repeat goes round again; Freeze pins it at 100 %. Double-click resets."));
+            v => On(Freeze) ? "Hold" : Pct(v),
+            "Feedback — how much of each repeat goes round again; Freeze pins it at 100 %. ⌥-click types, double-click resets."));
         faders.Children.Add(Col(LoopFader(Spread, "SPREAD", NotaPalette.Rose, NotaPalette.RoseBright,
-            () => NotaNum.F($"{P(Spread) * 50:0} ms"),
-            "Spread — pushes the right channel later, up to 50 ms. Double-click resets."), 1));
+            v => NotaNum.F($"{v * 50:0} ms"),
+            "Spread — pushes the right channel later, up to 50 ms. ⌥-click types, double-click resets."), 1));
         var loopCol = new RuleSection
         {
             Width = 96, Padding = new Thickness(0, 5, 0, 4),
@@ -352,7 +354,9 @@ internal sealed class DelayDeviceBody : IDeviceBody
             filter.GestureBegin += h => Begin(h == 0 ? LowCut : HighCut);
             filter.GestureEnd += h => End(h == 0 ? LowCut : HighCut);
             filter.Reset += h => Reset(h == 0 ? LowCut : HighCut);
-            ToolTip.SetTip(filter, "The band the repeats live in — drag the left handle for the low cut, the right one for the high cut. Double-click a handle to open it.");
+            ValueEntry.AttachHandles(filter, [ValueEntry.DeviceParam(engine, track, di, LowCut, "Low cut", v => Hz(LowHz(v)))],
+                [ValueEntry.DeviceParam(engine, track, di, HighCut, "High cut", v => Hz(HighHz(v)))]);
+            ToolTip.SetTip(filter, MenuKit.Keys("The band the repeats live in — drag the left handle for the low cut, the right one for the high cut. ⌥-click a handle to type it, double-click to open it."));
             MidiLearn.Bind(filter, MidiTarget.DeviceParam(track, di, LowCut), "Low Cut");
             readouts.Add(() => { if (!filter.Dragging) filter.Set(P(LowCut), P(HighCut), LowHz(P(LowCut)), HighHz(P(HighCut))); });
 

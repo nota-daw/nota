@@ -114,18 +114,52 @@ internal static partial class ValueEntry
 
     /// <summary>Make the handles of <paramref name="host"/> typeable.</summary>
     public static void AttachHost<T>(T host, bool menu = true) where T : Control, IValueEntryHost
+        => AttachHost(host, host, menu);
+
+    /// <summary>Make the handles of a graph typeable: <paramref name="handles"/>[k] are the fields of
+    /// handle k (null or empty = that handle has none), in Tab order.</summary>
+    public static void AttachHandles<T>(T view, params IReadOnlyList<ValueField>?[] handles) where T : Control, IValueHandles
+        => AttachHost(view, new Handles(view, handles));
+
+    /// <summary>A box anchor next to a handle at <paramref name="at"/>: a strip just above it (below
+    /// it near the top of <paramref name="area"/>, the control's size), so the box never hides the
+    /// handle it edits, kept inside the control sideways.</summary>
+    public static Rect Near(Point at, Size area)
     {
-        Anchor AnchorOf(ValueField f) => new(host, host.AnchorOf(f), null);
-        Entries.AddOrUpdate(host, new Entry(host, () => host.AllFields, AnchorOf));
+        const double w = 48, h = 12;
+        double x = Math.Clamp(at.X - w / 2, 0, Math.Max(0, area.Width - w));
+        double y = at.Y - 10 - h >= 0 ? at.Y - 10 - h : at.Y + 10;
+        return new Rect(x, y, w, h);
+    }
+
+    private sealed class Handles(IValueHandles view, IReadOnlyList<ValueField>?[] handles) : IValueEntryHost
+    {
+        public IReadOnlyList<ValueField>? FieldsAt(Point p)
+            => view.HandleAt(p) is var k && k >= 0 && k < handles.Length && handles[k] is { Count: > 0 } fs ? fs : null;
+
+        public Rect AnchorOf(ValueField field)
+        {
+            for (int k = 0; k < handles.Length; k++)
+                if (handles[k] is { } fs && fs.Contains(field)) return view.HandleRect(k);
+            return default;
+        }
+
+        public IReadOnlyList<ValueField> AllFields => handles.Where(h => h is not null).SelectMany(h => h!).ToArray();
+    }
+
+    private static void AttachHost(Control host, IValueEntryHost logic, bool menu = true)
+    {
+        Anchor AnchorOf(ValueField f) => new(host, logic.AnchorOf(f), null);
+        Entries.AddOrUpdate(host, new Entry(host, () => logic.AllFields, AnchorOf));
         host.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
         {
-            if (host.FieldsAt(e.GetPosition(host)) is not { Count: > 0 } fs) return;
+            if (logic.FieldsAt(e.GetPosition(host)) is not { Count: > 0 } fs) return;
             if (Pressed(e, host, fs[0], fs)) Open(host, fs[0], AnchorOf(fs[0]));
         }, RoutingStrategies.Tunnel);
         if (!menu) return;
         host.AddHandler(Control.ContextRequestedEvent, (_, e) =>
         {
-            if (e.Handled || !e.TryGetPosition(host, out var p) || host.FieldsAt(p) is not { Count: > 0 } fs) return;
+            if (e.Handled || !e.TryGetPosition(host, out var p) || logic.FieldsAt(p) is not { Count: > 0 } fs) return;
             e.Handled = true;
             ShowMenu(host, fs[0], () => Open(host, fs[0], AnchorOf(fs[0])), fs);
         });
@@ -156,14 +190,29 @@ internal static partial class ValueEntry
             return true;
         }
         if (e.ClickCount != 2) return false;
-        if (field.Clear is null && !(all ?? [field]).Any(f => f.CanReset)) return false;   // the control keeps its own double-click
+        var resets = (all ?? [field]).Where(f => f.CanReset && f.ResetOnDoubleClick).ToList();
+        if (field.Clear is null && resets.Count == 0) return false;   // the control keeps its own double-click
         e.Handled = true;
         if (field.Clear is not null) Clear(field);
-        else foreach (var f in all ?? [field]) Reset(f);
+        else ResetAll(resets);
         return false;
     }
 
     // ---- reset / clear / commit ----------------------------------------------------------
+
+    /// <summary>Groups several gestures into one undo step (the engine's undo group); set at start-up.</summary>
+    public static (Action Begin, Action End)? UndoGroup { get; set; }
+
+    // A handle's values back to their defaults as one undo step.
+    private static void ResetAll(IReadOnlyList<ValueField> fs)
+    {
+        var todo = fs.Where(f => f.CanReset && !AtDefault(f)).ToList();
+        if (todo.Count == 0) return;
+        if (todo.Count == 1) { Reset(todo[0]); return; }
+        UndoGroup?.Begin();
+        try { foreach (var f in todo) Reset(f); }
+        finally { UndoGroup?.End(); }
+    }
 
     /// <summary>Back to the default as one gesture; nothing without a default or when already there.</summary>
     public static void Reset(ValueField f)
@@ -215,8 +264,15 @@ internal static partial class ValueEntry
         yield return MenuKit.Item("Type value…", GlyphKind.Edit, open);
         var fs = all ?? [field];
         if (field.Clear is not null) yield return MenuKit.Danger("Clear", GlyphKind.Trash, () => Clear(field));
-        else yield return MenuKit.Item("Reset to default", GlyphKind.Cycle, () => { foreach (var f in fs) Reset(f); },
+        else yield return MenuKit.Item("Reset to default", GlyphKind.Cycle, () => ResetAll(fs),
             enabled: fs.Any(f => f.CanReset && !AtDefault(f)));
+    }
+
+    /// <summary>The parameter menu for a host's handle, for a host that shows menus on its own press.</summary>
+    public static void ShowMenu(Control host, IReadOnlyList<ValueField> fields)
+    {
+        if (fields.Count == 0) return;
+        ShowMenu(host, fields[0], () => Open(host, fields[0]), fields);
     }
 
     private static void ShowMenu(Control control, ValueField field, Action open, IReadOnlyList<ValueField>? all = null)

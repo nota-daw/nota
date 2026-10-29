@@ -12,6 +12,10 @@
 // Filter also draws the mini (S) card's one graph (Mini = true): no Hz axis, a soft neutral
 // wash under the curve, and the captions cut to "LP · Saw" and the cutoff.
 //
+// ⌥-click an Env breakpoint (attack · decay → sustain · release) or the Filter handle
+// (cutoff → reso) to type its values, Tab between them; double-click resets them
+// (specs/035-typed-value-entry).
+//
 // All three read the engine's normalized params straight and denormalise them with the
 // exact maps Synth.h uses, so the scales are real. Drawn through NotaGraph — well ground,
 // hairline frame, corner axis labels, no fills under curves.
@@ -19,6 +23,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -27,7 +32,7 @@ using Nota.Application;
 
 namespace Nota.App;
 
-internal sealed class SynthViz : Control, IMidiLearnRegions
+internal sealed class SynthViz : Control, IMidiLearnRegions, IValueEntryHost
 {
     public enum K { Osc, Adsr, Filter }
 
@@ -53,7 +58,59 @@ internal sealed class SynthViz : Control, IMidiLearnRegions
     {
         _k = k; _e = engine; _t = track; _idx = idx;
         MinWidth = 180; MinHeight = 56;
-        if (k != K.Osc) Cursor = new Cursor(StandardCursorType.Hand);
+        if (k != K.Osc) { Cursor = new Cursor(StandardCursorType.Hand); ValueEntry.AttachHost(this); }
+    }
+
+    // ---- typed entry -------------------------------------------------------
+    private ValueField[]? _fields;   // Env: attack · decay · sustain · release. Filter: cutoff · reso.
+
+    public IReadOnlyList<ValueField> AllFields => _fields ??= _k == K.Adsr
+        ? new[]
+        {
+            Field("attack", "Attack", v => NotaNum.Time(ExpMap(v, 0.001, 2.0))),
+            Field("decay", "Decay", v => NotaNum.Time(ExpMap(v, 0.002, 2.0))),
+            Field("sustain", "Sustain", v => NotaNum.Db(AudioMath.LinToDb((float)v))),
+            Field("release", "Release", v => NotaNum.Time(ExpMap(v, 0.002, 3.0))),
+        }.OfType<ValueField>().ToArray()
+        : _k == K.Filter
+            ? new[]
+            {
+                Field("cutoff", "Cutoff", v => NotaNum.Hz(ExpMap(v, 20, 18000))),
+                Field("resonance", "Reso", v => v.ToString("0.00", NotaNum.Culture)),
+            }.OfType<ValueField>().ToArray()
+            : [];
+
+    private ValueField? Field(string id, string name, Func<double, string> text)
+    {
+        int i = I(id);
+        if (i < 0) return null;
+        return new ValueField(name, () => G(id), text, v => Set(id, v),
+            () => _e.BeginAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, id),
+            () => _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, id),
+            _e.PluginParamDefault(_t, -1, i)) { After = () => { InvalidateVisual(); Changed?.Invoke(); } };
+    }
+
+    private IReadOnlyList<ValueField>? Fields(params string[] names)
+        => AllFields.Where(f => names.Contains(f.Name)).ToArray() is { Length: > 0 } fs ? fs : null;
+
+    // Env: the breakpoint within 8 px. Filter: the whole pad is the handle (a press anywhere moves it).
+    public IReadOnlyList<ValueField>? FieldsAt(Point p)
+    {
+        if (_k == K.Filter) return Fields("Cutoff", "Reso");
+        if (_k != K.Adsr) return null;
+        var (xa, xd, sy, _, xr) = EnvNodes();
+        var (_, _, top, bot) = Geo();
+        var nodes = new (Point at, string[] names)[] { (new(xa, top), ["Attack"]), (new(xd, sy), ["Decay", "Sustain"]), (new(xr, bot), ["Release"]) };
+        var near = nodes.MinBy(n => Point.Distance(n.at, p));
+        return Point.Distance(near.at, p) <= 8 ? Fields(near.names) : null;
+    }
+
+    public Rect AnchorOf(ValueField field)
+    {
+        var (x0, x1, top, bot) = Geo();
+        if (_k == K.Filter) return ValueEntry.Near(new Point(x0 + G("cutoff") * (x1 - x0), CurveTop(top, bot, G("resonance"))), Bounds.Size);
+        var (xa, xd, sy, _, xr) = EnvNodes();
+        return ValueEntry.Near(field.Name switch { "Attack" => new Point(xa, top), "Release" => new Point(xr, bot), _ => new Point(xd, sy) }, Bounds.Size);
     }
 
     public void Refresh() => InvalidateVisual();
