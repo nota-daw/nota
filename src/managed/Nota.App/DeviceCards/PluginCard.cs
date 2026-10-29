@@ -153,10 +153,7 @@ internal static class PluginCard
     // S has no room for the sidechain controls: it names the source; L edits it.
     private static Control SidechainLine(IAudioEngine e, int t, int di)
     {
-        int src = e.DeviceSidechainSource(t, di);
-        string label = "None";
-        for (int i = 0, n = e.TrackCount; i < n && src >= 0; i++)
-            if (e.TryGetTrackInfo(i, out var ti) && ti.Id == src) { label = TrackNames.Of(e, ti); break; }
+        string label = SidechainSourcePicker.Name(e, e.DeviceSidechainKey(t, di), "None");
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(0, 0, 0, 3) };
         Fact(g, 0, "Sidechain", label);
         return g;

@@ -130,11 +130,11 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         int WindowIdx() { double s = Sc(S_WindowSec); return s <= 0 ? 1 : s < 0.5 ? 0 : s < 2 ? 1 : 2; }
         int State() => Math.Clamp((int)Math.Round(Sc(S_State)), 0, 4);
 
-        // Sidechain key: the source track and whether it is in use.
-        string SrcName(int id) => TrackNames.Of(engine, id);
+        // Sidechain key: the source (a track, or one pad / chain / voice of it, specs/050) and
+        // whether it is in use.
         int Src() => engine.DeviceSidechainSource(track, di);
         bool ExtOn() => On(ExternalKey) && Src() >= 0;
-        string KeyName() => ExtOn() ? SrcName(Src()) : "Internal";
+        string KeyName() => ExtOn() ? SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di)) : "Internal";
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
@@ -282,28 +282,28 @@ internal sealed class ShutterDeviceBody : IDeviceBody
                 box.BorderBrush = ext ? NotaPalette.BorderStrong : BorderDef;
                 chev.Foreground = ext ? TextSecondary : TextTertiary;
             });
-            ToolTip.SetTip(box, "Key source — Internal keys off this track; pick another track to gate or duck against it");
+            ToolTip.SetTip(box, "Key source — Internal keys off this track; pick another track, or one pad or chain of it, to gate or duck against it");
             Learn(box, ExternalKey);
             box.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
                 var fly = new MenuFlyout();
-                void Item(string label, int id)
+                void Item(string label, bool cur, Action pick)
                 {
-                    bool cur = id < 0 ? !ExtOn() : ExtOn() && Src() == id;
                     var mi = new MenuItem { Header = label };
                     mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = cur;
-                    mi.Click += (_, _) =>
-                    {
-                        engine.SetDeviceSidechainSource(track, di, id);
-                        if (id >= 0 && !On(ExternalKey)) SetP(ExternalKey, 1f);
-                        ctx.NotifyChanged(); RefreshAll();
-                    };
+                    mi.Click += (_, _) => pick();
                     fly.Items.Add(mi);
                 }
-                Item("Internal — this track", -1);
-                for (int i = 0; i < engine.TrackCount; i++)
-                    if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track) Item(SrcName(ti.Id), ti.Id);
+                Item("Internal — this track", !ExtOn(), () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); RefreshAll(); });
+                // Picking a source means using it.
+                void Picked()
+                {
+                    if (Src() >= 0 && !On(ExternalKey)) SetP(ExternalKey, 1f);
+                    ctx.NotifyChanged(); RefreshAll();
+                }
+                foreach (var row in SidechainSourcePicker.MenuRows(engine, track, di, Picked))
+                    fly.Items.Add(SidechainSourcePicker.MenuItemFor(row with { Checked = row.Checked && ExtOn() }));
                 fly.ShowAt(box);
                 e.Handled = true;
             };

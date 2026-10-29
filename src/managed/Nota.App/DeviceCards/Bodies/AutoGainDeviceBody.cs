@@ -68,7 +68,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         double MaxG() => MaxGainDb(P(MaxGain));
 
         // ---- reference track (the device's sidechain) ---------------------------------------
-        string TrackName(int id) => TrackNames.Of(engine, id);
+        // The reference may be one pad / chain / voice of a track (specs/050).
+        string RefName() => SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di));
         int Ref() => engine.DeviceSidechainSource(track, di);
         bool HasRef() => Ref() >= 0;
 
@@ -155,7 +156,9 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         }
 
         // A dropdown menu under a control.
-        void Menu(Control at, IEnumerable<(string Label, bool Current, Action Pick)?> items)
+        // Key-source rows (specs/050) go after the others, unavailable ones disabled.
+        void Menu(Control at, IEnumerable<(string Label, bool Current, Action Pick)?> items,
+            IEnumerable<(string Label, bool Checked, Action? Pick, string? Tip)>? sources = null)
         {
             var fly = new MenuFlyout();
             foreach (var it in items)
@@ -167,6 +170,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
                 mi.Click += (_, _) => { pk(); RefreshAll(); };
                 fly.Items.Add(mi);
             }
+            foreach (var row in sources ?? Array.Empty<(string, bool, Action?, string?)>())
+                fly.Items.Add(SidechainSourcePicker.MenuItemFor(row, RefreshAll));
             fly.ShowAt(at);
         }
 
@@ -184,13 +189,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             }
             list.Add(null);
             list.Add(("Fixed target — no reference", !HasRef(), () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); }));
-            for (int i = 0; i < engine.TrackCount; i++)
-                if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track)
-                {
-                    int id = ti.Id;
-                    list.Add(("Match track: " + TrackName(id), Ref() == id, () => { engine.SetDeviceSidechainSource(track, di, id); ctx.NotifyChanged(); }));
-                }
-            Menu(at, list);
+            Menu(at, list, SidechainSourcePicker.MenuRows(engine, track, di, ctx.NotifyChanged, "Match track: "));
         }
 
         // ======================================================================
@@ -267,7 +266,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         var targetRow = Slider("TARGET", Target, TargetF,
             "Target loudness, −36 … 0 LUFS. Click the value for the standards or to match another track's loudness (a reference); drag the dashed line in the graph for the same",
             38, 50, dim: HasRef,
-            valueOverride: () => HasRef() ? ("REF " + TrackName(Ref()), TextSecondary) : ("", null),
+            valueOverride: () => HasRef() ? ("REF " + RefName(), TextSecondary) : ("", null),
             valueClick: TargetMenu);
         var trimRow = Slider("TRIM", Trim, TrimF, "Trim — a fixed offset after the correction, −12 … +12\u2009dB (the output then sits that far off the target)", 38, 50, bipolar: true);
 
@@ -461,7 +460,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             else
             {
                 foot = (locked ? "On target" : "Catching up") + " · " + ScaleLong[si] + " · window " + WindowF(P(WindowP));
-                if (HasRef()) foot += " · matching " + TrackName(Ref());
+                if (HasRef()) foot += " · matching " + RefName();
                 else if (Math.Abs(trim) > 0.05) foot += " · trim " + Sgn(trim) + "\u2009dB";
             }
             statusLeft.Text = foot; statusLeft.Foreground = footInk;

@@ -236,6 +236,12 @@ track count and closes with Escape.
     Recording on the receiver prints the incoming MIDI into a clip. Saved with the
     project.
   - **Send/Return** buses (sends to returns) with a return list.
+  - **Sidechain keys** — a device's key (and Nota Flux's React) listens to another track, or
+    to one pad of a Drum Rack, one chain of an Instrument Rack or one voice of Nota Rhythm on
+    it: every source picker lists the parts under their track. Pre takes a part before its own
+    effects, Post after them and its level and pan. A muted or solo-silenced pad still drives
+    its key (a "ghost kick"); the key follows its pad through edits and is saved with the
+    project. Up to 16 distinct sources at once.
 - **Level meters** (peak/RMS) on every channel and on the master, plus true peak.
 - **Device chain** per track: instrument + effects + MIDI effects, laid out in a row. The
   **+** at its end opens the browser on Audio effects with the cursor in the search.
@@ -699,8 +705,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   presets; MCP `read_eq8`, `set_eq8_band`, `set_eq8`.
 - **Nota Compressor** (1) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
   look-ahead (reported as latency for PDC), Peak/RMS/Auto detection, hold, auto-release,
-  auto-gain, Range, MIX; a sidechain key (internal or another track, pre/post tap, External
-  key switch) through 2-pole HP/LP filters with Q and SC Gain, Listen, Stereo link on/off.
+  auto-gain, Range, MIX; a sidechain key (internal, another track or one pad / chain / voice
+  of it, pre/post tap, External key switch) through 2-pole HP/LP filters with Q and SC Gain, Listen, Stereo link on/off.
   Tabs: Curve (draggable transfer curve + gain-reduction history, crest in → out) / Motion
   (reduction envelope against the input, measured transient and recovery) / Sidechain (key
   spectrum under draggable filters), and Dynamics / Output, with a LEVEL column and a status
@@ -1305,6 +1311,9 @@ Coverage:
   name), load a sample onto a track or into a rack chain, read sample info, and read / shape a
   Sampler in real units (`read_sampler`, `set_sampler`).
 - **Mixer**: sends to returns, the return list, track and master meters, record source.
+- **Sidechain**: `list_sidechain_sources` (tracks with their pads / chains / voices and the free
+  routes), `set_device_sidechain` / `get_device_sidechain` with a `sourcePart`, and Nota
+  Flux's React with `set_instrument_sidechain` / `get_instrument_sidechain`.
 - **Plugins**: list the AU/VST3 catalogue, look up by id, add as an instrument or insert
   effect, open and close the editor, read and write parameters and state.
 - **Presets**: factory (list, apply to a new track or in place) and user (list, apply,
