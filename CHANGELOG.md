@@ -23,6 +23,27 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Custom wavetables in Nota Aurora** (specs/053): drop a WAV, FLAC or MP3 file on either
+  oscillator, from the browser or the desktop, or pick **Import…** in its table drop-down.
+  Aurora turns it into a table as follows:
+  - a standard wavetable file, with a `clm ` frame size or a length that is a multiple of
+    2048, keeps its frames, up to 256;
+  - a file of up to 4096 samples is taken as one cycle;
+  - anything longer is cut into 16 frames, evenly spaced through it.
+  Only the first 60 s are read. Stereo is mixed to mono, DC is removed and the table is
+  normalised. A long file loads in the background. A silent or unreadable file is refused,
+  with the reason under the oscillator.
+  The table window draws the imported frames and follows the position each played note is
+  at, as LFOs and envelopes move it. The drop-down switches between the imported table and
+  the built-in ones and can remove the import. Import and remove are one undo step each,
+  and notes that are sounding stop when you import. Imported tables are band-limited, so a
+  bright table played high does not fold back. Each takes up to about 7 MB of memory.
+  Projects save each table inside the bundle, once even when several oscillators share it,
+  so a project opens with its tables even after the source file is gone. User presets carry
+  their tables too. The project format is now 28. Older projects open unchanged; a project
+  saved by this version needs this version or later to open.
+  An Aurora inside a rack keeps its tables, but cannot import one yet. Built-in tables and
+  factory presets sound exactly as before.
 - **Tempo-synced scope in Nota Lens** (#119): the Scope view gains **Sync**, which lines the
   trace up with the song: pick a **Span** from a quarter beat to four bars and the scope shows
   that stretch of the beat grid, with beat and bar lines, a sweep line at the playhead and the

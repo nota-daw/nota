@@ -74,8 +74,8 @@ internal static class UiProbe
     public static string Report()
     {
         var p = Paints.Take(); var t = Ticks.Take(); var b = Builds.Take();
-        return $"ui-probe aurora: paint p50 {p.P50:0.000} ms p99 {p.P99:0.000} ms (n {p.N}) · "
-             + $"tick p50 {t.P50:0.000} ms p99 {t.P99:0.000} ms (n {t.N}) · "
-             + $"card build→first paint p50 {b.P50:0.0} ms (n {b.N})";
+        return $"ui-probe aurora: paint p50 {p.P50:0.000}\u2009ms p99 {p.P99:0.000}\u2009ms (n {p.N}) · "
+             + $"tick p50 {t.P50:0.000}\u2009ms p99 {t.P99:0.000}\u2009ms (n {t.N}) · "
+             + $"card build→first paint p50 {b.P50:0.0}\u2009ms (n {b.N})";
     }
 }

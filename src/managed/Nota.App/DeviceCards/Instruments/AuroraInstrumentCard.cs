@@ -645,9 +645,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                     fly.Items.Add(import);
                     if (tinfo[o].HasTable)
                     {
-                        var remove = new MenuItem { Header = "Remove imported table" };
-                        remove.Click += (_, _) => { engine.AuroraClearTable(track, o); ReloadInfo(o); ctx.NotifyChanged(); Touch(); };
-                        fly.Items.Add(remove);
+                        fly.Items.Add(new Separator());
+                        fly.Items.Add(MenuKit.Danger("Remove imported table", null,
+                            () => { engine.AuroraClearTable(track, o); ReloadInfo(o); ctx.NotifyChanged(); Touch(); }));
                     }
                 }
                 fly.ShowAt(box);

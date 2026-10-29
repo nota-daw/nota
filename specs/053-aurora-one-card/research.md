@@ -294,3 +294,52 @@ with like (the same project shape on old and new cards).
 | Rack-hosted Aurora import goes through the proxy engine | Dedicated task, with rack-chain ABI variants |
 | Preset JSON of about 2.8 MB for 256-frame tables | Acceptable. Tested for load time in quickstart § 3 |
 | Built-in sound regression | The built-in branch stays untouched. The `--aurora-null` gate runs in the smoke test |
+
+## R13. Changes made during implementation
+
+Places where the plan proved wrong or too big, and the smaller choice taken instead.
+
+- **Mip levels (R4)**. Halving the length at each level leaves level k with 2 samples per
+  cycle of its top harmonic. The linear read then rolls the top octave off and folds part of
+  it back (a C3 check measured −39 dB, against a −40 dB gate). The plan's clamp at k = 5
+  also leaves 32 harmonics at C7, which alias. Now there are **ten levels**: level k keeps
+  `1024 >> k` harmonics, its length is `clamp(4096 >> k, 256, 2048)` with level 0 at 2048,
+  and that gives at least 4 samples per cycle. C3 measures −51 dB and the C7 alias check
+  −73 dB. Memory is **3.5 × the base, about 7 MB per 256-frame table** (the plan said 4 MB).
+  The CHANGELOG states it.
+- **Mip pick per read, not per block**. Unison voices and Sync / Bend each step the
+  phase at their own rate, so the level is picked per read, from that read's increment (with
+  the warp bias). That costs one comparison loop, and it removes the R12 pitch-bend jump
+  across a block. The `aurora-imported-2x` scenario costs +8 % over built-in tables,
+  within SC-006 (perf-baseline.md).
+- **Preview (R9)**. A plain resample of the base level drew bright frames as flat lines.
+  The preview is now a **min / max outline** of the base level: `points / 2` slices, each
+  emitting its min and max in the order they occur. Its shape matches what is heard at low
+  pitch.
+- **Drawing (R9)**. 17 cached geometries per paint still cost 6.4 / 10.6 ms (p50 / p99) in
+  the container: SC-004 failed, so T046 applied. The view now renders the window chrome and
+  the depth stack once into a `RenderTargetBitmap`, keyed by table serial, bank, size,
+  inset, dim, render scale and ink colour, so a theme or scale change rebuilds it. Each
+  paint draws only the lit frame on top. Built-in tables use the same path. Result: 0.43 /
+  1.65 ms. This reverses the "Alternatives" note in R9.
+- **Rack chains (T040, T041) deferred**. An Aurora inside a rack keeps its tables: they
+  travel in the instrument state blob, and the smoke test checks a group / ungroup round
+  trip. But the rack card cannot import or remove a table yet, so the card hides **Import…**
+  inside a rack. The chain ABI variants and the proxy forwarding are left for a follow-up.
+- **ABI**. One extra call, `nota_aurora_table_frames`, copies a table's base frames out, so
+  the app can write them to the project bundle without decoding the file again.
+- **Handles**. Managed code holds table handles as `nint`, with `try / finally` around
+  `AuroraTableFree`, not a `SafeHandle`. Each handle lives for one call chain.
+- **Hash**. The table hash is a 128-bit pair of FNV-style mixes over the base frames. It
+  needs no new dependency, and it is only used to dedupe bundle files, not for security.
+- **`clm ` chunk**. A declared frame size is accepted only as a power of two from 256 to
+  4096. Any other value falls back to the 2048-multiple rule.
+- **Measurement (R11)**. The runs were done in a 4-core container with a headless
+  Avalonia harness, not with `pidstat` on the 036 machine. Each run was compared against
+  the base card on the same container. SC-005 (100 ms) is missed **by the unchanged card
+  too** there (about 204 ms). The feature is no slower (184 to 191 ms). The
+  reference-machine run is still owed (perf-baseline.md).
+- **UI fixture**. The baseline project is saved by this branch, then stamped
+  `formatVersion: 27`, because nothing in it needs 28. That lets the base build open it.
+- **Presets**. A preset saved with no tables (including Init) clears any imported table
+  when applied in place, so applying a preset always gives the sound it was saved with.

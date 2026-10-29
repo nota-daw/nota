@@ -45,6 +45,10 @@ NOTA_API int32_t nota_aurora_table_from_frames(const float* frames, int32_t fram
                                                NotaAuroraTable** out);
 
 NOTA_API int32_t nota_aurora_table_info(const NotaAuroraTable* t, NotaAuroraTableInfo* out);
+/* The base frames (2048 × frames floats) into out; returns floats written, or the count when
+ * out is null. Added in implementation: the app writes a fresh import to the bundle from
+ * these, without decoding the file again (research R13). */
+NOTA_API int64_t nota_aurora_table_frames(const NotaAuroraTable* t, float* out, int64_t cap);
 NOTA_API void    nota_aurora_table_free(NotaAuroraTable* t);
 ```
 
@@ -74,8 +78,9 @@ NOTA_API int32_t nota_track_aurora_table_info(const NotaEngine* e, int32_t track
 NOTA_API int64_t nota_track_aurora_table_read(const NotaEngine* e, int32_t track_id, int32_t osc,
                                               float* out, int64_t cap);
 /* Drawing preview: rep_frames (≤ 16) evenly chosen frames then grid_frames (≤ 64) evenly chosen
- * frames, each `points` (≤ 256) samples of the lowest mip level that keeps the shape, back to
- * back. Returns floats written. */
+ * frames, each `points` (≤ 256) values back to back. Each frame is a min / max outline of
+ * its base level: points / 2 slices, each giving its min and max in the order they occur, so
+ * a bright frame keeps its envelope (research R13). Returns floats written. */
 NOTA_API int32_t nota_track_aurora_table_preview(const NotaEngine* e, int32_t track_id, int32_t osc,
                                                  int32_t rep_frames, int32_t grid_frames, int32_t points,
                                                  float* out, int32_t cap);
@@ -90,6 +95,9 @@ Live follow uses the existing `nota_track_instrument_scope` (`nota_engine.h:1081
 the layout given in [../data-model.md](../data-model.md) § Scope telemetry.
 
 ## Rack chains (message thread)
+
+> **Deferred** (research R13): not in this release. An Aurora inside a rack keeps its
+> tables through the state blob, but its card cannot import or remove one yet.
 
 These mirror `nota_rack_set_chain_sampler_sample` (`nota_engine.h:1801`). They carry the same
 semantics, but address an Aurora in Instrument Rack chain `chain`, or on a Drum Rack pad:

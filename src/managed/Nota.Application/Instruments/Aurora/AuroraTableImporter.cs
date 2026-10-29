@@ -3,8 +3,8 @@
 //
 // Importing a file as a Nota Aurora wavetable (specs/053): the decode and the table build
 // run on a worker (they can take a moment for a long recording), then the table goes into
-// the oscillator on the caller's thread as one undo step. The card, a drop and the MCP share
-// this, so each says the same thing about a file it could not use.
+// the oscillator on the caller's thread as one undo step. The file picker and a drop both
+// come here, so each says the same thing about a file it could not use.
 
 using System;
 using System.IO;
@@ -18,7 +18,7 @@ public readonly record struct AuroraImportResult(AuroraImportOutcome Outcome, Au
 {
     public bool Loaded => Outcome is AuroraImportOutcome.Ok or AuroraImportOutcome.Shortened or AuroraImportOutcome.FirstFrames;
 
-    /// <summary>The one line the card shows (and the MCP returns); "" for a plain success.</summary>
+    /// <summary>The one line the card shows; "" for a plain success.</summary>
     public string Message => Outcome switch
     {
         AuroraImportOutcome.Shortened => "Shortened to 60 s",

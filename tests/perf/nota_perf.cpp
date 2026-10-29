@@ -31,6 +31,12 @@
 #include <valgrind/callgrind.h>
 #endif
 #endif
+#if defined(__has_include)
+#if __has_include(<dlfcn.h>)
+#include <dlfcn.h>
+#define NOTA_PERF_HAS_DL 1
+#endif
+#endif
 #ifndef CALLGRIND_START_INSTRUMENTATION
 #define CALLGRIND_START_INSTRUMENTATION
 #define CALLGRIND_STOP_INSTRUMENTATION
@@ -92,6 +98,41 @@ void fillChords6(NotaEngine* e, int track, int transpose, double startBeat, doub
         for (int k = 0; k < 6; ++k) notes.push_back({c[k] + transpose, bar * 4.0, 4.0, 0.7f, 0});
     }
     nota_clip_set_notes(e, track, clip, notes.data(), (int)notes.size());
+}
+
+// A bright 256-frame table (saw to pulse across the frames, full bandwidth), the worst
+// case an import can produce: the most frames and every harmonic present (specs/053).
+// The gate compiles this harness against the base engine's header too, so the table calls
+// are looked up at run time; on an engine without them the scenario reports "base error".
+using TableFromFrames = int32_t (*)(const float*, int32_t, const char*, int32_t, void**);
+using AuroraSetTable = int32_t (*)(NotaEngine*, int32_t, int32_t, const void*, int32_t);
+
+template <typename F> F engineSymbol(const char* name) {
+#if defined(NOTA_PERF_HAS_DL)
+    return reinterpret_cast<F>(dlsym(RTLD_DEFAULT, name));
+#else
+    (void)name;
+    return nullptr;
+#endif
+}
+
+const void* importedTable() {
+    static void* table = [] {
+        const auto fromFrames = engineSymbol<TableFromFrames>("nota_aurora_table_from_frames");
+        if (!fromFrames) return (void*)nullptr;
+        constexpr int kFrame = 2048, kFrames = 256;
+        std::vector<float> t((size_t)kFrame * kFrames);
+        for (int f = 0; f < kFrames; ++f) {
+            const double m = (double)f / (kFrames - 1);
+            for (int i = 0; i < kFrame; ++i) {
+                const double ph = (i + 0.5) / kFrame;
+                t[(size_t)f * kFrame + i] = (float)((2 * ph - 1) * (1 - m) + (ph < 0.5 ? 0.8 : -0.8) * m);
+            }
+        }
+        void* h = nullptr;
+        return fromFrames(t.data(), kFrames, "perf-256", 0, &h) == 0 ? h : nullptr;
+    }();
+    return table;
 }
 
 // An 8 s stereo 48 kHz WAV of a chord with a little noise (so the stretch has real work), in
@@ -193,6 +234,7 @@ std::vector<Scenario> scenarios() {
     s.push_back({"instrument-rack", "Instrument Rack, 2 Synth chains"});
     s.push_back({"effect-base", "Synth alone (effect baseline)"});
     s.push_back({"aurora-supersaw-2x", "Aurora Super Saw x2"});
+    s.push_back({"aurora-imported-2x", "Aurora Super Saw x2, imported 256-frame tables"});
     for (int k = 0; k < kMaxKind; ++k) {
         const std::string name = effectName(k);
         if (name.empty()) continue;
@@ -251,11 +293,19 @@ bool build(NotaEngine* e, const std::string& id) {
         fillClip(e, t, 0, 0, 16);
         return true;
     }
-    if (id == "aurora-supersaw-2x") {
+    if (id == "aurora-supersaw-2x" || id == "aurora-imported-2x") {
+        // The imported variant is the same load with both oscillators on a 256-frame table:
+        // what an import costs on the audio thread (budget: within 10 % of the built-in row).
+        const bool imported = id == "aurora-imported-2x";
+        const auto setTable = imported ? engineSymbol<AuroraSetTable>("nota_track_aurora_set_table") : nullptr;
+        if (imported && (!setTable || !importedTable())) return false;
         for (int t = 0; t < 2; ++t) {
             const int tr = instrumentTrack(e, 5);
             if (tr < 0) return false;
             applySuperSaw(e, tr);
+            if (imported)
+                for (int o = 0; o < 2; ++o)
+                    if (setTable(e, tr, o, importedTable(), 0) != 1) return false;
             fillChords6(e, tr, t == 0 ? 0 : 7, 0, 16);
         }
         return true;

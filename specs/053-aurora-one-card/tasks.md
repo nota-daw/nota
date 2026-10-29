@@ -34,11 +34,11 @@ its own.
 **Purpose**: The test harness, fixtures, the measurement probe, and the baseline numbers
 taken on the **unchanged** code.
 
-- [ ] T001 Add `tests/Nota.SmokeTest/AuroraTableTests.cs` (SPDX header, empty test groups for conditioning, undo, state, project, preset, rack, scope). Register the `--aurora-tables` mode in `tests/Nota.SmokeTest/Program.cs`, next to `--aurora-null` (`Program.cs:536-551`), and add the group to the full run.
-- [ ] T002 [P] Add `tests/Nota.SmokeTest/AuroraFixtures.cs` and the `--aurora-fixtures <dir>` mode. It writes the quickstart § 2 files (cycle-2048, table-64x2048 with a `clm ` chunk, table-300x2048, stereo vowel-2s FLAC, long-90s, silence, broken, x.aiff) through `tests/Nota.SmokeTest/WavWriter.cs` and the engine's encoder.
-- [ ] T003 [P] Add the `--aurora-ui-fixture <dir> [--builtin]` mode in `tests/Nota.SmokeTest/AuroraFixtures.cs`. For now it writes the **v27 baseline** project: 4 Auroras, Formant / Chroma, LFO 1 → Osc 1 position, LFO 2 → Osc 2 position at 2 Hz, a 4-bar 6-note chord loop. The scenario variant is added in T043.
-- [ ] T004 [P] Add the opt-in UI probe `src/managed/Nota.App/Diagnostics/UiProbe.cs`: `NOTA_UI_PROBE=aurora`, fixed rings of Stopwatch ticks, p50 / p99 to stderr every 10 s, no cost when off. Hook it into the current `src/managed/Nota.App/Controls/AuroraStack.cs` `Render`, and add a "card build → first paint" mark in `src/managed/Nota.App/DeviceChainView.Instruments.cs` (`:120-126`).
-- [ ] T005 On the 036 reference machine, record the baselines in `specs/053-aurora-one-card/perf-baseline.md` (format of `specs/036-aurora-perf/baseline-env.md`): `nota_perf run aurora-supersaw-2x 30` twice, plus `pidstat` UI-thread %CPU, paint p99 and card build time with the T003 baseline fixture on the unchanged card (quickstart § 4 step 1).
+- [x] T001 Add `tests/Nota.SmokeTest/AuroraTableTests.cs` (SPDX header, empty test groups for conditioning, undo, state, project, preset, rack, scope). Register the `--aurora-tables` mode in `tests/Nota.SmokeTest/Program.cs`, next to `--aurora-null` (`Program.cs:536-551`), and add the group to the full run.
+- [x] T002 [P] Add `tests/Nota.SmokeTest/AuroraFixtures.cs` and the `--aurora-fixtures <dir>` mode. It writes the quickstart § 2 files (cycle-2048, table-64x2048 with a `clm ` chunk, table-300x2048, stereo vowel-2s FLAC, long-90s, silence, broken, x.aiff) through `tests/Nota.SmokeTest/WavWriter.cs` and the engine's encoder.
+- [x] T003 [P] Add the `--aurora-ui-fixture <dir> [--builtin]` mode in `tests/Nota.SmokeTest/AuroraFixtures.cs`. For now it writes the **v27 baseline** project: 4 Auroras, Formant / Chroma, LFO 1 → Osc 1 position, LFO 2 → Osc 2 position at 2 Hz, a 4-bar 6-note chord loop. The scenario variant is added in T043.
+- [x] T004 [P] Add the opt-in UI probe `src/managed/Nota.App/Diagnostics/UiProbe.cs`: `NOTA_UI_PROBE=aurora`, fixed rings of Stopwatch ticks, p50 / p99 to stderr every 10 s, no cost when off. Hook it into the current `src/managed/Nota.App/Controls/AuroraStack.cs` `Render`, and add a "card build → first paint" mark in `src/managed/Nota.App/DeviceChainView.Instruments.cs` (`:120-126`).
+- [ ] T005 On the 036 reference machine, record the baselines in `specs/053-aurora-one-card/perf-baseline.md` (format of `specs/036-aurora-perf/baseline-env.md`): `nota_perf run aurora-supersaw-2x 30` twice, plus `pidstat` UI-thread %CPU, paint p99 and card build time with the T003 baseline fixture on the unchanged card (quickstart § 4 step 1). *(Partly done: base numbers taken in a container against the unchanged card, see perf-baseline.md; the reference-machine run is still owed.)*
 
 **Checkpoint**: baselines recorded. Every later number is compared against them.
 
@@ -49,34 +49,34 @@ taken on the **unchanged** code.
 **Purpose**: The engine table model, the hand-over to the audio thread, the state blob, the
 C ABI and interop. US1 does not need this phase and can start right after Phase 1.
 
-- [ ] T006 Create `src/native/nota.engine/src/devices/instruments/AuroraTable.h` and `.cpp` (SPDX header): the immutable `AuroraTable` and `AuroraTableSet` types from data-model.md, with a serial counter. Add the .cpp to `src/native/nota.engine/CMakeLists.txt` (list at `:171`).
-- [ ] T007 Implement `AuroraTable::buildFromFile` in `AuroraTable.cpp`:
+- [x] T006 Create `src/native/nota.engine/src/devices/instruments/AuroraTable.h` and `.cpp` (SPDX header): the immutable `AuroraTable` and `AuroraTableSet` types from data-model.md, with a serial counter. Add the .cpp to `src/native/nota.engine/CMakeLists.txt` (list at `:171`).
+- [x] T007 Implement `AuroraTable::buildFromFile` in `AuroraTable.cpp`:
   - `decodeAudioFile` (`src/media/AudioFile.cpp:73`), mono mix, the 60 s cap;
   - classification (a) `clm ` chunk or a multiple of 2048, at most 256 frames, (b) at most
     4096 samples as one cycle by FFT resample, (c) 16 zero-crossing-aligned windows
     (research R3);
   - typed errors (contracts/c-abi.md).
-- [ ] T008 Implement conditioning in `AuroraTable.cpp`: DC removal per frame, the 32-sample equal-power seam blend for (c), per-table normalisation to peak 1.0, refusal below −60 dBFS, and `buildFromFrames` (no re-conditioning).
-- [ ] T009 Implement mip levels k = 0…5 by FFT truncation with signalsmith-linear `RealFFT` (as in `src/dsp/primitives/SpectrumAnalyzer.h:18`), and the 128-bit content hash of the base level, in `AuroraTable.cpp`.
-- [ ] T010 In `src/native/nota.engine/src/devices/instruments/WavetableSynth.h/.cpp`, add:
+- [x] T008 Implement conditioning in `AuroraTable.cpp`: DC removal per frame, the 32-sample equal-power seam blend for (c), per-table normalisation to peak 1.0, refusal below −60 dBFS, and `buildFromFrames` (no re-conditioning).
+- [x] T009 Implement mip levels k = 0…5 by FFT truncation with signalsmith-linear `RealFFT` (as in `src/dsp/primitives/SpectrumAnalyzer.h:18`), and the 128-bit content hash of the base level, in `AuroraTable.cpp`. *(Done as ten levels with at least 4 samples per cycle; research R13.)*
+- [x] T010 In `src/native/nota.engine/src/devices/instruments/WavetableSynth.h/.cpp`, add:
   - a `SnapshotHistory<const AuroraTableSet>` member and `std::atomic<uint8_t> useCustom_[2]`;
   - a `RenderScope` in `render()`, and a `live()` read next to the block snapshot (`WavetableSynth.cpp:330-345`);
   - `clone()` (`:246-252`) sharing the set and flags;
   - message-thread setters `setTable`, `clearTable`, `setSource`, `setMissing`.
-- [ ] T011 In `WavetableSynth.h/.cpp`, add `readMorphSized` and `oscStackCustom`, with the mip pick per voice per block (unison detune and warp bias, research R4). Call it only when `useCustom_` is set and a table is present; leave the built-in `oscStack` / `readMorph` calls at `:497-500` untouched.
-- [ ] T012 In `WavetableSynth.cpp`, implement the state trailer v1 in `getState` / `setState` (`:227-244`) per contracts/state-blob.md, with an `includeTables` flag. A blob with no table, flag or missing name stays byte-identical.
-- [ ] T013 In `WavetableSynth.h/.cpp`, implement `scopeRead` (5 floats, data-model.md § Scope telemetry, the Keys pattern `Keys.h:199-215`): relaxed atomics written once per block, holding the played position of the most recently started sounding voice.
-- [ ] T014 In `src/native/nota.engine/src/engine/Engine.h` and `Engine_Devices.cpp`, add:
+- [x] T011 In `WavetableSynth.h/.cpp`, add `readMorphSized` and `oscStackCustom`, with the mip pick per voice per block (unison detune and warp bias, research R4). Call it only when `useCustom_` is set and a table is present; leave the built-in `oscStack` / `readMorph` calls at `:497-500` untouched.
+- [x] T012 In `WavetableSynth.cpp`, implement the state trailer v1 in `getState` / `setState` (`:227-244`) per contracts/state-blob.md, with an `includeTables` flag. A blob with no table, flag or missing name stays byte-identical.
+- [x] T013 In `WavetableSynth.h/.cpp`, implement `scopeRead` (5 floats, data-model.md § Scope telemetry, the Keys pattern `Keys.h:199-215`): relaxed atomics written once per block, holding the played position of the most recently started sounding voice.
+- [x] T014 In `src/native/nota.engine/src/engine/Engine.h` and `Engine_Devices.cpp`, add:
   - `auroraSetTable` (checkpoint → clone + `republishWithTrack`; otherwise in place through the history), `auroraClearTable`, `auroraSetSource`, `auroraSetMissing`;
   - `auroraTableInfo`, `auroraTableRead`, `auroraTablePreview`, `auroraState`.
   Model them on `setRhythmVoiceSample` (`Engine_Devices.cpp:328-343`).
-- [ ] T015 Declare the contracts/c-abi.md functions in `src/native/nota.engine/include/nota/nota_engine.h`. Implement the builders in `src/native/nota.engine/src/abi/nota_engine_import.cpp` and the track functions in `src/native/nota.engine/src/abi/nota_engine_track.cpp`.
-- [ ] T016 [P] Add managed interop:
+- [x] T015 Declare the contracts/c-abi.md functions in `src/native/nota.engine/include/nota/nota_engine.h`. Implement the builders in `src/native/nota.engine/src/abi/nota_engine_import.cpp` and the track functions in `src/native/nota.engine/src/abi/nota_engine_track.cpp`.
+- [x] T016 [P] Add managed interop:
   - `src/managed/Nota.Infrastructure/Interop/NativeMethods.Tracks.cs` (`[LibraryImport]`, `NotaAuroraTableInfo` struct);
   - `NotaEngine.Tracks.cs` wrappers, with a `SafeHandle` for `NotaAuroraTable*`;
   - `src/managed/Nota.Application/Engine/IAudioEngine.cs` members;
   - any test fakes that implement `IAudioEngine`.
-- [ ] T017 In `tests/Nota.SmokeTest/AuroraTableTests.cs`, add the regression tests: an Aurora with no table gives a byte-identical `getState` (compare against the 156-float layout); a factory preset after the change still passes `--aurora-null` (`AuroraNullTests.cs`).
+- [x] T017 In `tests/Nota.SmokeTest/AuroraTableTests.cs`, add the regression tests: an Aurora with no table gives a byte-identical `getState` (compare against the 156-float layout); a factory preset after the change still passes `--aurora-null` (`AuroraNullTests.cs`).
 
 **Checkpoint**: the engine can hold, play, save and report a custom table. Built-in sound is bit-identical.
 
@@ -113,42 +113,42 @@ C ABI and interop. US1 does not need this phase and can start right after Phase 
 
 ### Tests for User Story 2 (write first; they fail before the implementation)
 
-- [ ] T025 [P] [US2] In `AuroraTableTests.cs`, add the conditioning tests:
+- [x] T025 [P] [US2] In `AuroraTableTests.cs`, add the conditioning tests:
   - each of rules (a) / (b) / (c) gives the expected frame count, using the T002 fixtures;
   - the 256-frame clamp and the 60 s cap set their flags;
   - silence gives `ERR_SILENT`; AIFF / broken files give `ERR_FORMAT` / `ERR_DECODE`;
   - each frame's mean is below 1e-6; the table peak equals 1.0;
   - the loop seam jump is at most the median step for (c).
-- [ ] T026 [P] [US2] In `AuroraTableTests.cs`, add the undo and source tests: `set_table(checkpoint 1)`, then undo restores the previous table info and redo re-applies it; `clear_table` is one step; `set_source` toggles with no undo entry and keeps the voices active.
-- [ ] T027 [P] [US2] In `AuroraTableTests.cs`, add the state tests:
+- [x] T026 [P] [US2] In `AuroraTableTests.cs`, add the undo and source tests: `set_table(checkpoint 1)`, then undo restores the previous table info and redo re-applies it; `clear_table` is one step; `set_source` toggles with no undo entry and keeps the voices active.
+- [x] T027 [P] [US2] In `AuroraTableTests.cs`, add the state tests:
   - the trailer round-trips through `getState` / `setState` (contracts/state-blob.md);
   - a blob without a trailer clears the tables;
   - an unknown trailer version is ignored;
   - `clone()`, track duplicate, device copy/paste, and an Instrument Rack chain / Drum Rack pad round trip keep the table (`RackNestingTests.cs` style).
-- [ ] T028 [P] [US2] In `AuroraTableTests.cs`, add the render tests: an imported 2048-sample saw cycle and the built-in Analog at frame 0 differ by less than −40 dB at C3 (sanity); with Warp Off at C7 the alias energy of a bright 64-frame table is at most −60 dB relative to the fundamental (FR-011).
-- [ ] T029 [P] [US2] In `AuroraTableTests.cs`, add the project tests:
+- [x] T028 [P] [US2] In `AuroraTableTests.cs`, add the render tests: an imported 2048-sample saw cycle and the built-in Analog at frame 0 differ by less than −40 dB at C3 (sanity); with Warp Off at C7 the alias energy of a bright 64-frame table is at most −60 dB relative to the fundamental (FR-011).
+- [x] T029 [P] [US2] In `AuroraTableTests.cs`, add the project tests:
   - save, reopen and render bit-identically (SC-007);
   - two Auroras with the same table give one `samples/<hash>.wav`;
   - with a deleted sample, the load warns, `table_info.missing` is 1 and the built-in plays;
   - v27 projects load unchanged and migrate to 28.
-- [ ] T030 [P] [US2] In `AuroraTableTests.cs`, add the preset tests: a user preset carries `AuroraTables` and restores the frames exactly; a factory preset clears custom tables; the preset apply is one undo group.
+- [x] T030 [P] [US2] In `AuroraTableTests.cs`, add the preset tests: a user preset carries `AuroraTables` and restores the frames exactly; a factory preset clears custom tables; the preset apply is one undo group.
 
 ### Implementation for User Story 2
 
-- [ ] T031 [US2] Create `src/managed/Nota.Application/Instruments/Aurora/AuroraTableImporter.cs` (SPDX header):
+- [x] T031 [US2] Create `src/managed/Nota.Application/Instruments/Aurora/AuroraTableImporter.cs` (SPDX header):
   - check the extension against `SampleIndex.AudioExtensions` (`src/managed/Nota.Infrastructure/SampleStore/SampleIndex.cs:20-21`);
   - run `AuroraTableBuild` on a `Task`, then apply on the UI thread with `AuroraSetTable(checkpoint: true)`;
   - return a typed result (Ok / Shortened / FirstFrames / Unreadable / Format / Silent).
-- [ ] T032 [US2] In `AuroraInstrumentCard.cs`, make each column a drop target (`BrowserView.IsAcceptableDrag` / `DroppedItems`, Rhythm pattern `RhythmInstrumentCard.cs:220-235`, ignoring MIDI files and presets). Add an `Import…` file picker filtered to `*.wav;*.flac;*.mp3` (Rhythm `:205-218`, without AIFF / OGG). Both call T031.
-- [ ] T033 [US2] In `AuroraInstrumentCard.cs`, extend each type drop-down with the imported table's name (a check mark on the active source, via `AuroraSetSource`), `Remove imported table` (`AuroraClearTable`), and the dimmed built-in value while the imported table is active (FR-010).
-- [ ] T034 [US2] In `src/managed/Nota.App/Controls/AuroraTableView.cs`, add the imported source: fetch `AuroraTablePreview` once per (track, osc, serial) into a shared cache; the "n/N" caption; "1 frame"; the drag-over ring and Loading / Error (4 s) / Missing states (contracts/ui-osc-tab.md).
-- [ ] T035 [US2] In `src/managed/Nota.Infrastructure/Persistence/ProjectModel.cs` (`InstrumentDto` `:316-341`), add `WavetableDto` and `InstrumentDto.Wavetables`. Bump `CurrentFormatVersion` to 28 in `ProjectService.cs:40`, with its doc line, and append the no-op v27→v28 `Migration` in `ProjectMigrations.cs`.
-- [ ] T036 [US2] In `ProjectService.cs`, make the save of kind 5 (`:150-153`) store `AuroraState(includeTables: false)`, write each table as float32 `clm ` WAV under `samples/<hash>.wav` via `BundleContent`, and fill `Wavetables` (contracts/persistence.md).
-- [ ] T037 [US2] In `ProjectService.cs`, make the load of kind 5 (`:637` area) apply the blob, then for each `WavetableDto` call `nota_file_decode_mono` → `AuroraTableFromFrames` → `AuroraSetTable(checkpoint: false)` → `AuroraSetSource`. On failure, add the warning text from contracts/persistence.md and call `AuroraSetMissing`.
-- [ ] T038 [US2] In `src/managed/Nota.Infrastructure/Persistence/BundleContent.cs` and `ProjectHistory.cs`, pin `Wavetables` samples in `PinnedBinaries` / `PruneUnreferenced` so that version history and pruning keep them.
-- [ ] T039 [P] [US2] In `src/managed/Nota.Infrastructure/Persistence/PresetModel.cs` and `PresetService.cs`, add `PresetAuroraTable` and `AuroraTables`. Write it in save (`PresetService.cs:62` area) and apply it after the parameters (`:274`, `:313-324` pattern), clearing tables when it is absent.
-- [ ] T040 [US2] Add the rack-chain variants (contracts/c-abi.md § Rack chains) in `src/native/nota.engine/src/engine/Engine_Devices.cpp`, `src/abi/nota_engine_rack.cpp`, `nota_engine.h`, and managed interop `NativeMethods.Rack.cs` / `NotaEngine.Rack.cs` / `IAudioEngine.cs`.
-- [ ] T041 [US2] In `src/managed/Nota.App/DeviceCards/Rack/RackCardView.cs` (proxy engine, `:211`), forward the Aurora table calls to the chain variants, so an Aurora card opened inside a rack can import, switch source and remove.
+- [x] T032 [US2] In `AuroraInstrumentCard.cs`, make each column a drop target (`BrowserView.IsAcceptableDrag` / `DroppedItems`, Rhythm pattern `RhythmInstrumentCard.cs:220-235`, ignoring MIDI files and presets). Add an `Import…` file picker filtered to `*.wav;*.flac;*.mp3` (Rhythm `:205-218`, without AIFF / OGG). Both call T031.
+- [x] T033 [US2] In `AuroraInstrumentCard.cs`, extend each type drop-down with the imported table's name (a check mark on the active source, via `AuroraSetSource`), `Remove imported table` (`AuroraClearTable`), and the dimmed built-in value while the imported table is active (FR-010).
+- [x] T034 [US2] In `src/managed/Nota.App/Controls/AuroraTableView.cs`, add the imported source: fetch `AuroraTablePreview` once per (track, osc, serial) into a shared cache; the "n/N" caption; "1 frame"; the drag-over ring and Loading / Error (4 s) / Missing states (contracts/ui-osc-tab.md).
+- [x] T035 [US2] In `src/managed/Nota.Infrastructure/Persistence/ProjectModel.cs` (`InstrumentDto` `:316-341`), add `WavetableDto` and `InstrumentDto.Wavetables`. Bump `CurrentFormatVersion` to 28 in `ProjectService.cs:40`, with its doc line, and append the no-op v27→v28 `Migration` in `ProjectMigrations.cs`.
+- [x] T036 [US2] In `ProjectService.cs`, make the save of kind 5 (`:150-153`) store `AuroraState(includeTables: false)`, write each table as float32 `clm ` WAV under `samples/<hash>.wav` via `BundleContent`, and fill `Wavetables` (contracts/persistence.md).
+- [x] T037 [US2] In `ProjectService.cs`, make the load of kind 5 (`:637` area) apply the blob, then for each `WavetableDto` call `nota_file_decode_mono` → `AuroraTableFromFrames` → `AuroraSetTable(checkpoint: false)` → `AuroraSetSource`. On failure, add the warning text from contracts/persistence.md and call `AuroraSetMissing`.
+- [x] T038 [US2] In `src/managed/Nota.Infrastructure/Persistence/BundleContent.cs` and `ProjectHistory.cs`, pin `Wavetables` samples in `PinnedBinaries` / `PruneUnreferenced` so that version history and pruning keep them.
+- [x] T039 [P] [US2] In `src/managed/Nota.Infrastructure/Persistence/PresetModel.cs` and `PresetService.cs`, add `PresetAuroraTable` and `AuroraTables`. Write it in save (`PresetService.cs:62` area) and apply it after the parameters (`:274`, `:313-324` pattern), clearing tables when it is absent.
+- [ ] T040 [US2] Add the rack-chain variants (contracts/c-abi.md § Rack chains) in `src/native/nota.engine/src/engine/Engine_Devices.cpp`, `src/abi/nota_engine_rack.cpp`, `nota_engine.h`, and managed interop `NativeMethods.Rack.cs` / `NotaEngine.Rack.cs` / `IAudioEngine.cs`. *(Deferred, research R13: racks keep tables via the state blob; import inside a rack is hidden.)*
+- [ ] T041 [US2] In `src/managed/Nota.App/DeviceCards/Rack/RackCardView.cs` (proxy engine, `:211`), forward the Aurora table calls to the chain variants, so an Aurora card opened inside a rack can import, switch source and remove. *(Deferred with T040.)*
 
 **Checkpoint**: US2 complete. T025–T030 pass; quickstart § 2 and § 3 pass.
 
@@ -160,11 +160,11 @@ C ABI and interop. US1 does not need this phase and can start right after Phase 
 
 **Independent Test**: quickstart § 4 and § 5 on the reference machine, compared with the T005 baselines.
 
-- [ ] T042 [P] [US3] In `tests/perf/nota_perf.cpp`, add the `aurora-imported-2x` scenario next to `aurora-supersaw-2x` (`:195`, `:254`): the same load, with both oscillators on generated 256-frame tables.
-- [ ] T043 [P] [US3] In `tests/Nota.SmokeTest/AuroraFixtures.cs`, extend `--aurora-ui-fixture` with the v28 scenario project (256-frame generated tables on both oscillators of all 4 Auroras).
-- [ ] T044 [US3] Check that no table-view work runs while the device panel is hidden or the window is minimised (FR-018). Gate `RefreshSynthLive` / the probe in `src/managed/Nota.App/DeviceChainView.Instruments.cs` if needed; the probe should show 0 paints (quickstart § 4 step 4).
-- [ ] T045 [US3] Run quickstart § 4 and § 5 twice on the reference machine. Record UI-thread %CPU, paint p50 / p99, card build time and `nota_perf` numbers in `specs/053-aurora-one-card/perf-baseline.md`, against T005.
-- [ ] T046 [US3] Only if T045 misses a budget: profile (`perf record` on the UI thread, or `dotnet-trace`). Fix in `AuroraTableView.cs` / `AuroraInstrumentCard.cs` (geometry cache, invalidation gate) or in `oscStackCustom`, then re-run T045. The budgets themselves are not loosened.
+- [x] T042 [P] [US3] In `tests/perf/nota_perf.cpp`, add the `aurora-imported-2x` scenario next to `aurora-supersaw-2x` (`:195`, `:254`): the same load, with both oscillators on generated 256-frame tables.
+- [x] T043 [P] [US3] In `tests/Nota.SmokeTest/AuroraFixtures.cs`, extend `--aurora-ui-fixture` with the v28 scenario project (256-frame generated tables on both oscillators of all 4 Auroras).
+- [x] T044 [US3] Check that no table-view work runs while the device panel is hidden or the window is minimised (FR-018). Gate `RefreshSynthLive` / the probe in `src/managed/Nota.App/DeviceChainView.Instruments.cs` if needed; the probe should show 0 paints (quickstart § 4 step 4).
+- [ ] T045 [US3] Run quickstart § 4 and § 5 twice on the reference machine. Record UI-thread %CPU, paint p50 / p99, card build time and `nota_perf` numbers in `specs/053-aurora-one-card/perf-baseline.md`, against T005. *(Partly done: container runs in perf-baseline.md, with SC-003/SC-004/SC-006 met there; reference-machine run still owed.)*
+- [x] T046 [US3] Only if T045 misses a budget: profile (`perf record` on the UI thread, or `dotnet-trace`). Fix in `AuroraTableView.cs` / `AuroraInstrumentCard.cs` (geometry cache, invalidation gate) or in `oscStackCustom`, then re-run T045. The budgets themselves are not loosened.
 
 **Checkpoint**: SC-003 to SC-006 recorded as met.
 
@@ -176,9 +176,9 @@ C ABI and interop. US1 does not need this phase and can start right after Phase 
 
 **Independent Test**: LFO 1 → Position at 1 Hz with a held note: the lit frame travels once a second. With no note, it rests at the set Position and repaints stop.
 
-- [ ] T047 [P] [US4] In `AuroraTableTests.cs`, add the scope tests: with LFO 1 routed to Position and a held note, `nota_track_instrument_scope` floats [0] / [1] move over 1 s and stay in 0..1; with no voice they are −1; [2] / [3] change on `set_table`.
-- [ ] T048 [US4] In `AuroraInstrumentCard.cs`, read the 5-float scope on every tick **before** the `ParamsMoved` gate (`:151-166`). Push the played position to both `AuroraTableView`s (the set Position when −1). Refetch the preview when a serial changes. Leave the readouts and graphs gated as today.
-- [ ] T049 [US4] In `AuroraTableView.cs`, use the 64-frame lit grid of the preview for imported tables (built-ins: the 16 frames), and quantise the lit index so repaints happen only on a grid step.
+- [x] T047 [P] [US4] In `AuroraTableTests.cs`, add the scope tests: with LFO 1 routed to Position and a held note, `nota_track_instrument_scope` floats [0] / [1] move over 1 s and stay in 0..1; with no voice they are −1; [2] / [3] change on `set_table`.
+- [x] T048 [US4] In `AuroraInstrumentCard.cs`, read the 5-float scope on every tick **before** the `ParamsMoved` gate (`:151-166`). Push the played position to both `AuroraTableView`s (the set Position when −1). Refetch the preview when a serial changes. Leave the readouts and graphs gated as today.
+- [x] T049 [US4] In `AuroraTableView.cs`, use the 64-frame lit grid of the preview for imported tables (built-ins: the 16 frames), and quantise the lit index so repaints happen only on a grid step.
 
 **Checkpoint**: US4 complete. Re-run T045 with live follow active; it is part of the SC-003 scenario.
 
@@ -186,12 +186,12 @@ C ABI and interop. US1 does not need this phase and can start right after Phase 
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T050 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: both oscillators on the Osc tab, custom wavetable import (formats, rules, limits), project format 28, and that held notes stop on import.
-- [ ] T051 [P] Update `FEATURES.md` with the nota-features skill.
-- [ ] T052 [P] Update the user manual (EN + RU) page `instruments/aurora` with the nota-docs skill (`src/managed/Nota.App/NotaDocs.cs:23` lists it).
-- [ ] T053 [P] Check that every new file has the two-line SPDX header (`AuroraTable.h/.cpp`, `AuroraTableView.cs`, `AuroraTableImporter.cs`, `UiProbe.cs`, `AuroraFixtures.cs`, `AuroraTableTests.cs`), and that `LICENSES/third-party.md` needs no change (no new dependency).
+- [x] T050 [P] Add a `CHANGELOG.md` `[Unreleased]` entry: both oscillators on the Osc tab, custom wavetable import (formats, rules, limits), project format 28, and that held notes stop on import.
+- [x] T051 [P] Update `FEATURES.md` with the nota-features skill.
+- [ ] T052 [P] Update the user manual (EN + RU) page `instruments/aurora` with the nota-docs skill (`src/managed/Nota.App/NotaDocs.cs:23` lists it). *(Not done here: the manual lives in the sibling nota-docs repo, outside this worktree.)*
+- [x] T053 [P] Check that every new file has the two-line SPDX header (`AuroraTable.h/.cpp`, `AuroraTableView.cs`, `AuroraTableImporter.cs`, `UiProbe.cs`, `AuroraFixtures.cs`, `AuroraTableTests.cs`), and that `LICENSES/third-party.md` needs no change (no new dependency).
 - [ ] T054 Run `scripts/build-linux.sh` (and `scripts/build.sh` on macOS) and the whole of quickstart.md. Re-check the plan's Constitution Check and the spec's Nota Compliance Checklist.
-- [ ] T055 Run `/speckit-converge` until it reports **Converged**.
+- [ ] T055 Run `/speckit-converge` until it reports **Converged**. *(Not run in this pass.)*
 
 ---
 

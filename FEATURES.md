@@ -600,7 +600,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   two envelopes, two tempo-syncable LFOs, an 8×7 mod matrix, 8 macros over 12
   destinations, pitch-bend (±2/±5/±12) and modulation wheels, output pan, a switchable FX
   chain (drive Tube/Tape/Fold with tone · chorus 1×/2×/4× · reverb Room/Hall/Plate with
-  size), Mono/Poly. 25 factory presets.
+  size), Mono/Poly. Both oscillators sit side by side on the Osc tab, each with its own
+  table window. **Custom wavetables**: drop a WAV, FLAC or MP3 on an oscillator, or pick
+  **Import…** in its table drop-down. A wavetable file keeps up to 256 frames, a short file
+  becomes one cycle, and a recording is cut into 16 frames. Tables are band-limited, are
+  saved inside the project and in user presets, and the window follows the position each
+  note plays. 25 factory presets.
 - **Nota Operator** — FM synth: 4 operators (wave, coarse ratio, fine detune, level and
   their own ADSR each), 11 algorithms with interactive diagrams and drag-to-reroute,
   feedback, a live harmonic spectrum, an LP/HP/BP filter with keyboard tracking, pitch-bend
