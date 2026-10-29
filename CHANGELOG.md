@@ -99,6 +99,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Nota Compressor and Nota Auto Filter: read-outs and controls back after the bigger graphs**
+  (nota-daw/nota#376): on the Sidechain tab the left fader learns SC gain again (Makeup on the
+  other tabs). The Motion panel has the Character chips again and a LIVE box with the attack and
+  release the detector really runs, the window length and the GR peak; the measured attack is
+  labelled "90 % rise", since it is timed to 90 % of the peak so a Hold plateau does not count.
+  Auto Filter: the LFO and Envelope tabs show the resonance swing ("reso X ±Y") when Mod is Reso
+  or Both instead of "no modulation", and the Envelope tab shows the −24 dB onset threshold again.
+  The REDUCTION box on the Dynamics panel keeps its own height, so its two lines no longer spill
+  under the Auto gain switch.
 - **Linux: file dialogs that never open** (nota-daw/nota#297): when xdg-desktop-portal has no
   working FileChooser backend, Open / Save / Export / Import used to do nothing. Nota now notices
   within 4 seconds (the request fails, answers without showing, or shows nothing) and opens its

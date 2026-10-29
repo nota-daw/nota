@@ -106,6 +106,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         static string LfoHzF(double hz) => hz >= 10 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz");
         int Target() => Sel(ModTarget, 3);   // 0 Freq, 1 Reso, 2 Both
         bool ToFreq() => Target() != 1;
+        bool ToRes() => Target() != 0;
         string TargetName() => Target() switch { 0 => "Freq", 1 => "Reso", _ => "Freq + Reso" };
         double EnvBip() => On(EnvOn) ? (P(EnvAmt) - 0.5) * 2 : 0;
         double LfoDepth() => On(LfoOn) ? P(LfoAmt) : 0;
@@ -637,11 +638,27 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 var (lo, hi) = RangeOct();
                 return NotaNum.F($"range {Hz(Math.Min(18000, BaseHz() * Math.Pow(2, lo)))}…{Hz(Math.Min(18000, BaseHz() * Math.Pow(2, hi)))}");
             }
+            // The LFO's reach when it drives the resonance (Mod → Reso / Both).
+            string LfoRange()
+            {
+                if (!Assigned()) return "no modulation";
+                var parts = new List<string>();
+                if (ToFreq()) parts.Add(Range());
+                if (ToRes() && LfoAssigned()) parts.Add(NotaNum.F($"reso {Pct(P(Res))} ±{Pct(LfoDepth() * 0.5)}"));
+                return parts.Count > 0 ? string.Join(" · ", parts) : "no modulation";
+            }
+            string EnvReach()
+            {
+                var parts = new List<string>();
+                if (ToFreq()) parts.Add(NotaNum.F($"cutoff {Hz(BaseHz())} → {Hz(envPeakHz)}"));
+                if (ToRes()) parts.Add(NotaNum.F($"reso {Pct(P(Res))} {Bip(P(EnvAmt))}"));
+                return string.Join(" · ", parts);
+            }
             extras.Text = centreTab switch
             {
-                1 => NotaNum.F($"{envEvents} {(envEvents == 1 ? "event" : "events")} · {(ToFreq() ? NotaNum.F($"cutoff {Hz(BaseHz())} → {Hz(envPeakHz)}") : NotaNum.F($"reso {Pct(P(Res))} {Bip(P(EnvAmt))}"))} · window {(envWindowMs >= 1000 ? NotaNum.F($"{envWindowMs / 1000:0.#} s") : NotaNum.F($"{envWindowMs:0} ms"))}"),
-                2 => Synced() ? NotaNum.F($"{DivNames[Sel(LfoRate, 8)]} at {Bpm():0} BPM = {LfoHzF(LfoHz())} · {Range()}")
-                              : NotaNum.F($"free · period {Ms(1000 / LfoHz())} · {Range()}"),
+                1 => NotaNum.F($"{envEvents} {(envEvents == 1 ? "event" : "events")} · threshold −24 dB · {EnvReach()} · window {(envWindowMs >= 1000 ? NotaNum.F($"{envWindowMs / 1000:0.#} s") : NotaNum.F($"{envWindowMs:0} ms"))}"),
+                2 => Synced() ? NotaNum.F($"{DivNames[Sel(LfoRate, 8)]} at {Bpm():0} BPM = {LfoHzF(LfoHz())} · {LfoRange()}")
+                              : NotaNum.F($"free · period {Ms(1000 / LfoHz())} · {LfoRange()}"),
                 _ => NotaNum.F($"cutoff {HzLong(LiveHz())} · {NoteOf(LiveHz())} · {Range()}"),
             };
         });

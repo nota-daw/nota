@@ -64,6 +64,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         int Sel(int p, int n) => Math.Clamp((int)Math.Round(P(p)), 0, n - 1);
 
         var readouts = new List<Action>();
+        object AutoRow = new();
         var scope = new float[ScopeLen];
         int scN = 0;
         double Sc(int i) => scN > i ? scope[i] : 0;
@@ -183,7 +184,8 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             return hits;
         }
         // The last hit in the window (the reduction rising through 1 dB from below 0.5 dB):
-        // onset → its first peak (transient) and that peak → 37 % of it (recovery), in ms;
+        // onset → 90 % of its first peak (the rise — timed to 90 % so a Hold plateau at the top
+        // does not count) and that peak → 37 % of it (recovery), in ms;
         // NaN when there is nothing to measure.
         (double Transient, double Recovery) Timings(int n)
         {
@@ -227,7 +229,16 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         f2.Changed += v => Raw(F2(), Lin(F2()).V(v));
         f2.GestureBegin += () => Begin(F2());
         f2.GestureEnd += () => End(F2());
-        MidiLearn.Bind(f2, MidiTarget.DeviceParam(track, di, Makeup), "Makeup");
+        // MIDI learn follows the fader's param: Makeup on Curve / Motion, SC gain on Sidechain.
+        int f2Bound = -1;
+        void BindF2()
+        {
+            int p2 = F2();
+            if (p2 == f2Bound) return;
+            f2Bound = p2;
+            MidiLearn.Bind(f2, MidiTarget.DeviceParam(track, di, p2), p2 == ScGain ? engine.DeviceParamName(track, di, ScGain) : "Makeup");
+        }
+        BindF2();
 
         var thrLbl = Caps("THR"); thrLbl.HorizontalAlignment = HorizontalAlignment.Center;
         var f2Lbl = Caps("MKP"); f2Lbl.HorizontalAlignment = HorizontalAlignment.Center;
@@ -245,6 +256,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             double keyDb = KeyDb();
             thrFader.Set(thrMap.N(P(Threshold)), keyDb > -60 ? (keyDb + 60) / 60 : double.NaN);
             int p2 = F2();
+            BindF2();
             f2.Default = Lin(p2).N(Def(p2));
             f2.Set(Lin(p2).N(P(p2)));
             thrVal.Text = Db(P(Threshold));
@@ -332,13 +344,15 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         // ======================================================================
         // RIGHT — the controls of the centre tab (Curve · Motion · Sidechain)
         // ======================================================================
-        // Rows spread evenly down the panel; Auto rows (rules) keep their height.
+        // Rows spread evenly down the panel; Auto rows (rules, and the read-out boxes tagged
+        // AutoRow) keep their own height, so a box's lines never spill over the next row.
         Control Rows(params Control[] rows)
         {
             var grid = new Grid { RowSpacing = 2 };
             for (int r = 0; r < rows.Length; r++)
             {
-                grid.RowDefinitions.Add(new RowDefinition(rows[r] is Border { Height: 1 } ? GridLength.Auto : GridLength.Star));
+                bool auto = rows[r] is Border { Height: 1 } || ReferenceEquals(rows[r].Tag, AutoRow);
+                grid.RowDefinitions.Add(new RowDefinition(auto ? GridLength.Auto : GridLength.Star));
                 grid.Children.Add(GRow(rows[r], r));
             }
             return new Border { Padding = new Thickness(8, 4, 8, 5), Child = grid };
@@ -352,6 +366,12 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         }
 
         Border GrBox(bool levels)
+        {
+            var box = GrBoxCore(levels);
+            box.Tag = AutoRow;
+            return box;
+        }
+        Border GrBoxCore(bool levels)
         {
             var title = Caps(levels ? "OUTPUT" : "REDUCTION");
             var stack = new StackPanel { Spacing = 2, Children = { title } };
@@ -411,12 +431,20 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             return new Border { Padding = new Thickness(8, 5), Child = grid };
         }
 
-        Control CurvePanel()
+        // Character chips — on the Curve and the Motion panels, so the voicing can be changed while
+        // watching either graph.
+        Control CharSeg()
         {
             var charSeg = Segments(Chars, () => Sel(Character, 5), iv => SetP(Character, iv), out var charSync, fill: true, padX: 1, fontSize: 8);
             readouts.Add(charSync);
             MidiLearn.Bind(charSeg, MidiTarget.DeviceParam(track, di, Character), engine.DeviceParamName(track, di, Character));
             ToolTip.SetTip(charSeg, "Character — the voicing: Clean as set, Glue slower and softer, Punch faster, Opto slow and program-soft, FET very fast");
+            return charSeg;
+        }
+
+        Control CurvePanel()
+        {
+            var charSeg = CharSeg();
             var detSeg = Seg(Detection, Detects, fill: true);
             ToolTip.SetTip(detSeg, "Detector — Peak reacts to every transient, RMS to the body, Auto follows the body and still catches the spikes");
             return Rows(
@@ -431,12 +459,37 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 Toggle(AutoGain, "Auto gain", "Auto gain — make-up that follows the threshold and ratio"));
         }
 
+        // The Motion read-outs: the attack / release the detector really runs (after Character
+        // and auto-release), the window the graph and the timings cover, and the GR peak.
+        Border MotionBox()
+        {
+            var stack = new StackPanel { Spacing = 2, Children = { Caps("LIVE") } };
+            Control Line(string name, Func<string> v)
+            {
+                var val = Mono("", 8, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Right;
+                readouts.Add(() => val.Text = v());
+                var gg = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+                gg.Children.Add(new TextBlock { Text = name, FontSize = 8, Foreground = TextSecondary });
+                gg.Children.Add(Col(val, 1));
+                return gg;
+            }
+            stack.Children.Add(Line("attack · release", () => NotaNum.F($"{MsShort(Sc(S_AtkMs))} / {Ms(Sc(S_RelMs))}")));
+            stack.Children.Add(Line("window", () => Ms(WindowMs())));
+            stack.Children.Add(Line("GR peak", () => NotaNum.F($"{Gr(grHist.Peak)} dB")));
+            var box = new Border { Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(NotaRadius.FieldValue), Padding = new Thickness(6, 4), Child = stack };
+            box.Tag = AutoRow;
+            ToolTip.SetTip(box, "Attack and release as the detector runs them now (after Character and auto-release), the time window of the Motion graph, and the deepest reduction lately");
+            return box;
+        }
+
         Control MotionPanel() => Rows(
+            CharSeg(),
             SliderRow("ATTACK", Attack, Ms, Log(Attack)),
             SliderRow("RELEASE", Release, Ms, Log(Release)),
             SliderRow("HOLD", Hold, v => v < 0.5 ? "off" : Ms(v), Sq(Hold), teal: true),
             SliderRow("AHEAD", Lookahead, v => v < 0.05 ? "off" : Ms(v), Lin(Lookahead)),
             Rule(),
+            MotionBox(),
             Toggle(AutoRelease, "Auto-release", "Auto-release — a slower second release once the reduction runs deep, so sustained material does not pump"));
 
         Control KeyPanel()
@@ -501,7 +554,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                     double held = 0;
                     for (int i = Math.Max(0, EnvN - (int)WindowMs()); i < EnvN; i++) held = Math.Max(held, envGr[i]);
                     extras.Text = !double.IsNaN(tr)
-                        ? NotaNum.F($"transient {Ms(tr)} · recovery {(double.IsNaN(rec) ? "–" : Ms(rec))} · {hits} {(hits == 1 ? "hit" : "hits")}")
+                        ? NotaNum.F($"90 % rise {Ms(tr)} · recovery {(double.IsNaN(rec) ? "–" : Ms(rec))} · {hits} {(hits == 1 ? "hit" : "hits")}")
                         : held > 1 ? NotaNum.F($"reduction held near −{held:0.0}\u2009dB · no separate hits to time")
                         : NotaNum.F($"attack {Ms(Sc(S_AtkMs))} · release {Ms(Sc(S_RelMs))} · no reduction to measure");
                     extras.Foreground = TextTertiary; break;
