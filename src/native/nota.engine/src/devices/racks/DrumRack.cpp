@@ -79,10 +79,8 @@ void DrumRack::render(float* out, int32_t frames) {
             if (d && !d->bypassed()) d->process(scratch_, frames);
         const float g = c.ctl->gain.load(std::memory_order_relaxed);
         const float pan = c.ctl->pan.load(std::memory_order_relaxed);
-        const float pl = g * (pan > 0.0f ? 1.0f - pan : 1.0f); // the pad's own gain / pan
-        const float pr = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
-        const float lg = silent ? 0.0f : pl * rv; // a ghost pad adds nothing to the sum
-        const float rg = silent ? 0.0f : pr * rv;
+        const float lg = g * rv * (pan > 0.0f ? 1.0f - pan : 1.0f);
+        const float rg = g * rv * (pan < 0.0f ? 1.0f + pan : 1.0f);
 
         // Pad decay VCA: decay==1 (default) is transparent (sustain); below that,
         // each hit resets the envelope to 1 and it falls with a decay 20 ms..2 s.
@@ -99,10 +97,13 @@ void DrumRack::render(float* out, int32_t frames) {
             coef = (float)std::exp(-1.0 / (tauMs * 0.001 * sampleRate_));
         }
 
-        // Post for a keyed pad: after inserts, decay and the pad's gain / pan, before the rack
-        // volume. Its own pass (the envelope run from the same start), so the sum loop below
-        // stays as lean as it is for an unkeyed pad.
+        // Post for a keyed pad: after inserts, decay and the pad's own gain / pan, before the
+        // rack volume. Its own pass (the envelope run from the same start), so the sum loop
+        // below is the same code an unkeyed pad runs. A ghost pad (muted / solo-gated) stops
+        // here: its envelope moves on, nothing reaches the sum.
         if (tap) {
+            const float pl = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
+            const float pr = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
             float e = env;
             float* post = tap->post + tapAt;
             for (int32_t i = 0; i < frames; ++i) {
@@ -110,6 +111,11 @@ void DrumRack::render(float* out, int32_t frames) {
                 post[i * 2] += scratch_[i * 2] * k * pl;
                 post[i * 2 + 1] += scratch_[i * 2 + 1] * k * pr;
                 if (shaped) e *= coef;
+            }
+            if (silent) {
+                if (shaped) c.ctl->ampEnv.store(e, std::memory_order_relaxed);
+                c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+                continue;
             }
         }
 
@@ -127,7 +133,7 @@ void DrumRack::render(float* out, int32_t frames) {
             if (a > peak) peak = a;
         }
         if (shaped) c.ctl->ampEnv.store(env, std::memory_order_relaxed);
-        c.ctl->meter.store(silent ? 0.0f : peak * g, std::memory_order_relaxed);
+        c.ctl->meter.store(peak * g, std::memory_order_relaxed);
     }
 }
 
