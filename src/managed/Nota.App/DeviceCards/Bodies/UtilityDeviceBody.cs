@@ -355,7 +355,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             field.DragV += v => SetN(Width_, v);
             field.GestureBegin += () => { Begin(Balance); Begin(Width_); };
             field.GestureEnd += () => { End(Balance); End(Width_); };
-            ToolTip.SetTip(field, "The output's stereo field by frequency over the last second — lows at the bottom, highs at the top. Solid: where each band sits between L and R; teal: how far it spreads; dashed: how far the width setting spreads an uncorrelated band. Drag sideways for the balance, up or down for the width.");
+            ToolTip.SetTip(field, "The output's stereo field by frequency over the last second — lows at the bottom, highs at the top. Solid: where each band sits between L and R; grey dots: how far it spreads; dashed: how far the width setting spreads an uncorrelated band. Drag sideways for the balance, up or down for the width.");
             Learn(field, Width_);
 
             var corr = Mono("", 7, TextTertiary);
@@ -387,7 +387,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             widthView.DragV += v => SetN(Width_, v);
             widthView.GestureBegin += () => { Begin(MonoFreq); Begin(Width_); };
             widthView.GestureEnd += () => { End(MonoFreq); End(Width_); };
-            ToolTip.SetTip(widthView, "The width over frequency — solid: what the settings do (0 % = mono, 100 % = unchanged), the mono region shaded; teal dashed: the output's measured width (side against mid). Drag sideways for the mono cutoff, up or down for the width.");
+            ToolTip.SetTip(widthView, "The width over frequency — solid: what the settings do (0 % = mono, 100 % = unchanged), the mono region shaded; grey dashed: the output's measured width (side against mid). Drag sideways for the mono cutoff, up or down for the width.");
             Learn(widthView, MonoFreq);
 
             var wv = Mono("", 7, TextSecondary);
@@ -424,7 +424,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             levelView.DragV += v => SetN(Target, v);
             levelView.GestureBegin += () => Begin(Target);
             levelView.GestureEnd += () => End(Target);
-            ToolTip.SetTip(levelView, "Input (teal) and output (neutral ink) over the last 8 s in the meter's unit; dashed: the target. Drag up or down for the target.");
+            ToolTip.SetTip(levelView, "Input (the darker grey) and output (the bright line) over the last 8 s in the meter's unit; dashed: the target. Drag up or down for the target.");
             Learn(levelView, Target);
 
             var delta = Mono("", 7, TextSecondary);

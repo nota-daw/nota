@@ -49,10 +49,12 @@ internal static class DeviceCardKit
     /// <summary>⌥-click <paramref name="control"/>, or double-click <paramref name="readout"/>, to type a value
     /// (specs/035): for the upright faders and value boxes that are not knobs or value bars. Typed by
     /// probing <paramref name="setNorm"/> and reading <paramref name="text"/> back. Without
-    /// <paramref name="reset"/> a double-click on the control keeps the control's own reset.</summary>
+    /// <paramref name="reset"/> a double-click on the control keeps the control's own reset.
+    /// <paramref name="altResets"/> leaves ⌥-click on the control to the control's own reset
+    /// (typing is then a double-click on the read-out, or the right-click menu).</summary>
     internal static void Typeable(Control control, string name, Func<double> norm, Action<double> setNorm, Func<string> text,
-        Action begin, Action end, Action after, Action? reset = null, TextBlock? readout = null)
-        => ValueEntry.Attach(control, ValueEntry.Probing(name, norm, setNorm, text, begin, end, after, reset), readout);
+        Action begin, Action end, Action after, Action? reset = null, TextBlock? readout = null, bool altResets = false)
+        => ValueEntry.Attach(control, ValueEntry.Probing(name, norm, setNorm, text, begin, end, after, reset) with { AltResets = altResets }, readout);
 
     internal static string Pct(float v) => $"{(int)Math.Round(v * 100)}\u2009%";
 
@@ -133,7 +135,8 @@ internal static class DeviceCardKit
     // corner 3, 9 in ink 3); the picked cell rises out of the groove in the soft tint with
     // orange text. Two to four choices; more than four is a dropdown. `current` returns the
     // picked index, or −1 when the value sits between choices. An inactive strip (`dim` —
-    // e.g. a shelf band's slope) draws every cell in ink 4 with nothing picked, never faded.
+    // e.g. a shelf band's slope) draws every cell in ink 4, never faded; the picked cell still
+    // rises in a plain grey (SurfaceRaised) with ink-3 text, so the value stays readable.
     // `fill` spreads the cells over the full width; `padX` narrows each cell's side padding
     // where a strip must fit a tight column; `fontSize` drops (never below 7) for a dense strip.
     // Left button picks; right-click bubbles. `sync` repaints — register it with the card.
@@ -175,11 +178,11 @@ internal static class DeviceCardKit
             bool d = dim?.Invoke() ?? false;
             for (int i = 0; i < n; i++)
             {
-                bool on = i == cur && !d;
-                cells[i].Background = on ? NotaPalette.AccentSoft : Brushes.Transparent;
-                if (on) cells[i].BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+                bool picked = i == cur, on = picked && !d;
+                cells[i].Background = on ? NotaPalette.AccentSoft : picked ? NotaPalette.SurfaceRaised : Brushes.Transparent;
+                if (picked) cells[i].BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
                 else cells[i].BoxShadow = default;
-                texts[i].Foreground = on ? AccentBright : d ? TextDisabled : TextTertiary;
+                texts[i].Foreground = on ? AccentBright : picked ? TextSecondary : d ? TextDisabled : TextTertiary;
             }
         }
         sync = Paint;

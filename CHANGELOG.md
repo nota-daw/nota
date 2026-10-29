@@ -254,6 +254,25 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   shows on (clips always loop); clip names show on rows taller than 34 px again; and the piano
   roll's selection read-out labels its fields again (Pitch, Start, Length, Velocity / Notes,
   Range, Velocity) while the gesture hint wraps to a second line instead of being cut off.
+- **Device cards: what the restyle dropped is back, in the new look.** Level meters turn red
+  only at 0 dBFS again (amber from −6 dB), Pentad's level bars included. Modulation depths and
+  amounts (env, LFO and fine-tune knobs, rack macros in mapping mode, Ceiling's Release while
+  Auto Release drives it) draw a dashed arc, and modulation sliders a hatched fill, so they read
+  apart from ordinary values. An inactive segment strip (Dynamic EQ-8 Mode, EQ-8 Slope, Bass
+  Legato, Flux's reaction target, Physical's resonator choices, a rack macro's Curve) shows
+  which option is picked again. Ceiling's Level graph has its reduction strip back; Chamber
+  shows the IR start time and the result lane's axis; Dynamic EQ-8 shows its "Response" title
+  and tells boost from cut by shade and a dashed ring; EQ-3's three band curves differ again
+  (shade and dash) and its faders have their 0 dB and half-cut ticks; EQ-8's L / R bands have a
+  dashed ring; Vintage's pitch-drift scale, Chorus's centre-line label and the Volt / Bass /
+  Aurora filter graph's frequency labels, −48 dB floor and +12 … −48 dB range are back;
+  Utility's correlation bar tints its out-of-phase half; Sampler's live cutoff line is lighter
+  and labelled; Flux shows when the reaction pulls the vector. ⌥-click resets Compressor's
+  Thresh / Makeup and EQ-3's faders and Output again (double-click the value, or right-click,
+  to type). Value bars and EQ-3's faders light up under the pointer, and the Auto Filter and
+  Compressor handles only look grabbed while hovered or dragged. Operator's OUT drop zone is the
+  bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
+  graph tooltips that named colours no longer drawn now describe what is on screen.
 - **Disarming a track no longer leaves a held note sounding** (nota-daw/nota#366): turning record arm off
   (or the arm moving to another selected track) while a key is down releases the notes that
   came in through live input, instead of leaving them on until panic or stop.

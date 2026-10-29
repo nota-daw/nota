@@ -149,7 +149,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             if (cell is Panel pl) foreach (var c in pl.Children) if (c is TextBlock tb && tb != val) { label = tb; break; }
             readouts.Add(() =>
             {
-                knob.ArcColor = null;
+                knob.ArcColor = teal?.Invoke() == true ? Teal : null;
                 if (!knob.Dragging) { double c = N(p); if (Math.Abs(c - knob.Value) > 1e-4) knob.Value = c; }
                 val.Text = fmt(P(p));
                 bool on = lit?.Invoke() ?? false;
@@ -401,7 +401,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             level = new CeLevelView { CeilToNorm = db => ToN(Ceil, db) };
             WireDrag(level, Ceil);
-            ToolTip.SetTip(level, "The last 4 s: the input (teal), the part over the ceiling (red) and the output (neutral ink), with the reduction under it. Drag the ceiling line; double-click resets.");
+            ToolTip.SetTip(level, "The last 4 s: the input (shaded grey), the part over the ceiling (red) and the output (the bright columns), with the reduction hanging in a strip under it (0 … −12\u2009dB). Drag the ceiling line; double-click resets.");
             var head = HeadRow(CharSeg(), Info(() => "ceiling " + CeilF(P(Ceil))));
             var knobs = KnobRow(
                 () => ScDb(S_WinInPeak) <= -119 ? "no signal" : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
@@ -413,7 +413,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Control ReductionTab()
         {
             reduction = new CeReductionView();
-            ToolTip.SetTip(reduction, "The gain reduction over the last 4 s: teal where a transient got through to the clip, the dashed line is the mean");
+            ToolTip.SetTip(reduction, "The gain reduction over the last 4 s: the darker grey where a transient got through to the clip, the dashed line is the mean");
             var head = HeadRow(CharSeg(), Info(() => NotaNum.F($"avg {GrF(Sc(S_AvgGr))} · max {GrF(Sc(S_WinMaxGr))}")));
             var knobs = KnobRow(ReleaseRange, ClipText);
             return TabBody(head, reduction, knobs);
@@ -424,7 +424,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             loudness = new CeLoudnessView { TargetToNorm = t => ToN(Target, t) };
             WireDrag(loudness, Target);
-            ToolTip.SetTip(loudness, "Momentary (teal), short-term (neutral ink) and integrated (rose) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; double-click resets.");
+            ToolTip.SetTip(loudness, "Momentary (the darker grey), short-term (the bright line) and integrated (the lighter grey) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; double-click resets.");
             var head = HeadRow(Row(6, CharSeg(false), Caps("TARGET"), TargetDrop()),
                 Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : "measuring…"));
             var knobs = KnobRow(

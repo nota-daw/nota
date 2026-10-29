@@ -409,7 +409,7 @@ internal static class NotaPalette
     public static readonly SolidColorBrush KnobCap           = T(nameof(KnobCap)); // Brush.KnobCap — knob centre cap (devices only)
     // Picked, not live: a pale accent fill with accent text (AccentBright on it).
     public static readonly SolidColorBrush AccentSoft        = T(nameof(AccentSoft)); // Brush.AccentSoft — behind something picked
-    // Track meters: green to 70 %, amber to 88 %, red above.
+    // Level meters: green below −6 dB, amber to 0 dBFS, red at and above 0 dBFS (a clip).
     public static readonly SolidColorBrush MeterSafe         = T(nameof(MeterSafe)); // Brush.MeterSafe
     public static readonly SolidColorBrush MeterHot          = T(nameof(MeterHot)); // Brush.MeterHot
     public static readonly SolidColorBrush MeterOver         = T(nameof(MeterOver)); // Brush.MeterOver
