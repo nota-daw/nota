@@ -356,14 +356,16 @@ public sealed partial class SessionView : UserControl
 
     // ---- selection + commands -----------------------------------------------------
 
-    private void Select(Selection sel)
+    // renotify: a click on the slot that is already selected still raises SlotSelected, so a
+    // filled slot can reopen its clip after the detail panel moved to Devices (#334).
+    private void Select(Selection sel, bool renotify = false)
     {
         var prev = _sel;
         _sel = sel;
         InvalidateAll();
         RebuildInspector();
         bool selectable = sel.Kind == SelKind.Slot ? ColumnFor(sel.TrackId) is not null : sel.Kind == SelKind.Bus && BusColumn(sel.TrackId) is not null;
-        if (selectable && prev != sel)
+        if (selectable && (prev != sel || renotify))
             SlotSelected?.Invoke(sel.TrackId, sel.Scene);
     }
 

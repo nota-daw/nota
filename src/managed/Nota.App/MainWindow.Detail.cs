@@ -693,7 +693,7 @@ public partial class MainWindow
     {
         _lastClipEditor = _clipEditor;
         SetHost(ClipDetailHost, _clipEditor);
-        SetDetailChip(_editorTrackId);
+        SetDetailChip(EditedTrack());   // a Session roll keeps _editorTrackId at -1
         if (DetailFloating) return;   // floating: top pane only
         DetailClipBtn.IsEnabled = true;
         DetailClipBtn.IsChecked = true;
