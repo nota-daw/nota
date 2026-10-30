@@ -2528,7 +2528,8 @@ public sealed partial class ArrangementView : UserControl
             {
                 bool on = pick.Matches(cur);
                 var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = on };
-                mi.Click += (_, _) => pick.ApplyTo(_engine, trackId);
+                // Rebuild so the header's input selector and monitor chip show the new source.
+                mi.Click += (_, _) => { pick.ApplyTo(_engine, trackId); RebuildHeaders(); };
                 choices.Add(mi);
                 if (on) curName = shortName;
             }
