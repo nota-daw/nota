@@ -1184,26 +1184,49 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     // Left / Right for the arrangement's track-header column (#72). Saving fires
     // Settings.Changed, which moves the column at once and ticks the View menu item.
+    // The same event repaints these buttons, so a change from the View menu updates an
+    // Appearance pane that is already open.
     private static Control HeaderSidePicker()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         var buttons = new List<(bool Right, ToggleButton Btn)>();
+        void ShowSaved()
+        {
+            bool right = settings.Current.ArrangementHeadersRight;
+            foreach (var (br, bb) in buttons) bb.IsChecked = br == right;
+        }
         foreach (var (right, label) in new[] { (false, "Left"), (true, "Right") })
         {
             var r = right;
-            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label, IsChecked = settings.Current.ArrangementHeadersRight == r };
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label };
             btn.Click += (_, _) =>
             {
-                foreach (var (br, bb) in buttons) bb.IsChecked = br == r;
-                if (settings.Current.ArrangementHeadersRight == r) return;
+                if (settings.Current.ArrangementHeadersRight == r) { ShowSaved(); return; }
                 settings.Current.ArrangementHeadersRight = r;
                 settings.Save();
             };
             buttons.Add((r, btn));
             strip.Children.Add(btn);
         }
-        return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+        ShowSaved();
+        var box = new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+        var listening = false;
+        void OnChanged() => ShowSaved();
+        box.AttachedToVisualTree += (_, _) =>
+        {
+            ShowSaved();
+            if (listening) return;
+            listening = true;
+            settings.Changed += OnChanged;
+        };
+        box.DetachedFromVisualTree += (_, _) =>
+        {
+            if (!listening) return;
+            listening = false;
+            settings.Changed -= OnChanged;
+        };
+        return box;
     }
 
     // 75–200 % for the whole interface (spec 027, #38). Applies live — this window rescales
