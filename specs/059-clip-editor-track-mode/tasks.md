@@ -37,4 +37,4 @@
 
 ## Phase 6: Convergence
 
-- [ ] T016 Get the smoke test green on CI (macOS, Windows, Linux) — locally `scripts/build-linux.sh` fails only the two render-pool overload timing guards, which fail the same way on unmodified `develop` on the 4-core VM — per Constitution IV / T014 (partial)
+- [X] T016 Get the smoke test green on CI (macOS, Windows, Linux) — locally `scripts/build-linux.sh` fails only the two render-pool overload timing guards, which fail the same way on unmodified `develop` on the 4-core VM — per Constitution IV / T014 (partial). CI run 41124206352 passed on all three platforms.
