@@ -32,6 +32,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   it on the next launch.
 
 ### Changed
+- **Clip inspector and MIDI tools in two columns** (#276): in a short clip editor the
+  inspector (MIDI and audio) and the Tools rail lay their sections out in two columns instead
+  of one scrolling column, so Clip, Quantize, Transpose and Selection (or Clip, Playback and
+  Warp) are all in view. They stay one column while that fits or the editor is narrow, and
+  scroll only when even two columns don't fit.
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
   rows hide first, then the sends, then the fader gets shorter; name, meter, fader, pan and
   M / S / Arm always stay. A hidden section's **Sends** / **I/O** footer toggle shows an

@@ -4,7 +4,8 @@
 // Shared shell pieces of the clip editor (nota-design "Nota Clip Editor"): one frame for
 // MIDI and audio — a 38px header whose first 232px is the clip cell (track-colour bar,
 // name, kind badge), mode segments after it, and a 232px inspector on the left whose
-// sections are split by hairlines and end in a single hint line. Everything here is the
+// sections are split by hairlines and end in a single hint line. Inspector and MIDI tools
+// take a second column when one would scroll (specs/055); the clip cell follows. Everything here is the
 // shell scale (11px words, 10px caps section labels); the theme's Button / .primary /
 // ToggleButton.seg carry the states.
 
@@ -22,16 +23,20 @@ internal static class ClipEditorKit
 {
     public const double HeaderH = 38, InspectorW = 232, ToolsW = 272, FieldH = 26;
 
+    /// <summary>Width the piano roll / waveform keeps before a side panel takes a second column.</summary>
+    public const double MinCanvasW = 480;
+
     // ---- header -----------------------------------------------------------
 
     /// <summary>The 38px header: clip cell | modes | (flex) | right-hand controls.</summary>
-    public static Border Header(IBrush trackColor, string name, string kind, Control modes, Control? afterModes, Control? right)
-        => Header(trackColor, name, kind, modes, afterModes, right, out _, out _);
+    public static Border Header(IBrush trackColor, string name, string kind, Control modes, Control? afterModes, Control? right, Control? inspector = null)
+        => Header(trackColor, name, kind, modes, afterModes, right, out _, out _, inspector);
 
     /// <summary>As above, handing back the name and the colour bar so a header can follow the
-    /// clip it names (the multi-clip editor's active clip).</summary>
+    /// clip it names (the multi-clip editor's active clip). The clip cell keeps the width of
+    /// <paramref name="inspector"/>, so it stays over it at one column or two.</summary>
     public static Border Header(IBrush trackColor, string name, string kind, Control modes, Control? afterModes, Control? right,
-                                out TextBlock nameOut, out Border colorBar)
+                                out TextBlock nameOut, out Border colorBar, Control? inspector = null)
     {
         var cell = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 9 };
         var nameText = new TextBlock
@@ -59,6 +64,7 @@ internal static class ClipEditorKit
                 },
             },
         };
+        if (inspector is not null) inspector.SizeChanged += (_, e) => cellHost.Width = e.NewSize.Width;
 
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto"), ColumnSpacing = 12 };
         row.Children.Add(cellHost);
@@ -109,44 +115,24 @@ internal static class ClipEditorKit
 
     // ---- inspector --------------------------------------------------------
 
-    /// <summary>The 232px inspector: scrolling sections with the hint line pinned below.</summary>
-    public static Border Inspector(Control sections, TextBlock hint)
+    /// <summary>The inspector: sections in one 232px column, or two side by side when one would
+    /// scroll and the editor has the width (specs/055), with the hint line pinned below.</summary>
+    public static Border Inspector(SectionColumns sections, TextBlock hint) => Inspector(sections, hint, out _);
+
+    public static Border Inspector(SectionColumns sections, TextBlock hint, out ColumnFlow flow)
     {
-        DockPanel.SetDock(hint, Dock.Bottom);
         hint.Margin = new Thickness(14, 6, 14, 12);
+        flow = new ColumnFlow(sections, hint, new Thickness(14, 16, 14, 8), InspectorW - 1) { Reserve = MinCanvasW };
         return new Border
         {
-            Width = InspectorW, Background = NotaPalette.Panel, BorderBrush = NotaPalette.BorderDefault,
-            BorderThickness = new Thickness(0, 0, 1, 0),
-            Child = new DockPanel
-            {
-                Children =
-                {
-                    hint,
-                    new ScrollViewer
-                    {
-                        Content = new Border { Padding = new Thickness(14, 16, 14, 8), Child = sections },
-                        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                        VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                    },
-                },
-            },
+            Background = NotaPalette.Panel, BorderBrush = NotaPalette.BorderDefault,
+            BorderThickness = new Thickness(0, 0, 1, 0), Child = flow,
         };
     }
 
-    /// <summary>A vertical run of sections split by hairlines (gap 18 around each rule).</summary>
-    public static StackPanel Sections(params Control[] sections)
-    {
-        var s = new StackPanel { Spacing = 18 };
-        for (int i = 0; i < sections.Length; i++)
-        {
-            if (i > 0) s.Children.Add(Rule());
-            s.Children.Add(sections[i]);
-        }
-        return s;
-    }
-
-    public static Border Rule() => new() { Height = 1, Background = NotaPalette.GraphBorder };
+    /// <summary>Sections split by hairlines (gap 18 around each rule), laid out in columns by
+    /// the panel that hosts them.</summary>
+    public static SectionColumns Sections(params Control[] sections) => new(18, sections);
 
     /// <summary>A section title (sentence case, muted), with an optional mono read-out on the right.</summary>
     public static Grid SectionTitle(string title, TextBlock? right = null)
