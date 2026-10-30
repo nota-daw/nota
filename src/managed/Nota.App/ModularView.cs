@@ -263,8 +263,7 @@ public sealed partial class ModularView : UserControl
         _emptyHint.IsVisible = !_global && _trackId <= 0;   // the hint is Track view's; Global has islands
         if (_global) return;
         _sidebar.Children.Clear();
-        int n = _engine.TrackCount;
-        for (int i = 0; i < n; i++)
+        foreach (int i in ArrangementView.DisplayOrder(_engine))
             if (_engine.TryGetTrackInfo(i, out var ti) && !ti.IsGroup)
                 _sidebar.Children.Add(TrackRow(ti.Id, ti));
         if (_sidebar.Children.Count == 0)
@@ -549,10 +548,9 @@ public sealed partial class ModularView : UserControl
     {
         double y = 60;
         int islands = 0;
-        int n = _engine.TrackCount;
         var islandByTrack = new Dictionary<int, GNode>();
         var trackIds = new List<int>();
-        for (int i = 0; i < n; i++)
+        foreach (int i in ArrangementView.DisplayOrder(_engine))
         {
             if (!_engine.TryGetTrackInfo(i, out var ti) || ti.IsGroup) continue;
             var isl = IslandNode(ti.Id, i, ti);

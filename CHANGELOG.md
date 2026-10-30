@@ -22,6 +22,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **An armed audio track meters its input with monitoring off** (nota-daw/nota#352): arm a
+  track and its meter shows the level coming in (hardware input, or the source track it
+  records from) before and during a take, without hearing it. The meter reads the input
+  pre-fader; with monitoring on it still shows what the track plays.
+- **The Mixer and Modular list tracks in the Arrangement's order** (nota-daw/nota#374): a new
+  track no longer shows up after the return tracks there until the tracks are reordered.
+
 ## [0.58.1] — 2026-10-29
 
 ### Added

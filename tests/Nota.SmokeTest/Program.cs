@@ -13140,6 +13140,36 @@ Console.WriteLine("-- input monitoring --");
     me.SetTrackMonitor(mon, false);
     me.RenderOffline(mbuf, 2048);
     Check(Rms(mbuf, 2048) < 1e-4f, $"monitor off silences the input (RMS {Rms(mbuf, 2048):F5})");
+
+    // Armed without monitoring (#352): the meter shows the input, nothing is heard.
+    me.TryGetTrackMeter(mon, out var offMeter);
+    Check(offMeter.Peak < 1e-4f, $"an unarmed, unmonitored track meters nothing (peak {offMeter.Peak:F5})");
+    me.SetTrackArmed(mon, true);
+    me.PushMonitorFramesForTest(sine, 8192);
+    me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var armMeter);
+    Check(armMeter.Peak > 0.1f, $"an armed track meters its hardware input without monitoring (peak {armMeter.Peak:F3})");
+    Check(Rms(mbuf, 2048) < 1e-4f, $"... and the input stays unheard (RMS {Rms(mbuf, 2048):F5})");
+    me.SetTrackVolume(mon, 0f);
+    me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var preMeter);
+    Check(preMeter.Peak > 0.1f, $"the armed input meter is pre-fader (peak {preMeter.Peak:F3})");
+    me.SetTrackVolume(mon, 1f);
+    me.SetTrackArmed(mon, false);
+    me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var disarmMeter);
+    Check(disarmMeter.Peak < 1e-4f, $"disarming drops the input meter (peak {disarmMeter.Peak:F5})");
+
+    // An internal source: an armed track meters its source track's output.
+    me.SetTrackRecordInput(mon, minst);
+    me.SetTrackSolo(mon, false);
+    me.SetTrackArmed(mon, true);
+    me.Seek(0); me.Play();
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var srcMeter);
+    Check(srcMeter.Peak > 0.001f, $"an armed track meters its source track without monitoring (peak {srcMeter.Peak:F3})");
+    me.StopTransport();
+    me.SetTrackArmed(mon, false);
 }
 
 // ============ input monitoring survives a project round-trip ===============
