@@ -1,6 +1,6 @@
 # Implementation Plan: Sample rate and buffer size in the status bar
 
-**Branch**: `055-status-bar-buffer` | **Date**: 2026-10-30 | **Spec**: [spec.md](spec.md)
+**Branch**: `061-status-bar-buffer` | **Date**: 2026-10-30 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 

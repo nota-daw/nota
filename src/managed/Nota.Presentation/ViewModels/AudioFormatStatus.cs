@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The status bar's audio format readout and buffer menu (#373, specs/055): "48 kHz · 256",
+// The status bar's audio format readout and buffer menu (#373, specs/061): "48 kHz · 256",
 // the buffer sizes Nota offers (shared with Settings → Audio), and who decides the buffer.
 
 using System.Globalization;

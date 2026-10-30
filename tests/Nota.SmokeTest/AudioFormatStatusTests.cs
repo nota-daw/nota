@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Status bar audio format (#373, specs/055): the "48 kHz · 256" readout, the block latency
+// Status bar audio format (#373, specs/061): the "48 kHz · 256" readout, the block latency
 // each buffer menu item shows, and who owns the buffer (Nota, the ASIO driver, or the device
 // in WASAPI exclusive mode).
 

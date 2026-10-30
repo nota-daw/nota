@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The status bar's sample rate · buffer size readout (#373, specs/055). A click opens the
+// The status bar's sample rate · buffer size readout (#373, specs/061). A click opens the
 // buffer menu: the sizes Settings → Audio offers, each with its block latency, and Audio
 // settings… under them. Under ASIO the driver owns the buffer and WASAPI exclusive uses the
 // device's own period, so there the menu says so instead of offering sizes.

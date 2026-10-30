@@ -1,6 +1,6 @@
 # Feature Specification: Sample rate and buffer size in the status bar
 
-**Feature Branch**: `055-status-bar-buffer`
+**Feature Branch**: `061-status-bar-buffer`
 
 **Created**: 2026-10-30
 
