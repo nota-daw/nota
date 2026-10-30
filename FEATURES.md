@@ -133,6 +133,13 @@ docks as a panel under any of the three, or floats in its own window — see
     whole bars). Its menu loops the section, selects it as a time range across every track,
     duplicates it or deletes it. Each edit is one undo step. Saved with the project (MCP
     `list_sections` / `set_sections`); View ▸ Toggle sections hides it.
+  - **Automatic section names** — a new section is named "Section N" for its place in the
+    song, left to right, custom-named sections counted, and renumbers as sections are added,
+    moved or deleted; a custom name never changes on its own. Renaming: Return keeps the name
+    (an empty one goes back to automatic), Esc cancels; the box says whether the name is
+    automatic or custom. **Reset to default** (in the rename box, the section's menu and the
+    command palette's *Reset section name*, for the section at the playhead) brings the
+    automatic name back. Undo / redo restore both the name and its mode.
   - **Resizable tracks and track list** — drag a track's bottom edge (header or lane) to
     set its height, 30–256 px, with a light snap to Compact / Standard / Large; a
     multi-selection resizes together, ⌥-drag resizes every track, double-click resets.

@@ -136,7 +136,7 @@ public partial class MainWindow : IRemoteHost
     int IRemoteHost.ProjectKeyCode => _vm?.Transport.KeyCode ?? -1;
 
     IReadOnlyList<(string Name, double StartBeat)> IRemoteHost.Sections =>
-        Timeline.SectionList.OrderBy(s => s.StartBeat).Select(s => (s.Name, s.StartBeat)).ToList();
+        Timeline.SectionList.Select((s, i) => (SectionNames.Display(s.Name, i), s.StartBeat)).ToList();
 
     bool IRemoteHost.Recording => _vm?.Transport.RecordOn ?? false;
     bool IRemoteHost.LoopOn => _vm?.Transport.LoopOn ?? false;

@@ -400,6 +400,7 @@ if (args.Length >= 1 && args[0] == "--paramundo")
 {
     Console.WriteLine("-- param + section undo --");
     foreach (var (ok, label) in ParamSectionUndoTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in SectionNamingTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "PARAMUNDO PASSED" : $"PARAMUNDO FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -15307,6 +15308,8 @@ foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- param + section undo --");
 foreach (var (ok, label) in ParamSectionUndoTests.Run()) Check(ok, label);
+Console.WriteLine("-- section names --");
+foreach (var (ok, label) in SectionNamingTests.Run()) Check(ok, label);
 Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device copy + rack undo --");
