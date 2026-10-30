@@ -129,7 +129,7 @@ internal static class NoteEditingTests
         var fine = NoteOverwrite.VelocityBy(0.8f, 1);
         yield return (Midi(fine) == (int)Math.Round(0.8 * 127) + 1 && OnStep(fine), "velocity: fine step lands on an integer MIDI value");
 
-        // ---- shaping a note while placing it (specs/055, #45) -----------------------------
+        // ---- shaping a note while placing it (specs/066, #45) -----------------------------
         yield return (NotePlacementDrag.KindFor(false, false) == PlaceDragKind.Move, "place drag: plain drag moves the new note");
         yield return (NotePlacementDrag.KindFor(true, false) == PlaceDragKind.Length, "place drag: ⇧ drag sets its length");
         yield return (NotePlacementDrag.KindFor(false, true) == PlaceDragKind.Velocity

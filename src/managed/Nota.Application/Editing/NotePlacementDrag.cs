@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Shaping a note while it is placed (specs/055-piano-roll-place-drag, #45): after the
+// Shaping a note while it is placed (specs/066-piano-roll-place-drag, #45): after the
 // double-click that adds a note, dragging with the button still held moves it, ⇧ sets its
 // length, ⌘/Ctrl its velocity. Pure and UI-free: the smoke test drives it directly.
 

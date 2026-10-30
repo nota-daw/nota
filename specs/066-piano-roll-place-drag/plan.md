@@ -1,6 +1,6 @@
 # Implementation Plan: Shape a note while placing it
 
-**Branch**: `055-piano-roll-place-drag` | **Date**: 2026-10-30 | **Spec**: [spec.md](spec.md)
+**Branch**: `066-piano-roll-place-drag` | **Date**: 2026-10-30 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -18,9 +18,19 @@ or commit) and remembers the note as last touched.
 
 C# / .NET 10, Avalonia; no new dependency, no engine or ABI change. Not on the audio thread.
 
+## Audio-thread impact
+
+None. All of it runs on the UI thread inside the note grid's pointer handlers. Notes reach
+the engine only through the C ABI calls the roll already makes (`SetClipNotes` /
+`SetClipNotesLive` for arrangement clips, `SetSessionNotes` for Session slots), which publish
+a new snapshot as before; nothing new runs on the audio thread, so there is no new
+allocation, lock, I/O or logging there. Audition uses the existing note-on / note-off path.
+Musical time stays with the Transport — the gesture only edits note beats.
+
 ## Constitution Check
 
-UI-only, no allocation on the audio thread, AGPL headers on new files, no dependency.
+UI-only, no audio-thread work (above), only the C ABI crosses managed/native, no JUCE
+outside `pluginhost/`, SPDX/copyright header on the new file, no new dependency.
 
 ## Project Structure
 

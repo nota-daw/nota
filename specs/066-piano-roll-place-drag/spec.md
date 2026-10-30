@@ -1,6 +1,6 @@
 # Feature Specification: Shape a note while placing it
 
-**Feature Branch**: `055-piano-roll-place-drag`
+**Feature Branch**: `066-piano-roll-place-drag`
 
 **Created**: 2026-10-30
 
