@@ -262,6 +262,10 @@ public sealed partial class ArrangementView : UserControl
     /// all, delete). Raised once per change, after the arrangement has settled its own state;
     /// the Clip editor follows it (specs/029).</summary>
     public event Action? ClipSelectionChanged;
+    /// <summary>Clips were split (Cmd+E, a time range, the clip menu's "Split here"). A split
+    /// inserts the right half after the left, so the clips after it change index: a track-mode
+    /// Clip editor reopens the track's clips (specs/059). Raised after the arrangement refreshed.</summary>
+    public event Action? ClipsSplit;
     private (int, int)[] _notifiedSel = Array.Empty<(int, int)>();
     private bool _selNotifyQueued;
 
@@ -1794,6 +1798,7 @@ public sealed partial class ArrangementView : UserControl
         var ids = TimeSelectionTrackIds();
         if (ids.Length == 0 || !_engine.SplitClipsInRange(ids, _timeSelStart, _timeSelEnd)) return false;
         Refresh();
+        ClipsSplit?.Invoke();
         return true;
     }
 
@@ -1931,7 +1936,7 @@ public sealed partial class ArrangementView : UserControl
             if (at > vm.StartBeat + 1e-6 && at < vm.StartBeat + vm.LengthBeats - 1e-6)
             { _engine.SplitClip(track, clip, at); any = true; }
         }
-        if (any) { Select(-1, -1); Refresh(); }
+        if (any) { Select(-1, -1); Refresh(); ClipsSplit?.Invoke(); }
         return any;
     }
 

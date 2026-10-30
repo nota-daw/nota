@@ -955,7 +955,7 @@ public sealed partial class ArrangementView
 
             var edits = new List<Control>
             {
-                MenuKit.Item("Split here", GlyphKind.Split, () => { _o._engine?.SplitClip(trackId, idx, at); _o.Refresh(); }, MenuKit.SplitKey),
+                MenuKit.Item("Split here", GlyphKind.Split, () => { _o._engine?.SplitClip(trackId, idx, at); _o.Refresh(); _o.ClipsSplit?.Invoke(); }, MenuKit.SplitKey),
             };
             // Reverse (audio only): non-destructive, so the label reflects the clicked clip.
             if (!clip.IsMidi && _o._engine is { } rev && rev.TryGetAudioClipInfo(trackId, idx, out var rai))

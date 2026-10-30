@@ -434,7 +434,7 @@ public partial class MainWindow
     {
         if (!ClipTrackMode || _editorRoll is not { Clips.TrackMode: true } roll || _clipEditor is null
             || roll.ActiveClip.TrackId != trackId) return false;
-        if (roll.Clips.IndexOf(trackId, clipIndex) < 0) SyncTrackClips(roll);
+        SyncTrackClips(roll);   // an arrangement edit may have added or re-indexed clips
         int slot = roll.Clips.IndexOf(trackId, clipIndex);
         if (slot < 0) return false;
         roll.SetActiveClip(slot);
@@ -442,21 +442,42 @@ public partial class MainWindow
         return true;
     }
 
-    /// <summary>Opens the clips that appeared on a track-mode editor's track since it was built
-    /// (drawn, pasted, recorded). Whether any did; the caller reloads the roll.</summary>
-    private bool AddNewTrackClips(PianoRollView roll)
+    /// <summary>Reopens a track-mode editor's clips from the engine when they no longer match the
+    /// track's MIDI clips: one appeared (drawn, pasted, recorded) or an edit re-indexed them (a
+    /// split puts the right half after the left, so the later clips shift). The roll keeps its
+    /// zoom, scroll and note selection; the active clip is the one still at its start beat.
+    /// Whether the roll was reloaded.</summary>
+    private bool SyncTrackClips(PianoRollView roll)
     {
-        if (!roll.Clips.TrackMode) return false;
-        bool added = false;
-        foreach (var (t, c) in MidiClipsOf(roll.ActiveClip.TrackId))
-            if (roll.Clips.IndexOf(t, c) < 0 && Engine.TryGetClipInfo(t, c, out var info))
-                added |= roll.Clips.Add(new OpenClip(t, c, info.StartBeat, info.LengthBeats > 0 ? info.LengthBeats : 4));
-        return added;
+        var old = roll.Clips;
+        if (!old.TrackMode) return false;
+        var a = roll.ActiveClip;
+        var now = MidiClipsOf(a.TrackId);
+        if (now.Count == 0 || (now.Count == old.Count && now.All(x => old.IndexOf(x.TrackId, x.ClipIndex) >= 0))) return false;
+        var items = new List<OpenClip>();
+        foreach (var (t, c) in now)
+            if (Engine.TryGetClipInfo(t, c, out var info))
+                items.Add(new OpenClip(t, c, info.StartBeat, info.LengthBeats > 0 ? info.LengthBeats : 4));
+        if (items.Count == 0) return false;
+        var sameStart = items.Where(i => Math.Abs(i.StartBeat - a.StartBeat) < 1e-6).ToList();
+        var active = sameStart.FirstOrDefault(i => i.ClipIndex == a.ClipIndex) ?? sameStart.FirstOrDefault() ?? items[0];
+        var set = new ClipSet(items, a.TrackId, active.ClipIndex, Timeline.BeatsPerBar, trackMode: true);
+        // Reference locks stay on the clips that are still where they were.
+        foreach (var o in old.Clips)
+        {
+            if (!o.IsReference) continue;
+            int slot = set.IndexOf(o.TrackId, o.ClipIndex);
+            if (slot >= 0 && Math.Abs(set.Clips[slot].StartBeat - o.StartBeat) < 1e-6) set.SetReference(slot, true);
+        }
+        roll.SetClips(set, ClipNotesOf(set), TrackBrush);
+        return true;
     }
 
-    private void SyncTrackClips(PianoRollView roll)
+    // An arrangement edit that re-indexes the track's clips (a split) while no clip is selected.
+    private void SyncTrackModeClips()
     {
-        if (AddNewTrackClips(roll)) roll.SetClips(roll.Clips, ClipNotesOf(roll.Clips), TrackBrush);
+        if (_editorRoll is { Clips.TrackMode: true } roll && _clipEditor is not null && _editorTrackId > 0)
+            SyncTrackClips(roll);
     }
 
     /// <summary>A Clip editor with several arrangement clips open.</summary>
@@ -476,7 +497,12 @@ public partial class MainWindow
         // Track mode follows the clicked clip: its track, with it active.
         if (ClipTrackMode)
         {
-            if (!SelectedClip(out int t, out int c, out bool isMidi) || !isMidi || FocusTrackClip(t, c)) return;
+            if (!SelectedClip(out int t, out int c, out bool isMidi) || !isMidi)
+            {
+                SyncTrackModeClips();   // e.g. a split cleared the selection: the editor still follows the track
+                return;
+            }
+            if (FocusTrackClip(t, c)) return;
             BuildClipEditor(t, c);
             ShowClipPanel();
             return;
@@ -895,12 +921,12 @@ public partial class MainWindow
         // Every open clip, as the engine now holds it (undo/redo, recording); clips that are
         // gone leave the set, and their lengths/starts are re-read.
         var roll = _editorRoll;
+        SyncTrackClips(roll);   // a track-mode editor takes clips that appeared or were re-indexed (undo, record)
         if (!PruneDeadClips(roll)) return;
         var set = roll.Clips;
         foreach (var c in set.Clips.ToList())
             if (Engine.TryGetClipInfo(c.TrackId, c.ClipIndex, out var info))
                 set.UpdateGeometry(c.TrackId, c.ClipIndex, info.StartBeat, info.LengthBeats > 0 ? info.LengthBeats : c.LengthBeats);
-        AddNewTrackClips(roll);
         roll.SetClips(set, ClipNotesOf(set), TrackBrush);
         // The roll shows the recording take: draw its held notes too (#56).
         bool take = _recordPreview is { Active: true, SessionScene: < 0 } rp
