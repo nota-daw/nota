@@ -125,6 +125,11 @@ internal static class ClipEditorTests
         bool shortest = true;
         for (int s = 1; s < 6; s++) shortest &= best <= Math.Max(PanelColumns.Stack(mixed, 0, s, g), PanelColumns.Stack(mixed, s, 6, g));
         yield return (shortest && k is > 0 and < 6, "columns: the split leaves the taller column shortest");
+        // Room for a second column leaves the canvas its minimum and the header what it needs beside the cell.
+        yield return (PanelColumns.RoomForTwo(1000, 463, 480, 0) && !PanelColumns.RoomForTwo(900, 463, 480, 0),
+            "columns: a second column leaves the canvas its minimum width");
+        yield return (!PanelColumns.RoomForTwo(1150, 463, 480, 700) && PanelColumns.RoomForTwo(1163, 463, 480, 700),
+            "columns: a second column leaves the header the width of its controls");
         yield return (PanelColumns.BestSplit(new double[] { 50, 50 }, g) == 1 && PanelColumns.BestSplit(new double[] { 10, 50, 10 }, g) == 2,
             "columns: on a tie the first column takes more");
     }

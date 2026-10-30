@@ -128,6 +128,10 @@ public sealed class ColumnFlow : Control
 
     public double ColumnWidth { get; }
 
+    /// <summary>Width the editor's header needs beside the clip cell, which follows this panel's
+    /// width, so a second column must leave it. Read at each measure.</summary>
+    public Func<double>? Beside { get; set; }
+
     private double _reserve;
     public double Reserve
     {
@@ -155,7 +159,7 @@ public sealed class ColumnFlow : Control
         if (_foot is not null) { _foot.Measure(new Size(one, availableSize.Height)); footH = _foot.DesiredSize.Height; }
         var heights = _body.MeasureSections(Math.Max(0, one - pad.Left - pad.Right));
         double room = availableSize.Height - footH - pad.Top - pad.Bottom;
-        bool widthForTwo = availableSize.Width - Reserve >= two;
+        bool widthForTwo = PanelColumns.RoomForTwo(availableSize.Width, two, Reserve, Beside?.Invoke() ?? 0);
         var plan = PanelColumns.Choose(heights, _body.Gap, room, widthForTwo);
         _body.SetLayout(plan.Columns, plan.Columns == 2 ? plan.Split : int.MaxValue);
 

@@ -26,6 +26,8 @@ the height it is given and the width it is offered.
 - **`ClipEditorKit`**: `Sections` returns `SectionColumns`; `Inspector` builds a `ColumnFlow`
   (column 231 px + 1 px border = 232 px; two columns 464 px, padding 14/16/14/8, hint as the foot) and hands it back;
   `Header` takes the inspector and keeps the clip cell at its width (`SizeChanged`);
+  it also gives the inspector's `ColumnFlow` a `Beside` width (the rest of the header) that
+  `PanelColumns.RoomForTwo` weighs against the canvas reserve;
   `MinCanvasW = 480`; `Rule()` goes (unused).
 - **`MidiToolsView`**: sections = [Generate / Transform + tool list], parameters, Output, spacing
   10; foot = result line, Apply, Revert / Defaults; column 271 px + 1 px border = 272 px (544 px

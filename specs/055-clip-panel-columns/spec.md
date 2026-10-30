@@ -77,6 +77,8 @@ the foot across the panel's width.
 - **FR-002**: They MUST use two columns of the one-column width when one column would scroll and
   the width they are offered, less what the editor canvas keeps (480 px, plus a one-column tools
   panel for the inspector while Tools is open), holds two columns.
+  The inspector also leaves the header the width its mode and right-hand controls need beside the
+  clip cell, which widens with the inspector, so no control runs outside the visible panel.
 - **FR-003**: They MUST scroll vertically only when the chosen layout doesn't fit the height.
 - **FR-004**: Sections MUST stay whole and in order; column one holds a leading run of them.
 - **FR-005**: The split MUST minimise the taller column; on a tie the first column takes more.

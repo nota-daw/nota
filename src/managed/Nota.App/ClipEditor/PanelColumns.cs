@@ -40,6 +40,13 @@ public static class PanelColumns
         return best;
     }
 
+    /// <summary>Whether a panel can take its second column: of the <paramref name="available"/>
+    /// width, <paramref name="two"/> goes to the panel and what is left must still hold the
+    /// larger of <paramref name="reserve"/> (the canvas's minimum) and <paramref name="beside"/>
+    /// (what the header needs next to the clip cell, which widens with the panel).</summary>
+    public static bool RoomForTwo(double available, double two, double reserve, double beside)
+        => available - Math.Max(reserve, beside) >= two;
+
     /// <summary>Picks the layout. <paramref name="room"/> is the height the sections get in one
     /// column; <paramref name="widthForTwo"/> says the editor can spare a second column.</summary>
     public static Plan Choose(ReadOnlySpan<double> heights, double gap, double room, bool widthForTwo)

@@ -29,14 +29,18 @@ internal static class ClipEditorKit
     // ---- header -----------------------------------------------------------
 
     /// <summary>The 38px header: clip cell | modes | (flex) | right-hand controls.</summary>
-    public static Border Header(IBrush trackColor, string name, string kind, Control modes, Control? afterModes, Control? right, Control? inspector = null)
-        => Header(trackColor, name, kind, modes, afterModes, right, out _, out _, inspector);
+    public static Border Header(IBrush trackColor, string name, string kind, Control modes, Control? afterModes, Control? right,
+                                Control? inspector = null, ColumnFlow? flow = null)
+        => Header(trackColor, name, kind, modes, afterModes, right, out _, out _, inspector, flow);
 
     /// <summary>As above, handing back the name and the colour bar so a header can follow the
     /// clip it names (the multi-clip editor's active clip). The clip cell keeps the width of
-    /// <paramref name="inspector"/>, so it stays over it at one column or two.</summary>
+    /// <paramref name="inspector"/>, so it stays over it at one column or two; the rest of the
+    /// header can't shrink, so <paramref name="flow"/> (that inspector's columns) is told how much
+    /// width it needs and takes a second column only when that still fits.</summary>
     public static Border Header(IBrush trackColor, string name, string kind, Control modes, Control? afterModes, Control? right,
-                                out TextBlock nameOut, out Border colorBar, Control? inspector = null)
+                                out TextBlock nameOut, out Border colorBar,
+                                Control? inspector = null, ColumnFlow? flow = null)
     {
         var cell = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 9 };
         var nameText = new TextBlock
@@ -72,11 +76,17 @@ internal static class ClipEditorKit
         Grid.SetColumn(modes, 1); row.Children.Add(modes);
         if (afterModes is not null) { afterModes.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(afterModes, 2); row.Children.Add(afterModes); }
         if (right is not null) { right.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(right, 4); row.Children.Add(right); }
-        return new Border
+        var header = new Border
         {
             Height = HeaderH, Background = NotaPalette.Panel, BorderBrush = NotaPalette.BorderDefault,
             BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(0, 0, 12, 0), Child = row,
         };
+        // Everything but the clip cell: the controls at their natural width (hidden ones measure 0),
+        // the column gaps and the right padding.
+        if (flow is not null)
+            flow.Beside = () => modes.DesiredSize.Width + (afterModes?.DesiredSize.Width ?? 0) + (right?.DesiredSize.Width ?? 0)
+                                + row.ColumnSpacing * (row.ColumnDefinitions.Count - 1) + header.Padding.Right;
+        return header;
     }
 
     /// <summary>A 1×18 hairline between header groups.</summary>
