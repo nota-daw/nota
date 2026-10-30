@@ -242,7 +242,7 @@ public sealed partial class ArrangementView
         Refresh(); SessionChanged?.Invoke();
     }
 
-    // ---- the track inspector's view of a track (specs/055) -------------------------------
+    // ---- the track inspector's view of a track (specs/060) -------------------------------
 
     /// <summary>Redraws the headers and the Session grid after an edit made outside them.</summary>
     internal void RefreshAfterTrackEdit() { Refresh(); SessionChanged?.Invoke(); }

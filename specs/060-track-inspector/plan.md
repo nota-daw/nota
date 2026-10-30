@@ -1,6 +1,6 @@
 # Implementation Plan: Track inspector
 
-**Branch**: `055-track-inspector` | **Date**: 2026-10-30 | **Spec**: [spec.md](spec.md)
+**Branch**: `060-track-inspector` | **Date**: 2026-10-30 | **Spec**: [spec.md](spec.md)
 
 ## Summary
 
@@ -30,6 +30,13 @@ arming and automation rules are shared rather than copied. No engine, ABI or for
 - **Staying current**: a 250 ms timer while the view is attached; it skips when the tab is
   hidden (browser folded) or the name box has focus, compares a string snapshot of
   everything shown, and rebuilds on a difference. A rebuild is a few dozen controls.
+
+## Audio-thread impact
+
+None. Every edit goes through an existing message-thread engine setter that the track
+header and menu already use; the inspector only reads state on the UI thread. Nothing new
+runs on the audio thread: no allocation, locks, I/O or logging there, no structural graph
+edit (so no new graph snapshot), and Transport stays the only source of musical time.
 
 ## Constitution Check
 

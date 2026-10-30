@@ -1,6 +1,6 @@
 # Feature Specification: Track inspector
 
-**Feature Branch**: `055-track-inspector`
+**Feature Branch**: `060-track-inspector`
 
 **Created**: 2026-10-30
 

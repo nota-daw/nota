@@ -458,7 +458,7 @@ public sealed class BrowserView : UserControl
         if (_active == HistoryTab) _content.Content = view;
     }
 
-    /// <summary>Give the browser the track inspector tab (specs/055).</summary>
+    /// <summary>Give the browser the track inspector tab (specs/060).</summary>
     internal void SetTrackInspector(Control view)
     {
         _trackInspector = view;

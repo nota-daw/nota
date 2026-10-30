@@ -205,7 +205,7 @@ public partial class MainWindow : Window
         Timeline.FreezeMenuItems = BuildTrackFreezeMenu;   // track context menu: Freeze / Live Freeze
         Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
         Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
-        _trackInspector = new TrackInspectorView(vm.Engine, Timeline, TrackFreezeEntries);   // browser's Track inspector tab (specs/055)
+        _trackInspector = new TrackInspectorView(vm.Engine, Timeline, TrackFreezeEntries);   // browser's Track inspector tab (specs/060)
         Browser.SetTrackInspector(_trackInspector);
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.EditSelectedClipsRequested += () => EditSelectedClips();

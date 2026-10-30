@@ -147,7 +147,7 @@ public partial class MainWindow
     // switching it on live-freezes the track, switching it off unfreezes the link (wakes the
     // source). While linked, Edit (or Done / Discard mid-session) and Flatten follow; a track
     // frozen in place offers Unfreeze / Flatten instead. Each command first selects its track
-    // so the device panel and header buttons follow. The track inspector (specs/055) shows the
+    // so the device panel and header buttons follow. The track inspector (specs/060) shows the
     // same entries as buttons.
     private IReadOnlyList<FreezeEntry> TrackFreezeEntries(int trackId)
     {

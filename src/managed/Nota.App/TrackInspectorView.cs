@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The track inspector (specs/055, #186): the browser's Track inspector tab, showing the track
+// The track inspector (specs/060, #186): the browser's Track inspector tab, showing the track
 // the Devices panel shows — name, mute / solo / arm, record input + monitor or MIDI from,
 // colour, row height and freeze — so those settings have a home besides the track menu. Every
 // control calls what the header and the menu call, so undo and arming behave the same.
