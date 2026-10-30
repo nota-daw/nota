@@ -58,6 +58,8 @@ shade and the velocity lane follow.
 ### Edge Cases
 
 - Release without moving: exactly today's placement.
+- Losing the pointer (released outside the window) ends the placement drag. Hovering back over the grid does not keep moving the note.
+- Switching into length or move mid-drag keeps the note as it is until the pointer actually moves; an off-grid end is not snapped by the switch itself.
 - Velocity drag near the viewport edge does not auto-scroll the rows.
 - Double-click on a note still deletes it; no drag follows.
 

@@ -140,5 +140,11 @@ internal static class NoteEditingTests
         yield return (NotePlacementDrag.Velocity(64 / 127f, 0) == 64 / 127f, "place drag: no vertical movement keeps the velocity");
         yield return (Midi(NotePlacementDrag.Velocity(0.8f, -1000)) == 127 && Midi(NotePlacementDrag.Velocity(0.8f, 1000)) == 1,
                       "place drag: velocity clamps to 1..127");
+        // Half-beat grid: 0.7 snaps to 0.5. Switching into length (no pointer movement) must not.
+        static double Half(double b) => Math.Round(b * 2) / 2;
+        yield return (NotePlacementDrag.BeatAfter(0.7, 0, Half) == 0.7,
+                      "place drag: switching mode keeps an off-grid end");
+        yield return (NotePlacementDrag.BeatAfter(0.7, 0.2, Half) == 1.0,
+                      "place drag: a later horizontal drag snaps the end");
     }
 }

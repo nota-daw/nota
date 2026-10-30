@@ -24,4 +24,11 @@ public static class NotePlacementDrag
     /// the velocity drag started at <paramref name="anchor"/>: up is louder, clamped to 1..127.</summary>
     public static float Velocity(float anchor, double dyPx)
         => NoteOverwrite.VelocityBy(anchor, (int)Math.Round(-dyPx / PxPerVelocityStep));
+
+    /// <summary>Where a beat that was <paramref name="anchored"/> when this drag (or a modifier
+    /// switch) started should sit after the pointer moves <paramref name="deltaBeats"/>. No
+    /// movement keeps the anchored beat, so switching into the mode never snaps an off-grid
+    /// note; later movement snaps the beat the pointer now points at.</summary>
+    public static double BeatAfter(double anchored, double deltaBeats, Func<double, double> snap)
+        => Math.Abs(deltaBeats) < 1e-9 ? anchored : snap(anchored + deltaBeats);
 }
