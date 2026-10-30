@@ -23,6 +23,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Sample rate and buffer size in the status bar** (#373): the lower right corner now reads
+  "48 kHz · 256". Click it to pick another buffer size — Device default or 64 to 2048 frames,
+  each with its latency — or to open Settings → Audio. Playback carries on across the change.
+  Under ASIO the menu offers the driver's settings instead, since the driver sets the buffer.
 - **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
   the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
   Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.

@@ -32,8 +32,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Version history was just turned off in Settings: the window erases the open
     /// project's history.</summary>
     public event Action? VersionHistoryTurnedOff;
-    /// <summary>The audio driver restarted (or fell back) on its own, after a device event:
-    /// an open Settings ▸ Audio pane re-reads the driver's buffer, latency and channels.</summary>
+    /// <summary>The audio driver restarted (or fell back) on its own, after a device event, or
+    /// the status bar changed the buffer: an open Settings ▸ Audio pane re-reads the driver's
+    /// buffer, latency and channels.</summary>
     public event Action? AudioDeviceRestarted;
 
     /// <summary>Turns version history on or off and persists it. Turning it off (the caller has
@@ -82,7 +83,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         catch (NotaEngineException ex) { _log.Error("The audio engine couldn't start", ex); }
         Engine.SetBpm(120);
         Engine.SetTimeSignature(4, 4);
-        EngineInfo = $"{Engine.SampleRate:0}\u2009Hz";
+        UpdateEngineInfo();
         _log.Info($"Engine started · {Engine.SampleRate:0}\u2009Hz");
         if (NoAudioOutput is { } why) { _log.Warn(why); StatusText = why; }
         else if (AsioFallbackStatus() is { } asio) { _log.Warn(asio); StatusText = asio; }
@@ -201,7 +202,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         // it here, so Settings can say why — also when the apply waited for the driver's panel.
         RefusedSampleRate = askedRate > 0 && Engine.ActiveAudioSystem == AudioSystem.Asio
                             && Engine.GetAudioConfig().SampleRate == 0 ? askedRate : 0;
-        EngineInfo = $"{Engine.SampleRate:0}\u2009Hz";   // the version sits beside it, as its own button (#127)
+        UpdateEngineInfo();
         int buf = Engine.NegotiatedBufferFrames;
         _log.Info($"Audio applied · {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames");
         if (NoAudioOutput is { } why)
@@ -232,6 +233,35 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             ? $"Audio: {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames"
             : $"Audio: {Engine.NegotiatedSampleRate:0}\u2009Hz";
         return StatusText;
+    }
+
+    private void UpdateEngineInfo()
+    {
+        double sr = Engine.NegotiatedSampleRate > 0 ? Engine.NegotiatedSampleRate : Engine.SampleRate;
+        EngineInfo = AudioFormatStatus.Text(sr, Engine.IsRunning ? Engine.NegotiatedBufferFrames : 0);
+    }
+
+    /// <summary>Who sets the running device's buffer: Nota, the ASIO driver, or the device
+    /// itself in WASAPI exclusive mode.</summary>
+    public BufferOwner BufferOwner => AudioFormatStatus.Owner(
+        Engine.ActiveAudioSystem == AudioSystem.Asio,
+        OperatingSystem.IsWindows() && Engine.GetAudioConfig().WasapiExclusive && !Engine.AudioExclusiveFallback);
+
+    /// <summary>The status bar's buffer menu (#373): stage the size (0 = device default), restart
+    /// the backend on it, carry on playing from the same spot, and let an open Settings ▸ Audio
+    /// pane re-read it.</summary>
+    public void SetAudioBufferFrames(int frames)
+    {
+        bool wasPlaying = Engine.IsPlaying && !Engine.IsRecording;
+        double position = Engine.PositionBeats;
+        Engine.SetAudioBufferFrames(frames);
+        ApplyAudioSettings();
+        if (wasPlaying && Engine.IsRunning)
+        {
+            Engine.Seek(position);
+            Engine.Play();
+        }
+        AudioDeviceRestarted?.Invoke();
     }
 
     /// <summary>The ASIO driver chosen in Settings couldn't start and WASAPI runs instead

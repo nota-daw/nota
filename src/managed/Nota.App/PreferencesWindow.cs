@@ -91,7 +91,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     private readonly IGamepadService _gamepads = App.Services.GetRequiredService<IGamepadService>();
 
     private static readonly double[] SampleRates = { 0, 44100, 48000, 88200, 96000 };
-    private static readonly int[] BufferSizes = { 0, 64, 128, 256, 512, 1024, 2048 };
+    private static int[] BufferSizes => AudioFormatStatus.BufferSizes;
     private readonly List<string> _outputUids = new();
     private readonly List<string> _inputUids = new();
 

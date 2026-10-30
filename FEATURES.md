@@ -1228,6 +1228,11 @@ audio effects after it keep running and keep their settings; saved with the proj
   release's sha256). **Restart now** installs it and relaunches, and **Later** installs it on
   quit. This covers the macOS .app, the Windows installer (run silently) and the Linux
   AppImage. Other copies fall back to a link to the release page.
+- **Sample rate and buffer size in the status bar** ("48 kHz · 256", beside the version). A
+  click opens the buffer menu: Device default or 64–2048 frames, each with its latency, and
+  Audio settings…; picking a size restarts the device and playback carries on. Under ASIO
+  the menu offers Driver settings… instead (the driver owns the buffer); in WASAPI exclusive
+  mode it says the device's own buffer is used.
 - **About** — the app and engine versions, the copyright notice, and a pointer to the
   third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
 - **Settings** — a larger window with a sidebar grouped into Devices, Plug-ins and General
