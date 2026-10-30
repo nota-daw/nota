@@ -108,7 +108,7 @@ public sealed partial class ArrangementView
     }
 
     // Position in start order, ties kept in list order — what an automatic name counts
-    // (specs/055). Computed, not sorted in place, so it also holds mid-drag.
+    // (specs/058). Computed, not sorted in place, so it also holds mid-drag.
     private int SectionIndex(ArrangementSection s)
     {
         int self = _sections.IndexOf(s), n = 0;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Automatic section names (specs/055-section-automatic-names): an empty name is automatic and
+// Automatic section names (specs/058-section-automatic-names): an empty name is automatic and
 // reads "Section N" for its position, custom names counted; typed names are trimmed and a blank
 // one is automatic; a reset is one step whose undo brings the custom name back; the mode
 // survives save / load; MCP lists the shown name and the mode and round-trips them.

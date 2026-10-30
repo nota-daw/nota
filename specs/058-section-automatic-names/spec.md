@@ -145,6 +145,9 @@ caption reads "Custom name".
   "assignable in shortcut settings" is out of scope; Reset is reachable from the command
   palette and by keyboard inside the rename box. A rebinding system is a separate feature.
 - Older projects' stored "Section N" texts stay custom (see Edge Cases).
+- The user manual lives in the separate `nota-docs` repository. Its Arrangement, command
+  palette, MCP and shortcuts pages are updated there as a follow-up (nota-docs skill), not in
+  this repository's change.
 
 ## Nota Compliance Checklist *(review before implementation; re-check in tasks.md)*
 

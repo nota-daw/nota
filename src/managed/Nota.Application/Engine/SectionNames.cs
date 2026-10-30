@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Automatic section names (specs/055). A section whose stored name is empty is automatic: it
+// Automatic section names (specs/058). A section whose stored name is empty is automatic: it
 // reads "Section N", N its position among all sections in start order, custom-named ones
 // counted. The mode lives in the name itself, so the engine's undo snapshot and project.json
 // carry it with no extra field, and renumbering never rewrites stored data.

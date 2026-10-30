@@ -24,6 +24,21 @@ and the command palette gain Reset.
 - IV. Verification — smoke tests added; build script run before the PR. PASS
 - VI. Docs in sync — `FEATURES.md`, `CHANGELOG.md`, Shortcuts pane, MCP descriptions. PASS
 
+## Audio-thread impact and architecture rules
+
+None of the work runs on the audio thread. The naming rules, the rename flyout, the menu,
+the palette command, MCP and Remote are managed UI / control-thread code.
+
+- **No allocation, locks, I/O or logging on the audio thread (AR-6)**: nothing new reaches it.
+  `SectionNames` allocates strings, but only on the UI / MCP threads.
+- **Structural edits publish a new graph snapshot (AR-5)**: a rename or reset still goes through
+  `Engine::setSections`, which copies the `Graph` and publishes it. That path is unchanged.
+- **Only the C ABI crosses managed/native (AR-7)**: no new ABI. `nota_engine_set_sections` /
+  `nota_engine_section_*` are used as before.
+- **No JUCE outside `pluginhost/`**: untouched.
+- **Transport is the only source of musical time**: the palette command reads the view's
+  playhead position, which the Transport already reports, and only reads it.
+
 ## Design
 
 - `Nota.Application/Engine/SectionNames.cs` (new): `IsAutomatic(name)`, `Automatic(index)`,
