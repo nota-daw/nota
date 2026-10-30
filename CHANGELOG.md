@@ -23,6 +23,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Track inspector** (#186): a new tab at the bottom of the browser's left rail shows the
+  selected track's settings in one place — name, Mute / Solo / Arm, record input and input
+  monitoring or MIDI from, colour, row height and the freeze commands — so they no longer
+  need the track's right-click menu. It follows the track the Devices panel shows and
+  picks up changes made anywhere else at once. The right-click menu keeps its entries.
 - **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
   the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
   Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.

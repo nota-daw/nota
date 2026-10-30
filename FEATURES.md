@@ -1061,9 +1061,15 @@ audio effects after it keep running and keep their settings; saved with the proj
 
 - An **island panel** with an icon rail down its left edge: **Instruments / Audio Effects /
   MIDI Effects**, then **Files** (with folder tree navigation), **Presets** (a tree of
-  category → device → preset), **Projects**, **Map** (MIDI Learn mappings) and **History**
-  (the open project's versions). A hairline
+  category → device → preset), **Projects**, **Map** (MIDI Learn mappings), **History**
+  (the open project's versions) and the **Track inspector**. A hairline
   separates the device tabs from the library tabs, and the active one carries an orange edge.
+- **Track inspector**: the last rail tab shows the track the Devices panel shows — its name
+  (type to rename), Mute / Solo / Arm, record input and input monitoring (audio tracks) or
+  MIDI from (instrument tracks), colour, row height and the freeze commands (Freeze, Live
+  freeze, Unfreeze, Flatten, and Edit source / Done / Discard on a live-freeze link). A
+  return shows its name, Mute and colour; the master its name. Changes made from the
+  header, the track menu or undo show in it straight away.
 - **Category chips**: above each device tab's list, one chip per kind of device — Synths /
   Keys & physical / Drums / Samplers / Racks; EQ & filter / Dynamics / Reverb & delay /
   Modulation / Distortion / Pitch & time / Utility / Racks; Generate / Shape. A click

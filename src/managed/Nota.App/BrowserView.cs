@@ -156,13 +156,14 @@ public sealed class BrowserView : UserControl
         return g;
     }
 
-    private const int TabCount = 8;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History
+    private const int TabCount = 9;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History / Track
     private const int EffectsTab = 1; // Audio effects
     private const int FilesTab = 3;   // samples: the player auditions the file
     private const int PresetsTab = 4; // Instr / FX / MIDI / Files / Presets carry the player
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
     private const int HistoryTab = 7; // the open project's versions — hosts a HistoryView
-    private static bool IsCustomTab(int index) => index is MapTab or HistoryTab;
+    private const int InspectorTab = 8; // the selected track's settings — hosts a TrackInspectorView
+    private static bool IsCustomTab(int index) => index is MapTab or HistoryTab or InspectorTab;
     private const double RowH = 26;   // single-line index row (almanac list row: 26–28, one line)
     private const double GroupRowH = 22;
 
@@ -176,6 +177,7 @@ public sealed class BrowserView : UserControl
     private ISettingsService? _settings;
     private MidiMapView? _midiMap;
     private HistoryView? _historyView;
+    private Control? _trackInspector;
 
     // Collapsed: only the icon rail shows; clicking an icon unfolds the browser on that tab.
     private bool _collapsed;
@@ -267,9 +269,10 @@ public sealed class BrowserView : UserControl
             RailTab(5, "Projects", GlyphKind.Doc),
             RailTab(6, "MIDI map", GlyphKind.Map),
             RailTab(7, "History", GlyphKind.History),
+            RailTab(InspectorTab, "Track inspector", GlyphKind.Track),
         };
-        // A hairline above Files and above Map: devices · library · mappings.
-        foreach (int i in new[] { 3, 6 })
+        // A hairline above Files, Map and the inspector: devices · library · mappings · track.
+        foreach (int i in new[] { 3, 6, InspectorTab })
         {
             _tabs[i].BorderThickness = new Thickness(0, 1, 0, 0);
             _tabs[i].BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
@@ -453,6 +456,13 @@ public sealed class BrowserView : UserControl
     {
         _historyView = view;
         if (_active == HistoryTab) _content.Content = view;
+    }
+
+    /// <summary>Give the browser the track inspector tab (specs/055).</summary>
+    internal void SetTrackInspector(Control view)
+    {
+        _trackInspector = view;
+        if (_active == InspectorTab) _content.Content = view;
     }
 
     /// <summary>Reveal the MIDI-mappings tab (called when learn mode is armed).</summary>
@@ -685,9 +695,15 @@ public sealed class BrowserView : UserControl
         _active = index;
         for (int i = 0; i < _tabs.Length; i++)
             _tabs[i].Classes.Set("active", !_collapsed && i == index);
-        // The MIDI-map and History tabs host bespoke views, not a filtered item list.
+        // The MIDI-map, History and inspector tabs host bespoke views, not a filtered item list.
         bool isMap = IsCustomTab(index);
-        _content.Content = index == MapTab ? _midiMap : index == HistoryTab ? (Control?)_historyView : _pages[index];
+        _content.Content = index switch
+        {
+            MapTab => _midiMap,
+            HistoryTab => _historyView,
+            InspectorTab => _trackInspector,
+            _ => _pages[index],
+        };
         if (index == HistoryTab) _historyView?.Refresh();
         _searchWrap.IsVisible = !isMap;
         _optionsBtn.IsVisible = !isMap;
