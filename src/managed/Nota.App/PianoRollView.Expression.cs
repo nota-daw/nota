@@ -172,17 +172,9 @@ public sealed partial class PianoRollView
                 ctx.DrawText(ft, new Point(x, y));
                 if (ctl)
                 {
-                    // ▾: the tab opens the controller picker.
-                    double cx = x + ft.Width + 2, cy = y + ft.Height / 2;
-                    var tri = new StreamGeometry();
-                    using (var g = tri.Open())
-                    {
-                        g.BeginFigure(new Point(cx, cy - 1.5), true);
-                        g.LineTo(new Point(cx + 5, cy - 1.5));
-                        g.LineTo(new Point(cx + 2.5, cy + 1.5));
-                        g.EndFigure(true);
-                    }
-                    ctx.DrawGeometry(ink, null, tri);
+                    // The caret marks that the tab opens the controller picker.
+                    double cx = x + ft.Width + 2;
+                    Glyph.Draw(ctx, GlyphKind.CaretDown, new Rect(cx, y + (ft.Height - 6) / 2, 6, 6), ink);
                 }
                 if (on) ctx.FillRectangle(TabActive, new Rect(0, y + 1, 2, ft.Height - 2));
             }

@@ -719,9 +719,42 @@ public sealed partial class PianoRollView : UserControl
     {
         _previewBackup = null;
         _placementPending = false;   // a reload (undo, recording, another clip) is the truth now
-        _velWheelTimer?.Stop(); _velWheel.Reset(); _velWheelBurst = false;
+        // A Session slot has no live path, so a velocity-wheel burst lives only in _notes until
+        // the idle timer commits it. Recording reloads this roll ~60 Hz; dropping the burst
+        // here would throw those edits away. Keep them across a reload of the same clip and
+        // let the timer commit once. A different clip commits first, then loads.
+        List<(int Pitch, double Start, float Velocity)>? burstVel = null;
+        bool sameClip = _clipKey.Item1 != int.MinValue && _clipKey == _loadedKey;
+        if (!_velWheelBurst || !sameClip)
+        {
+            if (_velWheelBurst && !HasLivePath) CommitNotes();
+            _velWheelTimer?.Stop(); _velWheel.Reset(); _velWheelBurst = false;
+        }
+        else if (!HasLivePath)
+        {
+            burstVel = new(_notes.Count);
+            for (int i = 0; i < _notes.Count; i++)
+                burstVel.Add((_notes[i].Pitch, _notes[i].StartBeat, _notes[i].Velocity));
+        }
         DropControllerCache();
         ReplaceAll(notes, owners);
+        if (burstVel is not null)
+        {
+            var used = new bool[burstVel.Count];
+            for (int i = 0; i < _notes.Count; i++)
+            {
+                var n = _notes[i];
+                for (int k = 0; k < burstVel.Count; k++)
+                {
+                    if (used[k]) continue;
+                    var (pitch, start, vel) = burstVel[k];
+                    if (pitch != n.Pitch || Math.Abs(start - n.StartBeat) > 1e-4) continue;
+                    used[k] = true;
+                    if (vel != n.Velocity) { n.Velocity = vel; _notes[i] = n; }
+                    break;
+                }
+            }
+        }
         _lengthBeats = lengthBeats;
         _selection.Clear();
         _strip.Relayout();

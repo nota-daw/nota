@@ -375,11 +375,11 @@ public sealed partial class PianoRollView
 
             _o.DrawOutsideClip(ctx, w, h);
 
-            var name = new FormattedText(ControllerLabel(Ctl), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText);
+            var name = new FormattedText(ControllerLabel(Ctl), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
             ctx.DrawText(name, new Point(4, 3));
             if (c.Count == 0 && Editable && _drag == Drag.None)
             {
-                var hint = new FormattedText(IsSwitch ? "Drag to draw a block" : "Drag to draw", NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText);
+                var hint = new FormattedText(IsSwitch ? "Drag to draw a block" : "Drag to draw", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
                 ctx.DrawText(hint, new Point((w - hint.Width) / 2, (h - hint.Height) / 2));
             }
             if (!double.IsNaN(_hoverBeat) || _drag != Drag.None)
@@ -445,7 +445,7 @@ public sealed partial class PianoRollView
                 double px = XOf(c[k].Beat);
                 if (px < -4 || px > w + 4) continue;
                 bool hot = k == _hoverPt || (_drag == Drag.Point && k == _pt);
-                double r = hot ? 3.5 : 2.5;
+                const double r = 2.5;   // hover changes colour, not size
                 ctx.FillRectangle(hot ? PointHot : PointFill, new Rect(px - r, ValueToY(c[k].Value) - r, r * 2, r * 2), 1);
             }
         }
@@ -580,7 +580,12 @@ public sealed partial class PianoRollView
                 }
                 case Drag.BlockStart:
                 {
-                    double s = Math.Clamp(SnapLocal(local), 0, _grab.End - MinBlock);
+                    // A recorded tap can be shorter than the grid, so the min-length bound can
+                    // sit left of 0. Clamping onto an inverted range throws; stay inside the block.
+                    double cap = _grab.End - MinBlock;
+                    double s = cap >= 0
+                        ? Math.Clamp(SnapLocal(local), 0, cap)
+                        : Math.Clamp(SnapLocal(local), 0, Math.Max(0, _grab.End));
                     _blockStart = s;
                     var pts = PointsOf(_orig, _grab);
                     var seg = new List<AutomationPoint> { new(s, ValueAt(pts, s, true)) };
@@ -590,7 +595,10 @@ public sealed partial class PianoRollView
                 }
                 case Drag.BlockEnd:
                 {
-                    double e = Math.Clamp(SnapLocal(local), _grab.Start + MinBlock, len);
+                    double lo = _grab.Start + MinBlock;
+                    double e = lo <= len
+                        ? Math.Clamp(SnapLocal(local), lo, len)
+                        : Math.Clamp(SnapLocal(local), _grab.Start, Math.Max(_grab.Start, len));
                     _blockStart = _grab.Start;
                     _work = Overwrite(Without(_orig, _grab), _grab.Start, e, PointsOf(_orig, _grab));
                     break;
@@ -604,11 +612,19 @@ public sealed partial class PianoRollView
             var was = _drag;
             _drag = Drag.None;
             e.Pointer.Capture(null);
-            if (was == Drag.Draw && !_straight)
+            if (was == Drag.Draw)
             {
-                // Thin to what the eye can tell apart: a pixel and a half of the lane's scale.
-                float tol = Math.Abs(YToValue(Bounds.Height / 2) - YToValue(Bounds.Height / 2 + 1.5));
-                ApplyStroke(Thin(StrokeSamples().OrderBy(s => s.Beat).ToList(), tol));
+                var samples = StrokeSamples().OrderBy(s => s.Beat).ToList();
+                // A click without a drag is not a stroke. Committing it would write a point
+                // that the second press of a double-click then deletes.
+                if (samples.Count < 2)
+                    _work = _orig.ToList();
+                else if (!_straight)
+                {
+                    // Thin to what the eye can tell apart: a pixel and a half of the lane's scale.
+                    float tol = Math.Abs(YToValue(Bounds.Height / 2) - YToValue(Bounds.Height / 2 + 1.5));
+                    ApplyStroke(Thin(samples, tol));
+                }
             }
             var result = _work;
             _work = null; _stroke.Clear(); _pt = -1;
