@@ -30,6 +30,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   window**) moves it into the floating window for a second screen; the window's dock button
   brings it back. Nota remembers whether the Mixer was shown, where and how tall, and restores
   it on the next launch.
+- **Shape a note while placing it in the piano roll** (#45): after the double-click that adds
+  a note, keep the button down and drag to move it (pitch and time); hold ⇧ to set its length
+  or ⌘ / Ctrl to drag up and down for its velocity. The next note drawn takes the shaped
+  length and velocity.
 
 ### Changed
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
