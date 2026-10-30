@@ -19,15 +19,17 @@ the height it is given and the width it is offered.
     children `ClipEditorKit.Sections` built).
   - `ColumnFlow`: a vertical `ScrollViewer` around the sections with an optional foot pinned
     below. Measure: foot at one-column width, each section at the column's inner width, then
-    `PanelColumns.Choose`; two columns are `2 × ColumnWidth` wide and the column gap equals the
-    side padding, so a section has the same width in either layout and never reflows. `Reserve`
+    `PanelColumns.Choose`; two columns are `2 × ColumnWidth + border` wide (the panel, border
+    included, doubles) and the column gap is the side padding plus the border, so a section has
+    the same width in either layout and never reflows. `Reserve`
     is the width the editor canvas keeps.
 - **`ClipEditorKit`**: `Sections` returns `SectionColumns`; `Inspector` builds a `ColumnFlow`
-  (column 231 px + 1 px border = 232 px, padding 14/16/14/8, hint as the foot) and hands it back;
+  (column 231 px + 1 px border = 232 px; two columns 464 px, padding 14/16/14/8, hint as the foot) and hands it back;
   `Header` takes the inspector and keeps the clip cell at its width (`SizeChanged`);
   `MinCanvasW = 480`; `Rule()` goes (unused).
 - **`MidiToolsView`**: sections = [Generate / Transform + tool list], parameters, Output, spacing
-  10; foot = result line, Apply, Revert / Defaults; column 271 px + 1 px border = 272 px.
+  10; foot = result line, Apply, Revert / Defaults; column 271 px + 1 px border = 272 px (544 px
+  in two columns).
 - **Editors**: the body `Grid` (`Auto,*,Auto` / `Auto,*`) becomes a `DockPanel` (inspector left,
   tools right, canvas fill), so the panels are measured with the real width (a Grid `Auto` column
   measures with infinite width) and in order: inspector first, tools from what is left.
@@ -35,6 +37,18 @@ the height it is given and the width it is offered.
   is open.
 - **Re-layout**: a section growing or shrinking changes the scroller's desired size whenever the
   choice could flip, which re-measures the host; no extra hook.
+
+## Audio-thread impact and architecture rules
+
+None. Every change is in the Avalonia layout pass on the UI thread (`Nota.App`); nothing
+touches the engine, the C ABI, the graph or the transport.
+
+- AR-6 (no allocation, locks or I/O on the audio thread): the audio thread runs no new code.
+- AR-5 (graph snapshots): no structural edit; the graph is not touched.
+- AR-7 (pure C ABI): no new or changed `nota_engine.h` call.
+- No JUCE outside `pluginhost/`: no native code changes.
+- AR-9 (`Transport` is the only source of musical time): nothing reads or keeps time.
+- No new dependency.
 
 ## Testing
 

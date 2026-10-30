@@ -5,8 +5,9 @@
 // sections in one or two columns, split by hairlines, and ColumnFlow decides how many from the
 // height it is given and the width the editor can spare (PanelColumns does the arithmetic),
 // with a foot (the inspector's hint, the tools' Apply row) pinned under the scrolling sections.
-// The second column has exactly the first one's width, so a section never reflows: the panel
-// just doubles, and the column gap equals the panel's side padding.
+// The second column has exactly the first one's width, so a section never reflows: the panel,
+// border included, just doubles (2 × 232 for the inspector), and the column gap is the side
+// padding plus the border width.
 
 using System;
 using Avalonia;
@@ -96,9 +97,9 @@ public sealed class SectionColumns : Control
 }
 
 /// <summary>A side panel's body: <see cref="SectionColumns"/> in a vertical scroller with an
-/// optional foot pinned below. One column is <see cref="ColumnWidth"/> wide; it takes a second
-/// only when one column would scroll and the width it is offered, less <see cref="Reserve"/>
-/// (what the editor canvas keeps), still holds two.</summary>
+/// optional foot pinned below. One column is <see cref="ColumnWidth"/> wide, inside the panel's
+/// border (<c>edge</c> wide); it takes a second only when one column would scroll and the width
+/// it is offered, less <see cref="Reserve"/> (what the editor canvas keeps), still holds two.</summary>
 public sealed class ColumnFlow : Control
 {
     private readonly ScrollViewer _scroll;
@@ -106,9 +107,12 @@ public sealed class ColumnFlow : Control
     private readonly Control? _foot;
     private SectionColumns _body = null!;
 
-    public ColumnFlow(SectionColumns body, Control? foot, Thickness padding, double columnWidth)
+    private readonly double _edge;
+
+    public ColumnFlow(SectionColumns body, Control? foot, Thickness padding, double columnWidth, double edge = 1)
     {
         ColumnWidth = columnWidth;
+        _edge = edge;
         _pad = new Border { Padding = padding };
         _scroll = new ScrollViewer
         {
@@ -137,7 +141,7 @@ public sealed class ColumnFlow : Control
         set
         {
             _body = value;
-            _body.ColumnGap = _pad.Padding.Left + _pad.Padding.Right;
+            _body.ColumnGap = _pad.Padding.Left + _pad.Padding.Right + _edge;
             _pad.Child = value;
             InvalidateMeasure();
         }
@@ -146,7 +150,7 @@ public sealed class ColumnFlow : Control
     protected override Size MeasureOverride(Size availableSize)
     {
         var pad = _pad.Padding;
-        double one = ColumnWidth, two = 2 * ColumnWidth;
+        double one = ColumnWidth, two = 2 * ColumnWidth + _edge;
         double footH = 0;
         if (_foot is not null) { _foot.Measure(new Size(one, availableSize.Height)); footH = _foot.DesiredSize.Height; }
         var heights = _body.MeasureSections(Math.Max(0, one - pad.Left - pad.Right));

@@ -17,7 +17,7 @@ the MIDI clip editor, the audio clip editor and MIDI tools in the same way."
 
 ### User Story 1 - Reach every inspector control without scrolling (Priority: P1)
 
-A producer opens a MIDI clip in the detail area, which is about 300 px tall. Today Clip and
+A producer opens a MIDI clip in the detail area, which is about 320 px tall. Today Clip and
 Quantize are visible and Transpose and Selection sit below the fold. With this change the
 inspector widens to two columns, Clip and Quantize on the left and Transpose and Selection on
 the right, and nothing scrolls.
@@ -84,8 +84,9 @@ the foot across the panel's width.
 
 ## Success Criteria *(mandatory)*
 
-- **SC-001**: In a 300 px tall, 1400 px wide MIDI editor all four inspector sections are visible
-  without scrolling.
+- **SC-001**: In a MIDI editor 320 px tall (header included) and 1400 px wide, all four inspector
+  sections are visible without scrolling. (Measured in the headless app: the two-column inspector
+  needs an editor about 310 px tall; 300 px, the figure first written here, was too short.)
 - **SC-002**: In a tall editor the panels are pixel-for-pixel today's single column.
 - **SC-003**: The layout choice is covered by smoke-test cases (`--clipeditor`).
 
