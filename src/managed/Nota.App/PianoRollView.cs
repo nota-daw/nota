@@ -2251,8 +2251,11 @@ public sealed partial class PianoRollView : UserControl
                 var (lo, hi) = _o.ShiftRange(_orig.Keys, i => (_orig[i].start, _orig[i].len, _orig[i].owner), endsInside: false);
                 dBeat = Math.Clamp(dBeat, lo, hi);
                 dRows = _o.ClampRows(_orig.Values.Select(v => v.pitch), dRows);
-                // Still on the anchor: switching into move must not snap the note.
-                if (place != PlaceDragKind.Move || Math.Abs(dBeat) >= 1e-9 || dRows != 0)
+                // A modifier switch lands on the note as it is: nothing to apply until the result
+                // differs from the note now (not from the anchor, or dragging back would stick).
+                var cur = _o._notes[_primary];
+                if (place != PlaceDragKind.Move || Math.Abs(pr.start + dBeat - cur.StartBeat) >= 1e-9
+                    || _o._rows.Step(pr.pitch, dRows) != cur.Pitch)
                 {
                     foreach (var kv in _orig)
                     {
@@ -2280,8 +2283,9 @@ public sealed partial class PianoRollView : UserControl
                     ? NotePlacementDrag.BeatAfter(anchoredEnd, rawEnd - anchoredEnd, Snap)
                     : Snap(rawEnd);
                 double dLen = newEnd - anchoredEnd;
-                // Still on the anchor: switching into length must not snap an off-grid end.
-                if (place != PlaceDragKind.Length || Math.Abs(dLen) >= 1e-9)
+                // Compared with the note now, not the anchor: dragging back must undo the extension.
+                if (place != PlaceDragKind.Length
+                    || Math.Abs(Math.Max(_o.MinNoteLen, pr.len + dLen) - _o._notes[_primary].LengthBeats) >= 1e-9)
                 {
                     foreach (var kv in _orig)
                     {
