@@ -81,6 +81,7 @@ public partial class MainWindow
         B("view.follow", () => OnMenuToggleFollow(this, e));
         B("view.showPlayhead", ShowPlayhead);
         B("view.clipNames", () => OnMenuCycleClipNames(this, e));
+        B("view.headersRight", ToggleHeadersRight);
         B("view.automation", () =>
         {
             AutomationToggle.IsChecked = !(AutomationToggle.IsChecked == true);
@@ -213,6 +214,23 @@ public partial class MainWindow
     {
         TrackArming.ArmOnSelect = on;
         if (MenuItemFor("transport.armOnSelect") is { } mi) mi.IsChecked = on;
+    }
+
+    // View ▸ Track headers on the right (#72): a saved preference, shared with Settings →
+    // Appearance; Settings.Changed moves the column (ApplyHeadersRight).
+    private void ToggleHeadersRight()
+    {
+        if (_vm is null) return;
+        bool on = !Timeline.HeadersOnRight;
+        _vm.Settings.Current.ArrangementHeadersRight = on;
+        _vm.Settings.Save();
+        _vm.StatusText = on ? "Track headers on the right" : "Track headers on the left";
+    }
+
+    private void ApplyHeadersRight(bool on)
+    {
+        Timeline.HeadersOnRight = on;
+        if (MenuItemFor("view.headersRight") is { } mi) mi.IsChecked = on;
     }
 
     // The grid shortcuts act on the clip editor (piano roll or audio — they share one setting)

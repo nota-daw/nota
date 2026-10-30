@@ -30,6 +30,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   window**) moves it into the floating window for a second screen; the window's dock button
   brings it back. Nota remembers whether the Mixer was shown, where and how tall, and restores
   it on the next launch.
+- **Track headers on the right** (#72): **View → Track headers on the right** (also
+  **Settings → Appearance → Track headers: Left / Right**) moves the arrangement's track
+  list — the track headers, the return / master headers and the header strips beside the
+  Overview, Sections and ruler — to the right edge, so the timeline starts at the left, next
+  to the browser. Everything works the same on either side; drag the seam to the left to
+  widen the headers. The choice is remembered for every project.
 
 ### Changed
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O

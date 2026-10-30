@@ -141,6 +141,10 @@ docks as a panel under any of the three, or floats in its own window — see
     fit their height: one line (name, M / S / arm) when short, input, fader and pan on rows
     of their own when tall. Drag the seam between headers and lanes to set the header
     width (160–480 px). Both are saved with the project.
+  - **Track headers left or right** — View ▸ Track headers on the right (or Settings →
+    Appearance → Track headers) moves the header column, the return / master headers and
+    the header strips to the right edge, so the timeline starts at the left; remembered
+    for every project.
   - **Group rows are slim** — a group collapses to a titled bar with its disclosure,
     mute/solo and level, and opens to the full control set when selected, so groups read as
     families rather than as more tracks. A track without a colour of its own takes its
@@ -1280,7 +1284,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   dark mode and one for light mode, switched with the OS appearance; the choice applies
   live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
-  remembered; timeline, piano roll and audio editor zoom work on top of it. Also
+  remembered; timeline, piano roll and audio editor zoom work on top of it. **Track
+  headers** — Left / Right side of the arrangement's track list. Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Shortcuts**: the shortcut list.

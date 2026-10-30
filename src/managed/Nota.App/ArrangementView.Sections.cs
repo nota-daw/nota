@@ -62,10 +62,11 @@ public sealed partial class ArrangementView
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
         };
-        var grid = new Grid { Height = SectionsH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        grid.Children.Add(HeaderPanel(label));
-        Grid.SetColumn(_sectionsLane, 1);
+        var grid = new Grid { Height = SectionsH };
+        var header = HeaderPanel(label);
+        grid.Children.Add(header);
         grid.Children.Add(_sectionsLane);
+        AddSideRow(grid, header, _sectionsLane);
 
         // A hairline, lighter than the lines above and below: the sections belong with the
         // ruler under them, while Overview and the tracks are separate areas.

@@ -93,6 +93,7 @@
             <NativeMenuItem Header="Show playhead" app:Commands.Id="view.showPlayhead"/>
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Clip names" app:Commands.Id="view.clipNames"/>
+            <NativeMenuItem Header="Track headers on the right" app:Commands.Id="view.headersRight" ToggleType="CheckBox"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>

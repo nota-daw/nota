@@ -1182,6 +1182,30 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
 
+    // Left / Right for the arrangement's track-header column (#72). Saving fires
+    // Settings.Changed, which moves the column at once and ticks the View menu item.
+    private static Control HeaderSidePicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(bool Right, ToggleButton Btn)>();
+        foreach (var (right, label) in new[] { (false, "Left"), (true, "Right") })
+        {
+            var r = right;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label, IsChecked = settings.Current.ArrangementHeadersRight == r };
+            btn.Click += (_, _) =>
+            {
+                foreach (var (br, bb) in buttons) bb.IsChecked = br == r;
+                if (settings.Current.ArrangementHeadersRight == r) return;
+                settings.Current.ArrangementHeadersRight = r;
+                settings.Save();
+            };
+            buttons.Add((r, btn));
+            strip.Children.Add(btn);
+        }
+        return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+    }
+
     // 75–200 % for the whole interface (spec 027, #38). Applies live — this window rescales
     // under the pointer too — and is saved for the next launch.
     private static Control ScalePicker()
@@ -1296,6 +1320,8 @@ public sealed partial class PreferencesWindow : NotaWindow
                 Row("", Caption("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance.")),
                 Row("Waveform", WaveformPicker()),
                 Row("", Caption("How audio clips draw on the arrangement, and samples in the browser's preview: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel.")),
+                Row("Track headers", HeaderSidePicker()),
+                Row("", Caption("Which side of the arrangement the track list sits on. Right starts the timeline at the left edge, next to the browser. Also in the View menu.")),
                 Row("Interface scale", ScalePicker()),
                 Row("", Caption("Makes the whole interface larger or smaller. Timeline, piano roll and audio editor zoom work on top of it."))),
             Section("AI control (MCP)", 12, enable, details));

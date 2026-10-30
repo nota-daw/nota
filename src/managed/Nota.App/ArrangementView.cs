@@ -369,10 +369,10 @@ public sealed partial class ArrangementView : UserControl
         };
         _headerColumnParts.Add(zoomBar);
         var topLeft = HeaderPanel(zoomBar);
-        var topGrid = new Grid { Height = RulerH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var topGrid = new Grid { Height = RulerH };
         topGrid.Children.Add(topLeft);
-        Grid.SetColumn(_ruler, 1);
         topGrid.Children.Add(_ruler);
+        AddSideRow(topGrid, topLeft, _ruler);
         // The chrome stack (Overview · Sections · Zoom) ends on a full-width line, so the
         // tracks start under a clear edge rather than straight off the ruler.
         var top = new Border { BorderThickness = new Thickness(0, 0, 0, 1), Child = topGrid };
@@ -386,16 +386,11 @@ public sealed partial class ArrangementView : UserControl
         // Center: vertical scroll over [headers | lanes].
         // Top-anchored: the ScrollViewer would otherwise stretch the short
         // content to the viewport and centre the fixed-height lanes.
-        var center = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            VerticalAlignment = VerticalAlignment.Top,
-        };
+        var center = new Grid { VerticalAlignment = VerticalAlignment.Top };
         center.Children.Add(_headers);
-        Grid.SetColumn(_lanes, 1);
         center.Children.Add(_lanes);
-        Grid.SetColumn(_overlay, 1);
         center.Children.Add(_overlay);   // above _lanes (added later = on top)
+        AddSideRow(center, _headers, _lanes, _overlay);
         var scroller = _scroller = new ScrollViewer
         {
             Content = center,
@@ -432,32 +427,33 @@ public sealed partial class ArrangementView : UserControl
         scroller.PointerWheelChanged += (_, e) => { if (!e.Handled) HandleLaneWheel(e, e.GetPosition(_lanes).X); };
         // Full-height header-column backdrop behind the scroller so the header
         // column reads as a distinct panel even with no tracks.
-        var leftBackdrop = new Border
+        _columnBackdrop = new Border
         {
             Width = HeaderW,
             HorizontalAlignment = HorizontalAlignment.Left,
-            BorderThickness = new Thickness(0, 0, 1, 0),
+            BorderThickness = ColumnDivider,
         };
-        _headerColumnParts.Add(leftBackdrop);
-        leftBackdrop.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
-        leftBackdrop.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        _headerColumnParts.Add(_columnBackdrop);
+        _columnDividers.Add(_columnBackdrop);
+        _columnBackdrop.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
+        _columnBackdrop.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         var centerArea = _centerArea = new Grid();
-        centerArea.Children.Add(leftBackdrop);
+        centerArea.Children.Add(_columnBackdrop);
         centerArea.Children.Add(scroller);
 
         // Return / Master: a slim section pinned under the tracks (no scroll).
         _footerHeaders = new Canvas { Width = HeaderW };
-        var footerHeaderPanel = new Border { Width = HeaderW, BorderThickness = new Thickness(0, 0, 1, 0), Child = _footerHeaders };
+        var footerHeaderPanel = new Border { Width = HeaderW, BorderThickness = ColumnDivider, Child = _footerHeaders };
         _headerColumnParts.Add(_footerHeaders);
         _headerColumnParts.Add(footerHeaderPanel);
+        _columnDividers.Add(footerHeaderPanel);
         footerHeaderPanel.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
         footerHeaderPanel.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         _footerLanes = new FooterLaneControl(this);
-        _footer = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        Grid.SetColumn(footerHeaderPanel, 0);
-        Grid.SetColumn(_footerLanes, 1);
+        _footer = new Grid();
         _footer.Children.Add(footerHeaderPanel);
         _footer.Children.Add(_footerLanes);
+        AddSideRow(_footer, footerHeaderPanel, _footerLanes);
         // Effects / presets dropped on a return or the master go on that bus.
         DragDrop.SetAllowDrop(_footer, true);
         DragDrop.AddDragOverHandler(_footer, OnFooterDragOver);
@@ -474,12 +470,12 @@ public sealed partial class ArrangementView : UserControl
         };
 
         // Bottom: a thin horizontal scrollbar under the lanes, on the well, past a hairline.
-        var bottomGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var bottomGrid = new Grid();
         var bottomLeft = HeaderPanel(null);
         bottomLeft.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
         bottomGrid.Children.Add(bottomLeft);
-        Grid.SetColumn(_hScroll, 1);
         bottomGrid.Children.Add(_hScroll);
+        AddSideRow(bottomGrid, bottomLeft, _hScroll);
         var bottom = new Border { BorderThickness = new Thickness(0, 1, 0, 0), Child = bottomGrid };
         bottom.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
         bottom.BindResource(Border.BorderBrushProperty, "Brush.Hairline");
@@ -509,6 +505,7 @@ public sealed partial class ArrangementView : UserControl
         // header column and the pinned footer inside it.
         // The header/lane seam is draggable along the view's full height (overview to footer).
         _columnSeam = BuildColumnSeam();
+        PlaceColumnSeam();
         var layered = new Grid { Children = { root, _columnSeam } };
         SizeChanged += (_, _) => { OnViewSizeChanged(); CapFooterHeight(); };
 
@@ -1585,7 +1582,9 @@ public sealed partial class ArrangementView : UserControl
         var p = e.GetPosition(_lanes);
         int ti = RowAtY(p.Y);
         int trackId = ti >= 0 ? _tracks[ti].Id : -1;
-        double beat = Math.Max(0.0, Snap(_scrollBeats + p.X / _pixelsPerBeat));
+        // A drop on a header lands at the visible start, whichever side the headers are on.
+        double x = p.X >= 0 && p.X <= _lanes.Bounds.Width ? p.X : 0;
+        double beat = Math.Max(0.0, Snap(_scrollBeats + x / _pixelsPerBeat));
         // One internal item drops as-is; multiple external files land the first on the
         // target track and each of the rest on its own new track (trackId -1), so they
         // never stack on top of each other.
@@ -2141,7 +2140,7 @@ public sealed partial class ArrangementView : UserControl
             Width = HeaderW, Height = GroupRowHeight, ClipToBounds = true,
             Background = selected ? SelHeaderBg : Brush("Brush.SurfaceRaised"),
             BorderBrush = Brush("Brush.BorderDefault"),
-            BorderThickness = new Thickness(0, 0, 1, 1),
+            BorderThickness = CardBorder,
             Child = grid,
         };
         _headerCards[t.Id] = (card, name, true, spine, spineBrush);
@@ -2349,7 +2348,7 @@ public sealed partial class ArrangementView : UserControl
             ClipToBounds = true,
             Background = selected ? SelHeaderBg : (t.Frozen || t.LiveRole != 0) ? FrozenHeaderBg : t.IsGroup ? Brush("Brush.SurfaceRaised") : Brush("Brush.SurfaceCard"),
             BorderBrush = Brush("Brush.BorderDefault"),
-            BorderThickness = new Thickness(0, 0, 1, 1),
+            BorderThickness = CardBorder,
             Child = grid,
         };
         // A background import is still filling the track: the disabled look (by colour, not
@@ -3068,7 +3067,7 @@ public sealed partial class ArrangementView : UserControl
             Width = HeaderW, Height = height, ClipToBounds = true,
             Background = sel ? SelHeaderBg : Brush(bgKey),
             BorderBrush = Brush("Brush.BorderDefault"),
-            BorderThickness = new Thickness(0, 0, 1, 1),
+            BorderThickness = CardBorder,
             Child = grid,
         };
         if (trackId > 0)
@@ -3120,11 +3119,12 @@ public sealed partial class ArrangementView : UserControl
         HorizontalContentAlignment = HorizontalAlignment.Center,
     };
 
-    // Header-column chrome (SurfaceCard + right divider), as wide as the header column.
+    // Header-column chrome (SurfaceCard + a divider facing the lanes), as wide as the header column.
     private Border HeaderPanel(Control? child)
     {
-        var b = new Border { Width = HeaderW, BorderThickness = new Thickness(0, 0, 1, 0), Child = child };
+        var b = new Border { Width = HeaderW, BorderThickness = ColumnDivider, Child = child };
         _headerColumnParts.Add(b);   // follows the header-column width
+        _columnDividers.Add(b);
         b.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
         b.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         return b;
