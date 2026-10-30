@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Take lanes (specs/055): the passes of an Arrangement audio loop recording, kept on the track
+// Take lanes (specs/067): the passes of an Arrangement audio loop recording, kept on the track
 // so they can be comped. Takes are graph data, so every edit here is a message-thread clone +
 // republish (AR-5) and undo comes from the snapshot history. The comp is the track's ordinary
 // clips; a section made from a take carries the take's id, which only the lanes' highlight and

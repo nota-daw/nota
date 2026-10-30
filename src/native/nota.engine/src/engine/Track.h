@@ -94,7 +94,7 @@ struct AudioClip {
     AutomationLane panEnvelope;
     // ADSR amplitude shape (identity by default). Applied per sample with the envelopes.
     ClipAdsr adsr;
-    // The take this clip plays a section of (specs/055), 0 = none. Drives the take lanes'
+    // The take this clip plays a section of (specs/067), 0 = none. Drives the take lanes'
     // highlight and flatten only; playback never looks at it.
     int32_t takeId = 0;
 
@@ -107,7 +107,7 @@ struct AudioClip {
     double pitchRatio() const { return std::pow(2.0, static_cast<double>(pitchSemitones) / 12.0); }
 };
 
-// One pass of an Arrangement audio loop recording (specs/055), kept so it can be comped.
+// One pass of an Arrangement audio loop recording (specs/067), kept so it can be comped.
 // Every take of one recording has a loop-length buffer whose frame 0 sits at the loop start
 // (originBeat), so a frame inside a take is the same point of the loop in every take. The
 // track plays ordinary clips (the comp); a take is never played directly.
@@ -295,7 +295,7 @@ class Track {
 
     // Immutable after publish (only touched while building a snapshot).
     std::vector<AudioClip> clips;           // audio tracks
-    std::vector<AudioTake> takes;           // audio loop-recording passes (specs/055), recording order
+    std::vector<AudioTake> takes;           // audio loop-recording passes (specs/067), recording order
     std::vector<MidiClip> midiClips;        // instrument tracks
     std::vector<SessionSlot> sessionSlots;  // Session view, one per scene (M5)
     std::vector<TrackLane> automation; // parameter automation lanes (M9)

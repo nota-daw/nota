@@ -23,6 +23,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Take lanes for audio loop recording** (#187): an Arrangement audio recording that comes
+  back around the loop keeps every pass as a take (Take 1, Take 2, …) instead of overwriting
+  the earlier ones. The comp — what plays, on the track's own row — starts as the newest pass
+  at every point, which is what audio loop recording used to leave. The track header shows a
+  disclosure and the take count; the lanes start folded, and opening them draws one row per
+  take with its waveform and the sections the comp uses highlighted. Drag across a take to
+  use that section (the arrangement snap grid, ⌥ / Alt to bypass); right-click a lane for
+  **Use whole take**, **Delete take** (the sound stays) or **Flatten takes** (one clip, the
+  takes of that recording go). Each of those is one undo step, and takes are saved with the
+  project. One pass, the loop off, MIDI and Session slots are unchanged.
 - **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
   the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
   Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.

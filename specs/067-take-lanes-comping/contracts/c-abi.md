@@ -1,4 +1,4 @@
-# C ABI: take lanes (specs/055)
+# C ABI: take lanes (specs/067)
 
 All functions are message-thread only.
 

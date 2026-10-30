@@ -37,7 +37,7 @@ public sealed class ProjectService
     /// chain children's sidechain keys / CC targets.
     /// v26 (specs/048) adds Preset on instruments, devices and MIDI effects.
     /// v27 (specs/046) adds Preview on hosted plug-ins: the picture of their window.
-    /// v29 (specs/055) adds Takes on audio tracks and TakeId on audio clips.
+    /// v29 (specs/067) adds Takes on audio tracks and TakeId on audio clips.
     public const int CurrentFormatVersion = 29;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>

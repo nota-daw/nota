@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 
 namespace Nota.Infrastructure;
 
-/// <summary>Take lanes (specs/055): the passes of an audio loop recording and the comp built from them.</summary>
+/// <summary>Take lanes (specs/067): the passes of an audio loop recording and the comp built from them.</summary>
 /// <remarks>Part of <see cref="NotaEngine"/>'s P/Invoke surface; see nota_engine.h.</remarks>
 internal static partial class NativeMethods
 {

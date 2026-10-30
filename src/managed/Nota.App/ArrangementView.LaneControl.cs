@@ -20,7 +20,7 @@ namespace Nota.App;
 public sealed partial class ArrangementView
 {
     // ---- lanes ------------------------------------------------------------
-    private sealed class LaneControl : Control, IAutoRows, IValueEntryHost
+    private sealed partial class LaneControl : Control, IAutoRows, IValueEntryHost
     {
         private readonly ArrangementView _o;
         private readonly AutoEditor _auto;   // automation mode (M9-A3), shared with the footer's return rows
@@ -69,7 +69,7 @@ public sealed partial class ArrangementView
         TrackVM IAutoRows.TrackAt(int i) => _o._tracks[i];
         int IAutoRows.IndexOf(TrackVM t) => _o._tracks.IndexOf(t);
         double IAutoRows.Top(int i) => _o.RowTop(i);
-        double IAutoRows.Height(int i) => _o.RowHeightAt(i);
+        double IAutoRows.Height(int i) => _o.ClipAreaHeightAt(i);
         bool IAutoRows.Editable(int i) => !_o.IsSlimRowAt(i);   // a slim group bar has no room for an envelope
         (int lo, int hi) IAutoRows.VisibleRange => _o.VisibleRowRange();
 
@@ -180,9 +180,9 @@ public sealed partial class ArrangementView
 
         /// <summary>A clip drag / trim, marquee, time-range or envelope edit is in progress:
         /// Follow must not scroll the lanes out from under it (#105).</summary>
-        public bool IsGesturing => _drag != Drag.None || _marquee is not null || _auto.IsActive;
+        public bool IsGesturing => _drag != Drag.None || _marquee is not null || _auto.IsActive || _takeSwipe is not null;
         private double RowTop(int i) => _o.RowTop(i);
-        private double RowH(int i) => _o.RowHeightAt(i);
+        private double RowH(int i) => _o.ClipAreaHeightAt(i);
         protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
             => _o.HandleLaneWheel(e, e.GetPosition(this).X);
 
@@ -190,7 +190,7 @@ public sealed partial class ArrangementView
         {
             beat = _o._scrollBeats + p.X / _o._pixelsPerBeat;
             int ti = _o.RowAtY(p.Y);
-            if (ti < 0) return null;
+            if (ti < 0 || p.Y >= RowTop(ti) + RowH(ti)) return null;   // below the clip area: take lanes
             var t = _o._tracks[ti];
             foreach (var c in t.Clips)
                 if (beat >= c.StartBeat && beat <= c.StartBeat + c.LengthBeats)
@@ -231,6 +231,7 @@ public sealed partial class ArrangementView
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             if (RowSeamPressed(e)) return;
+            if (TakeLanePressed(e)) return;
             if (_o._automationMode) { _auto.AutoPointerPressed(e); return; }
             var pt = e.GetCurrentPoint(this);
             var hit = HitTest(pt.Position, out double beat);
@@ -381,6 +382,7 @@ public sealed partial class ArrangementView
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             if (_o.IsRowResizing) { _o.UpdateRowResize(e.GetPosition(this).Y); return; }
+            if (_takeSwipe is not null) { TakeSwipeMoved(e); return; }
             if (e.GetCurrentPoint(this).Properties is { IsLeftButtonPressed: false, IsRightButtonPressed: false }
                 && RowSeamHover(e.GetPosition(this))) return;
             if (_o._automationMode) { _auto.AutoPointerMoved(e); return; }
@@ -551,6 +553,7 @@ public sealed partial class ArrangementView
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
             if (_o.IsRowResizing) { e.Pointer.Capture(null); _o.EndRowResize(); return; }
+            if (_takeSwipe is not null) { TakeSwipeReleased(e); return; }
             if (_o._automationMode) { _auto.AutoPointerReleased(e); return; }
             var eng = _o._engine;
 
@@ -1117,6 +1120,7 @@ public sealed partial class ArrangementView
                                      take ? rp : null);
                     }
                 if (take) DrawHeldNotes(ctx, rp!, _o._tracks[i].ColorIndex, y, rh, w, pitches);
+                if (_o.TakesOpen(_o._tracks[i])) DrawTakeLanes(ctx, _o._tracks[i], y + rh, w);
                 // Imports still decoding: a translucent placeholder whose waveform fills in.
                 using (ctx.PushOpacity(0.5))
                     foreach (var c in _o.PendingClipsFor(tid))

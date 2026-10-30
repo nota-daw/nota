@@ -5,7 +5,7 @@ namespace Nota.Infrastructure;
 
 public sealed partial class NotaEngine
 {
-    // --- take lanes (specs/055) ---
+    // --- take lanes (specs/067) ---
 
     public int TakeCount(int trackId)
     { ThrowIfDisposed(); return NativeMethods.TakeCount(_handle, trackId); }

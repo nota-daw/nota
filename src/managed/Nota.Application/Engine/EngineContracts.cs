@@ -97,7 +97,7 @@ public struct NotaAudioClipInfo
     public int Reversed;         // 0/1: plays back-to-front (non-destructive)
 }
 
-/// <summary>One take of an audio loop recording (specs/055). Matches native NotaTakeInfo. Every
+/// <summary>One take of an audio loop recording (specs/067). Matches native NotaTakeInfo. Every
 /// take of a recording has a loop-length buffer whose frame 0 sits at <see cref="OriginBeat"/>;
 /// the pass recorded <see cref="StartBeat"/> .. + <see cref="LengthBeats"/> of it.</summary>
 [StructLayout(LayoutKind.Sequential)]

@@ -1138,7 +1138,7 @@ public interface IAudioEngine : IDisposable
     bool TryGetAudioClipInfo(int trackId, int clipIndex, out NotaAudioClipInfo info);
     int AddAudioClipEx(int trackId, string path, double startBeat, double sourceOffsetFrames, long lengthFrames, float gain);
 
-    // --- Take lanes (specs/055) --------------------------------------------
+    // --- Take lanes (specs/067) --------------------------------------------
     /// <summary>The takes on an audio track, in recording order.</summary>
     int TakeCount(int trackId);
     bool TryGetTakeInfo(int trackId, int index, out NotaTakeInfo info);

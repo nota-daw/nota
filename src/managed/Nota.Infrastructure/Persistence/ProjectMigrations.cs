@@ -115,7 +115,7 @@ public static class ProjectMigrations
         // SidechainPart and NestedSidechainDto.Part. Absent in v27 documents = -1, the whole
         // track — no-op.
         new Migration(27, _ => { }),
-        // v28 -> v29: audio tracks gain Takes and audio clips TakeId (take lanes, specs/055).
+        // v28 -> v29: audio tracks gain Takes and audio clips TakeId (take lanes, specs/067).
         // Absent in v28 documents = no takes, every clip a plain clip — no-op.
         new Migration(28, _ => { }),
     };

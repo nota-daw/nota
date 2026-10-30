@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Take lanes (#187, specs/055-take-lanes-comping): an Arrangement audio recording that wraps
+// Take lanes (#187, specs/067-take-lanes-comping): an Arrangement audio recording that wraps
 // the loop keeps every pass as a take; the default comp sounds exactly as the single loop
 // buffer did; comping a swiped range, deleting a take and flattening are one undo step each,
 // and takes + comp survive save/reopen.

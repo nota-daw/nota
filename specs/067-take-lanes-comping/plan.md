@@ -2,7 +2,7 @@
 
 **Branch**: `cursor/take-lanes-comping-3af4` | **Date**: 2026-10-31 | **Spec**: [spec.md](spec.md)
 
-**Input**: Feature specification from `/specs/055-take-lanes-comping/spec.md`
+**Input**: Feature specification from `/specs/067-take-lanes-comping/spec.md`
 
 ## Summary
 
@@ -104,7 +104,7 @@ the message thread.
 ### Documentation (this feature)
 
 ```text
-specs/055-take-lanes-comping/
+specs/067-take-lanes-comping/
 ├── spec.md
 ├── plan.md
 ├── research.md

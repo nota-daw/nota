@@ -106,7 +106,7 @@ typedef struct NotaAudioClipInfo {
     int32_t reversed;          /* 0/1: play the region back-to-front (non-destructive) */
 } NotaAudioClipInfo;
 
-/* One take of an audio loop recording (specs/055). Every take of a recording has a
+/* One take of an audio loop recording (specs/067). Every take of a recording has a
  * loop-length buffer whose frame 0 sits at origin_beat; the pass recorded
  * [source_offset_frames, +length_frames) of it, which is [start_beat, +length_beats) on the
  * timeline at the current tempo. */
@@ -1079,7 +1079,7 @@ NOTA_API int32_t nota_track_add_audio_clip_ex(NotaEngine* engine, int32_t track_
                                               const char* path_utf8, double start_beat,
                                               double source_offset_frames, int64_t length_frames,
                                               float gain);
-/* ---- Take lanes (specs/055) ---------------------------------------------- */
+/* ---- Take lanes (specs/067) ---------------------------------------------- */
 /* An Arrangement audio loop recording that completes a pass keeps every pass as a take; the
  * track plays its ordinary clips (the comp), and a clip made from a take carries its id.
  * Message thread only. */

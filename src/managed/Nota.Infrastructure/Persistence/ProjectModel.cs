@@ -134,7 +134,7 @@ public sealed class TrackDto
     public List<DeviceDto> Devices { get; set; } = new();
     public List<MidiClipDto> MidiClips { get; set; } = new();
     public List<AudioClipDto> AudioClips { get; set; } = new();
-    public List<AudioTakeDto>? Takes { get; set; }   // loop-recording take lanes (v29, specs/055)
+    public List<AudioTakeDto>? Takes { get; set; }   // loop-recording take lanes (v29, specs/067)
     public List<SessionSlotDto> SessionSlots { get; set; } = new();
     /// <summary>Empty slots whose stop button was removed (scene launch leaves the track playing).</summary>
     public List<int>? SessionNoStop { get; set; }
@@ -399,7 +399,7 @@ public sealed class AudioClipDto
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }
 
-/// <summary>One pass of an Arrangement loop recording (v29, specs/055). `Id` is file-local:
+/// <summary>One pass of an Arrangement loop recording (v29, specs/067). `Id` is file-local:
 /// it only links comp sections (<see cref="AudioClipDto.TakeId"/>) to their take.</summary>
 public sealed class AudioTakeDto
 {

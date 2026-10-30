@@ -467,7 +467,7 @@ void Engine::activateLoopPunch(double atBeat) {
 }
 
 // The pass that started at capturePassFrom_ ends at `to`: keep a copy as a future take
-// (specs/055) before the next pass overwrites the loop buffer. Message thread (the drain).
+// (specs/067) before the next pass overwrites the loop buffer. Message thread (the drain).
 void Engine::finishLoopPass(size_t to) {
     if (to <= capturePassFrom_ || captureLoopFrames_ == 0) return;
     LoopPass p;
@@ -625,7 +625,7 @@ void Engine::stopAudioRecording() {
     }
     capturePasses_.clear();
 
-    // Two or more passes keep every pass as a take (specs/055). A session take never loops here.
+    // Two or more passes keep every pass as a take (specs/067). A session take never loops here.
     if (loopTake && passes.size() >= 2 && !(recordSessionAudio_ && recordSessionScene_ >= 0)) {
         const double sr = audioRecordSampleRate_ > 0 ? audioRecordSampleRate_ : transport_.sampleRate();
         audioCaptureBuf_.clear();

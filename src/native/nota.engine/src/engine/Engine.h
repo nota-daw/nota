@@ -1304,7 +1304,7 @@ class Engine {
     bool audioRecordSelfTest();        // ring -> accumulate -> clip, no device
     bool sessionAudioRecordSelfTest(); // ring -> slot.audio -> looped playback, no device (M5-4)
 
-    // --- take lanes (specs/055, Engine_Takes.cpp) ---
+    // --- take lanes (specs/067, Engine_Takes.cpp) ---
     int32_t takeCount(int32_t trackId) const;
     bool takeInfo(int32_t trackId, int32_t index, NotaTakeInfo* out) const;
     int32_t takePeaks(int32_t trackId, int32_t index, float* outMinMax, int32_t maxPoints) const;
@@ -1558,7 +1558,7 @@ class Engine {
     std::vector<std::shared_ptr<Graph>> retired_;
     std::atomic<Graph*> liveGraph_{nullptr};
     int32_t nextTrackId_ = 1;
-    int32_t nextTakeId_ = 0;    // AudioTake::id (specs/055); never reused in a session
+    int32_t nextTakeId_ = 0;    // AudioTake::id (specs/067); never reused in a session
     int32_t nextTakeGroup_ = 0; // AudioTake::group
     // Beats per frame of `sampleRate` audio at the current tempo and device rate (the mapping
     // unwarped clips play at); 0 when the transport has no rate yet.
@@ -2047,7 +2047,7 @@ class Engine {
     size_t captureLoopFrames_ = 0; // loop length in capture-SR frames
     size_t captureOrigin_ = 0;     // cursor position where this take started (for partial clips)
     double captureLoopStartBeat_ = 0.0;
-    // Take lanes (specs/055): each finished loop pass, copied out of the loop buffer when the
+    // Take lanes (specs/067): each finished loop pass, copied out of the loop buffer when the
     // cursor wraps (message thread), in a zeroed loop-length buffer holding [from, to).
     struct LoopPass {
         std::vector<float> buf;
