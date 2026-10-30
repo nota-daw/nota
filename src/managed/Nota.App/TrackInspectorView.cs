@@ -6,7 +6,9 @@
 // colour, row height and freeze — so those settings have a home besides the track menu. Every
 // control calls what the header and the menu call, so undo and arming behave the same.
 // Changes made elsewhere (header, menu, undo, keys) are picked up while the tab is on screen:
-// a snapshot of what it shows is taken four times a second and the panel rebuilt when it differs.
+// a snapshot of what it shows — including every record-input and MIDI-from choice — is taken four
+// times a second and the panel rebuilt when it differs. While freeze or export has suspended
+// engine polling, the timer does not read the engine: that job owns it on another thread.
 
 using System;
 using System.Collections.Generic;
@@ -33,16 +35,19 @@ internal sealed class TrackInspectorView : UserControl
     private readonly IAudioEngine _engine;
     private readonly ArrangementView _timeline;
     private readonly Func<int, IReadOnlyList<FreezeEntry>> _freezeEntries;
+    private readonly Func<bool> _engineSuspended;
     private readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private int _trackId = -1;
     private string _shown = "";
     private TextBox? _nameBox;
 
-    public TrackInspectorView(IAudioEngine engine, ArrangementView timeline, Func<int, IReadOnlyList<FreezeEntry>> freezeEntries)
+    public TrackInspectorView(IAudioEngine engine, ArrangementView timeline, Func<int, IReadOnlyList<FreezeEntry>> freezeEntries,
+        Func<bool> engineSuspended)
     {
         _engine = engine;
         _timeline = timeline;
         _freezeEntries = freezeEntries;
+        _engineSuspended = engineSuspended;
         _poll.Tick += (_, _) => Poll();
         Rebuild();
     }
@@ -70,6 +75,10 @@ internal sealed class TrackInspectorView : UserControl
 
     private void Poll()
     {
+        // Freeze and export run on a worker and replace the session when they finish. The
+        // progress dialog keeps this timer running, so leave the engine alone until the job
+        // is done (the same SuspendEnginePolling the playhead clock honours).
+        if (_engineSuspended()) return;
         // A folded browser keeps the tab attached but hidden; a name being typed must not be
         // swept away by a rebuild.
         if (!IsEffectivelyVisible || _nameBox?.IsFocused == true) return;
@@ -105,12 +114,16 @@ internal sealed class TrackInspectorView : UserControl
             var pick = RecordInputPick.Of(_engine, id);
             sb.Append(pick).Append(_engine.GetTrackMonitor(id));
             if (pick.Source > 0) sb.Append(TrackNames.Of(_engine, pick.Source));
+            foreach (var c in _timeline.RecordInputChoices(id))
+                sb.Append('|').Append(c.Pick.Source).Append(':').Append((int)c.Pick.Channels).Append('=').Append(c.Label);
         }
         if (ti.IsInstrument)
         {
             int src = _engine.GetTrackMidiSource(id);
             sb.Append(src);
             if (src > 0) sb.Append(TrackNames.Of(_engine, src));
+            foreach (var c in _timeline.MidiSourceChoices(id))
+                sb.Append('|').Append(c.Id).Append('=').Append(c.Name);
         }
         foreach (var f in _freezeEntries(id)) sb.Append('|').Append(f.Label).Append(f.Switch);
         return sb.ToString();
@@ -118,6 +131,7 @@ internal sealed class TrackInspectorView : UserControl
 
     private void Rebuild()
     {
+        if (_engineSuspended()) return;
         _shown = Snapshot();
         _nameBox = null;
         var s = new StackPanel { Spacing = 18, Margin = new Thickness(12, 12, 12, 16) };
