@@ -149,16 +149,18 @@ public partial class MainWindow
         // Switching to a different track abandons the previously edited clip. Reset the clip
         // editor to empty so a stale editor from the old track doesn't linger — most visible
         // in the popped-out Devices/Clip window, whose top pane isn't touched by ShowDevices.
-        if (_editorTrackId != trackId && _audioEditorTrackId != trackId)
+        bool session = _session?.IsVisible == true;
+        if (_editorTrackId != trackId && _audioEditorTrackId != trackId && !(session && _sessionSlotTrack == trackId))
             ResetClipEditor();
 
         // Selecting a clip in the arrangement also selects its track — including the select
         // that an edge-drag does before it trims. That must not pull a user who is working in
         // the Clip tab over to Devices, so refresh the chain underneath and re-point the Clip
         // tab at the newly selected clip. With no clip to show, Devices takes the panel as before.
+        // In Session the clip is the slot the editor already holds (OnSessionSlotSelected).
         bool keepClipTab = !DetailFloating && DetailPanel.IsVisible
                            && DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView
-                           && SelectedClip(out _, out _, out _);
+                           && (session ? SessionEditorTrack == trackId : SelectedClip(out _, out _, out _));
         bool wasPattern = keepClipTab && DetailBody.Content is DrumPatternView;
 
         ShowDevices(trackId, takeOverPanel: !keepClipTab);
@@ -203,13 +205,58 @@ public partial class MainWindow
         return false;
     }
 
+    // The Session slot selected in the grid, when it holds a clip.
+    private bool SelectedSessionClip(out int trackId, out int scene)
+    {
+        (trackId, scene) = _session?.SelectedSlot ?? (-1, -1);
+        return trackId > 0 && scene >= 0 && Engine.SessionSlotState(trackId, scene) != 0;
+    }
+
+    // The track of the Session slot whose editor the Clip / Pattern tab last showed, or -1.
+    private int SessionEditorTrack =>
+        _lastClipEditor is null ? -1
+        : ReferenceEquals(_lastClipEditor, _audioEditor) ? (SessionAudioEditorOpen ? _audioEditorTrackId : -1)
+        : ReferenceEquals(_lastClipEditor, _clipEditor) && _editorTrackId < 0 ? _sessionSlotTrack
+        : ReferenceEquals(_lastClipEditor, _patternView) && _patternScene >= 0 ? _patternTrackId
+        : -1;
+
+    // A Session MIDI roll keeps _editorTrackId at -1; an arrangement one sets it.
+    private bool SessionMidiEditorOpen(int trackId, int scene)
+        => _clipEditor is not null && _editorTrackId < 0 && _sessionSlotTrack == trackId && _sessionSlotScene == scene;
+
+    private bool SessionAudioEditorOn(int trackId, int scene)
+        => SessionAudioEditorOpen && _audioEditorTrackId == trackId && _audioEditorClipIndex == SessionClip.Index(scene);
+
+    // Selecting a Session slot selects its track everywhere (devices below, the arrangement
+    // header); a slot holding a clip opens it in the Clip tab, and the tab follows the
+    // selection from clip to clip (#334). A Pattern grid stays a Pattern grid on a Drum Rack.
+    private void OnSessionSlotSelected(int trackId, int scene)
+    {
+        if (scene >= 0 && Engine.SessionSlotState(trackId, scene) != 0)
+        {
+            bool pattern = !DetailFloating && DetailPanel.IsVisible && DetailBody.Content is DrumPatternView;
+            ShowSessionSlot(trackId, scene);
+            if (Timeline.SelectedTrackId != trackId) Timeline.Select(trackId, -1);
+            if (pattern && DetailPatternBtn.IsEnabled) OnDetailPattern(this, new RoutedEventArgs());
+        }
+        else if (Timeline.SelectedTrackId != trackId)
+            Timeline.Select(trackId, -1);
+    }
+
+    private void ShowSessionSlot(int trackId, int scene)
+    {
+        if (SessionAudioEditorOn(trackId, scene)) ShowAudioClipPanel();
+        else if (SessionMidiEditorOpen(trackId, scene)) ShowClipPanel();
+        else OpenSessionClipEditor(trackId, scene);
+    }
+
     // Enable the Clip tab for the current context: in the arrangement, whenever a
-    // clip is selected; in Session, when a slot editor has been opened. The Pattern tab
-    // rides along on the same target, narrowed to Drum Rack MIDI.
+    // clip is selected; in Session, when a filled slot is selected or a slot editor is open.
+    // The Pattern tab rides along on the same target, narrowed to Drum Rack MIDI.
     internal void SyncClipTab()
     {
         DetailClipBtn.IsEnabled = _session?.IsVisible == true
-            ? _clipEditor is not null || SessionAudioEditorOpen
+            ? _clipEditor is not null || SessionAudioEditorOpen || SelectedSessionClip(out _, out _)
             : SelectedClip(out _, out _, out _);
         DetailPatternBtn.IsEnabled = PatternTarget(out _, out _, out _);
         // Pattern only means something on a Drum Rack track, so elsewhere the tab is hidden
@@ -857,13 +904,14 @@ public partial class MainWindow
 
     private void OnDetailClip(object? sender, RoutedEventArgs e)
     {
-        // Session: show the opened slot editor. Arrangement: always target the
-        // currently selected clip, rebuilding if the selection moved tracks.
+        // Session: the selected slot's clip, else the slot editor already open. Arrangement:
+        // always target the currently selected clip, rebuilding if the selection moved tracks.
         if (_session?.IsVisible == true)
         {
-            if (_clipEditor is not null) ShowClipPanel();
+            if (SelectedSessionClip(out int st, out int ss)) ShowSessionSlot(st, ss);
+            else if (_clipEditor is not null) ShowClipPanel();
             else if (SessionAudioEditorOpen) ShowAudioClipPanel();
-            else RejectClipTab("Double-click a slot to edit it.");
+            else RejectClipTab("Select a clip to edit it.");
             return;
         }
         if (!SelectedClip(out int tid, out int ci, out bool isMidi))

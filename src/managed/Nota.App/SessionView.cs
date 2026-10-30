@@ -83,7 +83,7 @@ public sealed partial class SessionView : UserControl
 
     /// <summary>Raised to edit a filled slot's notes / audio (trackId, scene).</summary>
     public event Action<int, int>? SlotEditRequested;
-    /// <summary>Raised when the selection lands on a track's slot, or on a Return / Master column
+    /// <summary>Raised when the selection lands on another slot, or on a Return / Master column
     /// (trackId, scene).</summary>
     public event Action<int, int>? SlotSelected;
     /// <summary>Raised after slots are copied / moved into the arrangement (M5-6) or a track is renamed.</summary>
@@ -363,7 +363,7 @@ public sealed partial class SessionView : UserControl
         InvalidateAll();
         RebuildInspector();
         bool selectable = sel.Kind == SelKind.Slot ? ColumnFor(sel.TrackId) is not null : sel.Kind == SelKind.Bus && BusColumn(sel.TrackId) is not null;
-        if (selectable && (prev.Kind != sel.Kind || prev.TrackId != sel.TrackId))
+        if (selectable && prev != sel)
             SlotSelected?.Invoke(sel.TrackId, sel.Scene);
     }
 
