@@ -721,8 +721,10 @@ public sealed partial class PianoRollView : UserControl
         _placementPending = false;   // a reload (undo, recording, another clip) is the truth now
         // A Session slot has no live path, so a velocity-wheel burst lives only in _notes until
         // the idle timer commits it. Recording reloads this roll ~60 Hz; dropping the burst
-        // here would throw those edits away. Keep them across a reload of the same clip and
-        // let the timer commit once. A different clip commits first, then loads.
+        // here would throw those edits away. Keep them across that reload of the same clip.
+        // Undo and redo close the burst first (EndVelocityWheel), so this reload is the
+        // engine's notes and the next wheel opens its own undo step. A different clip
+        // commits first, then loads.
         List<(int Pitch, double Start, float Velocity)>? burstVel = null;
         bool sameClip = _clipKey.Item1 != int.MinValue && _clipKey == _loadedKey;
         if (!_velWheelBurst || !sameClip)
@@ -1373,7 +1375,10 @@ public sealed partial class PianoRollView : UserControl
         return true;
     }
 
-    private void EndVelocityWheel()
+    /// <summary>Closes the open velocity burst. A Session slot commits it (one undo step);
+    /// an arrangement clip already seeded that step. Call before Undo or Redo so the reload
+    /// does not keep the burst open — the next wheel must checkpoint on its own.</summary>
+    internal void EndVelocityWheel()
     {
         _velWheelTimer?.Stop();
         _velWheel.Reset();
