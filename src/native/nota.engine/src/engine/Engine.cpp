@@ -582,6 +582,10 @@ void Engine::setBpm(double bpm) {
     // audio thread later, so reading transport_.samplesPerBeat() here would be stale.
     const double devSR = transport_.sampleRate();
     if (bpm > 0.0 && devSR > 0.0) reconfigureAllWarpStreams(devSR * 60.0 / bpm, devSR);
+    if (bpm > 0.0) {
+        authoringBpm_ = bpm;
+        placeTakesForTempo(); // take lanes + their comp keep one mapping (specs/067)
+    }
 }
 double Engine::bpm() const {
     return transport_.bpm();
@@ -783,6 +787,7 @@ bool Engine::undo() {
         // device (a removed look-ahead coming back, #109), so compensation follows them.
         if (e.graph) {
             publishRaw(std::move(e.graph));
+            placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
             reapplyRackMacros();
             reapplyCcRoutes();
@@ -818,6 +823,7 @@ bool Engine::redo() {
         undoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
         if (e.graph) {
             publishRaw(std::move(e.graph));
+            placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
             reapplyRackMacros();
             reapplyCcRoutes();

@@ -32,7 +32,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   use that section (the arrangement snap grid, ⌥ / Alt to bypass); right-click a lane for
   **Use whole take**, **Delete take** (the sound stays) or **Flatten takes** (one clip, the
   takes of that recording go). Each of those is one undo step, and takes are saved with the
-  project. One pass, the loop off, MIDI and Session slots are unchanged.
+  project. A tempo change moves the comp's sections with their takes, so they still meet
+  sample to sample. One pass, the loop off, MIDI and Session slots are unchanged.
 - **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
   the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
   Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.

@@ -1560,9 +1560,15 @@ class Engine {
     int32_t nextTrackId_ = 1;
     int32_t nextTakeId_ = 0;    // AudioTake::id (specs/067); never reused in a session
     int32_t nextTakeGroup_ = 0; // AudioTake::group
-    // Beats per frame of `sampleRate` audio at the current tempo and device rate (the mapping
-    // unwarped clips play at); 0 when the transport has no rate yet.
+    // The tempo setBpm last asked for. The transport only takes it on the audio thread, so
+    // message-thread layout that must agree with the next block reads this instead.
+    double authoringBpm_ = 120.0;
+    // Beats per frame of `sampleRate` audio at authoringBpm_ (the mapping unwarped clips play
+    // at; the device rate cancels out); 0 without a rate.
     double beatsPerSourceFrame(double sampleRate) const;
+    // Re-place every take and the unwarped comp sections still where their take put them on
+    // authoringBpm_'s mapping (after a tempo change or an undo/redo). No undo entry.
+    void placeTakesForTempo();
 
     // Clip clipboard (copy/cut/paste). Holds a clone of the copied clip; kind -1 empty.
     int32_t clipboardKind_ = -1; // -1 none, 0 audio, 1 midi

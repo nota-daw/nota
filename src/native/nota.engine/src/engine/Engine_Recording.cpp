@@ -744,6 +744,7 @@ void Engine::materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size
         k.originBeat = loopStartBeat;
         k.sourceOffsetFrames = static_cast<double>(p.from);
         k.lengthFrames = static_cast<int64_t>(p.to - p.from);
+        k.beatsPerFrame = bpf;
         takes.push_back(std::move(k));
     }
 

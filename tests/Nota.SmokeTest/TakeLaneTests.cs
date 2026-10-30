@@ -3,8 +3,9 @@
 //
 // Take lanes (#187, specs/067-take-lanes-comping): an Arrangement audio recording that wraps
 // the loop keeps every pass as a take; the default comp sounds exactly as the single loop
-// buffer did; comping a swiped range, deleting a take and flattening are one undo step each,
-// and takes + comp survive save/reopen.
+// buffer did; comping a swiped range, deleting a take and flattening are one undo step each;
+// flatten sounds as the comp did; a tempo change keeps the takes and their comp on one
+// mapping; and takes + comp survive save/reopen.
 
 using Nota.Application;
 using Nota.Infrastructure;
@@ -20,6 +21,7 @@ internal static class TakeLaneTests
     public static IEnumerable<(bool, string)> Run()
     {
         foreach (var r in ThreePasses()) yield return r;
+        foreach (var r in TempoChange()) yield return r;
         foreach (var r in NoTakes()) yield return r;
         foreach (var r in SaveReopen()) yield return r;
     }
@@ -83,6 +85,33 @@ internal static class TakeLaneTests
             }
         }
         return tl;
+    }
+
+    // What the engine plays over the loop, left channel, rendered from beat 0 with the
+    // playback edge fades every clip gets.
+    private static float[] Render(NotaEngine e)
+    {
+        var buf = new float[256 * 2];
+        e.StopTransport();
+        e.Seek(0.0);
+        e.RenderOffline(buf, 256, Sr);   // drain the stop / seek
+        e.RenderOffline(buf, 256, Sr);
+        e.Play();
+        var outL = new float[Loop];
+        for (int done = 0; done < Loop; done += 256)
+        {
+            e.RenderOffline(buf, 256, Sr);
+            for (int i = 0; i < 256; i++) outL[done + i] = buf[i * 2];
+        }
+        e.StopTransport();
+        return outL;
+    }
+
+    private static int RenderMismatch(float[] a, float[] b)
+    {
+        for (int f = 0; f < Loop; f++)
+            if (Math.Abs(a[f] - b[f]) > 1e-5f) return f;
+        return -1;
     }
 
     private static int ClipCount(NotaEngine e, int track)
@@ -175,12 +204,15 @@ internal static class TakeLaneTests
         e.Undo();
         yield return (e.TakeCount(track) == 3, "undo brings the deleted take back");
 
-        // Flatten: one clip, sample-exact, no takes.
+        // Flatten: one clip, no takes, and it renders as the comp did — the joins keep the edge
+        // fades their sections played with.
+        var compSound = Render(e);
         yield return (e.FlattenTakes(track), "flatten the takes");
-        bad = Mismatch(Timeline(e, track, out mirrored), compAt);
+        Timeline(e, track, out mirrored);
+        bad = RenderMismatch(Render(e), compSound);
         clips = ClipCount(e, track);
         yield return (e.TakeCount(track) == 0 && clips == 1 && e.ClipTakeId(track, 0) == 0 && bad < 0 && mirrored,
-            $"flatten leaves one clip that plays the comp exactly ({clips} clips, mismatch {bad})");
+            $"flatten leaves one clip that sounds as the comp did ({clips} clips, first mismatch {bad})");
         yield return (e.Undo() && e.TakeCount(track) == 3, "one undo step un-flattens");
         bad = Mismatch(Timeline(e, track, out _), compAt);
         yield return (bad < 0, $"...with the comp as it was (first mismatch {bad})");
@@ -190,6 +222,45 @@ internal static class TakeLaneTests
         var more = Takes(e, track);
         yield return (more.Length == 5 && more[3].Number == 4 && more[4].Number == 5 && more[3].Group != more[0].Group,
             $"a new recording continues the take numbers in a new group ({more.Length})");
+    }
+
+    // Every take section sits where its take plays its first frame.
+    private static bool SectionsOnTakes(NotaEngine e, int track)
+    {
+        var takes = Takes(e, track);
+        int clips = ClipCount(e, track);
+        for (int c = 0; c < clips; c++)
+        {
+            int id = e.ClipTakeId(track, c);
+            if (id == 0) continue;
+            if (!e.TryGetAudioClipInfo(track, c, out var ac)) return false;
+            var t = takes.FirstOrDefault(k => k.Id == id);
+            if (t.Id == 0 || t.LengthFrames <= 0) return false;
+            double bpf = t.LengthBeats / t.LengthFrames;
+            if (Math.Abs(ac.StartBeat - (t.OriginBeat + ac.SourceOffsetFrames * bpf)) > 1e-9) return false;
+        }
+        return clips > 0;
+    }
+
+    // Unwarped audio plays at its own rate, so a tempo change moves where a take's frames land;
+    // the comp sections still where their take put them move with it.
+    private static IEnumerable<(bool, string)> TempoChange()
+    {
+        using var e = Rig(out int track);
+        Record(e, track, RecFrames, 1.0);
+        var takes = Takes(e, track);
+        if (takes.Length != 3) { yield return (false, $"tempo: a 3-pass recording makes 3 takes ({takes.Length})"); yield break; }
+        e.CompTake(track, takes[0].Id, 1.5, 2.5);
+        e.SetBpm(60);
+        e.RenderOffline(new float[256 * 2], 256, Sr);   // the transport takes the new tempo
+        var slow = Takes(e, track);
+        yield return (Math.Abs(slow[0].StartBeat - 0.5) < 1e-9 && Math.Abs(slow[1].LengthBeats - 2.0) < 1e-9,
+            $"at half tempo a take covers half the beats ({slow[0].StartBeat}, {slow[1].LengthBeats})");
+        yield return (SectionsOnTakes(e, track), "after a tempo change the comp sections sit where their takes play them");
+        yield return (e.Undo() && SectionsOnTakes(e, track), "...and after undoing an edit made at the old tempo");
+        yield return (e.Redo() && SectionsOnTakes(e, track), "...and after redoing it");
+        yield return (e.FlattenTakes(track) && ClipCount(e, track) == 1,
+            $"flatten after a tempo change still merges the comp into one clip ({ClipCount(e, track)})");
     }
 
     private static IEnumerable<(bool, string)> NoTakes()

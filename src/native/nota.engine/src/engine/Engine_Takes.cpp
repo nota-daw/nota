@@ -5,7 +5,9 @@
 // so they can be comped. Takes are graph data, so every edit here is a message-thread clone +
 // republish (AR-5) and undo comes from the snapshot history. The comp is the track's ordinary
 // clips; a section made from a take carries the take's id, which only the lanes' highlight and
-// flatten read — the audio thread plays clips as always.
+// flatten read — the audio thread plays clips as always. A take and the sections still where
+// it put them share one beat mapping (AudioTake::beatsPerFrame), re-placed on a tempo change
+// so the comp stays one recording that meets frame to frame and the lanes keep matching it.
 
 #include "Engine.h"
 #include "media/AudioFile.h"
@@ -23,14 +25,47 @@ const AudioTake* findTake(const Track& t, int32_t takeId) {
     return nullptr;
 }
 
+// A section still where its take put it starts where the take plays its first frame.
+bool atTakePosition(const AudioClip& c, const AudioTake& k) {
+    return std::abs(c.startBeat - (k.originBeat + c.sourceOffsetFrames * k.beatsPerFrame)) < 1e-6;
+}
+
 } // namespace
 
 double Engine::beatsPerSourceFrame(double sampleRate) const {
-    const double spb = transport_.samplesPerBeat();
-    const double devSR = transport_.sampleRate();
-    if (spb <= 0.0 || devSR <= 0.0) return 0.0;
-    const double sr = sampleRate > 0.0 ? sampleRate : devSR;
-    return devSR / sr / spb;
+    const double sr = sampleRate > 0.0 ? sampleRate : transport_.sampleRate();
+    return sr > 0.0 && authoringBpm_ > 0.0 ? authoringBpm_ / 60.0 / sr : 0.0;
+}
+
+void Engine::placeTakesForTempo() {
+    if (!authoring_) return;
+    auto stale = [&](const Track& t) {
+        for (const auto& k : t.takes)
+            if (k.sample && k.beatsPerFrame != beatsPerSourceFrame(k.sample->sourceSampleRate)) return true;
+        return false;
+    };
+    bool any = false;
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks) {
+        if (!stale(*t)) {
+            g->tracks.push_back(t);
+            continue;
+        }
+        auto nt = cloneTrack(*t);
+        // Warped sections already follow the tempo from where they start; moved ones stay put.
+        for (auto& c : nt->clips) {
+            const AudioTake* k = c.takeId != 0 && !c.warpEnabled ? findTake(*nt, c.takeId) : nullptr;
+            if (k && k->sample && atTakePosition(c, *k))
+                c.startBeat = k->originBeat + c.sourceOffsetFrames * beatsPerSourceFrame(k->sample->sourceSampleRate);
+        }
+        for (auto& k : nt->takes)
+            if (k.sample) k.beatsPerFrame = beatsPerSourceFrame(k.sample->sourceSampleRate);
+        g->tracks.push_back(std::move(nt));
+        any = true;
+    }
+    if (any) publishRaw(std::move(g));
 }
 
 int32_t Engine::takeCount(int32_t trackId) const {
@@ -42,7 +77,7 @@ bool Engine::takeInfo(int32_t trackId, int32_t index, NotaTakeInfo* out) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || !out || index < 0 || index >= static_cast<int32_t>(t->takes.size())) return false;
     const AudioTake& k = t->takes[index];
-    const double bpf = k.sample ? beatsPerSourceFrame(k.sample->sourceSampleRate) : 0.0;
+    const double bpf = k.beatsPerFrame;
     *out = NotaTakeInfo{};
     out->id = k.id;
     out->number = k.number;
@@ -79,7 +114,7 @@ bool Engine::compTake(int32_t trackId, int32_t takeId, double startBeat, double 
     if (!old) return false;
     const AudioTake* k = findTake(*old, takeId);
     if (!k || !k->sample) return false;
-    const double bpf = beatsPerSourceFrame(k->sample->sourceSampleRate);
+    const double bpf = k->beatsPerFrame;
     if (bpf <= 0.0) return false;
     // Whole frames of the take, clamped to what the pass recorded: sections from one
     // recording then meet frame to frame, so a comp has no gaps or overlaps at its seams.
@@ -138,7 +173,7 @@ bool Engine::flattenTakes(int32_t trackId) {
         if (!first) continue;
         const SampleBuffer& ref = *first->sample;
         const double origin = first->originBeat;
-        const double bpf = beatsPerSourceFrame(ref.sourceSampleRate);
+        const double bpf = first->beatsPerFrame;
         const int64_t frames = ref.frames;
         const int32_t ch = ref.channels;
 
@@ -156,7 +191,7 @@ bool Engine::flattenTakes(int32_t trackId) {
             return bpf > 0.0 && std::abs(c.startBeat - (origin + off * bpf)) < 1e-6;
         };
 
-        std::vector<float> buf;
+        std::vector<const AudioClip*> merged; // into nt->clips, which `kept` leaves them in
         int64_t lo = frames, hi = 0;
         std::vector<AudioClip> kept;
         kept.reserve(nt->clips.size());
@@ -170,14 +205,31 @@ bool Engine::flattenTakes(int32_t trackId) {
                 kept.push_back(std::move(c));
                 continue;
             }
-            if (buf.empty()) buf.assign(static_cast<size_t>(frames) * ch, 0.0f);
             const int64_t off = static_cast<int64_t>(std::round(c.sourceOffsetFrames));
-            const int64_t len = c.effectiveLength();
-            const float* src = c.sample->samples.data() + off * ch;
-            float* dst = buf.data() + off * ch;
-            for (int64_t i = 0; i < len * ch; ++i) dst[i] = src[i] * c.gain;
             lo = std::min(lo, off);
-            hi = std::max(hi, off + len);
+            hi = std::max(hi, off + c.effectiveLength());
+            merged.push_back(&c);
+        }
+
+        // Each section keeps the edge fades it played with, so the joins sound as the comp did;
+        // only where the merged clip's own edge falls does its playback fade take over.
+        std::vector<float> buf;
+        if (hi > lo) buf.assign(static_cast<size_t>(frames) * ch, 0.0f);
+        const double devSR = transport_.sampleRate();
+        const double devPerFrame = devSR > 0.0 && ref.sourceSampleRate > 0.0 ? devSR / ref.sourceSampleRate : 0.0;
+        for (const AudioClip* c : merged) {
+            const int64_t off = static_cast<int64_t>(std::round(c->sourceOffsetFrames));
+            const int64_t len = c->effectiveLength();
+            const double devLen = static_cast<double>(len) * devPerFrame;
+            const bool fadeIn = off != lo, fadeOut = off + len != hi;
+            const float* src = c->sample->samples.data() + off * ch;
+            float* dst = buf.data() + off * ch;
+            for (int64_t j = 0; j < len; ++j) {
+                const double into = static_cast<double>(j) * devPerFrame;
+                const bool fade = into < devLen * 0.5 ? fadeIn : fadeOut;
+                const float g = fade ? c->gain * static_cast<float>(audioClipEdgeGain(into, devLen, devSR)) : c->gain;
+                for (int32_t m = 0; m < ch; ++m) dst[j * ch + m] += src[j * ch + m] * g;
+            }
         }
         nt->clips = std::move(kept);
         if (hi > lo) {
@@ -222,6 +274,7 @@ int32_t Engine::restoreTake(int32_t trackId, const std::string& path, int32_t nu
     k.originBeat = originBeat;
     k.sourceOffsetFrames = std::clamp(sourceOffsetFrames, 0.0, static_cast<double>(k.sample->frames));
     k.lengthFrames = std::clamp<int64_t>(lengthFrames, 0, k.sample->frames - static_cast<int64_t>(k.sourceOffsetFrames));
+    k.beatsPerFrame = beatsPerSourceFrame(k.sample->sourceSampleRate);
     nt->takes.push_back(std::move(k));
     republishWithTrackRaw(trackId, nt);
     return nextTakeId_;

@@ -107,6 +107,19 @@ struct AudioClip {
     double pitchRatio() const { return std::pow(2.0, static_cast<double>(pitchSemitones) / 12.0); }
 };
 
+// The short edge fade (~3 ms) an unwarped clip plays at both ends, so one that starts or ends
+// mid-waveform doesn't click: the gain `into` device frames into a clip `len` device frames
+// long at device rate `sr`. Flatten (specs/067) bakes the same fades into the joins it removes.
+inline double audioClipEdgeGain(double into, double len, double sr) {
+    const double edge = std::min(3.0 * sr / 1000.0, len * 0.5);
+    if (edge <= 1.0) return 1.0;
+    double eg = 1.0;
+    if (into < edge) eg = into / edge;
+    else if (into > len - edge)
+        eg = (len - into) / edge;
+    return std::clamp(eg, 0.0, 1.0);
+}
+
 // One pass of an Arrangement audio loop recording (specs/067), kept so it can be comped.
 // Every take of one recording has a loop-length buffer whose frame 0 sits at the loop start
 // (originBeat), so a frame inside a take is the same point of the loop in every take. The
@@ -119,6 +132,9 @@ struct AudioTake {
     double originBeat = 0.0;
     double sourceOffsetFrames = 0.0; // the range the pass recorded, inside `sample`
     int64_t lengthFrames = 0;
+    // Beats per frame of `sample` that the take and its comp sections are laid out with: the
+    // tempo's mapping when they were placed. A tempo change re-places both (placeTakesForTempo).
+    double beatsPerFrame = 0.0;
 };
 
 // A Session-view clip slot (M5). One per scene on each track. Holds a MIDI clip
