@@ -1,4 +1,4 @@
-# Tasks: 055 Clip editor fills the window, edge double-click reset
+# Tasks: 056 Clip editor fills the window, edge double-click reset
 
 - [x] T1 `Glyph`: `Expand` / `Shrink` path kinds
 - [x] T2 Detail header button (`DetailMaximizeBtn`), View menu item, catalog command `view.maximizeDetail` (⌘⇧F)
@@ -7,4 +7,4 @@
 - [x] T5 Double-click reset: Detail splitter and edge (tab default, forget `_detailHeight`), Mixer top edge (forget the dock height), browser splitter (344)
 - [x] T6 Settings → Shortcuts rows, CHANGELOG, FEATURES
 - [x] T7 Smoke test; headless check of every scenario against the real window; before/after screenshots
-- [ ] T8 nota-docs EN + RU (detail panel page, regenerated shortcuts page)
+- [x] T8 nota-docs EN + RU (detail panel page, shortcuts page rows) — nota-docs#51
