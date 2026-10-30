@@ -238,21 +238,30 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void UpdateEngineInfo()
     {
         double sr = Engine.NegotiatedSampleRate > 0 ? Engine.NegotiatedSampleRate : Engine.SampleRate;
-        EngineInfo = AudioFormatStatus.Text(sr, Engine.IsRunning ? Engine.NegotiatedBufferFrames : 0);
+        // The silent stand-in (no output opened) is "running" but negotiated nothing.
+        EngineInfo = AudioFormatStatus.Text(sr, Engine.IsRunning && !Engine.AudioSilentFallback ? Engine.NegotiatedBufferFrames : 0);
     }
 
     /// <summary>Who sets the running device's buffer: Nota, the ASIO driver, or the device
-    /// itself in WASAPI exclusive mode.</summary>
+    /// itself in WASAPI exclusive mode. An ASIO start that fell back to WASAPI is shared mode,
+    /// even when exclusive is still saved.</summary>
     public BufferOwner BufferOwner => AudioFormatStatus.Owner(
         Engine.ActiveAudioSystem == AudioSystem.Asio,
-        OperatingSystem.IsWindows() && Engine.GetAudioConfig().WasapiExclusive && !Engine.AudioExclusiveFallback);
+        AudioFormatStatus.ExclusiveIsRunning(
+            OperatingSystem.IsWindows(),
+            Engine.AudioSystem == AudioSystem.Asio,
+            Engine.ActiveAudioSystem == AudioSystem.Asio,
+            Engine.GetAudioConfig().WasapiExclusive,
+            Engine.AudioExclusiveFallback));
 
     /// <summary>The status bar's buffer menu (#373): stage the size (0 = device default), restart
     /// the backend on it, carry on playing from the same spot, and let an open Settings ▸ Audio
-    /// pane re-read it.</summary>
+    /// pane re-read it. A no-op while recording — the menu disables the sizes, and this guards a
+    /// take that started from elsewhere while the menu stayed open.</summary>
     public void SetAudioBufferFrames(int frames)
     {
-        bool wasPlaying = Engine.IsPlaying && !Engine.IsRecording;
+        if (Engine.IsRecording) return;
+        bool wasPlaying = Engine.IsPlaying;
         double position = Engine.PositionBeats;
         Engine.SetAudioBufferFrames(frames);
         ApplyAudioSettings();

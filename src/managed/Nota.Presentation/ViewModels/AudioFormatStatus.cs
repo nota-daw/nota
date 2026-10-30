@@ -42,4 +42,10 @@ public static class AudioFormatStatus
 
     public static BufferOwner Owner(bool asioRunning, bool exclusiveRunning)
         => asioRunning ? BufferOwner.Driver : exclusiveRunning ? BufferOwner.Device : BufferOwner.Nota;
+
+    /// <summary>WASAPI exclusive is what actually opened. A saved exclusive flag does not count
+    /// while ASIO is chosen (its fallback runs shared WASAPI) or after exclusive was refused.</summary>
+    public static bool ExclusiveIsRunning(bool windows, bool asioChosen, bool asioRunning,
+                                          bool exclusiveRequested, bool exclusiveRefused)
+        => windows && !asioChosen && !asioRunning && exclusiveRequested && !exclusiveRefused;
 }

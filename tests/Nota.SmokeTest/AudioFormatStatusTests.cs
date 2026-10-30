@@ -28,5 +28,14 @@ internal static class AudioFormatStatusTests
         yield return (AudioFormatStatus.Owner(false, false) == BufferOwner.Nota, "shared mode: Nota sets the buffer");
         yield return (AudioFormatStatus.Owner(true, false) == BufferOwner.Driver, "ASIO: the driver sets the buffer");
         yield return (AudioFormatStatus.Owner(false, true) == BufferOwner.Device, "WASAPI exclusive: the device sets the buffer");
+
+        yield return (AudioFormatStatus.ExclusiveIsRunning(true, false, false, true, false),
+            "WASAPI exclusive is running when it was requested and opened");
+        yield return (!AudioFormatStatus.ExclusiveIsRunning(true, true, false, true, false),
+            "an ASIO fallback to shared WASAPI is not exclusive, even if exclusive is saved");
+        yield return (!AudioFormatStatus.ExclusiveIsRunning(true, false, false, true, true),
+            "exclusive that the device refused is shared mode");
+        yield return (!AudioFormatStatus.ExclusiveIsRunning(false, false, false, true, false),
+            "exclusive mode does not exist off Windows");
     }
 }
