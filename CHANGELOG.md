@@ -22,6 +22,23 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
+  the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
+  Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.
+  Drag its top edge to resize it. The panel's pop-out button (or **View → Mixer in its own
+  window**) moves it into the floating window for a second screen; the window's dock button
+  brings it back. Nota remembers whether the Mixer was shown, where and how tall, and restores
+  it on the next launch.
+
+### Changed
+- **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
+  rows hide first, then the sends, then the fader gets shorter; name, meter, fader, pan and
+  M / S / Arm always stay. A hidden section's **Sends** / **I/O** footer toggle shows an
+  outline — click it to show the section anyway, and the strips scroll. Strip faders, pan and
+  M / S / Arm — in the Mixer and in Session's mixer sections — now follow changes made
+  elsewhere (the other mixer, track headers, automation, undo).
+
 ## [0.58.1] — 2026-10-29
 
 ### Added

@@ -73,7 +73,7 @@ public partial class MainWindow
         // Hide the docked panel — state is preserved, it just lives in the window now.
         DetailPanel.IsVisible = false;
         DetailSplitter.IsVisible = false;
-        var row = BodyGrid.RowDefinitions[2];
+        var row = _detailRow;
         row.MinHeight = 0;
         row.Height = new GridLength(0);
 

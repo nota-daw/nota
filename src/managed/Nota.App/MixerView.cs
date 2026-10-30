@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Mixer (mockup 1f): a dedicated strip mixer as a third Detail mode. One strip
-// per track (+ returns + master): name with a 2px colour top, I/O rows, A/B
-// sends, a pan knob, a 190px vertical fader with a stereo meter, a dB read-out
-// and M/S/Arm. All strips ride the existing engine ops (vol/pan/mute/solo/send/
-// meter); meters are pushed each UI tick by MainWindow. Crossfader is M7+. The footer
+// Mixer (mockup 1f): one strip per track (+ returns + master): name with a 2px colour
+// top, I/O rows, A/B sends, a pan knob, a vertical fader with a stereo meter, a dB
+// read-out and M/S/Arm. All strips ride the existing engine ops (vol/pan/mute/solo/send/
+// meter); meters are pushed each UI tick by MainWindow, which hosts this one instance
+// docked under the main view or in the Mixer window (specs/054). Strips fit the height
+// they get (I/O, then sends hide, then the fader shortens). Crossfader is M7+. The footer
 // also shows and switches the project pan law (specs/006).
 
 using System;
@@ -50,6 +51,34 @@ public sealed class MixerView : UserControl
     private readonly List<Control> _sendSections = new();
     private readonly List<Control> _ioSections = new();
     private bool _sendsVisible = true, _ioVisible = true;
+
+    // Height-adaptive strips (specs/054): the strips fit the height they get, docked or in the
+    // window. As it shrinks, I/O rows hide first, then sends, then the fader shortens to
+    // FaderMin; below that the host can't get smaller (MinContentHeight). A footer toggle can
+    // pin an auto-hidden section back on — the strip row then scrolls vertically.
+    private const double FaderMax = 190, FaderMin = 72;
+    private const double FaderComfort = 120;   // a section hides only if the fader would get shorter
+    private const double HeaderH = 24, IoH = 34, SendsH = 42, PanH = 38, ButtonsH = 28;
+    private const double FaderPad = 16, RowPad = 20, StripBorder = 2, FooterH = 44;
+    private readonly List<Control> _faderGrids = new();
+    private double _faderH = FaderMax;
+    private double _dbH = 18;   // the dB read-out's height, measured once built
+    private bool _ioAuto, _sendsAuto;        // hidden for lack of height
+    private bool _ioPinned, _sendsPinned;    // shown anyway by the user
+    private Action? _paintIoToggle, _paintSendsToggle;
+
+    // Each strip's controls that follow the engine, so a change made elsewhere — track
+    // headers, Session's mixer sections, automation, undo, a MIDI controller — shows here
+    // too. The docked Mixer sits right next to those (specs/054).
+    private sealed class StripSync
+    {
+        public VFader? Fader;
+        public DragNumber? Db;
+        public PanKnob? Pan;
+        public Action<bool>? Mute, Solo, Arm;
+    }
+    private readonly Dictionary<int, StripSync> _syncs = new();
+    private StripSync SyncOf(int id) => _syncs.TryGetValue(id, out var s) ? s : _syncs[id] = new StripSync();
     // The master volume lives in TransportViewModel.MasterVolume (saved with the project, shown
     // in the MST module and the arrangement's Master row); the master strip goes through these.
     public Func<float>? GetMasterVolume { get; set; }
@@ -83,11 +112,29 @@ public sealed class MixerView : UserControl
     /// fit its width to them.</summary>
     public event Action? StripsChanged;
 
+    /// <summary>Raised when <see cref="MinContentHeight"/> changed, so a host can update its
+    /// own minimum.</summary>
+    public event Action? MinContentHeightChanged;
+
     /// <summary>The width the strip row wants (all strips + master + margin), unclipped.</summary>
     public double StripsWidth
     {
         get { _row.Measure(Size.Infinity); return _row.DesiredSize.Width; }
     }
+
+    // A strip's always-shown part (header, pan, dB, M/S/Arm) without the fader.
+    private double CoreH => HeaderH + PanH + FaderPad + _dbH + ButtonsH + StripBorder;
+
+    /// <summary>The smallest height (design units) at which a strip's core still fits — header,
+    /// pan, a FaderMin fader, dB, M/S/Arm — plus the footer. Hosts don't go below it.</summary>
+    public double MinContentHeight => CoreH + FaderMin + RowPad + FooterH + MapPad;
+
+    /// <summary>The height at which every strip shows in full (I/O, sends, the full fader).</summary>
+    public double NaturalContentHeight => CoreH + FaderMax + IoH + SendsH + RowPad + FooterH + MapPad;
+
+    // The Stereo Map layout's grid margin (8 above and below the strip column).
+    private const double MapMargin = 8;
+    private double MapPad => _view == MixerViewMode.StereoMap ? 2 * MapMargin : 0;
 
     public MixerView(IAudioEngine engine)
     {
@@ -99,6 +146,7 @@ public sealed class MixerView : UserControl
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
+        _stripsScroller.SizeChanged += (_, e) => { if (e.HeightChanged) FitHeight(); };
         var dock = new DockPanel();
         var footer = Footer();
         DockPanel.SetDock(footer, Dock.Bottom);
@@ -111,7 +159,7 @@ public sealed class MixerView : UserControl
     public MixerViewMode View
     {
         get => _view;
-        set { if (_view == value) return; _view = value; ApplyView(); }
+        set { if (_view == value) return; _view = value; ApplyView(); MinContentHeightChanged?.Invoke(); }
     }
 
     private void ApplyView()
@@ -130,7 +178,7 @@ public sealed class MixerView : UserControl
         }
         if (Map is null) { Map = new StereoMapView(_engine) { MinWidth = 520 }; MapCreated?.Invoke(Map); }
         _stripsScroller.MaxWidth = 440;
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = new Thickness(8) };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = new Thickness(MapMargin) };
         grid.Children.Add(Map);
         Grid.SetColumn(_stripsScroller, 1);
         grid.Children.Add(_stripsScroller);
@@ -144,6 +192,8 @@ public sealed class MixerView : UserControl
         _sendFaders.Clear();
         _sendSections.Clear();
         _ioSections.Clear();
+        _faderGrids.Clear();
+        _syncs.Clear();
         _balBadges.Clear();
         int returns = _engine.ReturnTrackCount;
         int n = _engine.TrackCount;
@@ -157,6 +207,8 @@ public sealed class MixerView : UserControl
         _shownLaw = null;   // the strips are new: repaint the law state onto them
         SyncPanLaw();
         _builtTrackCount = n;
+        MeasureDb();
+        FitHeight();
         StripsChanged?.Invoke();
     }
 
@@ -183,7 +235,28 @@ public sealed class MixerView : UserControl
             double v = _engine.GetTrackSend(id, bus);
             if (Math.Abs(send.Value - v) > 1e-3) send.Value = v;
         }
+        FollowStrips();
         SyncPanLaw();   // undo/redo or a load elsewhere may have changed it
+    }
+
+    // Volume, pan and M/S/Arm follow the engine (see StripSync); a control being dragged is
+    // left to the hand on it.
+    private void FollowStrips()
+    {
+        int n = _engine.TrackCount;
+        for (int i = 0; i < n; i++)
+        {
+            if (!_engine.TryGetTrackInfo(i, out var ti) || !_syncs.TryGetValue(ti.Id, out var s)) continue;
+            if (s.Fader is { Dragging: false } f && Math.Abs(f.Value - ti.Volume) > 1e-3)
+            {
+                f.SetValueExternal(ti.Volume);
+                if (s.Db is { } db) db.Value = LinToDb(ti.Volume);
+            }
+            if (s.Pan is { Dragging: false } k && Math.Abs(k.Pan - ti.Pan) > 1e-3) k.SetPanExternal(ti.Pan);
+            s.Mute?.Invoke(ti.Muted != 0);
+            s.Solo?.Invoke(ti.Soloed != 0);
+            s.Arm?.Invoke(ti.Armed != 0);
+        }
     }
 
     // ---- strips -----------------------------------------------------------
@@ -202,14 +275,14 @@ public sealed class MixerView : UserControl
                    : ti.IsInstrument ? "Monitor auto" : "Monitor in";
         // Instrument tracks get a live "MIDI To" selector in place of the static I/O text.
         var ioRow = ti.IsInstrument ? MidiIoRow(id) : IoRow(io1, io2);
-        ioRow.IsVisible = _ioVisible;
+        ioRow.IsVisible = IoShown;
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
 
         if (!isReturn)
         {
             var sends = SendsRow(id, returns);
-            sends.IsVisible = _sendsVisible;
+            sends.IsVisible = SendsShown;
             _sendSections.Add(sends);
             col.Children.Add(sends);
         }
@@ -232,7 +305,7 @@ public sealed class MixerView : UserControl
         var col = new StackPanel();
         col.Children.Add(Header("Master", NotaPalette.Master, MasterBg));
         var ioRow = IoRow("Sum bus", "→ Output");
-        ioRow.IsVisible = _ioVisible;
+        ioRow.IsVisible = IoShown;
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
 
@@ -256,8 +329,10 @@ public sealed class MixerView : UserControl
 
     private Control Footer()
     {
-        var sendsToggle = SectionToggle("Sends", _sendsVisible, on => { _sendsVisible = on; foreach (var s in _sendSections) s.IsVisible = on; });
-        var ioToggle = SectionToggle("I/O", _ioVisible, on => { _ioVisible = on; foreach (var s in _ioSections) s.IsVisible = on; });
+        var sendsToggle = SectionToggle("Sends", () => _sendsVisible, () => _sendsAuto, () => _sendsPinned,
+            (on, pinned) => { _sendsVisible = on; _sendsPinned = pinned; FitHeight(); }, out _paintSendsToggle);
+        var ioToggle = SectionToggle("I/O", () => _ioVisible, () => _ioAuto, () => _ioPinned,
+            (on, pinned) => { _ioVisible = on; _ioPinned = pinned; FitHeight(); }, out _paintIoToggle);
         var left = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
@@ -279,16 +354,81 @@ public sealed class MixerView : UserControl
         return new Border { Height = 44, Background = MasterBg, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(12, 0), Child = grid };
     }
 
-    private Border SectionToggle(string label, bool initial, Action<bool> set)
+    // A footer section toggle. On = "show when it fits"; when the section is hidden for lack of
+    // height it shows muted, and a click pins it on anyway (the strips then scroll); a click on
+    // a shown or pinned section turns it off.
+    private Border SectionToggle(string label, Func<bool> on, Func<bool> auto, Func<bool> pinned,
+        Action<bool, bool> set, out Action paint)
     {
-        bool on = initial;
         var t = new TextBlock { Text = label, FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var b = new Border { Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
-        // Toggled on: a solid accent key with derived ink; off: a raised key.
-        void Paint() { b.Background = on ? Brass : NotaPalette.SurfaceRaised; b.BorderBrush = on ? Brass : NotaPalette.Seam; t.Foreground = on ? OnAccent : TextSecondary; }
-        b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
+        // Shown: a solid accent key with derived ink; auto-hidden: a raised key with an accent
+        // rim; off: a raised key.
+        void Paint()
+        {
+            bool hiddenByHeight = on() && auto() && !pinned();
+            bool lit = on() && !hiddenByHeight;
+            b.Background = lit ? Brass : NotaPalette.SurfaceRaised;
+            b.BorderBrush = lit || hiddenByHeight ? Brass : NotaPalette.Seam;
+            t.Foreground = lit ? OnAccent : hiddenByHeight ? TextTertiary : TextSecondary;
+            ToolTip.SetTip(b, hiddenByHeight ? "Hidden: not enough height · click to show anyway" : null);
+        }
+        b.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            if (on() && auto() && !pinned()) set(true, true);
+            else if (on()) set(false, false);
+            else set(true, false);
+            Paint();
+        };
+        paint = Paint;
         Paint();
         return b;
+    }
+
+    private bool IoShown => _ioVisible && (!_ioAuto || _ioPinned);
+    private bool SendsShown => _sendsVisible && (!_sendsAuto || _sendsPinned);
+
+    // The dB read-out's height comes from its font; measure it once there is one, so
+    // MinContentHeight matches what is drawn.
+    private void MeasureDb()
+    {
+        if (_masterDb is null) return;
+        _masterDb.Measure(Size.Infinity);
+        double h = Math.Ceiling(_masterDb.DesiredSize.Height);
+        if (h <= 0 || Math.Abs(h - _dbH) < 0.5) return;
+        _dbH = h;
+        MinContentHeightChanged?.Invoke();
+    }
+
+    // Fit the strips to the strip area's height: while the fader would drop below FaderComfort,
+    // I/O hides first, then sends; the fader takes the rest between FaderMin and FaderMax. Only toggles visibility / height — no rebuild.
+    private void FitHeight()
+    {
+        // Not laid out yet: show everything the toggles allow; the first size pass refits.
+        double h = _stripsScroller.Bounds.Height;
+        double avail = h > 0 ? h - RowPad - CoreH : double.PositiveInfinity;
+        double sends = _sendsVisible ? SendsH : 0, io = _ioVisible ? IoH : 0;
+        double pinnedIo = _ioVisible && _ioPinned ? IoH : 0;
+        bool ioFits = avail >= FaderComfort + sends + io;
+        bool sendsFits = avail - pinnedIo >= FaderComfort + sends;
+        _ioAuto = _ioVisible && !ioFits;
+        _sendsAuto = _sendsVisible && !sendsFits;
+        double used = (IoShown ? IoH : 0) + (SendsShown ? SendsH : 0);
+        double fader = Math.Clamp(Math.Floor(avail - used), FaderMin, FaderMax);
+
+        foreach (var s in _ioSections) s.IsVisible = IoShown;
+        foreach (var s in _sendSections) s.IsVisible = SendsShown;
+        if (Math.Abs(fader - _faderH) >= 0.5)
+        {
+            _faderH = fader;
+            foreach (var g in _faderGrids) g.Height = fader;
+        }
+        // A pinned section may not fit: let the strip row scroll then.
+        _stripsScroller.VerticalScrollBarVisibility = (_ioPinned && _ioAuto) || (_sendsPinned && _sendsAuto)
+            ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+        _paintIoToggle?.Invoke();
+        _paintSendsToggle?.Invoke();
     }
 
     // Pan law: the project's pan law as shell segments, a one-line hint, and the Older project
@@ -471,6 +611,7 @@ public sealed class MixerView : UserControl
     private Control PanRow(int id, float pan, bool isGroup = false)
     {
         var knob = new PanKnob(pan);
+        if (id > 0) SyncOf(id).Pan = knob;
         // One undo step per gesture (specs/009); opened before the automation write so a
         // recorded lane and the value undo together, closed after it.
         var undo = new MixGesture(_engine, MixTarget.Pan(id));
@@ -516,6 +657,7 @@ public sealed class MixerView : UserControl
         ToolTip.SetTip(dbNum, "Set the gain — drag, or double-click to type");
         void SetVolume(double v) { if (id < 0) SetMasterVolume?.Invoke((float)v); else _engine.SetTrackVolume(id, (float)v); }
         if (id < 0) { _masterFader = fader; _masterDb = dbNum; }
+        else { var sync = SyncOf(id); sync.Fader = fader; sync.Db = dbNum; }
         // One undo step per drag of the fader or the dB number, and per reset / typed value
         // (specs/009). Opened before the automation write, closed after it.
         var undo = new MixGesture(_engine, id < 0 ? MixTarget.Master : MixTarget.Volume(id));
@@ -546,7 +688,7 @@ public sealed class MixerView : UserControl
             scaleGrid.Children.Add(t);
         }
 
-        var grid = new Grid { Height = 190, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(7, 8) };
+        var grid = new Grid { Height = _faderH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(7, 8) };
         grid.Children.Add(scaleGrid);
         Grid.SetColumn(fader, 1); grid.Children.Add(fader);
         // Channels lettered under the meter (almanac § level meters), one letter per 11px column.
@@ -559,24 +701,26 @@ public sealed class MixerView : UserControl
         DockPanel.SetDock(letters, Dock.Bottom);
         var meterCol = new DockPanel { Margin = new Thickness(4, 0, 0, 0), Children = { letters, meter } };
         Grid.SetColumn(meterCol, 2); grid.Children.Add(meterCol);
+        _faderGrids.Add(grid);
         return grid;
     }
 
     private Control ButtonsRow(int id, NotaTrackInfo ti, bool isReturn)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var mute = Toggle("M", false, ti.Muted != 0, v => _engine.SetTrackMute(id, v));
-        var solo = Toggle("S", false, ti.Soloed != 0, v => _engine.SetTrackSolo(id, v));
+        var sync = SyncOf(id);
+        var mute = Toggle("M", false, ti.Muted != 0, v => _engine.SetTrackMute(id, v), out sync.Mute);
+        var solo = Toggle("S", false, ti.Soloed != 0, v => _engine.SetTrackSolo(id, v), out sync.Solo);
         MidiLearn.Bind(mute, MidiTarget.TrackMute(id), "Mute");
         MidiLearn.Bind(solo, MidiTarget.TrackSolo(id), "Solo");
         row.Children.Add(mute);
         row.Children.Add(solo);
-        if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive)));
+        if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm));
         return new Border { Height = 28, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0), Child = row };
     }
 
     // Record-arm: neutral with a red disc at rest, solid record red with a pale disc when armed.
-    private Border ArmToggle(bool initial, Action<bool, bool> set)   // (armed, ⌘/Ctrl held) — #332
+    private Border ArmToggle(bool initial, Action<bool, bool> set, out Action<bool> sync)   // (armed, ⌘/Ctrl held) — #332
     {
         bool on = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
@@ -589,11 +733,12 @@ public sealed class MixerView : UserControl
             disc.Foreground = on ? NotaPalette.RecordInk : NotaPalette.Record;
         }
         b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on, TrackArming.IsAdditive(e.KeyModifiers)); Paint(); };
+        sync = v => { if (v == on) return; on = v; Paint(); };
         Paint();
         return b;
     }
 
-    private Border Toggle(string label, bool danger, bool initial, Action<bool> set)
+    private Border Toggle(string label, bool danger, bool initial, Action<bool> set, out Action<bool> sync)
     {
         bool on = initial;
         var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -607,6 +752,7 @@ public sealed class MixerView : UserControl
             t.Foreground = on ? NotaPalette.InkOn(fill) : TextSecondary;
         }
         b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
+        sync = v => { if (v == on) return; on = v; Paint(); };
         Paint();
         return b;
     }
