@@ -85,7 +85,7 @@ public sealed class ClipEditorView : UserControl
     private string HeaderName(string name)
         => Roll.Clips.Count > 1 ? $"{name} · +{Roll.Clips.Count - 1} {(Roll.Clips.Count == 2 ? "clip" : "clips")}" : name;
 
-    // Clip | Track (specs/055), at the top of the inspector: one clip, or every MIDI clip of its
+    // Clip | Track (specs/059), at the top of the inspector: one clip, or every MIDI clip of its
     // track on the arrangement's timeline. The host rebuilds the editor on a switch. Arrangement
     // clips only.
     private static Control? ModeControl(PianoRollView roll, Action<bool>? setTrackMode)

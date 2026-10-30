@@ -375,7 +375,7 @@ public partial class MainWindow
 
     // Double-click on a MIDI clip: that clip — or, when it is one of two or more selected MIDI
     // clips, all of them together with it active (specs/029-multi-clip-editing).
-    // In track mode (specs/055) it opens the clip's whole track instead.
+    // In track mode (specs/059) it opens the clip's whole track instead.
     private void OpenClipEditor(int trackId, int clipIndex)
     {
         if (!FocusTrackClip(trackId, clipIndex))
@@ -399,7 +399,7 @@ public partial class MainWindow
         return true;
     }
 
-    // --- track mode (specs/055-clip-editor-track-mode, #49) ------------------------------------
+    // --- track mode (specs/059-clip-editor-track-mode, #49) ------------------------------------
 
     private bool ClipTrackMode => _vm?.Settings.Current.ClipEditorTrackMode == true;
 

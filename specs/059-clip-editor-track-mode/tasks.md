@@ -34,3 +34,7 @@
 
 - [X] T014 `scripts/build-linux.sh` passes (smoke test included)
 - [X] T015 No new source files (SPDX n/a); no new dependency
+
+## Phase 6: Convergence
+
+- [ ] T016 Get the smoke test green on CI (macOS, Windows, Linux) — locally `scripts/build-linux.sh` fails only the two render-pool overload timing guards, which fail the same way on unmodified `develop` on the 4-core VM — per Constitution IV / T014 (partial)

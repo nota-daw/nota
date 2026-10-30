@@ -27,7 +27,7 @@ internal static class MultiClipTests
         foreach (var r in TrackMode()) yield return r;
     }
 
-    // Track mode (specs/055): a track's clips on the arrangement axis, joined by new ones.
+    // Track mode (specs/059): a track's clips on the arrangement axis, joined by new ones.
     private static IEnumerable<(bool, string)> TrackMode()
     {
         var lone = new ClipSet(new[] { new OpenClip(3, 0, 24, 8) }, 3, 0, barBeats: 4, trackMode: true);

@@ -41,7 +41,7 @@ public sealed class ClipPropsView : UserControl
     private int _transpose;
     private double _strength = 0.8;
 
-    /// <param name="mode">The Clip | Track switch (specs/055) heading the CLIP section; none for
+    /// <param name="mode">The Clip | Track switch (specs/059) heading the CLIP section; none for
     /// a Session slot.</param>
     public ClipPropsView(PianoRollView roll, double startBeat, Control? mode = null)
     {

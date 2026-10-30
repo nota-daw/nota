@@ -170,7 +170,7 @@ public sealed class Settings
     /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
     /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
     public bool PianoRollAudition { get; set; } = true;
-    /// <summary>Clip editor track mode (specs/055, #49): the piano roll shows every MIDI clip of
+    /// <summary>Clip editor track mode (specs/059, #49): the piano roll shows every MIDI clip of
     /// the edited track on the arrangement's timeline. The Clip | Track switch at the top of
     /// the clip editor's inspector; off (clip mode) by default.</summary>
     public bool ClipEditorTrackMode { get; set; }

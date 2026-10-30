@@ -18,13 +18,36 @@ Clip | Track segmented control (the header has no room left at the default windo
   `Nota.Application/Palette/CommandCatalog.cs`, `Nota.App/MainWindow.Detail.cs`,
   `Nota.App/MainWindow.Commands.cs`, `Nota.App/ClipEditorView.cs`, `Nota.App/ClipPropsView.cs`,
   `Nota.App/PianoRollView.cs`.
+- **Primary Dependencies**: none new (Avalonia as today).
+- **Storage**: one new app setting, `ClipEditorTrackMode` (settings JSON); nothing in the
+  project file.
+- **Audio-Thread Impact**: None. The change is UI-thread only: which clips the editor opens and
+  how it lays them out. Note edits still reach the engine through the existing
+  `SetClipNotes` / `SetClipNotesLive` C ABI calls, grouped with `BeginUndoGroup` /
+  `EndUndoGroup` as in spec 029; the engine publishes its snapshot for them as before (AR-5).
+  No allocation, lock, I/O or logging is added on the audio thread (AR-6), no command-queue
+  change (AR-4), and the playhead / seek still convert through `Transport` beats (AR-9).
 - **Testing**: `tests/Nota.SmokeTest/MultiClipTests.cs` (`--multiclip`), full smoke via
   `scripts/build-linux.sh`.
 
+## Nota: Read Before Planning
+
+UI work → [`DESIGN.md`](../../DESIGN.md): the switch is the existing `segmented` control, the
+active clip keeps the orange accent in the clip strip, no new colours.
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md): no new dependency, no new source file.
+
 ## Constitution Check
 
-- Audio thread: untouched (edits go through `SetClipNotes` / `SetClipNotesLive` as today).
-- AR-7: no new native crossing. No new dependency. No new files beyond the spec.
+| Principle | Status |
+|---|---|
+| I. Real-time audio safety | Pass — no audio-thread code touched (see Audio-Thread Impact) |
+| II. Boundary discipline | Pass — no new C ABI call, no JUCE change |
+| III. Licensing hygiene | Pass — no new dependency, no new source file |
+| IV. Verification gate | Pass — no engine behaviour change; `ClipSet` track-mode rules added to the smoke test |
+| V. One logical change | Pass — one feature |
+| VI. Docs in sync | CHANGELOG `[Unreleased]` and FEATURES.md in this change; the user manual (`../nota-docs`, piano-roll page EN + RU) follows in a nota-docs change; no new shortcut, so the Shortcuts pane is unchanged |
+| VII. Spec-first | Pass — this spec |
+| VIII. Rules not weakened | Pass |
 
 ## Design
 
