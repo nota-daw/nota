@@ -3217,6 +3217,17 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Colour index for a return bus (0/1).</summary>
     internal static int ReturnColorIndex(int returnIdx) => ReturnColorBase + (Math.Max(0, returnIdx) % NotaPalette.ReturnColors.Length);
 
+    /// <summary>The engine's track indices in the order the arrangement lists them: regular
+    /// tracks first, then the returns. A new track is appended after the returns in the
+    /// engine, so views walking the raw order showed it below them (#374).</summary>
+    internal static IEnumerable<int> DisplayOrder(IAudioEngine eng)
+    {
+        int n = eng.TrackCount;
+        for (int pass = 0; pass < 2; pass++)
+            for (int i = 0; i < n; i++)
+                if (eng.TryGetTrackInfo(i, out var ti) && ti.IsReturn == (pass == 1)) yield return i;
+    }
+
     /// <summary>The effective palette index for a track: its stored colour if set, else its
     /// group's hue (shaded per sibling), else the automatic colour for its position. Shared by
     /// every view so a user-picked colour shows consistently in the arrangement, mixer and

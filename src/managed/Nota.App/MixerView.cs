@@ -147,7 +147,7 @@ public sealed class MixerView : UserControl
         _balBadges.Clear();
         int returns = _engine.ReturnTrackCount;
         int n = _engine.TrackCount;
-        for (int i = 0; i < n; i++)
+        foreach (int i in ArrangementView.DisplayOrder(_engine))
         {
             if (!_engine.TryGetTrackInfo(i, out var ti)) continue;
             var c = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, ti.Id));

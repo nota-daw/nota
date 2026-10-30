@@ -2542,6 +2542,28 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
         }
 
+        // An armed audio track that isn't monitoring meters its input instead (#352): the
+        // level to set before a take, without hearing it. Pre-fader, like a console's input
+        // meter; a monitoring track already meters what it hears.
+        for (auto& tptr : g->tracks) {
+            Track& t = *tptr;
+            if (t.type() != TrackType::Audio || !t.armed() || (t.frozen() && t.frozenBuf)) continue;
+            if (t.monitor() && t.id() != capTrackId) continue;
+            float* in = scratch_.data();
+            renderMonitorInput(g, t, in, frames);
+            float pkL = 0.0f, pkR = 0.0f;
+            double sqL = 0.0, sqR = 0.0;
+            for (int32_t i = 0; i < frames; ++i) {
+                const float l = in[i * 2], r = in[i * 2 + 1];
+                pkL = std::max(pkL, std::fabs(l));
+                pkR = std::max(pkR, std::fabs(r));
+                sqL += l * (double)l;
+                sqR += r * (double)r;
+            }
+            t.setMeter(
+                pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
+        }
+
         // Pass 1.5: group submixes. Process deepest-first so a nested group folds into its
         // parent's bus before the parent reads it; top-level groups fold into the master.
         for (int depth = maxDepth; depth >= 1; --depth)

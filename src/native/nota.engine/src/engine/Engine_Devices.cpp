@@ -1600,8 +1600,9 @@ void Engine::forEachRouteKey(Fn&& fn) const {
                 fn(d->sidechainSourceTrackId(), d->sidechainPart());
                 if (auto* r = d->asRack()) children(*r);
             }
-        // A monitoring audio track hears its source track's post-fader tap.
-        if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0) fn(t->recordInputSource(), uint64_t{0});
+        // A monitoring audio track hears its source track's post-fader tap; an armed one meters it (#352).
+        if (t->type() == TrackType::Audio && (t->monitor() || t->armed()) && t->recordInputSource() > 0)
+            fn(t->recordInputSource(), uint64_t{0});
     }
 }
 
