@@ -1,6 +1,6 @@
 # Feature Specification: Default waveform rendering
 
-**Feature Branch**: `055-waveform-rendering`
+**Feature Branch**: `057-waveform-rendering`
 
 **Created**: 2026-10-30
 
