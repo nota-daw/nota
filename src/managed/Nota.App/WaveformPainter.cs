@@ -36,8 +36,10 @@ internal sealed class WaveformPainter
     /// <summary>The ink for the peak envelope around a body drawn in <paramref name="ink"/>.</summary>
     public static IBrush PeakInk(IBrush ink) => ink is SolidColorBrush s ? NotaPalette.Wash(s, PeakAlpha) : ink;
 
-    /// <summary>The device-pixel scale a control renders at (2 on a Retina display).</summary>
-    public static double Scale(Visual v) => TopLevel.GetTopLevel(v)?.RenderScaling ?? 1.0;
+    /// <summary>Device pixels per DIP a control renders at: the screen's scaling (2 on a Retina
+    /// display) times the interface scale, which enlarges everything through a LayoutTransform the
+    /// RenderScaling doesn't include (at 200 % one DIP is twice as many device pixels).</summary>
+    public static double Scale(Visual v) => (TopLevel.GetTopLevel(v)?.RenderScaling ?? 1.0) * NotaUiScale.Factor;
 
     public void Begin(double renderScaling)
     {
