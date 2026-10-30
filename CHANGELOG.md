@@ -38,6 +38,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   outline — click it to show the section anyway, and the strips scroll. Strip faders, pan and
   M / S / Arm — in the Mixer and in Session's mixer sections — now follow changes made
   elsewhere (the other mixer, track headers, automation, undo).
+- **Mixer strip order** follows the arrangement: the tracks in their order, then the
+  returns, then the master.
+
+### Fixed
+- **View ▸ Toggle detail panel** no longer leaves an empty band where the hidden panel was;
+  showing it again brings back its height.
 
 ## [0.58.1] — 2026-10-29
 

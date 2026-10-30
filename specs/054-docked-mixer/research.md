@@ -58,6 +58,13 @@ Rebuilding rows for the visible set keeps both splitters correct in every combin
 with whatever sits above it (the Mixer when shown — the natural "boundary between two
 panels" behaviour).
 
+**Revised in review (#388)**: between two pixel rows a GridSplitter trades height between
+them, so with both panels shown the Detail splitter resized the Mixer. While the Mixer is
+docked the Detail panel is resized from its own edge (`DetailEdge`), which changes only the
+Detail row and takes room from the main view; the GridSplitter stays for the undocked case.
+The Detail row also follows the panel's visibility, and keeps a wanted height that a short
+window can shrink and a taller one restores.
+
 **Alternatives**: (a) a fixed five-row grid — breaks the Devices splitter when the Mixer
 is hidden; (b) a custom drag handle that resizes only its own panel — re-implements the
 splitter and the #53 handling; (c) nesting the Mixer inside `DetailPanel` — that is the

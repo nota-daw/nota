@@ -513,6 +513,10 @@
                     IsVisible="False"
                     HorizontalAlignment="Stretch" ResizeDirection="Rows"
                     Background="Transparent"/>
+      <!-- With the Mixer docked above it, a GridSplitter here would trade height between the
+           two panels; this edge resizes the Detail panel alone (MainWindow.Detail.cs). -->
+      <Border x:Name="DetailEdge" Grid.Row="3" Height="6" Margin="0,-3,0,-3" IsVisible="False"
+              Background="Transparent" Cursor="SizeNorthSouth"/>
 
       <!-- Detail panel: Devices chain / Pattern / Clip (piano roll) for the selected track.
            Docked under the canvas (or the docked Mixer) on a seam, like the browser beside it. -->

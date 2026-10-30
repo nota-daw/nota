@@ -197,12 +197,14 @@ public sealed class MixerView : UserControl
         _balBadges.Clear();
         int returns = _engine.ReturnTrackCount;
         int n = _engine.TrackCount;
-        for (int i = 0; i < n; i++)
-        {
-            if (!_engine.TryGetTrackInfo(i, out var ti)) continue;
-            var c = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, ti.Id));
-            _row.Children.Add(Strip(ti, c, returns));
-        }
+        // As in the arrangement: the tracks in their order, then the returns, then the master.
+        foreach (bool wantReturns in new[] { false, true })
+            for (int i = 0; i < n; i++)
+            {
+                if (!_engine.TryGetTrackInfo(i, out var ti) || ti.IsReturn != wantReturns) continue;
+                var c = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, ti.Id));
+                _row.Children.Add(Strip(ti, c, returns));
+            }
         _row.Children.Add(MasterStrip());
         _shownLaw = null;   // the strips are new: repaint the law state onto them
         SyncPanLaw();

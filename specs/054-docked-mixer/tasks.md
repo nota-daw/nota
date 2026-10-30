@@ -186,3 +186,12 @@ Track B: T008 → T009 → T010 → T011          (App/MainWindow.Detail.cs, Det
 - [X] T035 Re-run `scripts/build.sh` on an idle machine (Rider closed) until native + managed + smoke test are green; if the render-pool `overloaded` checks still fail, investigate before the PR per Constitution IV (partial)
 - [X] T036 [US2] Make Session's own mixer sections follow the engine on the UI tick — volume (`MiniFader` + dB read-out), pan (`PanBar`) and M / S / Arm toggles in `src/managed/Nota.App/SessionView.Mixer.cs`, skipping a control being dragged — so changes made in the docked Mixer show there per FR-012, US2/AC2 (partial)
 - [X] T037 In `src/managed/Nota.App/MixerView.cs` include the Stereo map layout's grid margins (8 + 8) in `MinContentHeight` while `View == StereoMap`, and raise `MinContentHeightChanged` when the view changes, so M / S / Arm stay visible at the minimum docked / window height per FR-014, T007 (partial)
+
+## Phase 8: PR review (nota-daw/nota#388)
+
+- [X] T038 Order the Mixer strips like the arrangement — tracks in their order, then returns, then the master — in `src/managed/Nota.App/MixerView.cs` `Refresh()` (maintainer comment)
+- [X] T039 With the Mixer docked, resize the Detail panel from its own edge (`DetailEdge` in `src/managed/Nota.App/MainWindow.axaml`, handlers in `MainWindow.Detail.cs`) so dragging it changes the Detail panel alone, not the Mixer; `DetailSplitter` stops being hit-testable then, and its drag no longer writes the Mixer height per FR-004 (review: "Clip resize changes the Mixer")
+- [X] T040 Update Session's `_armed` from the per-tick track snapshot before the cells tick, so arming in the docked Mixer makes an empty slot record, in `src/managed/Nota.App/SessionView.Mixer.cs` (review: "Armed slots do not record")
+- [X] T041 Keep the Detail panel's wanted height (`_detailWanted`) and restore it in `FitBottomPanels` when the window grows (review: "Detail stays too short")
+- [X] T042 Refit the bottom panels whenever the Detail panel's visibility changes (close, pop-out, View ▸ Toggle detail panel), and collapse / restore its row with it so a hidden panel leaves no empty band (review: "Mixer leaves freed space unused"; the empty band after View ▸ Toggle detail panel predates this feature)
+

@@ -341,7 +341,7 @@ public sealed partial class SessionView : UserControl
                 if (_engine.SessionSlotState(c.TrackId, s) >= 2) { active = true; break; }
         _sessionActive = active;
 
-        if (_showMixer) SnapshotMixInfo();   // the mixer sections follow the engine (specs/054)
+        SnapshotMixInfo();   // mixer sections and armed slots follow the engine (specs/054)
         // Cells repaint only when their state moved or while they animate (progress, blink).
         foreach (var c in _cols)
         {

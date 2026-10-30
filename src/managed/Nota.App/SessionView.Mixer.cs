@@ -86,6 +86,13 @@ public sealed partial class SessionView
         int n = _engine.TrackCount;
         for (int i = 0; i < n; i++)
             if (_engine.TryGetTrackInfo(i, out var t)) _mixInfo[t.Id] = t;
+        // Arming elsewhere (the docked Mixer, a track header) must also make an empty slot
+        // record: the cells read _armed, and they tick after this.
+        foreach (var c in _cols)
+        {
+            if (c.Kind != ColKind.Track || !_mixInfo.TryGetValue(c.TrackId, out var ct)) continue;
+            if (ct.Armed != 0) _armed.Add(c.TrackId); else _armed.Remove(c.TrackId);
+        }
     }
 
     private MixerParts BuildMixer(Column c)
