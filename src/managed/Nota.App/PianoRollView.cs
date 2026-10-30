@@ -298,6 +298,17 @@ public sealed partial class PianoRollView : UserControl
         SyncScroll(); Invalidate(); SaveView();
     }
 
+    /// <summary>Scrolls clip <paramref name="slot"/>'s start into view when it is off screen.</summary>
+    public void RevealClip(int slot)
+    {
+        if (slot < 0 || slot >= _set.Count) return;
+        double start = _set.EditorStart(slot);
+        if (_pixelsPerBeat <= 0) { _pendingScrollTo = start; return; }
+        double vpBeats = _gridControl.Bounds.Width / _pixelsPerBeat;
+        if (start >= _scrollBeats && start < _scrollBeats + vpBeats) return;
+        SetScrollBeats(start);
+    }
+
     internal void ScrollByBeats(double delta) => SetScrollBeats(_scrollBeats + delta);
 
     internal void ZoomAt(double factor, double beatAnchor)

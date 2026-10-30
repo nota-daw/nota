@@ -375,23 +375,88 @@ public partial class MainWindow
 
     // Double-click on a MIDI clip: that clip — or, when it is one of two or more selected MIDI
     // clips, all of them together with it active (specs/029-multi-clip-editing).
+    // In track mode (specs/055) it opens the clip's whole track instead.
     private void OpenClipEditor(int trackId, int clipIndex)
     {
-        var sel = Timeline.SelectedMidiClips();
-        if (sel.Count >= 2 && sel.Contains((trackId, clipIndex))) BuildClipEditor(sel, trackId, clipIndex);
-        else BuildClipEditor(trackId, clipIndex);
+        if (!FocusTrackClip(trackId, clipIndex))
+        {
+            var sel = Timeline.SelectedMidiClips();
+            if (!ClipTrackMode && sel.Count >= 2 && sel.Contains((trackId, clipIndex))) BuildClipEditor(sel, trackId, clipIndex);
+            else BuildClipEditor(trackId, clipIndex);
+        }
         ShowClipPanel();
     }
 
     /// <summary>"Edit selected clips": every selected MIDI clip in one editor, the first in time
-    /// active. False with fewer than two selected.</summary>
+    /// active. False with fewer than two selected. Asking for the selection leaves track mode.</summary>
     internal bool EditSelectedClips()
     {
         var sel = Timeline.SelectedMidiClips();
         if (sel.Count < 2) return false;
+        SetClipTrackMode(false, reopen: false);
         BuildClipEditor(sel, sel[0].TrackId, sel[0].ClipIndex);
         ShowClipPanel();
         return true;
+    }
+
+    // --- track mode (specs/055-clip-editor-track-mode, #49) ------------------------------------
+
+    private bool ClipTrackMode => _vm?.Settings.Current.ClipEditorTrackMode == true;
+
+    /// <summary>The Clip | Track switch: saves the mode and reopens an arrangement clip editor in
+    /// it on the clip it has active (clip mode shows that clip alone).</summary>
+    internal void SetClipTrackMode(bool on, bool reopen = true)
+    {
+        if (_vm is null || ClipTrackMode == on) return;
+        _vm.Settings.Current.ClipEditorTrackMode = on;
+        _vm.Settings.Save();
+        _vm.StatusText = on ? "Clip editor: every clip on the track" : "Clip editor: one clip";
+        if (!reopen || _editorRoll is not { } roll || _clipEditor is null || _editorTrackId <= 0) return;
+        bool shown = ClipEditorShown(_clipEditor);
+        var a = roll.ActiveClip;
+        BuildClipEditor(a.TrackId, a.ClipIndex);
+        if (shown) ShowClipPanel();
+    }
+
+    // The track's MIDI clips in index order.
+    private List<(int TrackId, int ClipIndex)> MidiClipsOf(int trackId)
+    {
+        var list = new List<(int, int)>();
+        if (!ChipTrackInfo(trackId, out var ti)) return list;
+        for (int c = 0; c < ti.ClipCount; c++)
+            if (Engine.TryGetClipInfo(trackId, c, out var ci) && ci.IsMidi) list.Add((trackId, c));
+        return list;
+    }
+
+    /// <summary>A track-mode editor already open on this clip's track makes the clip active and
+    /// brings it into view instead of being rebuilt. False when there is no such editor.</summary>
+    private bool FocusTrackClip(int trackId, int clipIndex)
+    {
+        if (!ClipTrackMode || _editorRoll is not { Clips.TrackMode: true } roll || _clipEditor is null
+            || roll.ActiveClip.TrackId != trackId) return false;
+        if (roll.Clips.IndexOf(trackId, clipIndex) < 0) SyncTrackClips(roll);
+        int slot = roll.Clips.IndexOf(trackId, clipIndex);
+        if (slot < 0) return false;
+        roll.SetActiveClip(slot);
+        roll.RevealClip(slot);
+        return true;
+    }
+
+    /// <summary>Opens the clips that appeared on a track-mode editor's track since it was built
+    /// (drawn, pasted, recorded). Whether any did; the caller reloads the roll.</summary>
+    private bool AddNewTrackClips(PianoRollView roll)
+    {
+        if (!roll.Clips.TrackMode) return false;
+        bool added = false;
+        foreach (var (t, c) in MidiClipsOf(roll.ActiveClip.TrackId))
+            if (roll.Clips.IndexOf(t, c) < 0 && Engine.TryGetClipInfo(t, c, out var info))
+                added |= roll.Clips.Add(new OpenClip(t, c, info.StartBeat, info.LengthBeats > 0 ? info.LengthBeats : 4));
+        return added;
+    }
+
+    private void SyncTrackClips(PianoRollView roll)
+    {
+        if (AddNewTrackClips(roll)) roll.SetClips(roll.Clips, ClipNotesOf(roll.Clips), TrackBrush);
     }
 
     /// <summary>A Clip editor with several arrangement clips open.</summary>
@@ -408,6 +473,14 @@ public partial class MainWindow
             ? _clipEditor is not null && ReferenceEquals(_lastClipEditor, _clipEditor)
             : DetailPanel.IsVisible && DetailBody.Content is ClipEditorView;
         if (!shown) return;
+        // Track mode follows the clicked clip: its track, with it active.
+        if (ClipTrackMode)
+        {
+            if (!SelectedClip(out int t, out int c, out bool isMidi) || !isMidi || FocusTrackClip(t, c)) return;
+            BuildClipEditor(t, c);
+            ShowClipPanel();
+            return;
+        }
         var midi = Timeline.SelectedMidiClips();
         if (midi.Count >= 2)
         {
@@ -479,10 +552,13 @@ public partial class MainWindow
         => BuildClipEditor(new[] { (trackId, clipIndex) }, trackId, clipIndex);
 
     // Build the piano-roll editor for a set of arrangement MIDI clips, (activeTrack, activeClip)
-    // active (no panel switch). One clip is the classic single-clip editor.
+    // active (no panel switch). One clip is the classic single-clip editor. In track mode the set
+    // is every MIDI clip of the active clip's track.
     private void BuildClipEditor(IReadOnlyList<(int TrackId, int ClipIndex)> clips, int activeTrack, int activeClip)
     {
         if (_vm is null) return;
+        bool trackMode = ClipTrackMode;
+        if (trackMode && MidiClipsOf(activeTrack) is { Count: > 0 } all) clips = all;
         var open = new List<OpenClip>();
         foreach (var (t, c) in clips)
             if (Engine.TryGetClipInfo(t, c, out var info) && info.IsMidi)
@@ -491,7 +567,7 @@ public partial class MainWindow
         // The editor being replaced lets its pending placement go into its own clips first (it
         // may never have had focus to lose, e.g. after a menu paste).
         _editorRoll?.SettlePlacement();
-        var set = new ClipSet(open, activeTrack, activeClip, Timeline.BeatsPerBar);
+        var set = new ClipSet(open, activeTrack, activeClip, Timeline.BeatsPerBar, trackMode);
         PianoRollView roll = null!;
         roll = new PianoRollView
         {
@@ -548,7 +624,8 @@ public partial class MainWindow
         _editorClipIndex = set.ActiveClip.ClipIndex;
         _editorRoll = roll;
         _clipEditor = new ClipEditorView(roll, $"Track {_editorTrackId} clip", set.ActiveClip.StartBeat, Engine,
-                                         _editorTrackId, _editorClipIndex, set.ActiveClip.LengthBeats);
+                                         _editorTrackId, _editorClipIndex, set.ActiveClip.LengthBeats,
+                                         on => SetClipTrackMode(on));
         // The active clip drives the detail chip, the playhead's live check and the envelopes.
         roll.ActiveClipChanged += () =>
         {
@@ -667,7 +744,10 @@ public partial class MainWindow
         if (_patternView is not null && _patternTrackId == trackId && _patternClipIndex == clipIndex && _patternScene < 0)
             _patternView.Reload();
 
-        if (_editorRoll is { } roll && _editorTrackId > 0 && roll.Clips.IndexOf(trackId, clipIndex) >= 0)
+        if (_editorRoll is { Clips.TrackMode: true } trackRoll && trackRoll.ActiveClip.TrackId == trackId
+            && trackRoll.Clips.IndexOf(trackId, clipIndex) < 0 && ci.IsMidi)
+            SyncTrackClips(trackRoll);
+        else if (_editorRoll is { } roll && _editorTrackId > 0 && roll.Clips.IndexOf(trackId, clipIndex) >= 0)
         {
             double len = ci.LengthBeats > 0 ? ci.LengthBeats : 4;
             var set = roll.Clips;
@@ -820,6 +900,7 @@ public partial class MainWindow
         foreach (var c in set.Clips.ToList())
             if (Engine.TryGetClipInfo(c.TrackId, c.ClipIndex, out var info))
                 set.UpdateGeometry(c.TrackId, c.ClipIndex, info.StartBeat, info.LengthBeats > 0 ? info.LengthBeats : c.LengthBeats);
+        AddNewTrackClips(roll);
         roll.SetClips(set, ClipNotesOf(set), TrackBrush);
         // The roll shows the recording take: draw its held notes too (#56).
         bool take = _recordPreview is { Active: true, SessionScene: < 0 } rp
@@ -873,7 +954,7 @@ public partial class MainWindow
         }
         if (isMidi)
         {
-            if (_clipEditor is null || _editorTrackId != tid || _editorClipIndex != ci)
+            if (!FocusTrackClip(tid, ci) && (_clipEditor is null || _editorTrackId != tid || _editorClipIndex != ci))
                 BuildClipEditor(tid, ci);
             ShowClipPanel();
         }

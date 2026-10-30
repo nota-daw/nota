@@ -23,6 +23,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Clip editor track mode** (#49): a **Clip | Track** switch at the top of the Clip editor's
+  inspector (and *Toggle clip editor track mode* in the command palette). Track shows every MIDI clip of the
+  track on the arrangement's timeline from bar 1, each clip's borders marked in the clip strip,
+  so you can scroll through the whole part and edit any note without re-selecting clips —
+  moves across clip seams, rubber band across clips, reference locks and one-step undo work as
+  in multi-clip editing. Selecting another clip of the track makes it active and scrolls to it;
+  a clip on another track opens that track; clips drawn, pasted or recorded on the track join.
+  Nota remembers the mode; Clip opens one clip as before.
 - **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
   the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
   Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.

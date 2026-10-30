@@ -36,7 +36,8 @@ public sealed class ClipEditorView : UserControl
     private bool _envMode;
 
     public ClipEditorView(PianoRollView roll, string clipName, double startBeat,
-                          IAudioEngine? engine = null, int trackId = -1, int clipIndex = -1, double lengthBeats = 4)
+                          IAudioEngine? engine = null, int trackId = -1, int clipIndex = -1, double lengthBeats = 4,
+                          Action<bool>? setTrackMode = null)
     {
         Roll = roll;
         _engine = engine;
@@ -49,7 +50,7 @@ public sealed class ClipEditorView : UserControl
         // Inspector | roll | clip-tools panel. The tools panel is a toggle rather than a
         // tab because its whole point is watching the roll change while you turn a knob.
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
-        _props = new ClipPropsView(roll, startBeat);
+        _props = new ClipPropsView(roll, startBeat, ModeControl(roll, setTrackMode));
         grid.Children.Add(_props);
         Grid.SetColumn(roll, 1);
         grid.Children.Add(roll);
@@ -82,7 +83,18 @@ public sealed class ClipEditorView : UserControl
 
     // "Bass 2 · +2 clips" while several clips are open.
     private string HeaderName(string name)
-        => Roll.Clips.IsMulti ? $"{name} · +{Roll.Clips.Count - 1} {(Roll.Clips.Count == 2 ? "clip" : "clips")}" : name;
+        => Roll.Clips.Count > 1 ? $"{name} · +{Roll.Clips.Count - 1} {(Roll.Clips.Count == 2 ? "clip" : "clips")}" : name;
+
+    // Clip | Track (specs/055), at the top of the inspector: one clip, or every MIDI clip of its
+    // track on the arrangement's timeline. The host rebuilds the editor on a switch. Arrangement
+    // clips only.
+    private static Control? ModeControl(PianoRollView roll, Action<bool>? setTrackMode)
+    {
+        if (setTrackMode is null) return null;
+        var seg = Segments(new[] { "Clip", "Track" }, roll.Clips.TrackMode ? 1 : 0, i => setTrackMode(i == 1), out _, fill: true);
+        ToolTip.SetTip(seg, "Clip: the selected clip · Track: every clip on the track");
+        return seg;
+    }
 
     // Another clip became active: name, colour, start and the envelope target follow it.
     private void OnActiveClipChanged()

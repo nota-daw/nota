@@ -134,6 +134,7 @@ public partial class MainWindow
         B("roll.fold", () => { if (_editorRoll is { } r) r.SetFold(!r.Folded, user: true); }, Roll);
         B("roll.editSelected", () => EditSelectedClips(),
             _ => Need(Timeline.SelectedMidiClips().Count >= 2, "Select two or more MIDI clips"));
+        B("roll.trackMode", () => SetClipTrackMode(!ClipTrackMode));
         B("roll.removeOutOfScale", () => _editorRoll?.RemoveOutOfScaleNotes(),
             c => Need(c.HasOpenMidiClip && _editorRoll?.HasOutOfScaleNotes == true, "No notes outside the scale"));
 

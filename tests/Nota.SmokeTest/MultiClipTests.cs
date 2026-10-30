@@ -24,6 +24,24 @@ internal static class MultiClipTests
         foreach (var r in Moves()) yield return r;
         foreach (var r in Paste()) yield return r;
         foreach (var r in GroupedUndo()) yield return r;
+        foreach (var r in TrackMode()) yield return r;
+    }
+
+    // Track mode (specs/055): a track's clips on the arrangement axis, joined by new ones.
+    private static IEnumerable<(bool, string)> TrackMode()
+    {
+        var lone = new ClipSet(new[] { new OpenClip(3, 0, 24, 8) }, 3, 0, barBeats: 4, trackMode: true);
+        yield return (lone.IsMulti && lone.TrackMode && Near(lone.Origin, 0) && Near(lone.EditorStart(0), 24) && Near(lone.SpanBeats, 32),
+            "trackmode: a lone clip sits at its arrangement beat on the shared timeline");
+
+        var t = new ClipSet(new[] { new OpenClip(3, 0, 8, 8), new OpenClip(3, 1, 32, 8) }, 3, 1, barBeats: 4, trackMode: true);
+        yield return (Near(t.Origin, 0) && Near(t.ToEditor(1, 2), 34), "trackmode: editor beats are arrangement beats");
+        yield return (t.Add(new OpenClip(3, 2, 16, 8)) && t.Count == 3 && t.Clips[1].ClipIndex == 2
+                      && t.ActiveClip is { TrackId: 3, ClipIndex: 1 } && Near(t.SpanBeats, 40),
+            "trackmode: a new clip joins in start order and the active clip stays active");
+        yield return (!t.Add(new OpenClip(3, 2, 16, 8)), "trackmode: a clip already open is not added twice");
+        var (lo, hi) = t.Reach(0);
+        yield return (Near(lo, 8) && Near(hi, 24), "trackmode: a note reaches the touching clip, not across a gap");
     }
 
     // Track 1: A (bars 1–4 = beats 0–16), B (16–32). Track 2: C (8–40).
