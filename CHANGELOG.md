@@ -44,6 +44,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ### Fixed
 - **View ▸ Toggle detail panel** no longer leaves an empty band where the hidden panel was;
   showing it again brings back its height.
+- **Playback no longer stutters while an audio clip is open in the Clip panel** (#142): once
+  the playhead reached the open clip, every tick repainted the whole audio editor — the
+  waveform, ruler, warp markers and envelope — to move one line. The editor's playhead is now
+  drawn on its own layer, so playing through the clip repaints just that line.
 
 ## [0.58.1] — 2026-10-29
 
