@@ -1,0 +1,13 @@
+build,commit,run,scenario,waveform_renders_per_s,samples
+before,db9990a,1,stopped-inside-clip,0.0,8
+before,db9990a,1,playing-outside-clip,0.0,8
+before,db9990a,1,playing-inside-clip,29.9,8
+after,14707d1,1,stopped-inside-clip,0.0,8
+after,14707d1,1,playing-outside-clip,0.0,8
+after,14707d1,1,playing-inside-clip,0.0,8
+before,db9990a,2,stopped-inside-clip,0.0,8
+before,db9990a,2,playing-outside-clip,0.0,8
+before,db9990a,2,playing-inside-clip,28.0,8
+after,14707d1,2,stopped-inside-clip,0.0,8
+after,14707d1,2,playing-outside-clip,0.0,8
+after,14707d1,2,playing-inside-clip,0.0,8
