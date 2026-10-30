@@ -390,6 +390,7 @@ public sealed partial class PianoRollView : UserControl
         _gridControl = new NoteGrid(this) { Height = RangeH, ClipToBounds = true };
         _vel = new VelocityLane(this) { ClipToBounds = true };
         _expr = new ExpressionLane(this) { ClipToBounds = true };
+        _ctlLane = new ControllerLane(this) { ClipToBounds = true, Focusable = true };
         _velHost = new Border { BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0), Child = _vel };
 
         // Body: keys pinned left, grid fills; both scroll vertically together.
@@ -689,6 +690,7 @@ public sealed partial class PianoRollView : UserControl
         SettlePlacement();
         if (!_set.SetActive(slot)) return;
         _trackBrush = slot < _slotBrushes.Count ? _slotBrushes[slot] : _trackBrush;
+        DropControllerCache();
         Invalidate();
         ActiveClipChanged?.Invoke();
         Changed?.Invoke();
@@ -717,6 +719,8 @@ public sealed partial class PianoRollView : UserControl
     {
         _previewBackup = null;
         _placementPending = false;   // a reload (undo, recording, another clip) is the truth now
+        _velWheelTimer?.Stop(); _velWheel.Reset(); _velWheelBurst = false;
+        DropControllerCache();
         ReplaceAll(notes, owners);
         _lengthBeats = lengthBeats;
         _selection.Clear();
@@ -1278,6 +1282,74 @@ public sealed partial class PianoRollView : UserControl
         return true;
     }
 
+    // ---- Shift + wheel velocity (specs/063) ---------------------------------------
+    /// <summary>The wheel's direction and steps-per-notch multiplier (0–2, 0 = off). App-wide,
+    /// seeded from and saved to Settings by the host, like <see cref="AuditionEnabled"/>.</summary>
+    public static bool VelocityWheelReversed { get; set; }
+    public static double VelocityWheelMultiplier { get; set; } = 1.0;
+
+    // Wheel moves closer together than this are one edit, one undo step.
+    private static readonly TimeSpan VelocityWheelIdle = TimeSpan.FromMilliseconds(600);
+    private readonly VelocityWheel _velWheel = new();
+    private DispatcherTimer? _velWheelTimer;
+    private bool _velWheelBurst;
+    private int _velWheelNote = -1;
+
+    /// <summary>Steps the velocity of note <paramref name="hit"/> — or of the whole selection
+    /// when it is selected — for a wheel move of <paramref name="notches"/>. False when there
+    /// is no editable note there or the gesture is off: the wheel scrolls instead.</summary>
+    internal bool WheelVelocity(int hit, double notches)
+    {
+        if (hit < 0 || hit >= _notes.Count || IsLocked(hit) || !VelocityWheel.Enabled(VelocityWheelMultiplier)) return false;
+        int steps = _velWheel.Steps(notches, VelocityWheelReversed, VelocityWheelMultiplier);
+        if (steps != 0)
+        {
+            var targets = _selection.Contains(hit)
+                ? _selection.Where(i => i >= 0 && i < _notes.Count && !IsLocked(i)).ToList()
+                : new List<int> { hit };
+            if (!_velWheelBurst)
+            {
+                // The burst's undo step: seeded with the notes before it, like a note drag.
+                _velWheelBurst = true;
+                if (HasLivePath) CommitNotes(_notes.ToList(), _owner.ToList(), seed: true);
+            }
+            bool changed = false;
+            foreach (int i in targets)
+            {
+                var n = _notes[i];
+                float v = NoteOverwrite.VelocityBy(n.Velocity, steps);
+                if (v == n.Velocity) continue;
+                n.Velocity = v;
+                _notes[i] = n;
+                changed = true;
+            }
+            if (changed)
+            {
+                _velWheelNote = hit;
+                if (HasLivePath) PushLive(_notes, _owner);
+                Invalidate(); Changed?.Invoke();
+            }
+        }
+        if (_velWheelTimer is null)
+        {
+            _velWheelTimer = new DispatcherTimer { Interval = VelocityWheelIdle };
+            _velWheelTimer.Tick += (_, _) => EndVelocityWheel();
+        }
+        _velWheelTimer.Stop();
+        _velWheelTimer.Start();
+        return true;
+    }
+
+    private void EndVelocityWheel()
+    {
+        _velWheelTimer?.Stop();
+        _velWheel.Reset();
+        if (!_velWheelBurst) return;
+        _velWheelBurst = false;
+        if (!HasLivePath) CommitNotes();   // a Session slot: the burst lands as one push
+        Remember(_velWheelNote);
+    }
+
     // ---- pending placement (specs/007-midi-note-editing) -------------------------
     // Notes moved, stretched, drawn or pasted overwrite same-pitch notes they land on, but
     // only once the selection is let go: until then the notes underneath stay whole and are
@@ -1413,6 +1485,7 @@ public sealed partial class PianoRollView : UserControl
         _gridControl.InvalidateVisual();
         _vel.InvalidateVisual();
         _expr.InvalidateVisual();
+        _ctlLane.InvalidateVisual();
         NotifyGrid();
     }
 
@@ -2330,8 +2403,9 @@ public sealed partial class PianoRollView : UserControl
         }
 
         // ⌘⌥/Ctrl+Alt+wheel zooms rows around the pitch under the cursor; ⌘/Ctrl+wheel zooms
-        // time toward the cursor; Shift+wheel scrolls horizontally; plain wheel is left to
-        // the body ScrollViewer for vertical key navigation.
+        // time toward the cursor; Shift+wheel changes velocity over a note and scrolls
+        // horizontally elsewhere; plain wheel is left to the body ScrollViewer for vertical
+        // key navigation.
         protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
         {
             var mods = e.KeyModifiers;
@@ -2347,7 +2421,10 @@ public sealed partial class PianoRollView : UserControl
             }
             else if ((mods & KeyModifiers.Shift) != 0)
             {
-                _o.ScrollByBeats(-WheelInput.Pixels(e.Delta.Y) / _o.PixelsPerBeat);
+                // Over a note, Shift+wheel steps its velocity (specs/063); elsewhere it scrolls.
+                double d = Math.Abs(e.Delta.Y) >= Math.Abs(e.Delta.X) ? e.Delta.Y : e.Delta.X;
+                if (!_o.WheelVelocity(HitTest(e.GetPosition(this), out _), WheelInput.Notches(d)))
+                    _o.ScrollByBeats(-WheelInput.Pixels(e.Delta.Y) / _o.PixelsPerBeat);
                 e.Handled = true;
             }
             else if (Math.Abs(e.Delta.X) > Math.Abs(e.Delta.Y))

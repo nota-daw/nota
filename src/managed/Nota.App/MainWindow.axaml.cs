@@ -385,6 +385,8 @@ public partial class MainWindow : Window
         PianoRollView.AuditionEnabled = vm.Settings.Current.PianoRollAudition;
         PianoRollView.AuditionToggled -= OnAuditionToggled;
         PianoRollView.AuditionToggled += OnAuditionToggled;
+        PianoRollView.VelocityWheelReversed = vm.Settings.Current.PianoRollVelocityWheelReversed;
+        PianoRollView.VelocityWheelMultiplier = Nota.Application.Editing.VelocityWheel.ClampMultiplier(vm.Settings.Current.PianoRollVelocityWheelMultiplier);
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         vm.Transport.LoopRecordReplace = vm.Settings.Current.LoopRecordReplace;
         SetArmOnSelect(vm.Settings.Current.ArmOnSelect);

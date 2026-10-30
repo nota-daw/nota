@@ -30,6 +30,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   window**) moves it into the floating window for a second screen; the window's dock button
   brings it back. Nota remembers whether the Mixer was shown, where and how tall, and restores
   it on the next launch.
+- **Edit any MIDI controller in the piano roll** (#169): the lane under the notes gets a fifth
+  tab for controllers. Click it to pick one — the controllers the clip already has first, then
+  Sustain, Mod wheel, Pitch wheel, Channel pressure, Expression, Breath and every other CC.
+  Pedals (CC64–69) draw as on/off blocks you drag, move and resize on the grid; other
+  controllers are a curve you draw, with points to drag, add and delete. Each gesture is one
+  undo step and plays back straight away.
+- **Shift + wheel changes note velocity** (#169): over a note, ⇧ + wheel raises or lowers the
+  velocity of the selected notes (or of the hovered note when it isn't selected) by one step per
+  notch; a run of notches is one undo step. Elsewhere ⇧ + wheel still scrolls the roll.
+  Preferences → Shortcuts sets the direction and the speed (off, 0.25× … 2×, default 1×).
 
 ### Changed
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O

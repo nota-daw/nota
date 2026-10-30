@@ -526,6 +526,16 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            // The controller lane edits the active clip (specs/063); a clip gone since is left alone.
+            ControllersInClip = () => Engine.GetMidiClipControllers(roll.ActiveClip.TrackId, roll.ActiveClip.ClipIndex),
+            GetController = ctl => Engine.GetMidiClipController(roll.ActiveClip.TrackId, roll.ActiveClip.ClipIndex, ctl),
+            SetController = (ctl, pts) =>
+            {
+                var c = roll.ActiveClip;
+                if (!Engine.TryGetClipInfo(c.TrackId, c.ClipIndex, out var info) || !info.IsMidi) { PruneDeadClips(roll); return; }
+                Engine.SetMidiClipController(c.TrackId, c.ClipIndex, ctl, pts);
+                Timeline.Refresh(rebuildHeaders: false);
+            },
             // A note sounds on its own clip's track; the keys column on the active clip's.
             AuditionOn = (pitch, vel) => AuditionNoteOn(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch, vel),
             AuditionOff = pitch => Engine.TrackNoteOff(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch),
@@ -1098,6 +1108,13 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            ControllersInClip = () => Engine.GetSessionControllers(trackId, scene),
+            GetController = ctl => Engine.GetSessionController(trackId, scene, ctl),
+            SetController = (ctl, pts) =>
+            {
+                Engine.SetSessionController(trackId, scene, ctl, pts);
+                _session?.Refresh();
+            },
             AuditionOn = (pitch, vel) => AuditionNoteOn(trackId, pitch, vel),
             AuditionOff = pitch => Engine.TrackNoteOff(trackId, pitch),
             IsSessionSlot = true,   // no Seek: the slot plays on its own loop clock

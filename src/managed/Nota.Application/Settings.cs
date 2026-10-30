@@ -170,6 +170,12 @@ public sealed class Settings
     /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
     /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
     public bool PianoRollAudition { get; set; } = true;
+    /// <summary>Shift + wheel over a note in the piano roll (specs/063): false — wheel up raises
+    /// the velocity; true — wheel up lowers it.</summary>
+    public bool PianoRollVelocityWheelReversed { get; set; }
+    /// <summary>Velocity steps per wheel notch, 0–2 (<see cref="Editing.VelocityWheel"/>); 0 turns
+    /// the gesture off and Shift + wheel only scrolls.</summary>
+    public double PianoRollVelocityWheelMultiplier { get; set; } = 1.0;
     /// <summary>Arm-on-select (#332): selecting an instrument track arms it alone, so the
     /// keyboard plays the track you're on. Transport ▸ Auto-arm selected track; off by default.</summary>
     public bool ArmOnSelect { get; set; }
