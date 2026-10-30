@@ -71,11 +71,15 @@ public sealed class ProjectTools(IAudioEngine engine, IEngineDispatch dispatch, 
     [McpServerTool(Name = "set_sections"), Description(
         "Replace the arrangement's song sections with this list (pass [] to remove them all). Each needs startBeat >= 0 and "
         + "lengthBeats > 0; they are sorted by start, and a span with no length is dropped. A section with automatic = true "
-        + "or an empty name gets the automatic name \"Section N\" for its position; any other name is kept as a custom name. "
+        +         "or an empty or whitespace-only name gets the automatic name \"Section N\" for its position. Any other name is stored "
+        + "exactly as given, surrounding spaces included, so listing and setting the same list changes nothing. "
         + "One undo step. Returns the list as stored.")]
     public Task<Section[]> SetSections(Section[] sections) => Mutate(() =>
     {
-        E.SetSections(sections.Select(s => new SectionInfo(s.StartBeat, s.LengthBeats, s.Automatic ? "" : SectionNames.Normalize(s.Name))).ToList());
+        // A nonblank custom name is kept verbatim. Trimming belongs to the rename box; doing it
+        // here would rewrite a legacy " Chorus " on a list → set round trip and add an undo step.
+        E.SetSections(sections.Select(s => new SectionInfo(s.StartBeat, s.LengthBeats,
+            s.Automatic || SectionNames.IsAutomatic(s.Name) ? "" : s.Name)).ToList());
         return Listed();
     });
 }

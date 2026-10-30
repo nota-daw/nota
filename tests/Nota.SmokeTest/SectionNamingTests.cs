@@ -100,5 +100,13 @@ internal static class SectionNamingTests
         eng.Undo();
         yield return (listed && raw && roundTrip && eng.Sections.Count == 0 && !eng.CanUndo,
             "section names: MCP lists shown names with the automatic flag and a list → set round-trip changes nothing");
+
+        // A legacy custom name can carry surrounding spaces. Listing it and setting that list
+        // back must not trim it, and must not record a step.
+        eng.SetSections(new[] { new SectionInfo(0, 8, " Chorus ") }, checkpoint: false);
+        eng.ClearUndoHistory();
+        proj.SetSections(proj.ListSections().GetAwaiter().GetResult()).GetAwaiter().GetResult();
+        yield return (!eng.CanUndo && eng.Sections.Count == 1 && eng.Sections[0].Name == " Chorus ",
+            "section names: MCP list → set keeps a padded custom name and records no step");
     }
 }
