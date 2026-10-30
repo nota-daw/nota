@@ -714,9 +714,11 @@ public sealed partial class ArrangementView
             // OnPointerReleased turns it into a selection.
             bool active = _drag != Drag.None || _groupMove is not null || _rangeActive
                           || _auto.IsActive
-                          || _adsrDrag != AdsrHandle.None;
+                          || _adsrDrag != AdsrHandle.None
+                          || _takeSwipe is not null;
             if (!active) return false;
             _pending = false; _drag = Drag.None; _groupMove = null; _moveRowDelta = 0; _dragClip = null; _rpPeaks = null;
+            _takeSwipe = null; _takeMoved = false;   // an abandoned take swipe never comps
             _marqueeArmed = false; _rangeActive = false; _marquee = null; _shiftClipTrack = -1; _shiftClipIndex = -1;
             _auto.Cancel();
             _adsrDrag = AdsrHandle.None; _adsrClip = null;

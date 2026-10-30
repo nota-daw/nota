@@ -260,7 +260,7 @@ public sealed partial class ArrangementView
                     }
                     foreach (var c in t.Clips)
                     {
-                        if (c.TakeId != take.Id) continue;
+                        if (c.TakeId != take.Id || !c.Active) continue;   // a deactivated section is silent
                         double cx0 = Math.Max(r.X, _o.BeatToX(c.StartBeat)), cx1 = Math.Min(r.Right, _o.BeatToX(c.StartBeat + c.LengthBeats));
                         if (cx1 <= cx0 || cx1 < 0 || cx0 > w) continue;
                         var used = new Rect(cx0, r.Y, cx1 - cx0, r.Height);
