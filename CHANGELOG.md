@@ -32,6 +32,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   it on the next launch.
 
 ### Changed
+- **Smoother, clearer waveforms on audio clips** (#267): clips in the Arrangement and the
+  audio clip editor now draw an anti-aliased peak outline around a denser body that follows
+  the loudness (RMS) of the audio. Every zoom level reads cleanly — zoomed out, no peak slips
+  between pixels; zoomed in, the wave slopes from point to point instead of stepping, down to
+  a fine line at sample level — and on a HiDPI screen it is drawn at the screen's full
+  resolution. This is the new default, **Smooth**; **Solid** and **Bars** are still in
+  Settings → Appearance → Waveform (a saved Bars choice moves to Smooth once).
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
   rows hide first, then the sends, then the fader gets shorter; name, meter, fader, pan and
   M / S / Arm always stay. A hidden section's **Sends** / **I/O** footer toggle shows an

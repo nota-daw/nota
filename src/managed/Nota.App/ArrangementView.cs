@@ -28,8 +28,9 @@ public enum NewTrackKind { Instrument, Audio, Return }
 /// <summary>How much of the arrangement names its clips (View ▸ Clip names).</summary>
 public enum ClipLabelMode { Every, RunStart, None }
 
-/// <summary>How audio clips draw their waveform: spaced peak strokes, or a solid column per pixel.</summary>
-public enum WaveformStyle { Bars, Solid }
+/// <summary>How audio clips draw their waveform: the peak outline around its RMS body (default),
+/// a solid column per pixel, or spaced peak strokes. The values are the stored setting.</summary>
+public enum WaveformStyle { Smooth, Solid, Bars }
 
 public sealed partial class ArrangementView : UserControl
 {
@@ -567,7 +568,7 @@ public sealed partial class ArrangementView : UserControl
         get => _waveform;
         set { if (_waveform == value) return; _waveform = value; _lanes.InvalidateVisual(); }
     }
-    private WaveformStyle _waveform = WaveformStyle.Bars;
+    private WaveformStyle _waveform = WaveformStyle.Smooth;
     /// <summary>Show/edit parameter-automation envelopes over the lanes (M9-A3).</summary>
     public bool AutomationMode
     {
@@ -1074,8 +1075,10 @@ public sealed partial class ArrangementView : UserControl
                     {
                         // Unchanged audio clip on a live refresh: reuse the peaks (no native recompute).
                         cvm.Peaks = prev.Peaks;
+                        cvm.Rms = prev.Rms;
                         cvm.PeakCount = prev.PeakCount;
-                        (cvm.DetailPeaks, cvm.DetailCount, cvm.DetailF0, cvm.DetailF1) = (prev.DetailPeaks, prev.DetailCount, prev.DetailF0, prev.DetailF1);
+                        (cvm.DetailPeaks, cvm.DetailRms, cvm.DetailCount, cvm.DetailF0, cvm.DetailF1)
+                            = (prev.DetailPeaks, prev.DetailRms, prev.DetailCount, prev.DetailF0, prev.DetailF1);
                     }
                     else
                     {
@@ -1083,8 +1086,10 @@ public sealed partial class ArrangementView : UserControl
                         // (the lane draws one aggregated column per pixel).
                         const int buckets = 2048;
                         var peaks = new float[buckets * 2];
-                        cvm.PeakCount = eng.GetClipPeaks(ti.Id, c, peaks, buckets);
+                        var rms = new float[buckets];
+                        cvm.PeakCount = eng.GetClipPeaks(ti.Id, c, peaks, buckets, rms);
                         cvm.Peaks = peaks;
+                        cvm.Rms = rms;
                     }
                     if (!ci.IsMidi && eng.TryGetAudioClipInfo(ti.Id, c, out var ai))
                     {

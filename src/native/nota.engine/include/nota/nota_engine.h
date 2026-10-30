@@ -609,6 +609,19 @@ NOTA_API int32_t nota_clip_get_source_peaks_range(const NotaEngine* engine, int3
                                                   int32_t clip_index, double frame0, double frame1,
                                                   float* out_min_max, int32_t max_points);
 
+/* Waveform levels: the same min/max buckets as the matching *_peaks call above, plus each
+ * bucket's RMS of the stereo mid (0..1) in out_rms[max_points] — the waveform's body.
+ * view picks the call; a and b are its range (beats for WARP_RANGE, frames for
+ * SOURCE_RANGE) and are ignored by the others. Returns the number of buckets written. */
+#define NOTA_CLIP_LEVELS_PLAYED       0   /* nota_clip_get_peaks */
+#define NOTA_CLIP_LEVELS_SOURCE       1   /* nota_clip_get_source_peaks */
+#define NOTA_CLIP_LEVELS_WARP_FULL    2   /* nota_clip_get_warp_full_peaks */
+#define NOTA_CLIP_LEVELS_WARP_RANGE   3   /* nota_clip_get_warp_peaks_range */
+#define NOTA_CLIP_LEVELS_SOURCE_RANGE 4   /* nota_clip_get_source_peaks_range */
+NOTA_API int32_t nota_clip_get_levels(const NotaEngine* engine, int32_t track_id, int32_t clip_index,
+                                      int32_t view, double a, double b, float* out_min_max,
+                                      float* out_rms, int32_t max_points);
+
 /* ---- Background audio import -------------------------------------------- */
 /* Decodes a WAV/FLAC/MP3 block by block on ANY thread (it touches no engine state), so
  * the UI stays responsive and can draw the waveform as it fills in. One job is not

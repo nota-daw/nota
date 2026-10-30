@@ -162,7 +162,9 @@ public sealed class Settings
     /// <summary>Show the song-structure (sections) lane over the ruler.</summary>
     public bool ArrangementShowSections { get; set; } = true;
     /// <summary>How audio clips draw their waveform on the lanes (Settings → Appearance):
-    /// 0 bars — spaced peak strokes (default), 1 solid — one column per pixel.</summary>
+    /// 0 smooth — the peak outline around its RMS body (default; was bars before #267, so a
+    /// saved 0 moves to the new default), 1 solid — one column per pixel, 2 bars — spaced
+    /// peak strokes.</summary>
     public int ArrangementWaveform { get; set; }
     /// <summary>Interface scale in percent (Settings → Appearance, spec 027): one of
     /// <see cref="Application.InterfaceScale.Presets"/>; anything else reads as 100.</summary>
