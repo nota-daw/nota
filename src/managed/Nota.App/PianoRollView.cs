@@ -729,8 +729,7 @@ public sealed partial class PianoRollView : UserControl
         bool sameClip = _clipKey.Item1 != int.MinValue && _clipKey == _loadedKey;
         if (!_velWheelBurst || !sameClip)
         {
-            if (_velWheelBurst && !HasLivePath) CommitNotes();
-            _velWheelTimer?.Stop(); _velWheel.Reset(); _velWheelBurst = false;
+            EndVelocityWheel();   // a Session slot commits it before the notes are replaced
         }
         else if (!HasLivePath)
         {
@@ -1099,6 +1098,9 @@ public sealed partial class PianoRollView : UserControl
     /// undo step — every editable clip goes.</summary>
     private void CommitNotes(IReadOnlyList<NotaNote>? notes = null, IReadOnlyList<int>? owners = null, bool seed = false)
     {
+        // Backstop: an edit that did not close the velocity burst first must not leave the
+        // timer to commit it again later, nor fold it silently into this edit unannounced.
+        if (_velWheelBurst && !HasLivePath) EndVelocityWheel();
         _previewBackup = null;
         _previewOwners = null;
         notes ??= _notes;
@@ -1414,6 +1416,7 @@ public sealed partial class PianoRollView : UserControl
     /// before save/export. Returns true when notes were cut or removed (indices may have shifted).</summary>
     public bool SettlePlacement()
     {
+        EndVelocityWheel();   // every edit starts here: the wheel's burst is its own undo step
         if (!_placementPending) return false;
         _placementPending = false;
         if (_selection.Count == 0) return false;
@@ -2186,6 +2189,7 @@ public sealed partial class PianoRollView : UserControl
         {
             Focus();
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            _o.EndVelocityWheel();   // a press starts a new edit: close the wheel's burst first
             var p = e.GetPosition(this);
             _free = (e.KeyModifiers & KeyModifiers.Alt) != 0;
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
@@ -2644,6 +2648,7 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            _o.EndVelocityWheel();   // a press starts a new edit: close the wheel's burst first
             var p = e.GetPosition(this);
             int hit = Nearest(p);
             if (hit < 0) return;
