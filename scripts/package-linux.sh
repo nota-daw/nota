@@ -125,6 +125,10 @@ HERE="$(dirname "$(readlink -f "$0")")"
 exec "${HERE}/usr/bin/Nota.App" "$@"
 RUN
 chmod +x "${APPDIR}/AppRun"
+# The AppImage is run by other users: everything must be world-readable, and whatever
+# is executable for the owner must be for everyone (the publish output lands 0744 in
+# the release container; appimagetool refuses to package that).
+chmod -R a+rX "${APPDIR}"
 
 echo "==> Building AppImage…"
 mkdir -p dist
@@ -167,7 +171,8 @@ build_manually() {
   mksquashfs -help 2>&1 | grep -q zstd && comp="zstd" || true
   local sq="dist/nota-${AI_ARCH}.squashfs"
   rm -f "${sq}"
-  mksquashfs "${APPDIR}" "${sq}" -root-owned -noappend -quiet -comp "${comp}"
+  # No -quiet: EL8's squashfs-tools 4.3 predates it.
+  mksquashfs "${APPDIR}" "${sq}" -root-owned -noappend -comp "${comp}" >/dev/null
   cat "${runtime}" "${sq}" > "${OUT}"    # type2 runtime finds the appended filesystem itself
   chmod +x "${OUT}"
   rm -f "${sq}"
