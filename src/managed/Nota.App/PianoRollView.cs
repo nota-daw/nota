@@ -1344,24 +1344,22 @@ public sealed partial class PianoRollView : UserControl
             var targets = _selection.Contains(hit)
                 ? _selection.Where(i => i >= 0 && i < _notes.Count && !IsLocked(i)).ToList()
                 : new List<int> { hit };
-            if (!_velWheelBurst)
+            // Notes already at 1 or 127 do not move: nothing to edit, so no empty undo step.
+            bool changed = targets.Any(i => NoteOverwrite.VelocityBy(_notes[i].Velocity, steps) != _notes[i].Velocity);
+            if (changed && !_velWheelBurst)
             {
                 // The burst's undo step: seeded with the notes before it, like a note drag.
                 _velWheelBurst = true;
                 if (HasLivePath) CommitNotes(_notes.ToList(), _owner.ToList(), seed: true);
             }
-            bool changed = false;
-            foreach (int i in targets)
-            {
-                var n = _notes[i];
-                float v = NoteOverwrite.VelocityBy(n.Velocity, steps);
-                if (v == n.Velocity) continue;
-                n.Velocity = v;
-                _notes[i] = n;
-                changed = true;
-            }
             if (changed)
             {
+                foreach (int i in targets)
+                {
+                    var n = _notes[i];
+                    n.Velocity = NoteOverwrite.VelocityBy(n.Velocity, steps);
+                    _notes[i] = n;
+                }
                 _velWheelNote = hit;
                 if (HasLivePath) PushLive(_notes, _owner);
                 Invalidate(); Changed?.Invoke();
