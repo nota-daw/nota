@@ -97,6 +97,24 @@ public struct NotaAudioClipInfo
     public int Reversed;         // 0/1: plays back-to-front (non-destructive)
 }
 
+/// <summary>One take of an audio loop recording (specs/055). Matches native NotaTakeInfo. Every
+/// take of a recording has a loop-length buffer whose frame 0 sits at <see cref="OriginBeat"/>;
+/// the pass recorded <see cref="StartBeat"/> .. + <see cref="LengthBeats"/> of it.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaTakeInfo
+{
+    public int Id;          // comp clips carry it (IAudioEngine.ClipTakeId)
+    public int Number;      // "Take N" on its track
+    public int Group;       // the loop recording it came from
+    public int Reserved;
+    public double OriginBeat;
+    public double StartBeat;
+    public double LengthBeats;
+    public double SourceOffsetFrames;
+    public long LengthFrames;
+    public long SampleId;
+}
+
 /// <summary>Audio-clip ADSR amplitude shape in played time (clip-local beats). Matches native
 /// NotaClipAdsr. Attack ramps 0→1 from the clip start, decay falls to <see cref="Sustain"/>,
 /// release fades to 0 over the clip's last <see cref="ReleaseBeats"/>. <see cref="Identity"/>

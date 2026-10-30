@@ -1137,6 +1137,25 @@ public interface IAudioEngine : IDisposable
     // --- Audio persistence (M7-6b) -----------------------------------------
     bool TryGetAudioClipInfo(int trackId, int clipIndex, out NotaAudioClipInfo info);
     int AddAudioClipEx(int trackId, string path, double startBeat, double sourceOffsetFrames, long lengthFrames, float gain);
+
+    // --- Take lanes (specs/055) --------------------------------------------
+    /// <summary>The takes on an audio track, in recording order.</summary>
+    int TakeCount(int trackId);
+    bool TryGetTakeInfo(int trackId, int index, out NotaTakeInfo info);
+    /// <summary>Min/max peaks over the take's recorded range; buckets written.</summary>
+    int GetTakePeaks(int trackId, int index, float[] outMinMax, int maxPoints);
+    /// <summary>The take plays over [startBeat, endBeat) (clamped to it). One undo step; false if nothing changed.</summary>
+    bool CompTake(int trackId, int takeId, double startBeat, double endBeat);
+    /// <summary>Removes a take; what plays is unchanged. One undo step.</summary>
+    bool DeleteTake(int trackId, int takeId);
+    /// <summary>Each recording's comp becomes one clip and its takes go. One undo step.</summary>
+    bool FlattenTakes(int trackId);
+    /// <summary>The take an arrangement audio clip plays a section of; 0 = none.</summary>
+    int ClipTakeId(int trackId, int clipIndex);
+    /// <summary>Project load (no undo entry): a take from a file; its new id, or -1.</summary>
+    int RestoreTake(int trackId, string path, int number, int group, double originBeat, double sourceOffsetFrames, long lengthFrames);
+    /// <summary>Project load (no undo entry): tag a restored clip as a section of a restored take.</summary>
+    void SetClipTakeId(int trackId, int clipIndex, int takeId);
     bool TryGetSampleInfo(long sampleId, out NotaSampleInfo info);
     float[] ReadSample(long sampleId);
     bool TryGetSamplerInfo(int trackId, out NotaSamplerInfo info);

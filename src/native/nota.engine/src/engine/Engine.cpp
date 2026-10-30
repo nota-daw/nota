@@ -641,6 +641,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setMidiFromTrackId(t.midiFromTrackId());                     // MIDI routing
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, t.send(b)); // M6-1: send levels
     nt->clips = t.clips;
+    nt->takes = t.takes; // take lanes (specs/055) — buffers shared
     nt->midiClips = t.midiClips;
     nt->instrument = t.instrument;     // shared — voice state persists
     nt->midiEffects = t.midiEffects;   // shared — arp held/phase state persists

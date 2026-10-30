@@ -30,6 +30,8 @@ std::shared_ptr<SampleBuffer> Engine::findSampleById(int64_t sampleId) const {
     for (auto& t : authoring_->tracks) {
         for (auto& c : t->clips)
             if (c.sample && c.sample->id == sampleId) return c.sample;
+        for (auto& k : t->takes)
+            if (k.sample && k.sample->id == sampleId) return k.sample;
         for (auto& sl : t->sessionSlots)
             if (sl.audio.sample && sl.audio.sample->id == sampleId) return sl.audio.sample;
         if (auto* smp = dynamic_cast<Sampler*>(t->instrument.get()))
@@ -3118,6 +3120,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, src.send(b));
     if (withContent) {
         nt->clips = src.clips; // sample buffers are shared_ptr (immutable) — fine
+        nt->takes = src.takes;
         nt->midiClips = src.midiClips;
         nt->sessionSlots = src.sessionSlots;
         nt->automation = src.automation;

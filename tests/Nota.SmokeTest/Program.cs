@@ -643,6 +643,14 @@ if (args.Length >= 1 && args[0] == "--live-record")
     Console.WriteLine(failures == 0 ? "LIVE RECORD PASSED" : $"LIVE RECORD FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Take lanes alone (fast iteration): `--takes`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--takes")
+{
+    Console.WriteLine("-- take lanes --");
+    foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TAKES PASSED" : $"TAKES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // MIDI controllers alone (fast iteration): `--midi-ctl`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--midi-ctl")
 {
@@ -15215,6 +15223,8 @@ Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop record mode --");
 foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
+Console.WriteLine("-- take lanes --");
+foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
 Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
