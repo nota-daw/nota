@@ -1240,6 +1240,11 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Devices/Clip panel in its own window** — the ⧉ button in the bottom panel's header
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
+- **Clip editor fills the window** — the expand button in the bottom panel's header (Clip
+  and Pattern tabs), View → Clip editor fills the window or ⌘⇧F / Ctrl+Shift+F folds away
+  the browser, the main view and a docked Mixer; the same again brings back the split.
+- **Panel edges** — drag to resize the browser, the docked Mixer and the bottom panel;
+  double-click an edge to reset that panel to its default size.
 - **Popup rack editors** (full UI / Params).
 - **Typed values** — ⌥-click any knob, fader or slider (or double-click the number next to
   it) and type the value: "−6", "1.5k", "250 ms", "L 30", "1/16". Double-click the control

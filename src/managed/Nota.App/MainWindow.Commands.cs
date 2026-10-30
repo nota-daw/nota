@@ -73,6 +73,8 @@ public partial class MainWindow
         B("view.connectPhone", ShowConnectPhone);
         B("view.toggleBrowser", () => OnMenuToggleBrowser(this, e));
         B("view.toggleDetail", () => OnMenuToggleClip(this, e));
+        B("view.maximizeDetail", ToggleDetailMaximized,
+            _ => Need(_detailMaximized || CanMaximizeDetail, "Open a clip in the clip editor first"));
         B("view.showDevices", () => { int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack(); if (t > 0) ShowDevices(t); },
             c => Need(c.HasTrack, "Select a track first"));
         B("view.popOutDetail", () => OnToggleDetailWindow(this, e));

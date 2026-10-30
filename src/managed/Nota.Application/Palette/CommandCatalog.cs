@@ -57,6 +57,7 @@ public static class CommandCatalog
         C("view.connectPhone", "Connect phone…", "View", "", "remote mobile qr"),
         C("view.toggleBrowser", "Toggle browser", "View", "", "library sidebar"),
         C("view.toggleDetail", "Toggle detail panel", "View", "", "devices clip"),
+        C("view.maximizeDetail", "Clip editor fills the window", "View", Shortcut.CmdShift('F'), "maximize maximise full detail panel piano roll restore split"),
         C("view.showDevices", "Show devices", "View", "", "chain detail"),
         C("view.popOutDetail", "Open devices in a window", "View", "", "detach float pop out"),
         C("view.toggleOverview", "Toggle overview", "View", "", "minimap", view: "Arrangement"),
