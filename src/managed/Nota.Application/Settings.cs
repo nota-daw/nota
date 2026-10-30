@@ -57,6 +57,16 @@ public sealed class Settings
     /// <summary>The Mixer window's view: "strips" or "map" (the Stereo Map, specs/008).
     /// A per-user preference, remembered between openings.</summary>
     public string MixerView { get; set; } = "strips";
+    /// <summary>Where the Mixer lives (specs/054): false = docked as a bottom panel in the main
+    /// window, true = its own window. Toggled from the panel / window and View → Mixer in its
+    /// own window.</summary>
+    public bool MixerFloating { get; set; }
+    /// <summary>The Mixer was shown when the user last showed or hid it; restored on launch
+    /// (specs/054). Quitting the app does not count as hiding it.</summary>
+    public bool MixerShown { get; set; }
+    /// <summary>Height of the docked Mixer panel in design units, set by dragging its top edge
+    /// (specs/054). 0 = its natural height (full strips), clamped to what the window fits.</summary>
+    public double MixerDockHeight { get; set; }
     /// <summary>Record a project version on every save (the History tab). On by default.</summary>
     public bool KeepVersionHistory { get; set; } = true;
     /// <summary>Bars of metronome count-in before Play / Record from stop (0 = off). Set from

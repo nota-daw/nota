@@ -77,6 +77,7 @@ public partial class MainWindow : Window
     // True while the detail panel (Devices/Clip) was the last area the user interacted
     // with — Tab then toggles between the two tabs.
     private bool _detailWasLastFocused;
+    private bool _mixerWasLastFocused;   // the docked Mixer was the last area clicked (specs/054)
     private bool _trackHeadersFocused;
     private bool _tempoRefreshPosted;
 
@@ -85,6 +86,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitBottomPanels();    // BodyGrid rows for the docked Mixer + Detail panels (specs/054)
         InitMenuShortcuts();   // Ctrl instead of Win on Windows / Linux, and bound there
         UpdateWindowTitle();   // "Nota — Untitled" until a project is opened/saved
         // Custom frameless title bar (Phase 2): extend the client area under the
@@ -456,8 +458,8 @@ public partial class MainWindow : Window
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
         MainContent.Children.Add(_session);
 
-        // Mixer lives in its own window (View → Mixer), not as a main-view tab — created here
-        // once and hosted in the window when opened (see MainWindow.Mixer.cs).
+        // The Mixer is created here once and hosted docked under the main view or in its own
+        // window while shown (see MainWindow.Mixer.cs, specs/054).
         _mixer = new MixerView(vm.Engine)
         {
             IsVisible = false,
@@ -471,6 +473,7 @@ public partial class MainWindow : Window
                 map.SelectTrack = id => Timeline.SelectTrackFromOutside(id);
             },
         };
+        _mixer.MinContentHeightChanged += OnMixerMinHeightChanged;
 
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.
@@ -498,6 +501,8 @@ public partial class MainWindow : Window
         // window menu — File/Edit/View/… — intermittently never installs and only the
         // "Nota" app menu appears. Force activation once shown so it always lands.
         Opened += (_, _) => Activate();
+        // Bring the Mixer back docked / in its window / hidden as the user left it (specs/054).
+        Opened += (_, _) => RestoreMixer();
 
         // Remember the detail panel's height once the user drags the splitter — but only
         // on the Clip tab. The Devices tab keeps its natural card-fitting height, so its
@@ -508,7 +513,7 @@ public partial class MainWindow : Window
         DetailSplitter.DragCompleted += (_, _) =>
         {
             bool clipActive = DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView;
-            double h = BodyGrid.RowDefinitions[2].ActualHeight;
+            double h = _detailRow.ActualHeight;
             if (clipActive && DetailPanel.IsVisible && h > 120) _detailHeight = h;
         };
 
@@ -518,7 +523,11 @@ public partial class MainWindow : Window
         AddHandler(PointerPressedEvent, (_, e) =>
         {
             if (e.Source is Visual v)
+            {
                 _detailWasLastFocused = DetailPanel.IsVisible && v.GetSelfAndVisualAncestors().Contains(DetailPanel);
+                // Likewise the docked Mixer, so the palette opens with its context (specs/054).
+                _mixerWasLastFocused = _mixerDocked && v.GetSelfAndVisualAncestors().Contains(MixerPanel);
+            }
             // Likewise the track-header column: while it has focus, Cmd+A/C/X/V/D and Delete act on tracks.
             _trackHeadersFocused = Timeline.IsVisible && Timeline.IsInTrackHeaders(e);
         }, RoutingStrategies.Tunnel, handledEventsToo: true);

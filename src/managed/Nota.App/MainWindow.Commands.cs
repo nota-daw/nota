@@ -68,7 +68,8 @@ public partial class MainWindow
         B("view.arrangement", () => SetView(MainView.Arrangement));
         B("view.session", () => SetView(MainView.Session));
         B("view.modular", () => SetView(MainView.Modular));
-        B("view.mixer", ToggleMixerWindow);
+        B("view.mixer", ToggleMixer);
+        B("view.mixerFloat", () => SetMixerFloating(!MixerFloating));
         B("view.connectPhone", ShowConnectPhone);
         B("view.toggleBrowser", () => OnMenuToggleBrowser(this, e));
         B("view.toggleDetail", () => OnMenuToggleClip(this, e));

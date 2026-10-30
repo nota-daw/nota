@@ -106,9 +106,9 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 ## Views
 
 Three top-level views, switched by three icon keys in the transport (**Arrangement ·
-Session · Modular**; each names its view in a tooltip); the mixer opens as a separate
-floating window (**View → Mixer**, ⌘M) that is as wide as its channel strips, follows the
-track count and closes with Escape.
+Session · Modular**; each names its view in a tooltip). The Mixer (**View → Mixer**, ⌘⇧M)
+docks as a panel under any of the three, or floats in its own window — see
+[Tracks and mixer](#tracks-and-mixer).
 
 - **Arrangement View** — a linear timeline:
   place, move, trim and duplicate clips; the snap grid (below); scroll and zoom;
@@ -219,13 +219,23 @@ track count and closes with Escape.
   arms that track alone, ⌘-click arms several; **Transport ▸ Auto-arm selected track** (off by
   default) arms the instrument track you select.
   Double-click resets to the default.
+- **Mixer** (**View → Mixer**, ⌘⇧M / Ctrl+Shift+M): a strip per track, then the returns, then
+  the master (I/O, A/B sends, pan, fader with a stereo meter and dB read-out, M / S / Arm), the
+  **Strips | Stereo map** switch and the pan law footer. It docks as a resizable panel under
+  Arrangement, Session or Modular, above the Devices / Clip panel (either, both or neither),
+  or pops out into its own window for a second screen — the panel's pop-out button, the
+  window's dock button or **View → Mixer in its own window** switch it; the window is as wide
+  as its strips and closes with Escape. Whether it is shown, where and how tall come back on
+  the next launch. Strips fit the height they get: I/O rows hide first, then sends, then the
+  fader shortens; the footer's **Sends** / **I/O** toggles show a hidden section anyway (the
+  strips then scroll). Faders, pan and M / S / Arm follow changes made anywhere else.
 - **Pan law** (per project, in the Mixer footer: **Pan law** Stereo / Balance): under
   Stereo, panning a stereo track or return moves its whole image — at full pan both
   channels play from one side; under Balance the opposite channel fades out. Mono
   material and centred tracks sound the same either way. New projects use Stereo; projects
   from earlier versions keep Balance and are marked **Older project**. Switching is
   click-free during playback and one undo step. Groups keep their balance (marked **BAL**).
-- **Stereo Map** (Mixer window, **Strips | Stereo map** in its title bar): every track,
+- **Stereo Map** (Mixer, **Strips | Stereo map** in its panel or window title bar): every track,
   return and the master as a dot at its pan (left–right) and fader (up–down), with a measured
   cloud — where the sound really sits, how wide it is (from the phase correlation) and how
   loud — and the master correlation under the map. Drag a dot to set pan and volume at once
