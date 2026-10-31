@@ -29,6 +29,9 @@ internal sealed record ValueField(string Name, Func<double> Get, Func<double, st
     public Action? Clear { get; init; }
     /// <summary>Repaints the owner after a commit or a reset.</summary>
     public Action? After { get; init; }
+    /// <summary>Reads the name when the menu opens, for a control whose parameter follows a tab
+    /// (Compressor's second fader: Makeup, or SC gain on the Sidechain tab); <see cref="Name"/> without it.</summary>
+    public Func<string>? NameNow { get; init; }
     /// <summary><see cref="TextAt"/> reads back through <see cref="Set"/> (legacy rows, plug-in
     /// parameters whose text is only readable at the current value); the position is restored
     /// before the gesture opens.</summary>

@@ -248,9 +248,11 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         Typeable(thrFader, "Thresh", () => thrMap.N(P(Threshold)), n => { Raw(Threshold, thrMap.V(n)); RefreshAll(); },
             () => Db(P(Threshold)), () => Begin(Threshold), () => End(Threshold), RefreshAll,
             () => { Begin(Threshold); Raw(Threshold, Def(Threshold)); End(Threshold); RefreshAll(); }, thrVal, altResets: true);
-        Typeable(f2, "Makeup", () => Lin(F2()).N(P(F2())), n => { Raw(F2(), Lin(F2()).V(n)); RefreshAll(); },
+        // The menu names the fader's param of the moment: Makeup, or SC gain on the Sidechain tab.
+        ValueEntry.Attach(f2, ValueEntry.Probing("Makeup", () => Lin(F2()).N(P(F2())), n => { Raw(F2(), Lin(F2()).V(n)); RefreshAll(); },
             () => SDb(P(F2())), () => Begin(F2()), () => End(F2()), RefreshAll,
-            () => { int id = F2(); Begin(id); Raw(id, Def(id)); End(id); RefreshAll(); }, f2Val, altResets: true);
+            () => { int id = F2(); Begin(id); Raw(id, Def(id)); End(id); RefreshAll(); })
+            with { AltResets = true, NameNow = () => F2() == ScGain ? engine.DeviceParamName(track, di, ScGain) : "Makeup" }, f2Val);
         readouts.Add(() =>
         {
             double keyDb = KeyDb();

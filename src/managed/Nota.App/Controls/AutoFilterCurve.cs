@@ -4,7 +4,7 @@
 // Auto Filter response curve (the Filter tab). Layers over a log-frequency grid:
 //  1) a real-time spectrum of the pre-filter signal (FFT of the device's scope ring, fed
 //     by the card each tick);
-//  2) the teal range the modulation can walk the cutoff over (from the settings), and the
+//  2) the grey range the modulation can walk the cutoff over (from the settings), and the
 //     filter's magnitude response at the BASE cutoff — interactive: drag the handle (or
 //     anywhere) to set cutoff (X) + resonance (Y), recording an automation gesture;
 //  3) the response at the LIVE modulated cutoff and resonance, dashed, so you see the
@@ -212,7 +212,7 @@ internal sealed class AutoFilterCurve : Control
         }
         ctx.DrawGeometry(null, SpecPen, spec);
 
-        // 2a) the range the modulation can walk the cutoff over (two teal rules)
+        // 2a) the range the modulation can walk the cutoff over (two grey rules)
         if (_modAssigned && _rangeHi - _rangeLo > 0.004)
         {
             double x0 = _rangeLo * w, x1 = _rangeHi * w;
