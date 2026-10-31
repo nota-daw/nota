@@ -1204,6 +1204,13 @@ What the guide changes inside a card:
 - Use thin sliders, monospace readouts or capital-letter labels.
 - Fade anything out; draw it in ink 4 with nothing picked.
 
+**Layout changes decided since** (each its own decision, as above):
+
+- **Aurora's Osc tab** (specs/053): the two oscillators sit side by side in the same
+  700 × 260 card, each column with its name and switch, its table and warp-mode drop-downs,
+  its table window and six 34 px knobs; the sub and unison row runs under both. There is no
+  1 / 2 pick any more. An oscillator that is off takes the unavailable look in place.
+
 ### The card shell
 
 - **Every card uses one shell**: effects, instruments, MIDI effects, racks (the
