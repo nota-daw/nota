@@ -211,7 +211,9 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         }
 
         // A dropdown: [label  value ▾] opens `items`; the current one is dotted.
-        Border Drop(string caps, Func<string> text, Func<bool> hot, Func<IEnumerable<(string Label, bool Current, Action Pick)>> items, string tip, int learnParam = -1)
+        // sources: key-source rows (specs/050) after the items, unavailable ones disabled.
+        Border Drop(string caps, Func<string> text, Func<bool> hot, Func<IEnumerable<(string Label, bool Current, Action Pick)>> items, string tip, int learnParam = -1,
+            Func<IEnumerable<(string Label, bool Checked, Action? Pick, string? Tip)>>? sources = null)
         {
             var name = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var chev = new Glyph(GlyphKind.ChevronDown, 7) { Margin = new Thickness(6, 0, 0, 0) };
@@ -245,31 +247,27 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                     mi.Click += (_, _) => { pk(); RefreshAll(); };
                     fly.Items.Add(mi);
                 }
+                if (sources != null)
+                    foreach (var row in sources()) fly.Items.Add(SidechainSourcePicker.MenuItemFor(row, RefreshAll));
                 fly.ShowAt(box);
                 e.Handled = true;
             };
             return box;
         }
 
-        // Key source: Internal, or another track (the device's sidechain routing).
-        string SrcName(int id) => TrackNames.Of(engine, id);
+        // Key source: Internal, another track, or one pad / chain / voice of it (the device's
+        // sidechain routing, specs/050).
         int Src() => engine.DeviceSidechainSource(track, di);
         bool ExtOn() => Src() >= 0;
-        string KeyName() => ExtOn() ? SrcName(Src()) : "Internal";
+        string KeyName() => SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di));
         Control KeyDrop() => Drop("SC", KeyName, ExtOn, () =>
         {
-            var list = new List<(string, bool, Action)>
+            return new List<(string, bool, Action)>
             {
                 ("Internal — this track", !ExtOn(), () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); }),
             };
-            for (int i = 0; i < engine.TrackCount; i++)
-                if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track)
-                {
-                    int id = ti.Id;
-                    list.Add((SrcName(id), Src() == id, () => { engine.SetDeviceSidechainSource(track, di, id); ctx.NotifyChanged(); }));
-                }
-            return list;
-        }, "Key source — Internal limits on this track's own peaks; pick another track to duck this one when that one peaks");
+        }, "Key source — Internal limits on this track's own peaks; pick another track to duck this one when that one peaks",
+            sources: () => SidechainSourcePicker.MenuRows(engine, track, di, ctx.NotifyChanged));
 
         Control TargetDrop() => Drop("", () => TargetF(P(Target)), () => false, () =>
         {
@@ -333,8 +331,11 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
             Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
         };
-        void WireDrag(ShDragView v, int param)
+        void WireDrag<T>(T v, int param, string name, Func<double, string> fmt) where T : ShDragView
         {
+            // ⌥-click the handle to type it (specs/035).
+            ValueEntry.Attach(v, new ValueField(name, () => N(param), n => fmt(FromN(param, n)), n => SetN(param, n),
+                () => Begin(param), () => End(param), DefN(param)) { After = RefreshAll });
             v.Value = _ => N(param);
             v.Changed += (_, x) => { SetN(param, x); RefreshAll(); };
             v.GestureBegin += _ => Begin(param);
@@ -400,8 +401,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Control LevelTab()
         {
             level = new CeLevelView { CeilToNorm = db => ToN(Ceil, db) };
-            WireDrag(level, Ceil);
-            ToolTip.SetTip(level, "The last 4 s: the input (shaded grey), the part over the ceiling (red) and the output (the bright columns), with the reduction hanging in a strip under it (0 … −12\u2009dB). Drag the ceiling line; double-click resets.");
+            WireDrag(level, Ceil, "Ceiling", CeilF);
+            ToolTip.SetTip(level, MenuKit.Keys("The last 4 s: the input (shaded grey), the part over the ceiling (red) and the output (the bright columns), with the reduction hanging in a strip under it (0 … −12\u2009dB). Drag the ceiling line; ⌥-click to type, double-click resets."));
             var head = HeadRow(CharSeg(), Info(() => "ceiling " + CeilF(P(Ceil))));
             var knobs = KnobRow(
                 () => ScDb(S_WinInPeak) <= -119 ? "no signal" : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
@@ -423,8 +424,8 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Control LoudnessTab()
         {
             loudness = new CeLoudnessView { TargetToNorm = t => ToN(Target, t) };
-            WireDrag(loudness, Target);
-            ToolTip.SetTip(loudness, "Momentary (the darker grey), short-term (the bright line) and integrated (the lighter grey) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; double-click resets.");
+            WireDrag(loudness, Target, "Target", TargetF);
+            ToolTip.SetTip(loudness, MenuKit.Keys("Momentary (the darker grey), short-term (the bright line) and integrated (the lighter grey) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; ⌥-click to type, double-click resets."));
             var head = HeadRow(Row(6, CharSeg(false), Caps("TARGET"), TargetDrop()),
                 Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : "measuring…"));
             var knobs = KnobRow(

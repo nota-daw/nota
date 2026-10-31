@@ -463,7 +463,9 @@ internal sealed partial class RackCardView
         var tb = DrumMono(PanText(a.ChainPan(c)), TextSecondary, 7);
         tb.HorizontalAlignment = HorizontalAlignment.Center;
         var host = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = tb };
-        ToolTip.SetTip(host, "Pad pan · drag up or down, double-click to centre");
+        ToolTip.SetTip(host, MenuKit.Keys("Pad pan · drag up or down, ⌥-click to type, double-click to centre"));
+        ValueEntry.Attach(host, new ValueField("Pan", () => (a.ChainPan(c) + 1) / 2, n => PanText((float)(n * 2 - 1)),
+            n => a.SetChainPan(c, (float)Math.Clamp(n * 2 - 1, -1, 1)), Default: 0.5) { After = () => tb.Text = PanText(a.ChainPan(c)) }, tb);   // specs/035
         bool drag = false; double lastY = 0;
         host.PointerPressed += (_, e) =>
         {

@@ -87,8 +87,9 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
 
-        // Key source: the device's sidechain routing (a track), picked from a menu.
-        string SrcName(int id) => TrackNames.Of(engine, id);
+        // Key source: the device's sidechain routing (a track, or one pad / chain / voice of it,
+        // specs/050), picked from a menu.
+        string KeyName() => SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di), "none");
         int Src() => engine.DeviceSidechainSource(track, di);
         void ShowKeyMenu(Control at)
         {
@@ -97,14 +98,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             none.Click += (_, _) => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); RefreshAll(); };
             fly.Items.Add(none);
             fly.Items.Add(new Separator());
-            for (int i = 0; i < engine.TrackCount; i++)
-                if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track)
-                {
-                    int id = ti.Id;
-                    var mi = new MenuItem { Header = SrcName(id), ToggleType = MenuItemToggleType.Radio, IsChecked = Src() == id };
-                    mi.Click += (_, _) => { engine.SetDeviceSidechainSource(track, di, id); ctx.NotifyChanged(); RefreshAll(); };
-                    fly.Items.Add(mi);
-                }
+            foreach (var row in SidechainSourcePicker.MenuRows(engine, track, di, () => { ctx.NotifyChanged(); RefreshAll(); }))
+                fly.Items.Add(SidechainSourcePicker.MenuItemFor(row));
             fly.ShowAt(at);
         }
 
@@ -421,7 +416,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             parts.Add(band);
             bool anyExt = false;
             for (int b = 0; b < DynEq.Bands; b++) if (IsDyn(b) && KeyExt(b)) anyExt = true;
-            if (anyExt) parts.Add("key " + (Src() >= 0 ? SrcName(Src()) : "none"));
+            if (anyExt) parts.Add("key " + KeyName());
             return string.Join(" · ", parts);
         }
         var nowRead = Mono("", 8, TextTertiary);
@@ -468,7 +463,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         outBox.PointerReleased += (_, e) => { OutEnd(); e.Pointer.Capture(null); };
         outBox.PointerCaptureLost += (_, _) => OutEnd();
         Learn(outBox, DynEq.OutputP);
-        ToolTip.SetTip(outBox, "Output — drag up / down (Shift for fine), double-click for 0 dB");
+        ToolTip.SetTip(outBox, MenuKit.Keys("Output — drag up / down (Shift for fine), ⌥-click to type, double-click for 0 dB"));
+        ValueEntry.Attach(outBox, ValueEntry.DeviceRaw(engine, track, di, DynEq.OutputP, "Output", -18, 18, v => "Out " + DynEq.Db(v) + " dB", RefreshAll), outTb);
         readouts.Add(() =>
         {
             float o = P(DynEq.OutputP);

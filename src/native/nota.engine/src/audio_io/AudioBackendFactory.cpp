@@ -14,10 +14,19 @@
 #else
 #error "No audio backend for this platform yet (see AudioBackendFactory.cpp)."
 #endif
+#ifdef NOTA_HAS_ASIO
+#include "audio_io/windows/AsioBackend.h"
+#include "audio_io/windows/AsioInput.h"
+#endif
 
 namespace nota {
 
-std::unique_ptr<AudioBackend> createAudioBackend() {
+std::unique_ptr<AudioBackend> createAudioBackend(AudioSystem system) {
+#ifdef NOTA_HAS_ASIO
+    if (system == AudioSystem::Asio) return std::make_unique<AsioBackend>();
+#else
+    (void)system;
+#endif
 #if defined(__APPLE__)
     return std::make_unique<CoreAudioBackend>();
 #else
@@ -25,11 +34,24 @@ std::unique_ptr<AudioBackend> createAudioBackend() {
 #endif
 }
 
-std::unique_ptr<AudioInput> createAudioInput() {
+std::unique_ptr<AudioInput> createAudioInput(AudioSystem system) {
+#ifdef NOTA_HAS_ASIO
+    if (system == AudioSystem::Asio) return std::make_unique<AsioInput>();
+#else
+    (void)system;
+#endif
 #if defined(__APPLE__)
     return std::make_unique<CoreAudioInput>();
 #else
     return std::make_unique<MiniaudioInput>();
+#endif
+}
+
+bool asioSupported() {
+#ifdef NOTA_HAS_ASIO
+    return true;
+#else
+    return false;
 #endif
 }
 

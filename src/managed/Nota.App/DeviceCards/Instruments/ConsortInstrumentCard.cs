@@ -450,6 +450,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
             curve.Changed = (c, r) => { Raw("cutoff", (float)c); Raw("reso", (float)r); Refresh(); };
             curve.DragStarted += () => { Begin("cutoff"); Begin("reso"); };
             curve.DragEnded += () => { End("cutoff"); End("reso"); };
+            if (I("cutoff") is var ci and >= 0 && I("reso") is var ri and >= 0)   // ⌥-click types them (specs/035)
+                ValueEntry.AttachAll(curve, ValueEntry.InstrumentParam(engine, track, ci, "cutoff", "Cutoff", v => Cut((float)v), Refresh),
+                    ValueEntry.InstrumentParam(engine, track, ri, "reso", "Reso", v => Tenths((float)v), Refresh));
             cur.Add(() => curve.Set(G("cutoff"), G("reso"), (G("spacing") - 0.5) * 6, Sel("filtmode", 3), On("basscomp")));
             var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Margin = new Thickness(0, 3, 0, 2), Child = curve };
             var head = new DockPanel { Height = 12, LastChildFill = false, Children = { Docked(Caps("DUAL LADDER"), Avalonia.Controls.Dock.Left), Docked(MonoText("24\u2009dB/oct", 7, Txt2), Avalonia.Controls.Dock.Right) } };
@@ -1001,7 +1004,9 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                     var tone = ConsortJacks.ToneBrush(ConsortJacks.Src(c.Src).Tone);
                     var dep = MonoText($"{c.Depth * 100:+0;−0;0}", 8, tone);
                     var depBox = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = dep };
-                    ToolTip.SetTip(depBox, "Depth — drag up / down (double-click: +50)");
+                    ToolTip.SetTip(depBox, MenuKit.Keys("Depth — drag up / down (⌥-click to type, double-click: +50)"));
+                    if (I(AmtId(slot)) is var ai and >= 0)   // ⌥-click types the depth (specs/035)
+                        ValueEntry.Attach(depBox, ValueEntry.InstrumentParam(engine, track, ai, AmtId(slot), CableName(c), v => NotaNum.F($"{(v - 0.5) * 200:+0;−0;0}"), Refresh) with { Default = 0.75 }, dep);
                     bool drag = false; double y0 = 0; float v0 = 0;
                     depBox.PointerPressed += (_, e) =>
                     {
@@ -1058,7 +1063,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                 {
                     var broken = CableList().Where(c => ConsortJacks.Normalled.Contains(c.Dst)).Select(c => ConsortJacks.Dst(c.Dst).Name).Distinct().ToList();
                     string nb = broken.Count == 0 ? "all normals intact" : "normals broken at " + string.Join(" and ", broken);
-                    return (vs.PatchView == 0 ? "Matrix view · drag a cell for depth, Alt-click to remove · " : $"Jack strip · {ConsortJacks.Points} points · ") + nb;
+                    return (vs.PatchView == 0 ? MenuKit.Keys("Matrix view · drag a cell for depth, ⌥-click to type it, double-click to remove · ") : $"Jack strip · {ConsortJacks.Points} points · ") + nb;
                 }
                 default:
                 {

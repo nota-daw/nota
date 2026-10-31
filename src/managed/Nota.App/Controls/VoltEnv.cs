@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -15,7 +16,9 @@ namespace Nota.App;
     // Interactive ADSR editor for Nota Volt: draw the envelope and drag its three
     // breakpoints (attack peak · decay/sustain · release end) to set the A/D/S/R params
     // directly, recording automation gestures. Retargetable between the amp / filter env.
-    internal sealed class VoltEnv : Control, IMidiLearnRegions
+    // ⌥-click a breakpoint to type its values (attack → A, decay/sustain → D then S,
+    // release → R; Tab walks them), double-click resets them (specs/035-typed-value-entry).
+    internal sealed class VoltEnv : Control, IMidiLearnRegions, IValueEntryHost
     {
         private static readonly IBrush Sunken = NotaPalette.BgSunken;
         private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
@@ -42,10 +45,72 @@ namespace Nota.App;
         public string? Note { get; set; }
         public IBrush NoteInk { get; set; } = TextTertiary;
 
-        public VoltEnv(IAudioEngine e, int t) { _e = e; _t = t; MinWidth = 150; MinHeight = 96; }
+        // The read-out of stage k (0 A · 1 D · 2 S · 3 R) at a 0..1 position, for typing;
+        // without it a typed value is read back from the engine's own parameter text.
+        public Func<int, double, string>? Format { get => _format; set { _format = value; _stages = null; } }
+        private Func<int, double, string>? _format;
+
+        public VoltEnv(IAudioEngine e, int t) { _e = e; _t = t; MinWidth = 150; MinHeight = 96; ValueEntry.AttachHost(this); }
         public void Target(string title, (int, string) a, (int, string) d, (int, string) s, (int, string) r)
-        { _title = title; _a = a; _d = d; _s = s; _r = r; InvalidateVisual(); }
+        {
+            if (title != _title || a != _a || d != _d || s != _s || r != _r) _stages = null;   // re-targeted every tick by some cards
+            _title = title; _a = a; _d = d; _s = s; _r = r; InvalidateVisual();
+        }
         public void Refresh() => InvalidateVisual();
+
+        // ---- typed entry ------------------------------------------------------------
+        private ValueField?[]? _stages;   // A · D · S · R of the current target; null where unmapped
+
+        private ValueField?[] Stages => _stages ??= Enumerable.Range(0, 4).Select(BuildField).ToArray();
+
+        private ValueField? BuildField(int stage)
+        {
+            var p = stage switch { 0 => _a, 1 => _d, 2 => _s, _ => _r };
+            if (p.i < 0) return null;
+            void Begin() => _e.BeginAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id);
+            void End() => _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id);
+            string name = $"{NotaText.Label(_title)} · {new[] { "Attack", "Decay", "Sustain", "Release" }[stage]}";
+            double def = _e.PluginParamDefault(_t, -1, p.i);
+            return Format is { } fmt
+                ? new ValueField(name, () => G(p), n => fmt(stage, n), n => Set(p, n), Begin, End, def) { After = InvalidateVisual }
+                : ValueEntry.Probing(name, () => G(p), n => Set(p, n), () => _e.PluginParamText(_t, -1, p.i), Begin, End, InvalidateVisual) with { Default = def };
+        }
+
+        /// <summary>The typeable value of stage <paramref name="stage"/> (0 A · 1 D · 2 S · 3 R), for a read-out row.</summary>
+        public ValueField? Field(int stage) => Stages[stage];
+
+        public IReadOnlyList<ValueField> AllFields => Stages.OfType<ValueField>().ToArray();
+
+        private IReadOnlyList<ValueField>? Of(params int[] stages)
+            => stages.Select(k => Stages[k]).OfType<ValueField>().ToArray() is { Length: > 0 } fs ? fs : null;
+
+        // A breakpoint within 8 px, or a segment within 6 px: the rise → attack, the fall → decay
+        // then sustain, the sustain line → sustain, the release fall → release.
+        public IReadOnlyList<ValueField>? FieldsAt(Point p)
+        {
+            var (x0, _, top, bot) = Geo(); var (xa, xd, sy, xh, xr) = Nodes();
+            static double Dist(Point p, Point a, Point b)
+            {
+                Vector ab = b - a, ap = p - a; double l2 = ab.X * ab.X + ab.Y * ab.Y;
+                double t = l2 <= 0 ? 0 : Math.Clamp((ap.X * ab.X + ap.Y * ab.Y) / l2, 0, 1);
+                return Point.Distance(p, a + ab * t);
+            }
+            var nodes = new (Point at, int[] stages)[] { (new(xa, top), [0]), (new(xd, sy), [1, 2]), (new(xr, bot), [3]) };
+            var near = nodes.MinBy(n => Point.Distance(n.at, p));
+            if (Point.Distance(near.at, p) <= 8) return Of(near.stages);
+            if (Dist(p, new Point(x0, bot), new Point(xa, top)) <= 6) return Of(0);
+            if (Dist(p, new Point(xa, top), new Point(xd, sy)) <= 6) return Of(1, 2);
+            if (Dist(p, new Point(xd, sy), new Point(xh, sy)) <= 6) return Of(2);
+            if (Dist(p, new Point(xh, sy), new Point(xr, bot)) <= 6) return Of(3);
+            return null;
+        }
+
+        public Rect AnchorOf(ValueField field)
+        {
+            var (_, _, top, bot) = Geo(); var (xa, xd, sy, _, xr) = Nodes();
+            int k = Array.IndexOf(Stages, field);
+            return ValueEntry.Near(k switch { 0 => new Point(xa, top), 3 => new Point(xr, bot), _ => new Point(xd, sy) }, Bounds.Size);
+        }
 
         // MIDI-learn: the A/D/S/R params live only in this drag editor, so expose them as
         // four vertical strips (left→right) that each learn one stage.
@@ -75,6 +140,7 @@ namespace Nota.App;
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;   // right-click: the parameter menu
             var p = e.GetPosition(this); var (xa, xd, sy, _, xr) = Nodes(); var (_, _, top, bot) = Geo();
             double dA = Math.Abs(p.X - xa) + Math.Abs(p.Y - top);
             double dDS = Math.Abs(p.X - xd) + Math.Abs(p.Y - sy);

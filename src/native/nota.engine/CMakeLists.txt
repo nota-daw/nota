@@ -110,6 +110,9 @@ set(NOTA_ENGINE_SOURCES
     src/audio_io/NotaConfigFile.cpp        # per-user data dir + atomic file IO (all platforms)
     src/audio_io/ConfigJson.cpp  # audio.json / midi.json via CPM nlohmann/json
     src/audio_io/MpeInput.cpp  # MPE routing (.h/.cpp)
+    src/audio_io/asio/AsioSampleFormat.cpp  # ASIO core, every platform (nota_asio_selftest)
+    src/audio_io/asio/AsioSession.cpp
+    src/audio_io/asio/FakeAsioDriver.cpp
     src/devices/Device.cpp  # interface TU (vtable anchor)
     src/devices/Instrument.cpp  # ctor + controller routing
     src/devices/MidiDevice.cpp  # interface TU (vtable anchor)
@@ -219,6 +222,15 @@ elseif(WIN32 OR (UNIX AND NOT APPLE))
         src/audio_io/desktop/GamepadInput_stub.cpp     # v1: macOS-only; reports zero pads
         ${rtmidi_SOURCE_DIR}/RtMidi.cpp
     )
+    if(WIN32)
+        # ASIO beside WASAPI (specs/049): registry list, IASIO adapter, the two facades.
+        list(APPEND NOTA_ENGINE_SOURCES
+            src/audio_io/windows/AsioDriverList.cpp
+            src/audio_io/windows/ComAsioDriver.cpp
+            src/audio_io/windows/AsioBackend.cpp
+            src/audio_io/windows/AsioInput.cpp
+        )
+    endif()
 else()
     message(FATAL_ERROR "No Nota audio/MIDI device backend for this platform yet.")
 endif()
@@ -280,6 +292,10 @@ elseif(WIN32)
     target_compile_definitions(nota_engine PRIVATE
         __WINDOWS_MM__ NOMINMAX WIN32_LEAN_AND_MEAN _USE_MATH_DEFINES)
     target_link_libraries(nota_engine PRIVATE winmm ole32)
+    # ASIO (specs/049): SDK headers only, from the CPM zip (cmake/dependencies.cmake).
+    target_include_directories(nota_engine SYSTEM PRIVATE ${asiosdk_SOURCE_DIR}/common)
+    target_compile_definitions(nota_engine PRIVATE NOTA_HAS_ASIO=1)
+    target_link_libraries(nota_engine PRIVATE advapi32 user32 avrt)
 elseif(UNIX AND NOT APPLE)
     # RtMidi -> ALSA sequencer (__LINUX_ALSA__), which links libasound directly.
     # miniaudio runtime-links PulseAudio/ALSA via dlopen (see nota_miniaudio.h), so
