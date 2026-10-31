@@ -1183,6 +1183,53 @@ public sealed partial class PreferencesWindow : NotaWindow
         return new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
     }
 
+    // Left / Right for the arrangement's track-header column (#72). Saving fires
+    // Settings.Changed, which moves the column at once and ticks the View menu item.
+    // The same event repaints these buttons, so a change from the View menu updates an
+    // Appearance pane that is already open.
+    private static Control HeaderSidePicker()
+    {
+        var settings = App.Services.GetRequiredService<ISettingsService>();
+        var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        var buttons = new List<(bool Right, ToggleButton Btn)>();
+        void ShowSaved()
+        {
+            bool right = settings.Current.ArrangementHeadersRight;
+            foreach (var (br, bb) in buttons) bb.IsChecked = br == right;
+        }
+        foreach (var (right, label) in new[] { (false, "Left"), (true, "Right") })
+        {
+            var r = right;
+            var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label };
+            btn.Click += (_, _) =>
+            {
+                if (settings.Current.ArrangementHeadersRight == r) { ShowSaved(); return; }
+                settings.Current.ArrangementHeadersRight = r;
+                settings.Save();
+            };
+            buttons.Add((r, btn));
+            strip.Children.Add(btn);
+        }
+        ShowSaved();
+        var box = new Border { Classes = { "segmented" }, HorizontalAlignment = HorizontalAlignment.Left, Child = strip };
+        var listening = false;
+        void OnChanged() => ShowSaved();
+        box.AttachedToVisualTree += (_, _) =>
+        {
+            ShowSaved();
+            if (listening) return;
+            listening = true;
+            settings.Changed += OnChanged;
+        };
+        box.DetachedFromVisualTree += (_, _) =>
+        {
+            if (!listening) return;
+            listening = false;
+            settings.Changed -= OnChanged;
+        };
+        return box;
+    }
+
     // 75–200 % for the whole interface (spec 027, #38). Applies live — this window rescales
     // under the pointer too — and is saved for the next launch.
     private static Control ScalePicker()
@@ -1297,6 +1344,8 @@ public sealed partial class PreferencesWindow : NotaWindow
                 Row("", Caption("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance.")),
                 Row("Waveform", WaveformPicker()),
                 Row("", Caption("How audio clips draw on the arrangement: Smooth outlines the peaks around the RMS level; Solid draws every pixel; Bars spaces the peaks out so the rhythm reads. Solid and Bars also set the browser's preview.")),
+                Row("Track headers", HeaderSidePicker()),
+                Row("", Caption("Which side of the arrangement the track list sits on. Right starts the timeline at the left edge, next to the browser. Also in the View menu.")),
                 Row("Interface scale", ScalePicker()),
                 Row("", Caption("Makes the whole interface larger or smaller. Timeline, piano roll and audio editor zoom work on top of it."))),
             Section("AI control (MCP)", 12, enable, details));

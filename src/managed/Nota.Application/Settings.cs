@@ -161,6 +161,9 @@ public sealed class Settings
     public int ArrangementClipLabels { get; set; } = 1;
     /// <summary>Show the song-structure (sections) lane over the ruler.</summary>
     public bool ArrangementShowSections { get; set; } = true;
+    /// <summary>The arrangement's track-header column sits on the right of the lanes (#72);
+    /// off = on the left. View ▸ Track headers on the right, or Settings → Appearance.</summary>
+    public bool ArrangementHeadersRight { get; set; }
     /// <summary>How audio clips draw their waveform on the lanes (Settings → Appearance):
     /// 0 smooth — the peak outline around its RMS body (default; was bars before #267, so a
     /// saved 0 moves to the new default), 1 solid — one column per pixel, 2 bars — spaced

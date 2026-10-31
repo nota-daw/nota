@@ -65,12 +65,12 @@ public sealed partial class ArrangementView
             Children = { label, _overviewRange },
         };
 
-        var grid = new Grid { Height = OverviewH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+        var grid = new Grid { Height = OverviewH };
         var header = HeaderPanel(labels);
         header.BindResource(Border.BackgroundProperty, "Brush.BgSunken");   // the strip is a well, header included
         grid.Children.Add(header);
-        Grid.SetColumn(_overview, 1);
         grid.Children.Add(_overview);
+        AddSideRow(grid, header, _overview);
 
         // A hairline under the strip separates it from the ruler (structure over shadows).
         var row = new Border { BorderThickness = new Thickness(0, 0, 0, 1), Child = grid };

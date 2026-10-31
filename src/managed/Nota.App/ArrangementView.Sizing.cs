@@ -479,7 +479,7 @@ public sealed partial class ArrangementView
         foreach (var hc in _headerCards.Values) hc.card.Width = w;
         foreach (var c in _footerHeaders.Children) c.Width = w;
         PlaceRowSeamGrips();
-        if (_columnSeam is not null) _columnSeam.Margin = new Thickness(w - SeamGrabPx / 2, 0, 0, 0);
+        PlaceColumnSeam();
         if (final)
         {
             RebuildHeaders();
@@ -499,8 +499,7 @@ public sealed partial class ArrangementView
         var line = new Border { Width = 1, HorizontalAlignment = HorizontalAlignment.Center, Background = Brushes.Transparent };
         var seam = new Border
         {
-            Width = SeamGrabPx, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch,
-            Margin = new Thickness(_headerW - SeamGrabPx / 2, 0, 0, 0),
+            Width = SeamGrabPx, VerticalAlignment = VerticalAlignment.Stretch,
             Background = Brushes.Transparent, Child = line,
             Cursor = new Cursor(StandardCursorType.SizeWestEast),
         };
@@ -520,7 +519,8 @@ public sealed partial class ArrangementView
         {
             if (!_colResizing) return;
             e.Handled = true;
-            SetHeaderWidth(_colResizeStartW + e.GetPosition(this).X - _colResizeStartX, final: false);
+            double dx = e.GetPosition(this).X - _colResizeStartX;
+            SetHeaderWidth(_colResizeStartW + (_headersRight ? -dx : dx), final: false);
         };
         void End()
         {
@@ -532,6 +532,69 @@ public sealed partial class ArrangementView
         seam.PointerReleased += (_, e) => { if (_colResizing) { e.Handled = true; e.Pointer.Capture(null); End(); } };
         seam.PointerCaptureLost += (_, _) => End();
         return seam;
+    }
+
+    private void PlaceColumnSeam()
+    {
+        if (_columnSeam is null) return;
+        double inset = _headerW - SeamGrabPx / 2;
+        _columnSeam.HorizontalAlignment = _headersRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        _columnSeam.Margin = _headersRight ? new Thickness(0, 0, inset, 0) : new Thickness(inset, 0, 0, 0);
+    }
+
+    // ---- header column side (specs/065) -----------------------------------------
+    // Every horizontal band is a two-column grid: the header part and the lane part(s).
+    // Moving the column to the right swaps those columns; hit-testing is relative to the
+    // header canvases and the lane controls, so the gestures need no change.
+
+    private bool _headersRight;
+    private readonly List<(Grid grid, Control header, Control[] lanes)> _sideRows = new();
+    // Header-column borders whose 1 px divider must face the lanes.
+    private readonly List<Border> _columnDividers = new();
+    private Border _columnBackdrop = null!;
+
+    private Thickness ColumnDivider => _headersRight ? new Thickness(1, 0, 0, 0) : new Thickness(0, 0, 1, 0);
+    // A header card also keeps its bottom rule.
+    private Thickness CardBorder => _headersRight ? new Thickness(1, 0, 0, 1) : new Thickness(0, 0, 1, 1);
+
+    /// <summary>The track-header column sits on the right of the lanes (View ▸ Track headers
+    /// on the right, Settings → Appearance). A per-user view preference, not project state.</summary>
+    public bool HeadersOnRight
+    {
+        get => _headersRight;
+        set
+        {
+            if (_headersRight == value) return;
+            _headersRight = value;
+            ApplyHeaderSide();
+        }
+    }
+
+    private void AddSideRow(Grid grid, Control header, params Control[] lanes)
+    {
+        _sideRows.Add((grid, header, lanes));
+        PlaceSideRow(grid, header, lanes);
+    }
+
+    private void PlaceSideRow(Grid grid, Control header, Control[] lanes)
+    {
+        grid.ColumnDefinitions = new ColumnDefinitions(_headersRight ? "*,Auto" : "Auto,*");
+        Grid.SetColumn(header, _headersRight ? 1 : 0);
+        foreach (var lane in lanes) Grid.SetColumn(lane, _headersRight ? 0 : 1);
+    }
+
+    private void ApplyHeaderSide()
+    {
+        foreach (var (grid, header, lanes) in _sideRows) PlaceSideRow(grid, header, lanes);
+        foreach (var b in _columnDividers) b.BorderThickness = ColumnDivider;
+        _columnBackdrop.HorizontalAlignment = _headersRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        PlaceColumnSeam();
+        // The cards carry their own divider: rebuild them with it on the new side.
+        RebuildHeaders();
+        RebuildFooterHeaders();
+        _lanes.InvalidateVisual();
+        _overlay.InvalidateVisual();
+        _footerLanes.InvalidateVisual();
     }
 
     // ---- duplicate / copy / paste carry the height ----------------------------

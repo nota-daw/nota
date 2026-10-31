@@ -66,6 +66,7 @@ public static class CommandCatalog
         C("view.follow", "Follow playhead", "View", "", "scroll"),
         C("view.showPlayhead", "Show playhead", "View", Shortcut.None('P'), "find locate scroll reveal cursor position", view: "Arrangement"),
         C("view.clipNames", "Cycle clip names", "View", "", "labels", view: "Arrangement"),
+        C("view.headersRight", "Track headers on the right", "View", "", "track list side left right swap mirror ableton", view: "Arrangement"),
         C("view.automation", "Toggle automation mode", "View", Shortcut.CmdShift('A'), "envelopes lanes", view: "Arrangement"),
         C("view.history", "Show version history", "View", "", "undo history versions snapshots"),
         C("view.midiLearn", "MIDI learn", "View", "", "map controller"),
