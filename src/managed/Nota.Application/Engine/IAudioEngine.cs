@@ -410,6 +410,8 @@ public interface IAudioEngine : IDisposable
     /// <summary>Adds an instrument track with the built-in Nota Mosaic multisample instrument (kind 17),
     /// empty until a program is set.</summary>
     int AddMosaicTrack();
+    /// <summary>Adds an instrument track with the built-in Nota Twin two-part morphing analog poly (kind 18).</summary>
+    int AddTwinTrack();
     /// <summary>Sets a Nota Mosaic's program (MosaicProgram text) and starts loading its samples in
     /// the background. <paramref name="undoable"/>: one undo step (sounding notes stop); false edits
     /// the live instrument in place (a drag in progress). False when the track isn't a Mosaic.</summary>

@@ -34,6 +34,7 @@ public static class RackKeyParams
         [14] = ["Filter Cutoff", "Filter Resonance", "Filter Env-Amount"],      // Nota Pentad
         [15] = ["Filter Cutoff", "Filter Resonance", "Mixer Drive"],            // Nota Consort
         [16] = ["Resonator Bright", "Hammer Hardness", "Tremolo Depth"],        // Nota Keys
+        [18] = ["Lower A · Ladder Cutoff", "Lower A · Ladder Resonance", "Lower · Morph"], // Nota Twin
     };
 
     // Built-in audio effects by device kind.

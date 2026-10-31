@@ -152,6 +152,12 @@ bool AuditionRig::setMosaicProgram(const std::string& text, int32_t timeoutMs) {
     return false;
 }
 
+bool AuditionRig::instrumentState(const uint8_t* data, int32_t size) {
+    if (!inst_ || kit_) return false;
+    inst_->setState(data, size);
+    return true;
+}
+
 bool AuditionRig::setSamplerSample(const std::string& path, int32_t rootNote) {
     if (auto* grain = dynamic_cast<GrainSynth*>(inst_.get())) {
         auto buf = path.empty() ? nullptr : decodeAudioFile(path);

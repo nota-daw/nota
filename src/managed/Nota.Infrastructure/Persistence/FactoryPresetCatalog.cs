@@ -1072,6 +1072,249 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
         Mos("Warm Pad",          "warm-pad",      ("attack", 0.71f), ("release", 0.85f), ("velamount", 0.4f));
         Mos("Warm Pad Filtered", "warm-pad",      ("attack", 0.8f), ("release", 0.9f), ("velamount", 0.4f), ("filtertype", 1f / 3f), ("cutoff", 0.55f), ("envcutoff", 1f), ("envamount", 0.7f));
 
+        // ---- Nota Twin (kind 18) — two-part morphing analog poly (specs/055). Tw(name, a, b) writes
+        //      the Lower part: `a` is side A, side B is A with `b` laid over it, so Morph travels
+        //      from one sound to a related one. Bare ids are side params ("ldcut" → lo.a.ldcut /
+        //      lo.b.ldcut); "lo.*" ids are side-less part params.
+        //      Wave tri/saw/square = 0/.5/1; coarse v = (st + 24)/48; fine .5 + cents/100;
+        //      cutoff v = log10(Hz/20)/3; env amount .5 + oct/16; attack v = ln(s/0.0005)/ln(20000);
+        //      decay / release v = ln(s/0.003)/ln(5000); route 0 series … 1 parallel; Filter (bal)
+        //      0 multimode … 1 ladder; voice mode Poly/Mono/Legato/Unison = 0/⅓/⅔/1.
+        Section("Pads");
+        Tw("Warm Two-Filter Pad", P(("lo.vol", 0.6f), ("o2level", 0.8f), ("o2fine", 0.57f), ("o1bal", 0.4f), ("o2bal", 0.7f), ("route", 0.6f),
+                ("mmcut", 0.625f), ("mmres", 0.2f), ("ldcut", 0.593f), ("ldres", 0.2f), ("ldenv", 0.6f), ("mmenv", 0.58f),
+                ("fenva", 0.6f), ("fenvd", 0.65f), ("fenvs", 0.4f), ("aenva", 0.62f), ("aenvr", 0.7f), ("drift", 0.4f), ("spread", 0.6f)),
+            P(("ldcut", 0.78f), ("mmcut", 0.8f), ("mmres", 0.45f), ("o1wave", 0.75f), ("o2wave", 0.25f), ("route", 0.2f), ("aenva", 0.45f)));
+        Tw("Glass Pad", P(("o1wave", 0f), ("o1metal", 0.35f), ("o2wave", 0f), ("o2coarse", 0.75f), ("o2level", 0.5f),
+                ("o1bal", 0f), ("o2bal", 0f), ("route", 1f), ("mmmode", 0.33f), ("mmcut", 0.7f), ("mmres", 0.35f),
+                ("aenva", 0.66f), ("aenvr", 0.76f), ("spread", 0.7f), ("drift", 0.3f)),
+            P(("o1metal", 0.8f), ("o2metal", 0.5f), ("mmmode", 0.6f), ("mmres", 0.6f), ("mmcut", 0.8f)));
+        Section("Keys");
+        Tw("Poly Keys", P(("o2wave", 0.75f), ("o2level", 0.5f), ("ldcut", 0.45f), ("ldenv", 0.72f), ("fenvd", 0.45f),
+                ("fenvs", 0.2f), ("fenvvel", 0.6f), ("aenvd", 0.55f), ("aenvs", 0.4f), ("aenvr", 0.45f), ("aenvvel", 0.7f)),
+            P(("ldcut", 0.62f), ("ldres", 0.4f), ("fenvd", 0.35f), ("o2coarse", 0.75f), ("aenvs", 0.2f)));
+        Tw("Metal Keys", P(("o1wave", 0f), ("o1metal", 0.5f), ("ldcut", 0.7f), ("ldenv", 0.62f), ("fenvd", 0.5f),
+                ("fenvs", 0.3f), ("aenvd", 0.6f), ("aenvs", 0.3f), ("aenvr", 0.5f), ("aenvvel", 0.6f)),
+            P(("o1metal", 0.9f), ("fm21", 0.35f), ("o2coarse", 0.75f), ("ldcut", 0.85f)));
+        Section("Brass");
+        Tw("Twin Brass", P(("lo.vol", 0.62f), ("o2level", 1f), ("o1fine", 0.45f), ("o2fine", 0.55f), ("ldcut", 0.4f), ("ldres", 0.15f),
+                ("ldenv", 0.7f), ("fenva", 0.4f), ("fenvd", 0.5f), ("fenvs", 0.55f), ("aenva", 0.3f), ("aenvs", 0.85f), ("aenvr", 0.45f)),
+            P(("ldcut", 0.55f), ("ldenv", 0.74f), ("fenva", 0.3f), ("drive", 0.35f)));
+        Section("Bass");
+        Tw("Steiner Bass", P(("lo.voicemode", 1f / 3f), ("lo.glide", 0.3f), ("o1coarse", 0.25f), ("o1wave", 0.75f), ("o1bal", 0f),
+                ("route", 1f), ("mmcut", 0.45f), ("mmres", 0.55f), ("mmenv", 0.75f), ("fenvd", 0.45f), ("fenvs", 0.1f), ("drive", 0.4f)),
+            P(("mmmode", 0.33f), ("mmres", 0.75f), ("mmenv", 0.85f), ("drive", 0.6f)));
+        Tw("Ladder Sub Bass", P(("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f), ("o2coarse", 0f), ("o2level", 0.6f), ("ldcut", 0.35f),
+                ("ldres", 0.3f), ("ldenv", 0.62f), ("fenvd", 0.4f), ("fenvs", 0.2f), ("aenvr", 0.3f)),
+            P(("ldcut", 0.48f), ("ldres", 0.55f), ("ldslope", 0f), ("brute", 0.3f)));
+        Section("Leads");
+        Tw("Sync Lead", P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.35f), ("sync", 1f), ("o2coarse", 0.75f), ("o2level", 1f), ("o1level", 0.3f),
+                ("ldcut", 0.7f), ("ldenv", 0.6f), ("fenvd", 0.5f), ("vibamt", 0.3f), ("lfo1rate", 0.72f)),
+            P(("o2coarse", 0.95f), ("fmfilt", 0.3f), ("ldres", 0.35f)));
+        Tw("Brute Lead", P(("lo.voicemode", 1f), ("unidetune", 0.35f), ("brute", 0.6f), ("drive", 0.35f), ("ldcut", 0.6f),
+                ("ldres", 0.45f), ("o2level", 0.7f), ("o2wave", 1f), ("vibamt", 0.25f)),
+            P(("brute", 0.9f), ("drive", 0.6f), ("ldcut", 0.75f), ("unidetune", 0.55f)));
+        Section("Plucks");
+        Tw("Twin Pluck", P(("o2wave", 1f), ("o2level", 0.5f), ("ldcut", 0.3f), ("ldres", 0.35f), ("ldenv", 0.8f), ("fenvd", 0.38f),
+                ("fenvs", 0f), ("aenvd", 0.45f), ("aenvs", 0f), ("aenvr", 0.45f), ("spread", 0.5f)),
+            P(("fenvd", 0.55f), ("aenvd", 0.6f), ("o1wave", 0f), ("o1metal", 0.4f), ("ldres", 0.55f)));
+        Section("FX");
+        Tw("Noise Sweep", P(("lo.vol", 0.6f), ("o1level", 0f), ("noiselevel", 1f), ("noisebal", 0f), ("route", 1f), ("mmres", 0.85f), ("mmmode", 0.33f),
+                ("mmcut", 0.35f), ("mmenv", 0.9f), ("fenva", 0.8f), ("fenvd", 0.85f), ("aenva", 0.5f), ("aenvr", 0.8f)),
+            P(("mmmode", 0.9f), ("noisecolor", 0.9f), ("mmcut", 0.55f)));
+        Tw("FM Bell", P(("o1wave", 0f), ("fm21", 0.55f), ("o2coarse", 0.896f), ("o2level", 0f), ("ldcut", 0.9f),
+                ("aenvd", 0.7f), ("aenvs", 0f), ("aenvr", 0.7f), ("aenvvel", 0.6f)),
+            P(("fm21", 0.8f), ("o2coarse", 0.75f), ("o1metal", 0.3f)));
+
+        Section("Pads");
+        Tw("Slow Bloom", Cat(P(("o2level", 0.7f), ("o2fine", 0.56f), ("ldcut", 0.42f), ("ldres", 0.25f), ("ldenv", 0.62f), ("fenva", 0.84f), ("fenvd", 0.8f),
+                ("fenvs", 0.6f), ("aenva", 0.84f), ("aenvr", 0.8f), ("spread", 0.7f), ("drift", 0.45f), ("revon", 1f), ("revsize", 0.75f), ("revmix", 0.35f)),
+                Rt(7, "LFO 2", "ldcut", 0.08f), P(("lfo2rate", 0.25f))),
+            P(("ldcut", 0.7f), ("o1metal", 0.4f), ("o1wave", 0.2f), ("mmcut", 0.75f), ("o1bal", 0.5f), ("route", 0.5f), ("revsize", 0.95f)));
+        Tw("Dream Morph Pad", Cat(P(("lo.vol", 0.62f), ("o2level", 0.8f), ("o2coarse", 0.646f), ("o2wave", 0f), ("ldcut", 0.5f), ("aenva", 0.77f), ("aenvr", 0.8f),
+                ("modfxon", 1f), ("modfxtype", 1f), ("revon", 1f), ("revsize", 0.8f), ("revmix", 0.4f), ("lfo3rate", 0.15f), ("lfo3mode", 1f)),
+                Rt(7, "LFO 3", "Morph", 0.9f)),
+            P(("o1wave", 1f), ("o1pw", 0.2f), ("ldcut", 0.75f), ("ldres", 0.45f), ("mmmode", 0.5f), ("mmcut", 0.6f), ("o1bal", 0.3f)));
+        Tw("Wide Saws", Cat(P(("lo.vol", 0.55f), ("o2level", 0.9f), ("o1fine", 0.42f), ("o2fine", 0.58f), ("ldcut", 0.6f), ("ldenv", 0.55f),
+                ("aenva", 0.55f), ("aenvr", 0.65f), ("spread", 1f), ("drift", 0.6f), ("modfxon", 1f), ("modfxmix", 0.45f))),
+            P(("o1fine", 0.35f), ("o2fine", 0.65f), ("ldcut", 0.75f), ("modfxtype", 1f), ("dlyon", 1f), ("dlymix", 0.2f)));
+        Section("Keys");
+        Tw("Twin EP", Cat(P(("o1wave", 0f), ("o1metal", 0.2f), ("o2wave", 0f), ("o2coarse", 0.75f), ("o2level", 0.25f), ("ldcut", 0.6f), ("ldenv", 0.6f),
+                ("fenvd", 0.55f), ("fenvs", 0.1f), ("aenvd", 0.72f), ("aenvs", 0.15f), ("aenvr", 0.5f), ("aenvvel", 0.8f), ("modfxon", 1f), ("modfxtype", 0f)),
+                Rt(7, "Velocity", "o1metal", 0.3f)),
+            P(("o1metal", 0.45f), ("ldcut", 0.72f), ("modfxtype", 2f / 3f)));
+        Tw("Clav Funk", Cat(P(("o1wave", 1f), ("o1pw", 0.12f), ("o1bal", 0f), ("route", 1f), ("mmmode", 0.33f), ("mmcut", 0.6f), ("mmres", 0.4f), ("mmenv", 0.7f),
+                ("fenvd", 0.38f), ("fenvs", 0f), ("aenvd", 0.5f), ("aenvs", 0f), ("aenvr", 0.3f), ("aenvvel", 0.8f))),
+            P(("o1pw", 0.3f), ("mmmode", 0.0f), ("mmres", 0.6f), ("mmenv", 0.8f)));
+        Tw("Drawbar Organ", Cat(P(("o1wave", 0f), ("o2wave", 0f), ("o2coarse", 0.75f), ("o2level", 0.6f), ("noiselevel", 0.02f), ("ldcut", 0.85f),
+                ("aenva", 0.15f), ("aenvr", 0.3f), ("aenvvel", 0f), ("modfxon", 1f), ("modfxtype", 1f), ("modfxmix", 0.5f))),
+            P(("o2coarse", 0.896f), ("o1metal", 0.25f), ("modfxrate", 0.6f), ("drive", 0.3f)));
+        Section("Leads");
+        Tw("Mono Saw Lead", Cat(P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.4f), ("o2level", 0.8f), ("o2fine", 0.53f), ("ldcut", 0.62f), ("ldres", 0.3f),
+                ("ldenv", 0.6f), ("fenvd", 0.55f), ("vibamt", 0.35f), ("lfo1fade", 0.55f), ("dlyon", 1f), ("dlymix", 0.2f))),
+            P(("ldcut", 0.78f), ("drive", 0.4f), ("ldres", 0.45f)));
+        Tw("Pressure Lead", Cat(P(("lo.voicemode", 1f / 3f), ("lo.glide", 0.3f), ("o1wave", 0.75f), ("o2level", 0.6f), ("ldcut", 0.5f), ("ldres", 0.35f)),
+                Rt(7, "Pressure", "brute", 0.6f), Rt(8, "Pressure", "Vibrato", 0.4f)),
+            P(("o1wave", 1f), ("ldcut", 0.65f), ("drive", 0.3f)));
+        Tw("Filter FM Scream", Cat(P(("lo.vol", 0.6f), ("lo.voicemode", 2f / 3f), ("o2coarse", 0.646f), ("o2level", 0.4f), ("fmfilt", 0.45f), ("o1bal", 0f),
+                ("route", 1f), ("mmcut", 0.55f), ("mmres", 0.65f), ("mmenv", 0.65f), ("fenvd", 0.6f), ("drive", 0.35f))),
+            P(("fmfilt", 0.75f), ("mmmode", 0.33f), ("mmres", 0.8f)));
+        Section("Bass");
+        Tw("Pluck Bass", Cat(P(("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f), ("o2coarse", 0.25f), ("o2wave", 1f), ("o2level", 0.6f), ("ldcut", 0.3f),
+                ("ldenv", 0.75f), ("fenvd", 0.38f), ("fenvs", 0f), ("aenvd", 0.55f), ("aenvs", 0.2f), ("aenvr", 0.3f))),
+            P(("ldcut", 0.4f), ("ldres", 0.4f), ("fenvd", 0.3f)));
+        Tw("Acid Ladder", Cat(P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.3f), ("o1coarse", 0.25f), ("o1wave", 0.5f), ("ldcut", 0.3f), ("ldres", 0.75f),
+                ("ldenv", 0.8f), ("fenvd", 0.4f), ("fenvs", 0f), ("fenvvel", 0.8f), ("drive", 0.4f))),
+            P(("o1wave", 1f), ("ldres", 0.88f), ("ldenv", 0.88f), ("drive", 0.6f)));
+        Tw("Sub Wobble", Cat(P(("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f), ("o2coarse", 0f), ("o2level", 0.5f), ("ldcut", 0.4f), ("ldres", 0.4f),
+                ("lfo1sync", 1f), ("lfo1div", 9f / 13f), ("vibamt", 0f), ("lfo1mode", 1f)),
+                Rt(7, "LFO 1", "ldcut", 0.25f)),
+            P(("lfo1div", 11f / 13f), ("ldres", 0.6f), ("drive", 0.35f)));
+        Section("Brass");
+        Tw("Brass Section", Cat(P(("lo.vol", 0.6f), ("o2level", 1f), ("o1fine", 0.44f), ("o2fine", 0.56f), ("ldcut", 0.42f), ("ldenv", 0.72f), ("fenva", 0.42f),
+                ("fenvd", 0.55f), ("fenvs", 0.5f), ("aenva", 0.35f), ("aenvs", 0.8f), ("aenvr", 0.5f), ("spread", 0.8f), ("revon", 1f), ("revmix", 0.2f))),
+            P(("ldcut", 0.55f), ("fenva", 0.3f), ("o1wave", 0.6f), ("o2wave", 0.6f)));
+        Tw("Soft Horns", Cat(P(("o1wave", 0.35f), ("o2level", 0.6f), ("ldcut", 0.38f), ("ldenv", 0.6f), ("fenva", 0.6f), ("fenvd", 0.6f), ("fenvs", 0.6f),
+                ("aenva", 0.55f), ("aenvr", 0.55f), ("vibamt", 0.2f))),
+            P(("ldcut", 0.5f), ("o1wave", 0.5f), ("mmcut", 0.7f), ("o1bal", 0.6f)));
+        Section("Strings");
+        Tw("String Machine", Cat(P(("lo.vol", 0.62f), ("o2level", 0.8f), ("o2coarse", 0.75f), ("ldcut", 0.55f), ("ldenv", 0.5f), ("aenva", 0.7f), ("aenvr", 0.7f),
+                ("modfxon", 1f), ("modfxtype", 1f), ("modfxmix", 0.6f), ("revon", 1f), ("revmix", 0.25f))),
+            P(("ldcut", 0.68f), ("o1pw", 0.3f), ("o1wave", 0.6f), ("modfxdepth", 0.75f)));
+        Tw("Bowed Cello", Cat(P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.25f), ("o1coarse", 0.25f), ("o2coarse", 0.25f), ("o2level", 0.5f), ("o2fine", 0.55f),
+                ("ldcut", 0.5f), ("ldres", 0.15f), ("aenva", 0.6f), ("aenvr", 0.5f), ("vibamt", 0.25f), ("lfo1rate", 0.68f), ("lfo1fade", 0.6f),
+                ("noiselevel", 0.05f), ("revon", 1f), ("revmix", 0.2f))),
+            P(("ldcut", 0.62f), ("o1metal", 0.2f), ("o1wave", 0.45f)));
+        Tw("Pizzicato", Cat(P(("o2level", 0.4f), ("ldcut", 0.4f), ("ldenv", 0.7f), ("fenvd", 0.35f), ("fenvs", 0f), ("aenvd", 0.45f), ("aenvs", 0f), ("aenvr", 0.35f),
+                ("aenvvel", 0.7f), ("revon", 1f), ("revmix", 0.3f))),
+            P(("o1wave", 0.2f), ("ldcut", 0.52f), ("aenvd", 0.55f)));
+        Tw("Morphing Strings", Cat(P(("lo.vol", 0.62f), ("o2level", 0.7f), ("o2fine", 0.56f), ("ldcut", 0.45f), ("aenva", 0.72f), ("aenvr", 0.72f),
+                ("modfxon", 1f), ("modfxtype", 1f), ("lfo3rate", 0.1f), ("lfo3mode", 1f)),
+                Rt(7, "LFO 3", "Morph", 0.8f)),
+            P(("ldcut", 0.72f), ("o1wave", 0.75f), ("o2wave", 0.25f), ("ldres", 0.3f)));
+        Section("Plucks");
+        Tw("Harp Glass", Cat(P(("o1wave", 0f), ("o1metal", 0.3f), ("ldcut", 0.7f), ("aenvd", 0.62f), ("aenvs", 0f), ("aenvr", 0.6f), ("spread", 0.6f),
+                ("dlyon", 1f), ("dlymix", 0.2f), ("revon", 1f), ("revmix", 0.3f))),
+            P(("o1metal", 0.6f), ("fm21", 0.25f), ("o2coarse", 0.75f)));
+        Tw("Kalimba Metal", Cat(P(("o1wave", 0f), ("o1metal", 0.55f), ("fm21", 0.3f), ("o2coarse", 0.896f), ("o2level", 0f), ("ldcut", 0.8f),
+                ("aenvd", 0.55f), ("aenvs", 0f), ("aenvr", 0.5f), ("aenvvel", 0.7f))),
+            P(("o1metal", 0.8f), ("fm21", 0.5f)));
+        Tw("Muted Pluck", Cat(P(("lo.vol", 0.85f), ("o1wave", 0.75f), ("o2level", 0.5f), ("ldcut", 0.45f), ("ldres", 0.2f), ("ldenv", 0.66f), ("fenvd", 0.36f),
+                ("fenvs", 0f), ("aenvd", 0.5f), ("aenvs", 0.05f), ("aenvr", 0.35f))),
+            P(("ldcut", 0.52f), ("ldres", 0.45f), ("fenvd", 0.42f)));
+        Section("Sequences");
+        Tw("S&H Bleeps", Cat(P(("o1wave", 1f), ("o1pw", 0.3f), ("o1bal", 0f), ("route", 1f), ("mmmode", 0.2f), ("mmcut", 0.5f), ("mmres", 0.6f),
+                ("lfo2shape", 0.8f), ("lfo2sync", 1f), ("lfo2div", 11f / 13f), ("lfo2mode", 1f), ("dlyon", 1f), ("dlymix", 0.3f)),
+                Rt(7, "LFO 2", "mmcut", 0.35f)),
+            P(("mmmode", 0.5f), ("mmres", 0.75f), ("lfo2div", 9f / 13f)));
+        Tw("Pulse Motion", Cat(P(("o2level", 0.6f), ("o2coarse", 0.646f), ("ldcut", 0.5f), ("ldres", 0.35f), ("lfo2shape", 0.6f), ("lfo2sync", 1f),
+                ("lfo2div", 9f / 13f), ("lfo2mode", 1f)),
+                Rt(7, "LFO 2", "o1level", -0.5f), Rt(8, "LFO 2", "ldcut", 0.15f)),
+            P(("lfo2div", 11f / 13f), ("ldres", 0.55f)));
+        Tw("Random Steps", Cat(P(("o1wave", 0.75f), ("ldcut", 0.5f), ("ldres", 0.4f), ("aenvd", 0.5f), ("aenvs", 0.2f), ("dlyon", 1f), ("dlymix", 0.3f)),
+                Rt(7, "Random", "ldcut", 0.15f), Rt(8, "Random", "o1wave", 0.4f)),
+            P(("ldres", 0.6f), ("m8amt", 0.9f)));
+        TwSeq("Berlin Bass Seq", P(("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f), ("o1wave", 0.75f), ("ldcut", 0.35f), ("ldres", 0.45f), ("ldenv", 0.7f),
+                ("fenvd", 0.36f), ("fenvs", 0f), ("aenvr", 0.3f), ("dlyon", 1f), ("dlymix", 0.2f)),
+            P(("ldcut", 0.5f), ("ldres", 0.65f), ("drive", 0.4f)),
+            new[] { "C2:110:60%", "C3:80:40%", "C2:100:60%", "G2:80:40%", "C2:110:60%", "C3:80:40%", "D#2:100:50%", "A#2:80:40%",
+                    "C2:110:60%", "C3:80:40%", "C2:100:60%", "G2:80:40%", "F2:110:60%", "D#2:80:40%", "C2:100:60%", "G1:90:50%" });
+        TwSeq("Chord Stabs Seq", P(("seq.rate", 0.4f), ("o2level", 0.7f), ("o2fine", 0.55f), ("ldcut", 0.5f), ("ldenv", 0.7f), ("fenvd", 0.4f), ("fenvs", 0f),
+                ("aenvd", 0.5f), ("aenvs", 0f), ("revon", 1f), ("revmix", 0.25f)),
+            P(("ldcut", 0.65f), ("o1wave", 1f), ("o1pw", 0.3f)),
+            new[] { ".", "C3 D#3 G3:100:40%", ".", "C3 D#3 G3:90:40%", ".", "A#2 D3 F3:100:40%", ".", "G#2 C3 D#3:90:60%" });
+        TwSeq("Arp Glass Up", P(("seq.kind", 1f), ("arp.mode", 0f), ("arp.oct", 1f / 3f), ("arp.gate", 0.4f), ("o1wave", 0f), ("o1metal", 0.35f),
+                ("ldcut", 0.75f), ("aenvd", 0.55f), ("aenvs", 0.1f), ("dlyon", 1f), ("dlymix", 0.3f)),
+            P(("o1metal", 0.7f), ("fm21", 0.3f), ("o2coarse", 0.75f)), new[] { "." });
+        TwSeq("Arp Random Bells", P(("seq.kind", 1f), ("arp.mode", 0.6f), ("arp.oct", 2f / 3f), ("arp.gate", 0.3f), ("o1wave", 0f), ("fm21", 0.45f),
+                ("o2coarse", 0.896f), ("o2level", 0f), ("ldcut", 0.9f), ("aenvd", 0.6f), ("aenvs", 0f), ("revon", 1f), ("revmix", 0.35f)),
+            P(("fm21", 0.7f), ("o1metal", 0.3f)), new[] { "." });
+        TwSeq("Arp Chord Pulse", P(("seq.kind", 1f), ("seq.rate", 0.4f), ("arp.mode", 1f), ("arp.gate", 0.5f), ("o2level", 0.7f), ("ldcut", 0.55f),
+                ("ldenv", 0.65f), ("fenvd", 0.42f), ("fenvs", 0.1f), ("modfxon", 1f), ("modfxtype", 1f)),
+            P(("ldcut", 0.7f), ("ldres", 0.4f)), new[] { "." });
+        TwSeq("Morph Sequence", P(("o2level", 0.7f), ("o2coarse", 0.75f), ("ldcut", 0.5f), ("ldenv", 0.6f), ("fenvd", 0.45f), ("aenvd", 0.55f), ("aenvs", 0.2f)),
+            P(("o1wave", 1f), ("o1pw", 0.25f), ("ldcut", 0.8f), ("ldres", 0.5f)),
+            new[] { "C3:100:70%", "C3:90:70%", "G3:100:70%", "C3:90:70%", "D#3:100:70%", "C3:90:70%", "G3:100:70%", "A#3:90:70%" },
+            (21, true, new[] { 0f, 0.15f, 0.3f, 0.45f, 0.6f, 0.75f, 0.9f, 1f })); // lane on "lo.morph" (param 21)
+        TwSeq("Tied Melody", P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.35f), ("seq.rate", 0.4f), ("o2level", 0.6f), ("ldcut", 0.55f), ("vibamt", 0.25f),
+                ("dlyon", 1f), ("dlymix", 0.25f)),
+            P(("ldcut", 0.7f), ("o1wave", 0.7f)),
+            new[] { "C4:100:tie", "C4:100:60%", "D#4:90:60%", "G4:100:tie", "G4:100:60%", "F4:90:60%", "D#4:90:tie", "D#4:90:80%" });
+        TwSeq("Swing Keys Seq", P(("seq.swing", 0.55f), ("o1wave", 0f), ("o1metal", 0.2f), ("ldcut", 0.6f), ("aenvd", 0.6f), ("aenvs", 0.1f), ("aenvvel", 0.7f),
+                ("modfxon", 1f)),
+            P(("o1metal", 0.45f), ("ldcut", 0.72f)),
+            new[] { "C3 E3:100:50%", "G3:70:40%", "A3:90:50%", "G3:70:40%", "F3 A3:100:50%", "C4:70:40%", "E3:90:50%", "D3:70:40%" });
+
+        Section("FX");
+        Tw("Rising Tension", Cat(P(("lo.vol", 0.6f), ("o2level", 0.8f), ("o2fine", 0.6f), ("menva", 0.9f), ("menvs", 1f), ("ldcut", 0.4f), ("aenva", 0.6f),
+                ("revon", 1f), ("revmix", 0.4f)),
+                Rt(7, "Mod env", "Pitch", 0.25f), Rt(8, "Mod env", "ldcut", 0.4f)),
+            P(("o1metal", 0.4f), ("ldres", 0.5f)));
+        Tw("Wind Morph", Cat(P(("o1level", 0f), ("noiselevel", 1f), ("noisecolor", 0.8f), ("noisebal", 0f), ("route", 1f), ("mmmode", 0.33f), ("mmcut", 0.55f),
+                ("mmres", 0.6f), ("aenva", 0.7f), ("aenvr", 0.75f), ("lfo3rate", 0.2f), ("lfo3mode", 1f), ("revon", 1f), ("revmix", 0.5f)),
+                Rt(7, "LFO 3", "mmcut", 0.2f)),
+            P(("noisecolor", 0.2f), ("mmmode", 0.66f), ("mmres", 0.8f)));
+        Section("Morph");
+        Tw("Day to Night", Cat(P(("o1wave", 0.6f), ("o2level", 0.6f), ("o2coarse", 0.75f), ("ldcut", 0.8f), ("aenva", 0.4f), ("aenvr", 0.6f))),
+            P(("o1wave", 0.2f), ("o2level", 0.2f), ("ldcut", 0.35f), ("revon", 1f), ("revsize", 0.9f), ("revmix", 0.5f), ("aenva", 0.7f)));
+        Tw("Glass to Grit", Cat(P(("lo.vol", 0.5f), ("o1wave", 0f), ("o1metal", 0.3f), ("ldcut", 0.75f), ("aenvr", 0.55f))),
+            P(("o1wave", 0.6f), ("o1metal", 0f), ("brute", 0.4f), ("drive", 0.45f), ("ldcut", 0.5f), ("ldres", 0.4f)));
+        Tw("Velocity Morph", Cat(P(("lo.morph", 0f), ("o1wave", 0.5f), ("ldcut", 0.4f), ("aenvd", 0.65f), ("aenvs", 0.3f)),
+                Rt(7, "Velocity", "Morph", 1f)),
+            P(("o1wave", 1f), ("o1pw", 0.25f), ("ldcut", 0.8f), ("ldres", 0.4f)));
+        Tw("Key Split Morph", Cat(P(("o2level", 0.5f), ("ldcut", 0.45f)),
+                Rt(7, "Key", "Morph", 1f)),
+            P(("o1wave", 0f), ("o1metal", 0.5f), ("o2coarse", 0.75f), ("ldcut", 0.85f), ("aenvd", 0.6f), ("aenvs", 0.1f)));
+        Tw("Wheel Morph", Cat(P(("o2level", 0.7f), ("ldcut", 0.4f), ("aenva", 0.5f), ("aenvr", 0.6f), ("vibamt", 0f)),
+                Rt(7, "Mod wheel", "Morph", 1f)),
+            P(("o1wave", 0.9f), ("o2wave", 0.1f), ("ldcut", 0.75f), ("ldres", 0.45f), ("modfxon", 1f)));
+        // Two parts (US9): TwParts(name, globals, lower A, lower B, upper A, upper B). mode Layer .5 /
+        // Split 1; splitkey = first Upper key / 127; share .25 / .5 / .75 = Lower 4 / 6 / 8 voices.
+        Section("Split & Layer");
+        TwParts("Bass + Pad Split", P(("mode", 1f), ("splitkey", 48f / 127f), ("share", 0.25f)),
+            P(("lo.voicemode", 1f / 3f), ("lo.glide", 0.25f), ("o1coarse", 0.25f), ("o1wave", 0.75f), ("o1bal", 0f), ("route", 1f),
+                ("mmcut", 0.45f), ("mmres", 0.5f), ("mmenv", 0.72f), ("fenvd", 0.42f), ("fenvs", 0.15f), ("drive", 0.35f)),
+            P(("mmres", 0.7f), ("mmenv", 0.82f)),
+            P(("lo.vol", 0.55f), ("o2level", 0.8f), ("o2fine", 0.57f), ("ldcut", 0.6f), ("ldenv", 0.58f), ("fenva", 0.6f), ("fenvd", 0.65f),
+                ("aenva", 0.62f), ("aenvr", 0.7f), ("drift", 0.4f), ("spread", 0.6f), ("revon", 1f)),
+            P(("ldcut", 0.78f), ("o1wave", 0.75f), ("aenva", 0.45f)));
+        TwParts("Sub + Lead Split", P(("mode", 1f), ("splitkey", 53f / 127f), ("share", 0.5f)),
+            P(("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f), ("o2coarse", 0f), ("o2level", 0.6f), ("ldcut", 0.35f), ("ldres", 0.3f),
+                ("ldenv", 0.62f), ("fenvd", 0.4f), ("fenvs", 0.2f), ("aenvr", 0.3f)),
+            P(("ldcut", 0.48f), ("ldres", 0.55f), ("brute", 0.3f)),
+            P(("lo.voicemode", 2f / 3f), ("lo.glide", 0.35f), ("o1wave", 0.5f), ("o2wave", 1f), ("o2level", 0.7f), ("o2fine", 0.56f), ("ldcut", 0.55f),
+                ("ldres", 0.35f), ("ldenv", 0.66f), ("fenvd", 0.5f), ("fenvs", 0.5f), ("vibamt", 0.25f), ("dlyon", 1f)),
+            P(("ldcut", 0.72f), ("ldres", 0.55f), ("drive", 0.45f), ("sync", 1f)));
+        TwParts("Keys + Strings Layer", P(("mode", 0.5f), ("share", 0.5f)),
+            P(("lo.vol", 0.6f), ("o2wave", 0.75f), ("o2level", 0.5f), ("ldcut", 0.45f), ("ldenv", 0.72f), ("fenvd", 0.45f), ("fenvs", 0.2f),
+                ("fenvvel", 0.6f), ("aenvd", 0.55f), ("aenvs", 0.4f), ("aenvr", 0.45f), ("aenvvel", 0.7f)),
+            P(("ldcut", 0.62f), ("ldres", 0.4f), ("fenvd", 0.35f)),
+            P(("lo.vol", 0.5f), ("o2level", 1f), ("o2fine", 0.58f), ("o1fine", 0.42f), ("ldcut", 0.62f), ("aenva", 0.66f), ("aenvs", 0.9f), ("aenvr", 0.72f),
+                ("spread", 0.8f), ("modfxon", 1f), ("revon", 1f)),
+            P(("ldcut", 0.75f), ("aenva", 0.55f), ("o1wave", 0.75f)));
+        TwParts("Brass + Pad Layer", P(("mode", 0.5f), ("share", 0.5f)),
+            P(("lo.vol", 0.6f), ("o2level", 1f), ("o1fine", 0.45f), ("o2fine", 0.55f), ("ldcut", 0.4f), ("ldres", 0.15f), ("ldenv", 0.7f),
+                ("fenva", 0.4f), ("fenvd", 0.5f), ("fenvs", 0.55f), ("aenva", 0.3f), ("aenvs", 0.85f), ("aenvr", 0.45f)),
+            P(("ldcut", 0.55f), ("ldenv", 0.74f), ("drive", 0.35f)),
+            P(("lo.vol", 0.45f), ("o1wave", 0f), ("o1metal", 0.3f), ("o2wave", 0f), ("o2coarse", 0.75f), ("o2level", 0.5f), ("o1bal", 0f), ("o2bal", 0f),
+                ("route", 1f), ("mmmode", 0.33f), ("mmcut", 0.7f), ("aenva", 0.7f), ("aenvr", 0.78f), ("spread", 0.7f), ("revon", 1f)),
+            P(("o1metal", 0.7f), ("mmcut", 0.8f), ("mmres", 0.5f)));
+        TwParts("Glass Bell Layer", P(("mode", 0.5f), ("share", 0.5f)),
+            P(("lo.pan", 0.35f), ("lo.vol", 0.55f), ("o1wave", 0f), ("o1metal", 0.5f), ("ldcut", 0.7f), ("ldenv", 0.62f), ("fenvd", 0.5f),
+                ("fenvs", 0.3f), ("aenvd", 0.6f), ("aenvs", 0.2f), ("aenvr", 0.6f), ("aenvvel", 0.6f)),
+            P(("o1metal", 0.9f), ("fm21", 0.35f), ("o2coarse", 0.75f)),
+            P(("lo.pan", 0.65f), ("lo.vol", 0.45f), ("lo.octave", 0.75f), ("o1wave", 0f), ("o2wave", 0f), ("o2coarse", 0.75f), ("o2level", 0.4f),
+                ("ldcut", 0.8f), ("aenva", 0.2f), ("aenvd", 0.7f), ("aenvs", 0f), ("aenvr", 0.65f), ("dlyon", 1f)),
+            P(("o1metal", 0.6f), ("ldcut", 0.9f)));
+        TwParts("Arp Bass + Pad Split", P(("mode", 1f), ("splitkey", 48f / 127f), ("share", 0.25f), ("seq.on", 1f), ("seq.kind", 1f),
+                ("seq.target", 0f), ("arp.mode", 0.4f), ("arp.oct", 1f / 3f), ("arp.gate", 0.4f)),
+            P(("lo.voicemode", 1f / 3f), ("o1coarse", 0.25f), ("o1wave", 0.5f), ("o2level", 0.6f), ("o2fine", 0.55f), ("ldcut", 0.42f),
+                ("ldres", 0.45f), ("ldenv", 0.68f), ("fenvd", 0.35f), ("fenvs", 0.1f), ("aenvd", 0.45f), ("aenvs", 0.5f), ("aenvr", 0.25f)),
+            P(("ldcut", 0.55f), ("ldres", 0.6f), ("brute", 0.25f)),
+            P(("lo.vol", 0.5f), ("o2level", 0.8f), ("o2fine", 0.58f), ("ldcut", 0.55f), ("aenva", 0.64f), ("aenvr", 0.72f), ("spread", 0.7f),
+                ("modfxon", 1f), ("revon", 1f)),
+            P(("ldcut", 0.72f), ("o1wave", 0.75f)));
+
         // ---- Nota EQ-8 (kind 0) — raw units. Eq8(…) spells out every band it uses with B(band, type,
         //      Hz, dB, Q, slope, channel); a band it does not name is switched off. Type: 0 Low cut,
         //      1 Low shelf, 2 Bell, 3 Notch, 4 High shelf, 5 High cut. Slope (cuts): 0 = 12, 1 = 24,
@@ -2590,6 +2833,9 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
     public string ResetInPlace(IAudioEngine engine, int trackId, int deviceIndex, bool midiEffect)
         => PresetService.ResetInPlace(engine, trackId, deviceIndex, midiEffect);
 
+    public IReadOnlyDictionary<string, float>? InstrumentParams(string id)
+        => _byId.TryGetValue(id, out var doc) && doc.NamedParams is { Count: > 0 } named ? named : null;
+
     // Nota Consort preset helpers (see the Consort block above).
     private static (string, float)[] P(params (string, float)[] ps) => ps;
     private static (string, float)[] Cat(params (string, float)[][] parts)
@@ -2627,6 +2873,75 @@ public sealed class FactoryPresetCatalog : IFactoryPresets
     {
         Inst("mosaic", MosaicModel.Kind, name, ps);
         _byId["mosaic/" + name].MosaicSource = source;
+    }
+
+    // A Nota Twin matrix route in slot `slot` (7..64; 1–6 hold Init's expression routes) for
+    // Tw(): the source by name and the destination as "Morph" / "Pitch" / "Vibrato" / … or a side
+    // param id ("ldcut"), depth −1..1 on side A (side B copies it unless Tw's `b` sets "mNamt").
+    private static (string Id, float Value)[] Rt(int slot, string source, string destination, float depth)
+    {
+        int src = System.Array.IndexOf(Nota.Application.Twin.TwinMatrix.Sources, source);
+        int dst = destination switch { "Morph" => 1, "Pitch" => 2, "Osc 1 pitch" => 3, "Osc 2 pitch" => 4, "Vibrato" => 5,
+            _ => Nota.Application.Twin.TwinMatrix.DestinationOfSide(destination) };
+        if (src <= 0 || dst <= 0) throw new System.ArgumentException($"Twin route {source} → {destination}");
+        return new[] { ($"lo.m{slot}.src", src / 63f), ($"lo.m{slot}.dst", dst / 255f), ($"m{slot}amt", 0.5f + 0.5f * depth) };
+    }
+
+    // Nota Twin's patch-wide params (no part, no side), and the sequencer's ("seq.*", "arp.*").
+    private static readonly HashSet<string> TwinGlobals = new() { "mode", "splitkey", "share", "voices", "padx", "pady", "padz", "bendrange" };
+
+    // A Nota Twin preset that plays its own pattern (pattern 1, the sequencer on): `rows` in
+    // TwinPatterns' text form; `motion` puts a lane on a param (its index, one value per row).
+    private void TwSeq(string name, (string Id, float Value)[] a, (string Id, float Value)[] b, string[] rows,
+        (int Param, bool Smooth, float[] Values)? motion = null)
+    {
+        Tw(name, Cat(P(("seq.on", 1f)), a), b);
+        var set = new Nota.Application.Twin.TwinPatterns.Pattern[Nota.Application.Twin.TwinPatterns.Patterns];
+        for (int i = 0; i < set.Length; i++) set[i] = new Nota.Application.Twin.TwinPatterns.Pattern();
+        set[0].Length = rows.Length;
+        for (int k = 0; k < rows.Length; k++)
+            set[0].Steps[k] = Nota.Application.Twin.TwinPatterns.ParseStep(rows[k], out var err)
+                ?? throw new System.ArgumentException($"Twin preset {name}, row {k + 1}: {err}");
+        if (motion is { } m)
+        {
+            set[0].Lanes[0].Target = m.Param;
+            set[0].Lanes[0].Smooth = m.Smooth;
+            for (int k = 0; k < m.Values.Length && k < rows.Length; k++) set[0].Lanes[0].Values[k] = (ushort)System.Math.Round(m.Values[k] * 65534);
+        }
+        _byId["twin/" + name].StateBase64 = System.Convert.ToBase64String(Nota.Application.Twin.TwinPatterns.StateWithPatterns(set));
+    }
+
+    // A Nota Twin preset for the Lower part: side A, and side B = A with `b` laid over it.
+    // Bare ids are side params; "lo.*" ids are the part's side-less params (specs/055).
+    private void Tw(string name, (string Id, float Value)[] a, (string Id, float Value)[] b)
+        => Inst("twin", 18, name, TwPart("lo.", a, b).ToArray());
+
+    // One part's params for Tw / TwParts: `a` is side A, side B = A with `b` laid over it; "lo.*"
+    // ids are the part's side-less params (renamed to `part`), other dotted ids and the patch-wide
+    // ones pass through.
+    private static List<(string Id, float Value)> TwPart(string part, (string Id, float Value)[] a, (string Id, float Value)[] b)
+    {
+        var all = new List<(string Id, float Value)>();
+        var side = new Dictionary<string, float>();
+        foreach (var (id, v) in a)
+            if (id.StartsWith("lo.", System.StringComparison.Ordinal)) all.Add((part + id[3..], v));
+            else if (id.Contains('.') || TwinGlobals.Contains(id)) all.Add((id, v));
+            else { all.Add((part + "a." + id, v)); side[id] = v; }
+        foreach (var (id, v) in b) side[id] = v;
+        foreach (var (id, v) in side) all.Add((part + "b." + id, v));
+        return all;
+    }
+
+    // A two-part Nota Twin preset (US9): `globals` sets the layout ("mode", "splitkey", "share", …),
+    // then each part as Tw() writes the Lower — side A, and B = A with its overlay. In the Upper's
+    // lists "lo.*" ids name the Upper's own side-less params.
+    private void TwParts(string name, (string Id, float Value)[] globals,
+        (string Id, float Value)[] lowerA, (string Id, float Value)[] lowerB, (string Id, float Value)[] upperA, (string Id, float Value)[] upperB)
+    {
+        var all = new List<(string Id, float Value)>(globals);
+        all.AddRange(TwPart("lo.", lowerA, lowerB));
+        all.AddRange(TwPart("up.", upperA, upperB));
+        Inst("twin", 18, name, all.ToArray());
     }
 
     private void Fx(string group, int kind, string name, params (string Name, float Value)[] ps)

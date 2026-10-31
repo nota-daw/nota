@@ -68,7 +68,7 @@ class Delay : public Device {
         kScope
     };
     // deviceAction ids.
-    enum { A_ClearLoop = 0 };
+    enum { A_ClearLoop = 0, A_Reset = 1 }; // A_Reset: the loop, the wow phase and the time glide, as new
 
     static constexpr float kMaxTimeMs = 2000.0f;
     static constexpr int kNumDiv = 8;
@@ -158,7 +158,7 @@ class Delay : public Device {
     bool idle_ = false;
     float loopPk_ = 0.0f; // peak loop-feed push (blocks sleep while the tail rings)
 
-    std::atomic<bool> clear_{false};
+    std::atomic<bool> clear_{false}, reset_{false};
     std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, cpuA_{0}, srA_{44100.0f}, bpmA_{0}, diffA_{0}, msL_{0}, msR_{0};
     std::atomic<float> p_[kNumParams] = {};
 };

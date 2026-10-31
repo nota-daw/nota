@@ -183,6 +183,10 @@ set(NOTA_ENGINE_SOURCES
     src/devices/instruments/RhythmMachine.cpp
     src/devices/instruments/MosaicProgram.cpp  # program model
     src/devices/instruments/Mosaic.cpp
+    src/devices/instruments/Twin.cpp
+    src/devices/instruments/TwinMod.cpp
+    src/devices/instruments/TwinSeq.cpp
+    src/devices/instruments/TwinVoice.cpp
     src/dsp/core/SilenceDetector.cpp  # hysteresis silence detection
     src/dsp/core/Parameter.cpp  # param mappings + smoothing
     src/dsp/primitives/SvfFilter.cpp  # TPT SVF + LR4

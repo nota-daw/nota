@@ -201,10 +201,11 @@ internal static class DeviceCardKit
     internal static Grid SliderRow(string label, Func<double> norm, Action<double> setNorm, Func<string> text, out Action sync,
         Action? begin = null, Action? end = null, Action? reset = null, bool bipolar = false, Func<bool>? dim = null,
         double labelWidth = 0, double trackWidth = double.NaN, double valueWidth = 42, bool modulation = false,
-        Func<double, string>? textAt = null)
+        Func<double, string>? textAt = null, Action<SliderTrack>? withTrack = null)
     {
         Action repaint = () => { };
         var track = new SliderTrack { Bipolar = bipolar, Modulation = modulation, Reset = reset is null ? null : () => { reset(); repaint(); } };
+        withTrack?.Invoke(track);
         if (!double.IsNaN(trackWidth)) track.Width = trackWidth;
         var val = new TextBlock
         {
@@ -258,6 +259,32 @@ internal static class DeviceCardKit
 
         sync = () => { if (!track.Dragging) Paint(); };
         Paint();
+        return g;
+    }
+
+    // Words under a slider's track: the ends of a balance ("multi … ladder") or the marks of a
+    // continuous choice ("LP · BP · HP · notch"), spread evenly — first left, last right. Put it
+    // under a SliderRow; `left` / `right` are the row's label and value columns (plus their
+    // spacing) so the words sit under the track only.
+    internal static Control SliderMarks(string[] marks, double left = 0, double right = 0)
+    {
+        // N marks over N − 1 equal columns: a middle mark spans the two columns it divides and
+        // centres on their boundary, so mark i sits at i / (N − 1) of the track.
+        var g = new Grid { Margin = new Thickness(left, 1, right, 0) };
+        int n = marks.Length, cols = Math.Max(1, n - 1);
+        for (int c = 0; c < cols; c++) g.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
+        for (int i = 0; i < n; i++)
+        {
+            bool first = i == 0, last = i == n - 1 && n > 1;
+            var tb = new TextBlock
+            {
+                Text = marks[i], FontSize = NotaType.KnobLabel, Foreground = TextTertiary,
+                HorizontalAlignment = first ? HorizontalAlignment.Left : last ? HorizontalAlignment.Right : HorizontalAlignment.Center,
+            };
+            Grid.SetColumn(tb, first ? 0 : last ? cols - 1 : i - 1);
+            if (!first && !last) Grid.SetColumnSpan(tb, 2);
+            g.Children.Add(tb);
+        }
         return g;
     }
 

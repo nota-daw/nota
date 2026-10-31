@@ -61,6 +61,8 @@ class AuditionRig {
     // Nota Mosaic's program; waits (up to timeoutMs) until its samples are in, so the
     // offline render that follows hears them. False when the instrument isn't a Mosaic.
     bool setMosaicProgram(const std::string& text, int32_t timeoutMs = 20000);
+    // The instrument's state blob (Instrument::setState), e.g. a Nota Twin preset's patterns.
+    bool instrumentState(const uint8_t* data, int32_t size);
     bool setSourceFile(const std::string& path, double maxSeconds);
     // Mixes another rig's rendered result into this rig's source (a demo track's part).
     bool addSourceFrom(const AuditionRig& part, float gain);

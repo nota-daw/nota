@@ -899,6 +899,14 @@ bool Engine::applyMix(const MixChange& c, bool after) {
         eq->setState(st.data(), static_cast<int32_t>(st.size()));
         return true;
     }
+    if (c.kind == MixKind::InstrumentEdit) { // a track instrument's edit state (sequencer patterns)
+        auto t = findTrackAuthoring(c.trackId);
+        const auto at = static_cast<size_t>(v);
+        if (!t || !t->instrument || at >= noteStates_.size()) return false; // gone: skip
+        const auto& st = noteStates_[at];
+        t->instrument->setEditState(st.data(), static_cast<int32_t>(st.size()));
+        return true;
+    }
     if (c.kind == MixKind::MasterVolume) {
         setMasterVolume(v);
         return true;

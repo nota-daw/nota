@@ -32,6 +32,15 @@ public static class RemoteParams
     public const int AutoFilterKind = 7;
     public const int EffectRackKind = 5;
     public const int InstrumentRackKind = 3, DrumRackKind = 4, FluxKind = 11, RhythmKind = 12, SamplerKind = 1;
+    public const int TwinKind = 18;
+    // Nota Twin's phone pages, in order: the morph and the pad, then the Lower part's side-A sound.
+    private static readonly string[] TwinRemoteIds =
+    {
+        "lo.morph", "padx", "pady", "padz", "lo.a.ldcut", "lo.a.ldres", "lo.a.mmcut", "lo.a.mmres",
+        "lo.a.o1wave", "lo.a.o2wave", "lo.a.o2level", "lo.a.noiselevel", "lo.a.route", "lo.a.brute", "lo.a.drive", "lo.a.mmmode",
+        "lo.a.aenva", "lo.a.aenvd", "lo.a.aenvs", "lo.a.aenvr", "lo.a.fenva", "lo.a.fenvd", "lo.a.ldenv", "lo.a.mmenv",
+        "lo.a.vibamt", "lo.a.spread", "lo.a.drift", "lo.glide",
+    };
 
     private static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -44,7 +53,7 @@ public static class RemoteParams
             0 => "Nota Synth", 1 => "Sampler", 2 => "Nota Physical", 3 => "Instrument Rack", 4 => "Drum Rack",
             5 => "Nota Aurora", 6 => "Nota Volt", 7 => "Nota Bass", 8 => "Nota Pendulum", 9 => "Nota Operator",
             10 => "Nota Grain", 11 => "Nota Flux", 12 => "Nota Rhythm", 13 => "Nota Monolith", 14 => "Nota Pentad",
-            15 => "Nota Consort", 16 => "Nota Keys", 17 => "Nota Mosaic", _ => "",
+            15 => "Nota Consort", 16 => "Nota Keys", 17 => "Nota Mosaic", 18 => "Nota Twin", _ => "",
         };
         if (name.Length > 0) return name;
         string id = e.TrackInstrumentPluginId(trackId);
@@ -121,6 +130,18 @@ public static class RemoteParams
                     ps.Add(new RemoteParam(RemoteParamKind.RackMacro, trackId, -1, m, mn.Length > 0 ? mn : $"Macro {m + 1}", inst));
                 }
                 list.Add(new RemoteMacroDevice(inst + " · Macros", -1, ps));
+            }
+            else if (kind == TwinKind)
+            {
+                // Nota Twin has ~900 params (every sound control on both morph sides of both parts);
+                // the phone pages the ones a player reaches for instead (specs/055 research R2a).
+                int n = e.PluginParamCount(trackId, -1);
+                var at = new Dictionary<string, int>(n);
+                for (int i = 0; i < n; i++) at[e.PluginParamId(trackId, -1, i)] = i;
+                var picks = new List<int>();
+                foreach (var id in TwinRemoteIds)
+                    if (at.TryGetValue(id, out var pi)) picks.Add(pi);
+                AddPaged(list, inst, -1, picks.Count, k => new RemoteParam(RemoteParamKind.PluginParam, trackId, -1, picks[k], e.PluginParamName(trackId, -1, picks[k]), inst));
             }
             else
             {

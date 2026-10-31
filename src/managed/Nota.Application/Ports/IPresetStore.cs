@@ -21,6 +21,11 @@ public interface IPresetStore
     /// plug-in). Null when the file can't be read.</summary>
     (string Type, int BuiltinKind)? Describe(string path);
 
+    /// <summary>A built-in instrument preset file's params by id (null when the file can't be
+    /// read, isn't a built-in instrument preset or names none) — for loading part of a preset,
+    /// e.g. one Nota Twin part (specs/055).</summary>
+    IReadOnlyDictionary<string, float>? InstrumentParams(string path) => null;
+
     /// <summary>Applies a preset file to a device that already matches it, in place
     /// (<paramref name="deviceIndex"/> −1 = the instrument, else the effect or MIDI effect at that
     /// index). Returns a warning ("" = clean).</summary>

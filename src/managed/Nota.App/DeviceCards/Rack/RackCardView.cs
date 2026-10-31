@@ -477,7 +477,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         var f = new MenuFlyout();
         void Add(string h, int k) { var mi = new MenuItem { Header = h }; mi.Click += (_, _) => { int c = a.AddChain(k); if (c >= 0) Sel = c; _ctx.RequestRebuild(); }; f.Items.Add(mi); }
         Add("Nota Volt", 6); Add("Nota Sampler", 1); Add("Nota Physical", 2); Add("Nota Aurora", 5);
-        Add("Nota Pendulum", 8); Add("Nota Operator", 9); Add("Nota Grain", 10); Add("Nota Flux", 11); Add("Nota Monolith", 13); Add("Nota Pentad", 14); Add("Nota Consort", 15); Add("Nota Keys", 16);
+        Add("Nota Pendulum", 8); Add("Nota Operator", 9); Add("Nota Grain", 10); Add("Nota Flux", 11); Add("Nota Monolith", 13); Add("Nota Pentad", 14); Add("Nota Consort", 15); Add("Nota Keys", 16); Add("Nota Twin", 18);
         Add("Nota Mosaic", 17);
         f.Items.Add(new Separator()); Add("Nota Drum Rack", 4);   // racks nest one level (specs/041)
         f.ShowAt(anchor, showAtPointer: true);

@@ -924,6 +924,15 @@ public sealed partial class NotaEngine
         return id;
     }
 
+    /// <summary>Adds an instrument track with the built-in Nota Twin morphing poly. Returns its id.</summary>
+    public int AddTwinTrack()
+    {
+        ThrowIfDisposed();
+        var id = NativeMethods.AddTwinTrack(_handle);
+        if (id <= 0) throw new NotaEngineException("Failed to add Twin track.");
+        return id;
+    }
+
     public bool MosaicSetProgram(int trackId, string text, bool undoable = true)
     { ThrowIfDisposed(); return NativeMethods.MosaicSetProgram(_handle, trackId, text ?? "", undoable ? 1 : 0) != 0; }
 

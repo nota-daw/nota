@@ -37,6 +37,9 @@ class MpeInput {
         virtual ~Sink() = default;
         virtual void mpeNoteOn(int32_t pitch, float velocity) = 0;
         virtual void mpeNoteOff(int32_t pitch) = 0;
+        // A note-off message (0x80) with its release velocity; a sink that doesn't use it
+        // gets a plain mpeNoteOff.
+        virtual void mpeNoteOffVelocity(int32_t pitch, float /*velocity*/) { mpeNoteOff(pitch); }
         virtual void mpeExpression(int32_t pitch, int32_t dim, float value) = 0; // pitch −1 = all
         // An instrument-wide controller (MidiController.h): the wheel, channel pressure and
         // every CC of an ordinary / master channel, the sustain pedal of any channel.

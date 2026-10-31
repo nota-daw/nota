@@ -687,6 +687,24 @@ audio effects after it keep running and keep their settings; saved with the proj
   Poly/Unison/Mono, poly unison stacks, glide, the Release switch, and **Vintage Drift**
   (seeded per-voice spread — a render is identical for the same seed, so freezing is
   exact). 40 factory presets. Also builds as a standalone VST3 for other hosts.
+- **Nota Twin** — morphing analog poly, 4–12 voices: every sound control has a **side A and a
+  side B**, and **Morph** sweeps the whole sound between them, effects and modulation depths
+  included. Two oscillators running triangle → saw → square with a Metal folder, sync and FM;
+  noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
+  feedback and drive; three envelopes, three LFOs (per voice or global); Poly / Mono / Legato /
+  Unison, glide, seeded drift. Poly aftertouch and MPE per note (pressure routed to Morph
+  morphs only that note), an X · Y · Z expression pad. A 64-route matrix per part (29 sources
+  incl. 8 macros and Random → Morph, pitch, vibrato or any control), a depth per side. Per
+  part: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb. Own sequencer (8
+  patterns × 64 steps of up to six notes, tie, swing, transpose, latch, step record, four motion
+  lanes, **To clip**) and arpeggiator (six modes, 1–4 octaves, hold). **Split / Layer**: Lower
+  and Upper parts sharing the voices (2 + 10 … 10 + 2), a learnable split key, per-part octave,
+  volume and pan; **Parts** copies, swaps or loads a factory or saved sound into one part. The A / B
+  switch picks the side knobs, automation and MIDI learn write to; **A → B**, **B → A**,
+  **Swap**. Card tabs Osc, Filter, Env, LFO, Matrix, FX, Seq, Voice; S size shows Morph, the
+  pad and four knobs. 57 factory presets in 11 folders; MCP `read_twin`, `set_twin_morph_side`,
+  `copy_twin_side`, `copy_twin_part`, `set_twin_route`, `get_twin_pattern`, `set_twin_pattern`,
+  `twin_pattern_to_clip`.
 - **Nota Consort** — paraphonic semi-modular synth: four oscillators (tri / saw / square /
   pulse, sync 2→1 and 4→3), a mixer with noise, drive and a feedback-normalled EXT input, dual
   ladder filters (HP→LP series, LP/LP or HP/LP parallel stereo with spacing), two ADSRs,
@@ -1327,7 +1345,9 @@ Coverage:
 - **Instruments**: add by kind, read and write parameters (by index or by stable id), turn
   on or off (`set_device_bypass` with device index -1; `get_overview` shows it), replace with
   another built-in or an empty rack (`set_track_instrument`); read / shape Nota Keys in
-  musical terms (`read_keys`, `set_keys`).
+  musical terms (`read_keys`, `set_keys`); Nota Twin's sides, parts, matrix and patterns
+  (`read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`, `set_twin_route`,
+  `get_twin_pattern`, `set_twin_pattern`, `twin_pattern_to_clip`).
 - **Moving devices**: `move_device_to_track` moves or copies an audio effect, a MIDI effect or
   the instrument to another track, with its automation.
 - **Audio effects**: add, remove, reorder, bypass, parameters; load an audio file into a

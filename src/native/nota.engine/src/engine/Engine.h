@@ -743,6 +743,7 @@ class Engine {
     int32_t addConsortTrack();        // built-in Nota Consort (paraphonic semi-modular, kind 15)
     int32_t addKeysTrack();           // built-in Nota Keys (modelled electric piano, kind 16)
     int32_t addMosaicTrack();         // built-in Nota Mosaic (multisample instrument, kind 17)
+    int32_t addTwinTrack();           // built-in Nota Twin (two-part morphing analog poly, kind 18)
     // Nota Mosaic's program (see Mosaic.h): set parses + starts loading, get returns the text.
     bool mosaicSetProgram(int32_t trackId, const std::string& text, bool checkpoint);
     std::string mosaicProgram(int32_t trackId) const;
@@ -1263,7 +1264,7 @@ class Engine {
     // Live notes (computer keyboard, gamepad, MIDI). Producers on different threads
     // serialize on liveMidiMx_; the audio thread only pops (AR-6).
     void noteOn(int32_t pitch, float velocity);
-    void noteOff(int32_t pitch);
+    void noteOff(int32_t pitch, float releaseVelocity = 0.0f); // 0 = none
     // Per-note expression for live notes (MPE, NoteExpression.h): dim = ExprDim, pitch −1 =
     // the whole instrument. Reaches the same tracks as live notes do.
     void noteExpression(int32_t pitch, int32_t dim, float value);
@@ -1274,7 +1275,7 @@ class Engine {
     // Live notes addressed to one track (Nota Remote). Callable from any thread: producers
     // serialize on remoteMidiMx_; the audio thread only pops (AR-6).
     void trackNoteOn(int32_t trackId, int32_t pitch, float velocity);
-    void trackNoteOff(int32_t trackId, int32_t pitch);
+    void trackNoteOff(int32_t trackId, int32_t pitch, float releaseVelocity = 0.0f); // 0 = none
     void trackNoteExpression(int32_t trackId, int32_t pitch, int32_t dim, float value);
     // Audition target: live notes also reach this track even when it isn't armed
     // (for clicking rack/drum pads). -1 = none. Lock-free.
@@ -1511,6 +1512,7 @@ class Engine {
         Engine* e = nullptr;
         void mpeNoteOn(int32_t pitch, float velocity) override { e->noteOn(pitch, velocity); }
         void mpeNoteOff(int32_t pitch) override { e->noteOff(pitch); }
+        void mpeNoteOffVelocity(int32_t pitch, float velocity) override { e->noteOff(pitch, velocity); }
         void mpeExpression(int32_t pitch, int32_t dim, float value) override { e->noteExpression(pitch, dim, value); }
         void mpeController(int32_t ctl, float value) override { e->controller(ctl, value); }
     };
@@ -2295,6 +2297,10 @@ class Engine {
             if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId) return true;
         return false;
     }
+
+    // Built-in instruments' default param values, one fresh instance per kind
+    // (instrumentParamDefault). Message thread only.
+    mutable std::unordered_map<int32_t, std::vector<float>> instrumentDefaults_;
 };
 
 } // namespace nota

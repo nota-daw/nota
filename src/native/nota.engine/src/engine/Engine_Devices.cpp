@@ -47,6 +47,7 @@
 #include "devices/instruments/Consort.h"
 #include "devices/instruments/Keys.h"
 #include "devices/instruments/Mosaic.h"
+#include "devices/instruments/Twin.h"
 #include "devices/instruments/GrainSynth.h"
 #include "bridge/PluginHostBridge.h"
 #include "devices/racks/RackDevice.h"
@@ -257,6 +258,18 @@ int32_t Engine::addKeysTrack() {
     return id;
 }
 
+int32_t Engine::addTwinTrack() {
+    auto g = std::make_shared<Graph>(*authoring_);
+    const int32_t id = nextTrackId_++;
+    auto track = std::make_shared<Track>(id, TrackType::Instrument);
+    auto inst = std::make_shared<Twin>();
+    inst->setSampleRate(transport_.sampleRate());
+    track->instrument = inst;
+    g->tracks.push_back(track);
+    publish(g);
+    return id;
+}
+
 int32_t Engine::addMosaicTrack() {
     auto g = std::make_shared<Graph>(*authoring_);
     const int32_t id = nextTrackId_++;
@@ -322,7 +335,22 @@ int64_t Engine::mosaicZoneSampleId(int32_t trackId, int32_t zone) const {
 // instrument object is stable across snapshots, so this mutates it in place (message thread).
 void Engine::instrumentAction(int32_t trackId, int32_t id, int32_t iarg, float farg) {
     auto t = findTrackAuthoring(trackId);
-    if (t && t->instrument) t->instrument->action(id, iarg, farg);
+    if (!t || !t->instrument) return;
+    auto before = t->instrument->editState();
+    t->instrument->action(id, iarg, farg);
+    if (before.empty()) return;
+    auto after = t->instrument->editState();
+    if (after == before) return;
+    // One mix-only undo step that swaps the instrument's edit state (as setEqBandText does).
+    noteStates_.push_back(std::move(before));
+    noteStates_.push_back(std::move(after));
+    const auto at = static_cast<float>(noteStates_.size() - 2);
+    undoStack_.push_back({nullptr, {MixChange{MixKind::InstrumentEdit, trackId, at, at + 1.0f, -1, -1}}});
+    if (undoStack_.size() > kMaxUndoDepth) {
+        undoStack_.erase(undoStack_.begin());
+        if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_;
+    }
+    redoStack_.clear();
 }
 
 // Nota Rhythm Phase 2: load a one-shot into one drum voice. Clones the instrument (so the
@@ -1375,9 +1403,20 @@ float Engine::builtinDeviceParamDefault(int32_t kind, int32_t p) const {
 float Engine::instrumentParamDefault(int32_t t, int32_t p) const {
     auto tr = findTrackAuthoring(t);
     if (!tr || !tr->instrument) return 0.0f;
-    if (tr->instrument->kind() < 0) return tr->instrument->pluginParamGet(p); // plugin
-    auto fresh = makeBuiltinInstrument(tr->instrument->kind());
-    return fresh ? fresh->pluginParamGet(p) : tr->instrument->pluginParamGet(p);
+    const int32_t kind = tr->instrument->kind();
+    if (kind < 0) return tr->instrument->pluginParamGet(p); // plugin
+    // A fresh instance's values, read once per kind: a preset asks for every param it doesn't
+    // name, and building an instrument per question (Nota Twin: ~900, each with its effect
+    // devices) made applying a preset take tens of milliseconds. Message thread only.
+    auto it = instrumentDefaults_.find(kind);
+    if (it == instrumentDefaults_.end()) {
+        auto fresh = makeBuiltinInstrument(kind);
+        if (!fresh) return tr->instrument->pluginParamGet(p);
+        std::vector<float> d(static_cast<size_t>(fresh->pluginParamCount()));
+        for (size_t i = 0; i < d.size(); ++i) d[i] = fresh->pluginParamGet(static_cast<int32_t>(i));
+        it = instrumentDefaults_.emplace(kind, std::move(d)).first;
+    }
+    return p >= 0 && static_cast<size_t>(p) < it->second.size() ? it->second[static_cast<size_t>(p)] : tr->instrument->pluginParamGet(p);
 }
 float Engine::midiEffectParamDefault(int32_t t, int32_t i, int32_t p) const {
     auto* m = midiDeviceAt(t, i);

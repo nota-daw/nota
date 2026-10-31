@@ -18,7 +18,7 @@ public static class DeviceCategories
 
     private static readonly Category[] Instruments =
     {
-        new("Synths", ["Nota Volt", "Nota Monolith", "Nota Pentad", "Nota Consort",
+        new("Synths", ["Nota Volt", "Nota Monolith", "Nota Pentad", "Nota Consort", "Nota Twin",
                        "Nota Operator", "Nota Aurora", "Nota Flux", "Nota Pendulum"]),
         new("Keys & physical", ["Nota Keys", "Nota Physical"]),
         new("Drums", ["Nota Rhythm", "Nota Drum Rack"]),

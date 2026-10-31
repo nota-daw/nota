@@ -76,6 +76,12 @@ void Reverb::wake() {
 void Reverb::process(float* buf, int32_t frames) {
     if (frames <= 0 || preL_.size() < 4) return;
     const auto t0 = std::chrono::steady_clock::now();
+    // Read first: an exchange on every block would write the flag's cache line each time.
+    if (reset_.load(std::memory_order_relaxed) && reset_.exchange(false, std::memory_order_relaxed)) {
+        kill_.store(true, std::memory_order_relaxed);
+        modPhase_ = 0.0;
+        span_ = -1.0f;
+    }
     if (kill_.exchange(false, std::memory_order_relaxed)) wipe();
 
     const bool freeze = on(Freeze);
@@ -324,6 +330,7 @@ bool Reverb::combWrapSelfTest() {
 
 void Reverb::deviceAction(int32_t id, int32_t, float) {
     if (id == A_KillTail) kill_.store(true, std::memory_order_relaxed);
+    else if (id == A_Reset) reset_.store(true, std::memory_order_relaxed);
     wake();
 }
 

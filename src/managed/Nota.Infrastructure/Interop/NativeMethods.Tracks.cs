@@ -425,6 +425,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_add_mosaic_track")]
     internal static partial int AddMosaicTrack(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_add_twin_track")]
+    internal static partial int AddTwinTrack(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_mosaic_set_program", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int MosaicSetProgram(IntPtr engine, int trackId, string text, int checkpoint);
 

@@ -208,10 +208,10 @@ void Engine::noteOn(int32_t pitch, float velocity) {
     }
     if (pitch >= 0 && pitch < 128) liveHeld_[pitch >> 5].fetch_or(1u << (pitch & 31), std::memory_order_relaxed);
 }
-void Engine::noteOff(int32_t pitch) {
+void Engine::noteOff(int32_t pitch, float releaseVelocity) {
     {
         std::lock_guard<std::mutex> lk(liveMidiMx_);
-        liveMidi_.push(MidiEvent{false, pitch, 0.0f});
+        liveMidi_.push(MidiEvent{false, pitch, std::clamp(releaseVelocity, 0.0f, 1.0f)});
     }
     if (pitch >= 0 && pitch < 128) liveHeld_[pitch >> 5].fetch_and(~(1u << (pitch & 31)), std::memory_order_relaxed);
 }
@@ -273,10 +273,10 @@ void Engine::trackNoteOn(int32_t trackId, int32_t pitch, float velocity) {
     }
     if (pitch >= 0 && pitch < 128) liveHeld_[pitch >> 5].fetch_or(1u << (pitch & 31), std::memory_order_relaxed);
 }
-void Engine::trackNoteOff(int32_t trackId, int32_t pitch) {
+void Engine::trackNoteOff(int32_t trackId, int32_t pitch, float releaseVelocity) {
     {
         std::lock_guard<std::mutex> lk(remoteMidiMx_);
-        remoteMidi_.push(MidiEvent{false, pitch, 0.0f, trackId});
+        remoteMidi_.push(MidiEvent{false, pitch, std::clamp(releaseVelocity, 0.0f, 1.0f), trackId});
     }
     if (pitch >= 0 && pitch < 128) liveHeld_[pitch >> 5].fetch_and(~(1u << (pitch & 31)), std::memory_order_relaxed);
 }

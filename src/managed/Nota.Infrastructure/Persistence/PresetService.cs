@@ -60,6 +60,9 @@ public static class PresetService
                 }
                 // Nota Mosaic: the zone map travels with the sound (its samples stay referenced).
                 if (ik == MosaicModel.Kind && engine.MosaicProgram(trackId) is { Length: > 0 } prog) doc.MosaicProgram = prog;
+                // Nota Twin: its sequencer patterns travel with the sound (a params-free state blob).
+                if (ik == Nota.Application.Twin.TwinMatrix.Kind && Nota.Application.Twin.TwinPatterns.FromState(engine.GetPluginState(trackId, -1)) is { } pats)
+                    doc.StateBase64 = Convert.ToBase64String(Nota.Application.Twin.TwinPatterns.StateWithPatterns(pats));
                 return doc;
             }
         }
@@ -260,6 +263,7 @@ public static class PresetService
                     15 => engine.AddConsortTrack(),
                     16 => engine.AddKeysTrack(),
                     17 => engine.AddMosaicTrack(),
+                    18 => engine.AddTwinTrack(),
                     _ => engine.AddInstrumentTrack(),
                 };
                 if (t <= 0) return "Failed to add instrument.";
@@ -271,6 +275,7 @@ public static class PresetService
                             && doc.NamedParams.TryGetValue(pid, out var v))
                             engine.PluginParamSet(t, -1, i, v);
                 }
+                LoadTwinPatterns(doc, engine, t);
                 string mw = LoadMosaicProgram(doc, engine, t);
                 return mw.Length > 0 ? mw : LoadGrainSource(doc, engine, t);
             }
@@ -383,6 +388,15 @@ public static class PresetService
     /// <summary>Applies a preset to an EXISTING instrument/device in place (no new track/
     /// device is created) — for the in-header preset picker. Built-in instruments reset all
     /// params to default first so the patch is clean; effects set the preset's named params.</summary>
+    // A Nota Twin preset's patterns (a params-free state blob): applied after its params; a preset
+    // without patterns leaves the track's own (a sound preset doesn't wipe a sequence).
+    private static void LoadTwinPatterns(PresetDocument doc, IAudioEngine engine, int trackId)
+    {
+        if (string.IsNullOrEmpty(doc.StateBase64)) return;
+        try { engine.SetPluginState(trackId, -1, Convert.FromBase64String(doc.StateBase64)); }
+        catch (FormatException) { }
+    }
+
     public static string ApplyInPlace(PresetDocument doc, IAudioEngine engine, int trackId, int deviceIndex)
     {
         if (trackId <= 0) return "Select a track first.";
@@ -406,6 +420,7 @@ public static class PresetService
                     float v = named ? doc.NamedParams![id] : engine.InstrumentParamDefault(trackId, i);
                     engine.PluginParamSet(trackId, -1, i, v);
                 }
+                if (kind == Nota.Application.Twin.TwinMatrix.Kind) LoadTwinPatterns(doc, engine, trackId);
                 return kind == 10 ? LoadGrainSource(doc, engine, trackId)
                      : kind == MosaicModel.Kind ? LoadMosaicProgram(doc, engine, trackId) : "";
             }
