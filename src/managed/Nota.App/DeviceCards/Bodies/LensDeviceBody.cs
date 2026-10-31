@@ -416,6 +416,9 @@ internal sealed class LensDeviceBody : IDeviceBody
             s.GestureBegin += () => Begin(param());
             s.GestureEnd += () => End(param());
             s.ValueChanged += v => Raw(param(), (float)v);
+            // ⌥-click types the value of whichever parameter the rail drives now (specs/035).
+            ValueEntry.Attach(s, new ValueField("Scale", () => P(param()), v => RailText(param(), v), v => { Raw(param(), (float)v); s.Value = v; },
+                () => Begin(param()), () => End(param()), null) { Reset = () => { Raw(param(), Def(param())); s.Value = Def(param()); } });
             readouts.Add(() =>
             {
                 lbl.Text = NotaText.Label(caption());
@@ -428,6 +431,13 @@ internal sealed class LensDeviceBody : IDeviceBody
             return g;
         }
 
+        string RailText(int p, double v) => p switch
+        {
+            VoltDivP => Inv($"{Exp(v, 0.02, 2.0):0.00} /d"),
+            TimeDivP => Ms(Exp(v, 0.00002, 0.02)),
+            ScaleTopP => Inv($"{24 - v * 60:0}\u2009dB"),
+            _ => Inv($"{30 + v * 90:0}\u2009dB"),
+        };
         int centreTab = Sel(ViewP, 3);
         var railA = RailSlider(() => centreTab == 1 ? VoltDivP : ScaleTopP, NotaPalette.VizInk, () => centreTab == 1 ? "V/D" : "TOP");
         var railB = RailSlider(() => centreTab == 1 ? TimeDivP : ScaleRangeP, DeviceCardKit.ModInk, () => centreTab == 1 ? "T/D" : "RNG");

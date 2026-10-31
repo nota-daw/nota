@@ -61,6 +61,13 @@ class RackInstrument : public Instrument, public RackCore {
 
     int32_t latencySamples() const override { return maxChainLatency(); }
 
+    // ---- parts (specs/050): each chain is a sidechain sub-source, by its chain uid ----------
+    int32_t partCount() const override;
+    uint64_t partId(int32_t index) const override { return chainBaseUid(index); }
+    int32_t partIndex(uint64_t id) const override;
+    std::string partName(int32_t index) const override; // the chain name, else its instrument's
+    void setPartTaps(const PartTap* taps, int32_t n) override { taps_.set(taps, n); }
+
     // A fork for an undoable edit plays on with the same held keys, sounding note and glide.
     void shareMonoWith(const RackInstrument& o) { mono_ = o.mono_; }
 
@@ -79,6 +86,13 @@ class RackInstrument : public Instrument, public RackCore {
 
   protected:
     float scratch_[kMaxBlock * 2]; // per-chain render buffer (DrumRack reuses it)
+
+    // Where this block's keyed chains go (specs/050): audio thread, set by the engine around a
+    // block's renders. A short scan — at most one entry per route slot.
+    static void addTap(float* dst, const float* src, int32_t frames) {
+        for (int32_t i = 0; i < frames * 2; ++i) dst[i] += src[i];
+    }
+    PartTaps taps_;
 
   private:
     // Fan a note-on out to the chains whose zone holds it; with glideFrom >= 0 the chains

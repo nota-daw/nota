@@ -20,7 +20,7 @@ namespace Nota.App;
 public sealed partial class ArrangementView
 {
     // ---- lanes ------------------------------------------------------------
-    private sealed class LaneControl : Control, IAutoRows
+    private sealed class LaneControl : Control, IAutoRows, IValueEntryHost
     {
         private readonly ArrangementView _o;
         private readonly AutoEditor _auto;   // automation mode (M9-A3), shared with the footer's return rows
@@ -29,7 +29,39 @@ public sealed partial class ArrangementView
             _o = o;
             ClipToBounds = true;
             _auto = new AutoEditor(o, this);
+            ValueEntry.AttachHost(this, menu: false);   // the right-press below shows the menu
         }
+
+        // ⌥-click an audio clip's ADSR handle to type its stage (specs/035); one engine edit each.
+        // The clip is found again by id on every read: a commit reloads the lane's clips.
+        public IReadOnlyList<ValueField>? FieldsAt(Point p)
+        {
+            if (_o._automationMode || HitAdsr(p) is not { } ah) return null;
+            int trackId = ah.track.Id, index = ah.clip.ClipIndex;
+            ClipVM? Clip() => _o._tracks.FirstOrDefault(t => t.Id == trackId)?.Clips.FirstOrDefault(c => c.ClipIndex == index);
+            var fs = ClipAdsrKit.Fields(ah.handle, () => Clip()?.Adsr ?? ah.clip.Adsr,
+                a => { if (Clip() is { } c) CommitAdsr(trackId, c, a); }, ah.clip.LengthBeats, () => _o._engine?.Bpm ?? 120);
+            _adsrFields = (trackId, index, ah.handle, fs);
+            return fs;
+        }
+        private (int track, int clip, AdsrHandle handle, IReadOnlyList<ValueField> fields)? _adsrFields;   // the handle last asked about
+
+        public Rect AnchorOf(ValueField field)
+        {
+            if (_adsrFields is not { } af) return default;
+            int row = _o._tracks.FindIndex(t => t.Id == af.track);
+            if (row < 0 || _o._tracks[row].Clips.FirstOrDefault(c => c.ClipIndex == af.clip) is not { } clip) return default;
+            var f = AdsrFrameOf(clip, row); var a = clip.Adsr.Fit(clip.LengthBeats);
+            var at = af.handle switch
+            {
+                AdsrHandle.Attack => ClipAdsrKit.AttackPt(f, a),
+                AdsrHandle.Release => ClipAdsrKit.ReleasePt(f, a),
+                _ => ClipAdsrKit.DecayPt(f, a),
+            };
+            return ValueEntry.Near(at, Bounds.Size);
+        }
+
+        public IReadOnlyList<ValueField> AllFields => _adsrFields?.fields ?? [];
 
         // The scrolling track rows, as the automation editor sees them.
         Control IAutoRows.Owner => this;
@@ -205,7 +237,8 @@ public sealed partial class ArrangementView
 
             if (pt.Properties.IsRightButtonPressed)
             {
-                if (hit is { } h) ShowClipMenu(h.track.Id, h.clip, beat);
+                if (FieldsAt(pt.Position) is { Count: > 0 } adsr) ValueEntry.ShowMenu(this, adsr);
+                else if (hit is { } h) ShowClipMenu(h.track.Id, h.clip, beat);
                 else ShowLaneMenu(pt.Position, beat);
                 return;
             }
