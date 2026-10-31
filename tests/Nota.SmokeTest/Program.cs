@@ -15303,6 +15303,9 @@ foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
 Console.WriteLine("-- status bar audio format --");
 foreach (var (ok, label) in AudioFormatStatusTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- status bar dropout counter --");
+foreach (var (ok, label) in DropoutCounterTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- process cpu --");
 foreach (var (ok, label) in ProcessCpuTests.Run()) Check(ok, label);
 

@@ -38,6 +38,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   "48 kHz · 256". Click it to pick another buffer size — Device default or 64 to 2048 frames,
   each with its latency — or to open Settings → Audio. Playback carries on across the change.
   Under ASIO the menu offers the driver's settings instead, since the driver sets the buffer.
+- **Audio dropouts in the status bar** (#271): beside the sample rate, a counter shows how
+  many dropouts the audio device reported since it started — "0 dropouts" in the quiet
+  caption ink, red from the first one. Click it to count from zero again, e.g. after raising
+  the buffer size, to see whether they stop; a new device, sample rate or buffer size resets
+  it too. The tooltip says what a dropout is and what usually helps. Core Audio (macOS) and
+  ASIO report dropouts; the PulseAudio / ALSA and WASAPI backends don't yet.
 - **Track inspector** (#186): a new tab at the bottom of the browser's left rail shows the
   selected track's settings in one place — name, Mute / Solo / Arm, record input and input
   monitoring or MIDI from, colour, row height and the freeze commands — so they no longer
