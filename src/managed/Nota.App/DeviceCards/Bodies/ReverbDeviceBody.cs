@@ -165,7 +165,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             t.GestureBegin += target => Begin(target == 0 ? Decay : PreDelay);
             t.GestureEnd += target => End(target == 0 ? Decay : PreDelay);
             t.Reset += target => { Reset(target == 0 ? Decay : PreDelay); SyncTail(); };
-            ToolTip.SetTip(t, "The decay tail — the impulse at the pre-delay (teal), the early reflections (drawn magnified), then the RT60 curve over 4 s. Drag the teal marker for the pre-delay, drag the tail for the decay; double-click to reset.");
+            ToolTip.SetTip(t, "The decay tail — the impulse at the pre-delay (dashed grey), the early reflections (drawn magnified), then the RT60 curve over 4 s. Drag the pre-delay marker, drag the tail for the decay; double-click to reset.");
             MidiLearn.Bind(t, MidiTarget.DeviceParam(track, di, Decay), "Decay");
             tails.Add(t);
             return t;

@@ -467,6 +467,14 @@ public sealed partial class NotaEngine
     public int GetTrackColorIndex(int trackId)
     { ThrowIfDisposed(); return NativeMethods.TrackGetColor(_handle, trackId); }
 
+    /// <summary>Sets a track's piano roll Fold (specs/045).</summary>
+    public void SetTrackPianoFold(int trackId, bool on)
+    { ThrowIfDisposed(); NativeMethods.TrackSetPianoFold(_handle, trackId, on ? 1 : 0); }
+
+    /// <summary>Whether a track's piano roll is folded (false for an unknown track).</summary>
+    public bool GetTrackPianoFold(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.TrackGetPianoFold(_handle, trackId) == 1; }
+
     /// <summary>Copies a whole track (incl. devices/clips/automation) to the clipboard.</summary>
     public bool CopyTrack(int trackId)
     { ThrowIfDisposed(); return NativeMethods.TrackCopy(_handle, trackId) == NativeMethods.NotaResult.Ok; }
@@ -504,6 +512,14 @@ public sealed partial class NotaEngine
     /// <summary>Gets an audio track's record input source (0 hardware, -1 master, &gt;0 track id).</summary>
     public int GetTrackRecordInput(int trackId)
     { ThrowIfDisposed(); return NativeMethods.TrackGetRecordInput(_handle, trackId); }
+
+    /// <summary>Sets which hardware input channels an audio track takes (stereo 1/2, input 1 or input 2).</summary>
+    public void SetTrackInputChannels(int trackId, InputChannels channels)
+    { ThrowIfDisposed(); NativeMethods.TrackSetInputChannels(_handle, trackId, (int)channels); }
+
+    /// <summary>Gets which hardware input channels an audio track takes.</summary>
+    public InputChannels GetTrackInputChannels(int trackId)
+    { ThrowIfDisposed(); return (InputChannels)NativeMethods.TrackGetInputChannels(_handle, trackId); }
 
     /// <summary>Turns live input monitoring on/off for an audio track (hear its record input through the track).</summary>
     public void SetTrackMonitor(int trackId, bool on)

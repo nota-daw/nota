@@ -409,7 +409,7 @@ internal static class NotaPalette
     public static readonly SolidColorBrush KnobCap           = T(nameof(KnobCap)); // Brush.KnobCap — knob centre cap (devices only)
     // Picked, not live: a pale accent fill with accent text (AccentBright on it).
     public static readonly SolidColorBrush AccentSoft        = T(nameof(AccentSoft)); // Brush.AccentSoft — behind something picked
-    // Track meters: green to 70 %, amber to 88 %, red above.
+    // Level meters: green below −6 dB, amber to 0 dBFS, red at and above 0 dBFS (a clip).
     public static readonly SolidColorBrush MeterSafe         = T(nameof(MeterSafe)); // Brush.MeterSafe
     public static readonly SolidColorBrush MeterHot          = T(nameof(MeterHot)); // Brush.MeterHot
     public static readonly SolidColorBrush MeterOver         = T(nameof(MeterOver)); // Brush.MeterOver
@@ -460,6 +460,13 @@ internal static class NotaPalette
     /// time (the array reference is stable, its contents are not).</summary>
     public static readonly Color[] TrackColors = { TrackSlots[0].Color, TrackSlots[1].Color, TrackSlots[2].Color, TrackSlots[3].Color, TrackSlots[4].Color, TrackSlots[5].Color, TrackSlots[6].Color, TrackSlots[7].Color, TrackSlots[8].Color };
     public static readonly Color[] ReturnColors = { ReturnSlots[0].Color, ReturnSlots[1].Color };
+
+    /// <summary>The one gradient in the device cards (specs/046): the card's own surface laid
+    /// over the picture of a plug-in's window, heavier at the top (name, facts) and bottom
+    /// (buttons) than in the middle, so the card's text reads as on the plain card in every
+    /// theme. Washes of SurfaceCard, so it re-tints with the theme.</summary>
+    public static readonly LinearGradientBrush PluginPreviewWash = VGradient(
+        (Wash(SurfaceCard, 0xDB), 0), (Wash(SurfaceCard, 0x9E), 0.5), (Wash(SurfaceCard, 0xE6), 1));
 
     // ---- Lookup by XAML key ------------------------------------------------
 

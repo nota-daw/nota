@@ -1193,7 +1193,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘⇧M", "Toggle the Mixer view"),
             ("Tab", "Cycle Devices / Pattern / Clip in the detail panel"),
             ("Esc", "Cancel the current gesture / clear the selection · close the patch-bay overlay"),
-            ("⌘G   ⌘⇧G", "Group / ungroup selected tracks · on a selected device: wrap it in a rack / take it out"),
+            ("⌘G   ⌘⇧G", "Group / ungroup selected tracks · on selected devices: group them into a rack / take a rack apart"),
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste clips, a time range or an automation range · pastes onto the track clicked last"),
             ("⌘⇧C", "Copy the selected clips to Session · the first scene row where they fit"),
             ("⌘⇧V", "Paste the last range as audio rendered through its devices"),
@@ -1228,10 +1228,26 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         ("Devices (after a click on a device)", new[]
         {
-            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the device with all its settings · paste lands after the selected device, on any track"),
-            ("⌘G", "Wrap the selected audio effect in an Audio Effect Rack"),
+            ("⇧-click   ⌘-click", "Select a range of devices (MIDI effects, instrument, audio effects) / add or remove one"),
+            ("Esc", "Clear the device selection · so does a click on the chain's empty space"),
+            ("⌘C  ⌘X  ⌘V", "Copy / cut / paste the selected devices with all their settings · each lands in its section after the selected device · a copied instrument replaces the instrument it is pasted on"),
+            ("⌘D", "Duplicate the selected devices · each run right after itself"),
+            ("⌘G", "Group the selected devices into a rack · audio effects: Audio Effect Rack · MIDI effects: MIDI Effect Rack · with the instrument: Instrument Rack"),
             ("⌘⇧G", "Take the devices out of a selected one-chain rack"),
-            ("Delete", "Delete the selected device"),
+            ("Delete", "Delete the selected devices · with the instrument, its track"),
+            ("Drag a selected device's header", "Move the selected devices of that section together"),
+            ("Drag a device onto a track", "Move it there (out of the panel, onto a track row or Session column) · the instrument replaces that track's and its own track goes"),
+            ("⌥-drag a device onto a track", "Copy it there"),
+        }),
+        ("Racks", new[]
+        {
+            ("Esc", "End macro mapping (Map on the rack card)"),
+            ("Drag a zone edge", "Set a chain's key, velocity or select range · edges never cross"),
+            ("Hover the zones", "See which chains a note would play"),
+            ("Double-click a chain or macro name", "Rename it"),
+            ("Right-click a macro", "Map it to a parameter or the selector · clear its mappings"),
+            ("Drag a device's header", "Move it within its chain · onto another chain's row to move it there"),
+            ("Click a device", "Select it for ⌘C ⌘X ⌘V ⌘D and Delete"),
         }),
         ("Modular (after a click on the canvas)", new[]
         {
@@ -1282,6 +1298,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag on the keys", "Zoom rows · down taller, up shorter"),
             ("⌥ + pinch", "Zoom rows (trackpad)"),
             ("⇧F", "Fit to notes"),
+            ("⌥⇧F", "Fold: only the scale's notes, or a Drum Rack's pads"),
         }),
         ("Audio clip editor", new[]
         {
@@ -1329,6 +1346,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag a track's bottom edge", "Resize the track (header or lane) · snaps to compact / standard / large · a multi-selection resizes together"),
             ("Drag a track's bottom edge + ⌥", "Resize every track at once"),
             ("Double-click a track's bottom edge", "Back to the standard height"),
+            ("Drag a return's or the master's bottom edge", "Resize that row (header or lane) · same snaps · double-click goes back to compact"),
+            ("⌘-click / ⇧-click return headers", "Select several returns · they resize together"),
             ("⌥-click a height key in the track menu", "Set every track to Compact · Standard · Large"),
             ("Drag the track-list edge", "Widen or narrow the track headers · double-click resets"),
             ("Drag sections lane", "Mark a new section over the dragged bars"),

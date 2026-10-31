@@ -306,6 +306,13 @@ int run(const std::string& id, double seconds) {
     }
     if (id == "edit-warp-split") { // split the last piece 8 times, then undo them
         constexpr int kEdits = 8;
+        // Warm-up, not measured: one split + undo first, so the counted edits don't include the
+        // first-call costs (lazy symbol binding, function-local statics). Those depend on the
+        // library's size and layout rather than on the edit path, and they made this tiny
+        // scenario move by a percent or two when unrelated code was added. The clip is back as
+        // it was after the undo.
+        nota_clip_split(e, gWarpTrack, 0, 1.0);
+        nota_engine_undo(e);
         const auto t0 = std::chrono::steady_clock::now();
         CALLGRIND_START_INSTRUMENTATION;
         for (int i = 0; i < kEdits; ++i) nota_clip_split(e, gWarpTrack, i, 1.5 + i * 1.75);

@@ -72,8 +72,10 @@ public sealed partial class ArrangementView : UserControl
     // track-header maps because the two columns are rebuilt independently.
     private readonly Dictionary<int, MeterBar> _footerMeters = new();
     private readonly Dictionary<int, MiniFader> _footerFaders = new();
+    private readonly Dictionary<int, TextBlock> _footerDb = new();
     private MeterBar? _masterRowMeter;
     private MiniFader? _masterRowFader;
+    private TextBlock? _masterRowDb;
 
     /// <summary>The master volume lives in <c>TransportViewModel.MasterVolume</c> (saved with the
     /// project, shown in the MST module); the Master row reads and writes it through these.</summary>
@@ -83,14 +85,13 @@ public sealed partial class ArrangementView : UserControl
     // properties instead of tearing down and rebuilding every header control (click latency).
     private readonly Dictionary<int, (Border card, TextBlock name, bool isGroup, Border spine, IBrush spineIdle)> _headerCards = new();
     // Per-track chosen automation target, kept across Refresh (which rebuilds VMs).
-    private readonly Dictionary<int, (AutomationTarget target, int dev, int param, string paramId)> _autoTargets = new();
+    private readonly Dictionary<int, (AutomationTarget target, int dev, int param, string paramId, int chain, int slot, int lane)> _autoTargets = new();
 
     // Header column width and track row heights are user-resizable (ArrangementView.Sizing.cs).
     private double HeaderW => _headerW;
     private const double GroupRowHeight = 26;    // a group row: a slim titled bar, no controls
     private const double RulerH = 24;
     private const double SectionsH = 22;    // song-structure lane above the ruler
-    private const double FooterRowH = 30;   // slim return/master rows
 
     // Row geometry. Rows are no longer a fixed pitch — a group weighs a fraction of a track
     // (design 1a), so every y↔row conversion goes through the prefix table below instead of
@@ -169,6 +170,33 @@ public sealed partial class ArrangementView : UserControl
         return r >= 0 ? r : (y < 0 ? 0 : _tracks.Count - 1);
     }
 
+    // Footer geometry (specs/045): the pinned return/master rows each have their own height —
+    // returns first, the master last. Rebuilt with the track rows on every Refresh and live
+    // while a footer seam is dragged.
+    private double[] _footerRowTops = { 0, DefaultFooterRowHeight };
+
+    private void RebuildFooterGeometry()
+    {
+        int n = _returns.Count + 1;
+        var tops = new double[n + 1];
+        for (int i = 0; i < n; i++) tops[i + 1] = tops[i] + FooterRowHeightRaw(i);
+        _footerRowTops = tops;
+    }
+
+    private double FooterRowHeightRaw(int i)
+        => i < _returns.Count ? StoredRowHeight(_returns[i].Id) : _masterHeight;
+
+    /// <summary>Height of footer row <paramref name="i"/> (returns, then the master).</summary>
+    internal double FooterRowHeight(int i)
+        => i >= 0 && i + 1 < _footerRowTops.Length ? _footerRowTops[i + 1] - _footerRowTops[i] : DefaultFooterRowHeight;
+
+    /// <summary>Top of footer row <paramref name="i"/>; past the last row, the content bottom.</summary>
+    internal double FooterRowTop(int i)
+        => _footerRowTops[Math.Clamp(i, 0, _footerRowTops.Length - 1)];
+
+    /// <summary>Combined height of the return and master rows.</summary>
+    internal double FooterContentHeight => _footerRowTops[^1];
+
     /// <summary>Insertion gap nearest <paramref name="y"/> (0.._tracks.Count) — where a
     /// header-reorder drop would land.</summary>
     internal int RowGapAtY(double y)
@@ -223,6 +251,8 @@ public sealed partial class ArrangementView : UserControl
     private readonly Canvas _footerHeaders;
     private readonly FooterLaneControl _footerLanes;
     private readonly Grid _footer;
+    private readonly ScrollViewer _footerScroller;
+    private Grid _centerArea = null!;
 
     /// <summary>Raised when a MIDI clip is double-clicked (trackId, clipIndex).</summary>
     public event Action<int, int>? MidiClipActivated;
@@ -327,18 +357,44 @@ public sealed partial class ArrangementView : UserControl
         zoomOut.Click += (_, _) => Zoom(1 / 1.25);
         zoomIn.Click += (_, _) => Zoom(1.25);
         // The visible range ("bars 1 to 8 of 36", 11 ink 3) with zoom out / in at the right.
-        _overviewRange = new TextBlock { FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center };
+        _overviewRange = new TextBlock
+        {
+            FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
         _overviewRange.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
+        // "Zoom" names the two keys. On a header narrowed so far that the range read-out
+        // would be cut, the caption steps aside first (the keys keep their tooltips).
+        var zoomLabel = new TextBlock
+        {
+            Text = "Zoom", Classes = { "SectionLabel" },
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0),
+        };
         var zoomBar = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 4,
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"), ColumnSpacing = 4,
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(NameGap, 0, HeaderRightPad - 4, 0),
         };
         zoomBar.Children.Add(_overviewRange);
-        Grid.SetColumn(zoomOut, 1);
-        Grid.SetColumn(zoomIn, 2);
+        Grid.SetColumn(zoomLabel, 1);
+        Grid.SetColumn(zoomOut, 2);
+        Grid.SetColumn(zoomIn, 3);
+        zoomBar.Children.Add(zoomLabel);
         zoomBar.Children.Add(zoomOut);
         zoomBar.Children.Add(zoomIn);
+        void FitZoomLabel()
+        {
+            if (zoomBar.Bounds.Width <= 0) return;
+            // The TextBlock's FontSize already carries the text-size step, so measure it as is.
+            static double TextW(TextBlock t) => new NotaFormattedText(t.Text ?? "", CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight, new Typeface(t.FontFamily, t.FontStyle, t.FontWeight), t.FontSize, null,
+                NotaTextSize.InCard).Width;
+            double need = Math.Ceiling(TextW(_overviewRange)) + Math.Ceiling(TextW(zoomLabel)) + zoomLabel.Margin.Right
+                          + zoomOut.Width + zoomIn.Width + 3 * zoomBar.ColumnSpacing;
+            zoomLabel.IsVisible = need <= zoomBar.Bounds.Width;
+        }
+        zoomBar.SizeChanged += (_, _) => FitZoomLabel();
+        _overviewRange.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) FitZoomLabel(); };
         var topLeft = HeaderPanel(zoomBar);
         var topGrid = new Grid { Height = RulerH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         topGrid.Children.Add(topLeft);
@@ -412,7 +468,7 @@ public sealed partial class ArrangementView : UserControl
         _headerColumnParts.Add(leftBackdrop);
         leftBackdrop.BindResource(Border.BackgroundProperty, "Brush.Panel");
         leftBackdrop.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
-        var centerArea = new Grid();
+        var centerArea = _centerArea = new Grid();
         centerArea.Children.Add(leftBackdrop);
         centerArea.Children.Add(scroller);
 
@@ -434,6 +490,15 @@ public sealed partial class ArrangementView : UserControl
         DragDrop.AddDragOverHandler(_footer, OnFooterDragOver);
         DragDrop.AddDragLeaveHandler(_footer, (_, _) => SetFooterDropRow(-1));
         DragDrop.AddDropHandler(_footer, OnFooterDrop);
+        // Tall returns must not crowd out the tracks: past about half the arrangement the
+        // footer stops growing and scrolls (specs/045).
+        _footerScroller = new ScrollViewer
+        {
+            Content = _footer,
+            Background = Brushes.Transparent,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+        };
 
         // Bottom: a thin horizontal scrollbar under the lanes, on the well, past a hairline.
         var bottomGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
@@ -456,13 +521,13 @@ public sealed partial class ArrangementView : UserControl
         DockPanel.SetDock(_sectionsRow, Dock.Top);
         DockPanel.SetDock(top, Dock.Top);
         DockPanel.SetDock(bottom, Dock.Bottom);
-        DockPanel.SetDock(_footer, Dock.Bottom);
+        DockPanel.SetDock(_footerScroller, Dock.Bottom);
         DockPanel.SetDock(footerSeam, Dock.Bottom);
         root.Children.Add(_overviewRow);   // Overview sits above the ruler
         root.Children.Add(_sectionsRow);   // …then the named song sections
         root.Children.Add(top);
         root.Children.Add(bottom);
-        root.Children.Add(_footer);
+        root.Children.Add(_footerScroller);
         root.Children.Add(footerSeam);     // docked after the footer → sits on top of it
         root.Children.Add(centerArea);
 
@@ -472,7 +537,7 @@ public sealed partial class ArrangementView : UserControl
         // The header/lane seam is draggable along the view's full height (overview to footer).
         _columnSeam = BuildColumnSeam();
         var layered = new Grid { Children = { root, _columnSeam } };
-        SizeChanged += (_, _) => OnViewSizeChanged();
+        SizeChanged += (_, _) => { OnViewSizeChanged(); CapFooterHeight(); };
 
         var island = new Border
         {
@@ -544,9 +609,11 @@ public sealed partial class ArrangementView : UserControl
         if (!_automationMode) return;
         var eng = _engine;
         if (eng is not { IsPlaying: true } || !eng.AutomationRecording) return;
-        if (_lanes.IsEditingPoint) return;
+        if (_lanes.IsEditingPoint || _footerLanes.IsEditingPoint) return;
         foreach (var t in _tracks) LoadAutoPoints(t);
+        foreach (var t in _returns) LoadAutoPoints(t);
         _lanes.InvalidateVisual();
+        _footerLanes.InvalidateVisual();
     }
     internal IReadOnlyList<TrackVM> Tracks => _tracks;
 
@@ -653,7 +720,7 @@ public sealed partial class ArrangementView : UserControl
         bool playing = _engine is { IsPlaying: true };
         if (playing && !_wasPlaying) SetFollowSuspended(false);
         _wasPlaying = playing;
-        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && CenterOnPlayhead();
+        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && CenterOnPlayhead();
         if (scrolled) _lanes.InvalidateVisual();
         // Converge the loop highlight with the engine (~30 Hz) so transport-bar
         // toggles/changes reflect here too — except mid-drag, where we show a preview.
@@ -692,7 +759,13 @@ public sealed partial class ArrangementView : UserControl
             if (t.AutoPoints.Count != 0) continue;   // only empty lanes show a baseline
             sig = sig * 31.0 + (AutoCurrent(t) + 3.0) * (i * 7 + 1);
         }
-        if (sig != _autoBaselineSig) { _autoBaselineSig = sig; _lanes.InvalidateVisual(); }
+        for (int i = 0; i < _returns.Count; i++)   // the footer's return lanes (specs/045)
+        {
+            var t = _returns[i];
+            if (t.AutoPoints.Count != 0) continue;
+            sig = sig * 31.0 + (AutoCurrent(t) + 3.0) * (i * 13 + 5);
+        }
+        if (sig != _autoBaselineSig) { _autoBaselineSig = sig; _lanes.InvalidateVisual(); _footerLanes.InvalidateVisual(); }
     }
 
     // ---- loop region authoring -------------------------------------------
@@ -864,7 +937,7 @@ public sealed partial class ArrangementView : UserControl
         // The master level is the engine's master meter; the master *track* is only its effect chain.
         _masterRowMeter?.Push(eng.MasterMeter());
         if (GetMasterVolume is { } getMaster)
-            FollowVolume(_masterRowFader, getMaster());
+            FollowVolume(_masterRowFader, _masterRowDb, getMaster());
         int n = eng.TrackCount;
         for (int i = 0; i < n; i++)
         {
@@ -877,7 +950,9 @@ public sealed partial class ArrangementView : UserControl
             if (_panBars.TryGetValue(ti.Id, out var p) && !p.Dragging && Math.Abs(p.Pan - ti.Pan) > 1e-3)
                 p.Pan = ti.Pan;
             if (_footerFaders.TryGetValue(ti.Id, out var rf))
-                FollowVolume(rf, ti.Volume);
+                FollowVolume(rf, _footerDb.GetValueOrDefault(ti.Id), ti.Volume);
+            if (_footerPans.TryGetValue(ti.Id, out var rp) && !rp.Dragging && Math.Abs(rp.Pan - ti.Pan) > 1e-3)
+                rp.Pan = ti.Pan;
         }
         // Large headers' sends follow the mixer, the Sends card and automation (#138).
         foreach (var (tid, bus, sf) in _sendFaders)
@@ -890,6 +965,13 @@ public sealed partial class ArrangementView : UserControl
 
     // Moves a footer fader (its value is written inside it) to a volume changed elsewhere
     // (Mixer, MST, MCP, automation, project load) — unless the user is dragging it.
+    private static void FollowVolume(MiniFader? fader, TextBlock? db, double volume)
+    {
+        if (fader is null || fader.Dragging || Math.Abs(fader.Value - volume) <= 1e-3) return;
+        fader.Value = volume;
+        if (db is not null) db.Text = VolumeDbText(volume);
+    }
+
     private static void FollowVolume(MiniFader? fader, double volume)
     {
         if (fader is null || fader.Dragging || Math.Abs(fader.Value - volume) <= 1e-3) return;
@@ -1000,7 +1082,10 @@ public sealed partial class ArrangementView : UserControl
                     if (!_autoTargets.TryGetValue(ti.Id, out var sel) && FirstAutomatedTarget(eng, ti.Id) is { } first)
                         _autoTargets[ti.Id] = sel = first;
                     if (_autoTargets.ContainsKey(ti.Id))
-                        (tvm.AutoTarget, tvm.AutoDeviceIndex, tvm.AutoParamIndex, tvm.AutoParamId) = sel;
+                    {
+                        (tvm.AutoTarget, tvm.AutoDeviceIndex, tvm.AutoParamIndex, tvm.AutoParamId, tvm.AutoChain, tvm.AutoSlot, tvm.AutoLane) = sel;
+                        if (tvm.AutoChain >= 0) ResyncNestedTarget(tvm);   // a rack edit may have moved its device
+                    }
                     tvm.AutoLabel = AutoLabelFor(tvm);
                     LoadAutoPoints(tvm);
                 }
@@ -1056,6 +1141,7 @@ public sealed partial class ArrangementView : UserControl
         RebuildRowGeometry();   // row tops depend on which rows are groups → after the reorder
         RecomputeTotalBeats();
         LoadMasterAuto();   // master-volume automation for the footer row (M9 follow-up)
+        RebuildFooterGeometry();   // footer rows follow the returns just rebuilt
         if (rebuildHeaders)
         {
             RebuildHeaders();
@@ -1063,10 +1149,7 @@ public sealed partial class ArrangementView : UserControl
         }
         _lanes.Height = Math.Max(DefaultRowHeight, RowsHeight);
         _overlay.Height = _lanes.Height;   // keep the playhead/loop overlay the same span
-        double footerH = (_returns.Count + 1) * FooterRowH;   // returns + master
-        _footer.Height = footerH;
-        _footerHeaders.Height = footerH;
-        _footerLanes.InvalidateVisual();
+        ApplyFooterHeight();
         SyncScroll(_lanes.Bounds.Width);
         Redraw();
     }
@@ -1430,6 +1513,7 @@ public sealed partial class ArrangementView : UserControl
     private void OnLaneDragOver(object? sender, DragEventArgs e)
     {
         if (BrowserView.IsClipDrag) { OnClipDragOverLanes(e); return; }
+        if (DeviceDrag.IsActive) { OnDeviceDragOver(e); return; }
         bool ok = BrowserView.IsAcceptableDrag(e);
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
         SetDropTrack(ok ? RowAtY(e.GetPosition(_lanes).Y) : -1);
@@ -1450,8 +1534,10 @@ public sealed partial class ArrangementView : UserControl
     // The return/master footer row at y: returns first, master last; -1 outside.
     private int FooterRowAt(double y)
     {
-        int row = (int)Math.Floor(y / FooterRowH);
-        return y >= 0 && row <= _returns.Count ? row : -1;
+        if (y < 0) return -1;
+        for (int i = 0; i + 1 < _footerRowTops.Length; i++)
+            if (y < _footerRowTops[i + 1]) return i;
+        return -1;
     }
     private int FooterRowTrackId(int row)
         => row < 0 ? -1 : row < _returns.Count ? _returns[row].Id : _engine?.MasterTrackId ?? -1;
@@ -1462,6 +1548,14 @@ public sealed partial class ArrangementView : UserControl
 
     private void OnFooterDragOver(object? sender, DragEventArgs e)
     {
+        if (DeviceDrag.IsActive)   // returns and the master take audio effects
+        {
+            int id = FooterRowTrackId(FooterRowAt(e.GetPosition(_footerHeaders).Y));
+            bool can = id > 0 && _engine is not null && DeviceDrag.CanTake(_engine, id);
+            e.DragEffects = !can ? DragDropEffects.None : (e.KeyModifiers & KeyModifiers.Alt) != 0 ? DragDropEffects.Copy : DragDropEffects.Move;
+            SetFooterDropRow(can ? FooterRowAt(e.GetPosition(_footerHeaders).Y) : -1);
+            return;
+        }
         bool ok = IsBusDrop();
         e.DragEffects = ok ? DragDropEffects.Copy : DragDropEffects.None;
         SetFooterDropRow(ok ? FooterRowAt(e.GetPosition(_footerHeaders).Y) : -1);
@@ -1471,6 +1565,13 @@ public sealed partial class ArrangementView : UserControl
     {
         int row = FooterRowAt(e.GetPosition(_footerHeaders).Y);
         SetFooterDropRow(-1);
+        if (DeviceDrag.IsActive)
+        {
+            int id = FooterRowTrackId(row);
+            if (id > 0 && _engine is not null && DeviceDrag.CanTake(_engine, id) && DeviceDrag.RequestFor(id, e.KeyModifiers) is { } r)
+            { DeviceDropped?.Invoke(r); e.Handled = true; }
+            return;
+        }
         if (!IsBusDrop() || BrowserView.CurrentDrag is not { } item) return;
         int trackId = FooterRowTrackId(row);
         if (trackId <= 0) return;
@@ -1486,13 +1587,36 @@ public sealed partial class ArrangementView : UserControl
         _footerLanes.InvalidateVisual();
         _footerDropRing.IsVisible = row >= 0;
         if (row < 0) return;
-        Canvas.SetTop(_footerDropRing, row * FooterRowH);
-        _footerDropRing.Height = FooterRowH;
+        Canvas.SetTop(_footerDropRing, FooterRowTop(row));
+        _footerDropRing.Height = FooterRowHeight(row);
     }
+
+    // A device card dragged out of the Devices panel (specs/043): the row it is over lights when
+    // that track can take it; the drop moves it there (⌥ copies).
+    private void OnDeviceDragOver(DragEventArgs e)
+    {
+        int ti = RowAtY(e.GetPosition(_lanes).Y);
+        bool ok = ti >= 0 && ti < _tracks.Count && _engine is not null && DeviceDrag.CanTake(_engine, _tracks[ti].Id);
+        e.DragEffects = !ok ? DragDropEffects.None : (e.KeyModifiers & KeyModifiers.Alt) != 0 ? DragDropEffects.Copy : DragDropEffects.Move;
+        SetDropTrack(ok ? ti : -1);
+    }
+
+    private void OnDeviceDrop(DragEventArgs e)
+    {
+        SetDropTrack(-1);
+        int ti = RowAtY(e.GetPosition(_lanes).Y);
+        if (ti < 0 || ti >= _tracks.Count || _engine is null || !DeviceDrag.CanTake(_engine, _tracks[ti].Id)) return;
+        if (DeviceDrag.RequestFor(_tracks[ti].Id, e.KeyModifiers) is { } r) DeviceDropped?.Invoke(r);
+        e.Handled = true;
+    }
+
+    /// <summary>A device card was dropped on a track row or footer row (specs/043).</summary>
+    public event Action<DeviceMoveRequest>? DeviceDropped;
 
     private void OnLaneDrop(object? sender, DragEventArgs e)
     {
         if (BrowserView.IsClipDrag) { OnClipDropOnLanes(e); return; }
+        if (DeviceDrag.IsActive) { OnDeviceDrop(e); return; }
         SetDropTrack(-1);
         var items = BrowserView.DroppedItems(e);
         if (items.Count == 0) return;
@@ -1598,11 +1722,11 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Esc: cancel an in-progress lane gesture if one is active (no model change),
     /// otherwise clear any selection (req 1.2.6 / 2.11). Returns true if it did something.</summary>
     /// <summary>Abort any in-progress lane gesture with no model change (window focus loss).</summary>
-    public void CancelActiveGesture() => _lanes.CancelGesture();
+    public void CancelActiveGesture() { _lanes.CancelGesture(); _footerLanes.CancelGesture(); }
 
     internal bool EscapePressed()
     {
-        if (_lanes.CancelGesture()) return true;
+        if (_lanes.CancelGesture() | _footerLanes.CancelGesture()) return true;
         bool had = _sel.Count > 0 || SelTrackId > 0 || HasAutoSelection || HasTimeSelection;
         if (HasAutoSelection) ClearAutoSelection();
         if (HasTimeSelection) ClearTimeSelection();
@@ -2099,7 +2223,12 @@ public sealed partial class ArrangementView : UserControl
         // Record-arm applies to instrument (MIDI capture) + audio (input capture) tracks;
         // return and group tracks have no input, so they get no arm chip.
         if (!t.IsReturn && !t.IsGroup)
-            btnRow.Children.Add(ArmToggle(t.Armed, v => { t.Armed = v; _engine?.SetTrackArmed(t.Id, v); }));
+            btnRow.Children.Add(ArmToggle(t.Armed, (v, additive) =>
+            {
+                t.Armed = v;
+                if (_engine is not null) TrackArming.Set(_engine, t.Id, v, additive);
+            }));
+
         // Audio tracks: a monitor key after the arm hears the selected input live.
         bool isAudioTrack = !t.IsInstrument && !t.IsReturn && !t.IsGroup;
         var monitor = isAudioTrack ? MonitorToggle(t.Id) : null;
@@ -2178,18 +2307,26 @@ public sealed partial class ArrangementView : UserControl
                 break;
             default:
                 stack.VerticalAlignment = VerticalAlignment.Center;
-                // A column too narrow for volume, pan and the picker on one row leaves the
-                // picker to the context menu, as a compact row does.
-                if (picker is not null && HeaderW - x - NameGap - MeterW < MiniFader.MinW + PanBar.W + PickerW + 2 * 6)
-                {
-                    picker = null;
-                    monitor?.SetSource(_engine?.GetTrackRecordInput(t.Id) ?? 0);
-                }
+                // The picker stays on a standard row. A narrow column shrinks it (the source
+                // name trims) and then lets the volume bar give way; only when even "In ⌄"
+                // and a sliver of volume can't sit beside the pan does it go to the context menu.
                 if (picker is not null)
                 {
-                    picker.Width = PickerW;
-                    Grid.SetColumn(picker, 2);
-                    volRow.Children.Add(picker);
+                    double room = HeaderW - x - NameGap - MeterW - PanBar.W - 2 * 6;
+                    double pickerW = Math.Clamp(room - MiniFader.MinW, PickerMinW, PickerW);
+                    double faderMin = Math.Min(MiniFader.MinW, room - pickerW);
+                    if (faderMin < FaderSqueezeW)
+                    {
+                        picker = null;
+                        monitor?.SetSource(_engine?.GetTrackRecordInput(t.Id) ?? 0);
+                    }
+                    else
+                    {
+                        fader.MinWidth = faderMin;
+                        picker.Width = pickerW;
+                        Grid.SetColumn(picker, 2);
+                        volRow.Children.Add(picker);
+                    }
                 }
                 else volRow.ColumnSpacing = 10;
                 stack.Children.Add(volRow);
@@ -2264,7 +2401,7 @@ public sealed partial class ArrangementView : UserControl
         }
     }
 
-    private const double ChipGap = 4, HeaderRowGap = 6, NameGap = 12, PickerW = 66, PickerH = 22, HeaderRightPad = 10, MeterW = 7 + 6 + 4;
+    private const double ChipGap = 4, HeaderRowGap = 6, NameGap = 12, PickerW = 66, PickerMinW = 36, FaderSqueezeW = 20, PickerH = 22, HeaderRightPad = 10, MeterW = 7 + 6 + 4;
 
     private TextBlock HeaderName(string text) => new()
     {
@@ -2446,27 +2583,28 @@ public sealed partial class ArrangementView : UserControl
         MenuItem? recInput = null;
         if (isAudio)
         {
-            int cur = _engine.GetTrackRecordInput(trackId);
+            var cur = RecordInputPick.Of(_engine, trackId);
             string curName = "Ext";
             var choices = new List<MenuItem>();
-            void Src(string label, string shortName, int source)
+            void Src(string label, string shortName, RecordInputPick pick)
             {
-                var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = cur == source };
-                mi.Click += (_, _) => _engine.SetTrackRecordInput(trackId, source);
+                bool on = pick.Matches(cur);
+                var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = on };
+                mi.Click += (_, _) => pick.ApplyTo(_engine, trackId);
                 choices.Add(mi);
-                if (cur == source) curName = shortName;
+                if (on) curName = shortName;
             }
-            Src("Audio input (hardware)", "Ext", 0);
-            Src("Master", "Master", -1);
+            foreach (var (pick, label, shortName) in RecordInputPick.Hardware) Src(label, shortName, pick);
+            int fixedCount = RecordInputPick.Hardware.Length + 1;   // the hardware entries + Master
+            Src("Master", "Master", RecordInputPick.Track(-1));
             foreach (var v in _tracks)
-                if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : $"Track {v.Id}"; Src(n, n, v.Id); }
+                if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : $"Track {v.Id}"; Src(n, n, RecordInputPick.Track(v.Id)); }
             foreach (var v in _returns)
-            { string n = v.Name.Length > 0 ? v.Name : $"Return {v.Id}"; Src(n, n, v.Id); }
+            { string n = v.Name.Length > 0 ? v.Name : $"Return {v.Id}"; Src(n, n, RecordInputPick.Track(v.Id)); }
             recInput = MenuKit.ValueItem("Record input", GlyphKind.Input, curName);
-            recInput.Items.Add(choices[0]);
-            recInput.Items.Add(choices[1]);
-            if (choices.Count > 2) recInput.Items.Add(new Separator());
-            foreach (var c in choices.Skip(2)) recInput.Items.Add(c);
+            foreach (var c in choices.Take(fixedCount)) recInput.Items.Add(c);
+            if (choices.Count > fixedCount) recInput.Items.Add(new Separator());
+            foreach (var c in choices.Skip(fixedCount)) recInput.Items.Add(c);
         }
 
         // MIDI from ▸ (instrument tracks only): play another instrument track's MIDI through
@@ -2523,13 +2661,22 @@ public sealed partial class ArrangementView : UserControl
     // or another track / send. Reflects and writes the track's stored input source.
     private Control BuildInputCombo(int trackId, MonitorChip? monitor = null)
     {
-        int cur = _engine?.GetTrackRecordInput(trackId) ?? 0;
-        var sources = new List<(string, int)> { ("Ext", 0), ("Master", -1) };
-        foreach (var v in _tracks) if (v.Id != trackId) sources.Add((v.Name.Length > 0 ? v.Name : $"Track {v.Id}", v.Id));
-        foreach (var v in _returns) sources.Add((v.Name.Length > 0 ? v.Name : $"Return {v.Id}", v.Id));
-        if (!sources.Exists(x => x.Item2 == cur)) cur = 0;
-        monitor?.SetSource(cur);
-        return InPicker(sources, cur, src => { _engine?.SetTrackRecordInput(trackId, src); monitor?.SetSource(src); });
+        var picks = new List<RecordInputPick>();
+        var sources = new List<(string, int)>();
+        void Add(string name, RecordInputPick pick) { sources.Add((name, picks.Count)); picks.Add(pick); }
+        foreach (var (pick, _, shortName) in RecordInputPick.Hardware) Add(shortName, pick);
+        Add("Master", RecordInputPick.Track(-1));
+        foreach (var v in _tracks) if (v.Id != trackId) Add(v.Name.Length > 0 ? v.Name : $"Track {v.Id}", RecordInputPick.Track(v.Id));
+        foreach (var v in _returns) Add(v.Name.Length > 0 ? v.Name : $"Return {v.Id}", RecordInputPick.Track(v.Id));
+        var cur = _engine is null ? RecordInputPick.Hardware[0].Pick : RecordInputPick.Of(_engine, trackId);
+        int sel = picks.FindIndex(p => p.Matches(cur));
+        monitor?.SetSource(sel >= 0 ? cur.Source : 0);
+        return InPicker(sources, Math.Max(0, sel), k =>
+        {
+            if (_engine is null) return;
+            picks[k].ApplyTo(_engine, trackId);
+            monitor?.SetSource(picks[k].Source);
+        });
     }
 
     // Input-monitor chip (Monitor "In"): while lit, the audio track plays whatever arrives on
@@ -2618,6 +2765,19 @@ public sealed partial class ArrangementView : UserControl
                 fly.Items.Add(mi);
             }
             fly.ShowAt(box);
+        };
+        // The wheel over the closed picker steps through the sources, as a dropdown does:
+        // down picks the next one, up the previous; it stops at either end.
+        box.PointerWheelChanged += (_, e) =>
+        {
+            if (e.Delta.Y == 0 || sources.Count == 0) return;
+            e.Handled = true;
+            int at = Math.Max(0, sources.FindIndex(x => x.src == current));
+            int next = Math.Clamp(at + (e.Delta.Y < 0 ? 1 : -1), 0, sources.Count - 1);
+            if (next == at && sources[at].src == current) return;
+            current = sources[next].src;
+            Show();
+            set(current);
         };
         ToolTip.SetTip(box, "Input");
         return box;
@@ -2708,11 +2868,13 @@ public sealed partial class ArrangementView : UserControl
         Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
     };
 
-    private Control ArmToggle(bool initial, Action<bool> onChanged)
+    // onChanged(armed, additive): additive = ⌘/Ctrl held, arm without disarming the others (#332).
+    private Control ArmToggle(bool initial, Action<bool, bool> onChanged)
     {
         bool state = initial;
         var disc = new Glyph(GlyphKind.Record, 8);
         var chip = HeaderKey(disc);
+        ToolTip.SetTip(chip, TrackArming.Tip);
         void Paint()
         {
             chip.Background = state ? NotaPalette.Record : NotaPalette.Well;
@@ -2722,7 +2884,7 @@ public sealed partial class ArrangementView : UserControl
         chip.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
-            e.Handled = true; state = !state; Paint(); onChanged(state);
+            e.Handled = true; state = !state; Paint(); onChanged(state, TrackArming.IsAdditive(e.KeyModifiers));
         };
         return chip;
     }
@@ -2754,83 +2916,256 @@ public sealed partial class ArrangementView : UserControl
         if (undo is null) set(value); else undo.Change(value, set);
     }
 
+    // The footer's rows changed height (Refresh, a footer seam drag, a menu preset).
+    private void ApplyFooterHeight()
+    {
+        double h = FooterContentHeight;
+        _footer.Height = h;
+        _footerHeaders.Height = h;
+        _footerLanes.InvalidateVisual();
+        CapFooterHeight();
+    }
+
+    // The footer may take at most half of the space it shares with the track list.
+    private void CapFooterHeight()
+    {
+        double shared = _centerArea.Bounds.Height + _footerScroller.Bounds.Height;
+        _footerScroller.MaxHeight = shared > 0 ? Math.Max(DefaultFooterRowHeight, Math.Floor(shared / 2)) : double.PositiveInfinity;
+    }
+
+    // Footer header cards (one per return, then the master) and their seam grips. A seam drag
+    // moves the existing cards and grips instead of rebuilding them — rebuilding would drop the
+    // grip that holds the pointer — and swaps in a fresh card only when a row crosses a tier.
+    private readonly List<(Control card, HeaderTier tier)> _footerCards = new();
+    private readonly List<Border> _footerGrips = new();
+    private readonly Dictionary<int, PanBar> _footerPans = new();
+
     private void RebuildFooterHeaders()
     {
         _footerHeaders.Children.Clear();
         _footerMeters.Clear();
         _footerFaders.Clear();
-        double y = 0;
-        foreach (var r in _returns)
+        _footerDb.Clear();
+        _footerPans.Clear();
+        _footerCards.Clear();
+        _footerGrips.Clear();
+        int rows = _returns.Count + 1;
+        for (int i = 0; i < rows; i++)
         {
+            var card = BuildFooterCard(i);
+            _footerCards.Add((card, TierFor(FooterRowHeight(i))));
+            Canvas.SetLeft(card, 0);
+            Canvas.SetTop(card, FooterRowTop(i));
+            _footerHeaders.Children.Add(card);
+        }
+        for (int i = 0; i < rows; i++)
+        {
+            var grip = FooterSeamGrip(i);
+            _footerGrips.Add(grip);
+            _footerHeaders.Children.Add(grip);
+        }
+        PlaceFooterGrips();
+        _footerHeaders.Children.Add(_footerDropRing);   // browser drop target (kept invisible until a drag)
+    }
+
+    // Footer row i: a return (its bus volume) or, last, the master (the transport's master volume).
+    private Control BuildFooterCard(int i)
+    {
+        double h = FooterRowHeight(i);
+        if (i < _returns.Count)
+        {
+            var r = _returns[i];
             int id = r.Id;
-            var row = BuildSlimRow(r.Name, r.ColorIndex, id, "Brush.SurfaceCard", r.Volume,
-                v => _engine?.SetTrackVolume(id, (float)v), out var meter, out var fader);
+            var card = BuildSlimRow(r.Name, r.ColorIndex, id, "Brush.SurfaceCard", r.Volume, h,
+                v => _engine?.SetTrackVolume(id, (float)v), out var meter, out var fader, out var db, ret: r);
             _footerMeters[id] = meter;
             _footerFaders[id] = fader;
-            Canvas.SetLeft(row, 0);
-            Canvas.SetTop(row, y);
-            _footerHeaders.Children.Add(row);
-            y += FooterRowH;
+            _footerDb[id] = db;
+            return card;
         }
         // Master row: selectable (opens the master effect chain) via the reserved id.
         int masterId = _engine?.MasterTrackId ?? -1;
         string masterName = _engine is { } me2 && me2.GetTrackName(masterId) is { Length: > 0 } mn ? mn : "Master";
-        var master = BuildSlimRow(masterName, -1, masterId, "Brush.SurfaceRaised", GetMasterVolume?.Invoke() ?? 1f,
-            v => SetMasterVolume?.Invoke((float)v), out _masterRowMeter, out _masterRowFader,
+        return BuildSlimRow(masterName, -1, masterId, "Brush.SurfaceRaised", GetMasterVolume?.Invoke() ?? 1f, h,
+            v => SetMasterVolume?.Invoke((float)v), out _masterRowMeter, out _masterRowFader, out _masterRowDb,
             masterSpine: true);
-        Canvas.SetLeft(master, 0);
-        Canvas.SetTop(master, y);
-        _footerHeaders.Children.Add(master);
-        _footerHeaders.Children.Add(_footerDropRing);   // browser drop target (kept invisible until a drag)
     }
 
-    // A slim footer row (style guide): the name, the volume bar with its value inside and the
-    // level meter, on one line. No pan, and the fader writes no automation — returns have no
-    // visible lane down here. Selected: the lighter background, like a track header.
-    private Control BuildSlimRow(string title, int colorIndex, int trackId, string bgKey, double volume,
-        Action<double> setVolume, out MeterBar meter, out MiniFader fader, bool masterSpine = false)
+    private void PlaceFooterGrips()
     {
-        var name = HeaderName(title);
-        name.Margin = new Thickness(0, 0, 8, 0);
-        fader = new MiniFader(volume) { VerticalAlignment = VerticalAlignment.Center, Default = 1.0, Text = VolumeDbText, Width = SlimFaderW };
+        for (int i = 0; i < _footerGrips.Count; i++)
+        {
+            _footerGrips[i].Width = _headerW;
+            Canvas.SetLeft(_footerGrips[i], 0);
+            Canvas.SetTop(_footerGrips[i], FooterRowTop(i + 1) - SeamGrabPx / 2);
+        }
+    }
+
+    // During a footer seam drag: move and resize the cards in place; a card whose height
+    // crossed a layout tier is rebuilt on its own.
+    private void RelayoutFooterLive()
+    {
+        RebuildFooterGeometry();
+        var children = _footerHeaders.Children;
+        for (int i = 0; i < _footerCards.Count; i++)
+        {
+            var (card, built) = _footerCards[i];
+            double h = FooterRowHeight(i);
+            if (built != TierFor(h))
+            {
+                int at = children.IndexOf(card);
+                var fresh = BuildFooterCard(i);
+                if (at >= 0) children[at] = fresh; else children.Insert(0, fresh);
+                Canvas.SetLeft(fresh, 0);
+                _footerCards[i] = (fresh, TierFor(h));
+                card = fresh;
+            }
+            Canvas.SetTop(card, FooterRowTop(i));
+            card.Height = h;
+        }
+        PlaceFooterGrips();
+        ApplyFooterHeight();
+    }
+
+    // A footer row: name and volume read-out with the same vertical level meter as a track
+    // header on the right, laid out by the row's height (specs/045) — compact puts name, fader
+    // and read-out on one line; standard stacks the fader under the name (a return adds its mute);
+    // large adds a return's pan. A return's fader and pan write automation like a track's.
+    private Control BuildSlimRow(string title, int colorIndex, int trackId, string bgKey, double volume, double height,
+        Action<double> setVolume, out MeterBar meter, out MiniFader fader, out TextBlock db, bool masterSpine = false,
+        TrackVM? ret = null)
+    {
+        var tier = TierFor(height);
+        var spineBrush = masterSpine ? NotaPalette.Master : ClipColors(colorIndex).content;
+        var name = new TextBlock
+        {
+            Text = title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Brush("Brush.TextPrimary"),
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var dbText = new TextBlock
+        {
+            Text = VolumeDbText(volume), FontSize = 9, Classes = { "Mono" }, Foreground = Brush("Brush.TextTertiary"),
+            VerticalAlignment = VerticalAlignment.Center, Width = 30, TextAlignment = TextAlignment.Right,
+            Margin = new Thickness(6, 0, 0, 0),
+        };
+        db = dbText;
+        fader = new MiniFader(volume) { VerticalAlignment = VerticalAlignment.Center, Default = 1.0, Text = VolumeDbText };
         // One undo step per drag / reset (specs/009): the master row targets the master volume.
         var undo = _engine is { } ue ? new MixGesture(ue, masterSpine ? MixTarget.Master : MixTarget.Volume(trackId)) : null;
         fader.GestureBegin += () => undo?.Begin();
+        if (ret is not null)
+        {
+            fader.GestureBegin += () => _engine?.BeginAutomationWrite(trackId, AutomationTarget.Volume, -1, -1, "");
+            fader.GestureEnd   += () => _engine?.EndAutomationWrite(trackId, AutomationTarget.Volume, -1, -1, "");
+        }
         fader.GestureEnd   += () => undo?.End();
-        fader.ValueChanged += v => Change(undo, v, setVolume);
-        ValueEntry.Attach(fader, fader.EntryField("Volume", VolumeDbText));
+        // The dB read-out follows the drag, and double-clicking it types a value (as the bar does).
+        fader.ValueChanged += v => { Change(undo, v, setVolume); dbText.Text = VolumeDbText(v); };
+        ValueEntry.Attach(fader, fader.EntryField("Volume", VolumeDbText), dbText);
 
-        meter = new MeterBar { VerticalAlignment = VerticalAlignment.Center, Width = 7, Height = 14, Margin = new Thickness(8, 0, 0, 0) };
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), Margin = new Thickness(NameGap, 0, HeaderRightPad, 0) };
-        row.Children.Add(name);
-        Grid.SetColumn(fader, 1);
-        row.Children.Add(fader);
-        Grid.SetColumn(meter, 2);
-        row.Children.Add(meter);
+        Control? mute = ret is null ? null
+            : ChipToggle("M", ret.Muted, NotaPalette.Mute, v => { ret.Muted = v; _engine?.SetTrackMute(trackId, v); });
 
-        bool sel = trackId > 0 && trackId == SelTrackId;
+        // Room for the controls beside the name: card minus spine, padding and meter.
+        double contentW = HeaderW - 3 - 16 - 11;
+        Control rowContent;
+        if (tier == HeaderTier.Compact)
+        {
+            // One line: name · fader · dB. A narrow column shrinks the fader, then drops it.
+            double faderW = Math.Clamp(contentW - 56 - 36, 0, 96);
+            var line = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
+            Grid.SetColumn(name, 0);
+            line.Children.Add(name);
+            if (faderW >= 28)
+            {
+                fader.Width = faderW;
+                fader.Margin = new Thickness(6, 0, 0, 0);
+                Grid.SetColumn(fader, 1);
+                line.Children.Add(fader);
+            }
+            Grid.SetColumn(dbText, 2);
+            line.Children.Add(dbText);
+            rowContent = line;
+        }
+        else
+        {
+            var nameRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto") };
+            Grid.SetColumn(name, 0);
+            nameRow.Children.Add(name);
+            if (mute is not null)
+            {
+                mute.Margin = new Thickness(6, 0, 0, 0);
+                Grid.SetColumn(mute, 1);
+                nameRow.Children.Add(mute);
+            }
+            Grid.SetColumn(dbText, 2);
+            nameRow.Children.Add(dbText);
+            var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 6 };
+            stack.Children.Add(nameRow);
+            stack.Children.Add(fader);
+            if (tier == HeaderTier.Large && ret is not null)
+            {
+                var pan = new PanBar(ret.Pan) { VerticalAlignment = VerticalAlignment.Center };
+                var panUndo = _engine is { } pe ? new MixGesture(pe, MixTarget.Pan(trackId)) : null;
+                pan.GestureBegin += () => panUndo?.Begin();
+                Action<double> setPan = p => _engine?.SetTrackPan(trackId, (float)p);
+                pan.PanChanged  += p => Change(panUndo, p, setPan);
+                pan.GestureBegin += () => _engine?.BeginAutomationWrite(trackId, AutomationTarget.Pan, -1, -1, "");
+                pan.GestureEnd   += () => _engine?.EndAutomationWrite(trackId, AutomationTarget.Pan, -1, -1, "");
+                pan.GestureEnd   += () => panUndo?.End();
+                ValueEntry.Attach(pan, pan.EntryField("Pan"));
+                _footerPans[trackId] = pan;
+                stack.Children.Add(pan);
+            }
+            rowContent = stack;
+        }
+
+        meter = new MeterBar
+        {
+            VerticalAlignment = VerticalAlignment.Stretch, Width = 8,
+            Margin = tier == HeaderTier.Compact ? new Thickness(0, 4, 3, 4) : new Thickness(0, 6, 3, 6),
+        };
+        DockPanel.SetDock(meter, Dock.Right);
+        var body = new DockPanel
+        {
+            LastChildFill = true,
+            Children = { meter, new Border { Padding = tier == HeaderTier.Compact ? new Thickness(8, 0) : new Thickness(8, 4), Child = rowContent } },
+        };
+
+        var spine = new Border { Width = 3, Background = spineBrush };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("3,*") };
+        Grid.SetColumn(spine, 0);
+        Grid.SetColumn(body, 1);
+        grid.Children.Add(spine);
+        grid.Children.Add(body);
+
+        bool sel = trackId > 0 && (trackId == SelTrackId || (ret is not null && _selTracks.Contains(trackId)));
+        if (sel) spine.Background = NotaPalette.Accent;   // selected: accent stripe, name stays primary
         var card = new Border
         {
-            Width = HeaderW, Height = FooterRowH, ClipToBounds = true,
-            Background = sel ? SelHeaderBg : Brush("Brush.SurfaceDeep"),
+            Width = HeaderW, Height = height, ClipToBounds = true,
+            Background = sel ? SelHeaderBg : Brush(bgKey),
             BorderBrush = Brush("Brush.BorderDefault"),
             BorderThickness = new Thickness(0, 0, 1, 1),
-            Child = row,
+            Child = grid,
         };
         if (trackId > 0)
             card.PointerPressed += (_, e) =>
             {
                 if (e.GetCurrentPoint(card).Properties.IsRightButtonPressed) { ShowFooterMenu(card, trackId); return; }
+                if (ret is not null && (e.KeyModifiers & KeyModifiers.Shift) != 0) { SelectReturnRange(trackId); e.Handled = true; return; }
+                if (ret is not null && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
+                {
+                    ToggleReturnInSelection(trackId); e.Handled = true; return;
+                }
                 Select(trackId, -1);
             };
         return card;
     }
 
-    private const double SlimFaderW = 122;
-
-    // Context menu for a send/return or the master row: rename + colour (the same edits
-    // regular tracks get; returns/master have no clips to copy/duplicate), and Delete for a
-    // return (the master stays).
+    // Context menu for a send/return or the master row: rename, colour and height (the same
+    // edits regular tracks get; returns/master have no clips to copy/duplicate), and Delete for
+    // a return (the master stays).
     private void ShowFooterMenu(Control anchor, int trackId)
     {
         if (_engine is null) return;
@@ -2842,6 +3177,7 @@ public sealed partial class ArrangementView : UserControl
             new Control[] { MenuKit.Header(name.Length > 0 ? name : isReturn ? "Return" : "Master",
                                            TrackBrush(EffectiveColorIndex(_engine, trackId)), isReturn ? "Return" : "Master") },
             new Control[] { TrackColourRow(new[] { trackId }) },
+            new Control[] { FooterHeightRow(isReturn ? _returns.FindIndex(r => r.Id == trackId) : _returns.Count) },
             new Control[] { MenuKit.Item("Rename…", GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
             isReturn ? new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => DeleteTracks(new[] { trackId }), MenuKit.DeleteKey) } : null);
         flyout.ShowAt(anchor, showAtPointer: true);

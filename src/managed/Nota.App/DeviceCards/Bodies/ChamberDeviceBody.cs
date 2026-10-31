@@ -271,7 +271,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             f.DragEnded += () => End(p);
             readouts.Add(() => f.Set(P(p)));
             MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
-            ToolTip.SetTip(f, split ? "Blend — convolution (slate, top) ⇄ algorithm (neutral, bottom). Double-click: 50 / 50" : "Dry/Wet — double-click resets");
+            ToolTip.SetTip(f, split ? "Blend — convolution (shaded grey, top) ⇄ algorithm (bottom). Double-click: 50 / 50" : "Dry/Wet — double-click resets");
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
             if (!split) readouts.Add(() => lb.Foreground = P(DryWet) > 0.995f || On(WetOnly) ? TxtC : MutedC);
             return new DockPanel { Children = { Docked(lb, Dock.Bottom), f } };

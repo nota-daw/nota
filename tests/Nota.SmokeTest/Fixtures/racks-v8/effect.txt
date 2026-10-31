@@ -1,0 +1,15 @@
+chains 2
+chain 0 gain=1 pan=-0.3 mute=False solo=False select=0-63
+  dev 0 kind=4 -6 0 100 0 120 0 0 0 0 0 0 0 0 -14 0 0 -1
+chain 1 gain=0.7 pan=0 mute=False solo=False select=30-127
+  dev 0 kind=16 1 0.8 0 0 0 0 0.4363 0.4491 0 0.5 1
+macro 0 'Tone' 0.4
+macro 1 'Macro 2' 0
+macro 2 'Macro 3' 0
+macro 3 'Macro 4' 0
+macro 4 'Macro 5' 0
+macro 5 'Macro 6' 0
+macro 6 'Macro 7' 0
+macro 7 'Macro 8' 0
+map 0 m0 c1 d0 p2 -12..12 curve=3
+mode 2 select 0.3 drywet 0.7 pdc True volume 0.9

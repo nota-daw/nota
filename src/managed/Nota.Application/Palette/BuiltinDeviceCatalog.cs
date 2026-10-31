@@ -196,6 +196,9 @@ public static class BuiltinDeviceCatalog
         new("Nota Random", M, 5, "random transpose", D("random", "humanize chance",
             "evolving", "", "synth", "", "",
             "Random transposition, timing and dropouts.")),
+        new("Nota MIDI Effect Rack", M, 6, "chains of MIDI effects", D("rack", "midirack split layer zones",
+            "", "", "keys synth", "", "",
+            "Splits notes across chains of MIDI effects by key, velocity or a selector.")),
     };
 
     public static IEnumerable<BuiltinDevice> OfType(BuiltinDeviceType t) => All.Where(d => d.Type == t);

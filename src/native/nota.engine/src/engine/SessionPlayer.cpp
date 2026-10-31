@@ -12,14 +12,14 @@ void SessionPlayer::requestLaunch(int32_t slot, double quant, bool legato, float
     pending.store(slot, std::memory_order_relaxed);
 }
 
-bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double globalQuant) {
+bool SessionPlayer::maybeApply(double blockStartBeats, double blockBeats, double globalQuant, bool loopSeam) {
     const int32_t p = pending.load(std::memory_order_relaxed);
     if (p == kNone) return false;
 
     const double pq = pendingQuant.load(std::memory_order_relaxed);
     const double quant = (p == kStop || p == kStopNow || pq < 0.0) ? globalQuant : pq;
     bool boundary;
-    if (p == kStopNow || quant <= 0.0) {
+    if (p == kStopNow || quant <= 0.0 || loopSeam) {
         boundary = true;
     } else {
         const double b1 = blockStartBeats + blockBeats;

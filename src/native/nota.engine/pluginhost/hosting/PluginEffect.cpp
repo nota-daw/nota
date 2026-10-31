@@ -20,6 +20,8 @@ PluginEffect::PluginEffect(std::unique_ptr<juce::AudioPluginInstance> p, double 
     empty_.ensureSize(256);
     setSampleRate(sr, maxBlock);
     if (plugin_) plugin_->addListener(this); // "Learn" (M9-B3)
+    // The window's picture, taken each time it is hidden, goes on the card (specs/046).
+    editor_.onPreview = [this](std::vector<uint8_t> jpeg) { setEditorPreview(nota::EditorPreview::make(std::move(jpeg))); };
 }
 
 PluginEffect::~PluginEffect() {

@@ -459,7 +459,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         Control TraceTab()
         {
             trace = new AsTraceView();
-            ToolTip.SetTip(trace, "The detected pitch (teal dots) and the corrected output (neutral ink) over the last two seconds, on the scale's note lanes; the target lane is lit");
+            ToolTip.SetTip(trace, "The detected pitch (grey dots) and the corrected output (the bright line) over the last two seconds, on the scale's note lanes; the target lane is lit");
             var head = HeadRow(Row(6, Caps("KEY"), KeyDrop(false), ScaleDrop(), SourceSeg(), LearnLatch()), RightInfo(() => TargetNote() >= 0 ? "target " + TargetText() : ""));
             var knobs = KnobRow(new[]
             {
@@ -482,7 +482,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         {
             histView = new AsHistView();
             histView.NoteClicked += ToggleNote;
-            ToolTip.SetTip(histView, "How long each note was sung (the last ~16 bars) over the scale's notes — neutral in the scale, teal outside it. Click a column to add or remove its note");
+            ToolTip.SetTip(histView, "How long each note was sung (the last ~16 bars) over the scale's notes — bright in the scale, the darker grey outside it. Click a column to add or remove its note");
             LearnBind(histView, Custom);
             var scaleSeg = Seg(Scale, new[] { "Chrom", "Major", "Minor", "Pent", "Custom" },
                 "Scale — Chromatic, Major, Minor, Pentatonic (major or minor — click again to swap) or Custom (the notes below)",
@@ -548,7 +548,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         Control MidiTab()
         {
             midiView = new AsTraceView();
-            ToolTip.SetTip(midiView, "The source track's notes (neutral blocks, accent while sounding) and the voice (teal) over the last two seconds — with Key Source MIDI the voice is pulled to the notes");
+            ToolTip.SetTip(midiView, "The source track's notes (neutral blocks, accent while sounding) and the voice (the darker grey) over the last two seconds — with Key Source MIDI the voice is pulled to the notes");
             var head = HeadRow(Row(6, Caps("FROM"), FromDrop(),
                     Seg(MidiMode, new[] { "Note", "Scale" }, "Note — the voice goes to the last held note; Scale — the held notes form the scale"),
                     ToggleLatch(MidiLatch, "Latch", "Latch — keep the last target between notes (off = no correction while no note is held)"),

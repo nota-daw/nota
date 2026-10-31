@@ -180,6 +180,20 @@ class Track {
     float midiNoteNorm() const { return midiNote_.load(std::memory_order_relaxed); }
     bool midiGate() const { return midiHeld_.load(std::memory_order_relaxed) > 0; }
 
+    // A silent Session track released its instrument's notes on going silent (#343), so it
+    // isn't sent again every block. Audio thread only.
+    bool sessionSilentReleased = false;
+
+    // The untargeted live notes (keyboard, MIDI) the track was given and not yet the note-off
+    // of, and whether it was disarmed with them down (#366): released on its next render.
+    // Shared by every version of the track (edits, undo) and with no other track, so it
+    // follows the track whatever happens to its instrument. Audio thread only.
+    struct LiveHeld {
+        uint64_t bits[2] = {0, 0};
+        bool release = false;
+    };
+    std::shared_ptr<LiveHeld> liveHeld = std::make_shared<LiveHeld>();
+
     // Metering (M6-2): post-fader block peak/RMS per channel. Written by the
     // audio thread each block, read by the UI. Transient — not copied across
     // snapshots (a freshly cloned track just re-populates on the next block).
@@ -225,6 +239,23 @@ class Track {
     int32_t recordInputSource() const { return recordInputSource_.load(std::memory_order_relaxed); }
     void setRecordInputSource(int32_t s) { recordInputSource_.store(s, std::memory_order_relaxed); }
 
+    // Which channels of the hardware input an audio track takes (#340): 0 = both, as a
+    // stereo pair (1/2); 1 = input 1 alone, 2 = input 2 alone — a mono source, heard and
+    // recorded in the middle of both sides. Only the hardware input: an internal source is
+    // always stereo. Atomic (the audio thread reads it while monitoring).
+    static constexpr int32_t kInputStereo = 0, kInputMono1 = 1, kInputMono2 = 2;
+    int32_t inputChannels() const { return inputChannels_.load(std::memory_order_relaxed); }
+    void setInputChannels(int32_t c) {
+        inputChannels_.store(c == kInputMono1 || c == kInputMono2 ? c : kInputStereo, std::memory_order_relaxed);
+    }
+    // A mono pick: copy the chosen channel to both sides of interleaved stereo frames.
+    static void foldInputChannels(float* lr, size_t frames, int32_t channels) {
+        if (channels == kInputMono1)
+            for (size_t i = 0; i < frames; ++i) lr[i * 2 + 1] = lr[i * 2];
+        else if (channels == kInputMono2)
+            for (size_t i = 0; i < frames; ++i) lr[i * 2] = lr[i * 2 + 1];
+    }
+
     // Input monitoring (audio tracks, Ableton's Monitor "In"): while on, the track plays its
     // record-input source live — hardware input, or another track's / return's post-fader
     // output — through its own devices + fader instead of its clips, transport rolling or not.
@@ -249,12 +280,29 @@ class Track {
     std::vector<AudioClip> clips;           // audio tracks
     std::vector<MidiClip> midiClips;        // instrument tracks
     std::vector<SessionSlot> sessionSlots;  // Session view, one per scene (M5)
-    std::vector<AutomationLane> automation; // parameter automation lanes (M9)
+    std::vector<TrackLane> automation; // parameter automation lanes (M9)
 
     // CV modulation (Phase 3, Modular editor). Sources + edges to device params.
     // Config lives in atomics (live-tweakable); add/remove is structural (clone).
     std::vector<Modulator> modulators;
     std::vector<CvLink> cvLinks;
+    // Where each Arp on this track (top level or in a rack chain) sends its CC lane, as published
+    // with this snapshot: the audio thread reads the route from here, so a new device order and
+    // the targets that fit it go live together (an Arp is shared by every snapshot and keeps
+    // its own fields only as the authoring copy). Filled from the Arps when a fresh track object
+    // is published (ccRoutesDirty), never on a published one; undo / redo copy a restored
+    // snapshot's routes back onto its Arps. specs/044.
+    struct CcRoute {
+        const MidiDevice* arp = nullptr;
+        int32_t dev = -2;
+        uint64_t uid = 0;
+        int32_t slot = -1;
+        int32_t param = -1;
+    };
+    // Out of line and only when some Arp has a target: every edit clones a track, and a bigger
+    // track made small edits measurably costlier (the edit-path gate).
+    std::unique_ptr<std::vector<CcRoute>> ccRoutes;
+    bool ccRoutesDirty = true;
     int32_t nextModId = 1; // monotonic modulator-id source
 
     // UI metadata (message thread only; never read by the audio thread). `name` is the
@@ -262,6 +310,7 @@ class Track {
     // slot (-1 = auto: assign by position).
     std::string name;
     int32_t colorIndex = -1;
+    bool pianoFold = false; // piano roll Fold (specs/045): the editor shows the folded rows
 
     // Stable across snapshots (voice/DSP state must survive structural edits).
     std::shared_ptr<Instrument> instrument;               // instrument tracks
@@ -300,6 +349,7 @@ class Track {
     int32_t returnIndex_ = -1;                                          // >=0 for return tracks
     int32_t groupId_ = -1;                                              // parent Group track id, or -1 (top-level)
     std::atomic<int32_t> recordInputSource_{0};                         // 0 hardware, -1 master, >0 source track id
+    std::atomic<int32_t> inputChannels_{kInputStereo};                  // hardware input channels (#340)
     std::atomic<bool> monitor_{false};                                  // live input monitoring (audio tracks)
     std::atomic<int32_t> midiFromTrackId_{-1};                          // -1 off, >0 forward MIDI to this track id
     std::atomic<bool> frozen_{false};                                   // M7: play frozenBuf instead of the live chain

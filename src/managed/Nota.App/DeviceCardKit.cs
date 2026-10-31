@@ -49,10 +49,12 @@ internal static class DeviceCardKit
     /// <summary>⌥-click <paramref name="control"/>, or double-click <paramref name="readout"/>, to type a value
     /// (specs/035): for the upright faders and value boxes that are not knobs or value bars. Typed by
     /// probing <paramref name="setNorm"/> and reading <paramref name="text"/> back. Without
-    /// <paramref name="reset"/> a double-click on the control keeps the control's own reset.</summary>
+    /// <paramref name="reset"/> a double-click on the control keeps the control's own reset.
+    /// <paramref name="altResets"/> leaves ⌥-click on the control to the control's own reset
+    /// (typing is then a double-click on the read-out, or the right-click menu).</summary>
     internal static void Typeable(Control control, string name, Func<double> norm, Action<double> setNorm, Func<string> text,
-        Action begin, Action end, Action after, Action? reset = null, TextBlock? readout = null)
-        => ValueEntry.Attach(control, ValueEntry.Probing(name, norm, setNorm, text, begin, end, after, reset), readout);
+        Action begin, Action end, Action after, Action? reset = null, TextBlock? readout = null, bool altResets = false)
+        => ValueEntry.Attach(control, ValueEntry.Probing(name, norm, setNorm, text, begin, end, after, reset) with { AltResets = altResets }, readout);
 
     internal static string Pct(float v) => $"{(int)Math.Round(v * 100)}\u2009%";
 
@@ -133,7 +135,8 @@ internal static class DeviceCardKit
     // corner 3, 9 in ink 3); the picked cell rises out of the groove in the soft tint with
     // orange text. Two to four choices; more than four is a dropdown. `current` returns the
     // picked index, or −1 when the value sits between choices. An inactive strip (`dim` —
-    // e.g. a shelf band's slope) draws every cell in ink 4 with nothing picked, never faded.
+    // e.g. a shelf band's slope) draws every cell in ink 4, never faded; the picked cell still
+    // rises in a plain grey (SurfaceRaised) with ink-3 text, so the value stays readable.
     // `fill` spreads the cells over the full width; `padX` narrows each cell's side padding
     // where a strip must fit a tight column; `fontSize` drops (never below 7) for a dense strip.
     // Left button picks; right-click bubbles. `sync` repaints — register it with the card.
@@ -175,11 +178,11 @@ internal static class DeviceCardKit
             bool d = dim?.Invoke() ?? false;
             for (int i = 0; i < n; i++)
             {
-                bool on = i == cur && !d;
-                cells[i].Background = on ? NotaPalette.AccentSoft : Brushes.Transparent;
-                if (on) cells[i].BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
+                bool picked = i == cur, on = picked && !d;
+                cells[i].Background = on ? NotaPalette.AccentSoft : picked ? NotaPalette.SurfaceRaised : Brushes.Transparent;
+                if (picked) cells[i].BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
                 else cells[i].BoxShadow = default;
-                texts[i].Foreground = on ? AccentBright : d ? TextDisabled : TextTertiary;
+                texts[i].Foreground = on ? AccentBright : picked ? TextSecondary : d ? TextDisabled : TextTertiary;
             }
         }
         sync = Paint;
@@ -346,7 +349,8 @@ internal static class DeviceCardKit
     // neither select nor start dragging the card. Shared by the card shell and the rack chain
     // full-UI popups.
     internal static Control PresetPicker(IReadOnlyList<string> presets, int cur, string current,
-        Action<int> apply, Action<int> step, double nameWidth = 132, double height = NotaSize.Dropdown, Action? init = null)
+        Action<int> apply, Action<int> step, double nameWidth = 132, double height = NotaSize.Dropdown, Action? init = null,
+        Func<bool>? modified = null, Action<Action>? addLive = null)
     {
         double H = height;   // 22: a card header and the device window's title bar
         var label = new TextBlock
@@ -365,6 +369,21 @@ internal static class DeviceCardKit
         };
         name.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
         ToolTip.SetTip(name, "Choose a preset");
+        // A sound parameter moved away from the loaded preset (specs/048): "Name *", read live.
+        if (modified != null && !string.IsNullOrEmpty(current))
+        {
+            bool shown = false;
+            void Mark()
+            {
+                bool m = modified();
+                if (m == shown) return;
+                shown = m;
+                label.Text = m ? current + " *" : current;
+                ToolTip.SetTip(name, m ? $"Changed since you loaded {current} · choose a preset" : "Choose a preset");
+            }
+            Mark();
+            addLive?.Invoke(Mark);
+        }
         name.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(name).Properties.IsLeftButtonPressed) return;
@@ -414,5 +433,40 @@ internal static class DeviceCardKit
         };
         return picker;
         static Control At(Control c, int col) { Grid.SetColumn(c, col); return c; }
+    }
+
+    /// <summary>The Remove control on a device header or folded strip (#110, specs/043): an 18 × 18
+    /// × in muted ink that brightens on hover and shows a seam ring while focused. Not red —
+    /// red means overload in Nota; a destructive key says what it does (DESIGN.md). Click, Enter
+    /// or Space runs <paramref name="onRemove"/>; the press never reaches the header (no drag,
+    /// no selection, no fold).</summary>
+    internal static Border RemoveButton(string tip, Action onRemove)
+    {
+        var glyph = new Glyph(GlyphKind.Close, 8) { Foreground = TextTertiary, IsHitTestVisible = false };
+        var b = new Border
+        {
+            Width = 18, Height = 18, CornerRadius = NotaRadius.Field, Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent, BorderThickness = new Thickness(1),
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+            Cursor = new Cursor(StandardCursorType.Hand), Focusable = true, IsTabStop = true, Child = glyph,
+        };
+        ToolTip.SetTip(b, tip);
+        Avalonia.Automation.AutomationProperties.SetName(b, tip);
+        b.PointerEntered += (_, _) => glyph.Foreground = TextPrimary;
+        b.PointerExited += (_, _) => glyph.Foreground = b.IsFocused ? TextPrimary : TextTertiary;
+        b.GotFocus += (_, _) => { b.BorderBrush = BorderStrong; glyph.Foreground = TextPrimary; };
+        b.LostFocus += (_, _) => { b.BorderBrush = Brushes.Transparent; glyph.Foreground = TextTertiary; };
+        b.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            if (e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) onRemove();
+        };
+        b.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Enter or Key.Space)) return;
+            e.Handled = true;
+            onRemove();
+        };
+        return b;
     }
 }

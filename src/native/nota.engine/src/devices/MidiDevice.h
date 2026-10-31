@@ -32,8 +32,13 @@ struct MidiEv {
                       // Lets a device that needs the length up front (Nota Length's Gate %) use it.
 };
 
+class RackCore;
+
 class MidiDevice {
   public:
+    // The rack behind this device, if it is one (specs/044): a virtual call where the audio
+    // thread walks rack chains every block, instead of a dynamic_cast per device.
+    virtual const RackCore* asRack() const { return nullptr; }
     virtual ~MidiDevice() = default;
 
     virtual void setSampleRate(double sr, int32_t /*maxBlock*/) {}
@@ -116,6 +121,10 @@ class MidiDevice {
     bool folded() const { return folded_; }
     void setFolded(bool f) { folded_ = f; }
 
+    // The preset this device was loaded from (specs/048): an engine preset tag index, 0 = none.
+    int32_t presetTag() const { return presetTag_; }
+    void setPresetTag(int32_t t) { presetTag_ = t; }
+
     // Map/CC routing: a device (the arpeggiator) can drive a target audio-device param
     // on the same track from its per-step CC lane. destDevice = the track's audio-device
     // chain index (-2 = no routing), destParam = that device's param index, depth 0..1
@@ -126,11 +135,17 @@ class MidiDevice {
     virtual float ccDepth() const { return 0.0f; }
     virtual float ccValue() const { return 0.0f; }
     virtual void setCcDest(int32_t /*destDevice*/, int32_t /*destParam*/) {}
+    // A target grouped into a rack (specs/044): destDevice is then the rack's index in the
+    // chain and (chainUid, slot) its child, as a nested automation lane. setCcDest resets these.
+    virtual uint64_t ccDestChainUid() const { return 0; }
+    virtual int32_t ccDestSlot() const { return -1; }
+    virtual void setCcDestNested(uint64_t /*chainUid*/, int32_t /*slot*/) {}
     virtual void setCcDepth(float /*depth*/) {}
 
   private:
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
+    int32_t presetTag_ = 0;
 };
 
 } // namespace nota

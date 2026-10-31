@@ -13,12 +13,22 @@ namespace Nota.App;
 
 public sealed partial class DeviceChainView
 {
+    private const int MidiRackKind = 6;
+
     private Control MidiDeviceCard(int index, int count)
     {
         bool bypassed = _engine.MidiEffectBypassed(_trackId, index);
         string name = _engine.MidiEffectName(_trackId, index);
         int kind = _engine.MidiEffectKind(_trackId, index);
         if (_engine.MidiEffectFolded(_trackId, index)) return FoldedStrip(ChainKind.Midi, index, name, bypassable: true, bypassed);
+        if (kind == MidiRackKind) // the MIDI Effect Rack: the shared rack card, full bleed (specs/040)
+        {
+            int chains = _engine.MidiRackChainCount(_trackId, index);
+            var rackSpec = new ShellSpec(
+                Name: name, Subtitle: $"Rack · {chains} chain{(chains == 1 ? "" : "s")}", DeviceIndex: index, Count: count, Bypassed: bypassed, Bypassable: true,
+                CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: 700, Kind: ChainKind.Midi);
+            return BuildCardShell(rackSpec, new RackCardView(NewCardContext()).BuildMidiRackBody(index));
+        }
         var body = _midiFactory.Resolve(kind);
         var ctx = NewCardContext();
         double width = body.WidthFor(_engine, _trackId, index);

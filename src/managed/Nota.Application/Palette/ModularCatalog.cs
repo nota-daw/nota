@@ -21,7 +21,7 @@ public static class ModularCatalog
     public static IReadOnlyList<ModularNode> All { get; } = new ModularNode[]
     {
         new("LFO", 0, "Modulator", D("lfo oscillator wobble", "A low-frequency oscillator, free or synced to the tempo.")),
-        new("Envelope Follower", 1, "Modulator", D("envelope follower env sidechain", "Turns an audio signal's level into a control signal.")),
+        new("Envelope Follower", 1, "Modulator", D("envelope follower env sidechain peak controller ducking duck pump loudness level volume", "Turns the track's loudness into a control signal: a peak controller, for ducking one track under another.")),
         new("MIDI → CV", 2, "Converter", D("midi cv velocity note pitch", "Turns notes, velocity and controllers into control signals.")),
         new("ADSR", 3, "Modulator", D("adsr envelope", "An attack-decay-sustain-release envelope triggered by notes.")),
         new("Macro", 4, "Control", D("macro knob", "One knob driving several destinations.")),

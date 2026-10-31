@@ -15,17 +15,35 @@
 #include <string>
 #include <vector>
 
+#include "devices/EditorPreview.h"
 #include "engine/MidiController.h"
 #include "engine/NoteExpression.h"
 #include "engine/TransportInfo.h"
 
 namespace nota {
 
+struct MidiEv;
+
+class RackCore;
+
 class Instrument {
   public:
+    // The rack behind this device, if it is one (specs/044): a virtual call where the audio
+    // thread walks rack chains every block, instead of a dynamic_cast per device.
+    virtual const RackCore* asRack() const { return nullptr; }
     virtual ~Instrument() = default;
 
     virtual void setSampleRate(double sr) = 0;
+
+    // MIDI effects inside the instrument (an Instrument Rack chain's, issue #329). An instrument
+    // that wants the block's notes up front says so; the engine then hands it the block's sorted
+    // events once, with the clock the track's own MIDI effects ran on (the arrangement's, or a
+    // Session slot's loop), before driving it event by event as usual. The loop seam shifts
+    // their clock like the track's own MIDI effects; allNotesOff flushes them.
+    virtual bool takesBlockMidi() const { return false; }
+    virtual void blockMidi(const MidiEv* /*evs*/, int /*n*/, int32_t /*frames*/, double /*beatStart*/, double /*spb*/,
+        bool /*playing*/) {}
+    virtual void midiTimeJump(double /*deltaBeats*/) {}
 
     // Note events (applied at segment boundaries by the engine for sample accuracy).
     virtual void noteOn(int32_t pitch, float velocity) = 0;
@@ -57,6 +75,12 @@ class Instrument {
     // Fold (specs/022): the Devices panel draws the instrument as a narrow strip. A view flag
     // saved with the project; message thread only.
     bool folded = false;
+    // The preset this instrument was loaded from (specs/048): an engine preset tag index,
+    // 0 = none. Message thread only.
+    int32_t presetTag = 0;
+    // Editor preview (specs/046): a hosted plug-in's window as it last looked, drawn behind
+    // its card. Saved with the project; message thread only, like `folded`.
+    EditorPreview editorPreview;
     Instrument();
     virtual void controller(int32_t ctl, float value);
 
@@ -223,8 +247,19 @@ class Instrument {
     // copied state). Returns nullptr if the engine should handle it. Message thread.
     virtual std::shared_ptr<Instrument> clone() const { return nullptr; }
 
+    // Which instrument this is, for the UI's per-card state (specs/043): every new instrument
+    // (added, swapped in, copied, cloned) gets a fresh value; an edit that forks the object (a
+    // rack) keeps it with adoptUid, and undo brings back the object with its own. Message thread.
+    uint64_t uid() const { return uid_; }
+    void adoptUid(const Instrument& from) { uid_ = from.uid_; }
+
   private:
+    static uint64_t nextUid() {
+        static std::atomic<uint64_t> next{1};
+        return next.fetch_add(1, std::memory_order_relaxed);
+    }
     std::atomic<bool> bypassed_{false};
+    uint64_t uid_ = nextUid();
 };
 
 } // namespace nota

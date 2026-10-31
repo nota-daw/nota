@@ -470,12 +470,12 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             void Cell(Control c, int col) { Grid.SetRow(c, row); Grid.SetColumn(c, col); oscGrid.Children.Add(c); }
             Cell(head, 0);
             // Position is what the modulators reach for on this synth, so it wears teal.
-            Cell(PKnob(o == 0 ? "position" : "osc2position", "POSITION", nm + " Position", FrameText, 34, 42, null), 1);
+            Cell(PKnob(o == 0 ? "position" : "osc2position", "POSITION", nm + " Position", FrameText, 34, 42, Teal), 1);
             Cell(PKnob(o == 0 ? "warp" : "osc2warp", "WARP", nm + " Warp", Pct, 34, 42), 2);
             Cell(PKnob(pre + "level", "LEVEL", nm + " Level", Pct, 34, 42), 3);
             Cell(PKnob(pre + "oct", "OCT", nm + " Octave", Oct, 34, 42), 4);
             Cell(PKnob(pre + "semi", "SEMI", nm + " Semi", Semi, 34, 42), 5);
-            Cell(PKnob(pre + "detune", "FINE", nm + " Fine", Cents, 34, 42, null), 6);
+            Cell(PKnob(pre + "detune", "FINE", nm + " Fine", Cents, 34, 42, Teal), 6);
         }
         applyOsc = () =>
         {
@@ -563,7 +563,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                     ? k switch { 0 => "cutoff", 1 => "resonance", _ => "fil1" + filtIds[k] }
                     : "fil2" + filtIds[k];
                 Func<float, string> fmt = k switch { 0 => Hz, 1 => Pct, 4 => Pct, _ => Bip };
-                Control cell = PKnob(id, filtLbl[k], $"Filter {f + 1} {filtLbl[k]}", fmt, 24, 33, null);
+                Control cell = PKnob(id, filtLbl[k], $"Filter {f + 1} {filtLbl[k]}", fmt, 24, 33, k >= 2 ? Teal : null);
                 cell.IsVisible = false;
                 filtStack[f, k] = cell;
                 filtCells[k].Children.Add(cell);
@@ -715,7 +715,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             Cell(Chips(pre + "shape", ShapeNames), 1);
             string rateId = pre + "rate", syncId = pre + "sync";
             Cell(PKnob(rateId, "RATE", nm + " Rate", v => SyncDiv(G(syncId)) > 0 ? SyncText(G(syncId)) : SlowHz(ExpMap(v, 0.05, 20)), 28, 46), 2);
-            Cell(PKnob(pre + "depth", "DEPTH", nm + " Depth", Pct, 28, 46, null), 3);
+            Cell(PKnob(pre + "depth", "DEPTH", nm + " Depth", Pct, 28, 46, Teal), 3);
             Cell(PKnob(syncId, "SYNC", nm + " Sync", SyncText, 28, 46), 4);
             var dest = Mono("", Teal, NotaType.Axis);
             dest.Width = 58; dest.TextAlignment = TextAlignment.Right;
@@ -981,7 +981,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             var words = new StackPanel { Spacing = 0, VerticalAlignment = VerticalAlignment.Center, Children = { name, dest, nums } };
             var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 3 };
             var valKnob = BareKnob($"mac{mv}val", $"Macro {mv + 1}", Pct, 34);
-            var amtKnob = BareKnob($"mac{mv}amt", $"Macro {mv + 1} Amount", Bip, 34, null);
+            var amtKnob = BareKnob($"mac{mv}amt", $"Macro {mv + 1} Amount", Bip, 34, Teal);
             row.Children.Add(valKnob);
             Grid.SetColumn(amtKnob, 1); row.Children.Add(amtKnob);
             words.Margin = new Thickness(3, 0, 0, 0);

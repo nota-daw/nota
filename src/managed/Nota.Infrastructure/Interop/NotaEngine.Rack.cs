@@ -246,6 +246,17 @@ public sealed partial class NotaEngine
     public void RackSetVolume(int trackId, float v)
     { ThrowIfDisposed(); NativeMethods.RackSetVolume(_handle, trackId, v); }
 
+    /// <summary>Copies a chain after itself (children, controls, its mappings); the new index or &lt;0. One undo step.</summary>
+    public int RackDuplicateChain(int trackId, int chain)
+    { ThrowIfDisposed(); return NativeMethods.RackDuplicateChain(_handle, trackId, chain); }
+
+    /// <summary>Instrument Rack mono: one note at a time, last-note priority; glide bends between notes.</summary>
+    public bool RackMono(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.RackMono(_handle, trackId) != 0; }
+
+    public void RackSetMono(int trackId, bool on)
+    { ThrowIfDisposed(); NativeMethods.RackSetMono(_handle, trackId, on ? 1 : 0); }
+
     public float RackGlide(int trackId)
     { ThrowIfDisposed(); return NativeMethods.RackGlide(_handle, trackId); }
 
@@ -282,4 +293,97 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); NativeMethods.RackSetHumanize(_handle, trackId, v); }
     public float RackHumanize(int trackId)
     { ThrowIfDisposed(); return NativeMethods.RackHumanize(_handle, trackId); }
+
+    // specs/041: the Drum Rack card's Rack* surface for any rack address (a nested Drum Rack too).
+    public int RackDevAddSamplerChain(int trackId, int deviceIndex, string path, int rootNote, bool loop)
+    {
+        ThrowIfDisposed();
+        int c = NativeMethods.RackDevAddSamplerChain(_handle, trackId, deviceIndex, path, rootNote, loop ? 1 : 0);
+        if (c >= 0 && RackDevChainSamplerInfo(trackId, deviceIndex, c, out var si)) RememberSampleName(si.SampleId, path);
+        return c;
+    }
+    public bool RackDevSetChainSamplerSample(int trackId, int deviceIndex, int chain, string path, int rootNote)
+    {
+        ThrowIfDisposed();
+        bool ok = NativeMethods.RackDevSetChainSamplerSample(_handle, trackId, deviceIndex, chain, path, rootNote) != 0;
+        if (ok && RackDevChainSamplerInfo(trackId, deviceIndex, chain, out var si)) RememberSampleName(si.SampleId, path);
+        return ok;
+    }
+    public int RackDevAddPluginInstrumentChain(int trackId, int deviceIndex, int catalogIndex)
+    { ThrowIfDisposed(); return NativeMethods.RackDevAddPluginInstrumentChain(_handle, trackId, deviceIndex, catalogIndex); }
+    public string RackDevChainName(int trackId, int deviceIndex, int chain)
+    { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.RackDevChainName(_handle, trackId, deviceIndex, chain)) ?? ""; }
+    public void RackDevSetChainName(int trackId, int deviceIndex, int chain, string name)
+    { ThrowIfDisposed(); NativeMethods.RackDevSetChainName(_handle, trackId, deviceIndex, chain, name ?? ""); }
+    public int RackDevChainChoke(int trackId, int deviceIndex, int chain)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainChoke(_handle, trackId, deviceIndex, chain); }
+    public void RackDevSetChainChoke(int trackId, int deviceIndex, int chain, int group)
+    { ThrowIfDisposed(); NativeMethods.RackDevSetChainChoke(_handle, trackId, deviceIndex, chain, group); }
+    public int RackDevChainTune(int trackId, int deviceIndex, int chain)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainTune(_handle, trackId, deviceIndex, chain); }
+    public void RackDevSetChainTune(int trackId, int deviceIndex, int chain, int semitones)
+    { ThrowIfDisposed(); NativeMethods.RackDevSetChainTune(_handle, trackId, deviceIndex, chain, semitones); }
+    public float RackDevChainDecay(int trackId, int deviceIndex, int chain)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainDecay(_handle, trackId, deviceIndex, chain); }
+    public void RackDevSetChainDecay(int trackId, int deviceIndex, int chain, float v)
+    { ThrowIfDisposed(); NativeMethods.RackDevSetChainDecay(_handle, trackId, deviceIndex, chain, v); }
+    public float RackDevSwing(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return NativeMethods.RackDevSwing(_handle, trackId, deviceIndex); }
+    public void RackDevSetSwing(int trackId, int deviceIndex, float v)
+    { ThrowIfDisposed(); NativeMethods.RackDevSetSwing(_handle, trackId, deviceIndex, v); }
+    public float RackDevHumanize(int trackId, int deviceIndex)
+    { ThrowIfDisposed(); return NativeMethods.RackDevHumanize(_handle, trackId, deviceIndex); }
+    public void RackDevSetHumanize(int trackId, int deviceIndex, float v)
+    { ThrowIfDisposed(); NativeMethods.RackDevSetHumanize(_handle, trackId, deviceIndex, v); }
+    public bool RackDevChainSamplerInfo(int trackId, int deviceIndex, int chain, out NotaSamplerInfo info)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainSamplerInfo(_handle, trackId, deviceIndex, chain, out info) != 0; }
+    public bool RackDevSetChainSamplerRoot(int trackId, int deviceIndex, int chain, int rootNote)
+    { ThrowIfDisposed(); return NativeMethods.RackDevSetChainSamplerRoot(_handle, trackId, deviceIndex, chain, rootNote) != 0; }
+    public float RackDevChainSamplerPlayPosition(int trackId, int deviceIndex, int chain)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainSamplerPlayPosition(_handle, trackId, deviceIndex, chain); }
+    public string RackDevChainInstrumentParamId(int trackId, int deviceIndex, int chain, int param)
+    { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.RackDevChainInstrumentParamId(_handle, trackId, deviceIndex, chain, param)) ?? ""; }
+    public float RackDevChainInstrumentParamDefault(int trackId, int deviceIndex, int chain, int param)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainInstrumentParamDefault(_handle, trackId, deviceIndex, chain, param); }
+    public int RackDevChainInstrumentScope(int trackId, int deviceIndex, int chain, float[] outv)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainInstrumentScope(_handle, trackId, deviceIndex, chain, outv, outv.Length); }
+    public int RackDevChainInstrumentVoiceCount(int trackId, int deviceIndex, int chain)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainInstrumentVoiceCount(_handle, trackId, deviceIndex, chain); }
+    public int RackDevChainInstrumentHeldNotes(int trackId, int deviceIndex, int chain, int[] outNotes)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainInstrumentHeldNotes(_handle, trackId, deviceIndex, chain, outNotes, outNotes.Length); }
+    public void RackDevChainInstrumentAction(int trackId, int deviceIndex, int chain, int id, int iarg, float farg)
+    { ThrowIfDisposed(); NativeMethods.RackDevChainInstrumentAction(_handle, trackId, deviceIndex, chain, id, iarg, farg); }
+    public void RackDevOpenChainInstrumentEditor(int trackId, int deviceIndex, int chain)
+    { ThrowIfDisposed(); NativeMethods.RackDevOpenChainInstrumentEditor(_handle, trackId, deviceIndex, chain); }
+    public string RackDevChainInstrumentPluginId(int trackId, int deviceIndex, int chain)
+    { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.RackDevChainInstrumentPluginId(_handle, trackId, deviceIndex, chain)) ?? ""; }
+    public byte[] RackDevGetChainInstrumentState(int trackId, int deviceIndex, int chain)
+    {
+        ThrowIfDisposed();
+        int size = NativeMethods.RackDevChainInstrumentGetState(_handle, trackId, deviceIndex, chain, null, 0);
+        if (size <= 0) return System.Array.Empty<byte>();
+        var buf = new byte[size];
+        NativeMethods.RackDevChainInstrumentGetState(_handle, trackId, deviceIndex, chain, buf, size);
+        return buf;
+    }
+
+    // Nota Mosaic as a chain instrument (specs/041), as MosaicSetProgram & co. for a track.
+    public bool RackDevChainMosaicSetProgram(int trackId, int deviceIndex, int chain, string text, bool undoable = true)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainMosaicSetProgram(_handle, trackId, deviceIndex, chain, text ?? "", undoable ? 1 : 0) != 0; }
+
+    public unsafe string RackDevChainMosaicProgram(int trackId, int deviceIndex, int chain)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.RackDevChainMosaicProgram(_handle, trackId, deviceIndex, chain, null, 0);
+        if (n <= 0) return "";
+        var buf = new byte[n];
+        fixed (byte* p = buf) n = System.Math.Min(n, NativeMethods.RackDevChainMosaicProgram(_handle, trackId, deviceIndex, chain, p, buf.Length));
+        return System.Text.Encoding.UTF8.GetString(buf, 0, n);
+    }
+
+    public bool RackDevTryGetChainMosaicStatus(int trackId, int deviceIndex, int chain, out NotaMosaicStatus status)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainMosaicStatus(_handle, trackId, deviceIndex, chain, out status) != 0; }
+
+    public long RackDevChainMosaicZoneSampleId(int trackId, int deviceIndex, int chain, int zone)
+    { ThrowIfDisposed(); return NativeMethods.RackDevChainMosaicZoneSampleId(_handle, trackId, deviceIndex, chain, zone); }
 }

@@ -22,6 +22,10 @@ public enum InsertPlacement
     Insert,
     /// <summary>The effect at <see cref="InsertTarget.Index"/> is swapped for the new one.</summary>
     Replace,
+    /// <summary>An instrument swaps the track's instrument even when it is a rack — Replace…
+    /// in the instrument's menu (specs/043). A drop never asks for this: on a rack it adds a
+    /// chain / pad.</summary>
+    ReplaceInstrument,
 }
 
 /// <summary>Where an item goes. <paramref name="Midi"/>: the index refers to the MIDI-effect chain.
@@ -43,6 +47,9 @@ public sealed record InsertResult
     public bool CreatedTrack { get; init; }
     /// <summary>The track's instrument was swapped in place — its card state is stale.</summary>
     public bool InstrumentReplaced { get; init; }
+    /// <summary>An instrument preset dropped on an Instrument Rack (specs/043): the rack card adds
+    /// it as a new chain, as a drop on the card does — the caller hands it over.</summary>
+    public bool ToRackCard { get; init; }
     /// <summary>The views should reveal the track's device chain.</summary>
     public bool ShowDevices { get; init; }
     /// <summary>An effect was appended at <c>Added</c> and then moved to <c>Final</c>
@@ -50,6 +57,8 @@ public sealed record InsertResult
     public (bool Midi, int Added, int Final, bool Replaced)? Placed { get; init; }
     /// <summary>A preset that landed: chain, device index, its name and factory id ("" for a user preset).</summary>
     public (int TrackId, PresetChain Chain, int Index, string Name, string FactoryId)? PresetLanded { get; init; }
+    /// <summary>The preset was applied in place and tagged in its own undo step already.</summary>
+    internal bool PresetTagged { get; init; }
 
     /// <summary>The plug-in this insertion put on a track, for "Open plug-in window on insert"
     /// (#250): DeviceIndex -1 is the track's instrument.</summary>
@@ -110,6 +119,13 @@ public sealed class DeviceInsertService
         => item.Kind == BrowserItemKind.Preset
            && (item.Path.StartsWith(KitPrefix, StringComparison.Ordinal) || item.Path.StartsWith(RhythmKitPrefix, StringComparison.Ordinal));
 
+    /// <summary>A preset that brings an instrument: a kit, a factory instrument preset, or a user /
+    /// pack preset of a built-in or plug-in instrument.</summary>
+    public bool IsInstrumentPreset(BrowserItem item)
+        => item.Kind == BrowserItemKind.Preset
+           && (IsKit(item) || FactoryInfo(item) is { IsInstrument: true }
+               || _presets?.Describe(item.Path) is { Type: "builtin-instrument" or "plugin-instrument" });
+
     /// <summary>The factory preset behind a row, or null for a user preset / kit / non-preset.</summary>
     public FactoryPresetInfo? FactoryInfo(BrowserItem item)
     {
@@ -156,9 +172,9 @@ public sealed class DeviceInsertService
     }
 
     /// <summary>Swaps a plain instrument track's instrument. False — nothing changed — when it can't.</summary>
-    public bool TryReplaceInstrument(BrowserItem item, int trackId)
+    public bool TryReplaceInstrument(BrowserItem item, int trackId, bool evenRack = false)
     {
-        if (!CanReplaceInstrument(trackId)) return false;
+        if (evenRack ? !(TryTrackInfo(trackId, out var ti) && ti.IsInstrument && !ti.IsReturn && !ti.IsGroup) : !CanReplaceInstrument(trackId)) return false;
         if (item.Kind == BrowserItemKind.BuiltinInstrument)
         {
             if (!_engine.SetTrackBuiltinInstrument(trackId, item.BuiltinKind)) return false;
@@ -209,6 +225,44 @@ public sealed class DeviceInsertService
         return Group(() => RouteToTrack(item, trackId));
     }
 
+    /// <summary>A Browser drop in Session view (#313, specs/043) on a column (<paramref name="trackId"/>)
+    /// or right of the last one (≤ 0). An instrument replaces a plain instrument track's, adds a
+    /// chain / pad to a rack, and otherwise (an audio, return or group column, or no column) starts
+    /// a new instrument track — the caller places it after the column. An instrument preset loads
+    /// in place the same way; effects and other presets route to the track. One undo step.</summary>
+    public InsertResult DropOnSession(BrowserItem item, int trackId)
+    {
+        bool hostsInstrument = trackId > 0 && TryTrackInfo(trackId, out var ti) && ti.IsInstrument && !ti.IsGroup && !ti.IsReturn;
+        if (item.Kind is BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument)
+            return TagPlugin(item, Group(() =>
+            {
+                if (hostsInstrument)
+                {
+                    if (_engine.TrackInstrumentKind(trackId) is 3 or 4) return AddToTrack(item, trackId);
+                    return TryReplaceInstrument(item, trackId)
+                        ? new InsertResult { Ok = true, TrackId = trackId, InstrumentReplaced = true, Status = $"Changed instrument to {item.Name} (track {trackId})" }
+                        : InsertResult.Fail($"Couldn't load {item.Name}.");
+                }
+                int t = CreateInstrumentTrack(item, 0);
+                return t > 0 ? new InsertResult { Ok = true, TrackId = t, CreatedTrack = true, Status = $"Added {item.Name} (track {t})" }
+                             : InsertResult.Fail($"Couldn't load {item.Name}.");
+            }));
+        // A preset: in place on an instrument track; on another column an instrument preset
+        // spawns its own track and an effect preset lands on the column.
+        // On a rack an instrument preset becomes a chain (Instrument Rack) or, a kit, the pads
+        // (Drum Rack) — never a track of its own.
+        if (item.Kind == BrowserItemKind.Preset && hostsInstrument && IsInstrumentPreset(item)
+            && _engine.TrackInstrumentKind(trackId) is int rk and (3 or 4))
+        {
+            if (rk == 3) return new InsertResult { Ok = true, TrackId = trackId, ToRackCard = true, ShowDevices = true };
+            if (!IsKit(item)) return InsertResult.Fail("A Drum Rack takes kits and instruments; load an instrument preset on a pad from its card.");
+        }
+        if (item.Kind == BrowserItemKind.Preset)
+            return hostsInstrument ? ApplyPreset(item, new InsertTarget(trackId, InPlace: true))
+                 : trackId > 0 ? Group(() => RouteToTrack(item, trackId)) : ApplyPreset(item, new InsertTarget(-1));
+        return Group(() => RouteToTrack(item, trackId));
+    }
+
     /// <summary>Drag & drop onto the Devices panel, the Modular canvas, or the palette's
     /// default: the item goes onto <paramref name="target"/>'s track — an effect into the
     /// gap or in place of the card the target names, an instrument in place of the track's
@@ -230,6 +284,10 @@ public sealed class DeviceInsertService
         }
         if (item.Kind == BrowserItemKind.Preset) return ApplyPreset(item, target);
         if (t <= 0) return InsertResult.Fail("Select a track first.");
+        if (isInstrument && target.Placement == InsertPlacement.ReplaceInstrument)
+            return TryReplaceInstrument(item, t, evenRack: true)
+                ? new InsertResult { Ok = true, TrackId = t, InstrumentReplaced = true, ShowDevices = true, Status = $"Changed instrument to {item.Name}" }
+                : InsertResult.Fail($"Couldn't load {item.Name}.");
 
         if (target.Placement != InsertPlacement.Default)
             switch (item.Kind)
@@ -292,7 +350,7 @@ public sealed class DeviceInsertService
             case BrowserItemKind.PluginInstrument:
                 if (TryReplaceInstrument(item, t))
                     return new InsertResult { Ok = true, TrackId = t, InstrumentReplaced = true, Status = $"Changed instrument to {item.Name} (track {t})" };
-                return InsertResult.Fail("Drop instruments onto the arrangement.");
+                return InsertResult.Fail($"Couldn't load {item.Name}.");
             case BrowserItemKind.Sample when kind == 4:                 // sample → drum pad (Sampler)
             {
                 int note = NextFreeDrumPad(t);
@@ -403,7 +461,29 @@ public sealed class DeviceInsertService
     /// instrument track when the target asks for it in place (the palette), swaps the
     /// instrument and loads the sound there; an effect preset lands on the target and, with a
     /// placement, moves to the aimed slot.</summary>
-    public InsertResult ApplyPreset(BrowserItem item, InsertTarget target) => Group(() => ApplyPresetCore(item, target));
+    public InsertResult ApplyPreset(BrowserItem item, InsertTarget target) => Group(() => TagLanded(ApplyPresetCore(item, target), item, target));
+
+    // The device a preset landed on carries its name from here on (specs/048), inside the
+    // same undo step. A preset file is tagged by its path.
+    private InsertResult TagLanded(InsertResult r, BrowserItem item, InsertTarget target)
+    {
+        if (r is not { Ok: true, PresetLanded: { } pl } || r.PresetTagged) return r;
+        var surface = pl.Chain switch
+        {
+            PresetChain.Instrument => PresetSurface.Instrument,
+            PresetChain.Midi => PresetSurface.MidiEffect,
+            _ => PresetSurface.Effect,
+        };
+        string id = pl.FactoryId.Length > 0 ? pl.FactoryId : "file:" + item.Path;
+        // A device the apply just made (a new track, an inserted device, a swapped instrument)
+        // takes the name with no undo step of its own: undo brings back the old graph with its
+        // devices' names as they were, and redo the new one with this name. A value step here
+        // would write the new device's empty tag over the restored one's on undo.
+        bool fresh = r.InstrumentReplaced || pl.Chain != PresetChain.Instrument || pl.TrackId != target.TrackId;
+        if (fresh) _engine.SetDevicePresetTag(pl.TrackId, surface, pl.Index, id, pl.Name);
+        else Nota.Application.Editing.PresetEdit.Tag(_engine, pl.TrackId, surface, pl.Index, id, pl.Name);
+        return r;
+    }
 
     private InsertResult ApplyPresetCore(BrowserItem item, InsertTarget target)
     {
@@ -421,23 +501,42 @@ public sealed class DeviceInsertService
                 if (!_engine.SetTrackBuiltinInstrument(t, f.BuiltinKind)) return InsertResult.Fail($"Couldn't load {item.Name}.");
                 swapped = true;
             }
-            string w = _factory.ApplyInPlace(_engine, factoryId, t, -1);
+            // On the same instrument the sound and the name change as one undo step, so undo
+            // brings both back (a swap restores the old instrument whole).
+            string w = swapped ? _factory.ApplyInPlace(_engine, factoryId, t, -1)
+                : InstrumentInPlace(t, factoryId, item.Name, () => _factory.ApplyInPlace(_engine, factoryId, t, -1));
             if (w.Length == 0) InstrumentPresetApplied?.Invoke(t);
             return new InsertResult
             {
                 Ok = w.Length == 0, TrackId = t, InstrumentReplaced = swapped, ShowDevices = true,
                 Status = w.Length > 0 ? w : $"Applied preset {item.Name}",
-                PresetLanded = (t, PresetChain.Instrument, -1, item.Name, factoryId),
+                PresetLanded = (t, PresetChain.Instrument, -1, item.Name, factoryId), PresetTagged = !swapped,
             };
         }
         // …and a preset file (a user preset, a Mosaic pack preset) the same way.
+        // A built-in instrument's file preset on the same instrument is parameters only: one undo
+        // step with its name, as above.
         if (fp is null && !target.NewTrack && target.InPlace && CanReplaceInstrument(t)
-            && _presets?.ApplyInstrumentInPlace(_engine, item.Path, t, out bool fileSwapped) is { } fw)
+            && _presets?.Describe(item.Path) is ("builtin-instrument", var fileKind) && fileKind == _engine.TrackInstrumentKind(t))
+        {
+            bool fileSwapped = false;
+            string sw = InstrumentInPlace(t, "file:" + item.Path, item.Name,
+                () => _presets!.ApplyInstrumentInPlace(_engine, item.Path, t, out fileSwapped) ?? "Presets are unavailable.");
+            if (sw.Length == 0) InstrumentPresetApplied?.Invoke(t);
+            return new InsertResult
+            {
+                Ok = sw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped, ShowDevices = true,
+                Status = sw.Length > 0 ? sw : $"Applied preset {item.Name}",
+                PresetLanded = (t, PresetChain.Instrument, -1, item.Name, ""), PresetTagged = !fileSwapped,
+            };
+        }
+        if (fp is null && !target.NewTrack && target.InPlace && CanReplaceInstrument(t)
+            && _presets?.ApplyInstrumentInPlace(_engine, item.Path, t, out bool fileSwapped2) is { } fw)
         {
             if (fw.Length == 0) InstrumentPresetApplied?.Invoke(t);
             return new InsertResult
             {
-                Ok = fw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped, ShowDevices = true,
+                Ok = fw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped2, ShowDevices = true,
                 Status = fw.Length > 0 ? fw : $"Applied preset {item.Name}",
                 PresetLanded = (t, PresetChain.Instrument, -1, item.Name, ""),
             };
@@ -513,6 +612,9 @@ public sealed class DeviceInsertService
     }
 
     // One undo step per insertion (CP-25). Nests, so an outer group (a multi-item drop) holds.
+    private string InstrumentInPlace(int t, string id, string name, Func<string> apply)
+        => Nota.Application.Editing.PresetEdit.Apply(_engine, t, PresetSurface.Instrument, -1, id, name, apply);
+
     private InsertResult Group(Func<InsertResult> body)
     {
         _engine.BeginUndoGroup();

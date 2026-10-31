@@ -17,6 +17,7 @@
 #include <atomic>
 #include <cmath>
 #include <cstdint>
+#include <memory>
 
 namespace nota {
 
@@ -29,7 +30,14 @@ namespace nota {
 // the UI to draw; passes the input through as its output.
 enum class ModulatorKind : int32_t { LFO = 0, EnvFollower = 1, MidiToCv = 2, Adsr = 3, Macro = 4, Math = 5, Scope = 6 };
 
-inline constexpr int kScopeLen = 128; // CV oscilloscope history length
+// Scope history (specs/047): one (value, time step) pair per audio block. 8192 blocks hold
+// the longest 8 s window down to 64-frame blocks at 48 kHz.
+inline constexpr int kScopeLen = 8192;
+struct ScopeHistory {
+    float value[kScopeLen] = {};
+    float dt[kScopeLen] = {};           // seconds since the previous entry (the block length)
+    std::atomic<int64_t> write{0};      // entries written so far (audio thread)
+};
 enum class CvMode : int32_t { Add = 0, Multiply = 1, Override = 2 };
 enum class MathOp : int32_t { Add = 0, Subtract = 1, Multiply = 2, Invert = 3, Scale = 4, Min = 5, Max = 6 };
 
@@ -48,6 +56,13 @@ enum class ModField : int32_t {
     InputA = 10,
     InputB = 11,
     MathOffset = 12, // Math (op = Waveform field; gain = Depth field)
+    // Scope view settings (specs/047): read by the UI only; the engine just stores them.
+    ScopeWindowMs = 13,    // 50..8000 ms
+    ScopeSync = 14,        // 1 = the window is ScopeWindowBeats at the tempo
+    ScopeWindowBeats = 15, // 0.25..32 beats
+    ScopeZoom = 16,        // 1, 2, 4 or 8
+    ScopeTrigger = 17,     // 0 free · 1 rising edge through 0
+    ScopeHeight = 18,      // trace height in the node, 76..320 px
 };
 
 struct Modulator {
@@ -70,16 +85,27 @@ struct Modulator {
     std::atomic<int32_t> inputB{-1};
     std::atomic<float> mathOffset{0.0f}; // Math: Scale offset
     std::atomic<float> outValue{0.0f};   // runtime: this block's output (read by links + Math)
-    float scopeBuf[kScopeLen] = {};      // Scope: rolling history (audio-thread write)
-    std::atomic<int32_t> scopeWrite{0};
+    std::atomic<float> scopeWindowMs{1000.0f}; // Scope view settings (UI-only, saved)
+    std::atomic<int32_t> scopeSync{0};
+    std::atomic<float> scopeWindowBeats{4.0f};
+    std::atomic<int32_t> scopeZoom{1};
+    std::atomic<int32_t> scopeTrigger{0};
+    std::atomic<float> scopeHeight{76.0f};
+    // Scope: rolling history, allocated on the message thread for Scope nodes only and
+    // shared by the track's snapshot copies (so the trace survives a republish). The
+    // audio thread only writes into it.
+    std::shared_ptr<ScopeHistory> scope;
 
-    void pushScope(float v) {
-        const int32_t w = scopeWrite.load(std::memory_order_relaxed);
-        scopeBuf[w & (kScopeLen - 1)] = v;
-        scopeWrite.store(w + 1, std::memory_order_relaxed);
+    void pushScope(float v, float dt) {
+        if (!scope) return;
+        const int64_t w = scope->write.load(std::memory_order_relaxed);
+        scope->value[w & (kScopeLen - 1)] = v;
+        scope->dt[w & (kScopeLen - 1)] = dt;
+        scope->write.store(w + 1, std::memory_order_release);
     }
-    // Copy the history oldest→newest into `out`; returns the count written.
-    int32_t readScope(float* out, int32_t cap) const;
+    // Copy the newest entries oldest→newest into `values` (and `dts` when non-null);
+    // returns the count written (at most cap, and at most what has been recorded).
+    int32_t readScope(float* values, float* dts, int32_t cap) const;
 
     Modulator() = default;
     Modulator(const Modulator& o) { *this = o; }
@@ -120,6 +146,13 @@ struct CvLink {
     int32_t targetTrack = -1;  // target track id (-1 = the owner track)
     int32_t targetDevice = -1; // insert-effect / MIDI-FX index on the target track
     int32_t targetParam = -1;
+    // A source or target grouped into a rack (specs/044): sourceDevice / targetDevice is then
+    // the rack's address on its track (ParamPath host) and these name the chain child; the
+    // kinds keep naming the child's param surface. 0 = track level as before.
+    uint64_t sourceChainUid = 0;
+    int32_t sourceSlot = -1;
+    uint64_t targetChainUid = 0;
+    int32_t targetSlot = -1;
     std::atomic<float> depth{1.0f}; // -1..1
     std::atomic<int32_t> mode{0};   // CvMode
     // The target param's *base* value (the centre the modulation swings around). The

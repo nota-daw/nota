@@ -80,7 +80,8 @@ public sealed class BrowserView : UserControl
     /// or an external drag that carries file(s). Lenient by design — used in DragOver,
     /// where some backends don't expose the file list yet; the drop re-checks.</summary>
     public static bool IsAcceptableDrag(DragEventArgs e)
-        => IsBrowserDrag || e.DataTransfer.Contains(DataFormat.File) || HasPathText(e.DataTransfer);
+        => !DeviceDrag.IsActive   // a device card's drag carries text too, but isn't a file
+           && (IsBrowserDrag || e.DataTransfer.Contains(DataFormat.File) || HasPathText(e.DataTransfer));
 
     // A drag that may name files without Avalonia's file list (#300): plain text or a
     // file manager's own URI list. The drop parses it and ignores anything else.
@@ -129,6 +130,7 @@ public sealed class BrowserView : UserControl
     public static IReadOnlyList<BrowserItem> DroppedItems(DragEventArgs e)
     {
         if (CurrentDrag is { } item) return new[] { item };
+        if (DeviceDrag.IsActive) return Array.Empty<BrowserItem>();   // a device card, not files
         var list = new List<BrowserItem>();
         foreach (var p in ExternalFiles(e))
             list.Add(new BrowserItem
@@ -707,6 +709,9 @@ public sealed class BrowserView : UserControl
         _sampleChipsHost.IsVisible = index == FilesTab && _vm?.HasSampleIndex == true;
         _statusBar.IsVisible = !isMap;
         if (isMap) { _matchCount.Text = ""; _emptyWrap.IsVisible = false; return; }
+        // The shared search box may have changed on another tab (#342).
+        if (index <= PresetsTab) _vm?.ShowTab(index, _search.Text?.Trim() ?? "");
+        else ApplyFilter(index);
         RefreshCounts();
     }
 

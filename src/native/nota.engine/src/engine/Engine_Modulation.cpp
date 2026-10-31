@@ -11,6 +11,7 @@
 // layer copies trivially across graph snapshots and needs no per-block phase state.
 
 #include "Engine.h"
+#include "ParamResolve.h"
 
 #include <algorithm>
 
@@ -33,6 +34,7 @@ int32_t Engine::addModulator(int32_t trackId, int32_t kind) {
     Modulator m;
     m.id = nt->nextModId++;
     m.kind = static_cast<ModulatorKind>(kind);
+    if (m.kind == ModulatorKind::Scope) m.scope = std::make_shared<ScopeHistory>();
     const int32_t id = m.id;
     nt->modulators.push_back(m);
     republishWithTrack(trackId, nt);
@@ -108,45 +110,55 @@ float Engine::modulatorValue(int32_t trackId, int32_t modId) const {
 
 // ---- modulation target read/write (device / instrument / MIDI-FX) ----------
 
-// True if (kind, dev, param) names a live target on track t.
-static bool targetValid(Track& t, int32_t kind, int32_t dev, int32_t param) {
-    if (kind == static_cast<int32_t>(CvTargetKind::Instrument))
-        return t.instrument && param >= 0 && param < t.instrument->pluginParamCount();
-    if (kind == static_cast<int32_t>(CvTargetKind::MidiFx))
-        return dev >= 0 && dev < static_cast<int32_t>(t.midiEffects.size()) && t.midiEffects[dev] && param >= 0 &&
-               param < t.midiEffects[dev]->paramCount();
-    return dev >= 0 && dev < static_cast<int32_t>(t.devices.size()) && t.devices[dev] && param >= 0 &&
-           param < t.devices[dev]->paramCount();
+// The owner of a link's target: a track-level device, the instrument or a MIDI effect,
+// or (uid != 0, specs/044) a child of the rack at `dev`. Reads the published graph only.
+static ParamOwner targetOwner(Track& t, int32_t kind, int32_t dev, uint64_t uid, int32_t slot) {
+    if (uid != 0) return resolveNested(t, dev, uid, slot);
+    ParamOwner o;
+    if (kind == static_cast<int32_t>(CvTargetKind::Instrument)) o.instrument = t.instrument.get();
+    else if (kind == static_cast<int32_t>(CvTargetKind::MidiFx)) {
+        if (dev >= 0 && dev < static_cast<int32_t>(t.midiEffects.size())) o.midi = t.midiEffects[dev].get();
+    } else if (dev >= 0 && dev < static_cast<int32_t>(t.devices.size()))
+        o.device = t.devices[dev].get();
+    return o;
 }
-// Current value + range of a target (instrument params are normalized 0..1).
-static float targetGet(Track& t, int32_t kind, int32_t dev, int32_t param, float& mn, float& mx) {
+
+// True if (kind, dev, param) names a live target on track t.
+static bool targetValid(Track& t, int32_t kind, int32_t dev, int32_t param, uint64_t uid = 0, int32_t slot = -1) {
+    const ParamOwner o = targetOwner(t, kind, dev, uid, slot);
+    if (param < 0) return false;
+    if (kind == static_cast<int32_t>(CvTargetKind::Instrument))
+        return o.instrument && param < o.instrument->pluginParamCount();
+    if (kind == static_cast<int32_t>(CvTargetKind::MidiFx)) return o.midi && param < o.midi->paramCount();
+    return o.device && param < o.device->paramCount();
+}
+// Current value + range of a target (instrument params are normalized 0..1). Call after targetValid.
+static float targetGet(Track& t, int32_t kind, int32_t dev, int32_t param, float& mn, float& mx, uint64_t uid = 0,
+    int32_t slot = -1) {
     mn = 0.0f;
     mx = 1.0f;
+    const ParamOwner o = targetOwner(t, kind, dev, uid, slot);
     if (kind == static_cast<int32_t>(CvTargetKind::Instrument))
-        return t.instrument ? t.instrument->pluginParamGet(param) : 0.0f;
+        return o.instrument ? o.instrument->pluginParamGet(param) : 0.0f;
     if (kind == static_cast<int32_t>(CvTargetKind::MidiFx)) {
-        auto* m = t.midiEffects[dev].get();
-        mn = m->paramMin(param);
-        mx = m->paramMax(param);
-        return m->getParam(param);
+        if (!o.midi) return 0.0f;
+        mn = o.midi->paramMin(param);
+        mx = o.midi->paramMax(param);
+        return o.midi->getParam(param);
     }
-    auto* d = t.devices[dev].get();
-    mn = d->paramMin(param);
-    mx = d->paramMax(param);
-    return d->getParam(param);
+    if (!o.device) return 0.0f;
+    mn = o.device->paramMin(param);
+    mx = o.device->paramMax(param);
+    return o.device->getParam(param);
 }
-static void targetSet(Track& t, int32_t kind, int32_t dev, int32_t param, float v) {
+static void targetSet(Track& t, int32_t kind, int32_t dev, int32_t param, float v, uint64_t uid = 0, int32_t slot = -1) {
+    const ParamOwner o = targetOwner(t, kind, dev, uid, slot);
     if (kind == static_cast<int32_t>(CvTargetKind::Instrument)) {
-        if (t.instrument) t.instrument->pluginParamSet(param, v);
-        return;
-    }
-    if (kind == static_cast<int32_t>(CvTargetKind::MidiFx)) {
-        if (dev >= 0 && dev < static_cast<int32_t>(t.midiEffects.size()))
-            if (auto* m = t.midiEffects[dev].get()) m->setParam(param, v);
-        return;
-    }
-    if (dev >= 0 && dev < static_cast<int32_t>(t.devices.size()))
-        if (auto* d = t.devices[dev].get()) d->setParam(param, v);
+        if (o.instrument) o.instrument->pluginParamSet(param, v);
+    } else if (kind == static_cast<int32_t>(CvTargetKind::MidiFx)) {
+        if (o.midi) o.midi->setParam(param, v);
+    } else if (o.device)
+        o.device->setParam(param, v);
 }
 
 // Generalized link creation. Source: modulator or param. Target: device / instrument / MIDI-FX.
@@ -163,7 +175,7 @@ int32_t Engine::addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId
     if (!tgtTrack || !targetValid(*tgtTrack, targetKind, targetDevice, targetParam)) return -1;
     const int32_t storedTarget = tgt == trackId ? -1 : tgt;
     for (auto& l : old->cvLinks)
-        if (l.sourceKind == sourceKind && l.sourceModId == modId && l.sourceDevice == srcDev &&
+        if (l.sourceChainUid == 0 && l.targetChainUid == 0 && l.sourceKind == sourceKind && l.sourceModId == modId && l.sourceDevice == srcDev &&
             l.sourceParam == srcParam && l.targetKind == targetKind && l.targetTrack == storedTarget &&
             l.targetDevice == targetDevice && l.targetParam == targetParam)
             return -1;
@@ -183,6 +195,58 @@ int32_t Engine::addCvLinkFull(int32_t trackId, int32_t sourceKind, int32_t modId
     const int32_t idx = static_cast<int32_t>(nt->cvLinks.size()) - 1;
     republishWithTrack(trackId, nt);
     return idx;
+}
+
+// A link reaching into a rack (specs/044), for project load: as addCvLinkFull with the source
+// and / or target given as (device, chain index, slot); chain index -1 = track level.
+int32_t Engine::addNestedCvLink(int32_t trackId, int32_t sourceKind, int32_t modId, int32_t srcDev, int32_t srcChain,
+    int32_t srcSlot, int32_t srcParam, int32_t targetKind, int32_t targetTrack, int32_t targetDevice, int32_t tgtChain,
+    int32_t tgtSlot, int32_t targetParam) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old) return -1;
+    const int32_t tgt = targetTrack < 0 ? trackId : targetTrack;
+    auto tgtTrack = findTrackAuthoring(tgt);
+    if (!tgtTrack) return -1;
+    const uint64_t su = srcChain >= 0 ? nestedChainUid(trackId, srcDev, srcChain) : 0;
+    const uint64_t tu = tgtChain >= 0 ? nestedChainUid(tgt, targetDevice, tgtChain) : 0;
+    if ((srcChain >= 0 && !su) || (tgtChain >= 0 && !tu)) return -1;
+    if (sourceKind == static_cast<int32_t>(CvSourceKind::Param) && !su
+        && (srcDev < 0 || srcDev >= static_cast<int32_t>(old->devices.size())))
+        return -1;
+    if (!targetValid(*tgtTrack, targetKind, targetDevice, targetParam, tu, tgtSlot)) return -1;
+    auto nt = cloneTrack(*old);
+    CvLink l;
+    l.sourceKind = sourceKind;
+    l.sourceModId = modId;
+    l.sourceDevice = srcDev;
+    l.sourceParam = srcParam;
+    l.sourceChainUid = su;
+    l.sourceSlot = su ? srcSlot : -1;
+    l.targetKind = targetKind;
+    l.targetTrack = tgt == trackId ? -1 : tgt;
+    l.targetDevice = targetDevice;
+    l.targetParam = targetParam;
+    l.targetChainUid = tu;
+    l.targetSlot = tu ? tgtSlot : -1;
+    float mn, mx;
+    l.base.store(targetGet(*tgtTrack, targetKind, targetDevice, targetParam, mn, mx, tu, tgtSlot), std::memory_order_relaxed);
+    nt->cvLinks.push_back(l);
+    const int32_t idx = static_cast<int32_t>(nt->cvLinks.size()) - 1;
+    republishWithTrack(trackId, nt);
+    return idx;
+}
+
+bool Engine::cvLinkPath(int32_t trackId, int32_t index, int32_t* srcChain, int32_t* srcSlot, int32_t* tgtChain,
+    int32_t* tgtSlot) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || index < 0 || index >= static_cast<int32_t>(t->cvLinks.size())) return false;
+    const CvLink& l = t->cvLinks[index];
+    const int32_t tgt = l.targetTrack < 0 ? trackId : l.targetTrack;
+    if (srcChain) *srcChain = l.sourceChainUid ? nestedChainIndex(trackId, l.sourceDevice, l.sourceChainUid) : -1;
+    if (srcSlot) *srcSlot = l.sourceChainUid ? l.sourceSlot : -1;
+    if (tgtChain) *tgtChain = l.targetChainUid ? nestedChainIndex(tgt, l.targetDevice, l.targetChainUid) : -1;
+    if (tgtSlot) *tgtSlot = l.targetChainUid ? l.targetSlot : -1;
+    return true;
 }
 
 int32_t Engine::addCvLink(int32_t trackId, int32_t modId, int32_t device, int32_t param) {
@@ -210,8 +274,9 @@ int32_t Engine::addCvLinkFromParamToTarget(int32_t trackId, int32_t srcDevice, i
 void Engine::restoreLinkTarget(int32_t ownerTrack, const CvLink& l) {
     const int32_t tgt = l.targetTrack < 0 ? ownerTrack : l.targetTrack;
     if (auto tt = findTrackAuthoring(tgt))
-        if (targetValid(*tt, l.targetKind, l.targetDevice, l.targetParam))
-            targetSet(*tt, l.targetKind, l.targetDevice, l.targetParam, l.base.load(std::memory_order_relaxed));
+        if (targetValid(*tt, l.targetKind, l.targetDevice, l.targetParam, l.targetChainUid, l.targetSlot))
+            targetSet(*tt, l.targetKind, l.targetDevice, l.targetParam, l.base.load(std::memory_order_relaxed),
+                l.targetChainUid, l.targetSlot);
 }
 
 bool Engine::removeCvLink(int32_t trackId, int32_t index) {
@@ -305,7 +370,7 @@ bool Engine::paramModulated(int32_t targetKind, int32_t trackId, int32_t device,
         const int32_t owner = op->id();
         for (auto& l : op->cvLinks) {
             const int32_t tgt = l.targetTrack < 0 ? owner : l.targetTrack;
-            if (tgt == trackId && l.targetKind == targetKind && l.targetDevice == device && l.targetParam == param)
+            if (tgt == trackId && l.targetChainUid == 0 && l.targetKind == targetKind && l.targetDevice == device && l.targetParam == param)
                 return true;
         }
     }
@@ -320,7 +385,22 @@ void Engine::routeCvBaseEdit(int32_t targetKind, int32_t trackId, int32_t device
         const int32_t owner = op->id();
         for (auto& l : op->cvLinks) {
             const int32_t tgt = l.targetTrack < 0 ? owner : l.targetTrack;
-            if (tgt == trackId && l.targetKind == targetKind && l.targetDevice == device && l.targetParam == param)
+            if (tgt == trackId && l.targetChainUid == 0 && l.targetKind == targetKind && l.targetDevice == device && l.targetParam == param)
+                l.base.store(value, std::memory_order_relaxed);
+        }
+    }
+}
+
+void Engine::routeNestedCvBaseEdit(int32_t trackId, int32_t rack, int32_t chain, int32_t slot, int32_t param, float value) {
+    if (!authoring_) return;
+    const uint64_t uid = nestedChainUid(trackId, rack, chain);
+    if (!uid) return;
+    for (auto& op : authoring_->tracks) {
+        const int32_t owner = op->id();
+        for (auto& l : op->cvLinks) {
+            const int32_t tgt = l.targetTrack < 0 ? owner : l.targetTrack;
+            if (tgt == trackId && l.targetChainUid == uid && l.targetDevice == rack && l.targetSlot == slot
+                && l.targetParam == param)
                 l.base.store(value, std::memory_order_relaxed);
         }
     }
@@ -332,7 +412,7 @@ bool Engine::cvBaseValue(int32_t targetKind, int32_t trackId, int32_t device, in
         const int32_t owner = op->id();
         for (auto& l : op->cvLinks) {
             const int32_t tgt = l.targetTrack < 0 ? owner : l.targetTrack;
-            if (tgt == trackId && l.targetKind == targetKind && l.targetDevice == device && l.targetParam == param) {
+            if (tgt == trackId && l.targetChainUid == 0 && l.targetKind == targetKind && l.targetDevice == device && l.targetParam == param) {
                 out = l.base.load(std::memory_order_relaxed);
                 return true;
             }
@@ -354,8 +434,9 @@ static int32_t remappedMoveIndex(int32_t idx, int32_t from, int32_t to) {
     return idx;
 }
 
-void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to) {
+void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, int32_t from, int32_t to, bool midi) {
     if (!authoring_) return;
+    const auto chainKind = static_cast<int32_t>(midi ? CvTargetKind::MidiFx : CvTargetKind::Device);
     bool anyChange = false;
     auto g = std::make_shared<Graph>();
     inheritGraphLevel(*g, *authoring_);
@@ -365,7 +446,7 @@ void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, 
         bool needs = false;
         for (auto& l : ot->cvLinks) {
             const int32_t tgt = l.targetTrack < 0 ? ot->id() : l.targetTrack;
-            const bool paramSrcHere = ownerIsEdited && l.sourceKind == static_cast<int32_t>(CvSourceKind::Param);
+            const bool paramSrcHere = !midi && ownerIsEdited && l.sourceKind == static_cast<int32_t>(CvSourceKind::Param);
             if (tgt == track || paramSrcHere) {
                 needs = true;
                 break;
@@ -380,18 +461,26 @@ void Engine::remapCvLinksAfterDeviceChange(int32_t track, int32_t removedIndex, 
         kept.reserve(nt->cvLinks.size());
         for (auto& l : nt->cvLinks) {
             bool drop = false;
-            // Target index fix-up (device-target links whose target is the edited track).
+            // Target index fix-up (links into the edited chain of the edited track).
             const int32_t tgt = l.targetTrack < 0 ? nt->id() : l.targetTrack;
-            if (tgt == track && l.targetKind == static_cast<int32_t>(CvTargetKind::Device)) {
+            // A target inside a rack (specs/044) follows the rack: targetDevice is its address.
+            const bool nestedTgt = l.targetChainUid != 0;
+            const bool tgtOnChain = nestedTgt ? (midi ? isMidiHost(l.targetDevice) : l.targetDevice >= 0)
+                                              : l.targetKind == chainKind;
+            if (tgt == track && tgtOnChain) {
+                int32_t idx = nestedTgt && midi ? midiHostIndex(l.targetDevice) : l.targetDevice;
                 if (removedIndex >= 0) {
-                    if (l.targetDevice == removedIndex) drop = true;
-                    else if (l.targetDevice > removedIndex)
-                        l.targetDevice -= 1;
+                    if (idx == removedIndex) drop = true;
+                    else if (idx > removedIndex)
+                        idx -= 1;
                 } else
-                    l.targetDevice = remappedMoveIndex(l.targetDevice, from, to);
+                    idx = remappedMoveIndex(idx, from, to);
+                l.targetDevice = nestedTgt && midi ? midiHost(idx) : idx;
             }
-            // Source index fix-up (param source lives on the owner = edited track).
-            if (!drop && ownerIsEdited && l.sourceKind == static_cast<int32_t>(CvSourceKind::Param)) {
+            // Source index fix-up (param source lives on the owner = edited track; a nested source
+            // inside the Instrument Rack has no chain index to follow).
+            if (!drop && !midi && ownerIsEdited && l.sourceKind == static_cast<int32_t>(CvSourceKind::Param)
+                && (l.sourceChainUid == 0 || l.sourceDevice >= 0)) {
                 if (removedIndex >= 0) {
                     if (l.sourceDevice == removedIndex) drop = true;
                     else if (l.sourceDevice > removedIndex)
@@ -419,8 +508,9 @@ void Engine::applyModulation(Graph* g, double beat, double timeSec) {
             float mv;
             if (link.sourceKind == static_cast<int32_t>(CvSourceKind::Param)) {
                 const int32_t sd = link.sourceDevice, sp = link.sourceParam;
-                if (sd < 0 || sd >= static_cast<int32_t>(t.devices.size())) continue;
-                Device* sdev = t.devices[sd].get();
+                Device* sdev = link.sourceChainUid != 0 ? resolveNested(t, sd, link.sourceChainUid, link.sourceSlot).device
+                             : sd >= 0 && sd < static_cast<int32_t>(t.devices.size()) ? t.devices[sd].get()
+                                                                                       : nullptr;
                 if (!sdev || sp < 0 || sp >= sdev->paramCount()) continue;
                 const float smn = sdev->paramMin(sp), smx = sdev->paramMax(sp), sspan = smx - smn;
                 mv = sspan > 1e-9f ? (sdev->getParam(sp) - smn) / sspan : 0.0f; // 0..1
@@ -446,13 +536,15 @@ void Engine::applyModulation(Graph* g, double beat, double timeSec) {
                 if (!tgt) continue;
             }
             const int32_t tk = link.targetKind, di = link.targetDevice, pi = link.targetParam;
-            if (!targetValid(*tgt, tk, di, pi)) continue;
+            const uint64_t tu = link.targetChainUid;
+            const int32_t ts = link.targetSlot;
+            if (!targetValid(*tgt, tk, di, pi, tu, ts)) continue;
 
             // Swing around the stored base (the target atomic holds the live modulated
             // value continuously — no per-block restore — so the UI shows it smoothly).
             const float base = link.base.load(std::memory_order_relaxed);
             float mn, mx;
-            targetGet(*tgt, tk, di, pi, mn, mx);
+            targetGet(*tgt, tk, di, pi, mn, mx, tu, ts);
             const float span = mx - mn;
             const float ld = link.depth.load(std::memory_order_relaxed);
             float v;
@@ -465,7 +557,7 @@ void Engine::applyModulation(Graph* g, double beat, double timeSec) {
             }
             default: v = base + ld * mv * span; break; // Add
             }
-            targetSet(*tgt, tk, di, pi, std::clamp(v, mn, mx));
+            targetSet(*tgt, tk, di, pi, std::clamp(v, mn, mx), tu, ts);
         }
     }
 }
@@ -496,17 +588,17 @@ void Engine::updateModulators(Graph* g, double beat, double timeSec, double dt) 
             } else if (m.kind == ModulatorKind::Scope) {
                 const float v = modOutput(t, m.inputA.load(std::memory_order_relaxed), beat, timeSec);
                 m.outValue.store(v, std::memory_order_relaxed); // pass-through
-                m.pushScope(v);
+                m.pushScope(v, static_cast<float>(dt));
             }
         }
     }
 }
 
-int32_t Engine::modulatorScope(int32_t trackId, int32_t modId, float* out, int32_t cap) const {
+int32_t Engine::modulatorScope(int32_t trackId, int32_t modId, float* values, float* dts, int32_t cap) const {
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0;
     for (auto& m : t->modulators)
-        if (m.id == modId) return m.readScope(out, cap);
+        if (m.id == modId) return m.readScope(values, dts, cap);
     return 0;
 }
 

@@ -4,8 +4,8 @@
 // Nota Ceiling (device kind 14) card windows, read from the engine's telemetry
 // (Ceiling.h scopeRead) so the picture is what the limiter does:
 //  · CeLevelView — the Level tab: the last 4 s as columns — the input behind (grey), the part
-//    over the ceiling (red), the limited output (neutral ink) — with the ceiling line. Drag the
-//    ceiling line up or down. (The reduction has its own tab.)
+//    over the ceiling (red), the limited output (neutral ink) — with the ceiling line, and the
+//    reduction hanging under it in a strip (0 … −12 dB). Drag the ceiling line up or down.
 //  · CeReductionView — the Reduction tab: the reduction over 4 s hanging from 0 dB, lighter grey where
 //    a transient got through to the clip, the window's mean dashed; the scale follows the
 //    deepest reduction (3 / 6 / 12 / 24 dB).
@@ -26,11 +26,11 @@ internal sealed class CeLevelView : ShDragView
     private float[] _in = Array.Empty<float>(), _out = Array.Empty<float>(), _gr = Array.Empty<float>();
     private int _n;
     private double _ceil = -1, _hi = 6, _heldHi = double.NaN;
-    private const double Lo = -36;
+    private const double Lo = -36, StripH = 16;
     /// <summary>Maps a ceiling (dB) to the handle's 0..1 value and back — set by the card.</summary>
     public Func<double, double> CeilToNorm { get; set; } = db => (db + 12) / 12;
     public Func<double, double> NormToCeil { get; set; } = n => -12 + 12 * n;
-    public string Title { get; set; } = "Level";
+    public string Title { get; set; } = "Level and reduction";
 
     /// <summary>The level cells (input, output, max GR — each <paramref name="n"/> long from
     /// <paramref name="inAt"/>, <paramref name="outAt"/>, <paramref name="grAt"/>) and the ceiling in dB.</summary>
@@ -53,10 +53,11 @@ internal sealed class CeLevelView : ShDragView
         InvalidateVisual();
     }
 
-    private (double top, double bot) Plot() => (NotaGraph.PlotTop, Bounds.Height - NotaGraph.PlotFloor);
+    // The level plot, with the reduction strip under it (above the time axis).
+    private (double top, double bot) Plot() => (NotaGraph.PlotTop, Bounds.Height - NotaGraph.PlotFloor - StripH);
     private double Y(double db) { var (t, b) = Plot(); return b - Math.Clamp((db - Lo) / (_hi - Lo), 0, 1) * (b - t); }
 
-    protected override int Hit(Point p) => Math.Abs(p.Y - Y(_ceil)) <= 5 ? HCeiling : -1;
+    protected override int Hit(Point p) => Math.Abs(p.Y - Y(_ceil)) <= 5 && p.Y < Plot().bot + 2 ? HCeiling : -1;
     protected override double DragTo(int handle, Point start, Point p, double v0)
     {
         var (t, b) = Plot();
@@ -94,6 +95,10 @@ internal sealed class CeLevelView : ShDragView
                     double oy = Y(_out[i]);
                     ctx.DrawRectangle(NotaPalette.VizInk, null, new Rect(x, oy, bw, bot - oy), 1, 1);
                 }
+                // Reduction strip under the plot (0 … −12 dB hanging).
+                double g = Math.Clamp(_gr[i] / 12.0, 0, 1);
+                if (g > 0.005)
+                    ctx.FillRectangle(NotaPalette.VizInk, new Rect(x, bot + 3, bw, g * (StripH - 4)));
             }
         }
         ctx.DrawLine(NotaGraph.FramePen, new Point(x0, bot + 0.5), new Point(x1, bot + 0.5));

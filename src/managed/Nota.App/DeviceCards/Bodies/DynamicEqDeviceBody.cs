@@ -74,7 +74,10 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         bool Capable(int b) => DynEq.HasGain(TypeOf(b));
         bool IsDyn(int b) => DynMaster() && BandOn(b) && Capable(b) && ModeOf(b) != DynEq.Static;
         bool KeyExt(int b) => P(DynEq.SidechainP) >= 0.5f || P(DynEq.KeyBase + b) >= 0.5f;
-        IBrush DirInk(int b, bool bright = false) => B(b, DynEq.RangeF) >= 0 ? (bright ? DeviceCardKit.ModInkBright : DeviceCardKit.ModInk) : (bright ? DeviceCardKit.ModInkBright : Teal);
+        // Boost vs cut, by shade (style guide): a boost the lighter grey, a cut the darker one.
+        IBrush DirInk(int b, bool bright = false) => B(b, DynEq.RangeF) >= 0
+            ? (bright ? NotaPalette.TextPrimary : DeviceCardKit.ModInkBright)
+            : (bright ? DeviceCardKit.ModInkBright : DeviceCardKit.ModInk);
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
@@ -318,7 +321,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 Spacing = 5, Children =
                 {
                     SliderRow("THRESH", pThr, () => NotaNum.F($"{B(b, DynEq.ThrF):0} dB"),
-                        "Threshold — where the band starts to act; the teal mark is the band's level now",
+                        "Threshold — where the band starts to act; the grey mark is the band's level now",
                         marker: () => ToN(pThr, Math.Max(mn[pThr], curve.Level(b)))),
                     SliderRow("RANGE", pRange, () => (Rng() >= 0 ? "↑ " : "↓ ") + NotaNum.F($"{Math.Abs(Rng()):0.0}"),
                         "Range — how far the gain can move at full engagement (6 dB past the threshold); click the arrow to flip cut / boost",

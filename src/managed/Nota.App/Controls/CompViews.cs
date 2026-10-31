@@ -62,6 +62,11 @@ internal sealed class CompTransferView : Control
     public event Action? Reset;
     public bool Dragging => _drag;
 
+    // The whole graph is the handle: under the pointer its node looks grabbed.
+    private bool _hover;
+    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; InvalidateVisual(); }
+
     public CompTransferView() { ClipToBounds = true; Cursor = new Cursor(StandardCursorType.Hand); }
 
     public void Set(double thr, double ratio, double knee, double range, double liveInDb)
@@ -142,7 +147,7 @@ internal sealed class CompTransferView : Control
             double li = Math.Min(Hi, _live);
             ctx.DrawEllipse(NotaPalette.TextPrimary, null, new Point(X(li), Y(li - CompDraw.Reduction(li, _thr, _ratio, _knee, _range))), 2, 2);
         }
-        NotaGraph.Node(ctx, new Point(tx, Y(_thr - CompDraw.Reduction(_thr, _thr, _ratio, _knee, _range))), active: true);   // the one point is always the picked one
+        NotaGraph.Node(ctx, new Point(tx, Y(_thr - CompDraw.Reduction(_thr, _thr, _ratio, _knee, _range))), active: _drag || _hover);   // looks grabbed only under the pointer or in the hand
 
         // Title and ratio share the top row where both fit; in a narrow window the ratio shows only
         // while dragging, in the title's place (the tab row names it too).
