@@ -582,6 +582,10 @@ void Engine::setBpm(double bpm) {
     // audio thread later, so reading transport_.samplesPerBeat() here would be stale.
     const double devSR = transport_.sampleRate();
     if (bpm > 0.0 && devSR > 0.0) reconfigureAllWarpStreams(devSR * 60.0 / bpm, devSR);
+    if (bpm > 0.0) {
+        authoringBpm_ = bpm;
+        placeTakesForTempo(); // take lanes + their comp keep one mapping (specs/067)
+    }
 }
 double Engine::bpm() const {
     return transport_.bpm();
@@ -641,6 +645,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setMidiFromTrackId(t.midiFromTrackId());                     // MIDI routing
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, t.send(b)); // M6-1: send levels
     nt->clips = t.clips;
+    nt->takes = t.takes; // take lanes (specs/067) — buffers shared
     nt->midiClips = t.midiClips;
     nt->instrument = t.instrument;     // shared — voice state persists
     nt->midiEffects = t.midiEffects;   // shared — arp held/phase state persists
@@ -782,6 +787,7 @@ bool Engine::undo() {
         // device (a removed look-ahead coming back, #109), so compensation follows them.
         if (e.graph) {
             publishRaw(std::move(e.graph));
+            placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
             reapplyRackMacros();
             reapplyCcRoutes();
@@ -817,6 +823,7 @@ bool Engine::redo() {
         undoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
         if (e.graph) {
             publishRaw(std::move(e.graph));
+            placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
             reapplyRackMacros();
             reapplyCcRoutes();

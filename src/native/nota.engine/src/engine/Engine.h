@@ -1308,6 +1308,20 @@ class Engine {
     bool audioRecordSelfTest();        // ring -> accumulate -> clip, no device
     bool sessionAudioRecordSelfTest(); // ring -> slot.audio -> looped playback, no device (M5-4)
 
+    // --- take lanes (specs/067, Engine_Takes.cpp) ---
+    int32_t takeCount(int32_t trackId) const;
+    bool takeInfo(int32_t trackId, int32_t index, NotaTakeInfo* out) const;
+    int32_t takePeaks(int32_t trackId, int32_t index, float* outMinMax, int32_t maxPoints) const;
+    bool compTake(int32_t trackId, int32_t takeId, double startBeat, double endBeat); // one undo step
+    bool deleteTake(int32_t trackId, int32_t takeId);                                   // one undo step
+    bool flattenTakes(int32_t trackId);                                                 // one undo step
+    int32_t clipTakeId(int32_t trackId, int32_t clipIndex) const;
+    int32_t restoreTake(int32_t trackId, const std::string& path, int32_t number, int32_t group, double originBeat,
+                        double sourceOffsetFrames, int64_t lengthFrames); // project load, no undo entry
+    bool setClipTakeId(int32_t trackId, int32_t clipIndex, int32_t takeId); // project load, no undo entry
+    // A loop take through the real capture path (ring -> drain -> stop), no device.
+    bool takeRecordTest(int32_t trackId, const float* interleavedStereo, int32_t frames, double startBeat);
+
     // --- undo/redo (M6-6) ---
     // Every structural edit publishes a fresh, immutable Graph snapshot, so the
     // previous authoring_ is already a complete restore point. Undo/redo just
@@ -1548,6 +1562,17 @@ class Engine {
     std::vector<std::shared_ptr<Graph>> retired_;
     std::atomic<Graph*> liveGraph_{nullptr};
     int32_t nextTrackId_ = 1;
+    int32_t nextTakeId_ = 0;    // AudioTake::id (specs/067); never reused in a session
+    int32_t nextTakeGroup_ = 0; // AudioTake::group
+    // The tempo setBpm last asked for. The transport only takes it on the audio thread, so
+    // message-thread layout that must agree with the next block reads this instead.
+    double authoringBpm_ = 120.0;
+    // Beats per frame of `sampleRate` audio at authoringBpm_ (the mapping unwarped clips play
+    // at; the device rate cancels out); 0 without a rate.
+    double beatsPerSourceFrame(double sampleRate) const;
+    // Re-place every take and the unwarped comp sections still where their take put them on
+    // authoringBpm_'s mapping (after a tempo change or an undo/redo). No undo entry.
+    void placeTakesForTempo();
 
     // Clip clipboard (copy/cut/paste). Holds a clone of the copied clip; kind -1 empty.
     int32_t clipboardKind_ = -1; // -1 none, 0 audio, 1 midi
@@ -2032,6 +2057,18 @@ class Engine {
     size_t captureLoopFrames_ = 0; // loop length in capture-SR frames
     size_t captureOrigin_ = 0;     // cursor position where this take started (for partial clips)
     double captureLoopStartBeat_ = 0.0;
+    // Take lanes (specs/067): each finished loop pass, copied out of the loop buffer when the
+    // cursor wraps (message thread), in a zeroed loop-length buffer holding [from, to).
+    struct LoopPass {
+        std::vector<float> buf;
+        size_t from = 0, to = 0;
+    };
+    std::vector<LoopPass> capturePasses_;
+    size_t capturePassFrom_ = 0; // where the open pass started recording
+    void finishLoopPass(size_t to);
+    // Two or more passes: keep each as a take on `nt` and comp the newest-first coverage.
+    void materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size_t loopFrames, double loopStartBeat,
+                              double sampleRate);
     void beginCaptureLayout();             // decide linear vs loop capture at take start
     void activateLoopPunch(double atBeat); // switch capture to loop punch (start or mid-take)
     bool audioRecording_ = false;

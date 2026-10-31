@@ -106,14 +106,19 @@ public sealed partial class ArrangementView : UserControl
         for (int i = 0; i < _tracks.Count; i++)
         {
             tops[i] = y;
-            y += IsSlimRow(_tracks[i]) ? GroupRowHeight : TrackRowHeight(_tracks[i]);
+            y += RowHeightAt(i);
         }
         tops[_tracks.Count] = y;
         _rowTops = tops;
     }
 
-    /// <summary>Height of arrangement row <paramref name="i"/> — a slim bar for a group.</summary>
+    /// <summary>Height of arrangement row <paramref name="i"/>: its clip area plus any open take lanes.</summary>
     internal double RowHeightAt(int i)
+        => ClipAreaHeightAt(i) + (i >= 0 && i < _tracks.Count ? TakesHeight(_tracks[i]) : 0);
+
+    /// <summary>Height of row <paramref name="i"/>'s clip area — a slim bar for a group. Clips,
+    /// automation and the header card live here; open take lanes sit below it.</summary>
+    internal double ClipAreaHeightAt(int i)
         => i < 0 || i >= _tracks.Count ? DefaultRowHeight
          : IsSlimRow(_tracks[i]) ? GroupRowHeight : TrackRowHeight(_tracks[i]);
 
@@ -1016,6 +1021,7 @@ public sealed partial class ArrangementView : UserControl
         if (rebuildHeaders) ReloadSections();   // sections live in the engine's project (specs/016)
         _tracks.Clear();
         _returns.Clear();
+        var takePeaks = new Dictionary<(int, int, long), (float[], int)>();
         if (_engine is { } eng)
         {
             int n = eng.TrackCount;
@@ -1099,14 +1105,18 @@ public sealed partial class ArrangementView : UserControl
                     {
                         cvm.Gain = ai.Gain;
                         cvm.Adsr = eng.GetClipAdsr(ti.Id, c);
+                        cvm.TakeId = eng.ClipTakeId(ti.Id, c);
                     }
                     tvm.Clips.Add(cvm);
                 }
+                if (ti.Type == 0) LoadTakes(eng, tvm, takePeaks);
                 MarkClipRuns(tvm);
                 (tvm.IsReturn ? _returns : _tracks).Add(tvm);
             }
         }
 
+        _takePeaks = takePeaks;
+        _takesOpen.RemoveWhere(id => !_tracks.Any(t => t.Id == id && t.Takes.Count > 0));
         ApplyHierarchy();   // reorder _tracks into group DFS order (depth + collapse-filtered)
         PruneTrackHeights();    // heights of deleted tracks go with them
         RebuildRowGeometry();   // row tops depend on which rows are groups → after the reorder
@@ -2075,6 +2085,7 @@ public sealed partial class ArrangementView : UserControl
             Canvas.SetTop(card, RowTop(i));     // pin to the same Y as the lane row
             _headers.Children.Add(card);
         }
+        AddTakeHeaders();
         AddRowSeamGrips();                       // row-height grips sit above the cards
         _headers.Children.Add(_trackDropLine);   // insertion marker (kept invisible until a drag)
         _headers.Children.Add(_headerDropRing);  // browser drop target (kept invisible until a drag)
@@ -2196,6 +2207,11 @@ public sealed partial class ArrangementView : UserControl
             tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
             Grid.SetColumn(tri, 0);
             nameRow.Children.Add(tri);
+        }
+        else if (TakesToggle(t) is { } takes)
+        {
+            Grid.SetColumn(takes, 0);
+            nameRow.Children.Add(takes);
         }
         else if (t.Frozen || t.LiveRole != 0)
         {

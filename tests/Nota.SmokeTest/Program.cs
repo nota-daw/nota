@@ -644,6 +644,14 @@ if (args.Length >= 1 && args[0] == "--live-record")
     Console.WriteLine(failures == 0 ? "LIVE RECORD PASSED" : $"LIVE RECORD FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Take lanes alone (fast iteration): `--takes`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--takes")
+{
+    Console.WriteLine("-- take lanes --");
+    foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TAKES PASSED" : $"TAKES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // MIDI controllers alone (fast iteration): `--midi-ctl`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--midi-ctl")
 {
@@ -13193,8 +13201,8 @@ Console.WriteLine("-- simultaneous instrument + audio record --");
 }
 
 // ============ loop recording punches the loop region =======================
-// Loop on → each pass wraps and overwrites the loop region in place; the take is bounded
-// to the loop and placed at its start. The playhead wraps with the loop (stays inside it).
+// Loop on → each pass is kept as a take (specs/067). The comp covers the loop: the newest
+// pass where it recorded, earlier passes behind it. The playhead wraps with the loop.
 Console.WriteLine("-- loop recording (punch) --");
 {
     using var le = new NotaEngine();
@@ -13215,10 +13223,17 @@ Console.WriteLine("-- loop recording (punch) --");
     le.SetRecording(false);
     le.Poll();
     le.TryGetTrackInfo(1, out var lti);
-    Check(lti.ClipCount == 1, $"loop record makes one clip ({lti.ClipCount})");
-    le.TryGetClipInfo(lr, 0, out var lci);
-    Check(Math.Abs(lci.StartBeat) < 1e-6, $"take placed at the loop start ({lci.StartBeat:F2})");
-    Check(Math.Abs(lci.LengthBeats - 2.0) < 0.3, $"take is bounded to the loop (~2 beats) ({lci.LengthBeats:F2})");
+    double lLo = double.MaxValue, lHi = 0;
+    for (int c = 0; c < lti.ClipCount; c++)
+        if (le.TryGetClipInfo(lr, c, out var ci))
+        {
+            lLo = Math.Min(lLo, ci.StartBeat);
+            lHi = Math.Max(lHi, ci.StartBeat + ci.LengthBeats);
+        }
+    Check(lti.ClipCount >= 2 && le.TakeCount(lr) >= 2,
+        $"loop record keeps a take per pass ({lti.ClipCount} comp clips, {le.TakeCount(lr)} takes)");
+    Check(Math.Abs(lLo) < 1e-6 && Math.Abs(lHi - 2.0) < 0.3,
+        $"comp covers the loop [{lLo:F2}, {lHi:F2}]");
     le.SetTrackMute(li, true);
     le.SetLoop(false, 0, 0); le.Seek(0); le.Play();
     var lpb = new float[8192 * 2]; le.RenderOffline(lpb, 8192); le.StopTransport();
@@ -13244,9 +13259,16 @@ Console.WriteLine("-- loop enabled mid-record --");
     for (int b = 0; b < 60; b++) { me.RenderOffline(mcap, 2048); me.Poll(); }
     me.SetRecording(false);
     me.Poll();
-    me.TryGetClipInfo(mr, 0, out var mci);
-    Check(Math.Abs(mci.StartBeat) < 1e-6 && Math.Abs(mci.LengthBeats - 2.0) < 0.3,
-        $"mid-record loop switches to punch (start={mci.StartBeat:F2} len={mci.LengthBeats:F2})");
+    me.TryGetTrackInfo(1, out var mti);
+    double mLo = double.MaxValue, mHi = 0;
+    for (int c = 0; c < mti.ClipCount; c++)
+        if (me.TryGetClipInfo(mr, c, out var mci))
+        {
+            mLo = Math.Min(mLo, mci.StartBeat);
+            mHi = Math.Max(mHi, mci.StartBeat + mci.LengthBeats);
+        }
+    Check(mti.ClipCount >= 2 && me.TakeCount(mr) >= 2 && Math.Abs(mLo) < 1e-6 && Math.Abs(mHi - 2.0) < 0.3,
+        $"mid-record loop switches to punch (takes {me.TakeCount(mr)}, comp [{mLo:F2}, {mHi:F2}])");
 }
 
 // ============ overwrite / comp: a dropped clip carves what it lands on ======
@@ -15236,6 +15258,8 @@ Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop record mode --");
 foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
+Console.WriteLine("-- take lanes --");
+foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
 Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");

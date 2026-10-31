@@ -499,6 +499,14 @@ docks as a panel under any of the three, or floats in its own window — see
 - **Recording** from an input (microphone, line, interface) onto an audio track, with
   monitoring (in/auto/off). The input is **Ext 1** or **Ext 2** (mono, centred) or **Ext 1/2**
   (stereo pair); new tracks take Ext 1. MCP `set_input_channels`.
+- **Take lanes**: an Arrangement audio recording with the loop on keeps every pass. The
+  header shows a disclosure and the take count; open it for one row per take (**Take 1**,
+  **Take 2**, …), folded until you do. What plays is the comp, the track's own row — after
+  recording, the newest pass at every point. Drag across a take to use that section (the
+  snap grid; ⌥ bypasses it). Right-click a lane for **Use whole take**, **Delete take**
+  (what plays stays) or **Flatten takes** (the comp becomes one clip and those takes go).
+  Each is one undo step. Takes are saved with the project. One pass, the loop off, MIDI
+  and Session slots stay a single clip.
 - **Audio clips as samples** — drag an arrangement clip onto a track with a Sampler, Nota
   Grain, Drum Rack (next free pad) or Instrument Rack, or anywhere a sample goes (a pad, a
   Rhythm voice, a Session slot); hovering an instrument track opens its devices. The sample
