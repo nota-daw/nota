@@ -80,6 +80,7 @@ public partial class MainWindow
         B("view.popOutDetail", () => OnToggleDetailWindow(this, e));
         B("view.toggleOverview", () => OnMenuToggleOverview(this, e));
         B("view.toggleSections", () => OnMenuToggleSections(this, e));
+        B("edit.resetSectionName", () => { string status = Timeline.ResetSectionNameAtPlayhead(); if (_vm is not null) _vm.StatusText = status; });
         B("view.follow", () => OnMenuToggleFollow(this, e));
         B("view.showPlayhead", ShowPlayhead);
         B("view.clipNames", () => OnMenuCycleClipNames(this, e));

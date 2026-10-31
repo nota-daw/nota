@@ -23,6 +23,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Automatic section names and Reset to default** (#106): new arrangement sections are named
+  "Section N" for their place in the song — left to right, custom-named sections counted — and
+  renumber when sections are added, moved, duplicated or deleted; custom names stay as typed.
+  In the rename box Return keeps the name (an empty name goes back to automatic) and Esc
+  cancels without an undo step; a caption says whether the name is automatic or custom.
+  **Reset to default** — in the rename box, the section's right-click menu and the command
+  palette (*Reset section name*, for the section at the playhead) — restores the automatic
+  name. Undo / redo bring back both the name and its mode. Sections named in earlier versions
+  keep their names; MCP `list_sections` reports which names are automatic.
 - **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
   the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
   Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.

@@ -62,6 +62,7 @@ public static class CommandCatalog
         C("view.popOutDetail", "Open devices in a window", "View", "", "detach float pop out"),
         C("view.toggleOverview", "Toggle overview", "View", "", "minimap", view: "Arrangement"),
         C("view.toggleSections", "Toggle sections", "View", "", "markers locators", view: "Arrangement"),
+        C("edit.resetSectionName", "Reset section name", "Edit", "", "default automatic rename section at playhead", view: "Arrangement"),
         C("view.follow", "Follow playhead", "View", "", "scroll"),
         C("view.showPlayhead", "Show playhead", "View", Shortcut.None('P'), "find locate scroll reveal cursor position", view: "Arrangement"),
         C("view.clipNames", "Cycle clip names", "View", "", "labels", view: "Arrangement"),
