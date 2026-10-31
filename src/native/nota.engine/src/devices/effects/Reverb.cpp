@@ -64,6 +64,7 @@ void Reverb::setSampleRate(double sr, int32_t /*maxBlock*/) {
     quietSamples_ = 0;
     idle_ = false;
     feedPk_ = 0.0f;
+    hist_.setSampleRate(sr_);
     srA_.store(static_cast<float>(sr_), std::memory_order_relaxed);
 }
 
@@ -157,6 +158,7 @@ void Reverb::process(float* buf, int32_t frames) {
     if (inSilent && !freeze && idle_) {
         modPhase_ += modInc * frames;
         if (modPhase_ >= 1.0) modPhase_ -= std::floor(modPhase_);
+        hist_.silence(frames);
         return;
     }
 
@@ -238,6 +240,7 @@ void Reverb::process(float* buf, int32_t frames) {
         }
         outL = mid + side;
         outR = mid - side;
+        hist_.push(std::max(std::fabs(l), std::fabs(r)), std::max(std::fabs(outL), std::fabs(outR)), mid);
 
         // Final guard: a runaway (but finite) loop build-up here would blast the
         // speakers. A hard clamp bounds it but the clip itself sounds metallic, so
@@ -271,6 +274,7 @@ void Reverb::process(float* buf, int32_t frames) {
     if (quietSamples_ > (uint64_t)flight + kIdleSamples) idle_ = true;
 
     // ---- telemetry -----------------------------------------------------------
+    hist_.publish();
     mWet_.store(decayPeak(mWet_.load(std::memory_order_relaxed), wetPk), std::memory_order_relaxed);
     mOutL_.store(decayPeak(mOutL_.load(std::memory_order_relaxed), outPkL), std::memory_order_relaxed);
     mOutR_.store(decayPeak(mOutR_.load(std::memory_order_relaxed), outPkR), std::memory_order_relaxed);
@@ -340,7 +344,7 @@ int32_t Reverb::scopeRead(float* out, int32_t maxSamples) const {
     out[S_DiffuseSmp] = diffA_.load(std::memory_order_relaxed);
     out[S_Frozen] = getParam(Freeze) >= 0.5f ? 1.0f : 0.0f;
     out[S_EarlyOn] = erOnA_.load(std::memory_order_relaxed);
-    return kScope;
+    return kScope + hist_.read(out + kScope, maxSamples - kScope);
 }
 
 std::string Reverb::deviceText(int32_t id) const {

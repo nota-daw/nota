@@ -4536,11 +4536,18 @@ Console.WriteLine("-- Nota Delay --");
     de.DeviceSetParam(dt, dd, LatencyComp, 1f);
 
     // Telemetry + the MCP status line.
-    var sc = new float[11];
+    var sc = new float[13];
     de.DeviceSetParam(dt, dd, Sync, 1f); de.DeviceSetParam(dt, dd, DivL, 2f / 7f);
     Render(20000);
     int scn = de.DeviceScope(dt, dd, sc, sc.Length);
-    Check(scn == 11 && sc[4] > 1000 && sc[5] > 1, $"Delay scope reports sample rate + tempo ({sc[4]:0} Hz, {sc[5]:0.0} BPM)");
+    Check(scn == 13 && sc[4] > 1000 && sc[5] > 1, $"Delay scope reports sample rate + tempo ({sc[4]:0} Hz, {sc[5]:0.0} BPM)");
+    // The live graph's level history follows the telemetry: input dB, echoes dB, echo samples.
+    var dh = new float[13 + 2 * 1536 + 2048];
+    int dhn = de.DeviceScope(dt, dd, dh, dh.Length);
+    float dIn = -999, dWet = -999;
+    for (int i = 0; i < 1536; i++) { dIn = Math.Max(dIn, dh[13 + i]); dWet = Math.Max(dWet, dh[13 + 1536 + i]); }
+    Check(dhn == dh.Length && dIn > -60 && dWet > -60 && dIn <= 12 && dWet <= 12,
+          $"Delay scope appends the level history (in {dIn:0.0} dB, echoes {dWet:0.0} dB)");
     string text = de.DeviceText(dt, dd, 0);
     Check(text.Contains("1/8"), $"Delay status text names the division (got '{text}')");
 
@@ -4836,6 +4843,13 @@ Console.WriteLine("-- Nota Reverb --");
     int scn = re.DeviceScope(rt, rd, sc, sc.Length);
     Check(scn == 11 && sc[4] > 1000 && sc[8] > 100 && Math.Abs(sc[6] - 1.9) < 0.1,
           $"Reverb scope reports sample rate, diffuser delay and RT60 ({sc[4]:0} Hz, {sc[8]:0} smp, {sc[6]:0.00} s)");
+    // The live graph's level history follows the telemetry: input dB, tail dB, tail samples.
+    var rh = new float[11 + 2 * 1536 + 2048];
+    int rhn = re.DeviceScope(rt, rd, rh, rh.Length);
+    float rIn = -999, rWet = -999;
+    for (int i = 0; i < 1536; i++) { rIn = Math.Max(rIn, rh[11 + i]); rWet = Math.Max(rWet, rh[11 + 1536 + i]); }
+    Check(rhn == rh.Length && rIn > -60 && rWet > -80 && rIn <= 12 && rWet <= 12,
+          $"Reverb scope appends the level history (in {rIn:0.0} dB, tail {rWet:0.0} dB)");
     string text = re.DeviceText(rt, rd, 0);
     Check(text.Contains("Hall") && text.Contains("RT60"), $"Reverb status text names the algorithm and RT60 (got '{text}')");
 
