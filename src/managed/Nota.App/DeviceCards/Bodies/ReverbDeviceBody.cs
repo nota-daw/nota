@@ -88,7 +88,11 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         space.GestureBegin += () => Begin(Decay);
         space.GestureEnd += () => End(Decay);
         space.Reset += () => { Reset(Decay); SyncGraphs(); };
-        ToolTip.SetTip(space, "The tail of your audio — the input (grey) and the reverb's tail before the mix, over the last six seconds. The dashed line falls from the tail's latest peak at the set RT60. Drag to lengthen or shorten the decay; double-click to reset it.");
+        space.PreChanged += v => { Raw(PreDelay, (float)v); SyncGraphs(); };
+        space.PreGestureBegin += () => Begin(PreDelay);
+        space.PreGestureEnd += () => End(PreDelay);
+        space.PreReset += () => { Reset(PreDelay); SyncGraphs(); };
+        ToolTip.SetTip(space, "The tail of your audio — the input (grey) and the reverb's tail before the mix, over the last six seconds. The dashed line falls from the tail's latest peak at the set RT60. Drag the teal marker for the pre-delay (0 … 200 ms), drag anywhere else to lengthen or shorten the decay; double-click to reset.");
         MidiLearn.Bind(space, MidiTarget.DeviceParam(track, di, Decay), "Decay");
 
         tone.Changed += (hd, v) => { Raw(hd == 0 ? LowCut : HighCut, (float)v); SyncGraphs(); };
@@ -101,7 +105,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         void SyncGraphs()
         {
             bool has = scN >= ScopeLen;
-            if (centreTab == 0) space.Set(scope, kScope, has, Rt60(P(Decay)), On(Freeze));
+            if (centreTab == 0) { space.Set(scope, kScope, has, Rt60(P(Decay)), On(Freeze)); space.SetPre(P(PreDelay), P(PreDelay) * 200); }
             else
                 tone.Set(Rt60(P(Decay)), P(HFDamp), P(Size), Sel(Algorithm, 4), On(Freeze), LowHz(P(LowCut)), HighHz(P(HighCut)), P(LowCut) > 0.001f,
                     scope, kScope + 2 * SpaceDraw.Points, has, Sc(S_SampleRate));
@@ -237,8 +241,14 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             ToolTip.SetTip(er, "Early reflections — the first discrete echoes off the walls, spaced by the algorithm and the size");
             var fr = Toggle(Freeze, "Freeze");
             ToolTip.SetTip(fr, "Freeze — hold the tail forever; the input is muted and nothing decays");
+            // The mode's hint: Plate has no room, so it is always at maximum density.
+            var hint = Mono("", 7, TextTertiary); hint.HorizontalAlignment = HorizontalAlignment.Right;
+            readouts.Add(() => hint.Text = Sel(Algorithm, 4) == 2
+                ? NotaNum.F($"maximum density · size {Pct(P(Size))}")
+                : NotaNum.F($"size {Pct(P(Size))} · diffuse {Pct(P(Diffusion))}"));
             return Rows(
                 mode,
+                hint,
                 SliderRow("PRE", PreDelay, PreF),
                 SliderRow("SIZE", Size, Pct),
                 SliderRow("DIFFUSE", Diffusion, Pct),
@@ -261,6 +271,34 @@ internal sealed class ReverbDeviceBody : IDeviceBody
                 SliderRow("MOD RATE", ModRate, RateF, teal: true),
                 SliderRow("DEPTH", ModDepth, Pct, teal: true),
                 mt, vi);
+        }
+
+        // The L / R output level meters (after Out) on the 0 / −12 / −48 dB scale of the level bars.
+        Control OutMeters(Func<double> l, Func<double> r)
+        {
+            var barL = new PentadLevelBar { Height = 4, VerticalAlignment = VerticalAlignment.Center };
+            var barR = new PentadLevelBar { Height = 4, VerticalAlignment = VerticalAlignment.Center };
+            readouts.Add(() => { barL.SetLinear(l()); barR.SetLinear(r()); });
+            // The bars run −48 … +3 dBFS, so the marks sit at 0, 36/51 and 48/51 of the width.
+            var scale = new Canvas { Height = 9 };
+            var marks = new (double At, TextBlock Tb)[] { (0, Mono("−48", 7, TextDisabled)), (36 / 51.0, Mono("−12", 7, TextDisabled)), (48 / 51.0, Mono("0", 7, TextDisabled)) };
+            foreach (var (_, tb) in marks) scale.Children.Add(tb);
+            void Place()
+            {
+                double w = scale.Bounds.Width;
+                foreach (var (at, tb) in marks)
+                {
+                    double tw = tb.DesiredSize.Width;
+                    Canvas.SetLeft(tb, Math.Clamp(at * w - (at > 0 ? tw / 2 : 0), 0, Math.Max(0, w - tw)));
+                }
+            }
+            scale.PropertyChanged += (_, e) => { if (e.Property == Visual.BoundsProperty) Place(); };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto"), ColumnSpacing = 6, RowSpacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            g.Children.Add(Caps("L")); g.Children.Add(Col(barL, 1));
+            g.Children.Add(GRow(Caps("R"), 1)); g.Children.Add(GRow(Col(barR, 1), 1));
+            g.Children.Add(GRow(Col(scale, 1), 2));
+            ToolTip.SetTip(g, "Output level, left and right, after Out");
+            return g;
         }
 
         Control OutputPanel()
@@ -293,7 +331,8 @@ internal sealed class ReverbDeviceBody : IDeviceBody
                 mono,
                 Rule(),
                 Pair(wetOnly, comp),
-                meter);
+                meter,
+                OutMeters(() => Sc(S_OutL), () => Sc(S_OutR)));
         }
 
         // ======================================================================

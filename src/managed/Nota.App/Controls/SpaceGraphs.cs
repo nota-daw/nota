@@ -264,22 +264,29 @@ internal abstract class CutHandleGraph : Control
 /// <summary>The last six seconds of the input (grey area) and the reverb's tail before the mix
 /// (the curve), dB against time, now at the right. A dashed guide falls from the tail's latest
 /// peak at the set RT60, so a tail that rings longer or shorter than the setting shows at once.
-/// Drag to lengthen or shorten the decay (right or up = longer), double-click to reset it.</summary>
+/// Drag to lengthen or shorten the decay (right or up = longer), double-click to reset it. The teal
+/// pre-delay marker has its own scale (0 … 200 ms between 3 % and 33 % of the width, as on the old
+/// tail picture): drag it for the pre-delay, double-click it to reset.</summary>
 internal sealed class ReverbSpaceView : Control
 {
+    private const double PreLo = 0.03, PreSpan = 0.30;
     private float[] _s = Array.Empty<float>();
     private int _off;
     private bool _has, _freeze;
-    private double _rt60 = 2;
-    private bool _drag;
+    private double _rt60 = 2, _preNorm = 0.1, _preMs = 20;
+    private bool _drag, _dragPre, _hoverPre;
     private double _dragX, _dragY, _dragV;
 
     public event Action<double>? Changed;   // the Decay param, normalised
     public event Action? GestureBegin;
     public event Action? GestureEnd;
     public event Action? Reset;
+    public event Action<double>? PreChanged;   // the Pre-delay param, normalised
+    public event Action? PreGestureBegin;
+    public event Action? PreGestureEnd;
+    public event Action? PreReset;
     public Func<double>? DecayValue { get; set; }
-    public bool Dragging => _drag;
+    public bool Dragging => _drag || _dragPre;
 
     public ReverbSpaceView()
     {
@@ -296,12 +303,43 @@ internal sealed class ReverbSpaceView : Control
         InvalidateVisual();
     }
 
+    /// <summary>The pre-delay: normalised (where the marker sits) and in ms (its label).</summary>
+    public void SetPre(double preNorm, double preMs)
+    {
+        if (_dragPre) return;
+        _preNorm = Math.Clamp(preNorm, 0, 1); _preMs = preMs;
+        InvalidateVisual();
+    }
+
+    private (double x0, double x1) Span() => (6, Bounds.Width - 6);
+    private double PreX() { var (x0, x1) = Span(); return x0 + (PreLo + PreSpan * _preNorm) * (x1 - x0); }
+    private bool OnPre(Point p) => Math.Abs(p.X - PreX()) <= 6;
+    private void ApplyPre(Point p)
+    {
+        var (x0, x1) = Span();
+        if (x1 <= x0) return;
+        _preNorm = Math.Clamp(((p.X - x0) / (x1 - x0) - PreLo) / PreSpan, 0, 1);
+        _preMs = _preNorm * 200;
+        PreChanged?.Invoke(_preNorm);
+        InvalidateVisual();
+    }
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-        if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) { Reset?.Invoke(); e.Pointer.Capture(null); e.Handled = true; return; }   // as CutHandleGraph
         var p = e.GetPosition(this);
+        bool pre = OnPre(p);
+        if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)
+        {
+            if (pre) PreReset?.Invoke(); else Reset?.Invoke();   // as CutHandleGraph
+            e.Pointer.Capture(null); e.Handled = true; return;
+        }
+        if (pre)
+        {
+            _dragPre = true; PreGestureBegin?.Invoke();
+            e.Pointer.Capture(this); ApplyPre(p); e.Handled = true; return;
+        }
         _drag = true; _dragX = p.X; _dragY = p.Y; _dragV = DecayValue?.Invoke() ?? 0.5;
         GestureBegin?.Invoke();
         e.Pointer.Capture(this);
@@ -310,8 +348,11 @@ internal sealed class ReverbSpaceView : Control
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
-        if (!_drag) return;
         var p = e.GetPosition(this);
+        if (_dragPre) { ApplyPre(p); return; }
+        bool hover = OnPre(p);
+        if (hover != _hoverPre) { _hoverPre = hover; InvalidateVisual(); }
+        if (!_drag) return;
         double w = Math.Max(40, Bounds.Width), h = Math.Max(40, Bounds.Height);
         Changed?.Invoke(Math.Clamp(_dragV + (p.X - _dragX) / w - (p.Y - _dragY) / h * 0.5, 0, 1));
     }
@@ -319,11 +360,15 @@ internal sealed class ReverbSpaceView : Control
     {
         base.OnPointerReleased(e);
         if (ReferenceEquals(e.Pointer.Captured, this)) e.Pointer.Capture(null);
+        if (_dragPre) { _dragPre = false; PreGestureEnd?.Invoke(); InvalidateVisual(); }
         if (!_drag) return;
         _drag = false; GestureEnd?.Invoke();
     }
+    protected override void OnPointerExited(PointerEventArgs e)
+    { base.OnPointerExited(e); if (_hoverPre) { _hoverPre = false; InvalidateVisual(); } }
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
+        if (_dragPre) { _dragPre = false; PreGestureEnd?.Invoke(); InvalidateVisual(); }
         if (_drag) { _drag = false; GestureEnd?.Invoke(); }
         base.OnPointerCaptureLost(e);
     }
@@ -357,6 +402,16 @@ internal sealed class ReverbSpaceView : Control
             DrawGuide(ctx, x0, x1, top, bot, Y, XAge);
         }
         else SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), "Play audio to see its tail");
+
+        // The pre-delay marker (teal, its own 0 … 200 ms scale): drag it, double-click resets.
+        {
+            double px = PreX();
+            bool hot = _hoverPre || _dragPre;
+            ctx.DrawLine(new Pen(NotaPalette.Teal, hot ? 1.2 : 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(px, top), new Point(px, bot));
+            NotaGraph.Node(ctx, new Point(px, top + 4), hot, NotaPalette.Teal);
+            var lbl = SpaceDraw.Text(NotaNum.F($"pre {_preMs:0} ms"), hot ? NotaPalette.TealBright : NotaPalette.Teal);
+            ctx.DrawText(lbl, new Point(Math.Min(px + 6, x1 - lbl.Width), top + 4 - lbl.Height / 2));
+        }
 
         if (_freeze) ctx.DrawText(new NotaFormattedText("Tail held · no decay", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));

@@ -113,7 +113,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         repeats.GestureEnd += hd => End(hd == 0 ? LowCut : HighCut);
         repeats.Reset += hd => { Begin(hd == 0 ? LowCut : HighCut); Raw(hd == 0 ? LowCut : HighCut, hd == 0 ? 0f : 1f); End(hd == 0 ? LowCut : HighCut); };
         ToolTip.SetTip(repeats, "The repeats — each pass round the loop goes through the low cut, the high cut (and the tape's head loss) again and loses the feedback, so each curve sits lower and narrower. Drag the handles for the cuts; double-click one to open it. Grey: the echoes' live spectrum.");
-        MidiLearn.Bind(repeats, MidiTarget.DeviceParam(track, di, HighCut), "High Cut");
+        MidiLearn.Bind(repeats, MidiTarget.DeviceParam(track, di, LowCut), "Low Cut");
         void SyncTaps()
         {
             double msl = MsL(), msr = (On(LinkLR) ? msl : MsR()) + SpreadMs();
@@ -318,10 +318,15 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 Latch(FadeChange, "Fade", "Fade on change — crossfade to a new delay time instead of gliding to it (which bends the pitch, tape style)") } };
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), VerticalAlignment = VerticalAlignment.Center };
             head.Children.Add(modeSeg); head.Children.Add(Col(latches, 1));
+            var hint = Mono("", 7, TextTertiary); hint.HorizontalAlignment = HorizontalAlignment.Right;
+            readouts.Add(() => hint.Text = On(SyncMode)
+                ? NotaNum.F($"L {DivNames[Sel(DivL, 8)]} · R {DivNames[On(LinkLR) ? Sel(DivL, 8) : Sel(DivR, 8)]}")
+                : On(LinkLR) ? "channels linked" : "channels independent");
             var btns = Pair(Btn("Tap tempo", TapTempo, "Tap four times to set the delay time by ear (switches to free ms)"),
                 Btn("Clear loop", () => engine.DeviceAction(track, di, A_ClearLoop, 0, 0), "Empty the delay buffer — silences what is still circulating"));
             return Rows(
                 head,
+                hint,
                 Channel("L", DivL, TimeL, null),
                 Channel("R", DivR, TimeR, () => On(LinkLR)),
                 SliderRow("FEEDBACK", Feedback, v => On(Freeze) ? "HOLD" : Pct(v)),
@@ -345,6 +350,34 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 SliderRow("WOW RATE", WowRate, v => { double hz = Exp(v, 0.05, 8); return hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz"); }, 52, null, 40, teal: true),
                 SliderRow("WOW", WowDepth, Pct, teal: true),
                 Pair(fr, tp));
+        }
+
+        // The L / R output level meters (after Out) on the 0 / −12 / −48 dB scale of the level bars.
+        Control OutMeters(Func<double> l, Func<double> r)
+        {
+            var barL = new PentadLevelBar { Height = 4, VerticalAlignment = VerticalAlignment.Center };
+            var barR = new PentadLevelBar { Height = 4, VerticalAlignment = VerticalAlignment.Center };
+            readouts.Add(() => { barL.SetLinear(l()); barR.SetLinear(r()); });
+            // The bars run −48 … +3 dBFS, so the marks sit at 0, 36/51 and 48/51 of the width.
+            var scale = new Canvas { Height = 9 };
+            var marks = new (double At, TextBlock Tb)[] { (0, Mono("−48", 7, TextDisabled)), (36 / 51.0, Mono("−12", 7, TextDisabled)), (48 / 51.0, Mono("0", 7, TextDisabled)) };
+            foreach (var (_, tb) in marks) scale.Children.Add(tb);
+            void Place()
+            {
+                double w = scale.Bounds.Width;
+                foreach (var (at, tb) in marks)
+                {
+                    double tw = tb.DesiredSize.Width;
+                    Canvas.SetLeft(tb, Math.Clamp(at * w - (at > 0 ? tw / 2 : 0), 0, Math.Max(0, w - tw)));
+                }
+            }
+            scale.PropertyChanged += (_, e) => { if (e.Property == Visual.BoundsProperty) Place(); };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto"), ColumnSpacing = 6, RowSpacing = 2, VerticalAlignment = VerticalAlignment.Center };
+            g.Children.Add(Caps("L")); g.Children.Add(Col(barL, 1));
+            g.Children.Add(GRow(Caps("R"), 1)); g.Children.Add(GRow(Col(barR, 1), 1));
+            g.Children.Add(GRow(Col(scale, 1), 2));
+            ToolTip.SetTip(g, "Output level, left and right, after Out");
+            return g;
         }
 
         Control OutputPanel()
@@ -373,7 +406,8 @@ internal sealed class DelayDeviceBody : IDeviceBody
                 SliderRow("MONO", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0} Hz"), 52, null, 40),
                 Rule(),
                 Pair(wetOnly, comp),
-                wet);
+                wet,
+                OutMeters(() => Sc(S_OutL), () => Sc(S_OutR)));
         }
 
         // ======================================================================

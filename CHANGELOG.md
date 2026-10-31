@@ -98,6 +98,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
+- **Nota Reverb and Nota Delay: meters, read-outs and gestures back after the live graphs**
+  (nota-daw/nota#377): both Output panels have the left / right output meters again, with the
+  0 / −12 / −48 dB scale, under the WET bar. Reverb: the teal pre-delay marker is back on the
+  Space graph (drag it for the pre-delay, double-click resets; drag elsewhere still sets the
+  decay), and the Space panel shows "size · diffuse" again, or "maximum density" on Plate.
+  Delay: the Time panel says "channels linked / independent" in ms, or "L 1/8 · R 1/4" in Sync,
+  and MIDI-learning the repeats graph maps Low Cut again, as before.
 - **Linux: file dialogs that never open** (nota-daw/nota#297): when xdg-desktop-portal has no
   working FileChooser backend, Open / Save / Export / Import used to do nothing. Nota now notices
   within 4 seconds (the request fails, answers without showing, or shows nothing) and opens its
