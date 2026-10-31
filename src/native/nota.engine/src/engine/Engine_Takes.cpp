@@ -44,6 +44,10 @@ void Engine::placeTakesForTempo() {
             if (k.sample && k.beatsPerFrame != beatsPerSourceFrame(k.sample->sourceSampleRate)) return true;
         return false;
     };
+    // Runs after every undo/redo: no new graph unless a take is actually off its tempo.
+    if (std::none_of(authoring_->tracks.begin(), authoring_->tracks.end(),
+                     [&](const auto& t) { return stale(*t); }))
+        return;
     bool any = false;
     auto g = std::make_shared<Graph>();
     inheritGraphLevel(*g, *authoring_);
