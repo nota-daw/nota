@@ -54,6 +54,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     `set_twin_route`, `get_twin_pattern`, `set_twin_pattern` and `twin_pattern_to_clip`.
 - **Preset audition plays a preset's own state**: a Nota Twin preset with a sequence is heard
   playing its pattern.
+- **Automatic section names and Reset to default** (#106): new arrangement sections are named
+  "Section N" for their place in the song — left to right, custom-named sections counted — and
+  renumber when sections are added, moved, duplicated or deleted; custom names stay as typed.
+  In the rename box Return keeps the name (an empty name goes back to automatic) and Esc
+  cancels without an undo step; a caption says whether the name is automatic or custom.
+  **Reset to default** — in the rename box, the section's right-click menu and the command
+  palette (*Reset section name*, for the section at the playhead) — restores the automatic
+  name. Undo / redo bring back both the name and its mode. Sections named in earlier versions
+  keep their names; MCP `list_sections` reports which names are automatic.
 - **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
   the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
   Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.
@@ -61,8 +70,33 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   window**) moves it into the floating window for a second screen; the window's dock button
   brings it back. Nota remembers whether the Mixer was shown, where and how tall, and restores
   it on the next launch.
+- **The clip editor can fill the window** (#304): with a clip open in the Clip or Pattern tab,
+  the new button at the right of the detail panel's header, **View → Clip editor fills the
+  window** or ⌘⇧F (Ctrl+Shift+F) folds away the browser, the Arrangement / Session / Modular
+  view and a docked Mixer so the piano roll, audio editor or step grid gets the whole window.
+  The same button or key brings everything back at the heights it had.
+- **Double-click a panel edge to reset it** (#305): double-clicking the edge above the detail
+  panel sets it back to its default height (and the Clip tab forgets the height you dragged
+  it to); the browser's edge and the docked Mixer's top edge go back to their default sizes
+  the same way.
 
 ### Changed
+- **Smoother, clearer waveforms on audio clips** (#267): clips in the Arrangement and the
+  audio clip editor now draw an anti-aliased peak outline around a denser body that follows
+  the loudness (RMS) of the audio. Every zoom level reads cleanly — zoomed out, no peak slips
+  between pixels; zoomed in, the wave slopes from point to point instead of stepping, down to
+  a fine line at sample level — and on a HiDPI screen it is drawn at the screen's full
+  resolution. This is the new default, **Smooth**; **Solid** and **Bars** are still in
+  Settings → Appearance → Waveform (a saved Bars choice moves to Smooth once).
+- **Clip inspector and MIDI tools in two columns** (#276): in a short clip editor the
+  inspector (MIDI and audio) and the Tools rail lay their sections out in two columns instead
+  of one scrolling column, so Clip, Quantize, Transpose and Selection (or Clip, Playback and
+  Warp) are all in view. They stay one column while that fits or the editor is narrow, and
+  scroll only when even two columns don't fit.
+- **Track header buttons stay in one place at every track height** (#387): M / S / arm — and,
+  on audio tracks, the headphone monitor button — now sit on the right of the header in
+  compact, standard and large rows alike. The input selector moves to their left on a
+  standard row, and a compact audio track keeps its monitor button.
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
   rows hide first, then the sends, then the fader gets shorter; name, meter, fader, pan and
   M / S / Arm always stay. A hidden section's **Sends** / **I/O** footer toggle shows an

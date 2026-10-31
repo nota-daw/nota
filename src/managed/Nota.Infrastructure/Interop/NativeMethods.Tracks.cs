@@ -373,6 +373,13 @@ internal static partial class NativeMethods
     internal static partial int ClipGetSourcePeaksRange(IntPtr engine, int trackId, int clipIndex, double frame0, double frame1,
                                                         [Out] float[] outMinMax, int maxPoints);
 
+    internal const int ClipLevelsPlayed = 0, ClipLevelsSource = 1, ClipLevelsWarpFull = 2,
+                       ClipLevelsWarpRange = 3, ClipLevelsSourceRange = 4;   // NOTA_CLIP_LEVELS_*
+
+    [LibraryImport(Lib, EntryPoint = "nota_clip_get_levels")]
+    internal static partial int ClipGetLevels(IntPtr engine, int trackId, int clipIndex, int view, double a, double b,
+                                              [Out] float[] outMinMax, [Out] float[] outRms, int maxPoints);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_add_instrument_track")]
     internal static partial int AddInstrumentTrack(IntPtr engine);
 
