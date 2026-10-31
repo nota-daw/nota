@@ -27,6 +27,11 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.ModulatorValue(_handle, trackId, modId); }
     public int ModulatorScope(int trackId, int modId, float[] outv)
     { ThrowIfDisposed(); return NativeMethods.ModulatorScope(_handle, trackId, modId, outv, outv.Length); }
+    public int ModulatorScopeTimed(int trackId, int modId, float[] values, float[] dts)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.ModulatorScopeTimed(_handle, trackId, modId, values, dts, Math.Min(values.Length, dts.Length));
+    }
 
     public int CvLinkAdd(int trackId, int modId, int deviceIndex, int paramIndex)
     { ThrowIfDisposed(); return NativeMethods.AddCvLink(_handle, trackId, modId, deviceIndex, paramIndex); }
@@ -60,6 +65,21 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.CvLinkDevice(_handle, trackId, index); }
     public int CvLinkParam(int trackId, int index)
     { ThrowIfDisposed(); return NativeMethods.CvLinkParam(_handle, trackId, index); }
+
+    public CvLinkPath CvLinkPath(int trackId, int index)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.CvLinkPath(_handle, trackId, index, out int sc, out int ss, out int tc, out int ts) == 0
+            ? new CvLinkPath(sc, ss, tc, ts) : new CvLinkPath(-1, -1, -1, -1);
+    }
+
+    public int CvLinkAddNested(int trackId, int sourceKind, int modId, int srcDevice, int srcChain, int srcSlot, int srcParam,
+                               int targetKind, int targetTrack, int targetDevice, int tgtChain, int tgtSlot, int targetParam)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.AddNestedCvLink(_handle, trackId, sourceKind, modId, srcDevice, srcChain, srcSlot, srcParam,
+                                             targetKind, targetTrack, targetDevice, tgtChain, tgtSlot, targetParam);
+    }
     public float CvLinkDepth(int trackId, int index)
     { ThrowIfDisposed(); return NativeMethods.CvLinkDepth(_handle, trackId, index); }
     public int CvLinkMode(int trackId, int index)

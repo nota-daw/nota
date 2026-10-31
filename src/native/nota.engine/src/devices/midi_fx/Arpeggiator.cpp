@@ -98,6 +98,7 @@ std::shared_ptr<MidiDevice> Arpeggiator::clone() const {
         a->p_[i].store(p_[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
     a->setBypassed(bypassed());
     a->setCcDest(ccDev_.load(std::memory_order_relaxed), ccParam_.load(std::memory_order_relaxed));
+    a->setCcDestNested(ccUid_.load(std::memory_order_relaxed), ccSlot_.load(std::memory_order_relaxed));
     a->setCcDepth(ccDepth_.load(std::memory_order_relaxed));
     a->setSampleRate(sr_, 0);
     return a; // transient live state (held/pending/phase) starts fresh

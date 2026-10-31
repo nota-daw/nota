@@ -44,6 +44,10 @@ public sealed partial class ArrangementView
         public int AutoDeviceIndex = -1;
         public int AutoParamIndex = -1;
         public string AutoParamId = "";      // PluginParam target (M9-B3)
+        // A device grouped into a rack (specs/044): AutoDeviceIndex is the rack's address and
+        // these the chain index and slot of the child the lane drives; -1 = track level.
+        public int AutoChain = -1, AutoSlot = -1;
+        public int AutoLane = -1;   // the nested lane itself: rack edits move its (chain, slot)
         public string AutoLabel = "Vol";
         public List<AutoPt> AutoPoints = new();
         // Group lane summary (M-groups): descendant clips aggregated for the lane preview —

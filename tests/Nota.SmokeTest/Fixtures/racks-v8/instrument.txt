@@ -1,0 +1,43 @@
+chains 3
+chain 0 name='Low' inst=0 gain=0.8 pan=0 mute=False solo=False keys=0-70 vel=0-127
+  inst p0=0.66
+  inst p1=0.02
+  inst p2=0.25
+  inst p3=0.7
+  inst p4=0.2
+  inst p5=0.62
+  inst p6=0.12
+  inst p7=0.8
+  dev 0 kind=16 0 0.8 0.8 0 0 0 0.4363 0.4491 0 0.5 1
+chain 1 name='' inst=2 gain=1 pan=0.2 mute=True solo=False keys=58-127 vel=0-127
+  inst p0=0.85
+  inst p1=0.66476
+  inst p2=0.1
+  inst p3=0.4
+  inst p4=0
+  inst p5=0.5
+  inst p6=0
+  inst p7=0.5
+chain 2 name='Hard hits' inst=6 gain=1 pan=-0.15 mute=False solo=True keys=36-84 vel=96-127
+  inst p0=0
+  inst p1=0.5
+  inst p2=0.5
+  inst p3=0.5
+  inst p4=0.85
+  inst p5=0
+  inst p6=0
+  inst p7=0.5
+  dev 0 kind=2 0.5265 0.5 0.1 0.6 0.6 0 0.85 0.6 0.3 0.25 0 0 0.3 0.5 0.70711 1 1 0 0 0 1
+macro 0 'Bright' 0.6
+macro 1 'Space' 0.35
+macro 2 'Macro 3' 0
+macro 3 'Macro 4' 0.25
+macro 4 'Macro 5' 0
+macro 5 'Macro 6' 0
+macro 6 'Macro 7' 0
+macro 7 'Macro 8' 0
+map 0 m0 c0 d-1 p0 0.3..0.9 curve=0
+map 1 m0 c1 d-1 p1 0.2..0.8 curve=2
+map 2 m1 c2 d0 p0 0.6..0 curve=1
+map 3 m3 c0 d0 p0 -6..6 curve=3
+volume 0.8 glide 0.3

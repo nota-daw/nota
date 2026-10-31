@@ -1,0 +1,230 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+//
+// Fold (specs/045, #344 #345): one switch that folds the keyboard to the rows that matter —
+// the scale's pitches on a melodic track, the pads on a Drum Rack — keeping every pitch a
+// note sits on. The rows are a PianoRowMap; this part builds it and keeps it current. The
+// map is never rebuilt mid-gesture, so a row under the pointer can't vanish during a drag.
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using Avalonia.Controls;
+using Nota.Application.Midi;
+using Nota.Presentation;
+
+namespace Nota.App;
+
+public sealed partial class PianoRollView
+{
+    private const double FoldedPadKeysW = 96;   // room for "Hat closed" beside the rows
+    private const double MaxPadRowH = 24;       // a fitted kit's rows stop growing here
+
+    private PianoRowMap _rows = PianoRowMap.Chromatic(MinPitch, MaxPitch);
+    private bool _rowsArePads;                   // the rows are a Drum Rack's pads
+    private bool _fold;
+    private double? _rowHBeforePadFit;          // the row height to go back to when unfolding
+    private bool _padFit;                       // a kit's rows follow the editor's height (off once zoomed by hand)
+    private readonly List<ColumnDefinition> _keyColumns = new();
+
+    /// <summary>The host's pad scan for the clip's track: note → pad name on a Drum Rack
+    /// track, null on any other track. Asked whenever the rows are rebuilt.</summary>
+    public Func<IReadOnlyDictionary<int, string>?>? FoldPads { get; set; }
+
+    /// <summary>Fires when the user toggles Fold, so the host stores it on the track.</summary>
+    public event Action<bool>? FoldToggled;
+    /// <summary>Fold changed, by the user or the host (another track's clip became active), so
+    /// the toolbar switch can follow.</summary>
+    public event Action? FoldChanged;
+
+    public bool Folded => _fold;
+    /// <summary>The rows the keyboard shows now (for the toolbar's tooltip and the smoke test).</summary>
+    internal PianoRowMap Rows => _rows;
+    /// <summary>Whether a folded keyboard shows a Drum Rack's pads (else scale rows).</summary>
+    public bool FoldShowsPads => FoldPads?.Invoke() is not null;
+    /// <summary>Folded but with nothing to fold to: the keyboard stays whole, with a hint.</summary>
+    public bool FoldHasNothing => _fold && _rows.IsChromatic;
+
+    /// <summary>Sets Fold; <paramref name="user"/> raises <see cref="FoldToggled"/>.</summary>
+    public void SetFold(bool on, bool user = false)
+    {
+        // Not mid-drag: the grabbed notes' rows would change under the pointer (as row zoom).
+        // A switch that arrives during one (another track's note grabbed in a multi-clip
+        // editor) lands when the drag ends.
+        if (_gridControl.Dragging) { if (!user) _foldAfterDrag = on; return; }
+        _foldAfterDrag = null;
+        if (on == _fold) return;
+        _fold = on;
+        RebuildRows(force: true);
+        // A kit is a handful of rows: fit them to the editor (and keep them fitted as it
+        // resizes, until the user zooms), and give the keyboard its own row height back on
+        // unfolding.
+        if (_rowsArePads)
+        {
+            _rowHBeforePadFit ??= _rowH;
+            // A reopened editor takes the kit zoom saved with the clip; else the kit fits.
+            if (!user && SavedPadRowH() is { } ph) UsePadRowH(ph);
+            else
+            {
+                _padFit = true;
+                if (_bodyScroll.Viewport.Height <= 0) FitPadsWhenLaidOut();   // a reopened editor
+                else FitPads();
+            }
+        }
+        else
+        {
+            _padFit = false;
+            if (!on && _rowHBeforePadFit is { } h0)
+            {
+                _rowHBeforePadFit = null;
+                SetRowHeightAt(h0, 0);
+            }
+        }
+        if (user) FoldToggled?.Invoke(on);
+        FoldChanged?.Invoke();
+    }
+
+    private bool? _foldAfterDrag;
+    private (Action Adopt, bool On)? _trackAfterDrag;
+
+    /// <summary>The rows are to follow another track (a multi-clip editor's active clip moved):
+    /// <paramref name="adopt"/> makes the host's pads and Fold read that track, and
+    /// <paramref name="on"/> is its Fold. Mid-drag this waits for the release.</summary>
+    public void SwitchFoldTrack(Action adopt, bool on)
+    {
+        if (_gridControl.Dragging) { _trackAfterDrag = (adopt, on); return; }
+        _trackAfterDrag = null;
+        adopt();
+        if (on != _fold) SetFold(on);
+        else if (_fold)
+        {
+            // Kit to kit keeps a row zoom the user chose; rows that just became a kit fit it.
+            bool wasPads = _rowsArePads;
+            RebuildRows(force: true);
+            if (_rowsArePads && (!wasPads || _padFit)) { _rowHBeforePadFit ??= _rowH; _padFit = true; FitPads(); }
+            else if (wasPads && !_rowsArePads && _rowHBeforePadFit is { } h0)
+            {
+                // Kit to scale rows: the keyboard's own row height comes back, as on unfolding.
+                _rowHBeforePadFit = null;
+                _padFit = false;
+                SetRowHeightAt(h0, 0);
+            }
+            FoldChanged?.Invoke();
+        }
+        else FoldChanged?.Invoke();
+    }
+
+    internal void ApplyDeferredFold()
+    {
+        if (_gridControl.Dragging) return;
+        if (_trackAfterDrag is { } t) SwitchFoldTrack(t.Adopt, t.On);
+        else if (_foldAfterDrag is { } on) SetFold(on);
+    }
+
+    // Fold restored before the editor has a height (a reopened project or clip): fit the kit
+    // on the first layout that gives it one.
+    private void FitPadsWhenLaidOut()
+    {
+        void Once(object? sender, EventArgs e)
+        {
+            double vh = _bodyScroll.Viewport.Height;
+            if (vh <= 0) return;
+            _bodyScroll.LayoutUpdated -= Once;
+            if (_fold && _rowsArePads && _padFit) FitPads();
+        }
+        _bodyScroll.LayoutUpdated += Once;
+    }
+
+    // A kit row height the user zoomed to: kept, and no fitting from here on.
+    private void UsePadRowH(double h)
+    {
+        _padFit = false;
+        _rowH = Math.Clamp(h, MinRowH, MaxRowH);
+        _keys.Height = RangeH;
+        _gridControl.Height = RangeH;
+        Invalidate();
+    }
+
+    private double? SavedPadRowH() =>
+        _clipKey.Item1 != int.MinValue && s_view.TryGetValue(_clipKey, out var vs) ? vs.PadRowH : null;
+
+    private void FitPads() => FitToNotes();
+
+    /// <summary>The user zoomed the rows: a fitted kit stays at their height from now on.</summary>
+    internal void PadRowsZoomed() => _padFit = false;
+
+    // A fitted kit follows the editor's height, both ways (docked panel ↔ pop-out, a window
+    // maximized or restored), until the user zooms rows.
+    private void RefitPadsOnResize()
+    {
+        if (!_fold || !_rowsArePads || !_padFit || _gridControl.Dragging) return;
+        FitPads();
+    }
+
+    // Another clip loaded with its saved (keyboard) row height: a folded kit keeps that as
+    // the height to unfold to, and takes the kit zoom saved with the clip, or fits its pads.
+    private void RefitPadsOnClipLoad(double? padRowH)
+    {
+        if (!_fold) return;
+        if (!_rowsArePads) { _rowHBeforePadFit = null; _padFit = false; return; }
+        _rowHBeforePadFit = _rowH;
+        if (padRowH is { } ph) { UsePadRowH(ph); return; }
+        _padFit = true;
+        if (_bodyScroll.Viewport.Height <= 0) FitPadsWhenLaidOut();
+        else FitPads();
+    }
+
+    /// <summary>The rack's pads may have changed (renamed, added, a new sample): re-read them.</summary>
+    public void RefreshFold() { if (_fold) Invalidate(); }
+
+    internal bool HasRow(int pitch) => _rows.RowOf(pitch) >= 0;
+    internal double PitchY(int pitch) => _rows.NearestRow(pitch) * RowH;
+    internal int PitchAtY(double y) => _rows.PitchAt((int)Math.Floor(y / RowH));
+
+    /// <summary>Rebuilds the rows from the scale, the pads and the notes, keeping the row at
+    /// the top of the view on screen. Skipped mid-gesture unless forced.</summary>
+    private void RebuildRows(bool force = false)
+    {
+        if (!force && _gridControl.Dragging) return;
+        PianoRowMap next;
+        var pads = _fold ? FoldPads?.Invoke() : null;
+        if (!_fold) next = PianoRowMap.Chromatic(MinPitch, MaxPitch);
+        else next = PianoRowMap.Folded(MinPitch, MaxPitch, pads,
+            pads is null && _scaleOn ? ScaleMasks[_scaleIndex] : null, _scaleRoot, UsedPitches());
+        bool padRows = pads is not null && !next.IsChromatic;
+        if (!force && SameRows(next) && padRows == _rowsArePads) { _rows = next; return; }   // labels may change
+
+        // Keep the pitch at the top of the view where it is.
+        double rowH = RowH, top = _bodyScroll.Offset.Y;
+        int anchor = _rows.PitchAt((int)Math.Floor(top / rowH));
+        bool kitResized = !force && padRows && _rowsArePads && next.Count != _rows.Count;
+        _rows = next;
+        _rowsArePads = padRows;
+        double keysW = padRows ? FoldedPadKeysW : KeysW;
+        foreach (var c in _keyColumns) c.Width = new GridLength(keysW);
+        _overlayHost.Margin = new Avalonia.Thickness(keysW, 0, 0, 0);
+        _keys.Height = RangeH;
+        _gridControl.Height = RangeH;
+        _pendingCenter = false;
+        _pendingVOffset = Math.Max(0, _rows.NearestRow(anchor) * rowH);
+        ApplyPendingVOffset();
+        // A fitted kit that gained or lost pads fits again (a zoom the user chose stays).
+        if (kitResized && _padFit) FitPads();
+    }
+
+    // The pitches a folded keyboard keeps: every note's, and the keys held into a recording
+    // take, which aren't notes until they are released.
+    private List<int> UsedPitches()
+    {
+        var ps = _notes.Select(n => n.Pitch).ToList();
+        if (_recPreview is { } rp) foreach (var h in rp.Held) ps.Add(h.Pitch);
+        return ps;
+    }
+
+    private bool SameRows(PianoRowMap m)
+    {
+        if (m.Count != _rows.Count) return false;
+        for (int r = 0; r < m.Count; r++) if (m.PitchAt(r) != _rows.PitchAt(r)) return false;
+        return true;
+    }
+}

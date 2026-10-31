@@ -79,6 +79,14 @@ int32_t nota_track_add_plugin_automation_lane(
     NotaEngine* e, int32_t track_id, int32_t device_index, const char* param_id) {
     return e ? ENG(e)->addPluginAutomationLane(track_id, device_index, param_id) : -1;
 }
+NotaResult nota_track_automation_lane_path(const NotaEngine* e, int32_t track_id, int32_t lane_index,
+    int32_t* out_chain, int32_t* out_slot) {
+    return e && CENG(e)->automationLanePath(track_id, lane_index, out_chain, out_slot) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_add_nested_automation_lane(NotaEngine* e, int32_t track_id, int32_t target, int32_t device_index,
+    int32_t chain, int32_t slot, int32_t param_index, const char* param_id) {
+    return e ? ENG(e)->addNestedAutomationLane(track_id, target, device_index, chain, slot, param_index, param_id) : -1;
+}
 const char* nota_track_automation_lane_param_id(const NotaEngine* e, int32_t track_id, int32_t lane_index) {
     static std::string s; // owned by the engine, valid until the next call
     s = e ? CENG(e)->automationLaneParamId(track_id, lane_index) : std::string{};

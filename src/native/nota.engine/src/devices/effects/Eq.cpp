@@ -11,6 +11,8 @@
 #include "dsp/math/FastMath.h"
 #include "dsp/math/SimdAudio.h"
 
+#include <cstring>
+
 namespace nota {
 namespace {
 
@@ -36,6 +38,9 @@ Eq::Eq() {
     p_[Output].store(0.0f);
     p_[AutoGain].store(0.0f);
     p_[Analyzer].store((float)AnaPost);
+    p_[AnaRange].store(1.0f);
+    p_[AnaPeak].store(0.0f);
+    p_[Labels].store(1.0f);
     setSampleRate(44100.0, 0);
 }
 
@@ -53,25 +58,15 @@ void Eq::setSampleRate(double sr, int32_t /*maxBlock*/) {
     inPk_ = outPk_ = 0.0f;
     quietSamples_ = 0;
     idle_ = false;
-    fftN_ = sr_ > 50000.0 ? 8192 : 4096;
+    const int fftN = dsp::SpectrumAnalyzer::fftSizeFor(sr_);
     size_t ring = 1;
-    while (ring < (size_t)fftN_ * 2) ring <<= 1;
+    while (ring < (size_t)fftN * 2) ring <<= 1;
     for (auto& r : ring_) r.assign(ring, 0.0f);
     ringMask_ = (uint32_t)(ring - 1);
     ringW_.store(0, std::memory_order_relaxed);
-    fft_.resize((size_t)fftN_);
-    win_.assign((size_t)fftN_, 0.0f);
-    tBuf_.assign((size_t)fftN_, 0.0f);
-    fBuf_.assign((size_t)fftN_ / 2, {});
-    for (int i = 0; i < fftN_; ++i) win_[(size_t)i] = (float)(0.5 - 0.5 * std::cos(2.0 * kPi * i / fftN_));
+    for (auto& a : ana_) a.prepare(sr_);
     lastAnaS_ = -1.0;
-    lastAnaW_ = 0;
     anaValid_ = false;
-    for (int k = 0; k < 2; ++k)
-        for (int b = 0; b < kSpec; ++b) {
-            aSpec_[k][b] = 0.0;
-            spec_[k][b] = -120.0f;
-        }
 }
 
 void Eq::wake() {
@@ -316,8 +311,11 @@ void Eq::process(float* buf, int32_t frames) {
     }
     (void)moving;
 
-    // Gain stage: smoothed auto/output gains, output peak, post ring.
+    // Gain stage: smoothed auto/output gains, output peak, post ring. The post ring is written
+    // at the same indices as the pre ring, so the two stay aligned and the ring advances one
+    // sample per frame (it used to run on from the pre pass, leaving every other block stale).
     float outPk = 0.0f;
+    w = w0;
     for (int32_t i = 0; i < frames; ++i) {
         autoCur_ += (autoTarget - autoCur_) * glide;
         outCur_ += (outTarget - outCur_) * glide;
@@ -366,6 +364,9 @@ const char* Eq::paramName(int32_t i) const {
     if (i == Output) return "Output";
     if (i == AutoGain) return "Auto Gain";
     if (i == Analyzer) return "Analyzer";
+    if (i == AnaRange) return "Analyzer Range";
+    if (i == AnaPeak) return "Analyzer Peak";
+    if (i == Labels) return "Labels";
     static thread_local char buf[16];
     if (i >= SlopeBase && i < ChannelBase) {
         std::snprintf(buf, sizeof(buf), "%d Slope", i - SlopeBase + 1);
@@ -384,7 +385,7 @@ const char* Eq::paramName(int32_t i) const {
 
 float Eq::paramMin(int32_t i) const {
     if (i == Output) return -12.0f;
-    if (i < 0 || i >= kBandParams) return 0.0f; // Slope, Channel, Scale, Auto Gain, Analyzer
+    if (i < 0 || i >= kBandParams) return 0.0f; // Slope, Channel, Scale, Auto Gain, Analyzer…
     switch (i % kPerBand) {
     case On: return 0.0f;
     case Type: return 0.0f;
@@ -401,6 +402,9 @@ float Eq::paramMax(int32_t i) const {
     if (i == Output) return 12.0f;
     if (i == AutoGain) return 1.0f;
     if (i == Analyzer) return 2.0f;
+    if (i == AnaRange) return 2.0f;
+    if (i == AnaPeak) return 1.0f;
+    if (i == Labels) return 1.0f;
     switch (i % kPerBand) {
     case On: return 1.0f;
     case Type: return kNumTypes - 1;
@@ -436,7 +440,9 @@ int32_t Eq::scopeRead(float* out, int32_t maxSamples) const {
         t[S_Analysed] = analyse() ? 1.0f : 0.0f;
         for (int k = 0; k < kTele && n < maxSamples; ++k) out[n++] = t[k];
         for (int s = 0; s < 2; ++s)
-            for (int b = 0; b < kSpec && n < maxSamples; ++b) out[n++] = spec_[s][b];
+            for (int b = 0; b < kSpec && n < maxSamples; ++b) out[n++] = ana_[s].curve()[b];
+        const float* pk = ana_[analyzerMode() == AnaPre ? 0 : 1].peak();
+        for (int b = 0; b < kSpec && n < maxSamples; ++b) out[n++] = pk[b];
         return n;
     }
     for (int k = 0; k < kTele && n < maxSamples; ++k) out[n++] = t[k];
@@ -451,11 +457,7 @@ void Eq::deviceAction(int32_t id, int32_t /*iarg*/, float /*farg*/) {
     outPkA_.store(-120.0f, std::memory_order_relaxed);
     lastAnaS_ = -1.0;
     anaValid_ = false;
-    for (int k = 0; k < 2; ++k)
-        for (int b = 0; b < kSpec; ++b) {
-            aSpec_[k][b] = 0.0;
-            spec_[k][b] = -120.0f;
-        }
+    for (auto& a : ana_) a.reset();
 }
 
 std::string Eq::deviceText(int32_t id) const {
@@ -492,6 +494,14 @@ std::string Eq::deviceText(int32_t id) const {
         std::snprintf(b, sizeof b, " | output %+.1f dB%s | analyzer %s", get(Output),
             get(AutoGain) >= 0.5f ? " + auto gain" : "", anas[std::clamp((int)std::lround(get(Analyzer)), 0, 2)]);
         s += b;
+        // The user's band labels and notes (specs/049): what each band is for.
+        for (int k = 0; k < kBands; ++k) {
+            if (label_[k].empty() && note_[k].empty()) continue;
+            std::snprintf(b, sizeof b, " | B%d", k + 1);
+            s += b;
+            if (!label_[k].empty()) s += " label \"" + label_[k] + "\"";
+            if (!note_[k].empty()) s += " note \"" + note_[k] + "\"";
+        }
         return s;
     }
     if (id == 1) {
@@ -521,44 +531,119 @@ std::string Eq::deviceText(int32_t id) const {
                "shelf and bell gain. 57 Output -12..+12 dB. 58 Auto Gain 0/1 adds the opposite of the average level of "
                "the "
                "shelves and bells (cuts and notches do not count; max +-12 dB). 59 Analyzer 0 Pre, 1 Post, 2 Off "
-               "(display only).";
+               "(display only). 60 Analyzer Range 0 = 60, 1 = 90, 2 = 120 dB (display only). 61 Analyzer Peak "
+               "0/1 peak hold (display only). 62 Labels 0/1 shows the band labels in the graph (display only). "
+               "Band labels and notes are text, not params: set them with the band-text tool.";
     }
     return {};
 }
 
-bool Eq::analyse() const {
-    if (ring_[0].empty() || fftN_ <= 0) return false;
-    const double now = nowSeconds();
-    const uint32_t w = ringW_.load(std::memory_order_acquire);
-    if (lastAnaS_ >= 0 && (now - lastAnaS_ < 1.0 / 30.0 || w == lastAnaW_)) return anaValid_;
-    if (w < (uint32_t)fftN_) return anaValid_;
-    const int n = fftN_;
-    const uint32_t start = w - (uint32_t)n;
-    const int half = n / 2;
-    const double binHz = sr_ / n;
-    const double ref = 0.25 * (double)n * n * 0.25; // Hann: a full-scale sine's bin power
-    const bool stale = lastAnaS_ < 0 || now - lastAnaS_ > 1.2;
-    const double a = stale ? 1.0 : 1.0 - std::exp(-(now - lastAnaS_) / 0.2);
-    double tot = 0.0;
-    for (int s = 0; s < 2; ++s) {
-        for (int i = 0; i < n; ++i) tBuf_[(size_t)i] = ring_[s][(start + (uint32_t)i) & ringMask_] * win_[(size_t)i];
-        fft_.fft(tBuf_.data(), fBuf_.data());
-        for (int b = 0; b < kSpec; ++b) {
-            const double lo = kSpecLo * std::pow(kSpecHi / kSpecLo, (double)b / kSpec);
-            const double hi = kSpecLo * std::pow(kSpecHi / kSpecLo, (double)(b + 1) / kSpec);
-            int k0 = std::max(1, (int)std::ceil(lo / binHz)), k1 = std::min(half - 1, (int)std::ceil(hi / binHz) - 1);
-            if (k1 < k0) k0 = k1 = std::clamp((int)std::lround(std::sqrt(lo * hi) / binHz), 1, half - 1);
-            double e = 0.0;
-            for (int k = k0; k <= k1; ++k) e += std::norm(fBuf_[(size_t)k]);
-            tot += e;
-            aSpec_[s][b] += a * (e - aSpec_[s][b]);
-            spec_[s][b] =
-                aSpec_[s][b] > ref * 1e-12 ? (float)std::max(-120.0, 10.0 * std::log10(aSpec_[s][b] / ref)) : -120.0f;
+namespace {
+
+// Keep at most `max` UTF-8 code points, drop control characters (line breaks too unless
+// `multiline`) and trim a label's surrounding spaces (a blank note is empty). Invalid bytes are dropped.
+std::string cleanText(const std::string& in, size_t max, bool multiline) {
+    std::string out;
+    size_t cps = 0;
+    for (size_t i = 0; i < in.size() && cps < max;) {
+        const auto c = static_cast<unsigned char>(in[i]);
+        const size_t len = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 0;
+        if (len == 0 || i + len > in.size()) {
+            ++i;
+            continue;
         }
+        bool ok = true;
+        for (size_t k = 1; k < len; ++k)
+            if ((static_cast<unsigned char>(in[i + k]) & 0xC0) != 0x80) ok = false;
+        if (!ok) {
+            ++i;
+            continue;
+        }
+        if (len == 1 && (c < 0x20 || c == 0x7F)) { // control characters: only a note keeps line breaks
+            i += 1;
+            if (c == '\t' || c == '\n') { // a tab, or a line break in a label, reads as a space
+                out += multiline && c == '\n' ? '\n' : ' ';
+                ++cps;
+            }
+            continue;
+        }
+        out.append(in, i, len);
+        i += len;
+        ++cps;
     }
+    const auto first = out.find_first_not_of(" \n");
+    if (first == std::string::npos) return {};
+    if (multiline) return out; // a note is kept exactly
+    const auto last = out.find_last_not_of(" \n");
+    return out.substr(first, last - first + 1);
+}
+
+} // namespace
+
+void Eq::setBandText(int b, const std::string& label, const std::string& note) {
+    if (b < 0 || b >= kBands) return;
+    label_[b] = cleanText(label, kLabelMax, false);
+    note_[b] = cleanText(note, kNoteMax, true);
+}
+
+// "NEQ1", then per band: u16 label length, label bytes, u16 note length, note bytes (UTF-8).
+std::vector<uint8_t> Eq::getState() const {
+    bool any = false;
+    for (int b = 0; b < kBands; ++b) any |= !label_[b].empty() || !note_[b].empty();
+    if (!any) return {};
+    std::vector<uint8_t> v{'N', 'E', 'Q', '1'};
+    auto put = [&v](const std::string& s) {
+        const auto n = static_cast<uint16_t>(std::min<size_t>(s.size(), 0xFFFF));
+        v.push_back(static_cast<uint8_t>(n & 0xFF));
+        v.push_back(static_cast<uint8_t>(n >> 8));
+        v.insert(v.end(), s.begin(), s.begin() + n);
+    };
+    for (int b = 0; b < kBands; ++b) {
+        put(label_[b]);
+        put(note_[b]);
+    }
+    return v;
+}
+
+void Eq::setState(const uint8_t* data, int32_t size) {
+    std::string lab[kBands], nt[kBands];
+    if (data && size >= 4 && std::memcmp(data, "NEQ1", 4) == 0) {
+        size_t at = 4;
+        const auto n = static_cast<size_t>(size);
+        auto get = [&](std::string& out) {
+            if (at + 2 > n) return false;
+            const size_t len = data[at] | (static_cast<size_t>(data[at + 1]) << 8);
+            at += 2;
+            if (at + len > n) return false;
+            out.assign(reinterpret_cast<const char*>(data + at), len);
+            at += len;
+            return true;
+        };
+        for (int b = 0; b < kBands; ++b)
+            if (!get(lab[b]) || !get(nt[b])) {
+                lab[b].clear();
+                nt[b].clear();
+                break;
+            }
+    }
+    // Anything else (an empty blob, an unknown format) reads as no annotations.
+    for (int b = 0; b < kBands; ++b) setBandText(b, lab[b], nt[b]);
+}
+
+bool Eq::analyse() const {
+    const int mode = analyzerMode();
+    if (ring_[0].empty() || mode == AnaOff) return false;
+    const double now = nowSeconds();
+    if (lastAnaS_ >= 0 && now - lastAnaS_ < 1.0 / 30.0) return anaValid_;
+    const double dt = lastAnaS_ < 0 ? 0.0 : now - lastAnaS_;
+    const uint32_t w = ringW_.load(std::memory_order_acquire);
+    const bool peak = get(AnaPeak) >= 0.5f;
+    // Pre shows only the input; Post both, with the peak on the output.
+    ana_[0].analyse(ring_[0].data(), ringMask_, w, dt, peak && mode == AnaPre);
+    if (mode == AnaPost) ana_[1].analyse(ring_[1].data(), ringMask_, w, dt, peak);
+    else ana_[1].reset();
     lastAnaS_ = now;
-    lastAnaW_ = w;
-    anaValid_ = tot > ref * 1e-10;
+    anaValid_ = ana_[0].valid() || (mode == AnaPost && ana_[1].valid());
     return anaValid_;
 }
 

@@ -15,7 +15,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
 {
     private static readonly (int Kind, string Name)[] Kinds =
     {
-        (0, "Nota Arp"), (1, "Nota Chord"), (2, "Nota Scale"), (3, "Nota Length"), (4, "Nota Velocity"), (5, "Nota Random"),
+        (0, "Nota Arp"), (1, "Nota Chord"), (2, "Nota Scale"), (3, "Nota Length"), (4, "Nota Velocity"), (5, "Nota Random"), (6, "Nota MIDI Effect Rack"),
     };
 
     public sealed record MidiFxKind(int Kind, string Name);
@@ -34,7 +34,7 @@ public sealed class MidiFxTools(IAudioEngine engine, IEngineDispatch dispatch, I
         return arr;
     });
 
-    [McpServerTool(Name = "add_midi_fx"), Description("Add a built-in MIDI effect (see list_midi_fx_kinds) before the instrument. Returns the index (or -1).")]
+    [McpServerTool(Name = "add_midi_fx"), Description("Add a built-in MIDI effect (see list_midi_fx_kinds) before the instrument; kind 6 is the MIDI Effect Rack (see get_midi_rack). Returns the index (or -1).")]
     public Task<int> AddMidiFx(int trackId, int kind) => Mutate(() => E.AddMidiEffect(trackId, kind));
 
     [McpServerTool(Name = "remove_midi_fx"), Description("Remove a MIDI effect from a track by index.")]

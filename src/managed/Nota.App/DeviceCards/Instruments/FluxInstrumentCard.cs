@@ -192,7 +192,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             if (!pad.Dragging) pad.SetValue(G("vecx"), G("vecy"));
             pad.SetGhost(effX, effY, Ghost());
             vecReadout.Text = $"x {Coord(G("vecx"))} · y {Coord(G("vecy"))}";
-            vecReadout.Foreground = VectorPulled() ? DeviceCardKit.ModInkBright : TextSecondary;   // teal: the reaction pulls it
+            vecReadout.Foreground = VectorPulled() ? TextPrimary : TextSecondary;   // lifted to ink 1 while the reaction pulls it
             bool pulled = VectorPulled();
             vecFoot.Text = pulled ? "dashed — where the reaction pulls"
                 : Ghost() ? "dashed — where motion drifts" : "four timbres · drag the point";
@@ -270,7 +270,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
 
         var scope = new FluxReactScope { VerticalAlignment = VerticalAlignment.Stretch, Live = live };
 
-        var listen = PKnob("listen", "LISTEN", "Listen", Pct, NotaSize.KnobSecondary, 44, null);
+        var listen = PKnob("listen", "LISTEN", "Listen", Pct, NotaSize.KnobSecondary, 44, Teal);
         var targetSeg = Segments(Targets, TargetIdx, iv => { Begin("target"); SetP("target", iv / 3f); End("target"); Refresh(); },
             out var targetSync, fill: true, dim: () => !live, padX: 2);
         readouts.Add(targetSync);

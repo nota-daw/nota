@@ -550,7 +550,11 @@ internal sealed class SamplerFilterView : Control
             if (_liveHz > 0 && Math.Abs(Math.Log2(_liveHz / fc)) > 0.05)
             {
                 double lx = XOf(_liveHz, w);
-                ctx.DrawLine(new Pen(DeviceCardKit.ModInk, 1.2), new Point(lx, 0), new Point(lx, h));
+                // The cutoff the loudest voice hears now: a solid line in the lighter grey, named
+                // "live" at its top, against the set cutoff's darker dashed line.
+                ctx.DrawLine(new Pen(DeviceCardKit.ModInkBright, 1.2), new Point(lx, 0), new Point(lx, h));
+                var lt = SamplerInk.Mono("live", DeviceCardKit.ModInkBright);
+                ctx.DrawText(lt, new Point(lx + 3 + lt.Width <= w - 2 ? lx + 3 : lx - 3 - lt.Width, 3 + lt.Height));
             }
         }
 

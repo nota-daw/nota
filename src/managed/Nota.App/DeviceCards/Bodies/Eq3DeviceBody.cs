@@ -30,7 +30,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
                       FreqLo = 6, FreqHi = 7, Slope = 8, Gain = 9, Range = 10;
     // Scope layout (Eq3::S_* / kTele / kSpec).
     private const int S_SampleRate = 5, S_Cpu = 6, S_Analysed = 7, S_Latency = 8,
-        kTele = 16, kSpec = 96, kScope = kTele + kSpec;
+        kTele = 16, kSpec = 256, kScope = kTele + kSpec;
 
     public double Width => 700;
     public bool FullBleed => true;
@@ -130,7 +130,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             fader.Changed += db => { GainRaw(b, db); RefreshAll(); };
             fader.ResetRequested += () => ResetBand(b);
             Typeable(fader, engine.DeviceParamName(track, di, Low + b), () => P(Low + b), n => { Raw(Low + b, n); RefreshAll(); },
-                () => Eq3Math.Db(Eq3Math.GainDb(P(Low + b), Iso())), () => Begin(Low + b), () => End(Low + b), RefreshAll, () => ResetBand(b), val);
+                () => Eq3Math.Db(Eq3Math.GainDb(P(Low + b), Iso())), () => Begin(Low + b), () => End(Low + b), RefreshAll, () => ResetBand(b), val, altResets: true);
             ToolTip.SetTip(fader, "Drag up / down for the band's gain (Shift for fine steps); double-click resets to 0\u2009dB and lifts the kill");
             Learn(fader, Low + b);
             readouts.Add(() =>
@@ -179,7 +179,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         graph.GainChanged += (b, db) => { GainRaw(b, db); RefreshAll(); };
         graph.GainReset += ResetBand;
         Learn(graph, FreqLo);
-        ToolTip.SetTip(graph, "Each band in its colour, the sum in brass, the output spectrum behind. Drag a crossover handle left / right; drag anywhere else to ride that band's gain. Double-click resets.");
+        ToolTip.SetTip(graph, "Each band's curve in grey (Low light, Mid darker, High light and dashed), the sum in the bright line, the output spectrum behind. Drag a crossover handle left / right; drag anywhere else to ride that band's gain. Double-click resets.");
 
         // Header: crossover readouts · Output · Range · Slope.
         Control XRead(string label, Func<string> text)
@@ -195,13 +195,13 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             var v = Mono("", 8, TextPrimary);
             var box = new Border { Background = Brushes.Transparent, Padding = new Thickness(2, 0), Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = v, VerticalAlignment = VerticalAlignment.Center };
             Typeable(box, "Output", () => P(Gain), n => { Raw(Gain, n); RefreshAll(); }, () => Eq3Math.Db(OutDb(P(Gain))) + "\u2009dB",
-                () => Begin(Gain), () => End(Gain), RefreshAll, () => { SetP(Gain, 0.5); RefreshAll(); });
+                () => Begin(Gain), () => End(Gain), RefreshAll, () => { SetP(Gain, 0.5); RefreshAll(); }, altResets: true);
             bool drag = false; double y0 = 0, v0 = 0;
             box.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
                 e.Handled = true;
-                if (e.ClickCount == 2) { SetP(Gain, 0.5); RefreshAll(); return; }
+                if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) { SetP(Gain, 0.5); RefreshAll(); return; }
                 drag = true; y0 = e.GetPosition(box).Y; v0 = P(Gain);
                 e.Pointer.Capture(box); Begin(Gain);
             };

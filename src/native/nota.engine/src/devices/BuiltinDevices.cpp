@@ -33,6 +33,7 @@
 #include "devices/effects/Flanger.h"
 #include "devices/effects/Phaser.h"
 #include "devices/effects/Chorus.h"
+#include "devices/effects/Vocoder.h"
 
 namespace nota {
 
@@ -63,6 +64,7 @@ std::shared_ptr<Device> makeChainDevice(int32_t kind) {
     case 23: return std::make_shared<Flanger>();
     case 24: return std::make_shared<Phaser>();
     case 25: return std::make_shared<Chorus>();
+    case 26: return std::make_shared<Vocoder>(); // in a chain: Saw / Noise carrier (no sidechain)
     default: return nullptr; // 5 = Effect Rack (nesting) / plugin: not via this factory
     }
 }

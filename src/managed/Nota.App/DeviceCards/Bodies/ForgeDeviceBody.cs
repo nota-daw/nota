@@ -250,7 +250,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         transfer.Changed += (_, v) => { Raw(Amount, v); Refresh(); };
         transfer.ResetRequested += _ => { Reset(Amount); Refresh(); };
         Learn(transfer, Amount);
-        ToolTip.SetTip(transfer, "Input → output through the device (in M/S and Multi through the selected stage): each stage alone faint, the LFO-modulated curve dashed teal, the node where the input sits now. Drag up / down for Amount; double-click resets.");
+        ToolTip.SetTip(transfer, "Input → output through the device (in M/S and Multi through the selected stage): each stage alone faint, the LFO-modulated curve dashed grey, the node where the input sits now. Drag up / down for Amount; double-click resets.");
         var harm = new FgHarmonicsView { Height = 50 };
         ToolTip.SetTip(harm, "Harmonics 2 … 9 of a −6 dB sine through the curve: odd partials in full ink (hard, buzzy), even ones dimmer (warm, round), and the total harmonic distortion");
         var graphs = new DockPanel

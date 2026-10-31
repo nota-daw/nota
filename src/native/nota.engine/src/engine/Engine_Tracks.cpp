@@ -45,11 +45,23 @@ std::shared_ptr<SampleBuffer> Engine::findSampleById(int64_t sampleId) const {
             for (int v = 0; v < RhythmMachine::kVoices; ++v)
                 if (auto b = rh->voiceSampleBuf(v))
                     if (b->id == sampleId) return b;
-        // Samplers nested in a rack's chains (Drum Rack pads / Instrument Rack chains).
-        if (auto* rack = dynamic_cast<RackCore*>(t->instrument.get()))
-            for (int32_t c = 0; c < rack->chainCount(); ++c)
-                if (auto* smp = dynamic_cast<Sampler*>(rack->chainInstrument(c)))
-                    if (smp->sample() && smp->sample()->id == sampleId) return smp->sample();
+        // Samplers and Mosaics in a rack's chains (Drum Rack pads / Instrument Rack chains), and
+        // in the pads of a Drum Rack nested in a chain (specs/041).
+        if (auto b = chainSampleById(dynamic_cast<RackCore*>(t->instrument.get()), sampleId, 0)) return b;
+    }
+    return nullptr;
+}
+
+std::shared_ptr<SampleBuffer> Engine::chainSampleById(const RackCore* rack, int64_t sampleId, int depth) {
+    if (!rack || depth > 1) return nullptr;
+    for (int32_t c = 0; c < rack->chainCount(); ++c) {
+        Instrument* inst = rack->chainInstrument(c);
+        if (auto* smp = dynamic_cast<Sampler*>(inst))
+            if (smp->sample() && smp->sample()->id == sampleId) return smp->sample();
+        if (auto* mo = dynamic_cast<Mosaic*>(inst))
+            for (auto& b : mo->samples())
+                if (b->id == sampleId) return b;
+        if (auto b = chainSampleById(dynamic_cast<RackCore*>(inst), sampleId, depth + 1)) return b;
     }
     return nullptr;
 }
@@ -947,7 +959,11 @@ int32_t Engine::instrumentScope(int32_t trackId, float* out, int32_t maxN) const
 int32_t Engine::addAudioTrack() {
     auto g = std::make_shared<Graph>(*authoring_);
     const int32_t id = nextTrackId_++;
-    g->tracks.push_back(std::make_shared<Track>(id, TrackType::Audio));
+    auto t = std::make_shared<Track>(id, TrackType::Audio);
+    // A new track records input 1 alone, as most microphones are mono (#340); stereo (1/2) is
+    // one pick away. Older projects keep the stereo pair they were made with.
+    t->setInputChannels(Track::kInputMono1);
+    g->tracks.push_back(std::move(t));
     publish(g);
     return id;
 }
@@ -1591,7 +1607,7 @@ bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
         AudioClip ac;
         double oldStart, len, newStart;
         bool sameTrack, layoutMatch;
-        std::vector<AutomationLane> snips;
+        std::vector<TrackLane> snips;
     };
     std::vector<Item> items;
     items.reserve(moves.size());
@@ -2480,15 +2496,17 @@ int32_t Engine::duplicateClip(int32_t trackId, int32_t clipIndex) {
 // Pull the points of every automation lane that fall in [start,end] out into a
 // per-lane snippet, with beats rebased to be relative to `start`. Empty lanes are
 // dropped so paste only touches targets the clip actually carried.
-std::vector<AutomationLane> Engine::captureClipAutomation(const Track& t, double start, double end) const {
+std::vector<TrackLane> Engine::captureClipAutomation(const Track& t, double start, double end) const {
     constexpr double eps = 1e-6;
-    std::vector<AutomationLane> out;
+    std::vector<TrackLane> out;
     for (const auto& lane : t.automation) {
-        AutomationLane snip;
+        TrackLane snip;
         snip.target = lane.target;
         snip.deviceIndex = lane.deviceIndex;
         snip.paramIndex = lane.paramIndex;
         snip.paramId = lane.paramId;
+        snip.chainUid = lane.chainUid; // a lane into a rack (specs/044)
+        snip.slot = lane.slot;
         for (const auto& p : lane.points)
             if (p.beat >= start - eps && p.beat <= end + eps) {
                 AutomationPoint q = p;
@@ -2527,15 +2545,15 @@ bool Engine::tracksDeviceLayoutMatch(const Track& a, const Track& b) {
 // the pasted envelope replaces (not overlaps) whatever was there. Device/plugin/MIDI
 // lanes only apply when sameTrack — their indices are positional, so a cross-track
 // paste would otherwise bind them to the wrong device.
-void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<AutomationLane>& snips,
+void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<TrackLane>& snips,
     double placedStart, double len, bool sameTrack) const {
     const double s = placedStart, e = placedStart + len;
     for (const auto& snip : snips) {
         if (!sameTrack && snip.target != AutomationTarget::Volume && snip.target != AutomationTarget::Pan) continue;
         // Find the matching lane on nt, or create one bound to the same target.
-        AutomationLane* lane = nullptr;
+        TrackLane* lane = nullptr;
         for (auto& l : nt.automation) {
-            if (l.target != snip.target) continue;
+            if (l.target != snip.target || l.chainUid != snip.chainUid || l.slot != snip.slot) continue;
             bool match = true;
             switch (snip.target) {
             case AutomationTarget::DeviceParam:
@@ -2553,11 +2571,13 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<A
             }
         }
         if (!lane) {
-            AutomationLane nl;
+            TrackLane nl;
             nl.target = snip.target;
             nl.deviceIndex = snip.deviceIndex;
             nl.paramId = snip.paramId;
-            nl.paramIndex = snip.target == AutomationTarget::PluginParam
+            nl.chainUid = snip.chainUid;
+            nl.slot = snip.slot;
+            nl.paramIndex = snip.target == AutomationTarget::PluginParam && !snip.nested()
                                 ? pluginParamIndexOfId(trackId, snip.deviceIndex, snip.paramId)
                                 : snip.paramIndex;
             nt.automation.push_back(std::move(nl));
@@ -3050,6 +3070,19 @@ int32_t Engine::trackColorIndex(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return t ? t->colorIndex : -1;
 }
+bool Engine::setTrackPianoFold(int32_t trackId, bool on) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old) return false;
+    if (old->pianoFold == on) return true;
+    auto nt = cloneTrack(*old);
+    nt->pianoFold = on;
+    republishWithTrackRaw(trackId, nt); // a view change, not an edit: no undo step
+    return true;
+}
+int32_t Engine::trackPianoFold(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t ? (t->pianoFold ? 1 : 0) : -1;
+}
 
 bool Engine::deleteClip(int32_t trackId, int32_t clipIndex) {
     auto old = findTrackAuthoring(trackId);
@@ -3079,6 +3112,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     nt->setReturnIndex(src.returnIndex());
     nt->setGroupId(src.groupId()); // keep membership on duplicate (paste resets to top-level)
     nt->setRecordInputSource(src.recordInputSource());
+    nt->setInputChannels(src.inputChannels());
     nt->setMonitor(src.monitor());
     nt->setMidiFromTrackId(src.midiFromTrackId());
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, src.send(b));
@@ -3090,6 +3124,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     }
     nt->name = src.name;
     nt->colorIndex = src.colorIndex;
+    nt->pianoFold = src.pianoFold;
     nt->instrument = cloneInstrument(src);
     if (nt->instrument && src.instrument) nt->instrument->setBypassed(src.instrument->bypassed());
     for (auto& m : src.midiEffects)

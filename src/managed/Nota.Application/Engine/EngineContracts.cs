@@ -251,9 +251,45 @@ public struct NotaMeter
 /// <summary>What a parameter-automation lane drives (M9). Matches native AutomationTarget.</summary>
 public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4 }
 
+/// <summary>What a device transfer (specs/043) moves: an audio effect, a MIDI effect or the
+/// track's instrument. Matches nota_track_transfer_device's family.</summary>
+public enum DeviceFamily { Audio = 0, Midi = 1, Instrument = 2 }
+
+/// <summary>What a device transfer did besides moving the device (nota_track_transfer_device's out_flags).</summary>
+[Flags]
+public enum TransferFlags { None = 0, SidechainCleared = 1, LinksDropped = 2, SourceTrackRemoved = 4 }
+
+/// <summary>Where a CV link's source and target sit when they reach into a rack (specs/044):
+/// chain index and slot, -1 at track level.</summary>
+public readonly record struct CvLinkPath(int SourceChain, int SourceSlot, int TargetChain, int TargetSlot);
+
+/// <summary>A rack chain MIDI effect's CC target (specs/044): a device on the track, or the
+/// child (Chain, Slot) of the rack at Device; Chain -1 = track level.</summary>
+public readonly record struct NestedCcDest(int Device, int Chain, int Slot, int Param, float Depth);
+
+/// <summary>A rack chain child's sidechain key (specs/044); SourceTrack -1 = none.</summary>
+public readonly record struct NestedSidechain(int SourceTrack, bool TapPre, float GainDb, float Mix);
+
+/// <summary>Why nota_track_group_devices refused a run (specs/044).</summary>
+public enum GroupRefusal
+{
+    BadRun = -2, NotContiguous = -3, RackInRun = -4, CantHost = -5, InstrumentCantNest = -6, NotInstrumentTrack = -7,
+}
+
+/// <summary>Why nota_track_ungroup_rack refused (specs/044).</summary>
+public enum UngroupRefusal { NotARack = -2, SeveralChains = -3, DrumRack = -4, NoInstrument = -5 }
+
+/// <summary>What an ungroup left behind (nota_track_ungroup_rack's out_dropped).</summary>
+[Flags]
+public enum UngroupDropped { None = 0, MacroMappings = 1, ChainMix = 2 }
+
 /// <summary>Project pan law (specs/006). Matches NOTA_PAN_LAW_*: Balance drops the far
 /// channel as a track pans, Stereo folds it into the near side.</summary>
 public enum PanLaw { Balance = 0, Stereo = 1 }
+
+/// <summary>Which hardware input channels an audio track records and monitors (#340): both as a
+/// stereo pair (1/2), or input 1 / input 2 alone — a mono source, placed in the middle.</summary>
+public enum InputChannels { Stereo = 0, Mono1 = 1, Mono2 = 2 }
 
 /// <summary>One Stereo Map row (specs/008), laid out like native NotaStereoMeasure: what a
 /// track / return / the master sends to the master, averaged over ~300 ms. Balance is on the
@@ -272,7 +308,7 @@ public struct StereoMeasure
 
 /// <summary>What a value gesture targets (specs/009 volume / pan, specs/016 device
 /// parameters). Matches NOTA_MIX_*.</summary>
-public enum MixKind { TrackVolume = 0, TrackPan = 1, MasterVolume = 2, DeviceParam = 3, MidiDeviceParam = 4, PluginParam = 5 }
+public enum MixKind { TrackVolume = 0, TrackPan = 1, MasterVolume = 2, DeviceParam = 3, MidiDeviceParam = 4, PluginParam = 5, PresetTag = 6 }
 
 /// <summary>One value a gesture records for undo; laid out like native NotaMixTarget.
 /// <see cref="TrackId"/> is ignored for the master volume; <see cref="DeviceIndex"/> /
@@ -290,7 +326,16 @@ public readonly record struct MixTarget(MixKind Kind, int TrackId, int DeviceInd
     public static MixTarget MidiDeviceParam(int trackId, int index, int paramIndex) => new(MixKind.MidiDeviceParam, trackId, index, paramIndex);
     /// <summary>A normalized plugin / built-in instrument parameter (device −1 = the instrument).</summary>
     public static MixTarget PluginParam(int trackId, int deviceIndex, int paramIndex) => new(MixKind.PluginParam, trackId, deviceIndex, paramIndex);
+    /// <summary>A device's preset tag (specs/048), so a preset applied in the gesture undoes with its name.</summary>
+    public static MixTarget PresetTag(int trackId, PresetSurface surface, int index) => new(MixKind.PresetTag, trackId, index, (int)surface);
 }
+
+/// <summary>Which of a track's devices a preset tag is on (specs/048).</summary>
+public enum PresetSurface { Effect = 0, Instrument = 1, MidiEffect = 2 }
+
+/// <summary>The preset a device was loaded from: its id ("" = a user preset by path), name
+/// and the parameter values right after it applied (specs/048).</summary>
+public sealed record PresetTag(string Id, string Name, float[] Loaded);
 
 /// <summary>A named span of arrangement time — Intro / Verse / Drop (specs/016). Project
 /// data held by the engine: undoable, saved with the project.</summary>
@@ -418,6 +463,13 @@ public readonly record struct RackMacroMapping(
 {
     /// <summary>DeviceIndex of a mapping onto the chain's own controls (RackCore::kPadControls).</summary>
     public const int PadControls = -2;
+    /// <summary>DeviceIndex of a mapping onto a rack-level control (NOTA_RACK_CONTROL); ParamIndex 0 = the selector.</summary>
+    public const int RackControl = -3;
+    /// <summary>DeviceIndex of a chain's MIDI effect j is MidiDeviceBase − j (NOTA_RACK_MIDI_DEVICE_BASE).</summary>
+    public const int MidiDeviceBase = -1000;
+    /// <summary>The rack address (RackDev* deviceIndex) of the Drum Rack in chain c of a track's
+    /// Instrument Rack is NestedRackBase − c (NOTA_RACK_NESTED_BASE, specs/041).</summary>
+    public const int NestedRackBase = -100000;
     /// <summary>The pad controls a mapping can drive, by ParamIndex, with their ranges (gain is linear,
     /// pan −1..1, tune in semitones, decay 0..1 with 1 = hold).</summary>
     public static readonly string[] PadParamNames = { "Volume", "Pan", "Tune", "Decay" };

@@ -81,8 +81,8 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
   A modulation arc keeps its source's colour. There is no second accent.
 - **Semantic fills with derived ink.** Mute on = `Mute` (amber), solo on = `Solo` (blue),
   arm / record on = `Record` (red), solid, with `NotaPalette.InkOn(fill)` for the text or
-  glyph — never a fixed label colour on a themed fill. Meters run `MeterSafe` to 70 %,
-  `MeterHot` to 88 %, `MeterOver` above. Graph chromas (viz ink · teal · rose · blue) live
+  glyph — never a fixed label colour on a themed fill. Meters run `MeterSafe` below −6 dB,
+  `MeterHot` to 0 dBFS, `MeterOver` at and above 0 dBFS (a clip). Graph chromas (viz ink · teal · rose · blue) live
   only inside graphs, after shade has been tried; devices lose their teal / olive / rose
   identity colours.
 - **The corner scale.** `Radius.Docked` 0 (docked panels) · `Card` 9 (device card, view
@@ -106,7 +106,10 @@ Many of these are enforced by `DesignTokenCheck`; the smoke test fails when one 
   `ToUpperInvariant()` a label, never set `LetterSpacing`. `RunLabels` fails on an all-caps
   or Title Case literal; `LabelAllowList.txt` is for data only.
 - **Never see-through, opacity is not a state.** An unavailable option is ink 4
-  (`TextDisabled`) with nothing picked; use `Inactive.Set` for a subtree. The see-through
+  (`TextDisabled`) (an inactive segment strip keeps its picked cell, in grey); use `Inactive.Set` for a subtree.
+  A modulation depth stays orange with the modulation mark (a dashed knob arc via
+  `Knob.ArcColor`, a hatched value-bar fill via `SliderTrack.Modulation`); where an identity
+  colour told two things apart, keep them apart by shade, dash or label (DESIGN.md § Modulation). The see-through
   wells are fills, not a state. The only allowed `Opacity` is a drag ghost.
 - **State changes colour only** — never size, border width or position (no 1 px press
   shift). Hover and colour transitions 120 ms ease-out; meters, playhead and spectra are

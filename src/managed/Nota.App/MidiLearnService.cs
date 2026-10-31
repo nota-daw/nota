@@ -371,6 +371,8 @@ public sealed class MidiLearnService
             case MidiTargetKind.TrackPan:
                 MixTouch(MixTarget.Pan(t.TrackId), () => _engine.SetTrackPan(t.TrackId, (float)(outv * 2.0 - 1.0)));
                 break;
+            case MidiTargetKind.RackVolume or MidiTargetKind.RackChainGain when t.DeviceIndex <= MidiTarget.MidiRackBase:
+                break; // a MIDI Effect Rack has no audio level
             case MidiTargetKind.RackVolume:
                 if (t.DeviceIndex < 0) _engine.RackSetVolume(t.TrackId, (float)(outv * RackGainMax));
                 else _engine.RackDevSetVolume(t.TrackId, t.DeviceIndex, (float)(outv * RackGainMax));
@@ -420,6 +422,18 @@ public sealed class MidiLearnService
             case MidiTargetKind.TransportRecord: _engine.SetRecording(!_engine.IsRecording); break;
             case MidiTargetKind.TrackMute: _engine.SetTrackMute(t.TrackId, !TrackFlag(t.TrackId, mute: true)); break;
             case MidiTargetKind.TrackSolo: _engine.SetTrackSolo(t.TrackId, !TrackFlag(t.TrackId, mute: false)); break;
+            case MidiTargetKind.RackChainMute when t.DeviceIndex <= MidiTarget.MidiRackBase:
+            {
+                int mi = MidiTarget.MidiRackBase - t.DeviceIndex;
+                _engine.MidiRackSetChainMute(t.TrackId, mi, t.ParamIndex, !_engine.MidiRackChainMute(t.TrackId, mi, t.ParamIndex));
+                break;
+            }
+            case MidiTargetKind.RackChainSolo when t.DeviceIndex <= MidiTarget.MidiRackBase:
+            {
+                int mi = MidiTarget.MidiRackBase - t.DeviceIndex;
+                _engine.MidiRackSetChainSolo(t.TrackId, mi, t.ParamIndex, !_engine.MidiRackChainSolo(t.TrackId, mi, t.ParamIndex));
+                break;
+            }
             case MidiTargetKind.RackChainMute:
                 if (t.DeviceIndex < 0) _engine.RackSetChainMute(t.TrackId, t.ParamIndex, !_engine.RackChainMute(t.TrackId, t.ParamIndex));
                 else _engine.RackDevSetChainMute(t.TrackId, t.DeviceIndex, t.ParamIndex, !_engine.RackDevChainMute(t.TrackId, t.DeviceIndex, t.ParamIndex));

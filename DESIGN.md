@@ -178,19 +178,23 @@ changes.
    their controls sit in grooves; the picked option rises out of its groove. Modular nodes
    are raised like device cards. Nothing else looks raised. Depth comes from slightly
    different greys, thin lines and 1–2 px shadows: no gradients, no blur, no glow, no
-   texture.
+   texture. One exception, which is the work and not the chrome: a hosted plug-in's card
+   stands on a picture of the plug-in's own window under `NotaPalette.PluginPreviewWash`, a
+   vertical wash of the card's own `SurfaceCard` (specs/046). It lives in `Theme/` like
+   every token; views still draw no gradients of their own.
 4. **Orange has three jobs.** Solid for what is live, a soft tint with orange text for what
    you picked, orange lines for values inside a device. Nothing else is orange (§ Orange).
 5. **One typeface.** Geist for every word and number, with tabular figures so a value can
    change without the text around it jumping. No monospace face, no capital-letter labels.
-6. **Never see-through.** An unavailable option is drawn in ink 4 with nothing picked,
-   never faded with opacity. The see-through wells are fills, not a state.
+6. **Never see-through.** An unavailable option is drawn in ink 4, never faded with
+   opacity; an inactive segment strip still shows its picked cell, in grey (§ Segment buttons). The see-through wells are fills, not a state.
 
 These carry over from the earlier rules and still hold:
 
 - **Semantics by purpose.** Mute on is amber (`Mute`), solo on is blue (`Solo`), arm and
   record are red (`Record`), in the arrangement, mixer and Session alike. Red is also
-  overload (`Danger`). Meters run green, amber, red (`MeterSafe`, `MeterHot`, `MeterOver`).
+  overload (`Danger`). Meters run green, amber, red (`MeterSafe`, `MeterHot`, `MeterOver`),
+  with the zones tied to dBFS: amber from −6 dB, red only at and above 0 dBFS (a clip).
 - **Derived ink on every solid fill.** Text or a glyph on an orange, mute, solo, arm or
   track-colour fill takes `InkOn(fill)` (or `TextOnAccent` / `RecordInk` in XAML), never a
   hard-coded label colour.
@@ -305,9 +309,9 @@ code uses the three above.
 | The disc on an engaged record key | `Brush.RecordInk` | `#17181A` | `#FFFFFF` | `#FFFFFF` | `#FFF4EE` |
 | Mute | `Brush.Mute` | `#F2B53C` | `#E0A030` | `#D9C34C` | `#837010` |
 | Solo | `Brush.Solo` | `#6A9FD8` | `#3F78B8` | `#6D8FB5` | `#3E6288` |
-| Meter, safe (to 70 %) | `Brush.MeterSafe` | `#6CC673` | `#3E9E4A` | `#58B368` | `#2C7A3E` |
-| Meter, hot (70–88 %) | `Brush.MeterHot` | `#F2B53C` | `#C98A12` | `#D9C34C` | `#837010` |
-| Meter, over (above 88 %) | `Brush.MeterOver` | `#F06A6E` | `#C8343A` | `#BE563E` | `#B54A32` |
+| Meter, safe (below −6 dB) | `Brush.MeterSafe` | `#6CC673` | `#3E9E4A` | `#58B368` | `#2C7A3E` |
+| Meter, hot (−6 to 0 dBFS) | `Brush.MeterHot` | `#F2B53C` | `#C98A12` | `#D9C34C` | `#837010` |
+| Meter, over (0 dBFS and above) | `Brush.MeterOver` | `#F06A6E` | `#C8343A` | `#BE563E` | `#B54A32` |
 | Selected track header | `Brush.TrackHeaderSelected` | `#2E3034` | `#F2F3F4` | `#191815` | `#F0EBDD` |
 | Selected track lane | `Brush.LaneSelected` | `#24262A` | `#D2D4D7` | `#141310` | `#E4DFD1` |
 | Overload, clipping, error text | `Brush.Danger` | `#F06A6E` | `#B3262C` | `#C2554A` | `#B13E33` |
@@ -357,6 +361,24 @@ where shade cannot carry it (`NotaGraph.Chroma(n)`: viz ink · teal `ChromaTeal`
 `ChromaRose` · blue `ChromaSteel`). The style guide removes the teal, olive and rose
 *identity* colours devices used for a right channel, a band or a modulation source
 (§ Devices); a chroma never goes on a button and never means state.
+
+**Keep the meaning.** Where an identity colour told two things apart, the greys must still
+tell them apart: by shade first (`TextSecondary` the lighter, `TextTertiary` the darker),
+then by stroke (solid vs dashed) or a glyph or label where shade alone is too close.
+Examples: EQ-3's Low (light) · Mid (darker) · High (light, dashed) curves; Dynamic EQ-8's
+boost (lighter, solid ring) vs cut (darker, dashed ring) plus ↑ / ↓; EQ-8's L / R node ring
+dashed against Mid's solid one; Sampler's live cutoff (lighter, solid, "live") against the
+set cutoff (darker, dashed). States keep their tokens: `Warning` tints Utility's
+out-of-phase correlation half, `Danger` is the clip.
+
+### Modulation
+
+A modulation depth (an env or LFO amount, a fine tune, an "amount" knob, a rack macro in
+mapping mode, a value an automatic mode is driving such as Ceiling's Release under Auto
+Release) stays orange like every value, but carries the **modulation mark** so it reads
+apart from a plain value: a knob draws its value arc in short dashes (`Knob.ArcColor` set),
+and a value bar hatches its fill (2 px on, 2 px off: `SliderTrack.Modulation`,
+`ValueBar.Accent`). The dash is the same one graphs use for a modulated curve.
 
 ## Orange
 
@@ -634,6 +656,8 @@ A row of options where exactly one is picked (Notes / Envelopes, Pre / Post / Of
 - **Cell:** 20 high, 8 padding (6 in a device), corner 5, Value 11.5 in ink 3.
 - **Picked:** soft tint with orange text; inside a device it is also raised.
 - **Disabled cell:** ink 4 text, never faded.
+- **Inactive strip** (`dim`, e.g. a shelf band's slope): every cell in ink 4, but the
+  picked cell still rises, in `SurfaceRaised` with ink 3 text, so the value stays readable.
 - The picked cell keeps its weight and width, so auto-width cells never shift.
 
 ### Chips and pills
@@ -729,7 +753,8 @@ and grey.
   the value over the name (both 8); 24 in a table row (`KnobInline`); a flat knob outside
   devices 28, with no cap. `Knob` snaps to these sizes.
 - An inactive knob draws its arc in ink 4. The knobs 0.57 drew in a modulation colour
-  (teal) draw orange like the rest (`Knob.ArcColor` only marks them).
+  (teal) draw orange like the rest, with a dashed arc (`Knob.ArcColor` marks them;
+  § Modulation).
 
 ### Value bar
 
@@ -739,8 +764,9 @@ fader inside a device is an upright value bar.
 - 9 high (`SliderTrack.DeviceH`), corner 4, in a groove; 0.57's thin slider height, so the
   layouts keep their rows.
 - **Fill:** the soft tint up to the value; **value:** a 3 px orange line. Bipolar bars
-  (Pan, Balance, Feedback) fill from the centre. While dragged the fill deepens toward
-  orange.
+  (Pan, Balance, Feedback) fill from the centre. Under the pointer the fill lifts a little
+  toward orange; while dragged it deepens further. A modulation depth hatches its fill
+  (§ Modulation).
 - Drag anywhere on the bar; a click never jumps the value; double-click resets.
 - Why: a thin slider inside a device is hard to grab and read.
 
@@ -785,7 +811,9 @@ wheels go. Never put in a groove.
 The level meter on each track (`MeterBar`, `StereoMeter`; `GrMeter` for gain reduction).
 
 - Channels 3 wide, corner 2, 1.5 apart, on the well.
-- Zones: green (`MeterSafe`) to 70 %, amber (`MeterHot`) to 88 %, red (`MeterOver`) above.
+- Zones, in dBFS: green (`MeterSafe`) below −6 dB, amber (`MeterHot`) from −6 dB to 0 dBFS,
+  red (`MeterOver`) at and above 0 dBFS, so red always means a clip (`MeterScale.CautionDb`,
+  `AlertDb`). A meter on its own scale (Pentad's −48 … +3) places the same dB zones on it.
 - Down the right edge of the track header. Peak hold stays until clicked; no release
   ballistics.
 
@@ -1237,7 +1265,7 @@ drift).
 | `RunGeometry` | `Radius.*` / `Control.*` / `Space.*` in XAML equal `NotaGeometry`; no undefined keys; no `CornerRadius` literals, drop shadows or gradients in views; `Rectangle` `RadiusX` / `RadiusY` literals on the 0 / 2 / 3 / 4 / 5 / 6 / 7 / 9 scale (`RadiusAllowList.txt`) |
 | `RunType` | `Font.UI` matches `NotaFonts.UiUri`; it is the only font family (no Mono URI); `+tnum` is on (`NotaFonts.Tabular`); the four Geist weights are bundled and no other `.ttf`; the Geist OFL licence ships; no font names or `FontFamily.Default` in views; nothing under 7 px |
 | `RunControls` | No unicode icons typed as text; `Knob` snaps to its sizes (34 / 36 / 44 device, 24 inline, 28 flat); `SwitchTrack` is 18 × 10 with a 7 px knob inset 1.5; `SliderTrack` is a 9 px value bar in a groove with a 3 px line (16 in the shell) |
-| `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter or spectrum ballistics; meter channels 3 wide, 1.5 apart, green to 70 %, amber to 88 %; the arrangement playhead 1 px without glow |
+| `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter or spectrum ballistics; meter channels 3 wide, 1.5 apart, amber from −6 dBFS, red from 0 dBFS; the arrangement playhead 1 px without glow |
 | `RunLayout` | `DeviceCardKit.HeaderH` 22 and cards 260 high; every card width between 260 and 940; the transport a docked row at the top at `Control.TransportBar` with its console; browser rows 30 |
 | `RunNumbers` | Display culture installed; no hyphen in a negative format section or before ∞; no hyphen-minus before a digit in a view literal (`NumberAllowList.txt`); no invariant culture on readouts; thin space before units; no vowel-dropped labels |
 | `RunBans` | No hex outside `Ink()` (bar three data tables), no RGB typed as numbers, no named system colours, `Opacity` only on drag ghosts, no brush snapshotting a theme colour |
