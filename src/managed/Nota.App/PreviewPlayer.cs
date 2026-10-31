@@ -259,7 +259,7 @@ public sealed class PreviewPlayer : UserControl
         _fxTrack = track == AuditionTrackIds.Sample || audition.Tracks.Any(t => t.Id == track) ? track : AuditionTrackIds.Auto;
         SetSpectrum(settings.Current.BrowserPreviewSpectrum, persist: false);
         // The Appearance → Waveform choice draws the well too, and follows it live (#107).
-        void ApplyWaveform() => _wave.Style = (WaveformStyle)Math.Clamp(settings.Current.ArrangementWaveform, 0, 1);
+        void ApplyWaveform() => _wave.Style = (WaveformStyle)Math.Clamp(settings.Current.ArrangementWaveform, 0, 2);
         ApplyWaveform();
         settings.Changed += ApplyWaveform;
     }
@@ -920,7 +920,7 @@ public sealed class PreviewWaveform : Control
 
     public void SetPeaks(float[]? peaks) { _peaks = peaks; InvalidateVisual(); }
 
-    /// <summary>Bars (spaced strokes) or Solid (one column per pixel), as Appearance → Waveform sets.</summary>
+    /// <summary>Solid (one column per pixel) or spaced strokes for the other styles, as Appearance → Waveform sets.</summary>
     public WaveformStyle Style
     {
         get => _style;

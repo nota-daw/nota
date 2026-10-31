@@ -133,6 +133,13 @@ docks as a panel under any of the three, or floats in its own window — see
     whole bars). Its menu loops the section, selects it as a time range across every track,
     duplicates it or deletes it. Each edit is one undo step. Saved with the project (MCP
     `list_sections` / `set_sections`); View ▸ Toggle sections hides it.
+  - **Automatic section names** — a new section is named "Section N" for its place in the
+    song, left to right, custom-named sections counted, and renumbers as sections are added,
+    moved or deleted; a custom name never changes on its own. Renaming: Return keeps the name
+    (an empty one goes back to automatic), Esc cancels; the box says whether the name is
+    automatic or custom. **Reset to default** (in the rename box, the section's menu and the
+    command palette's *Reset section name*, for the section at the playhead) brings the
+    automatic name back. Undo / redo restore both the name and its mode.
   - **Resizable tracks and track list** — drag a track's bottom edge (header or lane) to
     set its height, 30–256 px, with a light snap to Compact / Standard / Large; a
     multi-selection resizes together, ⌥-drag resizes every track, double-click resets.
@@ -346,6 +353,12 @@ docks as a panel under any of the three, or floats in its own window — see
     click its lock to keep it as a dimmed, read-only reference. While the Clip tab is
     open it follows the arrangement selection. ⌘D copies that run past a clip's end continue
     into the next open clip; past the last one they are left out.
+  - **Track mode**: the **Clip | Track** switch at the top of the inspector (also *Toggle
+    clip editor track mode* in the command palette) opens every MIDI clip of the track on the
+    arrangement's bars from bar 1, each clip marked in the clip strip, with the same editing
+    as several clips at once. Selecting a clip of the track makes it active and scrolls to it;
+    a clip on another track opens that track; new clips on the track join. The mode is
+    remembered.
 - **Clip tools (generate and transform)**: a **Tools** rail beside the piano roll with
   fifteen tools that write or rewrite notes. Six **generators** — *Rhythm* (a pattern that
   leans on the strong beats), *Seed* (learns the clip's own intervals and rhythm, then
@@ -363,6 +376,10 @@ docks as a panel under any of the three, or floats in its own window — see
   - Everything is **seeded**, so a result is repeatable and "New seed" re-rolls it.
   - Tools that think in pitch follow the roll's **Set Scale** key, so what they write
     stays in key.
+- **Clip editor side panels**: the clip inspector (MIDI and audio) and the Tools rail show
+  their sections in one column while they fit the editor's height and in two side by side when
+  they don't and the editor is wide enough, so the controls stay in view; only past that do
+  they scroll. Sections keep their order and are never split between columns.
 - **Pattern (step sequencer)**: on a Drum Rack track the detail panel gains a **Pattern**
   tab between Devices and Clip — a drum-machine grid with one row per loaded pad. Click a
   step to place a hit, shift-click for an accent, drag across the grid to paint, and use
@@ -486,7 +503,10 @@ docks as a panel under any of the three, or floats in its own window — see
   track) — dropped frames are padded with silence, so there is no cumulative drift.
 - **Import** of audio files by drag and drop: WAV / AIFF / FLAC / MP3.
 - **Audio clip**: start and end, waveform drawing, trimming, split, fade in/out, clip
-  gain. Changing the length shows the material actually being revealed or hidden.
+  gain. Changing the length shows the material actually being revealed or hidden. The
+  waveform (lanes and clip editor) is an anti-aliased peak outline around its RMS body,
+  resolved to device pixels at every zoom; the lanes can draw **Solid** or **Bars** instead
+  (Settings → Appearance → Waveform).
 - **Reverse** (clip editor ▸ DIRECTION, or the clip's context menu): plays the clip
   backwards without touching the file, so it costs nothing to toggle and composes with
   gain, pitch and warp. The arrangement lane and the clip editor both draw it the way it
@@ -1091,9 +1111,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   group by source, favourites first — each remembered across sessions — plus the tag editor.
 - A **status line** counts what the tab is showing (`13 built-in · 4 plug-ins`), and the
   search box counts the matches.
-- **Sample player** under the Files tab: the file's real waveform, drawn as Bars or Solid
-  like the arrangement (Settings → Appearance → Waveform; click to play from a point,
-  hover for the time), Play / Stop, time readout, Loop, Auto (play on select) and a
+- **Sample player** under the Files tab: the file's real waveform, drawn Solid when the
+  arrangement is set to Solid and as Bars otherwise (Settings → Appearance → Waveform;
+  click to play from a point, hover for the time), Play / Stop, time readout, Loop, Auto (play on select) and a
   preview volume fader; ↑ ↓ step through files and Space plays the selected one. It stays
   hidden until you use a list and tightens in a narrow browser. Space in the arrangement
   always drives the project transport.
@@ -1246,6 +1266,11 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Devices/Clip panel in its own window** — the ⧉ button in the bottom panel's header
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
+- **Clip editor fills the window** — the expand button in the bottom panel's header (Clip
+  and Pattern tabs), View → Clip editor fills the window or ⌘⇧F / Ctrl+Shift+F folds away
+  the browser, the main view and a docked Mixer; the same again brings back the split.
+- **Panel edges** — drag to resize the browser, the docked Mixer and the bottom panel;
+  double-click an edge to reset that panel to its default size.
 - **Popup rack editors** (full UI / Params).
 - **Typed values** — ⌥-click any knob, fader or slider (or double-click the number next to
   it) and type the value: "−6", "1.5k", "250 ms", "L 30", "1/16". Double-click the control
@@ -1286,7 +1311,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   dark mode and one for light mode, switched with the OS appearance; the choice applies
   live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
-  remembered; timeline, piano roll and audio editor zoom work on top of it. Also
+  remembered; timeline, piano roll and audio editor zoom work on top of it. **Waveform** —
+  **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Shortcuts**: the shortcut list.
