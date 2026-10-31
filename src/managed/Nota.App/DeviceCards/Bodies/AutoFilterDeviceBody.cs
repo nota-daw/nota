@@ -561,7 +561,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 SlopeRow(slope, circuit),
                 SliderRow("MORPH", Morph, Pct),
                 SliderRow("DRIVE", Drive, v => v <= 0.001 ? "off" : Pct(v)),
-                SliderRow("DRY/WET", DryWet, Pct, modulation: true),
+                SliderRow("DRY/WET", DryWet, Pct),
                 SliderRow("GAIN", Gain, GainF, bipolar: true, valW: 44),
                 Rule(),
                 Labelled("MOD →", target));
@@ -584,7 +584,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             var hold = Latch(EnvHold, () => "Hold", "Hold — keep the envelope at its peak for the hold time before it releases (∞ freezes it)", fill: true);
             var holdRow = new Grid { ColumnDefinitions = new ColumnDefinitions("40,*"), ColumnSpacing = 0, VerticalAlignment = VerticalAlignment.Center };
             var holdTime = DeviceCardKit.SliderRow("", () => P(EnvHoldTime), v => Raw(EnvHoldTime, (float)v), () => HoldF(P(EnvHoldTime)), out var holdSync,
-                begin: () => Begin(EnvHoldTime), end: () => End(EnvHoldTime), reset: () => Reset(EnvHoldTime), dim: () => !On(EnvHold), valueWidth: 34, modulation: true);
+                begin: () => Begin(EnvHoldTime), end: () => End(EnvHoldTime), reset: () => Reset(EnvHoldTime), dim: () => !On(EnvHold), valueWidth: 34);
             readouts.Add(holdSync);
             Learn(holdTime, EnvHoldTime);
             hold.Margin = new Thickness(0, 0, 6, 0);
