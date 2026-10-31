@@ -318,6 +318,9 @@ docks as a panel under any of the three, or floats in its own window — see
     while a take is recording.
   - **Playable keys**: click a key to hear it, ⇧-drag to glide, ⌘-click to select every note
     of that pitch; a vertical drag on the keys zooms the rows.
+  - **Key labels**: only C by default; Settings → Appearance → Piano roll labels every note
+    (C, C#, D…) instead — an aid for beginners. Folded rows and Drum Rack pads are always
+    named either way.
   - Click the roll's ruler to put the playhead there, or drag along it to scrub (snapped to
     the grid, ⌥ free); the playhead line itself drags too, on the ruler or over empty grid.
     The roll shows the playhead while stopped, where playback will start, and its ruler

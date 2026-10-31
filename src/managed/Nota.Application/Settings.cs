@@ -188,6 +188,11 @@ public sealed class Settings
     /// <summary>Arm-on-select (#332): selecting an instrument track arms it alone, so the
     /// keyboard plays the track you're on. Transport ▸ Auto-arm selected track; off by default.</summary>
     public bool ArmOnSelect { get; set; }
+
+    /// <summary>Label every note of the piano-roll keyboard: the keys column
+    /// shows all note names (C, C#, D …) instead of only C. Off by default; a beginner aid
+    /// set from Settings → Appearance.</summary>
+    public bool PianoRollLabelAllNotes { get; set; } = false;
 }
 
 public interface ISettingsService

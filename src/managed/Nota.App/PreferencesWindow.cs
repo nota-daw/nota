@@ -1338,6 +1338,14 @@ public sealed partial class PreferencesWindow : NotaWindow
         // Inactive.Set walks the visual tree, so the dimming waits until the pane is shown.
         details.AttachedToVisualTree += (_, _) => Refresh();
 
+        // Piano-roll key labels: every note for beginners, C-only by default.
+        var labelAll = SwitchRow("Label every note in the piano roll", settings?.Current.PianoRollLabelAllNotes ?? false, on =>
+        {
+            if (settings is null) return;
+            settings.Current.PianoRollLabelAllNotes = on;
+            settings.Save();
+        });
+
         return Sections(
             Section("UI", 10,
                 TopRow("Colour theme", ThemePicker()),
@@ -1348,6 +1356,8 @@ public sealed partial class PreferencesWindow : NotaWindow
                 Row("", Caption("Which side of the arrangement the track list sits on. Right starts the timeline at the left edge, next to the browser. Also in the View menu.")),
                 Row("Interface scale", ScalePicker()),
                 Row("", Caption("Makes the whole interface larger or smaller. Timeline, piano roll and audio editor zoom work on top of it."))),
+            Section("Piano roll", 10, labelAll,
+                Caption("Shows every note name (C, D, E…) on the piano roll's keys instead of only C. Helpful when learning notes.")),
             Section("AI control (MCP)", 12, enable, details));
     }
 
