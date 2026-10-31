@@ -168,6 +168,7 @@ public partial class MainWindow : IRemoteHost
 
     bool IRemoteHost.Undo()
     {
+        _editorRoll?.EndVelocityWheel();
         if (!Engine.Undo()) return false;
         RefreshAfterUndoRedo();
         if (_vm is not null) _vm.StatusText = "Undo (from a phone)";

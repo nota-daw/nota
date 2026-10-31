@@ -281,6 +281,14 @@ if (args.Length >= 1 && args[0] == "--tap")
     Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Piano-roll velocity wheel alone: `--velocity-wheel`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--velocity-wheel")
+{
+    Console.WriteLine("-- velocity wheel --");
+    foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "VELOCITY WHEEL PASSED" : $"VELOCITY WHEEL FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Filter knob glide alone: `--glide`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--glide")
 {
@@ -15284,6 +15292,8 @@ foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- velocity wheel --");
+foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
 Console.WriteLine("-- status bar audio format --");
 foreach (var (ok, label) in AudioFormatStatusTests.Run()) Check(ok, label);
 

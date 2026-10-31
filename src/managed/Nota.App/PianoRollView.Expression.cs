@@ -30,7 +30,7 @@ public sealed partial class PianoRollView
     /// host; without it the MPE lanes are view-only.</summary>
     public Func<NotaExprPoint[], int>? CreateExpression { get; set; }
 
-    internal enum LaneMode { Velocity, Bend, Pressure, Slide }
+    internal enum LaneMode { Velocity, Bend, Pressure, Slide, Controller }
 
     private const double ExprH = 112;   // the MPE lanes are taller: a curve needs the room
     private readonly ExpressionLane _expr;
@@ -53,7 +53,8 @@ public sealed partial class PianoRollView
     {
         if (m == _laneMode) return;
         _laneMode = m;
-        _velHost.Child = m == LaneMode.Velocity ? _vel : _expr;
+        if (m == LaneMode.Controller && _laneCtl < 0) _laneCtl = DefaultController();
+        _velHost.Child = m switch { LaneMode.Velocity => _vel, LaneMode.Controller => _ctlLane, _ => _expr };
         _laneRow.Height = m == LaneMode.Velocity ? VelH : ExprH;
         Invalidate();
         _laneTabs.InvalidateVisual();
@@ -131,16 +132,31 @@ public sealed partial class PianoRollView
         return c[^1].Value;
     }
 
-    // ---- the gutter: VEL · BEND · PRES · SLIDE -----------------------------------------------
+    // ---- the gutter: VEL · BEND · PRES · SLIDE · <controller> ----------------------------------
 
     private sealed class LaneTabs : Control
     {
         private static readonly (LaneMode Mode, string Label)[] Tabs =
-            { (LaneMode.Velocity, "Vel"), (LaneMode.Bend, "Bend"), (LaneMode.Pressure, "Pres"), (LaneMode.Slide, "Slide") };
-        private const double Top = 6, RowStep = 15;
+            { (LaneMode.Velocity, "Vel"), (LaneMode.Bend, "Bend"), (LaneMode.Pressure, "Pres"), (LaneMode.Slide, "Slide"), (LaneMode.Controller, "") };
+        // Five rows fit the velocity lane's 72 px.
+        private const double Top = 4, RowStep = 13;
+        private const double ChevronW = 7;
+        private static readonly Typeface TabFace = new(NotaFonts.Mono.FontFamily, FontStyle.Normal, FontWeight.Bold);
         private readonly PianoRollView _o;
         private int _hover = -1;
         public LaneTabs(PianoRollView o) { _o = o; Cursor = new Cursor(StandardCursorType.Hand); }
+
+        private FormattedText Text(string s, IBrush ink) => new(s, NotaNum.Culture, FlowDirection.LeftToRight, TabFace, 9, ink);
+
+        // The controller tab names the controller when it fits beside the picker chevron.
+        private FormattedText ControllerLabel(IBrush ink)
+        {
+            int ctl = _o._laneCtl >= 0 ? _o._laneCtl : _o.DefaultController();
+            var ft = Text(MidiController.ShortName(ctl), ink);
+            if (ft.Width <= Bounds.Width - ChevronW - 6) return ft;
+            ft = Text(ctl < 128 ? $"CC{ctl}" : "CC", ink);
+            return ft.Width <= Bounds.Width - ChevronW - 6 ? ft : Text("CC", ink);
+        }
 
         public override void Render(DrawingContext ctx)
         {
@@ -149,10 +165,17 @@ public sealed partial class PianoRollView
             {
                 bool on = Tabs[i].Mode == _o._laneMode;
                 var ink = on ? TabActive : i == _hover ? KeyLabelHot : LabelText;
-                var ft = new FormattedText(Tabs[i].Label, NotaNum.Culture, FlowDirection.LeftToRight,
-                    new Typeface(NotaFonts.Mono.FontFamily, FontStyle.Normal, FontWeight.Bold), 9, ink);
+                bool ctl = Tabs[i].Mode == LaneMode.Controller;
+                var ft = ctl ? ControllerLabel(ink) : Text(Tabs[i].Label, ink);
                 double y = Top + i * RowStep;
-                ctx.DrawText(ft, new Point((Bounds.Width - ft.Width) / 2, y));
+                double x = (Bounds.Width - ft.Width - (ctl ? ChevronW : 0)) / 2;
+                ctx.DrawText(ft, new Point(x, y));
+                if (ctl)
+                {
+                    // The caret marks that the tab opens the controller picker.
+                    double cx = x + ft.Width + 2;
+                    Glyph.Draw(ctx, GlyphKind.CaretDown, new Rect(cx, y + (ft.Height - 6) / 2, 6, 6), ink);
+                }
                 if (on) ctx.FillRectangle(TabActive, new Rect(0, y + 1, 2, ft.Height - 2));
             }
         }
@@ -167,7 +190,8 @@ public sealed partial class PianoRollView
         {
             int i = RowAt(e.GetPosition(this));
             if (i < 0 || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-            _o.SetLaneMode(Tabs[i].Mode);
+            if (Tabs[i].Mode == LaneMode.Controller && _o._laneMode == LaneMode.Controller) _o.ShowControllerPicker(this);
+            else _o.SetLaneMode(Tabs[i].Mode);
             e.Handled = true;
         }
 

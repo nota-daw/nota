@@ -47,6 +47,7 @@ public partial class MainWindow
     private void OnMenuUndo(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        _editorRoll?.EndVelocityWheel();   // the burst is the step about to be undone
         if (Engine.Undo()) { RefreshAfterUndoRedo(); _vm.StatusText = "Undo"; }
         else _vm.StatusText = "Nothing to undo.";
     }
@@ -54,6 +55,7 @@ public partial class MainWindow
     private void OnMenuRedo(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        _editorRoll?.EndVelocityWheel();
         if (Engine.Redo()) { RefreshAfterUndoRedo(); _vm.StatusText = "Redo"; }
         else _vm.StatusText = "Nothing to redo.";
     }

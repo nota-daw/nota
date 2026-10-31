@@ -330,6 +330,9 @@ docks as a panel under any of the three, or floats in its own window — see
     the arrows or the mouse.
   - Keyboard: ←/→ move by the grid, ↑/↓ by a semitone (⇧ an octave), ⇧←/⇧→ shorten or
     lengthen by the grid, ⌥↑/⌥↓ change velocity by 10 (⌥⇧ by 1).
+  - ⇧ + wheel over a note changes the velocity of the selection (or of that note when it
+    isn't selected), one step per notch; elsewhere ⇧ + wheel scrolls. Direction and speed
+    (off, 0.25× … 2×) are in **Preferences → Shortcuts**. A run of notches is one undo step.
   - **Remove out of scale** (next to the Scale key and mode) deletes every note outside the
     scale in one undo step.
   - **Fold** (⌥⇧F) hides the rows you don't use. On a melodic track it keeps the scale's
@@ -426,6 +429,13 @@ docks as a panel under any of the three, or floats in its own window — see
   Operator, Pentad, Consort). The sustain pedal holds released keys on every melodic built-in
   (Keys and Mosaic model their own damper; drums ignore it); a re-struck held key restarts.
   MCP `get_clip_controllers` / `set_clip_controller`.
+  - **Controller lane in the piano roll** — the fifth tab of the lane under the notes edits
+    any controller: click the active tab for a picker (the clip's controllers first, then
+    Sustain, Mod wheel, Pitch wheel, Channel pressure, Expression, Breath and **Other CC**).
+    Pedals (CC64–69) are on/off blocks — drag to draw, move or resize one on the grid (⌘ free),
+    double-click or Delete removes it; other controllers are a curve — drag to draw (⌥ for a
+    straight line), drag a point, double-click to add or delete one, right-click to clear.
+    Each gesture is one undo step.
 - **MPE (per-note expression)** — an MPE controller's notes each carry their own pitch
   bend, pressure and slide (CC74): channels 2–16 are per-note (lower zone, ±48 semitones by
   default; the controller's MPE Configuration and bend-range messages are honoured), channel 1

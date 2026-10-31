@@ -401,6 +401,7 @@ public sealed partial class PianoRollView : UserControl
         _gridControl = new NoteGrid(this) { Height = RangeH, ClipToBounds = true };
         _vel = new VelocityLane(this) { ClipToBounds = true };
         _expr = new ExpressionLane(this) { ClipToBounds = true };
+        _ctlLane = new ControllerLane(this) { ClipToBounds = true, Focusable = true };
         _velHost = new Border { BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0), Child = _vel };
 
         // Body: keys pinned left, grid fills; both scroll vertically together.
@@ -739,6 +740,7 @@ public sealed partial class PianoRollView : UserControl
         SettlePlacement();
         if (!_set.SetActive(slot)) return;
         _trackBrush = slot < _slotBrushes.Count ? _slotBrushes[slot] : _trackBrush;
+        DropControllerCache();
         Invalidate();
         ActiveClipChanged?.Invoke();
         Changed?.Invoke();
@@ -767,7 +769,43 @@ public sealed partial class PianoRollView : UserControl
     {
         _previewBackup = null;
         _placementPending = false;   // a reload (undo, recording, another clip) is the truth now
+        // A Session slot has no live path, so a velocity-wheel burst lives only in _notes until
+        // the idle timer commits it. Recording reloads this roll ~60 Hz; dropping the burst
+        // here would throw those edits away. Keep them across that reload of the same clip.
+        // Undo and redo close the burst first (EndVelocityWheel), so this reload is the
+        // engine's notes and the next wheel opens its own undo step. A different clip
+        // commits first, then loads.
+        List<(int Pitch, double Start, float Velocity)>? burstVel = null;
+        bool sameClip = _clipKey.Item1 != int.MinValue && _clipKey == _loadedKey;
+        if (!_velWheelBurst || !sameClip)
+        {
+            EndVelocityWheel();   // a Session slot commits it before the notes are replaced
+        }
+        else if (!HasLivePath)
+        {
+            burstVel = new(_notes.Count);
+            for (int i = 0; i < _notes.Count; i++)
+                burstVel.Add((_notes[i].Pitch, _notes[i].StartBeat, _notes[i].Velocity));
+        }
+        DropControllerCache();
         ReplaceAll(notes, owners);
+        if (burstVel is not null)
+        {
+            var used = new bool[burstVel.Count];
+            for (int i = 0; i < _notes.Count; i++)
+            {
+                var n = _notes[i];
+                for (int k = 0; k < burstVel.Count; k++)
+                {
+                    if (used[k]) continue;
+                    var (pitch, start, vel) = burstVel[k];
+                    if (pitch != n.Pitch || Math.Abs(start - n.StartBeat) > 1e-4) continue;
+                    used[k] = true;
+                    if (vel != n.Velocity) { n.Velocity = vel; _notes[i] = n; }
+                    break;
+                }
+            }
+        }
         _lengthBeats = lengthBeats;
         _selection.Clear();
         _strip.Relayout();
@@ -1117,6 +1155,9 @@ public sealed partial class PianoRollView : UserControl
     /// undo step — every editable clip goes.</summary>
     private void CommitNotes(IReadOnlyList<NotaNote>? notes = null, IReadOnlyList<int>? owners = null, bool seed = false)
     {
+        // Backstop: an edit that did not close the velocity burst first must not leave the
+        // timer to commit it again later, nor fold it silently into this edit unannounced.
+        if (_velWheelBurst && !HasLivePath) EndVelocityWheel();
         _previewBackup = null;
         _previewOwners = null;
         notes ??= _notes;
@@ -1335,6 +1376,75 @@ public sealed partial class PianoRollView : UserControl
         return true;
     }
 
+    // ---- Shift + wheel velocity (specs/063) ---------------------------------------
+    /// <summary>The wheel's direction and steps-per-notch multiplier (0–2, 0 = off). App-wide,
+    /// seeded from and saved to Settings by the host, like <see cref="AuditionEnabled"/>.</summary>
+    public static bool VelocityWheelReversed { get; set; }
+    public static double VelocityWheelMultiplier { get; set; } = 1.0;
+
+    // Wheel moves closer together than this are one edit, one undo step.
+    private static readonly TimeSpan VelocityWheelIdle = TimeSpan.FromMilliseconds(600);
+    private readonly VelocityWheel _velWheel = new();
+    private DispatcherTimer? _velWheelTimer;
+    private bool _velWheelBurst;
+    private int _velWheelNote = -1;
+
+    /// <summary>Steps the velocity of note <paramref name="hit"/> — or of the whole selection
+    /// when it is selected — for a wheel move of <paramref name="notches"/>. False when there
+    /// is no editable note there or the gesture is off: the wheel scrolls instead.</summary>
+    internal bool WheelVelocity(int hit, double notches)
+    {
+        if (hit < 0 || hit >= _notes.Count || IsLocked(hit) || !VelocityWheel.Enabled(VelocityWheelMultiplier)) return false;
+        int steps = _velWheel.Steps(notches, VelocityWheelReversed, VelocityWheelMultiplier);
+        if (steps != 0)
+        {
+            var targets = _selection.Contains(hit)
+                ? _selection.Where(i => i >= 0 && i < _notes.Count && !IsLocked(i)).ToList()
+                : new List<int> { hit };
+            // Notes already at 1 or 127 do not move: nothing to edit, so no empty undo step.
+            bool changed = targets.Any(i => NoteOverwrite.VelocityBy(_notes[i].Velocity, steps) != _notes[i].Velocity);
+            if (changed && !_velWheelBurst)
+            {
+                // The burst's undo step: seeded with the notes before it, like a note drag.
+                _velWheelBurst = true;
+                if (HasLivePath) CommitNotes(_notes.ToList(), _owner.ToList(), seed: true);
+            }
+            if (changed)
+            {
+                foreach (int i in targets)
+                {
+                    var n = _notes[i];
+                    n.Velocity = NoteOverwrite.VelocityBy(n.Velocity, steps);
+                    _notes[i] = n;
+                }
+                _velWheelNote = hit;
+                if (HasLivePath) PushLive(_notes, _owner);
+                Invalidate(); Changed?.Invoke();
+            }
+        }
+        if (_velWheelTimer is null)
+        {
+            _velWheelTimer = new DispatcherTimer { Interval = VelocityWheelIdle };
+            _velWheelTimer.Tick += (_, _) => EndVelocityWheel();
+        }
+        _velWheelTimer.Stop();
+        _velWheelTimer.Start();
+        return true;
+    }
+
+    /// <summary>Closes the open velocity burst. A Session slot commits it (one undo step);
+    /// an arrangement clip already seeded that step. Call before Undo or Redo so the reload
+    /// does not keep the burst open — the next wheel must checkpoint on its own.</summary>
+    internal void EndVelocityWheel()
+    {
+        _velWheelTimer?.Stop();
+        _velWheel.Reset();
+        if (!_velWheelBurst) return;
+        _velWheelBurst = false;
+        if (!HasLivePath) CommitNotes();   // a Session slot: the burst lands as one push
+        Remember(_velWheelNote);
+    }
+
     // ---- pending placement (specs/007-midi-note-editing) -------------------------
     // Notes moved, stretched, drawn or pasted overwrite same-pitch notes they land on, but
     // only once the selection is let go: until then the notes underneath stay whole and are
@@ -1361,6 +1471,7 @@ public sealed partial class PianoRollView : UserControl
     /// before save/export. Returns true when notes were cut or removed (indices may have shifted).</summary>
     public bool SettlePlacement()
     {
+        EndVelocityWheel();   // every edit starts here: the wheel's burst is its own undo step
         if (!_placementPending) return false;
         _placementPending = false;
         if (_selection.Count == 0) return false;
@@ -1470,6 +1581,7 @@ public sealed partial class PianoRollView : UserControl
         _gridControl.InvalidateVisual();
         _vel.InvalidateVisual();
         _expr.InvalidateVisual();
+        _ctlLane.InvalidateVisual();
         NotifyGrid();
     }
 
@@ -2142,6 +2254,7 @@ public sealed partial class PianoRollView : UserControl
         {
             Focus();
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            _o.EndVelocityWheel();   // a press starts a new edit: close the wheel's burst first
             var p = e.GetPosition(this);
             _free = (e.KeyModifiers & KeyModifiers.Alt) != 0;
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
@@ -2488,8 +2601,9 @@ public sealed partial class PianoRollView : UserControl
         }
 
         // ⌘⌥/Ctrl+Alt+wheel zooms rows around the pitch under the cursor; ⌘/Ctrl+wheel zooms
-        // time toward the cursor; Shift+wheel scrolls horizontally; plain wheel is left to
-        // the body ScrollViewer for vertical key navigation.
+        // time toward the cursor; Shift+wheel changes velocity over a note and scrolls
+        // horizontally elsewhere; plain wheel is left to the body ScrollViewer for vertical
+        // key navigation.
         protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
         {
             var mods = e.KeyModifiers;
@@ -2505,7 +2619,10 @@ public sealed partial class PianoRollView : UserControl
             }
             else if ((mods & KeyModifiers.Shift) != 0)
             {
-                _o.ScrollByBeats(-WheelInput.Pixels(e.Delta.Y) / _o.PixelsPerBeat);
+                // Over a note, Shift+wheel steps its velocity (specs/063); elsewhere it scrolls.
+                double d = Math.Abs(e.Delta.Y) >= Math.Abs(e.Delta.X) ? e.Delta.Y : e.Delta.X;
+                if (!_o.WheelVelocity(HitTest(e.GetPosition(this), out _), WheelInput.Notches(d)))
+                    _o.ScrollByBeats(-WheelInput.Pixels(e.Delta.Y) / _o.PixelsPerBeat);
                 e.Handled = true;
             }
             else if (Math.Abs(e.Delta.X) > Math.Abs(e.Delta.Y))
@@ -2687,6 +2804,7 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
+            _o.EndVelocityWheel();   // a press starts a new edit: close the wheel's burst first
             var p = e.GetPosition(this);
             int hit = Nearest(p);
             if (hit < 0) return;
