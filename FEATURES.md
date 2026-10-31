@@ -305,6 +305,10 @@ docks as a panel under any of the three, or floats in its own window — see
   editor; transposing the selection.
   - A note drawn takes the length and velocity of the note last touched (clicked, moved,
     resized or velocity-changed); before any note is touched, one grid step at velocity 0.8.
+  - **Shape a note as you place it** (#45): keep the button down after the double-click and
+    drag — the new note moves (pitch and time, on the grid, ⌥ free); hold ⇧ to drag its
+    end and set the length, ⌘ (Ctrl) to drag up / down for velocity. The modifier can change
+    mid-drag.
   - **Note audition** (the speaker switch in the header, on by default): a note sounds while
     it is placed, clicked or dragged, re-sounding at each new pitch. Nothing is auditioned
     while a take is recording.

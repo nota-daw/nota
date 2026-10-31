@@ -1455,6 +1455,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Esc", "Deselect · moved or pasted notes replace the notes under them"),
             ("Delete", "Delete the selected notes"),
             ("Double-click empty grid", "Add a note with the length and velocity of the last note touched · on a note, delete it"),
+            ("Double-click and hold, drag", "Shape the new note: move it · ⇧ set its length · ⌘ drag up / down for velocity"),
             ("Drag note edge", "Change the note's start or end"),
             ("Click · drag the ruler", "Move the playhead there · drag to scrub, snapped to the grid · ⌥ off the grid"),
             ("Drag the playhead line", "Scrub the playhead · on the ruler or over empty grid"),
