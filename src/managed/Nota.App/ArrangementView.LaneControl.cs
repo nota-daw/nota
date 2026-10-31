@@ -1270,7 +1270,7 @@ public sealed partial class ArrangementView
                     ctx.DrawRectangle(tint, null, new Rect(ex0, y + 2, Math.Max(2, ex1 - ex0), rowH - 4), ClipRadius, ClipRadius);
             }
             // Under the take's name, as the stored notes are.
-            double top = y + 2 + (rowH - 4 > LabelH * 2 ? LabelH : BandH);
+            double top = y + 2 + (rowH - 4 > NameMinClipH ? LabelH : BandH);
             using var _ = ctx.PushClip(new Rect(0, top, w, Math.Max(0, y + rowH - 2 - top)));
             int span = Math.Max(1, pr.hi - pr.lo + 1);
             double step = Math.Min(content.Height / span, 4), noteH = Math.Max(1, step);
@@ -1452,7 +1452,7 @@ public sealed partial class ArrangementView
             // The name sits on the clip's top-left; a row tall enough for it gives the notes and
             // waveform the rest of the height under it (a short row keeps them full height and
             // drops the name). Both DrawNotes and DrawWaveform clip themselves to their rect.
-            bool tall = rect.Height > LabelH * 2;
+            bool tall = rect.Height > NameMinClipH;
             double top = tall ? LabelH : BandH;
             var contentRect = new Rect(rect.X + 1, rect.Y + top, Math.Max(0, rect.Width - 2), Math.Max(0, rect.Height - top - 3));
             if (c.IsMidi) DrawNotes(ctx, c, contentRect, content, pitches, appear);
@@ -1479,6 +1479,7 @@ public sealed partial class ArrangementView
 
         private const double BandH = 2;         // the content area starts under this (ADSR frame, notes)
         private const double LabelH = 18;       // the clip name's line over the notes and waveform
+        private const double NameMinClipH = 30; // a clip taller than this (a row over 34 px) shows its name
         private const double ClipRadius = 6;
 
         // The clip's ADSR: the curve whenever it shapes the clip, the handles while the clip is

@@ -114,9 +114,11 @@ public sealed class DynamicEqCurve : Control
     private static readonly IPen SelPen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x5A), 1);
     private static readonly IPen StaticPen = new Pen(NotaPalette.TextTertiary, 1.2) { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     private static readonly IPen OffSelPen = new Pen(NotaPalette.Accent, 1.5);
-    // The dynamics marks (whiskers, the ring on a dynamic band, the gain history): a grey told
-    // apart from the live curve by shade, whichever way the band moves (style guide).
-    private static readonly IBrush DynInk = NotaPalette.TextSecondary;
+    // The dynamics marks (whiskers, the ring on a dynamic band, the gain history): greys told
+    // apart by shade and stroke (style guide): a boost (Range up) is the lighter grey, solid; a
+    // cut (Range down) the darker grey, dashed. The read-outs add ↑ / ↓.
+    private static IBrush DynInk(double range) => range >= 0 ? NotaPalette.TextSecondary : NotaPalette.TextTertiary;
+    private static readonly DashStyle CutDash = new(new double[] { 2, 1.5 }, 0);
     private static readonly IPen RingPen = new Pen(NotaPalette.BgSunken, 2);
 
     private readonly IAudioEngine _engine;
@@ -452,8 +454,8 @@ public sealed class DynamicEqCurve : Control
         ctx.DrawText(m12, new Point(w - 5 - m12.Width, Y(-12) + 1));
 
         // title + legend
-        if (solo >= 0)
-            ctx.DrawText(Text(NotaNum.F($"Solo · B{solo + 1}"), NotaPalette.AccentBright, NotaGraph.TitleSize, bold: true, mono: false), new Point(8, 5));
+        var title = solo >= 0 ? NotaNum.F($"Solo · B{solo + 1}") : "Response";
+        ctx.DrawText(Text(title, solo >= 0 ? NotaPalette.AccentBright : NotaGraph.TitleInk, NotaGraph.TitleSize, bold: true, mono: false), new Point(8, 5));
         NotaGraph.Legend(ctx, w - 5, 2, ("static", NotaPalette.TextTertiary, NotaGraph.Mark.Dashed), ("live", NotaPalette.VizInk, NotaGraph.Mark.Line));
 
         // whiskers (dynamic bands): node → where Range can take it, a dot at the gain it has now
@@ -461,7 +463,7 @@ public sealed class DynamicEqCurve : Control
         {
             if (!IsDyn(b) || !on[b]) continue;
             double g = P(b, DynEq.GainF), r = P(b, DynEq.RangeF);
-            var ink = DynInk;
+            var ink = DynInk(r);
             double x = Math.Round(X(P(b, DynEq.FreqF))) + 0.5, y0 = Y(g), y1 = Y(g + r);
             ctx.DrawLine(new Pen(ink, 1) { DashStyle = new DashStyle(new double[] { 2, 2 }, 0) }, new Point(x, y0), new Point(x, y1));
             ctx.DrawLine(new Pen(ink, 1), new Point(x - 3.5, y1), new Point(x + 3.5, y1));
@@ -482,7 +484,11 @@ public sealed class DynamicEqCurve : Control
             double r = NodeD / 2;
             ctx.DrawEllipse(fill, RingPen, c, r + 1, r + 1);
             if (!bOn && isSel) ctx.DrawEllipse(null, OffSelPen, c, r, r);
-            else if (IsDyn(b) && on[b]) ctx.DrawEllipse(null, new Pen(DynInk, 1), c, r + 2.5, r + 2.5);
+            else if (IsDyn(b) && on[b])
+            {
+                double rg = P(b, DynEq.RangeF);
+                ctx.DrawEllipse(null, rg >= 0 ? new Pen(DynInk(rg), 1) : new Pen(DynInk(rg), 1, CutDash), c, r + 2.5, r + 2.5);
+            }
             var t = Text(NotaNum.F($"{b + 1}"), num, 8.5, bold: true);
             ctx.DrawText(t, new Point(c.X - t.Width / 2, c.Y - t.Height / 2));
         }
@@ -499,7 +505,7 @@ public sealed class DynamicEqCurve : Control
         var a = Text(NotaNum.F($"B{b + 1} {DynEq.TypeNames[ty]}") + (bOn ? "" : " · off"), NotaPalette.TextPrimary, 11, bold: true, mono: false);
         var l2 = Text(DynEq.Hz(P(b, DynEq.FreqF)) + (g ? " · " + DynEq.Db(P(b, DynEq.GainF)) + " dB" : "") + NotaNum.F($" · Q {P(b, DynEq.QF):0.00}"),
             NotaPalette.TextSecondary, 10.5);
-        IBrush dynInk = NotaPalette.TextPrimary;
+        IBrush dynInk = r >= 0 ? NotaPalette.TextPrimary : NotaPalette.TextSecondary;
         string c = dyn ? (r >= 0 ? "↑ " : "↓ ") + DynEq.Db(_gr[b]) + " dB of " + DynEq.Db(r)
             : !g ? "no dynamics" : BandMode(b) != DynEq.Static && !DynMaster ? "dynamics off" : "static";
         var l3 = Text(c, dyn ? dynInk : NotaPalette.TextTertiary, 10.5);
@@ -528,6 +534,6 @@ public sealed class DynamicEqCurve : Control
                 var pt = new Point(hx0 + (hx1 - hx0) * i / (HistLen - 1), r >= 0 ? hy1 - t * (hy1 - hy0) : hy0 + t * (hy1 - hy0));
                 if (i == 0) gg.BeginFigure(pt, false); else gg.LineTo(pt);
             }
-        ctx.DrawGeometry(null, new Pen(DynInk, 1), sg);
+        ctx.DrawGeometry(null, new Pen(DynInk(r), 1), sg);
     }
 }

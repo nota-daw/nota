@@ -65,10 +65,17 @@ public sealed class ClipEditorView : UserControl
             Orientation = Orientation.Horizontal, Spacing = 12,
             Children = { AuditionControl(), FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
         };
-        var hint = Hint("Double-click — add or delete · edge — length · Shift — add to selection");
-        hint.TextWrapping = TextWrapping.NoWrap;
-        hint.TextTrimming = TextTrimming.CharacterEllipsis;
+        // The gesture hint fills the header's free space: one line when there is room, two in
+        // a narrower editor (the header holds two caption lines), trimmed only past that, and
+        // always readable in full in its tooltip.
+        const string hintText = "Double-click — add or delete · edge — length · Shift — add to selection";
+        var hint = Hint(hintText);
+        hint.TextWrapping = TextWrapping.Wrap;
+        hint.MaxLines = 2;
+        hint.Background = Brushes.Transparent;   // hit-testable across its box, for the tooltip
+        hint.TextTrimming = TextTrimming.WordEllipsis;
         hint.VerticalAlignment = VerticalAlignment.Center;
+        ToolTip.SetTip(hint, hintText);
         var header = Header(roll.TrackBrush, HeaderName(clipName), "MIDI", tabs, hint, right, double.NaN, out _nameText, out _colorBar);
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(_props, Dock.Top);

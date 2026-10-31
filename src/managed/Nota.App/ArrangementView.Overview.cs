@@ -41,12 +41,19 @@ public sealed partial class ArrangementView
         }
     }
 
-    // The strip row: a plain stretch of header column (the visible range is read out on the
-    // ruler row, style guide), then the strip itself over the lane column.
+    // The strip row: the header column names the strip (the visible range is read out on
+    // the ruler row, style guide), then the strip itself over the lane column.
     private Border BuildOverviewRow()
     {
+        var label = new TextBlock
+        {
+            Text = "Overview", Classes = { "SectionLabel" },
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(NameGap, 0, 0, 0),
+        };
         var grid = new Grid { Height = OverviewH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        grid.Children.Add(HeaderPanel(null));
+        grid.Children.Add(HeaderPanel(label));
         Grid.SetColumn(_overview, 1);
         grid.Children.Add(_overview);
 

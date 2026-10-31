@@ -309,7 +309,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             on: () => detected >= 0 && detected == rootv, enabled: () => detected >= 0);
         var pitchRow = Row(16,
             (PKnob("transpose", "TRANSPOSE", St, tip: "Shift every note, ±24 semitones"), "Auto"),
-            (PKnob("detune", "DETUNE", Cents, arc: null, tip: "Fine tune, ±50 cents"), "Auto"),
+            (PKnob("detune", "DETUNE", Cents, arc: Teal, tip: "Fine tune, ±50 cents"), "Auto"),
             (PKnob("pitchtrack", "KEYTRACK", v => NotaNum.Pct(v), tip: "How far the key moves the pitch — 100\u2009% chromatic, 0\u2009% every key plays the root"), "Auto"),
             (Labeled("ROOT", rootStepper), "Auto"),
             (new Panel(), "*"),
@@ -364,10 +364,10 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         ToolTip.SetTip(typeSeg, "Off · low-pass · high-pass · band-pass (12\u2009dB/oct)");
         var cutKnob = PKnob("cutoff", "CUTOFF", v => NotaNum.Hz(SamplerModel.CutoffHz(v)), NotaSize.KnobMain, 58, emphasised: true);
         var resoKnob = PKnob("resonance", "RESO", v => NotaNum.Pct(v));
-        var ktKnob = PKnob("keytrack", "KEYTRACK", v => NotaNum.Pct(v), arc: null, tip: "The cutoff follows the key, 0 … 100\u2009%");
+        var ktKnob = PKnob("keytrack", "KEYTRACK", v => NotaNum.Pct(v), arc: Teal, tip: "The cutoff follows the key, 0 … 100\u2009%");
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1),
             "Let the amp envelope open (or close) the filter — the depth is ENV", on: () => G("envcutoff") >= 0.5f, learnId: "envcutoff");
-        var envAmt = PKnob("envamount", "ENV", Oct, arc: null, tip: "How far the envelope moves the cutoff, ±6 octaves");
+        var envAmt = PKnob("envamount", "ENV", Oct, arc: Teal, tip: "How far the envelope moves the cutoff, ±6 octaves");
         var filterBody = new[] { cutKnob, resoKnob, ktKnob };
         foreach (var c in filterBody) DimWhen(c, () => Sel("filtertype", 4) == 0);
         DimWhen(envAmt, () => Sel("filtertype", 4) == 0 || G("envcutoff") < 0.5f);
@@ -438,7 +438,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             },
         };
         var outKnob = PKnob("output", "OUTPUT", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: "The level after everything");
-        var velKnob = PKnob("velamount", "VEL → VOL", v => NotaNum.Pct(v), cellW: 50, arc: null, tip: "How much velocity sets the level");
+        var velKnob = PKnob("velamount", "VEL → VOL", v => NotaNum.Pct(v), cellW: 50, arc: Teal, tip: "How much velocity sets the level");
 
         Control meterBlock;
         if (acc.TryMeter(out _))

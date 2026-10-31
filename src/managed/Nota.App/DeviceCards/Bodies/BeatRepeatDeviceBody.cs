@@ -405,7 +405,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         {
             slices = new BrSlicesView();
             WireDrag(slices, h => h == BrSlicesView.HGate ? Gate : Offset);
-            ToolTip.SetTip(slices, "The last interval's sound (teal) on the grid: the gate from the offset is shaded and the captured slice is brass. Drag the offset line or the gate's end sideways; double-click resets.");
+            ToolTip.SetTip(slices, "The last interval's sound (the darker grey) on the grid: the gate from the offset is shaded and the captured slice is the bright line. Drag the offset line or the gate's end sideways; double-click resets.");
             Learn(slices, Offset);
             var head = HeadRow(Row(6, Caps("INTERVAL"), IntervalSegC(), Caps("GRID"), GridSegC(), TripletChip()), new Border());
             var knobs = KnobRow(new[]
@@ -430,7 +430,7 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         {
             filter = new BrFilterView();
             WireDrag(filter, h => h == BrFilterView.HFreq ? FilterFreq : FilterWidth);
-            ToolTip.SetTip(filter, "The repeat filter — only the repeats go through it. Solid: the first repeat; teal dashed: a later one when the band narrows and follows the pitch. Drag the node for the frequency, a band edge for the width; double-click resets.");
+            ToolTip.SetTip(filter, "The repeat filter — only the repeats go through it. Solid: the first repeat; grey dashed: a later one when the band narrows and follows the pitch. Drag the node for the frequency, a band edge for the width; double-click resets.");
             Learn(filter, FilterFreq);
             var type = Seg(FilterNames, () => On(FilterOn) ? FType() + 1 : 0,
                 i => { if (i == 0) SetP(FilterOn, 0f); else { SetP(FilterType, (i - 1) / 2f); if (!On(FilterOn)) SetP(FilterOn, 1f); } },

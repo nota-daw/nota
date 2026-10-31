@@ -84,7 +84,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         int[] held = Array.Empty<int>();
 
         var lanes = new PendulumLanesView { VerticalAlignment = VerticalAlignment.Stretch };
-        ToolTip.SetTip(lanes, "One lane per ball: x is pitch, low to high. Crossing a chord degree plays that note; teal shows the wall ahead");
+        ToolTip.SetTip(lanes, "One lane per ball: x is pitch, low to high. Crossing a chord degree plays that note; the grey lead shows the wall ahead");
         var bar = new PendulumBarView { Height = BarH };
         ToolTip.SetTip(bar, "The bar: generated notes land on the 1/16 grid — this bar in neutral ink with the note just played in accent, the last bar dimmer ahead of the playhead");
         var ballList = new PendulumBallList();
@@ -302,7 +302,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             {
                 PKnob("tone", "TONE", PendulumModel.ToneWord),
                 PKnob("bright", "BRIGHT", v => NotaNum.Pct(v)),
-                PKnob("fm", "FM", v => NotaNum.Pct(v), arc: null),
+                PKnob("fm", "FM", v => NotaNum.Pct(v), arc: Teal),
                 PKnob("notelen", "LENGTH", v => Secs(PendulumModel.NoteSeconds(v))),
             },
         };

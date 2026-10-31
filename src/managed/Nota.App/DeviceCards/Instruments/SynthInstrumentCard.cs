@@ -167,7 +167,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         var oscRow = Row(
             Capped("WAVE", Chips("wave", WaveNames)),
             pwKnobCell,
-            Knob("detune", "Detune", Cents, arc: null),
+            Knob("detune", "Detune", Cents, arc: Teal),
             Knob("octave", "Octave", Octaves),
             Capped("UNISON", Chips("unison", UnisonNames)));
 
@@ -192,7 +192,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
         // ---- Filter tab -------------------------------------------------------
         var cutCell = Knob("cutoff", "Cutoff", KHz, size: 44, cellW: 52);
         var resoCell = Knob("resonance", "Reso", v => v.ToString("0.00", NotaNum.Culture));
-        var envCell = Knob("filenv", "Env → Cutoff", Bipolar, cellW: 66, arc: null);
+        var envCell = Knob("filenv", "Env → Cutoff", Bipolar, cellW: 66, arc: Teal);
         var cutKnob = FindKnob(cutCell); var resoKnob = FindKnob(resoCell); var envKnob = FindKnob(envCell);
         // Off bypasses the filter entirely — its three knobs go inactive but stay editable.
         void SyncFilter()
@@ -324,7 +324,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
             Children =
             {
                 Knob("spread", "Spread", v => NotaNum.Pct(v), size: 44, cellW: 50),
-                Knob("velamp", "Vel → Vol", v => NotaNum.Pct(v), cellW: 46, arc: null),
+                Knob("velamp", "Vel → Vol", v => NotaNum.Pct(v), cellW: 46, arc: Teal),
             },
         };
         var railBottomHost = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };

@@ -323,9 +323,9 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             ToolTip.SetTip(g, tip);
             return (g, m, v);
         }
-        var mIn = MeterRow("IN", "Input loudness on the chosen scale (LUFS); the teal mark is the target");
-        var mOut = MeterRow("OUT", "Output loudness on the chosen scale (LUFS); the teal mark is the target");
-        var mTp = MeterRow("TP", "Output true peak (dBTP); the teal mark is the ceiling while True-peak safe is on");
+        var mIn = MeterRow("IN", "Input loudness on the chosen scale (LUFS); the grey mark is the target");
+        var mOut = MeterRow("OUT", "Output loudness on the chosen scale (LUFS); the grey mark is the target");
+        var mTp = MeterRow("TP", "Output true peak (dBTP); the grey mark is the ceiling while True-peak safe is on");
         var mCor = MeterRow("COR", "The correction applied, ±Max Gain around 0\u2009dB (trim not included)");
 
         var respSeg = Seg(new[] { "Fast", "Slow" }, () => On(Response) ? 1 : 0, i => SetP(Response, i), Response,

@@ -300,7 +300,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             curve.GestureEnd += () => { End(Freq); End(Res); };
             curve.CutoffChanged += v => Raw(Freq, (float)v);
             curve.ResChanged += v => Raw(Res, (float)v);
-            ToolTip.SetTip(curve, "Drag sideways for the cutoff, up and down for the resonance. The teal band is how far the envelope and LFO can move the cutoff; the dashed curve is where they have it now.");
+            ToolTip.SetTip(curve, "Drag sideways for the cutoff, up and down for the resonance. The shaded grey band is how far the envelope and LFO can move the cutoff; the dashed curve is where they have it now.");
             Learn(curve, Freq);
 
             var q = Mono("", 7, TextTertiary);
@@ -340,7 +340,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             envView.DragV += v => Raw(EnvAmt, (float)v);
             envView.GestureBegin += () => Begin(EnvAmt);
             envView.GestureEnd += () => End(EnvAmt);
-            ToolTip.SetTip(envView, "The input's envelope (teal) and the cutoff it drives (neutral ink), the base cutoff dashed. Drag up or down for the amount.");
+            ToolTip.SetTip(envView, "The input's envelope (the darker grey) and the cutoff it drives (the bright line), the base cutoff dashed. Drag up or down for the amount.");
             Learn(envView, EnvAmt);
 
             // → Freq / → Reso: the shared Mod Target, as two switches that can both be lit.
@@ -417,7 +417,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             lfoView.DragH += v => Raw(LfoOffset, (float)v);
             lfoView.GestureBegin += () => { Begin(LfoAmt); Begin(LfoOffset); };
             lfoView.GestureEnd += () => { End(LfoAmt); End(LfoOffset); };
-            ToolTip.SetTip(lfoView, "The LFO's movement over the window — raw shape dashed, what the filter follows (after Smooth) in neutral ink, the right channel in rose when stereo is on. Drag up or down for the amount, sideways for the start phase.");
+            ToolTip.SetTip(lfoView, "The LFO's movement over the window — raw shape dashed, what the filter follows (after Smooth) in neutral ink, the right channel in the darker grey when stereo is on. Drag up or down for the amount, sideways for the start phase.");
             Learn(lfoView, LfoAmt);
 
             var waves = Chips(WaveNames, i => Sel(LfoWave, 5) == i, i => SetP(LfoWave, i / 4f), LfoWave, padX: 6);

@@ -209,7 +209,10 @@ internal sealed class VtWearView : VtWindowBase
         }
         if (showF) ctx.DrawGeometry(null, NotaGraph.SecondaryPen(NotaPalette.TextTertiary, 1.1), Line(k => _flut[k] + (showW ? _wow[k] : 0)));
         if (showW) ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(k => _wow[k]));
-        Labels();   // (the scale follows the peak, named top-right — no label of its own on the curves)
+        // The scale (it grows to fit what is drawn), named at the top of the plot on the left.
+        var scale = NotaGraph.AxisText(NotaNum.F($"±{range:0}\u2009¢"));
+        ctx.DrawText(scale, new Point(4, top));
+        Labels();
 
         void Labels()
         {
