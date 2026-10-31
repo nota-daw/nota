@@ -41,6 +41,8 @@ public sealed class ClipPropsView : UserControl
     private int _transpose;
     private double _strength = 0.8;
 
+    public ColumnFlow Flow { get; }
+
     /// <param name="mode">The Clip | Track switch (specs/059) heading the CLIP section; none for
     /// a Session slot.</param>
     public ClipPropsView(PianoRollView roll, double startBeat, Control? mode = null)
@@ -94,7 +96,8 @@ public sealed class ClipPropsView : UserControl
         var selection = Section(SectionTitle("Selection", _selCount), 8, _selCard, _selEmpty);
 
         Content = Inspector(Sections(clip, grid, transpose, selection),
-            Hint("Double-click — add or delete · edge — length · Shift — add to selection"));
+            Hint("Double-click — add or delete · edge — length · Shift — add to selection"), out var flow);
+        Flow = flow;
 
         PaintTranspose();
         OnRollChanged();

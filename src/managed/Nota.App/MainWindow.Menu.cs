@@ -201,7 +201,11 @@ public partial class MainWindow
         if (ActiveRoll() is { } roll && roll.DeleteSelection()) { _vm.StatusText = "Deleted notes"; return; }
         if (Timeline.DeleteSelectedClips()) { _session?.Refresh(); _vm.StatusText = "Deleted clip(s)"; }
     }
-    private void OnMenuToggleBrowser(object? sender, EventArgs e) => Browser.IsVisible = !Browser.IsVisible;
+    private void OnMenuToggleBrowser(object? sender, EventArgs e)
+    {
+        if (_detailMaximized) { SetDetailMaximized(false); Browser.IsVisible = true; return; }
+        Browser.IsVisible = !Browser.IsVisible;
+    }
     private void OnMenuToggleClip(object? sender, EventArgs e) => DetailPanel.IsVisible = !DetailPanel.IsVisible;
     private void OnMenuToggleOverview(object? sender, EventArgs e)
     {

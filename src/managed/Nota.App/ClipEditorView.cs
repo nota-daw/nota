@@ -3,8 +3,8 @@
 //
 // Detail · Clip for MIDI clips (nota-design "Nota Clip Editor" 1a): a 38px header — the clip
 // cell, Notes | Envelopes, then the Scale switch with its key, mode and "Remove out of
-// scale", and the Tools toggle — over the 232px inspector (ClipPropsView), the piano roll (PianoRollView) and
-// the 272px clip-tools panel (MidiToolsView). Envelopes is a mode of the same canvas: the
+// scale", and the Tools toggle — over the inspector (ClipPropsView), the piano roll (PianoRollView) and
+// the clip-tools panel (MidiToolsView), each panel one column or two (specs/055). Envelopes is a mode of the same canvas: the
 // notes dim under a wash and the clip envelope (Velocity / Volume) is drawn over them in
 // brass, on the roll's own beat axis so zoom and scroll carry over. With several clips open
 // (specs/029) the header, inspector and envelopes follow the roll's active clip.
@@ -49,14 +49,13 @@ public sealed class ClipEditorView : UserControl
 
         // Inspector | roll | clip-tools panel. The tools panel is a toggle rather than a
         // tab because its whole point is watching the roll change while you turn a knob.
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+        // Docked in this order, the inspector picks its columns first, then the tools panel
+        // from what is left, and the roll takes the rest (specs/055).
         _props = new ClipPropsView(roll, startBeat, ModeControl(roll, setTrackMode));
-        grid.Children.Add(_props);
-        Grid.SetColumn(roll, 1);
-        grid.Children.Add(roll);
+        DockPanel.SetDock(_props, Dock.Left);
         _tools = new MidiToolsView(roll) { IsVisible = false };
-        Grid.SetColumn(_tools, 2);
-        grid.Children.Add(_tools);
+        DockPanel.SetDock(_tools, Dock.Right);
+        var body = new DockPanel { Children = { _props, _tools, roll } };
 
         _toolsToggle = new ToggleButton { Content = "Tools", Padding = new Thickness(12, 0), Classes = { "chip" } };
         _toolsToggle.Click += (_, _) => SetTools(_toolsToggle.IsChecked == true);
@@ -68,9 +67,9 @@ public sealed class ClipEditorView : UserControl
             Orientation = Orientation.Horizontal, Spacing = 12,
             Children = { AuditionControl(), FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
         };
-        var header = Header(roll.TrackBrush, HeaderName(clipName), "MIDI", tabs, null, right, out _nameText, out _colorBar);
+        var header = Header(roll.TrackBrush, HeaderName(clipName), "MIDI", tabs, null, right, out _nameText, out _colorBar, _props, _props.Flow);
         DockPanel.SetDock(header, Dock.Top);
-        Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, grid } };
+        Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, body } };
         roll.ActiveClipChanged += OnActiveClipChanged;
         if (roll.Clips.IsMulti) OnActiveClipChanged();   // envelopes on the active clip's place on the axis
     }
@@ -171,6 +170,7 @@ public sealed class ClipEditorView : UserControl
     {
         if (show && _envMode) { _setTab(0); ShowTab(false); }
         _tools.IsVisible = show;
+        _props.Flow.Reserve = MinCanvasW + (show ? ToolsW : 0);
         _toolsToggle.IsChecked = show;
         _tools.SetActive(show);
     }

@@ -400,6 +400,7 @@ if (args.Length >= 1 && args[0] == "--paramundo")
 {
     Console.WriteLine("-- param + section undo --");
     foreach (var (ok, label) in ParamSectionUndoTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in SectionNamingTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "PARAMUNDO PASSED" : $"PARAMUNDO FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -15041,6 +15042,26 @@ Console.WriteLine("-- background audio import --");
             Check(sn == 64 && err < 1e-6, $"range peaks: source sub-range matches a full scan (max err {err:E1})");
             var tiny = new float[100 * 2];
             Check(ie.GetClipSourcePeaksRange(ct, cc, 5000, 5010, tiny, 100) == 100, "range peaks: sub-frame buckets read single frames");
+
+            // The waveform's RMS body (#267): the same min/max as without it, and each bucket's
+            // RMS matches a scan — over short spans (frame scans) and long ones (block table).
+            double ScanRms(long f0, long f1) { double s = 0; for (long f = f0; f < f1; f++) { double m = Mid(f); s += m * m; } return Math.Sqrt(s / (f1 - f0)); }
+            var sub2 = new float[64 * 2]; var subRms = new float[64];
+            ie.GetClipSourcePeaksRange(ct, cc, 1000, 1000 + 64 * 64, sub2, 64, subRms);
+            double rErr = 0;
+            for (int b = 0; b < 64; b++) rErr = Math.Max(rErr, Math.Abs(ScanRms(1000 + b * 64, 1000 + (b + 1) * 64) - subRms[b]));
+            Check(sub2.SequenceEqual(sub) && rErr < 1e-5, $"waveform rms: short buckets match a scan (max err {rErr:E1})");
+            var whole = new float[8 * 2]; var wholeRms = new float[8];
+            int wn = ie.GetClipSourcePeaks(ct, cc, whole, 8, wholeRms);
+            long per = psi.Frames / Math.Max(1, wn);
+            rErr = 0;
+            for (int b = 0; b < wn; b++) rErr = Math.Max(rErr, Math.Abs(ScanRms(b * per, (b + 1) * per) - wholeRms[b]));
+            Check(wn == 8 && rErr < 1e-4, $"waveform rms: long buckets read from the block table match a scan (max err {rErr:E1})");
+            var fullRms = new float[256]; var full2 = new float[256 * 2];
+            ie.GetClipWarpFullPeaks(ct, cc, full2, 256, fullRms);
+            bool inside = true;
+            for (int b = 0; b < 256; b++) inside &= fullRms[b] >= 0 && fullRms[b] <= Math.Max(Math.Abs(full2[b * 2]), Math.Abs(full2[b * 2 + 1])) + 1e-6;
+            Check(full2.SequenceEqual(full) && inside && fullRms.Any(v => v > 0.001f), "waveform rms: warped buckets keep their peaks, RMS inside them");
         }
 
         // Background warp build: a deferred marker edit keeps the old cache playing (not
@@ -15307,6 +15328,8 @@ foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- param + section undo --");
 foreach (var (ok, label) in ParamSectionUndoTests.Run()) Check(ok, label);
+Console.WriteLine("-- section names --");
+foreach (var (ok, label) in SectionNamingTests.Run()) Check(ok, label);
 Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device copy + rack undo --");

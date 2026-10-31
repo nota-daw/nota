@@ -132,6 +132,15 @@ public partial class MainWindow
     // and less clips them.
     private void ShowDetail(double height, bool honorPersist, bool resizable = true)
     {
+        _detailDefault = height;
+        // Filling the window, a clip tab keeps it; Devices goes back to the split.
+        if (_detailMaximized && resizable)
+        {
+            DetailPanel.IsVisible = true;
+            return;
+        }
+        SetDetailMaximized(false);
+        DetailMaximizeBtn.IsVisible = resizable;
         var row = _detailRow;
         row.MinHeight = 120;
         double h = honorPersist && _detailHeight > 120 ? _detailHeight : height;
@@ -1031,6 +1040,7 @@ public partial class MainWindow
         DetailPanel.PropertyChanged += (_, e) =>
         {
             if (e.Property != IsVisibleProperty) return;
+            if (!DetailPanel.IsVisible) SetDetailMaximized(false);
             FollowDetailVisibility(DetailPanel.IsVisible);
             SyncDetailEdge();
             Dispatcher.UIThread.Post(FitBottomPanels);
@@ -1039,6 +1049,69 @@ public partial class MainWindow
         DetailEdge.PointerPressed += OnDetailEdgePressed;
         DetailEdge.PointerMoved += OnDetailEdgeMoved;
         DetailEdge.PointerReleased += OnDetailEdgeReleased;
+        OnDoubleClick(DetailSplitter, ResetDetailHeight);
+        OnDoubleClick(DetailEdge, ResetDetailHeight);
+        OnDoubleClick(MixerSplitter, ResetMixerHeight);
+        OnDoubleClick(BrowserSplitter, ResetBrowserWidth);
+    }
+
+    // Double-click a panel edge: the panel goes back to its default size (#305). Taken in the
+    // tunnel and handled, so the splitter never starts the drag that would record the old size.
+    private static void OnDoubleClick(Control edge, Action reset)
+        => edge.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.ClickCount != 2 || !e.GetCurrentPoint(edge).Properties.IsLeftButtonPressed) return;
+            reset();
+            e.Handled = true;
+        }, RoutingStrategies.Tunnel);
+
+    // The tab's own height (ShowDetail's), forgetting the one the Clip tab remembered.
+    private void ResetDetailHeight()
+    {
+        if (_detailMaximized || !DetailPanel.IsVisible) return;
+        _detailHeight = 0;
+        _detailWanted = _detailDefault;
+        _detailRow.Height = new GridLength(_detailDefault);
+        FitBottomPanels();
+    }
+
+    // --- the clip editor filling the window (#304) --------------------------------------------
+    //
+    // The main view (browser and all) and a docked Mixer fold away and the Detail row takes the
+    // whole body; back, everything returns to the split it had (_detailWanted, _mixerWanted).
+    // Not saved: a new launch opens on the split.
+
+    private bool _detailMaximized;
+    private double _detailDefault = 250;   // the shown tab's default height (ShowDetail)
+
+    private bool CanMaximizeDetail => !DetailFloating && DetailPanel.IsVisible
+                                      && DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView;
+
+    private void OnDetailMaximize(object? sender, RoutedEventArgs e) => ToggleDetailMaximized();
+
+    private void ToggleDetailMaximized()
+    {
+        if (!_detailMaximized && !CanMaximizeDetail)
+        {
+            if (_vm is not null) _vm.StatusText = DetailFloating ? "The clip editor is in its own window" : "Open a clip in the clip editor first";
+            return;
+        }
+        SetDetailMaximized(!_detailMaximized);
+    }
+
+    private void SetDetailMaximized(bool on)
+    {
+        if (on == _detailMaximized) return;
+        _detailMaximized = on;
+        BrowserGrid.IsVisible = !on;
+        _mainRow.MinHeight = on ? 0 : 120;
+        _mainRow.Height = on ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        _detailRow.Height = on ? new GridLength(1, GridUnitType.Star) : new GridLength(_detailWanted > 120 ? _detailWanted : _detailDefault);
+        DetailSplitter.IsVisible = !on;
+        DetailMaximizeGlyph.Kind = on ? GlyphKind.Shrink : GlyphKind.Expand;
+        ToolTip.SetTip(DetailMaximizeBtn, MenuKit.Keys(on ? "Back to the split (⌘⇧F)" : "Fill the window with the clip editor (⌘⇧F)"));
+        if (MenuItemFor("view.maximizeDetail") is { } mi) mi.IsChecked = on;
+        LayoutBottomPanels();
     }
 
     // Some paths only flip the panel's visibility (View ▸ Toggle detail panel, a closed clip):
@@ -1108,8 +1181,10 @@ public partial class MainWindow
         rows.Clear();
         rows.Add(_mainRow);
         int detail = 1;
-        if (_mixerDocked)
+        bool mixer = _mixerDocked && !_detailMaximized;
+        if (mixer)
         {
+            _mixerRow.MinHeight = MixerPanelMin;
             rows.Add(_mixerSplitRow);
             rows.Add(_mixerRow);
             Grid.SetRow(MixerSplitter, 1);
@@ -1126,8 +1201,8 @@ public partial class MainWindow
         Grid.SetRow(DetailSplitter, detail);
         Grid.SetRow(DetailPanel, detail + 1);
         Grid.SetRow(DetailEdge, detail);
-        MixerSplitter.IsVisible = _mixerDocked;
-        MixerPanel.IsVisible = _mixerDocked;
+        MixerSplitter.IsVisible = mixer;
+        MixerPanel.IsVisible = mixer;
         SyncDetailEdge();
         FitBottomPanels();
     }
@@ -1138,6 +1213,7 @@ public partial class MainWindow
     // minimum. The Mixer grows back toward the height the user chose; a fit never changes it.
     private void FitBottomPanels()
     {
+        if (_detailMaximized) return;   // the Detail row is all there is
         double total = BodyGrid.Bounds.Height;
         double mixer = _mixerDocked ? Math.Max(_mixerWanted, _mixerRow.MinHeight) : 0;
         if (total > 0)

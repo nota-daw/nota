@@ -396,10 +396,10 @@ public partial class MainWindow : Window
             vm.Settings.Current.LoopRecordReplace = vm.Transport.LoopRecordReplace;
             vm.Settings.Save();
         };
-        Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
+        Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
         InitSnapGrid();
         // Settings → Appearance can switch the waveform style while the arrangement is open.
-        vm.Settings.Changed += () => Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
+        vm.Settings.Changed += () => Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
         Browser.SetViewModel(vm.Browser);
         InitPalette();   // the command palette (⌘⇧P) indexes the library and the registry
         Browser.ProjectTempo = () => (double)vm.Transport.Bpm;   // the Files filter's "project" shortcuts
@@ -683,6 +683,7 @@ public partial class MainWindow : Window
     private void SetView(MainView view)
     {
         if (_session is null || _modular is null) return;
+        SetDetailMaximized(false);   // a view picked is a view to see
         bool session = view == MainView.Session, modular = view == MainView.Modular;
         Timeline.IsVisible = view == MainView.Arrangement;
         _session.IsVisible = session;

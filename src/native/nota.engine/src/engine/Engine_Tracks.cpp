@@ -1039,8 +1039,8 @@ int32_t Engine::trackReturnIndex(int32_t id) const {
 // Peak-pick a warped clip's source envelope over a beat range [beat0, beat1] via the
 // marker map (time-stretch preserves the amplitude envelope). Shared by the played
 // window (getClipPeaks) and the full-material view (getClipWarpFullPeaks).
-static int32_t warpPeaksRange(
-    const AudioClip& clip, float* out, int32_t maxPoints, double beat0, double beat1, int32_t cap = 2048) {
+static int32_t warpPeaksRange(const AudioClip& clip, float* out, float* outRms, int32_t maxPoints, double beat0,
+    double beat1, int32_t cap = 2048) {
     if (!out || maxPoints <= 0 || !clip.sample) return 0;
     const auto& m = clip.warpMarkers;
     if (m.size() < 2) return 0;
@@ -1067,20 +1067,23 @@ static int32_t warpPeaksRange(
         sb.peakRange(s0, s1 + 1, mn, mx);
         out[b * 2] = mn;
         out[b * 2 + 1] = mx;
+        if (outRms) outRms[b] = sb.rmsRange(s0, s1 + 1);
     }
     return buckets;
 }
 
 // Flip a min/max peak array end-to-end (each bucket's own min/max is unchanged) so a
 // reversed clip draws the waveform it actually plays.
-static void reversePeaks(float* peaks, int32_t count) {
+static void reversePeaks(float* peaks, float* rms, int32_t count) {
     for (int32_t a = 0, b = count - 1; a < b; ++a, --b) {
         std::swap(peaks[a * 2], peaks[b * 2]);
         std::swap(peaks[a * 2 + 1], peaks[b * 2 + 1]);
+        if (rms) std::swap(rms[a], rms[b]);
     }
 }
 
-int32_t Engine::getClipPeaks(int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints) const {
+int32_t Engine::getClipPeaks(
+    int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints, float* outRms) const {
     if (!outMinMax || maxPoints <= 0) return 0;
     auto t = findTrackAuthoring(trackId);
     if (!t || !audioClipRef(*t, clipIndex)) return 0;
@@ -1097,8 +1100,8 @@ int32_t Engine::getClipPeaks(int32_t trackId, int32_t clipIndex, float* outMinMa
     const bool warped = clip.warpEnabled && m.size() >= 2 && clip.warpBeats > 0.0;
 
     if (warped) { // peaks over the PLAYED window (what the arrangement shows/plays)
-        const int32_t n = warpPeaksRange(clip, outMinMax, maxPoints, clip.warpPlayStart, clip.warpPlayEndEff());
-        if (clip.reversed) reversePeaks(outMinMax, n);
+        const int32_t n = warpPeaksRange(clip, outMinMax, outRms, maxPoints, clip.warpPlayStart, clip.warpPlayEndEff());
+        if (clip.reversed) reversePeaks(outMinMax, outRms, n);
         return n;
     }
 
@@ -1113,8 +1116,9 @@ int32_t Engine::getClipPeaks(int32_t trackId, int32_t clipIndex, float* outMinMa
         sb.peakRange(begin, begin + per, mn, mx);
         outMinMax[b * 2] = mn;
         outMinMax[b * 2 + 1] = mx;
+        if (outRms) outRms[b] = sb.rmsRange(begin, begin + per);
     }
-    if (clip.reversed) reversePeaks(outMinMax, buckets);
+    if (clip.reversed) reversePeaks(outMinMax, outRms, buckets);
     return buckets;
 }
 
@@ -1123,7 +1127,8 @@ int32_t Engine::getClipPeaks(int32_t trackId, int32_t clipIndex, float* outMinMa
 // reveal audio that was trimmed off. Unwarped only (warped uses getClipPeaks). Always in
 // FILE order: the editor draws this view together with source-frame brackets, so it
 // mirrors the two as one when the clip is reversed rather than flipping peaks here.
-int32_t Engine::getClipSourcePeaks(int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints) const {
+int32_t Engine::getClipSourcePeaks(
+    int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints, float* outRms) const {
     if (!outMinMax || maxPoints <= 0) return 0;
     auto t = findTrackAuthoring(trackId);
     if (!t || !audioClipRef(*t, clipIndex)) return 0;
@@ -1139,6 +1144,7 @@ int32_t Engine::getClipSourcePeaks(int32_t trackId, int32_t clipIndex, float* ou
         sb.peakRange(b * per, (b + 1) * per, mn, mx);
         outMinMax[b * 2] = mn;
         outMinMax[b * 2 + 1] = mx;
+        if (outRms) outRms[b] = sb.rmsRange(b * per, (b + 1) * per);
     }
     return buckets;
 }
@@ -1147,31 +1153,32 @@ int32_t Engine::getClipSourcePeaks(int32_t trackId, int32_t clipIndex, float* ou
 // clip editor draws the whole warp so the Start/End brackets can reveal trimmed beats.
 // In marker (file) order — the editor mirrors this view and its markers together when the
 // clip is reversed, so flipping the peaks alone here would desync them.
-int32_t Engine::getClipWarpFullPeaks(int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints) const {
+int32_t Engine::getClipWarpFullPeaks(
+    int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints, float* outRms) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || !audioClipRef(*t, clipIndex)) return 0;
     const AudioClip& clip = (*audioClipRef(*t, clipIndex));
     if (!(clip.warpEnabled && clip.warpBeats > 0.0)) return 0;
-    return warpPeaksRange(clip, outMinMax, maxPoints, 0.0, clip.warpBeats);
+    return warpPeaksRange(clip, outMinMax, outRms, maxPoints, 0.0, clip.warpBeats);
 }
 
 // The clip editor's zoomed-in detail: peaks over just the visible slice, so zooming
 // re-resolves the waveform instead of magnifying the whole-clip overview into blocks.
 constexpr int32_t kRangePeaksCap = 8192;
 
-int32_t Engine::getClipWarpPeaksRange(
-    int32_t trackId, int32_t clipIndex, double beat0, double beat1, float* outMinMax, int32_t maxPoints) const {
+int32_t Engine::getClipWarpPeaksRange(int32_t trackId, int32_t clipIndex, double beat0, double beat1, float* outMinMax,
+    int32_t maxPoints, float* outRms) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || !audioClipRef(*t, clipIndex)) return 0;
     const AudioClip& clip = (*audioClipRef(*t, clipIndex));
     if (!(clip.warpEnabled && clip.warpBeats > 0.0)) return 0;
     beat0 = std::clamp(beat0, 0.0, clip.warpBeats);
     beat1 = std::clamp(beat1, 0.0, clip.warpBeats);
-    return warpPeaksRange(clip, outMinMax, maxPoints, beat0, beat1, kRangePeaksCap);
+    return warpPeaksRange(clip, outMinMax, outRms, maxPoints, beat0, beat1, kRangePeaksCap);
 }
 
-int32_t Engine::getClipSourcePeaksRange(
-    int32_t trackId, int32_t clipIndex, double frame0, double frame1, float* outMinMax, int32_t maxPoints) const {
+int32_t Engine::getClipSourcePeaksRange(int32_t trackId, int32_t clipIndex, double frame0, double frame1,
+    float* outMinMax, int32_t maxPoints, float* outRms) const {
     if (!outMinMax || maxPoints <= 0) return 0;
     auto t = findTrackAuthoring(trackId);
     if (!t || !audioClipRef(*t, clipIndex)) return 0;
@@ -1191,6 +1198,7 @@ int32_t Engine::getClipSourcePeaksRange(
         sb.peakRange(f0, f1, mn, mx);
         outMinMax[b * 2] = mn;
         outMinMax[b * 2 + 1] = mx;
+        if (outRms) outRms[b] = sb.rmsRange(f0, f1);
     }
     return buckets;
 }
