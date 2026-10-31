@@ -137,6 +137,7 @@ public partial class MainWindow
             track = origin == PaletteOrigin.PianoRoll ? EditedTrack() : _deviceChain?.TrackId ?? -1;
         }
         else if (source is DeviceWindow devw) { origin = PaletteOrigin.DeviceWindow; track = devw.ContextTrackId > 0 ? devw.ContextTrackId : _deviceChain?.TrackId ?? -1; }
+        else if (_mixerDocked && (Within(MixerPanel) || _mixerWasLastFocused)) { origin = PaletteOrigin.Mixer; track = Timeline.SelectedTrackId; }   // docked Mixer (specs/054)
         else if (DetailPanel.IsVisible && (Within(DetailPanel) || _detailWasLastFocused))
         {
             origin = DetailBody.Content is ClipEditorView or DrumPatternView ? PaletteOrigin.PianoRoll : PaletteOrigin.Devices;
