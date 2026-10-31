@@ -5,7 +5,8 @@
 //
 //   KeysPickupView  the Pickup transfer curve — the exact function the engine runs
 //                   (KeysModel.PickupRaw) — with the tine's travel drawn over it, a dashed
-//                   linear reference and the handle: drag X = Symmetry, Y = Distance. L adds
+//                   linear reference and the handle: drag X = Symmetry, Y = Distance (⌥-click
+//                   types them, specs/035). L adds
 //                   the H1–H8 bars of what the curve does to a sine. For Clav it draws the
 //                   string instead, with its two pickups lit by Pickup Position.
 //   KeysTremView    the tremolo: the left (graph ink) and right (ink 3) gains scrolling with the
@@ -16,6 +17,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -24,7 +26,7 @@ using Nota.Application;
 
 namespace Nota.App;
 
-internal sealed class KeysPickupView : Control, IMidiLearnRegions
+internal sealed class KeysPickupView : Control, IMidiLearnRegions, IValueEntryHost
 {
     private readonly IAudioEngine _e;
     private readonly int _t;
@@ -41,7 +43,19 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions
         _e = engine; _t = track; _idx = idx;
         MinWidth = 120; MinHeight = 60;
         Cursor = new Cursor(StandardCursorType.Hand);
+        ValueEntry.AttachHost(this);
     }
+
+    // ---- typed entry: the whole plot is the handle (Clav has none) ----
+    private ValueField[]? _fields;
+    public IReadOnlyList<ValueField> AllFields => Model == 3 ? [] : _fields ??= new[]
+    {
+        I("sym") is var s and >= 0 ? ValueEntry.InstrumentParam(_e, _t, s, "sym", "Pickup symmetry", v => NotaNum.F($"{(v - 0.5) * 200:+0;−0;0}\u2009%"), After) : null,
+        I("dist") is var d and >= 0 ? ValueEntry.InstrumentParam(_e, _t, d, "dist", "Pickup distance", NotaNum.Pct, After) : null,
+    }.OfType<ValueField>().ToArray();
+    private void After() { InvalidateVisual(); Changed?.Invoke(); }
+    public IReadOnlyList<ValueField>? FieldsAt(Point p) => AllFields.Count > 0 ? AllFields : null;
+    public Rect AnchorOf(ValueField field) => ValueEntry.Near(new Point(Bounds.Width / 2, 0), Bounds.Size);
 
     public void Refresh() => InvalidateVisual();
 

@@ -218,6 +218,9 @@ public sealed class NestedSidechainDto
     public int Chain { get; set; }
     public int Slot { get; set; }
     public int Source { get; set; } = -1;
+    /// <summary>The part of the source's instrument (index at save time; -1 = the whole track).
+    /// Format v28, specs/050.</summary>
+    public int Part { get; set; } = -1;
     public bool TapPre { get; set; }
     public float GainDb { get; set; }
     public float Mix { get; set; } = 1.0f;
@@ -331,6 +334,9 @@ public sealed class InstrumentDto
     /// <summary>Sidechain source ("React", Nota Flux) as a track INDEX in this document
     /// (-1 = none). Resolved to a live track id on load, since ids are reassigned.</summary>
     public int SidechainSource { get; set; } = -1;
+    /// <summary>The part of the source React listens to (index at save time; -1 = the whole
+    /// track). Format v28, specs/050.</summary>
+    public int SidechainPart { get; set; } = -1;
     /// <summary>Drawn as a narrow strip in the Devices panel (format v23, specs/022).</summary>
     public bool Folded { get; set; }
     /// <summary>Nota Rhythm (Kind == 12) per-voice one-shots (only sample-source voices).</summary>
@@ -456,6 +462,10 @@ public sealed class DeviceDto
     /// <summary>Sidechain source as a track INDEX in this document (-1 = none). Resolved to a
     /// live track id on load, since ids are reassigned. Phase B (format v15).</summary>
     public int SidechainSource { get; set; } = -1;
+    /// <summary>The part of the source track's instrument the key listens to — a Drum Rack pad,
+    /// an Instrument Rack chain or a Rhythm voice — as its index at save time; -1 = the whole
+    /// track (format v28, specs/050).</summary>
+    public int SidechainPart { get; set; } = -1;
     /// <summary>Sidechain detector gain in dB (Phase D, format v16).</summary>
     public float SidechainGain { get; set; }
     /// <summary>Sidechain dry/wet, 0..1 (Phase D, format v16). Default 1 = fully wet.</summary>

@@ -480,7 +480,8 @@ internal sealed class EqDeviceBody : IDeviceBody
         outBox.PointerReleased += (_, e) => { OutEnd(); e.Pointer.Capture(null); };
         outBox.PointerCaptureLost += (_, _) => OutEnd();
         Learn(outBox, Eq8.OutputP);
-        ToolTip.SetTip(outBox, "Output (plus the auto gain in effect) — drag up / down (Shift for fine), double-click for 0\u2009dB");
+        ToolTip.SetTip(outBox, MenuKit.Keys("Output (plus the auto gain in effect) — drag up / down (Shift for fine), ⌥-click to type, double-click for 0\u2009dB"));
+        ValueEntry.Attach(outBox, ValueEntry.DeviceRaw(engine, track, di, Eq8.OutputP, "Output", -12, 12, v => "Out " + Eq8.Db(v) + " dB", RefreshAll), outTb);
         readouts.Add(() =>
         {
             float o = P(Eq8.OutputP);

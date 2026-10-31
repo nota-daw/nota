@@ -49,6 +49,7 @@ void DrumRack::allNotesOff() {
 
 void DrumRack::render(float* out, int32_t frames) {
     const auto done = renderScope();
+    const int32_t tapAt = taps_.take(frames) * 2; // this piece's place in the block's key buffers
     RackState* st = live();
     if (!st || frames <= 0 || frames > kMaxBlock) return;
     bool anySolo = false;
@@ -62,13 +63,18 @@ void DrumRack::render(float* out, int32_t frames) {
         if (!c.instrument) continue;
         const bool solo = c.ctl->solo.load(std::memory_order_relaxed);
         const bool mute = c.ctl->mute.load(std::memory_order_relaxed);
-        if (mute || (anySolo && !solo)) {
+        // A pad a sidechain key listens to (specs/050) renders even when muted or solo-gated:
+        // the "ghost kick" drives the key without being heard.
+        const PartTap* tap = taps_.any() ? taps_.find(c.uid) : nullptr;
+        const bool silent = mute || (anySolo && !solo);
+        if (silent && !tap) {
             c.ctl->meter.store(0.0f, std::memory_order_relaxed);
             c.ctl->retrig = false;
             continue;
         }
         std::memset(scratch_, 0, sizeof(float) * frames * 2);
         c.instrument->render(scratch_, frames);
+        if (tap) addTap(tap->pre + tapAt, scratch_, frames); // Pre: the raw hit, before inserts and decay
         for (auto& d : c.devices)
             if (d && !d->bypassed()) d->process(scratch_, frames);
         const float g = c.ctl->gain.load(std::memory_order_relaxed);
@@ -89,6 +95,28 @@ void DrumRack::render(float* out, int32_t frames) {
         if (shaped) {
             const double tauMs = 20.0 * std::pow(100.0, (double)dec); // 20 ms .. 2000 ms
             coef = (float)std::exp(-1.0 / (tauMs * 0.001 * sampleRate_));
+        }
+
+        // Post for a keyed pad: after inserts, decay and the pad's own gain / pan, before the
+        // rack volume. Its own pass (the envelope run from the same start), so the sum loop
+        // below is the same code an unkeyed pad runs. A ghost pad (muted / solo-gated) stops
+        // here: its envelope moves on, nothing reaches the sum.
+        if (tap) {
+            const float pl = g * (pan > 0.0f ? 1.0f - pan : 1.0f);
+            const float pr = g * (pan < 0.0f ? 1.0f + pan : 1.0f);
+            float e = env;
+            float* post = tap->post + tapAt;
+            for (int32_t i = 0; i < frames; ++i) {
+                const float k = shaped ? e : 1.0f;
+                post[i * 2] += scratch_[i * 2] * k * pl;
+                post[i * 2 + 1] += scratch_[i * 2 + 1] * k * pr;
+                if (shaped) e *= coef;
+            }
+            if (silent) {
+                if (shaped) c.ctl->ampEnv.store(e, std::memory_order_relaxed);
+                c.ctl->meter.store(0.0f, std::memory_order_relaxed);
+                continue;
+            }
         }
 
         float peak = 0.0f;

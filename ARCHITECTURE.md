@@ -102,11 +102,23 @@ Device I/O sits behind `AudioBackend` so the platform layer stays swappable:
 | Platform | Audio | MIDI |
 |---|---|---|
 | macOS | CoreAudio (`CoreAudioBackend.mm`) | CoreMIDI |
-| Windows | WASAPI via miniaudio | WinMM via RtMidi |
+| Windows | WASAPI via miniaudio, or ASIO (`audio_io/windows/`) | WinMM via RtMidi |
 | Linux | PulseAudio / ALSA via miniaudio | ALSA via RtMidi |
 
 miniaudio runtime-links PulseAudio/ALSA with `dlopen`, so those libraries are not needed
 at link time.
+
+ASIO (specs/049) is one duplex driver with one callback, while the engine opens output
+(`AudioBackend`) and capture (`AudioInput`) separately. Both are thin facades
+(`AsioBackend`, `AsioInput`) over one process-wide `AsioSession`, which owns the driver:
+each buffer switch converts the chosen input pair, hands it to the input rings, renders,
+converts the result to the chosen output pair and zeroes every other output. The session
+lives in `audio_io/asio/` and builds on every platform — it reaches the driver through
+`AsioDriverApi`, so `FakeAsioDriver` tests it in the smoke test; only the registry list, the
+COM adapter (its own STA control thread, with timeouts) and the facades are Windows-only.
+Driver resets reach the app as a polled device event and go through the normal apply path;
+a driver that won't start falls back to WASAPI. Backends report device latency
+(`inputLatencyFrames` / `outputLatencyFrames`), which moves recorded takes earlier.
 
 ### Warping
 

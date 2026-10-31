@@ -62,9 +62,24 @@ internal static class ValueEntryTests
             "value entry: ∞ and inf, signed");
         yield return (ValueText.Read("abc", out _, out _) is null && ValueText.Read("", out _, out _) is null,
             "value entry: text with no number reads as nothing");
+        yield return (Near(ValueText.Read("Out −6.0 dB", out _, out _), -6) && Near(ValueText.Read("Swing 30 %", out _, out _), 30),
+            "value entry: a label before the number is skipped (\"Out −6.0 dB\", \"Swing 30 %\")");
+        yield return (Near(ValueText.Read("C4", out _, out _), 60) && Near(ValueText.Read("F#2", out _, out _), 42)
+                      && Near(ValueText.Read("C-1", out _, out _), 0) && Near(ValueText.Read("bb3", out _, out _), 58),
+            "value entry: note names read as MIDI numbers (C4 = 60, F#2, C-1, Bb3)");
+        yield return (ValueText.Read("C99999999999", out _, out _) is null && ValueText.Read("C10", out _, out _) is null,
+            "value entry: a note outside MIDI's octaves reads as nothing (no overflow)");
 
         // ---- the search against a read-out ----
         string s;
+        static string Note(double v)
+        {
+            int n = (int)Math.Round(v * 127);
+            return new[] { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" }[n % 12] + (n / 12 - 1);
+        }
+        static string Out(double v) => "Out " + (v * 36 - 18).ToString("+0.0;−0.0;0.0", System.Globalization.CultureInfo.InvariantCulture) + " dB";
+        yield return ((s = Typed("D4", Note, 0.5)) == "D4", $"value entry: \"D4\" on a note read-out lands on D4 ({s})");
+        yield return ((s = Typed("-6", Out, 0.5)) == "Out −6.0 dB", $"value entry: \"-6\" on a labelled read-out lands on Out −6.0 dB ({s})");
         yield return ((s = Typed("1.2k", Hz, 0.5)) == "1.20 kHz", $"value entry: \"1.2k\" on a frequency lands on 1.20 kHz ({s})");
         yield return ((s = Typed("1.5", Hz, 0.8)) == "1.50 kHz", $"value entry: a bare number takes the read-out's unit — 1.5 on a kHz read-out ({s})");
         yield return ((s = Typed("800", Hz, 0.8)) == "800 Hz", $"value entry: a bare number takes the unit that fits — 800 on a kHz read-out is 800 Hz ({s})");

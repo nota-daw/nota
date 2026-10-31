@@ -222,7 +222,7 @@ public partial class MainWindow
             return;
         }
 
-        // ⌘⇧M / ⌃⇧M = open the Mixer window (or focus it if already open).
+        // ⌘⇧M / ⌃⇧M = show or hide the Mixer, docked or in its window (specs/054).
         if (mod && e.Key == Key.M && (e.KeyModifiers & KeyModifiers.Shift) != 0 && (e.KeyModifiers & KeyModifiers.Alt) == 0)
         {
             _commands.Run("view.mixer");
