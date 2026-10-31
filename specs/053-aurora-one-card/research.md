@@ -343,3 +343,5 @@ Places where the plan proved wrong or too big, and the smaller choice taken inst
   `formatVersion: 27`, because nothing in it needs 28. That lets the base build open it.
 - **Presets**. A preset saved with no tables (including Init) clears any imported table
   when applied in place, so applying a preset always gives the sound it was saved with.
+
+- **Format renumbered (Oct 31).** develop took format v28 for sidechain parts (specs/050, #381), so the Aurora tables are format **v29**: `CurrentFormatVersion` 28 → 29 with a no-op `Migration(28)`. Where this spec says v28 for the tables, read v29.

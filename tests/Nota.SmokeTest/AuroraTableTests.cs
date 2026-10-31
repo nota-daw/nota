@@ -4,7 +4,7 @@
 // Nota Aurora custom wavetables (specs/053): how a file becomes a table, the undo and source
 // rules, the state blob and its trailer, copies and duplicates, the sound (an imported copy
 // of a built-in frame sounds like it; a bright table played high does not fold back), the
-// project v28 round trip (bit-identical render, one file per table, missing tables, v27
+// project v29 round trip (bit-identical render, one file per table, missing tables, v27
 // documents), presets, and the live-follow telemetry. An Aurora without a table keeps its
 // old state blob byte for byte and the factory sounds pass the null gate.
 // Also runnable alone: `--aurora-tables`.
@@ -327,7 +327,7 @@ internal static class AuroraTableTests
         yield return (alias <= -60, $"aurora tables: a bright table at C7 does not fold back ({alias:0} dB alias energy vs harmonics)");
     }
 
-    // ---- T029: project v28 ----
+    // ---- T029: project v29 ----
     private static IEnumerable<(bool, string)> Project(Dictionary<string, string> fx, string root)
     {
         var transport = new TransportState(120.0, 1.0, false, false);
@@ -354,7 +354,7 @@ internal static class AuroraTableTests
             wavs = Directory.GetFiles(Path.Combine(bundle, "samples")).Select(Path.GetFileName).OfType<string>().ToArray();
         }
         var json = JsonNode.Parse(File.ReadAllText(Path.Combine(bundle, ProjectService.ManifestName)))!;
-        yield return (json["formatVersion"]?.GetValue<int>() == 28 && warnCount == 0, $"aurora tables: projects save as format 28 ({json["formatVersion"]})");
+        yield return (json["formatVersion"]?.GetValue<int>() == 29 && warnCount == 0, $"aurora tables: projects save as format 29 ({json["formatVersion"]})");
         yield return (wavs.Length == 2, $"aurora tables: two Auroras with the same table share one file ({wavs.Length} tables for 3 slots)");
         {
             using var e = new NotaEngine();
@@ -402,9 +402,9 @@ internal static class AuroraTableTests
             var w = ProjectService.Apply(doc, e2, old);
             int id = TrackIds(e2)[0];
             e2.TryGetAuroraTableInfo(id, 0, out var v0);
-            yield return (doc.FormatVersion == 28 && w.Count == 0 && v0.Frames == 0
+            yield return (doc.FormatVersion == 29 && w.Count == 0 && v0.Frames == 0
                           && e2.GetPluginState(id, -1).Length == Params * 4,
-                $"aurora tables: a v27 project loads unchanged and migrates to 28 ({doc.FormatVersion})");
+                $"aurora tables: a v27 project loads unchanged and migrates to 29 ({doc.FormatVersion})");
         }
     }
 

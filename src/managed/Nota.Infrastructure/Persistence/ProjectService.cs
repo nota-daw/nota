@@ -37,8 +37,9 @@ public sealed class ProjectService
     /// chain children's sidechain keys / CC targets.
     /// v26 (specs/048) adds Preset on instruments, devices and MIDI effects.
     /// v27 (specs/046) adds Preview on hosted plug-ins: the picture of their window.
-    /// v28 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
-    public const int CurrentFormatVersion = 28;
+    /// v28 (specs/050) lets a sidechain key name one pad, chain or voice of its source.
+    /// v29 (specs/053) adds Wavetables on Nota Aurora: its imported tables, as samples.
+    public const int CurrentFormatVersion = 29;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -173,8 +174,12 @@ public sealed class ProjectService
                     if (vs.Count > 0) instDto.VoiceSamples = vs;
                 }
                 // React source (Nota Flux): store as a doc index, resolved on load.
-                int instScSrc = engine.InstrumentSidechainSource(ti.Id);
-                instDto.SidechainSource = instScSrc >= 0 && idToIndex.TryGetValue(instScSrc, out var isi) ? isi : -1;
+                // A key whose part is gone (Missing) saves as no key (specs/050).
+                var instKey = engine.InstrumentSidechainKey(ti.Id);
+                int isi = -1;
+                bool instKeyed = instKey.Source >= 0 && instKey.Part != SidechainKey.Missing && idToIndex.TryGetValue(instKey.Source, out isi);
+                instDto.SidechainSource = instKeyed ? isi : -1;
+                instDto.SidechainPart = instKeyed ? instKey.Part : -1;
                 instDto.Folded = engine.DeviceFolded(ti.Id, -1);
                 instDto.Bypassed = engine.DeviceBypassed(ti.Id, -1);
                 instDto.Preset = CapturePresetTag(engine, ti.Id, PresetSurface.Instrument, -1);
@@ -398,8 +403,13 @@ public sealed class ProjectService
         {
             int bk = engine.TrackDeviceBuiltinKind(trackId, d);
             var dev = new DeviceDto { BuiltinKind = bk, Bypassed = engine.DeviceBypassed(trackId, d), Folded = engine.DeviceFolded(trackId, d) };
-            int scSrc = engine.DeviceSidechainSource(trackId, d);
-            dev.SidechainSource = scSrc >= 0 && idToIndex.TryGetValue(scSrc, out var si) ? si : -1;
+            // Source as a doc index, its part as an index on that track; a key whose part is
+            // gone (Missing) saves as no key (specs/050).
+            var key = engine.DeviceSidechainKey(trackId, d);
+            int si = -1;
+            bool keyed = key.Source >= 0 && key.Part != SidechainKey.Missing && idToIndex.TryGetValue(key.Source, out si);
+            dev.SidechainSource = keyed ? si : -1;
+            dev.SidechainPart = keyed ? key.Part : -1;
             dev.SidechainGain = engine.DeviceSidechainGain(trackId, d);
             dev.SidechainMix = engine.DeviceSidechainMix(trackId, d);
             dev.SidechainTapPre = engine.DeviceSidechainTapPre(trackId, d);
@@ -454,8 +464,9 @@ public sealed class ProjectService
                 int n = devCount(c);
                 for (int slot = hasInstrument ? -1 : 0; slot < n; slot++)
                     if (engine.RackChainSidechain(trackId, host, c, slot) is { SourceTrack: >= 0 } sc
-                        && idToIndex.TryGetValue(sc.SourceTrack, out int src))
-                        scs.Add(new NestedSidechainDto { Host = host, Chain = c, Slot = slot, Source = src, TapPre = sc.TapPre, GainDb = sc.GainDb, Mix = sc.Mix });
+                        && idToIndex.TryGetValue(sc.SourceTrack, out int src)
+                        && engine.RackChainSidechainPart(trackId, host, c, slot) is var part && part != SidechainKey.Missing)
+                        scs.Add(new NestedSidechainDto { Host = host, Chain = c, Slot = slot, Source = src, Part = part, TapPre = sc.TapPre, GainDb = sc.GainDb, Mix = sc.Mix });
                 int mn = midiCount(c);
                 for (int i = 0; i < mn; i++)
                     if (engine.RackChainMidiCcDest(trackId, host, c, i) is { } d && (d.Device >= 0 || d.Chain >= 0) && d.Param >= 0)
@@ -476,7 +487,7 @@ public sealed class ProjectService
     }
 
     private static void ApplyDevices(IAudioEngine engine, int trackId, IEnumerable<DeviceDto> devices,
-                                     string bundleDir, List<(int track, int dev, int srcIndex)> scDeferred, List<string> warnings)
+                                     string bundleDir, List<(int track, int dev, int srcIndex, int part)> scDeferred, List<string> warnings)
     {
         foreach (var d in devices)
         {
@@ -522,7 +533,7 @@ public sealed class ProjectService
             if (d.Folded) engine.SetDeviceFolded(trackId, di, true);
             ApplyPresetTag(engine, trackId, PresetSurface.Effect, di, d.Preset);
             if (d.Preview is { } previewRel) engine.SetPluginPreview(trackId, di, ReadPreview(bundleDir, previewRel));
-            if (d.SidechainSource >= 0) scDeferred.Add((trackId, di, d.SidechainSource));
+            if (d.SidechainSource >= 0) scDeferred.Add((trackId, di, d.SidechainSource, d.SidechainPart));
             engine.SetDeviceSidechainGain(trackId, di, d.SidechainGain);
             engine.SetDeviceSidechainMix(trackId, di, d.SidechainMix);
             engine.SetDeviceSidechainTapPre(trackId, di, d.SidechainTapPre);
@@ -559,9 +570,9 @@ public sealed class ProjectService
         // Doc index -> new live track id, and deferred sidechain wiring (a source may be
         // a track created later), both resolved after every track exists (Phase B).
         var newTrackIds = new List<int>();
-        var scDeferred = new List<(int track, int dev, int srcIndex)>();
+        var scDeferred = new List<(int track, int dev, int srcIndex, int part)>();
         var nestedScDeferred = new List<(int track, NestedSidechainDto dto)>();
-        var instScDeferred = new List<(int track, int srcIndex)>();   // instrument React source (Nota Flux)
+        var instScDeferred = new List<(int track, int srcIndex, int part)>();   // instrument React source (Nota Flux)
         var recInputDeferred = new List<(int trackId, int encoded)>();
         var monitorDeferred = new List<(int trackId, bool on)>();
         var groupDeferred = new List<(int trackId, int parentDocIndex)>();   // group membership
@@ -696,7 +707,7 @@ public sealed class ProjectService
             if (id > 0 && t.Instrument is { Bypassed: true })
                 engine.SetDeviceBypassed(id, -1, true);           // the instrument card's switch is off (#148)
             if (id > 0 && t.Instrument is { SidechainSource: >= 0 } insc)
-                instScDeferred.Add((id, insc.SidechainSource));   // wire React source once every track exists
+                instScDeferred.Add((id, insc.SidechainSource, insc.SidechainPart));   // wire React source once every track exists
             if (id > 0 && t.GroupId >= 0)
                 groupDeferred.Add((id, t.GroupId));               // reparent into its group once every track exists
             newTrackIds.Add(id);   // keep index aligned with doc.Tracks even on failure (id <= 0)
@@ -920,24 +931,31 @@ public sealed class ProjectService
         }
 
         // Sidechain wiring, now that every track exists (Phase B). Source is a doc index.
-        foreach (var (track, dev, srcIndex) in scDeferred)
+        // A key may name a part of its source's instrument (specs/050); the route pool is shared,
+        // so a key past it is dropped and reported once.
+        int unrouted = 0;
+        foreach (var (track, dev, srcIndex, part) in scDeferred)
         {
             if (srcIndex < newTrackIds.Count && newTrackIds[srcIndex] > 0)
-                engine.SetDeviceSidechainSource(track, dev, newTrackIds[srcIndex]);
+                if (engine.SetDeviceSidechainKey(track, dev, newTrackIds[srcIndex], part) == -2) unrouted++;
         }
-        // Keys of devices inside racks (specs/044), same deferral.
+        // Keys of devices inside racks (specs/044), same deferral and the same route check: a key
+        // the pool can't take is cleared and counted.
         foreach (var (track, n) in nestedScDeferred)
         {
-            if (n.Source < newTrackIds.Count && newTrackIds[n.Source] > 0)
-                engine.RackChainSetSidechain(track, n.Host, n.Chain, n.Slot,
-                    new NestedSidechain(newTrackIds[n.Source], n.TapPre, n.GainDb, n.Mix));
+            if (n.Source >= newTrackIds.Count || newTrackIds[n.Source] <= 0) continue;
+            var sc = new NestedSidechain(newTrackIds[n.Source], n.TapPre, n.GainDb, n.Mix);
+            // Source and part together: only the saved key itself meets the route check.
+            if (engine.RackChainSetSidechainKey(track, n.Host, n.Chain, n.Slot, sc, n.Part) == -2) unrouted++;
         }
         // Instrument React source (Nota Flux), same deferral.
-        foreach (var (track, srcIndex) in instScDeferred)
+        foreach (var (track, srcIndex, part) in instScDeferred)
         {
             if (srcIndex < newTrackIds.Count && newTrackIds[srcIndex] > 0)
-                engine.SetInstrumentSidechainSource(track, newTrackIds[srcIndex]);
+                if (engine.SetInstrumentSidechainKey(track, newTrackIds[srcIndex], part) == -2) unrouted++;
         }
+        if (unrouted > 0)
+            warnings.Add($"{unrouted} sidechain key{(unrouted == 1 ? " was" : "s were")} cleared: all {engine.SidechainRouteCapacity()} sidechain routes are in use.");
         // Group membership (parent stored as a doc index), now that every track exists.
         foreach (var (trackId, parentDocIndex) in groupDeferred)
         {

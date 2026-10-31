@@ -169,7 +169,7 @@ internal static class AuroraFixtures
         ProjectService.Save(doc, bundle, eng);
         if (builtin)
         {
-            // Nothing in it needs format 28, so stamp it 27: the base build opens it too.
+            // Nothing in it needs format 29, so stamp it 27: the base build opens it too.
             string mf = Path.Combine(bundle, ProjectService.ManifestName);
             var node = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(mf))!.AsObject();
             node["formatVersion"] = 27;

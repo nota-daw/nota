@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.57.1** (plus changes in development on `main`). This document describes what is
+**0.58.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -29,13 +29,15 @@ Contents
 
 - **macOS** (≥ 13.0, arm64 + x86_64): CoreAudio, CoreMIDI, **AU + VST3**
   hosting. Distributed as a separate `.dmg` for Apple Silicon and for Intel (ad-hoc signed).
-- **Windows** (x64): WASAPI (shared + **exclusive mode** for minimum latency), WinMM
-  MIDI, **VST3** hosting. Distributed as an Inno Setup installer
+- **Windows** (x64): WASAPI (shared + **exclusive mode** for minimum latency) or **ASIO**
+  (any installed driver; falls back to WASAPI if it can't start), WinMM MIDI, **VST3** hosting. Distributed as an Inno Setup installer
   (`Nota-Setup-<version>-x64.exe`; arm64 is also built).
 - **Linux**: PulseAudio/ALSA (via miniaudio), ALSA MIDI (RtMidi), **VST3** hosting.
   Distributed as a portable **AppImage** (`Nota-<version>-<arch>`) that runs on any distro
   with glibc ≥ 2.28 (RHEL/Alma/Rocky 8+, Debian 10+, Ubuntu 18.10+). Settings live in
-  `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`).
+  `~/.config/nota` (or `$XDG_CONFIG_HOME/nota`). Without a working xdg-desktop-portal file
+  chooser Nota falls back to its own file dialog (`NOTA_FILE_DIALOG=builtin` forces it), and
+  with no audio output that opens it runs on a silent device and says so.
 
 Architecture: engine and DSP in C++20 (CMake + Ninja), UI in .NET 10 / Avalonia 12 (C#),
 with a C ABI + P/Invoke boundary between them. Plugin hosting is isolated in a separate
@@ -68,6 +70,7 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 - **Start window**: the logo follows the theme, recent projects sit in one compact list with
   their dates — click to select, double-click (or the arrow keys and Return) to open. Escape
   or a click outside closes it, keeping the current project.
+- **File → Exit** (Ctrl+Q) on Windows and Linux; Quit Nota (⌘Q) in the app menu on macOS.
 - **Quit without saving** dialog names the project and how long its changes have gone
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
 - **Project key** (KEY cell in the transport bar, saved with the project): loops dropped on
@@ -104,15 +107,18 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 ## Views
 
 Three top-level views, switched by three icon keys in the transport (**Arrangement ·
-Session · Modular**; each names its view in a tooltip); the mixer opens as a separate
-floating window (**View → Mixer**, ⌘M) that is as wide as its channel strips, follows the
-track count and closes with Escape.
+Session · Modular**; each names its view in a tooltip). The Mixer (**View → Mixer**, ⌘⇧M)
+docks as a panel under any of the three, or floats in its own window — see
+[Tracks and mixer](#tracks-and-mixer).
 
 - **Arrangement View** — a linear timeline:
   place, move, trim and duplicate clips; the snap grid (below); scroll and zoom;
   recording into the arrangement (audio and MIDI); split at the cursor or across a
   selection (Cmd/Ctrl+E cuts every track in the selection); clip scrubbing on the ruler.
-  ⌘A selects every clip; moving several selected clips is one undo step.
+  ⌘A selects every clip; moving several selected clips is one undo step. ← / → nudge the
+  selected clips by the grid step (⌥← / ⌥→ by a 64th), ⌥↑ / ⌥↓ move them to the next track
+  that takes them; clips dropped below the last track make a **New track** per source track,
+  with the same instrument, devices and mix.
   A selected time range (⇧-drag) copies, cuts, duplicates and deletes with ⌘C / ⌘X / ⌘D /
   Delete — just the covered part of each track, cut at the range edges; ⌘V pastes clips or a
   range at the playhead onto the track clicked last (a range replaces what it lands on).
@@ -206,20 +212,32 @@ track count and closes with Escape.
   it when it is a group). `Add track ▸ Recent` (Arrangement and Session) lists the five
   instruments added most recently — built-in or plug-in, however they were added — and
   adds one in a click; the list is per user, and an uninstalled plug-in drops out of it.
-- **Several tracks at once**: ⇧-click headers to build a selection (or ⌘A with the headers
-  focused); ⌘C / ⌘X / ⌘V / ⌘D and Delete copy, cut, paste, duplicate and delete the
+- **Several tracks at once**: ⇧-click headers to select a range, ⌘-click (Ctrl on Windows /
+  Linux) to add or remove one (or ⌘A with the headers focused); ⌘C / ⌘X / ⌘V / ⌘D and Delete copy, cut, paste, duplicate and delete the
   selected tracks, and right-clicking the selection groups, colours or freezes them all —
   each as one undo step. Copying, duplicating or deleting a group takes its tracks along;
   pasted tracks land after the selected track, in its group.
-- **Per track**: volume, pan (bipolar bar), mute, solo, arm (ready to record).
+- **Per track**: volume, pan (bipolar bar), mute, solo, arm (ready to record). A click on arm
+  arms that track alone, ⌘-click arms several; **Transport ▸ Auto-arm selected track** (off by
+  default) arms the instrument track you select.
   Double-click resets to the default.
+- **Mixer** (**View → Mixer**, ⌘⇧M / Ctrl+Shift+M): a strip per track, then the returns, then
+  the master (I/O, A/B sends, pan, fader with a stereo meter and dB read-out, M / S / Arm), the
+  **Strips | Stereo map** switch and the pan law footer. It docks as a resizable panel under
+  Arrangement, Session or Modular, above the Devices / Clip panel (either, both or neither),
+  or pops out into its own window for a second screen — the panel's pop-out button, the
+  window's dock button or **View → Mixer in its own window** switch it; the window is as wide
+  as its strips and closes with Escape. Whether it is shown, where and how tall come back on
+  the next launch. Strips fit the height they get: I/O rows hide first, then sends, then the
+  fader shortens; the footer's **Sends** / **I/O** toggles show a hidden section anyway (the
+  strips then scroll). Faders, pan and M / S / Arm follow changes made anywhere else.
 - **Pan law** (per project, in the Mixer footer: **Pan law** Stereo / Balance): under
   Stereo, panning a stereo track or return moves its whole image — at full pan both
   channels play from one side; under Balance the opposite channel fades out. Mono
   material and centred tracks sound the same either way. New projects use Stereo; projects
   from earlier versions keep Balance and are marked **Older project**. Switching is
   click-free during playback and one undo step. Groups keep their balance (marked **BAL**).
-- **Stereo Map** (Mixer window, **Strips | Stereo map** in its title bar): every track,
+- **Stereo Map** (Mixer, **Strips | Stereo map** in its panel or window title bar): every track,
   return and the master as a dot at its pan (left–right) and fader (up–down), with a measured
   cloud — where the sound really sits, how wide it is (from the phase correlation) and how
   loud — and the master correlation under the map. Drag a dot to set pan and volume at once
@@ -238,6 +256,12 @@ track count and closes with Escape.
     Recording on the receiver prints the incoming MIDI into a clip. Saved with the
     project.
   - **Send/Return** buses (sends to returns) with a return list.
+  - **Sidechain keys** — a device's key (and Nota Flux's React) listens to another track, or
+    to one pad of a Drum Rack, one chain of an Instrument Rack or one voice of Nota Rhythm on
+    it: every source picker lists the parts under their track. Pre takes a part before its own
+    effects, Post after them and its level and pan. A muted or solo-silenced pad still drives
+    its key (a "ghost kick"); the key follows its pad through edits and is saved with the
+    project. Up to 16 distinct sources at once.
 - **Level meters** (peak/RMS) on every channel and on the master, plus true peak.
 - **Device chain** per track: instrument + effects + MIDI effects, laid out in a row. The
   **+** at its end opens the browser on Audio effects with the cursor in the search.
@@ -456,7 +480,7 @@ track count and closes with Escape.
 
 - **Recording** from an input (microphone, line, interface) onto an audio track, with
   monitoring (in/auto/off). The input is **Ext 1** or **Ext 2** (mono, centred) or **Ext 1/2**
-  (stereo pair); new tracks take Ext 1.
+  (stereo pair); new tracks take Ext 1. MCP `set_input_channels`.
 - **Audio clips as samples** — drag an arrangement clip onto a track with a Sampler, Nota
   Grain, Drum Rack (next free pad) or Instrument Rack, or anywhere a sample goes (a pad, a
   Rhythm voice, a Session slot); hovering an instrument track opens its devices. The sample
@@ -704,13 +728,14 @@ audio effects after it keep running and keep their settings; saved with the proj
   numbered nodes, the selected band's curve, a separate Side curve, an input / output spectrum
   analyzer — a filled 1/6-octave curve with fast-rise / slow-fall ballistics, switched Pre / Post /
   Off, with a 60 / 90 / 120 dB Range and Peak hold), a slim row of band chips over the graph (number,
-  filter shape, frequency) with Analyzer and Auto gain over its corner, and the selected band's settings,
+  filter shape, frequency) with Analyzer and Auto gain over its corner, and the selected band's settings
+  (with a **Label** shown next to its node — **Labels** hides them — and a multiline **Note**),
   Scale and Output in one narrow column at the right that folds away; 34 factory
   presets; MCP `read_eq8`, `set_eq8_band`, `set_eq8`.
 - **Nota Compressor** (1) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
   look-ahead (reported as latency for PDC), Peak/RMS/Auto detection, hold, auto-release,
-  auto-gain, Range, MIX; a sidechain key (internal or another track, pre/post tap, External
-  key switch) through 2-pole HP/LP filters with Q and SC Gain, Listen, Stereo link on/off.
+  auto-gain, Range, MIX; a sidechain key (internal, another track or one pad / chain / voice
+  of it, pre/post tap, External key switch) through 2-pole HP/LP filters with Q and SC Gain, Listen, Stereo link on/off.
   Tabs: Curve (draggable transfer curve + gain-reduction history, crest in → out) / Motion
   (reduction envelope against the input, measured transient and recovery) / Sidechain (key
   spectrum under draggable filters), and Dynamics / Output, with a LEVEL column and a status
@@ -859,6 +884,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   on a rising or falling edge, a level dragged on the trace, holdoff, 20 µs–20 ms per division,
   A/B cursors for Δt / 1/Δt / ΔV with the matching note, and Export WAV of the captured window.
   *Waterfall*: a 4 / 12 / 60-second spectrogram with gain, floor, contrast and FFT overlap.
+  **Sync** lines the scope up with the song: a Span from a quarter beat to four bars, beat and
+  bar lines and a sweep at the playhead. A sidechain **Key** track is drawn in teal over the
+  trace or **Stacked** under it, with its own gain; Lens also opens in its own resizable window.
   A permanent SCALE rail, Freeze, a note grid, a linear or log frequency axis, an L+R / L / R
   source that can read Mid/Side, and a status line with peak, crest, momentary LUFS and L/R
   correlation. Readable from MCP with `read_analyzer`.
@@ -953,7 +981,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   note)** — glide bends each new note from the last one on instruments that take per-note bend.
   A chain can hold **Nota Mosaic** (its full editor, program saved with the rack) or a **Drum
   Rack** — one level deep — whose card opens in a window with its pads, macros and factory kits;
-  outer macros can drive its macros. MCP `get_rack` with `nestedChain` reads it.
+  outer macros can drive its macros. MCP `get_rack` with `nestedChain` reads it. A new rack
+  starts empty: drop an instrument or a preset on it for the first chain.
 - **Nota Drum Rack** — 4×4 pads (banks C1–C4, up to 64 pads), Pads, Mixer, Chain and Macro views,
   per-pad Volume/Pan/Tune/Decay, named pads (rename, re-choke or remove from a pad's
   right-click menu), choke groups (monophonic cut), Swing/Humanize, hot-swap, a pad
@@ -1225,7 +1254,11 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Popup rack editors** (full UI / Params).
 - **Typed values** — ⌥-click any knob, fader or slider (or double-click the number next to
   it) and type the value: "−6", "1.5k", "250 ms", "L 30", "1/16". Double-click the control
-  itself resets it to the default.
+  itself resets it to the default; right-click offers **Type value…** and **Reset to
+  default**. The same works on graph handles (EQ bands — frequency, gain, Q — filter
+  pads, crossovers, thresholds, trim and loop markers, the Stereo Map dots), envelope nodes
+  (instrument envelopes and audio clips' ADSR handles) and mod-matrix cells (double-click
+  or **Clear** removes a route); Tab moves to the handle's next value.
 - **User manual** (EN / RU, https://nota-daw.github.io/nota-docs/) — **Help ▸ Documentation**
   opens it in the system language, the start window links to the first-track tutorial, and
   each device header menu's **Documentation** item opens that device's page.
@@ -1237,7 +1270,12 @@ audio effects after it keep running and keep their settings; saved with the proj
 ## Preferences
 
 - **Audio**: device, sample rate, buffer size (latency); **WASAPI exclusive mode**
-  (Windows).
+  (Windows). On Windows, **Audio system** WASAPI / **ASIO**: the driver, the output and input
+  channel pairs (by the driver's channel names; other outputs silent), **Driver settings…**
+  for the driver's own panel (buffer size changes there are picked up without a restart);
+  the Latency line shows the driver's latency and round trip. Recorded takes are moved
+  earlier by the driver's reported latency; a missing or failed driver falls back to WASAPI
+  with the reason in the status bar, and **Try again** returns to ASIO.
 - **MIDI**: which MIDI inputs are enabled (the house checkboxes); **MPE** on/off (on by
   default) and the per-note bend range (±12 / 24 / 48 / 96 semitones).
 - **Gamepads** (macOS): enable gamepad input (notes and mapped controls); the controller
@@ -1309,10 +1347,13 @@ Coverage:
   name), load a sample onto a track or into a rack chain, read sample info, and read / shape a
   Sampler in real units (`read_sampler`, `set_sampler`).
 - **Mixer**: sends to returns, the return list, track and master meters, record source.
+- **Sidechain**: `list_sidechain_sources` (tracks with their pads / chains / voices and the free
+  routes), `set_device_sidechain` / `get_device_sidechain` with a `sourcePart`, and Nota
+  Flux's React with `set_instrument_sidechain` / `get_instrument_sidechain`.
 - **Plugins**: list the AU/VST3 catalogue, look up by id, add as an instrument or insert
   effect, open and close the editor, read and write parameters and state.
 - **Presets**: factory (list, apply to a new track or in place) and user (list, apply,
-  save).
+  save); `read_preset_state` reads a device's loaded preset and whether it has changed.
 - **Audio Effect Rack**: snapshot, Parallel/Series/Select mode, dry/wet, volume,
   chain-select, add, duplicate and remove chains, parameters, 8 macros, the selector as a
   macro target.

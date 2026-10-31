@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -15,8 +16,9 @@ namespace Nota.App;
     // Interactive filter response for Nota Volt (and Bass, Aurora, Operator): drag anywhere to
     // set cutoff (X) and resonance (Y) of the targeted filter, recording gestures. Drawn like
     // Auto Filter's curve: the real 2-pole response by type (LP / HP / BP / Notch / Morph) over a
-    // log-frequency grid, the handle on the curve and the cutoff top-right.
-    internal sealed class VoltFilter : Control, IMidiLearnRegions
+    // log-frequency grid, the handle on the curve and the cutoff top-right. ⌥-click types the
+    // cutoff, then (Tab) the resonance; double-click resets both (specs/035-typed-value-entry).
+    internal sealed class VoltFilter : Control, IMidiLearnRegions, IValueEntryHost
     {
         private readonly IAudioEngine _e;
         private readonly int _t;
@@ -30,9 +32,28 @@ namespace Nota.App;
         /// engine actually does.</summary>
         public (double Lo, double Hi) FreqRange { get; set; } = (20.0, 18000.0);
 
-        public VoltFilter(IAudioEngine e, int t) { _e = e; _t = t; MinWidth = 150; MinHeight = 96; }
+        public VoltFilter(IAudioEngine e, int t) { _e = e; _t = t; MinWidth = 150; MinHeight = 96; ValueEntry.AttachHost(this); }
         public void Target(string title, (int, string) freq, (int, string) reso, int type)
-        { _title = title; _freq = freq; _reso = reso; _type = type; InvalidateVisual(); }
+        {
+            if (title != _title || freq != _freq || reso != _reso) _fields = null;
+            _title = title; _freq = freq; _reso = reso; _type = type; InvalidateVisual();
+        }
+
+        // ---- typed entry: the whole pad is the handle (a press anywhere moves it) ----
+        private ValueField[]? _fields;
+        public IReadOnlyList<ValueField> AllFields => _fields ??= new[]
+        {
+            Field(_freq, "Cutoff", v => NotaNum.Hz(FreqRange.Lo * Math.Pow(FreqRange.Hi / FreqRange.Lo, v))),
+            Field(_reso, "Reso", NotaNum.Pct),
+        }.OfType<ValueField>().ToArray();
+        private ValueField? Field((int i, string id) p, string name, Func<double, string> text) => p.i < 0 ? null
+            : ValueEntry.InstrumentParam(_e, _t, p.i, p.id, $"{NotaText.Label(_title)} · {name}", text, InvalidateVisual);
+        public IReadOnlyList<ValueField>? FieldsAt(Point p) => AllFields.Count > 0 ? AllFields : null;
+        public Rect AnchorOf(ValueField field)
+        {
+            var (x0, x1, top, _) = Geo();
+            return ValueEntry.Near(new Point(x0 + G(_freq) * (x1 - x0), top), Bounds.Size);
+        }
         public void Refresh() => InvalidateVisual();
         private float G((int i, string id) p) => p.i >= 0 ? _e.PluginParamGet(_t, -1, p.i) : 0f;
 
@@ -48,7 +69,9 @@ namespace Nota.App;
         }
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)
-        { _drag = true; Gest(true); e.Pointer.Capture(this); Apply(e.GetPosition(this)); e.Handled = true; }
+        {
+            if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;   // right-click: the parameter menu
+            _drag = true; Gest(true); e.Pointer.Capture(this); Apply(e.GetPosition(this)); e.Handled = true; }
         protected override void OnPointerMoved(PointerEventArgs e) { if (_drag) Apply(e.GetPosition(this)); }
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         { if (_drag) { _drag = false; InvalidateVisual(); Gest(false); e.Pointer.Capture(null); } }

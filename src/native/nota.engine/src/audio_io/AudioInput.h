@@ -2,9 +2,10 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Audio input capture abstraction. macOS ships a CoreAudio (HAL) implementation
-// (CoreAudioInput); the Windows port ships a miniaudio/WASAPI one. The engine
-// talks only to this interface (via createAudioInput() in AudioBackendFactory)
-// so the capture layer stays swappable, mirroring AudioBackend for output.
+// (CoreAudioInput); Windows and Linux a miniaudio one, and Windows also AsioInput,
+// which shares the running ASIO driver with AsioBackend instead of opening a device
+// (specs/049). The engine talks only to this interface (via createAudioInput() in
+// AudioBackendFactory) so the capture layer stays swappable, mirroring AudioBackend.
 
 #pragma once
 

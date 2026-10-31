@@ -68,7 +68,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         double MaxG() => MaxGainDb(P(MaxGain));
 
         // ---- reference track (the device's sidechain) ---------------------------------------
-        string TrackName(int id) => TrackNames.Of(engine, id);
+        // The reference may be one pad / chain / voice of a track (specs/050).
+        string RefName() => SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di));
         int Ref() => engine.DeviceSidechainSource(track, di);
         bool HasRef() => Ref() >= 0;
 
@@ -155,7 +156,9 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         }
 
         // A dropdown menu under a control.
-        void Menu(Control at, IEnumerable<(string Label, bool Current, Action Pick)?> items)
+        // Key-source rows (specs/050) go after the others, unavailable ones disabled.
+        void Menu(Control at, IEnumerable<(string Label, bool Current, Action Pick)?> items,
+            IEnumerable<(string Label, bool Checked, Action? Pick, string? Tip)>? sources = null)
         {
             var fly = new MenuFlyout();
             foreach (var it in items)
@@ -167,6 +170,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
                 mi.Click += (_, _) => { pk(); RefreshAll(); };
                 fly.Items.Add(mi);
             }
+            foreach (var row in sources ?? Array.Empty<(string, bool, Action?, string?)>())
+                fly.Items.Add(SidechainSourcePicker.MenuItemFor(row, RefreshAll));
             fly.ShowAt(at);
         }
 
@@ -184,13 +189,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             }
             list.Add(null);
             list.Add(("Fixed target — no reference", !HasRef(), () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); }));
-            for (int i = 0; i < engine.TrackCount; i++)
-                if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track)
-                {
-                    int id = ti.Id;
-                    list.Add(("Match track: " + TrackName(id), Ref() == id, () => { engine.SetDeviceSidechainSource(track, di, id); ctx.NotifyChanged(); }));
-                }
-            Menu(at, list);
+            Menu(at, list, SidechainSourcePicker.MenuRows(engine, track, di, ctx.NotifyChanged, "Match track: "));
         }
 
         // ======================================================================
@@ -216,7 +215,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         fader.Changed += db => { Raw(Gain, GainNorm(db)); RefreshAll(); };
         fader.ResetRequested += () => { Reset(Gain); RefreshAll(); };
         Learn(fader, Gain);
-        ToolTip.SetTip(fader, "The correction around 0\u2009dB, ±Max Gain. In Manual drag it (Shift for fine steps); double-click resets to 0\u2009dB. In Auto it shows the ride");
+        ToolTip.SetTip(fader, MenuKit.Keys("The correction around 0\u2009dB, ±Max Gain. In Manual drag it (Shift for fine steps); ⌥-click types, double-click resets to 0\u2009dB. In Auto it shows the ride"));
+        ValueEntry.Attach(fader, ValueEntry.DeviceParam(engine, track, di, Gain, "Gain", v => Sgn(GainDb(v)) + "\u2009dB", RefreshAll));
 
         var maxTop = Mono("", 7, TextDisabled);
         var modeTag = Mono("", 7, TextDisabled);
@@ -266,7 +266,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         var targetRow = Slider("TARGET", Target, TargetF,
             "Target loudness, −36 … 0 LUFS. Click the value for the standards or to match another track's loudness (a reference); drag the dashed line in the graph for the same",
             38, 50, dim: HasRef,
-            valueOverride: () => HasRef() ? ("REF " + TrackName(Ref()), TextSecondary) : ("", null),
+            valueOverride: () => HasRef() ? ("REF " + RefName(), TextSecondary) : ("", null),
             valueClick: TargetMenu);
         var trimRow = Slider("TRIM", Trim, TrimF, "Trim — a fixed offset after the correction, −12 … +12\u2009dB (the output then sits that far off the target)", 38, 50, bipolar: true);
 
@@ -291,7 +291,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         hist.Changed += v => { Raw(Target, v); RefreshAll(); };
         hist.ResetRequested += () => { Reset(Target); RefreshAll(); };
         Learn(hist, Target);
-        ToolTip.SetTip(hist, "The last 8\u2009s: input, output and the target with its ±1\u2009LU band (momentary loudness). Drag up / down to move the target; double-click resets it");
+        ToolTip.SetTip(hist, MenuKit.Keys("The last 8\u2009s: input, output and the target with its ±1\u2009LU band (momentary loudness). Drag up / down to move the target; ⌥-click types, double-click resets it"));
+        ValueEntry.Attach(hist, ValueEntry.DeviceParam(engine, track, di, Target, "Target", TargetF, RefreshAll));
 
         IBrush Dim() => TextDisabled;
         var rIn = Mono("", 8, TextSecondary); var rOut = Mono("", 8, TextPrimary); var rDelta = Mono("", 8, TextSecondary); var rTp = Mono("", 8, TextSecondary);
@@ -363,7 +364,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         ceilBox.PointerReleased += (_, e) => { if (cd) { cd = false; End(Ceiling); e.Pointer.Capture(null); } };
         ceilBox.PointerCaptureLost += (_, _) => { if (cd) { cd = false; End(Ceiling); } };
         Learn(ceilBox, Ceiling);
-        ToolTip.SetTip(ceilBox, "Ceiling, −6 … 0\u2009dBTP — drag up / down (Shift for fine steps), double-click resets to −1.0");
+        ToolTip.SetTip(ceilBox, MenuKit.Keys("Ceiling, −6 … 0\u2009dBTP — drag up / down (Shift for fine steps), ⌥-click to type, double-click resets to −1.0"));
+        ValueEntry.Attach(ceilBox, ValueEntry.DeviceParam(engine, track, di, Ceiling, "Ceiling", v => NotaNum.F($"{CeilingDb(v):0.0;−0.0;0.0}\u2009dBTP"), RefreshAll), ceilTxt);
         readouts.Add(() =>
         {
             ceilTxt.Text = NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0}\u2009dBTP");
@@ -458,7 +460,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             else
             {
                 foot = (locked ? "On target" : "Catching up") + " · " + ScaleLong[si] + " · window " + WindowF(P(WindowP));
-                if (HasRef()) foot += " · matching " + TrackName(Ref());
+                if (HasRef()) foot += " · matching " + RefName();
                 else if (Math.Abs(trim) > 0.05) foot += " · trim " + Sgn(trim) + "\u2009dB";
             }
             statusLeft.Text = foot; statusLeft.Foreground = footInk;

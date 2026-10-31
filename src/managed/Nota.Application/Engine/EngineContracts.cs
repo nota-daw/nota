@@ -288,6 +288,15 @@ public readonly record struct NestedCcDest(int Device, int Chain, int Slot, int 
 /// <summary>A rack chain child's sidechain key (specs/044); SourceTrack -1 = none.</summary>
 public readonly record struct NestedSidechain(int SourceTrack, bool TapPre, float GainDb, float Mix);
 
+/// <summary>A sidechain key (specs/050): the source track (-1 = none) and the part of its
+/// instrument — a Drum Rack pad, an Instrument Rack chain or a Rhythm voice — as its current
+/// index; -1 = the whole track, -2 = the keyed part is gone (the key is silent).</summary>
+public readonly record struct SidechainKey(int Source, int Part)
+{
+    public const int WholeTrack = -1, Missing = -2;
+    public static readonly SidechainKey None = new(-1, WholeTrack);
+}
+
 /// <summary>Why nota_track_group_devices refused a run (specs/044).</summary>
 public enum GroupRefusal
 {
@@ -430,6 +439,13 @@ public readonly record struct AutomationLaneInfo(AutomationTarget Target, int De
 
 /// <summary>An audio device: a stable UID (persistence key) and a display name (M7-1).</summary>
 public readonly record struct AudioDevice(string Uid, string Name);
+
+/// <summary>The audio system on Windows (specs/049). Elsewhere always <see cref="Wasapi"/>, meaning
+/// the platform's native backend.</summary>
+public enum AudioSystem { Wasapi = 0, Asio = 1 }
+
+/// <summary>What the audio driver asked for since the last poll (NotaAudioDeviceEvent).</summary>
+public enum AudioDeviceEvent { None = 0, ResetRequested = 1, DriverFailed = 2 }
 
 /// <summary>A MIDI input source: a stable UID (persistence key) and a display name (M7-2).</summary>
 public readonly record struct MidiDevice(string Uid, string Name);

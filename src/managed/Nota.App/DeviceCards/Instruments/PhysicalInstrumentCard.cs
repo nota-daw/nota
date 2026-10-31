@@ -86,6 +86,11 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
 
         var noiseEnv = new VoltEnv(engine, track) { VerticalAlignment = VerticalAlignment.Stretch, MinWidth = 90, MinHeight = 50 };
         noiseEnv.Target("NOISE ENV", P("noisea"), P("noised"), P("noises"), P("noiser"));
+        noiseEnv.Format = (k, n) => k switch   // ⌥-click a breakpoint to type it
+        {
+            0 => Secs(PhysicalModel.NoiseAttack((float)n)), 1 => Secs(PhysicalModel.NoiseDecay((float)n)),
+            2 => Pct((float)n), _ => Secs(PhysicalModel.NoiseRelease((float)n)),
+        };
         var partials = new PhysPartialsView { VerticalAlignment = VerticalAlignment.Stretch };
         ToolTip.SetTip(partials, "Partials as the engine tunes them — drag ↔ to spread the series (Ratio), ↕ to tilt the highs (Bright)");
 
@@ -226,13 +231,22 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             Grid.SetColumn(typeChips, 1); head.Children.Add(typeChips);
             Grid.SetColumn(envCap, 2); head.Children.Add(envCap);
 
-            // The ADSR editor with its stage times along the bottom edge.
-            var envTimes = Mono("", NotaPalette.TextAxis, NotaType.Axis);
-            envTimes.HorizontalAlignment = HorizontalAlignment.Right; envTimes.VerticalAlignment = VerticalAlignment.Bottom;
-            envTimes.Margin = new Thickness(0, 0, 6, 1); envTimes.IsHitTestVisible = false;
-            readouts.Add(() => envTimes.Text =
-                $"{Secs(PhysicalModel.NoiseAttack(G("noisea")))} · {Secs(PhysicalModel.NoiseDecay(G("noised")))} · "
-                + $"{Pct(G("noises"))} · {Secs(PhysicalModel.NoiseRelease(G("noiser")))}");
+            // The ADSR editor with its stage times along the bottom edge — each one typeable
+            // (double-click it, specs/035), since no A/D/S/R knobs sit beside the graph.
+            var envTimes = new StackPanel
+            {
+                Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 6, 1),
+            };
+            for (int k = 0; k < 4; k++)
+            {
+                int stage = k;
+                if (k > 0) envTimes.Children.Add(Mono(" · ", NotaPalette.TextAxis, NotaType.Axis));
+                var tv = Mono("", NotaPalette.TextAxis, NotaType.Axis);
+                readouts.Add(() => tv.Text = noiseEnv.Field(stage) is { } f ? f.TextAt(f.Get()) : "");
+                if (noiseEnv.Field(stage) is { } vf) ValueEntry.Attach(tv, vf);
+                envTimes.Children.Add(tv);
+            }
             var envHost = new Panel { Children = { noiseEnv, envTimes } };
 
             var knobs = KnobGrid(2,

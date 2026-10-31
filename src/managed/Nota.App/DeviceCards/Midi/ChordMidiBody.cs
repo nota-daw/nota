@@ -487,7 +487,9 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             void Stop() { if (!drag) return; drag = false; End(p); Edited(); }
             hit.PointerReleased += (_, ev) => { if (drag) ev.Pointer.Capture(null); Stop(); };
             hit.PointerCaptureLost += (_, _) => Stop();
-            ToolTip.SetTip(hit, $"Shift {s + 1} velocity offset — drag sideways, double-click resets");
+            ToolTip.SetTip(hit, MenuKit.Keys($"Shift {s + 1} velocity offset — drag sideways, ⌥-click to type, double-click resets"));
+            ValueEntry.Attach(hit, new ValueField($"Shift {s + 1} velocity", () => (GI(p) + 64) / 127.0, n => Sgn((int)Math.Round(-64 + n * 127)),
+                n => { S(p, (int)Math.Round(-64 + Math.Clamp(n, 0, 1) * 127)); ui.CustomPinned = true; Refresh(); }, () => Begin(p), () => End(p), 64 / 127.0) { After = Edited }, tb);
             Learn(hit, p, $"Shift {s + 1} velocity");
             readouts.Add(() => { int v = GI(p); tb.Text = Sgn(v); tb.Foreground = v != 0 ? Txt : Cap; });
             return hit;

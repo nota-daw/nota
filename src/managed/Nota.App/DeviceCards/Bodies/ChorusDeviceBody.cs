@@ -245,7 +245,8 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         plot.Changed += a => { Raw(Amount, Math.Round(a * 100) / 100); RefreshAll(); };
         plot.ResetRequested += () => { Reset(Amount); RefreshAll(); };
         Learn(plot, Amount);
-        ToolTip.SetTip(plot, "Each voice over two LFO cycles — its delay (τ) or its detune (ct) — and where it is now. Drag up / down for Amount; double-click resets it.");
+        ToolTip.SetTip(plot, MenuKit.Keys("Each voice over two LFO cycles — its delay (τ) or its detune (ct) — and where it is now. Drag up / down for Amount; ⌥-click types, double-click resets it."));
+        ValueEntry.AttachAll(plot, ValueEntry.DeviceParam(engine, track, di, Amount, "Amount", PctF, RefreshAll));
 
         var field = new ChorusFieldView { Margin = new Thickness(0, 4, 0, 0) };
         ToolTip.SetTip(field, "Where the voices sit in the stereo field (Width) and how far each is detuned right now");

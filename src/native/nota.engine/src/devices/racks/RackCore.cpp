@@ -180,6 +180,37 @@ bool RackCore::removeChain(int32_t chain) {
     return true;
 }
 
+// What the blob leaves out because it points outside the rack: the children's sidechain keys
+// and the Arps' CC targets. A target in the source chain itself moves to the copy.
+void RackCore::copyExternalLinks(const RackChain& src, RackChain& dst) {
+    if (src.devices.size() == dst.devices.size())
+        for (size_t i = 0; i < src.devices.size(); ++i) {
+            const Device* s = src.devices[i].get();
+            Device* d = dst.devices[i].get();
+            if (!s || !d) continue;
+            d->setSidechainSourceTrackId(s->sidechainSourceTrackId());
+            d->setSidechainPart(s->sidechainPart());
+            d->setSidechainTapPre(s->sidechainTapPre());
+            d->setSidechainGainDb(s->sidechainGainDb());
+            d->setSidechainMix(s->sidechainMix());
+        }
+    if (src.instrument && dst.instrument) {
+        dst.instrument->setSidechainSourceTrackId(src.instrument->sidechainSourceTrackId());
+        dst.instrument->setSidechainPart(src.instrument->sidechainPart());
+    }
+    if (src.midiDevices.size() == dst.midiDevices.size())
+        for (size_t i = 0; i < src.midiDevices.size(); ++i) {
+            const MidiDevice* s = src.midiDevices[i].get();
+            MidiDevice* d = dst.midiDevices[i].get();
+            if (!s || !d) continue;
+            d->setCcDepth(s->ccDepth());
+            if (s->ccDestDevice() < 0 && s->ccDestChainUid() == 0) continue;
+            d->setCcDest(s->ccDestDevice(), s->ccDestParam());
+            if (const uint64_t uid = s->ccDestChainUid())
+                d->setCcDestNested(uid == src.uid ? dst.uid : uid, s->ccDestSlot());
+        }
+}
+
 int32_t RackCore::duplicateChain(int32_t chain) {
     if (chain < 0 || chain >= chainCount()) return -1;
     // Rebuild the chain from this rack's own blob in a scratch rack: the blob already knows
@@ -191,7 +222,9 @@ int32_t RackCore::duplicateChain(int32_t chain) {
     if (!tmp.authoring_ || chain >= static_cast<int32_t>(tmp.authoring_->chains.size())) return -1;
     auto ns = copyState();
     const int32_t at = chain + 1;
-    ns->chains.insert(ns->chains.begin() + at, std::move(tmp.authoring_->chains[chain]));
+    RackChain& copy = tmp.authoring_->chains[chain];
+    copyExternalLinks(ns->chains[chain], copy);
+    ns->chains.insert(ns->chains.begin() + at, std::move(copy));
     std::vector<MacroMapping> copies;
     for (auto& m : ns->mappings) {
         if (m.chainIndex == chain) {
@@ -714,6 +747,13 @@ std::vector<uint8_t> RackCore::serialize() const {
         };
         putPreview(c.instrument ? c.instrument->editorPreview : EditorPreview{});
         for (auto& d : c.devices) putPreview(d ? d->editorPreview() : EditorPreview{});
+        // v11: each built-in device's state blob (an EQ-8's band labels, a looper's take, a
+        // nested rack); a hosted plug-in's went in above. 0 = none.
+        for (auto& d : c.devices) {
+            std::vector<uint8_t> ds = d && d->builtinKind() >= 0 ? d->getState() : std::vector<uint8_t>{};
+            putU32(b, static_cast<uint32_t>(ds.size()));
+            b.insert(b.end(), ds.begin(), ds.end());
+        }
     }
     return b;
 }
@@ -882,6 +922,12 @@ void RackCore::deserialize(const uint8_t* data, int32_t size) {
                 if (d) d->setEditorPreview(std::move(dp));
             }
         }
+        if (ver >= 11)
+            for (auto* d : devAt) {
+                const uint32_t n = getU32(cur);
+                const uint8_t* p = cur.take(n);
+                if (d && p && n > 0 && d->builtinKind() >= 0) d->setState(p, static_cast<int32_t>(n));
+            }
         ns->chains.push_back(std::move(c));
     }
     commit(ns);

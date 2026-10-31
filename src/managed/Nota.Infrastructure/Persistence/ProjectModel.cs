@@ -51,7 +51,7 @@ public sealed class ProjectDocument
     /// Capture, written to <c>plugin-states/</c> by Save; not serialized.</summary>
     [JsonIgnore] public Dictionary<string, byte[]> StateBlobs { get; } = new();
 
-    /// <summary>Nota Aurora custom wavetables (format v28, specs/053): relative bundle path
+    /// <summary>Nota Aurora custom wavetables (format v29, specs/053): relative bundle path
     /// -&gt; the table's frames (2048 floats each). Populated by Capture, written to
     /// <c>samples/</c> as float32 WAV by Save; not serialized.</summary>
     [JsonIgnore] public Dictionary<string, float[]> TableRefs { get; } = new();
@@ -223,6 +223,9 @@ public sealed class NestedSidechainDto
     public int Chain { get; set; }
     public int Slot { get; set; }
     public int Source { get; set; } = -1;
+    /// <summary>The part of the source's instrument (index at save time; -1 = the whole track).
+    /// Format v28, specs/050.</summary>
+    public int Part { get; set; } = -1;
     public bool TapPre { get; set; }
     public float GainDb { get; set; }
     public float Mix { get; set; } = 1.0f;
@@ -336,12 +339,15 @@ public sealed class InstrumentDto
     /// <summary>Sidechain source ("React", Nota Flux) as a track INDEX in this document
     /// (-1 = none). Resolved to a live track id on load, since ids are reassigned.</summary>
     public int SidechainSource { get; set; } = -1;
+    /// <summary>The part of the source React listens to (index at save time; -1 = the whole
+    /// track). Format v28, specs/050.</summary>
+    public int SidechainPart { get; set; } = -1;
     /// <summary>Drawn as a narrow strip in the Devices panel (format v23, specs/022).</summary>
     public bool Folded { get; set; }
     /// <summary>Nota Rhythm (Kind == 12) per-voice one-shots (only sample-source voices).</summary>
     public List<VoiceSampleDto>? VoiceSamples { get; set; }
     /// <summary>Nota Aurora (Kind == 5) imported wavetables, one per oscillator that holds one
-    /// (format v28, specs/053); null = none.</summary>
+    /// (format v29, specs/053); null = none.</summary>
     public List<WavetableDto>? Wavetables { get; set; }
     /// <summary>The card's on/off switch is off: the instrument makes no sound (#148).</summary>
     public bool Bypassed { get; set; }
@@ -351,7 +357,7 @@ public sealed class InstrumentDto
 
 /// <summary>One drum voice's sample for Nota Rhythm: the voice index + a bundle-relative
 /// path into <c>samples/</c>.</summary>
-/// <summary>One Nota Aurora oscillator's imported wavetable (format v28, specs/053): its frames
+/// <summary>One Nota Aurora oscillator's imported wavetable (format v29, specs/053): its frames
 /// as a float32 WAV in <c>samples/</c> (a <c>clm </c> chunk names the 2048-sample frame), the
 /// name it was imported as, how the file was read (0 wavetable file, 1 single cycle,
 /// 2 recording) and whether the oscillator plays it. <see cref="Missing"/>: the table could not
@@ -480,6 +486,10 @@ public sealed class DeviceDto
     /// <summary>Sidechain source as a track INDEX in this document (-1 = none). Resolved to a
     /// live track id on load, since ids are reassigned. Phase B (format v15).</summary>
     public int SidechainSource { get; set; } = -1;
+    /// <summary>The part of the source track's instrument the key listens to — a Drum Rack pad,
+    /// an Instrument Rack chain or a Rhythm voice — as its index at save time; -1 = the whole
+    /// track (format v28, specs/050).</summary>
+    public int SidechainPart { get; set; } = -1;
     /// <summary>Sidechain detector gain in dB (Phase D, format v16).</summary>
     public float SidechainGain { get; set; }
     /// <summary>Sidechain dry/wet, 0..1 (Phase D, format v16). Default 1 = fully wet.</summary>

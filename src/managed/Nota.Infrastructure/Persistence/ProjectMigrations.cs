@@ -110,9 +110,14 @@ public static class ProjectMigrations
         // v26 -> v27: hosted plug-ins and instruments gain Preview, the picture of their window
         // (specs/046). Absent in v26 documents; null = no preview, the card stays plain — no-op.
         new Migration(26, _ => { }),
-        // v27 -> v28: Nota Aurora instruments gain Wavetables, their imported tables
-        // (specs/053). Absent in v27 documents; null = the built-in tables — no-op.
+        // v27 -> v28: sidechain keys may name one part of the source's instrument (a Drum Rack
+        // pad, an Instrument Rack chain, a Rhythm voice; specs/050): DeviceDto / InstrumentDto
+        // SidechainPart and NestedSidechainDto.Part. Absent in v27 documents = -1, the whole
+        // track — no-op.
         new Migration(27, _ => { }),
+        // v28 -> v29: Nota Aurora instruments gain Wavetables, their imported tables
+        // (specs/053). Absent in v28 documents; null = the built-in tables — no-op.
+        new Migration(28, _ => { }),
     };
 
     /// <summary>Migrates <paramref name="root"/> up to <see cref="ProjectService.CurrentFormatVersion"/>

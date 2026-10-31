@@ -641,7 +641,8 @@ public interface IAudioEngine : IDisposable
     NestedCcDest? RackChainMidiCcDest(int trackId, int rackAddress, int chain, int index);
     bool RackChainMidiSetCcDest(int trackId, int rackAddress, int chain, int index, NestedCcDest dest);
     NestedSidechain? RackChainSidechain(int trackId, int rackAddress, int chain, int slot);
-    bool RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc);
+    /// <summary>0 = set, -1 = bad address, -2 = no free route (the key is left as it was).</summary>
+    int RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc);
     float MidiEffectCcDepth(int trackId, int index);
     /// <summary>Copies up to maxSamples of the device's live readings into outSamples; returns
     /// the count written. Each device defines its own layout (the analysers: a telemetry block,
@@ -681,6 +682,31 @@ public interface IAudioEngine : IDisposable
     int InstrumentSidechainSource(int trackId);
     /// <summary>Whether a track's instrument listens to a sidechain (Nota Flux).</summary>
     bool InstrumentAcceptsSidechain(int trackId);
+    // Sidechain sub-sources (specs/050): a key may name one part of the source track's
+    // instrument (a Drum Rack pad, an Instrument Rack chain, a Rhythm voice) by its current
+    // index; the engine keeps the key on that part through reorder / insert / delete of others.
+    /// <summary>Parts of the track's instrument (0 = not a multi-part instrument).</summary>
+    int TrackPartCount(int trackId);
+    /// <summary>Display name of a part: the chain name, else its instrument's.</summary>
+    string TrackPartName(int trackId, int index);
+    /// <summary>Key a device off a track (part -1) or one part of it. 0 = set, -1 = bad address
+    /// or part, -2 = no free route (the key is left as it was).</summary>
+    int SetDeviceSidechainKey(int trackId, int deviceIndex, int sourceTrackId, int part);
+    SidechainKey DeviceSidechainKey(int trackId, int deviceIndex);
+    /// <summary>The same for an instrument's React key (Nota Flux) — always the Post tap.</summary>
+    int SetInstrumentSidechainKey(int trackId, int sourceTrackId, int part);
+    SidechainKey InstrumentSidechainKey(int trackId);
+    /// <summary>The part of a rack chain child's key (save / load; after RackChainSetSidechain).</summary>
+    int RackChainSidechainPart(int trackId, int rackAddress, int chain, int slot);
+    int RackChainSetSidechainPart(int trackId, int rackAddress, int chain, int slot, int part);   // 0 / -1 / -2 as above
+    /// <summary>A rack child's whole key in one step (source, part — -1 whole track — and shaping), so
+    /// only the final key meets the route check. 0 / -1 / -2 as above; on -2 nothing changes.</summary>
+    int RackChainSetSidechainKey(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc, int part);
+    /// <summary>The route pool whole tracks and parts share: size, free now, and whether
+    /// (source, part) already has a route (a further key on it needs none).</summary>
+    int SidechainRouteCapacity();
+    int SidechainRoutesFree();
+    bool SidechainRouteInUse(int sourceTrackId, int part);
     /// <summary>Sidechain detector gain in dB (Phase D): how hard the source drives the effect.</summary>
     void SetDeviceSidechainGain(int trackId, int deviceIndex, float gainDb);
     float DeviceSidechainGain(int trackId, int deviceIndex);
@@ -1171,6 +1197,29 @@ public interface IAudioEngine : IDisposable
     bool AudioExclusiveFallback { get; }
     /// <summary>True when no output device opened and the engine runs on a silent stand-in.</summary>
     bool AudioSilentFallback { get; }
+
+    // --- ASIO (Windows; specs/049) -----------------------------------------
+    // Staged like the device settings; ApplyAudio() persists and restarts. No-ops off Windows.
+    AudioSystem AudioSystem { get; }
+    /// <summary>What actually runs: WASAPI after a failed ASIO start fell back.</summary>
+    AudioSystem ActiveAudioSystem { get; }
+    bool AsioAvailable { get; }
+    /// <summary>Installed ASIO drivers (re-scanned): Uid = CLSID, Name = display name.</summary>
+    IReadOnlyList<AudioDevice> AsioDrivers();
+    void SetAudioSystem(AudioSystem system);
+    void SetAsioDriver(string id);
+    string AsioDriver { get; }
+    /// <summary>Channel names of the open ASIO driver; empty when ASIO isn't running.</summary>
+    IReadOnlyList<string> AsioChannels(bool input);
+    int AsioPair(bool input);
+    void SetAsioPair(bool input, int firstChannel);
+    bool OpenAsioControlPanel();
+    /// <summary>The driver's panel is open: an apply now would wait for it, so hold it back.</summary>
+    bool AsioPanelOpen { get; }
+    AudioDeviceEvent PollDeviceEvent();
+    string AudioFallbackReason { get; }
+    int InputLatencyFrames { get; }
+    int OutputLatencyFrames { get; }
 
     // --- MIDI device settings (M7-2) ---------------------------------------
     bool IsMidiInputEnabled(string uid);

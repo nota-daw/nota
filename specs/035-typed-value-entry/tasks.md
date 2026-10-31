@@ -126,13 +126,13 @@ All app paths are under `src/managed/Nota.App/` unless they start with `tests/`,
 
 **Independent Test**: quickstart § 2 Volt env rows; each `VoltEnv` site; clip ADSR handle in the arrangement.
 
-- [ ] T042 [US4] `Controls/VoltEnv.cs`: implement `IValueEntryHost` — attack node → A; decay/sustain node → D then S; release node → R; nearest segment within 6 px → that stage's time; fields use `PluginParamGet/Set`, `Gest`-style Begin/End per param, `TextAt` from a formatter set by the owner (`VoltEnv.Format(Func<string, double, string>)` keyed by stage); `ValueEntry.AttachHost(this)`
-- [ ] T043 [US4] `DeviceCardKit.EnvReadouts(IValueEntryHost env)` in `DeviceCardKit.cs`: a compact four-column read-out row (labels A · D · S · R, mono 8, Studio tokens) whose read-outs are typeable fields, live-followed via the card's refresher
-- [ ] T044 [P] [US4] `DeviceCards/Instruments/VoltInstrumentCard.cs` (amp + filter env) and `BassInstrumentCard.cs` (amp + filter env): pass stage formatters; add `EnvReadouts` where no A/D/S/R knobs sit beside the graph
-- [ ] T045 [P] [US4] `DeviceCards/Instruments/AuroraInstrumentCard.cs` (×2), `OperatorInstrumentCard.cs`, `PhysicalInstrumentCard.cs` (noise env): same
-- [ ] T046 [P] [US4] `Controls/SynthViz.cs` Env tab: host over the breakpoints (A, D→S, R), box anchored over the read-out caption drawn in the graph
-- [ ] T047 [US4] Clip ADSR handles: `ClipAdsrKit.cs` exposes the handle fields (Attack time, Decay time → Sustain level, Release time, `TextAt` from `ClipAdsrKit.Readout`'s formatting); `ArrangementView.LaneControl.cs` attaches them as a host on the lane, commits through `CommitAdsr` (one undo step), and the current double-click reset (`ClipAdsrKit.Reset`) moves to ⌥
-- [ ] T048 [P] [US4] Other envelope graphs from the audit (`AfEnvView` in `Controls/AutoFilterViews.cs`, `ShEnvelopeView` in `Controls/ShutterViews.cs`): host over their handles; `EnvReadouts` only if no numeric controls sit beside them
+- [X] T042 [US4] `Controls/VoltEnv.cs`: implement `IValueEntryHost` — attack node → A; decay/sustain node → D then S; release node → R; nearest segment within 6 px → that stage's time; fields use `PluginParamGet/Set`, `Gest`-style Begin/End per param, `TextAt` from a formatter set by the owner (`VoltEnv.Format(Func<string, double, string>)` keyed by stage); `ValueEntry.AttachHost(this)`
+- [X] T043 [US4] `DeviceCardKit.EnvReadouts(IValueEntryHost env)` in `DeviceCardKit.cs`: a compact four-column read-out row (labels A · D · S · R, mono 8, Studio tokens) whose read-outs are typeable fields, live-followed via the card's refresher — done without a new kit row: the A · D · S · R read-out cells under the Volt, Bass and Aurora graphs attach `VoltEnv.Field(k)`; Operator has knobs beside its graph; Physical keeps its summary line (the graph types)
+- [X] T044 [P] [US4] `DeviceCards/Instruments/VoltInstrumentCard.cs` (amp + filter env) and `BassInstrumentCard.cs` (amp + filter env): pass stage formatters; add `EnvReadouts` where no A/D/S/R knobs sit beside the graph
+- [X] T045 [P] [US4] `DeviceCards/Instruments/AuroraInstrumentCard.cs` (×2), `OperatorInstrumentCard.cs`, `PhysicalInstrumentCard.cs` (noise env): same
+- [X] T046 [P] [US4] `Controls/SynthViz.cs` Env tab: host over the breakpoints (A, D→S, R), box anchored over the read-out caption drawn in the graph
+- [X] T047 [US4] Clip ADSR handles: `ClipAdsrKit.cs` exposes the handle fields (Attack time, Decay time → Sustain level, Release time, `TextAt` from `ClipAdsrKit.Readout`'s formatting); `ArrangementView.LaneControl.cs` attaches them as a host on the lane, commits through `CommitAdsr` (one undo step), and the current double-click reset (`ClipAdsrKit.Reset`) moves to ⌥ — gestures per #274: ⌥ types, DC still resets the stage
+- [X] T048 [P] [US4] Other envelope graphs from the audit (`AfEnvView` in `Controls/AutoFilterViews.cs`, `ShEnvelopeView` in `Controls/ShutterViews.cs`): host over their handles; `EnvReadouts` only if no numeric controls sit beside them — `AfEnvView` is a relative-drag window (`AttachAll` amount); `ShEnvelopeView` through `ShDragView : IValueHandles`
 
 ---
 
@@ -142,8 +142,8 @@ All app paths are under `src/managed/Nota.App/` unless they start with `tests/`,
 
 **Independent Test**: quickstart § 2 Volt matrix row; Consort patch matrix.
 
-- [ ] T049 [US5] `Controls/VoltMatrix.cs`: implement `IValueEntryHost` — one field per routed cell, `TextAt` = signed % ("−100…+100 %", 0.5 = 0), `Set` via `PluginParamSet`, Begin/End via `BeginAutomationWrite` / `EndAutomationWrite` on `mtx{s}_{d}`, `Clear` = Begin → set 0.5 → End (makes clearing undoable); remove the right-click / double-click clear from `OnPointerPressed` (right-click now opens the parameter menu with **Type value…** / **Clear**); update the header comment
-- [ ] T050 [US5] `ConsortPatchMatrix` in `Controls/ConsortViews.cs`: host per cell — double-click types the depth (raising `DepthChanged`, which creates the cable), ⌥-click and **Clear** raise `Removed` (⌥ keeps its meaning); remove the double-click removal; owner `DeviceCards/Instruments/ConsortInstrumentCard.cs` supplies Begin/End and `TextAt`
+- [X] T049 [US5] `Controls/VoltMatrix.cs`: implement `IValueEntryHost` — one field per routed cell, `TextAt` = signed % ("−100…+100 %", 0.5 = 0), `Set` via `PluginParamSet`, Begin/End via `BeginAutomationWrite` / `EndAutomationWrite` on `mtx{s}_{d}`, `Clear` = Begin → set 0.5 → End (makes clearing undoable); remove the right-click / double-click clear from `OnPointerPressed` (right-click now opens the parameter menu with **Type value…** / **Clear**); update the header comment — per #274, ⌥ types and DC / **Clear** clear
+- [X] T050 [US5] `ConsortPatchMatrix` in `Controls/ConsortViews.cs`: host per cell — double-click types the depth (raising `DepthChanged`, which creates the cable), ⌥-click and **Clear** raise `Removed` (⌥ keeps its meaning); remove the double-click removal; owner `DeviceCards/Instruments/ConsortInstrumentCard.cs` supplies Begin/End and `TextAt` — per #274, ⌥ types and DC / **Clear** pull the cable (⌥ no longer removes)
 
 ---
 
@@ -153,15 +153,16 @@ All app paths are under `src/managed/Nota.App/` unless they start with `tests/`,
 
 **Independent Test**: quickstart § 2 EQ-8 row; each graph control in contracts/control-audit.md § 3.
 
-- [ ] T051 [P] [US6] `Controls/Eq8Views.cs` (`Eq8Curve`) and `Controls/DynamicEqCurve.cs`: host — band handle → frequency, gain, Q; `FieldsAt` null off a handle (keeps add-band double-click); owners `DeviceCards/Bodies/EqDeviceBody.cs` / `DynamicEqDeviceBody.cs` pass formatters and gestures
-- [ ] T052 [P] [US6] `Controls/Eq3Views.cs` (`Eq3Fader` attach, `Eq3Graph` host) with `DeviceCards/Bodies/Eq3DeviceBody.cs`
-- [ ] T053 [P] [US6] `Controls/AutoFilterCurve.cs` (cutoff → resonance), `Controls/AutoFilterViews.cs` (`AfFader` attach, `AfLfoView` host) with `DeviceCards/Bodies/AutoFilterDeviceBody.cs`
-- [ ] T054 [P] [US6] `Controls/CompViews.cs` (`CompFader` attach, `CompTransferView` threshold, `CompMotionView`, `CompKeyView` hosts) with `DeviceCards/Bodies/CompressorDeviceBody.cs`
-- [ ] T055 [P] [US6] `Controls/DelayViews.cs` (`DelayTaps` host, `DelayFader` attach, `DelayFilterCurve` low cut → high cut) with `DeviceCards/Bodies/DelayDeviceBody.cs`
-- [ ] T056 [P] [US6] `Controls/ChorusViews.cs`, `Controls/FlangerViews.cs`, `Controls/PhaserViews.cs`, `Controls/OrbitViews.cs` hosts / attaches with their bodies (`ChorusDeviceBody.cs`, `FlangerDeviceBody.cs`, `PhaserDeviceBody.cs`, `AutoPanDeviceBody.cs` for Orbit)
-- [ ] T057 [P] [US6] `Controls/CrushViews.cs`, `Controls/LevelViews.cs`, `Controls/LensViews.cs` (`LensVSlider`), `Controls/ShutterViews.cs` (`ShSignalView`, `ShKeyView`), `Controls/ReverbViews.cs`, `Controls/VintageViews.cs`, `Controls/VocoderGraph.cs` — the rows the audit marks H/A, with their bodies
-- [ ] T058 [P] [US6] Instrument graphs: `Controls/VoltFilter.cs` (cutoff → resonance), `Controls/SynthViz.cs` Filter pad (X → Y), `Controls/FluxVectorPad.cs` (X → Y), `Controls/KeysViews.cs` (`KeysPickupView`, `KeysTremView`), `Controls/GrainWaveViz.cs`, `Controls/RhythmViews.cs` (`RhythmHitView`, `RhythmSampleView`), `Controls/ChordShiftTrack.cs`, `DeviceCards/Sampler/SamplerViews.cs`, `DeviceCards/Mosaic/MosaicViews.cs` — per audit
-- [ ] T059 [US6] `Controls/RangeSliderTrack.cs` in `DeviceCards/Midi/VelocityMidiBody.cs`: host with low / high fields
+- [X] T051 [P] [US6] `Controls/Eq8Views.cs` (`Eq8Curve`) and `Controls/DynamicEqCurve.cs`: host — band handle → frequency, gain, Q; `FieldsAt` null off a handle (keeps add-band double-click); owners `DeviceCards/Bodies/EqDeviceBody.cs` / `DynamicEqDeviceBody.cs` pass formatters and gestures
+- [X] T052 [P] [US6] `Controls/Eq3Views.cs` (`Eq3Fader` attach, `Eq3Graph` host) with `DeviceCards/Bodies/Eq3DeviceBody.cs`
+- [X] T053 [P] [US6] `Controls/AutoFilterCurve.cs` (cutoff → resonance), `Controls/AutoFilterViews.cs` (`AfFader` attach, `AfLfoView` host) with `DeviceCards/Bodies/AutoFilterDeviceBody.cs`
+- [X] T054 [P] [US6] `Controls/CompViews.cs` (`CompFader` attach, `CompTransferView` threshold, `CompMotionView`, `CompKeyView` hosts) with `DeviceCards/Bodies/CompressorDeviceBody.cs`
+- [X] T055 [P] [US6] `Controls/DelayViews.cs` (`DelayTaps` host, `DelayFader` attach, `DelayFilterCurve` low cut → high cut) with `DeviceCards/Bodies/DelayDeviceBody.cs`
+- [X] T056 [P] [US6] `Controls/ChorusViews.cs`, `Controls/FlangerViews.cs`, `Controls/PhaserViews.cs`, `Controls/OrbitViews.cs` hosts / attaches with their bodies (`ChorusDeviceBody.cs`, `FlangerDeviceBody.cs`, `PhaserDeviceBody.cs`, `AutoPanDeviceBody.cs` for Orbit)
+- [X] T057 [P] [US6] `Controls/CrushViews.cs`, `Controls/LevelViews.cs`, `Controls/LensViews.cs` (`LensVSlider`), `Controls/ShutterViews.cs` (`ShSignalView`, `ShKeyView`), `Controls/ReverbViews.cs`, `Controls/VintageViews.cs`, `Controls/VocoderGraph.cs` — the rows the audit marks H/A, with their bodies
+- [X] T058 [P] [US6] Instrument graphs: `Controls/VoltFilter.cs` (cutoff → resonance), `Controls/SynthViz.cs` Filter pad (X → Y), `Controls/FluxVectorPad.cs` (X → Y), `Controls/KeysViews.cs` (`KeysPickupView`, `KeysTremView`), `Controls/GrainWaveViz.cs`, `Controls/RhythmViews.cs` (`RhythmHitView`, `RhythmSampleView`), `Controls/ChordShiftTrack.cs`, `DeviceCards/Sampler/SamplerViews.cs`, `DeviceCards/Mosaic/MosaicViews.cs` — per audit
+- [X] T059 [US6] `Controls/RangeSliderTrack.cs` in `DeviceCards/Midi/VelocityMidiBody.cs`: host with low / high fields
+- [X] T059a [US6] Interim controls from control-audit.md § 6 (they reset on ⌥ until now): `ShDragView : IValueHandles` for Ceiling / Forge / Beat Repeat / Crush views, Chamber (fader, IR trims, decay markers, tail EQ), Prism (crossovers, transfer dots, value boxes), the output / value boxes of EQ-8, Dynamic EQ, EQ-3, Auto Gain, Forge, Chord, Scale, Arp, Consort cable depth, the drum-pad pan, Mosaic curves, the Stereo Map handles
 
 ---
 
@@ -170,9 +171,9 @@ All app paths are under `src/managed/Nota.App/` unless they start with `tests/`,
 - [X] T060 [P] DESIGN.md § Controls → Interaction contract: "Double-click types a value (a flat field over the read-out); ⌥/Alt-click restores the default; right-click opens the parameter menu (Type value…, Reset to default) merged with CV-modulate / MIDI Learn where present"; `DragNumber` row; remove the "Slider reset on double-click…" known-gap line (PR 1)
 - [X] T061 [P] Preferences → Shortcuts in `PreferencesWindow.cs` via the `nota-shortcuts` skill: add "Double-click a knob, fader, slider or graph handle — type a value", "⌥-click — reset to default", "In the value field: Enter / Tab / ⇧Tab / Esc"; change "Double-click volume" (preview) and the clip ADSR handle row ("double-click resets the stage" → ⌥-click) (PR 1, extended in PR 2)
 - [X] T062 `CHANGELOG.md` `[Unreleased]`: Added — type exact values into every parameter control; Changed — double-click on knobs / faders / sliders now types a value, ⌥-click resets; Fixed — clearing a Volt mod-matrix cell is undoable (PR 1 / PR 2 entries)
-- [ ] T063 FEATURES.md via `nota-features`; user docs EN + RU in `../nota-docs` via `nota-docs` (device-card basics, mixer, envelopes, mod matrix pages)
-- [ ] T064 Tick every row of `specs/035-typed-value-entry/contracts/control-audit.md` (☑ or exempt with reason)
-- [ ] T065 Run quickstart.md § 2 in the app in every colour theme (Studio Dark / Light, Ember Graphite / Paper); capture before/after screenshots of the box for the PR (`nota-pr`)
+- [X] T063 FEATURES.md via `nota-features`; user docs EN + RU in `../nota-docs` via `nota-docs` (device-card basics, mixer, envelopes, mod matrix pages) — FEATURES "Typed values" extended; docs: devices (card basics), editing/audio-clips (ADSR), devices/instruments/volt (matrix), EN + RU; the shortcuts page is regenerated after merge (pending in nota-docs coverage.yml)
+- [X] T064 Tick every row of `specs/035-typed-value-entry/contracts/control-audit.md` (☑ or exempt with reason)
+- [X] T065 Run quickstart.md § 2 in the app in every colour theme (Studio Dark / Light, Ember Graphite / Paper); capture before/after screenshots of the box for the PR (`nota-pr`) — PR 2/3: headless harness (/tmp/typedharness) ⌥-clicks EQ-8, Compressor, Auto Filter, EQ-3, Volt env and Volt matrix handles in all four themes, types a value, Return: 24/24 change the right parameter; frames of the open box in each theme
 - [ ] T066 `/speckit-converge` until **Converged**
 
 ### Nota closing tasks *(PR gates)*
@@ -254,3 +255,11 @@ Phase 8, T063–T066, final build. Until PR 2 lands, a Volt matrix double-click 
 - Do not commit: the maintainer reviews and commits (see project memory).
 - Keep the Studio box look identical everywhere — the design checks (`RunControls`, `RunMenus`) must stay green.
 - When a graph control already has a "nearest handle" hit test for dragging, reuse it for `FieldsAt`.
+
+## Phase 10: Convergence
+
+- [X] T071 Make the Stereo Map volume reset reachable again — the handle's menu **Reset to default** must also offer 0 dB volume (e.g. a menu-only reset on the volume field that a double-click does not trigger) in `StereoMapView.cs` / `Controls/ValueEntry.cs` per SC-005 (partial)
+- [X] T072 Make a handle's multi-field reset (double-click / menu on AutoFilter curve, Compressor transfer, Flanger / Phaser / Orbit graphs, Crush quant, Volt env D·S node) one undo step instead of one per field in `Controls/ValueEntry.cs` per FR-009 (partial)
+- [X] T073 Add typeable A · D · S · R read-outs beside the Physical noise envelope (it has only a summary line) in `DeviceCards/Instruments/PhysicalInstrumentCard.cs` per FR-013 (partial)
+- [X] T074 Record the #274 gesture swap (⌥/Alt-click types, double-click resets / clears) in `spec.md` FR-002, FR-009, FR-012, FR-014, FR-015, FR-018 and the user stories, so the spec matches the shipped behaviour per FR-002 (contradicts)
+- [ ] T075 Regenerate `reference/shortcuts` (EN + RU) in `../nota-docs` with `npm run shortcuts` once this branch merges, and drop the pending entry from `coverage.yml` per FR-018 (partial)
