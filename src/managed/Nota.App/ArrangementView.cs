@@ -2202,8 +2202,13 @@ public sealed partial class ArrangementView : UserControl
         nameRow.Children.Add(name);
         nameRow.Children.Add(typeTag);
 
-        // Row 2: M / S / ● (record-arm) — 18×16 chips.
-        var btnRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(0, 5, 0, 0) };
+        // M / S / ● (record-arm) and, on audio tracks, the monitor chip — 18×16 chips held
+        // against the meter at every height, so they stay put as the row is resized (#387).
+        var btnRow = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(0, 5, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Right,
+        };
         // Each toggle also writes the TrackVM: resizing a row rebuilds its card from the VM
         // without re-reading the engine, and a stale VM put the old state back (#255).
         btnRow.Children.Add(ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }));
@@ -2217,37 +2222,39 @@ public sealed partial class ArrangementView : UserControl
                 if (_engine is not null) TrackArming.Set(_engine, t.Id, v, additive);
             }));
 
-        // A compact routing selector sits with the arm button (the standard row leaves no
-        // room for a 4th row): audio tracks get record-input, instrument tracks get "MIDI To".
-        // A large row gives it a row of its own; a compact one leaves it to the context menu.
         bool isAudioTrack = !t.IsInstrument && !t.IsReturn && !t.IsGroup;
+        // Audio tracks: the monitor chip hears the selected input live. A compact row has no
+        // input selector to tell it the source, so it reads it from the engine.
+        var monitor = isAudioTrack ? MonitorToggle(t.Id) : null;
+        if (monitor is not null)
+        {
+            btnRow.Children.Add(monitor.Chip);
+            if (tier == HeaderTier.Compact && _engine is not null) monitor.SetSource(RecordInputPick.Of(_engine, t.Id).Source);
+        }
+
+        // The routing selector — record-input on audio tracks, "MIDI In" on instrument tracks —
+        // sits left of the buttons (the standard row leaves no room for a 4th row). A large
+        // row gives it a row of its own; a compact one leaves it to the context menu.
         Control row2 = btnRow;
         Control? routingRow = null;
         if (tier != HeaderTier.Compact && (isAudioTrack || t.IsInstrument))
         {
-            // Audio tracks: a monitor chip right of the input selector hears that input live.
-            var monitor = isAudioTrack ? MonitorToggle(t.Id) : null;
             var combo = isAudioTrack ? BuildInputCombo(t.Id, monitor) : BuildMidiSourceCombo(t.Id);
-            bool ownRow = tier == HeaderTier.Large;
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions(ownRow ? "*,Auto" : "Auto,*,Auto"), Margin = new Thickness(0, 5, 0, 0), ColumnSpacing = 3};
-            int col = 0;
-            if (!ownRow)
+            if (tier == HeaderTier.Large)
             {
+                combo.Margin = new Thickness(0, 5, 0, 0);
+                routingRow = combo;
+            }
+            else
+            {
+                var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Margin = new Thickness(0, 5, 0, 0), ColumnSpacing = 3 };
                 btnRow.Margin = new Thickness(0);
-                Grid.SetColumn(btnRow, col);
+                Grid.SetColumn(combo, 0);
+                Grid.SetColumn(btnRow, 1);
+                g.Children.Add(combo);
                 g.Children.Add(btnRow);
-                col++;
+                row2 = g;
             }
-            Grid.SetColumn(combo, col);
-            g.Children.Add(combo);
-            if (monitor is not null)
-            {
-                combo.Margin = new Thickness(0);
-                monitor.Chip.Margin = new Thickness(0, 0, 12, 0);   // the row's right inset moves to the chip
-                Grid.SetColumn(monitor.Chip, col + 1);
-                g.Children.Add(monitor.Chip);
-            }
-            if (ownRow) routingRow = g; else row2 = g;
         }
 
         // Row 3: volume (mini fader + dB readout) and a bipolar pan bar in one row —
@@ -2302,7 +2309,7 @@ public sealed partial class ArrangementView : UserControl
         switch (tier)
         {
             case HeaderTier.Compact:
-                // One line: name · tag · M S ●. Volume, pan and routing stay in the mixer and
+                // One line: name · tag · M S ● (monitor). Volume, pan and routing stay in the mixer and
                 // the track's context menu. A narrow column drops the tag before the name.
                 nameRow.ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto");
                 if (HeaderW < 200) typeTag.IsVisible = false;
@@ -2521,7 +2528,8 @@ public sealed partial class ArrangementView : UserControl
             {
                 bool on = pick.Matches(cur);
                 var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = on };
-                mi.Click += (_, _) => pick.ApplyTo(_engine, trackId);
+                // Rebuild so the header's input selector and monitor chip show the new source.
+                mi.Click += (_, _) => { pick.ApplyTo(_engine, trackId); RebuildHeaders(); };
                 choices.Add(mi);
                 if (on) curName = shortName;
             }
@@ -2597,7 +2605,6 @@ public sealed partial class ArrangementView : UserControl
             FontSize = 9, Height = 16, MinHeight = 0, Padding = new Thickness(6, 0),
             HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,   // let the item span the box (In left / name right)
-            Margin = new Thickness(0, 0, 12, 0),   // a touch shorter than the row
         };
         var sources = new List<RecordInputPick>();
         // "In" pinned left (faded), the source name pinned right, so the name stands out.
@@ -2686,7 +2693,6 @@ public sealed partial class ArrangementView : UserControl
             FontSize = 9, Height = 16, MinHeight = 0, Padding = new Thickness(6, 0),
             HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Margin = new Thickness(0, 0, 12, 0),
         };
         var sources = new List<int>();
         // "In" pinned left (faded), the source name pinned right.

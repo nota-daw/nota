@@ -37,6 +37,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   of one scrolling column, so Clip, Quantize, Transpose and Selection (or Clip, Playback and
   Warp) are all in view. They stay one column while that fits or the editor is narrow, and
   scroll only when even two columns don't fit.
+- **Track header buttons stay in one place at every track height** (#387): M / S / arm — and,
+  on audio tracks, the headphone monitor button — now sit on the right of the header in
+  compact, standard and large rows alike. The input selector moves to their left on a
+  standard row, and a compact audio track keeps its monitor button.
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
   rows hide first, then the sends, then the fader gets shorter; name, meter, fader, pan and
   M / S / Arm always stay. A hidden section's **Sends** / **I/O** footer toggle shows an
