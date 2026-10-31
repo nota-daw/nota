@@ -23,6 +23,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Track inspector** (#186): a new tab at the bottom of the browser's left rail shows the
+  selected track's settings in one place — name, Mute / Solo / Arm, record input and input
+  monitoring or MIDI from, colour, row height and the freeze commands — so they no longer
+  need the track's right-click menu. It follows the track the Devices panel shows and
+  picks up changes made anywhere else at once. The right-click menu keeps its entries.
 - **Clip editor track mode** (#49): a **Clip | Track** switch at the top of the Clip editor's
   inspector (and *Toggle clip editor track mode* in the command palette). Track shows every MIDI clip of the
   track on the arrangement's timeline from bar 1, each clip's borders marked in the clip strip,

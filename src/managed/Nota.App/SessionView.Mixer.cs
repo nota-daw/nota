@@ -350,7 +350,7 @@ public sealed partial class SessionView
     }
 
     /// <summary>A segmented switch (Border.segmented + ToggleButton.seg); exactly one is lit.</summary>
-    private static Border Segmented(IReadOnlyList<string> labels, int selected, Action<int> pick, bool compact = false, bool mono = false)
+    internal static Border Segmented(IReadOnlyList<string> labels, int selected, Action<int> pick, bool compact = false, bool mono = false)
     {
         var row = new UniformGrid { Rows = 1 };
         var buttons = new List<ToggleButton>();

@@ -355,6 +355,7 @@ public partial class MainWindow
     // — a browser drop, Convert, the Devices tab — leave it true.
     private void ShowDevices(int trackId, bool takeOverPanel = true)
     {
+        _trackInspector?.Show(trackId);
         if (_vm is null || _deviceChain is null) return;
         // No track (the selected one was just deleted): empty the chain instead of leaving the
         // dead track's instrument/effect cards on screen — they'd still edit a removed track.

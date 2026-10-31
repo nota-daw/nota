@@ -52,6 +52,7 @@ public partial class MainWindow : Window
 
     // Bottom detail panel (Devices chain / Clip piano roll / Mixer).
     private DeviceChainView? _deviceChain;
+    private TrackInspectorView? _trackInspector;
     private ClipEditorView? _clipEditor;
     private AudioClipEditorView? _audioEditor;
     private MixerView? _mixer;
@@ -204,6 +205,8 @@ public partial class MainWindow : Window
         Timeline.FreezeMenuItems = BuildTrackFreezeMenu;   // track context menu: Freeze / Live Freeze
         Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
         Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
+        _trackInspector = new TrackInspectorView(vm.Engine, Timeline, TrackFreezeEntries, () => vm.SuspendEnginePolling);   // browser's Track inspector tab (specs/060)
+        Browser.SetTrackInspector(_trackInspector);
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.EditSelectedClipsRequested += () => EditSelectedClips();
         Timeline.ClipSelectionChanged += FollowClipSelection;
