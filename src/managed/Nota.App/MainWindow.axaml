@@ -541,7 +541,7 @@
                               ToolTip.Tip="Step the selected MIDI clip on a Drum Rack track"
                               Click="OnDetailPattern"/>
                 <ToggleButton x:Name="DetailClipBtn" Classes="seg" Content="Clip" IsEnabled="False"
-                              ToolTip.Tip="Select a MIDI clip to edit it" Click="OnDetailClip"/>
+                              ToolTip.Tip="Select a clip to edit it" Click="OnDetailClip"/>
               </StackPanel>
             </Border>
             <ContentControl x:Name="DetailChipHost" Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center"/>

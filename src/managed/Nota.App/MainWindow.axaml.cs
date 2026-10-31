@@ -457,8 +457,7 @@ public partial class MainWindow : Window
             else AddTrack(kind, anchor);
         };
         HookRecentInstruments();   // "Add track ▸ Recent" in both views' menus
-        // Selecting a slot selects its track everywhere: devices below, arrangement header.
-        _session.SlotSelected += (trackId, _) => Timeline.Select(trackId, -1);
+        _session.SlotSelected += OnSessionSlotSelected;
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
         MainContent.Children.Add(_session);
 

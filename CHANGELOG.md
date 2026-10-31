@@ -97,6 +97,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Session clips open in the Clip editor** (#334): a click on a slot that holds a clip shows
+  that clip in the Clip tab instead of the track's devices, the **Clip** button opens the
+  selected slot, and with the editor open, clicking another clip — on the same track or
+  another — brings that clip into the editor. Selecting an empty slot still shows that track's devices.
 - **View ▸ Toggle detail panel** no longer leaves an empty band where the hidden panel was;
   showing it again brings back its height.
 

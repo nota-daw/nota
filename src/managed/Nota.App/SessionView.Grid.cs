@@ -455,7 +455,7 @@ public sealed partial class SessionView
                 return;
             }
 
-            _o.Select(new Selection(SelKind.Slot, _c.TrackId, _scene));
+            _o.Select(new Selection(SelKind.Slot, _c.TrackId, _scene), renotify: _filled && e.ClickCount == 1);
             if (e.ClickCount == 2)
             {
                 if (_filled) _o.SlotEditRequested?.Invoke(_c.TrackId, _scene);
