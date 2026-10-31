@@ -682,6 +682,7 @@ public partial class MainWindow : Window
     private void SetView(MainView view)
     {
         if (_session is null || _modular is null) return;
+        SetDetailMaximized(false);   // a view picked is a view to see
         bool session = view == MainView.Session, modular = view == MainView.Modular;
         Timeline.IsVisible = view == MainView.Arrangement;
         _session.IsVisible = session;

@@ -27,7 +27,7 @@ public partial class MainWindow
         BindCommands();
         ToolTip.SetTip(AutomationToggle, MenuKit.Keys("Show parameter-automation lanes (⌘⇧A)"));
         // The XAML tips name the macOS keys; spell them Ctrl+… on Windows / Linux (#10).
-        foreach (var c in new Control[] { RecordBtn, LoopRecordCell, MetronomeBtn })
+        foreach (var c in new Control[] { RecordBtn, LoopRecordCell, MetronomeBtn, DetailMaximizeBtn })
             if (ToolTip.GetTip(c) is string tip) ToolTip.SetTip(c, MenuKit.Keys(tip));
         if (NativeMenu.GetMenu(this) is not { } menu) return;
         // macOS quits from the app menu (Quit Nota, ⌘Q); File → Exit is for Windows / Linux (#316).

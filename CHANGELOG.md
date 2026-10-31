@@ -30,6 +30,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   window**) moves it into the floating window for a second screen; the window's dock button
   brings it back. Nota remembers whether the Mixer was shown, where and how tall, and restores
   it on the next launch.
+- **The clip editor can fill the window** (#304): with a clip open in the Clip or Pattern tab,
+  the new button at the right of the detail panel's header, **View → Clip editor fills the
+  window** or ⌘⇧F (Ctrl+Shift+F) folds away the browser, the Arrangement / Session / Modular
+  view and a docked Mixer so the piano roll, audio editor or step grid gets the whole window.
+  The same button or key brings everything back at the heights it had.
+- **Double-click a panel edge to reset it** (#305): double-clicking the edge above the detail
+  panel sets it back to its default height (and the Clip tab forgets the height you dragged
+  it to); the browser's edge and the docked Mixer's top edge go back to their default sizes
+  the same way.
 
 ### Changed
 - **Smoother, clearer waveforms on audio clips** (#267): clips in the Arrangement and the
@@ -39,6 +48,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   a fine line at sample level — and on a HiDPI screen it is drawn at the screen's full
   resolution. This is the new default, **Smooth**; **Solid** and **Bars** are still in
   Settings → Appearance → Waveform (a saved Bars choice moves to Smooth once).
+- **Clip inspector and MIDI tools in two columns** (#276): in a short clip editor the
+  inspector (MIDI and audio) and the Tools rail lay their sections out in two columns instead
+  of one scrolling column, so Clip, Quantize, Transpose and Selection (or Clip, Playback and
+  Warp) are all in view. They stay one column while that fits or the editor is narrow, and
+  scroll only when even two columns don't fit.
+- **Track header buttons stay in one place at every track height** (#387): M / S / arm — and,
+  on audio tracks, the headphone monitor button — now sit on the right of the header in
+  compact, standard and large rows alike. The input selector moves to their left on a
+  standard row, and a compact audio track keeps its monitor button.
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
   rows hide first, then the sends, then the fader gets shorter; name, meter, fader, pan and
   M / S / Arm always stay. A hidden section's **Sends** / **I/O** footer toggle shows an

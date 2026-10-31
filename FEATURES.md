@@ -363,6 +363,10 @@ docks as a panel under any of the three, or floats in its own window — see
   - Everything is **seeded**, so a result is repeatable and "New seed" re-rolls it.
   - Tools that think in pitch follow the roll's **Set Scale** key, so what they write
     stays in key.
+- **Clip editor side panels**: the clip inspector (MIDI and audio) and the Tools rail show
+  their sections in one column while they fit the editor's height and in two side by side when
+  they don't and the editor is wide enough, so the controls stay in view; only past that do
+  they scroll. Sections keep their order and are never split between columns.
 - **Pattern (step sequencer)**: on a Drum Rack track the detail panel gains a **Pattern**
   tab between Devices and Clip — a drum-machine grid with one row per loaded pad. Click a
   step to place a hit, shift-click for an accent, drag across the grid to paint, and use
@@ -1243,6 +1247,11 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Devices/Clip panel in its own window** — the ⧉ button in the bottom panel's header
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
+- **Clip editor fills the window** — the expand button in the bottom panel's header (Clip
+  and Pattern tabs), View → Clip editor fills the window or ⌘⇧F / Ctrl+Shift+F folds away
+  the browser, the main view and a docked Mixer; the same again brings back the split.
+- **Panel edges** — drag to resize the browser, the docked Mixer and the bottom panel;
+  double-click an edge to reset that panel to its default size.
 - **Popup rack editors** (full UI / Params).
 - **Typed values** — ⌥-click any knob, fader or slider (or double-click the number next to
   it) and type the value: "−6", "1.5k", "250 ms", "L 30", "1/16". Double-click the control
