@@ -119,4 +119,57 @@ int64_t nota_file_decode_mono(const char* path, double max_seconds, float* out, 
     return n;
 }
 
+// ---- Nota Aurora tables (specs/053): builders, any thread ----
+int32_t nota_aurora_table_build(const char* path, NotaAuroraTable** out) {
+    if (!path || !out) return NOTA_AURORA_ERR_ARGS;
+    *out = nullptr;
+    std::shared_ptr<const nota::AuroraTable> t;
+    const int32_t r = nota::AuroraTable::buildFromFile(std::string(path), t);
+    if (r != nota::AuroraTable::Ok) return r;
+    *out = new NotaAuroraTable{std::move(t)};
+    return NOTA_AURORA_OK;
+}
+
+int32_t nota_aurora_table_from_frames(
+    const float* frames, int32_t count, const char* name, int32_t origin, NotaAuroraTable** out) {
+    if (!out) return NOTA_AURORA_ERR_ARGS;
+    *out = nullptr;
+    std::shared_ptr<const nota::AuroraTable> t;
+    const int32_t r = nota::AuroraTable::buildFromFrames(frames, count, name ? std::string(name) : std::string(), origin, t);
+    if (r != nota::AuroraTable::Ok) return r;
+    *out = new NotaAuroraTable{std::move(t)};
+    return NOTA_AURORA_OK;
+}
+
+int32_t nota_aurora_table_info(const NotaAuroraTable* t, NotaAuroraTableInfo* out) {
+    if (!t || !out) return 0;
+    notaFillAuroraInfo(t->table.get(), out);
+    return 1;
+}
+
+int64_t nota_aurora_table_frames(const NotaAuroraTable* t, float* out, int64_t cap) {
+    if (!t || !t->table) return 0;
+    const int64_t n = (int64_t)t->table->level[0].size();
+    if (!out) return n;
+    const int64_t k = std::min(n, cap);
+    if (k > 0) std::memcpy(out, t->table->base(), (size_t)k * sizeof(float));
+    return std::max<int64_t>(k, 0);
+}
+
+void nota_aurora_table_free(NotaAuroraTable* t) { delete t; }
+
 } // extern "C"
+
+void notaFillAuroraInfo(const nota::AuroraTable* t, NotaAuroraTableInfo* out) {
+    *out = NotaAuroraTableInfo{};
+    if (!t) return;
+    out->frames = t->frames;
+    out->origin = t->origin;
+    out->truncated_length = t->truncatedLength ? 1 : 0;
+    out->truncated_frames = t->truncatedFrames ? 1 : 0;
+    out->serial = t->serial;
+    std::memcpy(out->hash, t->hash, 16);
+    const size_t n = std::min(t->name.size(), sizeof(out->name) - 1);
+    std::memcpy(out->name, t->name.data(), n);
+    out->name[n] = 0;
+}

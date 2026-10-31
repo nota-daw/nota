@@ -419,6 +419,39 @@ public interface IAudioEngine : IDisposable
     bool TryGetMosaicStatus(int trackId, out NotaMosaicStatus status);
     /// <summary>The sample id behind a zone (for TryGetSampleInfo / ReadSample), 0 = not loaded.</summary>
     long MosaicZoneSampleId(int trackId, int zone);
+    // ---- Nota Aurora custom wavetables (specs/053) ----
+    /// <summary>Decodes a WAV / FLAC / MP3 and builds a conditioned, band-limited table on the
+    /// calling thread (any thread: it touches no engine state). Returns an
+    /// <see cref="AuroraTableResult"/>; on Ok, <paramref name="table"/> is a handle the caller
+    /// frees with <see cref="AuroraTableFree"/>.</summary>
+    int AuroraTableBuild(string path, out nint table);
+    /// <summary>A table from frames a project or preset saved (2048 floats each): only the mips
+    /// are rebuilt, so it plays exactly what was saved.</summary>
+    int AuroraTableFromFrames(float[] frames, int frameCount, string name, int origin, out nint table);
+    AuroraTableInfo AuroraTableInfoOf(nint table);
+    /// <summary>The handle's base frames (2048 × frames floats).</summary>
+    float[] AuroraTableFrames(nint table);
+    void AuroraTableFree(nint table);
+    /// <summary>Puts the table into Aurora oscillator <paramref name="osc"/> (0/1) and plays it.
+    /// <paramref name="undoable"/>: one undo step (sounding notes stop); false: in place (a project
+    /// load). The engine keeps its own reference. False when the track isn't an Aurora.</summary>
+    bool AuroraSetTable(int trackId, int osc, nint table, bool undoable = true);
+    /// <summary>Removes the imported table (one undo step).</summary>
+    bool AuroraClearTable(int trackId, int osc);
+    /// <summary>Imported table (true) or the built-in bank (false). Undoable: one undo step
+    /// (the instrument is republished); otherwise in place with no undo (loads).</summary>
+    bool AuroraSetSource(int trackId, int osc, bool useCustom, bool undoable = false);
+    /// <summary>Marks a table a project named but could not restore ("" clears).</summary>
+    bool AuroraSetMissing(int trackId, int osc, string name);
+    bool TryGetAuroraTableInfo(int trackId, int osc, out AuroraTableInfo info);
+    /// <summary>The slot's base frames, or an empty array.</summary>
+    float[] AuroraTableRead(int trackId, int osc);
+    /// <summary>A drawing preview: <paramref name="repFrames"/> then <paramref name="gridFrames"/>
+    /// evenly chosen frames of <paramref name="points"/> samples each; empty when there is no table.</summary>
+    float[] AuroraTablePreview(int trackId, int osc, int repFrames, int gridFrames, int points);
+    /// <summary>The Aurora's state blob with or without the table frames (a project save keeps
+    /// the tables as sample files beside it).</summary>
+    byte[] AuroraState(int trackId, bool includeTables);
     /// <summary>UI editing channel for the track's instrument (e.g. Rhythm step patterns).</summary>
     void InstrumentAction(int trackId, int id, int iarg, float farg);
     /// <summary>Loads a sample file into a Nota Grain track (kind 10). True on success.</summary>

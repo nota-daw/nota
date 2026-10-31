@@ -26,6 +26,7 @@
 #include "media/SampleBuffer.h"
 #include "Transport.h"
 #include "nota/nota_engine.h" // NotaNoteData
+#include "devices/instruments/AuroraTable.h"
 
 #include <algorithm>
 #include <array>
@@ -41,6 +42,8 @@
 #include <vector>
 
 namespace nota {
+
+class WavetableSynth;
 
 // Live MIDI event (UI/CoreMIDI -> audio), lock-free down-queue.
 class RackCore;       // shared rack guts (RackInstrument / RackDevice; see RackCore.h)
@@ -745,6 +748,14 @@ class Engine {
     bool mosaicStatus(int32_t trackId, NotaMosaicStatus* out) const;
     int64_t mosaicZoneSampleId(int32_t trackId, int32_t zone) const;
     void instrumentAction(int32_t trackId, int32_t id, int32_t iarg, float farg);       // UI editing channel
+    // Nota Aurora custom wavetables (specs/053). setTable with checkpoint publishes a
+    // fresh Aurora holding the table (one undo step; sounding notes stop), without it the
+    // live one takes it in place (a project load). Source and missing are in place, no undo.
+    bool auroraSetTable(int32_t trackId, int32_t osc, std::shared_ptr<const AuroraTable> t, bool checkpoint);
+    bool auroraClearTable(int32_t trackId, int32_t osc);
+    bool auroraSetSource(int32_t trackId, int32_t osc, bool custom, bool checkpoint);
+    bool auroraSetMissing(int32_t trackId, int32_t osc, const std::string& name);
+    std::shared_ptr<const WavetableSynth> auroraOf(int32_t trackId) const; // null unless an Aurora
     bool setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::string& path); // Phase 2
     bool rhythmVoiceInfo(int32_t trackId, int32_t voice, NotaSamplerInfo* out) const;   // sample id per voice
     int32_t rhythmVoiceSource(int32_t trackId, int32_t voice) const;                    // 0 Synth, 1 Sample

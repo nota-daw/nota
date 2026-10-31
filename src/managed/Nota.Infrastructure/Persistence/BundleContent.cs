@@ -92,7 +92,8 @@ internal static partial class BundleContent
     public static void PruneUnreferenced(string bundleDir, ProjectDocument doc)
     {
         if (ProjectHistory.PinnedBinaries(bundleDir) is not { } pinned) return;
-        bool Keep(string rel) => doc.SampleRefs.ContainsKey(rel) || doc.StateBlobs.ContainsKey(rel) || pinned.Contains(rel);
+        bool Keep(string rel) => doc.SampleRefs.ContainsKey(rel) || doc.TableRefs.ContainsKey(rel) || doc.StateBlobs.ContainsKey(rel)
+                                 || pinned.Contains(rel);
         foreach (var relDir in new[] { SamplesDir, StatesDir })
         {
             string dir = Path.Combine(bundleDir, relDir);

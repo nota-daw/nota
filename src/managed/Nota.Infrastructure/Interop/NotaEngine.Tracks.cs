@@ -944,6 +944,114 @@ public sealed partial class NotaEngine
         return buf;
     }
 
+    // --- Nota Aurora custom wavetables (specs/053) ------------------------------
+
+    public int AuroraTableBuild(string path, out nint table)
+    {
+        table = 0;
+        if (string.IsNullOrEmpty(path)) return AuroraTableResult.ErrArgs;
+        int r = NativeMethods.AuroraTableBuild(path, out var t);
+        table = r == AuroraTableResult.Ok ? t : 0;
+        return r;
+    }
+
+    public unsafe int AuroraTableFromFrames(float[] frames, int frameCount, string name, int origin, out nint table)
+    {
+        table = 0;
+        if (frames is null || frameCount <= 0 || (long)frameCount * 2048 > frames.LongLength) return AuroraTableResult.ErrArgs;
+        int r;
+        IntPtr t;
+        fixed (float* p = frames) r = NativeMethods.AuroraTableFromFrames(p, frameCount, name ?? "", origin, out t);
+        table = r == AuroraTableResult.Ok ? t : 0;
+        return r;
+    }
+
+    public AuroraTableInfo AuroraTableInfoOf(nint table)
+    {
+        if (table == 0 || NativeMethods.AuroraTableInfo(table, out var raw) == 0) return default;
+        return ToInfo(raw);
+    }
+
+    public unsafe float[] AuroraTableFrames(nint table)
+    {
+        if (table == 0) return [];
+        long n = NativeMethods.AuroraTableFrames(table, null, 0);
+        if (n <= 0 || n > int.MaxValue) return [];
+        var buf = new float[n];
+        fixed (float* p = buf) n = NativeMethods.AuroraTableFrames(table, p, buf.LongLength);
+        return n == buf.LongLength ? buf : [];
+    }
+
+    public void AuroraTableFree(nint table)
+    {
+        if (table != 0) NativeMethods.AuroraTableFree(table);
+    }
+
+    public bool AuroraSetTable(int trackId, int osc, nint table, bool undoable = true)
+    { ThrowIfDisposed(); return table != 0 && NativeMethods.AuroraSetTable(_handle, trackId, osc, table, undoable ? 1 : 0) != 0; }
+
+    public bool AuroraClearTable(int trackId, int osc)
+    { ThrowIfDisposed(); return NativeMethods.AuroraClearTable(_handle, trackId, osc) != 0; }
+
+    public bool AuroraSetSource(int trackId, int osc, bool useCustom, bool undoable = false)
+    { ThrowIfDisposed(); return NativeMethods.AuroraSetSource(_handle, trackId, osc, useCustom ? 1 : 0, undoable ? 1 : 0) != 0; }
+
+    public bool AuroraSetMissing(int trackId, int osc, string name)
+    { ThrowIfDisposed(); return NativeMethods.AuroraSetMissing(_handle, trackId, osc, name ?? "") != 0; }
+
+    public bool TryGetAuroraTableInfo(int trackId, int osc, out AuroraTableInfo info)
+    {
+        ThrowIfDisposed();
+        info = default;
+        if (NativeMethods.AuroraTrackTableInfo(_handle, trackId, osc, out var raw) == 0) return false;
+        info = ToInfo(raw);
+        return true;
+    }
+
+    public unsafe float[] AuroraTableRead(int trackId, int osc)
+    {
+        ThrowIfDisposed();
+        long n = NativeMethods.AuroraTableRead(_handle, trackId, osc, null, 0);
+        if (n <= 0 || n > int.MaxValue) return [];
+        var buf = new float[n];
+        fixed (float* p = buf) n = NativeMethods.AuroraTableRead(_handle, trackId, osc, p, buf.LongLength);
+        return n == buf.LongLength ? buf : [];
+    }
+
+    public unsafe float[] AuroraTablePreview(int trackId, int osc, int repFrames, int gridFrames, int points)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.AuroraTablePreview(_handle, trackId, osc, repFrames, gridFrames, points, null, 0);
+        if (n <= 0) return [];
+        var buf = new float[n];
+        fixed (float* p = buf) n = NativeMethods.AuroraTablePreview(_handle, trackId, osc, repFrames, gridFrames, points, p, buf.Length);
+        return n == buf.Length ? buf : [];
+    }
+
+    public unsafe byte[] AuroraState(int trackId, bool includeTables)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.AuroraState(_handle, trackId, includeTables ? 1 : 0, null, 0);
+        if (n <= 0) return [];
+        var buf = new byte[n];
+        fixed (byte* p = buf) n = NativeMethods.AuroraState(_handle, trackId, includeTables ? 1 : 0, p, buf.Length);
+        return n == buf.Length ? buf : [];
+    }
+
+    private static unsafe AuroraTableInfo ToInfo(in NotaAuroraTableInfoRaw raw)
+    {
+        string hash, name;
+        fixed (byte* h = raw.Hash) hash = Convert.ToHexString(new ReadOnlySpan<byte>(h, 16)).ToLowerInvariant();
+        fixed (byte* n = raw.Name)
+        {
+            int len = 0;
+            while (len < 255 && n[len] != 0) len++;
+            name = System.Text.Encoding.UTF8.GetString(n, len);
+        }
+        return new AuroraTableInfo(raw.Frames, raw.Origin, raw.TruncatedLength != 0, raw.TruncatedFrames != 0,
+            raw.UseCustom != 0, raw.Missing != 0, raw.Serial, hash, name);
+    }
+
     /// <summary>UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns).</summary>
     public void InstrumentAction(int trackId, int id, int iarg, float farg)
     { ThrowIfDisposed(); NativeMethods.InstrumentAction(_handle, trackId, id, iarg, farg); }

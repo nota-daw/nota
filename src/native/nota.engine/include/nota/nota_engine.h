@@ -719,6 +719,73 @@ NOTA_API void    nota_path_root_set(const char* name_utf8, const char* path_utf8
  * frames; out may be null to ask). Returns the frames decoded (≤ cap when out is given),
  * 0 on failure; *sample_rate gets the file's rate. */
 NOTA_API int64_t nota_file_decode_mono(const char* path_utf8, double max_seconds, float* out, int64_t cap, double* sample_rate);
+/* Nota Aurora custom wavetables (specs/053). A table is built from a file, or from frames a
+ * project or preset saved, on any thread (the builders touch no engine state), then handed to
+ * an oscillator of an Aurora track on the message thread. The engine keeps its own reference;
+ * the caller frees its handle. */
+typedef struct NotaAuroraTable NotaAuroraTable; /* opaque, immutable once built */
+typedef struct NotaAuroraTableInfo {
+    int32_t  frames;           /* 1..256; 0 = no table in that slot */
+    int32_t  origin;           /* 0 wavetable file, 1 single cycle, 2 recording */
+    int32_t  truncated_length; /* 1 = only the first 60 s were read */
+    int32_t  truncated_frames; /* 1 = frames beyond 256 were dropped */
+    int32_t  use_custom;       /* track queries only: the source flag */
+    int32_t  missing;          /* track queries only: 1 = a restore failed; name holds it */
+    uint32_t serial;           /* changes whenever the slot's table changes; 0 = none */
+    uint8_t  hash[16];         /* content hash of the base frames */
+    char     name[256];        /* UTF-8, NUL-terminated */
+} NotaAuroraTableInfo;
+enum {
+    NOTA_AURORA_OK = 0,
+    NOTA_AURORA_ERR_DECODE = -1, /* unreadable or broken file */
+    NOTA_AURORA_ERR_FORMAT = -2, /* not WAV / FLAC / MP3 */
+    NOTA_AURORA_ERR_SILENT = -3, /* peak below -60 dBFS */
+    NOTA_AURORA_ERR_EMPTY = -4,
+    NOTA_AURORA_ERR_ARGS = -5
+};
+/* Decode a file and build a conditioned, band-limited table. *out gets a new handle. */
+NOTA_API int32_t nota_aurora_table_build(const char* path_utf8, NotaAuroraTable** out);
+/* From already-conditioned frames (2048 floats each): only the mips are rebuilt, so a reload
+ * plays exactly what was saved. */
+NOTA_API int32_t nota_aurora_table_from_frames(const float* frames, int32_t frame_count, const char* name_utf8,
+                                               int32_t origin, NotaAuroraTable** out);
+NOTA_API int32_t nota_aurora_table_info(const NotaAuroraTable* table, NotaAuroraTableInfo* out);
+/* The base frames (2048 × frames floats) into out; returns floats written, or the count when out is null. */
+NOTA_API int64_t nota_aurora_table_frames(const NotaAuroraTable* table, float* out, int64_t cap);
+NOTA_API void    nota_aurora_table_free(NotaAuroraTable* table);
+/* Put the table into oscillator osc (0/1) and make it the active source. checkpoint 1 = one
+ * undo step (the instrument is republished; sounding notes stop), 0 = in place, no undo (a
+ * project load). Returns 1, or 0 when the track is not an Aurora or osc is out of range. */
+NOTA_API int32_t nota_track_aurora_set_table(NotaEngine* engine, int32_t track_id, int32_t osc,
+                                             const NotaAuroraTable* table, int32_t checkpoint);
+/* Remove the imported table from osc (one undo step); it plays its built-in bank again. */
+NOTA_API int32_t nota_track_aurora_clear_table(NotaEngine* engine, int32_t track_id, int32_t osc);
+/* 1 = play the imported table, 0 = the built-in bank. checkpoint 1 = one undo step (the
+ * instrument is republished, as for set_table; no step when nothing changes), 0 = in place,
+ * lock-free, no undo (a project or preset load). Inside an unlatched parameter gesture the
+ * parameter's value step merges into it, so a bank pick that leaves the imported table
+ * undoes as one step. */
+NOTA_API int32_t nota_track_aurora_set_source(NotaEngine* engine, int32_t track_id, int32_t osc, int32_t use_custom,
+                                              int32_t checkpoint);
+/* Mark osc as missing a table a project named ("" clears). No undo. */
+NOTA_API int32_t nota_track_aurora_set_missing(NotaEngine* engine, int32_t track_id, int32_t osc, const char* name_utf8);
+/* 1 and *out filled (frames 0 when the slot is empty), 0 when the track is not an Aurora. */
+NOTA_API int32_t nota_track_aurora_table_info(const NotaEngine* engine, int32_t track_id, int32_t osc,
+                                              NotaAuroraTableInfo* out);
+/* The slot's base frames (2048 × frames floats); returns floats written (the count when out is null), 0 if none. */
+NOTA_API int64_t nota_track_aurora_table_read(const NotaEngine* engine, int32_t track_id, int32_t osc, float* out,
+                                              int64_t cap);
+/* Drawing preview: rep_frames (≤ 16) evenly chosen frames, then grid_frames (≤ 64) evenly chosen
+ * frames, each `points` (≤ 256) values back to back: for each of points / 2 slices of the
+ * frame, its lowest and highest sample in the order they occur (a min / max outline).
+ * Returns floats written (the count needed when out is null). */
+NOTA_API int32_t nota_track_aurora_table_preview(const NotaEngine* engine, int32_t track_id, int32_t osc,
+                                                 int32_t rep_frames, int32_t grid_frames, int32_t points, float* out,
+                                                 int32_t cap);
+/* The state blob with (1) or without (0) the table frames; 0 is what a project save stores
+ * beside the tables' own sample files. Size / copy semantics of nota_track_get_plugin_state. */
+NOTA_API int32_t nota_track_aurora_state(const NotaEngine* engine, int32_t track_id, int32_t include_tables,
+                                         uint8_t* out, int32_t cap);
 /* UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns):
  * id/iarg/farg are instrument-specific (see the instrument's action()). */
 NOTA_API void    nota_track_instrument_action(NotaEngine* engine, int32_t track_id, int32_t id, int32_t iarg, float farg);

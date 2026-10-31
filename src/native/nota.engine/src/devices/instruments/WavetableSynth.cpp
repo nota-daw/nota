@@ -224,31 +224,238 @@ int32_t WavetableSynth::pluginParamIndexOfId(const std::string& id) const {
     return it == map.end() ? -1 : it->second;
 }
 
-std::vector<uint8_t> WavetableSynth::getState() const {
+// ---- state blob (contracts/state-blob.md) --------------------------------
+namespace {
+constexpr char kTrailerTag[4] = {'A', 'W', 'T', '1'};
+constexpr uint32_t kTrailerVersion = 1;
+
+void putU8(std::vector<uint8_t>& b, uint8_t v) { b.push_back(v); }
+void putU16(std::vector<uint8_t>& b, uint16_t v) {
+    b.push_back((uint8_t)(v & 0xFF));
+    b.push_back((uint8_t)(v >> 8));
+}
+void putU32(std::vector<uint8_t>& b, uint32_t v) {
+    for (int i = 0; i < 4; ++i) b.push_back((uint8_t)(v >> (8 * i)));
+}
+void putStr(std::vector<uint8_t>& b, const std::string& s) {
+    const size_t n = std::min<size_t>(s.size(), 0xFFFF);
+    putU16(b, (uint16_t)n);
+    b.insert(b.end(), s.begin(), s.begin() + (ptrdiff_t)n);
+}
+
+struct Reader {
+    const uint8_t* p;
+    size_t n, at = 0;
+    bool ok = true;
+    bool need(size_t k) {
+        if (!ok || at + k > n) ok = false;
+        return ok;
+    }
+    uint8_t u8() { return need(1) ? p[at++] : 0; }
+    uint16_t u16() {
+        if (!need(2)) return 0;
+        const uint16_t v = (uint16_t)(p[at] | (p[at + 1] << 8));
+        at += 2;
+        return v;
+    }
+    uint32_t u32() {
+        if (!need(4)) return 0;
+        uint32_t v = 0;
+        for (int i = 0; i < 4; ++i) v |= (uint32_t)p[at + i] << (8 * i);
+        at += 4;
+        return v;
+    }
+    std::string str() {
+        const uint16_t k = u16();
+        if (!need(k)) return {};
+        std::string s(reinterpret_cast<const char*>(p + at), k);
+        at += k;
+        return s;
+    }
+};
+} // namespace
+
+std::vector<uint8_t> WavetableSynth::stateWith(bool includeTables) const {
     std::vector<uint8_t> b(kNumParams * sizeof(float));
     for (int i = 0; i < kNumParams; ++i) {
         float v = pn_[i].load(std::memory_order_relaxed);
         std::memcpy(b.data() + i * sizeof(float), &v, sizeof(float));
     }
+    const auto set = tableSet_.current();
+    const uint8_t flag[2] = {useCustom_[0].load(std::memory_order_relaxed), useCustom_[1].load(std::memory_order_relaxed)};
+    bool any = flag[0] || flag[1];
+    if (set)
+        for (int o = 0; o < 2; ++o) any = any || set->slot[o] || !set->missing[o].empty();
+    if (!any) return b; // byte-identical to the blob before custom tables existed
+
+    const size_t start = b.size();
+    b.insert(b.end(), kTrailerTag, kTrailerTag + 4);
+    putU32(b, kTrailerVersion);
+    putU8(b, flag[0]);
+    putU8(b, flag[1]);
+    for (int o = 0; o < 2; ++o) {
+        const AuroraTable* t = (includeTables && set) ? set->slot[o].get() : nullptr;
+        putU8(b, t ? 1 : 0);
+        putStr(b, set ? set->missing[o] : std::string());
+        if (!t) continue;
+        const AuroraTable* t0 = set->slot[0].get();
+        if (o == 1) {
+            const bool same = t0 && (t0 == t || std::memcmp(t0->hash, t->hash, 16) == 0);
+            putU8(b, same ? 1 : 0);
+            if (same) continue;
+        }
+        putStr(b, t->name);
+        putU8(b, (uint8_t)t->origin);
+        putU8(b, t->truncatedLength ? 1 : 0);
+        putU8(b, t->truncatedFrames ? 1 : 0);
+        putU32(b, (uint32_t)t->frames);
+        const auto* f = reinterpret_cast<const uint8_t*>(t->base());
+        b.insert(b.end(), f, f + (size_t)t->frames * AuroraTable::kSize * sizeof(float));
+    }
+    const uint32_t S = (uint32_t)(b.size() - start);
+    putU32(b, S);
+    b.insert(b.end(), kTrailerTag, kTrailerTag + 4);
     return b;
 }
 
 void WavetableSynth::setState(const uint8_t* data, int32_t size) {
-    if (!data) return;
-    const int n = std::min<int>(kNumParams, size / (int)sizeof(float));
+    if (!data || size < 0) return;
+    // The trailer, when there is one, is found from the end of the blob.
+    size_t paramBytes = (size_t)size;
+    const uint8_t* sec = nullptr;
+    size_t secLen = 0;
+    if (size >= 8 && std::memcmp(data + size - 4, kTrailerTag, 4) == 0) {
+        uint32_t S = 0;
+        for (int i = 0; i < 4; ++i) S |= (uint32_t)data[size - 8 + i] << (8 * i);
+        if ((uint64_t)S + 8 <= (uint64_t)size && S >= 4 && std::memcmp(data + size - 8 - S, kTrailerTag, 4) == 0) {
+            paramBytes = (size_t)size - S - 8;
+            sec = data + paramBytes;
+            secLen = S;
+        }
+    }
+    const int n = std::min<int>(kNumParams, (int)(paramBytes / sizeof(float)));
     for (int i = 0; i < n; ++i) {
         float v;
         std::memcpy(&v, data + i * sizeof(float), sizeof(float));
         if (std::isfinite(v)) pn_[i].store(std::clamp(v, 0.0f, 1.0f), std::memory_order_relaxed);
     }
+
+    if (!sec) {
+        // No trailer: a blob from before custom tables, or one without any. Both
+        // oscillators go back to their built-in tables.
+        const auto cur = tableSet_.current();
+        if (cur && (cur->slot[0] || cur->slot[1] || !cur->missing[0].empty() || !cur->missing[1].empty()))
+            publishSet(std::make_shared<AuroraTableSet>());
+        useCustom_[0].store(0, std::memory_order_relaxed);
+        useCustom_[1].store(0, std::memory_order_relaxed);
+        return;
+    }
+    Reader r{sec, secLen};
+    r.at = 4;
+    if (r.u32() != kTrailerVersion || !r.ok) return; // a newer writer: keep the tables as they are
+    uint8_t flag[2];
+    flag[0] = r.u8();
+    flag[1] = r.u8();
+    auto next = std::make_shared<AuroraTableSet>();
+    for (int o = 0; o < 2 && r.ok; ++o) {
+        const uint8_t present = r.u8();
+        next->missing[o] = r.str();
+        if (!present) continue;
+        if (o == 1 && r.u8()) {
+            next->slot[1] = next->slot[0];
+            continue;
+        }
+        std::string name = r.str();
+        const int32_t origin = r.u8();
+        const bool tl = r.u8() != 0, tf = r.u8() != 0;
+        const uint32_t frames = r.u32();
+        if (!r.ok || frames < 1 || frames > (uint32_t)AuroraTable::kMaxFrames) {
+            r.ok = false;
+            break;
+        }
+        const size_t bytes = (size_t)frames * AuroraTable::kSize * sizeof(float);
+        if (!r.need(bytes)) break;
+        std::vector<float> base((size_t)frames * AuroraTable::kSize);
+        std::memcpy(base.data(), sec + r.at, bytes);
+        r.at += bytes;
+        std::shared_ptr<const AuroraTable> t;
+        if (AuroraTable::buildFromFrames(base.data(), (int32_t)frames, std::move(name), origin, t) == AuroraTable::Ok) {
+            auto m = std::const_pointer_cast<AuroraTable>(t);
+            m->truncatedLength = tl;
+            m->truncatedFrames = tf;
+            next->slot[o] = t;
+        }
+    }
+    if (!r.ok) return; // a damaged section: the parameters stand, the tables stay as they were
+    publishSet(std::move(next));
+    useCustom_[0].store(flag[0] ? 1 : 0, std::memory_order_relaxed);
+    useCustom_[1].store(flag[1] ? 1 : 0, std::memory_order_relaxed);
 }
 
 std::shared_ptr<Instrument> WavetableSynth::clone() const {
     auto s = std::make_shared<WavetableSynth>();
     for (int i = 0; i < kNumParams; ++i)
         s->pn_[i].store(pn_[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+    if (auto cur = tableSet_.current()) s->tableSet_.publish(cur); // immutable: shared, not copied
+    for (int o = 0; o < 2; ++o) s->useCustom_[o].store(useCustom_[o].load(std::memory_order_relaxed));
     s->setSampleRate(sampleRate_);
     return s;
+}
+
+// ---- custom tables: message-thread setters ----------------------------------
+void WavetableSynth::setTable(int osc, std::shared_ptr<const AuroraTable> t) {
+    if (osc < 0 || osc > 1) return;
+    auto next = copySet();
+    next->slot[osc] = std::move(t);
+    next->missing[osc].clear();
+    const bool has = next->slot[osc] != nullptr;
+    publishSet(std::move(next));
+    useCustom_[osc].store(has ? 1 : 0, std::memory_order_relaxed);
+    wake();
+}
+
+void WavetableSynth::clearTable(int osc) {
+    if (osc < 0 || osc > 1) return;
+    useCustom_[osc].store(0, std::memory_order_relaxed);
+    auto next = copySet();
+    next->slot[osc].reset();
+    next->missing[osc].clear();
+    publishSet(std::move(next));
+    wake();
+}
+
+void WavetableSynth::setMissing(int osc, const std::string& name) {
+    if (osc < 0 || osc > 1) return;
+    auto next = copySet();
+    next->missing[osc] = name;
+    publishSet(std::move(next));
+}
+
+std::shared_ptr<const AuroraTable> WavetableSynth::table(int osc) const {
+    if (osc < 0 || osc > 1) return nullptr;
+    auto cur = tableSet_.current();
+    return cur ? cur->slot[osc] : nullptr;
+}
+
+std::string WavetableSynth::missingName(int osc) const {
+    if (osc < 0 || osc > 1) return {};
+    auto cur = tableSet_.current();
+    return cur ? cur->missing[osc] : std::string();
+}
+
+int32_t WavetableSynth::scopeRead(float* out, int32_t maxN) const {
+    if (!out || maxN <= 0) return 0;
+    const int32_t n = std::min(maxN, kScopeN);
+    for (int32_t i = 0; i < n; ++i) out[i] = scope_[i].load(std::memory_order_relaxed);
+    // The serials come from the set the message thread holds, so they are current even
+    // while the synth sleeps and is not rendered.
+    const auto cur = tableSet_.current();
+    for (int o = 0; o < 2 && 2 + o < n; ++o)
+        out[2 + o] = (cur && cur->slot[o]) ? (float)(cur->slot[o]->serial & 0xFFFFFFu) : 0.0f;
+    // Which oscillators play their imported table (bit 0 = Osc 1, bit 1 = Osc 2), so a card
+    // sees a source switch made anywhere else (another card, an undo, a state load).
+    if (n > 5) out[5] = (float)((useCustom(0) ? 1 : 0) | (useCustom(1) ? 2 : 0));
+    return n;
 }
 
 void WavetableSynth::noteOn(int32_t pitch, float velocity) {
@@ -257,6 +464,7 @@ void WavetableSynth::noteOn(int32_t pitch, float velocity) {
     const bool legato = mono && v->active && v->stage != Stage::Off;
     v->active = true;
     v->pitch = pitch;
+    v->seq = ++noteSeq_;
     v->freq = 440.0 * std::pow(2.0, (pitch - 69) / 12.0);
     {
         float add[kExprDims];
@@ -304,6 +512,7 @@ void WavetableSynth::allNotesOff() {
 }
 
 void WavetableSynth::render(float* out, int32_t frames) {
+    SnapshotHistory<const AuroraTableSet>::RenderScope tableScope(tableSet_);
     // ---- macros first: seven of the twelve destinations ride the per-voice bus
     //      below, the other five move this block's snapshot ----
     double macroDst[kDests] = {0, 0, 0, 0, 0, 0, 0};
@@ -329,6 +538,12 @@ void WavetableSynth::render(float* out, int32_t frames) {
 
     // ---- block snapshot ----
     const int b1 = bankOf(Table), b2 = bankOf(Osc2Table);
+    // Imported tables (specs/053): null unless the oscillator holds one and plays it.
+    const AuroraTableSet* tset = tableSet_.live();
+    const AuroraTable* ct1 =
+        (tset && useCustom_[0].load(std::memory_order_relaxed)) ? tset->slot[0].get() : nullptr;
+    const AuroraTable* ct2 =
+        (tset && useCustom_[1].load(std::memory_order_relaxed)) ? tset->slot[1].get() : nullptr;
     const int wm1 = warpModeOf(Osc1WarpMode), wm2 = warpModeOf(Osc2WarpMode);
     const float basePos1 = get(Position), basePos2 = get(Osc2Position);
     const double warp1 = std::clamp(get(Warp) + macroBlk[0], 0.0, 1.0);
@@ -362,6 +577,9 @@ void WavetableSynth::render(float* out, int32_t frames) {
     // √2 undoes the equal-power law's 0.707 at centre, so a spread of 0 is bit-for-bit
     // the mono stack this used to be.
     const float uniNorm = 1.41421356f / std::sqrt((float)uniN);
+    // The fastest unison voice's detune factor, for the imported tables' mip pick.
+    double uniMaxDet = 1.0;
+    for (int u = 0; u < uniN; ++u) uniMaxDet = std::max(uniMaxDet, uniDetF[u]);
     // Only a spread stack has a side; without one its filter state is parked at zero so
     // it starts clean the moment the spread opens.
     const bool stereoUni = uniN > 1 && uniSpread > 1e-6f;
@@ -493,12 +711,24 @@ void WavetableSynth::render(float* out, int32_t frames) {
             // routing and the same filters (own state, shared coefficients), so every
             // unison voice gets the cutoff, the envelope and the modulation (#193).
             float o1 = 0.0f, o2 = 0.0f, sd1 = 0.0f, sd2 = 0.0f;
-            if (lvl1 > 1e-5f)
-                o1 = oscStack(
-                    v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd1);
-            if (lvl2 > 1e-5f)
-                o2 = oscStack(v.ph2, base * m2 * (osc2PitchStatic ? 1.0 : std::exp2(dst[1] * 2.0)), b2, pos2,
-                    wm2, warp2, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd2);
+            if (lvl1 > 1e-5f) {
+                if (ct1)
+                    o1 = oscStackCustom(v.ph1, base * m1, *ct1, pos1, wm1, warp1, uniN, uniDetF, uniMaxDet, uniPanL,
+                        uniPanR, uniNorm, sd1);
+                else
+                    o1 = oscStack(
+                        v.ph1, base * m1, b1, pos1, wm1, warp1, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd1);
+            }
+            if (lvl2 > 1e-5f) {
+                const double inc2 = base * m2 * (osc2PitchStatic ? 1.0 : std::exp2(dst[1] * 2.0));
+                if (ct2)
+                    o2 = oscStackCustom(v.ph2, inc2, *ct2, pos2, wm2, warp2, uniN, uniDetF, uniMaxDet, uniPanL,
+                        uniPanR, uniNorm, sd2);
+                else
+                    o2 = oscStack(v.ph2, inc2, b2, pos2, wm2, warp2, uniN, uniDetF, uniPanL, uniPanR, uniNorm, sd2);
+            }
+            v.lastPos[0] = pos1;
+            v.lastPos[1] = pos2;
             float sub = 0.0f;
             if (subLvl > 1e-5f) {
                 sub = subOsc(subWave, v.subPh);
@@ -578,8 +808,16 @@ void WavetableSynth::render(float* out, int32_t frames) {
     // Auto-sleep flag only (the engine skips render while idle): no voice sounding
     // and this block silent. noteOn/noteOff/setParam wake.
     int live = 0;
+    const Voice* newest = nullptr;
     for (auto& v : voices_)
-        if (v.active) ++live;
+        if (v.active) {
+            ++live;
+            if (!newest || v.seq > newest->seq) newest = &v;
+        }
+    // Live follow telemetry, once per block (relaxed: the UI only draws it).
+    scope_[0].store(newest ? newest->lastPos[0] : -1.0f, std::memory_order_relaxed);
+    scope_[1].store(newest ? newest->lastPos[1] : -1.0f, std::memory_order_relaxed);
+    scope_[4].store((float)live, std::memory_order_relaxed);
     if (live == 0 && peak <= 1.0e-5f) {
         quietSamples_ += (uint64_t)frames;
         if (quietSamples_ > kIdleSamples) idle_ = true;
@@ -691,6 +929,40 @@ float WavetableSynth::oscStack(double* ph, double inc, int bank, float pos, int 
         float s = readMorph(t0, t1, ff, rp);
         if (mode == 4) s = foldOut(s, warpAmt);
         // Detune factors and equal-power gains are block-constant (see render()).
+        accL += s * panL[u];
+        accR += s * panR[u];
+        ph[u] += inc * detF[u];
+        if (ph[u] >= 1.0) ph[u] -= 1.0;
+    }
+    accL *= norm;
+    accR *= norm;
+    sideOut = (accL - accR) * 0.5f;
+    return (accL + accR) * 0.5f;
+}
+
+float WavetableSynth::oscStackCustom(double* ph, double inc, const AuroraTable& t, float pos, int mode, double warpAmt,
+    int uniN, const double* detF, double maxDet, const float* panL, const float* panR, float norm, float& sideOut) {
+    // Mip pick (research R4): the smallest level k whose top harmonic (below 1024 >> k)
+    // stays under 0.45 of the sample rate at the fastest unison voice, with the warp
+    // mode's bias — Sync squeezes the cycle up to 8×, Bend up to 4×.
+    double bias = 1.0;
+    if (mode == 1) bias = 1.0 + 7.0 * warpAmt;
+    else if (mode == 2) bias = 1.0 + 3.0 * warpAmt;
+    const double fEff = std::fabs(inc) * maxDet * bias;
+    int k = 0;
+    while (k < AuroraTable::kLevels - 1 && (double)AuroraTable::harmonics(k) * fEff > 0.45) ++k;
+    const int len = AuroraTable::len(k);
+    const int nf = t.frames;
+    const float posF = pos * (float)(nf - 1);
+    const int f0 = std::clamp((int)posF, 0, nf - 1), f1 = std::min(f0 + 1, nf - 1);
+    const float ff = posF - (float)f0;
+    const float* t0 = t.frame(k, f0);
+    const float* t1 = t.frame(k, f1);
+    float accL = 0.0f, accR = 0.0f;
+    for (int u = 0; u < uniN; ++u) {
+        double rp = warpRead(mode, ph[u], warpAmt);
+        float s = readMorphSized(t0, t1, ff, rp, len);
+        if (mode == 4) s = foldOut(s, warpAmt);
         accL += s * panL[u];
         accR += s * panR[u];
         ph[u] += inc * detF[u];

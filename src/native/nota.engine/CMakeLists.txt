@@ -172,6 +172,7 @@ set(NOTA_ENGINE_SOURCES
     src/devices/instruments/Pentad.cpp
     src/devices/instruments/Consort.cpp
     src/devices/instruments/WavetableSynth.cpp
+    src/devices/instruments/AuroraTable.cpp
     src/devices/instruments/OperatorSynth.cpp
     src/devices/instruments/FluxSynth.cpp
     src/devices/instruments/PendulumSynth.cpp

@@ -174,6 +174,24 @@ public struct NotaMosaicStatus
     public long RamBytes;
 }
 
+/// <summary>A Nota Aurora custom wavetable, as the engine reports it (specs/053): its frame
+/// count (0 = the slot is empty), how the file was read (0 wavetable file, 1 single cycle,
+/// 2 recording), whether it was cut to 60 s or 256 frames, and, for a track's slot, the source
+/// flag and whether a project could not restore it (then <see cref="Name"/> is the name it had).
+/// <see cref="Serial"/> changes whenever the slot's table does; <see cref="Hash"/> is the
+/// engine's 128-bit content hash of the frames, as hex.</summary>
+public readonly record struct AuroraTableInfo(int Frames, int Origin, bool TruncatedLength, bool TruncatedFrames,
+    bool UseCustom, bool Missing, uint Serial, string Hash, string Name)
+{
+    public bool HasTable => Frames > 0;
+}
+
+/// <summary>Results of the Aurora table builders (native NOTA_AURORA_*).</summary>
+public static class AuroraTableResult
+{
+    public const int Ok = 0, ErrDecode = -1, ErrFormat = -2, ErrSilent = -3, ErrEmpty = -4, ErrArgs = -5;
+}
+
 /// <summary>Captured session audio take. Matches native NotaSessionAudioSlot (M7-6b).</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct NotaSessionAudioSlot
