@@ -252,11 +252,10 @@ internal sealed class ChamberIrView : Control
         ctx.DrawRectangle(_drag == 1 ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(xs - 1.5, mid - 7, 3, 14), 1.5, 1.5);
         ctx.DrawRectangle(_drag == 2 ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(xe - 1.5, mid - 7, 3, 14), 1.5, 1.5);
 
-        // The trim being dragged names its time; at rest the lane stays clear of text (the end is
-        // the Decay knob's value, a start past 0 is in the tab row).
-        if (_drag == 1)
+        // The start trim always names its time (ink 3 at rest, orange while dragged); the end trim
+        // names its time while dragged (at rest it is the Decay knob's value).
         {
-            var st = ChamberInk.Text(NotaNum.F($"start {Sec(_start * _sec)}"), NotaGraph.AxisSize, NotaPalette.AccentBright);
+            var st = ChamberInk.Text(NotaNum.F($"start {Sec(_start * _sec)}"), NotaGraph.AxisSize, _drag == 1 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
             ctx.DrawText(st, new Point(Math.Min(xs + 4, w - st.Width - 2), 2));
         }
         if (_drag == 2)
@@ -322,7 +321,7 @@ internal sealed class ChamberIrView : Control
             }
         }
         // The lane's name and its length, in the last quarter (where the tail is low).
-        var len = ChamberInk.Text(NotaNum.F($"as heard {_resSec:0.00}\u2009s"), NotaGraph.AxisSize, NotaPalette.TextTertiary);
+        var len = ChamberInk.Text(NotaNum.F($"as heard {_resSec:0.00}\u2009s · axis {ChamberInk.AxisLabel(axis)}"), NotaGraph.AxisSize, NotaPalette.TextTertiary);
         ctx.DrawText(len, new Point(w - len.Width - 4, top + 2));
     }
 }

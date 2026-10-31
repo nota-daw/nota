@@ -187,7 +187,7 @@ internal sealed class OperatorRoutingViz : Control
         // Drop target: another box (must be a valid forward edge) or the OUT bus (bottom).
         int newTgt = -1;
         for (int o = 0; o < 4; o++) if (o != src && _boxRect[o].Contains(p)) newTgt = o;
-        if (newTgt < 0 && p.Y > h - 14) newTgt = 4;   // dropped on the OUT lane
+        if (newTgt < 0 && p.Y > h * 0.78) newTgt = 4;   // dropped on the OUT lane (the bottom 22 %)
         if (newTgt >= 0) TryReroute(src, newTgt);
         InvalidateVisual();
     }

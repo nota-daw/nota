@@ -41,6 +41,11 @@ internal sealed record ValueField(string Name, Func<double> Get, Func<double, st
     public double? CurrentDefault => DefaultNow is { } now ? now() : Default;
 
     public bool CanReset => Reset is not null || CurrentDefault is not null;
+
+    /// <summary>⌥-click on the control itself resets instead of typing (the faders whose ⌥-click
+    /// reset before typed entry came: Compressor Thresh / Makeup, EQ-3's band faders and Output).
+    /// Typing stays on a double-click of the read-out and the right-click menu.</summary>
+    public bool AltResets { get; init; }
 }
 
 /// <summary>A control with several typeable handles: double-click / ⌥-click / right-click ask it

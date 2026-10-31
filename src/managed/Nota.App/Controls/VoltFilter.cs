@@ -62,7 +62,7 @@ namespace Nota.App;
             void G1((int i, string id) p) { if (p.i < 0) return; if (begin) _e.BeginAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); else _e.EndAutomationWrite(_t, AutomationTarget.PluginParam, -1, -1, p.id); }
             G1(_freq); G1(_reso);
         }
-        private const double DbTop = 18, DbBot = -36;
+        private const double DbTop = 12, DbBot = -48;   // the +12 … −48 dB range the graph has always shown
 
         /// <summary>24 dB/oct: the response is drawn squared (two poles more), like Auto Filter's.</summary>
         public bool Slope24 { get; set; }
@@ -114,9 +114,9 @@ namespace Nota.App;
             double X(double hz) => x0 + Math.Log(hz / lo) / span * (x1 - x0);
             double Y(double db) => top + Math.Clamp((DbTop - db) / (DbTop - DbBot), 0, 1) * (bot - top);
 
-            // Decades across, 0 dB and −18 dB down: the same grid as Auto Filter.
+            // Decades across, 0 dB and −24 dB down.
             foreach (var f in new[] { 100.0, 1000, 10000 }) if (f > lo && f < hi) ctx.DrawLine(NotaGraph.GridPen, new Point(X(f), 0), new Point(X(f), h));
-            foreach (var db in new[] { 0.0, -18 }) ctx.DrawLine(NotaGraph.GridPen, new Point(0, Y(db)), new Point(w, Y(db)));
+            foreach (var db in new[] { 0.0, -24 }) ctx.DrawLine(NotaGraph.GridPen, new Point(0, Y(db)), new Point(w, Y(db)));
 
             double cut = G(_freq), res = G(_reso);
             double fc = lo * Math.Pow(hi / lo, cut);
@@ -145,9 +145,26 @@ namespace Nota.App;
             if (_drag) ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Accent, 0x50), 1), new Point(cx, 0), new Point(cx, h));
             NotaGraph.Node(ctx, new Point(cx, cy), active: true);
 
-            NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopLeft, "+18");
+            NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopLeft, "+12");
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, NotaNum.Hz(lo));
             NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, NotaNum.Hz(hi));
+            // The floor, named just over the bottom-left frequency.
+            var floor = NotaGraph.AxisText("−48\u2009dB");
+            var loT = NotaGraph.AxisText(NotaNum.Hz(lo));
+            ctx.DrawText(floor, new Point(4, h - 4 - loT.Height - floor.Height + 1));
+            // The intermediate frequencies along the bottom (a quarter, half and three quarters of the
+            // span), each left out where it would run into a neighbour.
+            var hiT = NotaGraph.AxisText(NotaNum.Hz(hi));
+            double prevRight = 4 + loT.Width + 4, lastLeft = w - 4 - hiT.Width - 4;
+            for (int i = 1; i <= 3; i++)
+            {
+                double f = lo * Math.Pow(hi / lo, i / 4.0);
+                var t = NotaGraph.AxisText(NotaNum.Hz(f));
+                double tx = X(f) - t.Width / 2;
+                if (tx < prevRight || tx + t.Width > lastLeft) continue;
+                ctx.DrawText(t, new Point(tx, h - 4 - t.Height + 1));
+                prevRight = tx + t.Width + 4;
+            }
             if (ShowCutoff) NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, NotaNum.Hz(fc), _drag ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         }
     }

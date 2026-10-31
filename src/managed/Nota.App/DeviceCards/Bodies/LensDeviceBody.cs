@@ -363,7 +363,7 @@ internal sealed class LensDeviceBody : IDeviceBody
                 Cursor = new Cursor(StandardCursorType.Hand), IsEnabled = scOk,
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(5, 0, 0, 0) }, Dock.Right), name } },
             };
-            ToolTip.SetTip(box, "Key — draw another track's audio over this one, in teal");
+            ToolTip.SetTip(box, "Key — draw another track's audio over this one, in the darker grey");
             box.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed || !scOk) return;

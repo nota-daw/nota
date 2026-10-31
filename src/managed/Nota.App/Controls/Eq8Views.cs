@@ -67,13 +67,19 @@ internal static class Eq8
     public static string Db(double g) => DynEq.Db(g);
 
     /// <summary>Ink of a band's channel mark (style guide: greys told apart by shade): Mid and
-    /// L / R the secondary ink, Side the tertiary one, stereo none.</summary>
+    /// L / R the secondary ink (L / R's ring dashed, see <see cref="ChannelDash"/>), Side the
+    /// tertiary one, stereo none.</summary>
     public static IBrush? ChannelInk(int ch, bool bright = false) => ch switch
     {
         Mid or Left or Right => bright ? NotaPalette.VizInk : NotaPalette.TextSecondary,
         Side => NotaPalette.TextTertiary,
         _ => null,
     };
+
+    /// <summary>The node ring's stroke for a band's channel: dashed for L / R, so a Mid band and an
+    /// L / R band read apart on the graph (they share a grey); solid otherwise.</summary>
+    public static DashStyle? ChannelDash(int ch) => ch is Left or Right ? LrDash : null;
+    private static readonly DashStyle LrDash = new(new double[] { 2, 1.5 }, 0);
 
     private static readonly double[] Q24 = { 0.54119610, 1.30656296 };
     private static readonly double[] Q48 = { 0.50979558, 0.60134489, 0.89997622, 2.56291545 };
@@ -521,7 +527,7 @@ public sealed class Eq8Curve : Control
             ctx.DrawEllipse(fill, RingPen, c, r + 1, r + 1);
             if (!bOn && isSel) ctx.DrawEllipse(null, OffSelPen, c, r, r);
             else if (bOn && ch[b] != Eq8.St && Eq8.ChannelInk(ch[b]) is { } ring)   // a mark for a band on one channel
-                ctx.DrawEllipse(null, new Pen(ring, 1), c, r + 2.5, r + 2.5);
+                ctx.DrawEllipse(null, new Pen(ring, 1, Eq8.ChannelDash(ch[b])), c, r + 2.5, r + 2.5);
             var t = Text(NotaNum.F($"{b + 1}"), num, 8.5, bold: true);
             ctx.DrawText(t, new Point(c.X - t.Width / 2, c.Y - t.Height / 2));
         }

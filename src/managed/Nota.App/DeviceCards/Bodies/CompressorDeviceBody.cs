@@ -248,10 +248,10 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         void RefreshAll() { foreach (var r in readouts) r(); }
         Typeable(thrFader, "Thresh", () => thrMap.N(P(Threshold)), n => { Raw(Threshold, thrMap.V(n)); RefreshAll(); },
             () => Db(P(Threshold)), () => Begin(Threshold), () => End(Threshold), RefreshAll,
-            () => { Begin(Threshold); Raw(Threshold, Def(Threshold)); End(Threshold); RefreshAll(); }, thrVal);
+            () => { Begin(Threshold); Raw(Threshold, Def(Threshold)); End(Threshold); RefreshAll(); }, thrVal, altResets: true);
         Typeable(f2, "Makeup", () => Lin(F2()).N(P(F2())), n => { Raw(F2(), Lin(F2()).V(n)); RefreshAll(); },
             () => SDb(P(F2())), () => Begin(F2()), () => End(F2()), RefreshAll,
-            () => { int id = F2(); Begin(id); Raw(id, Def(id)); End(id); RefreshAll(); }, f2Val);
+            () => { int id = F2(); Begin(id); Raw(id, Def(id)); End(id); RefreshAll(); }, f2Val, altResets: true);
         readouts.Add(() =>
         {
             double keyDb = KeyDb();
@@ -340,7 +340,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         Control MotionTab()
         {
             var motion = new CompMotionView();
-            ToolTip.SetTip(motion, "The reduction (neutral ink, hanging from 0 dB) against the input level (teal) — attack is the fall, release the climb back. The dashed line is the threshold.");
+            ToolTip.SetTip(motion, "The reduction (the bright line, hanging from 0 dB) against the input level (the darker grey) — attack is the fall, release the climb back. The dashed line is the threshold.");
             readouts.Add(() => motion.Set(envIn, envGr, scN >= kScope + 2 * EnvN ? EnvN : 0, P(Threshold), WindowMs()));
             string Measured()
             {

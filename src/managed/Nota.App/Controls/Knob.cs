@@ -41,6 +41,8 @@ public sealed class Knob : Control
     private const double StartDeg = 135.0;   // down-left
     private const double SweepDeg = 270.0;   // clockwise to down-right
     private const double Stroke = 2.4, PointerW = 1.6;
+    // The modulation mark: the value arc in short dashes (in stroke widths).
+    private static readonly DashStyle ModDash = new(new double[] { 1.1, 0.7 }, 0);
 
     public const double SizeSecondary = NotaSize.KnobSecondary, SizeRegular = NotaSize.KnobRegular, SizeMain = NotaSize.KnobMain,
                         SizeInline = NotaSize.KnobInline, SizeFlat = NotaSize.KnobFlat;
@@ -71,9 +73,11 @@ public sealed class Knob : Control
     /// <summary>The value fills from 12 o'clock (pan, detune, a ± amount).</summary>
     public bool Bipolar { get; init; }
 
-    /// <summary>Marks a knob 0.57 drew in a modulation colour; may change live (a knob that turns
-    /// into a modulation depth when its mode switches). Inside a device every value arc is
-    /// orange now, so a marked knob draws its arc orange even when it is not <see cref="Accent"/>.</summary>
+    /// <summary>Marks a modulation depth (a knob 0.57 drew in teal: an env or LFO amount, a fine
+    /// tune, a rack macro in mapping mode); may change live (a knob that turns into a modulation
+    /// depth when its mode switches). Inside a device every value arc is orange, so a marked
+    /// knob keeps orange but draws its value arc dashed — the modulation mark (DESIGN.md
+    /// § Modulation), the same dash the graphs use for a modulated curve.</summary>
     public IBrush? ArcColor { get => _arc; set { if (ReferenceEquals(_arc, value)) return; _arc = value; InvalidateVisual(); } }
     private IBrush? _arc;
 
@@ -239,7 +243,10 @@ public sealed class Knob : Control
         ctx.DrawGeometry(null, new Pen(Track, Stroke, lineCap: PenLineCap.Round), Arc(cx, cy, r, 0, 1));
         double from = Bipolar ? 0.5 : 0;
         if (Math.Abs(frac - from) > 0.001)
-            ctx.DrawGeometry(null, new Pen(arcBrush, Stroke, lineCap: PenLineCap.Round), Arc(cx, cy, r, Math.Min(from, frac), Math.Max(from, frac)));
+            ctx.DrawGeometry(null, ArcColor is not null && !_flat && on
+                    ? new Pen(arcBrush, Stroke, ModDash, lineCap: PenLineCap.Flat)
+                    : new Pen(arcBrush, Stroke, lineCap: PenLineCap.Round),
+                Arc(cx, cy, r, Math.Min(from, frac), Math.Max(from, frac)));
 
         // A live reading: a short tick across the track.
         if (on && !double.IsNaN(_marker) && _max > 0)
