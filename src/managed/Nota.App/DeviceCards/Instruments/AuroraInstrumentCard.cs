@@ -758,7 +758,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 PKnob(pre + "level", "Level", nm + " Level", Pct, 34, 35),
                 PKnob(pre + "oct", "Oct", nm + " Octave", Oct, 34, 35),
                 PKnob(pre + "semi", "Semi", nm + " Semi", Semi, 34, 35),
-                PKnob(pre + "detune", "Fine", nm + " Fine", Cents, 34, 35, Teal),
+                PKnob(pre + "detune", "Fine", nm + " Fine", Cents, 34, 35),
             };
             for (int i = 0; i < cells.Length; i++)
             {
