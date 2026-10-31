@@ -69,6 +69,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     capped knobs with an orange value arc, value bars instead of thin sliders, the new
     switches and segment groups, pressed-in sections, one font, greys instead of the old
     identity colours, and inactive controls in a quieter grey instead of faded.
+  - **Nota Strata** (review of nota-daw/nota#296): the transport, layer list and Loop rail are
+    pressed-in sections; the transport buttons are neutral, with the running one in orange
+    (Record in red) and a queued one outlined; layer waves are greys, newest brightest; each
+    layer's level is a value bar (double-click for 0 dB, or type a value); the tick strip has a
+    tick per beat of the loop; and the list fits all eight layers.
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
   rows hide first, then the sends, then the fader gets shorter; name, meter, fader, pan and
   M / S / Arm always stay. A hidden section's **Sends** / **I/O** footer toggle shows an
@@ -79,6 +84,25 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Strata's layer list and beat strip are back as they were** after the restyle: the layer count
+  says "· one cycle shown" again, the beat tick strip is on screen before the first loop closes,
+  and every layer keeps its own shade of grey (with a matching outline), so all eight can be told
+  apart.
+- **Nota Strata looper** (review of nota-daw/nota#296):
+  - Record and Overdub on the first pass close the loop (Overdub goes straight on to layer 2);
+    before, only Play or Stop could end the first pass.
+  - With Quantize at 1/4, Play or Stop on the first pass waited forever; they now land on the
+    next beat. A stopped loop no longer runs on in the background, so Play starts it from the
+    top and Record or Overdub from Stop start at once.
+  - **Count-in 1 bar** and **Set tempo from loop** did nothing. Count-in now waits one bar
+    before the first pass (the counter shows the beats left, Stop cancels it), and Set tempo
+    changes the song tempo when the first loop closes so the loop is a whole number of bars.
+  - **Export** did nothing; it now writes the loop as you hear it (every unmuted layer at its
+    level) to a WAV file.
+  - The captions under the actions say what a press does now (for example "close, then play"
+    or "layer 3, next bar"), and actions that would do nothing are dimmed. The first pass
+    draws its waveform as it records, and a stopped loop's layers say Stopped. Right-clicking
+    a transport or mute button no longer triggers it.
 - **Shell read-outs and controls lost in the restyle are back**: the Loop key writes the loop
   range beside its icon again; the arrangement's header column names the **Sections** and
   **Overview** lanes and the zoom keys carry their "Zoom" caption; the Return and Master rows'
