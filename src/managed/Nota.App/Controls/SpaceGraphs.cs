@@ -275,13 +275,14 @@ internal abstract class CutHandleGraph : Control, IValueHandles
 /// peak at the set RT60, so a tail that rings longer or shorter than the setting shows at once.
 /// Drag to lengthen or shorten the decay (right or up = longer), double-click to reset it. The grey
 /// pre-delay marker stands where the tail starts: the pre-delay after the latest hit of the input, on
-/// the graph's time scale (hidden while no hit is on screen). Drag it for the pre-delay (a third of
+/// the graph's time scale; with no hit on screen it falls back to its own scale (0 … 200 ms between 3 %
+/// and 33 % of the width), so it can always be dragged. Drag it for the pre-delay (a third of
 /// the width spans 0 … 200 ms, so it moves finer than the pointer), double-click it to reset. ⌥-click
 /// the marker to type the pre-delay, anywhere else to type the decay (the owner supplies the fields,
 /// specs/035).</summary>
 internal sealed class ReverbSpaceView : Control, IValueHandles
 {
-    private const double PreSpan = 0.30;
+    private const double PreLo = 0.03, PreSpan = 0.30;
     private float[] _s = Array.Empty<float>();
     private int _off;
     private bool _has, _freeze;
@@ -342,14 +343,15 @@ internal sealed class ReverbSpaceView : Control, IValueHandles
     }
 
     private (double x0, double x1) Span() => (6, Bounds.Width - 6);
-    private bool HasPre => _hitAge >= 0;
-    // The hit, then the pre-delay on the graph's time scale (now at the right).
+    // The hit, then the pre-delay on the graph's time scale (now at the right); with no hit on
+    // screen, the marker's own 0 … 200 ms scale, so the pre-delay can still be dragged.
     private double PreX()
     {
         var (x0, x1) = Span();
+        if (_hitAge < 0) return x0 + (PreLo + PreSpan * _preNorm) * (x1 - x0);
         return x1 - Math.Max(0, _hitAge - _preMs / 1000) / SpaceDraw.HistorySec * (x1 - x0);
     }
-    private bool OnPre(Point p) => HasPre && Math.Abs(p.X - PreX()) <= 6;
+    private bool OnPre(Point p) => Math.Abs(p.X - PreX()) <= 6;
 
     // Typed entry: handle 0 = the decay (the tail anywhere), 1 = the pre-delay marker.
     public int HandleAt(Point p) => OnPre(p) ? 1 : 0;
@@ -448,7 +450,6 @@ internal sealed class ReverbSpaceView : Control, IValueHandles
         else SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), "Play audio to see its tail");
 
         // The pre-delay marker (grey, orange in the hand), where the tail starts after the latest hit: drag it, double-click resets.
-        if (HasPre)
         {
             double px = PreX();
             bool hot = _hoverPre || _dragPre;
