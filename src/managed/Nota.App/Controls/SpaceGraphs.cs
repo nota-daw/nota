@@ -264,7 +264,7 @@ internal abstract class CutHandleGraph : Control
 /// <summary>The last six seconds of the input (grey area) and the reverb's tail before the mix
 /// (the curve), dB against time, now at the right. A dashed guide falls from the tail's latest
 /// peak at the set RT60, so a tail that rings longer or shorter than the setting shows at once.
-/// Drag to lengthen or shorten the decay (right or up = longer), double-click to reset it. The teal
+/// Drag to lengthen or shorten the decay (right or up = longer), double-click to reset it. The grey
 /// pre-delay marker has its own scale (0 … 200 ms between 3 % and 33 % of the width, as on the old
 /// tail picture): drag it for the pre-delay, double-click it to reset.</summary>
 internal sealed class ReverbSpaceView : Control
@@ -403,13 +403,13 @@ internal sealed class ReverbSpaceView : Control
         }
         else SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), "Play audio to see its tail");
 
-        // The pre-delay marker (teal, its own 0 … 200 ms scale): drag it, double-click resets.
+        // The pre-delay marker (grey, orange in the hand; its own 0 … 200 ms scale): drag it, double-click resets.
         {
             double px = PreX();
             bool hot = _hoverPre || _dragPre;
-            ctx.DrawLine(new Pen(NotaPalette.Teal, hot ? 1.2 : 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(px, top), new Point(px, bot));
-            NotaGraph.Node(ctx, new Point(px, top + 4), hot, NotaPalette.Teal);
-            var lbl = SpaceDraw.Text(NotaNum.F($"pre {_preMs:0} ms"), hot ? NotaPalette.TealBright : NotaPalette.Teal);
+            ctx.DrawLine(new Pen(hot ? NotaPalette.Accent : NotaPalette.TextSecondary, hot ? 1.2 : 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(px, top), new Point(px, bot));
+            NotaGraph.Node(ctx, new Point(px, top + 4), hot);
+            var lbl = SpaceDraw.Text(NotaNum.F($"pre {_preMs:0} ms"), hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
             ctx.DrawText(lbl, new Point(Math.Min(px + 6, x1 - lbl.Width), top + 4 - lbl.Height / 2));
         }
 
@@ -547,7 +547,7 @@ internal sealed class ReverbToneView : CutHandleGraph
 /// <summary>The input (grey area) and the echoes before the mix (the curve) over the last few seconds,
 /// now at the right; in Sync, on the project's beat grid while the transport rolls. Dots mark where
 /// the repeats of the latest hit land and how loud the feedback leaves them (L in the viz ink, R in
-/// teal when its time differs), joined by the dashed decay the feedback sets.</summary>
+/// grey when its time differs), joined by the dashed decay the feedback sets.</summary>
 internal sealed class DelayEchoView : Control
 {
     private float[] _s = Array.Empty<float>();
@@ -662,7 +662,7 @@ internal sealed class DelayEchoView : Control
         double stepDb = 20 * Math.Log10(Math.Clamp(_fb, 1e-4, 0.999));
         var dash = new Pen(NotaPalette.Wash(NotaPalette.Accent, 0xA0), 1, new DashStyle(new double[] { 3, 3 }, 0));
         bool both = Math.Abs(_msL - _msR) > 1;
-        foreach (var (ms, ink) in both ? new[] { (_msL, (IBrush)NotaPalette.Accent), (_msR, NotaPalette.Teal) } : new[] { (_msL, (IBrush)NotaPalette.Accent) })
+        foreach (var (ms, ink) in both ? new[] { (_msL, (IBrush)NotaPalette.Accent), (_msR, NotaPalette.TextSecondary) } : new[] { (_msL, (IBrush)NotaPalette.Accent) })
         {
             Point? last = new Point(XAge(onsetAge), Y(pk));
             for (int r = 1; r < 64; r++)

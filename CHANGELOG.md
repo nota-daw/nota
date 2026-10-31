@@ -256,11 +256,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ### Fixed
 - **Nota Reverb and Nota Delay: meters, read-outs and gestures back after the live graphs**
   (nota-daw/nota#377): both Output panels have the left / right output meters again, with the
-  0 / −12 / −48 dB scale, under the WET bar. Reverb: the teal pre-delay marker is back on the
+  0 / −12 / −48 dB scale, under the WET bar. Reverb: the pre-delay marker is back on the
   Space graph (drag it for the pre-delay, double-click resets; drag elsewhere still sets the
   decay), and the Space panel shows "size · diffuse" again, or "maximum density" on Plate.
   Delay: the Time panel says "channels linked / independent" in ms, or "L 1/8 · R 1/4" in Sync,
-  and MIDI-learning the repeats graph maps Low Cut again, as before.
+  and MIDI-learning the repeats graph maps Low Cut again, as before. The pre-delay marker and
+  Delay's R repeat dots are grey (orange in the hand), not teal, in the single-accent style.
 - **Shell read-outs and controls lost in the restyle are back**: the Loop key writes the loop
   range beside its icon again; the arrangement's header column names the **Sections** and
   **Overview** lanes and the zoom keys carry their "Zoom" caption; the Return and Master rows'

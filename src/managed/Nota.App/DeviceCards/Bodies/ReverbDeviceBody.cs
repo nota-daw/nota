@@ -92,7 +92,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         space.PreGestureBegin += () => Begin(PreDelay);
         space.PreGestureEnd += () => End(PreDelay);
         space.PreReset += () => { Reset(PreDelay); SyncGraphs(); };
-        ToolTip.SetTip(space, "The tail of your audio — the input (grey) and the reverb's tail before the mix, over the last six seconds. The dashed line falls from the tail's latest peak at the set RT60. Drag the teal marker for the pre-delay (0 … 200 ms), drag anywhere else to lengthen or shorten the decay; double-click to reset.");
+        ToolTip.SetTip(space, "The tail of your audio — the input (grey) and the reverb's tail before the mix, over the last six seconds. The dashed line falls from the tail's latest peak at the set RT60. Drag the dotted pre-delay marker (0 … 200 ms), drag anywhere else to lengthen or shorten the decay; double-click to reset.");
         MidiLearn.Bind(space, MidiTarget.DeviceParam(track, di, Decay), "Decay");
 
         tone.Changed += (hd, v) => { Raw(hd == 0 ? LowCut : HighCut, (float)v); SyncGraphs(); };
@@ -293,11 +293,12 @@ internal sealed class ReverbDeviceBody : IDeviceBody
                 }
             }
             scale.PropertyChanged += (_, e) => { if (e.Property == Visual.BoundsProperty) Place(); };
-            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto,Auto"), ColumnSpacing = 6, RowSpacing = 2, VerticalAlignment = VerticalAlignment.Center };
-            g.Children.Add(Caps("L")); g.Children.Add(Col(barL, 1));
-            g.Children.Add(GRow(Caps("R"), 1)); g.Children.Add(GRow(Col(barR, 1), 1));
-            g.Children.Add(GRow(Col(scale, 1), 2));
-            ToolTip.SetTip(g, "Output level, left and right, after Out");
+            // L over R in one row, so the scale under them still fits the panel's height.
+            var bars = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { barL, barR } };
+            var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 6, RowSpacing = 1, VerticalAlignment = VerticalAlignment.Center };
+            g.Children.Add(Caps("L / R")); g.Children.Add(Col(bars, 1));
+            g.Children.Add(GRow(Col(scale, 1), 1));
+            ToolTip.SetTip(g, "Output level after Out: left on top, right below");
             return g;
         }
 
