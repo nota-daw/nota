@@ -425,11 +425,15 @@
         </StackPanel>
         <!-- A newer Nota release: available / downloading / ready to install (MainWindow.Updates.cs). -->
         <Panel x:Name="UpdateHost" Grid.Column="3" VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="4" Classes="Caption Mono"
-                   VerticalAlignment="Center" Text="{Binding EngineInfo}"/>
+        <!-- Sample rate · buffer size: opens the buffer menu (MainWindow.AudioFormat.cs, #373). -->
+        <Button x:Name="AudioFormatButton" Grid.Column="4" Classes="ghost"
+                VerticalAlignment="Center" Margin="0" Padding="6,1" MinHeight="0" Cursor="Hand"
+                ToolTip.Tip="Sample rate and buffer size. Click to change the buffer size">
+          <TextBlock Classes="Caption Mono" Text="{Binding EngineInfo}"/>
+        </Button>
         <!-- The installed version: opens its release notes (What's New), never an update (#127). -->
         <Button x:Name="VersionButton" Grid.Column="5" Classes="ghost"
-                VerticalAlignment="Center" Margin="6,0,-6,0" Padding="6,1" MinHeight="0"
+                VerticalAlignment="Center" Margin="0,0,-6,0" Padding="6,1" MinHeight="0"
                 Cursor="Hand" ToolTip.Tip="View release notes">
           <TextBlock x:Name="VersionText" Classes="Caption Mono"/>
         </Button>

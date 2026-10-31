@@ -550,6 +550,7 @@ public partial class MainWindow : Window
         // Status bar: the installed version opens its release notes (#127).
         VersionText.Text = $"v{AppInfo.Version}";
         VersionButton.Click += (_, _) => ShowWhatsNew();
+        SetUpAudioFormatButton();
 
         Closed += (_, _) => vm.Dispose();
         SetUpCpuTip(vm.Engine);

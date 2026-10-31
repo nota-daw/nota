@@ -23,6 +23,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Sample rate and buffer size in the status bar** (#373): the lower right corner now reads
+  "48 kHz · 256". Click it to pick another buffer size — Device default or 64 to 2048 frames,
+  each with its latency — or to open Settings → Audio. Playback carries on across the change.
+  Under ASIO the menu offers the driver's settings instead, since the driver sets the buffer.
 - **Track inspector** (#186): a new tab at the bottom of the browser's left rail shows the
   selected track's settings in one place — name, Mute / Solo / Arm, record input and input
   monitoring or MIDI from, colour, row height and the freeze commands — so they no longer
