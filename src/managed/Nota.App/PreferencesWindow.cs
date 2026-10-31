@@ -1158,14 +1158,15 @@ public sealed partial class PreferencesWindow : NotaWindow
         }
     }
 
-    // Bars / Solid for the arrangement's audio-clip waveforms and the browser preview. Saving
+    // Smooth / Solid / Bars for the arrangement's audio-clip waveforms (Solid and Bars also set
+    // the browser preview). Saving
     // fires Settings.Changed, which the lanes and the preview apply at once.
     private static Control WaveformPicker()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         var buttons = new List<(int Style, ToggleButton Btn)>();
-        foreach (var (style, label) in new[] { (0, "Bars"), (1, "Solid") })
+        foreach (var (style, label) in new[] { (0, "Smooth"), (1, "Solid"), (2, "Bars") })
         {
             var st = style;
             var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label, IsChecked = settings.Current.ArrangementWaveform == st };
@@ -1295,7 +1296,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 TopRow("Colour theme", ThemePicker()),
                 Row("", Caption("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance.")),
                 Row("Waveform", WaveformPicker()),
-                Row("", Caption("How audio clips draw on the arrangement, and samples in the browser's preview: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel.")),
+                Row("", Caption("How audio clips draw on the arrangement: Smooth outlines the peaks around the RMS level; Solid draws every pixel; Bars spaces the peaks out so the rhythm reads. Solid and Bars also set the browser's preview.")),
                 Row("Interface scale", ScalePicker()),
                 Row("", Caption("Makes the whole interface larger or smaller. Timeline, piano roll and audio editor zoom work on top of it."))),
             Section("AI control (MCP)", 12, enable, details));
@@ -1323,6 +1324,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("Window", new[]
         {
             ("F11", "Enter / leave full screen — the title bar hides in full screen"),
+            ("⌘⇧F", "The clip editor fills the window / back to the split it had"),
+            ("Double-click a panel edge", "Reset the detail panel, the Mixer or the browser to its default size"),
         }),
         ("Command palette", new[]
         {
@@ -1519,7 +1522,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag the track-list edge", "Widen or narrow the track headers · double-click resets"),
             ("Drag sections lane", "Mark a new section over the dragged bars"),
             ("Click section", "Jump the playhead to its start"),
-            ("Double-click section", "Rename it"),
+            ("Double-click section", "Rename it · right-click → Reset to default name for its automatic Section N"),
+            ("Return · Esc (renaming a section)", "Keep the name (empty = automatic) · cancel"),
             ("Drag section · its edge", "Move / resize it, snapped to bars"),
             ("Drag overview strip", "Drag sideways to scroll · up / down to zoom out / in"),
             ("Drag overview edge", "Zoom by resizing the viewport window"),

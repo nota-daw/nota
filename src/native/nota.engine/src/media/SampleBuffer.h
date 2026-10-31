@@ -44,9 +44,13 @@ struct SampleBuffer {
     // scans frames. Blocks not computed yet hold the (1,-1) "no data" sentinel.
     static constexpr int64_t kPeakBlock = 512;
     std::vector<float> peakTable;
+    // Mean square of the stereo mid per block, alongside peakTable, for the waveform's RMS
+    // body. Not part of the peak cache: a seeded table has none until the decode finishes.
+    std::vector<float> rmsTable;
 
     int64_t peakBlocks() const { return (frames + kPeakBlock - 1) / kPeakBlock; }
     bool hasPeakTable() const { return static_cast<int64_t>(peakTable.size()) == peakBlocks() * 2; }
+    bool hasRmsTable() const { return static_cast<int64_t>(rmsTable.size()) == peakBlocks(); }
 
     void buildPeakTable();
 
@@ -60,8 +64,12 @@ struct SampleBuffer {
     // exact frame scans for the partial blocks at either end. (0,0) for an empty range.
     void peakRange(int64_t f0, int64_t f1, float& mn, float& mx) const;
 
+    // RMS of the stereo mid over frames [f0, f1), read the same way. 0 for an empty range.
+    float rmsRange(int64_t f0, int64_t f1) const;
+
   private:
     void scanRange(int64_t f0, int64_t f1, float& mn, float& mx) const;
+    double scanSquares(int64_t f0, int64_t f1) const;
 };
 
 } // namespace nota

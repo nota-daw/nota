@@ -132,6 +132,15 @@ public partial class MainWindow
     // and less clips them.
     private void ShowDetail(double height, bool honorPersist, bool resizable = true)
     {
+        _detailDefault = height;
+        // Filling the window, a clip tab keeps it; Devices goes back to the split.
+        if (_detailMaximized && resizable)
+        {
+            DetailPanel.IsVisible = true;
+            return;
+        }
+        SetDetailMaximized(false);
+        DetailMaximizeBtn.IsVisible = resizable;
         var row = _detailRow;
         row.MinHeight = 120;
         double h = honorPersist && _detailHeight > 120 ? _detailHeight : height;
@@ -346,6 +355,7 @@ public partial class MainWindow
     // — a browser drop, Convert, the Devices tab — leave it true.
     private void ShowDevices(int trackId, bool takeOverPanel = true)
     {
+        _trackInspector?.Show(trackId);
         if (_vm is null || _deviceChain is null) return;
         // No track (the selected one was just deleted): empty the chain instead of leaving the
         // dead track's instrument/effect cards on screen — they'd still edit a removed track.
@@ -375,23 +385,109 @@ public partial class MainWindow
 
     // Double-click on a MIDI clip: that clip — or, when it is one of two or more selected MIDI
     // clips, all of them together with it active (specs/029-multi-clip-editing).
+    // In track mode (specs/059) it opens the clip's whole track instead.
     private void OpenClipEditor(int trackId, int clipIndex)
     {
-        var sel = Timeline.SelectedMidiClips();
-        if (sel.Count >= 2 && sel.Contains((trackId, clipIndex))) BuildClipEditor(sel, trackId, clipIndex);
-        else BuildClipEditor(trackId, clipIndex);
+        if (!FocusTrackClip(trackId, clipIndex))
+        {
+            var sel = Timeline.SelectedMidiClips();
+            if (!ClipTrackMode && sel.Count >= 2 && sel.Contains((trackId, clipIndex))) BuildClipEditor(sel, trackId, clipIndex);
+            else BuildClipEditor(trackId, clipIndex);
+        }
         ShowClipPanel();
     }
 
     /// <summary>"Edit selected clips": every selected MIDI clip in one editor, the first in time
-    /// active. False with fewer than two selected.</summary>
+    /// active. False with fewer than two selected. Asking for the selection leaves track mode.</summary>
     internal bool EditSelectedClips()
     {
         var sel = Timeline.SelectedMidiClips();
         if (sel.Count < 2) return false;
+        SetClipTrackMode(false, reopen: false);
         BuildClipEditor(sel, sel[0].TrackId, sel[0].ClipIndex);
         ShowClipPanel();
         return true;
+    }
+
+    // --- track mode (specs/059-clip-editor-track-mode, #49) ------------------------------------
+
+    private bool ClipTrackMode => _vm?.Settings.Current.ClipEditorTrackMode == true;
+
+    /// <summary>The Clip | Track switch: saves the mode and reopens an arrangement clip editor in
+    /// it on the clip it has active (clip mode shows that clip alone).</summary>
+    internal void SetClipTrackMode(bool on, bool reopen = true)
+    {
+        if (_vm is null || ClipTrackMode == on) return;
+        _vm.Settings.Current.ClipEditorTrackMode = on;
+        _vm.Settings.Save();
+        _vm.StatusText = on ? "Clip editor: every clip on the track" : "Clip editor: one clip";
+        if (!reopen || _editorRoll is not { } roll || _clipEditor is null || _editorTrackId <= 0) return;
+        bool shown = ClipEditorShown(_clipEditor);
+        var a = roll.ActiveClip;
+        BuildClipEditor(a.TrackId, a.ClipIndex);
+        if (shown) ShowClipPanel();
+    }
+
+    // The track's MIDI clips in index order.
+    private List<(int TrackId, int ClipIndex)> MidiClipsOf(int trackId)
+    {
+        var list = new List<(int, int)>();
+        if (!ChipTrackInfo(trackId, out var ti)) return list;
+        for (int c = 0; c < ti.ClipCount; c++)
+            if (Engine.TryGetClipInfo(trackId, c, out var ci) && ci.IsMidi) list.Add((trackId, c));
+        return list;
+    }
+
+    /// <summary>A track-mode editor already open on this clip's track makes the clip active and
+    /// brings it into view instead of being rebuilt. False when there is no such editor.</summary>
+    private bool FocusTrackClip(int trackId, int clipIndex)
+    {
+        if (!ClipTrackMode || _editorRoll is not { Clips.TrackMode: true } roll || _clipEditor is null
+            || roll.ActiveClip.TrackId != trackId) return false;
+        SyncTrackClips(roll);   // an arrangement edit may have added or re-indexed clips
+        int slot = roll.Clips.IndexOf(trackId, clipIndex);
+        if (slot < 0) return false;
+        roll.SetActiveClip(slot);
+        roll.RevealClip(slot);
+        return true;
+    }
+
+    /// <summary>Reopens a track-mode editor's clips from the engine when they no longer match the
+    /// track's MIDI clips: one appeared (drawn, pasted, recorded) or an edit re-indexed them (a
+    /// split puts the right half after the left, so the later clips shift). The roll keeps its
+    /// zoom, scroll and note selection; the active clip is the one still at its start beat.
+    /// Whether the roll was reloaded.</summary>
+    private bool SyncTrackClips(PianoRollView roll)
+    {
+        var old = roll.Clips;
+        if (!old.TrackMode) return false;
+        var a = roll.ActiveClip;
+        var now = MidiClipsOf(a.TrackId);
+        if (now.Count == 0 || (now.Count == old.Count && now.All(x => old.IndexOf(x.TrackId, x.ClipIndex) >= 0))) return false;
+        var items = new List<OpenClip>();
+        foreach (var (t, c) in now)
+            if (Engine.TryGetClipInfo(t, c, out var info))
+                items.Add(new OpenClip(t, c, info.StartBeat, info.LengthBeats > 0 ? info.LengthBeats : 4));
+        if (items.Count == 0) return false;
+        var sameStart = items.Where(i => Math.Abs(i.StartBeat - a.StartBeat) < 1e-6).ToList();
+        var active = sameStart.FirstOrDefault(i => i.ClipIndex == a.ClipIndex) ?? sameStart.FirstOrDefault() ?? items[0];
+        var set = new ClipSet(items, a.TrackId, active.ClipIndex, Timeline.BeatsPerBar, trackMode: true);
+        // Reference locks stay on the clips that are still where they were.
+        foreach (var o in old.Clips)
+        {
+            if (!o.IsReference) continue;
+            int slot = set.IndexOf(o.TrackId, o.ClipIndex);
+            if (slot >= 0 && Math.Abs(set.Clips[slot].StartBeat - o.StartBeat) < 1e-6) set.SetReference(slot, true);
+        }
+        roll.SetClips(set, ClipNotesOf(set), TrackBrush);
+        return true;
+    }
+
+    // An arrangement edit that re-indexes the track's clips (a split) while no clip is selected.
+    private void SyncTrackModeClips()
+    {
+        if (_editorRoll is { Clips.TrackMode: true } roll && _clipEditor is not null && _editorTrackId > 0)
+            SyncTrackClips(roll);
     }
 
     /// <summary>A Clip editor with several arrangement clips open.</summary>
@@ -408,6 +504,19 @@ public partial class MainWindow
             ? _clipEditor is not null && ReferenceEquals(_lastClipEditor, _clipEditor)
             : DetailPanel.IsVisible && DetailBody.Content is ClipEditorView;
         if (!shown) return;
+        // Track mode follows the clicked clip: its track, with it active.
+        if (ClipTrackMode)
+        {
+            if (!SelectedClip(out int t, out int c, out bool isMidi) || !isMidi)
+            {
+                SyncTrackModeClips();   // e.g. a split cleared the selection: the editor still follows the track
+                return;
+            }
+            if (FocusTrackClip(t, c)) return;
+            BuildClipEditor(t, c);
+            ShowClipPanel();
+            return;
+        }
         var midi = Timeline.SelectedMidiClips();
         if (midi.Count >= 2)
         {
@@ -479,10 +588,13 @@ public partial class MainWindow
         => BuildClipEditor(new[] { (trackId, clipIndex) }, trackId, clipIndex);
 
     // Build the piano-roll editor for a set of arrangement MIDI clips, (activeTrack, activeClip)
-    // active (no panel switch). One clip is the classic single-clip editor.
+    // active (no panel switch). One clip is the classic single-clip editor. In track mode the set
+    // is every MIDI clip of the active clip's track.
     private void BuildClipEditor(IReadOnlyList<(int TrackId, int ClipIndex)> clips, int activeTrack, int activeClip)
     {
         if (_vm is null) return;
+        bool trackMode = ClipTrackMode;
+        if (trackMode && MidiClipsOf(activeTrack) is { Count: > 0 } all) clips = all;
         var open = new List<OpenClip>();
         foreach (var (t, c) in clips)
             if (Engine.TryGetClipInfo(t, c, out var info) && info.IsMidi)
@@ -491,7 +603,7 @@ public partial class MainWindow
         // The editor being replaced lets its pending placement go into its own clips first (it
         // may never have had focus to lose, e.g. after a menu paste).
         _editorRoll?.SettlePlacement();
-        var set = new ClipSet(open, activeTrack, activeClip, Timeline.BeatsPerBar);
+        var set = new ClipSet(open, activeTrack, activeClip, Timeline.BeatsPerBar, trackMode);
         PianoRollView roll = null!;
         roll = new PianoRollView
         {
@@ -548,7 +660,8 @@ public partial class MainWindow
         _editorClipIndex = set.ActiveClip.ClipIndex;
         _editorRoll = roll;
         _clipEditor = new ClipEditorView(roll, $"Track {_editorTrackId} clip", set.ActiveClip.StartBeat, Engine,
-                                         _editorTrackId, _editorClipIndex, set.ActiveClip.LengthBeats);
+                                         _editorTrackId, _editorClipIndex, set.ActiveClip.LengthBeats,
+                                         on => SetClipTrackMode(on));
         // The active clip drives the detail chip, the playhead's live check and the envelopes.
         roll.ActiveClipChanged += () =>
         {
@@ -667,7 +780,10 @@ public partial class MainWindow
         if (_patternView is not null && _patternTrackId == trackId && _patternClipIndex == clipIndex && _patternScene < 0)
             _patternView.Reload();
 
-        if (_editorRoll is { } roll && _editorTrackId > 0 && roll.Clips.IndexOf(trackId, clipIndex) >= 0)
+        if (_editorRoll is { Clips.TrackMode: true } trackRoll && trackRoll.ActiveClip.TrackId == trackId
+            && trackRoll.Clips.IndexOf(trackId, clipIndex) < 0 && ci.IsMidi)
+            SyncTrackClips(trackRoll);
+        else if (_editorRoll is { } roll && _editorTrackId > 0 && roll.Clips.IndexOf(trackId, clipIndex) >= 0)
         {
             double len = ci.LengthBeats > 0 ? ci.LengthBeats : 4;
             var set = roll.Clips;
@@ -815,6 +931,7 @@ public partial class MainWindow
         // Every open clip, as the engine now holds it (undo/redo, recording); clips that are
         // gone leave the set, and their lengths/starts are re-read.
         var roll = _editorRoll;
+        SyncTrackClips(roll);   // a track-mode editor takes clips that appeared or were re-indexed (undo, record)
         if (!PruneDeadClips(roll)) return;
         var set = roll.Clips;
         foreach (var c in set.Clips.ToList())
@@ -873,7 +990,7 @@ public partial class MainWindow
         }
         if (isMidi)
         {
-            if (_clipEditor is null || _editorTrackId != tid || _editorClipIndex != ci)
+            if (!FocusTrackClip(tid, ci) && (_clipEditor is null || _editorTrackId != tid || _editorClipIndex != ci))
                 BuildClipEditor(tid, ci);
             ShowClipPanel();
         }
@@ -924,6 +1041,7 @@ public partial class MainWindow
         DetailPanel.PropertyChanged += (_, e) =>
         {
             if (e.Property != IsVisibleProperty) return;
+            if (!DetailPanel.IsVisible) SetDetailMaximized(false);
             FollowDetailVisibility(DetailPanel.IsVisible);
             SyncDetailEdge();
             Dispatcher.UIThread.Post(FitBottomPanels);
@@ -932,6 +1050,69 @@ public partial class MainWindow
         DetailEdge.PointerPressed += OnDetailEdgePressed;
         DetailEdge.PointerMoved += OnDetailEdgeMoved;
         DetailEdge.PointerReleased += OnDetailEdgeReleased;
+        OnDoubleClick(DetailSplitter, ResetDetailHeight);
+        OnDoubleClick(DetailEdge, ResetDetailHeight);
+        OnDoubleClick(MixerSplitter, ResetMixerHeight);
+        OnDoubleClick(BrowserSplitter, ResetBrowserWidth);
+    }
+
+    // Double-click a panel edge: the panel goes back to its default size (#305). Taken in the
+    // tunnel and handled, so the splitter never starts the drag that would record the old size.
+    private static void OnDoubleClick(Control edge, Action reset)
+        => edge.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.ClickCount != 2 || !e.GetCurrentPoint(edge).Properties.IsLeftButtonPressed) return;
+            reset();
+            e.Handled = true;
+        }, RoutingStrategies.Tunnel);
+
+    // The tab's own height (ShowDetail's), forgetting the one the Clip tab remembered.
+    private void ResetDetailHeight()
+    {
+        if (_detailMaximized || !DetailPanel.IsVisible) return;
+        _detailHeight = 0;
+        _detailWanted = _detailDefault;
+        _detailRow.Height = new GridLength(_detailDefault);
+        FitBottomPanels();
+    }
+
+    // --- the clip editor filling the window (#304) --------------------------------------------
+    //
+    // The main view (browser and all) and a docked Mixer fold away and the Detail row takes the
+    // whole body; back, everything returns to the split it had (_detailWanted, _mixerWanted).
+    // Not saved: a new launch opens on the split.
+
+    private bool _detailMaximized;
+    private double _detailDefault = 250;   // the shown tab's default height (ShowDetail)
+
+    private bool CanMaximizeDetail => !DetailFloating && DetailPanel.IsVisible
+                                      && DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView;
+
+    private void OnDetailMaximize(object? sender, RoutedEventArgs e) => ToggleDetailMaximized();
+
+    private void ToggleDetailMaximized()
+    {
+        if (!_detailMaximized && !CanMaximizeDetail)
+        {
+            if (_vm is not null) _vm.StatusText = DetailFloating ? "The clip editor is in its own window" : "Open a clip in the clip editor first";
+            return;
+        }
+        SetDetailMaximized(!_detailMaximized);
+    }
+
+    private void SetDetailMaximized(bool on)
+    {
+        if (on == _detailMaximized) return;
+        _detailMaximized = on;
+        BrowserGrid.IsVisible = !on;
+        _mainRow.MinHeight = on ? 0 : 120;
+        _mainRow.Height = on ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        _detailRow.Height = on ? new GridLength(1, GridUnitType.Star) : new GridLength(_detailWanted > 120 ? _detailWanted : _detailDefault);
+        DetailSplitter.IsVisible = !on;
+        DetailMaximizeGlyph.Kind = on ? GlyphKind.Shrink : GlyphKind.Expand;
+        ToolTip.SetTip(DetailMaximizeBtn, MenuKit.Keys(on ? "Back to the split (⌘⇧F)" : "Fill the window with the clip editor (⌘⇧F)"));
+        if (MenuItemFor("view.maximizeDetail") is { } mi) mi.IsChecked = on;
+        LayoutBottomPanels();
     }
 
     // Some paths only flip the panel's visibility (View ▸ Toggle detail panel, a closed clip):
@@ -1001,8 +1182,10 @@ public partial class MainWindow
         rows.Clear();
         rows.Add(_mainRow);
         int detail = 1;
-        if (_mixerDocked)
+        bool mixer = _mixerDocked && !_detailMaximized;
+        if (mixer)
         {
+            _mixerRow.MinHeight = MixerPanelMin;
             rows.Add(_mixerSplitRow);
             rows.Add(_mixerRow);
             Grid.SetRow(MixerSplitter, 1);
@@ -1019,8 +1202,8 @@ public partial class MainWindow
         Grid.SetRow(DetailSplitter, detail);
         Grid.SetRow(DetailPanel, detail + 1);
         Grid.SetRow(DetailEdge, detail);
-        MixerSplitter.IsVisible = _mixerDocked;
-        MixerPanel.IsVisible = _mixerDocked;
+        MixerSplitter.IsVisible = mixer;
+        MixerPanel.IsVisible = mixer;
         SyncDetailEdge();
         FitBottomPanels();
     }
@@ -1031,6 +1214,7 @@ public partial class MainWindow
     // minimum. The Mixer grows back toward the height the user chose; a fit never changes it.
     private void FitBottomPanels()
     {
+        if (_detailMaximized) return;   // the Detail row is all there is
         double total = BodyGrid.Bounds.Height;
         double mixer = _mixerDocked ? Math.Max(_mixerWanted, _mixerRow.MinHeight) : 0;
         if (total > 0)

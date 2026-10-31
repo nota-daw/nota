@@ -35,10 +35,13 @@ public sealed class ClipSet
     /// (activeTrack, activeClip) is active, or the first in time when it is not among them.
     /// With <paramref name="barBeats"/> &gt; 0 a multi-clip set puts editor beat 0 on the bar
     /// line at or before the earliest clip, so the editor's grid is the arrangement's; a single
-    /// clip always starts at editor beat 0.</summary>
-    public ClipSet(IEnumerable<OpenClip> clips, int activeTrack, int activeClip, double barBeats = 0)
+    /// clip always starts at editor beat 0. A <paramref name="trackMode"/> set (specs/059) holds
+    /// every MIDI clip of one track and lies on the arrangement's own axis: editor beat 0 is
+    /// arrangement beat 0, and it reads as several clips even when the track has only one.</summary>
+    public ClipSet(IEnumerable<OpenClip> clips, int activeTrack, int activeClip, double barBeats = 0, bool trackMode = false)
     {
         _barBeats = barBeats;
+        TrackMode = trackMode;
         _clips = clips.Select(c => c with { IsReference = false })
                       .GroupBy(c => (c.TrackId, c.ClipIndex)).Select(g => g.First())
                       .OrderBy(c => c.StartBeat).ThenBy(c => c.TrackId).ToList();
@@ -53,7 +56,10 @@ public sealed class ClipSet
     public IReadOnlyList<OpenClip> Clips => _clips;
     public int Count => _clips.Count;
     public bool IsEmpty => _clips.Count == 0;
-    public bool IsMulti => _clips.Count > 1;
+    /// <summary>The set is a whole track's MIDI clips on the arrangement axis (specs/059).</summary>
+    public bool TrackMode { get; }
+    /// <summary>The editor works on the shared timeline: several clips, or track mode.</summary>
+    public bool IsMulti => _clips.Count > 1 || TrackMode;
     /// <summary>Slot of the active clip: it receives new notes and drives header, inspector and envelopes.</summary>
     public int Active { get; private set; }
     public OpenClip ActiveClip => _clips[Active];
@@ -65,8 +71,8 @@ public sealed class ClipSet
     private void Measure()
     {
         if (_clips.Count == 0) { Origin = 0; SpanBeats = 0; return; }
-        Origin = _clips.Min(c => c.StartBeat);
-        if (_clips.Count > 1 && _barBeats > 0) Origin = Math.Floor(Origin / _barBeats + 1e-9) * _barBeats;
+        Origin = TrackMode ? 0 : _clips.Min(c => c.StartBeat);
+        if (!TrackMode && _clips.Count > 1 && _barBeats > 0) Origin = Math.Floor(Origin / _barBeats + 1e-9) * _barBeats;
         SpanBeats = _clips.Max(c => c.EndBeat) - Origin;
     }
 
@@ -113,6 +119,22 @@ public sealed class ClipSet
         else if (Active == slot) Active = Math.Min(slot, _clips.Count - 1);
         if (_clips[Active].IsReference) _clips[Active] = _clips[Active] with { IsReference = false };
         return slot;
+    }
+
+    /// <summary>Opens one more clip (a clip that appeared on a track-mode editor's track), in
+    /// start order; the active clip stays active. False when it is already open. Slots after it
+    /// shift, so the roll must reload its notes.</summary>
+    public bool Add(OpenClip clip)
+    {
+        if (IndexOf(clip.TrackId, clip.ClipIndex) >= 0) return false;
+        var active = _clips.Count > 0 ? _clips[Active] : clip;
+        var sorted = _clips.Append(clip with { IsReference = false })
+                           .OrderBy(c => c.StartBeat).ThenBy(c => c.TrackId).ToList();
+        _clips.Clear();
+        _clips.AddRange(sorted);
+        Active = IndexOf(active.TrackId, active.ClipIndex);
+        Measure();
+        return true;
     }
 
     /// <summary>A clip moved or was trimmed in the arrangement. Slots stay put.</summary>

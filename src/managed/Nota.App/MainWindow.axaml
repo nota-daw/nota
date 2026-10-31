@@ -83,6 +83,7 @@
             <NativeMenuItemSeparator/>
             <NativeMenuItem Header="Toggle browser" app:Commands.Id="view.toggleBrowser"/>
             <NativeMenuItem Header="Toggle detail panel" app:Commands.Id="view.toggleDetail"/>
+            <NativeMenuItem Header="Clip editor fills the window" app:Commands.Id="view.maximizeDetail" ToggleType="CheckBox"/>
             <NativeMenuItem Header="Toggle overview" app:Commands.Id="view.toggleOverview"/>
             <NativeMenuItem Header="Toggle sections" app:Commands.Id="view.toggleSections"/>
             <NativeMenuItem Header="Toggle full screen" app:Commands.Id="view.fullscreen"/>
@@ -525,10 +526,10 @@
               CornerRadius="{StaticResource Radius.Docked}">
         <DockPanel>
           <!-- Panel toolbar (32, seam under it): mode tabs · track chip (routing/PDC) ·
-               Freeze · | · pop out · close -->
+               Freeze · | · fill the window (clip tabs) · pop out · close -->
           <Border DockPanel.Dock="Top" Height="32" Background="{DynamicResource Brush.Panel}"
                   BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,0,0,1">
-          <Grid Margin="8,0,6,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
+          <Grid Margin="8,0,6,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto">
             <Border Classes="segmented" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal" Spacing="1">
                 <ToggleButton x:Name="DetailDevicesBtn" Classes="seg" Content="Devices" Click="OnDetailDevices"/>
@@ -583,12 +584,17 @@
             </StackPanel>
             <Border Grid.Column="3" Width="1" Height="16" Margin="10,0,6,0" VerticalAlignment="Center"
                     Background="{DynamicResource Brush.Rule}"/>
-            <Button x:Name="DetailPopOut" Grid.Column="4" Classes="ghost" Height="22" Padding="6,0"
+            <Button x:Name="DetailMaximizeBtn" Grid.Column="4" Classes="ghost" Height="22" Margin="0,0,2,0" Padding="6,0"
+                    Foreground="{DynamicResource Brush.TextTertiary}" Click="OnDetailMaximize" IsVisible="False"
+                    ToolTip.Tip="Fill the window with the clip editor (⌘⇧F)">
+              <app:Glyph x:Name="DetailMaximizeGlyph" Kind="Expand"/>
+            </Button>
+            <Button x:Name="DetailPopOut" Grid.Column="5" Classes="ghost" Height="22" Padding="6,0"
                     Foreground="{DynamicResource Brush.TextTertiary}" Click="OnToggleDetailWindow"
                     ToolTip.Tip="Open devices and clip in a separate window">
               <app:Glyph x:Name="PopOutGlyph" Kind="PopOut"/>
             </Button>
-            <Button Grid.Column="5" Classes="ghost" Height="22" Margin="2,0,0,0" Padding="6,0"
+            <Button Grid.Column="6" Classes="ghost" Height="22" Margin="2,0,0,0" Padding="6,0"
                     Foreground="{DynamicResource Brush.TextTertiary}" Click="OnCloseDetail" ToolTip.Tip="Close">
               <app:Glyph x:Name="CloseDetailGlyph" Kind="Close"/>
             </Button>

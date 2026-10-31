@@ -298,6 +298,17 @@ public sealed partial class PianoRollView : UserControl
         SyncScroll(); Invalidate(); SaveView();
     }
 
+    /// <summary>Scrolls clip <paramref name="slot"/>'s start into view when it is off screen.</summary>
+    public void RevealClip(int slot)
+    {
+        if (slot < 0 || slot >= _set.Count) return;
+        double start = _set.EditorStart(slot);
+        if (_pixelsPerBeat <= 0) { _pendingScrollTo = start; return; }
+        double vpBeats = _gridControl.Bounds.Width / _pixelsPerBeat;
+        if (start >= _scrollBeats && start < _scrollBeats + vpBeats) return;
+        SetScrollBeats(start);
+    }
+
     internal void ScrollByBeats(double delta) => SetScrollBeats(_scrollBeats + delta);
 
     internal void ZoomAt(double factor, double beatAnchor)
@@ -665,7 +676,12 @@ public sealed partial class PianoRollView : UserControl
     /// exactly the single-clip editor.</summary>
     public void SetClips(ClipSet set, IReadOnlyList<ClipNotes> perClip, Func<int, ISolidColorBrush> brushOf)
     {
-        bool rescroll = !ReferenceEquals(set, _set) && set.IsMulti;
+        // A track-mode set refreshed for the same track (a clip drawn, split, pasted; undo)
+        // keeps the zoom, scroll and note selection the user is working with (specs/059).
+        bool keepView = _set.TrackMode && set.TrackMode && _pixelsPerBeat > 0
+                        && _set.ActiveClip.TrackId == set.ActiveClip.TrackId;
+        var kept = keepView ? SelectedNotesAbsolute() : null;
+        bool rescroll = !keepView && !ReferenceEquals(set, _set) && set.IsMulti;
         _set = set;
         _slotBrushes.Clear();
         foreach (var c in set.Clips) _slotBrushes.Add(brushOf(c.TrackId));
@@ -674,12 +690,46 @@ public sealed partial class PianoRollView : UserControl
         set.Merge(perClip, notes, owners);
         // Multi-clip view state is not remembered per clip: fit the span, then show the active clip.
         if (set.IsMulti) _clipKey = (int.MinValue, int.MinValue);
-        Load(notes, owners, Math.Max(1, set.SpanBeats));
+        _keepViewOnLoad = keepView;
+        try { Load(notes, owners, Math.Max(1, set.SpanBeats)); }
+        finally { _keepViewOnLoad = false; }
+        if (kept is not null) RestoreSelection(kept);
         if (rescroll) _pendingScrollTo = set.EditorStart(set.Active);
         ActiveClipChanged?.Invoke();
     }
 
     private double? _pendingScrollTo;   // editor beat to bring into view once the zoom is fitted
+    private bool _keepViewOnLoad;       // Load keeps the current zoom, scroll and rows (SetClips)
+
+    // The selected notes as (clip, arrangement start, pitch, length): they survive a reload that
+    // renumbers the notes, as long as the clip they sit in keeps its index.
+    private List<((int Track, int Clip) Clip, double Start, int Pitch, double Length)> SelectedNotesAbsolute()
+    {
+        var list = new List<((int Track, int Clip) Clip, double Start, int Pitch, double Length)>();
+        foreach (int i in _selection)
+        {
+            if (i < 0 || i >= _notes.Count || _owner[i] >= _set.Count) continue;
+            var c = _set.Clips[_owner[i]];
+            list.Add(((c.TrackId, c.ClipIndex), _set.Origin + _notes[i].StartBeat, _notes[i].Pitch, _notes[i].LengthBeats));
+        }
+        return list;
+    }
+
+    private void RestoreSelection(List<((int Track, int Clip) Clip, double Start, int Pitch, double Length)> kept)
+    {
+        if (kept.Count == 0) return;
+        for (int i = 0; i < _notes.Count; i++)
+        {
+            var c = _set.Clips[_owner[i]];
+            foreach (var k in kept)
+                if (k.Clip == (c.TrackId, c.ClipIndex) && k.Pitch == _notes[i].Pitch
+                    && Math.Abs(k.Start - (_set.Origin + _notes[i].StartBeat)) < 1e-9
+                    && Math.Abs(k.Length - _notes[i].LengthBeats) < 1e-9)
+                { _selection.Add(i); break; }
+        }
+        Invalidate();
+        Changed?.Invoke();   // Load announced an empty selection: the inspector shows these notes again
+    }
 
     /// <summary>Makes clip <paramref name="slot"/> the active one (a locked clip is unlocked).
     /// A pending placement lands first.</summary>
@@ -732,11 +782,18 @@ public sealed partial class PianoRollView : UserControl
         // fitted or zoomed by hand. The saved height is the keyboard's, for unfolding.
         bool reload = _clipKey.Item1 != int.MinValue && _clipKey == _loadedKey;
         _loadedKey = _clipKey;
-        bool keepKitRows = reload && _fold && _rowsArePads;
+        bool keepKitRows = (reload && _fold && _rowsArePads) || _keepViewOnLoad;
         if (!keepKitRows) _rowH = saved ? Math.Clamp(vs.RowH, MinRowH, MaxRowH) : DefaultRowH;
         _keys.Height = RangeH;
         _gridControl.Height = RangeH;
-        if (saved)
+        if (_keepViewOnLoad)
+        {
+            // The same track's clips refreshed: stay where the user is (the span may have changed).
+            _scrollBeats = Math.Min(_scrollBeats, MaxScrollBeats);
+            _pendingVOffset = _bodyScroll.Offset.Y; _pendingCenter = false;
+            SyncScroll();
+        }
+        else if (saved)
         {
             _pixelsPerBeat = Math.Clamp(vs.Ppb, MinPpb, MaxPpb);
             _scrollBeats = Math.Max(0, vs.Scroll);
