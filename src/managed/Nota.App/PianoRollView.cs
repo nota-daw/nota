@@ -728,6 +728,7 @@ public sealed partial class PianoRollView : UserControl
                 { _selection.Add(i); break; }
         }
         Invalidate();
+        Changed?.Invoke();   // Load announced an empty selection: the inspector shows these notes again
     }
 
     /// <summary>Makes clip <paramref name="slot"/> the active one (a locked clip is unlocked).
