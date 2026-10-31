@@ -128,7 +128,8 @@ internal sealed class AfEnvView : AfWindowBase
         NotaGraph.Title(ctx, frame, "Cutoff over time");
         string pk = NotaNum.Hz(_peakHz);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, pk, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        NotaGraph.Legend(ctx, w - 5, 16, ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
+        // The legend shares the title row, left of the peak read-out, above the plot.
+        NotaGraph.Legend(ctx, w - 14 - NotaGraph.AxisText(pk).Width, 3, ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "0");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, _winText);
         var bt = NotaGraph.AxisText(_baseText);
@@ -218,7 +219,7 @@ internal sealed class AfLfoView : AfWindowBase
                 double rel = _phase - _offset; rel -= Math.Floor(rel);
                 double x = rel / _cycles * w;
                 double v = Shape(_phase, 0);
-                ctx.DrawLine(new Pen(NotaPalette.Accent, 1), new Point(x, 0), new Point(x, h));
+                ctx.DrawLine(new Pen(NotaPalette.Accent, 1), new Point(x, NotaGraph.PlotTop - 2), new Point(x, h - NotaGraph.PlotFloor + 2));   // clear of the title and the axis labels
                 ctx.DrawEllipse(NotaPalette.Accent, null, new Point(x, mid - v * amp), 3, 3);
             }
         }

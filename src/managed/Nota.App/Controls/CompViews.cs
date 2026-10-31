@@ -223,7 +223,8 @@ internal sealed class CompGrHistoryView : Control
             double py = top + Math.Clamp(Peak / scale, 0, 1) * (bot - top);
             ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1) { DashStyle = new DashStyle(new double[] { 2, 4 }, 0) }, new Point(x0, py), new Point(x1, py));
             var ft = CompDraw.Text(NotaNum.F($"peak −{Peak:0.0}"), NotaPalette.TextTertiary);
-            ctx.DrawText(ft, new Point(x1 - ft.Width - 2, Math.Clamp(py - ft.Height - 1, top, bot - ft.Height)));
+            // On a plate at the left (the oldest end), so the live trace at the right never runs through it.
+            NotaGraph.PlateText(ctx, ft, new Point(x0 + 4, Math.Clamp(py - ft.Height - 1, top, bot - ft.Height)));
         }
         NotaGraph.Title(ctx, rect, "Gain reduction");
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.TopRight, Current > 0.05 ? NotaNum.F($"−{Current:0.0} dB") : "0.0 dB", NotaPalette.TextSecondary);
