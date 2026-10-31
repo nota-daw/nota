@@ -33,7 +33,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
     private static readonly IBrush Inset = NotaPalette.BgSunken;
     private static readonly IBrush TabBg = NotaPalette.SurfaceCard;
     private static readonly IBrush Amber = NotaPalette.Accent;
-    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealC = DeviceCardKit.ModInk;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush Txt2 = NotaPalette.TextSecondary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
@@ -114,7 +114,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             => new() { Text = NotaText.Label(t), FontSize = fs, FontWeight = w, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Caps(string t) => new() { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock MonoText(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
@@ -148,7 +148,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         Control WaveChip(string id, int wave, double w = 22, double h = 16)
         {
             var ic = new PentadWaveIcon(wave) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var b = new Border { Width = w, Height = h, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
+            var b = new Border { Width = w, Height = h, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Cursor = new Cursor(StandardCursorType.Hand), Child = ic };
             void Hi() { bool on = On(id); b.Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent; b.BorderBrush = on ? NotaPalette.BorderBrass : NotaPalette.BorderStrong; ic.Stroke = on ? NotaPalette.AccentHover : MutedC; ic.InvalidateVisual(); }
             b.PointerPressed += (_, e) => { SetP(id, On(id) ? 0f : 1f); Refresh(); e.Handled = true; };
             readouts.Add(Hi); Hi();
@@ -184,8 +184,8 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         {
             int pi = I(id);
             IBrush grad = NotaPalette.BgSunken;
-            var bar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Stretch };
-            var mark = new Border { Height = 2, Width = 12, Background = lit, CornerRadius = NotaRadius.Bar };
+            var bar = new Border { Width = 16, Background = grad, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Stretch };
+            var mark = new Border { Height = 2, Width = 12, Background = lit, CornerRadius = NotaRadius.Fine };
             var lay = new Canvas { Width = 16 };
             lay.Children.Add(mark); Canvas.SetLeft(mark, 2);
             var host = new Panel { Width = 16, VerticalAlignment = VerticalAlignment.Stretch, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Children = { bar, lay } };
@@ -313,7 +313,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             };
             filtCurve.DragStarted += () => { engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); engine.BeginAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "reso"); };
             filtCurve.DragEnded += () => { engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "cutoff"); engine.EndAutomationWrite(track, AutomationTarget.PluginParam, -1, -1, "reso"); };
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Margin = new Thickness(0, 3, 0, 3), Child = filtCurve };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Margin = new Thickness(0, 3, 0, 3), Child = filtCurve };
             var keyPct = MonoText("", 7, Txt2);
             readouts.Add(() => keyPct.Text = Pct(G("keytrk")));
             keyPct.HorizontalAlignment = HorizontalAlignment.Center;
@@ -334,7 +334,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             head.Children.Add(Docked(Caps(title), Avalonia.Controls.Dock.Left));
             if (amp) head.Children.Add(Docked(Toggle("releaseon", "Release"), Avalonia.Controls.Dock.Right));
             head.Children.Add(Docked(new Border { Margin = new Thickness(6, 0), Child = times }, Avalonia.Controls.Dock.Right));
-            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, Child = curve };
+            var graph = new Border { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, Child = curve };
             var knobs = Row(0, K(pre + "attack", "A", Atk, amp, Knob.SizeInline, 30, true), K(pre + "decay", "D", Dec, amp, Knob.SizeInline, 30, true), K(pre + "sustain", "S", v => Pct(v), amp, Knob.SizeInline, 30, true), K(pre + "release", "R", Dec, amp, Knob.SizeInline, 30, true));
             knobs.Margin = new Thickness(4, 0, 0, 0);
             return new DockPanel { LastChildFill = true, Children = { Docked(head, Avalonia.Controls.Dock.Top), Docked(knobs, Avalonia.Controls.Dock.Right), graph } };
@@ -475,7 +475,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         int centreTab = 0;
 
         // Drift slider + seed re-roll (Oscillators tab bar)
-        var reroll = new Border { Padding = new Thickness(3, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+        var reroll = new Border { Padding = new Thickness(3, 0), CornerRadius = NotaRadius.Cell, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = new Glyph(GlyphKind.Cycle, 9) { Foreground = Txt2 } };
         ToolTip.SetTip(reroll, "Re-roll the vintage seed (new per-voice spread)");
         reroll.PointerPressed += (_, e) => { SetP("seed", (float)Random.Shared.NextDouble()); Refresh(); e.Handled = true; };
@@ -531,7 +531,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         {
             var seedTxt = MonoText("", 8, TxtC);
             flyReadouts.Add(() => seedTxt.Text = $"#{(int)Math.Round(G("seed") * 16777215):X6}");
-            var rr = new Border { Padding = new Thickness(6, 1), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "Re-roll", FontSize = 8, Foreground = TxtC } };
+            var rr = new Border { Padding = new Thickness(6, 1), CornerRadius = NotaRadius.Cell, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = "Re-roll", FontSize = 8, Foreground = TxtC } };
             rr.PointerPressed += (_, e) => { SetP("seed", (float)Random.Shared.NextDouble()); Refresh(); foreach (var a in flyReadouts) a(); e.Handled = true; };
             Control R(string label, Control c) { var g = new Grid { ColumnDefinitions = new ColumnDefinitions("92,*"), Height = 20 }; g.Children.Add(Caps(label)); c.HorizontalAlignment = HorizontalAlignment.Left; g.Children.Add(Col(c, 1)); return g; }
             var tune = HSlider("tune", v => { double c = (v - 0.5) * 200; return Math.Abs(c) < 0.5 ? "0\u2009c" : $"{c:+0;−0}\u2009c"; }, 30, null, flyReadouts); tune.Width = 130;
@@ -551,7 +551,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
                 R("AFTERTOUCH", at) } };
             return new Border { Padding = new Thickness(4, 2), Child = p };
         }
-        var voiceBtn = new Border { Height = 14, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+        var voiceBtn = new Border { Height = 14, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = Glyph.WithChevron(new TextBlock { Text = "Voice", FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, 7) };
         ToolTip.SetTip(voiceBtn, "Voice setup: polyphony, allocation, glide mode, oversampling, vintage seed");
         voiceBtn.PointerPressed += (_, e) =>

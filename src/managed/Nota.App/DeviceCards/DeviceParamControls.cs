@@ -42,7 +42,7 @@ internal static class DeviceParamControls
         double span = Math.Max(1e-6, max - min);
 
         var value = new TextBlock { Text = Fmt(val), FontSize = 8, Foreground = TextPrimary };
-        value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var knob = new Knob((val - min) / span, 1.0) { Accent = true, Default = (engine.DeviceParamDefault(track, device, param) - min) / span };
         knob.Format = frac => Fmt((float)(min + frac * span));
         int d = device, pp = param;
@@ -93,7 +93,7 @@ internal static class DeviceParamControls
         var tap = new Border
         {
             Background = Card2, BorderBrush = BorderStrong, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Tile, Padding = new Thickness(6, 3), Cursor = new Cursor(StandardCursorType.Hand),
+            CornerRadius = NotaRadius.Group, Padding = new Thickness(6, 3), Cursor = new Cursor(StandardCursorType.Hand),
             HorizontalAlignment = HorizontalAlignment.Stretch, Child = tapText,
         };
         tap.PointerPressed += (_, _) =>
@@ -117,7 +117,7 @@ internal static class DeviceParamControls
     private static Control ScFaderRow(string name, double norm, Func<double, string> fmt, Action<double> apply)
     {
         var value = new TextBlock { Text = fmt(norm), FontSize = 8, Foreground = TextPrimary };
-        value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        value.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var knob = new Knob(Math.Clamp(norm, 0, 1), 1.0) { Accent = true };
         knob.Format = fmt;
         knob.ValueChanged += frac => { apply(frac); value.Text = fmt(frac); };

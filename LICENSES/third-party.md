@@ -26,7 +26,7 @@ public domain, or AGPL-compatible copyleft.
 | CPM.cmake | v0.43.2 | CMake package manager (build-time only, not linked) | MIT | ✅ in use — downloaded at configure time, never vendored |
 | HIIR (Laurent de Soras) | 1.50 (bump ex 1.40; snapshot unavailable upstream — null-gated, see note 4) | Oversampling (polyphase halfband IIR) | WTFPL | ✅ in use — CPM URL+HASH zip, fetched to build dir — see note 4 |
 | Apple CoreAudio / CoreMIDI / AudioToolbox | system | Audio + MIDI I/O (macOS) | system SDK | ✅ in use |
-| Geist / Geist Mono (Vercel) | 1.7.2 | UI and numeric typefaces (`assets/fonts`) | **SIL OFL 1.1** | ✅ in use — see note 5 |
+| Geist (Vercel) | 1.7.2 | The UI typeface, words and numbers (`assets/fonts`) | **SIL OFL 1.1** | ✅ in use — see note 5 |
 | ONNX Runtime — managed API (`Microsoft.ML.OnnxRuntime.Managed`) | 1.23.2 | Runs the AI models (Separate Stems, Convert to MIDI) | MIT | ✅ in use — see note 6 |
 | ONNX Runtime — native library | 1.23.2 | The same, downloaded with the first AI model | MIT | ✅ downloaded, not bundled — see note 6 |
 | htdemucs (Demucs v4, Meta) | v4 weights, ONNX export | Separate Stems model | MIT | ✅ downloaded, not bundled — see note 6 |
@@ -62,9 +62,11 @@ no warranty disclaimer and its enforceability is debated). It is fine for the AG
 **5 — Geist ships as bundled font files under the SIL Open Font License.** OFL 1.1
 allows embedding and redistributing the fonts with any software, including AGPL software,
 provided the fonts are not sold on their own and the license travels with them
-(`LICENSES/OFL-1.1-Geist.txt`). The eight static weights we use (Regular, Medium,
-SemiBold, Bold of each family) are copied unmodified from the `geist` npm package;
-"Geist" is a Reserved Font Name, so a subset or other modification must be renamed.
+(`LICENSES/OFL-1.1-Geist.txt`). The four static weights we use (Regular, Medium,
+SemiBold, Bold) are copied unmodified from the `geist` npm package; "Geist" is a Reserved
+Font Name, so a subset or other modification must be renamed. Numbers use Geist's own
+tabular figures (the `tnum` feature), turned on at shaping time rather than cut into the
+files. Geist Mono was bundled until the style guide (spec 038) dropped it.
 They replace Inter, which came in through the `Avalonia.Fonts.Inter` package.
 
 **6 — The AI models and their runtime are downloaded, not shipped.**

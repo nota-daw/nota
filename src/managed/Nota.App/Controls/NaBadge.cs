@@ -37,12 +37,12 @@ public sealed class NaBadge : Border
 
     public NaBadge()
     {
-        CornerRadius = NotaRadius.Pill;
+        CornerRadius = NotaRadius.Group;
         Padding = new Thickness(6, 1);
         Height = 16;
         VerticalAlignment = VerticalAlignment.Center;
         Child = _label;
-        _label.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _label.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         Apply();
     }
 

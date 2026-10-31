@@ -27,7 +27,6 @@ public partial class MainWindow
     private Control[][] TransportShedOrder => _transportShedOrder ??= new[]
     {
         new Control[] { CpuBar },               // the DSP meter keeps its number
-        new Control[] { ProjectNameText },      // moves to the title-bar caption
         new Control[] { RemoteLabel },          // Remote keeps its glyph, count and dot
         new Control[] { TapChip },              // palette ▸ Tap Tempo; the BPM field stays
         new Control[] { KeyChip },              // set once per project
@@ -49,8 +48,7 @@ public partial class MainWindow
         TransportBar.SizeChanged += (_, _) => FitTransport();
     }
 
-    /// <summary>Re-fit after something in the bar changed width (the project name, the
-    /// Re-enable chip). Coalesced to one pass after the current layout.</summary>
+    /// <summary>Re-fit after something in the bar changed width (the Re-enable chip). Coalesced to one pass after the current layout.</summary>
     private void RequestTransportFit()
     {
         if (_transportFitPosted) return;
@@ -76,8 +74,6 @@ public partial class MainWindow
             hidden++;
         }
 
-        // The name leaves the bar for the caption, so the open project stays on screen.
-        DocTitleText.Text = ProjectNameText.IsVisible ? "Nota" : ProjectDisplayName();
         TransportGrid.InvalidateMeasure();
     }
 

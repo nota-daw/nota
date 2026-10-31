@@ -43,7 +43,7 @@ public sealed partial class SessionView
     private Control BuildToolbar()
     {
         _recDot = new Glyph(GlyphKind.Record, 8);
-        _recText = new TextBlock { Text = "Session rec", FontSize = 11, FontWeight = FontWeight.SemiBold };
+        _recText = new TextBlock { Text = "Session rec", FontSize = 10, FontWeight = FontWeight.SemiBold };
         _recBtn = new Button
         {
             Height = NotaSize.Shell, Padding = new Thickness(10, 0),
@@ -57,8 +57,8 @@ public sealed partial class SessionView
         var fixedRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { fixedLabel, _fixedSeg } };
         ToolTip.SetTip(fixedRow, "Fixed record length in bars — the take stops by itself");
 
-        _quantLabel = new TextBlock { FontSize = 10, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
-        _quantLabel.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _quantLabel = new TextBlock { FontSize = 9, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        _quantLabel.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var quant = new Button
         {
             Height = NotaSize.Shell, Padding = new Thickness(9, 0),
@@ -83,7 +83,7 @@ public sealed partial class SessionView
         };
 
         _followSwitch = new SwitchTrack { VerticalAlignment = VerticalAlignment.Center };
-        _followText = new TextBlock { Text = "Follow", FontSize = 11, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
+        _followText = new TextBlock { Text = "Follow", FontSize = 10, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
         var follow = new Button
         {
             Height = NotaSize.Shell, Padding = new Thickness(9, 0),
@@ -92,7 +92,7 @@ public sealed partial class SessionView
         ToolTip.SetTip(follow, "Follow actions on or off for every clip and scene");
         follow.Click += (_, _) => { _engine.SessionFollow = !_engine.SessionFollow; SyncToolbar(); RebuildInspector(); };
 
-        var capture = new Button { Content = "Capture scene", Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 11 };
+        var capture = new Button { Content = "Capture scene", Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 10 };
         ToolTip.SetTip(capture, "Copy the clips playing now into a new scene");
         capture.Click += (_, _) => CaptureScene();
 
@@ -100,7 +100,7 @@ public sealed partial class SessionView
         var sections = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 0 };
         void Section(string label, Func<bool> get, Action<bool> set)
         {
-            var tb = new ToggleButton { Content = label, Classes = { "seg" }, IsChecked = get(), Height = 20, FontSize = 10, Padding = new Thickness(9, 0) };
+            var tb = new ToggleButton { Content = label, Classes = { "seg" }, IsChecked = get(), Height = 20, FontSize = 9, Padding = new Thickness(9, 0) };
             tb.Click += (_, _) => { set(tb.IsChecked == true); Refresh(); };
             _sectionToggles.Add(tb);
             sections.Children.Add(tb);
@@ -110,13 +110,13 @@ public sealed partial class SessionView
         Section("Mixer", () => _showMixer, v => _showMixer = v);
         var sectionsWell = new Border { Classes = { "segmented" }, Padding = new Thickness(2), Child = sections };
 
-        _posText = new TextBlock { FontSize = 12, Foreground = NotaPalette.TextPrimary, MinWidth = 56, VerticalAlignment = VerticalAlignment.Center };
-        _posText.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        _tempoText = new TextBlock { FontSize = 10, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        _tempoText.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _posText = new TextBlock { FontSize = 11, Foreground = NotaPalette.TextPrimary, MinWidth = 56, VerticalAlignment = VerticalAlignment.Center };
+        _posText.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        _tempoText = new TextBlock { FontSize = 9, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        _tempoText.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var readout = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(8, 0), Children = { _posText, _tempoText } };
 
-        _backBtn = new Button { Content = "Back to Arrangement", Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 11 };
+        _backBtn = new Button { Content = "Back to Arrangement", Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 10 };
         ToolTip.SetTip(_backBtn, "Stop session clips and hand every track back to the Arrangement");
         _backBtn.Click += (_, _) => { _engine.BackToArrangement(); UpdateStates(); };
 
@@ -126,7 +126,7 @@ public sealed partial class SessionView
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 7,
-                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = "Stop all", FontSize = 11, FontWeight = FontWeight.SemiBold } },
+                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = "Stop all", FontSize = 10, FontWeight = FontWeight.SemiBold } },
             },
         };
         ToolTip.SetTip(stopAll, "Stop every session clip");
@@ -146,7 +146,7 @@ public sealed partial class SessionView
         // (readout first, then Back to arrangement, Capture scene, the section toggles, Follow).
         // Every control stays reachable — the menu offers whatever is hidden.
         const double MoreW = 32;
-        var more = new Button { Content = "⋯", Width = MoreW, Height = NotaSize.Shell, Padding = new Thickness(0), FontSize = 12, HorizontalContentAlignment = HorizontalAlignment.Center, IsVisible = false };
+        var more = new Button { Content = "⋯", Width = MoreW, Height = NotaSize.Shell, Padding = new Thickness(0), FontSize = 11, HorizontalContentAlignment = HorizontalAlignment.Center, IsVisible = false };
         ToolTip.SetTip(more, "More session controls");
         more.Click += (_, _) =>
         {
@@ -200,7 +200,7 @@ public sealed partial class SessionView
 
     private static TextBlock Caps(string text) => new()
     {
-        Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
+        Text = text, FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
     };
 
     private void SessionRec()

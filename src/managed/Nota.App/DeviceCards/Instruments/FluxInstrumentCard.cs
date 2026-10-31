@@ -89,7 +89,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         int perBar = 0;
 
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily };
+        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily };
 
         void Refresh()
         {
@@ -112,7 +112,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         };
         static TextBlock Mono(string t, IBrush? c = null) => new()
         {
-            Text = t, FontSize = NotaType.Axis, Foreground = c ?? TextTertiary, FontFamily = NotaFonts.MonoFamily,
+            Text = t, FontSize = NotaType.Axis, Foreground = c ?? TextTertiary, FontFamily = NotaFonts.UiFamily,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
@@ -197,11 +197,11 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             if (!pad.Dragging) pad.SetValue(G("vecx"), G("vecy"));
             pad.SetGhost(effX, effY, Ghost());
             vecReadout.Text = $"x {Coord(G("vecx"))} · y {Coord(G("vecy"))}";
-            vecReadout.Foreground = VectorPulled() ? NotaPalette.TealBright : TextSecondary;   // teal: the reaction pulls it
+            vecReadout.Foreground = VectorPulled() ? TextPrimary : TextSecondary;   // lifted to ink 1 while the reaction pulls it
             bool pulled = VectorPulled();
             vecFoot.Text = pulled ? "dashed — where the reaction pulls"
                 : Ghost() ? "dashed — where motion drifts" : "four timbres · drag the point";
-            vecFoot.Foreground = pulled ? NotaPalette.TealBright : TextTertiary;
+            vecFoot.Foreground = pulled ? DeviceCardKit.ModInkBright : TextTertiary;
         });
 
         var vecGrid = new Grid { RowDefinitions = new RowDefinitions($"{HeadH},*,{StatusH}") };
@@ -232,7 +232,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         var srcChevron = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
         var srcField = new Border
         {
-            Height = 15, MinWidth = 92, CornerRadius = NotaRadius.Badge, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
+            Height = 15, MinWidth = 92, CornerRadius = NotaRadius.Cell, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
             Padding = new Thickness(6, 0, 5, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = new DockPanel { Children = { Docked(srcChevron, Dock.Right), srcText } },
         };
@@ -309,13 +309,13 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         {
             scope.Live = live;
             listen.Knob.IsDim = !live;
-            reactCap.Foreground = live ? NotaPalette.TealBright : TextTertiary;
+            reactCap.Foreground = live ? DeviceCardKit.ModInkBright : TextTertiary;
             reactSub.Foreground = live ? NotaPalette.TextMuted : TextDisabled;
             srcText.Text = KeyName();
             srcText.Foreground = live ? TextPrimary : TextDisabled;
             srcField.Background = live ? NotaPalette.SurfaceRaised : NotaPalette.BgSunken;
             targetHint.Text = TargetLine();
-            targetHint.Foreground = live ? NotaPalette.TealBright : TextDisabled;
+            targetHint.Foreground = live ? DeviceCardKit.ModInkBright : TextDisabled;
         });
 
         var reactBottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };

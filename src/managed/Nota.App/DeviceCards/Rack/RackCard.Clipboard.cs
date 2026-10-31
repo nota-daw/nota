@@ -221,7 +221,7 @@ internal sealed partial class RackCardView
     private int _rcDragRow = -1;
     private readonly Border _rcDropBar = new()
     {
-        Width = 3, Background = NotaPalette.AccentBright, CornerRadius = NotaRadius.Clip,
+        Width = 3, Background = NotaPalette.AccentBright, CornerRadius = NotaRadius.Field,
         Margin = new Thickness(-2, 6, -2, 6), IsHitTestVisible = false,
     };
 

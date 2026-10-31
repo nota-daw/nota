@@ -105,7 +105,7 @@ internal sealed partial class RackCardView
         var dash = new Rectangle
         {
             Stroke = NotaPalette.BorderStrong, StrokeThickness = 1, StrokeDashArray = new AvaloniaList<double> { 3, 2.5 },
-            RadiusX = NotaRadius.ClipValue, RadiusY = NotaRadius.ClipValue,
+            RadiusX = NotaRadius.FieldValue, RadiusY = NotaRadius.FieldValue,
         };
         label.HorizontalAlignment = HorizontalAlignment.Center;
         label.VerticalAlignment = VerticalAlignment.Center;
@@ -133,7 +133,7 @@ internal sealed partial class RackCardView
         bool chosen = c == Sel, audible = RcAudible(c);
         string name = RcChainName(c);
 
-        var stripe = new Border { Width = 3, Height = 9, CornerRadius = NotaRadius.Bar, Background = ChainHue(c), VerticalAlignment = VerticalAlignment.Center };
+        var stripe = new Border { Width = 3, Height = 9, CornerRadius = NotaRadius.Fine, Background = ChainHue(c), VerticalAlignment = VerticalAlignment.Center };
         var nameTb = RcName(name, chosen ? NotaPalette.AccentBright : audible ? NotaPalette.TextPrimary : NotaPalette.TextDisabled, NotaType.KnobLabel);
         var m = IrMsBtn("M", a.ChainMute(c), NotaPalette.Mute, () => { a.SetChainMute(c, !a.ChainMute(c)); DeferRebuild(); });
         var s = IrMsBtn("S", a.ChainSolo(c), NotaPalette.Solo, () => { a.SetChainSolo(c, !a.ChainSolo(c)); DeferRebuild(); });
@@ -146,15 +146,15 @@ internal sealed partial class RackCardView
         m.Margin = new Thickness(0, 0, 2, 0);
 
         var summary = RcMono(RcChainSummary(c), NotaPalette.TextSecondary, 7.5);
-        var meterFill = new Border { Background = NotaPalette.Success, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = NotaRadius.Bar, Width = 0 };
-        var meter = new Border { Height = 3, MinWidth = 16, Background = NotaPalette.BgSunken, CornerRadius = NotaRadius.Bar, Child = meterFill, VerticalAlignment = VerticalAlignment.Center };
+        var meterFill = new Border { Background = NotaPalette.Success, HorizontalAlignment = HorizontalAlignment.Left, CornerRadius = NotaRadius.Fine, Width = 0 };
+        var meter = new Border { Height = 3, MinWidth = 16, Background = NotaPalette.BgSunken, CornerRadius = NotaRadius.Fine, Child = meterFill, VerticalAlignment = VerticalAlignment.Center };
         _irTick.Add(() => meterFill.Width = meter.Bounds.Width * Math.Clamp(a.ChainMeter(c), 0, 1));
         summary.Margin = new Thickness(0, 0, 5, 0);
         var bottom = new DockPanel { LastChildFill = true, Children = { RcDock(summary, Dock.Left), meter } };
 
         var row = new Border
         {
-            Height = 34, CornerRadius = NotaRadius.Clip, BorderThickness = new Thickness(1), Padding = new Thickness(5, 0),
+            Height = 34, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Padding = new Thickness(5, 0),
             Background = chosen ? RowSel : NotaPalette.SurfaceRaised, BorderBrush = chosen ? NotaPalette.Accent : NotaPalette.BorderDefault,
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = { top, bottom } },
@@ -444,7 +444,7 @@ internal sealed partial class RackCardView
             var how = RcText("Click to add or remove", NotaPalette.TextSecondary, 7.5, FontWeight.Normal);
             head = new Border
             {
-                Height = 16, CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0), BorderThickness = new Thickness(1),
+                Height = 16, CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0), BorderThickness = new Thickness(1),
                 Background = NotaPalette.Wash(NotaPalette.Teal, 0x24), BorderBrush = NotaPalette.Teal,
                 Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { label, macro, how } },
             };
@@ -452,7 +452,7 @@ internal sealed partial class RackCardView
         else
         {
             int n = (_rp.TakesInstrument && a.ChainInstrumentKind(c) > -2 ? 1 : 0) + a.ChainDeviceCount(c) + a.ChainMidiCount(c);
-            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = ChainHue(c), VerticalAlignment = VerticalAlignment.Center };
+            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Cell, Background = ChainHue(c), VerticalAlignment = VerticalAlignment.Center };
             string flow = _rp.Kind == RackKind.MidiEffect ? "notes" : "signal";
             head = new StackPanel
             {
@@ -496,7 +496,7 @@ internal sealed partial class RackCardView
         var tb = Hint("No instrument");
         var slot = new Border
         {
-            Width = RcCompactWidth, CornerRadius = NotaRadius.Panel, BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderDefault,
+            Width = RcCompactWidth, CornerRadius = NotaRadius.Group, BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderDefault,
             Background = NotaPalette.SurfaceRaised, Cursor = new Cursor(StandardCursorType.Hand), Child = new Border { Padding = new Thickness(6), Child = tb },
         };
         ToolTip.SetTip(slot, "Pick an instrument — or drop one from the Browser");
@@ -524,7 +524,7 @@ internal sealed partial class RackCardView
         var dash = new Rectangle
         {
             Stroke = NotaPalette.BorderDefault, StrokeThickness = 1, StrokeDashArray = new AvaloniaList<double> { 3, 2.5 },
-            RadiusX = NotaRadius.ControlValue, RadiusY = NotaRadius.ControlValue,
+            RadiusX = NotaRadius.FieldValue, RadiusY = NotaRadius.FieldValue,
         };
         var box = new Panel
         {
@@ -598,7 +598,7 @@ internal sealed partial class RackCardView
 
         var dot = new Border
         {
-            Width = 6, Height = 6, CornerRadius = NotaRadius.Control, VerticalAlignment = VerticalAlignment.Center,
+            Width = 6, Height = 6, CornerRadius = NotaRadius.Field, VerticalAlignment = VerticalAlignment.Center,
             Background = bypassed ? NotaPalette.TextDisabled : NotaPalette.Success, Cursor = canBypass ? new Cursor(StandardCursorType.Hand) : Cursor.Default,
         };
         if (canBypass)
@@ -667,7 +667,7 @@ internal sealed partial class RackCardView
 
         var card = new Border
         {
-            Width = RcCompactWidth, CornerRadius = NotaRadius.Panel, BorderThickness = new Thickness(1), ClipToBounds = true,
+            Width = RcCompactWidth, CornerRadius = NotaRadius.Group, BorderThickness = new Thickness(1), ClipToBounds = true,
             Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.BorderDefault,
         };
         DockPanel.SetDock(head, Dock.Top);
@@ -696,7 +696,7 @@ internal sealed partial class RackCardView
         var ring = new Border
         {
             BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1.5), Margin = new Thickness(-2),
-            CornerRadius = new CornerRadius(NotaRadius.PanelValue + 2), IsHitTestVisible = false, IsVisible = RcIsSelected(c, slot, idx),
+            CornerRadius = new CornerRadius(NotaRadius.GroupValue + 2), IsHitTestVisible = false, IsVisible = RcIsSelected(c, slot, idx),
         };
         var host = new Panel { Children = { card, ring }, Margin = new Thickness(2, 2, 2, 0) };
         RcHookCardDrag(head, host, c, slot, idx);
@@ -764,7 +764,7 @@ internal sealed partial class RackCardView
         {
             var tag = new Border
             {
-                CornerRadius = NotaRadius.Badge, Padding = new Thickness(2, 0), Margin = new Thickness(3, 0, 0, 0), Background = NotaPalette.Wash(NotaPalette.Teal, 0x33),
+                CornerRadius = NotaRadius.Cell, Padding = new Thickness(2, 0), Margin = new Thickness(3, 0, 0, 0), Background = NotaPalette.Wash(NotaPalette.Teal, 0x33),
                 VerticalAlignment = VerticalAlignment.Center, Child = RcMono($"M{macro + 1}", NotaPalette.TealBright, 7),
             };
             top.Children.Add(RcDock(tag, Dock.Right));
@@ -786,7 +786,7 @@ internal sealed partial class RackCardView
 
         var row = new Border
         {
-            CornerRadius = NotaRadius.Badge, Padding = new Thickness(2, 1), BorderThickness = new Thickness(1),
+            CornerRadius = NotaRadius.Cell, Padding = new Thickness(2, 1), BorderThickness = new Thickness(1),
             BorderBrush = mapping ? NotaPalette.Teal : Brushes.Transparent,
             Background = onThis ? NotaPalette.Wash(NotaPalette.Teal, 0x30) : Brushes.Transparent,
             Child = new StackPanel { Spacing = 2, Children = { top, track } },

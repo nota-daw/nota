@@ -61,10 +61,10 @@ public sealed partial class ModularView
     // incoming CV also passes straight through to CV-out.
     private void BuildScopeView(GNode n, int modId)
     {
-        var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto,Auto") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
+        var col = new StackPanel();
         var headBorder = NodeHeader(n);
-        col.Children.Add(Row(headBorder, 1));
+        col.Children.Add(headBorder);
+        col.Children.Add(PortsBlock(n));
 
         int t = _trackId; var e = _engine;
         var viz = new ScopeViz(e, t, modId, () => ScopeHeld(t, modId));
@@ -78,15 +78,18 @@ public sealed partial class ModularView
             body = new TextBlock
             {
                 Text = "Watches CV. Drag a modulator's CV out onto this node. For audio, put Lens on the chain.",
-                FontSize = 9, Foreground = Text3, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
+                FontSize = 10, Foreground = Text3, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0),
             };
         }
         double h0 = Math.Clamp(e.ModulatorGet(t, modId, ScopeTrace.FieldHeight), ScopeTrace.MinHeight, ScopeTrace.MaxHeight);
-        var vizBox = new Border { Height = h0, Margin = new Thickness(9, 6, 9, 0), Child = body };
-        col.Children.Add(Row(new StackPanel { Children = { vizBox, ScopeGrip(vizBox, t, modId) } }, 2));
-        col.Children.Add(Row(ScopeControls(t, modId, _liveKnobs.Add, QueueRebuild), 3));
-        col.Children.Add(Row(PortsBlock(n), 4));
+        var vizBox = new Border { Height = h0, Margin = new Thickness(10, 0, 10, 0), Child = body };
+        col.Children.Add(new Border
+        {
+            Child = new StackPanel { Children = { vizBox, ScopeGrip(vizBox, t, modId) } },
+            BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 8, 0, 0),
+        });
+        col.Children.Add(ScopeControls(t, modId, _liveKnobs.Add, QueueRebuild));
         WrapFrame(n, col, headBorder);
     }
 
@@ -95,7 +98,7 @@ public sealed partial class ModularView
     {
         var line = new Border
         {
-            Width = 28, Height = 2, CornerRadius = NotaRadius.Badge, Background = NotaPalette.Seam,
+            Width = 28, Height = 2, CornerRadius = NotaRadius.Cell, Background = NotaPalette.Seam,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         var grip = new Border { Height = 9, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = line };
@@ -208,9 +211,31 @@ public sealed partial class ModularView
             Children =
             {
                 KnobGrid(windowCell, zoomCell),
-                new Border { Height = 34, Child = chips, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0) },
+                new Border { Height = 34, Child = chips, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0) },
             },
         };
+    }
+
+    // The Scope's two knobs side by side, as a device card's knob cells.
+    private static Control KnobCell(string name, Knob knob, TextBlock value)
+    {
+        knob.Width = Knob.SizeSecondary; knob.Height = Knob.SizeSecondary;
+        var cell = DeviceCardKit.KnobCell(name, knob, value, 50);
+        cell.HorizontalAlignment = HorizontalAlignment.Center;
+        cell.VerticalAlignment = VerticalAlignment.Center;
+        return cell;
+    }
+
+    private static Grid KnobGrid(params Control[] cells)
+    {
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), RowDefinitions = new RowDefinitions("56") };
+        for (int i = 0; i < cells.Length; i++)
+        {
+            var cell = new Border { Child = cells[i], BorderBrush = Divider, BorderThickness = new Thickness(i % 2 == 1 ? 1 : 0, 0, 0, 0) };
+            Grid.SetColumn(cell, i % 2);
+            grid.Children.Add(cell);
+        }
+        return grid;
     }
 
     // Open (or bring forward) the Scope's own window.

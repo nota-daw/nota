@@ -590,7 +590,7 @@ public sealed partial class DeviceChainView
     private Control? _devDragCard;
     private readonly Border _devDropBar = new()
     {
-        Width = 3, Background = AccentBright, CornerRadius = NotaRadius.Clip,
+        Width = 3, Background = AccentBright, CornerRadius = NotaRadius.Field,
         Margin = new Thickness(-4, 6, 1, 6), IsHitTestVisible = false,
     };
 

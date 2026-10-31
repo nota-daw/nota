@@ -99,7 +99,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         var env = new VoltEnv(engine, track) { MinHeight = 60, VerticalAlignment = VerticalAlignment.Stretch };
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        meta.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        meta.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         Action applyEnv = () => { };
 
         void SyncSpectrum()
@@ -133,7 +133,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8)
         {
             var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c ?? TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-            tb.FontFamily = NotaFonts.MonoFamily;
+            tb.FontFamily = NotaFonts.UiFamily;
             return tb;
         }
 
@@ -147,7 +147,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
             {
-                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily,
+                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily,
                 Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center,
             };
             var knob = new Nota.App.Knob(G(id), 1.0)
@@ -271,7 +271,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         {
             int op = o;
             string pre = OpId[op];
-            var bar = new Border { Width = 2, Height = 18, CornerRadius = NotaRadius.Bar, VerticalAlignment = VerticalAlignment.Center };
+            var bar = new Border { Width = 2, Height = 18, CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center };
             var letter = new TextBlock
             {
                 Text = OperatorTopo.Names[op], FontSize = NotaType.DeviceSection, FontWeight = FontWeight.SemiBold,
@@ -509,7 +509,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
             var tb = new TextBlock { Text = OperatorTopo.Names[i], FontSize = NotaType.DeviceSection, VerticalAlignment = VerticalAlignment.Center };
             var chip = new Border
             {
-                CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand),
+                CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 1), Cursor = new Cursor(StandardCursorType.Hand),
                 Background = Brushes.Transparent, Child = tb,
             };
             chip.PointerPressed += (_, e) =>
@@ -522,7 +522,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         var opPickHost = new Border
         {
             Background = NotaPalette.BgSunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Control, Padding = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Right,
+            CornerRadius = NotaRadius.Field, Padding = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Right,
             Child = opPick,
         };
         var envRoleText = Mono("", TextSecondary, NotaType.Axis);

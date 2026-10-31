@@ -37,7 +37,7 @@ public sealed partial class PreferencesWindow
         for (int i = 0; i < DownloadSources.Length; i++)
         {
             int idx = i;
-            segs[i] = new ToggleButton { Classes = { "seg" }, FontSize = 12, IsChecked = i == _downloadSource, Content = DownloadSources[i] };
+            segs[i] = new ToggleButton { Classes = { "seg" }, FontSize = 11, IsChecked = i == _downloadSource, Content = DownloadSources[i] };
             segs[i].Click += (_, _) =>
             {
                 segs[idx].IsChecked = idx == _downloadSource;   // a toggle never clears itself

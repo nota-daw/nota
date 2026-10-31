@@ -98,11 +98,11 @@ internal sealed class FluxVectorPad : Control
         ctx.DrawLine(NotaGraph.GridPen, new Point(Math.Round(r.Width / 2) + 0.5, 1), new Point(Math.Round(r.Width / 2) + 0.5, r.Height - 1));
         ctx.DrawLine(NotaGraph.GridPen, new Point(1, Math.Round(r.Height / 2) + 0.5), new Point(r.Width - 1, Math.Round(r.Height / 2) + 0.5));
 
-        // corner worlds, in the graph chromas.
-        Label(ctx, "Warm",  NotaPalette.VizInk, 6, 4, false);
-        Label(ctx, "Glass", NotaPalette.Steel,  r.Width - 6, 4, true);
-        Label(ctx, "Moog",  NotaPalette.Rose,   6, r.Height - 13, false);
-        Label(ctx, "Grain", NotaPalette.Teal,   r.Width - 6, r.Height - 13, true);
+        // corner worlds, named in ink 2 (style guide: no per-world colours).
+        Label(ctx, "Warm",  NotaPalette.TextSecondary, 8, 6, false);
+        Label(ctx, "Glass", NotaPalette.TextSecondary, r.Width - 8, 6, true);
+        Label(ctx, "Moog",  NotaPalette.TextSecondary, 8, r.Height - 6, false, true);
+        Label(ctx, "Grain", NotaPalette.TextSecondary, r.Width - 8, r.Height - 6, true, true);
 
         var b = new Point(_x * r.Width, _y * r.Height);
         if (_ghost)
@@ -118,18 +118,18 @@ internal sealed class FluxVectorPad : Control
                 gc.QuadraticBezierTo(bend, g);
                 gc.EndFigure(false);
             }
-            var dash = new Pen(NotaPalette.Teal, 1.4, new DashStyle(new double[] { 2, 2 }, 0));
+            var dash = new Pen(NotaPalette.TextTertiary, 1.4, new DashStyle(new double[] { 2, 2 }, 0));
             ctx.DrawGeometry(null, dash, geo);
-            ctx.DrawEllipse(null, new Pen(NotaPalette.Teal, 1.5, new DashStyle(new double[] { 2, 1.5 }, 0)), g, 6, 6);
+            ctx.DrawEllipse(null, new Pen(NotaPalette.TextTertiary, 1.5, new DashStyle(new double[] { 2, 1.5 }, 0)), g, 6, 6);
         }
 
-        // the vector: neutral ink with a ground-coloured ring; accent while dragged.
-        ctx.DrawEllipse(_drag ? NotaPalette.Accent : NotaPalette.VizInk, new Pen(NotaPalette.BgSunken, 2), b, 7, 7);
+        // the vector is the value: orange, brighter while dragged.
+        ctx.DrawEllipse(_drag ? NotaPalette.AccentBright : NotaPalette.Accent, null, b, 6, 6);
     }
 
-    private static void Label(DrawingContext ctx, string text, IBrush ink, double x, double y, bool rightAlign)
+    private static void Label(DrawingContext ctx, string text, IBrush ink, double x, double y, bool rightAlign, bool bottom = false)
     {
-        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, NotaType.KnobLabel, ink);
-        ctx.DrawText(ft, new Point(rightAlign ? x - ft.Width : x, y));
+        var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.KnobValue, ink, NotaTextSize.InCard);
+        ctx.DrawText(ft, new Point(rightAlign ? x - ft.Width : x, bottom ? y - ft.Height : y));
     }
 }

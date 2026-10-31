@@ -74,7 +74,8 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 - **Quit without saving** dialog names the project and how long its changes have gone
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
 - **Project key** (KEY cell in the transport bar, saved with the project): loops dropped on
-  the arrangement can be transposed to it.
+  the arrangement can be transposed to it. The cell opens a one-octave keyboard with a
+  Major / Minor switch; picking a note keeps the mode, switching the mode keeps the note.
 - **Transport**: play / stop / record, playhead position. Click the position read-out to
   switch it between bars and time; the arrangement and clip editor rulers follow it.
   - **Stop returns to the launch point** (a seek sets the start anchor).
@@ -139,7 +140,8 @@ docks as a panel under any of the three, or floats in its own window — see
     The track menu's **Height** keys (Compact · Standard · Large) size the selection in one
     click; ⌥-click sizes every track. Headers
     fit their height: one line (name, M / S / arm) when short, input, fader and pan on rows
-    of their own when tall. Drag the seam between headers and lanes to set the header
+    of their own when tall, and at Large the track's send to each return as value bars, two
+    per row. Drag the seam between headers and lanes to set the header
     width (160–480 px). Both are saved with the project.
   - **Group rows are slim** — a group collapses to a titled bar with its disclosure,
     mute/solo and level, and opens to the full control set when selected, so groups read as
@@ -295,7 +297,8 @@ docks as a panel under any of the three, or floats in its own window — see
 - **MIDI clip**: notes (pitch, start, length, velocity).
 - **Piano Roll**: draw, move, stretch and delete notes on the snap grid; **QUANTIZE** with
   its own step (1/32 … 1/2, triplets; independent of the zoom) and strength; a velocity
-  editor; transposing the selection.
+  editor; transposing the selection. The clip's settings (start, length, loop, quantize,
+  transpose, the selection) sit in one strip above the notes, so the notes get the full width.
   - A note drawn takes the length and velocity of the note last touched (clicked, moved,
     resized or velocity-changed); before any note is touched, one grid step at velocity 0.8.
   - **Note audition** (the speaker switch in the header, on by default): a note sounds while
@@ -719,8 +722,10 @@ audio effects after it keep running and keep their settings; saved with the proj
   shelf and bell gain), Output ±12 dB and Auto gain. A full-width response graph (draggable
   numbered nodes, the selected band's curve, a separate Side curve, an input / output spectrum
   analyzer — a filled 1/6-octave curve with fast-rise / slow-fall ballistics, switched Pre / Post /
-  Off, with a 60 / 90 / 120 dB Range and Peak hold), band chips, a panel for the selected band
-  with a **Label** shown next to its node (**Labels** hides them) and a multiline **Note**; 34 factory
+  Off, with a 60 / 90 / 120 dB Range and Peak hold), a slim row of band chips over the graph (number,
+  filter shape, frequency) with Analyzer and Auto gain over its corner, and the selected band's settings
+  (with a **Label** shown next to its node — **Labels** hides them — and a multiline **Note**),
+  Scale and Output in one narrow column at the right that folds away; 34 factory
   presets; MCP `read_eq8`, `set_eq8_band`, `set_eq8`.
 - **Nota Compressor** (1) — 5 character models (Clean/Glue/Punch/Opto/FET), soft knee,
   look-ahead (reported as latency for PDC), Peak/RMS/Auto detection, hold, auto-release,
@@ -813,9 +818,10 @@ audio effects after it keep running and keep their settings; saved with the proj
   downward expansion too), attack / release and its own key (Self or a key track); a Dynamic
   master switch, Solo, output. A full-width response graph (live curve, static curve while
   they differ, the output spectrum, draggable numbered nodes with a whisker to each dynamic
-  band's range and its gain now, a tooltip with a 2 s gain history), a strip of band chips
-  with their activity, a panel for the selected band with the band's level on the threshold;
-  33 factory presets; MCP `read_dynamic_eq`, `set_dynamic_eq_band`.
+  band's range and its gain now, a tooltip with a 2 s gain history), a row of band chips over
+  the graph (number, filter shape, frequency, each band's activity), the selected band's
+  settings in a panel at the right with the band's level on the threshold, which folds to a
+  strip with the band's Freq, Gain and Q; 33 factory presets; MCP `read_dynamic_eq`, `set_dynamic_eq_band`.
 - **Nota Strata** (15) — multi-layer overdub looper: layers with waveform, level and mute;
   Record/Overdub/Play/Stop, Undo/Clear, Feedback, input gain, speed/reverse, quantize,
   count-in, set-tempo, Export; audio layers persist into the project.
@@ -1280,7 +1286,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   dark mode and one for light mode, switched with the OS appearance; the choice applies
   live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
-  remembered; timeline, piano roll and audio editor zoom work on top of it. Also
+  remembered; timeline, piano roll and audio editor zoom work on top of it. **Text size** —
+  Smaller / Default / Larger / Largest steps every text by −1 to +2 pt without changing the
+  layout (device cards keep theirs), live and remembered. Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Shortcuts**: the shortcut list.

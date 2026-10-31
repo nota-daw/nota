@@ -3,13 +3,13 @@
 //
 // Nota Auto Shift (device kind 10) card windows, all read from the engine's telemetry
 // (AutoShift.h scopeRead), so the picture is what the corrector does:
-//  · AsPill — the Pitch column: In (where the voice sits in the detection range, neutral
-//    ink, rising from the bottom) or Corr (the correction now, teal, bipolar about the centre).
-//  · AsTraceView — the Trace and MIDI tabs: the detected pitch (teal dots) and the output
+//  · AsPill — the Pitch column, an upright groove: In (where the voice sits in the detection
+//    range, rising from the bottom) or Corr (the correction now, bipolar about the centre).
+//  · AsTraceView — the Trace and MIDI tabs: the detected pitch (grey dots) and the output
 //    (neutral line) over the last ~2 s on note lanes of the active scale, the target lane lit;
 //    in MIDI mode the source's notes are drawn as blocks on their lanes.
 //  · AsHistView — the Scale tab: how long each pitch class was sung (decaying over ~16
-//    bars), in-scale columns neutral ink, sung out-of-scale ones teal. Clicking a column toggles
+//    bars), in-scale columns neutral ink, sung out-of-scale ones a lighter grey. Clicking a column toggles
 //    that note in the scale.
 
 using System;
@@ -42,27 +42,27 @@ internal sealed class AsPill : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 4 || h < 8) return;
-        var rect = new Rect(0.5, 0.5, w - 1, h - 1);
-        double r = Math.Min(8, w / 2);
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
+        var rect = new Rect(0, 0, w, h);
+        const double r = 4;
+        NotaDepth.Groove(ctx, this, new RoundedRect(rect, r));
         using (ctx.PushClip(new RoundedRect(rect, r)))
         {
-            var wash = NotaPalette.Wash((SolidColorBrush)Ink, 0x4C);
+            var wash = NotaPalette.Wash((SolidColorBrush)Ink, 0x30);
             if (Bipolar)
             {
                 double mid = h / 2;
-                ctx.FillRectangle(NotaPalette.BorderStrong, new Rect(2, mid - 0.5, w - 4, 1));
+                ctx.FillRectangle(NotaPalette.TextTertiary, new Rect(4, mid - 0.5, w - 8, 1));
                 if (double.IsNaN(_v)) return;
                 double y = mid - _v * (h / 2 - 2);
                 ctx.FillRectangle(wash, new Rect(0, Math.Min(mid, y), w, Math.Abs(y - mid)));
-                ctx.FillRectangle(Ink, new Rect(1.5, Math.Clamp(y - 1, 0, h - 2), w - 3, 2));
+                ctx.FillRectangle(Ink, new Rect(0, Math.Clamp(y - 1, 0, h - 2), w, 2));
             }
             else
             {
                 if (double.IsNaN(_v)) return;
                 double y = (1 - _v) * h;
                 ctx.FillRectangle(wash, new Rect(0, y, w, h - y));
-                ctx.FillRectangle(Ink, new Rect(1.5, Math.Clamp(y - 1, 0, h - 2), w - 3, 2));
+                ctx.FillRectangle(Ink, new Rect(0, Math.Clamp(y - 1, 0, h - 2), w, 2));
             }
         }
     }
@@ -169,8 +169,8 @@ internal sealed class AsTraceView : Control
             }
         }
 
-        // Detected: teal dots.
-        var dot = NotaPalette.Wash(NotaPalette.Teal, 0xB0);
+        // Detected: grey dots.
+        var dot = NotaPalette.TextTertiary;
         for (int k = 0; k < _n; k += 2)
             if (_det[k] > 0) ctx.DrawEllipse(dot, null, new Point(X(k), Y(_det[k])), 0.9, 0.9);
 
@@ -189,18 +189,20 @@ internal sealed class AsTraceView : Control
         Flush();
         if (any) ctx.DrawEllipse(NotaPalette.VizInk, new Pen(NotaGraph.Ground, 1), last, 2.6, 2.6);
 
-        // Lane labels, the target lit.
+        // Lane labels on every other lane (the lanes are too thin for one each), skipping the top and
+        // bottom ones under the legend and the time labels; the target lane is always named, lit.
         for (int i = 0; i < nl; i++)
         {
             int m = lanes[i];
-            var ft = NotaGraph.AxisText(Names[((m % 12) + 12) % 12] + (m / 12 - 1), m == tgtNote ? NotaPalette.AccentBright : null, 6);
+            if (m != tgtNote && (nl - 1 - i) % 2 == 0) continue;
+            var ft = NotaGraph.AxisText(Names[((m % 12) + 12) % 12] + (m / 12 - 1), m == tgtNote ? NotaPalette.AccentBright : null, 8);
             ctx.DrawText(ft, new Point(4, LaneY(i) - ft.Height / 2));
         }
-        if (_midiMode) NotaGraph.Legend(ctx, w - 5, 2, ("MIDI", NotaPalette.VizInk, NotaGraph.Mark.Area), ("input", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
-        else NotaGraph.Legend(ctx, w - 5, 2, ("input", NotaPalette.TealBright, NotaGraph.Mark.Dashed), ("corrected", NotaPalette.VizInk, NotaGraph.Mark.Line));
-        var t0 = NotaGraph.AxisText("−" + _window, null, 6);
+        if (_midiMode) NotaGraph.Legend(ctx, w - 5, 2, ("MIDI", NotaPalette.VizInk, NotaGraph.Mark.Area), ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Dashed));
+        else NotaGraph.Legend(ctx, w - 5, 2, ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Dashed), ("corrected", NotaPalette.VizInk, NotaGraph.Mark.Line));
+        var t0 = NotaGraph.AxisText("−" + _window);
         ctx.DrawText(t0, new Point(gx, h - t0.Height - 1));
-        var t1 = NotaGraph.AxisText("now", null, 6);
+        var t1 = NotaGraph.AxisText("now");
         ctx.DrawText(t1, new Point(w - 5 - t1.Width, h - t1.Height - 1));
     }
 }
@@ -256,20 +258,19 @@ internal sealed class AsHistView : Control
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double top = 15, bot = h - 4, gw = (w - 12) / 12, gap = 4;
+        double top = NotaGraph.PlotTop, bot = h - 4, gw = (w - 12) / 12, gap = 4;
         for (int i = 0; i < 12; i++)
         {
             bool inScale = (_mask >> i & 1) != 0;
             double v = Math.Clamp(_h[i], 0, 1);
             double bh = Math.Max(1.5, v * (bot - top));
             IBrush fill = inScale ? (i == _key ? NotaPalette.VizInk : NotaPalette.Wash(NotaPalette.VizInk, 0x8C))
-                        : v > 0.08 ? NotaPalette.Wash(NotaPalette.Teal, 0x99) : NotaPalette.BorderDefault;
+                        : v > 0.08 ? NotaPalette.TextTertiary : NotaPalette.BorderDefault;
             var r = new Rect(6 + i * gw + gap / 2, bot - bh, gw - gap, bh);
             if (i == _hover) ctx.FillRectangle(NotaPalette.Wash(NotaPalette.BorderStrong, 0x30), new Rect(6 + i * gw + 1, top - 2, gw - 2, bot - top + 2));
             ctx.DrawRectangle(fill, null, new RoundedRect(r, 2, 2, 0, 0));
         }
-        var title = new FormattedText("Sung notes", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, NotaGraph.TitleInk);
-        ctx.DrawText(title, new Point(5, 3));
-        NotaGraph.Legend(ctx, w - 5, 2, ("in scale", NotaPalette.VizInk, NotaGraph.Mark.Area), ("out of scale" + _outName, NotaPalette.TealBright, NotaGraph.Mark.Area));
+        NotaGraph.Title(ctx, frame, "Sung notes");
+        NotaGraph.Legend(ctx, w - 5, 2, ("in scale", NotaPalette.VizInk, NotaGraph.Mark.Area), ("out of scale" + _outName, NotaPalette.TextTertiary, NotaGraph.Mark.Area));
     }
 }

@@ -55,11 +55,11 @@ public sealed partial class PreferencesWindow
         for (int i = 0; i < PackFilters.Length; i++)
         {
             int idx = i;
-            var count = new TextBlock { FontSize = 9, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center };
+            var count = new TextBlock { FontSize = 8.5, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
             _packCounts[i] = count;
             var b = new ToggleButton
             {
-                Classes = { "seg" }, FontSize = 12, IsChecked = i == _packFilter,
+                Classes = { "seg" }, FontSize = 11, IsChecked = i == _packFilter,
                 Content = new StackPanel
                 {
                     Orientation = Orientation.Horizontal, Spacing = 6,
@@ -75,9 +75,9 @@ public sealed partial class PreferencesWindow
             segs.Add(b);
             strip.Children.Add(b);
         }
-        var search = new TextBox { PlaceholderText = "Search", Text = _packSearch, Classes = { "search" }, FontSize = 12 };
+        var search = new TextBox { PlaceholderText = "Search", Text = _packSearch, Classes = { "search" }, FontSize = 11 };
         search.TextChanged += (_, _) => { _packSearch = search.Text ?? ""; RenderPackList(); };
-        var refresh = new Button { Content = "Refresh", Classes = { "ghost" }, Height = 30, FontSize = 12, Padding = new Thickness(12, 0), Foreground = TextSecondary };
+        var refresh = new Button { Content = "Refresh", Classes = { "ghost" }, Height = 30, FontSize = 11, Padding = new Thickness(12, 0), Foreground = TextSecondary };
         ToolTip.SetTip(refresh, "Reload the registry");
         refresh.Click += (_, _) => { if (!_packLoading) _packLoad = LoadPacksAsync(refresh: true); };
         _packRefresh = refresh;
@@ -182,7 +182,7 @@ public sealed partial class PreferencesWindow
             var empty = new TextBlock
             {
                 Text = _packFilter == 3 && q.Length == 0 ? "No sample packs installed from the registry yet." : "Nothing matches.",
-                FontSize = 12, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(28),
+                FontSize = 11, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(28),
             };
             _packList.Content = Table(new List<Control> { empty });
             return;
@@ -192,7 +192,7 @@ public sealed partial class PreferencesWindow
         if (_packList.Content is not Border { Tag: "pack-table" })
             _packList.Content = new Border
             {
-                Tag = "pack-table", BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel,
+                Tag = "pack-table", BorderBrush = Divider, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group,
                 ClipToBounds = true, Child = _packItems,
             };
     }
@@ -205,7 +205,7 @@ public sealed partial class PreferencesWindow
             Children =
             {
                 new ProgressBar { IsIndeterminate = true, Width = 180, Height = 4, MinWidth = 0 },
-                new TextBlock { Text = "Loading the sample registry…", FontSize = 12, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
+                new TextBlock { Text = "Loading the sample registry…", FontSize = 11, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
             },
         },
     });
@@ -251,18 +251,18 @@ public sealed partial class PreferencesWindow
                 {
                     Children =
                     {
-                        new TextBlock { Text = p.Name, FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
-                        new TextBlock { Text = PackKindLabel(p.Kind), FontSize = 9, FontFamily = NotaFonts.MonoFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = p.Name, FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, Margin = new Thickness(0, 0, 8, 0), VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = PackKindLabel(p.Kind), FontSize = 8.5, FontFamily = NotaFonts.UiFamily, Foreground = TextMuted, VerticalAlignment = VerticalAlignment.Center },
                     },
                 },
-                new TextBlock { Text = $"{p.Author} · {p.Version} · {p.License}", FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary },
-                new TextBlock { Text = p.Description, FontSize = 12, LineHeight = 18, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap },
+                new TextBlock { Text = $"{p.Author} · {p.Version} · {p.License}", FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary },
+                new TextBlock { Text = p.Description, FontSize = 11, LineHeight = 18, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap },
             },
         };
         if (p.Attribution is { Length: > 0 } credit)
-            text.Children.Add(new TextBlock { Text = $"Credit: {credit}", FontSize = 11, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = $"Credit: {credit}", FontSize = 10, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
         if (p.Notes is { Length: > 0 } notes)
-            text.Children.Add(new TextBlock { Text = notes, FontSize = 11, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = notes, FontSize = 10, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
 
         var actions = new StackPanel { Spacing = 8, MinWidth = 96, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
         bool busy = Jobs.BusyId is not null;
@@ -282,7 +282,7 @@ public sealed partial class PreferencesWindow
                 actions.Children.Add(new StackPanel
                 {
                     Orientation = Orientation.Horizontal, Spacing = 6, Height = 26, HorizontalAlignment = HorizontalAlignment.Right,
-                    Children = { Dot(Brass), new TextBlock { Text = "Installed", FontSize = 11, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
+                    Children = { Dot(Brass), new TextBlock { Text = "Installed", FontSize = 10, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
                 });
             var show = StoreLink("Show", null, () => { try { MainWindow.RevealInFileManager(inst.Path); } catch { /* no file manager */ } });
             ToolTip.SetTip(show, "Show the pack's folder");
@@ -292,7 +292,7 @@ public sealed partial class PreferencesWindow
         actions.Children.Add(new TextBlock
         {
             Text = inst is null ? $"{Megabytes(p.Asset.Size)} · {p.Asset.Files} samples" : $"{inst.Files} samples",
-            FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
+            FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
         });
         if (inst is null)
             ToolTip.SetTip(actions.Children[^1], $"{Megabytes(p.Asset.Size)} download · {p.Asset.Files} samples · {Megabytes(p.Asset.UnpackedSize)} on disk · {string.Join(", ", p.Asset.Formats)}");

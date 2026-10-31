@@ -24,7 +24,7 @@ public sealed class MidiMapView : UserControl
 
         var header = new TextBlock
         {
-            Text = "MIDI mappings", FontSize = 10, Margin = new Avalonia.Thickness(12, 12, 12, 2),
+            Text = "MIDI mappings", FontSize = 9, Margin = new Avalonia.Thickness(12, 12, 12, 2),
             Foreground = NotaPalette.TextTertiary,
         };
         var body = new StackPanel { Margin = new Avalonia.Thickness(8, 4), Children = { _rows } };
@@ -40,7 +40,7 @@ public sealed class MidiMapView : UserControl
             _rows.Children.Add(new TextBlock
             {
                 Text = "No mappings yet.\n\nClick MIDI (top-right), then click any highlighted\ncontrol and move a knob or fader on your controller —\nor press a button or move a stick on a gamepad.",
-                FontSize = 11, TextWrapping = TextWrapping.Wrap, LineHeight = 16,
+                FontSize = 10, TextWrapping = TextWrapping.Wrap, LineHeight = 16,
                 Margin = new Avalonia.Thickness(6, 10), Foreground = NotaPalette.TextTertiary,
             });
             return;
@@ -53,7 +53,7 @@ public sealed class MidiMapView : UserControl
         var name = new TextBlock
         {
             Text = string.IsNullOrEmpty(m.DisplayName) ? m.Target.Kind.ToString() : m.DisplayName,
-            FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
+            FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var del = new Button
@@ -69,8 +69,8 @@ public sealed class MidiMapView : UserControl
         Grid.SetColumn(del, 1);
         top.Children.Add(del);
 
-        var src = new TextBlock { Text = _learn.SourceLabel(m), FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        src.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        var src = new TextBlock { Text = _learn.SourceLabel(m), FontSize = 9, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+        src.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         // Source on the left; the invert toggle rides the right of the same line so the
         // range row below has room for just MIN / MAX.
         var srcRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -79,7 +79,7 @@ public sealed class MidiMapView : UserControl
             // Nota Remote: a drawn phone outline marks the source, as the gamepad has its word.
             var phone = new Border
             {
-                Width = 7, Height = 11, CornerRadius = NotaRadius.Bar, BorderThickness = new Avalonia.Thickness(1.3),
+                Width = 7, Height = 11, CornerRadius = NotaRadius.Fine, BorderThickness = new Avalonia.Thickness(1.3),
                 BorderBrush = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center,
             };
             srcRow.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { phone, src } });
@@ -93,7 +93,7 @@ public sealed class MidiMapView : UserControl
         // Range + invert only make sense for continuous (non-button) targets.
         if (!m.Target.IsButton)
         {
-            var inv = new CheckBox { Content = "Invert", FontSize = 10, IsChecked = m.Invert, VerticalAlignment = VerticalAlignment.Center, Foreground = NotaPalette.TextSecondary };
+            var inv = new CheckBox { Content = "Invert", FontSize = 9, IsChecked = m.Invert, VerticalAlignment = VerticalAlignment.Center, Foreground = NotaPalette.TextSecondary };
             inv.IsCheckedChanged += (_, _) => m.Invert = inv.IsChecked == true;
             Grid.SetColumn(inv, 1);
             srcRow.Children.Add(inv);
@@ -118,7 +118,7 @@ public sealed class MidiMapView : UserControl
 
     private static Control RangeField(string label, double value, System.Action<double> set)
     {
-        var l = new TextBlock { Text = label, FontSize = 9, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var l = new TextBlock { Text = label, FontSize = 8.5, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var n = new DragNumber(value, 0, 1, 0.01, "0.00", 10) { Width = 32, VerticalAlignment = VerticalAlignment.Center };
         n.ValueChanged += v => set(v);
         return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { l, n } };

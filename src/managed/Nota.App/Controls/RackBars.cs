@@ -124,13 +124,13 @@ internal sealed class RackRangeBar : Control
         var size = Bounds.Size;
         if (size.Width <= 0 || size.Height <= 0) return;
         var well = new Rect(size).Deflate(0.5);
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.Rule, 1), new RoundedRect(well, NotaRadius.ClipValue));
+        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.Rule, 1), new RoundedRect(well, NotaRadius.FieldValue));
         var hue = Hue ?? NotaPalette.VizInk;
         if (Single)
         {
             double x = X(Lo);
             var ink = _hot ? NotaPalette.Accent : NotaPalette.VizInk; // the accent only while in the hand
-            ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(x - 3, -2, 6, size.Height + 4), NotaRadius.BarValue));
+            ctx.DrawRectangle(ink, null, new RoundedRect(new Rect(x - 3, -2, 6, size.Height + 4), NotaRadius.FineValue));
         }
         else
         {
@@ -290,14 +290,14 @@ internal sealed class RackMapRangeBar : Control
         var size = Bounds.Size;
         if (size.Width <= 0) return;
         var well = new Rect(size).Deflate(0.5);
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.Rule, 1), new RoundedRect(well, NotaRadius.ClipValue));
+        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.Rule, 1), new RoundedRect(well, NotaRadius.FieldValue));
         double w = size.Width, h = size.Height;
         double a = Math.Min(Min, Max) * w, b = Math.Max(Min, Max) * w;
         var teal = NotaPalette.Teal.Color;
         ctx.DrawRectangle(new SolidColorBrush(teal, 0x55 / 255.0), null, new Rect(a, 1, Math.Max(1, b - a), h - 2));
         var handle = NotaPalette.TealBright;
-        ctx.DrawRectangle(handle, null, new RoundedRect(new Rect(Min * w - 2, -3, 4, h + 6), NotaRadius.BarValue));
-        ctx.DrawRectangle(handle, null, new RoundedRect(new Rect(Max * w - 2, -3, 4, h + 6), NotaRadius.BarValue));
+        ctx.DrawRectangle(handle, null, new RoundedRect(new Rect(Min * w - 2, -3, 4, h + 6), NotaRadius.FineValue));
+        ctx.DrawRectangle(handle, null, new RoundedRect(new Rect(Max * w - 2, -3, 4, h + 6), NotaRadius.FineValue));
         ctx.DrawRectangle(NotaPalette.Accent, null, new Rect(Math.Clamp(Current, 0, 1) * w - 1, -2, 2, h + 4)); // live position
     }
 }

@@ -74,13 +74,16 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         bool Capable(int b) => DynEq.HasGain(TypeOf(b));
         bool IsDyn(int b) => DynMaster() && BandOn(b) && Capable(b) && ModeOf(b) != DynEq.Static;
         bool KeyExt(int b) => P(DynEq.SidechainP) >= 0.5f || P(DynEq.KeyBase + b) >= 0.5f;
-        IBrush DirInk(int b, bool bright = false) => B(b, DynEq.RangeF) >= 0 ? (bright ? NotaPalette.RoseBright : NotaPalette.Rose) : (bright ? NotaPalette.TealBright : Teal);
+        // Boost vs cut, by shade (style guide): a boost the lighter grey, a cut the darker one.
+        IBrush DirInk(int b, bool bright = false) => B(b, DynEq.RangeF) >= 0
+            ? (bright ? NotaPalette.TextPrimary : DeviceCardKit.ModInkBright)
+            : (bright ? DeviceCardKit.ModInkBright : DeviceCardKit.ModInk);
 
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
 
@@ -108,7 +111,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         {
             int bb = b;
             var num = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Text = (b + 1).ToString(), VerticalAlignment = VerticalAlignment.Center };
-            num.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            num.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             var type = new TextBlock { FontSize = 7, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
             var hz = Mono("", 7, TextPrimary); hz.HorizontalAlignment = HorizontalAlignment.Right;
             var bar = new Border { Height = 2, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom };
@@ -116,7 +119,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             inner.Children.Add(num); inner.Children.Add(Col(type, 1)); inner.Children.Add(Col(hz, 2));
             var chip = new Border
             {
-                Height = 15, Margin = new Thickness(1, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), ClipToBounds = true,
+                Height = 15, Margin = new Thickness(1, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), ClipToBounds = true,
                 Cursor = new Cursor(StandardCursorType.Hand), Child = new Grid { Children = { inner, bar } },
             };
             ToolTip.SetTip(chip, NotaNum.F($"Band {b + 1} — click to edit it; the bar shows how much of its range the dynamics use now"));
@@ -176,7 +179,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
 
             // ---- header: badge · name · ON ----
             var badgeTxt = Mono((b + 1).ToString(), 8, OnAccent); badgeTxt.FontWeight = FontWeight.Bold; badgeTxt.HorizontalAlignment = HorizontalAlignment.Center;
-            var badge = new Border { Width = 13, Height = 13, CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Center, Child = badgeTxt };
+            var badge = new Border { Width = 13, Height = 13, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center, Child = badgeTxt };
             var name = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
             var onSw = Switch("On", () => BandOn(b), () => { SetP(pOn, BandOn(b) ? 0 : 1); RefreshAll(); }, out var onSync);
             Learn(onSw, pOn);
@@ -313,7 +316,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 Spacing = 5, Children =
                 {
                     SliderRow("THRESH", pThr, () => NotaNum.F($"{B(b, DynEq.ThrF):0} dB"),
-                        "Threshold — where the band starts to act; the teal mark is the band's level now",
+                        "Threshold — where the band starts to act; the grey mark is the band's level now",
                         marker: () => ToN(pThr, Math.Max(mn[pThr], curve.Level(b)))),
                     SliderRow("RANGE", pRange, () => (Rng() >= 0 ? "↑ " : "↓ ") + NotaNum.F($"{Math.Abs(Rng()):0.0}"),
                         "Range — how far the gain can move at full engagement (6 dB past the threshold); click the arrow to flip cut / boost",
@@ -358,7 +361,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             var soloTb = new TextBlock { Text = "Solo", FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
             var solo = new Border
             {
-                Height = 15, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+                Height = 15, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = soloTb,
             };
             solo.PointerPressed += (_, e) =>

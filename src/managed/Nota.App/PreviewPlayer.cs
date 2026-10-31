@@ -103,13 +103,13 @@ public sealed class PreviewPlayer : UserControl
         // Row 1: name · format.
         _name = new TextBlock
         {
-            Text = "—", FontSize = 12, FontWeight = FontWeight.SemiBold,
+            Text = "—", FontSize = 11, FontWeight = FontWeight.SemiBold,
             Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Bottom,
         };
         _meta = new TextBlock
         {
-            FontSize = 9, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextTertiary,
+            FontSize = 8.5, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextTertiary,
             Margin = new Thickness(8, 0, 0, 1), VerticalAlignment = VerticalAlignment.Bottom,
         };
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -129,8 +129,8 @@ public sealed class PreviewPlayer : UserControl
         ToolTip.SetTip(_playBtn, "Play / stop");
         _playBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { Toggle(); e.Handled = true; } };
 
-        _timeNow = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center };
-        _timeTotal = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextDisabled, VerticalAlignment = VerticalAlignment.Center };
+        _timeNow = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
+        _timeTotal = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextDisabled, VerticalAlignment = VerticalAlignment.Center };
         var time = _time = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(6, 0, 0, 0),
@@ -140,7 +140,7 @@ public sealed class PreviewPlayer : UserControl
         // Effect presets: what they are heard through (Beat / Keys / Loop / the Files sample).
         _sourceText = new TextBlock
         {
-            FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextSecondary,
+            FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextSecondary,
             VerticalAlignment = VerticalAlignment.Center,
         };
         var caret = new Glyph(GlyphKind.CaretDown, 9) { Foreground = NotaPalette.TextTertiary };
@@ -163,7 +163,7 @@ public sealed class PreviewPlayer : UserControl
         _loopBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { SetLoop(!_loop, persist: true); e.Handled = true; } };
 
         _autoDot = new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center };
-        _autoText = new TextBlock { Text = "Auto", FontSize = 10, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        _autoText = new TextBlock { Text = "Auto", FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         _autoBtn = Chip(new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
@@ -601,15 +601,15 @@ public sealed class PreviewPlayer : UserControl
             // A lone "unsupported" (or a full set) is all-or-nothing; the rest drops from the tail.
             if (n < _metaParts.Length && n > 2) continue;   // full, or length · rate, or length
             var m = string.Join(" · ", _metaParts, 0, n);
-            if (nameW + 8 + TextW(m, NotaFonts.Mono, 9) <= avail) { meta = m; break; }
+            if (nameW + 8 + TextW(m, NotaFonts.Sans, 9) <= avail) { meta = m; break; }
         }
         _meta.Text = meta;
         _meta.IsVisible = meta.Length > 0;
 
         // Controls.
         const double gap = 6, minMiddle = 8;
-        double now = TextW(_timeNow.Text ?? "", NotaFonts.Mono, 10);
-        double total = 3 + TextW(_timeTotal.Text ?? "", NotaFonts.Mono, 10);
+        double now = TextW(_timeNow.Text ?? "", NotaFonts.Sans, 10);
+        double total = 3 + TextW(_timeTotal.Text ?? "", NotaFonts.Sans, 10);
         double autoFull = 2 + 7 + 6 + 5 + TextW("Auto", NotaFonts.SansSemiBold, 10) + 7, autoDot = 22;
         double volFull = 12 + 5 + 46, volIcon = 22, loop = 22 + gap;
         double source = _sourceBtn.IsVisible ? 2 + 14 + 5 + 6 + TextW(_sourceText.Text ?? "", NotaFonts.SansSemiBold, 10) + gap : 0;
@@ -636,7 +636,7 @@ public sealed class PreviewPlayer : UserControl
     private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
 
     private static double TextW(string s, Typeface tf, double size)
-        => s.Length == 0 ? 0 : new FormattedText(s, NotaNum.Culture, FlowDirection.LeftToRight, tf, size, null).Width;
+        => s.Length == 0 ? 0 : new NotaFormattedText(s, NotaNum.Culture, FlowDirection.LeftToRight, tf, size, null).Width;
 
     // "SS.cc" as the mockup prints it; a minute or more gets "M:SS.cc".
     private static string Fmt(double s)
@@ -1011,7 +1011,7 @@ public sealed class PreviewWaveform : Control
             {
                 double x = Math.Round(InsetX + innerW * Math.Log(hz / FLo) / Math.Log(FHi / FLo)) + 0.5;
                 ctx.DrawLine(NotaGraph.GridPen, new Point(x, 1), new Point(x, h - 1));
-                var t = NotaGraph.AxisText(label);
+                var t = NotaGraph.AxisText(label, owner: this);
                 ctx.DrawText(t, new Point(x + 2, h - t.Height - 1));
             }
             if (_hasSpec && innerW > 8)
@@ -1078,8 +1078,8 @@ public sealed class PreviewWaveform : Control
         {
             double hx = InsetX + innerW * f;
             ctx.FillRectangle(NotaPalette.TextTertiary, new Rect(Math.Round(hx), 0, 1, h));
-            var ft = new FormattedText(Fmt(f * _duration), NotaNum.Culture, FlowDirection.LeftToRight,
-                                       NotaFonts.Mono, 8, NotaPalette.TextPrimary);
+            var ft = new NotaFormattedText(Fmt(f * _duration), NotaNum.Culture, FlowDirection.LeftToRight,
+                                       NotaFonts.Sans, 8, NotaPalette.TextPrimary);
             double tw = ft.Width + 8, th = ft.Height + 2;
             double tx = f > 0.75 ? hx - tw - 4 : hx + 4;
             ctx.FillRectangle(NotaPalette.TrackOff, new Rect(tx, InsetY, tw, th), 2);
@@ -1088,7 +1088,7 @@ public sealed class PreviewWaveform : Control
 
         if (!string.IsNullOrEmpty(hint) && (_peaks is null || _spectrum))
         {
-            var ht = new FormattedText(hint, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Mono, 9, NotaPalette.TextTertiary)
+            var ht = new NotaFormattedText(hint, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, NotaPalette.TextTertiary)
             {
                 MaxTextWidth = Math.Max(20, w - 16), MaxLineCount = 2, TextAlignment = TextAlignment.Center,
                 Trimming = TextTrimming.CharacterEllipsis,
@@ -1097,8 +1097,8 @@ public sealed class PreviewWaveform : Control
         }
 
         // WAVE · SPEC, the active one in brass, top-right.
-        var wave = NotaGraph.AxisText("Wave", _spectrum ? NotaPalette.TextTertiary : NotaPalette.Accent, 7);
-        var spec = NotaGraph.AxisText("Spec", _spectrum ? NotaPalette.Accent : NotaPalette.TextTertiary, 7);
+        var wave = NotaGraph.AxisText("Wave", _spectrum ? NotaPalette.TextTertiary : NotaPalette.Accent, 7, this);
+        var spec = NotaGraph.AxisText("Spec", _spectrum ? NotaPalette.Accent : NotaPalette.TextTertiary, 7, this);
         double lw = wave.Width + 5 + spec.Width, lx = w - lw - 5, ly = 3;
         _toggleRect = new Rect(lx - 4, 0, lw + 9, ly + wave.Height + 3);
         ctx.FillRectangle(NotaPalette.BgSunken, new Rect(lx - 2, ly - 1, lw + 4, wave.Height + 2), 2);

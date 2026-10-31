@@ -86,7 +86,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null) => new()
         { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
@@ -191,7 +191,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         var legend = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 5, 0),
-            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", NotaPalette.TealBright), tauWord },
+            Children = { LegendItem("L", NotaPalette.VizInk), LegendItem("R", DeviceCardKit.ModInkBright), tauWord },
         };
         var comb = new FlangerCombView { Value = () => (P(Delay), P(Feedback)) };
         comb.GestureBegin += () => { Begin(Delay); Begin(Feedback); };
@@ -199,8 +199,8 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         comb.Changed += (d, f) => { Raw(Delay, d); Raw(Feedback, f); RefreshAll(); };
         comb.ResetRequested += () => { Reset(Delay); Reset(Feedback); RefreshAll(); };
         Learn(comb, Delay);
-        ToolTip.SetTip(comb, MenuKit.Keys("The comb the delay carves into the spectrum, L neutral and R teal, with the first notch dashed. Drag left / right to move the notch (Delay), up / down for Feedback; ⌥-click types, double-click resets both."));
-        ValueEntry.AttachAll(comb, ValueEntry.DeviceParam(engine, track, di, Delay, "Delay", v => FlangerMath.Ms(FlangerMath.BaseMs(v)) + " ms", RefreshAll), ValueEntry.DeviceParam(engine, track, di, Feedback, "Feedback", v => FbF(FlangerMath.Fb(v)), RefreshAll));
+        ToolTip.SetTip(comb, MenuKit.Keys("The comb the delay carves into the spectrum, L in the bright line and R in the darker grey, with the first notch dashed. Drag left / right to move the notch (Delay), up / down for Feedback; ⌥-click types, double-click resets both."));
+        ValueEntry.AttachAll(comb, ValueEntry.DeviceParam(engine, track, di, Delay, "Delay", v => FlangerMath.Ms(FlangerMath.BaseMs(v)) + "\u2009ms", RefreshAll), ValueEntry.DeviceParam(engine, track, di, Feedback, "Feedback", v => FbF(FlangerMath.Fb(v)), RefreshAll));
 
         var sweep = new FlangerSweepView { Margin = new Thickness(0, 4, 0, 0) };
         ToolTip.SetTip(sweep, "The delay τ of both channels over two LFO cycles, and where each is now");
@@ -217,7 +217,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         {
             string m = Mode();
             modeWord.Text = m;
-            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? NotaPalette.TealBright : TextSecondary;
+            modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? DeviceCardKit.ModInkBright : TextSecondary;
         });
         ToolTip.SetTip(modeWord, "What the feedback makes: positive sharpens the peaks, negative hollows the tone, past 85\u2009% the comb rings");
 
@@ -233,7 +233,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             var tb = Mono(text, 7, TextTertiary); tb.HorizontalAlignment = HorizontalAlignment.Center;
             var b = new Border
             {
-                BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(0, 1),
+                BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(0, 1),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
             };
             b.PointerPressed += (_, e) =>
@@ -269,7 +269,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         }
         var notchBar = new FlangerBar { Ink = NotaPalette.BorderStrong, VerticalAlignment = VerticalAlignment.Center };
         var notchVal = Mono("", 8, TextPrimary);
-        var nullBar = new FlangerBar { Ink = NotaPalette.TealBright, VerticalAlignment = VerticalAlignment.Center };
+        var nullBar = new FlangerBar { Ink = DeviceCardKit.ModInkBright, VerticalAlignment = VerticalAlignment.Center };
         var nullVal = Mono("", 8, TextPrimary);
         var reads = new Border
         {

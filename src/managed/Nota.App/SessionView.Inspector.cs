@@ -57,9 +57,9 @@ public sealed partial class SessionView
         var hint = new TextBlock
         {
             Text = MenuKit.Keys("Click selects · the triangle launches · Enter launches the selection\n←↑↓→ move · ⌘C ⌘V ⌘D · ⌫ delete · ⌘I insert scene\n⌘⇧C copy to arrangement · ⌘V pastes clips copied there"),
-            FontSize = 9, LineHeight = 15, Foreground = NotaPalette.TextDisabled, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16),
+            FontSize = 8.5, LineHeight = 15, Foreground = NotaPalette.TextDisabled, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16),
         };
-        hint.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        hint.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         var dock = new DockPanel();
         DockPanel.SetDock(hint, Dock.Bottom);
         dock.Children.Add(hint);
@@ -78,8 +78,8 @@ public sealed partial class SessionView
             Orientation = Orientation.Horizontal, Spacing = 8,
             Children =
             {
-                new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Clip, Background = color, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = title, FontSize = 15, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = InspectorW - 60 },
+                new Border { Width = 10, Height = 10, CornerRadius = NotaRadius.Field, Background = color, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = title, FontSize = 14, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = InspectorW - 60 },
             },
         };
         var s = Mono(sub, 10, NotaPalette.TextTertiary);
@@ -89,7 +89,7 @@ public sealed partial class SessionView
 
     private static TextBlock SectionHead(string text) => new()
     {
-        Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted,
+        Text = text, FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted,
     };
 
     // A labelled value well (LENGTH, LOOP, START…): a click opens its choices when it has any.
@@ -101,7 +101,7 @@ public sealed partial class SessionView
         {
             well = new Border
             {
-                Height = NotaSize.Shell, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Badge,
+                Height = NotaSize.Shell, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Cell,
                 Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = text,
             };
         }
@@ -118,7 +118,7 @@ public sealed partial class SessionView
         return new StackPanel
         {
             Spacing = 4,
-            Children = { new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary }, well },
+            Children = { new TextBlock { Text = label, FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary }, well },
         };
     }
 
@@ -139,7 +139,7 @@ public sealed partial class SessionView
     private static Control Row(string label, Control right)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 22 };
-        g.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center });
+        g.Children.Add(new TextBlock { Text = label, FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center });
         Grid.SetColumn(right, 1);
         right.VerticalAlignment = VerticalAlignment.Center;
         g.Children.Add(right);
@@ -172,7 +172,7 @@ public sealed partial class SessionView
         var wrap = new WrapPanel { Orientation = Orientation.Horizontal };
         foreach (var (label, key, click) in actions)
         {
-            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { new TextBlock { Text = label, FontSize = 11, FontWeight = FontWeight.Medium } } };
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { new TextBlock { Text = label, FontSize = 10, FontWeight = FontWeight.Medium } } };
             if (key.Length > 0) content.Children.Add(Mono(MenuKit.Keys(key), 9, NotaPalette.TextDisabled));
             var b = new Button { Height = NotaSize.Shell, Padding = new Thickness(10, 0), Margin = new Thickness(0, 0, 6, 6), Content = content };
             b.Click += (_, _) => click();
@@ -194,7 +194,7 @@ public sealed partial class SessionView
                 bool on = idx == current;
                 var sw = new Border
                 {
-                    Height = 22, Margin = new Thickness(3), CornerRadius = NotaRadius.Badge, Background = ArrangementView.TrackBrush(idx),
+                    Height = 22, Margin = new Thickness(3), CornerRadius = NotaRadius.Cell, Background = ArrangementView.TrackBrush(idx),
                     BorderBrush = on ? NotaPalette.TextPrimary : Brushes.Transparent, BorderThickness = new Thickness(on ? 1.5 : 0),
                     Cursor = new Cursor(StandardCursorType.Hand),
                 };
@@ -230,7 +230,7 @@ public sealed partial class SessionView
         _inspPreview = new InspectorPreview(this, c, scene, brush);
         s.Children.Add(new Border
         {
-            Height = 68, CornerRadius = NotaRadius.Control, Background = NotaPalette.Wash(brush, 0x1F),
+            Height = 68, CornerRadius = NotaRadius.Field, Background = NotaPalette.Wash(brush, 0x1F),
             BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), ClipToBounds = true, Child = _inspPreview,
         });
 
@@ -257,7 +257,7 @@ public sealed partial class SessionView
         OneUndoStep(vel);
         vel.ValueChanged += v => { if (_engine.TryGetSessionClipProps(id, scene, out var cur)) { cur.VelocityAmount = (float)(v / 100); _engine.SetSessionClipProps(id, scene, cur); } };
         ToolTip.SetTip(vel, "Velocity amount: how far the launch velocity scales the clip · drag");
-        launch.Children.Add(Row("Velocity %", new Border { CornerRadius = NotaRadius.Badge, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
+        launch.Children.Add(Row("Velocity %", new Border { CornerRadius = NotaRadius.Cell, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
         s.Children.Add(launch);
 
         // Follow actions.
@@ -278,7 +278,7 @@ public sealed partial class SessionView
                 Background = NotaPalette.BgSunken,
                 Content = new DockPanel
                 {
-                    Children = { new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.TextDisabled, [DockPanel.DockProperty] = Dock.Right }, new TextBlock { Text = ActionLabel(action), FontSize = 11, Foreground = NotaPalette.TextPrimary } },
+                    Children = { new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.TextDisabled, [DockPanel.DockProperty] = Dock.Right }, new TextBlock { Text = ActionLabel(action), FontSize = 10, Foreground = NotaPalette.TextPrimary } },
                 },
             };
             pick.Click += (_, _) => Pick(pick, Array.ConvertAll(FollowActions, x => ((int)x.Action, x.Label)), a => a == action, setAction);
@@ -371,8 +371,8 @@ public sealed partial class SessionView
                 Spacing = 4,
                 Children =
                 {
-                    new TextBlock { Text = "Tempo", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary },
-                    new Border { Height = NotaSize.Shell, CornerRadius = NotaRadius.Badge, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = row },
+                    new TextBlock { Text = "Tempo", FontSize = 8.5, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary },
+                    new Border { Height = NotaSize.Shell, CornerRadius = NotaRadius.Cell, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = row },
                 },
             };
             ToolTip.SetTip(tempo, "Tempo set when the scene launches · drag to change");
@@ -418,7 +418,7 @@ public sealed partial class SessionView
         rows.Children.Add(new TextBlock
         {
             Text = stop ? $"Launching this scene stops {c.Name}." : $"Launching this scene keeps {c.Name} playing.",
-            FontSize = 11, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
+            FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
         s.Children.Add(rows);
         var actions = new List<(string, string, Action)>();
@@ -448,7 +448,7 @@ public sealed partial class SessionView
         s.Children.Add(new TextBlock
         {
             Text = "Launches every track's slot in this scene. The stop button stops them all.",
-            FontSize = 11, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
+            FontSize = 10, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
         s.Children.Add(Actions(("Launch group slot", Shortcut.None(KeyGlyphs.Return), () => LaunchGroup(g, scene)), ("Stop group", "", () => StopColumn(g)),
             ("To Arrangement", Shortcut.CmdShift('C'), () => CopySelectionToArrangement())));

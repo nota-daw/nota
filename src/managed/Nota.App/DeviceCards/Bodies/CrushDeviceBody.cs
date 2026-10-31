@@ -95,7 +95,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -110,7 +110,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, Default = Def(p), Width = 34, Height = 34 };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
-            if (teal) knob.ArcColor = Teal;
+            if (teal) knob.ArcColor = DeviceCardKit.ModInk;   // the modulation mark: a dashed arc
             knob.ValueChanged += v => { Raw(p, v); val.Text = fmt(P(p)); RefreshAll(); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
@@ -144,7 +144,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
         Border ParamChip(int p, string text, string tip)
         {
             var tb = new TextBlock { Text = text, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             void Hi()
             {
                 bool on = On(p);
@@ -282,7 +282,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
             spectrum.GestureEnd += h => End(map[h]);
             spectrum.ResetRequested += h => { Reset(map[h]); RefreshAll(); };
             Learn(spectrum, Rate);
-            ToolTip.SetTip(spectrum, MenuKit.Keys("The output spectrum: neutral ink is the signal, teal what the crush added — bright above the reduced Nyquist (the images). Drag the Nyquist line for Rate, the filter line for the post filter; ⌥-click types, double-click resets."));
+            ToolTip.SetTip(spectrum, MenuKit.Keys("The output spectrum: the bright ink is the signal, grey what the crush added — lighter above the reduced Nyquist (the images). Drag the Nyquist line for Rate, the filter line for the post filter; ⌥-click types, double-click resets."));
             ValueEntry.AttachHandles(spectrum, [F(Rate, "Rate", RateF)], [F(PostFilter, "Post filter", FiltF)]);
             var knobs = KnobRow(
                 () => Sc(S_Analysed) < 0.5 ? "no signal" : ScDb(S_Images) <= -119 ? NotaNum.F($"no images above {KHz(Sc(S_Nyquist))}")
@@ -342,7 +342,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
             l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
             var box = new Border
             {
-                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 2, Children = { t, l1, l2 } },
             };
             readouts.Add(() =>
@@ -379,7 +379,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
             }
             var meters = new Border
             {
-                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel
                 {
                     Spacing = 2, Children =

@@ -45,7 +45,6 @@ public sealed partial class PianoRollView
     private static readonly IBrush SpanWash = NotaPalette.Wash(NotaPalette.VizInk, 0x14);
     private static readonly IBrush PointFill = NotaPalette.VizInk;
     private static readonly IBrush PointHot = NotaPalette.Accent;
-    private static readonly IBrush TabActive = NotaPalette.AccentBright;
 
     internal LaneMode Lane => _laneMode;
 
@@ -137,7 +136,7 @@ public sealed partial class PianoRollView
     {
         private static readonly (LaneMode Mode, string Label)[] Tabs =
             { (LaneMode.Velocity, "Vel"), (LaneMode.Bend, "Bend"), (LaneMode.Pressure, "Pres"), (LaneMode.Slide, "Slide") };
-        private const double Top = 6, RowStep = 15;
+        private const double Top = 2, RowStep = 17, ChipH = 16;   // four rows end at 69, inside the 72 px velocity lane
         private readonly PianoRollView _o;
         private int _hover = -1;
         public LaneTabs(PianoRollView o) { _o = o; Cursor = new Cursor(StandardCursorType.Hand); }
@@ -147,19 +146,20 @@ public sealed partial class PianoRollView
             ctx.FillRectangle(Brushes.Transparent, new Rect(Bounds.Size));
             for (int i = 0; i < Tabs.Length; i++)
             {
+                // Style guide: the lane shown sits on the well in ink 1, the others ink 3 (ink 1 on hover).
                 bool on = Tabs[i].Mode == _o._laneMode;
-                var ink = on ? TabActive : i == _hover ? KeyLabelHot : LabelText;
-                var ft = new FormattedText(Tabs[i].Label, NotaNum.Culture, FlowDirection.LeftToRight,
-                    new Typeface(NotaFonts.Mono.FontFamily, FontStyle.Normal, FontWeight.Bold), 9, ink);
+                var ink = on || i == _hover ? NotaPalette.TextPrimary : NotaPalette.TextTertiary;
+                var ft = new NotaFormattedText(Tabs[i].Label, NotaNum.Culture, FlowDirection.LeftToRight,
+                    on ? NotaFonts.SansMedium : NotaFonts.Sans, NotaType.Caption, ink);
                 double y = Top + i * RowStep;
-                ctx.DrawText(ft, new Point((Bounds.Width - ft.Width) / 2, y));
-                if (on) ctx.FillRectangle(TabActive, new Rect(0, y + 1, 2, ft.Height - 2));
+                if (on) ctx.DrawRectangle(NotaPalette.Well, null, new Rect(6, y, Math.Max(0, Bounds.Width - 12), ChipH), 5, 5);
+                ctx.DrawText(ft, new Point((Bounds.Width - ft.Width) / 2, y + (ChipH - ft.Height) / 2));
             }
         }
 
         private int RowAt(Point p)
         {
-            int i = (int)Math.Floor((p.Y - Top + 2) / RowStep);
+            int i = (int)Math.Floor((p.Y - Top + 1) / RowStep);
             return i >= 0 && i < Tabs.Length ? i : -1;
         }
 
@@ -302,7 +302,7 @@ public sealed partial class PianoRollView
 
             if (Dim == NoteExpressionDim.Bend)
             {
-                var ft = new FormattedText("±" + NotaNum.Unit(_range, "0", "st"), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText);
+                var ft = new NotaFormattedText("±" + NotaNum.Unit(_range, "0", "st"), NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, LabelText);
                 ctx.DrawText(ft, new Point(4, 3));
             }
             _o.DrawOutsideClip(ctx, w, h);

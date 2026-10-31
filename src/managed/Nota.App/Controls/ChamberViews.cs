@@ -20,17 +20,15 @@ namespace Nota.App;
 
 internal static class ChamberInk
 {
-    public static Color SlateColor => NotaPalette.InkColor("#6D8FB5");   // convolution
-    public static Color MauveColor => NotaPalette.InkColor("#B57286");   // shimmer / pitch, low band
-    public static IBrush Slate => NotaPalette.Ink("#6D8FB5");
-    public static IBrush Mauve => NotaPalette.Ink("#B57286");   // a live slot, not a snapshot of its colour
     public static readonly IBrush Veil = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0xB8);
     public static readonly IBrush GridLine = NotaPalette.SurfaceCard;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
     private static readonly Typeface Sans = NotaFonts.SansSemiBold;
 
-    public static FormattedText Text(string s, double size, IBrush b) => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, b);
-    public static FormattedText Caps(string s, double size, IBrush b) => new(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b);
+    public static FormattedText Text(string s, double size, IBrush b) => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b, NotaTextSize.InCard);
+    public static FormattedText Caps(string s, double size, IBrush b) => new NotaFormattedText(NotaText.Label(s), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, size, b, NotaTextSize.InCard);
+    public static IBrush Slate => NotaPalette.TextSecondary;   // convolution (was slate blue)
+    public static IBrush Mauve => NotaPalette.TextTertiary;    // shimmer / pitch (was mauve)
     public static IBrush Alpha(Color c, byte a) => new SolidColorBrush(Color.FromArgb(a, c.R, c.G, c.B));
 
     // A time axis that stays put while the content moves inside it (so turning a knob visibly
@@ -101,7 +99,7 @@ internal sealed class ChamberFader : Control
         double y = (1 - _v) * h;
         using (ctx.PushClip(new RoundedRect(rect, r)))
         {
-            if (Split) ctx.FillRectangle(ChamberInk.Alpha(ChamberInk.SlateColor, 0x59), new Rect(0, 0, w, y));
+            if (Split) ctx.FillRectangle(ChamberInk.Alpha(NotaPalette.TextTertiary.Color, 0x59), new Rect(0, 0, w, y));
             ctx.FillRectangle(NotaPalette.Wash(NotaPalette.VizInk, 0x30), new Rect(0, y, w, h - y));
         }
         ctx.DrawRectangle(null, new Pen(NotaPalette.BorderDefault, 1), rect, r, r);
@@ -208,14 +206,14 @@ internal sealed class ChamberIrView : Control, IValueHandles
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
         if (_empty != null)
         {
-            var t = ChamberInk.Text(_empty, 8, NotaPalette.TextTertiary);
+            var t = ChamberInk.Text(_empty, NotaGraph.AxisSize, NotaPalette.TextTertiary);
             ctx.DrawText(t, new Point((w - t.Width) / 2, (h - t.Height) / 2));
             if (_hover) ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1.5), new Rect(1, 1, w - 2, h - 2), 3, 3);
             return;
         }
         double full = h;
         h = Math.Floor(full * SourceShare);                 // ---- SOURCE lane (top) ----
-        double mid = h / 2, amp = mid - 3;
+        double mid = h / 2, amp = mid - 6;   // the peak stays clear of the frame
         ctx.DrawLine(new Pen(ChamberInk.GridLine, 1), new Point(0, mid), new Point(w, mid));
         var clip = ctx.PushClip(new Rect(0, 0, w, h));
         void Env(float[] a, bool up, Color c, double alphaLine)
@@ -234,8 +232,8 @@ internal sealed class ChamberIrView : Control, IValueHandles
             ctx.DrawGeometry(null, new Pen(ChamberInk.Alpha(c, (byte)(255 * alphaLine)), 1.1), line);
         }
         Env(_l, true, NotaPalette.VizInk.Color, 1.0);
-        // Left and right in the first two chromas; the second at 70% (almanac § oscillogram).
-        Env(_r.Length > 0 ? _r : _l, false, NotaPalette.TealColor, 0.7);
+        // Left in the curve ink, right in the second grey (told apart by shade).
+        Env(_r.Length > 0 ? _r : _l, false, NotaPalette.TextTertiary.Color, 1.0);
 
         double xs = X(_start), xe = X(_end);
         // Attack: the fade-in shape across the head of the kept window.
@@ -259,22 +257,29 @@ internal sealed class ChamberIrView : Control, IValueHandles
         ctx.DrawRectangle(_drag == 1 ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(xs - 1.5, mid - 7, 3, 14), 1.5, 1.5);
         ctx.DrawRectangle(_drag == 2 ? NotaPalette.Accent : NotaPalette.VizInk, null, new Rect(xe - 1.5, mid - 7, 3, 14), 1.5, 1.5);
 
-        var st = ChamberInk.Text(NotaNum.F($"start {Sec(_start * _sec)}"), 7, _drag == 1 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        ctx.DrawText(st, new Point(Math.Min(xs + 4, w - st.Width - 2), 2));
-        var en = ChamberInk.Text(NotaNum.F($"end {Sec(_end * _sec)}"), 7, _drag == 2 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        ctx.DrawText(en, new Point(Math.Max(2, xe - en.Width - 4), h - en.Height - 2));
+        // The start trim always names its time (ink 3 at rest, orange while dragged); the end trim
+        // names its time while dragged (at rest it is the Decay knob's value).
+        {
+            var st = ChamberInk.Text(NotaNum.F($"start {Sec(_start * _sec)}"), NotaGraph.AxisSize, _drag == 1 ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
+            ctx.DrawText(st, new Point(Math.Min(xs + 4, w - st.Width - 2), 2));
+        }
+        if (_drag == 2)
+        {
+            var en = ChamberInk.Text(NotaNum.F($"end {Sec(_end * _sec)}"), NotaGraph.AxisSize, NotaPalette.AccentBright);
+            ctx.DrawText(en, new Point(Math.Max(2, xe - en.Width - 4), h - en.Height - 2));
+        }
         if (_reverse)
         {
-            var rv = ChamberInk.Text("Reversed", 7, ChamberInk.Mauve);
+            var rv = ChamberInk.Text("Reversed", NotaGraph.AxisSize, NotaPalette.TextSecondary);
             double rx = (xs + xe - rv.Width - 9) / 2;
-            Glyph.Draw(ctx, GlyphKind.StepLeft, new Rect(rx, 2 + (rv.Height - 6) / 2, 6, 6), ChamberInk.Mauve);
+            Glyph.Draw(ctx, GlyphKind.StepLeft, new Rect(rx, 2 + (rv.Height - 6) / 2, 6, 6), NotaPalette.TextSecondary);
             ctx.DrawText(rv, new Point(rx + 9, 2));
         }
         clip.Dispose();
         RenderResult(ctx, w, h, full);
         if (_building)
         {
-            var b = ChamberInk.Text("building…", 7, NotaPalette.TextTertiary);
+            var b = ChamberInk.Text("building…", NotaGraph.AxisSize, NotaPalette.TextTertiary);
             ctx.DrawText(b, new Point(w - b.Width - 4, h + 2));
         }
         if (_hover) ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1.5), new Rect(1, 1, w - 2, full - 2), 3, 3);
@@ -312,18 +317,16 @@ internal sealed class ChamberIrView : Control, IValueHandles
                 f.LineTo(new Point(Math.Min(w, X(_preSec + _resSec)), bot));
             }
             ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, 1), line);
+            // The pre-delay gap, dashed (its time is the Predelay knob's value).
             if (_preSec > 0.0005)
-            {
-                ctx.DrawLine(new Pen(NotaPalette.Teal, 1, new DashStyle(new double[] { 2, 2 }, 0)), new Point(x0, top + 2), new Point(x0, full));
-                var pt = ChamberInk.Text(NotaNum.F($"pre {_preSec * 1000:0}\u2009ms"), 7, NotaPalette.Teal);
-                ctx.DrawText(pt, new Point(Math.Min(x0 + 3, w - pt.Width - 2), bot - pt.Height));
-            }
+                ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1, new DashStyle(new double[] { 2, 2 }, 0)), new Point(x0, top + 2), new Point(x0, full));
             if (_preSec + _resSec > axis * 1.001)
             {
                 Glyph.Draw(ctx, GlyphKind.ChevronRight, new Rect(w - 9, peakY - 1, 7, 7), NotaPalette.TextSecondary);
             }
         }
-        var len = ChamberInk.Text(NotaNum.F($"as heard · {_resSec:0.00}\u2009s · axis {ChamberInk.AxisLabel(axis)}"), 7, NotaPalette.TextDisabled);
+        // The lane's name and its length, in the last quarter (where the tail is low).
+        var len = ChamberInk.Text(NotaNum.F($"as heard {_resSec:0.00}\u2009s · axis {ChamberInk.AxisLabel(axis)}"), NotaGraph.AxisSize, NotaPalette.TextTertiary);
         ctx.DrawText(len, new Point(w - len.Width - 4, top + 2));
     }
 }
@@ -340,7 +343,7 @@ internal sealed class ChamberDecayGraph : Control, IValueHandles
     private float[] _echo = Array.Empty<float>();
     private double _echoSec;
     private string _info = "";
-    private static readonly IBrush[] Ink = { ChamberInk.Mauve, NotaPalette.VizInk, NotaPalette.Teal };
+    private static readonly IBrush[] Ink = { NotaPalette.TextSecondary, NotaPalette.VizInk, NotaPalette.TextTertiary };
     private static readonly string[] Names = { "low", "mid", "high" };
 
     public event Action<int, double>? Changed;   // band, RT60 seconds
@@ -411,9 +414,9 @@ internal sealed class ChamberDecayGraph : Control, IValueHandles
         ctx.DrawLine(gp, new Point(0, (Top + bot) / 2), new Point(w, (Top + bot) / 2));
         ctx.DrawLine(gp, new Point(w / 3, Top - 4), new Point(w / 3, h));
         ctx.DrawLine(gp, new Point(2 * w / 3, Top - 4), new Point(2 * w / 3, h));
-        var cap = ChamberInk.Caps("DECAY PER BAND", 7, NotaPalette.TextTertiary);
+        var cap = ChamberInk.Caps("DECAY PER BAND", NotaGraph.AxisSize, NotaPalette.TextTertiary);
         ctx.DrawText(cap, new Point(5, 3));
-        if (_info.Length > 0) ctx.DrawText(ChamberInk.Text(_info, 7, NotaPalette.TextDisabled), new Point(5 + cap.Width + 6, 3));
+        if (_info.Length > 0) ctx.DrawText(ChamberInk.Text(_info, NotaGraph.AxisSize, NotaPalette.TextDisabled), new Point(5 + cap.Width + 6, 3));
 
         // The real echogram (dB, −60 dB floor) behind the RT60 lines — Size, Diffusion, the
         // mode, modulation and Freeze all show up here.
@@ -442,9 +445,9 @@ internal sealed class ChamberDecayGraph : Control, IValueHandles
         double lx = w - 5;
         for (int b = 2; b >= 0; b--)
         {
-            var t = ChamberInk.Text(NotaNum.F($"{Names[b]} {(_freeze ? "∞" : S(_rt[b]))}"), 7, b == 1 ? NotaPalette.TextPrimary : NotaPalette.TextSecondary);
+            var t = ChamberInk.Text(NotaNum.F($"{Names[b]} {(_freeze ? "∞" : S(_rt[b]))}"), NotaGraph.AxisSize, b == 1 ? NotaPalette.TextPrimary : NotaPalette.TextSecondary);
             lx -= t.Width; ctx.DrawText(t, new Point(lx, 3));
-            lx -= 11; ctx.FillRectangle(Ink[b], new Rect(lx, 7, 8, 2));
+            lx -= 11; ctx.FillRectangle(Ink[b], new Rect(lx, 9, 8, 2));
             lx -= 8;
         }
 
@@ -470,7 +473,7 @@ internal sealed class ChamberDecayGraph : Control, IValueHandles
                 ctx.DrawEllipse(_drag == b ? NotaPalette.Accent : Ink[b], new Pen(NotaPalette.BgSunken, 2), new Point(hx, bot - 1), _drag == b ? 4.5 : 3.5, _drag == b ? 4.5 : 3.5);
             }
         }
-        var tm = ChamberInk.Text(ChamberInk.AxisLabel(_tmax), 7, NotaPalette.TextDisabled);
+        var tm = ChamberInk.Text(ChamberInk.AxisLabel(_tmax), NotaGraph.AxisSize, NotaPalette.TextDisabled);
         ctx.DrawText(tm, new Point(w - tm.Width - 4, bot - tm.Height - 3));
     }
 }
@@ -594,9 +597,9 @@ internal sealed class ChamberEqCurve : Control, IValueHandles
         }
         ctx.DrawGeometry(null, new Pen(NotaPalette.VizInk, NotaGraph.PrimaryWidth), line);
 
-        var t0 = ChamberInk.Text("30", 7, NotaPalette.TextDisabled);
+        var t0 = ChamberInk.Text("30", NotaGraph.AxisSize, NotaPalette.TextDisabled);
         ctx.DrawText(t0, new Point(4, h - t0.Height - 2));
-        var t1 = ChamberInk.Text("18k Hz", 7, NotaPalette.TextDisabled);
+        var t1 = ChamberInk.Text("18k Hz", NotaGraph.AxisSize, NotaPalette.TextDisabled);
         ctx.DrawText(t1, new Point(w - t1.Width - 4, h - t1.Height - 2));
 
         var ring = new Pen(NotaPalette.BgSunken, 2);
@@ -607,7 +610,7 @@ internal sealed class ChamberEqCurve : Control, IValueHandles
     }
 }
 
-// The modulation LFO: a teal sine scrolling at the Rate, its swing following the Depth.
+// The modulation LFO: a grey sine scrolling at the Rate, its swing following the Depth.
 internal sealed class ChamberLfoView : Control
 {
     private double _rate = 0.4, _depth = 0.3, _phase;
@@ -627,6 +630,7 @@ internal sealed class ChamberLfoView : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 8 || h < 8) return;
+        // No rate label: the Rate knob beside it reads the same number, and a label here sat on the wave.
         ctx.DrawLine(new Pen(ChamberInk.GridLine, 1), new Point(0, h / 2), new Point(w, h / 2));
         double amp = (h / 2 - 3) * (0.12 + 0.88 * Math.Clamp(_depth, 0, 1));
         const double cycles = 3;
@@ -640,8 +644,6 @@ internal sealed class ChamberLfoView : Control
                 if (x == 0) c.BeginFigure(p, false); else c.LineTo(p);
             }
         }
-        ctx.DrawGeometry(null, new Pen(NotaPalette.Teal, 1.5), g);
-        var t = ChamberInk.Text(_rate >= 1 ? NotaNum.F($"{_rate:0.0}\u2009Hz") : NotaNum.F($"{_rate:0.00}\u2009Hz"), 7, NotaPalette.TextTertiary);
-        ctx.DrawText(t, new Point(w - t.Width - 3, 1));
+        ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1.5), g);
     }
 }

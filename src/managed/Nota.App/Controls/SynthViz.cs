@@ -37,11 +37,11 @@ internal sealed class SynthViz : Control, IMidiLearnRegions, IValueEntryHost
     public enum K { Osc, Adsr, Filter }
 
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush ModInk = NotaPalette.TextTertiary;   // the modulated curve: the second grey
     private static readonly IBrush Ink = NotaPalette.VizInk;   // curves at rest: neutral ink
     private static readonly IBrush Axis = NotaPalette.TextAxis;
     private static readonly IBrush Ghost = NotaPalette.Wash(NotaPalette.VizInk, 0x40);
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
 
     private const double Pad = 6;
 
@@ -139,9 +139,9 @@ internal sealed class SynthViz : Control, IMidiLearnRegions, IValueEntryHost
         => (Pad, Math.Max(Pad + 1, Bounds.Width - Pad), Pad + 11, Math.Max(Pad + 12, Bounds.Height - Pad - (Mini ? 0 : 9)));
 
     private void Text(DrawingContext ctx, string t, double x, double y, IBrush ink, double size = 8)
-        => ctx.DrawText(new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, ink), new Point(x, y));
+        => ctx.DrawText(new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, ink, this), new Point(x, y));
     private static double MeasureW(string t, double size = 8)
-        => new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, NotaPalette.TextPrimary).Width;
+        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, NotaPalette.TextPrimary, NotaTextSize.InCard).Width;
 
     // ---- MIDI learn --------------------------------------------------------
     // The graphs are the only place some of these params can be grabbed, so each drag
@@ -364,7 +364,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions, IValueEntryHost
         if (Math.Abs(env) > 0.01)
         {
             double modCut = Math.Clamp(cut + env * 4.0 / Math.Log2(18000.0 / 20.0), 0, 1);
-            DrawCurve(ctx, x0, x1, top, bot, modCut, res, type, NotaGraph.SecondaryPen(Teal, NotaGraph.SecondaryWidth));
+            DrawCurve(ctx, x0, x1, top, bot, modCut, res, type, NotaGraph.SecondaryPen(ModInk, NotaGraph.SecondaryWidth));
         }
         if (Mini) DrawCurve(ctx, x0, x1, top, bot, cut, res, type, null, Wash);
         DrawCurve(ctx, x0, x1, top, bot, cut, res, type, new Pen(Ink, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round));
@@ -386,7 +386,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions, IValueEntryHost
         if (Math.Abs(env) > 0.01)
         {
             string e = $"env {Signed(env * 100)} %";
-            Text(ctx, e, x1 - 1 - MeasureW(e), Pad - 3, Teal);
+            Text(ctx, e, x1 - 1 - MeasureW(e), Pad - 3, ModInk);
         }
         HzAxis(ctx, x0, x1, bot);
     }

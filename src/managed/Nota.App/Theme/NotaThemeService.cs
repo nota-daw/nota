@@ -102,6 +102,21 @@ internal static class NotaThemeService
         res["Shadow.Modal"] = new BoxShadows(new BoxShadow { Spread = 1, Color = t["Seam"] },
             new[] { new BoxShadow { OffsetY = 24, Blur = 64, Color = t["ShadowModal"] } });
 
+        // Depth inside device cards (style guide, spec 038): 1px lines and 1–2px shadows, no
+        // gradients. The dark inner shadows are plain black at a strength set by the theme's kind.
+        Color Black(double dark, double light) => Color.FromArgb((byte)Math.Round((t.IsDark ? dark : light) * 255), 0x00, 0x00, 0x00);
+        res["Shadow.SwitchInset"] = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 1, Blur = 2, Color = Black(.5, .15) });
+        res["Shadow.Card"] = new BoxShadows(new BoxShadow { Spread = 1, Color = t["Seam"] },
+            new[] { new BoxShadow { IsInset = true, OffsetY = 1, Color = t["Bevel"] } });
+        res["Shadow.Section"] = new BoxShadows(new BoxShadow { IsInset = true, Spread = 1, Color = t["DeviceSectionEdge"] },
+            new[] { new BoxShadow { IsInset = true, OffsetY = 1, Blur = t.IsDark ? 2 : 1, Color = Black(.25, .06) } });
+        res["Shadow.Groove"] = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 1, Blur = 2, Color = Black(.45, .18) });
+        res["Shadow.Lifted"] = t.IsDark
+            ? new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 1, Color = t["Bevel"] },
+                new[] { new BoxShadow { OffsetY = 1, Blur = 2, Color = Black(.45, .45) } })
+            : new BoxShadows(new BoxShadow { Spread = 1, Color = Black(.1, .1) },
+                new[] { new BoxShadow { OffsetY = 1, Blur = 2, Color = Black(.15, .15) } });
+
         res["SystemAccentColor"] = t["SystemAccent"];
         for (int i = 1; i <= 3; i++)
         {

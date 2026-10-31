@@ -60,7 +60,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
     private static readonly IBrush Amber = NotaPalette.Accent;
     private static readonly IBrush AmberLit = NotaPalette.AccentBright;
     private static readonly IBrush AmberSubtle = NotaPalette.AccentSubtle;
-    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealC = DeviceCardKit.ModInk;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush Txt2 = NotaPalette.TextSecondary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
@@ -130,14 +130,14 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         // ---- small builders ---------------------------------------------------------
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new() { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? MutedC, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
         static Control Col(Control c, int col) { Grid.SetColumn(c, col); return c; }
         static Control GRow(Control c, int row) { Grid.SetRow(c, row); return c; }
         static Border Divider(Control child, double top = 5) => new() { BorderBrush = BorderIn, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, top, 0, 0), Child = child };
-        static Border InsetBox(Control child) => new() { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control, ClipToBounds = true, Child = child };
+        static Border InsetBox(Control child) => new() { Background = Inset, BorderBrush = BorderIn, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field, ClipToBounds = true, Child = child };
 
         // Gauge knob bound to a device param (automation gesture + MIDI learn + live follow).
         Control K(int p, string name, Func<double, string> fmt, double size = 34, double cellW = 48, IBrush? arc = null, Action? onChange = null)
@@ -195,7 +195,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         // A small text button.
         Border Btn(string text, Action click, string? tip = null)
         {
-            var b = new Border { Height = 16, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+            var b = new Border { Height = 16, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
                 Child = new TextBlock { Text = text, FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center } };
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; click(); e.Handled = true; };
             if (tip != null) ToolTip.SetTip(b, tip);
@@ -212,7 +212,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
         Border Latch(int p, string text, string tip)
         {
             var tb = new TextBlock { Text = text, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 16, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+            var b = new Border { Height = 16, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
             void Hi() { bool on = On(p); b.Background = on ? NotaPalette.AccentSubtle : OffPill; b.BorderBrush = on ? NotaPalette.BorderBrass : Brushes.Transparent; tb.Foreground = on ? NotaPalette.AccentHover : TxtC; tb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal; }
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; SetP(p, On(p) ? 0f : 1f); Hi(); e.Handled = true; };
             ToolTip.SetTip(b, tip);
@@ -274,7 +274,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             readouts.Add(() => f.Set(P(p)));
             MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             ValueEntry.Attach(f, CF(p, split ? "Blend" : "Dry/wet", split ? v => NotaNum.F($"{v * 100:0}\u2009% algorithm") : Pct));
-            ToolTip.SetTip(f, split ? "Blend — convolution (slate, top) ⇄ algorithm (neutral, bottom). Double-click: 50 / 50" : "Dry/Wet — double-click resets");
+            ToolTip.SetTip(f, split ? "Blend — convolution (shaded grey, top) ⇄ algorithm (bottom). Double-click: 50 / 50" : "Dry/Wet — double-click resets");
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
             if (!split) readouts.Add(() => lb.Foreground = P(DryWet) > 0.995f || On(WetOnly) ? TxtC : MutedC);
             return new DockPanel { Children = { Docked(lb, Dock.Bottom), f } };
@@ -304,7 +304,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             // IR selector: ‹ [name · length · rate ▾] › + Load…
             var irName = new TextBlock { FontSize = 9, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var irInfo = Mono("", 7, MutedC);
-            var irBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            var irBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(6, 0, 0, 0) }, Dock.Right), Docked(irInfo, Dock.Right), irName } } };
             ToolTip.SetTip(irBox, "Impulse response — built-in rooms, or your own file (drop it on the waveform)");
             MidiLearn.Bind(irBox, MidiTarget.DeviceParam(track, di, IrSelect), "IR");

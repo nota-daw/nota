@@ -90,7 +90,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
     private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
     { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
-    { Text = t, FontSize = fs, FontFamily = NotaFonts.MonoFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    { Text = t, FontSize = fs, FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
     private static T WithDock<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
 
     // ---- body -------------------------------------------------------------------------------------
@@ -178,8 +178,8 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             });
             var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Height = 10, Margin = new Thickness(22, 3, 0, 0), Children =
             {
-                LegendItem(new Rectangle { Width = 9, Height = 5, Stroke = Muted, StrokeThickness = 1, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 2, 1 }, RadiusX = 1, RadiusY = 1 }, "input"),
-                LegendItem(new Border { Width = 9, Height = 5, Background = NotaPalette.VizInk, CornerRadius = NotaRadius.Bar }, "output · brightness = velocity"),
+                LegendItem(new Rectangle { Width = 9, Height = 5, Stroke = Muted, StrokeThickness = 1, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 2, 1 }, RadiusX = 2, RadiusY = 2 }, "input"),
+                LegendItem(new Border { Width = 9, Height = 5, Background = NotaPalette.VizInk, CornerRadius = NotaRadius.Fine }, "output · brightness = velocity"),
                 LegendItem(Mono("×", Muted, 8), "skip"),
             } };
             var outBody = new DockPanel { Margin = new Thickness(8, 5, 8, 4), Children = { WithDock(legend, Dock.Bottom), viz } };
@@ -255,7 +255,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             // Distribution chip: click for the next, Shift-click for the previous.
             var distTb = new TextBlock { FontSize = 9, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
             var chev = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = Cap, VerticalAlignment = VerticalAlignment.Center };
-            var distChip = new Border { Height = 14, Width = 62, CornerRadius = NotaRadius.Badge, Background = NotaPalette.GridBeat, BorderBrush = Bd, BorderThickness = new Thickness(1),
+            var distChip = new Border { Height = 14, Width = 62, CornerRadius = NotaRadius.Cell, Background = NotaPalette.GridBeat, BorderBrush = Bd, BorderThickness = new Thickness(1),
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new DockPanel { Children = { WithDock(chev, Dock.Right), distTb } } };
             distChip.PointerPressed += (_, ev) =>
@@ -396,7 +396,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
         Border Button(string text, string tip, Action click, out Action<bool> sync)
         {
             var tb = new TextBlock { Text = text, FontSize = 8, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
-            var b = new Border { Height = 16, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Padding = new Thickness(6, 0),
+            var b = new Border { Height = 16, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Padding = new Thickness(6, 0),
                 Background = NotaPalette.TrackOff, BorderBrush = NotaPalette.TrackOff, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
             bool engaged = false;
             b.PointerEntered += (_, _) => { if (!engaged) b.Background = NotaPalette.SurfaceHover; };

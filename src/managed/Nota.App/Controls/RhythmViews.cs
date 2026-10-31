@@ -4,12 +4,12 @@
 // Nota Rhythm's windows (the almanac's Rhythm card):
 //
 //   RhythmHitView     the selected synth voice's hit: the amp contour (neutral ink) over the
-//                     pitch drop (dim) or the attack click, the trigger as a teal tick; the
+//                     pitch drop (dim) or the attack click, the trigger as a grey tick; the
 //                     corner reads the pitch time · the decay. Drag it: across = Decay,
 //                     up / down = Tune. Lights (accent) when the voice fires.
 //   RhythmSampleView  the selected sample voice: the file as bars in the voice's hue, the
 //                     played region between a Start line and a dashed End line (drag
-//                     either; the dragged one turns accent), the part outside dimmed, the play position in teal.
+//                     either; the dragged one turns accent), the part outside dimmed, the play position in grey.
 //                     ⌥-click a line (or the hit) to type its value — the card attaches the fields (specs/035).
 //   RhythmStepStrip   the sixteen steps of the selected voice and, under them, the velocity
 //                     lane. Click toggles, shift-click accents, alt-click makes a quiet step;
@@ -27,8 +27,8 @@ namespace Nota.App;
 
 internal static class RhythmInk
 {
-    public static FormattedText Mono(string t, IBrush ink, double size = 7)
-        => new(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+    public static FormattedText Mono(string t, IBrush ink, double size = NotaGraph.AxisSize)
+        => new NotaFormattedText(t, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink, NotaTextSize.InCard);
 
     public static void TopRight(DrawingContext ctx, double w, string t, IBrush ink)
     {
@@ -113,7 +113,7 @@ internal sealed class RhythmHitView : Control
         double baseY = h - 20, x1 = w - 4;
         ctx.DrawLine(NotaGraph.GridPen, new Point(1, baseY + 2), new Point(w - 1, baseY + 2));
         // The trigger.
-        ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x80), 1), new Point(x0, 1), new Point(x0, h - 1));
+        ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1), new Point(x0, 1), new Point(x0, h - 1));
 
         double span = x1 - x0 - 2;
         double X(double sec) => x0 + 2 + Math.Min(1.0, sec / _windowSec) * span;
@@ -170,7 +170,7 @@ internal sealed class RhythmSampleView : Control, IValueHandles
     private string _name = "", _caption = "";
     private double _start, _end = 1, _pos = -1;
     private bool _reverse, _has;
-    private IBrush _hue = NotaPalette.Teal;
+    private IBrush _hue = NotaPalette.VizInk;
 
     /// <summary>A handle drag: which (0 Start, 1 End), then its new place 0..1 of the file.</summary>
     public Action<int>? DragBegin, DragEnd;
@@ -266,7 +266,7 @@ internal sealed class RhythmSampleView : Control, IValueHandles
         }
 
         var inPen = new Pen(_hue, 2.2, lineCap: PenLineCap.Round);
-        var outPen = new Pen(NotaPalette.BorderStrong, 2.2, lineCap: PenLineCap.Round);
+        var outPen = new Pen(NotaPalette.TextDisabled, 2.2, lineCap: PenLineCap.Round);
         int n = _peaks.Length, bars = Math.Max(4, (int)((w - 2 * Pad) / 5));
         for (int i = 0; i < bars; i++)
         {
@@ -285,7 +285,7 @@ internal sealed class RhythmSampleView : Control, IValueHandles
         if (_pos >= 0)
         {
             double xp = X(_pos);
-            ctx.DrawLine(new Pen(NotaPalette.TealBright, 1), new Point(xp, 12), new Point(xp, h - 12));
+            ctx.DrawLine(new Pen(NotaPalette.TextSecondary, 1), new Point(xp, 12), new Point(xp, h - 12));
         }
 
         RhythmInk.TopRight(ctx, w, _name, NotaPalette.TextPrimary);
@@ -296,7 +296,7 @@ internal sealed class RhythmSampleView : Control, IValueHandles
 internal sealed class RhythmStepStrip : Control
 {
     private const int N = RhythmModel.Steps;
-    private const double Gap = 2, LaneH = 4, LaneGap = 3;
+    private const double Gap = 5, LaneH = 3, LaneGap = 3;
 
     public readonly bool[] On = new bool[N], Acc = new bool[N];
     public readonly float[] Vel = new float[N];
@@ -407,31 +407,29 @@ internal sealed class RhythmStepStrip : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w < N * 4 || h < 12) return;
         double cw = CellW, cellH = h - LaneH - LaneGap;
-        var offPen = new Pen(NotaPalette.GraphBorder, 1);
-        var beatPen = new Pen(NotaPalette.BorderDefault, 1);
-        var quietPen = new Pen(NotaPalette.BorderBrass, 1);
-        var headPen = new Pen(NotaPalette.TealBright, 1);
+        var headPen = new Pen(NotaPalette.TextSecondary, 1);
         for (int s = 0; s < N; s++)
         {
             double x = s * (cw + Gap);
-            var r = new Rect(x + 0.5, 0.5, cw - 1, cellH - 1);
+            var r = new Rect(x, 0, cw, cellH);
             bool on = On[s], acc = on && Acc[s], quiet = on && !acc && Vel[s] < RhythmModel.QuietBelow;
-            if (!on) ctx.DrawRectangle(NotaPalette.BgSunken, s % 4 == 0 ? beatPen : offPen, r, 2, 2);
-            else if (quiet) ctx.DrawRectangle(NotaPalette.AccentSubtle, quietPen, r, 2, 2);
-            else ctx.DrawRectangle(acc ? NotaPalette.AccentBright : NotaPalette.Accent, null, r, 2, 2);
-            if (on && !quiet)
+            if (!on) ctx.DrawRectangle(s % 4 == 0 ? NotaPalette.Groove : NotaGraph.Ground, null, r, 4, 4);
+            else if (quiet) ctx.DrawRectangle(NotaPalette.AccentSoft, null, r, 4, 4);
+            else ctx.DrawRectangle(acc ? NotaPalette.AccentBright : NotaPalette.Accent, null, r, 4, 4);
+            if (on)
             {
-                var ft = RhythmInk.Mono((s + 1).ToString(NotaNum.Culture), NotaPalette.TextOnAccent);
-                ctx.DrawText(ft, new Point(x + (cw - ft.Width) / 2, 1));
+                var ft = new NotaFormattedText((s + 1).ToString(NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold,
+                    NotaType.KnobValue, quiet ? NotaPalette.AccentBright : NotaPalette.TextOnAccent, this);
+                ctx.DrawText(ft, new Point(x + (cw - ft.Width) / 2, (cellH - ft.Height) / 2));
             }
-            if (s == _head) ctx.DrawRectangle(null, headPen, r, 2, 2);
+            if (s == _head) ctx.DrawRectangle(null, headPen, r.Deflate(0.5), 4, 4);
 
-            // The velocity lane: teal by strength — accent light, normal teal, quiet deep.
+            // The velocity lane: grey by strength — accent the lightest, quiet the darkest.
             var lane = new Rect(x, h - LaneH, cw, LaneH);
-            IBrush li = !on ? NotaPalette.SurfaceRaised
-                : acc ? NotaPalette.TealBright
-                : NotaPalette.Wash(NotaPalette.Teal, (byte)Math.Clamp(70 + Vel[s] * 185, 70, 255));
-            ctx.DrawRectangle(li, null, lane, 1, 1);
+            IBrush li = !on ? NotaPalette.Rule
+                : acc ? NotaPalette.VizInk
+                : NotaPalette.Wash(NotaPalette.VizInk, (byte)Math.Clamp(60 + Vel[s] * 140, 60, 200));
+            ctx.DrawRectangle(li, null, lane, 1.5, 1.5);
         }
     }
 }

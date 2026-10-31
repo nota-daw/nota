@@ -67,7 +67,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -112,7 +112,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             var tb = new TextBlock { Text = "Kill", FontSize = 8, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var btn = new Border
             {
-                Width = 48, Height = 15, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center,
+                Width = 48, Height = 15, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center,
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
             };
             void Paint()
@@ -189,7 +189,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         graph.GainReset += ResetBand;
         Learn(graph, FreqLo);
         ValueEntry.AttachHandles(graph, [XoverField(0)], [XoverField(1)], [BandField(0)], [BandField(1)], [BandField(2)]);
-        ToolTip.SetTip(graph, MenuKit.Keys("Each band in its colour, the sum in brass, the output spectrum behind. Drag a crossover handle left / right; drag anywhere else to ride that band's gain. Double-click resets, ⌥-click types."));
+        ToolTip.SetTip(graph, MenuKit.Keys("Each band's curve in grey (Low light, Mid darker, High light and dashed), the sum in the bright line, the output spectrum behind. Drag a crossover handle left / right; drag anywhere else to ride that band's gain. Double-click resets, ⌥-click types."));
 
         // Header: crossover readouts · Output · Range · Slope.
         Control XRead(string label, Func<string> text)
@@ -209,7 +209,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             {
                 if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
                 e.Handled = true;
-                if ((e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0)) { SetP(Gain, 0.5); RefreshAll(); return; }
+                if (e.ClickCount == 2 || (e.KeyModifiers & KeyModifiers.Alt) != 0) { SetP(Gain, 0.5); RefreshAll(); return; }
                 drag = true; y0 = e.GetPosition(box).Y; v0 = P(Gain);
                 e.Pointer.Capture(box); Begin(Gain);
             };

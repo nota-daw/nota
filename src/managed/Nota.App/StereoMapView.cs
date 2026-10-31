@@ -67,7 +67,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
     private StereoMeasure[] _measures = new StereoMeasure[64];
     private readonly Dictionary<int, int> _measureAt = new();
     private readonly Dictionary<int, (string name, IBrush color)> _looks = new();
-    private readonly Dictionary<int, (string text, IBrush brush, FormattedText ft)> _labels = new();
+    private readonly Dictionary<int, (string text, IBrush brush, int step, FormattedText ft)> _labels = new();
     private readonly List<Rect> _placedLabels = new();   // this frame's label boxes (no two overlap)
     // The last tooltip drawn: its rows and note titles (read by the UI checks).
     private readonly List<(string key, string value)> _tooltipRows = new();
@@ -253,13 +253,13 @@ public sealed class StereoMapView : Control, IValueEntryHost
         {
             double x = Math.Round(PanX(p, pan)) + 0.5;
             ctx.DrawLine(pan == 0 ? strong : weak, new Point(x, p.Top), new Point(x, p.Bottom));
-            DrawText(ctx, label, NotaFonts.Mono, 8, NotaPalette.TextTertiary, new Point(x, p.Bottom + 6), hCenter: true);
+            DrawText(ctx, label, NotaFonts.Sans, 8, NotaPalette.TextTertiary, new Point(x, p.Bottom + 6), hCenter: true);
         }
         foreach (var (db, label) in new[] { (20 * Math.Log10(FaderScale.Max), "+3.5"), (0.0, "0 dB"), (-6.0, "−6"), (-12.0, "−12"), (-24.0, "−24") })
         {
             double y = Math.Round(VolY(p, Math.Pow(10, db / 20))) + 0.5;
             ctx.DrawLine(db == 0 ? strong : weak, new Point(p.Left, y), new Point(p.Right, y));
-            DrawText(ctx, label, NotaFonts.Mono, 8, NotaPalette.TextTertiary, new Point(p.Left - 6, y), vCenter: true, rightAlign: true);
+            DrawText(ctx, label, NotaFonts.Sans, 8, NotaPalette.TextTertiary, new Point(p.Left - 6, y), vCenter: true, rightAlign: true);
         }
     }
 
@@ -307,12 +307,12 @@ public sealed class StereoMapView : Control, IValueEntryHost
 
     private FormattedText Label(int id, string name, IBrush brush)
     {
-        if (_labels.TryGetValue(id, out var l) && l.text == name && ReferenceEquals(l.brush, brush)) return l.ft;
-        var ft = new FormattedText(name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 10, brush)
+        if (_labels.TryGetValue(id, out var l) && l.text == name && ReferenceEquals(l.brush, brush) && l.step == NotaTextSize.Step) return l.ft;
+        var ft = new NotaFormattedText(name, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 10, brush)
         {
             MaxTextWidth = LabelMaxW, MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis,
         };
-        _labels[id] = (name, brush, ft);
+        _labels[id] = (name, brush, NotaTextSize.Step, ft);
         return ft;
     }
 
@@ -322,7 +322,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, y0), new Point(b.Width, y0));
         double x = 10;
         x += DrawText(ctx, "Correlation", NotaFonts.SansBold, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
-        x += DrawText(ctx, "−1", NotaFonts.Mono, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 6;
+        x += DrawText(ctx, "−1", NotaFonts.Sans, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 6;
         var bar = new Rect(x, cy - 3, 180, 6);
         ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), bar, 2, 2);
         double mid = bar.Left + bar.Width / 2;
@@ -333,8 +333,8 @@ public sealed class StereoMapView : Control, IValueEntryHost
         ctx.DrawRectangle(fill, null, new Rect(corr < 0 ? mid - w : mid, bar.Top + 1, w, bar.Height - 2));
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1), new Point(mid, bar.Top - 2), new Point(mid, bar.Bottom + 2));
         x = bar.Right + 6;
-        x += DrawText(ctx, "+1", NotaFonts.Mono, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
-        DrawText(ctx, Signed(corr, 2), NotaFonts.Mono, 10, corr < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary, new Point(x, cy), vCenter: true);
+        x += DrawText(ctx, "+1", NotaFonts.Sans, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
+        DrawText(ctx, Signed(corr, 2), NotaFonts.Sans, 10, corr < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary, new Point(x, cy), vCenter: true);
         DrawText(ctx, MenuKit.Keys("Drag: pan + volume · Shift locks axis · double-click centres pan · ⌥-click types"),
                  NotaFonts.Sans, 10, NotaPalette.TextTertiary, new Point(b.Width - 10, cy), vCenter: true, rightAlign: true);
     }
@@ -373,7 +373,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         double h = 8 + 16 + rows.Count * RowH;
         foreach (var n in notes)
         {
-            var ft = new FormattedText(n.body, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, NotaPalette.TextTertiary) { MaxTextWidth = W - 2 * Pad };
+            var ft = new NotaFormattedText(n.body, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, NotaPalette.TextTertiary) { MaxTextWidth = W - 2 * Pad };
             bodies.Add(ft);
             h += 6 + 13 + ft.Height;
         }
@@ -390,7 +390,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         foreach (var (k, v, ink) in rows)
         {
             DrawText(ctx, k, NotaFonts.SansBold, 7, NotaPalette.TextTertiary, new Point(r.Left + Pad, ty + 6), vCenter: true);
-            DrawText(ctx, v, NotaFonts.Mono, 9, ink, new Point(r.Left + Pad + 62, ty + 6), vCenter: true);
+            DrawText(ctx, v, NotaFonts.Sans, 9, ink, new Point(r.Left + Pad + 62, ty + 6), vCenter: true);
             ty += RowH;
         }
         for (int i = 0; i < notes.Count; i++)
@@ -409,7 +409,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
     private static double DrawText(DrawingContext ctx, string text, Typeface face, double size, IBrush brush, Point at,
         bool vCenter = false, bool hCenter = false, bool rightAlign = false, bool tracking = false)
     {
-        var ft = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, size, brush);
+        var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, face, size, brush);
         double x = hCenter ? at.X - ft.Width / 2 : rightAlign ? at.X - ft.Width : at.X;
         double y = vCenter ? at.Y - ft.Height / 2 : at.Y;
         ctx.DrawText(ft, new Point(x, y));

@@ -42,7 +42,7 @@ public sealed class MosaicCreateWindow : NotaWindow
     private readonly StackPanel _instList = new() { Spacing = 3 };
     private readonly ContentControl _octave = new();
     private readonly ContentControl _mapping = new();
-    private readonly TextBlock _instTitle = new() { FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _instTitle = new() { FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _instSub = Mono("", TextTertiary, 8);
     private readonly MosaicZoneMap _map = new() { Interactive = false };
     private readonly WrapPanel _issues = new() { Orientation = Orientation.Horizontal };
@@ -64,7 +64,7 @@ public sealed class MosaicCreateWindow : NotaWindow
         Background = NotaPalette.BgApp;
 
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 12, Margin = new Thickness(12, 8) };
-        head.Children.Add(new TextBlock { Text = "Create multisample", FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center });
+        head.Children.Add(new TextBlock { Text = "Create multisample", FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center });
         var crumb = Mono(breadcrumb ?? _folderName, TextTertiary, 8.5);
         Grid.SetColumn(crumb, 1); head.Children.Add(crumb);
         Grid.SetColumn(_headerInfo, 2); head.Children.Add(_headerInfo);
@@ -170,7 +170,7 @@ public sealed class MosaicCreateWindow : NotaWindow
             var check = new CheckBox { IsChecked = inst.Selected, VerticalAlignment = VerticalAlignment.Center, MinWidth = 0 };
             check.IsCheckedChanged += (_, _) => { inst.Selected = check.IsChecked == true; PaintFoot(); };
             string layers = inst.Layers.Count > 1 ? string.Join("/", inst.Layers) : $"{inst.Layers.Count} layer";
-            var name = new TextBlock { Text = inst.Stem, FontSize = 9, FontWeight = sel ? FontWeight.SemiBold : FontWeight.Normal, Foreground = sel ? AccentBright : TextPrimary };
+            var name = new TextBlock { Text = inst.Stem, FontSize = 8.5, FontWeight = sel ? FontWeight.SemiBold : FontWeight.Normal, Foreground = sel ? AccentBright : TextPrimary };
             var sub = Mono($"{inst.Files.Count} files · {inst.Roots} roots · {layers}{(inst.MaxRr > 1 ? $" · rr {inst.MaxRr}" : "")}", TextTertiary, 7.5);
             var conf = Mono(NotaNum.Unit(inst.Confidence, "0", "%"), inst.Confidence >= 85 ? TextPrimary : NotaPalette.Warning, 8.5);
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6 };
@@ -180,7 +180,7 @@ public sealed class MosaicCreateWindow : NotaWindow
             Grid.SetColumn(conf, 2); g.Children.Add(conf);
             var b = new Border
             {
-                Padding = new Thickness(6, 4), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                Padding = new Thickness(6, 4), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                 BorderBrush = sel ? NotaPalette.BorderBrass : Brushes.Transparent, Background = sel ? NotaPalette.SurfaceHover : Brushes.Transparent, Child = g,
             };
             b.PointerPressed += (_, e) => { if (e.Source is CheckBox) return; _sel = iv; Paint(); };
@@ -298,11 +298,11 @@ public sealed class MosaicCreateWindow : NotaWindow
     }
 
     // ---- pieces ------------------------------------------------------------------------------------
-    private static TextBlock Mono(string t, IBrush ink, double fs) => new() { Text = t, FontSize = fs, Foreground = ink, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock Mono(string t, IBrush ink, double fs) => new() { Text = t, FontSize = fs, Foreground = ink, FontFamily = NotaFonts.UiFamily, VerticalAlignment = VerticalAlignment.Center };
 
     private static Border Box(Control child) => new()
     {
-        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Tile,
+        Background = NotaPalette.SurfaceCard, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Group,
         Padding = new Thickness(8), Child = child,
     };
 
@@ -326,8 +326,8 @@ public sealed class MosaicCreateWindow : NotaWindow
     {
         var b = new Border
         {
-            Width = 16, Height = 16, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised,
-            Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = glyph, FontSize = 9, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Width = 16, Height = 16, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised,
+            Cursor = new Cursor(StandardCursorType.Hand), Child = new TextBlock { Text = glyph, FontSize = 8.5, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         b.PointerPressed += (_, e) => { if (e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) { click(); e.Handled = true; } };
         return b;
@@ -335,14 +335,14 @@ public sealed class MosaicCreateWindow : NotaWindow
 
     private static Control Chip(string text, IBrush ink) => new Border
     {
-        Margin = new Thickness(0, 0, 6, 4), Padding = new Thickness(7, 2), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = ink,
+        Margin = new Thickness(0, 0, 6, 4), Padding = new Thickness(7, 2), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = ink,
         Background = NotaPalette.Wash(NotaPalette.SurfaceRaised, 0xCC), Child = new TextBlock { Text = text, FontSize = 8, Foreground = TextPrimary },
     };
 
     private static Control LegendItem(string text, IBrush ink) => new StackPanel
     {
         Orientation = Orientation.Horizontal, Spacing = 4,
-        Children = { new Border { Width = 8, Height = 8, BorderBrush = ink, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, VerticalAlignment = VerticalAlignment.Center }, Mono(text, TextTertiary, 7.5) },
+        Children = { new Border { Width = 8, Height = 8, BorderBrush = ink, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, VerticalAlignment = VerticalAlignment.Center }, Mono(text, TextTertiary, 7.5) },
     };
 
     private static Border TableRow(string file, string note, string layer, string rr, string rel, string conf, string action, IBrush ink,

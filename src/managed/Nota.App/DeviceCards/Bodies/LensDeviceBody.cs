@@ -57,7 +57,7 @@ internal sealed class LensDeviceBody : IDeviceBody
     private static readonly IBrush Inset = NotaPalette.BgSunken;
     private static readonly IBrush Amber = NotaPalette.Accent;
     private static readonly IBrush AmberLit = NotaPalette.AccentBright;
-    private static readonly IBrush TealC = NotaPalette.Teal;
+    private static readonly IBrush TealC = DeviceCardKit.ModInk;
     private static readonly IBrush TxtC = NotaPalette.TextPrimary;
     private static readonly IBrush Txt2 = NotaPalette.TextSecondary;
     private static readonly IBrush MutedC = NotaPalette.TextTertiary;
@@ -123,7 +123,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? MutedC, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
         static Control Col(Control c, int col) { Grid.SetColumn(c, col); return c; }
         Control Learn(Control c, int p) { MidiLearn.Bind(c, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p)); return c; }
@@ -175,7 +175,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             var box = new Border
             {
                 Background = Inset, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Control, Padding = new Thickness(6, 4),
+                CornerRadius = NotaRadius.Field, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 1, Children = { Caps(title), a, b } },
             };
             return (box, a, b);
@@ -186,7 +186,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             var b = new Border
             {
                 Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
-                CornerRadius = NotaRadius.Tile, Padding = new Thickness(8, 3), Cursor = new Cursor(StandardCursorType.Hand),
+                CornerRadius = NotaRadius.Group, Padding = new Thickness(8, 3), Cursor = new Cursor(StandardCursorType.Hand),
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 Child = new TextBlock { Text = text, FontSize = 9, Foreground = TxtC, HorizontalAlignment = HorizontalAlignment.Center },
             };
@@ -359,11 +359,11 @@ internal sealed class LensDeviceBody : IDeviceBody
             });
             var box = new Border
             {
-                Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0),
+                Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), IsEnabled = scOk,
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(5, 0, 0, 0) }, Dock.Right), name } },
             };
-            ToolTip.SetTip(box, "Key — draw another track's audio over this one, in teal");
+            ToolTip.SetTip(box, "Key — draw another track's audio over this one, in the darker grey");
             box.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed || !scOk) return;
@@ -482,7 +482,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         };
         int centreTab = Sel(ViewP, 3);
         var railA = RailSlider(() => centreTab == 1 ? VoltDivP : ScaleTopP, NotaPalette.VizInk, () => centreTab == 1 ? "V/D" : "TOP");
-        var railB = RailSlider(() => centreTab == 1 ? TimeDivP : ScaleRangeP, NotaPalette.Teal, () => centreTab == 1 ? "T/D" : "RNG");
+        var railB = RailSlider(() => centreTab == 1 ? TimeDivP : ScaleRangeP, DeviceCardKit.ModInk, () => centreTab == 1 ? "T/D" : "RNG");
         var rail = new RuleSection
         {
             Width = 56, Padding = new Thickness(0, 5),

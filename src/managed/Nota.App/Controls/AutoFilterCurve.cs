@@ -23,11 +23,11 @@ namespace Nota.App;
 internal sealed class AutoFilterCurve : Control
 {
     private static readonly IPen CurvePen = new Pen(NotaPalette.VizInk, 1.8); // solid neutral ink = current response
-    private static readonly IPen SpecPen = new Pen(NotaPalette.Wash(NotaPalette.Ink("#9CB4CC"), 0x44));
-    private static readonly IPen ModPen = new Pen(NotaPalette.Teal, 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) }; // dashed teal = at modulation
-    private static readonly IPen RangePen = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x8C), 1);
-    private static readonly IPen RangePen2 = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x4C), 1);
-    private static readonly IBrush RangeFill = NotaPalette.Wash(NotaPalette.Teal, 0x10);
+    private static readonly IPen SpecPen = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x44));
+    private static readonly IPen ModPen = new Pen(NotaPalette.TextSecondary, 1.2) { DashStyle = new DashStyle(new double[] { 4, 3 }, 0) }; // dashed grey = at modulation
+    private static readonly IPen RangePen = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x8C), 1);
+    private static readonly IPen RangePen2 = new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x4C), 1);
+    private static readonly IBrush RangeFill = NotaPalette.Wash(NotaPalette.TextTertiary, 0x10);
 
     private const double FMin = 30.0, FMax = 18000.0;
     private const double DbTop = 18.0, DbBot = -36.0;
@@ -66,6 +66,11 @@ internal sealed class AutoFilterCurve : Control
     }
 
     public bool Dragging => _drag;
+
+    // The whole graph is the handle: under the pointer its node looks grabbed.
+    private bool _hover;
+    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; InvalidateVisual(); }
 
     // Base (user-set) filter params — drives the drawn response + the handle.
     public void Set(double freqNorm, double res, int type, float morph, bool slope24)
@@ -248,11 +253,11 @@ internal sealed class AutoFilterCurve : Control
         var baseFc = HzOf(_fcNorm);
         Stroke(CurvePen, Curve(baseFc, _res));
         double cx = _fcNorm * w, cy = YForDb(MagDb(baseFc, baseFc, _res), h);
-        NotaGraph.Node(ctx, new Point(cx, cy), active: _drag);
+        NotaGraph.Node(ctx, new Point(cx, cy), active: _drag || _hover);   // looks grabbed only under the pointer or in the hand
 
         // Labels: title, legend, the range corners and the cutoff under its handle.
         NotaGraph.Title(ctx, frame, "Response");
-        if (moving || _modAssigned) NotaGraph.Legend(ctx, w - 5, 3, ("modulated", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
+        if (moving || _modAssigned) NotaGraph.Legend(ctx, w - 5, 3, ("modulated", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "30");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "18k Hz");
         var hz = baseFc;

@@ -163,8 +163,8 @@ public sealed class BrowserView : UserControl
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
     private const int HistoryTab = 7; // the open project's versions — hosts a HistoryView
     private static bool IsCustomTab(int index) => index is MapTab or HistoryTab;
-    private const double RowH = 26;   // single-line index row (almanac list row: 26–28, one line)
-    private const double GroupRowH = 22;
+    private const double RowH = 30;   // single-line index row (style guide: browser rows 30)
+    private const double GroupRowH = 30;
 
     private readonly ListBox[] _pages;
     private readonly Border[] _tabs;
@@ -274,23 +274,29 @@ public sealed class BrowserView : UserControl
             _tabs[i].BorderThickness = new Thickness(0, 1, 0, 0);
             _tabs[i].BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         }
-        var tabStack = new StackPanel();
+        var tabStack = new StackPanel { Margin = new Thickness(0, 5, 0, 0) };
         foreach (var t in _tabs) tabStack.Children.Add(t);
         _collapseBtn = RailButton(GlyphKind.Sidebar, "Collapse browser", () => SetCollapsed(!_collapsed, persist: true));
-        _collapseBtn.BorderThickness = new Thickness(0, 1, 0, 0);
-        _collapseBtn.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        _collapseBtn.Margin = new Thickness(0, 0, 0, 6);
         var rail = new DockPanel { Width = 40 };
         DockPanel.SetDock(_collapseBtn, Dock.Bottom);
         rail.Children.Add(_collapseBtn);
-        rail.Children.Add(tabStack);
+        // A short window scrolls the tabs under the fold key instead of drawing them over it.
+        rail.Children.Add(new ScrollViewer
+        {
+            Content = tabStack,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Hidden,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+        });
 
-        // --- Search (26h): accent border on focus, match count on the right ---
+        // --- Search (style guide): 30 high, corner 7, the well; a 16px icon, the placeholder in
+        // ink 3, the match count on the right in ink 3; an orange edge while typing ---
         _search = new TextBox
         {
             Watermark = "Search",
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
-            FontSize = 11,
+            FontSize = NotaType.Body,
             Padding = new Thickness(0),
             VerticalContentAlignment = VerticalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
@@ -298,7 +304,7 @@ public sealed class BrowserView : UserControl
         };
         _search.TextChanged += (_, _) => { ApplyFilter(_active); };
         _search.GotFocus += (_, _) => _searchWrap!.BindResource(Border.BorderBrushProperty, "Brush.Accent");
-        _search.LostFocus += (_, _) => _searchWrap!.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        _search.LostFocus += (_, _) => _searchWrap!.BorderBrush = Brushes.Transparent;
         // Esc leaves the search (the query stays) so the keyboard goes back to the app.
         _search.KeyDown += (_, e) =>
         {
@@ -308,27 +314,30 @@ public sealed class BrowserView : UserControl
         };
         _matchCount = new TextBlock
         {
-            FontSize = 9,
+            FontSize = NotaType.Caption,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(6, 0, 0, 0),
         };
-        _matchCount.Classes.Add("Mono");
         _matchCount.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-        var searchGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        var searchIcon = RailIcon(GlyphKind.Search, 16, "Brush.TextTertiary");
+        searchIcon.VerticalAlignment = VerticalAlignment.Center;
+        searchIcon.Margin = new Thickness(0, 0, 8, 0);
+        var searchGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+        searchGrid.Children.Add(searchIcon);
+        Grid.SetColumn(_search, 1);
         searchGrid.Children.Add(_search);
-        Grid.SetColumn(_matchCount, 1);
+        Grid.SetColumn(_matchCount, 2);
         searchGrid.Children.Add(_matchCount);
         _searchWrap = new Border
         {
-            Height = 26,
-            CornerRadius = NotaRadius.Tile,
+            Height = NotaSize.Search,
+            CornerRadius = NotaRadius.Group,
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(8, 0),
+            BorderBrush = Brushes.Transparent,
+            Padding = new Thickness(9, 0, 10, 0),
             Child = searchGrid,
         };
-        _searchWrap.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
-        _searchWrap.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
-        _searchWrap.BindResource(Border.BoxShadowProperty, "Shadow.Sunken");
+        _searchWrap.BindResource(Border.BackgroundProperty, "Brush.Well");
 
         // Sort & view options — the row's shape, sectioning and tag management.
         _optionsBtn = BuildOptionsButton();
@@ -345,39 +354,36 @@ public sealed class BrowserView : UserControl
         // Filter chips (Favorites + tags). Populated from the VM in SetViewModel and
         // shown only on the device tabs (Instr / FX / MIDI). One line: the chips that
         // don't fit collapse into a "+N" that opens the rest.
-        _overflowText = new TextBlock { FontSize = 10, VerticalAlignment = VerticalAlignment.Center };
-        _overflowText.Classes.Add("Mono");
+        _overflowText = new TextBlock { FontSize = NotaType.Body, VerticalAlignment = VerticalAlignment.Center };
         _overflowText.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         _overflowChip = new Border
         {
-            Height = NotaSize.Chip, CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0),
-            BorderThickness = new Thickness(1),
+            Height = NotaSize.Chip, CornerRadius = NotaRadius.Group, Padding = new Thickness(10, 0),
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = _overflowText,
         };
-        _overflowChip.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        _overflowChip.BindResource(Border.BackgroundProperty, "Brush.Well");
         _overflowChip.PointerPressed += (_, e) => { ShowOverflowChips(); e.Handled = true; };
         _chipsPanel = new ChipStrip(_overflowChip, _overflowText);
-        _chipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _chipsPanel };
+        _chipsHost = new Border { Margin = new Thickness(8, 0, 8, 8), Child = _chipsPanel };
 
-        _sampleChips = new WrapPanel { ItemSpacing = 5, LineSpacing = 5 };
-        _sampleChipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _sampleChips, IsVisible = false };
+        _sampleChips = new WrapPanel { ItemSpacing = 6, LineSpacing = 6 };
+        _sampleChipsHost = new Border { Margin = new Thickness(8, 0, 8, 8), Child = _sampleChips, IsVisible = false };
         // Category chips wrap rather than overflow into "+N": they are the main way to narrow
         // a device tab, so every one stays in sight.
-        _categoryChips = new WrapPanel { ItemSpacing = 5, LineSpacing = 5 };
-        _categoryChipsHost = new Border { Margin = new Thickness(8, 0, 8, 7), Child = _categoryChips, IsVisible = false };
+        _categoryChips = new WrapPanel { ItemSpacing = 6, LineSpacing = 6 };
+        _categoryChipsHost = new Border { Margin = new Thickness(8, 0, 8, 8), Child = _categoryChips, IsVisible = false };
 
         _previewFooter = new PreviewPlayer { IsVisible = false };
         _previewFooter.SetContext(files: _active == FilesTab);
 
         // Status line: what the active tab is showing, counted.
-        _statusText = new TextBlock { FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
-        _statusText.Classes.Add("Mono");
+        _statusText = new TextBlock { FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center };
         _statusText.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         _statusBar = new Border
         {
-            Height = 26,
-            Padding = new Thickness(10, 0),
+            Height = 30,
+            Padding = new Thickness(12, 0),
             BorderThickness = new Thickness(0, 1, 0, 0),
             Child = _statusText,
         };
@@ -385,7 +391,7 @@ public sealed class BrowserView : UserControl
         _statusBar.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
 
         // Empty-state message, centered over the list when a tab has nothing to show.
-        _emptyText.FontSize = 11;
+        _emptyText.FontSize = 10;
         _emptyText.TextWrapping = TextWrapping.Wrap;
         _emptyText.TextAlignment = TextAlignment.Center;
         _emptyText.LineHeight = 16;
@@ -415,7 +421,7 @@ public sealed class BrowserView : UserControl
         right.Children.Add(contentHost);
 
         var railDivider = _railDivider = new Border { BorderThickness = new Thickness(0, 0, 1, 0), Child = rail };
-        railDivider.BindResource(Border.BackgroundProperty, "Brush.Panel");
+        railDivider.BindResource(Border.BackgroundProperty, "Brush.SurfaceDeep");   // style guide: the left rail is deep
         railDivider.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         _body = right;
 
@@ -434,7 +440,7 @@ public sealed class BrowserView : UserControl
             Child = grid,
         };
         outer.BindResource(Border.CornerRadiusProperty, "Radius.Docked");
-        outer.BindResource(Border.BackgroundProperty, "Brush.SurfaceCard");
+        outer.BindResource(Border.BackgroundProperty, "Brush.Panel");
         outer.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = outer;
 
@@ -711,14 +717,14 @@ public sealed class BrowserView : UserControl
 
     private Border RailTab(int index, string caption, GlyphKind iconKind)
     {
-        // Icon-only rail; the caption survives as a tooltip. 16px icon in a 36px tab, with
-        // a 2px brass edge on the left when active.
+        // Icon-only rail; the caption survives as a tooltip. A 16px icon in a 28px key, with
+        // the soft tint and a 2 × 14 orange tick at the rail's edge when it is the current page.
         var icon = RailIcon(iconKind, 16);
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         icon.VerticalAlignment = VerticalAlignment.Center;
-        var bar = new Border { Classes = { "RailBar" }, VerticalAlignment = VerticalAlignment.Stretch };
+        var bar = new Border { Classes = { "RailBar" } };
         var inner = new Grid();
-        inner.Children.Add(icon);
+        inner.Children.Add(new Border { Classes = { "RailKey" }, Child = icon });
         inner.Children.Add(bar);
         var tab = new Border { Classes = { "RailTab" }, Child = inner };
         ToolTip.SetTip(tab, caption);
@@ -730,13 +736,13 @@ public sealed class BrowserView : UserControl
         return tab;
     }
 
-    // A rail-styled action (not a tab): same 36px cell and hover, never marked active.
+    // A rail-styled action (not a tab): the same 28px key and hover, never marked active.
     private static Border RailButton(GlyphKind iconKind, string caption, Action onClick)
     {
         var icon = RailIcon(iconKind, 16);
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         icon.VerticalAlignment = VerticalAlignment.Center;
-        var btn = new Border { Classes = { "RailTab" }, Child = icon };
+        var btn = new Border { Classes = { "RailTab" }, Child = new Border { Classes = { "RailKey" }, Child = icon } };
         ToolTip.SetTip(btn, caption);
         btn.PointerPressed += (_, e) =>
         {
@@ -775,17 +781,16 @@ public sealed class BrowserView : UserControl
             head.Children.Add(caret);
         }
         head.Children.Add(label);
-        var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0) };
+        var rule = new Border { Height = 1, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
         rule.BindResource(Border.BackgroundProperty, "Brush.Rule");
         var count = new TextBlock
         {
             Text = item.GroupCount.ToString(),
-            FontSize = 9,
+            FontSize = NotaType.Caption,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 0),
+            Margin = new Thickness(0, 0, 12, 0),
         };
-        count.Classes.Add("Mono");
-        count.BindResource(TextBlock.ForegroundProperty, "Brush.TextDisabled");
+        count.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
 
         var grid = new Grid { Height = GroupRowH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Background = Brushes.Transparent };
         grid.Children.Add(head);
@@ -853,7 +858,7 @@ public sealed class BrowserView : UserControl
         // The type, as a quiet tag on the right edge (toggleable in the ⋮ menu). A sample's
         // tag is what the index heard — "124 · Am" — and fills in as the scan reaches it.
         bool sample = item.Kind == BrowserItemKind.Sample;
-        string tag = sample ? SampleTag(item) : RowTag(item);
+        string tag = sample ? SampleTag(item) : item.Kind == BrowserItemKind.MidiFile ? RowTag(item) : Capital(RowTag(item));
         TextBlock? tagText = null;
         if (sample || (tag.Length > 0 && (_settings?.Current.BrowserShowTypeTags ?? true)))
             tagText = new TextBlock { Text = tag, Classes = { "RowTag" }, TextTrimming = TextTrimming.CharacterEllipsis };
@@ -979,6 +984,10 @@ public sealed class BrowserView : UserControl
 
     // The right-edge tag: what kind of thing the row is, in as few words as possible.
     // Nothing for rows whose indent already says it (presets under a device, folders).
+    // Tags read in sentence case ("Wavetable synth", "Built-in"); a file extension stays as it is.
+    private static string Capital(string s)
+        => s.Length > 0 && char.IsLower(s[0]) ? char.ToUpperInvariant(s[0]) + s[1..] : s;
+
     private static string RowTag(BrowserItem it) => it.Kind switch
     {
         BrowserItemKind.Folder => "",
@@ -1035,20 +1044,21 @@ public sealed class BrowserView : UserControl
 
     private Border BuildOptionsButton()
     {
-        var icon = RailIcon(GlyphKind.Options, 14, "Brush.TextSecondary");
+        // An icon button (style guide): 28, corner 7, no fill at rest, the well on hover.
+        var icon = RailIcon(GlyphKind.Options, 16, "Brush.TextSecondary");
         icon.HorizontalAlignment = HorizontalAlignment.Center;
         icon.VerticalAlignment = VerticalAlignment.Center;
         var btn = new Border
         {
-            Width = 26, Height = 26,
-            Margin = new Thickness(6, 0, 0, 0),
-            CornerRadius = NotaRadius.Tile,
-            BorderThickness = new Thickness(1),
+            Width = NotaSize.Icon, Height = NotaSize.Icon,
+            Margin = new Thickness(4, 0, 0, 0),
+            CornerRadius = NotaRadius.Group,
+            Background = Brushes.Transparent,
             Cursor = new Cursor(StandardCursorType.Hand),
             Child = icon,
         };
-        btn.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
-        btn.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
+        btn.PointerEntered += (_, _) => btn.BindResource(Border.BackgroundProperty, "Brush.Well");
+        btn.PointerExited += (_, _) => btn.Background = Brushes.Transparent;
         ToolTip.SetTip(btn, "Sort and view");
         btn.PointerPressed += (_, e) => { ShowOptionsMenu(btn); e.Handled = true; };
         return btn;
@@ -1336,7 +1346,7 @@ public sealed class BrowserView : UserControl
         var flyout = new Flyout { Placement = PlacementMode.BottomEdgeAlignedLeft };
         TextBox Field(double v, string hint) => new()
         {
-            Classes = { "field" }, Width = 64, Watermark = hint, FontSize = 12,
+            Classes = { "field" }, Width = 64, Watermark = hint, FontSize = 11,
             Text = v > 0 ? SampleInfo.FormatBpm(v) : "",
         };
         var min = Field(f.BpmMin, "min");
@@ -1407,19 +1417,19 @@ public sealed class BrowserView : UserControl
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         if (colorHex is not null)
             content.Children.Add(new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center, Fill = BrushFromHex(colorHex) });
-        var tb = new TextBlock { Text = text, FontSize = 11, VerticalAlignment = VerticalAlignment.Center };
-        tb.BindResource(TextBlock.ForegroundProperty, active ? "Brush.TextOnAccent" : "Brush.TextPrimary");
+        // Style guide: 24 high, 10 padding, corner 7, the well, 12 in ink 2; on, the soft tint
+        // with orange text (a filter is picked, not live).
+        var tb = new TextBlock { Text = text, FontSize = NotaType.Body, VerticalAlignment = VerticalAlignment.Center };
+        tb.BindResource(TextBlock.ForegroundProperty, active ? "Brush.AccentBright" : "Brush.TextSecondary");
         content.Children.Add(tb);
 
         var chip = new ChipBorder
         {
             Label = text, ColorHex = colorHex, Active = active, OnClick = onClick,
-            Height = NotaSize.Chip, CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0),
-            BorderThickness = new Thickness(1),
+            Height = NotaSize.Chip, CornerRadius = NotaRadius.Group, Padding = new Thickness(10, 0),
             Cursor = new Cursor(StandardCursorType.Hand), Child = content,
         };
-        chip.BindResource(Border.BackgroundProperty, active ? "Brush.Accent" : "Brush.SurfaceRaised");
-        chip.BindResource(Border.BorderBrushProperty, active ? "Brush.Accent" : "Brush.Seam");
+        chip.BindResource(Border.BackgroundProperty, active ? "Brush.AccentSoft" : "Brush.Well");
         chip.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;

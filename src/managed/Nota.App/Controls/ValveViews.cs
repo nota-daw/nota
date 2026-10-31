@@ -3,7 +3,7 @@
 //
 // Nota Valve card windows: VlResponseView — a magnitude response on a log-frequency grid,
 // read from the engine (so the picture is the filters the amp runs): the curve now in neutral ink,
-// a reference dashed in teal (the tone stack flat, or the cabinet on axis) and an optional
+// a reference dashed in grey (the tone stack flat, or the cabinet on axis) and an optional
 // node. The Amp tab uses it for the tone stack (drag: sideways = the middle frequency, up /
 // down = the middle), the Cab tab for the cabinet (sideways = off-axis, up / down = the mic
 // distance). The Harmonics tab reuses VtHarmView.
@@ -54,7 +54,7 @@ internal sealed class VlResponseView : VtWindowBase
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double top = 14, bot = h - 12;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         double X(double hz) => Math.Log(hz / LoHz) / Math.Log(HiHz / LoHz) * w;
         double Y(double db) => top + (TopDb - Math.Clamp(db, BottomDb - 2, TopDb + 2)) / (TopDb - BottomDb) * (bot - top);
 
@@ -78,13 +78,13 @@ internal sealed class VlResponseView : VtWindowBase
                 c.EndFigure(false);
                 return g;
             }
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.Teal, 0x90), 1.1, new DashStyle(new double[] { 4, 4 }, 0)), Line(_ref));
+            ctx.DrawGeometry(null, new Pen(NotaPalette.Wash(NotaPalette.TextTertiary, 0x90), 1.1, new DashStyle(new double[] { 4, 4 }, 0)), Line(_ref));
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(_now));
             if (!double.IsNaN(_nodeHz)) NotaGraph.Node(ctx, new Point(X(_nodeHz), Y(At(_now, _nodeHz))), Dragging);
         }
 
         NotaGraph.Title(ctx, frame, _title);
-        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _legend, NotaPalette.TealBright);
+        NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _legend, NotaPalette.TextSecondary);
         for (int i = 0; i < Ticks.Length; i++)
         {
             double t = Ticks[i];

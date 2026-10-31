@@ -124,7 +124,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -173,7 +173,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Border Chip(int p, Func<bool> lit, Action click, string text, string tip, bool fill = false)
         {
             var tb = new TextBlock { Text = text, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
             void Hi()
             {
@@ -222,7 +222,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             inner.Children.Add(name);
             var box = new Border
             {
-                Height = 16, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 16, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = inner,
             };
             readouts.Add(() =>
@@ -402,7 +402,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             level = new CeLevelView { CeilToNorm = db => ToN(Ceil, db) };
             WireDrag(level, Ceil, "Ceiling", CeilF);
-            ToolTip.SetTip(level, MenuKit.Keys("The last 4 s: the input (teal), the part over the ceiling (red) and the output (neutral ink), with the reduction under it. Drag the ceiling line; ⌥-click to type, double-click resets."));
+            ToolTip.SetTip(level, MenuKit.Keys("The last 4 s: the input (shaded grey), the part over the ceiling (red) and the output (the bright columns), with the reduction hanging in a strip under it (0 … −12\u2009dB). Drag the ceiling line; ⌥-click to type, double-click resets."));
             var head = HeadRow(CharSeg(), Info(() => "ceiling " + CeilF(P(Ceil))));
             var knobs = KnobRow(
                 () => ScDb(S_WinInPeak) <= -119 ? "no signal" : NotaNum.F($"in {Lvl(ScDb(S_WinInPeak))} → out {Lvl(ScDb(S_WinOutPeak))}"),
@@ -414,7 +414,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Control ReductionTab()
         {
             reduction = new CeReductionView();
-            ToolTip.SetTip(reduction, "The gain reduction over the last 4 s: teal where a transient got through to the clip, the dashed line is the mean");
+            ToolTip.SetTip(reduction, "The gain reduction over the last 4 s: the darker grey where a transient got through to the clip, the dashed line is the mean");
             var head = HeadRow(CharSeg(), Info(() => NotaNum.F($"avg {GrF(Sc(S_AvgGr))} · max {GrF(Sc(S_WinMaxGr))}")));
             var knobs = KnobRow(ReleaseRange, ClipText);
             return TabBody(head, reduction, knobs);
@@ -425,7 +425,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         {
             loudness = new CeLoudnessView { TargetToNorm = t => ToN(Target, t) };
             WireDrag(loudness, Target, "Target", TargetF);
-            ToolTip.SetTip(loudness, MenuKit.Keys("Momentary (teal), short-term (neutral ink) and integrated (rose) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; ⌥-click to type, double-click resets."));
+            ToolTip.SetTip(loudness, MenuKit.Keys("Momentary (the darker grey), short-term (the bright line) and integrated (the lighter grey) loudness over the last 60 s around the target, ±1 LU shaded. Drag the target line; ⌥-click to type, double-click resets."));
             var head = HeadRow(Row(6, CharSeg(false), Caps("TARGET"), TargetDrop()),
                 Info(() => HaveI() ? NotaNum.F($"{FromTarget():+0.0;−0.0;0.0}\u2009LU from target") : "measuring…"));
             var knobs = KnobRow(
@@ -459,7 +459,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
                 g.Children.Add(GRow(Col(k, c), r));
                 g.Children.Add(GRow(Col(v, c + 1), r));
             }
-            return new Border { Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 5), Child = g };
+            return new Border { Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 5), Child = g };
         }
         IBrush OverInk(double db, double limit) => db > limit + 0.05 ? NotaPalette.DangerBright : TextPrimary;
         Control ResetRow(bool loud)
@@ -501,7 +501,7 @@ internal sealed class CeilingDeviceBody : IDeviceBody
             line.Children.Add(big); line.Children.Add(Col(unit, 1)); line.Children.Add(Col(verdict, 2));
             var box = new Border
             {
-                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 1, Children = { Caps("INTEGRATED"), line } },
             };
             ToolTip.SetTip(box, "Integrated loudness since the last Reset, gated (BS.1770), against the Target");
@@ -517,13 +517,13 @@ internal sealed class CeilingDeviceBody : IDeviceBody
         Control DetectorTab()
         {
             var t = Caps("DETECTOR");
-            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Center };
+            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center };
             var l1 = Mono("", 9, TextPrimary);
             var l2 = Mono("", 8, TextSecondary);
             l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
             var box = new Border
             {
-                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 2, Children = { t, Row(5, dot, l1), l2 } },
             };
             readouts.Add(() =>

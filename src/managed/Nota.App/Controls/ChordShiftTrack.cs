@@ -20,13 +20,12 @@ namespace Nota.App;
 
 internal sealed class ChordShiftTrack : Control
 {
-    private static readonly IBrush Groove = NotaPalette.BgSunken;
-    private static readonly IBrush Frame = NotaPalette.GraphBorder;
-    private static readonly IBrush Fill = NotaPalette.VizInk;
-    private static readonly IBrush FillOff = NotaPalette.BorderStrong;
-    private static readonly IBrush Handle = NotaPalette.TextSecondary;
-    private static readonly IBrush Centre = NotaPalette.BorderStrong;
-    private static readonly IBrush CentreV = NotaPalette.BorderDefault;
+    // A value bar (style guide): a groove, soft orange from the centre to the value, a 2px orange
+    // line at the value. An off shift shows only a grey line at the centre.
+    private static readonly IBrush Wash = NotaPalette.AccentSoft;
+    private static readonly IBrush Line = NotaPalette.Accent;
+    private static readonly IBrush LineHot = NotaPalette.AccentBright;
+    private static readonly IBrush Centre = NotaPalette.TextTertiary;
 
     public const int Range = 12;
 
@@ -105,25 +104,26 @@ internal sealed class ChordShiftTrack : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(Brushes.Transparent, null, new Rect(0, 0, w, h));   // hit area
         double f = (_value + Range) / (2.0 * Range);
-        var fill = !_on ? FillOff : _drag ? NotaPalette.Accent : Fill;
-        if (Vertical)
+        var line = _drag ? LineHot : Line;
+        var r = new RoundedRect(new Rect(0, 0, w, h), NotaRadius.ValueBarValue);
+        NotaDepth.Groove(ctx, this, r);
+        using (ctx.PushClip(r))
         {
-            ctx.DrawRectangle(Groove, new Pen(Frame, 1), new Rect(0.5, 0.5, w - 1, h - 1), 3, 3);
-            double mid = Math.Round(h / 2);
-            ctx.DrawRectangle(CentreV, null, new Rect(1, mid - 0.5, w - 2, 1));
-            double bh = Math.Max(Math.Abs(f - 0.5) * (h - 2), 1);
-            double top = f >= 0.5 ? mid - bh : mid;
-            ctx.DrawRectangle(fill, null, new Rect(3, top, Math.Max(1, w - 6), bh), 1, 1);
-        }
-        else
-        {
-            double cy = Math.Round(h / 2), x = f * w, c = w / 2;
-            ctx.DrawRectangle(Groove, null, new Rect(0, cy - 1.5, w, 3), 2, 2);
-            ctx.DrawRectangle(Centre, null, new Rect(Math.Round(c) - 0.5, cy - 4.5, 1, 9));
-            ctx.DrawRectangle(fill, null, new Rect(Math.Min(c, x), cy - 1.5, Math.Abs(x - c), 3), 2, 2);
-            ctx.DrawRectangle(_drag ? NotaPalette.Accent : Handle, null, new Rect(Math.Clamp(x - 3, 0, w - 6), cy - 4.5, 6, 9), 2, 2);
+            if (Vertical)
+            {
+                double mid = Math.Round(h / 2), y = (1 - f) * h;
+                if (!_on || _value == 0) { ctx.FillRectangle(_on ? line : Centre, new Rect(0, mid - 1, w, 2)); return; }
+                ctx.FillRectangle(Wash, new Rect(0, Math.Min(mid, y), w, Math.Abs(y - mid)));
+                ctx.FillRectangle(line, new Rect(0, Math.Clamp(y - 1, 0, h - 2), w, 2));
+            }
+            else
+            {
+                double c = Math.Round(w / 2), x = f * w;
+                if (!_on || _value == 0) { ctx.FillRectangle(_on ? line : Centre, new Rect(c - 1, 0, 2, h)); return; }
+                ctx.FillRectangle(Wash, new Rect(Math.Min(c, x), 0, Math.Abs(x - c), h));
+                ctx.FillRectangle(line, new Rect(Math.Clamp(x - 1.5, 0, w - 3), 0, 3, h));
+            }
         }
     }
 }

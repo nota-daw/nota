@@ -56,7 +56,7 @@ public sealed class SplashWindow : Window
         stack.Children.Add(new TextBlock
         {
             Text = "Nota",
-            FontSize = 30,
+            FontSize = 29,
             FontWeight = FontWeight.SemiBold,
             Foreground = NotaPalette.TextPrimary,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -64,7 +64,7 @@ public sealed class SplashWindow : Window
         stack.Children.Add(new TextBlock
         {
             Text = $"Version {AppInfo.Version}",
-            FontSize = 12,
+            FontSize = 11,
             Foreground = NotaPalette.TextTertiary,
             HorizontalAlignment = HorizontalAlignment.Center,
         });
@@ -88,7 +88,7 @@ public sealed class SplashWindow : Window
             Background = NotaPalette.BgSunken,
             BorderBrush = NotaPalette.BorderDefault,
             BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Body,
+            CornerRadius = NotaRadius.Card,
             Child = stack,
         };
     }

@@ -83,7 +83,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
@@ -227,7 +227,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         var matchTxt = new TextBlock { FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary };
         var match = new Border
         {
-            Background = Raised, CornerRadius = NotaRadius.Badge, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand),
+            Background = Raised, CornerRadius = NotaRadius.Cell, Padding = new Thickness(8, 2), Cursor = new Cursor(StandardCursorType.Hand),
             VerticalAlignment = VerticalAlignment.Bottom, Child = matchTxt,
         };
         match.PointerPressed += (_, e) =>
@@ -324,9 +324,9 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             ToolTip.SetTip(g, tip);
             return (g, m, v);
         }
-        var mIn = MeterRow("IN", "Input loudness on the chosen scale (LUFS); the teal mark is the target");
-        var mOut = MeterRow("OUT", "Output loudness on the chosen scale (LUFS); the teal mark is the target");
-        var mTp = MeterRow("TP", "Output true peak (dBTP); the teal mark is the ceiling while True-peak safe is on");
+        var mIn = MeterRow("IN", "Input loudness on the chosen scale (LUFS); the grey mark is the target");
+        var mOut = MeterRow("OUT", "Output loudness on the chosen scale (LUFS); the grey mark is the target");
+        var mTp = MeterRow("TP", "Output true peak (dBTP); the grey mark is the ceiling while True-peak safe is on");
         var mCor = MeterRow("COR", "The correction applied, ±Max Gain around 0\u2009dB (trim not included)");
 
         var respSeg = Seg(new[] { "Fast", "Slow" }, () => On(Response) ? 1 : 0, i => SetP(Response, i), Response,
@@ -343,7 +343,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         var ceilTxt = Mono("", 8, TextPrimary);
         var ceilBox = new Border
         {
-            Background = Sunken, CornerRadius = NotaRadius.Clip, Padding = new Thickness(3, 0), VerticalAlignment = VerticalAlignment.Center,
+            Background = Sunken, CornerRadius = NotaRadius.Field, Padding = new Thickness(3, 0), VerticalAlignment = VerticalAlignment.Center,
             Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = ceilTxt,
         };
         bool cd = false; double cy0 = 0, cv0 = 0;

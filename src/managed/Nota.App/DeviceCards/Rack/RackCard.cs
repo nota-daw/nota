@@ -235,7 +235,7 @@ internal sealed partial class RackCardView
 
     private static TextBlock RcMono(string text, IBrush ink, double size = NotaType.KnobValue) => new()
     {
-        Text = text, FontFamily = NotaFonts.MonoFamily, FontSize = size, Foreground = ink,
+        Text = text, FontFamily = NotaFonts.UiFamily, FontSize = size, Foreground = ink,
         VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -264,7 +264,7 @@ internal sealed partial class RackCardView
         };
         var b = new Border
         {
-            Height = 16, MinWidth = 26, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge,
+            Height = 16, MinWidth = 26, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell,
             Background = on ? fill : NotaPalette.SurfaceRaised, BorderBrush = on ? fill : NotaPalette.BorderDefault,
             BorderThickness = new Thickness(1), Cursor = enabled ? new Cursor(StandardCursorType.Hand) : Cursor.Default,
             VerticalAlignment = VerticalAlignment.Center, Child = tb,

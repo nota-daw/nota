@@ -864,7 +864,7 @@ public sealed partial class ArrangementView
         // A small inline rename popup (Enter commits, Esc cancels) anchored at the pointer.
         private void PromptRename(string current, Action<string> commit)
         {
-            var box = new TextBox { Text = current, Width = 170, FontSize = 12 };
+            var box = new TextBox { Text = current, Width = 170, FontSize = 11 };
             var flyout = new Flyout { Content = box, Placement = PlacementMode.Pointer };
             box.KeyDown += (_, ke) =>
             {
@@ -1059,6 +1059,8 @@ public sealed partial class ArrangementView
                 // A group row reads as chrome between its children, not as another lane.
                 ctx.FillRectangle(_o.IsSlimRowAt(i) ? GroupLaneBg : (i & 1) == 0 ? LaneBgA : LaneBgB,
                     new Rect(0, y, w, rh));
+                // A group's lane carries the same 16% tint of its colour as its header.
+                if (_o._tracks[i].IsGroup) ctx.FillRectangle(TrackTint(_o._tracks[i].ColorIndex, 0.16), new Rect(0, y, w, rh));
                 ctx.DrawLine(BeatPen, new Point(0, y + rh), new Point(w, y + rh));
             }
             if (_o._tracks.Count == 0)
@@ -1155,7 +1157,7 @@ public sealed partial class ArrangementView
                         DrawRecPeaks(ctx, re, rr);
                         if (rr.Width > 34)
                         {
-                            var ft = new FormattedText("Rec", CultureInfo.InvariantCulture,
+                            var ft = new NotaFormattedText("Rec", CultureInfo.InvariantCulture,
                                 FlowDirection.LeftToRight, NotaFonts.SansBold, 9, RecText);
                             Glyph.Draw(ctx, GlyphKind.Record, new Rect(rr.X + 5, rr.Y + 3 + (ft.Height - 7) / 2, 7, 7), RecText);
                             ctx.DrawText(ft, new Point(rr.X + 16, rr.Y + 3));
@@ -1210,7 +1212,7 @@ public sealed partial class ArrangementView
                     Drag.TrimL => _dragClip?.StartBeat ?? 0,
                     _          => _pendingClip?.StartBeat ?? 0,
                 };
-                var ft = new FormattedText(_o.FormatBarBeat(tb), CultureInfo.InvariantCulture,
+                var ft = new NotaFormattedText(_o.FormatBarBeat(tb), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 10, TooltipText);
                 double tx = Math.Clamp(_lastPos.X + 12, 6, Math.Max(6, w - ft.Width - 10));
                 double ty = Math.Max(4, _lastPos.Y - 24);
@@ -1221,7 +1223,7 @@ public sealed partial class ArrangementView
             // ADSR drag readout: the stage being edited, in time and dB.
             if (_adsrDrag is not (AdsrHandle.None or AdsrHandle.AttackOrSustain) && _adsrClip is { } adc)
             {
-                var ft = new FormattedText(ClipAdsrKit.Readout(_adsrDrag, adc.Adsr, _o._engine?.Bpm ?? 120), CultureInfo.InvariantCulture,
+                var ft = new NotaFormattedText(ClipAdsrKit.Readout(_adsrDrag, adc.Adsr, _o._engine?.Bpm ?? 120), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 10, TooltipText);
                 double tx = Math.Clamp(_lastPos.X + 12, 6, Math.Max(6, w - ft.Width - 10));
                 double ty = Math.Max(4, _lastPos.Y - 24);
@@ -1236,7 +1238,7 @@ public sealed partial class ArrangementView
             // Empty-state hint.
             if (_o._tracks.Count == 0)
             {
-                var ft = new FormattedText("Add an instrument from the browser",
+                var ft = new NotaFormattedText("Add an instrument from the browser",
                     CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Typeface.Default, 12, RulerText);
                 ctx.DrawText(ft, new Point(Math.Max(12, (w - ft.Width) / 2), h / 2 - 10));
             }
@@ -1296,17 +1298,16 @@ public sealed partial class ArrangementView
             if (first < clipStart)
             {
                 double ex0 = _o.BeatToX(first), ex1 = _o.BeatToX(clipStart);
-                var (_, _, _, body) = ClipColors(colorIndex);
+                var (_, _, tint, _) = ClipColors(colorIndex);
                 using (ctx.PushClip(new Rect(0, y + 2, w, Math.Max(0, rowH - 4))))
-                using (ctx.PushOpacity(0.45))
-                    ctx.DrawRectangle(body, null, new Rect(ex0, y + 2, Math.Max(2, ex1 - ex0), rowH - 4), NotaRadius.ClipValue, NotaRadius.ClipValue);
+                    ctx.DrawRectangle(tint, null, new Rect(ex0, y + 2, Math.Max(2, ex1 - ex0), rowH - 4), ClipRadius, ClipRadius);
             }
-            // Under the take's title band, as the stored notes are (the band covers them there).
-            double top = y + 2 + (rowH - 4 > TitleBandH * 2.5 ? TitleBandH : BandH);
+            // Under the take's name, as the stored notes are.
+            double top = y + 2 + (rowH - 4 > NameMinClipH ? LabelH : BandH);
             using var _ = ctx.PushClip(new Rect(0, top, w, Math.Max(0, y + rowH - 2 - top)));
             int span = Math.Max(1, pr.hi - pr.lo + 1);
             double step = Math.Min(content.Height / span, 4), noteH = Math.Max(1, step);
-            var ink = ClipInk(colorIndex);
+            var ink = ClipColors(colorIndex).content;   // as the stored notes are drawn
             foreach (var h in held)
             {
                 double x0 = _o.BeatToX(h.StartBeat), x1 = _o.BeatToX(Math.Max(h.StartBeat, rp.NowBeat));
@@ -1407,8 +1408,8 @@ public sealed partial class ArrangementView
                 var r = new Rect(0, top + k * DefaultRowHeight, w, DefaultRowHeight);
                 ctx.FillRectangle(DropWash, r);
                 ctx.DrawRectangle(null, DropEdgePen, r.Deflate(1));
-                var ft = new FormattedText("New track", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                    Typeface.Default, 11, RulerText);
+                var ft = new NotaFormattedText("New track", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                    NotaFonts.Sans, NotaType.Body, RulerText);
                 ctx.DrawText(ft, new Point(Math.Max(8, w - ft.Width - 12), r.Y + 4));   // clear of clips at the song start
             }
             using (ctx.PushOpacity(0.5))
@@ -1467,12 +1468,12 @@ public sealed partial class ArrangementView
             double x0 = _o.BeatToX(c.StartBeat);
             double x1 = _o.BeatToX(c.StartBeat + c.LengthBeats);
             if (x1 < 0 || x0 > w || c.LengthBeats <= 0) return;
-            var (_, _, _, body) = ClipColors(colorIndex);
-            // The clip: a flat body in the track colour, radius 2, no outline; its notes and
-            // waveform in a deeper shade of it; selection adds a 1px accent edge.
-            var content = ClipInk(colorIndex);
+            var (_, edge, tint, content) = ClipColors(colorIndex);
+            // The clip (style guide): a 20% tint of the track colour over the lane, corner 6, a
+            // thin edge in the track colour; its notes, waveform and name in the full colour.
+            // Selection is an outline in the text colour, never orange.
             var rect = new Rect(x0, y + 2, Math.Max(2, x1 - x0), rowH - 4);
-            ctx.DrawRectangle(body, selected ? ClipSelBorder : null, rect, NotaRadius.ClipValue, NotaRadius.ClipValue);
+            ctx.DrawRectangle(tint, selected ? ClipSelBorder : edge, rect.Deflate(selected ? 0.75 : 0.5), ClipRadius, ClipRadius);
 
             // Resize-edge affordance: a bright bar on the edge a drag would trim.
             if (edgeHi != Drag.None)
@@ -1481,34 +1482,24 @@ public sealed partial class ArrangementView
                 ctx.FillRectangle(EdgeHighlight, new Rect(ex, rect.Y, 2.5, rect.Height));
             }
 
-            // The name is a label on the clip, not a strip that eats a fifth of the row's
-            // height. Content first, then the band and the name over it. Both DrawNotes and
-            // DrawWaveform already clip themselves to the rect they are handed.
-            var contentRect = new Rect(rect.X, rect.Y + BandH, rect.Width, Math.Max(0, rect.Height - BandH));
+            // The name sits on the clip's top-left; a row tall enough for it gives the notes and
+            // waveform the rest of the height under it (a short row keeps them full height and
+            // drops the name). Both DrawNotes and DrawWaveform clip themselves to their rect.
+            bool tall = rect.Height > NameMinClipH;
+            double top = tall ? LabelH : BandH;
+            var contentRect = new Rect(rect.X + 1, rect.Y + top, Math.Max(0, rect.Width - 2), Math.Max(0, rect.Height - top - 3));
             if (c.IsMidi) DrawNotes(ctx, c, contentRect, content, pitches, appear);
             else DrawWaveform(ctx, c, contentRect, content, trackId);
-
-            // The title band: the track colour mixed 30% toward black across the top, the
-            // accent when the clip is selected; the name sits on it in derived ink. It is drawn
-            // over the content — the content area and the ADSR frame keep their geometry.
-            // A row too short for a band keeps the 2px family marker.
-            bool tall = rect.Height > TitleBandH * 2.5;
-            var band = selected ? NotaPalette.Accent : ClipBand(colorIndex);
-            if (rect.Width > 3)
-            {
-                using var bc = ctx.PushClip(new RoundedRect(rect, NotaRadius.ClipValue));
-                ctx.FillRectangle(band, new Rect(rect.X, rect.Y, rect.Width, tall ? TitleBandH : BandH + 1));
-            }
 
             if (tall && rect.Width > 24 && ShowsLabel(c))
             {
                 // The clip's own name (set via its menu) wins; otherwise the track name.
                 string text = string.IsNullOrEmpty(c.Name) ? label : c.Name;
-                var ft = new FormattedText(text, CultureInfo.InvariantCulture,
-                    FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 9.5, NotaPalette.InkOn(band))
-                { MaxTextWidth = Math.Max(8, rect.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
+                var ft = new NotaFormattedText(text, CultureInfo.InvariantCulture,
+                    FlowDirection.LeftToRight, NotaFonts.SansSemiBold, NotaType.ClipName, content)
+                { MaxTextWidth = Math.Max(8, rect.Width - 14), Trimming = TextTrimming.CharacterEllipsis };
                 using var _ = ctx.PushClip(rect);
-                ctx.DrawText(ft, new Point(rect.X + 5, rect.Y + (TitleBandH - ft.Height) / 2));
+                ctx.DrawText(ft, new Point(rect.X + 7, rect.Y + (LabelH - ft.Height) / 2 + 1));
             }
 
             if (!c.IsMidi && row >= 0) DrawAdsr(ctx, c, trackId, row, selected, content, NotaPalette.BgSunken);
@@ -1516,11 +1507,13 @@ public sealed partial class ArrangementView
             // Deactivated clip (key 0): grey it out with a dark scrim so it reads as "off"
             // while still showing its content/geometry. Inset so the (selection) border stays.
             if (!c.Active)
-                ctx.DrawRectangle(InactiveVeil, null, rect.Deflate(1), NotaRadius.ClipValue, NotaRadius.ClipValue);
+                ctx.DrawRectangle(InactiveVeil, null, rect.Deflate(1), ClipRadius, ClipRadius);
         }
 
         private const double BandH = 2;         // the content area starts under this (ADSR frame, notes)
-        private const double TitleBandH = 12;   // the drawn title band over the top of the content
+        private const double LabelH = 18;       // the clip name's line over the notes and waveform
+        private const double NameMinClipH = 30; // a clip taller than this (a row over 34 px) shows its name
+        private const double ClipRadius = 6;
 
         // The clip's ADSR: the curve whenever it shapes the clip, the handles while the clip is
         // hovered, selected or being edited. Drawn in the clip's own colour; the hot handle is brass.

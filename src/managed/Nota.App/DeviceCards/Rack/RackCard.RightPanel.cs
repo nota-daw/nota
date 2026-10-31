@@ -30,7 +30,7 @@ internal sealed partial class RackCardView
         int c = Sel;
         var stack = new StackPanel { Spacing = 7 };
 
-        var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = ChainHue(c), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) };
+        var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Cell, Background = ChainHue(c), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) };
         string name = RcChainName(c);
         var nameTb = RcName(name, NotaPalette.TextPrimary, NotaType.RowLabel);
         nameTb.Cursor = new Cursor(StandardCursorType.Hand);

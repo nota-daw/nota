@@ -18,18 +18,19 @@ public sealed class ValueBar : Control
 {
     private static readonly IBrush Bg = NotaPalette.BgSunken;
     private static readonly IBrush Border = NotaPalette.Rule;
-    private static readonly IBrush FillAccent = NotaPalette.Teal;                          // modulation
+    private static readonly IBrush FillAccent = NotaPalette.Wash(NotaPalette.Accent, 0x8C); // the guide keeps one orange for values
     private static readonly IBrush FillBrass = NotaPalette.Wash(NotaPalette.VizInk, 0x40); // at rest: neutral
     private static readonly IBrush FillLive = NotaPalette.Wash(NotaPalette.Accent, 0x8C);  // live
     private static readonly IBrush TextBrush = NotaPalette.TextPrimary;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
 
     private double _value;                       // normalized 0..1
     private readonly Func<double, string> _fmt;  // formats the normalized value for display
     private bool _drag;
     private double _lastY;
 
-    /// <summary>Teal fill (modulation-ish) instead of the brass default.</summary>
+    /// <summary>A modulation amount: a hatched orange fill (the modulation mark, DESIGN.md
+    /// § Modulation) instead of the neutral default, so it reads apart from a live bar.</summary>
     public bool Accent { get; init; }
     /// <summary>Value change per pixel of vertical drag.</summary>
     public double Sensitivity { get; init; } = 0.006;
@@ -112,16 +113,19 @@ public sealed class ValueBar : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        var rrect = new RoundedRect(new Rect(0, 0, w, h), NotaRadius.ControlValue);
+        var rrect = new RoundedRect(new Rect(0, 0, w, h), NotaRadius.FieldValue);
         ctx.DrawRectangle(Bg, new Pen(Border, 1), rrect);
         double fw = _value * w;
         if (fw > 1)
         {
-            using (ctx.PushClip(new RoundedRect(new Rect(0, 0, fw, h), NotaRadius.ControlValue)))
-                ctx.DrawRectangle(Accent ? FillAccent : _drag || _hover ? FillLive : FillBrass, null, new Rect(0, 0, w, h), NotaRadius.ControlValue, NotaRadius.ControlValue);
+            using (ctx.PushClip(new RoundedRect(new Rect(0, 0, fw, h), NotaRadius.FieldValue)))
+            {
+                if (Accent) for (double x = 0; x < fw; x += 4) ctx.FillRectangle(FillAccent, new Rect(x, 0, Math.Min(2, fw - x), h));
+                else ctx.DrawRectangle(_drag || _hover ? FillLive : FillBrass, null, new Rect(0, 0, w, h), NotaRadius.FieldValue, NotaRadius.FieldValue);
+            }
         }
-        var text = new FormattedText(_fmt(_value), System.Globalization.CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, Mono, 9.5, TextBrush);
+        var text = new NotaFormattedText(_fmt(_value), System.Globalization.CultureInfo.InvariantCulture,
+            FlowDirection.LeftToRight, NumFace, 9.5, TextBrush, this);
         ctx.DrawText(text, new Point((w - text.Width) / 2, (h - text.Height) / 2));
     }
 }

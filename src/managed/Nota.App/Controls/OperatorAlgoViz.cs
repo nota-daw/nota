@@ -82,12 +82,12 @@ internal sealed class OperatorAlgoMini : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.Accent;
     private static readonly IBrush Ink = NotaPalette.VizInk;
-    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush Teal = NotaPalette.TextTertiary;   // a modulator: the second grey
     private static readonly IBrush AccentBright = NotaPalette.AccentBright;
     private static readonly IBrush AccentSubtle = NotaPalette.AccentSubtle;
     private static readonly IBrush InkSubtle = NotaPalette.Wash(NotaPalette.VizInk, 0x30);
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
 
     private readonly int _algo;
     private bool _active;
@@ -105,20 +105,28 @@ internal sealed class OperatorAlgoMini : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        ctx.DrawRectangle(_active ? AccentSubtle : Sunken, new Pen(_active ? Accent : BorderDef, 1), new Rect(0, 0, w, h), NotaRadius.ControlValue, NotaRadius.ControlValue);
-        var num = new FormattedText((_algo + 1).ToString(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, _active ? AccentBright : TextTertiary);
+        ctx.DrawRectangle(_active ? AccentSubtle : Sunken, new Pen(_active ? Accent : BorderDef, 1), new Rect(0, 0, w, h), NotaRadius.FieldValue, NotaRadius.FieldValue);
+        var num = new NotaFormattedText((_algo + 1).ToString(), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, _active ? AccentBright : TextTertiary, this);
         ctx.DrawText(num, new Point(3, 2));
 
         var tgt = OperatorTopo.Algo[_algo];
         OperatorTopo.Layout(tgt, out var nx, out var ny, out var carrier);
-        double padX = 5, padT = 11, padB = 4;
+        double padX = 5, padT = 15, padB = 3;   // the sketch starts under the number
         double gx0 = padX, gx1 = w - padX, gy0 = padT, gy1 = h - padB;
         Point Pt(int o) => new(gx0 + nx[o] * (gx1 - gx0), gy0 + ny[o] * (gy1 - gy0));
 
         var mod = new Pen(_active ? Teal : BorderDef, 1);
         for (int o = 0; o < 4; o++)
             if (tgt[o] < 4) ctx.DrawLine(mod, Pt(o), Pt(tgt[o]));
-        double bs = Math.Min(7, (gx1 - gx0) / 4);
+        // Boxes shrink until the closest two have a clear gap (a four-deep stack, three in a row).
+        double bs = Math.Min(6, (gx1 - gx0) / 4);
+        for (int a = 0; a < 4; a++)
+            for (int b = a + 1; b < 4; b++)
+            {
+                Point pa = Pt(a), pb = Pt(b);
+                bs = Math.Min(bs, Math.Max(Math.Abs(pa.X - pb.X), Math.Abs(pa.Y - pb.Y)) - 2.5);
+            }
+        bs = Math.Max(bs, 3);
         for (int o = 0; o < 4; o++)
         {
             var p = Pt(o);
@@ -136,13 +144,13 @@ internal sealed class OperatorRoutingViz : Control
     private static readonly IBrush BorderDef = NotaPalette.BorderDefault;
     private static readonly IBrush Accent = NotaPalette.Accent;
     private static readonly IBrush Ink = NotaPalette.VizInk;
-    private static readonly IBrush Teal = NotaPalette.Teal;
+    private static readonly IBrush Teal = NotaPalette.TextTertiary;   // a modulator: the second grey
     private static readonly IBrush InkSubtle = NotaPalette.Wash(NotaPalette.VizInk, 0x30);
-    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.Teal, 0x2E);
+    private static readonly IBrush TealSubtle = NotaPalette.Wash(NotaPalette.TextTertiary, 0x2E);
     private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
     private static readonly IBrush TextPrimary = NotaPalette.TextPrimary;
     private static readonly Typeface Semi = NotaFonts.SansSemiBold;
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
 
     private int _algo;
     private double[] _x = new double[4], _y = new double[4];
@@ -179,7 +187,7 @@ internal sealed class OperatorRoutingViz : Control
         // Drop target: another box (must be a valid forward edge) or the OUT bus (bottom).
         int newTgt = -1;
         for (int o = 0; o < 4; o++) if (o != src && _boxRect[o].Contains(p)) newTgt = o;
-        if (newTgt < 0 && p.Y > h * 0.78) newTgt = 4;   // dropped on the OUT lane
+        if (newTgt < 0 && p.Y > h * 0.78) newTgt = 4;   // dropped on the OUT lane (the bottom 22 %)
         if (newTgt >= 0) TryReroute(src, newTgt);
         InvalidateVisual();
     }
@@ -213,23 +221,32 @@ internal sealed class OperatorRoutingViz : Control
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
         var tgt = OperatorTopo.Algo[_algo];
 
-        double padX = 10, padT = 14, padB = 4;
-        double gx0 = padX, gx1 = w - padX, gy0 = padT, gy1 = h - padB;
-        // Box height follows the stack depth, so the deepest chain still shows four
-        // separate boxes instead of one smear.
+        // A title row, the boxes by stack level (carriers lowest), then the out bus with its
+        // word above it at the right. When the levels can't all stand apart (the four-deep
+        // chain in a short window) they step sideways too, so no two boxes share a row.
+        double padX = 10, top = NotaGraph.PlotTop;
+        double gx0 = padX, gx1 = w - padX;
+        double outY = h - 6;
         double bw = Math.Min(38, (gx1 - gx0) / 4.6);
-        double bh = Math.Clamp((gy1 - gy0) / (OperatorTopo.Depth(tgt) + 2.0), 10, 20);
-        double outY = gy1 - bh * 0.4;
+        var level = new int[4];
+        for (int o = 3; o >= 0; o--) level[o] = tgt[o] == 4 ? 0 : level[tgt[o]] + 1;
+        int maxL = OperatorTopo.Depth(tgt);
+        // Boxes shrink (to 10) so every level keeps a 6 px gap to the next, with its line visible.
+        const double MinGap = 6;
+        double avail = outY - 8 - top;
+        double bh = Math.Clamp(maxL == 0 ? avail : (avail - maxL * MinGap) / (maxL + 1), 10, 14);
+        double cyLow = outY - 8 - bh / 2, cyTop = top + bh / 2;
+        double step = maxL == 0 ? 0 : Math.Min(bh + 10, (cyLow - cyTop) / maxL);
+        double side = maxL > 0 && step < bh + MinGap ? bw + 8 : 0;
         Point Ctr(int o)
         {
             if (o == _drag) return _dragPt;
-            return new(gx0 + _x[o] * (gx1 - gx0), gy0 + _y[o] * (gy1 - gy0));
+            return new(gx0 + _x[o] * (gx1 - gx0) - (level[o] - maxL / 2.0) * side, cyLow - level[o] * step);
         }
 
-        // Header caption.
-        ctx.DrawText(new FormattedText("Routing", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, 8, TextTertiary), new Point(padX, 2));
-        var hint = new FormattedText("drag an operator onto another to re-route", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, TextTertiary);
-        ctx.DrawText(hint, new Point(gx1 - hint.Width, 2));
+        NotaGraph.Title(ctx, new Rect(0, 0, w, h), "Routing");
+        var hint = new NotaFormattedText("drag an operator onto another to re-route", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, TextTertiary, this);
+        ctx.DrawText(hint, new Point(gx1 - hint.Width, 5));
 
         // Connection lines (under the boxes).
         for (int o = 0; o < 4; o++)
@@ -240,7 +257,8 @@ internal sealed class OperatorRoutingViz : Control
         }
         // Out bus.
         ctx.DrawLine(new Pen(Ink, NotaGraph.PrimaryWidth), new Point(gx0 + 4, outY), new Point(gx1 - 4, outY));
-        ctx.DrawText(new FormattedText("out", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 7, TextTertiary), new Point(gx1 - 22, outY + 1));
+        var outWord = new NotaFormattedText("out", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaGraph.AxisSize, TextTertiary, this);
+        ctx.DrawText(outWord, new Point(gx1 - 4 - outWord.Width, outY - outWord.Height - 1));
 
         // Boxes.
         for (int o = 0; o < 4; o++)
@@ -254,7 +272,7 @@ internal sealed class OperatorRoutingViz : Control
             ctx.DrawRectangle(Sunken, null, rect, 3, 3);
             bool dragged = o == _drag;
             ctx.DrawRectangle(carr ? InkSubtle : TealSubtle, new Pen(dragged ? Accent : carr ? Ink : Teal, 1.3), rect, 3, 3);
-            var ft = new FormattedText(OperatorTopo.Names[o], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, 10, carr ? TextPrimary : Teal);
+            var ft = new NotaFormattedText(OperatorTopo.Names[o], CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, 10, carr ? TextPrimary : Teal, this);
             ctx.DrawText(ft, new Point(c.X - ft.Width / 2, c.Y - ft.Height / 2));
         }
     }

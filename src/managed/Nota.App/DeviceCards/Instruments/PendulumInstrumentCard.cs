@@ -84,7 +84,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         int[] held = Array.Empty<int>();
 
         var lanes = new PendulumLanesView { VerticalAlignment = VerticalAlignment.Stretch };
-        ToolTip.SetTip(lanes, "One lane per ball: x is pitch, low to high. Crossing a chord degree plays that note; teal shows the wall ahead");
+        ToolTip.SetTip(lanes, "One lane per ball: x is pitch, low to high. Crossing a chord degree plays that note; the grey lead shows the wall ahead");
         var bar = new PendulumBarView { Height = BarH };
         ToolTip.SetTip(bar, "The bar: generated notes land on the 1/16 grid — this bar in neutral ink with the note just played in accent, the last bar dimmer ahead of the playhead");
         var ballList = new PendulumBallList();
@@ -99,7 +99,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 7) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
         var hint = Mono("", TextTertiary);
@@ -231,7 +231,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
             };
             var b = new Border
             {
-                Height = height, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+                Height = height, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
             };
             void Paint()
@@ -372,7 +372,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         {
             var b = new Border
             {
-                Width = 16, Height = 14, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+                Width = 16, Height = 14, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
                 BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised, Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new Glyph(g, 7) { Foreground = NotaPalette.TextStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             };
@@ -435,7 +435,7 @@ internal sealed class PendulumInstrumentCard : IInstrumentCard
         readouts.Add(() => scaleText.Text = PendulumModel.ScaleText(G("root"), G("scalemode")));
         var scaleBox = new Border
         {
-            Height = 14, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
+            Height = 14, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
             Background = NotaPalette.BgSunken, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
             Child = new DockPanel
             {

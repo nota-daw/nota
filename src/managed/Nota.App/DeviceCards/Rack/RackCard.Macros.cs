@@ -113,7 +113,7 @@ internal sealed partial class RackCardView
         {
             var badge = new Border
             {
-                CornerRadius = NotaRadius.Badge, Padding = new Thickness(2, 0), Background = NotaPalette.Wash(NotaPalette.Teal, 0x33),
+                CornerRadius = NotaRadius.Cell, Padding = new Thickness(2, 0), Background = NotaPalette.Wash(NotaPalette.Teal, 0x33),
                 HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 2, 2, 0),
                 Child = RcMono(count.ToString(NotaNum.Culture), NotaPalette.TealBright, 7),
             };
@@ -121,7 +121,7 @@ internal sealed partial class RackCardView
         }
         var cell = new Border
         {
-            CornerRadius = NotaRadius.Clip, BorderThickness = new Thickness(1), ClipToBounds = true, Cursor = new Cursor(StandardCursorType.Hand),
+            CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), ClipToBounds = true, Cursor = new Cursor(StandardCursorType.Hand),
             Background = mapping ? NotaPalette.Wash(NotaPalette.Teal, 0x24) : chosen ? RowSel : NotaPalette.SurfaceRaised,
             BorderBrush = mapping ? NotaPalette.Teal : chosen ? NotaPalette.Accent : NotaPalette.BorderDefault,
             Child = host,

@@ -119,7 +119,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
         static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static Control Docked(Control c, Dock d) { DockPanel.SetDock(c, d); return c; }
         static Control Col(Control c, int col) { Grid.SetColumn(c, col); return c; }
         static Control GRow(Control c, int row) { Grid.SetRow(c, row); return c; }
@@ -206,7 +206,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var name = new TextBlock { Text = PrismInk.Names[b], FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
             readouts.Add(() => { bool s = band == b; name.Foreground = s ? PrismInk.BandLit[b] : TxtC; name.FontWeight = s ? FontWeight.SemiBold : FontWeight.Normal; });
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
-                new Border { Width = 3, Height = barH, CornerRadius = NotaRadius.Clip, Background = PrismInk.Band[b] }, name } };
+                new Border { Width = 3, Height = barH, CornerRadius = NotaRadius.Field, Background = PrismInk.Band[b] }, name } };
         }
 
         // A clickable table row for band b: selects the band; dimmed + inert when the band is off.
@@ -294,7 +294,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 var gain = DragVal(BP(bb, Gain), v => DbShort((v - 0.5) * 48), () => Math.Abs(P(BP(bb, Gain)) - 0.5f) < 0.001f ? Txt2 : TxtC);
                 ToolTip.SetTip(gain, "Band gain ±24\u2009dB — drag up / down, double-click resets");
                 g.Children.Add(Col(gain, 3));
-                var grTrack = new Border { Width = 32, Height = 4, CornerRadius = NotaRadius.Clip, Background = Inset, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
+                var grTrack = new Border { Width = 32, Height = 4, CornerRadius = NotaRadius.Field, Background = Inset, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
                 var grFill = new Border { Background = PrismInk.Band[bb], HorizontalAlignment = HorizontalAlignment.Right };
                 grTrack.Child = grFill;
                 readouts.Add(() => grFill.Width = 32 * Math.Clamp(Sc(S_Gr0 + bb) / 12, 0, 1));
@@ -490,7 +490,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             for (int i = 0; i < 3; i++)
             {
                 int iv = i;
-                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                     Child = new TextBlock { Text = sl[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center } };
                 c.PointerPressed += (_, e) =>
                 {
@@ -530,7 +530,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 scName.Text = !scOk ? "n/a in a rack" : src < 0 ? "None — own input" : SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di));
                 scName.Foreground = src >= 0 ? TxtC : Txt2;
             });
-            var scBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0),
+            var scBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), IsEnabled = scOk,
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(5, 0, 0, 0) }, Dock.Right), scName } } };
             ToolTip.SetTip(scBox, "Sidechain — key every band's detector from another track (split into the same bands)");
@@ -610,7 +610,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             for (int i = 0; i < 3; i++)
             {
                 int iv = i;
-                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                var c = new Border { Height = 15, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                     Child = new TextBlock { Text = PrismInk.Names[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center } };
                 c.PointerPressed += (_, e) => { SelectBand(iv); e.Handled = true; };
                 cells[i] = c; chips.Children.Add(c);

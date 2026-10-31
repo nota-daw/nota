@@ -6,11 +6,11 @@
 //  · BrTimelineView — the Timeline tab: two intervals as grid steps, each a bar of the input
 //    level — dry steps dim, the captured slice in full neutral ink, every repeat a step dimmer as
 //    it decays — with the trigger points, the bar numbers and the playhead (accent).
-//  · BrSlicesView — the Slices tab: the last interval's input (teal) on the grid, the gate
+//  · BrSlicesView — the Slices tab: the last interval's input (grey) on the grid, the gate
 //    window from the offset shaded, the captured slice in neutral ink. Drag the offset line or the
 //    gate's end sideways (16ths of the interval); double-click resets.
 //  · BrFilterView — the Filter tab: the repeat filter (LP / BP / HP) for the first repeat in
-//    neutral ink and a later one (teal dashed) when the band narrows and follows the pitch. Drag
+//    neutral ink and a later one (lighter grey, dashed) when the band narrows and follows the pitch. Drag
 //    the node for the frequency, a band edge for the width.
 // Drag contract from ShDragView: left button only, a gesture per drag, double-click resets
 // the handle, right-click bubbles to the MIDI-learn menu.
@@ -58,7 +58,7 @@ internal sealed class BrTimelineView : Control
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double x0 = 6, x1 = w - 6, top = 16, bot = h - 13;
+        double x0 = 6, x1 = w - 6, top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor;
         double X(double beats) => x0 + beats / _winBeats * (x1 - x0);
 
         // Grid steps over the window (at most 64 drawn; finer grids share a column).
@@ -168,7 +168,7 @@ internal sealed class BrSlicesView : ShDragView
         if (w <= 0 || h <= 0) return;
         var frame = new Rect(0, 0, w, h);
         NotaGraph.Window(ctx, frame);
-        double top = 16, bot = h - 13, mid = (top + bot) / 2, amp = (bot - top) / 2;
+        double top = NotaGraph.PlotTop, bot = h - NotaGraph.PlotFloor, mid = (top + bot) / 2, amp = (bot - top) / 2;
 
         // Gate window shaded from the offset.
         ctx.FillRectangle(NotaPalette.Wash(NotaPalette.VizInk, 0x20), new Rect(Xf(_offset), 0, Math.Max(1, Xf(GateEnd) - Xf(_offset)), h));
@@ -185,7 +185,7 @@ internal sealed class BrSlicesView : ShDragView
         // The interval's input (teal), the captured slice (neutral ink).
         if (_n > 1)
         {
-            var inPen = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xB0), Math.Max(1, Math.Min(2, W / _n * 0.6)));
+            var inPen = new Pen(NotaPalette.TextTertiary, Math.Max(1, Math.Min(2, W / _n * 0.6)));
             var slicePen = new Pen(NotaPalette.VizInk, Math.Max(1.2, Math.Min(2.2, W / _n * 0.7)));
             double s0 = _offset, s1 = Math.Min(1, _offset + _slice);
             for (int i = 0; i < _n; i++)
@@ -206,7 +206,7 @@ internal sealed class BrSlicesView : ShDragView
             new Point(Xf(GateEnd), 0), new Point(Xf(GateEnd), h));
 
         NotaGraph.Title(ctx, frame, _repeating ? "Captured sound · repeating" : "Captured sound");
-        NotaGraph.Legend(ctx, w - 6, 3, ("slice", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TealBright, NotaGraph.Mark.Line));
+        NotaGraph.Legend(ctx, w - 6, 3, ("slice", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         int off = (int)Math.Round(_offset * 16), gate = (int)Math.Round(_gate * 16);
         double ox = Math.Clamp(Xf(_offset) + 3, 4, w - 110);
         Text(ctx, NotaNum.F($"offset {off}/16"), ox, h - 11, hotO ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
@@ -294,7 +294,7 @@ internal sealed class BrFilterView : ShDragView
         }
 
         if (_on && _laterRepeat > 1)
-            ctx.DrawGeometry(null, new Pen(NotaPalette.Teal, 1.2, new DashStyle(new double[] { 3, 3 }, 0)), Curve(_laterHz, _laterOct));
+            ctx.DrawGeometry(null, new Pen(NotaPalette.TextTertiary, 1.2, new DashStyle(new double[] { 3, 3 }, 0)), Curve(_laterHz, _laterOct));
         ctx.DrawGeometry(null, _on ? NotaGraph.PrimaryPen : NotaGraph.SecondaryPen(NotaPalette.BorderStrong, 1.6), Curve(_hz, _oct));
 
         if (_on)
@@ -314,7 +314,7 @@ internal sealed class BrFilterView : ShDragView
         NotaGraph.Title(ctx, frame, _on ? "Repeat filter" : "Repeat filter · off");
         if (_on && _laterRepeat > 1)
             NotaGraph.Legend(ctx, w - 6, 3, ("repeat 1", NotaPalette.VizInk, NotaGraph.Mark.Line),
-                (NotaNum.F($"repeat {_laterRepeat}"), NotaPalette.TealBright, NotaGraph.Mark.Dashed));
+                (NotaNum.F($"repeat {_laterRepeat}"), NotaPalette.TextTertiary, NotaGraph.Mark.Dashed));
         static string Hz(double f) => f >= 1000 ? NotaNum.F($"{f / 1000:0.0}\u2009k") : NotaNum.F($"{f:0}\u2009Hz");
         Text(ctx, "50", 4, h - 11);
         TextR(ctx, "18\u2009k", w - 4, h - 11);

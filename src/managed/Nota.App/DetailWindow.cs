@@ -41,7 +41,7 @@ internal sealed class DetailWindow : NotaWindow
         MinWidth = 520;
         MinHeight = 400;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
-        Background = NotaPalette.BgApp;
+        Background = NotaPalette.SurfaceDeep;   // the device panel sits on the deep tone
 
         ClipHost = new ContentControl { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };
         ChainHost = new ContentControl { HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch };

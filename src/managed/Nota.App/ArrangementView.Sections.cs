@@ -52,7 +52,7 @@ public sealed partial class ArrangementView
     /// <summary>Raised whenever the section list changes, so the host can mark the project dirty.</summary>
     public event Action? SectionsChanged;
 
-    // The lane row: the same header-column chrome as the ruler, then the spans themselves.
+    // The lane row: the header column names the lane, then the spans themselves.
     private Border BuildSectionsRow()
     {
         var label = new TextBlock
@@ -60,7 +60,7 @@ public sealed partial class ArrangementView
             Text = "Sections", Classes = { "SectionLabel" },
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
+            Margin = new Thickness(NameGap, 0, 0, 0),
         };
         var grid = new Grid { Height = SectionsH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         grid.Children.Add(HeaderPanel(label));
@@ -152,7 +152,7 @@ public sealed partial class ArrangementView
 
     private void RenameSection(Control anchor, ArrangementSection s)
     {
-        var box = new TextBox { Text = s.Name, Width = 160, FontSize = 12 };
+        var box = new TextBox { Text = s.Name, Width = 160, FontSize = 11 };
         var flyout = new Flyout { Content = box, Placement = PlacementMode.Bottom };
         box.KeyDown += (_, ke) =>
         {
@@ -375,7 +375,7 @@ public sealed partial class ArrangementView
             var list = _o._sections;
             if (list.Count == 0 && _mode != Mode.Draft)
             {
-                var hint = new FormattedText("drag here to mark a section", CultureInfo.InvariantCulture,
+                var hint = new NotaFormattedText("drag here to mark a section", CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, HintInk);
                 ctx.DrawText(hint, new Point(8, (h - hint.Height) / 2));
             }
@@ -393,7 +393,7 @@ public sealed partial class ArrangementView
                     ctx.FillRectangle(warm ? WarmEdge : ColdEdge, new Rect(r.X, r.Y, 2, r.Height));
                     if (r.Width > 22)
                     {
-                        var ft = new FormattedText(s.Name, CultureInfo.InvariantCulture,
+                        var ft = new NotaFormattedText(s.Name, CultureInfo.InvariantCulture,
                             FlowDirection.LeftToRight, Typeface.Default, 9, warm ? WarmInk : ColdInk)
                         { MaxTextWidth = Math.Max(8, r.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
                         ctx.DrawText(ft, new Point(r.X + 7, r.Y + (r.Height - ft.Height) / 2));

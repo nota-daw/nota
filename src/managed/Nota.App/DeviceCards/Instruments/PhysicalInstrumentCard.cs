@@ -103,7 +103,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
         var hint = Mono("", TextTertiary, NotaType.Axis);
@@ -146,7 +146,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
             {
-                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily,
+                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily,
                 Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center, LineHeight = 10,
             };

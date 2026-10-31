@@ -67,14 +67,20 @@ internal static class Eq8
     public static string HzShort(double f) => DynEq.HzShort(f);
     public static string Db(double g) => DynEq.Db(g);
 
-    /// <summary>Ink of a band's channel: Mid neutral ink, Side teal, L / R rose, stereo none.</summary>
+    /// <summary>Ink of a band's channel mark (style guide: greys told apart by shade): Mid and
+    /// L / R the secondary ink (L / R's ring dashed, see <see cref="ChannelDash"/>), Side the
+    /// tertiary one, stereo none.</summary>
     public static IBrush? ChannelInk(int ch, bool bright = false) => ch switch
     {
-        Mid => bright ? NotaPalette.VizInk : NotaPalette.TextSecondary,
-        Side => bright ? NotaPalette.TealBright : NotaPalette.Teal,
-        Left or Right => bright ? NotaPalette.RoseBright : NotaPalette.Rose,
+        Mid or Left or Right => bright ? NotaPalette.VizInk : NotaPalette.TextSecondary,
+        Side => NotaPalette.TextTertiary,
         _ => null,
     };
+
+    /// <summary>The node ring's stroke for a band's channel: dashed for L / R, so a Mid band and an
+    /// L / R band read apart on the graph (they share a grey); solid otherwise.</summary>
+    public static DashStyle? ChannelDash(int ch) => ch is Left or Right ? LrDash : null;
+    private static readonly DashStyle LrDash = new(new double[] { 2, 1.5 }, 0);
 
     private static readonly double[] Q24 = { 0.54119610, 1.30656296 };
     private static readonly double[] Q48 = { 0.50979558, 0.60134489, 0.89997622, 2.56291545 };
@@ -106,14 +112,15 @@ internal static class Eq8
 public sealed class Eq8Curve : Control, IValueEntryHost
 {
     private const int Pts = 150;
-    private const double NodeD = 11, HitR = 9;
+    private const double NodeD = 13, HitR = 9;
 
     private static readonly IPen GridFaint = new Pen(NotaPalette.GridSubBeat, 1);
     private static readonly IPen GridMid = new Pen(NotaPalette.GridBeat, 1);
     private static readonly IPen ZeroPen = new Pen(NotaPalette.TrackOff, 1);
     private static readonly IPen PreDimPen = new Pen(NotaPalette.Wash(NotaPalette.TextAxis, 0x66), 1);
     private static readonly IPen SelPen = new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x5A), 1);
-    private static readonly IPen SidePen = new Pen(NotaPalette.Wash(NotaPalette.Teal, 0xE6), NotaGraph.SecondaryWidth, lineJoin: PenLineJoin.Round);
+    private static readonly IPen SidePen = new Pen(NotaPalette.TextTertiary, NotaGraph.SecondaryWidth, lineJoin: PenLineJoin.Round);
+    private static readonly IPen OffSelPen = new Pen(NotaPalette.Accent, 1.5);
     private static readonly IPen RingPen = new Pen(NotaPalette.BgSunken, 2);
 
     private readonly IAudioEngine _engine;
@@ -257,7 +264,12 @@ public sealed class Eq8Curve : Control, IValueEntryHost
     // ---- geometry: the plot is the whole control ----
     private double X(double f) => Eq8.FreqToN(f) * Bounds.Width;
     private double Y(double db) => Eq8.GainToN(db) * Bounds.Height;
-    private Point NodeAt(int b) => new(X(P(b, Eq8.FreqF)), Y(Eq8.HasGain(BandType(b)) ? P(b, Eq8.GainF) * ScaleK : 0));
+    // A node at 20 Hz or 20 kHz stays whole inside the window.
+    private Point NodeAt(int b) => new(Math.Clamp(X(P(b, Eq8.FreqF)), NodeD / 2 + 2, Math.Max(NodeD / 2 + 2, Bounds.Width - NodeD / 2 - 2)),
+        Y(Eq8.HasGain(BandType(b)) ? P(b, Eq8.GainF) * ScaleK : 0));
+
+    /// <summary>Whether a band node is within reach of <paramref name="p"/> (in this control's coordinates).</summary>
+    internal bool NodeNear(Point p) => Hit(p) >= 0;
 
     private int Hit(Point p)
     {
@@ -447,8 +459,8 @@ public sealed class Eq8Curve : Control, IValueEntryHost
 
     // ---- render ----
     private static FormattedText Text(string s, IBrush ink, double size, bool bold = false, bool mono = true)
-        => new(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            mono ? (bold ? NotaFonts.MonoBold : NotaFonts.Mono) : bold ? NotaFonts.SansSemiBold : NotaFonts.Sans, size, ink);
+        => new NotaFormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            mono ? (bold ? NotaFonts.SansBold : NotaFonts.Sans) : bold ? NotaFonts.SansSemiBold : NotaFonts.Sans, size, ink, NotaTextSize.InCard);
 
 
     public override void Render(DrawingContext ctx)
@@ -524,13 +536,13 @@ public sealed class Eq8Curve : Control, IValueEntryHost
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "20k Hz");
         var k1 = NotaGraph.AxisText("1k");
         ctx.DrawText(k1, new Point(X(1000) + 3, h - 4 - k1.Height + 1));
-        var p12 = NotaGraph.AxisText("+12", null, 6); var m12 = NotaGraph.AxisText("−12", null, 6);
+        var p12 = NotaGraph.AxisText("+12"); var m12 = NotaGraph.AxisText("−12");
         ctx.DrawText(p12, new Point(w - 5 - p12.Width, Y(12) - p12.Height - 1));
         ctx.DrawText(m12, new Point(w - 5 - m12.Width, Y(-12) + 1));
 
         // legend (the ANALYZER selector sits over the top-left corner, placed by the card)
         if (anySide)
-            NotaGraph.Legend(ctx, w - 5, 2, ("mid", NotaPalette.VizInk, NotaGraph.Mark.Line), ("side", NotaPalette.TealBright, NotaGraph.Mark.Line));
+            NotaGraph.Legend(ctx, w - 5, 2, ("mid", NotaPalette.VizInk, NotaGraph.Mark.Line), ("side", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         else
             NotaGraph.Legend(ctx, w - 5, 2, ("stereo", NotaPalette.VizInk, NotaGraph.Mark.Line));
 
@@ -540,14 +552,17 @@ public sealed class Eq8Curve : Control, IValueEntryHost
             int b = (sel + k) % Eq8.Bands;
             bool bOn = BandOn(b), isSel = b == sel;
             var c = NodeAt(b);
-            IBrush fill = !bOn ? NotaPalette.BorderStrong : isSel ? NotaPalette.AccentBright : ch[b] == Eq8.Side ? NotaPalette.TealBright : NotaPalette.TextSecondary;
-            // The number takes ink derived from its own node (orange, teal or grey), so it reads on all of them.
-            IBrush num = bOn && fill is SolidColorBrush f ? NotaPalette.InkOn(f) : NotaPalette.TextTertiary;
+            // On: light grey (a Side band a darker grey), the picked band orange; off: dark grey,
+            // and the picked band an orange ring.
+            IBrush fill = !bOn ? NotaPalette.BorderStrong : isSel ? NotaPalette.Accent : ch[b] == Eq8.Side ? NotaPalette.TextTertiary : NotaPalette.VizInk;
+            // The number takes ink derived from its own node, so it reads on all of them.
+            IBrush num = bOn && fill is SolidColorBrush f ? NotaPalette.InkOn(f) : isSel ? NotaPalette.AccentBright : NotaPalette.TextTertiary;
             double r = NodeD / 2;
             ctx.DrawEllipse(fill, RingPen, c, r + 1, r + 1);
-            if (bOn && ch[b] != Eq8.Side && Eq8.ChannelInk(ch[b]) is { } ring)   // Mid neutral, L / R rose
-                ctx.DrawEllipse(null, new Pen(ring, 1), c, r + 2.5, r + 2.5);
-            var t = Text(NotaNum.F($"{b + 1}"), num, 7, bold: true);
+            if (!bOn && isSel) ctx.DrawEllipse(null, OffSelPen, c, r, r);
+            else if (bOn && ch[b] != Eq8.St && Eq8.ChannelInk(ch[b]) is { } ring)   // a mark for a band on one channel
+                ctx.DrawEllipse(null, new Pen(ring, 1, Eq8.ChannelDash(ch[b])), c, r + 2.5, r + 2.5);
+            var t = Text(NotaNum.F($"{b + 1}"), num, 8.5, bold: true);
             ctx.DrawText(t, new Point(c.X - t.Width / 2, c.Y - t.Height / 2));
         }
 
@@ -655,18 +670,18 @@ public sealed class Eq8Curve : Control, IValueEntryHost
         int b = _selected, ty = BandType(b), chn = Chan(b);
         bool bOn = BandOn(b), g = Eq8.HasGain(ty);
         var a = Text(NotaNum.F($"B{b + 1} {Eq8.TypeNames[ty]}") + (chn != Eq8.St ? " · " + Eq8.ChannelShort[chn] : "") + (bOn ? "" : " · off"),
-            NotaPalette.TextPrimary, 8, bold: true, mono: false);
+            NotaPalette.TextPrimary, 11, bold: true, mono: false);
         var l2 = Text(Eq8.Hz(P(b, Eq8.FreqF)) + (g ? " · " + Eq8.Db(P(b, Eq8.GainF)) + " dB" : "") + NotaNum.F($" · Q {P(b, Eq8.QF):0.00}")
-            + (Eq8.IsCut(ty) ? NotaNum.F($" · {Eq8.SlopeDb(Slope(b))}\u2009dB/oct") : ""), NotaPalette.TextPrimary, 7);
-        double tw = Math.Max(a.Width, l2.Width) + 12, th = a.Height + l2.Height + 6;
+            + (Eq8.IsCut(ty) ? NotaNum.F($" · {Eq8.SlopeDb(Slope(b))}\u2009dB/oct") : ""), NotaPalette.TextSecondary, 10.5);
+        double tw = Math.Max(a.Width, l2.Width) + 16, th = a.Height + l2.Height + 10;
         var n = NodeAt(b);
-        double x = n.X > w * 0.62 ? n.X - 12 - tw : n.X + 12;
+        double x = n.X > w * 0.62 ? n.X - 14 - tw : n.X + 14;
         double y = n.Y < h * 0.34 ? n.Y + 8 : n.Y - 8 - th;
         x = Math.Clamp(x, 3, Math.Max(3, w - tw - 3)); y = Math.Clamp(y, 3, Math.Max(3, h - th - 3));
         var box = new Rect(x, y, tw, th);
-        ctx.DrawRectangle(NotaPalette.SurfaceCard, new Pen(NotaPalette.BorderStrong, 1), new RoundedRect(box.Deflate(0.5), 3));
-        ctx.DrawText(a, new Point(x + 6, y + 3));
-        ctx.DrawText(l2, new Point(x + 6, y + 3 + a.Height));
+        ctx.DrawRectangle(NotaPalette.SurfaceHover, null, new RoundedRect(box, NotaRadius.CellValue));
+        ctx.DrawText(a, new Point(x + 8, y + 5));
+        ctx.DrawText(l2, new Point(x + 8, y + 5 + a.Height));
         return box;
     }
 }

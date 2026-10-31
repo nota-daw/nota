@@ -167,6 +167,9 @@ public sealed class Settings
     /// <summary>Interface scale in percent (Settings → Appearance, spec 027): one of
     /// <see cref="Application.InterfaceScale.Presets"/>; anything else reads as 100.</summary>
     public int InterfaceScale { get; set; } = Application.InterfaceScale.Default;
+    /// <summary>Text size step in points (Settings → Appearance, spec 038): one of
+    /// <see cref="Application.TextSize.Steps"/>; anything else reads as 0.</summary>
+    public int TextSize { get; set; } = Application.TextSize.Default;
     /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
     /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
     public bool PianoRollAudition { get; set; } = true;

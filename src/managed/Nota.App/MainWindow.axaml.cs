@@ -231,31 +231,31 @@ public partial class MainWindow : Window
         _masterMeter = new MeterBar(horizontal: true);
         MasterMeterHost.Children.Add(_masterMeter);
 
-        // Thin master volume fader (mockup 1b) — MiniFader instead of a stock Slider. It
-        // sits over the master meter inside the MST module, with the gain printed in dB.
-        var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0 };
+        // The master slider: a flat bar over the master meter, its gain in dB written inside.
+        var masterVol = new MiniFader((double)vm.Transport.MasterVolume, 1.5) { Default = 1.0, Text = v => NotaNum.GainDb(v) };
         var masterUndo = new MixGesture(vm.Engine, MixTarget.Master);   // one undo step per drag (specs/009)
         masterVol.GestureBegin += masterUndo.Begin;
         masterVol.GestureEnd += masterUndo.End;
         Action<double> setMaster = v => vm.Transport.MasterVolume = v;
         masterVol.ValueChanged += v => masterUndo.Change(v, setMaster);
-        // Double-click the fader or its dB number to type the master gain, ⌥-click for 0 dB.
-        ValueEntry.Attach(masterVol, masterVol.EntryField("Master volume", v => NotaNum.GainDb(v)), MasterDb);
+        // Double-click the dB written in the bar (or ⌥-click anywhere) to type the master gain;
+        // a double-click elsewhere on the bar resets to 0 dB.
+        ValueEntry.Attach(masterVol, masterVol.EntryField("Master volume", v => NotaNum.GainDb(v)));
         MasterVolHost.Children.Add(masterVol);
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
         // BPM as a drag/type field (HANDOFF §4).
         // Tempo reads with two decimals (almanac § Numbers); a drag lands on whole BPM
         // (half a BPM per pixel), the hundredths come from double-click-to-type.
-        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: 14, dragSnap: 1);
+        var bpmField = new DragNumber((double)vm.Transport.Bpm, 20, 300, 0.5, "0.00", fontSize: NotaType.Readout, dragSnap: 1);
         bpmField.ValueChanged += v => vm.Transport.Bpm = (decimal)Math.Round(v, 2);
         BpmHost.Children.Add(bpmField);
 
         // Time signature: numerator drags 1–16; denominator snaps to a power of two.
-        var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: 14);
+        var tsNum = new DragNumber(vm.Transport.TimeSigNumerator, 1, 16, 0.5, "0", fontSize: NotaType.Readout);
         tsNum.ValueChanged += v => vm.Transport.TimeSigNumerator = (int)Math.Round(v);
         TimeSigNumHost.Children.Add(tsNum);
-        var tsDen = new DragNumber(vm.Transport.TimeSigDenominator, 1, 16, 0.5, "0", fontSize: 14);
+        var tsDen = new DragNumber(vm.Transport.TimeSigDenominator, 1, 16, 0.5, "0", fontSize: NotaType.Readout);
         tsDen.ValueChanged += v =>
         {
             int d = NearestPow2(v);

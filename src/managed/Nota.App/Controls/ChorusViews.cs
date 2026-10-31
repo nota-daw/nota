@@ -55,7 +55,7 @@ internal static class ChorusMath
     /// <summary>The cents axis' half-range: a bit beyond the sweep, never under 4 ct.</summary>
     public static double CentsRange(double maxCents) => Math.Max(maxCents * 1.3, 4);
 
-    public static IBrush VoiceInk(int i) => i switch { 0 => NotaPalette.VizInk, 1 => NotaPalette.TealBright, _ => NotaPalette.RoseBright };
+    public static IBrush VoiceInk(int i) => i switch { 0 => NotaPalette.VizInk, 1 => NotaPalette.TextSecondary, _ => NotaPalette.TextTertiary };
 
     public static string Ms(double t) => t >= 10 ? NotaNum.F($"{t:0.0}") : NotaNum.F($"{t:0.00}");
     public static string HzF(double f) => f >= 1000 ? NotaNum.F($"{f / 1000:0.00}k") : NotaNum.F($"{f:0}");
@@ -141,7 +141,7 @@ internal sealed class ChorusVoicesView : Control
         // The last voice first, so V1 / L reads on top where they cross.
         for (int v = voices.Length - 1; v >= 0; v--)
         {
-            var ink = _on ? ChorusMath.VoiceInk(v) : NotaPalette.TextAxis;
+            var ink = _on ? ChorusMath.VoiceInk(v) : NotaPalette.TextDisabled;
             var geo = new StreamGeometry();
             using (var g = geo.Open())
             {
@@ -154,19 +154,19 @@ internal sealed class ChorusVoicesView : Control
                 }
                 g.EndFigure(false);
             }
-            using (ctx.PushOpacity(v == 0 ? 1 : 0.8)) ctx.DrawGeometry(null, NotaGraph.SecondaryPen(ink, v == 0 ? 1.6 : 1.2), geo);
+            ctx.DrawGeometry(null, NotaGraph.SecondaryPen(ink, v == 0 ? 1.6 : 1.2), geo);
         }
 
-        void Label(string s, double y)
-        {
-            var ft = NotaGraph.AxisText(s, size: 6);
-            ctx.DrawText(ft, new Point(5, Math.Clamp(y - ft.Height - 1, 1, h - ft.Height - 1)));
-        }
-        Label(_cents ? "+" + ChorusMath.Ct(cR * 0.75) + " ct" : ChorusMath.Ms(baseMs * 2) + " ms", gTop + 10);
-        Label(_cents ? "0 ct" : ChorusMath.Ms(baseMs) + " ms", gMid);
-        Label(_cents ? "−" + ChorusMath.Ct(cR * 0.75) + " ct" : "0 ms", gBot);
+        // The scale: its two ends, under the top line and over the bottom one, and the dashed
+        // centre line named just above it (0 ct, or the base delay).
+        var topL = NotaGraph.AxisText(_cents ? "+" + ChorusMath.Ct(cR * 0.75) + " ct" : ChorusMath.Ms(baseMs * 2) + " ms");
+        ctx.DrawText(topL, new Point(5, Math.Max(1, gTop + 2)));
+        var botL = NotaGraph.AxisText(_cents ? "−" + ChorusMath.Ct(cR * 0.75) + " ct" : "0 ms");
+        ctx.DrawText(botL, new Point(5, Math.Min(h - botL.Height - 1, gBot - botL.Height - 1)));
+        var midL = NotaGraph.AxisText(_cents ? "0\u2009ct" : ChorusMath.Ms(baseMs) + "\u2009ms");
+        ctx.DrawText(midL, new Point(5, Math.Clamp(gMid - midL.Height - 1, 1, h - midL.Height - 1)));
         string span = "2 × " + (_periodMs >= 1000 ? NotaNum.F($"{_periodMs / 1000:0.0} s") : NotaNum.F($"{_periodMs:0} ms"));
-        var br = NotaGraph.AxisText(span, size: 6);
+        var br = NotaGraph.AxisText(span);
         ctx.DrawText(br, new Point(w - 5 - br.Width, h - 3 - br.Height));
 
         if (_on)
@@ -174,7 +174,7 @@ internal sealed class ChorusVoicesView : Control
             double ph = Math.Clamp(_head, 0, 2), hx = X(ph);
             ctx.DrawLine(new Pen(NotaPalette.TextAxis, 1), new Point(hx, 0), new Point(hx, h));
             for (int v = voices.Length - 1; v >= 0; v--)
-                ctx.DrawEllipse(ChorusMath.VoiceInk(v), new Pen(NotaGraph.Ground, 2), new Point(hx, Val(v, ph)), 3, 3);
+                ctx.DrawEllipse(v == 0 ? NotaPalette.Accent : ChorusMath.VoiceInk(v), new Pen(NotaGraph.Ground, 2), new Point(hx, Val(v, ph)), v == 0 ? 4 : 3, v == 0 ? 4 : 3);
         }
     }
 }
@@ -207,21 +207,21 @@ internal sealed class ChorusFieldView : Control
         double spread = Math.Min(_width / 200, 1);
         ctx.DrawLine(new Pen(NotaPalette.BorderStrong, 1), new Point(w * (0.5 - spread * 0.45), h / 2 - 1), new Point(w * (0.5 + spread * 0.45), h / 2 - 1));
 
-        var l = NotaGraph.AxisText("L", size: 7);
+        var l = NotaGraph.AxisText("L");
         ctx.DrawText(l, new Point(5, h / 2 - l.Height / 2 + 5));
-        var r = NotaGraph.AxisText("R", size: 7);
+        var r = NotaGraph.AxisText("R");
         ctx.DrawText(r, new Point(w - 5 - r.Width, h / 2 - r.Height / 2 + 5));
-        ctx.DrawText(NotaGraph.AxisText("Stereo · detune", size: 6), new Point(14, 2));
+        NotaGraph.Title(ctx, new Rect(0, 0, w, h), "Stereo · detune");
         string wt = NotaNum.F($"width {_width:0} %") + (_width > 100.5 ? NotaNum.F($" · side +{20 * Math.Log10(_width / 100):0.0} dB") : "");
-        var wtt = NotaGraph.AxisText(wt, size: 6);
-        ctx.DrawText(wtt, new Point(w - 14 - wtt.Width, 2));
+        var wtt = NotaGraph.AxisText(wt);
+        ctx.DrawText(wtt, new Point(w - 8 - wtt.Width, 4));
 
         var voices = ChorusMath.Voices(_mode, _off);
         for (int v = voices.Length - 1; v >= 0; v--)
         {
             double x = w * (0.5 + voices[v].Side * spread * 0.45);
             double y = h * (0.5 - (_on ? _cents[v] : 0) / _cR * 0.38);
-            ctx.DrawEllipse(_on ? ChorusMath.VoiceInk(v) : NotaPalette.TextAxis, null, new Point(x, y), 3, 3);
+            ctx.DrawEllipse(_on ? ChorusMath.VoiceInk(v) : NotaPalette.TextDisabled, null, new Point(x, y), 3, 3);
         }
     }
 }

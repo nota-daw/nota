@@ -282,7 +282,7 @@ public sealed class MidiToolsView : UserControl
             };
             var row = new Border
             {
-                Height = 26, CornerRadius = NotaRadius.Badge, Padding = new Thickness(10, 0),
+                Height = 26, CornerRadius = NotaRadius.Cell, Padding = new Thickness(10, 0),
                 Background = active ? NotaPalette.SurfaceHover : Brushes.Transparent,
                 Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new Grid
@@ -385,7 +385,7 @@ public sealed class MidiToolsView : UserControl
 
     private static TextBlock CapsLabel(string text) => new()
     {
-        Text = text, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextTertiary,
+        Text = text, FontSize = 8.5, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextTertiary,
         VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
     };
 }

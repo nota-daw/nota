@@ -30,8 +30,45 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   window**) moves it into the floating window for a second screen; the window's dock button
   brings it back. Nota remembers whether the Mixer was shown, where and how tall, and restores
   it on the next launch.
+- **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
+  text in the app a point smaller or up to two points larger, live, without changing the
+  layout (Interface scale still scales everything). Device cards keep their text size.
+- **Send levels in the Large track header**: a track at the Large height shows a value bar for
+  its send to each return, two per row, as far as the height allows.
 
 ### Changed
+- **Smaller shell text and a new key picker** (review of
+  nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
+  The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
+  full.
+- **A new look** (spec 038, the Studio style guide): every control and setting stays where it
+  was; how it is drawn changes. The shell is flat and grey so the track colours carry the
+  content, and depth is kept for device cards. Orange now has three jobs: solid for what is
+  live, a soft tint for what you picked, orange lines for values inside a device.
+  - **Arrangement:** clips are a 20 % tint of the track colour with the name, notes and wave
+    in the full colour, and a selected clip gets an outline in the text colour instead of
+    orange. Track headers are 54 high on two rows (name, tag, M, S, arm; then volume with its
+    value inside the bar, the pan knob and the input picker). New tracks take colours in an
+    order that keeps neighbours apart. Group members show the group's bar beside their own.
+  - **Toolbar and device panel:** the toolbar, the device panel (its toolbar and the area
+    behind the cards) and the status line sit on the darker shell tone, a step below the
+    arrangement, as the style guide draws them. The **Sends** card at the end of a chain is
+    one column per return (its colour, letter, knob, amount and name), so it is narrow with
+    one return and widens as returns are added, instead of a fixed wide card.
+  - **Browser and rail:** 30 px rows, a larger search box, flat chips, and rail buttons that
+    show the page you are on with an orange tick and the soft tint.
+  - **Piano roll:** the clip settings move from the left column into one strip above the
+    notes, so the notes get the full width. Quantize strength is a flat bar with its value
+    inside.
+  - **Audio editor:** one column with Start and Length side by side and the Warp switch and
+    mode on the Warp title row, so nothing scrolls.
+  - **Session and Mixer:** a selected slot gets an outline in the text colour, empty slots
+    fade back, and send and volume values sit inside their bars.
+  - **Devices** keep the layout and size they had: every card is still 700 × 260 with its
+    controls in the same places and its status line. What changes is how the parts are drawn:
+    capped knobs with an orange value arc, value bars instead of thin sliders, the new
+    switches and segment groups, pressed-in sections, one font, greys instead of the old
+    identity colours, and inactive controls in a quieter grey instead of faded.
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
   rows hide first, then the sends, then the fader gets shorter; name, meter, fader, pan and
   M / S / Arm always stay. A hidden section's **Sends** / **I/O** footer toggle shows an
@@ -42,6 +79,33 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Shell read-outs and controls lost in the restyle are back**: the Loop key writes the loop
+  range beside its icon again; the arrangement's header column names the **Sections** and
+  **Overview** lanes and the zoom keys carry their "Zoom" caption; the Return and Master rows'
+  dB number follows a drag, opens typed entry on double-click, and the bar writes its value
+  inside; the input picker stays on Standard-height track headers (it shrinks in a narrow
+  column) and the mouse wheel steps through its sources again; the piano roll's Loop switch
+  shows on (clips always loop); clip names show on rows taller than 34 px again; and the piano
+  roll's selection read-out labels its fields again (Pitch, Start, Length, Velocity / Notes,
+  Range, Velocity) while the gesture hint wraps to a second line instead of being cut off.
+- **Device cards: what the restyle dropped is back, in the new look.** Level meters turn red
+  only at 0 dBFS again (amber from −6 dB), Pentad's level bars included. Modulation depths and
+  amounts (env, LFO and fine-tune knobs, rack macros in mapping mode, Ceiling's Release while
+  Auto Release drives it) draw a dashed arc, and modulation sliders a hatched fill, so they read
+  apart from ordinary values. An inactive segment strip (Dynamic EQ-8 Mode, EQ-8 Slope, Bass
+  Legato, Flux's reaction target, Physical's resonator choices, a rack macro's Curve) shows
+  which option is picked again. Ceiling's Level graph has its reduction strip back; Chamber
+  shows the IR start time and the result lane's axis; Dynamic EQ-8 shows its "Response" title
+  and tells boost from cut by shade and a dashed ring; EQ-3's three band curves differ again
+  (shade and dash) and its faders have their 0 dB and half-cut ticks; EQ-8's L / R bands have a
+  dashed ring; Vintage's pitch-drift scale, Chorus's centre-line label and the Volt / Bass /
+  Aurora filter graph's frequency labels, −48 dB floor and +12 … −48 dB range are back;
+  Utility's correlation bar tints its out-of-phase half; Sampler's live cutoff line is lighter
+  and labelled; Flux shows when the reaction pulls the vector. Value bars and EQ-3's faders
+  light up under the pointer, and the Auto Filter and Compressor handles only look grabbed
+  while hovered or dragged. Operator's OUT drop zone is the
+  bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
+  graph tooltips that named colours no longer drawn now describe what is on screen.
 - **View ▸ Toggle detail panel** no longer leaves an empty band where the hidden panel was;
   showing it again brings back its height.
 

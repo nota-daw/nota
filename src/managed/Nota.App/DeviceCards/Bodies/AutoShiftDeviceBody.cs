@@ -204,7 +204,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -254,11 +254,11 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         // A latching chip: lit when `lit()`, a click runs `click`. `fill` = a full-width button.
         Border Latch(int p, Func<bool> lit, Action click, Func<string> text, string tip, bool fill = false, Func<bool>? blink = null)
         {
-            var dot = new Border { Width = 5, Height = 5, CornerRadius = NotaRadius.Pill, Background = Brass, VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
+            var dot = new Border { Width = 5, Height = 5, CornerRadius = NotaRadius.Group, Background = Brass, VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
             var tb = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
             var b = new Border
             {
-                Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
+                Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                 VerticalAlignment = VerticalAlignment.Center, Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, Children = { dot, tb } },
             };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -291,7 +291,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             var chev = new Glyph(GlyphKind.ChevronDown, 7) { Margin = new Thickness(6, 0, 0, 0) };
             var box = new Border
             {
-                Height = 16, MinWidth = minW, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 16, MinWidth = minW, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
                 Child = new DockPanel { Children = { Docked(chev, Dock.Right), name } },
             };
@@ -459,7 +459,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         Control TraceTab()
         {
             trace = new AsTraceView();
-            ToolTip.SetTip(trace, "The detected pitch (teal dots) and the corrected output (neutral ink) over the last two seconds, on the scale's note lanes; the target lane is lit");
+            ToolTip.SetTip(trace, "The detected pitch (grey dots) and the corrected output (the bright line) over the last two seconds, on the scale's note lanes; the target lane is lit");
             var head = HeadRow(Row(6, Caps("KEY"), KeyDrop(false), ScaleDrop(), SourceSeg(), LearnLatch()), RightInfo(() => TargetNote() >= 0 ? "target " + TargetText() : ""));
             var knobs = KnobRow(new[]
             {
@@ -482,7 +482,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         {
             histView = new AsHistView();
             histView.NoteClicked += ToggleNote;
-            ToolTip.SetTip(histView, "How long each note was sung (the last ~16 bars) over the scale's notes — neutral in the scale, teal outside it. Click a column to add or remove its note");
+            ToolTip.SetTip(histView, "How long each note was sung (the last ~16 bars) over the scale's notes — bright in the scale, the darker grey outside it. Click a column to add or remove its note");
             LearnBind(histView, Custom);
             var scaleSeg = Seg(Scale, new[] { "Chrom", "Major", "Minor", "Pent", "Custom" },
                 "Scale — Chromatic, Major, Minor, Pentatonic (major or minor — click again to swap) or Custom (the notes below)",
@@ -504,7 +504,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 int pc = i;
                 chipGrid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
                 var tb = new TextBlock { Text = Keys[i], FontSize = 8, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-                var b = new Border { Height = 22, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { Height = 22, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; ToggleNote(pc); e.Handled = true; };
                 LearnBind(b, NoteC + i);
                 ToolTip.SetTip(b, NotaNum.F($"{Keys[i]} — click to add it to the scale or take it out (makes the scale Custom)"));
@@ -520,7 +520,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                     bool sung = !inS && Sc(PcAt + i) > 0.08;
                     chips[i].Background = tonic ? Brass : inS ? NotaPalette.AccentSubtle : Sunken;
                     chips[i].BorderBrush = inS ? Brass : sung ? Teal : BorderDef;
-                    chipTx[i].Foreground = tonic ? OnAccent : inS ? AccentBright : sung ? NotaPalette.TealBright : TextDisabled;
+                    chipTx[i].Foreground = tonic ? OnAccent : inS ? AccentBright : sung ? DeviceCardKit.ModInkBright : TextDisabled;
                     chipTx[i].FontWeight = tonic ? FontWeight.Bold : inS ? FontWeight.SemiBold : FontWeight.Normal;
                 }
             });
@@ -548,7 +548,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         Control MidiTab()
         {
             midiView = new AsTraceView();
-            ToolTip.SetTip(midiView, "The source track's notes (neutral blocks, accent while sounding) and the voice (teal) over the last two seconds — with Key Source MIDI the voice is pulled to the notes");
+            ToolTip.SetTip(midiView, "The source track's notes (neutral blocks, accent while sounding) and the voice (the darker grey) over the last two seconds — with Key Source MIDI the voice is pulled to the notes");
             var head = HeadRow(Row(6, Caps("FROM"), FromDrop(),
                     Seg(MidiMode, new[] { "Note", "Scale" }, "Note — the voice goes to the last held note; Scale — the held notes form the scale"),
                     ToggleLatch(MidiLatch, "Latch", "Latch — keep the last target between notes (off = no correction while no note is held)"),
@@ -590,13 +590,13 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         Control InfoBox(Func<(string title, bool hot, IBrush dot, bool blink, string l1, string l2)> read, string tip)
         {
             var t = Caps("");
-            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Center };
+            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center };
             var l1 = Mono("", 9, TextPrimary);
             var l2 = Mono("", 8, TextSecondary);
             l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
             var b = new Border
             {
-                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 2, Children = { t, Row(5, dot, l1), l2 } },
             };
             readouts.Add(() =>

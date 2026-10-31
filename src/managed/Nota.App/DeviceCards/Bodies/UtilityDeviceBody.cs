@@ -129,7 +129,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -186,7 +186,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             {
                 int iv = i;
                 var tb = new TextBlock { Text = names[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-                var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; pick(iv); RefreshAll(); e.Handled = true; };
                 cells[i] = b; texts[i] = tb; row.Children.Add(b);
             }
@@ -212,7 +212,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         Border Latch(int p, Func<bool> lit, Action click, Func<string> text, string tip, bool fill = false, double h = 16, double padX = 7)
         {
             var tb = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            var b = new Border { Height = h, Padding = new Thickness(padX, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
             void Hi()
             {
@@ -238,7 +238,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             var tb = new TextBlock { Text = text, FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
                 FontWeight = primary ? FontWeight.SemiBold : FontWeight.Normal, Foreground = TextPrimary };
             // A push button rests raised; `primary` only sets its text heavier (accent is for state, not actions).
-            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, Background = Raised,
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, Background = Raised,
                 BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; click(); RefreshAll(); e.Handled = true; };
@@ -355,7 +355,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             field.DragV += v => SetN(Width_, v);
             field.GestureBegin += () => { Begin(Balance); Begin(Width_); };
             field.GestureEnd += () => { End(Balance); End(Width_); };
-            ToolTip.SetTip(field, "The output's stereo field by frequency over the last second — lows at the bottom, highs at the top. Solid: where each band sits between L and R; teal: how far it spreads; dashed: how far the width setting spreads an uncorrelated band. Drag sideways for the balance, up or down for the width.");
+            ToolTip.SetTip(field, "The output's stereo field by frequency over the last second — lows at the bottom, highs at the top. Solid: where each band sits between L and R; grey dots: how far it spreads; dashed: how far the width setting spreads an uncorrelated band. Drag sideways for the balance, up or down for the width.");
             Learn(field, Width_);
 
             var corr = Mono("", 7, TextTertiary);
@@ -387,7 +387,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             widthView.DragV += v => SetN(Width_, v);
             widthView.GestureBegin += () => { Begin(MonoFreq); Begin(Width_); };
             widthView.GestureEnd += () => { End(MonoFreq); End(Width_); };
-            ToolTip.SetTip(widthView, "The width over frequency — solid: what the settings do (0 % = mono, 100 % = unchanged), the mono region shaded; teal dashed: the output's measured width (side against mid). Drag sideways for the mono cutoff, up or down for the width.");
+            ToolTip.SetTip(widthView, "The width over frequency — solid: what the settings do (0 % = mono, 100 % = unchanged), the mono region shaded; grey dashed: the output's measured width (side against mid). Drag sideways for the mono cutoff, up or down for the width.");
             Learn(widthView, MonoFreq);
 
             var wv = Mono("", 7, TextSecondary);
@@ -424,7 +424,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             levelView.DragV += v => SetN(Target, v);
             levelView.GestureBegin += () => Begin(Target);
             levelView.GestureEnd += () => End(Target);
-            ToolTip.SetTip(levelView, "Input (teal) and output (neutral ink) over the last 8 s in the meter's unit; dashed: the target. Drag up or down for the target.");
+            ToolTip.SetTip(levelView, "Input (the darker grey) and output (the bright line) over the last 8 s in the meter's unit; dashed: the target. Drag up or down for the target.");
             Learn(levelView, Target);
 
             var delta = Mono("", 7, TextSecondary);
@@ -482,7 +482,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             var corrTitle = Caps("CORRELATION");
             var corrText = Mono("", 9, TextPrimary);
             corrText.TextTrimming = TextTrimming.CharacterEllipsis;
-            var corrBox = new Border { Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+            var corrBox = new Border { Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 3, Children = { corrTitle, corrBar, corrText } } };
             ToolTip.SetTip(corrBox, "Output correlation — +1 mono, 0 unrelated, below 0 out of phase (it cancels in mono)");
             readouts.Add(() =>
@@ -519,7 +519,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             }
             var box = new Border
             {
-                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 3),
+                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 3),
                 Child = new StackPanel { Spacing = 1, Children = {
                     Caps("MEASUREMENTS"),
                     Line("in", () => NotaNum.F($"{LvlF(ScDb(S_InLevel))} {Unit()}")),

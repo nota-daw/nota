@@ -142,7 +142,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         // An acronym NotaText.Label does not know (OS, GR) keeps its case: the label as written.
         static TextBlock Acr(string t, IBrush? c = null) { var tb = Caps(t, c); tb.Text = t; return tb; }
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -202,7 +202,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             {
                 int iv = i;
                 var tb = new TextBlock { Text = names[i], FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-                var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
+                var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; pick(iv); RefreshAll(); e.Handled = true; };
                 cells[i] = b; texts[i] = tb; row.Children.Add(b);
             }
@@ -226,7 +226,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         Border Latch(int p, Func<bool> lit, Action click, Func<string> text, string tip, bool fill = false)
         {
             var tb = new TextBlock { FontSize = 8, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            var b = new Border { Height = 16, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             if (fill) b.HorizontalAlignment = HorizontalAlignment.Stretch;
             void Hi()
             {
@@ -268,7 +268,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             var chev = new Glyph(GlyphKind.ChevronDown, 7) { Margin = new Thickness(6, 0, 0, 0) };
             var box = new Border
             {
-                Height = 16, MinWidth = 74, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 16, MinWidth = 74, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
                 Child = new DockPanel { Children = { Docked(chev, Dock.Right), name } },
             };
@@ -408,7 +408,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             signal = new ShSignalView();
             WireDrag(signal, h => h == ShSignalView.HThreshold ? Threshold : Return,
                 F(Threshold, "Threshold", v => ThrShort(v) + "\u2009dB"), F(Return, "Return", RetF));
-            ToolTip.SetTip(signal, MenuKit.Keys("The input (teal) and what passes (neutral ink) over the window, with the threshold (dashed) and where the gate closes again (dashed). Drag a line up or down; double-click resets it, ⌥-click types it."));
+            ToolTip.SetTip(signal, MenuKit.Keys("The input (grey columns) and what passes (the bright line) over the window, with the threshold (dashed) and where the gate closes again (dashed). Drag a line up or down; double-click resets it, ⌥-click types it."));
             Learn(signal, Threshold);
 
             var liveBtn = Latch(-1, () => live, () => { live = !live; if (!live) Array.Copy(scope, frozen, kScope); }, () => live ? "Live" : "Frozen",
@@ -438,7 +438,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             envView = new ShEnvelopeView();
             WireDrag(envView, h => h switch { ShEnvelopeView.HAttack => Attack, ShEnvelopeView.HHold => Hold, ShEnvelopeView.HRelease => Release, _ => Floor },
                 F(Attack, "Attack", AtkF), F(Hold, "Hold", HoldF), F(Release, "Release", RelF), F(Floor, "Floor", FloorF));
-            ToolTip.SetTip(envView, MenuKit.Keys("One opening: attack, hold, release in the chosen shape, down to the floor (inverted for Duck). Drag a node sideways for its time, the teal floor up or down; double-click resets, ⌥-click types."));
+            ToolTip.SetTip(envView, MenuKit.Keys("One opening: attack, hold, release in the chosen shape, down to the floor (inverted for Duck). Drag a node sideways for its time, the dashed floor up or down; double-click resets, ⌥-click types."));
             Learn(envView, Release);
 
             var shapes = Chips(Shapes, i => Sel(Shape, 3) == i, i => SetP(Shape, i / 2f), Shape,
@@ -467,7 +467,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         {
             keyView = new ShKeyView();
             WireDrag(keyView, h => h == ShKeyView.HHp ? DetHP : DetLP, F(DetHP, "SC HP", HpF), F(DetLP, "SC LP", LpF));
-            ToolTip.SetTip(keyView, MenuKit.Keys("The detector's band-pass (teal) — only this part of the key opens the gate — over the reduction in the window (neutral ink). Drag the nodes sideways; double-click resets, ⌥-click types."));
+            ToolTip.SetTip(keyView, MenuKit.Keys("The detector's band-pass (the grey curve) — only this part of the key opens the gate — over the reduction in the window (the bright line). Drag the nodes sideways; double-click resets, ⌥-click types."));
             Learn(keyView, DetHP);
 
             var eq = Latch(DetFilter, () => On(DetFilter), () => SetP(DetFilter, On(DetFilter) ? 0f : 1f), () => On(DetFilter) ? "SC EQ on" : "SC EQ off",
@@ -532,7 +532,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             var grid = new Grid { Children = { fill, tb } };
             var host = new Border
             {
-                Height = 18, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 18, Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 ClipToBounds = true, Cursor = new Cursor(StandardCursorType.SizeWestEast), Child = grid,
             };
             bool drag = false;
@@ -568,7 +568,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             var tb = new TextBlock { Text = text, FontSize = 9, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var b = new Border
             {
-                Height = 18, Padding = new Thickness(8, 0), Background = Raised, CornerRadius = NotaRadius.Badge,
+                Height = 18, Padding = new Thickness(8, 0), Background = Raised, CornerRadius = NotaRadius.Cell,
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb,
             };
             b.PointerPressed += (_, e) =>
@@ -631,7 +631,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             readouts.Add(() => pname.Text = PatternName());
             var browser = new Border
             {
-                Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Child = new DockPanel { Children = { Docked(Arrow(GlyphKind.ChevronLeft, -1), Dock.Left), Docked(Arrow(GlyphKind.ChevronRight, 1), Dock.Right), pname } },
             };
             ToolTip.SetTip(browser, "Pattern shapes — the arrows step through them (fitted to the grid)");
@@ -653,7 +653,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             }
             var gridSize = new Border
             {
-                Height = 18, Padding = new Thickness(6, 0), Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 18, Padding = new Thickness(6, 0), Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Child = Row(4, Caps("GRID"),
                     Cycle(nSt, () =>
                     {
@@ -728,13 +728,13 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         Control StateBox()
         {
             var t = Caps("STATE");
-            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Pill, VerticalAlignment = VerticalAlignment.Center };
+            var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Group, VerticalAlignment = VerticalAlignment.Center };
             var l1 = Mono("", 9, TextPrimary);
             var l2 = Mono("", 8, TextSecondary);
             l1.TextTrimming = l2.TextTrimming = TextTrimming.CharacterEllipsis;
             var b = new Border
             {
-                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+                Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 2, Children = { t, Row(5, dot, l1), l2 } },
             };
             readouts.Add(() =>
@@ -782,7 +782,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
             }
             var box = new Border
             {
-                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
+                Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 2, Children = {
                     Caps("MEASUREMENTS"),
                     Line(() => Sc(S_ExtKey) > 0.5 ? "sc in" : "in", () => DbF(Sc(S_ExtKey) > 0.5 ? Sc(S_KeyDb) : Sc(S_InDb))),

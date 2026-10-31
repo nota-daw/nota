@@ -25,7 +25,7 @@ namespace Nota.App;
         private static readonly IBrush Ink = NotaPalette.VizInk;
         private static readonly IBrush TextTertiary = NotaPalette.TextTertiary;
         private static readonly IBrush GridB = NotaGraph.Grid;
-        private static readonly Typeface Face = NotaFonts.Mono;
+        private static readonly Typeface Face = NotaFonts.Sans;
         private readonly IAudioEngine _e;
         private readonly int _t;
         private (int i, string id) _a, _d, _s, _r;
@@ -39,6 +39,11 @@ namespace Nota.App;
         // Draw the title in the plot's corner. Off when the card already names the graph
         // in a header above it (Nota Bass).
         public bool ShowTitle { get; set; } = true;
+
+        // A word after the title in its own ink (Nota Operator: the operator's role, carrier or
+        // modulator); it names nothing for MIDI learn.
+        public string? Note { get; set; }
+        public IBrush NoteInk { get; set; } = TextTertiary;
 
         // The read-out of stage k (0 A · 1 D · 2 S · 3 R) at a 0..1 position, for typing;
         // without it a typed value is read back from the engine's own parameter text.
@@ -121,7 +126,7 @@ namespace Nota.App;
 
         private float G((int i, string id) p) => p.i >= 0 ? _e.PluginParamGet(_t, -1, p.i) : 0f;
         private (double x0, double x1, double top, double bot) Geo()
-        { double pad = 6; return (pad, Bounds.Width - pad, pad + 11, Bounds.Height - pad - 9); }
+        { double pad = 6; return (pad, Bounds.Width - pad, ShowTitle ? 22 : pad + 4, Bounds.Height - pad - 9); }   // the attack peak sits under the title
         private (double xa, double xd, double sy, double xh, double xr) Nodes()
         {
             var (x0, x1, top, bot) = Geo(); double span = x1 - x0;
@@ -169,23 +174,39 @@ namespace Nota.App;
             InvalidateVisual();
         }
 
+
         public override void Render(DrawingContext ctx)
         {
-            double w = Bounds.Width, h = Bounds.Height; if (w <= 0) return;
-            NotaGraph.Window(ctx, new Rect(0, 0, w, h));
+            double w = Bounds.Width, h = Bounds.Height; if (w <= 0 || h <= 0) return;
+            var frame = new Rect(0, 0, w, h);
+            NotaGraph.Window(ctx, frame);
             var (x0, x1, top, bot) = Geo();
-            var gp = new Pen(GridB, 1);
-            for (int i = 1; i <= 3; i++) { double gy = top + (bot - top) * i / 4.0; ctx.DrawLine(gp, new Point(x0, gy), new Point(x1, gy)); }
-            var pen = new Pen(Accent, 1.6, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round);
+            for (int i = 1; i <= 3; i++) { double gy = top + (bot - top) * i / 4.0; ctx.DrawLine(NotaGraph.GridPen, new Point(0, gy), new Point(w, gy)); }
             var (xa, xd, sy, xh, xr) = Nodes();
-            ctx.DrawLine(pen, new Point(x0, bot), new Point(xa, top));
-            ctx.DrawLine(pen, new Point(xa, top), new Point(xd, sy));
-            ctx.DrawLine(pen, new Point(xd, sy), new Point(xh, sy));
-            ctx.DrawLine(pen, new Point(xh, sy), new Point(xr, bot));
+            foreach (var gx in new[] { xa, xd, xh }) ctx.DrawLine(NotaGraph.GridPen, new Point(gx, top), new Point(gx, bot));
+
+            // Drawn like Auto Filter's windows: a straight attack, then decay and release falling
+            // away exponentially (as the engine's one-pole stages do); no fill under the line.
+            void Shape(StreamGeometryContext g)
+            {
+                g.LineTo(new Point(xa, top));   // linear attack
+                g.CubicBezierTo(new Point(xa + (xd - xa) * 0.25, sy - (sy - top) * 0.15), new Point(xa + (xd - xa) * 0.55, sy), new Point(xd, sy));
+                g.LineTo(new Point(xh, sy));
+                g.CubicBezierTo(new Point(xh + (xr - xh) * 0.25, bot - (bot - sy) * 0.15), new Point(xh + (xr - xh) * 0.55, bot), new Point(xr, bot));
+            }
+            var line = new StreamGeometry();
+            using (var g = line.Open()) { g.BeginFigure(new Point(x0, bot), false); Shape(g); g.EndFigure(false); }
+            ctx.DrawGeometry(null, new Pen(Accent, NotaGraph.PrimaryWidth, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), line);
+
             var nodes = new[] { new Point(xa, top), new Point(xd, sy), new Point(xr, bot) };
             for (int k = 0; k < nodes.Length; k++)
-                ctx.DrawEllipse(_drag == k ? NotaPalette.Accent : Accent, null, nodes[k], 3.2, 3.2);
+                NotaGraph.Node(ctx, nodes[k], active: _drag == k, ink: _drag == k ? null : Accent == Ink ? NotaPalette.TextSecondary : Accent);
             if (ShowTitle)
-                ctx.DrawText(new FormattedText(NotaText.Label(_title), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, 8, TextTertiary), new Point(x0, 5));
+            {
+                NotaGraph.Title(ctx, frame, _title);
+                if (!string.IsNullOrEmpty(Note))
+                    ctx.DrawText(new NotaFormattedText(Note, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Face, NotaGraph.TitleSize, NoteInk, this),
+                        new Point(6 + NotaGraph.TitleWidth(_title) + 6, 4));
+            }
         }
     }

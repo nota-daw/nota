@@ -85,7 +85,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
         { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static StackPanel Row(double sp, params Control[] cs)
         { var s = new StackPanel { Orientation = Orientation.Horizontal, Spacing = sp, VerticalAlignment = VerticalAlignment.Center }; foreach (var c in cs) s.Children.Add(c); return s; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
@@ -131,7 +131,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         Border Btn(string text, Action click, string? tip = null)
         {
             var tb = new TextBlock { Text = text, FontSize = 8, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
-            var b = new Border { Height = 16, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, Background = Raised, BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
+            var b = new Border { Height = 16, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Cell, Background = Raised, BorderThickness = new Thickness(1), BorderBrush = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = tb };
             b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; click(); e.Handled = true; };
             if (tip != null) ToolTip.SetTip(b, tip);
             return b;
@@ -165,7 +165,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             t.GestureBegin += target => Begin(target == 0 ? Decay : PreDelay);
             t.GestureEnd += target => End(target == 0 ? Decay : PreDelay);
             t.Reset += target => { Reset(target == 0 ? Decay : PreDelay); SyncTail(); };
-            ToolTip.SetTip(t, MenuKit.Keys("The decay tail — the impulse at the pre-delay (teal), the early reflections (drawn magnified), then the RT60 curve over 4 s. Drag the teal marker for the pre-delay, drag the tail for the decay; ⌥-click to type, double-click to reset."));
+            ToolTip.SetTip(t, MenuKit.Keys("The decay tail — the impulse at the pre-delay (dashed grey), the early reflections (drawn magnified), then the RT60 curve over 4 s. Drag the pre-delay marker, drag the tail for the decay; ⌥-click to type, double-click to reset."));
             ValueEntry.AttachHandles(t, [ValueEntry.DeviceParam(engine, track, di, Decay, "Decay", DecayF, SyncTail)],
                 [ValueEntry.DeviceParam(engine, track, di, PreDelay, "Pre-delay", PreF, SyncTail)]);
             MidiLearn.Bind(t, MidiTarget.DeviceParam(track, di, Decay), "Decay");
@@ -218,7 +218,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 1, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
         faders.Children.Add(TailFader(Decay, "DECAY", NotaPalette.VizInk, NotaPalette.VizInk,
             "Decay — RT60, the time the tail takes to fall 60 dB (0.2 … 12 s); Freeze holds it forever. Double-click resets."));
-        faders.Children.Add(Col(TailFader(HFDamp, "DAMP", NotaPalette.Teal, NotaPalette.TealBright,
+        faders.Children.Add(Col(TailFader(HFDamp, "DAMP", DeviceCardKit.ModInk, DeviceCardKit.ModInkBright,
             "HF Damp — how much faster the highs die than the lows. Double-click resets."), 1));
         var decVal = Mono("", 7, TextPrimary); decVal.HorizontalAlignment = HorizontalAlignment.Center;
         var dmpVal = Mono("", 7, TextPrimary); dmpVal.HorizontalAlignment = HorizontalAlignment.Center;
@@ -281,11 +281,11 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         Control ToneTab()
         {
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,Auto,Auto,*,Auto") };
-            g.Children.Add(K(LowCut, "LOW CUT", v => Hz(LowHz(v)), arc: Teal));
-            g.Children.Add(Col(K(HighCut, "HIGH CUT", v => Hz(HighHz(v)), arc: Teal), 1));
+            g.Children.Add(K(LowCut, "LOW CUT", v => Hz(LowHz(v)), arc: null));
+            g.Children.Add(Col(K(HighCut, "HIGH CUT", v => Hz(HighHz(v)), arc: null), 1));
             g.Children.Add(Col(K(WidthP, "WIDTH", Pct), 2));
-            g.Children.Add(Col(K(ModRate, "MOD RATE", RateF, arc: NotaPalette.Rose), 3));
-            g.Children.Add(Col(K(ModDepth, "MOD DEPTH", Pct, arc: NotaPalette.Rose), 4));
+            g.Children.Add(Col(K(ModRate, "MOD RATE", RateF, arc: DeviceCardKit.ModInk), 3));
+            g.Children.Add(Col(K(ModDepth, "MOD DEPTH", Pct, arc: DeviceCardKit.ModInk), 4));
             var mt = Toggle(ModOnTail, "Mod on tail");
             ToolTip.SetTip(mt, "Mod on tail — the modulation wobbles the tail itself (a chorused, evolving decay); off, it moves only the early part and the tail stays still");
             var vi = Toggle(Vintage, "Vintage");

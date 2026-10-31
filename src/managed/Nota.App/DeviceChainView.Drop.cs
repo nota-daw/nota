@@ -41,11 +41,11 @@ public sealed partial class DeviceChainView
     private readonly Canvas _dropLayer = new() { IsHitTestVisible = false, ClipToBounds = true };
     private readonly Border _dropInsertBar = new()
     {
-        Width = 3, Background = AccentBright, CornerRadius = NotaRadius.Clip, IsVisible = false,
+        Width = 3, Background = AccentBright, CornerRadius = NotaRadius.Field, IsVisible = false,
     };
     private readonly Border _dropReplaceRing = new()
     {
-        BorderBrush = AccentBright, BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Body,
+        BorderBrush = AccentBright, BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Card,
         Background = NotaPalette.Wash(NotaPalette.AccentBright, 0x1E), IsVisible = false,
     };
 

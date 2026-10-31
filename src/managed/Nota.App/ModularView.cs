@@ -4,9 +4,9 @@
 // Modular editor (mockup "Modular Editor.dc.html", variant 1a) — a signal-graph
 // view of the selected track alongside Arrangement / Session / Mixer. Phase 1:
 // the track's existing linear chain (MIDI FX → instrument → insert effects →
-// track output) rendered as draggable knob-nodes on a pannable/zoomable canvas
+// track output) rendered as draggable nodes on a pannable/zoomable canvas
 // with a dot grid, audio (Sage) + MIDI (Slate) edges, a minimap and a status
-// bar. Knobs write straight through to the engine (same automation/live-follow
+// bar. Value rows write straight through to the engine (same automation/live-follow
 // plumbing as the Detail device cards). CV modulation, node reordering and the
 // Global view are later phases; their chrome is present but inert.
 //
@@ -46,15 +46,18 @@ public sealed partial class ModularView : UserControl
     private static readonly IBrush Brass      = NotaPalette.Accent;
     private static readonly IBrush BrassBright = NotaPalette.AccentBright;
     private static readonly IBrush OnAccent   = NotaPalette.TextOnAccent;
-    private static readonly IBrush Teal       = NotaPalette.Teal;                  // modulation accent
     private static readonly IBrush Sage       = NotaPalette.Sage;                  // audio
-    private static readonly IBrush Slate      = NotaPalette.Ink("#6D8FB5"); // MIDI
-    private static readonly IBrush Mauve      = NotaPalette.Ink("#9B7FA6"); // MIDI FX
+    private static readonly SolidColorBrush Slate = NotaPalette.Ink("#6D8FB5"); // MIDI (resolves to Steel); the instrument category
+    private static readonly SolidColorBrush Mauve = NotaPalette.Ink("#9B7FA6"); // MIDI FX category
     private static readonly IBrush Success    = NotaPalette.Success;
 
     private const double NodeW = 214;
     private const double GapX  = 50;   // horizontal spacing between chained nodes
-    private const double PortRow = 20; // height of one port row inside a node's port block
+    private const double PortRow = 22; // height of one port row inside a node's port block
+    private const double HeaderH = 34; // node header (style guide: 34, tinted by category)
+    private const double PortPadTop = 2, PortPadBottom = 6;   // the port block, right under the header
+    private const double ParamRowH = 18, ParamGap = 2;         // an expanded parameter row
+    private const int ParamRowsShown = 8;                      // the list scrolls after eight
 
     private readonly IAudioEngine _engine;
 
@@ -75,7 +78,7 @@ public sealed partial class ModularView : UserControl
     public int TrackId => _trackId;
     private readonly Border _dropGlow = new()
     {
-        BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Control,
+        BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(2), CornerRadius = NotaRadius.Field,
         Background = NotaPalette.AccentSubtle, IsVisible = false, IsHitTestVisible = false,
     };
 
@@ -131,11 +134,11 @@ public sealed partial class ModularView : UserControl
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Bottom,
             Margin = new Thickness(14, 0, 0, 14),
         };
-        hint.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        hint.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         _viewport.Children.Add(hint);
         _viewport.Children.Add(_mini);
         _edgeTip.Child = _edgeTipText;
-        _edgeTipText.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _edgeTipText.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         _viewport.Children.Add(_edgeTip);
         _viewport.Children.Add(_dropGlow);
 
@@ -190,8 +193,8 @@ public sealed partial class ModularView : UserControl
         island.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         Content = island;
 
-        _zoomLabel.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        _statusRight.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+        _zoomLabel.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        _statusRight.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
 
         _viewport.PointerPressed += OnViewportPressed;
         _viewport.PointerMoved += OnViewportMoved;
@@ -447,7 +450,8 @@ public sealed partial class ModularView : UserControl
         }
 
         // 4) Track output.
-        var outNode = SimpleNode("output", "Track output", Text1, new Point(x, y + 28),
+        // Same top as the chain, so the main audio cable into it runs straight (ports line up).
+        var outNode = SimpleNode("output", "Track output", Text1, new Point(x, y),
             audioIn: true, audioOut: false, midiIn: false, midiOut: false, badge: "MASTER", slot: Slot.Output);
         AddNode(outNode);
         if (prevAudio != null) _edgeList.Add(new GEdge(prevAudio, PortKind.Audio, outNode, PortKind.Audio));
@@ -616,7 +620,7 @@ public sealed partial class ModularView : UserControl
         n.IslandHeight = h;
 
         var col = new Grid { RowDefinitions = new RowDefinitions(hasMods ? "2,30,54,34" : "2,30,54") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.BodyValue) }, 0));
+        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.CardValue) }, 0));
 
         // header
         var head = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 0) };
@@ -628,7 +632,7 @@ public sealed partial class ModularView : UserControl
         if (cv > 0)
         {
             var cvLabel = new TextBlock { Text = $"{cv} CV", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center };
-            cvLabel.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
+            cvLabel.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
             DockPanel.SetDock(cvLabel, Dock.Right);
             head.Children.Add(cvLabel);
         }
@@ -676,7 +680,7 @@ public sealed partial class ModularView : UserControl
         var frame = new Border
         {
             Width = IslandW, Height = h, Background = Rail,
-            BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Body,
+            BorderBrush = BorderDef, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Card,
             Child = col,
         };
         if (n.Bypassed) frame.AttachedToVisualTree += (_, _) => Inactive.Set(col, true, interactive: true);
@@ -695,7 +699,7 @@ public sealed partial class ModularView : UserControl
         var b = new Border
         {
             Height = 30, Background = Card, BorderBrush = topColor, BorderThickness = new Thickness(1, 2, 1, 1),
-            CornerRadius = NotaRadius.Tile, Padding = new Thickness(9, 0),
+            CornerRadius = NotaRadius.Group, Padding = new Thickness(9, 0),
             Child = new TextBlock { Text = text, FontSize = 10, Foreground = Text1, VerticalAlignment = VerticalAlignment.Center },
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -708,7 +712,7 @@ public sealed partial class ModularView : UserControl
         var b = new Border
         {
             Height = 22, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Pill, Padding = new Thickness(9, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            CornerRadius = NotaRadius.Group, Padding = new Thickness(9, 0), Cursor = new Cursor(StandardCursorType.Hand),
             Child = new TextBlock { Text = text, FontSize = 9, Foreground = Text2, VerticalAlignment = VerticalAlignment.Center },
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
         };
@@ -731,6 +735,7 @@ public sealed partial class ModularView : UserControl
         var n = new GNode($"inst", name, Slate, at)
         {
             AudioOut = true, MidiIn = true, CvIn = true, Slot = Slot.Instrument,   // params are CV targets
+            Bypassed = _engine.DeviceBypassed(_trackId, -1),                        // -1: the instrument (#148)
         };
         n.CvInputLabels = CvInputsFor(1, -1);
         PopulateParams(n, _engine.PluginParamCount(_trackId, -1),
@@ -825,22 +830,18 @@ public sealed partial class ModularView : UserControl
         float val = e.DeviceGetParam(t, d, pp);
         bool modulated = e.DeviceParamModulated(t, d, pp);
         bool exposed = _exposedParams.Contains((t, d, pp));
-        var value = MonoValue(Fmt(val));
-        var knob = new Knob((val - min) / span, 1.0) { Accent = true, ArcColor = modulated ? Teal : null, Default = (e.DeviceParamDefault(t, d, pp) - min) / span };
-        knob.Format = frac => Fmt((float)(min + frac * span));
-        knob.ValueChanged += frac => { double v = min + frac * span; e.DeviceSetParam(t, d, pp, (float)v); value.Text = Fmt((float)v); };
-        knob.GestureBegin += () => e.BeginAutomationWrite(t, AutomationTarget.DeviceParam, d, pp, "");
-        knob.GestureEnd += () => e.EndAutomationWrite(t, AutomationTarget.DeviceParam, d, pp, "");
-        MidiLearn.Bind(knob, MidiTarget.DeviceParam(t, d, pp), name);
-        // Right-click → CV modulation menu (create / edit / remove a link).
-        knob.ContextRequested += (_, ev) => { ShowModulateMenu(knob, 0, d, pp, name); ev.Handled = true; };
-        _liveKnobs.Add(() =>
-        {
-            if (knob.Dragging) return;
-            float cur = e.DeviceGetParam(t, d, pp); double frac = (cur - min) / span;
-            if (Math.Abs(frac - knob.Value) > 1e-3) { knob.Value = frac; value.Text = Fmt(cur); }
-        });
-        return KnobCell(name, knob, value, exposed ? BrassBright : null);
+        string Text(double frac) => Fmt((float)(min + frac * span));
+        var row = ParamRow(name, (val - min) / span, (e.DeviceParamDefault(t, d, pp) - min) / span, Text,
+            frac => e.DeviceSetParam(t, d, pp, (float)(min + frac * span)),
+            () => e.BeginAutomationWrite(t, AutomationTarget.DeviceParam, d, pp, ""),
+            () => e.EndAutomationWrite(t, AutomationTarget.DeviceParam, d, pp, ""),
+            () => (e.DeviceGetParam(t, d, pp) - min) / span,
+            out var track,
+            labelInk: exposed ? BrassBright : modulated ? Text2 : null, modulated: modulated,
+            // Right-click → CV modulation menu (create / edit / remove a link).
+            context: c => ShowModulateMenu(c, 0, d, pp, name));
+        MidiLearn.Bind(track, MidiTarget.DeviceParam(t, d, pp), name);
+        return row;
     }
 
     private Control MidiEffectParam(int index, int param)
@@ -851,19 +852,14 @@ public sealed partial class ModularView : UserControl
         double span = Math.Max(1e-6, max - min);
         float val = e.MidiEffectGetParam(t, ix, pp);
         bool modulated = e.ParamModulated(2, t, ix, pp);
-        var value = MonoValue(Fmt(val));
-        var knob = new Knob((val - min) / span, 1.0) { Accent = true, ArcColor = modulated ? Teal : null, Default = (e.MidiEffectParamDefault(t, ix, pp) - min) / span };
-        knob.Format = frac => Fmt((float)(min + frac * span));
-        knob.ValueChanged += frac => { double v = min + frac * span; e.MidiEffectSetParam(t, ix, pp, (float)v); value.Text = Fmt((float)v); };
-        MidiLearn.Bind(knob, MidiTarget.MidiDeviceParam(t, ix, pp), name);
-        knob.ContextRequested += (_, ev) => { ShowModulateMenu(knob, 2, ix, pp, name); ev.Handled = true; };
-        _liveKnobs.Add(() =>
-        {
-            if (knob.Dragging) return;
-            float cur = e.MidiEffectGetParam(t, ix, pp); double frac = (cur - min) / span;
-            if (Math.Abs(frac - knob.Value) > 1e-3) { knob.Value = frac; value.Text = Fmt(cur); }
-        });
-        return KnobCell(name, knob, value, modulated ? Teal : null);
+        string Text(double frac) => Fmt((float)(min + frac * span));
+        var row = ParamRow(name, (val - min) / span, (e.MidiEffectParamDefault(t, ix, pp) - min) / span, Text,
+            frac => e.MidiEffectSetParam(t, ix, pp, (float)(min + frac * span)), null, null,
+            () => (e.MidiEffectGetParam(t, ix, pp) - min) / span,
+            out var track, labelInk: modulated ? Text2 : null, modulated: modulated,
+            context: c => ShowModulateMenu(c, 2, ix, pp, name));
+        MidiLearn.Bind(track, MidiTarget.MidiDeviceParam(t, ix, pp), name);
+        return row;
     }
 
     private Control InstrumentParam(int param)
@@ -873,20 +869,82 @@ public sealed partial class ModularView : UserControl
         string pid = e.PluginParamId(t, -1, pp);
         float val = e.PluginParamGet(t, -1, pp);   // normalized 0..1
         bool modulated = e.ParamModulated(1, t, -1, pp);
-        var value = MonoValue(val.ToString("0.00", NotaNum.Culture));
-        var knob = new Knob(val, 1.0) { Accent = true, ArcColor = modulated ? Teal : null, Default = e.InstrumentParamDefault(t, pp) };
-        knob.Format = frac => frac.ToString("0.00", NotaNum.Culture);
-        knob.ValueChanged += frac => { e.PluginParamSet(t, -1, pp, (float)frac); value.Text = frac.ToString("0.00", NotaNum.Culture); };
-        knob.GestureBegin += () => e.BeginAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, pid);
-        knob.GestureEnd += () => e.EndAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, pid);
         // Instrument params are modulated by dragging a CV cable onto the node (no right-click menu).
-        _liveKnobs.Add(() =>
+        return ParamRow(name, val, e.InstrumentParamDefault(t, pp), frac => frac.ToString("0.00", NotaNum.Culture),
+            frac => e.PluginParamSet(t, -1, pp, (float)frac),
+            () => e.BeginAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, pid),
+            () => e.EndAutomationWrite(t, AutomationTarget.PluginParam, -1, -1, pid),
+            () => e.PluginParamGet(t, -1, pp),
+            out _, labelInk: modulated ? Text2 : null, modulated: modulated);
+    }
+
+    // One parameter as an 18px row (style guide, modular node): its name (10.5, ink 3) · a short
+    // soft value bar · the value (11, ink 1), right-aligned in a fixed column. Everything a node's
+    // knob did carries over: drag (automation gesture), double-click reset to the default,
+    // ⌥-click / double-click the value to type one (ValueEntry), right-click menu (`context`, else
+    // the parameter menu), live follow (`live`, skipped while dragged). A modulated parameter draws
+    // its line in ink 2 instead of orange (the teal arc it replaces); `labelInk` tints the name
+    // (orange for an exposed CV source, ink 2 for a modulated one). Without a tint the name lifts
+    // to ink 2 while the value differs from its default, as the knob cell's label did.
+    private Control ParamRow(string name, double norm0, double? def, Func<double, string> textAt, Action<double> set,
+        Action? begin, Action? end, Func<double>? live, out SliderTrack track,
+        IBrush? labelInk = null, bool modulated = false, Action<Control>? context = null, Control? labelControl = null)
+    {
+        if (def is { } dd && (double.IsNaN(dd) || double.IsInfinity(dd))) def = null;
+        double? dflt = def is { } d0 ? Math.Clamp(d0, 0, 1) : null;
+        SliderTrack? tr = null;
+        var value = new TextBlock
         {
-            if (knob.Dragging) return;
-            float cur = e.PluginParamGet(t, -1, pp);
-            if (Math.Abs(cur - knob.Value) > 1e-3) { knob.Value = cur; value.Text = cur.ToString("0.00", NotaNum.Culture); }
-        });
-        return KnobCell(name, knob, value, modulated ? Teal : null);
+            FontFamily = NotaFonts.UiFamily, FontSize = NotaType.KnobValue, Foreground = Text1, TextAlignment = TextAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center, Text = textAt(Math.Clamp(norm0, 0, 1)),
+        };
+        TextBlock? lbl = labelControl is null
+            ? new TextBlock
+            {
+                Text = NotaText.Label(name), FontSize = NotaType.RowLabel, Foreground = labelInk ?? Text3,
+                VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+            }
+            : null;
+        if (lbl is not null) ToolTip.SetTip(lbl, name);
+        void PaintLabel(double n)
+        {
+            if (lbl is null) return;
+            if (tr!.IsDim) { lbl.Foreground = Text4; return; }   // a bypassed node: ink 4, never faded
+            if (labelInk is not null || dflt is not { } d) return;
+            lbl.Foreground = Math.Abs(n - d) > 1e-4 ? Text2 : Text3;
+        }
+        void Apply(double n) { set(n); value.Text = textAt(n); PaintLabel(n); }
+        tr = new SliderTrack
+        {
+            Height = 12, MinWidth = 20,
+            Reset = dflt is { } r ? () => { tr!.Norm = r; Apply(r); } : null,
+        };
+        tr.Norm = norm0;
+        if (modulated) tr.Ink = Text2;
+        tr.Changed += Apply;
+        if (begin is not null) tr.GestureBegin += begin;
+        if (end is not null) tr.GestureEnd += end;
+        var bar = tr;
+        // Registered before ValueEntry's own menu, so a node's modulate menu wins (it adds Type value… itself).
+        if (context is not null) bar.ContextRequested += (_, ev) => { context(bar); ev.Handled = true; };
+        var field = new ValueField(name, () => bar.Norm, textAt, n => { bar.Norm = n; Apply(n); }, begin, end, dflt);
+        ValueEntry.Attach(bar, field, value);
+        if (live is not null)
+            _liveKnobs.Add(() =>
+            {
+                if (bar.Dragging) return;
+                double f = live();
+                if (Math.Abs(f - bar.Norm) > 1e-3) { bar.Norm = f; value.Text = textAt(f); PaintLabel(f); }
+            });
+        PaintLabel(Math.Clamp(norm0, 0, 1));
+        var grid = new Grid { Height = ParamRowH, ColumnDefinitions = new ColumnDefinitions("62,*,38"), ColumnSpacing = 8, Tag = bar };
+        Control labelCell = labelControl ?? lbl!;
+        labelCell.VerticalAlignment = VerticalAlignment.Center;
+        grid.Children.Add(labelCell);
+        Grid.SetColumn(bar, 1); grid.Children.Add(bar);
+        Grid.SetColumn(value, 2); grid.Children.Add(value);
+        track = bar;
+        return grid;
     }
 
     // ---- modulators (Phase 3: LFO node + CV links) ---------------------
@@ -947,22 +1005,21 @@ public sealed partial class ModularView : UserControl
         if (kind == 5) { BuildMathView(n, modId); return; }
         if (kind == 6) { BuildScopeView(n, modId); return; }
 
-        // A top "select" row (waveform for LFO, MIDI source for MIDI→CV) then a knob grid.
-        bool hasTopRow = kind == 0 || kind == 2;
-        var col = new Grid { RowDefinitions = hasTopRow ? new RowDefinitions("3,32,34,Auto,Auto") : new RowDefinitions("3,32,Auto,Auto") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
+        // Header, the ports right under it (CV out on the first row, like every node), an
+        // optional select row (waveform for LFO, MIDI source for MIDI→CV), then the value rows.
+        var col = new StackPanel();
         var headBorder = NodeHeader(n);
-        col.Children.Add(Row(headBorder, 1));
+        col.Children.Add(headBorder);
+        col.Children.Add(PortsBlock(n));
 
-        int gridRow = hasTopRow ? 3 : 2;
-        Grid grid;
-        if (kind == 4)   // Macro: one manual knob (its value is the CV output)
+        Control list;
+        if (kind == 4)   // Macro: one manual value (it is the CV output)
         {
-            grid = KnobGrid(ModFieldCell("Macro", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
+            list = ParamList(ModFieldCell("Macro", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
         }
         else if (kind == 3)   // ADSR: Attack / Decay / Sustain / Release (+ Depth)
         {
-            grid = KnobGrid(
+            list = ParamList(
                 ModFieldCell("Attack", modId, 6, 0.1f, 2000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
                 ModFieldCell("Decay", modId, 8, 1f, 2000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
                 ModFieldCell("Sustain", modId, 9, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"),
@@ -971,73 +1028,62 @@ public sealed partial class ModularView : UserControl
         }
         else if (kind == 1)   // envelope follower: Attack / Release / Depth
         {
-            grid = KnobGrid(
+            list = ParamList(
                 ModFieldCell("Attack", modId, 6, 0.1f, 500f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
                 ModFieldCell("Release", modId, 7, 1f, 2000f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
                 ModFieldCell("Depth", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
         }
         else if (kind == 2)   // MIDI→CV: source select + Smooth / Depth
         {
-            col.Children.Add(Row(MidiSourceRow(modId), 2));
-            grid = KnobGrid(
+            col.Children.Add(MidiSourceRow(modId));
+            list = ParamList(
                 ModFieldCell("Smooth", modId, 6, 0.1f, 500f, v => v.ToString("0", NotaNum.Culture) + "\u2009ms"),
                 ModFieldCell("Depth", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"));
         }
-        else   // LFO: waveform + sync, then Rate / Depth / Phase
+        else   // LFO: waveform, then Rate (with its Sync / Free toggle) / Depth / Phase
         {
-            col.Children.Add(Row(WaveSyncRow(modId), 2));
-            grid = KnobGrid(
+            col.Children.Add(WaveSyncRow(modId));
+            list = ParamList(
                 ModRateCell(modId),
                 ModFieldCell("Depth", modId, 4, 0f, 1f, v => (v * 100).ToString("0", NotaNum.Culture) + "\u2009%"),
                 ModFieldCell("Phase", modId, 5, 0f, 1f, v => (v * 360).ToString("0", NotaNum.Culture) + "°"));
         }
-        col.Children.Add(Row(grid, gridRow));
-        col.Children.Add(Row(PortsBlock(n), gridRow + 1));
+        // Under a rule, unless the select row above already drew one.
+        col.Children.Add(kind is 0 or 2 ? list : Ruled(list));
         WrapFrame(n, col, headBorder);
     }
+
+    private static Control Ruled(Control c) => new Border { Child = c, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0) };
 
     private static readonly string[] MathOpNames = { "Add", "Subtract", "Multiply", "Invert", "Scale", "Min", "Max" };
 
     private void BuildMathView(GNode n, int modId)
     {
-        var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto") };
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
+        var col = new StackPanel();
         var headBorder = NodeHeader(n);
-        col.Children.Add(Row(headBorder, 1));
-
-        var body = new StackPanel { Spacing = 4, Margin = new Thickness(9, 6) };
-        body.Children.Add(MathLabeledRow("Op", MathOpCombo(modId)));
-        body.Children.Add(KnobGrid(
+        col.Children.Add(headBorder);
+        col.Children.Add(PortsBlock(n));   // A / B CV inputs (drag a cable in) + CV out
+        var list = (Panel)ParamList(
             ModFieldCell("Gain", modId, 4, 0f, 2f, v => v.ToString("0.00", NotaNum.Culture)),
-            ModFieldCell("Offset", modId, 12, -1f, 1f, v => v.ToString("0.00", NotaNum.Culture))));
-        col.Children.Add(Row(body, 2));
-        col.Children.Add(Row(MathPortsBlock(n), 3));   // A/B CV inputs (drag a cable in) + CV out
+            ModFieldCell("Offset", modId, 12, -1f, 1f, v => v.ToString("0.00", NotaNum.Culture)));
+        list.Children.Insert(0, MathLabeledRow("Op", MathOpCombo(modId)));
+        col.Children.Add(Ruled(list));
         WrapFrame(n, col, headBorder);
-    }
-
-    // Math ports: two CV inputs (A above B) on the left, CV-out on the right (row 0).
-    private Control MathPortsBlock(GNode n)
-    {
-        var stack = new StackPanel { Margin = new Thickness(0, 6, 0, 6) };
-        stack.Children.Add(PortRowUI(left: ("A", Brass, true), right: ("CV out", Brass, true), rightPress: e => BeginConnect(n, e)));
-        stack.Children.Add(PortRowUI(left: ("B", Brass, true), right: null));
-        return new Border { Child = stack, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0) };
     }
 
     private static Control MathLabeledRow(string label, Control field)
     {
-        var dock = new DockPanel { LastChildFill = true };
-        var lbl = new TextBlock { Text = label, FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center, Width = 24 };
-        DockPanel.SetDock(lbl, Dock.Left);
-        dock.Children.Add(lbl);
-        dock.Children.Add(field);
-        return dock;
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("62,*"), ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 2) };
+        var lbl = new TextBlock { Text = label, FontSize = NotaType.RowLabel, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
+        grid.Children.Add(lbl);
+        Grid.SetColumn(field, 1); grid.Children.Add(field);
+        return grid;
     }
 
     private Control MathOpCombo(int modId)
     {
         int t = _trackId; var e = _engine;
-        var combo = new ComboBox { FontSize = 9, HorizontalAlignment = HorizontalAlignment.Stretch, Height = 22 };
+        var combo = new ComboBox { FontSize = NotaType.KnobValue, HorizontalAlignment = HorizontalAlignment.Stretch, Height = 22 };
         foreach (var s in MathOpNames) combo.Items.Add(s);
         combo.SelectedIndex = Math.Clamp((int)Math.Round(e.ModulatorGet(t, modId, 0)), 0, MathOpNames.Length - 1);
         combo.SelectionChanged += (_, _) => { if (combo.SelectedIndex >= 0) { e.ModulatorSet(t, modId, 0, combo.SelectedIndex); Rebuild(); } };
@@ -1049,106 +1095,67 @@ public sealed partial class ModularView : UserControl
     private Control MidiSourceRow(int modId)
     {
         int t = _trackId; var e = _engine;
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(9, 0), VerticalAlignment = VerticalAlignment.Center };
-        int cur = (int)Math.Round(e.ModulatorGet(t, modId, 0));   // field 0 = source select
-        for (int i = 0; i < MidiSourceNames.Length; i++)
-        {
-            int sel = i;
-            row.Children.Add(SegChip(MidiSourceNames[i], cur == sel, () => { e.ModulatorSet(t, modId, 0, sel); Rebuild(); }));
-        }
-        return new Border { Height = 34, Child = row, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1) };
+        var seg = DeviceCardKit.Segments(MidiSourceNames, () => (int)Math.Round(e.ModulatorGet(t, modId, 0)),   // field 0 = source select
+            i => { e.ModulatorSet(t, modId, 0, i); Rebuild(); }, out _, fill: true);
+        return SelectRow(seg);
     }
 
-    // 2-column knob grid with inner separators (N cells → ceil(N/2) rows of 56px).
-    private static Grid KnobGrid(params Control[] cells)
+    // A modulator's select row (waveform / MIDI source) between the ports and the value rows.
+    private static Control SelectRow(Control seg) => new Border
     {
-        int rows = (cells.Length + 1) / 2;
-        var grid = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,*"),
-            RowDefinitions = new RowDefinitions(string.Join(",", Enumerable.Repeat("56", rows))),
-        };
-        for (int i = 0; i < cells.Length; i++)
-        {
-            var cell = new Border { Child = cells[i], BorderBrush = BorderInner, BorderThickness = new Thickness(i % 2 == 1 ? 1 : 0, i >= 2 ? 1 : 0, 0, 0) };
-            Grid.SetColumn(cell, i % 2);
-            Grid.SetRow(cell, i / 2);
-            grid.Children.Add(cell);
-        }
-        return grid;
+        Child = seg, Padding = new Thickness(10, 6, 10, 0), BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0),
+    };
+
+    // The value rows of a node: 18px each, under a thin rule.
+    private static Control ParamList(params Control[] rows)
+    {
+        var stack = new StackPanel { Spacing = ParamGap, Margin = new Thickness(10, 6, 10, 6) };
+        foreach (var r in rows) stack.Children.Add(r);
+        return stack;
     }
 
     private static readonly string[] WaveNames = { "Sine", "Tri", "Saw", "Sqr", "Rnd" };
 
-    // LFO waveform selector. The Sync/Free toggle used to live here too, but with five
-    // waveform chips it overflowed the node width — it now sits above the Rate knob (ModRateCell).
+    // LFO waveform selector. The Sync/Free toggle sits on the Rate row (ModRateCell).
     private Control WaveSyncRow(int modId)
     {
         int t = _trackId; var e = _engine;
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(9, 0), VerticalAlignment = VerticalAlignment.Center };
-        int cur = (int)Math.Round(e.ModulatorGet(t, modId, 0));
-        for (int i = 0; i < WaveNames.Length; i++)
-        {
-            int wf = i;
-            row.Children.Add(SegChip(WaveNames[i], cur == wf, () => { e.ModulatorSet(t, modId, 0, wf); Rebuild(); }));
-        }
-        return new Border { Height = 34, Child = row, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1) };
+        var seg = DeviceCardKit.Segments(WaveNames, () => (int)Math.Round(e.ModulatorGet(t, modId, 0)),
+            i => { e.ModulatorSet(t, modId, 0, i); Rebuild(); }, out _, fill: true, padX: 3);
+        return SelectRow(seg);
     }
 
-    // A compact Sync/Free toggle used as the Rate cell's label (14px so it fits the knob row).
+    // A compact Sync/Free toggle beside the Rate row's name.
     private Border SyncToggle(int modId, bool synced) =>
-        ToggleLabel(synced ? "Sync" : "Free", null, () => { _engine.ModulatorSet(_trackId, modId, 1, synced ? 0f : 1f); Rebuild(); });
+        ToggleLabel(synced ? "Sync" : "Free", synced ? "Synced to the tempo — click for a free rate in Hz" : "Free rate in Hz — click to sync to the tempo",
+            () => { _engine.ModulatorSet(_trackId, modId, 1, synced ? 0f : 1f); Rebuild(); });
 
-    // A small clickable label chip over a knob (Sync/Free, the Scope's ms/Sync).
+    // A small clickable label chip (Sync/Free, the Scope's ms/Sync).
     private static Border ToggleLabel(string text, string? tip, Action onClick)
     {
         var b = new Border
         {
-            Height = 13, CornerRadius = NotaRadius.Badge, Padding = new Thickness(5, 0),
-            Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
-            Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = text, FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Height = 16, CornerRadius = NotaRadius.Switch, Padding = new Thickness(5, 0),
+            Background = NotaPalette.Well, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock { Text = text, FontSize = 10, Foreground = Text2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
         if (tip is not null) ToolTip.SetTip(b, tip);
-        b.PointerPressed += (_, e) => { onClick(); e.Handled = true; };
+        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; onClick(); e.Handled = true; };
         return b;
     }
 
-    private static Border SegChip(string text, bool active, Action onClick)
-    {
-        var b = new Border
-        {
-            Height = 20, MinWidth = 30, CornerRadius = NotaRadius.Badge,
-            BorderBrush = active ? NotaPalette.Accent : NotaPalette.Seam, BorderThickness = new Thickness(1),
-            Background = active ? NotaPalette.Accent : NotaPalette.SurfaceRaised,
-            Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
-            Child = new TextBlock { Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = active ? NotaPalette.TextOnAccent : Text2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
-        };
-        b.PointerPressed += (_, e) => { onClick(); e.Handled = true; };
-        return b;
-    }
-
-    // A modulator field as a labelled knob (0..1 knob → [min,max] field value).
+    // A modulator field as a value row (0..1 bar → [min,max] field value).
     private Control ModFieldCell(string label, int modId, int field, float min, float max, Func<double, string> fmt)
     {
         int t = _trackId; var e = _engine;
         double span = Math.Max(1e-6, max - min);
         float v0 = e.ModulatorGet(t, modId, field);
-        var value = MonoValue(fmt((v0 - min) / span * span + min));
-        var knob = new Knob((v0 - min) / span, 1.0) { Accent = true };
-        knob.Format = frac => fmt((float)(min + frac * span));
-        knob.ValueChanged += frac => { float v = (float)(min + frac * span); e.ModulatorSet(t, modId, field, v); value.Text = fmt(v); };
-        _liveKnobs.Add(() =>
-        {
-            if (knob.Dragging) return;
-            float cur = e.ModulatorGet(t, modId, field); double frac = (cur - min) / span;
-            if (Math.Abs(frac - knob.Value) > 1e-3) { knob.Value = frac; value.Text = fmt(cur); }
-        });
-        return KnobCell(label, knob, value);
+        return ParamRow(label, (v0 - min) / span, null, frac => fmt((float)(min + frac * span)),
+            frac => e.ModulatorSet(t, modId, field, (float)(min + frac * span)), null, null,
+            () => (e.ModulatorGet(t, modId, field) - min) / span, out _);
     }
 
-    // Rate cell: musical divisions when synced, Hz when free. The Sync/Free toggle sits where
-    // a param label normally goes (right above the knob), so it no longer crowds the wave row.
+    // Rate row: musical divisions when synced, Hz when free. The Sync/Free toggle sits beside its name.
     private Control ModRateCell(int modId)
     {
         int t = _trackId; var e = _engine;
@@ -1158,22 +1165,14 @@ public sealed partial class ModularView : UserControl
         Func<double, string> fmt = synced ? DivisionLabel : v => v.ToString("0.00", NotaNum.Culture) + "\u2009Hz";
         double span = Math.Max(1e-6, max - min);
         float v0 = e.ModulatorGet(t, modId, field);
-        var value = MonoValue(fmt(v0));
-        var knob = new Knob((v0 - min) / span, 1.0) { Accent = true, Width = 30, Height = 30 };
-        knob.Format = frac => fmt((float)(min + frac * span));
-        knob.ValueChanged += frac => { float v = (float)(min + frac * span); e.ModulatorSet(t, modId, field, v); value.Text = fmt(v); };
-        _liveKnobs.Add(() =>
+        var label = new StackPanel
         {
-            if (knob.Dragging) return;
-            float cur = e.ModulatorGet(t, modId, field); double frac = (cur - min) / span;
-            if (Math.Abs(frac - knob.Value) > 1e-3) { knob.Value = frac; value.Text = fmt(cur); }
-        });
-        ValueEntry.Attach(knob, "Rate", value);
-        return new StackPanel
-        {
-            Spacing = 0, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Children = { SyncToggle(modId, synced), knob, value },
+            Orientation = Orientation.Horizontal, Spacing = 4,
+            Children = { new TextBlock { Text = "Rate", FontSize = NotaType.RowLabel, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center }, SyncToggle(modId, synced) },
         };
+        return ParamRow("Rate", (v0 - min) / span, null, frac => fmt((float)(min + frac * span)),
+            frac => e.ModulatorSet(t, modId, field, (float)(min + frac * span)), null, null,
+            () => (e.ModulatorGet(t, modId, field) - min) / span, out _, labelControl: label);
     }
 
     private static string DivisionLabel(double beats)
@@ -1337,6 +1336,28 @@ public sealed partial class ModularView : UserControl
         _selectedEdge = null; Rebuild(); Changed?.Invoke();
     }
 
+    // The CV link popover's value read-out and mode chips.
+    private static TextBlock MonoValue(string s)
+    {
+        var t = new TextBlock { Text = s, FontSize = 9, Foreground = Text1, HorizontalAlignment = HorizontalAlignment.Center };
+        t.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
+        return t;
+    }
+
+    private static Border SegChip(string text, bool active, Action onClick)
+    {
+        var b = new Border
+        {
+            Height = 20, MinWidth = 30, CornerRadius = NotaRadius.Cell,
+            BorderBrush = active ? NotaPalette.Accent : NotaPalette.Seam, BorderThickness = new Thickness(1),
+            Background = active ? NotaPalette.Accent : NotaPalette.SurfaceRaised,
+            Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
+            Child = new TextBlock { Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = active ? NotaPalette.TextOnAccent : Text2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        };
+        b.PointerPressed += (_, e) => { onClick(); e.Handled = true; };
+        return b;
+    }
+
     private void ShowLinkEditor(Control anchor, int ownerTrack, int linkIndex, bool atPointer = false)
     {
         int t = ownerTrack; var e = _engine;
@@ -1372,63 +1393,98 @@ public sealed partial class ModularView : UserControl
         flyout.ShowAt(anchor);
     }
 
-    private static TextBlock MonoValue(string s)
-    {
-        var t = new TextBlock { Text = s, FontSize = 9, Foreground = Text1, HorizontalAlignment = HorizontalAlignment.Center };
-        t.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
-        return t;
-    }
-
-    private static Control KnobCell(string name, Knob knob, TextBlock value, IBrush? labelColor = null)
-    {
-        // Same cell as a device card (DeviceCardKit.KnobCell): secondary knob, caps label
-        // over a mono value. A node passes its own label tint for modulation targets.
-        knob.Width = Knob.SizeSecondary; knob.Height = Knob.SizeSecondary;
-        var cell = (StackPanel)DeviceCardKit.KnobCell(name, knob, value, 50, labelInk: labelColor);
-        cell.HorizontalAlignment = HorizontalAlignment.Center;
-        cell.VerticalAlignment = VerticalAlignment.Center;
-        return cell;
-    }
-
     // ---- node visual ----------------------------------------------------
+    //
+    // A node (style guide, "Modular node"): a raised card 214 wide, corner 7, with the device
+    // card's thin outline and light top edge. The 34px header is tinted with the node's category
+    // (blue instrument, green audio effect, violet MIDI effect, a light orange wash for a
+    // modulator, grey for the track's fixed in / out) and goes plain grey when bypassed. Under it
+    // sit the ports, inputs left and outputs right on the card edges, so the first row is at the
+    // same height on every node and the main cable runs straight; then the parameter rows.
+    // Selected is a thin orange outline; hover a quieter one.
 
-    // Builds the 32px header strip (status dot · title · badge/action cluster). The
+    private static readonly IBrush Divider = NotaPalette.GridBar;          // lines inside a node
+    private static readonly IBrush GreyHead = NotaPalette.Wash(NotaPalette.TextTertiary, 0x1A);
+    private static readonly IBrush GreyHeadEdge = NotaPalette.Wash(NotaPalette.TextTertiary, 0x30);
+
+    private static SolidColorBrush? Category(GNode n) => n.Slot switch
+    {
+        Slot.Instrument => Slate,
+        Slot.Device => NotaPalette.Sage,
+        Slot.MidiFx => Mauve,
+        Slot.Modulator => NotaPalette.Accent,
+        _ => null,   // the track's own in / out: grey
+    };
+
+    private static IBrush HeaderFill(GNode n)
+    {
+        if (n.Bypassed) return NotaPalette.SurfaceCard;
+        if (Category(n) is not { } c) return GreyHead;
+        return NotaPalette.Wash(c, n.Slot == Slot.Modulator ? (byte)0x28 : (byte)0x3D);   // 24 % (16 % for the orange)
+    }
+
+    private static IBrush HeaderEdge(GNode n)
+    {
+        if (n.Bypassed) return Divider;
+        if (Category(n) is not { } c) return GreyHeadEdge;
+        return NotaPalette.Wash(c, n.Slot == Slot.Modulator ? (byte)0x4C : (byte)0x66);
+    }
+
+    // Builds the 34px header (power switch or status dot · title · badge / actions). The
     // returned Border is the drag handle; WrapFrame wires it.
     private Border NodeHeader(GNode n)
     {
-        var title = new TextBlock { Text = n.Title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = Text1, VerticalAlignment = VerticalAlignment.Center };
-        var head = new DockPanel { LastChildFill = true, Margin = new Thickness(9, 0) };
-        var stripeDot = n.Slot == Slot.Modulator ? (IBrush)Brass : (n.Bypassed ? BorderStrong : Success);
-        var dot = new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Badge, Background = stripeDot, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
-        DockPanel.SetDock(dot, Dock.Left);
-        head.Children.Add(dot);
-        // Right cluster: chain devices get bypass / expand / delete; modulators get a
-        // MODULATOR badge + delete; everyone else just a badge.
+        var title = new TextBlock
+        {
+            Text = n.Title, FontSize = NotaType.Name, FontWeight = FontWeight.SemiBold, Foreground = n.Bypassed ? Text3 : Text1,
+            VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
+        };
+        var head = new DockPanel { LastChildFill = true, Margin = new Thickness(10, 0) };
+        // On / off: a power switch on every device (the instrument too); the track's own in / out
+        // can't be switched off and shows a green dot; a modulator a dot in the CV colour.
+        Control lead;
+        if (n.IsChainDevice || n.Slot == Slot.Instrument)
+        {
+            bool inst = n.Slot == Slot.Instrument;
+            var power = new SwitchTrack { IsOn = !n.Bypassed, Cursor = new Cursor(StandardCursorType.Hand) };
+            ToolTip.SetTip(power, inst
+                ? (n.Bypassed ? "Off — click to turn the instrument on (B)" : "On — click to turn the instrument off (B)")
+                : (n.Bypassed ? "Bypassed — click to enable (B)" : "Active — click to bypass (B)"));
+            power.PointerPressed += (_, e) =>
+            {
+                if (!e.GetCurrentPoint(power).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;   // not a header drag
+                ToggleBypass(n);
+            };
+            lead = power;
+        }
+        else
+        {
+            lead = new Border
+            {
+                Width = 6, Height = 6, CornerRadius = NotaRadius.Fine, VerticalAlignment = VerticalAlignment.Center,
+                Background = n.Slot == Slot.Modulator ? NotaPalette.Accent : Success,
+            };
+        }
+        lead.Margin = new Thickness(0, 0, 8, 0);
+        DockPanel.SetDock(lead, Dock.Left);
+        head.Children.Add(lead);
+
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
         if (n.IsChainDevice)
         {
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
-            actions.Children.Add(HeaderGlyph(GlyphKind.Bypass, n.Bypassed ? BrassBright : Text3, "Bypass (B)", () => ToggleBypass(n)));
-            // Only offer expand when there are more params than the headline row shows,
-            // otherwise the button reveals nothing (e.g. a plugin exposing few params).
+            // Only offer expand when there are more params than the node shows.
             if (CanExpand(n) || _expanded.Contains(n.Id)) actions.Children.Add(ExpandGlyph(n));
             // A bin, not ×: an × reads as "close", and closing the opened knobs deleted the device (#261).
             actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, "Delete (⌫)", () => DeleteNode(n)));
-            DockPanel.SetDock(actions, Dock.Right);
-            head.Children.Add(actions);
         }
         else if (n.Slot == Slot.Instrument)
         {
-            // The instrument can't be bypassed/removed (the lock says so), but its params are expandable too.
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
             if (CanExpand(n) || _expanded.Contains(n.Id)) actions.Children.Add(ExpandGlyph(n));
-            actions.Children.Add(LockGlyph(n));
-            DockPanel.SetDock(actions, Dock.Right);
-            head.Children.Add(actions);
         }
         else if (n.Slot == Slot.Modulator)
         {
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            actions.Children.Add(new TextBlock { Text = string.IsNullOrEmpty(n.Badge) ? "LFO" : NotaText.Label(n.Badge), FontSize = 9, FontWeight = FontWeight.Medium, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center });
+            actions.Children.Add(BadgeText(string.IsNullOrEmpty(n.Badge) ? "LFO" : n.Badge));
             if (n.IsScopeNode)
             {
                 int scopeTrack = _trackId, scopeMod = n.ModId;
@@ -1439,94 +1495,145 @@ public sealed partial class ModularView : UserControl
                 actions.Children.Add(pop);
             }
             actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, "Delete (⌫)", () => RemoveModulatorNode(n)));
-            DockPanel.SetDock(actions, Dock.Right);
-            head.Children.Add(actions);
         }
-        else if (!string.IsNullOrEmpty(n.Badge) || FixedReason(n) is not null)
+        else if (!string.IsNullOrEmpty(n.Badge))
+            actions.Children.Add(BadgeText(n.Badge));
+        // A fixed node (instrument, track in / out) shows a lock: it can't be deleted (#261).
+        if (FixedReason(n) is not null) actions.Children.Add(LockGlyph(n));
+        if (actions.Children.Count > 0)
         {
-            var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 0, 0) };
-            if (!string.IsNullOrEmpty(n.Badge))
-                actions.Children.Add(new TextBlock { Text = NotaText.Label(n.Badge), FontSize = 9, FontWeight = FontWeight.Medium, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center });
-            if (FixedReason(n) is not null) actions.Children.Add(LockGlyph(n));
             DockPanel.SetDock(actions, Dock.Right);
             head.Children.Add(actions);
         }
         head.Children.Add(title);
-        // Transparent (not null) background so the whole header strip is hit-testable —
-        // otherwise only the title text / status dot catch the drag, not the gaps.
-        return new Border { Height = 32, Child = head, Background = Brushes.Transparent, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1) };
+        // Transparent-backed so the whole strip is hit-testable for the drag, not just the glyphs.
+        var border = new Border
+        {
+            Height = HeaderH, Child = head, Background = HeaderFill(n), BorderBrush = HeaderEdge(n),
+            BorderThickness = new Thickness(0, 0, 0, 1), CornerRadius = NotaRadius.Top(NotaRadius.GroupValue),
+        };
+        // The fixed nodes (instrument, track in / out) say why they can't be deleted (#261): the lock
+        // glyph, and the same reason on the whole header.
+        if (FixedReason(n) is { } why) ToolTip.SetTip(border, why);
+        return border;
     }
 
-    // Wraps a node's inner column in the card frame + wires hover and header-drag.
+    private static Control LockGlyph(GNode n)
+    {
+        var g = new Glyph(GlyphKind.Lock, 9) { Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Width = 16, Height = 16, Background = Brushes.Transparent, Child = g, VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(b, FixedReason(n));
+        return b;
+    }
+
+    private static TextBlock BadgeText(string badge) => new()
+    {
+        Text = NotaText.Label(badge), FontSize = 10, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    // Wraps a node's column in the card + wires hover and header-drag. The card clips its own
+    // content; the port dots and the outline ring sit on top of it, unclipped, so the dots can
+    // straddle the card edge.
     private void WrapFrame(GNode n, Control col, Border headBorder)
     {
-        var frame = new Border
+        var inner = new Border { CornerRadius = NotaRadius.Group, ClipToBounds = true, Child = col };
+        var card = new Border { Background = NotaPalette.SurfaceRaised, CornerRadius = NotaRadius.Group, Child = inner };
+        card.BindResource(Border.BoxShadowProperty, "Shadow.Card");   // the device card's outline + light top edge
+        var ring = new Border
         {
-            Width = NodeW, Background = Card,
-            BorderBrush = n.Bypassed ? BorderStrong : BorderDef,
-            BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel,
-            Child = col,
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(NotaRadius.GroupValue + 1), Margin = new Thickness(-1),
+            IsHitTestVisible = false, IsVisible = false,
         };
+        var frame = new Border { Width = NodeW, Child = new Panel { Children = { card, PortDots(n), ring } } };
         n.View = frame;
-        frame.PointerEntered += (_, _) => { if (!n.Selected && !n.Bypassed) frame.BorderBrush = BorderHover; };
-        frame.PointerExited += (_, _) => { if (!n.Selected) frame.BorderBrush = n.Bypassed ? BorderStrong : BorderDef; };
+        n.Ring = ring;
+        frame.PointerEntered += (_, _) => { n.Hover = true; PaintOutline(n); };
+        frame.PointerExited += (_, _) => { n.Hover = false; PaintOutline(n); };
         headBorder.Cursor = new Cursor(StandardCursorType.SizeAll);
         headBorder.PointerPressed += (s, e) => BeginNodeDrag(n, headBorder, e);
         headBorder.PointerMoved += (s, e) => MoveNodeDrag(n, e);
         headBorder.PointerReleased += (s, e) => EndNodeDrag(n, e);
     }
 
+    // The outline: orange when selected (or a valid drop target while wiring), a quiet line on
+    // hover, otherwise none (the card's own seam outline shows). Islands keep their bordered frame.
+    private void PaintOutline(GNode n)
+    {
+        if (n.Ring is { } ring)
+        {
+            bool target = _connecting && IsConnectTarget(n);
+            ring.IsVisible = n.Selected || n.Hover || target;
+            ring.BorderBrush = target ? BrassBright : n.Selected ? NotaPalette.Accent : BorderHover;
+            double th = target ? 2 : 1;
+            ring.BorderThickness = new Thickness(th);
+            ring.Margin = new Thickness(-th);
+            ring.CornerRadius = new CornerRadius(NotaRadius.GroupValue + th);
+            return;
+        }
+        if (n.View is Border b)
+        {
+            b.BorderBrush = n.Selected ? n.Stripe : n.Hover ? BorderHover : BorderDef;
+            b.BorderThickness = new Thickness(n.Selected ? 1.5 : 1);
+        }
+    }
+
     private void BuildNodeView(GNode n)
     {
-        var col = new Grid { RowDefinitions = new RowDefinitions("3,32,Auto,Auto,Auto") };
-
-        // type stripe
-        col.Children.Add(Row(new Border { Background = n.Stripe, CornerRadius = NotaRadius.Top(NotaRadius.TileValue) }, 0));
-
+        var col = new StackPanel();
         var headBorder = NodeHeader(n);
-        col.Children.Add(Row(headBorder, 1));
-
-        // knob grid (2×2)
-        if (n.Params.Count > 0)
-        {
-            int rows = (n.Params.Count + 1) / 2;
-            var grid = new Grid
-            {
-                ColumnDefinitions = new ColumnDefinitions("*,*"),
-                RowDefinitions = new RowDefinitions(string.Join(",", Enumerable.Repeat("56", rows))),
-            };
-            for (int i = 0; i < n.Params.Count; i++)
-            {
-                var cell = new Border
-                {
-                    Child = n.Params[i],
-                    BorderBrush = BorderInner,
-                    BorderThickness = new Thickness(i % 2 == 1 ? 1 : 0, i >= 2 ? 1 : 0, 0, 0),
-                };
-                Grid.SetColumn(cell, i % 2);
-                Grid.SetRow(cell, i / 2);
-                grid.Children.Add(cell);
-            }
-            col.Children.Add(Row(grid, 2));
-        }
-
-        // ports block
-        col.Children.Add(Row(PortsBlock(n), 3));
-
+        col.Children.Add(headBorder);
+        // The ports come straight after the header, so their first row is level on every node.
+        col.Children.Add(PortsBlock(n));
+        if (n.Params.Count > 0) col.Children.Add(ParamsBlock(n));
         // An opened node says how to close it: a strip under it, as well as the header chevron and Esc (#261).
-        if (_expanded.Contains(n.Id)) col.Children.Add(Row(CollapseStrip(n), 4));
-
+        if (_expanded.Contains(n.Id)) col.Children.Add(CollapseStrip(n));
         WrapFrame(n, col, headBorder);
+    }
+
+    // The parameter rows under the ports. More than eight scroll, with a caption saying so.
+    private Control ParamsBlock(GNode n)
+    {
+        var stack = new StackPanel { Spacing = ParamGap };
+        foreach (var p in n.Params) stack.Children.Add(p);
+        if (n.Bypassed)
+        {
+            // Bypassed stays playable but draws its rows in ink 4 (no opacity for state).
+            foreach (var p in n.Params)
+                if (p is Grid g && g.Tag is SliderTrack t)
+                {
+                    t.IsDim = true;
+                    foreach (var tb in g.Children.OfType<TextBlock>()) tb.Foreground = Text4;
+                    foreach (var tb in g.Children.OfType<Panel>().SelectMany(x => x.Children.OfType<TextBlock>())) tb.Foreground = Text4;
+                }
+        }
+        var body = new StackPanel { Margin = new Thickness(10, 6, 10, 6) };
+        if (n.Params.Count > ParamRowsShown)
+        {
+            // A gutter for the scroll bar, so it never sits over the values.
+            body.Margin = new Thickness(10, 6, 4, 6);
+            stack.Margin = new Thickness(0, 0, 6, 0);
+            body.Children.Add(new ScrollViewer
+            {
+                Content = stack, MaxHeight = ParamRowsShown * ParamRowH + (ParamRowsShown - 1) * ParamGap,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            });
+            body.Children.Add(new TextBlock
+            {
+                Text = $"{ParamRowsShown} of {n.Params.Count} · scroll for more", FontSize = 10, Foreground = Text4, Margin = new Thickness(0, 4, 0, 0),
+            });
+        }
+        else body.Children.Add(stack);
+        return new Border { Child = body, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0) };
     }
 
     private Control CollapseStrip(GNode n)
     {
-        var text = new TextBlock { Text = "Show fewer", FontSize = 9, FontWeight = FontWeight.Medium, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { Text = "Show fewer", FontSize = 10, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, HorizontalAlignment = HorizontalAlignment.Center,
             Children = { new Glyph(GlyphKind.ChevronUp, 8) { Foreground = Text3, VerticalAlignment = VerticalAlignment.Center }, text } };
         var strip = new Border
         {
-            Height = 22, Background = Brushes.Transparent, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0),
+            Height = 22, Background = Brushes.Transparent, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0),
             Cursor = new Cursor(StandardCursorType.Hand), Child = row,
         };
         ToolTip.SetTip(strip, "Hide the parameters that aren't modulated (Esc)");
@@ -1536,89 +1643,71 @@ public sealed partial class ModularView : UserControl
         return strip;
     }
 
-    private Control PortsBlock(GNode n)
+    private static IBrush PortColor(PortKind k) => k switch { PortKind.Audio => Sage, PortKind.Midi => Slate, _ => Brass };
+
+    // The port labels, one row per input / output pair (inputs left, outputs right). The dots
+    // themselves are drawn by PortDots on the card edges, at GNode.PortY.
+    private static Control PortsBlock(GNode n)
     {
-        var stack = new StackPanel { Margin = new Thickness(0, 6, 0, 6) };
-        // audio row (skipped for CV-only nodes like modulators)
-        if (n.AudioIn || n.AudioOut)
-            stack.Children.Add(PortRowUI(
-                left: n.AudioIn ? ("Audio in", Sage, true) : null,
-                right: n.AudioOut ? ("Audio out", Sage, true) : null));
-        // midi row
-        if (n.MidiIn || n.MidiOut)
-            stack.Children.Add(PortRowUI(
-                left: n.MidiIn ? ("MIDI in", Slate, false) : null,
-                right: n.MidiOut ? ("MIDI out", Slate, false) : null));
-        // cv row (Phase 3): only drawn for ports that actually function — a real CV
-        // target (CvIn) and/or a real CV source (CvOut). Nodes with no CV role (LFO
-        // input, audio-only nodes) show nothing, so the graph never lies. A
-        // modulator's CV-out dot is a drag handle to wire a CV link (P1 #13).
-        if (n.CvIn)
+        var ins = n.Inputs(); var outs = n.Outputs();
+        int rows = Math.Max(ins.Count, outs.Count);
+        var stack = new StackPanel { Margin = new Thickness(0, PortPadTop, 0, PortPadBottom) };
+        for (int i = 0; i < rows; i++)
         {
-            // One input row per incoming CV link (labelled with the driven param), or a single
-            // generic "CV" row when nothing is patched yet.
-            int rows = n.CvInputRows;
-            for (int i = 0; i < rows; i++)
-            {
-                string lbl = i < n.CvInputLabels.Count ? n.CvInputLabels[i] : "CV";
-                stack.Children.Add(PortRowUI(left: (lbl, Brass, true), right: null));
-            }
+            var grid = new Grid { Height = PortRow, Margin = new Thickness(12, 0) };
+            if (i < ins.Count) grid.Children.Add(PortLabel(ins[i].label, HorizontalAlignment.Left));
+            if (i < outs.Count) grid.Children.Add(PortLabel(outs[i].label, HorizontalAlignment.Right));
+            stack.Children.Add(grid);
         }
-        if (n.CvOut)
-        {
-            Action<PointerPressedEventArgs>? cvOutPress = n.Slot == Slot.Modulator ? e => BeginConnect(n, e) : null;
-            stack.Children.Add(PortRowUI(left: null, right: ("CV out", Brass, true), rightPress: cvOutPress));
-        }
-        return new Border { Child = stack, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0) };
+        return stack;
     }
 
-    private static Control PortRowUI((string label, IBrush color, bool round)? left,
-        (string label, IBrush color, bool round)? right, bool muted = false,
-        Action<PointerPressedEventArgs>? rightPress = null)
+    private static TextBlock PortLabel(string text, HorizontalAlignment side) => new()
     {
-        var grid = new Grid { Height = PortRow, Margin = new Thickness(12, 0) };
-        if (left is { } l)
-        {
-            var tb = new TextBlock { Text = l.label, FontSize = 9, Foreground = muted ? Text4 : Text3, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Left };
-            grid.Children.Add(tb);
-            grid.Children.Add(PortDot(l.color, l.round, left: true, null));
-        }
-        if (right is { } r)
-        {
-            var tb = new TextBlock { Text = r.label, FontSize = 9, Foreground = muted ? Text4 : Text3, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
-            grid.Children.Add(tb);
-            grid.Children.Add(PortDot(r.color, r.round, left: false, rightPress));
-        }
-        return grid;
-    }
+        Text = text, FontSize = 10, Foreground = Text3, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = side,
+        TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = NodeW / 2 - 16,
+    };
 
-    private static Control PortDot(IBrush color, bool round, bool left, Action<PointerPressedEventArgs>? onPress)
+    // The port dots on the card edges: round audio, square MIDI, diamond CV, each ringed in the
+    // card colour. A modulator's CV out is a grab handle for wiring a CV link (P1 #13).
+    private Control PortDots(GNode n)
     {
-        double d = round ? 8 : 7;
-        var dot = new Border
+        var canvas = new Canvas { IsHitTestVisible = true };
+        var ins = n.Inputs(); var outs = n.Outputs();
+        for (int i = 0; i < ins.Count; i++) AddDot(ins[i].kind, 0, n.PortY(i), null);
+        for (int i = 0; i < outs.Count; i++)
         {
-            Width = d, Height = d, Background = color,
-            CornerRadius = new CornerRadius(round ? d / 2 : 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right,
-            Margin = left ? new Thickness(-16, 0, 0, 0) : new Thickness(0, 0, -16, 0),
-        };
-        if (onPress != null)
+            Action<PointerPressedEventArgs>? press = n.Slot == Slot.Modulator && outs[i].kind == PortKind.Cv ? e => BeginConnect(n, e) : null;
+            AddDot(outs[i].kind, NodeW, n.PortY(i), press);
+        }
+        return canvas;
+
+        void AddDot(PortKind kind, double x, double y, Action<PointerPressedEventArgs>? onPress)
         {
-            // Enlarge the hit target and make it a grab handle for wiring.
-            var hit = new Border
+            bool cv = kind == PortKind.Cv;
+            double d = cv ? 9 : 10;
+            var dot = new Border
             {
-                Width = 16, Height = 16, Background = Brushes.Transparent, Child = dot,
-                Cursor = new Cursor(StandardCursorType.Cross),
-                HorizontalAlignment = left ? HorizontalAlignment.Left : HorizontalAlignment.Right,
-                Margin = left ? new Thickness(-20, 0, 0, 0) : new Thickness(0, 0, -20, 0),
+                Width = d, Height = d, Background = PortColor(kind), BorderBrush = NotaPalette.SurfaceRaised, BorderThickness = new Thickness(2),
+                CornerRadius = new CornerRadius(kind == PortKind.Audio ? d / 2 : kind == PortKind.Midi ? 2 : 1),
+                IsHitTestVisible = false,
             };
-            dot.Margin = new Thickness(0);
-            dot.HorizontalAlignment = HorizontalAlignment.Center;
-            hit.PointerPressed += (_, e) => { onPress(e); e.Handled = true; };
-            return hit;
+            if (cv) { dot.RenderTransform = new RotateTransform(45); dot.RenderTransformOrigin = RelativePoint.Center; }
+            Control c = dot;
+            double size = d;
+            if (onPress != null)
+            {
+                // A larger hit target, centred on the dot.
+                dot.HorizontalAlignment = HorizontalAlignment.Center; dot.VerticalAlignment = VerticalAlignment.Center;
+                var hit = new Border { Width = 18, Height = 18, Background = Brushes.Transparent, Child = dot, Cursor = new Cursor(StandardCursorType.Cross) };
+                ToolTip.SetTip(hit, "Drag onto a node to modulate one of its parameters");
+                hit.PointerPressed += (_, e) => { onPress(e); e.Handled = true; };
+                c = hit; size = 18;
+            }
+            Canvas.SetLeft(c, x - size / 2);
+            Canvas.SetTop(c, y - size / 2);
+            canvas.Children.Add(c);
         }
-        return dot;
     }
 
     // ---- node dragging --------------------------------------------------
@@ -1629,7 +1718,7 @@ public sealed partial class ModularView : UserControl
     private Point _nodeOrigin;
     private readonly Border _dropBar = new()
     {
-        Width = 3, Background = NotaPalette.AccentBright, CornerRadius = NotaRadius.Clip, IsHitTestVisible = false,
+        Width = 3, Background = NotaPalette.AccentBright, CornerRadius = NotaRadius.Field, IsHitTestVisible = false,
     };
 
     private void BeginNodeDrag(GNode n, Control captureTarget, PointerPressedEventArgs e)
@@ -1845,14 +1934,10 @@ public sealed partial class ModularView : UserControl
     }
 
     // While wiring, outline valid target nodes in brass (thicker so it's obvious).
-    private void HighlightTargets(bool on)
+    private void HighlightTargets(bool _)
     {
         foreach (var n in _nodes)
-            if (IsConnectTarget(n) && n.View is Border b)
-            {
-                b.BorderBrush = on ? BrassBright : (n.Selected ? n.Stripe : (n.Bypassed ? BorderStrong : BorderDef));
-                b.BorderThickness = new Thickness(on ? 2 : (n.Selected ? 1.5 : 1));
-            }
+            if (IsConnectTarget(n)) PaintOutline(n);   // reads _connecting
     }
 
     private string? _selId;
@@ -1860,7 +1945,7 @@ public sealed partial class ModularView : UserControl
     private readonly Border _edgeTip = new()
     {
         Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1),
-        CornerRadius = NotaRadius.Tile, Padding = new Thickness(8, 5), IsVisible = false, IsHitTestVisible = false,
+        CornerRadius = NotaRadius.Group, Padding = new Thickness(8, 5), IsVisible = false, IsHitTestVisible = false,
         HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
     };
     private readonly TextBlock _edgeTipText = new() { FontSize = 9, Foreground = NotaPalette.TextPrimary };
@@ -1883,11 +1968,7 @@ public sealed partial class ModularView : UserControl
         foreach (var n in _nodes)
         {
             n.Selected = n == sel;
-            if (n.View is Border b)
-            {
-                b.BorderBrush = n.Selected ? n.Stripe : (n.Bypassed ? BorderStrong : BorderDef);
-                b.BorderThickness = new Thickness(n.Selected ? 1.5 : 1);
-            }
+            PaintOutline(n);
         }
     }
 
@@ -1899,14 +1980,14 @@ public sealed partial class ModularView : UserControl
 
     private static Control HeaderGlyph(GlyphKind glyph, IBrush color, string tip, Action act)
     {
-        var tb = new Glyph(glyph, 9) { Foreground = color };
+        var tb = new Glyph(glyph, 10) { Foreground = color };
         var b = new Border
         {
-            Width = 16, Height = 16, CornerRadius = NotaRadius.Badge, Background = Brushes.Transparent,
+            Width = 18, Height = 18, CornerRadius = NotaRadius.Cell, Background = Brushes.Transparent,
             Cursor = new Cursor(StandardCursorType.Hand), Child = tb, VerticalAlignment = VerticalAlignment.Center,
         };
         ToolTip.SetTip(b, tip);
-        b.PointerEntered += (_, _) => b.Background = BorderInner;
+        b.PointerEntered += (_, _) => b.Background = NotaPalette.Well;
         b.PointerExited += (_, _) => b.Background = Brushes.Transparent;
         b.PointerPressed += (_, e) => { act(); e.Handled = true; };   // Handled so header drag doesn't start
         return b;
@@ -1922,18 +2003,10 @@ public sealed partial class ModularView : UserControl
         _ => null,
     };
 
-    private static Control LockGlyph(GNode n)
-    {
-        var g = new Glyph(GlyphKind.Lock, 9) { Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
-        var b = new Border { Width = 16, Height = 16, Background = Brushes.Transparent, Child = g, VerticalAlignment = VerticalAlignment.Center };
-        ToolTip.SetTip(b, FixedReason(n));
-        return b;
-    }
-
     private Control ExpandGlyph(GNode n)
     {
         bool open = _expanded.Contains(n.Id);
-        return HeaderGlyph(open ? GlyphKind.ChevronUp : GlyphKind.ChevronDown, open ? BrassBright : Text3,
+        return HeaderGlyph(open ? GlyphKind.ChevronUp : GlyphKind.ChevronDown, Text3,
             open ? "Show fewer parameters (Esc)" : "Show all parameters", () => ToggleExpand(n));
     }
 
@@ -1943,6 +2016,7 @@ public sealed partial class ModularView : UserControl
     {
         if (n.Slot == Slot.MidiFx) _engine.SetMidiEffectBypassed(_trackId, n.SlotIndex, !_engine.MidiEffectBypassed(_trackId, n.SlotIndex));
         else if (n.Slot == Slot.Device) _engine.SetDeviceBypassed(_trackId, n.SlotIndex, !_engine.DeviceBypassed(_trackId, n.SlotIndex));
+        else if (n.Slot == Slot.Instrument) _engine.SetDeviceBypassed(_trackId, -1, !_engine.DeviceBypassed(_trackId, -1));   // -1: the instrument (#148)
         else return;
         Rebuild(); Changed?.Invoke();
     }
@@ -2087,7 +2161,7 @@ public sealed partial class ModularView : UserControl
         foreach (var n in _nodes)
         {
             n.Selected = false;
-            if (n.View is Border b) { b.BorderBrush = n.Bypassed ? BorderStrong : BorderDef; b.BorderThickness = new Thickness(1); }
+            PaintOutline(n);
         }
     }
 
@@ -2098,7 +2172,7 @@ public sealed partial class ModularView : UserControl
         if (e.Key == Key.Space) { _spaceDown = true; _viewport.Cursor = new Cursor(StandardCursorType.SizeAll); }
         else if (e.Key == Key.F && !mod) { FitNow(); e.Handled = true; }
         else if (mod && e.Key == Key.D && sel is { IsChainDevice: true }) { DuplicateNode(sel); e.Handled = true; }
-        else if (!mod && e.Key == Key.B && sel is { IsChainDevice: true }) { ToggleBypass(sel); e.Handled = true; }
+        else if (!mod && e.Key == Key.B && sel is { IsChainDevice: true } or { Slot: Slot.Instrument }) { ToggleBypass(sel); e.Handled = true; }
         else if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && _selectedEdge is { IsCv: true, LinkOwner: >= 0 } ce)
         {
             _engine.CvLinkRemove(ce.LinkOwner, ce.LinkIndex); _selectedEdge = null;
@@ -2128,7 +2202,7 @@ public sealed partial class ModularView : UserControl
         _globalBtn.Click += (_, _) => SetGlobal(true);
         var seg = new Border
         {
-            Background = Sunken, CornerRadius = NotaRadius.Tile, Padding = new Thickness(2),
+            Background = Sunken, CornerRadius = NotaRadius.Group, Padding = new Thickness(2),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { _trackBtn, _globalBtn } },
         };
         // All the modulator sources collapse into one "+ Add" dropdown (a normal chip
@@ -2151,7 +2225,7 @@ public sealed partial class ModularView : UserControl
         var zoomIn = ZoomBtn("+"); zoomIn.Click += (_, _) => ZoomAround(Center(), 1.15);
         var zoomSeg = new Border
         {
-            Background = Sunken, CornerRadius = NotaRadius.Tile, Padding = new Thickness(2),
+            Background = Sunken, CornerRadius = NotaRadius.Group, Padding = new Thickness(2),
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Children = { zoomOut, zoomIn } },
         };
         var fit = Chip("Fit"); fit.Click += (_, _) => FitNow();
@@ -2231,6 +2305,8 @@ public sealed partial class ModularView : UserControl
         public IBrush Stripe;
         public Point World;
         public Border View = null!;
+        public Border? Ring;          // the outline drawn over the card (selected / hover / wiring target)
+        public bool Hover;
         public readonly List<Control> Params = new();
         public bool AudioIn, AudioOut, MidiIn, MidiOut;
         public bool CvIn, CvOut;
@@ -2258,12 +2334,34 @@ public sealed partial class ModularView : UserControl
         public bool IsScopeNode => Slot == Slot.Modulator && ModKind == 6;
 
         // The two CV-in port anchors for a Math node (A above B on the left side).
-        public Point MathInAnchor(bool b)
+        public Point MathInAnchor(bool b) => new(World.X, World.Y + PortY(b ? 1 : 0));
+
+        // The ports, top to bottom. Inputs go down the left edge, outputs down the right; row i holds
+        // input i and output i, so every node's first row (the main audio / MIDI port) is level.
+        public List<(PortKind kind, string label)> Inputs()
         {
-            double h = View.Bounds.Height > 0 ? View.Bounds.Height : 120;
-            double portsTop = h - 6 - 2 * PortRow;   // rows: [A | out] then [B]
-            return new Point(World.X, World.Y + portsTop + (b ? 1 : 0) * PortRow + PortRow / 2);
+            var l = new List<(PortKind, string)>();
+            if (IsMathNode) { l.Add((PortKind.Cv, "A")); l.Add((PortKind.Cv, "B")); return l; }
+            if (AudioIn) l.Add((PortKind.Audio, "Audio in"));
+            if (MidiIn) l.Add((PortKind.Midi, "MIDI in"));
+            // One CV input per incoming link (labelled with the driven param), or a single generic
+            // "CV" port while nothing is patched — only on a real CV target, so the graph never lies.
+            for (int i = 0; i < CvInputRows; i++) l.Add((PortKind.Cv, i < CvInputLabels.Count ? CvInputLabels[i] : "CV"));
+            return l;
         }
+
+        public List<(PortKind kind, string label)> Outputs()
+        {
+            var l = new List<(PortKind, string)>();
+            if (IsMathNode) { l.Add((PortKind.Cv, "CV out")); return l; }
+            if (AudioOut) l.Add((PortKind.Audio, "Audio out"));
+            if (MidiOut) l.Add((PortKind.Midi, "MIDI out"));
+            if (CvOut) l.Add((PortKind.Cv, "CV out"));
+            return l;
+        }
+
+        /// <summary>Centre of port row <paramref name="row"/>, from the node's top (the block sits right under the header).</summary>
+        public double PortY(int row) => HeaderH + PortPadTop + row * PortRow + PortRow / 2;
 
         /// <summary>Laid-out width (islands are wider than chain nodes).</summary>
         public double NodeWidth => Slot == Slot.Island ? IslandW : NodeW;
@@ -2271,40 +2369,24 @@ public sealed partial class ModularView : UserControl
         public GNode(string id, string title, IBrush stripe, Point world)
         { Id = id; Title = title; Stripe = stripe; World = world; }
 
-        // Port anchor in world coordinates. Ports live in the bottom block; we lay
-        // them out audio→midi→cv, 20px rows, ending 6px above the node's bottom.
+        // Port anchor in world coordinates — the dot PortDots draws on the card edge.
         public Point Anchor(PortKind kind, bool output, int cvInput = 0)
         {
-            double h = View.Bounds.Height > 0 ? View.Bounds.Height : 120;
             // Islands have no per-port rows — anchor cross-track CV edges at the side middles.
             if (Slot == Slot.Island)
             {
+                double h = View.Bounds.Height > 0 ? View.Bounds.Height : 120;
                 double hh = IslandHeight > 0 ? IslandHeight : h;
                 return new Point(World.X + (output ? IslandW : 0), World.Y + hh / 2);
             }
-            // Math node: CV-out sits on the first of two port rows ([A | out], [B]).
-            if (IsMathNode)
-            {
-                double mathTop = h - 6 - 2 * PortRow;
-                return new Point(World.X + (output ? NodeW : 0), World.Y + mathTop + PortRow / 2);
-            }
-            // Port rows are laid out top-to-bottom, drawn only when present:
-            // [audio?] [midi?] [cv in × N] [cv out?]. Must match PortsBlock so cables land on dots.
-            int rows = 0, audioIdx = -1, midiIdx = -1;
-            if (AudioIn || AudioOut) audioIdx = rows++;
-            if (MidiIn || MidiOut) midiIdx = rows++;
-            int cvInBase = rows;
-            rows += CvInputRows;
-            int cvOutIdx = CvOut ? rows++ : -1;
-            double portsTop = h - 6 - rows * PortRow;
-            int idx;
-            if (kind == PortKind.Audio) idx = audioIdx;
-            else if (kind == PortKind.Midi) idx = midiIdx;
-            else idx = output ? cvOutIdx : cvInBase + Math.Clamp(cvInput, 0, Math.Max(0, CvInputRows - 1));
-            if (idx < 0) idx = rows > 0 ? rows - 1 : 0;
-            double y = World.Y + portsTop + idx * PortRow + PortRow / 2;
-            double x = World.X + (output ? NodeW : 0);
-            return new Point(x, y);
+            var ports = output ? Outputs() : Inputs();
+            int idx = -1;
+            for (int i = 0; i < ports.Count; i++)
+                if (ports[i].kind == kind) { idx = i; break; }
+            if (idx >= 0 && kind == PortKind.Cv && !output && !IsMathNode)
+                idx = Math.Min(ports.Count - 1, idx + Math.Clamp(cvInput, 0, Math.Max(0, CvInputRows - 1)));
+            if (idx < 0) idx = Math.Max(0, ports.Count - 1);
+            return new Point(World.X + (output ? NodeW : 0), World.Y + PortY(idx));
         }
     }
 

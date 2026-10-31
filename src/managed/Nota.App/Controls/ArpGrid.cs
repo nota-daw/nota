@@ -5,7 +5,8 @@
 //   • Pattern: rows = the chord over every octave (root rows striped, note names in a left
 //     gutter), one cell per step = the note that step plays. Cell width = Gate × Length,
 //     odd steps pushed right by Swing, a ratchet splits the cell, a muted step is an empty
-//     outline. Steps rest in neutral ink, the ones already played this pass dimmer, the sounding one accent.
+//     outline. Steps rest in neutral ink, the ones already played this pass a darker grey, the
+//     sounding one accent; a muted step is ink 4.
 //   • Groove: the selected lane's per-step bars (Velocity / Length / Chance / Ratchet as
 //     stacked quarters / Transpose bipolar from the centre); drag across the well to draw
 //     (⌥ draws a ramp); the step-number strip under it mutes a step.
@@ -109,8 +110,8 @@ internal sealed class ArpGrid : Control
     private static readonly IBrush ColMajor = NotaPalette.GraphBorder;
     private static readonly IBrush Head = NotaPalette.Wash(NotaPalette.Accent, 0x14);
     private static readonly IBrush Zero = NotaPalette.BorderDefault;
-    private static readonly Typeface Mono = NotaFonts.Mono;
-    private const double GutterW = 20, NumsH = 13;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
+    private const double GutterW = 24, NumsH = 14;
 
     private readonly IAudioEngine _e; private readonly int _t, _mi;
     private readonly float[] _scope = new float[40];
@@ -225,15 +226,15 @@ internal sealed class ArpGrid : Control
     }
 
     // ---- render ---------------------------------------------------------------------
-    private static void Text(DrawingContext ctx, string t, double x, double y, IBrush b, double size = 7, bool right = false, bool centre = false)
+    private static void Text(DrawingContext ctx, string t, double x, double y, IBrush b, double size = NotaType.Axis, bool right = false, bool centre = false)
     {
-        var ft = new FormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, size, b);
+        var ft = new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, b, NotaTextSize.InCard);
         double px = right ? x - ft.Width : centre ? x - ft.Width / 2 : x;
         ctx.DrawText(ft, new Point(px, y - ft.Height / 2));
     }
 
     private IBrush Tone(int c, bool muted, IBrush future)
-        => muted ? NotaPalette.TrackOff : c == _pos ? NotaPalette.Accent : _pos >= 0 && c < _pos ? NotaPalette.Wash(NotaPalette.VizInk, 0x80) : future;
+        => muted ? NotaPalette.TextDisabled : c == _pos ? NotaPalette.Accent : _pos >= 0 && c < _pos ? NotaPalette.TextTertiary : future;
 
     public override void Render(DrawingContext ctx)
     {
@@ -250,8 +251,8 @@ internal sealed class ArpGrid : Control
         double rh = w.Height / rows.Count;
 
         // Well.
-        ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.GraphBorder, 1), w.Deflate(0.5), 4, 4);
-        using (ctx.PushClip(new RoundedRect(w.Deflate(1), 3)))
+        NotaGraph.Window(ctx, w);
+        using (ctx.PushClip(new RoundedRect(w.Deflate(1), NotaGraph.Radius)))
         {
             if (!Groove)
                 for (int r = 0; r < rows.Count; r++)
@@ -266,11 +267,12 @@ internal sealed class ArpGrid : Control
             {
                 var hr = new Rect(w.X + _pos * cw, w.Y, cw, w.Height);
                 ctx.FillRectangle(Head, hr);
-                ctx.FillRectangle(NotaPalette.BorderBrass, new Rect(hr.X, hr.Y, 1, hr.Height));
+                ctx.FillRectangle(NotaPalette.Accent, new Rect(hr.X, hr.Y, 1, hr.Height));
             }
 
             if (!Groove) DrawPattern(ctx, w, n, cw, seq, rows, rh, octs);
             else DrawGroove(ctx, w, n, cw, lane);
+            if (!Groove && Mini) MiniNoteLabel(ctx, w, seq, rows, octs);
         }
 
         // Key gutter (L Pattern): note names, root rows brighter; all names while it stays legible.
@@ -279,10 +281,8 @@ internal sealed class ArpGrid : Control
             {
                 bool root = ((rows[r] % 12) + 12) % 12 == rootPc;
                 if (rows.Count > 8 && !root) continue;
-                Text(ctx, DeviceCardKit.NoteName(rows[r]), GutterW, w.Y + (r + 0.5) * rh, root ? NotaPalette.TextMuted : NotaPalette.TextDisabled, 7, right: true);
+                Text(ctx, DeviceCardKit.NoteName(rows[r]), GutterW, w.Y + (r + 0.5) * rh, root ? NotaPalette.TextSecondary : NotaPalette.TextTertiary, right: true);
             }
-        if (!Groove && Mini && rows.Count > 0)
-            Text(ctx, DeviceCardKit.NoteName(rows[^1]), w.X + 4, w.Bottom - 7, NotaPalette.TextAxis, 7);
 
         // Step numbers (L Groove): click mutes.
         if (Groove && !Mini)
@@ -291,12 +291,34 @@ internal sealed class ArpGrid : Control
             for (int c = 0; c < n; c++)
             {
                 bool muted = G(LOn + c) < 0.5;
-                var ink = muted ? NotaPalette.TextAxis : c == _pos ? NotaPalette.AccentBright : NotaPalette.TextMuted;
+                var ink = muted ? NotaPalette.TextDisabled : c == _pos ? NotaPalette.AccentBright : NotaPalette.TextTertiary;
                 double cx = w.X + (c + 0.5) * cw;
-                Text(ctx, (c + 1).ToString(), cx, y, ink, 7, centre: true);
+                Text(ctx, (c + 1).ToString(NotaNum.Culture), cx, y, ink, centre: true);
                 if (muted) ctx.FillRectangle(ink, new Rect(cx - 4, y, 8, 1));
             }
         }
+    }
+
+    // Mini: one note name in the well (no key gutter). It names the bottom row in the
+    // bottom-left corner, or the top row top-left when step 1 sits on the bottom row (Up);
+    // when step 1 covers both, it goes bottom-left on a ground chip so it stays legible.
+    private void MiniNoteLabel(DrawingContext ctx, Rect w, List<int> seq, List<int> rows, int octs)
+    {
+        if (rows.Count == 0) return;
+        var first = new HashSet<int>();
+        if (seq.Count > 0)
+        {
+            long page = _k >= 0 ? (_k / StepCount) * StepCount : 0;
+            foreach (int p in ArpPattern.NotesAt(seq, GI(GOrder), page, octs, GI(GOctaveMode))) first.Add(p);
+        }
+        bool bottomFree = !first.Contains(rows[^1]);
+        bool topFree = rows.Count > 1 && !first.Contains(rows[0]);
+        bool top = !bottomFree && topFree;
+        var ft = new NotaFormattedText(DeviceCardKit.NoteName(top ? rows[0] : rows[^1]), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, NotaType.Axis, NotaPalette.TextTertiary, this);
+        double x = w.X + 4, y = top ? w.Y + 3 : w.Bottom - 3 - ft.Height;
+        if (!bottomFree && !topFree)
+            ctx.DrawRectangle(NotaGraph.Ground, null, new RoundedRect(new Rect(x - 2, y, ft.Width + 4, ft.Height), 2));
+        ctx.DrawText(ft, new Point(x, y));
     }
 
     private void DrawPattern(DrawingContext ctx, Rect w, int n, double cw, List<int> seq, List<int> rows, double rh, int octs)
@@ -315,8 +337,8 @@ internal sealed class ArpGrid : Control
             double wFrac = Math.Clamp(gate * len, 0.12, 1.0);
             double off = c % 2 == 1 ? swing * 0.5 * cw : 0;
             double cellW = wFrac * cw;
-            IBrush fill = muted ? Brushes.Transparent : c == _pos ? NotaPalette.Accent : _pos >= 0 && c < _pos ? NotaPalette.Wash(NotaPalette.VizInk, 0x80) : NotaPalette.VizInk;
-            IBrush border = muted ? NotaPalette.BorderStrong : fill;
+            IBrush fill = muted ? Brushes.Transparent : c == _pos ? NotaPalette.Accent : _pos >= 0 && c < _pos ? NotaPalette.TextTertiary : NotaPalette.VizInk;
+            IBrush border = muted ? NotaPalette.TextDisabled : fill;
             foreach (int p in ArpPattern.NotesAt(seq, order, page + c, octs, octMode))
             {
                 if (!rowOf.TryGetValue(p, out int r)) continue;   // a random octave above the drawn range
@@ -358,8 +380,8 @@ internal sealed class ArpGrid : Control
         }
         if (!Mini)
         {
-            Text(ctx, lane.Fmt(lane.Max), w.Right - 5, w.Y + 7, NotaPalette.TextAxis, 7, right: true);
-            Text(ctx, lane.Fmt(lane.Min), w.Right - 5, w.Bottom - 7, NotaPalette.TextAxis, 7, right: true);
+            Text(ctx, lane.Fmt(lane.Max), w.Right - 5, w.Y + 8, NotaPalette.TextTertiary, right: true);
+            Text(ctx, lane.Fmt(lane.Min), w.Right - 5, w.Bottom - 8, NotaPalette.TextTertiary, right: true);
         }
     }
 }

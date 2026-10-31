@@ -6,7 +6,8 @@
 // for every knob, fader, slider, graph handle and matrix cell:
 //
 //   double-click   on the control restores the default (or clears a route)
-//   ⌥/Alt-click    (and a double-click on the read-out) turns the read-out itself editable —
+//   ⌥/Alt-click    (and a double-click on the read-out) turns the read-out itself editable
+//                  (a field marked AltResets keeps ⌥-click on the control as a reset) —
 //                  a borderless text box in its place (an adorner, so it works whatever panel
 //                  the read-out sits in) with a 1px accent line under it and the number
 //                  selected; Enter or a click away commits, Escape cancels, Tab / Shift+Tab
@@ -38,6 +39,13 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 
 namespace Nota.App;
+
+/// <summary>A control that writes its own value inside itself (the value bar): a double-click on
+/// that text types, like a double-click on a separate read-out; elsewhere it still resets.</summary>
+internal interface IInlineReadout
+{
+    bool ReadoutAt(Point p);
+}
 
 internal static partial class ValueEntry
 {
@@ -79,7 +87,8 @@ internal static partial class ValueEntry
         Entries.AddOrUpdate(control, new Entry(control, () => fields, AnchorOf));
         void Press(object? s, PointerPressedEventArgs e)
         {
-            bool onReadout = control is TextBlock || readout is not null && ReferenceEquals(s, readout);
+            bool onReadout = control is TextBlock || readout is not null && ReferenceEquals(s, readout)
+                             || control is IInlineReadout ir && ir.ReadoutAt(e.GetPosition(control));
             if (Pressed(e, s as Visual ?? control, field, onReadout: onReadout)) Open(control, field, AnchorOf(field));
         }
         control.AddHandler(InputElement.PointerPressedEvent, Press, RoutingStrategies.Tunnel);
@@ -184,7 +193,9 @@ internal static partial class ValueEntry
         bool onReadout = false)
     {
         if (!e.GetCurrentPoint(at).Properties.IsLeftButtonPressed) return false;
-        if ((e.KeyModifiers & KeyModifiers.Alt) != 0 || onReadout && e.ClickCount == 2)
+        bool alt = (e.KeyModifiers & KeyModifiers.Alt) != 0;
+        if (alt && field.AltResets && !onReadout) return false;   // the control's own ⌥-click reset runs
+        if (alt || onReadout && e.ClickCount == 2)
         {
             e.Handled = true;
             return true;
@@ -218,7 +229,7 @@ internal static partial class ValueEntry
     public static void Reset(ValueField f)
     {
         if (f.Reset is { } act) { f.Begin?.Invoke(); act(); f.End?.Invoke(); f.After?.Invoke(); return; }
-        if (f.Default is not { } d) return;
+        if (f.CurrentDefault is not { } d) return;
         d = Math.Clamp(d, 0, 1);
         if (Math.Abs(f.Get() - d) < 1e-9) return;
         f.Begin?.Invoke(); f.Set(d); f.End?.Invoke(); f.After?.Invoke();
@@ -226,7 +237,7 @@ internal static partial class ValueEntry
 
     private static void Clear(ValueField f) { f.Clear?.Invoke(); f.After?.Invoke(); }
 
-    private static bool AtDefault(ValueField f) => f.Reset is null && f.Default is { } d && Math.Abs(f.Get() - Math.Clamp(d, 0, 1)) < 1e-9;
+    private static bool AtDefault(ValueField f) => f.Reset is null && f.CurrentDefault is { } d && Math.Abs(f.Get() - Math.Clamp(d, 0, 1)) < 1e-9;
 
     /// <summary>Apply typed text: the position whose read-out shows it, written as one gesture.
     /// Unreadable text or a value the read-out already shows changes nothing.</summary>
@@ -329,7 +340,7 @@ internal static partial class ValueEntry
         var box = new TextBox
         {
             Classes = { "value" },
-            Text = was, FontFamily = font?.FontFamily ?? NotaFonts.MonoFamily, FontSize = fontSize,
+            Text = was, FontFamily = font?.FontFamily ?? NotaFonts.UiFamily, FontSize = fontSize,
             FontWeight = font?.FontWeight ?? FontWeight.Normal,
             Height = h, Width = w,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,

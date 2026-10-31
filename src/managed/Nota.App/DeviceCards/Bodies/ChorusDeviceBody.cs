@@ -89,7 +89,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         static TextBlock Caps(string t, IBrush? c = null) => new()
         { Text = NotaText.Label(t), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = c ?? TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         static TextBlock Mono(string t, double fs, IBrush c)
-        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.Mono"); return tb; }
+        { var tb = new TextBlock { Text = t, FontSize = fs, Foreground = c, VerticalAlignment = VerticalAlignment.Center }; tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI"); return tb; }
         static T Docked<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
         static T Col<T>(T c, int col) where T : Control { Grid.SetColumn(c, col); return c; }
         static T GRow<T>(T c, int row) where T : Control { Grid.SetRow(c, row); return c; }
@@ -278,7 +278,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
             modulation: true, snap: v => Math.Round(v * 200) / 200);
         var warmRow = Slider("WARMTH", Warmth, v => PctF(v),
             "Warmth — a bucket-brigade flavour on the delay line: darker (low-pass down to 2.5 kHz) and gently saturated", LW, VW,
-            snap: v => Math.Round(v * 100) / 100, ink: NotaPalette.RoseBright);
+            snap: v => Math.Round(v * 100) / 100, ink: DeviceCardKit.ModInkBright);
         var mixRow = Slider("MIX", Mix, v => Vib() ? "wet" : PctF(v), "Mix — 0 % dry, 50 % dry and wet equal, 100 % the voices alone. Vibrato is always wet", LW, VW,
             snap: v => Math.Round(v * 100) / 100, locked: Vib);
 

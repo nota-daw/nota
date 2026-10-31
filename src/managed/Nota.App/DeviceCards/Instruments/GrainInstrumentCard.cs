@@ -138,12 +138,12 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
 
         var hint = new TextBlock
         {
-            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.MonoFamily,
+            FontSize = NotaType.Axis, Foreground = TextTertiary, FontFamily = NotaFonts.UiFamily,
             VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 0, 8, 0), TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily };
+        var meta = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily };
 
         void Refresh()
         {
@@ -181,7 +181,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         static TextBlock Mono(string t, IBrush? c = null, double fs = 8) => new()
         {
             Text = t, FontSize = fs, Foreground = c ?? TextSecondary,
-            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.MonoFamily,
+            VerticalAlignment = VerticalAlignment.Center, FontFamily = NotaFonts.UiFamily,
         };
 
         // Every knob is a table cell: a short label on the card while MIDI learn and the CV
@@ -192,7 +192,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             if (!idx.TryGetValue(id, out var pi)) return new Panel();
             var value = new TextBlock
             {
-                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily,
+                Text = fmt(G(id)), FontSize = NotaType.KnobValue, FontFamily = NotaFonts.UiFamily,
                 Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center, LineHeight = 10,
             };
@@ -248,7 +248,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
                 var ic = new GrainShapeIcon(i) { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
                 var c = new Border
                 {
-                    Width = 26, Height = 19, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
+                    Width = 26, Height = 19, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field,
                     Cursor = new Cursor(StandardCursorType.Hand), Child = ic,
                 };
                 ToolTip.SetTip(c, $"{char.ToUpperInvariant(ShapeWords[i][0])}{ShapeWords[i][1..]} window");
@@ -296,7 +296,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             {
                 var b = new Border
                 {
-                    Width = 16, Height = 17, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1),
+                    Width = 16, Height = 17, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1),
                     BorderBrush = BorderDef, Background = NotaPalette.SurfaceRaised, Cursor = new Cursor(StandardCursorType.Hand),
                     Child = new Glyph(g, 7) { Foreground = NotaPalette.TextStrong, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
                 };
@@ -310,7 +310,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             }
             var box = new Border
             {
-                Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
+                Height = 17, MinWidth = 40, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), BorderBrush = BorderDef,
                 Background = NotaPalette.BgSunken, Child = text,
             };
             box.PointerWheelChanged += (wt, e) => { if (WheelInput.Step(e, wt) is not { } s) return; e.Handled = true; if (s != 0) SetRoot(rootNote + s); };

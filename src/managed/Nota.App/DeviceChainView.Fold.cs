@@ -76,8 +76,8 @@ public sealed partial class DeviceChainView
         var strip = new Border
         {
             Background = ShellHdr, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Body, ClipToBounds = true,
-            Padding = new Thickness(0, 0, 0, 4),
+            CornerRadius = NotaRadius.Card, ClipToBounds = true,
+            Padding = new Thickness(0, 0, 0, 8),
             Child = new DockPanel { LastChildFill = true, Children = { power, remove, rotated } },
             Cursor = movable ? new Cursor(StandardCursorType.SizeAll) : null,
         };
@@ -88,7 +88,7 @@ public sealed partial class DeviceChainView
         var selRing = new Border
         {
             BorderBrush = Brass, BorderThickness = new Thickness(1.5),
-            CornerRadius = new CornerRadius(NotaRadius.BodyValue + RingGap), Margin = new Thickness(-RingGap),
+            CornerRadius = new CornerRadius(NotaRadius.CardValue + RingGap), Margin = new Thickness(-RingGap),
             IsHitTestVisible = false, IsVisible = IsSelected(k, di),
         };
         _selRings.Add(selRing);
@@ -108,6 +108,7 @@ public sealed partial class DeviceChainView
             SelectDevice(k, di, e.KeyModifiers);
         };
         HookDeviceDrag(strip, card, k, di);   // the instrument's strip drags onto other tracks only
+        NotaTextSize.SetFixed(card, true);   // as the full card: its text keeps its size
         return card;
     }
 }

@@ -71,7 +71,7 @@ internal sealed class CommandPaletteView : UserControl
 
         _input = new TextBox
         {
-            Classes = { "search" }, FontSize = 14, PlaceholderText = "Search actions, tracks, devices, presets…",
+            Classes = { "search" }, FontSize = 13, PlaceholderText = "Search actions, tracks, devices, presets…",
             VerticalAlignment = VerticalAlignment.Center, AcceptsReturn = false, AcceptsTab = false,
             Foreground = NotaPalette.TextPrimary,
         };
@@ -82,7 +82,7 @@ internal sealed class CommandPaletteView : UserControl
         _pillText.TextTrimming = TextTrimming.CharacterEllipsis;
         _pill = new Border
         {
-            Height = 24, MaxWidth = 310, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control,
+            Height = 24, MaxWidth = 310, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field,
             VerticalAlignment = VerticalAlignment.Center, Child = _pillText, IsVisible = false,
         };
         var fieldGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 8 };
@@ -92,7 +92,7 @@ internal sealed class CommandPaletteView : UserControl
         var field = new Border
         {
             Height = 38, Padding = new Thickness(10, 0, 6, 0), Background = NotaPalette.BgSunken,
-            BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
+            BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Field,
             Child = fieldGrid, Margin = new Thickness(10, 10, 10, 8),
         };
 
@@ -103,7 +103,7 @@ internal sealed class CommandPaletteView : UserControl
         chipRow.Children.Add(_chips);
         Grid.SetColumn(_count, 1); chipRow.Children.Add(_count);
 
-        _layoutText = new TextBlock { FontSize = 11, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+        _layoutText = new TextBlock { FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         _layoutRow = new Border
         {
             Height = 24, Padding = new Thickness(12, 0), Background = NotaPalette.Panel, IsVisible = false,
@@ -142,12 +142,12 @@ internal sealed class CommandPaletteView : UserControl
         var face = new Border
         {
             Background = NotaPalette.Panel, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
-            CornerRadius = NotaRadius.Modal, ClipToBounds = true, Child = body,
+            CornerRadius = NotaRadius.Card, ClipToBounds = true, Child = body,
         };
         _card = new Border
         {
             Width = CardWidth, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
-            CornerRadius = NotaRadius.Modal, Child = face,
+            CornerRadius = NotaRadius.Card, Child = face,
         };
         _card.BindResource(Border.BoxShadowProperty, "Shadow.Modal");
         // Clicks outside the card close the palette; nothing dims the window (CP-17).
@@ -207,7 +207,7 @@ internal sealed class CommandPaletteView : UserControl
             _layoutText.Inlines = new InlineCollection
             {
                 new Run("Showing results for "),
-                new Run(_results.LayoutHint) { FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextPrimary },
+                new Run(_results.LayoutHint) { FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextPrimary },
                 new Run(" · typed in the other keyboard layout"),
             };
         }
@@ -223,7 +223,7 @@ internal sealed class CommandPaletteView : UserControl
             bool on = prefix == q.Prefix;
             var chip = new Border
             {
-                Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, Cursor = new Cursor(StandardCursorType.Hand),
+                Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field, Cursor = new Cursor(StandardCursorType.Hand),
                 Background = on ? NotaPalette.BorderDefault : Brushes.Transparent,
                 BorderBrush = on ? NotaPalette.BorderStrong : Brushes.Transparent, BorderThickness = new Thickness(1),
                 Child = new StackPanel
@@ -231,7 +231,7 @@ internal sealed class CommandPaletteView : UserControl
                     Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
                     Children =
                     {
-                        new TextBlock { Text = label, FontSize = 11, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center,
+                        new TextBlock { Text = label, FontSize = 10, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center,
                                         Foreground = on ? NotaPalette.TextPrimary : NotaPalette.TextSecondary },
                         Mono(10, NotaPalette.TextTertiary, prefix),
                     },
@@ -269,7 +269,7 @@ internal sealed class CommandPaletteView : UserControl
             _list.Children.Add(new TextBlock
             {
                 Text = "Nothing matches. Try a role (reverb, comp), a character (warm, dark) or a source (vocals, drums).",
-                FontSize = 12, Foreground = NotaPalette.TextMuted, Margin = new Thickness(14, 18), TextWrapping = TextWrapping.Wrap,
+                FontSize = 11, Foreground = NotaPalette.TextMuted, Margin = new Thickness(14, 18), TextWrapping = TextWrapping.Wrap,
             });
             return;
         }
@@ -288,7 +288,7 @@ internal sealed class CommandPaletteView : UserControl
     private static Control Header(string label)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6, Height = 24, Margin = new Thickness(12, 0) };
-        var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
+        var t = new TextBlock { Text = label, FontSize = 8.5, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 4) };
         var line = new Border { Height = 1, Background = NotaPalette.GraphBorder, VerticalAlignment = VerticalAlignment.Bottom, Margin = new Thickness(0, 0, 0, 7) };
         g.Children.Add(t);
         Grid.SetColumn(line, 1); g.Children.Add(line);
@@ -306,9 +306,9 @@ internal sealed class CommandPaletteView : UserControl
         var icon = Icon(Icons[iconKey], 20, NotaPalette.TextMuted);
         icon.Tag = "icon";
 
-        var name = new TextBlock { FontSize = 12.5, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
+        var name = new TextBlock { FontSize = 11.5, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
         name.Inlines = NameRuns(it, hit.Mask, hit.Disabled);
-        var sub = new TextBlock { Text = it.Sub, FontSize = 11, Foreground = NotaPalette.TextMuted, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        var sub = new TextBlock { Text = it.Sub, FontSize = 10, Foreground = NotaPalette.TextMuted, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
         var line1 = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(name, Dock.Left);
         name.Margin = new Thickness(0, 0, 8, 0);
@@ -319,7 +319,7 @@ internal sealed class CommandPaletteView : UserControl
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
         if (hit.Disabled && hit.Why.Length > 0)
-            right.Children.Add(new TextBlock { Text = hit.Why, FontSize = 10.5, Foreground = NotaPalette.DangerBright, VerticalAlignment = VerticalAlignment.Center });
+            right.Children.Add(new TextBlock { Text = hit.Why, FontSize = 9.5, Foreground = NotaPalette.DangerBright, VerticalAlignment = VerticalAlignment.Center });
         else if (it.Kind == PaletteKind.Action && it.Gesture.Length > 0)
             foreach (var cap in Caps(it.Gesture)) right.Children.Add(KeyCap(cap, 18, 10));
         else if (it.Tag.Length > 0)
@@ -329,7 +329,7 @@ internal sealed class CommandPaletteView : UserControl
             right.Children.Add(tag);
         }
 
-        var edge = new Border { Width = 2, CornerRadius = NotaRadius.Bar, Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Left, Tag = "edge" };
+        var edge = new Border { Width = 2, CornerRadius = NotaRadius.Fine, Margin = new Thickness(0, 3), HorizontalAlignment = HorizontalAlignment.Left, Tag = "edge" };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 10, Margin = new Thickness(12, 5) };
         grid.Children.Add(icon);
         Grid.SetColumn(text, 1); grid.Children.Add(text);
@@ -430,7 +430,7 @@ internal sealed class CommandPaletteView : UserControl
             var capRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
             foreach (var c in caps == "Tab" ? ["Tab"] : Caps(caps)) capRow.Children.Add(KeyCap(c, 16, 9));
             row.Children.Add(capRow);
-            row.Children.Add(new TextBlock { Text = label, FontSize = 10.5, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center });
+            row.Children.Add(new TextBlock { Text = label, FontSize = 9.5, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center });
             _hints.Children.Add(row);
         }
     }
@@ -505,18 +505,18 @@ internal sealed class CommandPaletteView : UserControl
 
     internal static Control KeyCap(string label, double size, double fontSize) => new Border
     {
-        MinWidth = size, Height = size, Padding = new Thickness(3, 0), CornerRadius = NotaRadius.Badge,
+        MinWidth = size, Height = size, Padding = new Thickness(3, 0), CornerRadius = NotaRadius.Cell,
         BorderBrush = NotaPalette.BorderStrong, BorderThickness = new Thickness(1, 1, 1, 2), VerticalAlignment = VerticalAlignment.Center,
         Child = new TextBlock
         {
-            Text = label, FontSize = fontSize, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextStrong,
+            Text = label, FontSize = fontSize, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextStrong,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         },
     };
 
     private static TextBlock Mono(double size, IBrush ink, string text = "") => new()
     {
-        Text = text, FontSize = size, FontFamily = NotaFonts.MonoFamily, Foreground = ink, VerticalAlignment = VerticalAlignment.Center,
+        Text = text, FontSize = size, FontFamily = NotaFonts.UiFamily, Foreground = ink, VerticalAlignment = VerticalAlignment.Center,
     };
 
     // A shared-set icon in a square box: the 16-unit grid scaled as a whole, so the kinds keep
@@ -527,7 +527,7 @@ internal sealed class CommandPaletteView : UserControl
 /// <summary>The line that confirms what the palette did, with Undo (design: bottom-centre, 4 s).</summary>
 internal sealed class PaletteToast : Border
 {
-    private readonly TextBlock _text = new() { FontSize = 11, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _text = new() { FontSize = 10, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
     private readonly Border _undo;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(4) };
     private Action? _onUndo;
@@ -540,7 +540,7 @@ internal sealed class PaletteToast : Border
         Margin = new Thickness(0, 0, 0, 48);
         Height = 32;
         Padding = new Thickness(12, 0, 6, 0);
-        CornerRadius = NotaRadius.Panel;
+        CornerRadius = NotaRadius.Group;
         Background = NotaPalette.SurfaceHover;
         BorderBrush = NotaPalette.BorderStrong;
         BorderThickness = new Thickness(1);
@@ -549,13 +549,13 @@ internal sealed class PaletteToast : Border
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                new TextBlock { Text = "Undo", FontSize = 11, Foreground = NotaPalette.Accent, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = MenuKit.Keys("⌘Z"), FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = "Undo", FontSize = 10, Foreground = NotaPalette.Accent, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = MenuKit.Keys("⌘Z"), FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
             },
         };
         _undo = new Border
         {
-            Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, Background = NotaPalette.BorderDefault,
+            Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Field, Background = NotaPalette.BorderDefault,
             Cursor = new Cursor(StandardCursorType.Hand), Child = undoLabel, VerticalAlignment = VerticalAlignment.Center,
         };
         _undo.PointerPressed += (_, e) => { e.Handled = true; var u = _onUndo; Hide(); u?.Invoke(); };

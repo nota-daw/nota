@@ -96,7 +96,7 @@ public partial class MainWindow
         Child = new TextBlock
         {
             Text = "Select a clip in the arrangement to edit it here",
-            FontSize = 12,
+            FontSize = 11,
             Foreground = NotaPalette.TextTertiary,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,

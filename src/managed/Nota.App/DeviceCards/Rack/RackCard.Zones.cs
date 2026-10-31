@@ -76,7 +76,7 @@ internal sealed partial class RackCardView
         {
             int cc = c;
             var hue = ChainHue(c);
-            var stripe = new Border { Width = 3, Height = 9, CornerRadius = NotaRadius.Bar, Background = hue, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
+            var stripe = new Border { Width = 3, Height = 9, CornerRadius = NotaRadius.Fine, Background = hue, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 4, 0) };
             var name = RcName(RcChainName(c), c == Sel ? NotaPalette.AccentBright : NotaPalette.TextPrimary, NotaType.KnobLabel);
             var nameCell = new DockPanel { LastChildFill = true, Children = { RcDock(stripe, Dock.Left), name } };
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{RcZoneNameWidth},*{(vel ? $",{RcVelWidth}" : "")}"), ColumnSpacing = 8, Height = 22, VerticalAlignment = VerticalAlignment.Center };
@@ -129,7 +129,7 @@ internal sealed partial class RackCardView
                 ToolTip.SetTip(sb, "Drag the edges to set the select range");
                 Grid.SetColumn(sb, 1); grid.Children.Add(sb);
             }
-            var rowBorder = new Border { CornerRadius = NotaRadius.Badge, Padding = new Thickness(4, 0, 0, 0), Child = grid };
+            var rowBorder = new Border { CornerRadius = NotaRadius.Cell, Padding = new Thickness(4, 0, 0, 0), Child = grid };
             rows.Children.Add(rowBorder);
             rowHosts.Add((rowBorder, name, c));
         }

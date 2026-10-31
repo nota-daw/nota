@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // The custom-drawn view of the Nota Reverb card: the decay-tail window. The impulse flashes
-// at the pre-delay (teal), the early reflections light one after another, then the RT60
+// at the pre-delay (a bright line), the early reflections light one after another, then the RT60
 // curve draws itself and fades — a loop while the reverb is sounding, a still picture when
 // it is not. Frozen, the tail is a held line under an accent frame. It is also a control:
 // drag the pre-delay marker to set the pre-delay, drag anywhere else to lengthen or shorten
@@ -66,7 +66,7 @@ internal sealed class ReverbTailView : Control, IValueHandles
         InvalidateVisual();
     }
 
-    private (double x0, double x1, double top, double bot) Geo() => (8, Bounds.Width - 8, 15, Bounds.Height - 12);
+    private (double x0, double x1, double top, double bot) Geo() => (8, Bounds.Width - 8, NotaGraph.PlotTop, Bounds.Height - NotaGraph.PlotFloor);
     private double PreX() { var (x0, x1, _, _) = Geo(); return x0 + (PreLo + PreSpan * _preNorm) * (x1 - x0); }
 
     // Typed entry (specs/035): handle 0 = the decay (the tail anywhere), 1 = the pre-delay marker.
@@ -116,8 +116,8 @@ internal sealed class ReverbTailView : Control, IValueHandles
             Changed?.Invoke(0, Math.Clamp(_dragV + (p.X - _dragX) / (x1 - x0) - (p.Y - _dragY) / Math.Max(20, bot - top) * 0.5, 0, 1));
     }
 
-    private static FormattedText Text(string t, IBrush ink, double size = 7.5)
-        => new(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Mono, size, ink);
+    private static FormattedText Text(string t, IBrush ink, double size = NotaGraph.AxisSize)
+        => new NotaFormattedText(t, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink, NotaTextSize.InCard);
 
     public override void Render(DrawingContext ctx)
     {
@@ -190,13 +190,13 @@ internal sealed class ReverbTailView : Control, IValueHandles
         if (!_freeze)
         {
             double rx = preX + _rt60 / AxisSec * (x1 - preX);
-            if (rx <= x1) ctx.DrawEllipse(NotaPalette.VizInk, null, new Point(rx, bot), 2.2, 2.2);
+            if (rx <= x1) ctx.DrawEllipse(NotaPalette.Accent, null, new Point(rx, bot), 3.5, 3.5);
         }
 
         // ---- the impulse at the pre-delay and the early reflections ----------------
         double burstOp = !live ? 0.9 : ph < 0.1 ? 1 : ph < 0.4 ? 1 - (ph - 0.1) / 0.3 * 0.6 : 0.4 - (ph - 0.4) / 0.6 * 0.18;
         using (ctx.PushOpacity(burstOp))
-            ctx.DrawLine(new Pen(NotaPalette.Teal, 1.2), new Point(preX, top - 2), new Point(preX, bot));
+            ctx.DrawLine(new Pen(NotaPalette.VizInk, 1.2), new Point(preX, top - 2), new Point(preX, bot));
 
         int n = Math.Min(_erMs.Length, _erGain.Length);
         for (int k = 0; k < n; k++)
@@ -213,15 +213,16 @@ internal sealed class ReverbTailView : Control, IValueHandles
             else { op = 0.3 - Math.Min(1, (since - 0.36) / 0.6) * 0.15; sc = 0.8 - Math.Min(1, (since - 0.36) / 0.6) * 0.3; }
             double len = Math.Max(3, span * 0.52 * _erGain[k] * sc);
             using (ctx.PushOpacity(op))
-                ctx.DrawLine(new Pen(NotaPalette.Teal, 1.2), new Point(x, bot), new Point(x, bot - len));
+                ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1.2), new Point(x, bot), new Point(x, bot - len));
         }
 
         // ---- labels ------------------------------------------------------------------
-        var title = _freeze ? Text("Tail held · no decay", NotaPalette.AccentBright) : Text("Decay tail", NotaGraph.TitleInk);
-        ctx.DrawText(title, new Point(x0 - 3, 3));
+        if (_freeze) ctx.DrawText(new NotaFormattedText("Tail held · no decay", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));
+        else NotaGraph.Title(ctx, new Rect(0, 0, w, h), "Decay tail");
         var rt = Text(_freeze ? "RT60 ∞" : NotaNum.F($"RT60 {_rt60:0.00} s"), _freeze ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-        ctx.DrawText(rt, new Point(x1 + 3 - rt.Width, 3));
-        var pre = Text(NotaNum.F($"pre {_preMs:0} ms"), NotaPalette.TealBright);
+        ctx.DrawText(rt, new Point(x1 + 2 - rt.Width, 5));
+        var pre = Text(NotaNum.F($"pre {_preMs:0} ms"), NotaPalette.TextTertiary);
         ctx.DrawText(pre, new Point(Math.Min(preX + 3, x1 - pre.Width - 24), h - pre.Height - 2));
         var ax = Text("4 s", NotaGraph.AxisInk);
         ctx.DrawText(ax, new Point(x1 + 3 - ax.Width, h - ax.Height - 2));

@@ -126,7 +126,7 @@ internal sealed partial class RackCardView
         float span = Math.Max(1e-6f, max - min);
         int curve = a.MappingCurve(index);
 
-        var stripe = new Border { Width = 3, Height = 9, CornerRadius = NotaRadius.Bar, Background = hue, VerticalAlignment = VerticalAlignment.Center };
+        var stripe = new Border { Width = 3, Height = 9, CornerRadius = NotaRadius.Fine, Background = hue, VerticalAlignment = VerticalAlignment.Center };
         var whereTb = new TextBlock { Text = where, FontSize = NotaType.KnobLabel, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         var paramTb = new TextBlock { Text = NotaText.Label(param), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { stripe, whereTb, paramTb } };

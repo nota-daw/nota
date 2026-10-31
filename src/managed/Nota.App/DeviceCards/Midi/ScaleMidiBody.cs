@@ -92,7 +92,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
     private static TextBlock Caps(string t, IBrush? c = null, double fs = NotaType.KnobLabel) => new()
     { Text = NotaText.Label(t), FontSize = fs, FontWeight = FontWeight.Medium, Foreground = c ?? Cap, VerticalAlignment = VerticalAlignment.Center };
     private static TextBlock Mono(string t, IBrush c, double fs = 8) => new()
-    { Text = t, FontSize = fs, FontFamily = NotaFonts.MonoFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
+    { Text = t, FontSize = fs, FontFamily = NotaFonts.UiFamily, Foreground = c, VerticalAlignment = VerticalAlignment.Center };
     private static T WithDock<T>(T c, Dock d) where T : Control { DockPanel.SetDock(c, d); return c; }
 
     // ---- body -------------------------------------------------------------------------------------
@@ -227,7 +227,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             var ioIn = Mono("—", Sub, 13); var ioOut = Mono("—", Txt, 13);
             var ioBox = new Border
             {
-                Height = 30, Background = Well, BorderBrush = Rule, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 30, Background = Well, BorderBrush = Rule, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center,
                     Children = { ioIn, new TextBlock { Text = "→", FontSize = 10, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center }, ioOut } },
             };
@@ -281,7 +281,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             var ioIn = Mono("—", Sub, 11); var ioOut = Mono("—", Txt, 11);
             var ioBar = new Border
             {
-                Height = 24, Background = Well, BorderBrush = Rule, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(8, 0),
+                Height = 24, Background = Well, BorderBrush = Rule, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(8, 0),
                 Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children =
                     { Mono("In → out", Cap, 7), ioIn, new TextBlock { Text = "→", FontSize = 9, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center }, ioOut } },
             };
@@ -332,7 +332,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
 
         Border Chip(Control child, double w, double h = 14)
         {
-            return new Border { Width = w, Height = h, CornerRadius = NotaRadius.Badge, Background = NotaPalette.TrackOff, Cursor = new Cursor(StandardCursorType.Hand),
+            return new Border { Width = w, Height = h, CornerRadius = NotaRadius.Cell, Background = NotaPalette.TrackOff, Cursor = new Cursor(StandardCursorType.Hand),
                 VerticalAlignment = VerticalAlignment.Center, Child = child };
         }
 
@@ -373,7 +373,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             var name = new TextBlock { FontSize = 9, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             var box = new Border
             {
-                Width = 54, Height = 16, Background = NotaPalette.GridBeat, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Width = 54, Height = 16, Background = NotaPalette.GridBeat, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
                 Child = new DockPanel { Children = { WithDock(new Glyph(GlyphKind.ChevronDown, 7) { Foreground = Cap, VerticalAlignment = VerticalAlignment.Center }, Dock.Right), name } },
             };
@@ -437,7 +437,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             readouts.Add(() => val.Text = DeviceCardKit.NoteName(Get()));
             var box = new Border
             {
-                Height = 14, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
+                Height = 14, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell,
                 Child = new DockPanel { Children = { WithDock(dec, Dock.Left), WithDock(inc, Dock.Right), valHit } },
             };
             ToolTip.SetTip(box, MenuKit.Keys($"{label} — ± an octave, drag or scroll the note for semitones, ⌥-click the note to type it, double-click resets. Notes outside the range pass through."));
@@ -466,7 +466,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
         Border Button(string text, Action click, string tip)
         {
             var tb = new TextBlock { Text = text, FontSize = 8, Foreground = Txt, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            var b = new Border { Height = 16, CornerRadius = NotaRadius.Badge, Background = NotaPalette.TrackOff, BorderBrush = NotaPalette.TrackOff, BorderThickness = new Thickness(1),
+            var b = new Border { Height = 16, CornerRadius = NotaRadius.Cell, Background = NotaPalette.TrackOff, BorderBrush = NotaPalette.TrackOff, BorderThickness = new Thickness(1),
                 Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
             b.PointerEntered += (_, _) => { if (b.Tag is null) b.Background = NotaPalette.SurfaceHover; };
             b.PointerExited += (_, _) => { if (b.Tag is null) b.Background = NotaPalette.TrackOff; };

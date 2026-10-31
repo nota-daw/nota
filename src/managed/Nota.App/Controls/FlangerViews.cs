@@ -2,14 +2,15 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // Nota Flanger views (device kind 23) — the pictures on the Flanger card:
-//   FlangerCombView  — the live comb response of both channels (L neutral ink, R teal) over 20 Hz …
+//   FlangerCombView  — the live comb response of both channels (L neutral ink, R a darker grey) over 20 Hz …
 //                      20 kHz, −36 … +12 dB, with the first notch marked. Where the teeth get
 //                      denser than a pixel the curve draws each column's max…min, so the comb
 //                      stays honest at high frequencies. Drag left / right moves the notch (Delay),
 //                      up / down the Feedback; double-click resets both.
 //   FlangerSweepView — the delay τ of both channels over two LFO cycles, a running head and
 //                      the dots where each channel is now.
-//   FlangerBar       — a thin range / level bar (the NOTCH sweep and the NULL depth).
+//   FlangerBar       — a thin read-only range / level bar in a groove (the notch sweep, the
+//                      null depth; Chorus's detune and delay, Phaser's sweep).
 // FlangerMath mirrors Flanger.h so the picture matches the sound.
 
 using System;
@@ -164,15 +165,15 @@ internal sealed class FlangerCombView : Control
         }
 
         // R first so L reads on top where they meet.
-        Curve(_tauR, _on ? NotaPalette.TealBright : NotaPalette.TextAxis, 1.2, 0.75);
-        Curve(_tauL, _on ? NotaPalette.VizInk : NotaPalette.TextAxis, 1.6, 1);
+        Curve(_tauR, _on ? NotaPalette.TextTertiary : NotaPalette.TextDisabled, 1.2);
+        Curve(_tauL, _on ? NotaPalette.VizInk : NotaPalette.TextDisabled, 1.6);
 
         void Label(string s, double x, double y)
         {
             var ft = NotaGraph.AxisText(s);
             ctx.DrawText(ft, new Point(x, y - ft.Height / 2));
         }
-        Label("+12", 4, Y(12) + 6);
+        if (Y(0) - Y(12) >= 30) Label("+12", 4, Y(12) + 6);   // under the top line only where it clears "0 dB"
         Label("0 dB", 4, Y(0) - 6);
         Label("−24", 4, Y(-24) - 6);
         foreach (var (hz, s) in new[] { (100.0, "100"), (1000.0, "1k"), (10000.0, "10k") })
@@ -181,7 +182,7 @@ internal sealed class FlangerCombView : Control
             ctx.DrawText(ft, new Point(X(hz) + 3, h - 3 - ft.Height));
         }
 
-        void Curve(double tauMs, IBrush ink, double width, double opacity)
+        void Curve(double tauMs, IBrush ink, double width)
         {
             double t = tauMs / 1000, k = 2 * Math.PI * t;
             var (dry, wet) = FlangerMath.DryWet(_mix);
@@ -208,7 +209,7 @@ internal sealed class FlangerCombView : Control
                 }
                 g.EndFigure(false);
             }
-            using (ctx.PushOpacity(opacity)) ctx.DrawGeometry(null, NotaGraph.SecondaryPen(ink, width), geo);
+            ctx.DrawGeometry(null, NotaGraph.SecondaryPen(ink, width), geo);
         }
         static void Pt(StreamGeometryContext g, int i, double x, double y)
         {
@@ -242,27 +243,27 @@ internal sealed class FlangerSweepView : Control
         double Y(double t) => h * (34 - Math.Clamp(t / top, 0, 1.2) * 28) / 40;
         ctx.DrawLine(new Pen(NotaPalette.GraphBorder, 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(X(1), 0), new Point(X(1), h));
 
-        Curve(_off, _on ? NotaPalette.TealBright : NotaPalette.TextAxis, 1.2, 0.75);
-        Curve(0, _on ? NotaPalette.VizInk : NotaPalette.TextAxis, 1.4, 1);
+        Curve(_off, _on ? NotaPalette.TextTertiary : NotaPalette.TextDisabled, 1.2);
+        Curve(0, _on ? NotaPalette.VizInk : NotaPalette.TextDisabled, 1.4);
 
-        var tl = NotaGraph.AxisText("τ " + FlangerMath.Ms(top) + " ms", size: 6);
-        ctx.DrawText(tl, new Point(5, 1));
-        var bl = NotaGraph.AxisText("0 ms", size: 6);
-        ctx.DrawText(bl, new Point(5, h - 1 - bl.Height));
+        var tl = NotaGraph.AxisText("τ " + FlangerMath.Ms(top) + " ms");
+        NotaGraph.PlateText(ctx, tl, new Point(5, 1));   // a short window: the sweep passes behind its labels
+        var bl = NotaGraph.AxisText("0 ms");
+        NotaGraph.PlateText(ctx, bl, new Point(5, h - 1 - bl.Height));
         string span = "2 × " + (_periodMs >= 1000 ? NotaNum.F($"{_periodMs / 1000:0.0} s") : NotaNum.F($"{_periodMs:0} ms"));
-        var br = NotaGraph.AxisText(span, size: 6);
-        ctx.DrawText(br, new Point(w - 5 - br.Width, h - 1 - br.Height));
+        var br = NotaGraph.AxisText(span);
+        NotaGraph.PlateText(ctx, br, new Point(w - 5 - br.Width, h - 1 - br.Height));
 
         if (_on)
         {
             double hx = X(Math.Clamp(_head, 0, 2));
             ctx.DrawLine(new Pen(NotaPalette.TextTertiary, 1), new Point(hx, 0), new Point(hx, h));
-            DrawDot(new Point(hx, Y(_tauR)), NotaPalette.TealBright);
+            DrawDot(new Point(hx, Y(_tauR)), NotaPalette.TextTertiary);
             DrawDot(new Point(hx, Y(_tauL)), NotaPalette.VizInk);
         }
 
         void DrawDot(Point p, IBrush ink) => ctx.DrawEllipse(ink, new Pen(NotaGraph.Ground, 2), p, 3, 3);
-        void Curve(double off, IBrush ink, double width, double opacity)
+        void Curve(double off, IBrush ink, double width)
         {
             var geo = new StreamGeometry();
             using (var g = geo.Open())
@@ -277,7 +278,7 @@ internal sealed class FlangerSweepView : Control
                 }
                 g.EndFigure(false);
             }
-            using (ctx.PushOpacity(opacity)) ctx.DrawGeometry(null, NotaGraph.SecondaryPen(ink, width), geo);
+            ctx.DrawGeometry(null, NotaGraph.SecondaryPen(ink, width), geo);
         }
     }
 }
@@ -300,8 +301,8 @@ internal sealed class FlangerBar : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 0 || h <= 0) return;
-        var r = new RoundedRect(new Rect(0, 0, w, h), h / 2);
-        ctx.DrawRectangle(NotaPalette.BgSunken, null, r);
+        var r = new RoundedRect(new Rect(0, 0, w, h), Math.Min(NotaRadius.FineValue, h / 2));
+        NotaDepth.Groove(ctx, this, r);
         if (_w > 0)
             using (ctx.PushClip(r)) ctx.DrawRectangle(Ink, null, new Rect(w * _l, 0, Math.Max(1, w * _w), h));
     }

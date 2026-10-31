@@ -376,7 +376,7 @@ public sealed partial class PianoRollView : UserControl
     private static readonly IPen BendPen = new Pen(NotaPalette.TextPrimary, 1.25, lineCap: PenLineCap.Round);
     private static readonly IPen BendPenOnSel = new Pen(NotaPalette.TextOnAccent, 1.25, lineCap: PenLineCap.Round);
     private static readonly IBrush PressureShade = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0x66);
-    private static readonly Typeface Mono = NotaFonts.Mono;
+    private static readonly Typeface NumFace = NotaFonts.Sans;
 
     private double RangeH => _rows.Count * RowH;
 
@@ -1556,8 +1556,12 @@ public sealed partial class PianoRollView : UserControl
         private void RenderTime(DrawingContext ctx, double h, double ppb, double viewEnd, double origin, double bpm)
         {
             double pxPerSec = ppb * bpm / 60.0;
-            double charW = _charW > 0 ? _charW
-                : _charW = new FormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText).Width / 10;
+            if (_charW <= 0 || _charWStep != NotaTextSize.Step)   // re-measure when Text size changes
+            {
+                _charWStep = NotaTextSize.Step;
+                _charW = new NotaFormattedText("0000000000", NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, LabelText).Width / 10;
+            }
+            double charW = _charW;
             double stepS = RulerLabels.TimeSteps[^1];
             foreach (var st in RulerLabels.TimeSteps)
             {
@@ -1573,11 +1577,12 @@ public sealed partial class PianoRollView : UserControl
                 double x = _o.BeatToX(b);
                 ctx.DrawLine(BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
                 if (b >= _o._lengthBeats - 1e-9) continue;
-                var ft = new FormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText);
+                var ft = new NotaFormattedText(RulerLabels.Time(t, stepS, NotaNum.Culture), NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, LabelText);
                 ctx.DrawText(ft, new Point(x + 4, h - 5 - ft.Height));
             }
         }
         private double _charW;
+        private int _charWStep;   // the Text size step _charW was measured at
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
@@ -1628,7 +1633,7 @@ public sealed partial class PianoRollView : UserControl
                     ctx.DrawLine(bar ? BarPen : BeatPen, new Point(x + 0.5, 0), new Point(x + 0.5, h));
                     if (b >= _o._lengthBeats - 1e-9) continue;
                     string label = RulerLabels.Bars(origin + b, step, bpb, NotaNum.Culture);
-                    var ft = new FormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, bar ? RulerBarText : LabelText);
+                    var ft = new NotaFormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, NumFace, 9, bar ? RulerBarText : LabelText);
                     ctx.DrawText(ft, new Point(x + 4, h - 5 - ft.Height));
                 }
             }
@@ -1783,15 +1788,18 @@ public sealed partial class PianoRollView : UserControl
         // and cut to the column.
         private void DrawKeyLabel(DrawingContext ctx, int pitch, double y, double w, IBrush ink)
         {
+            // The axis size once a row has room for it (the default 12px row does); down to the
+            // type floor on squeezed rows.
+            double size = Math.Clamp(RowH - 2, NotaType.Floor, NotaType.Axis);
             string? pad = _o._rows.Label(_o._rows.NearestRow(pitch));
             if (pad is not null)
             {
-                var name = new FormattedText(pad, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, ink)
+                var name = new NotaFormattedText(pad, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink)
                     { MaxTextWidth = Math.Max(1, w - 8), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
                 ctx.DrawText(name, new Point(4, y + (RowH - name.Height) / 2));
                 return;
             }
-            var ft = new FormattedText(NoteName(pitch), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, ink);
+            var ft = new NotaFormattedText(NoteName(pitch), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, ink);
             ctx.DrawText(ft, new Point(w - ft.Width - 5, y + (RowH - ft.Height) / 2));
         }
     }

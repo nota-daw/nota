@@ -21,6 +21,9 @@ public partial class App : Avalonia.Application
     {
         // Numbers read the same on every OS locale: a point, and U+2212 for the minus.
         NotaNum.Install();
+        // One typeface with tabular figures, so digits keep their width everywhere.
+        NotaFonts.InstallTabular();
+        NotaTextSize.Install();
         // Rounded, bordered, clipping Borders clip their child to the inner edge.
         BorderInnerClip.Install();
         AvaloniaXamlLoader.Load(this);
@@ -101,6 +104,8 @@ public partial class App : Avalonia.Application
         // popup they open take it from here.
         NotaUiScale.InitPopups();
         NotaUiScale.Set(Services.GetRequiredService<ISettingsService>().Current.InterfaceScale);
+        // Text size (spec 038), likewise: every text the app draws takes its step.
+        NotaTextSize.Set(Services.GetRequiredService<ISettingsService>().Current.TextSize);
 
         // Nota Mosaic's samples resolve against the Samples and data folders; installed sample
         // packs get their Mosaic presets in the background (once per pack version).

@@ -126,7 +126,7 @@
   <Panel>
   <DockPanel Background="{DynamicResource Brush.Seam}">
     <!-- Header (32) on the ground, a seam under it — custom frameless: macOS traffic lights
-         sit in the left inset; the project name is centred on the window. Draggable.
+         sit in the left inset; the project's name is the title, centred on the window. Draggable.
          (Transport sits right under it, at the top of the window.) -->
     <Border x:Name="TitleBar" DockPanel.Dock="Top" Height="32"
             Background="{DynamicResource Brush.BgApp}"
@@ -157,13 +157,11 @@
     <Border x:Name="TransportBar" DockPanel.Dock="Top" Classes="transport" Height="{StaticResource Control.TransportBar}">
       <Grid x:Name="TransportGrid" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto,Auto,Auto,Auto,Auto">
 
-        <!-- Project name, then the view switch -->
-        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="2,0,10,0" VerticalAlignment="Center">
-          <TextBlock x:Name="ProjectNameText" Text="Untitled" FontSize="13" FontWeight="SemiBold"
-                     MaxWidth="220" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
-                     Foreground="{DynamicResource Brush.TextPrimary}"/>
-          <Border Classes="segmented" VerticalAlignment="Center">
-            <StackPanel Orientation="Horizontal" Spacing="1">
+        <!-- The view group: three 28px icon cells in a 2px well (corner 9). The project's name
+             is the window title, centred in the header above. -->
+        <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="10" Margin="2,0,0,0" VerticalAlignment="Center">
+          <Border Classes="segmented view" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal">
               <!-- The views as icon keys (spec 012): the tooltip and the accessible name carry
                    the view name. View → Arrangement / Session / Modular do the same. -->
               <ToggleButton x:Name="ArrangeBtn" Classes="seg view" IsChecked="True" Click="OnShowArrangement"
@@ -182,14 +180,14 @@
           </Border>
         </StackPanel>
 
-        <!-- The console: transport · position · loop in one recess -->
-        <Border Grid.Column="1" Classes="console">
-          <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-            <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
+        <!-- Transport and timing: the transport keys in their well, then the position, the
+             loop and loop-record mode as plain values and small pills — no box. -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10" Margin="12,0,0,0" VerticalAlignment="Center">
+          <Border Classes="console">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
               <!-- Shapes built from geometry: stop a square, play a filled triangle, record a
-                   filled disc. No glyph font. Keys butt against each other on 1px seams. -->
-              <Button x:Name="StopBtn" Classes="tp-icon" ToolTip.Tip="Stop (Return)"
-                      Foreground="{DynamicResource Brush.TextStrong}" Command="{Binding Transport.StopCommand}">
+                   filled disc. No glyph font. -->
+              <Button x:Name="StopBtn" Classes="tp-icon" ToolTip.Tip="Stop (Return)" Command="{Binding Transport.StopCommand}">
                 <app:Glyph x:Name="StopGlyph" Kind="Stop" Width="9" Height="9"/>
               </Button>
               <Button x:Name="PlayBtn" Classes="tp-play" ToolTip.Tip="Play (Space)"
@@ -201,56 +199,58 @@
                 <app:Glyph x:Name="RecordGlyph" Kind="Record" Width="10" Height="10"/>
               </ToggleButton>
             </StackPanel>
+          </Border>
 
-            <Border Width="1" Height="18" Background="{DynamicResource Brush.Rule}"/>
-
-            <!-- Position — click to flip bars.beats ↔ minutes:seconds; the unit beside says which -->
-            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Cursor="Hand" Background="Transparent"
-                        PointerPressed="OnTogglePositionDisplay"
-                        ToolTip.Tip="Switch between bars and time">
-              <TextBlock Classes="Readout" Text="{Binding Transport.PositionText}" FontSize="14"
-                         MinWidth="72" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
+          <!-- Position — click to flip bars.beats ↔ minutes:seconds; the unit beside says which -->
+          <Border Classes="readout" Cursor="Hand" PointerPressed="OnTogglePositionDisplay"
+                  ToolTip.Tip="Switch between bars and time">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <TextBlock Classes="Readout" Text="{Binding Transport.PositionText}"
+                         MinWidth="62" VerticalAlignment="Center"/>
               <TextBlock Classes="CellLabel" Text="{Binding Transport.PositionUnitText}" VerticalAlignment="Center"/>
             </StackPanel>
+          </Border>
 
-            <Border x:Name="LoopSep" Width="1" Height="18" Background="{DynamicResource Brush.Rule}"/>
+          <Border x:Name="LoopSep" Classes="tb-sep"/>
 
-            <!-- Loop: the range is the key -->
-            <ToggleButton x:Name="LoopCell" Classes="cell" Height="22" IsChecked="{Binding Transport.LoopOn}" ToolTip.Tip="Loop the range set on the ruler">
-              <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBlock Classes="CellLabel" Text="Loop" VerticalAlignment="Center" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
-                <TextBlock Classes="Mono" FontSize="11" MinWidth="58" VerticalAlignment="Center"
-                           Text="{Binding Transport.LoopRangeText}"
-                           Foreground="{Binding $parent[ToggleButton].Foreground}"/>
-              </StackPanel>
-            </ToggleButton>
-            <!-- Loop record mode: Overdub (rests neutral) or Replace (lit, the non-default choice) -->
-            <ToggleButton x:Name="LoopRecordCell" Classes="cell" Height="22" IsChecked="{Binding Transport.LoopRecordReplace}"
-                          ToolTip.Tip="Loop recording: Overdub adds every pass · Replace keeps the latest pass (⌘⇧R)">
-              <Panel>
-                <!-- Sizer: the cell keeps the longer label's width in both states, so the bar doesn't shift -->
-                <TextBlock Classes="CellLabel" Text="Overdub" Opacity="0" VerticalAlignment="Center"/>
-                <TextBlock Classes="CellLabel" Text="Overdub" VerticalAlignment="Center" HorizontalAlignment="Center"
-                           IsVisible="{Binding !Transport.LoopRecordReplace}" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
-                <TextBlock Classes="CellLabel" Text="Replace" VerticalAlignment="Center" HorizontalAlignment="Center"
-                           IsVisible="{Binding Transport.LoopRecordReplace}" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
-              </Panel>
-            </ToggleButton>
-          </StackPanel>
-        </Border>
+          <!-- Loop on/off as an icon key with the range beside it; on is the soft
+               tint, the glyph takes the orange ink through ToggleButton:checked -->
+          <ToggleButton x:Name="LoopCell" Classes="tp-icon" IsChecked="{Binding Transport.LoopOn}"
+                        Width="NaN" Padding="6,0,8,0"
+                        ToolTip.Tip="Loop the range set on the ruler (⌘L)" AutomationProperties.Name="Loop">
+            <!-- The loop range is written beside the glyph, so the numbers read at a glance -->
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <app:Glyph Kind="Loop" Size="16" VerticalAlignment="Center"/>
+              <TextBlock Classes="Value" MinWidth="44" VerticalAlignment="Center"
+                         Text="{Binding Transport.LoopRangeText}"
+                         Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+            </StackPanel>
+          </ToggleButton>
+          <!-- Loop record mode as an icon key: Overdub stacks the passes (two layers, at rest);
+               Replace keeps the latest (one layer and a turn arrow, picked: the soft tint) -->
+          <ToggleButton x:Name="LoopRecordCell" Classes="tp-icon" IsChecked="{Binding Transport.LoopRecordReplace}"
+                        AutomationProperties.Name="Loop recording mode"
+                        ToolTip.Tip="Loop recording: Overdub adds every pass · Replace keeps the latest pass (⌘⇧R)">
+            <Panel>
+              <app:Glyph Kind="Overdub" Size="16" IsVisible="{Binding !Transport.LoopRecordReplace}"/>
+              <app:Glyph Kind="Replace" Size="16" IsVisible="{Binding Transport.LoopRecordReplace}"/>
+            </Panel>
+          </ToggleButton>
+        </StackPanel>
 
-        <!-- Readouts: one 26px well each, a mono value and its muted unit on one line -->
-        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="10,0,0,0">
+        <!-- Tempo, tap, signature and key: plain 17px values with the unit in ink 3 -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="10,0,0,0">
+          <Border Classes="tb-sep"/>
           <!-- Tempo (drag ↕ or double-click to type) -->
-          <Border Classes="well" ToolTip.Tip="Set the tempo — drag, or double-click to type">
-            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
-              <Panel x:Name="BpmHost" Width="52" Height="18" VerticalAlignment="Center"/>
+          <Border Classes="readout" ToolTip.Tip="Set the tempo — drag, or double-click to type">
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <Panel x:Name="BpmHost" Width="60" Height="22" VerticalAlignment="Center"/>
               <TextBlock Classes="CellLabel" Text="BPM" VerticalAlignment="Center"/>
             </StackPanel>
           </Border>
           <!-- Tap tempo: fires on press (a release lags the beat). The dots count the beats
-               of the current series, brass as each one lands; they clear when it times out. -->
-          <Button x:Name="TapChip" Classes="cell" ClickMode="Press" Click="OnTapTempo"
+               of the current series, orange as each one lands; they clear when it times out. -->
+          <Button x:Name="TapChip" Classes="pill" ClickMode="Press" Click="OnTapTempo"
                   ToolTip.Tip="Tap the beat to set the tempo">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <StackPanel x:Name="TapDots" Orientation="Horizontal" Spacing="3"
@@ -260,71 +260,69 @@
                 <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
                 <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
               </StackPanel>
-              <TextBlock Classes="CellLabel" Text="Tap" VerticalAlignment="Center"/>
+              <TextBlock Text="Tap" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
           <!-- Time signature (drag ↕ each field) -->
-          <Border x:Name="TimeSigCell" Classes="well" ToolTip.Tip="Set the time signature — drag each field">
-            <StackPanel Orientation="Horizontal" Spacing="1" Height="18" VerticalAlignment="Center">
-              <Panel x:Name="TimeSigNumHost" Width="16"/>
-              <TextBlock Classes="Mono" Text="/" FontSize="13" VerticalAlignment="Center"
-                         Foreground="{DynamicResource Brush.TextMuted}"/>
-              <Panel x:Name="TimeSigDenHost" Width="16"/>
+          <Border x:Name="TimeSigCell" Classes="readout" ToolTip.Tip="Set the time signature — drag each field">
+            <StackPanel Orientation="Horizontal" Spacing="1" Height="22" VerticalAlignment="Center">
+              <Panel x:Name="TimeSigNumHost" Width="20"/>
+              <TextBlock Text="/" FontSize="16" FontWeight="Medium" VerticalAlignment="Center"
+                         Foreground="{DynamicResource Brush.TextTertiary}"/>
+              <Panel x:Name="TimeSigDenHost" Width="20"/>
             </StackPanel>
           </Border>
           <!-- Project key: loops dropped in can be transposed to it -->
           <Button x:Name="KeyChip" Classes="cell" Click="OnPickProjectKey" ToolTip.Tip="Set the project key — samples can be transposed to it">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock x:Name="KeyLabel" Classes="Mono" Text="—" FontSize="13"
-                         MinWidth="30" TextAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextMuted}"/>
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <TextBlock x:Name="KeyLabel" Classes="Readout" Text="—"
+                         MinWidth="24" TextAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextTertiary}"/>
               <TextBlock Classes="CellLabel" Text="Key" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
+          <Border Classes="tb-sep"/>
           <!-- Clip snap grid (SnapChip.cs): the step in effect, live with the zoom in Auto;
                click for the grid menu. SnapChip sizes the value to its widest label. -->
           <Button x:Name="SnapChip" Classes="cell">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-              <TextBlock x:Name="SnapLabel" Classes="Mono" Text="1/4" FontSize="13"
-                         MinWidth="36" TextAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
+            <StackPanel Orientation="Horizontal" Spacing="5">
+              <TextBlock x:Name="SnapLabel" Classes="Readout" Text="1/4"
+                         MinWidth="36" TextAlignment="Center" VerticalAlignment="Center"/>
               <TextBlock x:Name="SnapCaption" Classes="CellLabel" Text="Grid" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
         </StackPanel>
 
-        <!-- Switches. Each draws the thing it does, so the row carries no prose: a
-             metronome, a magnet, a breakpoint envelope. None sets Foreground, so the
-             engaged state fills the key with the accent and the glyph takes the derived ink
-             through the base ToggleButton:checked. -->
-        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="10,0,0,0">
+        <!-- Tools. Each draws the thing it does, so the row carries no prose: a metronome, a
+             playhead flag, a magnet, a breakpoint envelope. On is the soft tint (picked);
+             none sets Foreground, so the glyph takes the orange ink through
+             ToggleButton:checked. -->
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" Margin="10,0,0,0">
+          <Border Classes="tb-sep" Margin="0,0,8,0"/>
           <!-- Metronome: body, pendulum rod, weight -->
           <ToggleButton x:Name="MetronomeBtn" Classes="tp-icon" IsChecked="{Binding Transport.MetronomeOn}"
                         ContextRequested="OnMetronomeContext"
                         ToolTip.Tip="Turn the metronome on or off (⌘M) · right-click for count-in">
-            <app:Glyph Kind="Metronome" Size="15"/>
+            <app:Glyph Kind="Metronome" Size="16"/>
           </ToggleButton>
-          <!-- Follow playhead: keep the arrangement scrolling with the cursor. The
-               playhead marker standing on its ruler. A flag (block + point) rather than a
-               bare triangle: at 15px a flat triangle over a stem reads as "⊥". Viewport
-               brackets around it were tried too and collapse into noise at this size. Mirrored by View ▸ Follow playhead,
-               which shares one code path. -->
+          <!-- Follow playhead: keep the arrangement scrolling with the cursor. Mirrored by
+               View ▸ Follow playhead, which shares one code path. -->
           <ToggleButton x:Name="FollowBtn" Classes="tp-icon" Click="OnToggleFollow"
                         ToolTip.Tip="Scroll the arrangement to keep the playhead in view">
-            <app:Glyph Kind="Follow" Size="15"/>
+            <app:Glyph Kind="Follow" Size="16"/>
           </ToggleButton>
-          <!-- Snapping on/off, independent of which grid the GRID cell shows. Off is the
-               same as holding Alt, but latched. A horseshoe magnet: the poles are banded
-               off the body by a transparent gap, so the shape reads on any button state. -->
+          <!-- Snapping on/off, independent of which grid the Grid value shows. Off is the
+               same as holding Alt, but latched. -->
           <ToggleButton x:Name="SnapToggle" Classes="tp-icon" IsChecked="True" Click="OnToggleSnapEnabled"
                         ToolTip.Tip="Snap clips to the grid (hold Alt to drag freely)">
-            <app:Glyph Kind="Snap" Size="15"/>
+            <app:Glyph Kind="Snap" Size="16"/>
           </ToggleButton>
           <!-- Automation: a breakpoint envelope — the ramp and handles the lanes draw -->
           <ToggleButton x:Name="AutomationToggle" Classes="tp-icon" Click="OnToggleAutomation">
-            <app:Glyph Kind="Automation" Size="15"/>
+            <app:Glyph Kind="Automation" Size="16"/>
           </ToggleButton>
           <!-- Shown only while a hand-moved control has taken a lane over from
                playback (M9-C); one click hands every overridden lane back. -->
-          <Button x:Name="ReenableAutoBtn" Classes="chip" Content="Re-enable"
+          <Button x:Name="ReenableAutoBtn" Classes="chip" Content="Re-enable" Margin="6,0,0,0"
                   IsVisible="False" Click="OnReenableAutomation"
                   ToolTip.Tip="Hand overridden controls back to their automation"/>
         </StackPanel>
@@ -361,11 +359,11 @@
           <Button x:Name="RemoteBtn" Classes="chip" Click="OnRemoteClick"
                   ToolTip.Tip="Play and control Nota from a phone">
             <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
-              <Border x:Name="RemoteGlyph" Width="8" Height="12" CornerRadius="{StaticResource Radius.Clip}" BorderThickness="1.5"
+              <Border x:Name="RemoteGlyph" Width="8" Height="12" CornerRadius="{StaticResource Radius.Fine}" BorderThickness="1.5"
                       BorderBrush="{Binding $parent[Button].Foreground}" VerticalAlignment="Center"/>
               <TextBlock x:Name="RemoteLabel" Text="Remote" VerticalAlignment="Center"
                          Foreground="{Binding $parent[Button].Foreground}"/>
-              <TextBlock x:Name="RemoteCount" Classes="Mono" Text="Off" FontSize="10" VerticalAlignment="Center"
+              <TextBlock x:Name="RemoteCount" Classes="Mono" Text="Off" FontSize="9" VerticalAlignment="Center"
                          Foreground="{Binding $parent[Button].Foreground}"/>
               <Ellipse x:Name="RemoteDot" Width="5" Height="5" VerticalAlignment="Center"
                        Fill="{DynamicResource Brush.BorderStrong}"/>
@@ -379,31 +377,26 @@
         <!-- DSP load (audio-callback time ÷ buffer); the tooltip adds process CPU (MainWindow.SetUpCpuTip) -->
         <StackPanel x:Name="CpuMeter" Grid.Column="8" Spacing="3" VerticalAlignment="Center" Background="Transparent">
           <Border x:Name="CpuBar" Width="52" Height="4" Background="{DynamicResource Brush.BgSunken}"
-                  CornerRadius="{StaticResource Radius.Clip}" ClipToBounds="True">
-            <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="{StaticResource Radius.Clip}"
+                  CornerRadius="{StaticResource Radius.Field}" ClipToBounds="True">
+            <Border x:Name="CpuFill" Width="0" HorizontalAlignment="Left" CornerRadius="{StaticResource Radius.Field}"
                     Background="{DynamicResource Brush.Success}"/>
           </Border>
           <TextBlock x:Name="CpuText" Classes="Mono CellLabel" Text="DSP 0%" FontWeight="Normal"/>
         </StackPanel>
 
-        <!-- Master: fader over its meter, with the gain in dB -->
-        <Border x:Name="MasterWell" Grid.Column="9" Classes="tp-well" Margin="10,0,0,0">
-          <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <TextBlock Classes="CellLabel" Text="Master" VerticalAlignment="Center"/>
-            <StackPanel Spacing="3" VerticalAlignment="Center">
-              <Panel x:Name="MasterVolHost" Width="88" Height="10"/>
-              <Panel x:Name="MasterMeterHost" Width="88" Height="4"/>
-            </StackPanel>
-            <TextBlock x:Name="MasterDb" Classes="Mono" FontSize="11" MinWidth="46" TextAlignment="Right"
-                       VerticalAlignment="Center" Text="{Binding Transport.MasterDbText}"
-                       Foreground="{DynamicResource Brush.TextPrimary}"/>
+        <!-- Master: a flat bar with its dB value inside, the meter under it -->
+        <StackPanel x:Name="MasterWell" Grid.Column="9" Orientation="Horizontal" Spacing="8" Margin="10,0,0,0" VerticalAlignment="Center">
+          <TextBlock Classes="CellLabel" Text="Master" VerticalAlignment="Center"/>
+          <StackPanel Spacing="2" VerticalAlignment="Center">
+            <Panel x:Name="MasterVolHost" Width="120" Height="16"/>
+            <Panel x:Name="MasterMeterHost" Width="120" Height="8"/>
           </StackPanel>
-        </Border>
+        </StackPanel>
       </Grid>
     </Border>
 
-    <!-- Status line (22): caption text on the ground, a seam above it. -->
-    <Border x:Name="StatusBar" DockPanel.Dock="Bottom" Background="{DynamicResource Brush.BgApp}"
+    <!-- Status line (22): caption text on the deep tone, a seam above it. -->
+    <Border x:Name="StatusBar" DockPanel.Dock="Bottom" Background="{DynamicResource Brush.SurfaceDeep}"
             BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,1,0,0"
             Height="22" Padding="16,0">
       <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
@@ -521,12 +514,12 @@
       <!-- Detail panel: Devices chain / Pattern / Clip (piano roll) for the selected track.
            Docked under the canvas (or the docked Mixer) on a seam, like the browser beside it. -->
       <Border x:Name="DetailPanel" Grid.Row="4" Margin="0,1,0,0" IsVisible="False" ClipToBounds="True"
-              Background="{DynamicResource Brush.BgApp}" BorderThickness="0"
+              Background="{DynamicResource Brush.SurfaceDeep}" BorderThickness="0"
               CornerRadius="{StaticResource Radius.Docked}">
         <DockPanel>
           <!-- Panel toolbar (32, seam under it): mode tabs · track chip (routing/PDC) ·
                Freeze · | · pop out · close -->
-          <Border DockPanel.Dock="Top" Height="32" Background="{DynamicResource Brush.Panel}"
+          <Border DockPanel.Dock="Top" Height="32" Background="{DynamicResource Brush.SurfaceDeep}"
                   BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,0,0,1">
           <Grid Margin="8,0,6,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto">
             <Border Classes="segmented" VerticalAlignment="Center">
@@ -546,7 +539,7 @@
                       ToolTip.Tip="Freeze the track to audio to free CPU (right-click to flatten)">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <app:Glyph x:Name="FreezeIcon" Kind="Freeze" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                  <TextBlock x:Name="FreezeLabel" Text="Freeze" FontSize="12" VerticalAlignment="Center"
+                  <TextBlock x:Name="FreezeLabel" Text="Freeze" FontSize="11" VerticalAlignment="Center"
                              Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </StackPanel>
               </Button>
@@ -555,7 +548,7 @@
                       ToolTip.Tip="Bounce to a linked audio track below and put the source to sleep">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <app:Glyph Kind="ChainLink" Size="14" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                  <TextBlock Text="Live freeze" FontSize="12" VerticalAlignment="Center"
+                  <TextBlock Text="Live freeze" FontSize="11" VerticalAlignment="Center"
                              Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </StackPanel>
               </Button>
@@ -564,7 +557,7 @@
                       ToolTip.Tip="Wake the frozen source to edit it (right-click to unfreeze or flatten)">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                   <app:Glyph x:Name="EditGlyph" Kind="Edit" Foreground="{DynamicResource Brush.AccentBright}"/>
-                  <TextBlock Text="Edit" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
+                  <TextBlock Text="Edit" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
                 </StackPanel>
               </Button>
               <Button x:Name="DoneBtn" Height="22" Padding="9,0" VerticalAlignment="Center"
@@ -572,7 +565,7 @@
                       ToolTip.Tip="Re-freeze the source and put it back to sleep">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                   <app:Glyph x:Name="DoneGlyph" Kind="Check" Foreground="{DynamicResource Brush.AccentBright}"/>
-                  <TextBlock Text="Done" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
+                  <TextBlock Text="Done" FontSize="11" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
                 </StackPanel>
               </Button>
               <Button x:Name="DiscardBtn" Classes="ghost" Height="22" Padding="6,0" VerticalAlignment="Center"

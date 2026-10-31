@@ -75,7 +75,7 @@ public sealed partial class ArrangementView
         private const double PillH = 16;
         private static double PillWidth(string label)
         {
-            var ft = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            var ft = new NotaFormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                 Typeface.Default, 9, NotaPalette.TextPrimary);
             return Math.Clamp(Math.Ceiling(ft.Width) + 12, 34, 180);
         }
@@ -409,8 +409,8 @@ public sealed partial class ArrangementView
                 // Target-selector pill (top-left) — width fits the label, text centred.
                 double pillW = PillWidth(t.AutoLabel);
                 var pill = PillRect(i, pillW);
-                ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, pill, NotaRadius.ControlValue, NotaRadius.ControlValue);
-                var ft = new FormattedText(t.AutoLabel, CultureInfo.InvariantCulture,
+                ctx.DrawRectangle(NotaPalette.SurfaceRaised, null, pill, NotaRadius.FieldValue, NotaRadius.FieldValue);
+                var ft = new NotaFormattedText(t.AutoLabel, CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, NotaPalette.TextPrimary);
                 using (ctx.PushClip(pill))
                     ctx.DrawText(ft, new Point(pill.X + 6, pill.Y + (PillH - ft.Height) / 2));
