@@ -437,7 +437,7 @@ internal sealed class LensScopeView : Control
             }
             double dt = Math.Abs(_d.CursorB - _d.CursorA) * _d.TimeDivSec * Cols;
             string s = NotaNum.F($"Δt {dt * 1000:0.000} ms · {(dt > 1e-9 ? 1 / dt : 0):0.0} Hz");
-            LensInk.Text(ctx, s, w - LensInk.TextW(s, 8) - 4, h - 11, LensInk.TraceLit, 8);
+            LensInk.Text(ctx, s, w - LensInk.TextW(s, 8) - 4, h - 22, LensInk.TraceLit, 8);   // a line above the time axis label
         }
 
         LensInk.Title(ctx, "SCOPE", _d.ScopeNote);   // the divisions are on the Time/div and Volt/div knobs
