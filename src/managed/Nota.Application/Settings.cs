@@ -162,7 +162,9 @@ public sealed class Settings
     /// <summary>Show the song-structure (sections) lane over the ruler.</summary>
     public bool ArrangementShowSections { get; set; } = true;
     /// <summary>How audio clips draw their waveform on the lanes (Settings → Appearance):
-    /// 0 bars — spaced peak strokes (default), 1 solid — one column per pixel.</summary>
+    /// 0 smooth — the peak outline around its RMS body (default; was bars before #267, so a
+    /// saved 0 moves to the new default), 1 solid — one column per pixel, 2 bars — spaced
+    /// peak strokes.</summary>
     public int ArrangementWaveform { get; set; }
     /// <summary>Interface scale in percent (Settings → Appearance, spec 027): one of
     /// <see cref="Application.InterfaceScale.Presets"/>; anything else reads as 100.</summary>
@@ -170,6 +172,16 @@ public sealed class Settings
     /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
     /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
     public bool PianoRollAudition { get; set; } = true;
+    /// <summary>Shift + wheel over a note in the piano roll (specs/063): false — wheel up raises
+    /// the velocity; true — wheel up lowers it.</summary>
+    public bool PianoRollVelocityWheelReversed { get; set; }
+    /// <summary>Velocity steps per wheel notch, 0–2 (<see cref="Editing.VelocityWheel"/>); 0 turns
+    /// the gesture off and Shift + wheel only scrolls.</summary>
+    public double PianoRollVelocityWheelMultiplier { get; set; } = 1.0;
+    /// <summary>Clip editor track mode (specs/059, #49): the piano roll shows every MIDI clip of
+    /// the edited track on the arrangement's timeline. The Clip | Track switch at the top of
+    /// the clip editor's inspector; off (clip mode) by default.</summary>
+    public bool ClipEditorTrackMode { get; set; }
     /// <summary>Arm-on-select (#332): selecting an instrument track arms it alone, so the
     /// keyboard plays the track you're on. Transport ▸ Auto-arm selected track; off by default.</summary>
     public bool ArmOnSelect { get; set; }

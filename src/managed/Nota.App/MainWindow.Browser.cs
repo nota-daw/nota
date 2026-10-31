@@ -26,8 +26,17 @@ public partial class MainWindow
 {
     private int _lastInstrumentTrackId;
 
+    private const double BrowserDefaultWidth = 344;   // MainWindow.axaml's column width
+
     // The browser column's width before it was folded to its rail, restored on unfold.
-    private GridLength _browserWidth = new(344);
+    private GridLength _browserWidth = new(BrowserDefaultWidth);
+
+    // Double-clicking the splitter puts the column back at its default width.
+    private void ResetBrowserWidth()
+    {
+        _browserWidth = new GridLength(BrowserDefaultWidth);
+        BrowserGrid.ColumnDefinitions[0].Width = _browserWidth;
+    }
 
     // Folded, the column hugs the rail and the splitter goes away — there's nothing to resize.
     private void OnBrowserCollapsedChanged(bool collapsed)

@@ -106,6 +106,23 @@ typedef struct NotaAudioClipInfo {
     int32_t reversed;          /* 0/1: play the region back-to-front (non-destructive) */
 } NotaAudioClipInfo;
 
+/* One take of an audio loop recording (specs/067). Every take of a recording has a
+ * loop-length buffer whose frame 0 sits at origin_beat; the pass recorded
+ * [source_offset_frames, +length_frames) of it, which is [start_beat, +length_beats) on the
+ * timeline at the current tempo. */
+typedef struct NotaTakeInfo {
+    int32_t id;                   /* engine-unique; comp clips carry it (nota_clip_take_id) */
+    int32_t number;               /* "Take N" on its track, recording order */
+    int32_t group;                /* the loop recording it came from */
+    int32_t reserved;
+    double  origin_beat;
+    double  start_beat;
+    double  length_beats;
+    double  source_offset_frames;
+    int64_t length_frames;
+    int64_t sample_id;            /* the take audio (nota_sample_read) */
+} NotaTakeInfo;
+
 /* Audio-clip ADSR amplitude shape, in played time (clip-local beats). Attack ramps
  * 0->1 from the clip start, decay falls 1->sustain, sustain holds, release fades to 0
  * over the last release_beats before the clip end (multiplying the ADS stage, so
@@ -609,6 +626,19 @@ NOTA_API int32_t nota_clip_get_source_peaks_range(const NotaEngine* engine, int3
                                                   int32_t clip_index, double frame0, double frame1,
                                                   float* out_min_max, int32_t max_points);
 
+/* Waveform levels: the same min/max buckets as the matching *_peaks call above, plus each
+ * bucket's RMS of the stereo mid (0..1) in out_rms[max_points] — the waveform's body.
+ * view picks the call; a and b are its range (beats for WARP_RANGE, frames for
+ * SOURCE_RANGE) and are ignored by the others. Returns the number of buckets written. */
+#define NOTA_CLIP_LEVELS_PLAYED       0   /* nota_clip_get_peaks */
+#define NOTA_CLIP_LEVELS_SOURCE       1   /* nota_clip_get_source_peaks */
+#define NOTA_CLIP_LEVELS_WARP_FULL    2   /* nota_clip_get_warp_full_peaks */
+#define NOTA_CLIP_LEVELS_WARP_RANGE   3   /* nota_clip_get_warp_peaks_range */
+#define NOTA_CLIP_LEVELS_SOURCE_RANGE 4   /* nota_clip_get_source_peaks_range */
+NOTA_API int32_t nota_clip_get_levels(const NotaEngine* engine, int32_t track_id, int32_t clip_index,
+                                      int32_t view, double a, double b, float* out_min_max,
+                                      float* out_rms, int32_t max_points);
+
 /* ---- Background audio import -------------------------------------------- */
 /* Decodes a WAV/FLAC/MP3 block by block on ANY thread (it touches no engine state), so
  * the UI stays responsive and can draw the waveform as it fills in. One job is not
@@ -1062,6 +1092,41 @@ NOTA_API int32_t nota_track_add_audio_clip_ex(NotaEngine* engine, int32_t track_
                                               const char* path_utf8, double start_beat,
                                               double source_offset_frames, int64_t length_frames,
                                               float gain);
+/* ---- Take lanes (specs/067) ---------------------------------------------- */
+/* An Arrangement audio loop recording that completes a pass keeps every pass as a take; the
+ * track plays its ordinary clips (the comp), and a clip made from a take carries its id.
+ * Message thread only. */
+NOTA_API int32_t    nota_track_take_count(const NotaEngine* engine, int32_t track_id);
+NOTA_API int32_t    nota_track_take_info(const NotaEngine* engine, int32_t track_id, int32_t index, NotaTakeInfo* out);
+/* Min/max peaks over the take's recorded range; returns the buckets written. */
+NOTA_API int32_t    nota_track_take_peaks(const NotaEngine* engine, int32_t track_id, int32_t index,
+                                          float* out_min_max, int32_t max_points);
+/* The take plays over [start_beat, end_beat), clamped to its range and cut on whole frames:
+ * what the comp had there is carved away. One undo step; NOTA_ERR_INVALID_ARG if nothing
+ * of the range lies in the take. */
+NOTA_API NotaResult nota_track_take_comp(NotaEngine* engine, int32_t track_id, int32_t take_id,
+                                         double start_beat, double end_beat);
+/* Remove a take; the comp keeps playing what came from it. One undo step. */
+NOTA_API NotaResult nota_track_take_delete(NotaEngine* engine, int32_t track_id, int32_t take_id);
+/* Per recording: the comp sections still where their take put them (plain: unwarped,
+ * unreversed, unpitched, no envelope / ADSR, active) become one clip with the same audio, and
+ * the recording's takes are removed. One undo step; NOTA_ERR_INVALID_ARG without takes. */
+NOTA_API NotaResult nota_track_takes_flatten(NotaEngine* engine, int32_t track_id);
+/* The take an arrangement audio clip plays a section of; 0 = none. */
+NOTA_API int32_t    nota_clip_take_id(const NotaEngine* engine, int32_t track_id, int32_t clip_index);
+/* Project load (no undo entry): restore a take from a file, returning its new id (-1 on a bad
+ * track / file); tag a restored clip with a restored take's id — the clip then shares the
+ * take's decoded audio when it is the same length and rate. */
+NOTA_API int32_t    nota_track_restore_take(NotaEngine* engine, int32_t track_id, const char* path_utf8,
+                                            int32_t number, int32_t group, double origin_beat,
+                                            double source_offset_frames, int64_t length_frames);
+NOTA_API NotaResult nota_clip_set_take_id(NotaEngine* engine, int32_t track_id, int32_t clip_index, int32_t take_id);
+/* Smoke-test hook: record `frames` of interleaved stereo into the audio track as a take
+ * started at start_beat — through the capture ring, the drain and stop, under the current
+ * loop — without a device. 1 = a take was recorded. */
+NOTA_API int32_t    nota_take_record_test(NotaEngine* engine, int32_t track_id, const float* interleaved_stereo,
+                                          int32_t frames, double start_beat);
+
 /* Decoded-sample metadata by id; returns 1 if found, else 0. */
 NOTA_API int32_t nota_sample_get_info(const NotaEngine* engine, int64_t sample_id, NotaSampleInfo* out);
 /* Copies up to `cap` interleaved floats into `out`; returns the total count

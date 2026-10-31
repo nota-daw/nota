@@ -97,6 +97,7 @@ set(NOTA_ENGINE_SOURCES
     src/engine/Engine_Devices.cpp
     src/engine/Engine_Rack.cpp
     src/engine/Engine_Recording.cpp
+    src/engine/Engine_Takes.cpp
     src/engine/Engine_Render.cpp
     src/engine/Audition.cpp
     src/engine/AudioThreadPool.cpp  # fork-join pool

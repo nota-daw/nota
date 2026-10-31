@@ -87,7 +87,7 @@ public sealed partial class SessionView
         return new StackPanel { Spacing = 4, Children = { head, s } };
     }
 
-    private static TextBlock SectionHead(string text) => new()
+    internal static TextBlock SectionHead(string text) => new()
     {
         Text = text, FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextMuted,
     };
@@ -136,7 +136,7 @@ public sealed partial class SessionView
     }
 
     // A label on the left and a small value chip on the right (Quantize, Legato…).
-    private static Control Row(string label, Control right)
+    internal static Control Row(string label, Control right)
     {
         var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 22 };
         g.Children.Add(new TextBlock { Text = label, FontSize = 11, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center });
@@ -146,7 +146,7 @@ public sealed partial class SessionView
         return g;
     }
 
-    private static Button Chip(string value, bool lit, Action<Button> click)
+    internal static Button Chip(string value, bool lit, Action<Button> click)
     {
         var b = new Button { Classes = { "chip" }, Height = 22, Padding = new Thickness(8, 0), MinWidth = 0, Content = Mono(value, 10, lit ? NotaPalette.TextOnAccent : NotaPalette.TextPrimary) };
         b.Classes.Set("lit", lit);
@@ -154,7 +154,7 @@ public sealed partial class SessionView
         return b;
     }
 
-    private static void Pick<T>(Control anchor, IEnumerable<(T Value, string Label)> items, Func<T, bool> isCurrent, Action<T> choose)
+    internal static void Pick<T>(Control anchor, IEnumerable<(T Value, string Label)> items, Func<T, bool> isCurrent, Action<T> choose)
     {
         var f = new MenuFlyout();
         foreach (var (v, label) in items)

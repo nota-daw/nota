@@ -147,46 +147,52 @@ public partial class MainWindow
     // switching it on live-freezes the track, switching it off unfreezes the link (wakes the
     // source). While linked, Edit (or Done / Discard mid-session) and Flatten follow; a track
     // frozen in place offers Unfreeze / Flatten instead. Each command first selects its track
-    // so the device panel and header buttons follow.
-    private IReadOnlyList<Control> BuildTrackFreezeMenu(int trackId)
+    // so the device panel and header buttons follow. The track inspector (specs/060) shows the
+    // same entries as buttons.
+    private IReadOnlyList<FreezeEntry> TrackFreezeEntries(int trackId)
     {
-        var items = new List<Control>();
+        var items = new List<FreezeEntry>();
         if ((LinkForSource(trackId) ?? LinkForFrozen(trackId)) is { } link)
         {
             int src = link.SourceId;
-            items.Add(MenuKit.SwitchItem("Live freeze", GlyphKind.ChainLink, true, () => UnfreezeLink(src)));
+            items.Add(new("Live freeze", GlyphKind.ChainLink, () => UnfreezeLink(src), Switch: true));
             if (link.State == LinkState.Editing)
             {
-                items.Add(MenuKit.Item("Done — re-freeze", GlyphKind.Check,
+                items.Add(new("Done — re-freeze", GlyphKind.Check,
                     () => { Timeline.Select(trackId, -1); _ = CommitEditSessionAsync(src); }));
-                items.Add(MenuKit.Danger("Discard edits", GlyphKind.Cross,
-                    () => { Timeline.Select(trackId, -1); DiscardEditSession(src); }));
+                items.Add(new("Discard edits", GlyphKind.Cross,
+                    () => { Timeline.Select(trackId, -1); DiscardEditSession(src); }, Danger: true));
             }
             else
                 // Editing changes the source's notes/devices, so land on the source track.
-                items.Add(MenuKit.Item("Edit source", GlyphKind.Edit,
+                items.Add(new("Edit source", GlyphKind.Edit,
                     () => { Timeline.Select(src, -1); BeginEditSession(src); }));
-            items.Add(MenuKit.Danger("Flatten (remove source)", GlyphKind.Flatten, () => FlattenLinkAsync(src)));
+            items.Add(new("Flatten (remove source)", GlyphKind.Flatten, () => FlattenLinkAsync(src), Danger: true));
             return items;
         }
 
         if (!IsFreezable(trackId)) return items;
         if (Engine.IsTrackFrozen(trackId))
         {
-            items.Add(MenuKit.Item("Unfreeze track", GlyphKind.Freeze,
+            items.Add(new("Unfreeze track", GlyphKind.Freeze,
                 () => { Timeline.Select(trackId, -1); UnfreezeTrack(trackId); }));
-            items.Add(MenuKit.Danger("Flatten to audio track", GlyphKind.Flatten,
-                () => { Timeline.Select(trackId, -1); _ = FlattenTrackAsync(trackId); }));
+            items.Add(new("Flatten to audio track", GlyphKind.Flatten,
+                () => { Timeline.Select(trackId, -1); _ = FlattenTrackAsync(trackId); }, Danger: true));
         }
         else
         {
-            items.Add(MenuKit.Item("Freeze track", GlyphKind.Freeze,
+            items.Add(new("Freeze track", GlyphKind.Freeze,
                 () => { Timeline.Select(trackId, -1); _ = FreezeTrackAsync(trackId); }));
-            items.Add(MenuKit.SwitchItem("Live freeze", GlyphKind.ChainLink, false,
-                () => { Timeline.Select(trackId, -1); _ = LiveFreezeAsync(trackId); }));
+            items.Add(new("Live freeze", GlyphKind.ChainLink,
+                () => { Timeline.Select(trackId, -1); _ = LiveFreezeAsync(trackId); }, Switch: false));
         }
         return items;
     }
+
+    private IReadOnlyList<Control> BuildTrackFreezeMenu(int trackId)
+        => TrackFreezeEntries(trackId).Select(e => (Control)(e.Switch is { } on ? MenuKit.SwitchItem(e.Label, e.Icon, on, e.Run)
+                                                            : e.Danger ? MenuKit.Danger(e.Label, e.Icon, e.Run)
+                                                            : MenuKit.Item(e.Label, e.Icon, e.Run))).ToList();
 
     // Freeze entries for the multi-track menu: freeze the live tracks / unfreeze the frozen
     // ones among the selection. Live-freeze pairs are per-track, so they're left to each
@@ -329,3 +335,7 @@ public partial class MainWindow
         return tmp;
     }
 }
+
+/// <summary>One freeze command for a track: a plain or destructive action, or a switch
+/// (<paramref name="Switch"/> = its current state) whose click flips it.</summary>
+internal readonly record struct FreezeEntry(string Label, GlyphKind Icon, Action Run, bool Danger = false, bool? Switch = null);

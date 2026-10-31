@@ -91,7 +91,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     private readonly IGamepadService _gamepads = App.Services.GetRequiredService<IGamepadService>();
 
     private static readonly double[] SampleRates = { 0, 44100, 48000, 88200, 96000 };
-    private static readonly int[] BufferSizes = { 0, 64, 128, 256, 512, 1024, 2048 };
+    private static int[] BufferSizes => AudioFormatStatus.BufferSizes;
     private readonly List<string> _outputUids = new();
     private readonly List<string> _inputUids = new();
 
@@ -1158,14 +1158,15 @@ public sealed partial class PreferencesWindow : NotaWindow
         }
     }
 
-    // Bars / Solid for the arrangement's audio-clip waveforms and the browser preview. Saving
+    // Smooth / Solid / Bars for the arrangement's audio-clip waveforms (Solid and Bars also set
+    // the browser preview). Saving
     // fires Settings.Changed, which the lanes and the preview apply at once.
     private static Control WaveformPicker()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         var buttons = new List<(int Style, ToggleButton Btn)>();
-        foreach (var (style, label) in new[] { (0, "Bars"), (1, "Solid") })
+        foreach (var (style, label) in new[] { (0, "Smooth"), (1, "Solid"), (2, "Bars") })
         {
             var st = style;
             var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label, IsChecked = settings.Current.ArrangementWaveform == st };
@@ -1295,7 +1296,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 TopRow("Colour theme", ThemePicker()),
                 Row("", Caption("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance.")),
                 Row("Waveform", WaveformPicker()),
-                Row("", Caption("How audio clips draw on the arrangement, and samples in the browser's preview: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel.")),
+                Row("", Caption("How audio clips draw on the arrangement: Smooth outlines the peaks around the RMS level; Solid draws every pixel; Bars spaces the peaks out so the rhythm reads. Solid and Bars also set the browser's preview.")),
                 Row("Interface scale", ScalePicker()),
                 Row("", Caption("Makes the whole interface larger or smaller. Timeline, piano roll and audio editor zoom work on top of it."))),
             Section("AI control (MCP)", 12, enable, details));
@@ -1323,6 +1324,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("Window", new[]
         {
             ("F11", "Enter / leave full screen — the title bar hides in full screen"),
+            ("⌘⇧F", "The clip editor fills the window / back to the split it had"),
+            ("Double-click a panel edge", "Reset the detail panel, the Mixer or the browser to its default size"),
         }),
         ("Command palette", new[]
         {
@@ -1446,18 +1449,23 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⇧↑  ⇧↓", "Transpose by an octave"),
             ("⇧←  ⇧→", "Shorten / lengthen the notes by the grid"),
             ("⌥↑  ⌥↓", "Velocity +10 / −10 · ⌥⇧ by 1"),
+            ("⇧ + wheel over a note", "Change its velocity · the whole selection's when the note is selected · elsewhere scroll sideways"),
             ("⌘A", "Select all notes"),
             ("⌘D", "Duplicate the selection · replaces the notes it lands on"),
             ("⌘C  ⌘X  ⌘V", "Copy / cut / paste notes · paste lands on the originals"),
             ("Esc", "Deselect · moved or pasted notes replace the notes under them"),
             ("Delete", "Delete the selected notes"),
             ("Double-click empty grid", "Add a note with the length and velocity of the last note touched · on a note, delete it"),
+            ("Double-click and hold, drag", "Shape the new note: move it · ⇧ set its length · ⌘ drag up / down for velocity"),
             ("Drag note edge", "Change the note's start or end"),
             ("Click · drag the ruler", "Move the playhead there · drag to scrub, snapped to the grid · ⌥ off the grid"),
             ("Drag the playhead line", "Scrub the playhead · on the ruler or over empty grid"),
             ("Drag velocity stem", "Set velocity · selected notes move together · ⇧ adds a note"),
             ("Drag in the Bend / Pres / Slide lane", "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it"),
             ("Double-click in an MPE lane", "Add a point · on a point, delete it · right-click to clear the curve"),
+            ("Click the controller tab", "Show a MIDI controller under the notes · click it again to pick another CC, the pitch wheel or channel pressure"),
+            ("Drag in the Sustain lane", "Draw a pedal block on the grid · ⌘ off the grid · drag an edge to resize, the body to move · double-click or Delete removes it"),
+            ("Drag in a controller lane", "Draw the controller's curve · ⌥ draws a straight line · drag a point to move it · double-click adds or deletes a point"),
             ("Click a clip in the clip strip", "Make it the active clip (several clips open) · its lock keeps it as a read-only reference"),
             ("⌘⌥ + wheel", "Zoom rows (vertical zoom)"),
             ("Click a key", "Play it on the track's instrument · ⇧-drag glides through the keys · ⌘-click selects every note of that pitch"),
@@ -1518,7 +1526,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("Drag the track-list edge", "Widen or narrow the track headers · double-click resets"),
             ("Drag sections lane", "Mark a new section over the dragged bars"),
             ("Click section", "Jump the playhead to its start"),
-            ("Double-click section", "Rename it"),
+            ("Double-click section", "Rename it · right-click → Reset to default name for its automatic Section N"),
+            ("Return · Esc (renaming a section)", "Keep the name (empty = automatic) · cancel"),
             ("Drag section · its edge", "Move / resize it, snapped to bars"),
             ("Drag overview strip", "Drag sideways to scroll · up / down to zoom out / in"),
             ("Drag overview edge", "Zoom by resizing the viewport window"),
@@ -1577,7 +1586,40 @@ public sealed partial class PreferencesWindow : NotaWindow
         filter.TextChanged += (_, _) => { _shortcutFilter = filter.Text ?? ""; Render(); };
         Render();
 
-        return new StackPanel { Spacing = 18, Children = { SearchField(filter, 320), groups } };
+        return new StackPanel { Spacing = 18, Children = { VelocityWheelSection(), SearchField(filter, 320), groups } };
+    }
+
+    private static readonly double[] VelocityWheelSteps = { 0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2 };
+
+    // ⇧ + wheel over a piano-roll note (specs/063): its direction and step, beside the reference.
+    private Control VelocityWheelSection()
+    {
+        var settings = App.Services.GetService<ISettingsService>();
+        var step = Combo(150);
+        foreach (var m in VelocityWheelSteps) step.Items.Add(m == 0 ? "Off" : $"{m.ToString("0.##", NotaNum.Culture)}×");
+        int idx = Array.FindIndex(VelocityWheelSteps, m => Math.Abs(m - PianoRollView.VelocityWheelMultiplier) < 1e-6);
+        step.SelectedIndex = idx >= 0 ? idx : Array.IndexOf(VelocityWheelSteps, 1.0);
+        step.SelectionChanged += (_, _) =>
+        {
+            int k = step.SelectedIndex;
+            if (k < 0) return;
+            PianoRollView.VelocityWheelMultiplier = VelocityWheelSteps[k];
+            if (settings is null) return;
+            settings.Current.PianoRollVelocityWheelMultiplier = VelocityWheelSteps[k];
+            settings.Save();
+        };
+        var reverse = SwitchRow("Wheel up lowers the velocity", PianoRollView.VelocityWheelReversed, on =>
+        {
+            PianoRollView.VelocityWheelReversed = on;
+            if (settings is null) return;
+            settings.Current.PianoRollVelocityWheelReversed = on;
+            settings.Save();
+        });
+        return Section("Velocity wheel", 8,
+            Row("Direction", reverse),
+            Row("Step", step),
+            Row("", Caption("⇧ + wheel over a note in the piano roll changes its velocity, or the whole selection's when that note is selected: " +
+                            "one MIDI step per notch at 1×. Anywhere else ⇧ + wheel scrolls, and Off leaves it scrolling everywhere.")));
     }
 
     private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc", "PgUp", "PgDn", "⌘Return", "⌥Return", "⇧Return", "⇧Tab", "⇧Space" };

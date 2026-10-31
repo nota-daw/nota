@@ -27,9 +27,9 @@ namespace Nota.App;
 
 public sealed class MidiToolsView : UserControl
 {
-    public const double RailWidth = ToolsW;
-
     private readonly PianoRollView _roll;
+
+    public ColumnFlow Flow { get; }
     private readonly Dictionary<string, MidiToolSettings> _settings = new(StringComparer.Ordinal);
 
     private readonly StackPanel _toolList = new();
@@ -58,7 +58,6 @@ public sealed class MidiToolsView : UserControl
     public MidiToolsView(PianoRollView roll)
     {
         _roll = roll;
-        Width = RailWidth;
         Background = NotaPalette.Panel;
         BorderBrush = NotaPalette.BorderDefault;
         BorderThickness = new Thickness(1, 0, 0, 0);
@@ -109,25 +108,16 @@ public sealed class MidiToolsView : UserControl
                 Pair(ClipEditorKit.Button("Revert", Revert), ClipEditorKit.Button("Defaults", ResetTool)),
             },
         };
-        DockPanel.SetDock(foot, Dock.Bottom);
-        foot.Margin = new Thickness(0, 10, 8, 0);
+        foot.Margin = new Thickness(14, 10, 14, 12);
 
-        // The scroll content keeps 8px clear on the right for the overlay scrollbar.
-        var top = new StackPanel { Spacing = 10, Margin = new Thickness(0, 0, 8, 0), Children = { kinds, _toolList, Rule(), parameters, Rule(), output } };
-        Content = new DockPanel
+        // The right padding keeps 8px clear of the overlay scrollbar. Like the inspector, the
+        // panel takes a second column when one would scroll (specs/055).
+        var tools = new StackPanel { Spacing = 10, Children = { kinds, _toolList } };
+        Flow = new ColumnFlow(new SectionColumns(10, tools, parameters, output), foot, new Thickness(14, 12, 14, 0), ToolsW - 1)
         {
-            Margin = new Thickness(14, 12, 6, 12),
-            Children =
-            {
-                foot,
-                new ScrollViewer
-                {
-                    Content = top,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                },
-            },
+            Reserve = MinCanvasW,
         };
+        Content = Flow;
 
         RebuildToolList();
         RebuildParams();
