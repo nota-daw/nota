@@ -8,7 +8,8 @@
 // neutral dot is the vector the parameters hold (accent while dragged); a dashed teal ring, reached by a dashed arc, is
 // where Motion and React pull it right now.
 // X = 0..1 left→right, Y = 0..1 top→bottom. Reports drags via ValueChanged; Begin/End frame
-// an automation-write gesture on both axes. Left button only; double-click resets.
+// an automation-write gesture on both axes. Left button only; double-click resets; ⌥-click
+// types X and Y (the card attaches the fields, specs/035).
 
 using System;
 using System.Globalization;

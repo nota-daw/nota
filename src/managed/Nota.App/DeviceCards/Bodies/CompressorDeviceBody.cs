@@ -82,6 +82,11 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         (Func<double, double> N, Func<double, double> V) RangeMap() =>
             (v => v >= 47.5 ? 0 : Math.Clamp((48 - v) / 47, 0, 1), n => n <= 0.005 ? 48 : 48 - 47 * Math.Clamp(n, 0, 1));
 
+        // A typeable value over a raw-unit parameter through its 0..1 map (⌥-click, specs/035).
+        ValueField F(string name, Func<int> param, Func<int, (Func<double, double> N, Func<double, double> V)> map, Func<double, string> fmt, bool reset = true)
+            => new(name, () => map(param()).N(P(param())), n => fmt(map(param()).V(n)), n => Raw(param(), map(param()).V(n)),
+                () => Begin(param()), () => End(param()), reset ? map(param()).N(Def(param())) : null) { After = () => { foreach (var a in readouts) a(); } };
+
         // ---- formatters -------------------------------------------------------------------
         static string Ms(double ms) => ms >= 100 ? NotaNum.F($"{ms:0} ms") : NotaNum.F($"{ms:0.0} ms");
         static string MsShort(double ms) => ms >= 100 ? NotaNum.F($"{ms:0}") : NotaNum.F($"{ms:0.0}");
@@ -221,7 +226,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         thrFader.GestureBegin += () => Begin(Threshold);
         thrFader.GestureEnd += () => End(Threshold);
         MidiLearn.Bind(thrFader, MidiTarget.DeviceParam(track, di, Threshold), "Thresh");
-        ToolTip.SetTip(thrFader, "Threshold — the tick is the key's level right now. Double-click resets.");
+        ToolTip.SetTip(thrFader, MenuKit.Keys("Threshold — the tick is the key's level right now. ⌥-click types, double-click resets."));
 
         // The second fader is make-up on Curve / Motion and the key's gain on Sidechain.
         int F2() => centreTab == 2 ? ScGain : Makeup;
@@ -245,14 +250,6 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         var thrVal = Mono("", 7, TextPrimary); thrVal.HorizontalAlignment = HorizontalAlignment.Center;
         var f2Val = Mono("", 7, TextPrimary); f2Val.HorizontalAlignment = HorizontalAlignment.Center;
         void RefreshAll() { foreach (var r in readouts) r(); }
-        Typeable(thrFader, "Thresh", () => thrMap.N(P(Threshold)), n => { Raw(Threshold, thrMap.V(n)); RefreshAll(); },
-            () => Db(P(Threshold)), () => Begin(Threshold), () => End(Threshold), RefreshAll,
-            () => { Begin(Threshold); Raw(Threshold, Def(Threshold)); End(Threshold); RefreshAll(); }, thrVal, altResets: true);
-        // The menu names the fader's param of the moment: Makeup, or SC gain on the Sidechain tab.
-        ValueEntry.Attach(f2, ValueEntry.Probing("Makeup", () => Lin(F2()).N(P(F2())), n => { Raw(F2(), Lin(F2()).V(n)); RefreshAll(); },
-            () => SDb(P(F2())), () => Begin(F2()), () => End(F2()), RefreshAll,
-            () => { int id = F2(); Begin(id); Raw(id, Def(id)); End(id); RefreshAll(); })
-            with { AltResets = true, NameNow = () => F2() == ScGain ? engine.DeviceParamName(track, di, ScGain) : "Makeup" }, f2Val);
         readouts.Add(() =>
         {
             double keyDb = KeyDb();
@@ -264,8 +261,16 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             thrVal.Text = Db(P(Threshold));
             f2Val.Text = SDb(P(p2));
             f2Lbl.Text = NotaText.Label(p2 == ScGain ? "SC IN" : "MKP");
-            ToolTip.SetTip(f2, p2 == ScGain ? "Key gain — drives the detector harder or softer. Double-click resets." : "Make-up gain. Double-click resets.");
+            ToolTip.SetTip(f2, MenuKit.Keys(p2 == ScGain ? "Key gain — drives the detector harder or softer. ⌥-click types, double-click resets." : "Make-up gain. ⌥-click types, double-click resets."));
         });
+        ValueEntry.Attach(thrFader, F("Threshold", () => Threshold, Lin, Db), thrVal);
+        // The menu names the fader's param of the moment, and resets it to its own default:
+        // Make-up, or SC gain on the Sidechain tab.
+        ValueEntry.Attach(f2, F("Make-up", F2, Lin, SDb) with
+        {
+            NameNow = () => F2() == ScGain ? engine.DeviceParamName(track, di, ScGain) : "Make-up",
+            DefaultNow = () => Lin(F2()).N(Def(F2())),
+        }, f2Val);
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
         faders.Children.Add(new DockPanel { Children = { Docked(thrLbl, Dock.Bottom), thrFader } });
         faders.Children.Add(Col(new DockPanel { Children = { Docked(f2Lbl, Dock.Bottom), f2 } }, 1));
@@ -290,6 +295,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             transfer.GestureEnd += () => { End(Threshold); End(Ratio); };
             transfer.Changed += (thr, ratio) => { Raw(Threshold, thr); Raw(Ratio, ratio); };
             transfer.Reset += () => { Reset(Threshold); Reset(Ratio); };
+            ValueEntry.AttachAll(transfer, F("Threshold", () => Threshold, Lin, Db), F("Ratio", () => Ratio, Log, RatioF));
             MidiLearn.Bind(transfer, MidiTarget.DeviceParam(track, di, Threshold), "Thresh");
             readouts.Add(() => { if (!transfer.Dragging) transfer.Set(P(Threshold), P(Ratio), P(Knee), P(Range), KeyDb()); });
 
@@ -313,27 +319,24 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         // ======================================================================
         // CENTRE — Sidechain
         // ======================================================================
-        var srcIds = new List<int> { -1 };
-        var srcNames = new List<string> { "Internal" };
-        for (int i = 0; i < engine.TrackCount; i++)
-        {
-            if (!engine.TryGetTrackInfo(i, out var ti) || ti.Id == track) continue;
-            srcIds.Add(ti.Id);
-            srcNames.Add(TrackNames.Of(engine, ti));
-        }
-        string SourceName() { int k = srcIds.IndexOf(engine.DeviceSidechainSource(track, di)); return k > 0 ? srcNames[k] : "Internal"; }
+        // The key source: a track, or one pad / chain / voice of it (specs/050).
+        var picker = new SidechainSourcePicker(engine, track, () => engine.DeviceSidechainKey(track, di),
+            (src, part) => engine.SetDeviceSidechainKey(track, di, src, part));
+        string SourceName() => picker.SourceName();
         bool ExtActive() => Sc(S_ExtKey) > 0.5;
 
         var key = new CompKeyView();
         Control SidechainTab()
         {
-            ToolTip.SetTip(key, "The key's spectrum under its filters — drag a handle sideways to move HP / LP, up / down for Q. Double-click a handle to open it.");
+            ToolTip.SetTip(key, MenuKit.Keys("The key's spectrum under its filters — drag a handle sideways to move HP / LP, up / down for Q. ⌥-click a handle to type it, double-click to open it."));
             int KParam(int h) => h == 0 ? ScHP : h == 1 ? ScLP : ScQ;
             key.GestureBegin += h => Begin(KParam(h));
             key.GestureEnd += h => End(KParam(h));
             key.FreqChanged += (h, hz) => Raw(h == 0 ? ScHP : ScLP, hz);
             key.QChanged += q => Raw(ScQ, q);
             key.Reset += h => Reset(h == 0 ? ScHP : ScLP);
+            var keyQ = F("SC Q", () => ScQ, Log, v => NotaNum.F($"{v:0.00}"), reset: false);
+            ValueEntry.AttachHandles(key, [F("SC HP", () => ScHP, Log, HpF), keyQ], [F("SC LP", () => ScLP, Log, LpF), keyQ]);
             MidiLearn.Bind(key, MidiTarget.DeviceParam(track, di, ScHP), "SC HP");
             readouts.Add(() =>
             {
@@ -496,31 +499,21 @@ internal sealed class CompressorDeviceBody : IDeviceBody
 
         Control KeyPanel()
         {
-            var combo = new ComboBox { FontSize = 8, Height = 18, MinHeight = 18, Padding = new Thickness(6, 0), HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Center };
-            foreach (var n in srcNames) combo.Items.Add(n);
-            combo.SelectedIndex = Math.Max(0, srcIds.IndexOf(engine.DeviceSidechainSource(track, di)));
-            bool syncing = false;
+            var combo = picker.Combo;
+            combo.HorizontalAlignment = HorizontalAlignment.Stretch;
             // The source can change elsewhere (MCP, undo): follow it while the list is closed.
-            readouts.Add(() =>
+            readouts.Add(picker.Sync);
+            picker.Picked += k =>
             {
-                if (combo.IsDropDownOpen) return;
-                int want = Math.Max(0, srcIds.IndexOf(engine.DeviceSidechainSource(track, di)));
-                if (combo.SelectedIndex != want) { syncing = true; combo.SelectedIndex = want; syncing = false; }
-            });
-            combo.SelectionChanged += (_, _) =>
-            {
-                int s = combo.SelectedIndex;
-                if (syncing || s < 0 || s >= srcIds.Count) return;
-                engine.SetDeviceSidechainSource(track, di, srcIds[s]);
                 // Picking a source means using it.
-                if (srcIds[s] >= 0 && !On(External)) SetP(External, 1);
+                if (k.Source >= 0 && !On(External)) SetP(External, 1);
                 ctx.NotifyChanged();
             };
-            ToolTip.SetTip(combo, "Key source — Internal keys off this track; pick another track to duck or pump against it");
+            ToolTip.SetTip(combo, "Key source — Internal keys off this track; pick another track, or one pad or chain of it, to duck or pump against it");
             var tap = Segments(new[] { "Pre", "Post" }, () => engine.DeviceSidechainTapPre(track, di) ? 0 : 1,
                 i => { engine.SetDeviceSidechainTapPre(track, di, i == 0); ctx.NotifyChanged(); }, out var tapSync, fill: true);
             readouts.Add(tapSync);
-            ToolTip.SetTip(tap, "Where the source track is tapped: before its effects and fader, or after");
+            ToolTip.SetTip(tap, "Where the source is tapped: before its effects and fader, or after — for a pad or chain, before its own effects, or after them and its level");
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
             var listen = Latch(ScListen, "Listen", "Listen — hear the filtered key instead of the output, to set HP / LP by ear");
             var ext = Latch(External, "External", "External key — key off the source above; off, the track keys itself");

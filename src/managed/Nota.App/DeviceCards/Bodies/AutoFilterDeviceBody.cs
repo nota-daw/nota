@@ -65,6 +65,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
 
         var readouts = new List<Action>();
         void RefreshAll() { foreach (var a in readouts) a(); }
+        // A typeable value for a graph handle (⌥-click it, specs/035).
+        ValueField F(int p, string name, Func<double, string> fmt) => ValueEntry.DeviceParam(engine, track, di, p, name, fmt, RefreshAll);
         var scope = new float[kScope];
         int scN = 0;
         double Sc(int i) => scN > i ? scope[i] : 0;
@@ -226,7 +228,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             f.GestureBegin += () => Begin(p);
             f.GestureEnd += () => End(p);
             Learn(f, p);
-            ToolTip.SetTip(f, tip);
+            ToolTip.SetTip(f, MenuKit.Keys(tip));
+            ValueEntry.Attach(f, F(p, p == Freq ? "Cutoff" : "Resonance", p == Freq ? v => Hz(HzOf(v)) : Pct));
             readouts.Add(() => f.Set(P(p), scN > liveSlot && Assigned() ? Sc(liveSlot) : double.NaN));
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
             return new DockPanel { Children = { Docked(lb, Dock.Bottom), new Border { Margin = new Thickness(0, 0, 0, 3), Child = f } } };
@@ -241,8 +244,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             shapeTitle.Foreground = Assigned() && scN > 0 && Math.Abs(Sc(S_Cut) - P(Freq)) > 0.01 ? AccentBright : TextTertiary;
         });
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(ShapeFader(Freq, "FRQ", NotaPalette.VizInk, S_Cut, "Cutoff — the base the modulation moves from; the dashed mark is where it is now. Double-click resets."));
-        faders.Children.Add(Col(ShapeFader(Res, "RES", Teal, S_Res, "Resonance — the peak at the cutoff; the dashed mark is where it is now. Double-click resets."), 1));
+        faders.Children.Add(ShapeFader(Freq, "FRQ", NotaPalette.VizInk, S_Cut, "Cutoff — the base the modulation moves from; the dashed mark is where it is now. Double-click resets, ⌥-click types a value."));
+        faders.Children.Add(Col(ShapeFader(Res, "RES", Teal, S_Res, "Resonance — the peak at the cutoff; the dashed mark is where it is now. Double-click resets, ⌥-click types a value."), 1));
         var shapeCol = new RuleSection
         {
             Width = 56, Padding = new Thickness(0, 5, 0, 4),
@@ -264,6 +267,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             curve.ResChanged += v => Raw(Res, (float)v);
             ToolTip.SetTip(curve, "Drag sideways for the cutoff, up and down for the resonance. The shaded grey band is how far the envelope and LFO can move the cutoff; the dashed curve is where they have it now.");
             Learn(curve, Freq);
+            ValueEntry.AttachAll(curve, F(Freq, "Cutoff", v => Hz(HzOf(v))), F(Res, "Resonance", Pct));
             return new Border { Margin = new Thickness(8, 6), Child = curve };
         }
 
@@ -283,6 +287,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             envView.GestureEnd += () => End(EnvAmt);
             ToolTip.SetTip(envView, "The input's envelope (the darker grey) and the cutoff it drives (the bright line), the base cutoff dashed. Drag up or down for the amount.");
             Learn(envView, EnvAmt);
+            ValueEntry.AttachAll(envView, F(EnvAmt, "Env amount", Bip));
             return new Border { Margin = new Thickness(8, 6), Child = envView };
         }
         void SyncEnvView()
@@ -324,6 +329,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             lfoView.GestureEnd += () => { End(LfoAmt); End(LfoOffset); };
             ToolTip.SetTip(lfoView, "The LFO's movement over the window — raw shape dashed, what the filter follows (after Smooth) in neutral ink, the right channel in the darker grey when stereo is on. Drag up or down for the amount, sideways for the start phase.");
             Learn(lfoView, LfoAmt);
+            ValueEntry.AttachAll(lfoView, F(LfoAmt, "LFO amount", Pct), F(LfoOffset, "LFO phase", v => Deg(v, 360)));
             return new Border { Margin = new Thickness(8, 6), Child = lfoView };
         }
         void SyncLfoView()
@@ -344,8 +350,10 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         // ======================================================================
         // RIGHT — the controls of the centre tab (Filter · Envelope · LFO)
         // ======================================================================
-        // Sidechain key: the switch picks a source (a flyout with the tracks and the key gain).
-        string SrcName(int id) => TrackNames.Of(engine, id);
+        // Sidechain key: the switch picks a source (a flyout with the tracks — and the pads / chains
+        // / voices of a track's instrument, indented under it, specs/050 — and the key gain).
+        SidechainKey Key() => engine.DeviceSidechainKey(track, di);
+        string KeyName() => SidechainSourcePicker.Name(engine, Key());
         Control SidechainSwitch()
         {
             Border? host = null;
@@ -353,17 +361,19 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             {
                 var list = new StackPanel { Spacing = 1 };
                 var fly = new Flyout();
-                void Item(string name, int id)
+                void Item(string name, SidechainKey k, bool indent = false, bool enabled = true, string? tip = null)
                 {
-                    bool cur = engine.DeviceSidechainSource(track, di) == id;
-                    var tb = new TextBlock { Text = name, FontSize = 10, Foreground = cur ? AccentBright : TextPrimary, FontWeight = cur ? FontWeight.SemiBold : FontWeight.Normal };
-                    var b = new Border { Padding = new Thickness(8, 3), CornerRadius = NotaRadius.Cell, Background = cur ? NotaPalette.AccentSubtle : Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
-                    b.PointerPressed += (_, e) => { engine.SetDeviceSidechainSource(track, di, id); ctx.NotifyChanged(); RefreshAll(); fly.Hide(); e.Handled = true; };
+                    bool cur = Key() == k;
+                    var tb = new TextBlock { Text = name, FontSize = 10, Foreground = !enabled ? TextDisabled : cur ? AccentBright : TextPrimary, FontWeight = cur ? FontWeight.SemiBold : FontWeight.Normal };
+                    var b = new Border { Padding = new Thickness(indent ? 20 : 8, 3, 8, 3), CornerRadius = NotaRadius.Cell, Background = cur ? NotaPalette.AccentSubtle : Brushes.Transparent, Cursor = enabled ? new Cursor(StandardCursorType.Hand) : Cursor.Default, Child = tb };
+                    if (tip != null) ToolTip.SetTip(b, tip);
+                    if (enabled)
+                        b.PointerPressed += (_, e) => { SidechainSourcePicker.SetDeviceKey(engine, track, di, k); ctx.NotifyChanged(); RefreshAll(); fly.Hide(); e.Handled = true; };
                     list.Children.Add(b);
                 }
-                Item("None — this track's input", -1);
-                for (int i = 0; i < engine.TrackCount; i++)
-                    if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track) Item(SrcName(ti.Id), ti.Id);
+                Item("None — this track's input", SidechainKey.None);
+                foreach (var en in SidechainSourcePicker.Entries(engine, track, Key()))
+                    Item(en.Label, en.Key, en.IsPart, en.Enabled, en.Tip);
                 var gain = DeviceCardKit.SliderRow("KEY GAIN", () => (engine.DeviceSidechainGain(track, di) + 24) / 48.0,
                     v => engine.SetDeviceSidechainGain(track, di, (float)(v * 48 - 24)),
                     () => NotaNum.F($"{engine.DeviceSidechainGain(track, di):+0.0;−0.0;0.0} dB"), out _, bipolar: true,
@@ -377,8 +387,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 else ShowPicker();
             }, out var sync, liveLabel: () =>
             {
-                int src = engine.DeviceSidechainSource(track, di);
-                return src >= 0 ? "Key: " + SrcName(src) : "Sidechain key";
+                return engine.DeviceSidechainSource(track, di) >= 0 ? "Key: " + KeyName() : "Sidechain key";
             });
             host = sw;
             readouts.Add(sync);
@@ -710,7 +719,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                     parts.Add(NotaNum.F($"mix {Pct(P(DryWet))}"));
                     break;
             }
-            if (engine.DeviceSidechainSource(track, di) >= 0) parts.Add("key: " + SrcName(engine.DeviceSidechainSource(track, di)));
+            if (engine.DeviceSidechainSource(track, di) >= 0) parts.Add("key: " + KeyName());
             return string.Join(" · ", parts);
         }
         readouts.Add(() =>

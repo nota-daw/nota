@@ -77,3 +77,14 @@ CPMAddPackage(
     URL "https://github.com/juce-framework/JUCE/archive/refs/tags/8.0.14.tar.gz"
     URL_HASH "SHA256=ceb18e4ac9ab5ea71f3f20240d5852707767a1789ab43d06656a296da9e62f3e"
 )
+# Steinberg ASIO SDK 2.3.4 (2025-10-15), used under its GPLv3 option (LICENSES/third-party.md
+# note 8). Windows only, headers only: common/asio.h, iasiodrv.h, asiosys.h — no SDK .cpp
+# is built (src/audio_io/windows/ talks to drivers through IASIO itself).
+if(WIN32)
+    CPMAddPackage(
+        NAME asiosdk
+        URL "https://download.steinberg.net/sdk_downloads/ASIO-SDK_2.3.4_2025-10-15.zip"
+        URL_HASH "SHA256=d5ebf0c20dd2c5f43771fd0c1418f4b361bf52434ee670097cfa6b3a335e2eca"
+        DOWNLOAD_ONLY YES
+    )
+endif()

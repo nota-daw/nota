@@ -98,6 +98,15 @@ internal static class EqLabelTests
         e.Undo();
         yield return (L(e, t, d, 2) == "Mud" && e.DeviceGetParam(t, d, 2 * 5 + 2) == 250f,
             "undoing a label leaves the band's params as they are");
+
+        // A preset applied in place is one step, its labels with its params (63 params: one gesture).
+        var preset = new PresetDocument { Type = "builtin-effect", BuiltinKind = Eq8Kind, NamedParams = new() { ["Labels"] = 1f },
+            BandText = [new PresetBandText { Band = 1, Label = "Low", Note = "" }] };
+        Nota.Application.Editing.PresetEdit.Apply(e, t, PresetSurface.Effect, d, "", "",
+            () => PresetService.ApplyInPlace(preset, e, t, d));
+        bool applied = L(e, t, d, 0) == "Low" && L(e, t, d, 2) == "" && e.DeviceGetParam(t, d, 2 * 5 + 2) != 250f;
+        yield return (applied && e.Undo() && L(e, t, d, 2) == "Mud" && L(e, t, d, 0) == "" && e.DeviceGetParam(t, d, 2 * 5 + 2) == 250f,
+            $"one undo takes back a preset's labels with its params (\"{L(e, t, d, 2)}\")");
     }
 
     private static IEnumerable<(bool, string)> Copies()

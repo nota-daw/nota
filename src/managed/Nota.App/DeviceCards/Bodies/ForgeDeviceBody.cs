@@ -211,7 +211,8 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             outBox.PointerReleased += (_, e) => { if (od) { od = false; End(OutP(s)); e.Pointer.Capture(null); } };
             outBox.PointerCaptureLost += (_, _) => { if (od) { od = false; End(OutP(s)); } };
             Learn(outBox, OutP(s));
-            ToolTip.SetTip(outBox, $"Stage {s + 1} output, −12 … +12 dB — drag up / down, double-click resets");
+            ToolTip.SetTip(outBox, MenuKit.Keys($"Stage {s + 1} output, −12 … +12 dB — drag up / down, ⌥-click to type, double-click resets"));
+            ValueEntry.Attach(outBox, ValueEntry.DeviceParam(engine, track, di, OutP(s), $"Stage {s + 1} output", OutF, Refresh), outTxt);
 
             readouts.Add(() =>
             {
@@ -250,7 +251,8 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         transfer.Changed += (_, v) => { Raw(Amount, v); Refresh(); };
         transfer.ResetRequested += _ => { Reset(Amount); Refresh(); };
         Learn(transfer, Amount);
-        ToolTip.SetTip(transfer, "Input → output through the device (in M/S and Multi through the selected stage): each stage alone faint, the LFO-modulated curve dashed grey, the node where the input sits now. Drag up / down for Amount; double-click resets.");
+        ToolTip.SetTip(transfer, MenuKit.Keys("Input → output through the device (in M/S and Multi through the selected stage): each stage alone faint, the LFO-modulated curve dashed grey, the node where the input sits now. Drag up / down for Amount; ⌥-click to type, double-click resets."));
+        ValueEntry.Attach(transfer, new ValueField("Amount", () => P(Amount), AmtF, v => Raw(Amount, v), () => Begin(Amount), () => End(Amount), engine.DeviceParamDefault(track, di, Amount)) { After = Refresh });
         var harm = new FgHarmonicsView { Height = 50 };
         ToolTip.SetTip(harm, "Harmonics 2 … 9 of a −6 dB sine through the curve: odd partials in full ink (hard, buzzy), even ones dimmer (warm, round), and the total harmonic distortion");
         var graphs = new DockPanel

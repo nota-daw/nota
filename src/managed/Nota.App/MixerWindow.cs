@@ -4,7 +4,8 @@
 // The Mixer in its own window (opened from View → Mixer). It hosts the single MixerView
 // instance the main window owns (reparented, not rebuilt), so meters/state carry over and
 // the tick loop keeps updating it while the window is open. Closing detaches the mixer.
-// Its own title bar carries the Strips | Stereo Map switch (specs/008).
+// Its own title bar carries the Strips | Stereo Map switch (specs/008) and a dock button that
+// moves the Mixer back into the main window (specs/054).
 
 using System;
 using Avalonia;
@@ -22,6 +23,9 @@ internal sealed class MixerWindow : NotaWindow
     public event Action? WindowClosed;
     /// <summary>The user picked a view in the title bar.</summary>
     public event Action<MixerViewMode>? ViewPicked;
+    /// <summary>The user asked to dock the Mixer back into the main window (specs/054); the
+    /// owner moves it and closes this window.</summary>
+    public event Action? DockRequested;
     private readonly Action<int> _setViewSegment;
 
     private const double BarH = 36;
@@ -63,10 +67,20 @@ internal sealed class MixerWindow : NotaWindow
             i => ViewPicked?.Invoke(i == 1 ? MixerViewMode.StereoMap : MixerViewMode.Strips), out _setViewSegment);
         seg.HorizontalAlignment = HorizontalAlignment.Center;
         seg.VerticalAlignment = VerticalAlignment.Center;
+        var dockBtn = new Button
+        {
+            Classes = { "ghost" }, Height = 22, Padding = new Thickness(6, 0), Foreground = NotaPalette.TextTertiary,
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+            Content = new Glyph(GlyphKind.DockIn),
+        };
+        ToolTip.SetTip(dockBtn, "Dock the mixer in the main window");
+        dockBtn.Click += (_, _) => DockRequested?.Invoke();
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,*") };
         grid.Children.Add(caption);
         Grid.SetColumn(seg, 1);
         grid.Children.Add(seg);
+        Grid.SetColumn(dockBtn, 2);
+        grid.Children.Add(dockBtn);
         var bar = new Border
         {
             Height = BarH, Background = NotaPalette.Panel, BorderBrush = NotaPalette.GraphBorder,
@@ -84,6 +98,14 @@ internal sealed class MixerWindow : NotaWindow
 
     /// <summary>Repaints the title-bar switch (the view changed elsewhere).</summary>
     public void ShowView(MixerViewMode view) => _setViewSegment(view == MixerViewMode.StereoMap ? 1 : 0);
+
+    /// <summary>Height limits from the hosted mixer's content (specs/054): no shorter than its
+    /// strips' core, and — before the first show — tall enough for full strips.</summary>
+    public void FitHeightLimits(MixerView mixer)
+    {
+        if (!IsVisible) Height = Math.Max(Height, BarH + mixer.NaturalContentHeight);
+        NotaUiScale.SetDesignMinHeight(this, BarH + mixer.MinContentHeight);
+    }
 
     /// <summary>Fits the window to <paramref name="stripsWidth"/> (the mixer's strip row), so
     /// strips fill it with no dead area: clamped to [MinWidth, the screen's working width].

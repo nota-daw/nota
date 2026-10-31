@@ -23,6 +23,146 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
+  the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
+  Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.
+  Drag its top edge to resize it. The panel's pop-out button (or **View → Mixer in its own
+  window**) moves it into the floating window for a second screen; the window's dock button
+  brings it back. Nota remembers whether the Mixer was shown, where and how tall, and restores
+  it on the next launch.
+- **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
+  text in the app a point smaller or up to two points larger, live, without changing the
+  layout (Interface scale still scales everything). Device cards keep their text size.
+- **Send levels in the Large track header**: a track at the Large height shows a value bar for
+  its send to each return, two per row, as far as the height allows.
+
+### Changed
+- **Bigger graphs in Nota Compressor and Nota Auto Filter** (Egor's review of
+  nota-daw/nota#296): each centre tab is now one graph that fills its panel, nearly twice as
+  tall as before. The knobs under the graphs move to the right panel as sliders: its first tab
+  follows the centre tab, and its Output tab (and Auto Filter's Mod tab) stay. Compressor: Curve shows
+  Dynamics (character, detector, ratio, knee, mix, range, auto gain), Motion shows Timing
+  (attack, release, hold, lookahead, auto-release) and Sidechain shows Key (source, tap,
+  external, listen, HP, LP, Q, stereo link). Auto Filter: Filter, Envelope and LFO each show
+  their own controls, with Mod → Freq / Reso / Both on the Filter panel. The live read-outs
+  (in / out and crest, measured transient and recovery, the cutoff and its note) moved to the
+  right of the tab bar.
+- **Smaller shell text and a new key picker** (review of
+  nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
+  The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
+  full.
+- **A new look** (spec 038, the Studio style guide): every control and setting stays where it
+  was; how it is drawn changes. The shell is flat and grey so the track colours carry the
+  content, and depth is kept for device cards. Orange now has three jobs: solid for what is
+  live, a soft tint for what you picked, orange lines for values inside a device.
+  - **Arrangement:** clips are a 20 % tint of the track colour with the name, notes and wave
+    in the full colour, and a selected clip gets an outline in the text colour instead of
+    orange. Track headers are 54 high on two rows (name, tag, M, S, arm; then volume with its
+    value inside the bar, the pan knob and the input picker). New tracks take colours in an
+    order that keeps neighbours apart. Group members show the group's bar beside their own.
+  - **Toolbar and device panel:** the toolbar, the device panel (its toolbar and the area
+    behind the cards) and the status line sit on the darker shell tone, a step below the
+    arrangement, as the style guide draws them. The **Sends** card at the end of a chain is
+    one column per return (its colour, letter, knob, amount and name), so it is narrow with
+    one return and widens as returns are added, instead of a fixed wide card.
+  - **Browser and rail:** 30 px rows, a larger search box, flat chips, and rail buttons that
+    show the page you are on with an orange tick and the soft tint.
+  - **Piano roll:** the clip settings move from the left column into one strip above the
+    notes, so the notes get the full width. Quantize strength is a flat bar with its value
+    inside.
+  - **Audio editor:** one column with Start and Length side by side and the Warp switch and
+    mode on the Warp title row, so nothing scrolls.
+  - **Session and Mixer:** a selected slot gets an outline in the text colour, empty slots
+    fade back, and send and volume values sit inside their bars.
+  - **Devices** keep the layout and size they had: every card is still 700 × 260 with its
+    controls in the same places and its status line. What changes is how the parts are drawn:
+    capped knobs with an orange value arc, value bars instead of thin sliders, the new
+    switches and segment groups, pressed-in sections, one font, greys instead of the old
+    identity colours, and inactive controls in a quieter grey instead of faded.
+- **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
+  rows hide first, then the sends, then the fader gets shorter; name, meter, fader, pan and
+  M / S / Arm always stay. A hidden section's **Sends** / **I/O** footer toggle shows an
+  outline — click it to show the section anyway, and the strips scroll. Strip faders, pan and
+  M / S / Arm — in the Mixer and in Session's mixer sections — now follow changes made
+  elsewhere (the other mixer, track headers, automation, undo).
+- **Mixer strip order** follows the arrangement: the tracks in their order, then the
+  returns, then the master.
+
+### Fixed
+- **Nota Compressor and Nota Auto Filter: read-outs and controls back after the bigger graphs**
+  (nota-daw/nota#376): on the Sidechain tab the left fader learns SC gain again (Makeup on the
+  other tabs). The Motion panel has the Character chips again and a LIVE box with the attack and
+  release the detector really runs, the window length and the GR peak; the measured attack is
+  labelled "90 % rise", since it is timed to 90 % of the peak so a Hold plateau does not count.
+  Auto Filter: the LFO and Envelope tabs show the resonance swing ("reso X ±Y") when Mod is Reso
+  or Both instead of "no modulation", and the Envelope tab shows the −24 dB onset threshold again.
+  The REDUCTION box on the Dynamics panel keeps its own height, so its two lines no longer spill
+  under the Auto gain switch.
+- **Shell read-outs and controls lost in the restyle are back**: the Loop key writes the loop
+  range beside its icon again; the arrangement's header column names the **Sections** and
+  **Overview** lanes and the zoom keys carry their "Zoom" caption; the Return and Master rows'
+  dB number follows a drag, opens typed entry on double-click, and the bar writes its value
+  inside; the input picker stays on Standard-height track headers (it shrinks in a narrow
+  column) and the mouse wheel steps through its sources again; the piano roll's Loop switch
+  shows on (clips always loop); clip names show on rows taller than 34 px again; and the piano
+  roll's selection read-out labels its fields again (Pitch, Start, Length, Velocity / Notes,
+  Range, Velocity) while the gesture hint wraps to a second line instead of being cut off.
+- **Device cards: what the restyle dropped is back, in the new look.** Level meters turn red
+  only at 0 dBFS again (amber from −6 dB), Pentad's level bars included. Modulation depths and
+  amounts (env, LFO and fine-tune knobs, rack macros in mapping mode, Ceiling's Release while
+  Auto Release drives it) draw a dashed arc, and modulation sliders a hatched fill, so they read
+  apart from ordinary values. An inactive segment strip (Dynamic EQ-8 Mode, EQ-8 Slope, Bass
+  Legato, Flux's reaction target, Physical's resonator choices, a rack macro's Curve) shows
+  which option is picked again. Ceiling's Level graph has its reduction strip back; Chamber
+  shows the IR start time and the result lane's axis; Dynamic EQ-8 shows its "Response" title
+  and tells boost from cut by shade and a dashed ring; EQ-3's three band curves differ again
+  (shade and dash) and its faders have their 0 dB and half-cut ticks; EQ-8's L / R bands have a
+  dashed ring; Vintage's pitch-drift scale, Chorus's centre-line label and the Volt / Bass /
+  Aurora filter graph's frequency labels, −48 dB floor and +12 … −48 dB range are back;
+  Utility's correlation bar tints its out-of-phase half; Sampler's live cutoff line is lighter
+  and labelled; Flux shows when the reaction pulls the vector. Value bars and EQ-3's faders
+  light up under the pointer, and the Auto Filter and Compressor handles only look grabbed
+  while hovered or dragged. Operator's OUT drop zone is the
+  bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
+  graph tooltips that named colours no longer drawn now describe what is on screen.
+- **View ▸ Toggle detail panel** no longer leaves an empty band where the hidden panel was;
+  showing it again brings back its height.
+
+## [0.58.1] — 2026-10-29
+
+### Added
+- **Type exact values into graphs, envelopes and mod matrices** (#240): ⌥-click (Alt-click on
+  Windows / Linux) a graph handle and type its value in the units shown, as on knobs and
+  faders; a handle with several values (an EQ band's frequency · gain · Q, an envelope's decay
+  · sustain) takes Tab between them, Return sets, Esc cancels, each value one undo step and
+  one automation gesture. Covered: the envelope graphs of Volt, Bass, Aurora, Operator,
+  Physical, Synth and Sampler / Mosaic, the ADSR handles of audio clips in the Arrangement,
+  the Volt / Aurora and Consort mod matrices, and the graphs of EQ-8, Dynamic EQ, EQ-3, Auto
+  Filter, Compressor, Delay, Chorus, Flanger, Phaser, Orbit, Crush, Auto Gain, Lens, Reverb,
+  Shutter, Vintage and Vocoder, the filter pads of Volt-family and Consort instruments, Flux's
+  vector pad, Grain's position, Keys' pickup, Rhythm's hit and sample views, Velocity's out
+  range and the Stereo Map. Right-click a handle for **Type value…** and **Reset to default**
+  (**Clear** on a matrix cell); EQ bands carry **Type value…** in their own menu. The A · D ·
+  S · R read-outs under the Volt, Bass and Aurora envelopes take a double-click to type too.
+- **Sidechain from a single pad, chain or voice** (#190): a sidechain key can now listen to one
+  pad of a Drum Rack, one chain of an Instrument Rack or one voice of Nota Rhythm instead of the
+  whole track — duck the bass from just the kick. Every key source picker lists the parts under
+  their track (Compressor, Auto Filter, Auto Gain, Ceiling, Dynamic EQ, Prism, Shutter, Vocoder,
+  plug-in sidechain inputs and Nota Flux's React). Pre takes the part before its own effects (the
+  raw hit), Post after its effects and its level and pan. A muted or solo-silenced pad still drives
+  its key — the "ghost kick". The key stays on its pad when pads are added, removed or renamed,
+  goes quiet while its pad is deleted (undo brings it back) and is saved with the project. MCP:
+  `list_sidechain_sources`, `get_instrument_sidechain`, `set_instrument_sidechain`, and a
+  `sourcePart` on `get_device_sidechain` / `set_device_sidechain`.
+- **ASIO on Windows**: Settings → Audio → **Audio system** now offers ASIO beside WASAPI.
+  Pick the driver and the output and input channel pairs by the driver's own names (the
+  other outputs stay silent); **Driver settings…** opens the driver's panel, where the buffer
+  size is set, and a change there is picked up within a couple of seconds without a restart
+  — playback carries on. Recording and playback share the driver's clock, so monitoring needs
+  no extra buffer, and recorded takes are moved earlier by the driver's reported latency. If
+  the driver is missing, busy or stops responding, Nota switches to WASAPI and the status bar
+  says why; **Try again** goes back to ASIO. The Steinberg ASIO SDK is used under its GPLv3
+  option (`LICENSES/third-party.md`).
 - **Tempo-synced scope in Nota Lens** (#119): the Scope view gains **Sync**, which lines the
   trace up with the song: pick a **Span** from a quarter beat to four bars and the scope shows
   that stretch of the beat grid, with beat and bar lines, a sweep line at the playhead and the
@@ -173,55 +313,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   row). A mono pick is recorded and monitored in the middle of both sides, so a mic on input 1
   of a stereo interface is no longer left-only. New audio tracks take Ext 1; projects saved
   before keep the stereo pair. Saved with the project; MCP `set_input_channels`.
-- **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
-  text in the app a point smaller or up to two points larger, live, without changing the
-  layout (Interface scale still scales everything). Device cards keep their text size.
-- **Send levels in the Large track header**: a track at the Large height shows a value bar for
-  its send to each return, two per row, as far as the height allows.
 
 ### Changed
-- **Bigger graphs in Nota Compressor and Nota Auto Filter** (Egor's review of
-  nota-daw/nota#296): each centre tab is now one graph that fills its panel, nearly twice as
-  tall as before. The knobs under the graphs and the old right-hand tabs are gone: the right
-  panel follows the centre tab and holds its controls as sliders. Compressor: Curve shows
-  Dynamics (character, detector, ratio, knee, mix, range, auto gain), Motion shows Timing
-  (attack, release, hold, lookahead, auto-release) and Sidechain shows Key (source, tap,
-  external, listen, HP, LP, Q, stereo link). Auto Filter: Filter, Envelope and LFO each show
-  their own controls, with Mod → Freq / Reso / Both on the Filter panel. The live read-outs
-  (in / out and crest, measured transient and recovery, the cutoff and its note) moved to the
-  right of the tab bar.
-- **Smaller shell text and a new key picker** (review of
-  nota-daw/nota#296): the app's text outside the device cards is a point smaller by default.
-  The key picker is a one-octave keyboard with a Major / Minor switch and the key named in
-  full.
-- **A new look** (spec 038, the Studio style guide): every control and setting stays where it
-  was; how it is drawn changes. The shell is flat and grey so the track colours carry the
-  content, and depth is kept for device cards. Orange now has three jobs: solid for what is
-  live, a soft tint for what you picked, orange lines for values inside a device.
-  - **Arrangement:** clips are a 20 % tint of the track colour with the name, notes and wave
-    in the full colour, and a selected clip gets an outline in the text colour instead of
-    orange. Track headers are 54 high on two rows (name, tag, M, S, arm; then volume with its
-    value inside the bar, the pan knob and the input picker). New tracks take colours in an
-    order that keeps neighbours apart. Group members show the group's bar beside their own.
-  - **Toolbar and device panel:** the toolbar, the device panel (its toolbar and the area
-    behind the cards) and the status line sit on the darker shell tone, a step below the
-    arrangement, as the style guide draws them. The **Sends** card at the end of a chain is
-    one column per return (its colour, letter, knob, amount and name), so it is narrow with
-    one return and widens as returns are added, instead of a fixed wide card.
-  - **Browser and rail:** 30 px rows, a larger search box, flat chips, and rail buttons that
-    show the page you are on with an orange tick and the soft tint.
-  - **Piano roll:** the clip settings move from the left column into one strip above the
-    notes, so the notes get the full width. Quantize strength is a flat bar with its value
-    inside.
-  - **Audio editor:** one column with Start and Length side by side and the Warp switch and
-    mode on the Warp title row, so nothing scrolls.
-  - **Session and Mixer:** a selected slot gets an outline in the text colour, empty slots
-    fade back, and send and volume values sit inside their bars.
-  - **Devices** keep the layout and size they had: every card is still 700 × 260 with its
-    controls in the same places and its status line. What changes is how the parts are drawn:
-    capped knobs with an orange value arc, value bars instead of thin sliders, the new
-    switches and segment groups, pressed-in sections, one font, greys instead of the old
-    identity colours, and inactive controls in a quieter grey instead of faded.
+- ⌥-click a cell of Consort's patch matrix now types its depth (double-click or **Clear**
+  pulls the cable, as ⌥-click did); ⌥-click a Stereo Map handle types its pan and volume (⌥
+  double-click no longer resets the volume — type 0). (#240)
+- **16 sidechain routes instead of 8** (#190): whole tracks and single pads share the pool; a
+  source picker greys out what no free route can take, and a project that needs more says how many
+  keys it had to drop.
 - **Return and master rows start compact**: new projects, new returns and projects saved
   before this version show them at the Compact height, so the tracks get the room.
 - **One click arms one track** (nota-daw/nota#332): a click on a track's arm button arms that
@@ -255,43 +354,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   at full detail instead of in blocks.
 
 ### Fixed
-- **Nota Compressor and Nota Auto Filter: read-outs and controls back after the bigger graphs**
-  (nota-daw/nota#376): on the Sidechain tab the left fader learns SC gain again (Makeup on the
-  other tabs). The Motion panel has the Character chips again and a LIVE box with the attack and
-  release the detector really runs, the window length and the GR peak; the measured attack is
-  labelled "90 % rise", since it is timed to 90 % of the peak so a Hold plateau does not count.
-  Auto Filter: the LFO and Envelope tabs show the resonance swing ("reso X ±Y") when Mod is Reso
-  or Both instead of "no modulation", and the Envelope tab shows the −24 dB onset threshold again.
-  The REDUCTION box on the Dynamics panel keeps its own height, so its two lines no longer spill
-  under the Auto gain switch.
-- **Shell read-outs and controls lost in the restyle are back**: the Loop key writes the loop
-  range beside its icon again; the arrangement's header column names the **Sections** and
-  **Overview** lanes and the zoom keys carry their "Zoom" caption; the Return and Master rows'
-  dB number follows a drag, opens typed entry on double-click, and the bar writes its value
-  inside; the input picker stays on Standard-height track headers (it shrinks in a narrow
-  column) and the mouse wheel steps through its sources again; the piano roll's Loop switch
-  shows on (clips always loop); clip names show on rows taller than 34 px again; and the piano
-  roll's selection read-out labels its fields again (Pitch, Start, Length, Velocity / Notes,
-  Range, Velocity) while the gesture hint wraps to a second line instead of being cut off.
-- **Device cards: what the restyle dropped is back, in the new look.** Level meters turn red
-  only at 0 dBFS again (amber from −6 dB), Pentad's level bars included. Modulation depths and
-  amounts (env, LFO and fine-tune knobs, rack macros in mapping mode, Ceiling's Release while
-  Auto Release drives it) draw a dashed arc, and modulation sliders a hatched fill, so they read
-  apart from ordinary values. An inactive segment strip (Dynamic EQ-8 Mode, EQ-8 Slope, Bass
-  Legato, Flux's reaction target, Physical's resonator choices, a rack macro's Curve) shows
-  which option is picked again. Ceiling's Level graph has its reduction strip back; Chamber
-  shows the IR start time and the result lane's axis; Dynamic EQ-8 shows its "Response" title
-  and tells boost from cut by shade and a dashed ring; EQ-3's three band curves differ again
-  (shade and dash) and its faders have their 0 dB and half-cut ticks; EQ-8's L / R bands have a
-  dashed ring; Vintage's pitch-drift scale, Chorus's centre-line label and the Volt / Bass /
-  Aurora filter graph's frequency labels, −48 dB floor and +12 … −48 dB range are back;
-  Utility's correlation bar tints its out-of-phase half; Sampler's live cutoff line is lighter
-  and labelled; Flux shows when the reaction pulls the vector. ⌥-click resets Compressor's
-  Thresh / Makeup and EQ-3's faders and Output again (double-click the value, or right-click,
-  to type). Value bars and EQ-3's faders light up under the pointer, and the Auto Filter and
-  Compressor handles only look grabbed while hovered or dragged. Operator's OUT drop zone is the
-  bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
-  graph tooltips that named colours no longer drawn now describe what is on screen.
+- Clearing a Volt or Aurora mod-matrix cell is one undo step and records as an automation
+  gesture, and a right-click on the Volt-family envelope and filter graphs no longer moves
+  the value under the pointer. (#240)
 - **Disarming a track no longer leaves a held note sounding** (nota-daw/nota#366): turning record arm off
   (or the arm moving to another selected track) while a key is down releases the notes that
   came in through live input, instead of leaving them on until panic or stop.

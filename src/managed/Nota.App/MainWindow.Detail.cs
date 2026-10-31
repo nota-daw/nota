@@ -132,12 +132,14 @@ public partial class MainWindow
     // and less clips them.
     private void ShowDetail(double height, bool honorPersist, bool resizable = true)
     {
-        var row = BodyGrid.RowDefinitions[2];
+        var row = _detailRow;
         row.MinHeight = 120;
         double h = honorPersist && _detailHeight > 120 ? _detailHeight : height;
         row.Height = new GridLength(h);
         DetailSplitter.IsVisible = resizable;
         DetailPanel.IsVisible = true;
+        _detailWanted = h;
+        FitBottomPanels();   // under a docked Mixer in a short window it may not fit as asked
     }
 
     private void OnTrackSelected(int trackId)
@@ -891,11 +893,170 @@ public partial class MainWindow
 
     private void OnCloseDetail(object? sender, RoutedEventArgs e) => CloseDetail();
 
+    // --- bottom panels: docked Mixer over Detail (specs/054) ----------------------------------
+    //
+    // BodyGrid is [main *] [mixer splitter, mixer]? [detail splitter, detail]. The Mixer rows
+    // are only in the grid while it is docked, so each splitter always has the right neighbour
+    // above it: the Mixer's trades with the main view, the Detail one with the Mixer when it's
+    // there and the main view otherwise. The row objects persist; the Detail rows are the
+    // ones declared in XAML, so everything that sizes them keeps working unchanged.
+
+    private RowDefinition _mainRow = null!, _detailSplitRow = null!, _detailRow = null!;
+    private readonly RowDefinition _mixerSplitRow = new(GridLength.Auto);
+    private readonly RowDefinition _mixerRow = new(new GridLength(0));
+    private bool _mixerDocked;      // the Mixer is shown in MixerPanel
+    private double _mixerWanted;    // its height before fitting into the window
+    private double _detailWanted;   // the Detail panel's, likewise
+    private double _edgeStartY, _edgeStartH;   // a DetailEdge drag in progress
+
+    private void InitBottomPanels()
+    {
+        var rows = BodyGrid.RowDefinitions;
+        _mainRow = rows[0];
+        _detailSplitRow = rows[1];
+        _detailRow = rows[2];
+        LayoutBottomPanels();
+        BodyGrid.SizeChanged += (_, e) => { if (e.HeightChanged) FitBottomPanels(); };
+        MixerSplitter.DragCompleted += (_, _) => OnMixerHeightDragged();
+        DetailSplitter.DragCompleted += (_, _) => { if (!_mixerDocked) _detailWanted = _detailRow.ActualHeight; };
+        // However the Detail panel is hidden or shown (close, pop-out, a tab, a menu), the
+        // Mixer takes back or gives up the room; and the edge follows the splitter.
+        DetailPanel.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != IsVisibleProperty) return;
+            FollowDetailVisibility(DetailPanel.IsVisible);
+            SyncDetailEdge();
+            Dispatcher.UIThread.Post(FitBottomPanels);
+        };
+        DetailSplitter.PropertyChanged += (_, e) => { if (e.Property == IsVisibleProperty) SyncDetailEdge(); };
+        DetailEdge.PointerPressed += OnDetailEdgePressed;
+        DetailEdge.PointerMoved += OnDetailEdgeMoved;
+        DetailEdge.PointerReleased += OnDetailEdgeReleased;
+    }
+
+    // Some paths only flip the panel's visibility (View ▸ Toggle detail panel, a closed clip):
+    // the row follows, so a hidden panel leaves no empty band (under the Mixer either), and
+    // showing it again brings back its height and splitter.
+    private bool _detailSplitterWasVisible;
+    private void FollowDetailVisibility(bool shown)
+    {
+        if (!shown)
+        {
+            if (Height(_detailRow) <= 0) return;
+            _detailSplitterWasVisible = DetailSplitter.IsVisible;
+            DetailSplitter.IsVisible = false;
+            _detailRow.MinHeight = 0;
+            _detailRow.Height = new GridLength(0);
+            return;
+        }
+        if (Height(_detailRow) > 0) return;   // ShowDetail sized it already
+        _detailRow.MinHeight = 120;
+        _detailRow.Height = new GridLength(_detailWanted > 120 ? _detailWanted : 240);
+        DetailSplitter.IsVisible = _detailSplitterWasVisible;
+    }
+
+    private static double Height(RowDefinition r) => r.Height.IsAbsolute ? r.Height.Value : r.ActualHeight;
+
+    // The Detail panel's top edge while the Mixer is docked above it: only the Detail panel
+    // changes height, taking room from the main view down to its minimum; the Mixer keeps its.
+    private void SyncDetailEdge()
+    {
+        DetailEdge.IsVisible = _mixerDocked && DetailSplitter.IsVisible && DetailPanel.IsVisible;
+        DetailSplitter.IsHitTestVisible = !_mixerDocked;
+    }
+
+    private void OnDetailEdgePressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(DetailEdge).Properties.IsLeftButtonPressed) return;
+        _edgeStartY = e.GetPosition(BodyGrid).Y;
+        _edgeStartH = _detailRow.ActualHeight;
+        e.Pointer.Capture(DetailEdge);
+        e.Handled = true;
+    }
+
+    private void OnDetailEdgeMoved(object? sender, PointerEventArgs e)
+    {
+        if (!ReferenceEquals(e.Pointer.Captured, DetailEdge)) return;
+        double max = BodyGrid.Bounds.Height - _mainRow.MinHeight - _mixerRow.ActualHeight;
+        double h = Math.Clamp(_edgeStartH - (e.GetPosition(BodyGrid).Y - _edgeStartY), _detailRow.MinHeight, Math.Max(_detailRow.MinHeight, max));
+        _detailRow.Height = new GridLength(Math.Round(h));
+        e.Handled = true;
+    }
+
+    private void OnDetailEdgeReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!ReferenceEquals(e.Pointer.Captured, DetailEdge)) return;
+        e.Pointer.Capture(null);
+        e.Handled = true;
+        double h = _detailRow.Height.IsAbsolute ? _detailRow.Height.Value : _detailRow.ActualHeight;
+        _detailWanted = h;
+        // As the splitter's drag does: only the Clip tab remembers its height (#53).
+        bool clipActive = DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView;
+        if (clipActive && h > 120) _detailHeight = h;
+    }
+
+    private void LayoutBottomPanels()
+    {
+        var rows = BodyGrid.RowDefinitions;
+        rows.Clear();
+        rows.Add(_mainRow);
+        int detail = 1;
+        if (_mixerDocked)
+        {
+            rows.Add(_mixerSplitRow);
+            rows.Add(_mixerRow);
+            Grid.SetRow(MixerSplitter, 1);
+            Grid.SetRow(MixerPanel, 2);
+            detail = 3;
+        }
+        else
+        {
+            _mixerRow.MinHeight = 0;
+            _mixerRow.Height = new GridLength(0);
+        }
+        rows.Add(_detailSplitRow);
+        rows.Add(_detailRow);
+        Grid.SetRow(DetailSplitter, detail);
+        Grid.SetRow(DetailPanel, detail + 1);
+        Grid.SetRow(DetailEdge, detail);
+        MixerSplitter.IsVisible = _mixerDocked;
+        MixerPanel.IsVisible = _mixerDocked;
+        SyncDetailEdge();
+        FitBottomPanels();
+    }
+
+    // Keep the main view at its minimum height: when the window is too short for both bottom
+    // panels, the Mixer gives way first (its strips fit any height down to their core), then
+    // the Detail panel (device cards have a fixed height, so it clips), each down to its
+    // minimum. The Mixer grows back toward the height the user chose; a fit never changes it.
+    private void FitBottomPanels()
+    {
+        double total = BodyGrid.Bounds.Height;
+        double mixer = _mixerDocked ? Math.Max(_mixerWanted, _mixerRow.MinHeight) : 0;
+        if (total > 0)
+        {
+            double room = total - _mainRow.MinHeight;
+            double detail = !DetailPanel.IsVisible ? 0 : _detailWanted > 0 ? Math.Max(_detailWanted, _detailRow.MinHeight) : Height(_detailRow);
+            double over = mixer + detail - room;
+            if (over > 0 && mixer > 0)
+            {
+                double cut = Math.Min(over, Math.Max(0, mixer - _mixerRow.MinHeight));
+                mixer -= cut;
+                over -= cut;
+            }
+            if (over > 0 && detail > 0) detail -= Math.Min(over, Math.Max(0, detail - _detailRow.MinHeight));
+            // The Detail panel shrinks with the window and grows back to what it was asked for.
+            if (detail > 0 && Math.Abs(Height(_detailRow) - detail) >= 0.5) _detailRow.Height = new GridLength(Math.Round(detail));
+        }
+        if (_mixerDocked) _mixerRow.Height = new GridLength(Math.Round(mixer));
+
+    }
+
     private void CloseDetail()
     {
         DetailPanel.IsVisible = false;
         DetailSplitter.IsVisible = false;
-        var row = BodyGrid.RowDefinitions[2];
+        var row = _detailRow;
         row.MinHeight = 0;
         row.Height = new GridLength(0);
     }

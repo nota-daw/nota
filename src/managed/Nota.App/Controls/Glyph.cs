@@ -37,6 +37,7 @@ internal enum GlyphKind
     // Path kinds (24-unit grid, see Paths)
     Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Overdub, Replace, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink, Update,
     Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
+    DockIn,                        // PopOut's opposite: bring a floating window back into the main one
 }
 
 internal sealed class Glyph : Control
@@ -236,6 +237,15 @@ internal sealed class Glyph : Control
                 double d = s * 0.36;
                 ctx.DrawRectangle(null, pen, new RoundedRect(new Rect(cx - d, cy - d * 0.6, d * 1.4, d * 1.6), 1));
                 Stroke(ctx, pen, new Point(cx, cy - d), new Point(cx + d, cy - d), new Point(cx + d, cy));
+                ctx.DrawLine(pen, new Point(cx + d, cy - d), new Point(cx + d * 0.1, cy - d * 0.1));
+                break;
+            }
+            case GlyphKind.DockIn:
+            {
+                // PopOut's frame with the arrow turned around: it points into the frame.
+                double d = s * 0.36;
+                ctx.DrawRectangle(null, pen, new RoundedRect(new Rect(cx - d, cy - d * 0.6, d * 1.4, d * 1.6), 1));
+                Stroke(ctx, pen, new Point(cx + d * 0.1, cy - d * 0.75), new Point(cx + d * 0.1, cy - d * 0.1), new Point(cx + d * 0.75, cy - d * 0.1));
                 ctx.DrawLine(pen, new Point(cx + d, cy - d), new Point(cx + d * 0.1, cy - d * 0.1));
                 break;
             }
