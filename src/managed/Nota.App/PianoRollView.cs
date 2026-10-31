@@ -298,6 +298,17 @@ public sealed partial class PianoRollView : UserControl
         SyncScroll(); Invalidate(); SaveView();
     }
 
+    /// <summary>Scrolls clip <paramref name="slot"/>'s start into view when it is off screen.</summary>
+    public void RevealClip(int slot)
+    {
+        if (slot < 0 || slot >= _set.Count) return;
+        double start = _set.EditorStart(slot);
+        if (_pixelsPerBeat <= 0) { _pendingScrollTo = start; return; }
+        double vpBeats = _gridControl.Bounds.Width / _pixelsPerBeat;
+        if (start >= _scrollBeats && start < _scrollBeats + vpBeats) return;
+        SetScrollBeats(start);
+    }
+
     internal void ScrollByBeats(double delta) => SetScrollBeats(_scrollBeats + delta);
 
     internal void ZoomAt(double factor, double beatAnchor)
@@ -665,7 +676,12 @@ public sealed partial class PianoRollView : UserControl
     /// exactly the single-clip editor.</summary>
     public void SetClips(ClipSet set, IReadOnlyList<ClipNotes> perClip, Func<int, ISolidColorBrush> brushOf)
     {
-        bool rescroll = !ReferenceEquals(set, _set) && set.IsMulti;
+        // A track-mode set refreshed for the same track (a clip drawn, split, pasted; undo)
+        // keeps the zoom, scroll and note selection the user is working with (specs/059).
+        bool keepView = _set.TrackMode && set.TrackMode && _pixelsPerBeat > 0
+                        && _set.ActiveClip.TrackId == set.ActiveClip.TrackId;
+        var kept = keepView ? SelectedNotesAbsolute() : null;
+        bool rescroll = !keepView && !ReferenceEquals(set, _set) && set.IsMulti;
         _set = set;
         _slotBrushes.Clear();
         foreach (var c in set.Clips) _slotBrushes.Add(brushOf(c.TrackId));
@@ -674,12 +690,46 @@ public sealed partial class PianoRollView : UserControl
         set.Merge(perClip, notes, owners);
         // Multi-clip view state is not remembered per clip: fit the span, then show the active clip.
         if (set.IsMulti) _clipKey = (int.MinValue, int.MinValue);
-        Load(notes, owners, Math.Max(1, set.SpanBeats));
+        _keepViewOnLoad = keepView;
+        try { Load(notes, owners, Math.Max(1, set.SpanBeats)); }
+        finally { _keepViewOnLoad = false; }
+        if (kept is not null) RestoreSelection(kept);
         if (rescroll) _pendingScrollTo = set.EditorStart(set.Active);
         ActiveClipChanged?.Invoke();
     }
 
     private double? _pendingScrollTo;   // editor beat to bring into view once the zoom is fitted
+    private bool _keepViewOnLoad;       // Load keeps the current zoom, scroll and rows (SetClips)
+
+    // The selected notes as (clip, arrangement start, pitch, length): they survive a reload that
+    // renumbers the notes, as long as the clip they sit in keeps its index.
+    private List<((int Track, int Clip) Clip, double Start, int Pitch, double Length)> SelectedNotesAbsolute()
+    {
+        var list = new List<((int Track, int Clip) Clip, double Start, int Pitch, double Length)>();
+        foreach (int i in _selection)
+        {
+            if (i < 0 || i >= _notes.Count || _owner[i] >= _set.Count) continue;
+            var c = _set.Clips[_owner[i]];
+            list.Add(((c.TrackId, c.ClipIndex), _set.Origin + _notes[i].StartBeat, _notes[i].Pitch, _notes[i].LengthBeats));
+        }
+        return list;
+    }
+
+    private void RestoreSelection(List<((int Track, int Clip) Clip, double Start, int Pitch, double Length)> kept)
+    {
+        if (kept.Count == 0) return;
+        for (int i = 0; i < _notes.Count; i++)
+        {
+            var c = _set.Clips[_owner[i]];
+            foreach (var k in kept)
+                if (k.Clip == (c.TrackId, c.ClipIndex) && k.Pitch == _notes[i].Pitch
+                    && Math.Abs(k.Start - (_set.Origin + _notes[i].StartBeat)) < 1e-9
+                    && Math.Abs(k.Length - _notes[i].LengthBeats) < 1e-9)
+                { _selection.Add(i); break; }
+        }
+        Invalidate();
+        Changed?.Invoke();   // Load announced an empty selection: the inspector shows these notes again
+    }
 
     /// <summary>Makes clip <paramref name="slot"/> the active one (a locked clip is unlocked).
     /// A pending placement lands first.</summary>
@@ -732,11 +782,18 @@ public sealed partial class PianoRollView : UserControl
         // fitted or zoomed by hand. The saved height is the keyboard's, for unfolding.
         bool reload = _clipKey.Item1 != int.MinValue && _clipKey == _loadedKey;
         _loadedKey = _clipKey;
-        bool keepKitRows = reload && _fold && _rowsArePads;
+        bool keepKitRows = (reload && _fold && _rowsArePads) || _keepViewOnLoad;
         if (!keepKitRows) _rowH = saved ? Math.Clamp(vs.RowH, MinRowH, MaxRowH) : DefaultRowH;
         _keys.Height = RangeH;
         _gridControl.Height = RangeH;
-        if (saved)
+        if (_keepViewOnLoad)
+        {
+            // The same track's clips refreshed: stay where the user is (the span may have changed).
+            _scrollBeats = Math.Min(_scrollBeats, MaxScrollBeats);
+            _pendingVOffset = _bodyScroll.Offset.Y; _pendingCenter = false;
+            SyncScroll();
+        }
+        else if (saved)
         {
             _pixelsPerBeat = Math.Clamp(vs.Ppb, MinPpb, MaxPpb);
             _scrollBeats = Math.Max(0, vs.Scroll);
@@ -1802,7 +1859,8 @@ public sealed partial class PianoRollView : UserControl
         private readonly PianoRollView _o;
         // PlayheadPending: pressed on the playhead line over empty space — a drag scrubs the
         // transport (Scrub), a click without movement stays an ordinary empty-space click.
-        private enum Mode { None, Move, Resize, ResizeLeft, Marquee, PlayheadPending, Scrub }
+        // Place: the button is still down after the double-click that added a note (#45).
+        private enum Mode { None, Move, Resize, ResizeLeft, Marquee, PlayheadPending, Scrub, Place }
         private double _pressX;
         private const double PlayheadGrabPx = 3, ScrubSlop = 3;
         private Mode _drag = Mode.None;
@@ -1815,6 +1873,13 @@ public sealed partial class PianoRollView : UserControl
         private int _primary = -1;
         private double _grabBeat;       // pointer-beat minus primary start, at grab (Move)
         private double _edgeGrab;       // pointer beat minus the grabbed edge at press (Resize / ResizeLeft)
+        private int _rowGrab;           // pointer row minus the primary's row at grab (Move)
+
+        // Place: what the held drag does now (re-anchored when the modifiers change it) and
+        // where a velocity drag started.
+        private PlaceDragKind _placeKind;
+        private double _velY;
+        private float _velAnchor;
 
         // Marquee (grid coords) + the selection to union with when additive.
         private Point _marqueeA, _marqueeB;
@@ -1829,6 +1894,7 @@ public sealed partial class PianoRollView : UserControl
         private static readonly Cursor ArrowCursor = new(StandardCursorType.Arrow);
         private static readonly Cursor ResizeCursor = new(StandardCursorType.SizeWestEast);
         private static readonly Cursor MoveCursor = new(StandardCursorType.SizeAll);
+        private static readonly Cursor VelocityCursor = new(StandardCursorType.SizeNorthSouth);
         private const double EdgePx = 6;
 
         // Live drag (feature): the pre-drag note list (to seed one undo entry) + whether the
@@ -1945,7 +2011,8 @@ public sealed partial class PianoRollView : UserControl
                 }
                 if (n.ExprId > 0 || _o._expr.Editing(i)) DrawExpression(ctx, i, n, r, sel, ppb);
                 // Resize-edge affordance: a bright bar on the edge a drag would trim.
-                bool edgeHi = ((_drag == Mode.Resize || _drag == Mode.ResizeLeft) && sel) || (_drag == Mode.None && _hoverNote == i && !_o.IsLocked(i));
+                bool edgeHi = ((_drag == Mode.Resize || _drag == Mode.ResizeLeft || (_drag == Mode.Place && _placeKind == PlaceDragKind.Length)) && sel)
+                              || (_drag == Mode.None && _hoverNote == i && !_o.IsLocked(i));
                 if (edgeHi)
                 {
                     bool left = _drag == Mode.ResizeLeft || (_drag == Mode.None && _hoverLeft);
@@ -2100,6 +2167,14 @@ public sealed partial class PianoRollView : UserControl
                     _o._placementPending = true;   // a drawn note overwrites what it lands on
                     _o.Audition(nt.Pitch, nt.Velocity, slot: slot);   // heard until the button comes up
                     e.Pointer.Capture(this);
+                    // Still held, a drag shapes the new note. The commit below is the gesture's
+                    // one undo step, so the drag streams on the live path without seeding another.
+                    _primary = _o._notes.Count - 1;
+                    _dragMoved = false;
+                    _liveStarted = true;
+                    _drag = Mode.Place;
+                    AnchorPlace(p, PlaceKind(e.KeyModifiers));
+                    _lastGrid = p;
                 }
                 _o.Invalidate(); _o.CommitNotes(); _o.Changed?.Invoke();
                 e.Handled = true;
@@ -2147,7 +2222,7 @@ public sealed partial class PianoRollView : UserControl
                     _edgeGrab = XToBeat(p.X) - (edge > 0 ? g.start + g.len : g.start);
                     Cursor = ResizeCursor; _cursorKind = 1;
                 }
-                else { _drag = Mode.Move; _grabBeat = XToBeat(p.X) - _o._notes[hit].StartBeat; Cursor = MoveCursor; _cursorKind = 2; }
+                else { _drag = Mode.Move; _grabBeat = XToBeat(p.X) - _o._notes[hit].StartBeat; _rowGrab = 0; Cursor = MoveCursor; _cursorKind = 2; }
                 _lastGrid = p;
                 _o.Invalidate(); _o.Changed?.Invoke();
             }
@@ -2171,53 +2246,113 @@ public sealed partial class PianoRollView : UserControl
             if (_drag == Mode.PlayheadPending && Math.Abs(p.X - _pressX) >= ScrubSlop) _drag = Mode.Scrub;
             if (_drag == Mode.Scrub) _o.SeekAtX(p.X, _free);
             if (_drag is Mode.PlayheadPending or Mode.Scrub) return;
+            // Capture can already be gone (released outside the window): a later hover must not
+            // keep shaping the note.
+            if (_drag == Mode.Place && !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            {
+                EndDrag();
+                return;
+            }
+            if (_drag == Mode.Place)
+            {
+                var kind = PlaceKind(e.KeyModifiers);
+                if (kind != _placeKind) AnchorPlace(p, kind);
+            }
             _lastGrid = p;
             DragUpdate(p);
-            EvaluateAutoScroll(p);
+            if (_drag == Mode.Place && _placeKind == PlaceDragKind.Velocity) StopAutoScroll();
+            else EvaluateAutoScroll(p);
+        }
+
+        private static PlaceDragKind PlaceKind(KeyModifiers m)
+            => NotePlacementDrag.KindFor((m & KeyModifiers.Shift) != 0, (m & (KeyModifiers.Control | KeyModifiers.Meta)) != 0);
+
+        // Start (or restart, when the modifiers switch what the drag does) shaping the placed
+        // note from where it is now, so switching mid-drag never makes it jump.
+        private void AnchorPlace(Point p, PlaceDragKind kind)
+        {
+            var n = _o._notes[_primary];
+            _orig.Clear();
+            _orig[_primary] = (n.StartBeat, n.Pitch, n.LengthBeats, _o._owner[_primary]);
+            _placeKind = kind;
+            _grabBeat = XToBeat(p.X) - n.StartBeat;
+            _rowGrab = (int)Math.Floor(p.Y / RowH) - _o._rows.NearestRow(n.Pitch);
+            _edgeGrab = XToBeat(p.X) - (n.StartBeat + n.LengthBeats);
+            _velY = p.Y; _velAnchor = n.Velocity;
+            (Cursor, _cursorKind) = kind switch
+            {
+                PlaceDragKind.Length => (ResizeCursor, 1),
+                PlaceDragKind.Velocity => (VelocityCursor, 3),
+                _ => (MoveCursor, 2),
+            };
         }
 
         // Apply the current drag using a grid-space point (also re-used by auto-scroll).
         private void DragUpdate(Point p)
         {
-            if (_drag == Mode.Move)
+            var place = _drag == Mode.Place ? _placeKind : (PlaceDragKind?)null;
+            if (_drag == Mode.Move || place == PlaceDragKind.Move)
             {
-                double targetStart = Snap(XToBeat(p.X) - _grabBeat);
                 var pr = _orig[_primary];
+                double rawStart = XToBeat(p.X) - _grabBeat;
+                // A modifier switch re-anchors on the note as it is. Snapping that beat on the
+                // same move would shove an off-grid note before the pointer has moved.
+                double targetStart = place == PlaceDragKind.Move
+                    ? NotePlacementDrag.BeatAfter(pr.start, rawStart - pr.start, Snap)
+                    : Snap(rawStart);
                 double dBeat = targetStart - pr.start;
                 // Rows, not semitones: folded, the group moves between visible rows (specs/045).
-                int dRows = _o._rows.NearestRow(pr.pitch) - (int)Math.Floor(p.Y / RowH);
+                int dRows = _o._rows.NearestRow(pr.pitch) - ((int)Math.Floor(p.Y / RowH) - _rowGrab);
                 // Clamp the shared delta so the whole group stays in-bounds (keeps shape): every
                 // start within its reach — its clip and the open clips of its track it touches.
                 var (lo, hi) = _o.ShiftRange(_orig.Keys, i => (_orig[i].start, _orig[i].len, _orig[i].owner), endsInside: false);
                 dBeat = Math.Clamp(dBeat, lo, hi);
                 dRows = _o.ClampRows(_orig.Values.Select(v => v.pitch), dRows);
-                foreach (var kv in _orig)
+                // A modifier switch lands on the note as it is: nothing to apply until the result
+                // differs from the note now (not from the anchor, or dragging back would stick).
+                var cur = _o._notes[_primary];
+                if (place != PlaceDragKind.Move || Math.Abs(pr.start + dBeat - cur.StartBeat) >= 1e-9
+                    || _o._rows.Step(pr.pitch, dRows) != cur.Pitch)
                 {
-                    var n = _o._notes[kv.Key];
-                    n.StartBeat = kv.Value.start + dBeat;
-                    n.Pitch = _o._rows.Step(kv.Value.pitch, dRows);
-                    _o._notes[kv.Key] = n;
-                    _o._owner[kv.Key] = _o._set.OwnerAfterMove(kv.Value.owner, n.StartBeat);
+                    foreach (var kv in _orig)
+                    {
+                        var n = _o._notes[kv.Key];
+                        n.StartBeat = kv.Value.start + dBeat;
+                        n.Pitch = _o._rows.Step(kv.Value.pitch, dRows);
+                        _o._notes[kv.Key] = n;
+                        _o._owner[kv.Key] = _o._set.OwnerAfterMove(kv.Value.owner, n.StartBeat);
+                    }
+                    _dragMoved = true;
+                    PushLive();
+                    // A drag to a new pitch re-triggers the grabbed note there (#46).
+                    _o.Audition(_o._notes[_primary].Pitch, _o._notes[_primary].Velocity, slot: _o._owner[_primary]);
                 }
-                _dragMoved = true;
-                PushLive();
-                // A drag to a new pitch re-triggers the grabbed note there (#46).
-                _o.Audition(_o._notes[_primary].Pitch, _o._notes[_primary].Velocity, slot: _o._owner[_primary]);
             }
-            else if (_drag == Mode.Resize)
+            else if (_drag == Mode.Resize || place == PlaceDragKind.Length)
             {
                 // The grabbed note's end lands on the grid (not just the drag distance); the
-                // rest of the selection changes by the same amount.
+                // rest of the selection changes by the same amount. A placement length-drag
+                // keeps an off-grid end until the pointer actually moves horizontally.
                 var pr = _orig[_primary];
-                double dLen = Snap(XToBeat(p.X) - _edgeGrab) - (pr.start + pr.len);
-                foreach (var kv in _orig)
+                double anchoredEnd = pr.start + pr.len;
+                double rawEnd = XToBeat(p.X) - _edgeGrab;
+                double newEnd = place == PlaceDragKind.Length
+                    ? NotePlacementDrag.BeatAfter(anchoredEnd, rawEnd - anchoredEnd, Snap)
+                    : Snap(rawEnd);
+                double dLen = newEnd - anchoredEnd;
+                // Compared with the note now, not the anchor: dragging back must undo the extension.
+                if (place != PlaceDragKind.Length
+                    || Math.Abs(Math.Max(_o.MinNoteLen, pr.len + dLen) - _o._notes[_primary].LengthBeats) >= 1e-9)
                 {
-                    var n = _o._notes[kv.Key];
-                    n.LengthBeats = Math.Max(_o.MinNoteLen, kv.Value.len + dLen);
-                    _o._notes[kv.Key] = n;
+                    foreach (var kv in _orig)
+                    {
+                        var n = _o._notes[kv.Key];
+                        n.LengthBeats = Math.Max(_o.MinNoteLen, kv.Value.len + dLen);
+                        _o._notes[kv.Key] = n;
+                    }
+                    _dragMoved = true;
+                    PushLive();
                 }
-                _dragMoved = true;
-                PushLive();
             }
             else if (_drag == Mode.ResizeLeft)
             {
@@ -2239,6 +2374,18 @@ public sealed partial class PianoRollView : UserControl
                 }
                 _dragMoved = true;
                 PushLive();
+            }
+            else if (place == PlaceDragKind.Velocity)
+            {
+                var n = _o._notes[_primary];
+                float v = NotePlacementDrag.Velocity(_velAnchor, p.Y - _velY);
+                if (v != n.Velocity)
+                {
+                    n.Velocity = v;
+                    _o._notes[_primary] = n;
+                    _dragMoved = true;
+                    PushLive();
+                }
             }
             else if (_drag == Mode.Marquee)
             {
@@ -2287,7 +2434,10 @@ public sealed partial class PianoRollView : UserControl
         protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
         {
             _o.StopAudition();
-            if (_drag is Mode.PlayheadPending or Mode.Scrub) _drag = Mode.None;
+            // A placement drag must not survive the capture: the button is up, and the next
+            // hover would otherwise keep moving the note.
+            if (_drag == Mode.Place) EndDrag();
+            else if (_drag is Mode.PlayheadPending or Mode.Scrub) _drag = Mode.None;
             base.OnPointerCaptureLost(e);
         }
 
@@ -2300,12 +2450,20 @@ public sealed partial class PianoRollView : UserControl
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
-            StopAutoScroll();
             _o.StopAudition();
             if (_drag == Mode.None) { e.Pointer.Capture(null); return; }
+            EndDrag();
+            e.Pointer.Capture(null);
+        }
+
+        // Release and capture-loss share this: a placement gesture must finish (and stop
+        // auto-scroll) the moment the pointer is no longer ours.
+        private void EndDrag()
+        {
+            StopAutoScroll();
+            if (_drag == Mode.None) return;
             var was = _drag;
             _drag = Mode.None;
-            e.Pointer.Capture(null);
             Avalonia.Threading.Dispatcher.UIThread.Post(_o.ApplyDeferredFold);   // after the edit lands
             if (was is Mode.PlayheadPending or Mode.Scrub)
             {
@@ -2314,7 +2472,7 @@ public sealed partial class PianoRollView : UserControl
                 return;
             }
             _orig.Clear();
-            if ((was == Mode.Resize || was == Mode.ResizeLeft) && _dragMoved) _o.Remember(_primary);
+            if (was is Mode.Resize or Mode.ResizeLeft or Mode.Place && _dragMoved) _o.Remember(_primary);
             if (was != Mode.Marquee && _dragMoved)
             {
                 _o._placementPending = true;   // overwrites once the selection is let go

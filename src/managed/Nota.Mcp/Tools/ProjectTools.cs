@@ -54,19 +54,32 @@ public sealed class ProjectTools(IAudioEngine engine, IEngineDispatch dispatch, 
     [McpServerTool(Name = "redo"), Description("Redo the last undone edit. Returns whether anything was redone.")]
     public Task<bool> Redo() => Mutate(() => E.Redo());
 
-    public sealed record Section(double StartBeat, double LengthBeats, string Name);
+    public sealed record Section(double StartBeat, double LengthBeats, string Name, bool Automatic = false);
+
+    private Section[] Listed()
+    {
+        var all = E.Sections;
+        return all.Select((s, i) => new Section(s.StartBeat, s.LengthBeats, SectionNames.Display(s.Name, i), SectionNames.IsAutomatic(s.Name))).ToArray();
+    }
 
     [McpServerTool(Name = "list_sections"), Description(
         "List the arrangement's song sections (the named spans on the Sections lane — Intro, Verse, Drop …) in start order: "
-        + "start and length in beats, and the name.")]
-    public Task<Section[]> ListSections() => Read(() => E.Sections.Select(s => new Section(s.StartBeat, s.LengthBeats, s.Name)).ToArray());
+        + "start and length in beats, the name as shown, and whether it is automatic (\"Section N\" for its position, "
+        + "renumbered as sections are added, moved or removed) rather than a custom name.")]
+    public Task<Section[]> ListSections() => Read(Listed);
 
     [McpServerTool(Name = "set_sections"), Description(
         "Replace the arrangement's song sections with this list (pass [] to remove them all). Each needs startBeat >= 0 and "
-        + "lengthBeats > 0; they are sorted by start, and a span with no length is dropped. One undo step. Returns the list as stored.")]
+        + "lengthBeats > 0; they are sorted by start, and a span with no length is dropped. A section with automatic = true "
+        +         "or an empty or whitespace-only name gets the automatic name \"Section N\" for its position. Any other name is stored "
+        + "exactly as given, surrounding spaces included, so listing and setting the same list changes nothing. "
+        + "One undo step. Returns the list as stored.")]
     public Task<Section[]> SetSections(Section[] sections) => Mutate(() =>
     {
-        E.SetSections(sections.Select(s => new SectionInfo(s.StartBeat, s.LengthBeats, s.Name ?? "")).ToList());
-        return E.Sections.Select(s => new Section(s.StartBeat, s.LengthBeats, s.Name)).ToArray();
+        // A nonblank custom name is kept verbatim. Trimming belongs to the rename box; doing it
+        // here would rewrite a legacy " Chorus " on a list → set round trip and add an undo step.
+        E.SetSections(sections.Select(s => new SectionInfo(s.StartBeat, s.LengthBeats,
+            s.Automatic || SectionNames.IsAutomatic(s.Name) ? "" : s.Name)).ToList());
+        return Listed();
     });
 }
