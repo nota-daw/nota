@@ -291,6 +291,9 @@ NOTA_API int32_t nota_audition_midi_param(NotaAudition* rig, int32_t index, cons
 NOTA_API int32_t nota_audition_set_sampler_sample(NotaAudition* rig, const char* path_utf8, int32_t root_note);
 /* Nota Mosaic's program text; returns once its samples are loaded (1) or on failure (0). */
 NOTA_API int32_t nota_audition_set_mosaic_program(NotaAudition* rig, const char* text_utf8);
+/* The instrument's state blob, as nota_engine_set_plugin_state takes it for a built-in
+ * instrument (e.g. a Nota Twin preset's patterns), after its params. 1 = applied. */
+NOTA_API int32_t nota_audition_instrument_state(NotaAudition* rig, const uint8_t* data, int32_t size);
 /* Effect source: a file (its first max_seconds), or a demo track mixed from part rigs that
  * were rendered first (add_source_from). cache_source normalizes the mix to target_peak and
  * keeps it process-wide under key; use_cached_source takes it back (0 = not cached). */
@@ -702,6 +705,9 @@ NOTA_API int32_t nota_engine_add_keys_track(NotaEngine* engine);
 /* Adds an instrument track with the built-in Nota Mosaic (multisample instrument, kind 17),
  * empty until a program is set. id (>0). */
 NOTA_API int32_t nota_engine_add_mosaic_track(NotaEngine* engine);
+/* Adds an instrument track with the built-in Nota Twin (two-part morphing analog poly, kind 18).
+ * id (>0). */
+NOTA_API int32_t nota_engine_add_twin_track(NotaEngine* engine);
 /* Nota Mosaic's program — UTF-8 text (grammar in Mosaic.h). Set parses it and starts loading
  * its samples in the background (1 on success, 0 when the track isn't a Mosaic); checkpoint 1
  * makes it one undo step (the instrument is republished — sounding notes stop), 0 edits the
@@ -812,10 +818,13 @@ NOTA_API NotaResult nota_track_set_armed(NotaEngine* engine, int32_t track_id, i
  * tracks; captured into the record clip while recording. Lock-free. */
 NOTA_API NotaResult nota_engine_note_on(NotaEngine* engine, int32_t pitch, float velocity);
 NOTA_API NotaResult nota_engine_note_off(NotaEngine* engine, int32_t pitch);
+/* A live note-off with its release velocity (0..1), as a MIDI note-off message carries it. */
+NOTA_API NotaResult nota_engine_note_off_velocity(NotaEngine* engine, int32_t pitch, float release_velocity);
 /* Live notes addressed to one track, armed or not (Nota Remote: each phone plays its
  * own track). Recorded only when that track holds the take. Safe from any thread. */
 NOTA_API NotaResult nota_track_note_on(NotaEngine* engine, int32_t track_id, int32_t pitch, float velocity);
 NOTA_API NotaResult nota_track_note_off(NotaEngine* engine, int32_t track_id, int32_t pitch);
+NOTA_API NotaResult nota_track_note_off_velocity(NotaEngine* engine, int32_t track_id, int32_t pitch, float release_velocity);
 /* Per-note expression (MPE) for live notes: dim 0 = pitch bend in semitones, 1 = pressure
  * 0..1, 2 = slide (CC74 timbre) 0..1 with 0.5 neutral, 3 = sustain pedal (CC64) 0..1 (down at >= 0.5) —
  * instrument-wide only (pitch -1). pitch -1 addresses the whole instrument; its bend is

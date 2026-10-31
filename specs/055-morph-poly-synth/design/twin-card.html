@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Nota Twin — device card design (specs/055)</title>
+<style>
+@font-face { font-family: Geist; src: url(../../../src/web/remote/public/fonts/Geist-Regular.woff2) format("woff2"); font-weight: 400 500; }
+@font-face { font-family: Geist; src: url(../../../src/web/remote/public/fonts/Geist-SemiBold.woff2) format("woff2"); font-weight: 600 700; }
+@font-face { font-family: "Geist Mono"; src: url(../../../src/web/remote/public/fonts/GeistMono-Medium.woff2) format("woff2"); }
+
+/* Token values copied from src/managed/Nota.App/Theme/Themes/studio-*.json (the theme files win). */
+:root, .t-dark {
+  --SurfaceAbyss:#17181A; --BgApp:#1E1F22; --BgSunken:#17181A; --Panel:#2B2D31; --SurfaceRaised:#34363B; --SurfaceHover:#393C41;
+  --Seam:#141517; --Rule:#45484E; --VizGrid:#2E2F32;
+  --TextHeading:#F4F5F6; --TextPrimary:#E8E9EB; --TextSecondary:#C0C4C9; --TextMuted:#A4A9B0; --TextTertiary:#92969D;
+  --TextFaint:#82868C; --TextDisabled:#82868C; --TextAxis:#82868C; --TextOnAccent:#17181A;
+  --VizInk:#D7D8DA; --Accent:#FF9F1C; --AccentHover:#FFB547; --AccentSubtle:#4D3F2E;
+  --Teal:#5FB3A8; --Rose:#D77A8F; --Steel:#6A9FD8; --Record:#F06A6E;
+  --ShadowBevel:#FFFFFF12;
+}
+.t-light {
+  --SurfaceAbyss:#D6D8DB; --BgApp:#C9CBCF; --BgSunken:#D6D8DB; --Panel:#E4E5E7; --SurfaceRaised:#EEEFF1; --SurfaceHover:#F7F8F9;
+  --Seam:#9DA0A6; --Rule:#B3B6BB; --VizGrid:#C0C3C6;
+  --TextHeading:#0E0F11; --TextPrimary:#16171A; --TextSecondary:#3A3D42; --TextMuted:#4F535A; --TextTertiary:#65696F;
+  --TextFaint:#797C81; --TextDisabled:#797C81; --TextAxis:#797C81; --TextOnAccent:#17181A;
+  --VizInk:#252629; --Accent:#EF8A0C; --AccentHover:#C46A00; --AccentSubtle:#E6D6C4;
+  --Teal:#3A8A7F; --Rose:#B4566B; --Steel:#3F78B8; --Record:#B3262C;
+  --ShadowBevel:#FFFFFFB3;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--BgApp); color: var(--TextPrimary); font: 400 13px/1.45 Geist, system-ui, sans-serif; }
+.page { max-width: 1520px; margin: 0 auto; padding: 28px 32px 80px; }
+h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; color: var(--TextHeading); }
+h2 { font-size: 15px; font-weight: 600; margin: 36px 0 10px; color: var(--TextHeading); }
+h3 { font-size: 13px; font-weight: 600; margin: 18px 0 6px; color: var(--TextHeading); }
+p, li { color: var(--TextSecondary); max-width: 980px; }
+code { font: 12px "Geist Mono", ui-monospace, monospace; color: var(--TextPrimary); }
+.lede { color: var(--TextMuted); margin: 0 0 18px; }
+table.spec { border-collapse: collapse; margin: 6px 0 14px; font-size: 12px; }
+table.spec td, table.spec th { border-top: 1px solid var(--Rule); padding: 5px 14px 5px 0; vertical-align: top; text-align: left; color: var(--TextSecondary); }
+table.spec th { color: var(--TextMuted); font-weight: 600; }
+table.spec td:first-child { color: var(--TextPrimary); white-space: nowrap; }
+
+/* toolbar of the page (not part of the design) */
+.bar { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; margin: 0 0 18px; font-size: 12px; color: var(--TextMuted); }
+.bar .pg { display: inline-flex; border: 1px solid var(--Seam); border-radius: 3px; overflow: hidden; }
+.bar .pg button { font: 500 12px Geist, sans-serif; background: var(--SurfaceRaised); color: var(--TextSecondary); border: 0; border-left: 1px solid var(--Seam); padding: 4px 10px; cursor: pointer; }
+.bar .pg button:first-child { border-left: 0; }
+.bar .pg button.on { background: var(--Accent); color: var(--TextOnAccent); }
+.stage { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+.zoomwrap { zoom: 2; }
+.caption { font-size: 12px; color: var(--TextMuted); margin: 8px 0 0; }
+
+/* ===================== the card (true size, 1 px = 1 logical px) ===================== */
+.card { width: 700px; height: 260px; background: var(--Panel); border: 1px solid var(--Seam); border-radius: 3px; overflow: hidden;
+  display: flex; flex-direction: column; user-select: none; font-family: Geist, system-ui, sans-serif; color: var(--TextPrimary); position: relative; }
+.card.mini { width: 260px; }
+.hdr { height: 22px; flex: none; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 0 6px 0 8px;
+  background: var(--SurfaceRaised); border-bottom: 1px solid var(--Seam); box-shadow: inset 0 1px 0 var(--ShadowBevel); }
+.hdr .nm { font-size: 12px; font-weight: 600; color: var(--TextHeading); white-space: nowrap; }
+.hdr .rt { display: flex; justify-content: flex-end; align-items: center; gap: 6px; }
+.badge { font: 10px "Geist Mono", monospace; color: var(--TextMuted); white-space: nowrap; }
+.preset { height: 18px; display: flex; align-items: stretch; background: var(--BgSunken); border: 1px solid var(--Rule); border-radius: 3px; font-size: 11px; font-weight: 500; }
+.preset span { display: flex; align-items: center; padding: 0 6px; color: var(--TextMuted); }
+.preset .pn { min-width: 132px; border-left: 1px solid var(--Rule); border-right: 1px solid var(--Rule); color: var(--TextPrimary); justify-content: space-between; gap: 8px; }
+.body { flex: 1; display: flex; padding: 6px; min-height: 0; }
+
+/* morph column */
+.morph { width: 70px; flex: none; display: flex; flex-direction: column; align-items: center; padding: 2px 6px 0 0; border-right: 1px solid var(--Rule); margin-right: 0; }
+.sect-t { font-size: 10.5px; font-weight: 600; color: var(--TextMuted); line-height: 14px; white-space: nowrap; }
+.mstrip { width: 56px; display: grid; grid-template-columns: 7px 1fr 7px; align-items: center; gap: 3px; margin: 3px 0 0; font: 8px "Geist Mono", monospace; color: var(--TextFaint); }
+.mstrip .tr { height: 3px; background: var(--BgSunken); border-radius: 2px; position: relative; box-shadow: 0 0 0 1px var(--Rule) inset; }
+.mstrip .tr i { position: absolute; top: -2px; width: 3px; height: 7px; margin-left: -1.5px; background: var(--VizInk); border-radius: 1px; }
+.mstrip b.on { color: var(--Accent); font-weight: 400; }
+.cap { font-size: 8px; font-weight: 500; color: var(--TextMuted); line-height: 11px; }
+.ghost { height: 16px; width: 56px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 500; color: var(--TextSecondary);
+  border-radius: 2px; cursor: default; }
+.ghost:hover { background: var(--SurfaceHover); color: var(--TextPrimary); }
+
+/* main area */
+.main { flex: 1; display: flex; flex-direction: column; min-width: 0; padding-left: 0; }
+.tabs { height: 22px; flex: none; display: flex; align-items: stretch; border-bottom: 1px solid var(--Rule); padding-left: 2px; }
+.tab { padding: 0 7px; display: flex; align-items: center; font-size: 10.5px; font-weight: 600; color: var(--TextTertiary); border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.tab:hover { color: var(--TextPrimary); }
+.tab.on { color: var(--TextHeading); border-bottom-color: var(--Accent); }
+.tabs .sp { flex: 1; }
+.tabs .rt { display: flex; align-items: center; gap: 6px; padding-bottom: 2px; }
+.content { flex: 1; display: flex; min-height: 0; }
+
+/* sections: no fill, no frame, a Rule on the left edge facing a neighbour */
+.sec { flex: none; padding: 5px 8px 4px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sec + .sec { border-left: 1px solid var(--Rule); }
+.sec.grow { flex: 1; }
+.sec-h { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 16px; }
+.row { display: flex; align-items: flex-start; }
+.row.c { align-items: center; }
+.gap4 { gap: 4px; } .gap6 { gap: 6px; } .gap8 { gap: 8px; } .gap12 { gap: 12px; }
+.fill { flex: 1; }
+
+/* knob cell: knob → name 8/500 secondary → value mono 8 */
+.kc { display: flex; flex-direction: column; align-items: center; flex: none; cursor: ns-resize; }
+.kc svg { display: block; overflow: visible; }
+.kc .kl { font-size: 8px; font-weight: 500; color: var(--TextSecondary); line-height: 10px; margin-top: 1px; white-space: nowrap; }
+.kc .kv { font: 8px "Geist Mono", monospace; color: var(--TextPrimary); line-height: 10px; white-space: nowrap; }
+.kc .groove { stroke: var(--BgSunken); }
+.kc .face { fill: var(--SurfaceRaised); stroke: var(--Seam); }
+.kc .ptr { stroke: var(--TextPrimary); }
+.kc .arc { stroke: var(--VizInk); }
+.kc .arc.mod { stroke: var(--Teal); }
+.kc .oth { stroke: var(--TextFaint); }
+.kc .now { fill: var(--TextMuted); }
+.kc:hover .arc, .kc.drag .arc { stroke: var(--Accent); }
+.kc:hover .kl, .kc.drag .kl { color: var(--TextPrimary); }
+
+/* switch 18 × 10 */
+.swl { display: inline-flex; align-items: center; gap: 4px; font-size: 8px; font-weight: 500; color: var(--TextSecondary); white-space: nowrap; cursor: pointer; }
+.sw { width: 18px; height: 10px; border-radius: 2px; background: var(--BgSunken); box-shadow: 0 0 0 1px var(--Rule) inset; position: relative; flex: none; }
+.sw i { position: absolute; top: 1.5px; left: 1.5px; width: 7px; height: 7px; border-radius: 1px; background: var(--TextFaint); }
+.sw.on { background: var(--Accent); box-shadow: none; }
+.sw.on i { left: 9.5px; background: var(--Panel); }
+
+/* segmented group: keys butted on seams */
+.seg { display: inline-flex; height: 16px; border: 1px solid var(--Seam); border-radius: 3px; overflow: hidden; flex: none; background: var(--Seam); gap: 1px; }
+.seg b { display: flex; align-items: center; justify-content: center; padding: 0 5px; font-size: 9px; font-weight: 500; color: var(--TextSecondary);
+  background: var(--SurfaceRaised); white-space: nowrap; cursor: pointer; }
+.seg b:hover { background: var(--SurfaceHover); color: var(--TextPrimary); }
+.seg b.on { background: var(--Accent); color: var(--TextOnAccent); }
+.seg.fillw { display: flex; } .seg.fillw b { flex: 1; padding: 0 2px; }
+.seg.lg { height: 18px; } .seg.lg b { font-size: 10px; padding: 0 7px; }
+
+/* field / dropdown well */
+.dd { height: 16px; display: inline-flex; align-items: center; justify-content: space-between; gap: 4px; padding: 0 3px 0 5px; background: var(--BgSunken);
+  border: 1px solid var(--Rule); border-radius: 3px; font-size: 9px; font-weight: 500; color: var(--TextPrimary); white-space: nowrap; overflow: hidden; flex: none; }
+.dd.mono { font-family: "Geist Mono", monospace; font-weight: 400; }
+.dd svg { flex: none; }
+.btn { height: 16px; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; background: var(--SurfaceRaised); border: 1px solid var(--Seam); border-radius: 3px;
+  box-shadow: inset 0 1px 0 var(--ShadowBevel); font-size: 9px; font-weight: 500; color: var(--TextSecondary); white-space: nowrap; flex: none; cursor: default; }
+.btn:hover { background: var(--SurfaceHover); color: var(--TextPrimary); }
+.btn.on { background: var(--Accent); color: var(--TextOnAccent); border-color: var(--Seam); }
+.lbl { font-size: 9px; font-weight: 500; color: var(--TextSecondary); white-space: nowrap; }
+.mono8 { font: 8px "Geist Mono", monospace; color: var(--TextPrimary); white-space: nowrap; }
+.hint { font-size: 8px; color: var(--TextTertiary); line-height: 11px; }
+
+/* slider row: label · track · value */
+.sl { display: grid; align-items: center; gap: 5px; height: 14px; cursor: ew-resize; }
+.sl .ends { display: flex; justify-content: space-between; font-size: 8px; color: var(--TextTertiary); }
+.sl .trk { height: 3px; border-radius: 2px; background: var(--BgSunken); box-shadow: 0 0 0 1px var(--Rule) inset; position: relative; }
+.sl .trk u { position: absolute; top: 0; bottom: 0; left: 0; background: var(--VizInk); border-radius: 2px; }
+.sl .trk i { position: absolute; top: -2px; width: 6px; height: 7px; margin-left: -3px; background: var(--TextPrimary); border-radius: 1px; box-shadow: 0 0 0 1px var(--Seam); }
+.sl:hover .trk u { background: var(--Accent); }
+
+/* graph window: well, rule frame, radius 3 */
+.graph { background: var(--BgSunken); border: 1px solid var(--Rule); border-radius: 3px; position: relative; overflow: hidden; flex: none; }
+.graph svg { position: absolute; inset: 0; display: block; }
+.ax { font: 7.5px "Geist Mono", monospace; fill: var(--TextAxis); }
+.gl { stroke: var(--VizGrid); stroke-width: 1; fill: none; }
+.cv { stroke: var(--VizInk); stroke-width: 1.4; fill: none; stroke-linejoin: round; stroke-linecap: round; }
+.cv.teal { stroke: var(--Teal); } .cv.steel { stroke: var(--Steel); } .cv.thin { stroke-width: 1; }
+.nd { fill: var(--VizInk); } .nd.act { fill: var(--Accent); }
+
+/* ADSR number cells */
+.adsr { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; }
+.adsr div { display: flex; flex-direction: column; align-items: center; }
+.adsr .w { width: 100%; height: 15px; display: flex; align-items: center; justify-content: center; background: var(--BgSunken); border: 1px solid var(--Rule); border-radius: 2px;
+  font: 8px "Geist Mono", monospace; color: var(--TextPrimary); cursor: ns-resize; }
+.adsr .w:hover { color: var(--Accent); }
+.adsr span { font-size: 8px; font-weight: 500; color: var(--TextSecondary); line-height: 10px; }
+
+/* matrix rows */
+.mx-h, .mx-r { display: grid; grid-template-columns: 14px 104px 10px 138px 1fr 34px 14px; align-items: center; gap: 4px; }
+.mx-h { font-size: 8px; font-weight: 500; color: var(--TextTertiary); height: 12px; }
+.mx-r { height: 20px; border-top: 1px solid var(--Rule); }
+.mx-r:hover { background: var(--SurfaceHover); }
+.mx-r .n { font: 8px "Geist Mono", monospace; color: var(--TextFaint); text-align: right; }
+.mx-r .dd { width: 100%; height: 15px; }
+.bipbar { height: 7px; background: var(--BgSunken); border: 1px solid var(--Rule); border-radius: 2px; position: relative; }
+.bipbar u { position: absolute; top: 1px; bottom: 1px; background: var(--Teal); border-radius: 1px; }
+.bipbar i { position: absolute; top: -3px; bottom: -3px; width: 1px; background: var(--Rule); left: 50%; }
+.bipbar em { position: absolute; top: -3px; width: 1px; height: 3px; background: var(--TextFaint); }
+.x { display: flex; align-items: center; justify-content: center; color: var(--TextFaint); }
+.x:hover { color: var(--TextPrimary); }
+.scroll { flex: 1; overflow: hidden; position: relative; }
+.scroll::after { content: ""; position: absolute; right: 0; top: 2px; width: 3px; height: 62%; border-radius: 2px; background: var(--Rule); }
+
+/* inactive subtree: next ink step, never opacity */
+.inactive .kl, .inactive .kv, .inactive .lbl, .inactive .swl, .inactive .seg b:not(.on), .inactive .hint { color: var(--TextDisabled) !important; }
+.inactive .arc { stroke: var(--Rule) !important; }
+.inactive .ptr { stroke: var(--TextDisabled); }
+.inactive .sw.on, .inactive .seg b.on { background: var(--Rule); color: var(--TextSecondary); }
+.inactive .cv { stroke: var(--Rule); }
+.inactive .nd { fill: var(--Rule); }
+
+/* annotations */
+.ann { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 36px; }
+.ann ol { margin: 4px 0; padding-left: 20px; }
+.ann li { margin: 3px 0; font-size: 12.5px; }
+.ann li b { color: var(--TextPrimary); font-weight: 600; }
+.pill { display: inline-block; font: 11px "Geist Mono", monospace; color: var(--TextMuted); border: 1px solid var(--Rule); border-radius: 3px; padding: 0 5px; margin-right: 4px; }
+</style>
+</head>
+<body class="t-dark">
+<div class="page">
+  <h1>Nota Twin — device card</h1>
+  <p class="lede">Design handoff for <code>TwinInstrumentCard</code> (specs/055 · US7). The card below is live: tabs, A / B, layout, S / L, knobs (drag up / down) and switches respond, so every state can be inspected. 1 px in the card = 1 logical px in Avalonia; the 2× view is only for reading.</p>
+
+  <div class="bar">
+    <span>Theme <span class="pg" id="pgTheme"><button data-v="dark" class="on">Studio Dark</button><button data-v="light">Studio Light</button></span></span>
+    <span>Scale <span class="pg" id="pgZoom"><button data-v="1">1×</button><button data-v="2" class="on">2×</button></span></span>
+    <span>Morph demo <span class="pg" id="pgMorph"><button data-v="0" class="on">0 %</button><button data-v="0.35">35 %</button><button data-v="1">100 %</button></span></span>
+    <span>Delay <span class="pg" id="pgDly"><button data-v="1" class="on">on</button><button data-v="0">off (inactive look)</button></span></span>
+  </div>
+
+  <div class="stage">
+    <div><div class="zoomwrap" id="zL"><div id="cardL"></div></div><div class="caption">L · 700 × 260</div></div>
+    <div><div class="zoomwrap" id="zS"><div id="cardS"></div></div><div class="caption">S · 260 × 260 — the performance view</div></div>
+  </div>
+
+  <h2>What changes, and why</h2>
+  <div class="ann" id="ann"></div>
+
+  <h2>Frame and grid</h2>
+  <table class="spec">
+    <tr><th>Part</th><th>Size (logical px)</th><th>Notes</th></tr>
+    <tr><td>Card</td><td>700 × 260 (S: 260 × 260)</td><td>Unchanged. Header 22 from <code>BuildCardShell</code>; body 238, inset 6.</td></tr>
+    <tr><td>Status line</td><td>removed (was 18)</td><td>It repeated the header badge and the side switch. Its 18 px go to the tab body. Hints (“click a step”) move into the tab they belong to.</td></tr>
+    <tr><td>Morph column</td><td>70 wide (64 + 6 gap), full body height</td><td>Rule on its right edge. Morph knob 44 (<code>KnobMain</code>), value mono 8, morph strip 56 × 3, “Edit” A | B segments (fill, 18 tall), three ghost actions 56 × 16.</td></tr>
+    <tr><td>Tab row</td><td>22 tall, Rule under it</td><td>Tabs 10.5 / 600, padding 7, chosen = Ink 0 + 2 px accent underline. Right: Lower | Upper (only in Layer / Split) and Single | Layer | Split (18 tall). The “Parts” button is gone — its controls live in Voice → Part.</td></tr>
+    <tr><td>Tab body</td><td>612 × 204</td><td>Sections are <code>DeviceCardKit.Section</code>, padding 5 / 8, gap 4. Titles <code>DeviceSection</code> on a 16 px header row; the header row carries the section’s switch or chooser on its right.</td></tr>
+    <tr><td>Row baseline</td><td>header 16 · graph or chooser · knob row 53 (34 knob) or 62 (44 knob) · knob row · slider rows 14</td><td>Sections that sit side by side use the same row order, so knob rows line up across the tab (the old card let every island float).</td></tr>
+    <tr><td>Signal chevrons</td><td>removed</td><td>The “›” between islands read as buttons and appeared where there is no signal flow (Matrix). The left-to-right order already reads as the chain.</td></tr>
+  </table>
+
+  <h2>Controls used (all existing — nothing new to build except where noted)</h2>
+  <table class="spec">
+    <tr><th>Control</th><th>Where</th><th>Kit</th></tr>
+    <tr><td>Knob 34 / 36 / 44 + cell</td><td>everywhere</td><td><code>DeviceCardKit.KnobCell</code>, Twin’s other-side tick and “sound now” dot stay as they are.</td></tr>
+    <tr><td>Segments</td><td>discrete params only: ladder slope, voice mode, LFO shape and mode, spread mode, bend range (4 steps), mod-FX type, pattern, Seq | Arp</td><td><code>DeviceCardKit.Segments</code> (16 tall in the body, 18 in the tab row).</td></tr>
+    <tr><td>Slider row</td><td>continuous params that read as a position between named ends: “To filter” balance on each source, Route series ↔ parallel, multimode Mode (four marks LP · BP · HP · notch)</td><td><code>DeviceCardKit.SliderRow</code> with end words instead of a single label — <b>small addition</b>: an overload that takes end words (or N marks) under the track and an optional hidden label / value.</td></tr>
+    <tr><td>ADSR cells</td><td>Env tab</td><td><code>DragNumber</code> in a 4-column grid under each graph — replaces the “1 ms · 91 ms · 50 % · 39 ms” string.</td></tr>
+    <tr><td>Graphs</td><td>wave, response, envelopes, LFO, FX previews, route, step grid, pad</td><td><code>NotaGraph</code>. New read-only previews: route diagram, mod-FX sweep, delay taps, reverb tail (<code>TwinViews.cs</code>).</td></tr>
+    <tr><td>Bipolar depth bar</td><td>Matrix rows</td><td><b>New</b> small view in <code>TwinViews.cs</code>: centre-zero teal bar 7 tall, other side’s depth as a faint tick; drags like a slider; double-click = 0.</td></tr>
+  </table>
+
+  <h2>States to check</h2>
+  <ul>
+    <li><b>Editing B</b> — the B key is the only accent in the morph column; the morph strip’s “B” end takes the accent too. Every knob shows the B value; A’s value is the faint tick outside the groove.</li>
+    <li><b>Morph between</b> (35 % demo) — each knob shows a muted dot on the groove where the sound is now.</li>
+    <li><b>Effect off</b> — the section’s body takes <code>Inactive</code>: inner switches that are on turn <code>Rule</code>, arcs <code>Rule</code>, labels Ink 5. Nothing orange inside an effect that is off.</li>
+    <li><b>Detune</b> is inactive unless the voice mode is Unison; <b>Division</b> replaces Rate while LFO / delay Sync is on.</li>
+    <li><b>Layer / Split</b> — Lower | Upper appears in the tab row; Voice’s Output section becomes Part (Volume, Pan, Octave, Split key with Learn, voice share).</li>
+    <li>Both Studio themes (toggle above); Ember themes follow from tokens.</li>
+  </ul>
+</div>
+
+<script>
+"use strict";
+const T = " ", MI = "−";
+const sgn = (n, d = 0) => { const s = Math.abs(n).toFixed(d); return n > 0 && +s ? "+" + s : n < 0 && +s ? MI + s : (0).toFixed(d); };
+const pctv = v => Math.round(v * 100) + T + "%";
+const hz = f => f < 999.5 ? Math.round(f) + T + "Hz" : (f >= 9995 ? Math.round(f / 1000) : (f / 1000).toFixed(1)) + T + "k";
+const time = s => s < 0.9995 ? (s < 0.00995 ? (s * 1000).toFixed(1) : Math.round(s * 1000)) + T + "ms" : s.toFixed(2) + T + "s";
+const exp = (v, lo, hi) => lo * Math.pow(hi / lo, Math.min(1, Math.max(0, v)));
+const F = {
+  pct: pctv, bip: v => sgn((v - .5) * 200) + T + "%",
+  cut: v => hz(20 * Math.pow(1000, v)), oct: v => sgn((v - .5) * 16, 1) + T + "oct",
+  st: v => sgn(Math.round(v * 48) - 24) + T + "st", c: v => sgn(Math.round((v - .5) * 100)) + T + "c",
+  atk: v => time(exp(v, .0005, 10)), dec: v => time(exp(v, .003, 15)),
+  dly: v => v < .002 ? "off" : time(exp(v, .001, 5)), glide: v => v < .002 ? "off" : time(exp(v, .005, 5)),
+  fade: v => v < .002 ? "off" : time(exp(v, .01, 10)),
+  rate: v => { const h = exp(v, .02, 40); return h >= 9.995 ? hz(h) : h.toFixed(h < .995 ? 2 : 1) + T + "Hz"; },
+  wave: v => v <= .02 ? "tri" : v < .48 ? "tri–saw" : v <= .52 ? "saw" : v < .98 ? "saw–sqr" : "square",
+  width: v => pctv(.05 + .9 * v), semis: v => (v * 1).toFixed(2) + T + "st", det: v => "±" + Math.round(v * 50) + T + "c",
+  voices: v => String(4 + Math.round(v * 8)), colour: v => v < .2 ? "white" : v < .6 ? "pink" : "red",
+  pan: v => { const p = (v - .5) * 200; return Math.abs(p) < .5 ? "C" : (p < 0 ? "L" : "R") + Math.round(Math.abs(p)); },
+  oct2: v => sgn(Math.round(v * 4) - 2) + T + "oct", key: v => noteName(Math.round(v * 127)),
+  div: v => ["1/16", "1/8T", "1/8", "1/8.", "1/4T", "1/4", "1/4.", "1/2"][Math.round(v * 7)],
+  sync: v => ["8 bars", "4 bars", "2 bars", "1 bar", "1/2", "1/4.", "1/4", "1/8.", "1/4T", "1/8", "1/8T", "1/16", "1/16T", "1/32"][Math.round(v * 13)],
+  ms: v => time(exp(v, .01, 2)), share: v => { const l = 2 + 2 * Math.round(v * 4); return l + " + " + (12 - l); },
+};
+function noteName(n) { return ["C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B"][n % 12] + (Math.floor(n / 12) - 1); }
+
+// ---- the patch: [A, B, format] -----------------------------------------------------------
+const P = {
+  morph: [0, 0, "pct"],
+  o1wave: [.5, .82, "wave"], o1pw: [.5, .3, "width"], o1metal: [0, .35, "pct"], o1level: [1, .8, "pct"], o1coarse: [.5, .5, "st"], o1fine: [.5, .54, "c"], o1bal: [1, .6, "pct"],
+  o2wave: [.5, .1, "wave"], o2pw: [.5, .5, "width"], o2metal: [0, 0, "pct"], o2level: [.45, .7, "pct"], o2coarse: [.5, .75, "st"], o2fine: [.53, .47, "c"], o2bal: [1, .3, "pct"],
+  fm21: [0, .25, "pct"], fmfilt: [0, .1, "pct"],
+  noiselevel: [.08, .2, "pct"], noisecolor: [.4, .7, "colour"], noisebal: [1, 1, "pct"],
+  mmmode: [0, .3, "pct"], mmcut: [.82, .55, "cut"], mmres: [.1, .45, "pct"], mmkey: [0, .3, "pct"], mmenv: [.5, .68, "oct"],
+  route: [1, .2, "pct"], brute: [0, .25, "pct"], drive: [.15, .4, "pct"],
+  ldcut: [.62, .48, "cut"], ldres: [.1, .3, "pct"], ldkey: [.5, .5, "pct"], ldenv: [.6, .75, "oct"],
+  fenva: [.05, .2, "atk"], fenvd: [.45, .6, "dec"], fenvs: [.5, .3, "pct"], fenvr: [.35, .5, "dec"], fenvvel: [.3, .5, "pct"], fenvcurve: [.5, .6, "pct"],
+  aenva: [.03, .35, "atk"], aenvd: [.45, .55, "dec"], aenvs: [1, .7, "pct"], aenvr: [.3, .55, "dec"], aenvvel: [.5, .4, "pct"], aenvcurve: [.5, .5, "pct"],
+  menva: [.05, .1, "atk"], menvd: [.3, .4, "dec"], menvs: [0, .2, "pct"], menvr: [.35, .4, "dec"], menvdly: [0, .3, "dly"], menvvel: [0, .2, "pct"],
+  lfo1rate: [.46, .6, "rate"], lfo1div: [.6, .6, "sync"], lfo1fade: [0, .3, "fade"], lfo1amt: [1, .8, "pct"], vibamt: [.15, .3, "semis"],
+  modfxrate: [.3, .4, "pct"], modfxdepth: [.5, .6, "pct"], modfxmix: [.3, .45, "pct"],
+  dlydiv: [.71, .71, "div"], dlyfb: [.35, .5, "pct"], dlymix: [.25, .3, "pct"],
+  rvsize: [.5, .7, "pct"], rvdamp: [.5, .4, "pct"], rvmix: [.2, .35, "pct"],
+  voices: [1, 1, "voices"], glide: [0, .25, "glide"], unidetune: [.3, .3, "det"], spread: [.3, .5, "pct"], drift: [.2, .3, "pct"],
+  vol: [.7, .7, "pct"], pan: [.5, .5, "pan"], octave: [.5, .5, "oct2"], splitkey: [.47, .47, "key"], share: [.5, .5, "share"],
+  swing: [.5, .5, "pct"], arpgate: [.5, .5, "pct"],
+  m1: [0, 0, "pct"], m2: [.25, .25, "pct"], m3: [0, 0, "pct"], m4: [.6, .6, "pct"], m5: [0, 0, "pct"], m6: [0, 0, "pct"], m7: [0, 0, "pct"], m8: [0, 0, "pct"],
+};
+const BIP = new Set(["o1coarse", "o1fine", "o2coarse", "o2fine", "mmenv", "ldenv", "pan", "octave"]);
+const S = { tab: 0, side: 0, layout: 0, part: 0, lfo: 0, theme: "dark", morph: 0, dlyOn: 1, seqKind: 0, drag: null,
+  sel: { mmmode: 0, ldslope: 1, lfoshape: 0, lfomode: 0, vmode: 0, spmode: 0, bend: 0, modfx: 0, seqpat: 0, seqpage: 0, lane: 0, arpmode: 0, arpoct: 1, seqrate: 3 },
+  sw: { sync: 0, o2lo: 0, menvloop: 0, lfosync: 0, retrig: 0, modfxon: 1, dlysync: 1, pingpong: 1, rvon: 1, fxsec: 1, glidelegato: 0, seqon: 1, transpose: 1, latch: 0, smooth: 1, hold: 0 } };
+const val = id => P[id][S.side];
+const other = id => P[id][1 - S.side];
+const now = id => P[id][0] + (P[id][1] - P[id][0]) * S.morph;
+const show = id => F[P[id][2]](val(id));
+
+// ---- primitives ---------------------------------------------------------------------------
+const pt = (r, v) => { const a = (-135 + 270 * v) * Math.PI / 180; return [26 + r * Math.sin(a), 26 - r * Math.cos(a)]; };
+function arcPath(r, v0, v1) {
+  if (v1 < v0) [v0, v1] = [v1, v0];
+  if (v1 - v0 < .002) return "";
+  const [x0, y0] = pt(r, v0), [x1, y1] = pt(r, v1);
+  return `M${x0.toFixed(2)} ${y0.toFixed(2)}A${r} ${r} 0 ${(v1 - v0) * 270 > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+}
+function knobSvg(id, size, mod, plain) {
+  const v = plain ? plain : val(id), bip = BIP.has(id);
+  const [px, py] = pt(9, v), [ox0, oy0] = pt(24.2, plain ? v : other(id)), [ox1, oy1] = pt(26.8, plain ? v : other(id));
+  const showOther = !plain && Math.abs(other(id) - v) > .004, n = plain ? v : now(id), showNow = !plain && S.morph > 0 && S.morph < 1 && Math.abs(n - v) > .004;
+  const [nx, ny] = pt(21, n);
+  return `<svg width="${size}" height="${size}" viewBox="0 0 52 52">
+    <path class="groove" d="${arcPath(21, 0, 1)}" fill="none" stroke-width="5" stroke-linecap="butt"/>
+    <path class="arc${mod ? " mod" : ""}" d="${arcPath(21, bip ? .5 : 0, v)}" fill="none" stroke-width="5" stroke-linecap="butt"/>
+    ${showOther ? `<line class="oth" x1="${ox0}" y1="${oy0}" x2="${ox1}" y2="${oy1}" stroke-width="1.6"/>` : ""}
+    ${showNow ? `<circle class="now" cx="${nx}" cy="${ny}" r="2"/>` : ""}
+    <circle class="face" cx="26" cy="26" r="14" stroke-width="1"/>
+    <line class="ptr" x1="26" y1="26" x2="${px}" y2="${py}" stroke-width="2.4" stroke-linecap="round"/></svg>`;
+}
+function K(id, label, o = {}) {
+  const size = o.size || 34, cell = o.cell || (size === 44 ? 58 : 46);
+  return `<div class="kc${S.drag === id ? " drag" : ""}${o.cls ? " " + o.cls : ""}" data-k="${id}" style="width:${cell}px">${knobSvg(id, size, o.mod)}
+    <div class="kl">${label}</div><div class="kv">${o.text || show(id)}</div></div>`;
+}
+const SW = (id, label) => `<span class="swl" data-sw="${id}"><span class="sw${S.sw[id] ? " on" : ""}"><i></i></span>${label}</span>`;
+const SEG = (id, items, cls = "") => `<span class="seg ${cls}">${items.map((t, i) => `<b class="${S.sel[id] === i ? "on" : ""}" data-seg="${id}" data-i="${i}">${t}</b>`).join("")}</span>`;
+const SEGX = (items, on, act, cls = "") => `<span class="seg ${cls}">${items.map((t, i) => `<b class="${on === i ? "on" : ""}" data-act="${act}" data-i="${i}">${t}</b>`).join("")}</span>`;
+const chev = `<svg width="8" height="8" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const DD = (text, w, mono) => `<span class="dd${mono ? " mono" : ""}" style="${w ? `width:${w}px` : ""}"><span>${text}</span><span style="color:var(--TextMuted);display:flex">${chev}</span></span>`;
+const SEC = (title, right, body, o = {}) => `<div class="sec${o.grow ? " grow" : ""}${o.cls ? " " + o.cls : ""}" style="${o.w ? `width:${o.w}px` : ""}">
+  <div class="sec-h"><span class="sect-t">${title}</span>${right ? `<span class="row c gap8">${right}</span>` : ""}</div>${body}</div>`;
+const ROW = (...xs) => `<div class="row">${xs.join("")}</div>`;
+function SL(id, left, right, o = {}) {
+  const v = val(id);
+  return `<div class="sl" data-sl="${id}" style="grid-template-columns:${o.bare ? "1fr" : `${o.lw || 38}px 1fr 32px`}">
+    ${o.bare ? "" : `<span class="lbl">${o.label || ""}</span>`}
+    <div><div class="trk"><u style="width:${v * 100}%"></u><i style="left:${v * 100}%"></i></div><div class="ends" style="margin-top:2px">${(o.marks || [left, right]).map(x => `<span>${x}</span>`).join("")}</div></div>
+    ${o.bare ? "" : `<span class="mono8" style="text-align:right">${o.text ? o.text(v) : pctv(v)}</span>`}</div>`;
+}
+function G(w, h, inner) { return `<div class="graph" style="width:${w}px;height:${h}px"><svg width="${w - 2}" height="${h - 2}">${inner(w - 2, h - 2)}</svg></div>`; }
+const poly = (pts, cls = "cv") => `<polyline class="${cls}" points="${pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" ")}"/>`;
+
+// ---- graphs --------------------------------------------------------------------------------
+function oscSample(ph, wave, pw) {
+  const tri = ph < .5 ? 4 * ph - 1 : 3 - 4 * ph, saw = 2 * ph - 1, sq = ph < pw ? 1 : -1;
+  return wave <= .5 ? tri + (saw - tri) * (wave / .5) : saw + (sq - saw) * ((wave - .5) / .5);
+}
+const waveG = (n, w) => G(w, 34, (W, H) => {
+  const wave = val(`o${n}wave`), pw = .05 + .9 * val(`o${n}pw`), metal = val(`o${n}metal`), pts = [];
+  for (let i = 0; i <= 160; i++) { const ph = (i / 80) % 1; let s = oscSample(ph, wave, pw); s = s * (1 - metal) + Math.sin(s * Math.PI * 2.5) * metal; pts.push([4 + i / 160 * (W - 8), H / 2 - s * (H / 2 - 5)]); }
+  return `<line class="gl" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>` + poly(pts); 
+});
+const noiseG = w => G(w, 34, (W, H) => {
+  const c = val("noisecolor"), pts = [];
+  for (let i = 0; i <= 40; i++) { const x = i / 40, y = .25 + x * c * .6; pts.push([4 + x * (W - 8), 5 + y * (H - 10)]); }
+  return poly(pts) + `<text class="ax" x="4" y="${H - 3}">20</text><text class="ax" x="${W - 3}" y="${H - 3}" text-anchor="end">20k</text><text class="ax" x="${W - 3}" y="9" text-anchor="end">${F.colour(c)}</text>`;
+});
+function lp(f, fc, q, poles) { const r = f / fc; return -10 * poles / 2 * Math.log10(1 + Math.pow(r, 4)) / 2 * 1 + (q * 14) * Math.exp(-Math.pow(Math.log2(r) * 3, 2)); }
+const responseG = (w, h) => G(w, h, (W, H) => {
+  const fm = 20 * Math.pow(1000, val("mmcut")), fl = 20 * Math.pow(1000, val("ldcut")), poles = S.sel.ldslope ? 4 : 2, mode = Math.round(val("mmmode") * 3);
+  const y = db => 10 + (-db / 48) * (H - 22) + 8;
+  const mm = [], ld = [], cb = [];
+  for (let i = 0; i <= 120; i++) {
+    const f = 20 * Math.pow(1000, i / 120), x = i / 120 * W;
+    let a = lp(f, fm, val("mmres"), 2);
+    if (mode === 2) a = lp(fm * fm / f, fm, val("mmres"), 2);
+    if (mode === 1) a = Math.min(lp(f, fm, val("mmres"), 2), lp(fm * fm / f, fm, val("mmres"), 2)) + 3;
+    if (mode === 3) a = -18 * Math.exp(-Math.pow(Math.log2(f / fm) * 4, 2));
+    const b = lp(f, fl, val("ldres"), poles), r = val("route");
+    const c = r * (10 * Math.log10((Math.pow(10, a / 10) + Math.pow(10, b / 10)) / 2) ) + (1 - r) * (a + b);
+    mm.push([x, Math.min(H - 2, y(a))]); ld.push([x, Math.min(H - 2, y(b))]); cb.push([x, Math.min(H - 2, y(c))]);
+  }
+  const gx = [100, 1000, 10000].map(f => Math.log10(f / 20) / 3 * W);
+  return gx.map(x => `<line class="gl" x1="${x}" y1="0" x2="${x}" y2="${H}"/>`).join("") + `<line class="gl" x1="0" y1="${y(0)}" x2="${W}" y2="${y(0)}"/>`
+    + poly(mm, "cv teal thin") + poly(ld, "cv steel thin") + poly(cb)
+    + `<circle class="nd act" cx="${Math.log10(fl / 20) / 3 * W}" cy="${y(0) - 1}" r="3"/>`
+    + `<text class="ax" x="3" y="${H - 3}">20</text><text class="ax" x="${W - 3}" y="${H - 3}" text-anchor="end">20k</text>`
+    + `<text class="ax" x="${W - 3}" y="9" text-anchor="end" style="fill:var(--Teal)">multi</text><text class="ax" x="${W - 3}" y="18" text-anchor="end" style="fill:var(--Steel)">ladder</text>`;
+});
+const routeG = (w, h) => G(w, h, (W, H) => {
+  const r = val("route"), par = r >= .5, box = (x, y, t) => `<rect x="${x}" y="${y}" width="26" height="13" rx="2" fill="none" stroke="var(--VizInk)" stroke-width="1"/><text class="ax" x="${x + 13}" y="${y + 9.5}" text-anchor="middle" style="fill:var(--TextSecondary)">${t}</text>`;
+  const mid = H / 2 + 4, lab = `<text class="ax" x="3" y="9">${r <= .01 ? "series" : r >= .99 ? "parallel" : Math.round(r * 100) + T + "% parallel"}</text>`;
+  return lab + (par
+    ? `<path class="cv thin" d="M4 ${mid}H18V${mid - 10}H${W / 2 - 13}M18 ${mid}V${mid + 10}H${W / 2 - 13}M${W / 2 + 13} ${mid - 10}H${W - 18}V${mid + 10}H${W / 2 + 13}M${W - 18} ${mid}H${W - 4}"/>` + box(W / 2 - 13, mid - 16.5, "multi") + box(W / 2 - 13, mid + 3.5, "ladder")
+    : `<path class="cv thin" d="M4 ${mid}H${W / 2 - 34}M${W / 2 - 8} ${mid}H${W / 2 + 8}M${W / 2 + 34} ${mid}H${W - 4}"/>` + box(W / 2 - 34, mid - 6.5, "multi") + box(W / 2 + 8, mid - 6.5, "ladder"));
+});
+function envG(e, w, h, mod) {
+  return G(w, h, (W, H) => {
+    const a = val(e + "a"), d = val(e + "d"), s = val(e + "s"), r = val(e + "r"), dl = mod ? val("menvdly") : 0;
+    const tot = 4, xs = v => 4 + v * (W - 8) / tot, yb = H - 5, yt = 6, sy = yb - s * (yb - yt);
+    const x0 = xs(dl * .6), x1 = x0 + Math.max(2, a * (W - 8) / tot), x2 = x1 + Math.max(3, d * (W - 8) / tot), x3 = xs(3), x4 = Math.min(W - 4, x3 + Math.max(3, r * (W - 8) / tot));
+    const seg = (xa, ya, xb, yb2, k) => { const p = []; for (let i = 0; i <= 16; i++) { const t = i / 16, q = k > 0 ? 1 - Math.pow(1 - t, 3) : t; p.push([xa + (xb - xa) * t, ya + (yb2 - ya) * q]); } return p; };
+    const pts = [[4, yb], [x0, yb], ...seg(x0, yb, x1, yt, 0), ...seg(x1, yt, x2, sy, 1), [x3, sy], ...seg(x3, sy, x4, yb, 1)];
+    return `<line class="gl" x1="${x3}" y1="0" x2="${x3}" y2="${H}" stroke-dasharray="2 2"/>` + poly(pts)
+      + [[x1, yt], [x2, sy], [x4, yb]].map(([x, y], i) => `<circle class="nd${i === 1 && e === "aenv" ? " act" : ""}" cx="${x}" cy="${y}" r="2.6"/>`).join("");
+  });
+}
+function lfoShape(ph, k) {
+  switch (k) {
+    case 0: return Math.sin(ph * 2 * Math.PI);
+    case 1: return ph < .25 ? ph * 4 : ph < .75 ? 2 - ph * 4 : ph * 4 - 4;
+    case 2: return 1 - 2 * ph;
+    case 3: return ph < .5 ? 1 : -1;
+    case 4: return [.6, -.3, .9, -.8, .1, -.5, .4, -.9][Math.floor(ph * 8)];
+    default: { const v = [.6, -.3, .9, -.8, .1, -.5, .4, -.9, .6], i = ph * 8, f = i - Math.floor(i); const a = v[Math.floor(i)], b = v[Math.floor(i) + 1]; return a + (b - a) * (1 - Math.cos(f * Math.PI)) / 2; }
+  }
+}
+const lfoG = (w, h) => G(w, h, (W, H) => {
+  const pts = [], k = S.sel.lfoshape;
+  for (let i = 0; i <= 200; i++) { const ph = i / 200 * 2 % 1; pts.push([4 + i / 200 * (W - 8), H / 2 - lfoShape(ph, k) * (H / 2 - 8)]); }
+  const px = 4 + .37 * (W - 8);
+  return `<line class="gl" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/><line class="gl" x1="${W / 2}" y1="0" x2="${W / 2}" y2="${H}"/>` + poly(pts)
+    + `<line x1="${px}" y1="0" x2="${px}" y2="${H}" stroke="var(--Accent)" stroke-width="1"/>`
+    + `<text class="ax" x="3" y="${H - 3}">0</text><text class="ax" x="${W - 3}" y="${H - 3}" text-anchor="end">2 cycles</text>`;
+});
+const modfxG = w => G(w, 40, (W, H) => {
+  const pts = [], rate = 1 + val("modfxrate") * 4, depth = val("modfxdepth");
+  for (let i = 0; i <= 120; i++) { const x = i / 120; pts.push([4 + x * (W - 8), H / 2 - Math.sin(x * rate * 2 * Math.PI) * depth * (H / 2 - 5)]); }
+  return `<line class="gl" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>` + poly(pts) + `<text class="ax" x="${W - 3}" y="9" text-anchor="end">sweep</text>`;
+});
+const delayG = w => G(w, 40, (W, H) => {
+  let s = `<line class="gl" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>`, a = 1, x = 6;
+  const step = 10 + val("dlydiv") * 14, fb = val("dlyfb");
+  s += `<rect x="${x - 1}" y="${H / 2 - (H / 2 - 4)}" width="2" height="${H / 2 - 4}" rx="1" fill="var(--TextFaint)"/>`;
+  for (let i = 1; x + step < W - 4 && a > .04; i++) {
+    x += step; a = i === 1 ? .8 : a * fb * 1.6;
+    const hgt = Math.min(1, a) * (H / 2 - 4), up = !S.sw.pingpong || i % 2;
+    s += `<rect x="${x - 1}" y="${up ? H / 2 - hgt : H / 2}" width="2" height="${hgt}" rx="1" fill="var(--VizInk)" class="nd"/>`;
+  }
+  return s + `<text class="ax" x="${W - 3}" y="9" text-anchor="end">L</text><text class="ax" x="${W - 3}" y="${H - 3}" text-anchor="end">R</text>`;
+});
+const reverbG = w => G(w, 40, (W, H) => {
+  const pts = [], sz = .5 + val("rvsize") * 3, dm = val("rvdamp");
+  for (let i = 0; i <= 60; i++) { const x = i / 60; pts.push([4 + x * (W - 8), 5 + (1 - Math.exp(-x * 5 / sz)) * (H - 10) * (0.7 + dm * .3)]); }
+  return poly(pts) + `<text class="ax" x="${W - 3}" y="9" text-anchor="end">tail</text>`;
+});
+const padG = (sz, legend, w) => G(w || sz + 10, sz, (W, H) => {
+  const x = .62 * W, y = .38 * H;
+  return `<line class="gl" x1="${W / 2}" y1="0" x2="${W / 2}" y2="${H}"/><line class="gl" x1="0" y1="${H / 2}" x2="${W}" y2="${H / 2}"/>`
+    + `<circle cx="${x}" cy="${y}" r="9" fill="none" stroke="var(--VizGrid)" stroke-width="1"/><circle cx="${x}" cy="${y}" r="4.5" fill="var(--VizInk)"/>`
+    + (legend ? `<text class="ax" x="${W - 3}" y="${H / 2 - 3}" text-anchor="end">X</text><text class="ax" x="${W / 2 + 3}" y="9">Y</text>` : "");
+});
+
+// ---- tabs ------------------------------------------------------------------------------------
+const TABS = ["Osc", "Filter", "Env", "LFO", "Matrix", "FX", "Seq", "Voice"];
+const toFilter = (id) => SL(id, "multi", "ladder", { label: "To filter", text: v => v <= .005 ? "multi" : v >= .995 ? "ladder" : pctv(v) });
+function tabOsc() {
+  const osc = n => {
+    const o = "o" + n;
+    return ROW(K(o + "wave", "Wave"), K(o + "pw", "Width"), K(o + "metal", "Metal"), K(o + "level", "Level"))
+      + ROW(K(o + "coarse", "Coarse"), K(o + "fine", "Fine"), ...(n === 2 ? [K("fm21", "FM 1", { mod: true }), K("fmfilt", "FM cut", { mod: true })] : []));
+  };
+  return SEC("Osc 1", "", waveG(1, 196) + osc(1) + toFilter("o1bal"), { w: 212 })
+    + SEC("Osc 2", SW("sync", "Sync") + SW("o2lo", "Low"), waveG(2, 196) + osc(2) + toFilter("o2bal"), { w: 212 })
+    + SEC("Noise", "", noiseG(170) + ROW(K("noiselevel", "Level"), K("noisecolor", "Colour")) + `<div style="height:53px"></div>` + toFilter("noisebal"), { grow: true });
+}
+function tabFilter() {
+  return SEC("Multimode", "", SL("mmmode", "", "", { bare: true, marks: ["LP", "BP", "HP", "notch"] })
+      + ROW(K("mmcut", "Cutoff", { size: 44, cell: 64 }), K("mmres", "Resonance", { size: 44, cell: 64 }))
+      + ROW(K("mmkey", "Key", { mod: true, cell: 64 }), K("mmenv", "Env", { mod: true, cell: 64 })), { w: 144 })
+    + SEC("Route", "", SL("route", "series", "parallel", { bare: true })
+      + routeG(116, 62) + ROW(K("brute", "Brute", { cell: 58 }), K("drive", "Drive", { cell: 58 })), { w: 132 })
+    + SEC("Ladder", SEG("ldslope", ["12", "24"]), `<div style="height:16px" class="row c"><span class="hint">dB per octave</span></div>`
+      + ROW(K("ldcut", "Cutoff", { size: 44, cell: 64 }), K("ldres", "Resonance", { size: 44, cell: 64 }))
+      + ROW(K("ldkey", "Key", { mod: true, cell: 64 }), K("ldenv", "Env", { mod: true, cell: 64 })), { w: 144 })
+    + SEC("Response", "", responseG(176, 172), { grow: true });
+}
+function tabEnv() {
+  const env = (t, e, mod) => {
+    const cells = [["A", e + "a"], ["D", e + "d"], ["S", e + "s"], ["R", e + "r"]];
+    return SEC(t, mod ? SW("menvloop", "Loop") : "", envG(e, 186, 70, mod)
+      + `<div class="adsr">${cells.map(([l, id]) => `<div><div class="w">${show(id)}</div><span>${{ A: "Attack", D: "Decay", S: "Sustain", R: "Release" }[l]}</span></div>`).join("")}</div>`
+      + `<div class="row" style="justify-content:center;margin-top:2px">${mod ? K("menvdly", "Delay", { cell: 58 }) + K("menvvel", "Velocity", { mod: true, cell: 58 }) : K(e + "vel", "Velocity", { mod: true, cell: 58 }) + K(e + "curve", "Curve", { cell: 58 })}</div>`, { w: 204, grow: mod });
+  };
+  return env("Filter env", "fenv", false) + env("Amp env", "aenv", false) + env("Mod env", "menv", true);
+}
+function tabLfo() {
+  const synced = S.sw.lfosync;
+  return SEC("LFO", SEGX(["LFO 1", "LFO 2", "LFO 3"], S.lfo, "lfo"),
+      `<div class="row gap12"><div style="width:206px;display:flex;flex-direction:column;gap:6px">`
+      + SEG("lfoshape", ["Sine", "Tri", "Saw", "Square", "S&amp;H", "Smooth"], "fillw")
+      + `<div class="row c gap8">${SW("lfosync", "Sync")}${SW("retrig", "Retrig")}<span class="fill"></span>${SEG("lfomode", ["Voice", "Global"])}</div>`
+      + ROW(synced ? K("lfo1div", "Division", { size: 44, cell: 64 }) : K("lfo1rate", "Rate", { size: 44, cell: 64 }), K("lfo1fade", "Fade", { size: 44, cell: 64 }), K("lfo1amt", "Amount", { size: 44, cell: 64, mod: true }))
+      + `<div class="hint">${S.lfo === 2 ? "LFO 3 adds Symmetry and Curve to this row." : "Double-click the graph to reset the phase offset."}</div>`
+      + `</div>${lfoG(258, 166)}</div>`, { w: 500 })
+    + SEC("Vibrato", "", `<div class="row" style="justify-content:center;margin-top:8px">${K("vibamt", "Depth", { size: 44, mod: true, cell: 80 })}</div><div class="hint" style="text-align:center">LFO 1 × mod wheel</div>`, { grow: true });
+}
+function tabMatrix() {
+  const R = [["Pressure", "Ladder cutoff", .15, .3], ["Pressure", "Multimode cutoff", .15, .1], ["Slide", "Multimode cutoff", .2, .2], ["Pad X", "Multimode cutoff", .2, .35],
+    ["Pad Y", "Morph", .5, .5], ["Mod env", "Osc 2 coarse", -.25, .4], ["LFO 2", "Pan", .1, -.2]];
+  const x = `<svg width="8" height="8" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+  const arr = `<svg width="10" height="8" viewBox="0 0 16 16" style="color:var(--TextFaint)"><path d="M2 8h11M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const rows = R.map(([s, d, a, b], i) => {
+    const v = S.side ? b : a, o = S.side ? a : b, l = v < 0 ? 50 + v * 50 : 50, w = Math.abs(v) * 50;
+    return `<div class="mx-r"><span class="n">${i + 1}</span>${DD(s)}${arr}${DD(d)}<div class="bipbar"><i></i><u style="left:${l}%;width:${w}%"></u><em style="left:${50 + o * 50}%"></em></div><span class="mono8" style="text-align:right">${sgn(v * 100)}${T}%</span><span class="x">${x}</span></div>`;
+  }).join("");
+  return SEC("Routes", `<span class="badge">7 / 64</span><span class="btn">+ Route</span>`,
+      `<div class="mx-h"><span></span><span>Source</span><span></span><span>Destination</span><span>Depth ${S.side ? "B" : "A"}</span><span></span><span></span></div><div class="scroll">${rows}</div>`, { w: 412 })
+    + SEC("Macros", "", `<div class="row" style="flex-wrap:wrap;row-gap:4px">${[1, 2, 3, 4, 5, 6, 7, 8].map(i => K("m" + i, "Macro " + i)).join("")}</div><div class="hint">Macros are matrix sources; rename with a double-click on the name.</div>`, { grow: true });
+}
+function tabFx() {
+  const dOff = !S.dlyOn;
+  return SEC("Mod FX", SW("modfxon", "On"), SEG("modfx", ["Chorus", "Flanger", "Phaser", "Ensemble"], "fillw") + modfxG(162) + ROW(K("modfxrate", "Rate", { size: 44, cell: 54 }), K("modfxdepth", "Depth", { size: 44, cell: 54 }), K("modfxmix", "Mix", { size: 44, cell: 54 })), { w: 178 })
+    + SEC("Delay", `<span class="swl" data-act="dly"><span class="sw${S.dlyOn ? " on" : ""}"><i></i></span>On</span>`,
+      `<div class="row c gap8" style="height:16px">${SW("dlysync", "Sync")}${SW("pingpong", "Ping-pong")}</div>` + delayG(162)
+      + ROW(S.sw.dlysync ? K("dlydiv", "Division", { size: 44, cell: 54 }) : K("dlydiv", "Time", { size: 44, cell: 54, text: "350" + T + "ms" }), K("dlyfb", "Feedback", { size: 44, cell: 54 }), K("dlymix", "Mix", { size: 44, cell: 54 })), { w: 178, cls: dOff ? "inactive" : "" })
+    + SEC("Reverb", SW("rvon", "On"), `<div style="height:16px"></div>` + reverbG(162) + ROW(K("rvsize", "Size", { size: 44, cell: 54 }), K("rvdamp", "Damping", { size: 44, cell: 54 }), K("rvmix", "Mix", { size: 44, cell: 54 })), { w: 178 })
+    + SEC("All", "", `<div style="margin-top:2px">${SW("fxsec", "On")}</div><div class="hint" style="margin-top:4px">Off bypasses all three, to use Nota’s effect devices instead.</div>`, { grow: true });
+}
+function seqGrid(W, H) {
+  const steps = [[60, 64, 67], [], [62], [], [60, 63, 67], [], [], [65], [64, 67, 71], [], [62], [60], [57, 60, 64], [], [55], []];
+  const lo = 52, hi = 74, cw = (W - 2) / 16, play = 4, sel = 8, vel = [.9, 0, .6, 0, .8, 0, 0, .5, 1, 0, .6, .7, .9, 0, .5, 0];
+  let s = "";
+  for (let i = 0; i < 16; i++) {
+    const x = 1 + i * cw;
+    if (i % 4 === 0 && i) s += `<line class="gl" x1="${x}" y1="0" x2="${x}" y2="${H}" style="stroke:var(--Rule)"/>`;
+    else if (i) s += `<line class="gl" x1="${x}" y1="0" x2="${x}" y2="${H}"/>`;
+    if (i === play) s += `<rect x="${x}" y="0" width="${cw}" height="${H}" fill="var(--AccentSubtle)"/>`;
+    for (const n of steps[i]) { const y = 4 + (hi - n) / (hi - lo) * (H - 22); s += `<rect x="${x + 2}" y="${y}" width="${cw - 4}" height="4" rx="1" fill="var(--VizInk)"/>`; }
+    if (vel[i]) s += `<rect x="${x + 3}" y="${H - 2 - vel[i] * 11}" width="${cw - 6}" height="${vel[i] * 11}" rx="1" fill="var(--TextFaint)"/>`;
+    if (i === sel) s += `<rect x="${x + .5}" y=".5" width="${cw - 1}" height="${H - 1}" rx="2" fill="none" stroke="var(--Accent)" stroke-width="1"/>`;
+  }
+  return s + `<line class="gl" x1="0" y1="${H - 15}" x2="${W}" y2="${H - 15}"/>`;
+}
+function laneGrid(W, H) {
+  const v = [.2, .25, .35, .5, .65, .7, .7, .6, .5, .45, .4, .4, .5, .6, .55, .3], cw = (W - 2) / 16;
+  return v.map((a, i) => `<rect x="${1 + i * cw + 3}" y="${H - 2 - a * (H - 4)}" width="${cw - 6}" height="${a * (H - 4)}" rx="1" fill="var(--Teal)"/>`).join("");
+}
+function tabSeq() {
+  const head = `<div class="row c gap8">${SW("seqon", "Sequencer")}${SEGX(["Seq", "Arp"], S.seqKind, "seqkind")}`
+    + (S.layout ? `<span class="lbl">Plays</span>${SEGX(["Lower", "Upper", "Both"], 2, "noop")}` : "") + `<span class="fill"></span>`;
+  if (S.seqKind === 1) {
+    return SEC("Arpeggiator", `${SW("seqon", "On")}${SEGX(["Seq", "Arp"], 1, "seqkind")}`,
+      `<div class="row c gap8"><span class="lbl">Mode</span>${SEG("arpmode", ["Up", "Down", "Up/down", "Random", "As played", "Chord"])}<span class="lbl">Rate</span>${DD("1/16", 44, true)}<span class="lbl">Octaves</span>${SEG("arpoct", ["1", "2", "3", "4"])}${SW("hold", "Hold")}</div>`
+      + `<div class="row gap12" style="margin-top:4px">${G(420, 120, (W, H) => { let s = ""; const n = [0, 4, 7, 12, 16, 19, 24, 28], cw = W / 16; for (let i = 0; i < 16; i++) { const k = n[i % 8]; s += `<rect x="${i * cw + 2}" y="${H - 8 - k * 3.4}" width="${cw * .5 * (.4 + val("arpgate"))}" height="4" rx="1" fill="${i === 5 ? "var(--Accent)" : "var(--VizInk)"}"/>`; } return s + `<text class="ax" x="${W - 3}" y="9" text-anchor="end">2 octaves · up</text>`; })}`
+      + `<div>${ROW(K("arpgate", "Gate", { size: 44, cell: 64 }), K("swing", "Swing", { size: 44, cell: 64 }))}<div class="hint" style="width:128px;margin-top:6px">Hold a chord to hear it. Hold keeps it after release.</div></div></div>`, { grow: true });
+  }
+  return SEC("Sequencer", `${S.layout ? `<span class="lbl">Plays</span>${SEGX(["Lower", "Upper", "Both"], 2, "noop")}` : ""}<span class="btn"><svg width="7" height="7" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="var(--Record)"/></svg>Record</span><span class="btn">To clip</span>${SW("seqon", "On")}${SEGX(["Seq", "Arp"], 0, "seqkind")}`,
+    `<div class="row c gap6"><span class="lbl">Pattern</span>${SEG("seqpat", ["1", "2", "3", "4", "5", "6", "7", "8"])}<span class="lbl" style="margin-left:4px">Length</span>${DD("16", 34, true)}<span class="lbl">Rate</span>${DD("1/16", 44, true)}`
+    + `<span class="lbl">Swing</span><span class="mono8">50${T}%</span>${SW("transpose", "Transpose")}${SW("latch", "Latch")}</div>`
+    + G(594, 78, seqGrid)
+    + `<div class="row c gap6"><span class="lbl" style="width:42px">Motion</span>${SEG("lane", ["1", "2", "3", "4"])}${DD("Morph", 96)}${SW("smooth", "Smooth")}<span class="btn">Arm</span><span class="btn">Clear</span><span class="fill"></span><span class="lbl">Steps</span>${SEG("seqpage", ["1–16", "17–32", "33–48", "49–64"])}</div>`
+    + G(594, 26, laneGrid)
+    + `<div class="row c gap8"><span class="mono8" style="color:var(--TextSecondary)">Step 9 · E4 G4 B4 · velocity 127 · gate 50${T}%</span><span class="btn">Rest</span><span class="btn">Tie</span><span class="fill"></span><span class="hint">Click a step to edit it; hold keys while Record is on to enter chords.</span></div>`, { grow: true });
+}
+function tabVoice() {
+  const unison = S.sel.vmode === 3;
+  const part = S.layout
+    ? SEC(S.part ? "Upper part" : "Lower part", "", ROW(K("vol", "Volume"), K("pan", "Pan"), K("octave", "Octave"))
+      + `<div class="row c gap6" style="margin-top:2px">${S.layout === 2 ? `<span class="lbl">Split</span>${DD(show("splitkey"), 40, true)}<span class="btn">Learn</span>` : `<span class="hint">Layer: both parts play every key.</span>`}</div>`
+      + `<div class="row c gap6"><span class="lbl">Voices</span>${DD(show("share"), 52, true)}</div>`
+      + `<div class="row c gap6"><span class="lbl">Bend</span>${SEG("bend", ["±2", "±5", "±12", "±24"])}</div>`, { w: 160 })
+    : SEC("Output", "", ROW(K("vol", "Volume", { size: 44, cell: 58 }), K("pan", "Pan", { size: 44, cell: 58 }))
+      + `<div style="display:flex;flex-direction:column;gap:3px;margin-top:4px"><span class="cap">Bend range</span>${SEG("bend", ["±2", "±5", "±12", "±24"], "fillw")}</div>`, { w: 140 });
+  return SEC("Voices", SEG("vmode", ["Poly", "Mono", "Legato", "Unison"]),
+      ROW(K("voices", "Voices", { size: 44, cell: 58 }), K("glide", "Glide", { size: 44, cell: 58 }), K("unidetune", "Detune", { size: 44, cell: 58, cls: unison ? "" : "inactive" }))
+      + `<div style="margin-top:2px">${SW("glidelegato", "Glide only legato")}</div>`
+      + `<div class="hint">${unison ? "Unison stacks every voice on one note." : "Detune works in Unison."}</div>`, { w: 200 })
+    + SEC("Stereo", "", ROW(K("spread", "Spread", { size: 44, cell: 58 }), K("drift", "Drift", { size: 44, cell: 58 }))
+      + `<div style="display:flex;flex-direction:column;gap:3px;margin-top:4px"><span class="cap">Spread by</span>${SEG("spmode", ["Voice", "Key", "Unison"], "fillw")}</div>`, { w: S.layout ? 118 : 132 })
+    + part
+    + SEC("Pad", "", padG(S.layout ? 108 : 112, true) + `<div class="mono8" style="color:var(--TextSecondary)">X 62${T}% · Y 62${T}% · Z 0${T}%</div><div class="hint">X cutoff · Y morph · Z vibrato</div>`, { grow: true });
+}
+const TABF = [tabOsc, tabFilter, tabEnv, tabLfo, tabMatrix, tabFx, tabSeq, tabVoice];
+
+// ---- the card --------------------------------------------------------------------------------
+function header(mini) {
+  return `<div class="hdr"${mini ? ` style="grid-template-columns:1fr auto"` : ""}><span class="nm">${mini ? "Twin" : "Nota Twin"}</span>`
+    + (mini ? "" : `<span class="preset"><span>${chevL}</span><span class="pn">Twin EP${S.dirty ? " *" : ""}${chev}</span><span>${chevR}</span></span>`)
+    + `<span class="rt"><span class="badge">${mini ? "" : "Morphing poly · "}3/12</span>${SEGX(["S", "L"], mini ? 0 : 1, "noop")}<span class="sw on" style="margin-left:2px"><i></i></span></span></div>`;
+}
+const chevL = `<svg width="8" height="8" viewBox="0 0 16 16"><path d="M10 4l-4 4 4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const chevR = `<svg width="8" height="8" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+function morphCol(mini) {
+  const m = S.morph;
+  return `<div class="morph"${mini ? ` style="width:64px"` : ""}><span class="sect-t">Morph</span>
+    <div style="margin-top:4px">${`<div class="kc" data-k="morph" style="width:58px">${knobSvg("morph", 44, false, m || .0001)}<div class="kv" style="font-size:9px;margin-top:1px">${Math.round(m * 100)}${T}%</div></div>`}</div>
+    <div class="mstrip"><b class="${S.side === 0 ? "on" : ""}">A</b><div class="tr"><i style="left:${m * 100}%"></i></div><b class="${S.side === 1 ? "on" : ""}">B</b></div>
+    <div style="margin-top:12px;width:56px"><div class="cap" style="text-align:center;margin-bottom:3px">Edit</div>${SEGX(["A", "B"], S.side, "side", "fillw lg")}</div>
+    ${mini ? "" : `<div style="margin-top:10px;display:flex;flex-direction:column;gap:2px"><span class="ghost">A → B</span><span class="ghost">B → A</span><span class="ghost">Swap</span></div>`}
+  </div>`;
+}
+function renderL() {
+  const tabs = TABS.map((t, i) => `<span class="tab${S.tab === i ? " on" : ""}" data-tab="${i}">${t}</span>`).join("");
+  const right = (S.layout ? SEGX(["Lower", "Upper"], S.part, "part", "lg") : "") + SEGX(["Single", "Layer", "Split"], S.layout, "layout", "lg");
+  return `<div class="card">${header(false)}<div class="body">${morphCol(false)}
+    <div class="main"><div class="tabs">${tabs}<span class="sp"></span><span class="rt">${right}</span></div>
+    <div class="content">${TABF[S.tab]()}</div></div></div></div>`;
+}
+function renderS() {
+  return `<div class="card mini">${header(true)}<div class="body">${morphCol(true)}
+    <div class="main" style="padding-left:8px;gap:6px;justify-content:space-between">
+      ${padG(124, false, 172)}
+      <div class="row" style="justify-content:space-between;padding-right:4px">${K("ldcut", "Cutoff", { cell: 40 })}${K("ldres", "Reso", { cell: 40 })}${K("aenva", "Attack", { cell: 40 })}${K("aenvr", "Release", { cell: 40 })}</div>
+    </div></div></div>`;
+}
+function render() {
+  document.getElementById("cardL").innerHTML = renderL();
+  document.getElementById("cardS").innerHTML = renderS();
+  document.body.className = "t-" + S.theme;
+}
+
+// ---- interaction -----------------------------------------------------------------------------
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tab],[data-seg],[data-sw],[data-act]");
+  if (!t) return;
+  if (t.dataset.tab) S.tab = +t.dataset.tab;
+  else if (t.dataset.seg) S.sel[t.dataset.seg] = +t.dataset.i;
+  else if (t.dataset.sw) S.sw[t.dataset.sw] = S.sw[t.dataset.sw] ? 0 : 1;
+  else {
+    const a = t.dataset.act, i = +t.dataset.i;
+    if (a === "side") S.side = i; else if (a === "layout") { S.layout = i; S.part = 0; } else if (a === "part") S.part = i;
+    else if (a === "lfo") S.lfo = i; else if (a === "seqkind") S.seqKind = i; else if (a === "dly") S.dlyOn = S.dlyOn ? 0 : 1;
+  }
+  render();
+});
+document.addEventListener("dblclick", e => {
+  const k = e.target.closest("[data-k]"); if (!k || k.dataset.k === "morph") return;
+  P[k.dataset.k][S.side] = BIP.has(k.dataset.k) ? .5 : P[k.dataset.k][1 - S.side]; render();
+});
+let drag = null;
+document.addEventListener("pointerdown", e => {
+  const k = e.target.closest("[data-k],[data-sl]"); if (!k || e.button !== 0) return;
+  const id = k.dataset.k || k.dataset.sl;
+  drag = { id, y: e.clientY, x: e.clientX, v: id === "morph" ? S.morph : val(id), h: !!k.dataset.sl };
+  S.drag = id; e.preventDefault();
+});
+document.addEventListener("pointermove", e => {
+  if (!drag) return;
+  const z = +document.getElementById("zL").style.zoom || 2;
+  const d = drag.h ? (e.clientX - drag.x) / z / 120 : (drag.y - e.clientY) / z / 140 * (e.shiftKey ? .2 : 1);
+  const v = Math.min(1, Math.max(0, drag.v + d));
+  if (drag.id === "morph") S.morph = v; else P[drag.id][S.side] = v;
+  render();
+});
+document.addEventListener("pointerup", () => { if (drag) { drag = null; S.drag = null; render(); } });
+function pg(id, f) {
+  const g = document.getElementById(id);
+  g.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; g.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b)); f(b.dataset.v); render(); });
+}
+pg("pgTheme", v => S.theme = v);
+pg("pgZoom", v => { document.getElementById("zL").style.zoom = v; document.getElementById("zS").style.zoom = v; });
+pg("pgMorph", v => S.morph = +v);
+pg("pgDly", v => { S.dlyOn = +v; S.tab = 5; });
+
+// ---- annotations per tab -------------------------------------------------------------------
+const ANN = {
+  "Whole card": [
+    "<b>Status line removed.</b> It repeated the header badge (voices) and the side switch; its 18 px go to every tab, which is what most tabs lacked.",
+    "<b>Tab row decluttered.</b> “Parts” button removed (its controls now live in Voice → Part); Single | Layer | Split stays, Lower | Upper appears only when the patch is layered or split. Nothing is clipped at 700.",
+    "<b>Morph column tightened.</b> A strip with A and B at its ends shows where the morph sits and which side is edited; A → B, B → A, Swap become ghost actions (16 tall) instead of three full raised buttons.",
+    "<b>Rows line up.</b> Every section uses the same order: header 16 → graph or chooser → knob row → knob row → slider rows. Knob rows of neighbouring sections share a baseline.",
+    "<b>“›” chevrons between sections removed.</b> Sections are divided by the Rule only.",
+  ],
+  Osc: [
+    "Each source gets a full-width wave graph (34 tall, draggable as US7 asks) instead of the 56 × 16 thumbnail in the corner.",
+    "<b>Filter balance is a slider with end words</b> “multi … ladder” (was a knob reading “Filter · ladder”). Same param, same range.",
+    "Noise gets a colour-tilt graph so the three columns read as one row of sources.",
+  ],
+  Filter: [
+    "<b>Mode is a slider with four marks</b> LP · BP · HP · notch (was a knob). The param is continuous and morphs between modes, so it stays a value control — but its readout names the region instead of a lone word under a knob.",
+    "<b>Route is a series ↔ parallel slider plus a small route diagram</b> (was a knob reading “parallel”). Brute and Drive sit under it.",
+    "Slope 12 / 24 stays in the Ladder header; Cutoff and Resonance are main knobs (44) in both filters, Key and Env teal (34).",
+    "Response fills the column: combined curve in viz ink, multimode teal, ladder blue, active node accent only.",
+  ],
+  Env: [
+    "<b>Attack, Decay, Sustain, Release become four labelled drag cells</b> under each graph — the single “1 ms · 91 ms · 50 % · 39 ms” string had no names.",
+    "Graphs are taller (70) and the same size in all three envelopes; Velocity / Curve (Delay / Velocity on Mod env) sit centred below.",
+  ],
+  LFO: [
+    "LFO 1 · 2 · 3 picker moves into the section header; shape segments run full width; Sync, Retrig and Voice / Global share one row.",
+    "Rate (or Division while synced), Fade and Amount are one row of main knobs; the graph grows to 258 × 166 with a live phase line.",
+  ],
+  Matrix: [
+    "<b>Rows are 20 tall</b> (were ~28), so seven routes show instead of five. Column heads name Source, Destination and the edited side’s depth.",
+    "<b>Depth is a centre-zero teal bar</b> with the other side’s depth as a faint tick, plus a mono value — a row of small knobs read as clutter.",
+  ],
+  FX: [
+    "<b>An effect that is off greys out its body</b> (Inactive): Delay’s Sync and Ping-pong no longer glow orange while Delay itself is off.",
+    "Each effect gets a 40 px preview (sweep, taps L / R, tail) so the three columns are balanced; knobs grow to 44.",
+    "“Section · Effects” becomes a narrow “All” column with a one-line hint of what turning it off means.",
+  ],
+  Seq: [
+    "Header row: on, Seq | Arp, Plays (Layer / Split only). Toolbar: pattern 1–8, length, rate, swing, transpose, latch — Record and To clip at the right.",
+    "Grid 594 × 78 with chords, velocity foot, playing step (accent subtle) and selected step (accent outline); the motion lane is its own 26 px strip under it.",
+    "Selected-step readout and Rest / Tie sit on the last row with the hint that used to live in the status line.",
+  ],
+  Voice: [
+    "<b>Bend range is a segmented choice</b> ±2 · ±5 · ±12 · ±24 (was a knob with four positions).",
+    "<b>Detune is inactive outside Unison</b>, with a hint saying why.",
+    "In Layer / Split, Output becomes the <b>Part</b> section: Volume, Pan, Octave, Split key with Learn, voice share, Bend.",
+  ],
+};
+document.getElementById("ann").innerHTML = Object.entries(ANN).map(([k, v]) => `<div><h3>${k}</h3><ol>${v.map(x => `<li>${x}</li>`).join("")}</ol></div>`).join("");
+document.getElementById("zL").style.zoom = 2; document.getElementById("zS").style.zoom = 2;
+render();
+</script>
+</body>
+</html>

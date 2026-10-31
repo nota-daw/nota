@@ -22,6 +22,7 @@ public static class PresetDescriptors
         ["growl & wobble"] = new() { Sound = ["bass"], Character = ["aggressive"], Genre = ["dubstep"] },
         ["electric"] = new() { Sound = ["bass"], Character = ["punchy"] },
         ["sequences"] = new() { Sound = ["seq"] },
+        ["morph"] = new() { Character = ["evolving"] },            // Nota Twin: two sounds and the way between them
         ["reactive"] = new() { Character = ["evolving"] },
         ["winds & bowed"] = new() { Sound = ["strings", "brass"] },
         ["basics"] = new() { Character = ["clean"] },

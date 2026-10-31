@@ -22,6 +22,39 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Nota Twin — a morphing analog poly** (specs/055): a new built-in instrument with 12 voices.
+  Every sound control has a **side A and a side B**, and **Morph** sweeps the whole sound between
+  them, including the effects and the depth of each modulation route. The voice has two
+  oscillators that run triangle → saw → square continuously, with a Metal folder, sync and FM;
+  noise; a Steiner-style multimode filter and a 12 / 24 dB ladder in series or parallel; Brute
+  feedback and drive; three envelopes and three LFOs. The card's A / B switch picks the side the
+  knobs, automation and MIDI learn write to. Each knob marks the other side and where the sound
+  is now. **A → B**, **B → A** and **Swap** are one undo step each.
+  - **Expression**: poly aftertouch and MPE (pressure, slide, per-note bend) play one note at a
+    time. The expression pad (X · Y · Z) and the mod wheel drive the defaults. Routed to Morph,
+    pressure morphs only the pressed note.
+  - **Matrix**: up to 64 routes per part from 29 sources (LFOs, envelopes, velocity, release
+    velocity from a MIDI note-off, key, expression, Pad, Random, 8 macros) to Morph, pitch, vibrato or any sound control. A route
+    has a depth per side.
+  - **Effects per part**: Mod FX (chorus / flanger / phaser / ensemble), Delay and Reverb, all of
+    them morphing. One switch bypasses the section.
+  - **Sequencer and arpeggiator**: 8 patterns of up to 64 steps (up to six notes per step,
+    velocity, gate or tie), swing, transpose by a held key, latch and step record. Four motion
+    lanes per pattern, recorded or drawn (Morph, the pad or any sound control). **To clip** writes the pattern as a MIDI clip. The
+    arpeggiator plays up, down, up / down, random, as played or chord over 1–4 octaves, with hold.
+    Patterns travel with presets and projects; every pattern edit is one undo step.
+  - **Split and Layer**: two parts, Lower and Upper, each a full Twin sound. They split at a key
+    (learnable from a played key) or layer on every key. The 12 voices are shared between the
+    parts (2 + 10 … 10 + 2), and each part has its own octave, volume and pan. **Parts** copies
+    or swaps them, or loads a factory or saved sound into one part.
+  - **57 factory presets** in 11 folders, including Split & Layer and Sequences. The card has
+    L and S sizes.
+  - **MCP**: `read_twin`, `set_twin_morph_side`, `copy_twin_side`, `copy_twin_part`,
+    `set_twin_route`, `get_twin_pattern`, `set_twin_pattern` and `twin_pattern_to_clip`.
+- **Preset audition plays a preset's own state**: a Nota Twin preset with a sequence is heard
+  playing its pattern.
+
 ## [0.58.1] — 2026-10-29
 
 ### Added

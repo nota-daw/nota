@@ -49,6 +49,9 @@ class Instrument {
     // Note events (applied at segment boundaries by the engine for sample accuracy).
     virtual void noteOn(int32_t pitch, float velocity) = 0;
     virtual void noteOff(int32_t pitch) = 0;
+    // A note-off that carries its release velocity (0..1, from a MIDI note-off message); one
+    // that doesn't use it gets a plain noteOff. Clip notes and keys without one send noteOff.
+    virtual void noteOffVelocity(int32_t pitch, float /*velocity*/) { noteOff(pitch); }
     virtual void allNotesOff() = 0;
 
     // Per-note expression (MPE, see NoteExpression.h): dim is an ExprDim — ExprBend in
@@ -251,6 +254,12 @@ class Instrument {
     // e.g. a drum machine's step patterns / voice selection. id/iarg/farg are
     // instrument-specific. Default no-op. Message thread.
     virtual void action(int32_t /*id*/, int32_t /*iarg*/, float /*farg*/) {}
+    // The structural state those actions edit (Nota Twin's sequencer patterns), as bytes. When an
+    // instrument has one, the engine records every action that changes it as an undo step and
+    // undo hands the old bytes back through setEditState — no new instrument is published, so
+    // sounding notes go on. Empty = the actions aren't undoable. Message thread.
+    virtual std::vector<uint8_t> editState() const { return {}; }
+    virtual void setEditState(const uint8_t* /*data*/, int32_t /*size*/) {}
 
     // Hosted-plugin parameter automation (M9-B). Values are normalized 0..1 and
     // identified by a stable string paramID (the index is version-unstable).

@@ -110,13 +110,15 @@ inline void sendNoteOn(Instrument& inst, int32_t pitch, float vel) {
     }
     inst.noteOn(pitch, vel);
 }
-inline void sendNoteOff(Instrument& inst, int32_t pitch) {
+inline void sendNoteOff(Instrument& inst, int32_t pitch, float releaseVel = 0.0f) {
     if (inst.pedalDown.load(std::memory_order_relaxed) && pitch >= 0 && pitch < 128 && !inst.handlesSustain()) {
         auto& h = inst.pedalHeld[pitch >> 6];
         h.store(h.load(std::memory_order_relaxed) | (uint64_t{1} << (pitch & 63)), std::memory_order_relaxed);
         return;
     }
-    inst.noteOff(pitch);
+    if (releaseVel > 0.0f) inst.noteOffVelocity(pitch, releaseVel);
+    else
+        inst.noteOff(pitch);
 }
 inline void sendController(Instrument& inst, int32_t ctl, float value) {
     if (ctl == kCtlSustain && !inst.handlesSustain()) {
@@ -194,7 +196,7 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
             renderTo(nOff);
             if (evs[k].on) sendNoteOn(inst, evs[k].pitch, evs[k].vel);
             else
-                sendNoteOff(inst, evs[k].pitch);
+                sendNoteOff(inst, evs[k].pitch, evs[k].vel);
             ++k;
         } else {
             renderTo(xOff);

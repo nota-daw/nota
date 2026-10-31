@@ -82,7 +82,7 @@ class Reverb : public Device {
         kScope
     };
     // deviceAction ids.
-    enum { A_KillTail = 0 };
+    enum { A_KillTail = 0, A_Reset = 1 }; // A_Reset: the tail, the modulation phase and the size glide, as new
 
     Reverb();
     void setSampleRate(double sr, int32_t maxBlock) override;
@@ -267,7 +267,7 @@ class Reverb : public Device {
     bool idle_ = false;
     float feedPk_ = 0.0f; // peak tank feed (blocks sleep while the tail rings)
 
-    std::atomic<bool> kill_{false};
+    std::atomic<bool> kill_{false}, reset_{false};
     std::atomic<float> mWet_{0}, mOutL_{0}, mOutR_{0}, cpuA_{0}, srA_{44100.0f}, rt60A_{0}, preA_{0}, diffA_{0},
         erOnA_{0};
     std::atomic<float> p_[kNumParams] = {};

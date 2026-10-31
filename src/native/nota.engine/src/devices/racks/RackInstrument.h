@@ -48,6 +48,7 @@ class RackInstrument : public Instrument, public RackCore {
     // ---- note fan-out: a note reaches a chain only if it's inside its key/vel zone --
     void noteOn(int32_t pitch, float velocity) override;
     void noteOff(int32_t pitch) override;
+    void noteOffVelocity(int32_t pitch, float velocity) override; // the chains get it too
     void allNotesOff() override;
     // Expression goes to every chain: one whose zone kept the note out isn't holding the
     // pitch, so it ignores it.
@@ -99,6 +100,7 @@ class RackInstrument : public Instrument, public RackCore {
     // that take per-note bend start bent to the previous pitch and glide back (mono).
     void fanOn(int32_t pitch, float velocity, int32_t glideFrom);
     void fanOff(int32_t pitch);
+    float relVel_ = 0.0f; // the release velocity of the note-off being fanned out (audio thread)
     void monoRemove(int32_t pitch);
     void syncMono(); // mono switched since the last call: reconcile the sounding keys
     void endGlide(); // a glide stops half-way: the sounding note returns to its own pitch

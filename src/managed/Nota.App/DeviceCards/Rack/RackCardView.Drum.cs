@@ -855,6 +855,7 @@ internal sealed partial class RackCardView
         Add("Nota Consort", 15);
         Add("Nota Keys", 16);
         Add("Nota Mosaic", 17);
+        Add("Nota Twin", 18);
         f.ShowAt(anchor, showAtPointer: true);
     }
 

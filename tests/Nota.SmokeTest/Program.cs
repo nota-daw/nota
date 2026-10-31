@@ -607,6 +607,14 @@ if (args.Length >= 1 && args[0] == "--keys")
     Console.WriteLine(failures == 0 ? "KEYS PASSED" : $"KEYS FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Nota Twin alone (fast iteration): `--twin`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--twin")
+{
+    Console.WriteLine("-- nota twin --");
+    foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TWIN PASSED" : $"TWIN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Nota Vocoder alone (fast iteration): `--vocoder`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--vocoder")
 {
@@ -15221,6 +15229,8 @@ Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
+Console.WriteLine("-- nota twin --");
+foreach (var (ok, label) in TwinTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota vocoder --");
 foreach (var (ok, label) in VocoderTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument on/off --");

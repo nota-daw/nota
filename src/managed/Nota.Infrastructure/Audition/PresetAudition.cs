@@ -97,6 +97,12 @@ public sealed partial class PresetAudition : IPresetAudition
                         if (!rig.SetInstrument(kind)) return false;
                         foreach (var (id, v) in named)
                             if (!InstrumentView.IsViewParam(id)) rig.InstrumentParam(id, v);
+                        // A Nota Twin preset's patterns: its sequencer plays them over the phrase.
+                        if (kind == Nota.Application.Twin.TwinMatrix.Kind && !string.IsNullOrEmpty(doc.StateBase64))
+                        {
+                            try { rig.InstrumentState(System.Convert.FromBase64String(doc.StateBase64)); }
+                            catch (System.FormatException) { }
+                        }
                         // A Nota Grain factory preset is heard on its own source.
                         if (kind == 10 && !string.IsNullOrEmpty(doc.GrainSource))
                         {
@@ -181,7 +187,7 @@ public sealed partial class PresetAudition : IPresetAudition
     {
         [0] = "Nota Synth", [1] = "Nota Sampler", [2] = "Nota Physical", [5] = "Nota Aurora", [6] = "Nota Volt",
         [7] = "Nota Bass", [8] = "Nota Pendulum", [9] = "Nota Operator", [10] = "Nota Grain", [11] = "Nota Flux",
-        [12] = "Nota Rhythm", [13] = "Nota Monolith", [14] = "Nota Pentad", [15] = "Nota Consort", [16] = "Nota Keys", [17] = "Nota Mosaic",
+        [12] = "Nota Rhythm", [13] = "Nota Monolith", [14] = "Nota Pentad", [15] = "Nota Consort", [16] = "Nota Keys", [17] = "Nota Mosaic", [18] = "Nota Twin",
     };
     private static readonly Dictionary<int, string> MidiNames = new()
     {
@@ -286,7 +292,7 @@ public sealed partial class PresetAudition : IPresetAudition
         bool Has(params string[] words) { foreach (var w in words) if (c.Contains(w)) return true; return false; }
         if (Has("sequence", "arp", "generative")) return Held;
         if (Has("bass", "sub", "acid", "growl", "wobble", "808")) return BassRiff;
-        if (Has("pad", "ambient", "ensemble", "string", "choir", "bowed", "waterfall", "swell")) return Pad;
+        if (Has("pad", "ambient", "ensemble", "string", "choir", "bowed", "waterfall", "swell", "morph")) return Pad;   // morph: Nota Twin's folder — a held chord lets the morph travel
         if (Has("texture", "drone", "sweep", " fx", "motion", "noise")) return Texture;
         if (Has("lead", "brass", "solo", "whistle")) return Lead;
         if (Has("bell", "mallet", "pluck", "harp", "music box", "percussion", "perc", "marimba", "vibra")) return Pluck;

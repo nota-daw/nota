@@ -162,6 +162,7 @@ public sealed class DeviceInsertService
                 15 => _engine.AddConsortTrack(),
                 16 => _engine.AddKeysTrack(),
                 17 => _engine.AddMosaicTrack(),
+                18 => _engine.AddTwinTrack(),
                 1 => _engine.AddSamplerInstrumentTrack(),
                 _ => _engine.AddInstrumentTrack(),
             };

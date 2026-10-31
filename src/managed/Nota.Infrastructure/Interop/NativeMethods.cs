@@ -129,6 +129,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_note_off")]
     internal static partial NotaResult NoteOff(IntPtr engine, int pitch);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_note_off_velocity")]
+    internal static partial NotaResult NoteOffVelocity(IntPtr engine, int pitch, float releaseVelocity);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_note_off_velocity")]
+    internal static partial NotaResult TrackNoteOffVelocity(IntPtr engine, int trackId, int pitch, float releaseVelocity);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_note_on")]
     internal static partial NotaResult TrackNoteOn(IntPtr engine, int trackId, int pitch, float velocity);
 
