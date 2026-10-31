@@ -1323,6 +1323,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         ("Window", new[]
         {
             ("F11", "Enter / leave full screen — the title bar hides in full screen"),
+            ("⌘⇧F", "The clip editor fills the window / back to the split it had"),
+            ("Double-click a panel edge", "Reset the detail panel, the Mixer or the browser to its default size"),
         }),
         ("Command palette", new[]
         {

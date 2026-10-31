@@ -127,6 +127,7 @@ public partial class MainWindow
     private void DockMixer()
     {
         if (_mixer is null) return;
+        SetDetailMaximized(false);   // asked for, the Mixer must be seen
         _mixer.View = MixerViewFromSettings();
         SyncMixerViewButtons();
         _mixerDocked = true;
@@ -167,6 +168,17 @@ public partial class MainWindow
         var settings = MixerSettings;
         settings.Current.MixerDockHeight = h;
         settings.Save();
+    }
+
+    // Double-clicking its top edge forgets the dragged height: back to the first-dock default.
+    private void ResetMixerHeight()
+    {
+        if (!_mixerDocked) return;
+        var settings = MixerSettings;
+        settings.Current.MixerDockHeight = 0;
+        settings.Save();
+        _mixerWanted = DockedMixerHeight();
+        FitBottomPanels();
     }
 
     private void OnMixerMinHeightChanged()
