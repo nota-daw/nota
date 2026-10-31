@@ -363,6 +363,10 @@ docks as a panel under any of the three, or floats in its own window — see
   - Everything is **seeded**, so a result is repeatable and "New seed" re-rolls it.
   - Tools that think in pitch follow the roll's **Set Scale** key, so what they write
     stays in key.
+- **Clip editor side panels**: the clip inspector (MIDI and audio) and the Tools rail show
+  their sections in one column while they fit the editor's height and in two side by side when
+  they don't and the editor is wide enough, so the controls stay in view; only past that do
+  they scroll. Sections keep their order and are never split between columns.
 - **Pattern (step sequencer)**: on a Drum Rack track the detail panel gains a **Pattern**
   tab between Devices and Clip — a drum-machine grid with one row per loaded pad. Click a
   step to place a hit, shift-click for an accent, drag across the grid to paint, and use

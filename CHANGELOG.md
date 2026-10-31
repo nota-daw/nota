@@ -32,6 +32,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   it on the next launch.
 
 ### Changed
+- **Clip inspector and MIDI tools in two columns** (#276): in a short clip editor the
+  inspector (MIDI and audio) and the Tools rail lay their sections out in two columns instead
+  of one scrolling column, so Clip, Quantize, Transpose and Selection (or Clip, Playback and
+  Warp) are all in view. They stay one column while that fits or the editor is narrow, and
+  scroll only when even two columns don't fit.
 - **Track header buttons stay in one place at every track height** (#387): M / S / arm — and,
   on audio tracks, the headphone monitor button — now sit on the right of the header in
   compact, standard and large rows alike. The input selector moves to their left on a

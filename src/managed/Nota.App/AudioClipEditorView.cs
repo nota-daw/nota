@@ -3,8 +3,8 @@
 //
 // Detail · Clip for AUDIO clips (nota-design "Nota Clip Editor" 1b): the same frame as the
 // MIDI editor — a 38px header (clip cell, Sample | Envelope, the envelope target while
-// editing one, the snap-grid chip, the file's format) over the 232px inspector (CLIP,
-// PLAYBACK, WARP) and the waveform canvas: a beat ruler, a 22px warp-marker strip, and
+// editing one, the snap-grid chip, the file's format) over the inspector (CLIP, PLAYBACK,
+// WARP; one column or two, specs/055) and the waveform canvas: a beat ruler, a 22px warp-marker strip, and
 // the wave in the track colour, everything past the clip's played region darkened rather
 // than hidden. Envelope and ADSR are modes of the canvas, not checkboxes. ADSR edits the
 // clip's amplitude shape with the same handles the arrangement shows on the clip
@@ -47,8 +47,8 @@ public sealed class AudioClipEditorView : UserControl
     private Action _syncAttack = () => { }, _syncDecay = () => { }, _syncSustain = () => { }, _syncRelease = () => { };
     private ClipAdsr _adsr = ClipAdsr.Identity;
     private int _mode;   // 0 = Sample, 1 = Envelope, 2 = ADSR
-    private readonly ContentControl _inspectorBody = new();
-    private Control _sampleSections = null!, _adsrSections = null!;
+    private ColumnFlow _inspectorFlow = null!;
+    private SectionColumns _sampleSections = null!, _adsrSections = null!;
 
     private double _startBeat;
     private double _lengthBeats = 4;
@@ -177,8 +177,8 @@ public sealed class AudioClipEditorView : UserControl
 
         _sampleSections = Sections(clip, playback, warp);
         _adsrSections = Sections(adsr);
-        _inspectorBody.Content = _sampleSections;
-        var inspector = Inspector(_inspectorBody, _hint);
+        var inspector = Inspector(_sampleSections, _hint, out _inspectorFlow);
+        DockPanel.SetDock(inspector, Dock.Left);
 
         // Column 1: the waveform (row 0), a horizontal zoom scrollbar (row 1), and a
         // floating overlay (Canvas with null background → clicks pass through except the
@@ -205,10 +205,7 @@ public sealed class AudioClipEditorView : UserControl
         col1.Children.Add(waveHost);
         Grid.SetRow(_hScroll, 1); col1.Children.Add(_hScroll);
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        grid.Children.Add(inspector);
-        Grid.SetColumn(col1, 1);
-        grid.Children.Add(col1);
+        var grid = new DockPanel { Children = { inspector, col1 } };
 
         // Header: Sample | Envelope | ADSR, the target while editing an envelope, Snap, the format.
         var tabs = Segments(new[] { "Sample", "Envelope", "ADSR" }, 0, SetMode, out _);
@@ -220,7 +217,7 @@ public sealed class AudioClipEditorView : UserControl
         _wave.GridChanged += chip.Refresh;
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { snap, HeaderDivider(), _fileText } };
         var name = engine.GetClipName(trackId, clipIndex);
-        var header = Header(clipColor, string.IsNullOrWhiteSpace(name) ? $"Audio {trackId}" : name, "AUDIO", tabs, _envTargetDrop, right);
+        var header = Header(clipColor, string.IsNullOrWhiteSpace(name) ? $"Audio {trackId}" : name, "AUDIO", tabs, _envTargetDrop, right, inspector, _inspectorFlow);
         DockPanel.SetDock(header, Dock.Top);
         Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, grid } };
 
@@ -608,7 +605,7 @@ public sealed class AudioClipEditorView : UserControl
         _envTargetDrop.IsVisible = _envMode;
         _wave.SetEnvMode(_envMode);
         _wave.SetAdsrMode(mode == 2);
-        _inspectorBody.Content = mode == 2 ? _adsrSections : _sampleSections;
+        _inspectorFlow.Body = mode == 2 ? _adsrSections : _sampleSections;
         PaintHint();
     }
 
