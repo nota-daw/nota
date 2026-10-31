@@ -52,6 +52,7 @@ public partial class MainWindow : Window
 
     // Bottom detail panel (Devices chain / Clip piano roll / Mixer).
     private DeviceChainView? _deviceChain;
+    private TrackInspectorView? _trackInspector;
     private ClipEditorView? _clipEditor;
     private AudioClipEditorView? _audioEditor;
     private MixerView? _mixer;
@@ -204,6 +205,8 @@ public partial class MainWindow : Window
         Timeline.FreezeMenuItems = BuildTrackFreezeMenu;   // track context menu: Freeze / Live Freeze
         Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
         Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
+        _trackInspector = new TrackInspectorView(vm.Engine, Timeline, TrackFreezeEntries, () => vm.SuspendEnginePolling);   // browser's Track inspector tab (specs/060)
+        Browser.SetTrackInspector(_trackInspector);
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.EditSelectedClipsRequested += () => EditSelectedClips();
         Timeline.ClipSelectionChanged += FollowClipSelection;
@@ -385,6 +388,8 @@ public partial class MainWindow : Window
         PianoRollView.AuditionEnabled = vm.Settings.Current.PianoRollAudition;
         PianoRollView.AuditionToggled -= OnAuditionToggled;
         PianoRollView.AuditionToggled += OnAuditionToggled;
+        PianoRollView.VelocityWheelReversed = vm.Settings.Current.PianoRollVelocityWheelReversed;
+        PianoRollView.VelocityWheelMultiplier = Nota.Application.Editing.VelocityWheel.ClampMultiplier(vm.Settings.Current.PianoRollVelocityWheelMultiplier);
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         vm.Transport.LoopRecordReplace = vm.Settings.Current.LoopRecordReplace;
         SetArmOnSelect(vm.Settings.Current.ArmOnSelect);
@@ -396,13 +401,13 @@ public partial class MainWindow : Window
             vm.Settings.Current.LoopRecordReplace = vm.Transport.LoopRecordReplace;
             vm.Settings.Save();
         };
-        Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
+        Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
         ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         InitSnapGrid();
         // Settings → Appearance can switch the waveform style and the header side while the arrangement is open.
         vm.Settings.Changed += () =>
         {
-            Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
+            Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
             ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         };
         Browser.SetViewModel(vm.Browser);
@@ -435,6 +440,7 @@ public partial class MainWindow : Window
         HookDeviceMoves();   // Replace… / Delete track on the instrument, Move to track (specs/043)
         Timeline.TrackSelected += OnTrackSelected;
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
+        Timeline.ClipsSplit += SyncTrackModeClips;   // a split re-indexes the track's later clips
         Timeline.ClipsMoved += OnClipsMoved;   // a block move can re-index the open editor's clips
         Timeline.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // automation-follow hints etc.
 
@@ -458,8 +464,7 @@ public partial class MainWindow : Window
             else AddTrack(kind, anchor);
         };
         HookRecentInstruments();   // "Add track ▸ Recent" in both views' menus
-        // Selecting a slot selects its track everywhere: devices below, arrangement header.
-        _session.SlotSelected += (trackId, _) => Timeline.Select(trackId, -1);
+        _session.SlotSelected += OnSessionSlotSelected;
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
         MainContent.Children.Add(_session);
 
@@ -551,6 +556,7 @@ public partial class MainWindow : Window
         // Status bar: the installed version opens its release notes (#127).
         VersionText.Text = $"v{AppInfo.Version}";
         VersionButton.Click += (_, _) => ShowWhatsNew();
+        SetUpAudioFormatButton();
 
         Closed += (_, _) => vm.Dispose();
         SetUpCpuTip(vm.Engine);
@@ -687,6 +693,7 @@ public partial class MainWindow : Window
     private void SetView(MainView view)
     {
         if (_session is null || _modular is null) return;
+        SetDetailMaximized(false);   // a view picked is a view to see
         bool session = view == MainView.Session, modular = view == MainView.Modular;
         Timeline.IsVisible = view == MainView.Arrangement;
         _session.IsVisible = session;

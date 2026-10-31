@@ -23,6 +23,43 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Take lanes for audio loop recording** (#187): an Arrangement audio recording that comes
+  back around the loop keeps every pass as a take (Take 1, Take 2, …) instead of overwriting
+  the earlier ones. The comp — what plays, on the track's own row — starts as the newest pass
+  at every point, which is what audio loop recording used to leave. The track header shows a
+  disclosure and the take count; the lanes start folded, and opening them draws one row per
+  take with its waveform and the sections the comp uses highlighted. Drag across a take to
+  use that section (the arrangement snap grid, ⌥ / Alt to bypass); right-click a lane for
+  **Use whole take**, **Delete take** (the sound stays) or **Flatten takes** (one clip, the
+  takes of that recording go). Each of those is one undo step, and takes are saved with the
+  project. A tempo change moves the comp's sections with their takes, so they still meet
+  sample to sample. One pass, the loop off, MIDI and Session slots are unchanged.
+- **Sample rate and buffer size in the status bar** (#373): the lower right corner now reads
+  "48 kHz · 256". Click it to pick another buffer size — Device default or 64 to 2048 frames,
+  each with its latency — or to open Settings → Audio. Playback carries on across the change.
+  Under ASIO the menu offers the driver's settings instead, since the driver sets the buffer.
+- **Track inspector** (#186): a new tab at the bottom of the browser's left rail shows the
+  selected track's settings in one place — name, Mute / Solo / Arm, record input and input
+  monitoring or MIDI from, colour, row height and the freeze commands — so they no longer
+  need the track's right-click menu. It follows the track the Devices panel shows and
+  picks up changes made anywhere else at once. The right-click menu keeps its entries.
+- **Clip editor track mode** (#49): a **Clip | Track** switch at the top of the Clip editor's
+  inspector (and *Toggle clip editor track mode* in the command palette). Track shows every MIDI clip of the
+  track on the arrangement's timeline from bar 1, each clip's borders marked in the clip strip,
+  so you can scroll through the whole part and edit any note without re-selecting clips —
+  moves across clip seams, rubber band across clips, reference locks and one-step undo work as
+  in multi-clip editing. Selecting another clip of the track makes it active and scrolls to it;
+  a clip on another track opens that track; clips drawn, pasted or recorded on the track join.
+  Nota remembers the mode; Clip opens one clip as before.
+- **Automatic section names and Reset to default** (#106): new arrangement sections are named
+  "Section N" for their place in the song — left to right, custom-named sections counted — and
+  renumber when sections are added, moved, duplicated or deleted; custom names stay as typed.
+  In the rename box Return keeps the name (an empty name goes back to automatic) and Esc
+  cancels without an undo step; a caption says whether the name is automatic or custom.
+  **Reset to default** — in the rename box, the section's right-click menu and the command
+  palette (*Reset section name*, for the section at the playhead) — restores the automatic
+  name. Undo / redo bring back both the name and its mode. Sections named in earlier versions
+  keep their names; MCP `list_sections` reports which names are automatic.
 - **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
   the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
   Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.
@@ -36,8 +73,47 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   Overview, Sections and ruler — to the right edge, so the timeline starts at the left, next
   to the browser. Everything works the same on either side; drag the seam to the left to
   widen the headers. The choice is remembered for every project.
+- **Edit any MIDI controller in the piano roll** (#169): the lane under the notes gets a fifth
+  tab for controllers. Click it to pick one — the controllers the clip already has first, then
+  Sustain, Mod wheel, Pitch wheel, Channel pressure, Expression, Breath and every other CC.
+  Pedals (CC64–69) draw as on/off blocks you drag, move and resize on the grid; other
+  controllers are a curve you draw, with points to drag, add and delete. Each gesture is one
+  undo step and plays back straight away.
+- **Shift + wheel changes note velocity** (#169): over a note, ⇧ + wheel raises or lowers the
+  velocity of the selected notes (or of the hovered note when it isn't selected) by one step per
+  notch; a run of notches is one undo step. Elsewhere ⇧ + wheel still scrolls the roll.
+  Preferences → Shortcuts sets the direction and the speed (off, 0.25× … 2×, default 1×).
+- **Shape a note while placing it in the piano roll** (#45): after the double-click that adds
+  a note, keep the button down and drag to move it (pitch and time); hold ⇧ to set its length
+  or ⌘ / Ctrl to drag up and down for its velocity. The next note drawn takes the shaped
+  length and velocity.
+- **The clip editor can fill the window** (#304): with a clip open in the Clip or Pattern tab,
+  the new button at the right of the detail panel's header, **View → Clip editor fills the
+  window** or ⌘⇧F (Ctrl+Shift+F) folds away the browser, the Arrangement / Session / Modular
+  view and a docked Mixer so the piano roll, audio editor or step grid gets the whole window.
+  The same button or key brings everything back at the heights it had.
+- **Double-click a panel edge to reset it** (#305): double-clicking the edge above the detail
+  panel sets it back to its default height (and the Clip tab forgets the height you dragged
+  it to); the browser's edge and the docked Mixer's top edge go back to their default sizes
+  the same way.
 
 ### Changed
+- **Smoother, clearer waveforms on audio clips** (#267): clips in the Arrangement and the
+  audio clip editor now draw an anti-aliased peak outline around a denser body that follows
+  the loudness (RMS) of the audio. Every zoom level reads cleanly — zoomed out, no peak slips
+  between pixels; zoomed in, the wave slopes from point to point instead of stepping, down to
+  a fine line at sample level — and on a HiDPI screen it is drawn at the screen's full
+  resolution. This is the new default, **Smooth**; **Solid** and **Bars** are still in
+  Settings → Appearance → Waveform (a saved Bars choice moves to Smooth once).
+- **Clip inspector and MIDI tools in two columns** (#276): in a short clip editor the
+  inspector (MIDI and audio) and the Tools rail lay their sections out in two columns instead
+  of one scrolling column, so Clip, Quantize, Transpose and Selection (or Clip, Playback and
+  Warp) are all in view. They stay one column while that fits or the editor is narrow, and
+  scroll only when even two columns don't fit.
+- **Track header buttons stay in one place at every track height** (#387): M / S / arm — and,
+  on audio tracks, the headphone monitor button — now sit on the right of the header in
+  compact, standard and large rows alike. The input selector moves to their left on a
+  standard row, and a compact audio track keeps its monitor button.
 - **Mixer strips fit the height they get**, docked or in the window: as it shrinks, the I/O
   rows hide first, then the sends, then the fader gets shorter; name, meter, fader, pan and
   M / S / Arm always stay. A hidden section's **Sends** / **I/O** footer toggle shows an
@@ -48,8 +124,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Session clips open in the Clip editor** (#334): a click on a slot that holds a clip shows
+  that clip in the Clip tab instead of the track's devices, the **Clip** button opens the
+  selected slot, and with the editor open, clicking another clip — on the same track or
+  another — brings that clip into the editor. Selecting an empty slot still shows that track's devices.
 - **View ▸ Toggle detail panel** no longer leaves an empty band where the hidden panel was;
   showing it again brings back its height.
+- **Playback no longer stutters while an audio clip is open in the Clip panel** (#142): once
+  the playhead reached the open clip, every tick repainted the whole audio editor — the
+  waveform, ruler, warp markers and envelope — to move one line. The editor's playhead is now
+  drawn on its own layer, so playing through the clip repaints just that line.
 
 ## [0.58.1] — 2026-10-29
 

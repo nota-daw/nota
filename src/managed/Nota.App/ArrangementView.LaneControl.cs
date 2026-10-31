@@ -20,7 +20,7 @@ namespace Nota.App;
 public sealed partial class ArrangementView
 {
     // ---- lanes ------------------------------------------------------------
-    private sealed class LaneControl : Control, IAutoRows, IValueEntryHost
+    private sealed partial class LaneControl : Control, IAutoRows, IValueEntryHost
     {
         private readonly ArrangementView _o;
         private readonly AutoEditor _auto;   // automation mode (M9-A3), shared with the footer's return rows
@@ -69,7 +69,7 @@ public sealed partial class ArrangementView
         TrackVM IAutoRows.TrackAt(int i) => _o._tracks[i];
         int IAutoRows.IndexOf(TrackVM t) => _o._tracks.IndexOf(t);
         double IAutoRows.Top(int i) => _o.RowTop(i);
-        double IAutoRows.Height(int i) => _o.RowHeightAt(i);
+        double IAutoRows.Height(int i) => _o.ClipAreaHeightAt(i);
         bool IAutoRows.Editable(int i) => !_o.IsSlimRowAt(i);   // a slim group bar has no room for an envelope
         (int lo, int hi) IAutoRows.VisibleRange => _o.VisibleRowRange();
 
@@ -85,13 +85,15 @@ public sealed partial class ArrangementView
         // window [S0,S1] in that material's domain, captured at drag start. Drawing maps
         // each timeline beat through the committed anchor to a material point, so a resize
         // reveals/hides the REAL audio instead of squashing the fixed window peaks.
-        private float[]? _rpPeaks;
+        private float[]? _rpPeaks, _rpRms;
         private int _rpCount;
         private double _rpMTotal, _rpS0, _rpS1;   // material total + committed window (frames for unwarped, beats for warped)
         private bool _rpWarped;
         private int _rpTrack, _rpClip;
         private float[]? _rpDetail;                // the lane's visible material at one bucket per pixel (#299)
+        private float[]? _rpDetailRms;
         private int _rpDetailCount;
+        private readonly WaveformPainter _painter = new();
         private double _rpDetailM0, _rpDetailM1;
         private const double EdgePx = 6;
 
@@ -180,9 +182,9 @@ public sealed partial class ArrangementView
 
         /// <summary>A clip drag / trim, marquee, time-range or envelope edit is in progress:
         /// Follow must not scroll the lanes out from under it (#105).</summary>
-        public bool IsGesturing => _drag != Drag.None || _marquee is not null || _auto.IsActive;
+        public bool IsGesturing => _drag != Drag.None || _marquee is not null || _auto.IsActive || _takeSwipe is not null;
         private double RowTop(int i) => _o.RowTop(i);
-        private double RowH(int i) => _o.RowHeightAt(i);
+        private double RowH(int i) => _o.ClipAreaHeightAt(i);
         protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
             => _o.HandleLaneWheel(e, e.GetPosition(this).X);
 
@@ -190,7 +192,7 @@ public sealed partial class ArrangementView
         {
             beat = _o._scrollBeats + p.X / _o._pixelsPerBeat;
             int ti = _o.RowAtY(p.Y);
-            if (ti < 0) return null;
+            if (ti < 0 || p.Y >= RowTop(ti) + RowH(ti)) return null;   // below the clip area: take lanes
             var t = _o._tracks[ti];
             foreach (var c in t.Clips)
                 if (beat >= c.StartBeat && beat <= c.StartBeat + c.LengthBeats)
@@ -231,6 +233,7 @@ public sealed partial class ArrangementView
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             if (RowSeamPressed(e)) return;
+            if (TakeLanePressed(e)) return;
             if (_o._automationMode) { _auto.AutoPointerPressed(e); return; }
             var pt = e.GetCurrentPoint(this);
             var hit = HitTest(pt.Position, out double beat);
@@ -381,6 +384,7 @@ public sealed partial class ArrangementView
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             if (_o.IsRowResizing) { _o.UpdateRowResize(e.GetPosition(this).Y); return; }
+            if (_takeSwipe is not null) { TakeSwipeMoved(e); return; }
             if (e.GetCurrentPoint(this).Properties is { IsLeftButtonPressed: false, IsRightButtonPressed: false }
                 && RowSeamHover(e.GetPosition(this))) return;
             if (_o._automationMode) { _auto.AutoPointerMoved(e); return; }
@@ -551,6 +555,7 @@ public sealed partial class ArrangementView
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
             if (_o.IsRowResizing) { e.Pointer.Capture(null); _o.EndRowResize(); return; }
+            if (_takeSwipe is not null) { TakeSwipeReleased(e); return; }
             if (_o._automationMode) { _auto.AutoPointerReleased(e); return; }
             var eng = _o._engine;
 
@@ -711,9 +716,11 @@ public sealed partial class ArrangementView
             // OnPointerReleased turns it into a selection.
             bool active = _drag != Drag.None || _groupMove is not null || _rangeActive
                           || _auto.IsActive
-                          || _adsrDrag != AdsrHandle.None;
+                          || _adsrDrag != AdsrHandle.None
+                          || _takeSwipe is not null;
             if (!active) return false;
             _pending = false; _drag = Drag.None; _groupMove = null; _moveRowDelta = 0; _dragClip = null; _rpPeaks = null;
+            _takeSwipe = null; _takeMoved = false;   // an abandoned take swipe never comps
             _marqueeArmed = false; _rangeActive = false; _marquee = null; _shiftClipTrack = -1; _shiftClipIndex = -1;
             _auto.Cancel();
             _adsrDrag = AdsrHandle.None; _adsrClip = null;
@@ -955,7 +962,7 @@ public sealed partial class ArrangementView
 
             var edits = new List<Control>
             {
-                MenuKit.Item("Split here", GlyphKind.Split, () => { _o._engine?.SplitClip(trackId, idx, at); _o.Refresh(); }, MenuKit.SplitKey),
+                MenuKit.Item("Split here", GlyphKind.Split, () => { _o._engine?.SplitClip(trackId, idx, at); _o.Refresh(); _o.ClipsSplit?.Invoke(); }, MenuKit.SplitKey),
             };
             // Reverse (audio only): non-destructive, so the label reflects the clicked clip.
             if (!clip.IsMidi && _o._engine is { } rev && rev.TryGetAudioClipInfo(trackId, idx, out var rai))
@@ -1117,6 +1124,7 @@ public sealed partial class ArrangementView
                                      take ? rp : null);
                     }
                 if (take) DrawHeldNotes(ctx, rp!, _o._tracks[i].ColorIndex, y, rh, w, pitches);
+                if (_o.TakesOpen(_o._tracks[i])) DrawTakeLanes(ctx, _o._tracks[i], y + rh, w);
                 // Imports still decoding: a translucent placeholder whose waveform fills in.
                 using (ctx.PushOpacity(0.5))
                     foreach (var c in _o.PendingClipsFor(tid))
@@ -1560,11 +1568,12 @@ public sealed partial class ArrangementView
             if (eng is null || !eng.TryGetAudioClipInfo(trackId, clipIndex, out var ai)) return;
             const int buckets = 2048;
             var peaks = new float[buckets * 2];
+            var rms = new float[buckets];
             if (ai.WarpEnabled != 0 && ai.WarpBeats > 0)
             {
-                int n = eng.GetClipWarpFullPeaks(trackId, clipIndex, peaks, buckets);
+                int n = eng.GetClipWarpFullPeaks(trackId, clipIndex, peaks, buckets, rms);
                 if (n <= 0) return;
-                _rpCount = n; _rpPeaks = peaks; _rpWarped = true;
+                _rpCount = n; _rpPeaks = peaks; _rpRms = rms; _rpWarped = true;
                 _rpMTotal = ai.WarpBeats;
                 _rpS0 = ai.WarpPlayStart;
                 _rpS1 = ai.WarpPlayEnd > 0 ? ai.WarpPlayEnd : ai.WarpBeats;
@@ -1572,9 +1581,9 @@ public sealed partial class ArrangementView
             else
             {
                 if (ai.SampleId == 0 || !eng.TryGetSampleInfo(ai.SampleId, out var si) || si.Frames <= 0) return;
-                int n = eng.GetClipSourcePeaks(trackId, clipIndex, peaks, buckets);
+                int n = eng.GetClipSourcePeaks(trackId, clipIndex, peaks, buckets, rms);
                 if (n <= 0) return;
-                _rpCount = n; _rpPeaks = peaks; _rpWarped = false;
+                _rpCount = n; _rpPeaks = peaks; _rpRms = rms; _rpWarped = false;
                 _rpMTotal = si.Frames;
                 _rpS0 = ai.SourceOffsetFrames;
                 double len = ai.LengthFrames > 0 ? ai.LengthFrames : si.Frames - ai.SourceOffsetFrames;
@@ -1595,21 +1604,44 @@ public sealed partial class ArrangementView
             // The whole-material overview, or — when the lane shows it wider than it has buckets —
             // the material under the whole lane at one bucket per pixel, fetched once per drag (#299).
             float[] pk = _rpPeaks!;
+            float[]? rms = _rpRms;
             int count = _rpCount;
             double m0 = 0, m1 = _rpMTotal;
             double lm0 = Math.Clamp(MaterialAt(0), 0, _rpMTotal), lm1 = Math.Clamp(MaterialAt(Bounds.Width), 0, _rpMTotal);
-            if (lm1 > lm0 && (lm1 - lm0) / _rpMTotal * _rpCount * 1.5 < Bounds.Width && _o._engine is { } eng)
+            bool smooth = _o.Waveform == WaveformStyle.Smooth;
+            double scale = smooth ? WaveformPainter.Scale(this) : 1;
+            if (lm1 > lm0 && (lm1 - lm0) / _rpMTotal * _rpCount * 1.5 < Bounds.Width * scale && _o._engine is { } eng)
             {
-                int n = Math.Clamp((int)Math.Ceiling(Bounds.Width), 1, 8192);
+                int n = Math.Clamp((int)Math.Ceiling(Bounds.Width * scale), 1, 8192);
                 if (_rpDetail is null || _rpDetailCount <= 0 || _rpDetailM0 != lm0 || _rpDetailM1 != lm1)
                 {
                     _rpDetail ??= new float[8192 * 2];
+                    _rpDetailRms ??= new float[8192];
                     _rpDetailCount = _rpWarped
-                        ? eng.GetClipWarpPeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n)
-                        : eng.GetClipSourcePeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n);
+                        ? eng.GetClipWarpPeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n, _rpDetailRms)
+                        : eng.GetClipSourcePeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n, _rpDetailRms);
                     (_rpDetailM0, _rpDetailM1) = (lm0, lm1);
                 }
-                if (_rpDetailCount > 0) (pk, count, m0, m1) = (_rpDetail, _rpDetailCount, lm0, lm1);
+                if (_rpDetailCount > 0) (pk, rms, count, m0, m1) = (_rpDetail, _rpDetailRms, _rpDetailCount, lm0, lm1);
+            }
+            if (smooth)
+            {
+                // Material → screen is linear while the drag holds the committed window.
+                double XAt(double m) => ((m - _rpS0) / rate + _origStart - scroll) * ppb;
+                double bm = (m1 - m0) / count;
+                int i0 = Math.Max(0, (int)Math.Floor((MaterialAt(vx0) - m0) / bm) - 1);
+                int i1 = Math.Min(count, (int)Math.Ceiling((MaterialAt(vx1) - m0) / bm) + 1);
+                _painter.Begin(scale);
+                for (int i = i0; i < i1; i++)
+                {
+                    double ma = m0 + i * bm, mb = ma + bm;
+                    if (mb <= 0 || ma >= _rpMTotal) continue;   // past the material's ends: nothing to draw
+                    _painter.Add(XAt(ma), XAt(mb), Math.Clamp(pk[i * 2] * gain, -1f, 1f), Math.Clamp(pk[i * 2 + 1] * gain, -1f, 1f),
+                                 rms is null ? -1f : Math.Min(1f, rms[i] * gain));
+                }
+                using (ctx.PushClip(new Rect(vx0, r.Y, Math.Max(0, vx1 - vx0), r.Height)))
+                    _painter.Fill(ctx, mid, amp, WaveformPainter.PeakInk(brush), brush);
+                return;
             }
             var geo = new StreamGeometry();
             using (var g = geo.Open())
@@ -1684,16 +1716,38 @@ public sealed partial class ArrangementView
             // The whole-clip overview, or — when the clip is drawn wider than it has buckets —
             // peaks for just the visible slice at one bucket per pixel (#299).
             float[] pk = c.Peaks;
+            float[]? rms = c.Rms;
             int count = c.PeakCount;
             double fa = 0, fb = 1;
-            if (r.Width > c.PeakCount * 1.5 && EnsureDetailPeaks(c, trackId, (vx0 - r.X) / r.Width, (vx1 - r.X) / r.Width,
-                    (int)Math.Ceiling(vx1 - vx0), r.Width))
+            // Smooth resolves to device pixels, so a HiDPI screen gets twice the detail.
+            bool smooth = _o.Waveform == WaveformStyle.Smooth;
+            double scale = smooth ? WaveformPainter.Scale(this) : 1;
+            if (r.Width * scale > c.PeakCount * 1.5 && EnsureDetailPeaks(c, trackId, (vx0 - r.X) / r.Width, (vx1 - r.X) / r.Width,
+                    (int)Math.Ceiling((vx1 - vx0) * scale), r.Width))
             {
-                (pk, count, fa, fb) = (c.DetailPeaks!, c.DetailCount, c.DetailF0, c.DetailF1);
+                (pk, rms, count, fa, fb) = (c.DetailPeaks!, c.DetailRms, c.DetailCount, c.DetailF0, c.DetailF1);
             }
             double span = (fb - fa) * r.Width;
             var adsr = c.Adsr.Fit(c.LengthBeats);
             bool shaped = !adsr.IsIdentity;
+            if (smooth)
+            {
+                double ox = r.X + fa * r.Width, bw = span / count;
+                int i0 = Math.Max(0, (int)Math.Floor((vx0 - ox) / bw) - 1);
+                int i1 = Math.Min(count, (int)Math.Ceiling((vx1 - ox) / bw) + 1);
+                _painter.Begin(scale);
+                for (int i = i0; i < i1; i++)
+                {
+                    double x0 = ox + i * bw;
+                    float g = c.Gain;
+                    if (shaped) g *= (float)adsr.GainAt((x0 + bw / 2 - r.X) / r.Width * c.LengthBeats, c.LengthBeats);
+                    _painter.Add(x0, x0 + bw, Math.Clamp(pk[i * 2] * g, -1f, 1f), Math.Clamp(pk[i * 2 + 1] * g, -1f, 1f),
+                                 rms is null ? -1f : Math.Min(1f, rms[i] * g));
+                }
+                using (ctx.PushClip(new Rect(vx0, r.Y, vx1 - vx0, r.Height)))
+                    _painter.Fill(ctx, mid, amp, WaveformPainter.PeakInk(brush), brush);
+                return;
+            }
             var geo = new StreamGeometry();
             using (var gc = geo.Open())
                 ForEachWaveColumn(r.X, vx0, vx1, (cx0, cx1, x) =>
@@ -1727,18 +1781,19 @@ public sealed partial class ArrangementView
             bool rev = ai.Reversed != 0;
             double a = rev ? 1 - f1 : f0, b = rev ? 1 - f0 : f1;   // file-order fractions of the window
             var buf = c.DetailPeaks is { } old && old.Length >= n * 2 ? old : new float[n * 2];
+            var rms = c.DetailRms is { } oldRms && oldRms.Length >= n ? oldRms : new float[n];
             int got;
             if (ai.WarpEnabled != 0 && ai.WarpBeats > 0)
             {
                 double ps = ai.WarpPlayStart, pe = ai.WarpPlayEnd > 0 ? ai.WarpPlayEnd : ai.WarpBeats;
-                got = eng.GetClipWarpPeaksRange(trackId, c.ClipIndex, ps + a * (pe - ps), ps + b * (pe - ps), buf, n);
+                got = eng.GetClipWarpPeaksRange(trackId, c.ClipIndex, ps + a * (pe - ps), ps + b * (pe - ps), buf, n, rms);
             }
             else
             {
                 double len = ai.LengthFrames;
                 if (len <= 0 && eng.TryGetSampleInfo(ai.SampleId, out var si)) len = si.Frames - ai.SourceOffsetFrames;
                 if (len <= 0) return false;
-                got = eng.GetClipSourcePeaksRange(trackId, c.ClipIndex, ai.SourceOffsetFrames + a * len, ai.SourceOffsetFrames + b * len, buf, n);
+                got = eng.GetClipSourcePeaksRange(trackId, c.ClipIndex, ai.SourceOffsetFrames + a * len, ai.SourceOffsetFrames + b * len, buf, n, rms);
             }
             if (got <= 0) return false;
             if (rev)
@@ -1746,8 +1801,9 @@ public sealed partial class ArrangementView
                 {
                     (buf[i * 2], buf[j * 2]) = (buf[j * 2], buf[i * 2]);
                     (buf[i * 2 + 1], buf[j * 2 + 1]) = (buf[j * 2 + 1], buf[i * 2 + 1]);
+                    (rms[i], rms[j]) = (rms[j], rms[i]);
                 }
-            (c.DetailPeaks, c.DetailCount, c.DetailF0, c.DetailF1) = (buf, got, f0, f1);
+            (c.DetailPeaks, c.DetailRms, c.DetailCount, c.DetailF0, c.DetailF1) = (buf, rms, got, f0, f1);
             return true;
         }
 

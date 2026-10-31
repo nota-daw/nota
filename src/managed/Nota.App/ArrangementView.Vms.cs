@@ -37,6 +37,7 @@ public sealed partial class ArrangementView
         public int LiveRole;     // live-freeze (v1.1): 0 none, 1 sleeping source, 2 linked frozen
         public string Name = "";
         public List<ClipVM> Clips = new();
+        public List<TakeVM> Takes = new();   // loop-recording take lanes (specs/067), audio tracks only
         // Automation (M9-A3): current target + its live-editable envelope.
         public float Volume = 1f;
         public float Pan;
@@ -78,13 +79,17 @@ public sealed partial class ArrangementView
         public double LengthBeats;
         public bool IsMidi;
         public bool Active = true;   // false = deactivated (key 0): stays but silent + greyed
+        public int TakeId;           // the take this comp section came from (specs/067), 0 = none
         public float[]? Peaks;
         public int PeakCount;
+        /// <summary>RMS level per bucket of <see cref="Peaks"/> (null when unknown — an import placeholder).</summary>
+        public float[]? Rms;
         /// <summary>Peaks over just the visible slice [DetailF0, DetailF1] of the clip (fractions
         /// of its played length), at one bucket per pixel — fetched when the clip is drawn wider
         /// than <see cref="Peaks"/> has buckets, so a long or zoomed-in clip doesn't draw as
         /// blocks (#299).</summary>
         public float[]? DetailPeaks;
+        public float[]? DetailRms;
         public int DetailCount;
         public double DetailF0, DetailF1;
         /// <summary>Clip gain (linear) — peaks are raw material, the lane scales them by this.</summary>

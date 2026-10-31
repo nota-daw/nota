@@ -57,10 +57,12 @@ public static class CommandCatalog
         C("view.connectPhone", "Connect phone…", "View", "", "remote mobile qr"),
         C("view.toggleBrowser", "Toggle browser", "View", "", "library sidebar"),
         C("view.toggleDetail", "Toggle detail panel", "View", "", "devices clip"),
+        C("view.maximizeDetail", "Clip editor fills the window", "View", Shortcut.CmdShift('F'), "maximize maximise full detail panel piano roll restore split"),
         C("view.showDevices", "Show devices", "View", "", "chain detail"),
         C("view.popOutDetail", "Open devices in a window", "View", "", "detach float pop out"),
         C("view.toggleOverview", "Toggle overview", "View", "", "minimap", view: "Arrangement"),
         C("view.toggleSections", "Toggle sections", "View", "", "markers locators", view: "Arrangement"),
+        C("edit.resetSectionName", "Reset section name", "Edit", "", "default automatic rename section at playhead", view: "Arrangement"),
         C("view.follow", "Follow playhead", "View", "", "scroll"),
         C("view.showPlayhead", "Show playhead", "View", Shortcut.None('P'), "find locate scroll reveal cursor position", view: "Arrangement"),
         C("view.clipNames", "Cycle clip names", "View", "", "labels", view: "Arrangement"),
@@ -103,6 +105,7 @@ public static class CommandCatalog
         C("roll.fitNotes", "Fit to notes", "Piano roll", Shortcut.Shift('F'), "zoom vertical rows height"),
         C("roll.fold", "Fold the piano roll", "Piano roll", Shortcut.Alt('F').WithShift(), "fold scale rows drum pads names hide keys"),
         C("roll.editSelected", "Edit selected clips together", "Piano roll", "", "multi clip several open piano roll", view: "Arrangement"),
+        C("roll.trackMode", "Toggle clip editor track mode", "Piano roll", "", "track mode whole track all clips every clip piano roll", view: "Arrangement"),
 
         // ---- Grid (the arrangement or the piano roll — whichever was used last) -----------
         C("grid.narrower", "Narrow grid", "Grid", Shortcut.Cmd('1'), "finer smaller snap"),

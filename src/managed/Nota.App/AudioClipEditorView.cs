@@ -3,8 +3,8 @@
 //
 // Detail · Clip for AUDIO clips (nota-design "Nota Clip Editor" 1b): the same frame as the
 // MIDI editor — a 38px header (clip cell, Sample | Envelope, the envelope target while
-// editing one, the snap-grid chip, the file's format) over the 232px inspector (CLIP,
-// PLAYBACK, WARP) and the waveform canvas: a beat ruler, a 22px warp-marker strip, and
+// editing one, the snap-grid chip, the file's format) over the inspector (CLIP, PLAYBACK,
+// WARP; one column or two, specs/055) and the waveform canvas: a beat ruler, a 22px warp-marker strip, and
 // the wave in the track colour, everything past the clip's played region darkened rather
 // than hidden. Envelope and ADSR are modes of the canvas, not checkboxes. ADSR edits the
 // clip's amplitude shape with the same handles the arrangement shows on the clip
@@ -47,8 +47,8 @@ public sealed class AudioClipEditorView : UserControl
     private Action _syncAttack = () => { }, _syncDecay = () => { }, _syncSustain = () => { }, _syncRelease = () => { };
     private ClipAdsr _adsr = ClipAdsr.Identity;
     private int _mode;   // 0 = Sample, 1 = Envelope, 2 = ADSR
-    private readonly ContentControl _inspectorBody = new();
-    private Control _sampleSections = null!, _adsrSections = null!;
+    private ColumnFlow _inspectorFlow = null!;
+    private SectionColumns _sampleSections = null!, _adsrSections = null!;
 
     private double _startBeat;
     private double _lengthBeats = 4;
@@ -91,15 +91,16 @@ public sealed class AudioClipEditorView : UserControl
         _wave.DetailPeaks = (f0, f1, n) =>
         {
             var pk = new float[n * 2];
+            var rms = new float[n];
             int got = 0;
             if (_warpEnabled)
             {
                 if (_engine.TryGetAudioClipInfo(TrackId, ClipIndex, out var wi) && wi.WarpBeats > 0)
-                    got = _engine.GetClipWarpPeaksRange(TrackId, ClipIndex, f0 * wi.WarpBeats, f1 * wi.WarpBeats, pk, n);
+                    got = _engine.GetClipWarpPeaksRange(TrackId, ClipIndex, f0 * wi.WarpBeats, f1 * wi.WarpBeats, pk, n, rms);
             }
             else if (_srcFrames > 0)
-                got = _engine.GetClipSourcePeaksRange(TrackId, ClipIndex, f0 * _srcFrames, f1 * _srcFrames, pk, n);
-            return (pk, got);
+                got = _engine.GetClipSourcePeaksRange(TrackId, ClipIndex, f0 * _srcFrames, f1 * _srcFrames, pk, n, rms);
+            return (pk, rms, got);
         };
         _wave.SourceRegionCommitted = (off, len) =>
         {
@@ -177,8 +178,8 @@ public sealed class AudioClipEditorView : UserControl
 
         _sampleSections = Sections(clip, playback, warp);
         _adsrSections = Sections(adsr);
-        _inspectorBody.Content = _sampleSections;
-        var inspector = Inspector(_inspectorBody, _hint);
+        var inspector = Inspector(_sampleSections, _hint, out _inspectorFlow);
+        DockPanel.SetDock(inspector, Dock.Left);
 
         // Column 1: the waveform (row 0), a horizontal zoom scrollbar (row 1), and a
         // floating overlay (Canvas with null background → clicks pass through except the
@@ -200,15 +201,13 @@ public sealed class AudioClipEditorView : UserControl
 
         var waveHost = new Grid();
         waveHost.Children.Add(_wave);
+        waveHost.Children.Add(_wave.PlayheadLayer);
         waveHost.Children.Add(_overlay);
         var col1 = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), Background = NotaPalette.BgSunken };
         col1.Children.Add(waveHost);
         Grid.SetRow(_hScroll, 1); col1.Children.Add(_hScroll);
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        grid.Children.Add(inspector);
-        Grid.SetColumn(col1, 1);
-        grid.Children.Add(col1);
+        var grid = new DockPanel { Children = { inspector, col1 } };
 
         // Header: Sample | Envelope | ADSR, the target while editing an envelope, Snap, the format.
         var tabs = Segments(new[] { "Sample", "Envelope", "ADSR" }, 0, SetMode, out _);
@@ -220,7 +219,7 @@ public sealed class AudioClipEditorView : UserControl
         _wave.GridChanged += chip.Refresh;
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { snap, HeaderDivider(), _fileText } };
         var name = engine.GetClipName(trackId, clipIndex);
-        var header = Header(clipColor, string.IsNullOrWhiteSpace(name) ? $"Audio {trackId}" : name, "AUDIO", tabs, _envTargetDrop, right);
+        var header = Header(clipColor, string.IsNullOrWhiteSpace(name) ? $"Audio {trackId}" : name, "AUDIO", tabs, _envTargetDrop, right, inspector, _inspectorFlow);
         DockPanel.SetDock(header, Dock.Top);
         Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, grid } };
 
@@ -342,13 +341,14 @@ public sealed class AudioClipEditorView : UserControl
         // Warp markers (only meaningful while warping). Unwarped clips instead show the
         // whole sample with draggable Start/End brackets (source-region editing).
         var peaks = new float[1024 * 2];
+        var rms = new float[1024];
         int markers = 0;
         if (_warpEnabled)
         {
             // Show the FULL warp with markers + Start/End trim brackets (trim the played
             // window without stretching).
-            int n = _engine.GetClipWarpFullPeaks(TrackId, ClipIndex, peaks, 1024);
-            _wave.SetPeaks(peaks, n);
+            int n = _engine.GetClipWarpFullPeaks(TrackId, ClipIndex, peaks, 1024, rms);
+            _wave.SetPeaks(peaks, rms, n);
             var ms = new double[128]; var mb = new double[128];
             markers = Math.Min(_engine.GetClipWarpMarkers(TrackId, ClipIndex, ms, mb), 128);
             _wave.SetMarkers(ms, mb, markers);
@@ -360,8 +360,8 @@ public sealed class AudioClipEditorView : UserControl
         else
         {
             _wave.SetWarpTrim(0, 0, 0);       // warp trim brackets off (unwarped)
-            int n = _engine.GetClipSourcePeaks(TrackId, ClipIndex, peaks, 1024);
-            _wave.SetPeaks(peaks, n);
+            int n = _engine.GetClipSourcePeaks(TrackId, ClipIndex, peaks, 1024, rms);
+            _wave.SetPeaks(peaks, rms, n);
             _wave.SetMarkers(Array.Empty<double>(), Array.Empty<double>(), 0);
             _mkSrc = _mkBeat = Array.Empty<double>();
             if (haveSample)
@@ -608,7 +608,7 @@ public sealed class AudioClipEditorView : UserControl
         _envTargetDrop.IsVisible = _envMode;
         _wave.SetEnvMode(_envMode);
         _wave.SetAdsrMode(mode == 2);
-        _inspectorBody.Content = mode == 2 ? _adsrSections : _sampleSections;
+        _inspectorFlow.Body = mode == 2 ? _adsrSections : _sampleSections;
         PaintHint();
     }
 
@@ -711,8 +711,10 @@ public sealed class AudioClipEditorView : UserControl
         private const double RulerH = 24, StripH = 22, WaveTop = RulerH + StripH;
         private const int BeatsPerBar = 4;   // matches the props-rail bar.beat readouts
         private IBrush _wave = NotaPalette.TrackBrushes[1];
-        private float[]? _peaks;
+        private float[]? _peaks, _rms;
         private int _count;
+        private readonly WaveformPainter _painter = new();
+        private double _scale = 1;   // device pixels per DIP, as of the last render
         private double _frac = -1;
         private double _gain = 1.0;
         private readonly System.Collections.Generic.List<(double src, double beat)> _mk = new();
@@ -731,7 +733,7 @@ public sealed class AudioClipEditorView : UserControl
         public void SetPlacement(double startBeat, double lengthBeats, bool isSlot)
         {
             _placeStart = startBeat; _placeLen = Math.Max(1e-6, lengthBeats); _slot = isSlot;
-            InvalidateVisual();
+            Redraw();
         }
         private ClipTimeMap Map
             => _srcMode && _srcTotal > 0
@@ -741,6 +743,31 @@ public sealed class AudioClipEditorView : UserControl
                     : new ClipTimeMap(_placeStart, _placeLen, ClipContentDomain.WarpBeats, 1, 0, 1, _reversed, _slot);
         private double PlayheadX(double w) => FracToX(Map.ContentAtPlayFrac(_frac), w);
         private bool PlayheadShown => _frac >= 0 && _frac <= 1;
+
+        // The playback cursor is drawn on its own hit-transparent layer stacked over this view
+        // (the host adds it), so a transport tick repaints one line instead of the whole wave,
+        // ruler and markers (#142). Anything that repaints the view repaints the layer too.
+        public Control PlayheadLayer { get; }
+        public WaveformView() => PlayheadLayer = new PlayheadOverlay(this);
+        private void Redraw()
+        {
+            InvalidateVisual();
+            PlayheadLayer.InvalidateVisual();
+        }
+
+        private sealed class PlayheadOverlay : Control
+        {
+            private readonly WaveformView _v;
+            public PlayheadOverlay(WaveformView v) { _v = v; IsHitTestVisible = false; ClipToBounds = true; }
+            public override void Render(DrawingContext ctx)
+            {
+                if (!_v.PlayheadShown) return;
+                // _frac runs over the PLAYED window, so on a reversed clip it walks the region
+                // from its end back to its start (which the mirror then draws left-to-right).
+                double x = _v.PlayheadX(_v.Bounds.Width);
+                ctx.DrawLine(PlayheadPen, new Point(x, 0), new Point(x, _v.Bounds.Height));
+            }
+        }
         private bool OnPlayheadLine(double x, double w) => PlayheadShown && Math.Abs(x - PlayheadX(w)) <= PlayheadGrabPx;
 
         private double _srcSR;              // source sample rate (for per-marker BPM)
@@ -778,18 +805,18 @@ public sealed class AudioClipEditorView : UserControl
         private double SnapWarp(double beat) => SnapOn(beat, WarpGrid);
         private double SnapEnv(double beat) => SnapOn(beat, EnvGrid);
 
-        private void OnGrid(EditorKind k) { if (k == EditorKind.PianoRoll) InvalidateVisual(); }
+        private void OnGrid(EditorKind k) { if (k == EditorKind.PianoRoll) Redraw(); }
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
             EditorGrids.Shared.Changed += OnGrid;
-            RulerDisplay.Changed += InvalidateVisual;
+            RulerDisplay.Changed += Redraw;
         }
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnDetachedFromVisualTree(e);
             EditorGrids.Shared.Changed -= OnGrid;
-            RulerDisplay.Changed -= InvalidateVisual;
+            RulerDisplay.Changed -= Redraw;
         }
         private const double MinSrcFrames = 256;
         private static readonly Cursor ArrowCur = new(StandardCursorType.Arrow);
@@ -833,12 +860,12 @@ public sealed class AudioClipEditorView : UserControl
         /// <summary>Raised when an ADSR handle drag ends (or a handle is reset) with the new shape.</summary>
         public Action<ClipAdsr>? AdsrCommitted;
 
-        public void SetAdsrMode(bool on) { _adsrMode = on; _adsrHover = AdsrHandle.None; Cursor = ArrowCur; _curKind = StandardCursorType.Arrow; InvalidateVisual(); }
+        public void SetAdsrMode(bool on) { _adsrMode = on; _adsrHover = AdsrHandle.None; Cursor = ArrowCur; _curKind = StandardCursorType.Arrow; Redraw(); }
         public void SetAdsr(ClipAdsr a, double lenBeats, double bpm)
         {
             if (_adsrDrag != AdsrHandle.None) return;   // don't yank a handle out from under the hand
             _adsr = a; _adsrLen = Math.Max(1e-6, lenBeats); _bpm = bpm;
-            InvalidateVisual();
+            Redraw();
         }
 
         // The played region on screen (left→right in playing order) over the wave's value axis.
@@ -867,7 +894,7 @@ public sealed class AudioClipEditorView : UserControl
             _trimStart = playStart;
             _trimEnd = playEnd > 0 ? Math.Min(playEnd, warpBeats) : warpBeats;
             _trimMode = warpBeats > 0;
-            InvalidateVisual();
+            Redraw();
         }
         /// <summary>Raised on a click on a segment BPM label: (segmentIndex, currentBpm, xCenterPx, yTopPx).</summary>
         public Action<int, double, double, double>? BpmEditRequested;
@@ -887,7 +914,7 @@ public sealed class AudioClipEditorView : UserControl
             double newBeatSpan = Math.Max(0.05, bpm * srcSpan / (60.0 * _srcSR));
             double delta = newBeatSpan - (_mk[seg + 1].beat - _mk[seg].beat);
             for (int j = seg + 1; j < _mk.Count; j++) _mk[j] = (_mk[j].src, _mk[j].beat + delta);
-            if (commit) Commit(); else InvalidateVisual();
+            if (commit) Commit(); else Redraw();
         }
         public void SetSegmentBpm(int seg, double bpm) => ApplySegmentBpm(seg, bpm, commit: true);
 
@@ -897,7 +924,7 @@ public sealed class AudioClipEditorView : UserControl
         {
             _srcTotal = totalFrames; _srcOff = offsetFrames; _srcLen = lengthFrames;
             _srcMode = totalFrames > 0;
-            InvalidateVisual();
+            Redraw();
         }
 
         // Horizontal zoom/scroll over a normalised clip axis (frac 0..1 spans the whole
@@ -914,7 +941,7 @@ public sealed class AudioClipEditorView : UserControl
         public double Zoom => _zoom;
         public double ScrollFrac => _scrollFrac;
         public double MaxScrollFrac => Math.Max(0, 1.0 - 1.0 / _zoom);
-        public void SetScroll(double frac) { _scrollFrac = Math.Clamp(frac, 0, MaxScrollFrac); InvalidateVisual(); }
+        public void SetScroll(double frac) { _scrollFrac = Math.Clamp(frac, 0, MaxScrollFrac); Redraw(); }
 
         // Reverse: the clip is drawn MIRRORED, so the screen always reads left-to-right in
         // playing order — a reversed clip's audible head (the region's end) sits on the left.
@@ -923,7 +950,7 @@ public sealed class AudioClipEditorView : UserControl
         // every hit-test/drag keeps working in content coordinates. The zoom/scroll window
         // lives in VIEW space, hence the separate …View pair.
         private bool _reversed;
-        public void SetReversed(bool on) { if (_reversed == on) return; _reversed = on; InvalidateVisual(); }
+        public void SetReversed(bool on) { if (_reversed == on) return; _reversed = on; Redraw(); }
         private double Mirror(double f) => _reversed ? 1.0 - f : f;   // involution: content <-> view
         private double FracToXView(double vf, double w) => (vf - _scrollFrac) * _zoom * w;
         private double XToFracView(double x, double w) => x / Math.Max(1, _zoom * w) + _scrollFrac;
@@ -933,14 +960,14 @@ public sealed class AudioClipEditorView : UserControl
         private double SrcToX(double frame, double w) => _srcTotal > 0 ? FracToX(frame / _srcTotal, w) : 0;
         private double XToSrc(double x, double w) => Math.Clamp(XToFrac(x, w), 0, 1) * _srcTotal;
 
-        public void SetEnvMode(bool on) { _envMode = on; InvalidateVisual(); }
+        public void SetEnvMode(bool on) { _envMode = on; Redraw(); }
         public void SetEnvelope(double[] beats, double[] values, float[] curves, double clipBeats, double min, double max)
         {
             _clipBeats = Math.Max(1e-6, clipBeats);
             _envMin = min; _envMax = max;
             _env.Clear();
             for (int i = 0; i < beats.Length; i++) _env.Add(new EnvPt { beat = beats[i], val = values[i], curve = curves[i] });
-            InvalidateVisual();
+            Redraw();
         }
         // The clip envelope is authored in PLAYED time (the renderer evaluates it against the
         // timeline position), so it always runs left-to-right — it must NOT mirror with the
@@ -988,12 +1015,12 @@ public sealed class AudioClipEditorView : UserControl
             EnvelopeCommitted?.Invoke(beats, vals, curves);
         }
 
-        public void SetColor(IBrush b) { _wave = b; InvalidateVisual(); }
-        public void SetPeaks(float[] peaks, int count) { _peaks = peaks; _count = count; ClearDetail(); InvalidateVisual(); }
+        public void SetColor(IBrush b) { _wave = b; Redraw(); }
+        public void SetPeaks(float[] peaks, float[]? rms, int count) { _peaks = peaks; _rms = rms; _count = count; ClearDetail(); Redraw(); }
         public void SetPlayhead(double frac)
         {
             if (Math.Abs(frac - _frac) < 1e-4) return;
-            _frac = frac; InvalidateVisual();
+            _frac = frac; PlayheadLayer.InvalidateVisual();
         }
         public void SetMarkers(double[] src, double[] beat, int count)
         {
@@ -1003,9 +1030,9 @@ public sealed class AudioClipEditorView : UserControl
             _cSrc = src[..count]; _cBeat = beat[..count];
             if (_lBeat.Length != count) _lBeat = new double[count];
             if (_selMk >= _mk.Count) _selMk = -1;
-            InvalidateVisual();
+            Redraw();
         }
-        public void SetGain(double g) { if (Math.Abs(g - _gain) < 1e-4) return; _gain = g; InvalidateVisual(); }
+        public void SetGain(double g) { if (Math.Abs(g - _gain) < 1e-4) return; _gain = g; Redraw(); }
 
         // Live warp preview (#140): while markers move (a marker drag, a segment-tempo scrub, the
         // Tempo field) the peaks the engine laid out under the committed markers are re-timed on
@@ -1026,7 +1053,7 @@ public sealed class AudioClipEditorView : UserControl
         {
             if (beats.Length != _mk.Count) return;
             for (int i = 0; i < beats.Length; i++) _mk[i] = (_mk[i].src, beats[i]);
-            InvalidateVisual();
+            Redraw();
         }
         /// <summary>Drop a marker drag or segment-tempo scrub: back to the committed markers.</summary>
         public bool CancelGesture()
@@ -1042,7 +1069,7 @@ public sealed class AudioClipEditorView : UserControl
                 for (int i = 0; i < _mk.Count; i++) _mk[i] = (_cSrc[i], _cBeat[i]);
             var p = _gesturePointer; _gesturePointer = null;
             p?.Capture(null);
-            InvalidateVisual();
+            Redraw();
         }
 
         // Markers map in the BEAT domain, matching the warped waveform drawn across
@@ -1118,7 +1145,7 @@ public sealed class AudioClipEditorView : UserControl
                     e.Pointer.Capture(this);
                 }
                 e.Handled = true;
-                InvalidateVisual();
+                Redraw();
                 return;
             }
 
@@ -1151,14 +1178,14 @@ public sealed class AudioClipEditorView : UserControl
                 int hit = HitEnv(p.X, p.Y, W, H);
                 if (hit >= 0)
                 {
-                    if (right || e.ClickCount == 2) { _env.RemoveAt(hit); CommitEnv(); InvalidateVisual(); }
+                    if (right || e.ClickCount == 2) { _env.RemoveAt(hit); CommitEnv(); Redraw(); }
                     else { _envDrag = hit; e.Pointer.Capture(this); }
                     e.Handled = true;
                     return;
                 }
                 if (HitEnvSegment(p.X, p.Y, W, H) is { } seg)   // bend / reset a segment (M9-D)
                 {
-                    if (right || e.ClickCount == 2) { seg.curve = 0f; CommitEnv(); InvalidateVisual(); }
+                    if (right || e.ClickCount == 2) { seg.curve = 0f; CommitEnv(); Redraw(); }
                     else { _envBend = seg; e.Pointer.Capture(this); }
                     e.Handled = true;
                     return;
@@ -1169,7 +1196,7 @@ public sealed class AudioClipEditorView : UserControl
                 _envDrag = _env.IndexOf(np);
                 e.Pointer.Capture(this);
                 e.Handled = true;
-                InvalidateVisual();
+                Redraw();
                 return;
             }
 
@@ -1208,7 +1235,7 @@ public sealed class AudioClipEditorView : UserControl
                 return;
             }
             int h = HitMarker(x, w);
-            if (h != _selMk) { _selMk = h; InvalidateVisual(); }   // a click picks a marker (or clears the pick)
+            if (h != _selMk) { _selMk = h; Redraw(); }   // a click picks a marker (or clears the pick)
             if (h > 0 && h < _mk.Count - 1) { _drag = h; e.Pointer.Capture(this); _gesturePointer = e.Pointer; e.Handled = true; }
         }
 
@@ -1233,7 +1260,7 @@ public sealed class AudioClipEditorView : UserControl
                 _scrollFrac = Math.Clamp(_scrollFrac - WheelInput.Notches(d) * 0.12 / _zoom, 0, MaxScrollFrac);
             }
             ViewChanged?.Invoke();
-            InvalidateVisual();
+            Redraw();
             e.Handled = true;
         }
 
@@ -1256,13 +1283,13 @@ public sealed class AudioClipEditorView : UserControl
                 double beat = _adsrAnchorBeat + dx / Math.Max(1, f.Right - f.Left) * _adsrLen;
                 double level = _adsrAnchorLevel - dy / Math.Max(1, f.Bottom - f.Top);
                 _adsr = ClipAdsrKit.Drag(_adsrDrag, _adsrStart, beat, level, _adsrLen);
-                InvalidateVisual();
+                Redraw();
                 return;
             }
             if (_adsrMode)   // ADSR mode: light the handle under the pointer
             {
                 var hv = ClipAdsrKit.Hit(e.GetPosition(this), AdsrFrameNow(Bounds.Width, Bounds.Height), _adsr);
-                if (hv != _adsrHover) { _adsrHover = hv; InvalidateVisual(); }
+                if (hv != _adsrHover) { _adsrHover = hv; Redraw(); }
                 Cursor = hv != AdsrHandle.None ? HandCur : ArrowCur;
                 _curKind = StandardCursorType.Arrow;
                 return;
@@ -1281,7 +1308,7 @@ public sealed class AudioClipEditorView : UserControl
                 var p = e.GetPosition(this);
                 _env[_envDrag].beat = SnapEnv(EnvXToBeat(p.X, Bounds.Width));
                 _env[_envDrag].val = EnvYToVal(p.Y, Bounds.Height);
-                InvalidateVisual();
+                Redraw();
                 return;
             }
             if (_envBend is { } bl)
@@ -1299,7 +1326,7 @@ public sealed class AudioClipEditorView : UserControl
                         double ee = Math.Log(frac) / Math.Log(0.5);
                         bl.curve = (float)Math.Clamp(-Math.Log2(ee) / 4.0, -1.0, 1.0);
                     }
-                    InvalidateVisual();
+                    Redraw();
                 }
                 return;
             }
@@ -1309,7 +1336,7 @@ public sealed class AudioClipEditorView : UserControl
                 double f = XToSrc(e.GetPosition(this).X, sw);
                 if (_srcDrag == 0) _srcOff = Math.Clamp(f, 0, _srcOff + _srcLen - MinSrcFrames);
                 else { double end = Math.Clamp(f, _srcOff + MinSrcFrames, _srcTotal); _srcLen = end - _srcOff; }
-                InvalidateVisual();
+                Redraw();
                 return;
             }
             if (_trimDrag >= 0)   // warped trim brackets (beat domain)
@@ -1319,14 +1346,14 @@ public sealed class AudioClipEditorView : UserControl
                 bt = SnapWarp(bt);   // land the edge exactly on the grid (Alt / snap off: free)
                 if (_trimDrag == 0) _trimStart = Math.Clamp(bt, 0, _trimEnd - minBeat);
                 else _trimEnd = Math.Clamp(bt, _trimStart + minBeat, _trimTotal);
-                InvalidateVisual();
+                Redraw();
                 return;
             }
             if (_envMode && _drag < 0)   // envelope mode: light the node under the pointer
             {
                 var ep = e.GetPosition(this);
                 int hv = HitEnv(ep.X, ep.Y, Bounds.Width, Bounds.Height);
-                if (hv != _envHover) { _envHover = hv; InvalidateVisual(); }
+                if (hv != _envHover) { _envHover = hv; Redraw(); }
                 return;
             }
             if (_drag < 0)   // no active drag: track hover for marker/bracket highlight + cursor
@@ -1338,7 +1365,7 @@ public sealed class AudioClipEditorView : UserControl
             double b = SnapWarp(XToBeat(e.GetPosition(this).X, w));   // align to the grid
             double lo = _mk[_drag - 1].beat + 1e-3, hi = _mk[_drag + 1].beat - 1e-3;  // stay between neighbours
             _mk[_drag] = (_mk[_drag].src, Math.Clamp(b, lo, hi));   // source fixed; beat moves (warp)
-            InvalidateVisual();
+            Redraw();
         }
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -1349,7 +1376,7 @@ public sealed class AudioClipEditorView : UserControl
                 _adsrDrag = AdsrHandle.None;
                 e.Pointer.Capture(null);
                 if (!_adsr.Equals(_adsrStart)) AdsrCommitted?.Invoke(_adsr);
-                InvalidateVisual();
+                Redraw();
                 return;
             }
             if (_bpmScrubSeg >= 0)   // push the scrubbed warp (one undo step) — only if it was dragged
@@ -1357,7 +1384,7 @@ public sealed class AudioClipEditorView : UserControl
                 _bpmScrubSeg = -1; _gesturePointer = null; e.Pointer.Capture(null);
                 if (_bpmScrubMoved) Commit();
                 _bpmScrubMoved = false;
-                InvalidateVisual();
+                Redraw();
                 return;
             }
             if (_envDrag >= 0 || _envBend is not null) { _envDrag = -1; _envBend = null; e.Pointer.Capture(null); CommitEnv(); return; }
@@ -1380,7 +1407,7 @@ public sealed class AudioClipEditorView : UserControl
         protected override void OnPointerExited(PointerEventArgs e)
         {
             if (_hoverMk != -1 || _bpmHoverSeg != -1 || _envHover != -1 || _adsrHover != AdsrHandle.None)
-            { _hoverMk = -1; _bpmHoverSeg = -1; _envHover = -1; _adsrHover = AdsrHandle.None; InvalidateVisual(); }
+            { _hoverMk = -1; _bpmHoverSeg = -1; _envHover = -1; _adsrHover = AdsrHandle.None; Redraw(); }
             SetCursorKind(StandardCursorType.Arrow);
             base.OnPointerExited(e);
         }
@@ -1405,7 +1432,7 @@ public sealed class AudioClipEditorView : UserControl
             double x = p.X;
             int bpmHover = -1;
             foreach (var b in _bpmHot) if (b.rect.Contains(p)) { bpmHover = b.seg; break; }
-            if (bpmHover != _bpmHoverSeg) { _bpmHoverSeg = bpmHover; InvalidateVisual(); }
+            if (bpmHover != _bpmHoverSeg) { _bpmHoverSeg = bpmHover; Redraw(); }
             if (bpmHover >= 0) { SetCursorKind(StandardCursorType.SizeNorthSouth); return; }
 
             bool overHandle = false;
@@ -1424,10 +1451,10 @@ public sealed class AudioClipEditorView : UserControl
                 if (!overHandle && _mk.Count >= 2)
                 {
                     int hv = HitMarker(x, w);
-                    if (hv != _hoverMk) { _hoverMk = hv; InvalidateVisual(); }
+                    if (hv != _hoverMk) { _hoverMk = hv; Redraw(); }
                     overHandle = hv > 0 && hv < _mk.Count - 1;   // only interior markers drag
                 }
-                else if (overHandle && _hoverMk != -1) { _hoverMk = -1; InvalidateVisual(); }
+                else if (overHandle && _hoverMk != -1) { _hoverMk = -1; Redraw(); }
             }
             SetCursorKind(overHandle ? StandardCursorType.SizeWestEast : StandardCursorType.Arrow);
         }
@@ -1501,15 +1528,15 @@ public sealed class AudioClipEditorView : UserControl
         // The overview (_peaks) spans the whole clip at a fixed resolution; zoomed in, the
         // host fetches peaks for just the visible slice (padded a screen either side so a
         // scroll doesn't refetch at once). Content (file-order) fracs, like the overview.
-        /// <summary>Set by the host: peaks over content fracs [f0, f1] at n buckets → (peaks, count).</summary>
-        public Func<double, double, int, (float[] peaks, int count)>? DetailPeaks;
-        private float[]? _dPeaks;
+        /// <summary>Set by the host: peaks over content fracs [f0, f1] at n buckets → (peaks, rms, count).</summary>
+        public Func<double, double, int, (float[] peaks, float[]? rms, int count)>? DetailPeaks;
+        private float[]? _dPeaks, _dRms;
         private int _dCount;
         private double _dF0, _dF1;
         private bool _detailQueued;
-        private const double DetailPx = 1.5;   // overview buckets wider than this → fetch detail
+        private const double DetailPx = 1.5;   // overview buckets wider than this many device pixels → fetch detail
 
-        private void ClearDetail() { _dPeaks = null; _dCount = 0; }
+        private void ClearDetail() { _dPeaks = null; _dRms = null; _dCount = 0; }
 
         // Visible content-frac range (mirrored back when the clip is drawn reversed).
         private (double f0, double f1) VisibleContent(double w)
@@ -1521,7 +1548,7 @@ public sealed class AudioClipEditorView : UserControl
         private bool DetailCovers(double f0, double f1, double w)
         {
             if (_dPeaks is null || _dCount <= 0 || _dF0 > f0 + 1e-12 || _dF1 < f1 - 1e-12) return false;
-            double px = (_dF1 - _dF0) * _zoom * w / _dCount;   // detail bucket width at this zoom
+            double px = (_dF1 - _dF0) * _zoom * w * _scale / _dCount;   // detail bucket width at this zoom, device px
             return px <= DetailPx * 1.01 && px >= 0.25;         // fine enough, and not zoomed far back out
         }
 
@@ -1538,54 +1565,62 @@ public sealed class AudioClipEditorView : UserControl
                 double span = b - a;
                 if (span <= 0) return;
                 double p0 = Math.Max(0, a - span), p1 = Math.Min(1, b + span);
-                int n = (int)Math.Clamp(Math.Ceiling((p1 - p0) * _zoom * ww), 1, MaxDetail);
+                double dev = _zoom * ww * _scale;   // device pixels per unit of content frac
+                int n = (int)Math.Clamp(Math.Ceiling((p1 - p0) * dev), 1, MaxDetail);
                 // Too wide a slice for one fetch → just the visible part.
-                if ((p1 - p0) * _zoom * ww / n > DetailPx) { p0 = a; p1 = b; n = (int)Math.Clamp(Math.Ceiling(span * _zoom * ww), 1, MaxDetail); }
-                var (pk, cnt) = DetailPeaks(p0, p1, n);
+                if ((p1 - p0) * dev / n > DetailPx) { p0 = a; p1 = b; n = (int)Math.Clamp(Math.Ceiling(span * dev), 1, MaxDetail); }
+                var (pk, rms, cnt) = DetailPeaks(p0, p1, n);
                 if (cnt <= 0) return;
-                _dPeaks = pk; _dCount = cnt; _dF0 = p0; _dF1 = p1;
-                InvalidateVisual();
+                _dPeaks = pk; _dRms = rms; _dCount = cnt; _dF0 = p0; _dF1 = p1;
+                Redraw();
             }, DispatcherPriority.Background);
         }
         private const int MaxDetail = 8192;   // the engine's range-peaks cap
 
         // Peaks whose buckets evenly span content fracs [f0, f1], drawn through the zoom/
         // scroll (and mirror) axis; only the visible buckets are visited.
-        private void DrawPeaks(DrawingContext ctx, float[] peaks, int count, double f0, double f1, double w,
+        private void DrawPeaks(DrawingContext ctx, float[] peaks, float[]? rms, int count, double f0, double f1, double w,
                                double mid, double wh, AdsrFrame adsrF, ClipAdsr adsrFit, bool shaped)
         {
             double amp = wh / 2 - 6;
             double span = f1 - f0;
             if (span <= 0) return;
-            if (Remapped) { DrawPeaksRemapped(ctx, peaks, count, f0, f1, w, mid, amp, adsrF, adsrFit, shaped); return; }
-            double bwRaw = span * _zoom * w / count;
-            double bw = Math.Max(1, bwRaw);
-            var (c0, c1) = VisibleContent(w);
-            int i0 = Math.Max(0, (int)Math.Floor((c0 - f0) / span * count) - 1);
-            int i1 = Math.Min(count - 1, (int)Math.Ceiling((c1 - f0) / span * count) + 1);
-            for (int i = i0; i <= i1; i++)
+            _painter.Begin(_scale);
+            if (Remapped) AddPeaksRemapped(peaks, rms, count, f0, f1, w, adsrF, adsrFit, shaped);
+            else
             {
-                // FracToX marks the bucket's leading edge — its RIGHT edge once mirrored.
-                double fx = FracToX(f0 + span * i / count, w);
-                if (_reversed) fx -= bwRaw;
-                if (fx + bw < 0 || fx > w) continue;
-                // The ADSR shapes the played region the way it sounds (outside it is darkened anyway).
-                double g = _gain;
-                if (shaped)
+                double bw = span * _zoom * w / count;
+                var (c0, c1) = VisibleContent(w);
+                int i0 = Math.Max(0, (int)Math.Floor((c0 - f0) / span * count) - 1);
+                int i1 = Math.Min(count - 1, (int)Math.Ceiling((c1 - f0) / span * count) + 1);
+                for (int i = i0; i <= i1; i++)
                 {
-                    double bt = adsrF.Beat(fx + bw / 2);
-                    if (bt >= 0 && bt <= _adsrLen) g *= adsrFit.GainAt(bt, _adsrLen);
+                    // FracToX marks the bucket's leading edge — its RIGHT edge once mirrored.
+                    double fx = FracToX(f0 + span * i / count, w);
+                    if (_reversed) fx -= bw;
+                    AddBucket(peaks, rms, i, fx, fx + bw, adsrF, adsrFit, shaped);
                 }
-                float mn = (float)Math.Clamp(peaks[i * 2] * g, -1.0, 1.0);
-                float mx = (float)Math.Clamp(peaks[i * 2 + 1] * g, -1.0, 1.0);
-                ctx.FillRectangle(_wave, new Rect(fx, mid - mx * amp, bw, Math.Max(1, (mx - mn) * amp)));
             }
+            _painter.Fill(ctx, mid, amp, WaveformPainter.PeakInk(_wave), _wave);
+        }
+
+        private void AddBucket(float[] peaks, float[]? rms, int i, double x0, double x1, AdsrFrame adsrF, ClipAdsr adsrFit, bool shaped)
+        {
+            // The ADSR shapes the played region the way it sounds (outside it is darkened anyway).
+            double g = _gain;
+            if (shaped)
+            {
+                double bt = adsrF.Beat((x0 + x1) / 2);
+                if (bt >= 0 && bt <= _adsrLen) g *= adsrFit.GainAt(bt, _adsrLen);
+            }
+            _painter.Add(x0, x1, (float)Math.Clamp(peaks[i * 2] * g, -1.0, 1.0), (float)Math.Clamp(peaks[i * 2 + 1] * g, -1.0, 1.0),
+                         rms is null ? -1f : (float)Math.Min(1.0, rms[i] * g));
         }
 
         // The peaks re-timed to the live markers: each bucket's committed beat span is carried to
         // where the live markers put that audio, so the wave stretches with the drag.
-        private void DrawPeaksRemapped(DrawingContext ctx, float[] peaks, int count, double f0, double f1, double w,
-                                       double mid, double amp, AdsrFrame adsrF, ClipAdsr adsrFit, bool shaped)
+        private void AddPeaksRemapped(float[] peaks, float[]? rms, int count, double f0, double f1, double w,
+                                      AdsrFrame adsrF, ClipAdsr adsrFit, bool shaped)
         {
             for (int i = 0; i < _mk.Count; i++) _lBeat[i] = _mk[i].beat;
             double oldTotal = _cBeat[^1], span = f1 - f0;
@@ -1595,18 +1630,10 @@ public sealed class AudioClipEditorView : UserControl
             for (int i = 0; i < count; i++)
             {
                 double xb = XAtBucket(i + 1);
-                double lo = Math.Min(xa, xb), bw = Math.Max(1, Math.Abs(xb - xa));
+                double lo = Math.Min(xa, xb), hi = Math.Max(xa, xb);
                 xa = xb;
-                if (lo + bw < 0 || lo > w) continue;
-                double g = _gain;
-                if (shaped)
-                {
-                    double bt = adsrF.Beat(lo + bw / 2);
-                    if (bt >= 0 && bt <= _adsrLen) g *= adsrFit.GainAt(bt, _adsrLen);
-                }
-                float mn = (float)Math.Clamp(peaks[i * 2] * g, -1.0, 1.0);
-                float mx = (float)Math.Clamp(peaks[i * 2 + 1] * g, -1.0, 1.0);
-                ctx.FillRectangle(_wave, new Rect(lo, mid - mx * amp, bw, Math.Max(1, (mx - mn) * amp)));
+                if (hi < 0 || lo > w) continue;
+                AddBucket(peaks, rms, i, lo, hi, adsrF, adsrFit, shaped);
             }
         }
 
@@ -1658,6 +1685,7 @@ public sealed class AudioClipEditorView : UserControl
             // Zoomed in, buckets, markers and the playhead can sit past either edge: keep every
             // stroke inside the editor instead of over the inspector or the panel beside it.
             using var bounds = ctx.PushClip(new Rect(0, 0, w, h));
+            _scale = WaveformPainter.Scale(this);
             double top = WaveTop, wh = Math.Max(0, h - top);
             ctx.FillRectangle(Bg, new Rect(0, 0, w, h));
             _bpmHot.Clear();
@@ -1704,12 +1732,12 @@ public sealed class AudioClipEditorView : UserControl
                 // detail keeps drawing wherever it reaches (it's still far finer than the
                 // overview), so zooming never flashes back to the overview's wide blocks.
                 var (c0, c1) = VisibleContent(w);
-                bool coarse = _zoom * w / _count > DetailPx;
+                bool coarse = _zoom * w * _scale / _count > DetailPx;
                 if (coarse && !DetailCovers(c0, c1, w)) RequestDetail();
                 bool useDetail = coarse && _dPeaks is not null && _dCount > 0
                                  && (_dF1 - _dF0) / _dCount < 1.0 / _count && _dF1 > c0 && _dF0 < c1;
                 if (!useDetail)
-                    DrawPeaks(ctx, _peaks, _count, 0, 1, w, mid, wh, adsrF, adsrFit, shaped);
+                    DrawPeaks(ctx, _peaks, _rms, _count, 0, 1, w, mid, wh, adsrF, adsrFit, shaped);
                 else
                 {
                     // The overview only outside the detail's span, the detail inside it.
@@ -1717,12 +1745,12 @@ public sealed class AudioClipEditorView : UserControl
                     if (xa > xb) (xa, xb) = (xb, xa);
                     if (xa > 0)
                         using (ctx.PushClip(new Rect(0, top, xa, wh)))
-                            DrawPeaks(ctx, _peaks, _count, 0, 1, w, mid, wh, adsrF, adsrFit, shaped);
+                            DrawPeaks(ctx, _peaks, _rms, _count, 0, 1, w, mid, wh, adsrF, adsrFit, shaped);
                     if (xb < w)
                         using (ctx.PushClip(new Rect(xb, top, w - xb, wh)))
-                            DrawPeaks(ctx, _peaks, _count, 0, 1, w, mid, wh, adsrF, adsrFit, shaped);
+                            DrawPeaks(ctx, _peaks, _rms, _count, 0, 1, w, mid, wh, adsrF, adsrFit, shaped);
                     using (ctx.PushClip(new Rect(Math.Max(0, xa), top, Math.Max(0, Math.Min(w, xb) - Math.Max(0, xa)), wh)))
-                        DrawPeaks(ctx, _dPeaks!, _dCount, _dF0, _dF1, w, mid, wh, adsrF, adsrFit, shaped);
+                        DrawPeaks(ctx, _dPeaks!, _dRms, _dCount, _dF0, _dF1, w, mid, wh, adsrF, adsrFit, shaped);
                 }
             }
 
@@ -1865,14 +1893,6 @@ public sealed class AudioClipEditorView : UserControl
             }
             else if (shaped && !_envMode)
                 ClipAdsrKit.DrawCurve(ctx, adsrF, adsrFit, EnvPenDim);
-
-            if (_frac >= 0 && _frac <= 1)
-            {
-                // _frac runs over the PLAYED window, so on a reversed clip it walks the region
-                // from its end back to its start (which the mirror then draws left-to-right).
-                double x = PlayheadX(w);
-                ctx.DrawLine(PlayheadPen, new Point(x, 0), new Point(x, h));
-            }
         }
 
         // Local ruler (a Session slot): bar.beat over the warp's beats, or seconds over the source when unwarped.

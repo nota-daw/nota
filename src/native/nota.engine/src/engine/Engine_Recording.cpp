@@ -437,6 +437,8 @@ void Engine::beginCaptureLayout() {
     captureWrapped_ = false;
     captureWritePos_ = 0;
     captureOrigin_ = 0;
+    capturePasses_.clear();
+    capturePassFrom_ = 0;
     if (!recordSessionAudio_ && loopEnabled_ && loopEnd_ > loopStart_) activateLoopPunch(audioRecordStartBeat_);
 }
 
@@ -460,6 +462,22 @@ void Engine::activateLoopPunch(double atBeat) {
     captureWrapped_ = false;
     audioCaptureBuf_.assign(captureLoopFrames_ * 2, 0.0f); // fresh loop-region buffer, zeroed
     captureLoop_ = true;
+    capturePasses_.clear();
+    capturePassFrom_ = captureOrigin_;
+}
+
+// The pass that started at capturePassFrom_ ends at `to`: keep a copy as a future take
+// (specs/067) before the next pass overwrites the loop buffer. Message thread (the drain).
+void Engine::finishLoopPass(size_t to) {
+    if (to <= capturePassFrom_ || captureLoopFrames_ == 0) return;
+    LoopPass p;
+    p.buf.assign(captureLoopFrames_ * 2, 0.0f);
+    std::copy(audioCaptureBuf_.begin() + static_cast<std::ptrdiff_t>(capturePassFrom_ * 2),
+              audioCaptureBuf_.begin() + static_cast<std::ptrdiff_t>(to * 2),
+              p.buf.begin() + static_cast<std::ptrdiff_t>(capturePassFrom_ * 2));
+    p.from = capturePassFrom_;
+    p.to = to;
+    capturePasses_.push_back(std::move(p));
 }
 
 double Engine::audioRecordLengthBeats() const {
@@ -502,8 +520,10 @@ void Engine::drainInputQueue() {
             audioCaptureBuf_[idx] = captureScratch_[i * 2];
             audioCaptureBuf_[idx + 1] = captureScratch_[i * 2 + 1];
             if (++captureWritePos_ >= captureLoopFrames_) {
+                finishLoopPass(captureLoopFrames_);
                 captureWritePos_ = 0;
                 captureWrapped_ = true;
+                capturePassFrom_ = 0;
             }
         }
         return;
@@ -598,6 +618,24 @@ void Engine::stopAudioRecording() {
     const size_t loopReached = captureWritePos_;
     const size_t loopFrames = captureLoopFrames_;
     const double loopStartBeat = captureLoopStartBeat_;
+    std::vector<LoopPass> passes;
+    if (loopTake) {
+        finishLoopPass(loopReached); // the open pass, up to where recording stopped
+        passes = std::move(capturePasses_);
+    }
+    capturePasses_.clear();
+
+    // Two or more passes keep every pass as a take (specs/067). A session take never loops here.
+    if (loopTake && passes.size() >= 2 && !(recordSessionAudio_ && recordSessionScene_ >= 0)) {
+        const double sr = audioRecordSampleRate_ > 0 ? audioRecordSampleRate_ : transport_.sampleRate();
+        audioCaptureBuf_.clear();
+        captureWritePos_ = 0;
+        captureLoop_ = false;
+        auto nt = cloneTrack(*old);
+        materialiseLoopTakes(*nt, passes, loopFrames, loopStartBeat, sr);
+        republishWithTrack(trackId, nt);
+        return;
+    }
 
     auto sample = std::make_shared<SampleBuffer>();
     sample->channels = 2;
@@ -678,6 +716,62 @@ void Engine::stopAudioRecording() {
     overwriteAudioClipsInRange(nt->clips, ns, ne);
     nt->clips.push_back(clip);
     republishWithTrack(trackId, nt);
+}
+
+// Every pass becomes a take (one new group, numbers continuing on the track), and the comp is
+// what the in-place loop buffer would have held: each frame from the newest pass that recorded
+// it. The loop region is carved as a wrapped loop take always was.
+void Engine::materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size_t loopFrames, double loopStartBeat,
+                                  double sampleRate) {
+    const double bpf = beatsPerSourceFrame(sampleRate);
+    const int32_t group = ++nextTakeGroup_;
+    int32_t number = 0;
+    for (const auto& k : nt.takes) number = std::max(number, k.number);
+
+    std::vector<AudioTake> takes;
+    takes.reserve(passes.size());
+    for (auto& p : passes) {
+        auto sb = std::make_shared<SampleBuffer>();
+        sb->channels = 2;
+        sb->frames = static_cast<int64_t>(loopFrames);
+        sb->sourceSampleRate = sampleRate;
+        sb->samples = std::move(p.buf);
+        AudioTake k;
+        k.sample = std::move(sb);
+        k.id = ++nextTakeId_;
+        k.number = ++number;
+        k.group = group;
+        k.originBeat = loopStartBeat;
+        k.sourceOffsetFrames = static_cast<double>(p.from);
+        k.lengthFrames = static_cast<int64_t>(p.to - p.from);
+        k.beatsPerFrame = bpf;
+        takes.push_back(std::move(k));
+    }
+
+    overwriteAudioClipsInRange(nt.clips, loopStartBeat, loopStartBeat + static_cast<double>(loopFrames) * bpf);
+    std::vector<std::pair<size_t, size_t>> open{{0, loopFrames}}; // loop frames no newer pass covers yet
+    for (size_t i = passes.size(); i-- > 0 && !open.empty();) {
+        const size_t from = passes[i].from, to = passes[i].to;
+        std::vector<std::pair<size_t, size_t>> rest;
+        for (auto [a, b] : open) {
+            const size_t s = std::max(a, from), e = std::min(b, to);
+            if (s >= e) {
+                rest.emplace_back(a, b);
+                continue;
+            }
+            AudioClip clip;
+            clip.sample = takes[i].sample;
+            clip.startBeat = loopStartBeat + static_cast<double>(s) * bpf;
+            clip.sourceOffsetFrames = static_cast<double>(s);
+            clip.lengthFrames = static_cast<int64_t>(e - s);
+            clip.takeId = takes[i].id;
+            nt.clips.push_back(std::move(clip));
+            if (a < s) rest.emplace_back(a, s);
+            if (e < b) rest.emplace_back(e, b);
+        }
+        open = std::move(rest);
+    }
+    for (auto& k : takes) nt.takes.push_back(std::move(k));
 }
 
 double Engine::latencyCompensatedStart(double startBeat, int32_t latencyFrames, double samplesPerBeat,
