@@ -250,7 +250,7 @@ public sealed partial class DeviceChainView
             remove.Margin = new Thickness(-4, 0, -6, 0);   // tucked against the card's right inset
             Grid.SetColumn(remove, 2); right.Children.Add(remove);
         }
-        var headerGrid = new Grid { ColumnSpacing = 16 };
+        var headerGrid = new Grid { ColumnSpacing = s.Compact ? 8 : 16 };   // a mini card spends its gaps on the name
         // A compact card can't fit a long name, the preset picker and the right-hand controls at
         // their full widths: there the right side (S / L, power, Remove) takes what it needs and
         // the name trims instead of the switches clipping.
