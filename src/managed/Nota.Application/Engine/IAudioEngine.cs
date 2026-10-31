@@ -368,15 +368,16 @@ public interface IAudioEngine : IDisposable
     /// <summary>Restores a frozen track's audio blob and marks it frozen.</summary>
     void SetFreezeState(int trackId, byte[] data);
 
-    int GetClipPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints);
+    // Each peaks call also fills outRms (one RMS level per bucket, the waveform's body) when given.
+    int GetClipPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints, float[]? outRms = null);
     /// <summary>Peaks over the whole sample (ignores the trimmed region) for the clip editor's Start/End brackets.</summary>
-    int GetClipSourcePeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints);
+    int GetClipSourcePeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints, float[]? outRms = null);
     /// <summary>Peaks over the full warped material (ignores the trim window) for the warped-clip Start/End brackets.</summary>
-    int GetClipWarpFullPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints);
+    int GetClipWarpFullPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints, float[]? outRms = null);
     /// <summary>Peaks over warped beats [beat0, beat1] of the full material, file order (≤ 8192 points) — the zoomed clip editor's detail.</summary>
-    int GetClipWarpPeaksRange(int trackId, int clipIndex, double beat0, double beat1, float[] outMinMax, int maxPoints);
+    int GetClipWarpPeaksRange(int trackId, int clipIndex, double beat0, double beat1, float[] outMinMax, int maxPoints, float[]? outRms = null);
     /// <summary>Peaks over source frames [frame0, frame1) of the whole sample (≤ 8192 points) — the zoomed clip editor's detail.</summary>
-    int GetClipSourcePeaksRange(int trackId, int clipIndex, double frame0, double frame1, float[] outMinMax, int maxPoints);
+    int GetClipSourcePeaksRange(int trackId, int clipIndex, double frame0, double frame1, float[] outMinMax, int maxPoints, float[]? outRms = null);
 
     // --- Instrument tracks, MIDI clips & notes -----------------------------
     int AddInstrumentTrack();

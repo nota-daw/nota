@@ -442,13 +442,17 @@ class Engine {
     float trackSend(int32_t trackId, int32_t bus) const;
     int32_t returnTrackCount() const;                // number of return buses in use
     int32_t trackReturnIndex(int32_t trackId) const; // bus slot for a return track, else -1
-    int32_t getClipPeaks(int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints) const;
-    int32_t getClipSourcePeaks(int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints) const;
-    int32_t getClipWarpFullPeaks(int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints) const;
-    int32_t getClipWarpPeaksRange(
-        int32_t trackId, int32_t clipIndex, double beat0, double beat1, float* outMinMax, int32_t maxPoints) const;
-    int32_t getClipSourcePeaksRange(
-        int32_t trackId, int32_t clipIndex, double frame0, double frame1, float* outMinMax, int32_t maxPoints) const;
+    // Waveform buckets: min/max pairs, plus each bucket's RMS when outRms is given.
+    int32_t getClipPeaks(
+        int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints, float* outRms = nullptr) const;
+    int32_t getClipSourcePeaks(
+        int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints, float* outRms = nullptr) const;
+    int32_t getClipWarpFullPeaks(
+        int32_t trackId, int32_t clipIndex, float* outMinMax, int32_t maxPoints, float* outRms = nullptr) const;
+    int32_t getClipWarpPeaksRange(int32_t trackId, int32_t clipIndex, double beat0, double beat1, float* outMinMax,
+        int32_t maxPoints, float* outRms = nullptr) const;
+    int32_t getClipSourcePeaksRange(int32_t trackId, int32_t clipIndex, double frame0, double frame1, float* outMinMax,
+        int32_t maxPoints, float* outRms = nullptr) const;
 
     // --- incremental warp-cache build (project load, with a progress bar) ---
     void setDeferWarpBuild(bool defer);       // load path: skip cache builds, fill them via warpBuildStep

@@ -128,6 +128,23 @@ int32_t nota_clip_get_source_peaks_range(const NotaEngine* e, int32_t track_id, 
     if (!e) return 0;
     return CENG(e)->getClipSourcePeaksRange(track_id, clip_index, frame0, frame1, out_min_max, max_points);
 }
+int32_t nota_clip_get_levels(const NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t view, double a,
+    double b, float* out_min_max, float* out_rms, int32_t max_points) {
+    if (!e || !out_min_max || max_points <= 0) return 0;
+    auto* eng = CENG(e);
+    switch (view) {
+    case NOTA_CLIP_LEVELS_PLAYED: return eng->getClipPeaks(track_id, clip_index, out_min_max, max_points, out_rms);
+    case NOTA_CLIP_LEVELS_SOURCE:
+        return eng->getClipSourcePeaks(track_id, clip_index, out_min_max, max_points, out_rms);
+    case NOTA_CLIP_LEVELS_WARP_FULL:
+        return eng->getClipWarpFullPeaks(track_id, clip_index, out_min_max, max_points, out_rms);
+    case NOTA_CLIP_LEVELS_WARP_RANGE:
+        return eng->getClipWarpPeaksRange(track_id, clip_index, a, b, out_min_max, max_points, out_rms);
+    case NOTA_CLIP_LEVELS_SOURCE_RANGE:
+        return eng->getClipSourcePeaksRange(track_id, clip_index, a, b, out_min_max, max_points, out_rms);
+    default: return 0;
+    }
+}
 
 // ---- Instrument tracks, MIDI clips & notes (M2) ---------------------------
 

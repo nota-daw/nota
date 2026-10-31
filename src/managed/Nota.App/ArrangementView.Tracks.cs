@@ -230,15 +230,42 @@ public sealed partial class ArrangementView
     {
         var stored = ids.Select(id => _engine!.GetTrackColorIndex(id)).Distinct().ToList();
         int current = stored.Count == 1 ? stored[0] : int.MinValue;
-        return MenuKit.ColourGrid(current, ci =>
-        {
-            if (_engine is null) return;
-            _engine.BeginUndoGroup();
-            try { foreach (var id in ids) _engine.SetTrackColorIndex(id, ci); }
-            finally { _engine.EndUndoGroup(); }
-            Refresh(); SessionChanged?.Invoke();
-        });
+        return MenuKit.ColourGrid(current, ci => SetTrackColours(ids, ci));
     }
+
+    internal void SetTrackColours(IReadOnlyList<int> ids, int colorIndex)
+    {
+        if (_engine is null) return;
+        _engine.BeginUndoGroup();
+        try { foreach (var id in ids) _engine.SetTrackColorIndex(id, colorIndex); }
+        finally { _engine.EndUndoGroup(); }
+        Refresh(); SessionChanged?.Invoke();
+    }
+
+    // ---- the track inspector's view of a track (specs/060) -------------------------------
+
+    /// <summary>Redraws the headers and the Session grid after an edit made outside them.</summary>
+    internal void RefreshAfterTrackEdit() { Refresh(); SessionChanged?.Invoke(); }
+
+    internal double TrackRowHeight(int trackId) => StoredRowHeight(trackId);
+
+    /// <summary>An audio track's record-input choices in picker order (hardware, Master, the
+    /// other tracks, the returns), with their menu labels.</summary>
+    internal List<(RecordInputPick Pick, string Label)> RecordInputChoices(int trackId)
+    {
+        var list = RecordInputPick.Hardware.Select(h => (h.Pick, h.Label)).ToList();
+        list.Add((RecordInputPick.Track(-1), "Master"));
+        foreach (var v in _tracks)
+            if (v.Id != trackId) list.Add((RecordInputPick.Track(v.Id), v.Name.Length > 0 ? v.Name : $"Track {v.Id}"));
+        foreach (var v in _returns)
+            list.Add((RecordInputPick.Track(v.Id), v.Name.Length > 0 ? v.Name : $"Return {v.Id}"));
+        return list;
+    }
+
+    /// <summary>The instrument tracks another instrument track can take its MIDI from.</summary>
+    internal List<(int Id, string Name)> MidiSourceChoices(int trackId)
+        => _tracks.Where(v => v.Id != trackId && v.IsInstrument)
+                  .Select(v => (v.Id, v.Name.Length > 0 ? v.Name : $"Track {v.Id}")).ToList();
 
     // Compact / Standard / Large for one or more tracks (the chosen key when they all sit on
     // that preset); Option / Alt applies the height to every track.
