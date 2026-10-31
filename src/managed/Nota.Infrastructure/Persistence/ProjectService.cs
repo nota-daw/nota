@@ -551,13 +551,18 @@ public sealed class ProjectService
 
     /// <summary>Rebuilds the engine from a document. Resets the engine first, so
     /// call after the user confirms discarding the current project. Transport is
-    /// NOT applied here (the UI applies it via its view-model so controls update).
+    /// NOT applied here (the UI applies it via its view-model so controls update),
+    /// except the tempo as a baseline for the clips.
     /// <paramref name="bundleDir"/> resolves sample paths. Returns warnings for
     /// content downgraded on load.</summary>
     public static IReadOnlyList<string> Apply(ProjectDocument doc, IAudioEngine engine, string bundleDir)
     {
         var warnings = new List<string>();
         engine.Reset();
+
+        // The saved tempo before any clip (specs/067): take lanes lay their comp out on it, so a
+        // section the user moved isn't mistaken for one still on its take when the UI's tempo lands.
+        if (doc.Transport.Bpm > 0) engine.SetBpm(doc.Transport.Bpm);
 
         // Pan law (specs/006) first, as the baseline rather than an undo step. A missing mixer
         // is a pre-v21 project: Balance, so the mix sounds as it was saved.
