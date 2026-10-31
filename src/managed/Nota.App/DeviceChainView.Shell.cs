@@ -251,9 +251,12 @@ public sealed partial class DeviceChainView
             Grid.SetColumn(remove, 2); right.Children.Add(remove);
         }
         var headerGrid = new Grid { ColumnSpacing = 16 };
+        // A compact card can't fit a long name, the preset picker and the right-hand controls at
+        // their full widths: there the right side (S / L, power, Remove) takes what it needs and
+        // the name trims instead of the switches clipping.
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition(s.Compact ? GridLength.Star : GridLength.Auto));
         headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-        headerGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition(s.Compact ? GridLength.Auto : GridLength.Star));
         name.MaxWidth = s.Compact ? 90 : 220;
         headerGrid.Children.Add(name);
         Grid.SetColumn(right, 2); headerGrid.Children.Add(right);

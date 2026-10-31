@@ -136,7 +136,7 @@ public sealed partial class PianoRollView
     {
         private static readonly (LaneMode Mode, string Label)[] Tabs =
             { (LaneMode.Velocity, "Vel"), (LaneMode.Bend, "Bend"), (LaneMode.Pressure, "Pres"), (LaneMode.Slide, "Slide") };
-        private const double Top = 4, RowStep = 21, ChipH = 18;
+        private const double Top = 2, RowStep = 17, ChipH = 16;   // four rows end at 69, inside the 72 px velocity lane
         private readonly PianoRollView _o;
         private int _hover = -1;
         public LaneTabs(PianoRollView o) { _o = o; Cursor = new Cursor(StandardCursorType.Hand); }
