@@ -38,7 +38,7 @@ public partial class MainWindow
         new Control[] { SnapChip },             // the grid; snapping itself stays switchable
         new Control[] { SnapToggle },           // hold Alt to drag freely
         new Control[] { LoopRecordCell },       // ⌘⇧R / Transport menu
-        new Control[] { LoopSep, LoopCell },    // ⌘L; the range is on the ruler
+        new Control[] { LoopSep, LoopCell },    // ⌘L; the range stays visible on the ruler
         new Control[] { MasterWell },           // the master strip is in the mixer
         new Control[] { CpuMeter, CpuSep },     // only when nothing else is left to give
     };

@@ -91,6 +91,13 @@ class Lens : public Device {
         LogFreq,  // >= .5 logarithmic frequency axis
         NoteGrid, // >= .5 draw the note grid
         Rate,     // display refresh, 10..60 fps
+
+        // Tempo-synced scope and the key overlay (specs/050), appended.
+        Sync,    // >= .5 the scope spans beats on the song's grid
+        Span,    // 7 steps: 1/4 beat, 1/2 beat, 1 beat, 2 beats, 1 bar, 2 bars, 4 bars
+        KeyShow, // >= .5 draw the sidechain key's trace
+        KeyGain, // −24..+24 dB, display only
+        Layout,  // < .5 Overlay · >= .5 Stacked
         kNumParams
     };
 
@@ -115,12 +122,20 @@ class Lens : public Device {
         M_CursorAv, // trace value under cursor A / B
         M_CursorBv,
         M_SampleRate,
-        M_Held, // 1 = frozen or a finished Single capture
+        M_Held,    // 1 = frozen or a finished Single capture
+        M_KeyLive, // 1 = a sidechain key is arriving (specs/050)
+        M_Instance, // this Lens's serial, so a window can tell it from another Lens at its index
         kScope
     };
 
     // layerWave layers.
-    enum { L_Spectrum = 0, L_Peak, L_Trace, L_Raw, L_Waterfall };
+    // L_KeyTrace: the key over the main trace's window (Sync off). L_Sync: the synced frame —
+    // kSyncHead header values (S_*), then kSync columns of (main min, main max, key min,
+    // key max, age: 0 this pass · 1 the previous pass · NaN empty).
+    enum { L_Spectrum = 0, L_Peak, L_Trace, L_Raw, L_Waterfall, L_KeyTrace, L_Sync };
+    enum { S_Mode = 0, S_Playhead, S_Bpm, S_BeatsPerBar, S_SpanBeats, S_Start, S_KeyLive, kSyncHead = 8 };
+    static constexpr int kSync = 1024;   // columns in a synced frame
+    static constexpr int kSyncCol = 5;   // values per column
 
     // deviceAction ids.
     enum { A_Rearm = 0, A_ResetPeak, A_ResetTrigger };
@@ -155,6 +170,30 @@ class Lens : public Device {
     // ---- unit helpers, shared with the card so both read the same numbers ----
     static double timeDivSec(float v) { return expMap(v, 0.00002, 0.02); }
     static double voltDiv(float v) { return expMap(v, 0.02, 2.0); }
+    // Span in beats for a Span param value; a "bar" is beatsPerBar beats.
+    static double spanBeats(float v, double beatsPerBar) {
+        static const double b[7] = {0.25, 0.5, 1, 2, -1, -2, -4}; // negative = bars
+        const double x = b[step(v, 7)];
+        return x > 0 ? x : -x * std::max(1.0, beatsPerBar);
+    }
+    static double keyGainDb(float v) { return -24.0 + 48.0 * std::clamp((double)v, 0.0, 1.0); }
+
+    // Tempo sync + the sidechain key (specs/050). Audio thread.
+    void setTransport(double beatStart, double samplesPerBeat, bool playing) override {
+        beat0_ = beatStart;
+        spb_ = samplesPerBeat;
+        playing_ = playing;
+    }
+    void setTransportInfo(const TransportInfo& ti) override {
+        bpb_.store(ti.tsDenom > 0 ? ti.tsNum * 4.0 / ti.tsDenom : 4.0, std::memory_order_relaxed);
+    }
+    int32_t sidechainSourceTrackId() const override { return scTrackId_.load(std::memory_order_relaxed); }
+    void setSidechainSourceTrackId(int32_t id) override { scTrackId_.store(id, std::memory_order_relaxed); }
+    void setSidechain(const float* interleaved, int32_t frames) override {
+        scBuf_ = interleaved;
+        scFrames_ = frames;
+    }
+    bool acceptsSidechain() const override { return true; }
     static int fftSizeOf(float v) {
         static const int n[4] = {512, 2048, 4096, 16384};
         return n[std::clamp((int)std::lround(v * 3.0f), 0, 3)];
@@ -180,6 +219,7 @@ class Lens : public Device {
     static double expMap(float v, double lo, double hi) {
         return lo * std::pow(hi / lo, std::clamp((double)v, 0.0, 1.0));
     }
+  public:
     static int step(float v, int n) { return std::clamp((int)std::lround(v * (n - 1)), 0, n - 1); }
     int trigModeIdx() const { return step(get(TrigMode), 3); }
 
@@ -211,6 +251,11 @@ class Lens : public Device {
         return src == 1 ? l : src == 2 ? r : 0.5f * (l + r);
     }
     bool msOn() const { return get(MidSide) >= 0.5f; }
+    // A key arrived within the last ~16 blocks.
+    bool keyLive() const {
+        const uint32_t seen = keySeen_.load(std::memory_order_relaxed);
+        return seen != 0 && frameSeq_.load(std::memory_order_relaxed) - seen < 16;
+    }
     int srcIdx() const { return step(get(Source), 3); }
 
     int windowSamples() const;
@@ -226,6 +271,18 @@ class Lens : public Device {
     // Trigger search + trace capture. The trace is pinned to the trigger point
     // (25 % pre-trigger, like the mockup's marker) so it stands still.
     void analyzeScope() const;
+    // The synced frame from the beat-stamped history (specs/050).
+    void analyzeSync() const;
+    // Rings + history for one block of audio (main and, when routed, the key); the
+    // beat-stamped history only with `hist` (Sync on). Audio thread.
+    void capture(const float* main, const float* key, int32_t keyFrames, int32_t frames, double beat0, double spb,
+        bool playing, bool hist);
+    float pickKey(uint32_t idx, bool ms, int src) const {
+        const size_t i = idx & (kRing - 1);
+        const float l = ringKL_[i], r = ringKR_[i];
+        if (ms) return src == 2 ? 0.5f * (l - r) : 0.5f * (l + r);
+        return src == 1 ? l : src == 2 ? r : 0.5f * (l + r);
+    }
 
     // Period by autocorrelation over the captured window (0 when nothing locks).
     double measurePeriod() const;
@@ -260,6 +317,43 @@ class Lens : public Device {
     std::atomic<uint32_t> frameSeq_{0};
     std::atomic<float> corr_{0.0f}, lufs_{-120.0f};
 
+    // Tempo sync + the key (specs/050). The transport and key pointer are audio-thread only.
+    double beat0_ = 0.0, spb_ = 0.0;
+    bool playing_ = false;
+    std::atomic<double> bpb_{4.0};
+    std::atomic<int32_t> scTrackId_{-1};
+    static inline std::atomic<uint32_t> nextInstance_{1};
+    const uint32_t instance_ = nextInstance_.fetch_add(1, std::memory_order_relaxed) & 0xFFFFFF; // exact in a float
+    const float* scBuf_ = nullptr;
+    int32_t scFrames_ = 0;
+    // The engine hands a sidechain key one block late, so with a key routed the capture runs a
+    // block behind: the held block and its transport, captured with the next block's key.
+    std::vector<float> pend_;
+    int32_t pendN_ = 0;
+    double pendBeat_ = 0.0, pendSpb_ = 0.0;
+    bool pendPlaying_ = false;
+    bool keyedPrev_ = false, syncPrev_ = false; // audio thread
+    std::atomic<uint32_t> keySeen_{0}; // frameSeq_ of the last block a key arrived in
+    std::vector<float> ringKL_, ringKR_; // the key, beside ringL_/ringR_ (same head)
+
+    // Beat-stamped min/max history: one bin per binLen_ samples of the analysis channel. The
+    // audio thread fills bin binW_ (accumulators below) and publishes it by bumping binW_.
+    static constexpr int kBins = 65536; // power of two
+    struct Bin {
+        float mLo, mHi, kLo, kHi;
+        double beat;  // the transport beat at the bin's first sample
+        double spb;      // samples per beat then
+        uint32_t sample; // ringW_ at the bin's first sample
+        uint8_t flags;   // 1 playing · 2 key present · bits 2..4 the channel (Source, M/S)
+    };
+    static constexpr uint8_t kBinPlaying = 1, kBinKey = 2, kBinChan = 0x1C;
+    // A bin is drawn only under the channel it was measured on (Source, M/S).
+    static uint8_t chanBits(bool ms, int src) { return (uint8_t)(((ms ? 4 : 0) | (src & 3)) << 2); }
+    std::vector<Bin> bins_;
+    std::atomic<uint32_t> binW_{0};
+    int binLen_ = 32, binN_ = 0; // audio thread
+    Bin acc_{};                  // audio thread: the bin being filled
+
     // Loudness follower (audio thread only).
     Biquad kb_[2];
     KState ks_[2];
@@ -272,7 +366,7 @@ class Lens : public Device {
     mutable signalsmith::linear::RealFFT<float> fft_;
     mutable std::vector<std::complex<float>> freq_;
     mutable std::vector<float> time_, win_, avg_, binDb_, smTmp_;
-    mutable std::vector<float> curve_, peak_, peakAge_, trace_, rawWin_, wfRow_;
+    mutable std::vector<float> curve_, peak_, peakAge_, trace_, rawWin_, wfRow_, keyTrace_, sync_;
     mutable double winSum_ = 1.0, lastAnalyzeS_ = -1.0;
     mutable uint32_t lastSeq_ = 0xFFFFFFFFu;
     mutable int fftN_ = 0, winKind_ = -1, rawLen_ = 0;

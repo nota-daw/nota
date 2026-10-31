@@ -108,7 +108,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
             var val = Mono(fmt(P(p)), 7, TextPrimary);
             var knob = new Knob(P(p), 1.0) { Accent = true, Default = Def(p), Width = 34, Height = 34 };
             knob.Format = v => fmt(v);   // read-out at any value: typing searches it
-            // no modulation colour on the arc: values are orange inside a device
+            if (teal) knob.ArcColor = DeviceCardKit.ModInk;   // the modulation mark: a dashed arc
             knob.ValueChanged += v => { Raw(p, v); val.Text = fmt(P(p)); RefreshAll(); };
             knob.GestureBegin += () => Begin(p);
             knob.GestureEnd += () => End(p);
@@ -279,7 +279,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
             spectrum.GestureEnd += h => End(map[h]);
             spectrum.ResetRequested += h => { Reset(map[h]); RefreshAll(); };
             Learn(spectrum, Rate);
-            ToolTip.SetTip(spectrum, "The output spectrum: neutral ink is the signal, teal what the crush added — bright above the reduced Nyquist (the images). Drag the Nyquist line for Rate, the filter line for the post filter; double-click resets.");
+            ToolTip.SetTip(spectrum, "The output spectrum: the bright ink is the signal, grey what the crush added — lighter above the reduced Nyquist (the images). Drag the Nyquist line for Rate, the filter line for the post filter; double-click resets.");
             var knobs = KnobRow(
                 () => Sc(S_Analysed) < 0.5 ? "no signal" : ScDb(S_Images) <= -119 ? NotaNum.F($"no images above {KHz(Sc(S_Nyquist))}")
                     : NotaNum.F($"images above {KHz(Sc(S_Nyquist))} {ScDb(S_Images):0}\u2009dB"),

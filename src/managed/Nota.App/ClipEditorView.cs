@@ -65,10 +65,17 @@ public sealed class ClipEditorView : UserControl
             Orientation = Orientation.Horizontal, Spacing = 12,
             Children = { AuditionControl(), FitControl(roll), SnapControl(roll), HeaderDivider(), ScaleControls(), HeaderDivider(), _toolsToggle },
         };
-        var hint = Hint("Double-click — add or delete · edge — length · Shift — add to selection");
-        hint.TextWrapping = TextWrapping.NoWrap;
-        hint.TextTrimming = TextTrimming.CharacterEllipsis;
+        // The gesture hint fills the header's free space: one line when there is room, two in
+        // a narrower editor (the header holds two caption lines), trimmed only past that, and
+        // always readable in full in its tooltip.
+        const string hintText = "Double-click — add or delete · edge — length · Shift — add to selection";
+        var hint = Hint(hintText);
+        hint.TextWrapping = TextWrapping.Wrap;
+        hint.MaxLines = 2;
+        hint.Background = Brushes.Transparent;   // hit-testable across its box, for the tooltip
+        hint.TextTrimming = TextTrimming.WordEllipsis;
         hint.VerticalAlignment = VerticalAlignment.Center;
+        ToolTip.SetTip(hint, hintText);
         var header = Header(roll.TrackBrush, HeaderName(clipName), "MIDI", tabs, hint, right, double.NaN, out _nameText, out _colorBar);
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(_props, Dock.Top);
@@ -101,6 +108,7 @@ public sealed class ClipEditorView : UserControl
             Offset = Roll.Clips.EditorStart(Roll.Clips.Active),
         };
         if (_envMode) Roll.SetOverlay(_envOverlay);
+        PaintFold();   // another track's clip may be folded differently
     }
 
     // Note audition (#46): the speaker chip. One app-wide setting, so every open editor's
@@ -185,8 +193,24 @@ public sealed class ClipEditorView : UserControl
         _dropOutOfScale.VerticalAlignment = VerticalAlignment.Center;
         ToolTip.SetTip(_dropOutOfScale, "Delete every note outside the scale");
         Roll.Changed += () => _dropOutOfScale.IsEnabled = Roll.HasOutOfScaleNotes;
+        Roll.FoldToggled += _ => PaintScale();   // ⌥⇧F flips it from the keyboard too
+        Roll.FoldChanged += PaintFold;           // …and the host switches it with the active clip's track
+        // Fold (specs/045): the scale's rows, or a Drum Rack's pads, and nothing else.
+        _fold = SwitchRow("Fold", () => Roll.Folded, () => { Roll.SetFold(!Roll.Folded, user: true); PaintScale(); }, out _syncFold);
         PaintScale();
-        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { sw, key, mode, _dropOutOfScale } };
+        return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { sw, key, mode, _fold, _dropOutOfScale } };
+    }
+
+    private Action _syncFold = () => { };
+    private Control _fold = null!;
+
+    private void PaintFold()
+    {
+        _syncFold();
+        string what = Roll.FoldShowsPads ? "only the pads" : Roll.ScaleOn ? "only the scale's notes" : "only the notes in use";
+        string tip = MenuKit.Keys($"Fold: show {what} (⌥⇧F)");
+        if (Roll.FoldHasNothing) tip += Roll.FoldShowsPads ? "\nThe rack has no pads yet" : "\nSet a scale or add notes to fold";
+        ToolTip.SetTip(_fold, tip);
     }
 
     private void PaintScale()
@@ -198,6 +222,7 @@ public sealed class ClipEditorView : UserControl
         _keyText.Foreground = ink;
         _modeText.Foreground = ink;
         _dropOutOfScale.IsEnabled = Roll.HasOutOfScaleNotes;
+        PaintFold();
     }
 
     // ---- envelope overlay: a wash over the notes, the curve, a target picker ----------

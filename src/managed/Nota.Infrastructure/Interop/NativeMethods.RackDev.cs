@@ -191,6 +191,46 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_set_mode")]
     internal static partial void RackDevSetMode(IntPtr engine, int trackId, int deviceIndex, int mode);
 
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_duplicate_chain")]
+    internal static partial int RackDevDuplicateChain(IntPtr engine, int trackId, int deviceIndex, int chain);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_grain_set_sample", StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial int RackDevChainGrainSetSample(IntPtr engine, int trackId, int deviceIndex, int chain, string path, int rootNote);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_id")]
+    internal static partial long RackDevChainId(IntPtr engine, int trackId, int deviceIndex, int chain);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_checkpoint")]
+    internal static partial int RackDevCheckpoint(IntPtr engine, int trackId, int deviceIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_copy")]
+    internal static partial int RackDevChainDeviceCopy(IntPtr engine, int trackId, int deviceIndex, int chain, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_midi_copy")]
+    internal static partial int RackDevChainMidiCopy(IntPtr engine, int trackId, int deviceIndex, int chain, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_paste")]
+    internal static partial int RackDevChainDevicePaste(IntPtr engine, int trackId, int deviceIndex, int chain, int atIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_midi_paste")]
+    internal static partial int RackDevChainMidiPaste(IntPtr engine, int trackId, int deviceIndex, int chain, int atIndex);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_paste_devices")]
+    internal static partial int RackDevChainPasteDevices(IntPtr engine, int trackId, int deviceIndex, int chain, int midiAt, int fxAt,
+                                                         out int skipped, out int firstMidi, out int firstFx);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_duplicate")]
+    internal static partial int RackDevChainDeviceDuplicate(IntPtr engine, int trackId, int deviceIndex, int chain, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_midi_duplicate")]
+    internal static partial int RackDevChainMidiDuplicate(IntPtr engine, int trackId, int deviceIndex, int chain, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_device_move_to")]
+    internal static partial int RackDevChainDeviceMoveTo(IntPtr engine, int trackId, int deviceIndex, int chain, int index, int toChain);
+
+    [LibraryImport(Lib, EntryPoint = "nota_rackdev_chain_midi_move_to")]
+    internal static partial int RackDevChainMidiMoveTo(IntPtr engine, int trackId, int deviceIndex, int chain, int index, int toChain);
+
     [LibraryImport(Lib, EntryPoint = "nota_rackdev_drywet")]
     internal static partial float RackDevDryWet(IntPtr engine, int trackId, int deviceIndex);
 

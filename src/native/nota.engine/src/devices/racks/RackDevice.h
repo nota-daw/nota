@@ -24,6 +24,7 @@ namespace nota {
 class RackDevice final : public Device, public RackCore {
   public:
     int32_t builtinKind() const override { return 5; } // Audio Effect Rack (project compat)
+    const RackCore* asRack() const override { return this; }
     const char* displayName() const override { return "Nota Audio Effect Rack"; }
     bool hostsPlugin() const override { return chainsHostPlugin(); }
 

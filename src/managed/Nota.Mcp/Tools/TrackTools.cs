@@ -23,7 +23,7 @@ public sealed class TrackTools(IAudioEngine engine, IEngineDispatch dispatch, IA
     [McpServerTool(Name = "add_group_track"), Description("Add an empty group (submix) track. Returns its track id.")]
     public Task<int> AddGroupTrack() => Mutate(() => E.AddGroupTrack());
 
-    [McpServerTool(Name = "remove_track"), Description("Remove a track by id.")]
+    [McpServerTool(Name = "remove_track"), Description("Remove a track by id. This is also how an instrument is deleted: an instrument track never stands without one (set_track_instrument swaps it).")]
     public Task<bool> RemoveTrack([Description("Track id")] int trackId) => Mutate(() => E.RemoveTrack(trackId));
 
     [McpServerTool(Name = "rename_track"), Description("Set a track's display name.")]
@@ -31,6 +31,12 @@ public sealed class TrackTools(IAudioEngine engine, IEngineDispatch dispatch, IA
 
     [McpServerTool(Name = "set_track_color"), Description("Set a track's colour palette index (0..7).")]
     public Task SetTrackColor(int trackId, int colorIndex) => Mutate(() => E.SetTrackColorIndex(trackId, colorIndex));
+
+    [McpServerTool(Name = "set_piano_fold"), Description("Fold a track's piano roll on or off: folded, it shows only the scale's notes (or, on a Drum Rack, one named row per pad), plus any pitch a note sits on.")]
+    public Task SetPianoFold(int trackId, bool on) => Mutate(() => E.SetTrackPianoFold(trackId, on));
+
+    [McpServerTool(Name = "get_piano_fold"), Description("Whether a track's piano roll is folded.")]
+    public Task<bool> GetPianoFold(int trackId) => Read(() => E.GetTrackPianoFold(trackId));
 
     [McpServerTool(Name = "set_track_volume"), Description("Set a track's fader level (0..1 linear).")]
     public Task SetTrackVolume(int trackId, [Description("Linear gain 0..1")] float volume)

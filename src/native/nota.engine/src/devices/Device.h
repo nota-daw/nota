@@ -16,14 +16,20 @@
 #include <string>
 #include <vector>
 
+#include "devices/EditorPreview.h"
 #include "engine/TransportInfo.h"
 
 namespace nota {
 
 struct MidiEv;
 
+class RackCore;
+
 class Device {
   public:
+    // The rack behind this device, if it is one (specs/044): a virtual call where the audio
+    // thread walks rack chains every block, instead of a dynamic_cast per device.
+    virtual const RackCore* asRack() const { return nullptr; }
     virtual ~Device() = default;
 
     // Called on the message thread before the device is used (and on sample-rate
@@ -246,9 +252,21 @@ class Device {
     bool folded() const { return folded_; }
     void setFolded(bool f) { folded_ = f; }
 
+    // The preset this device was loaded from (specs/048): an index into the engine's preset
+    // tag table, 0 = none. Message thread only; kept on the device so it follows moves,
+    // copies and undo/redo.
+    int32_t presetTag() const { return presetTag_; }
+    void setPresetTag(int32_t t) { presetTag_ = t; }
+    // Editor preview (specs/046): the plug-in window's last look, drawn behind its card. View
+    // data saved with the project; message thread only, like the fold flag.
+    const EditorPreview& editorPreview() const { return preview_; }
+    void setEditorPreview(EditorPreview p) { preview_ = std::move(p); }
+
   private:
     std::atomic<bool> bypassed_{false};
     bool folded_ = false;
+    int32_t presetTag_ = 0;
+    EditorPreview preview_;
     std::atomic<float> scGainDb_{0.0f};
     std::atomic<float> scMix_{1.0f};
     std::atomic<int32_t> scTapPre_{0};

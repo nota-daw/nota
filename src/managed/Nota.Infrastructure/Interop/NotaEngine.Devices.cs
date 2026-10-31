@@ -81,6 +81,9 @@ public sealed partial class NotaEngine
     /// <summary>0 = empty, 1 = an audio effect, 2 = a MIDI effect.</summary>
     public int DeviceClipboardKind() { ThrowIfDisposed(); return NativeMethods.DeviceClipboardKind(_handle); }
 
+    /// <summary>True when the clipboard holds an audio effect keyed from another track.</summary>
+    public bool DeviceClipboardSidechain() { ThrowIfDisposed(); return NativeMethods.DeviceClipboardSidechain(_handle) != 0; }
+
     /// <summary>Inserts a clone of the copied audio effect at atIndex (-1 = end), one undo step. New index or -1.</summary>
     public int PasteDevice(int trackId, int atIndex)
     { ThrowIfDisposed(); return NativeMethods.PasteDevice(_handle, trackId, atIndex); }
@@ -93,6 +96,23 @@ public sealed partial class NotaEngine
     public int DuplicateMidiEffect(int trackId, int index)
     { ThrowIfDisposed(); return NativeMethods.DuplicateMidiEffect(_handle, trackId, index); }
 
+    /// <summary>The track's instrument on the device clipboard (specs/043), a full clone.</summary>
+    public bool CopyInstrument(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.CopyInstrument(_handle, trackId) == 1; }
+    /// <summary>Replaces the track's instrument with a clone of the copied one, one undo step.
+    /// 0 done, -1 nothing to paste, -2 not an instrument track, -3 the clone failed.</summary>
+    public int PasteInstrument(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.PasteInstrument(_handle, trackId); }
+    /// <summary>Moves (or copies) a device to another track in one undo step (specs/043). The new
+    /// index (0 for the instrument), -1 bad address, -2 the target can't take it, -3 the clone failed.</summary>
+    public int TransferDevice(int srcTrackId, DeviceFamily family, int index, int dstTrackId, int atIndex, bool keepSource, out TransferFlags flags)
+    {
+        ThrowIfDisposed();
+        int r = NativeMethods.TransferDevice(_handle, srcTrackId, (int)family, index, dstTrackId, atIndex, keepSource ? 1 : 0, out int f);
+        flags = (TransferFlags)f;
+        return r;
+    }
+
     /// <summary>Wraps an audio effect in a new Audio Effect Rack in its place (#257). The rack's index, or -1.</summary>
     public int WrapDeviceInRack(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.WrapDeviceInRack(_handle, trackId, deviceIndex); }
@@ -100,6 +120,25 @@ public sealed partial class NotaEngine
     /// <summary>Replaces a one-chain Audio Effect Rack with its chain's devices. Their count, or -1.</summary>
     public int UnwrapRack(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.UnwrapRack(_handle, trackId, deviceIndex); }
+
+    public int GroupDevices(int trackId, int midiFirst, int midiCount, bool withInstrument, int fxFirst, int fxCount)
+    { ThrowIfDisposed(); return NativeMethods.GroupDevices(_handle, trackId, midiFirst, midiCount, withInstrument ? 1 : 0, fxFirst, fxCount); }
+
+    public int UngroupRack(int trackId, DeviceFamily family, int index, out UngroupDropped dropped)
+    {
+        ThrowIfDisposed();
+        int r = NativeMethods.UngroupRack(_handle, trackId, (int)family, index, out int d);
+        dropped = (UngroupDropped)d;
+        return r;
+    }
+
+    public int CopyDevices(int trackId, int[] midiIndices, bool withInstrument, int[] fxIndices)
+    { ThrowIfDisposed(); return NativeMethods.CopyDevices(_handle, trackId, midiIndices, midiIndices.Length, withInstrument ? 1 : 0, fxIndices, fxIndices.Length); }
+
+    public int DeviceClipboardCount() { ThrowIfDisposed(); return NativeMethods.DeviceClipboardCount(_handle); }
+
+    public int PasteDevices(int trackId, int midiAt, int fxAt, out int skipped)
+    { ThrowIfDisposed(); return NativeMethods.PasteDevices(_handle, trackId, midiAt, fxAt, out skipped); }
 
     public string DeviceName(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.DeviceName(_handle, trackId, deviceIndex)) ?? ""; }
@@ -168,6 +207,17 @@ public sealed partial class NotaEngine
         NativeMethods.DeviceText(_handle, trackId, deviceIndex, id, buf, buf.Length);
         return System.Text.Encoding.UTF8.GetString(buf, 0, n);
     }
+    public bool EqSetBandText(int trackId, int deviceIndex, int band, string label, string note)
+    { ThrowIfDisposed(); return NativeMethods.EqSetBandText(_handle, trackId, deviceIndex, band, label ?? "", note ?? "") != 0; }
+    public string EqBandText(int trackId, int deviceIndex, int band, int which)
+    {
+        ThrowIfDisposed();
+        int n = NativeMethods.EqBandText(_handle, trackId, deviceIndex, band, which, null, 0);
+        if (n <= 0) return "";
+        var buf = new byte[n + 1];
+        NativeMethods.EqBandText(_handle, trackId, deviceIndex, band, which, buf, buf.Length);
+        return System.Text.Encoding.UTF8.GetString(buf, 0, n);
+    }
 
     // --- MIDI effects ---
     public int AddMidiEffect(int trackId, int kind) { ThrowIfDisposed(); return NativeMethods.AddMidiEffect(_handle, trackId, kind); }
@@ -179,6 +229,24 @@ public sealed partial class NotaEngine
     public int MidiEffectLastOut(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectLastOut(_handle, trackId, index); }
     public int MidiEffectScope(int trackId, int index, float[] outv) { ThrowIfDisposed(); return NativeMethods.MidiEffectScope(_handle, trackId, index, outv, outv.Length); }
     public void MidiEffectCommand(int trackId, int index, int cmd) { ThrowIfDisposed(); NativeMethods.MidiEffectCommand(_handle, trackId, index, cmd); }
+
+    /// <summary>A MIDI effect's opaque state blob (the MIDI Effect Rack: its whole structure); empty for params-only effects.</summary>
+    public byte[] MidiEffectGetState(int trackId, int index)
+    {
+        ThrowIfDisposed();
+        int size = NativeMethods.MidiEffectGetState(_handle, trackId, index, null, 0);
+        if (size <= 0) return Array.Empty<byte>();
+        var buf = new byte[size];
+        NativeMethods.MidiEffectGetState(_handle, trackId, index, buf, size);
+        return buf;
+    }
+
+    /// <summary>Restores a MIDI effect's state blob; checkpoint makes it one undo step. False if it couldn't be applied.</summary>
+    public bool MidiEffectSetState(int trackId, int index, byte[] data, bool checkpoint)
+    {
+        ThrowIfDisposed();
+        return data.Length > 0 && NativeMethods.MidiEffectSetState(_handle, trackId, index, data, data.Length, checkpoint ? 1 : 0) == NativeMethods.NotaResult.Ok;
+    }
     public string MidiEffectName(int trackId, int index) { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.MidiEffectName(_handle, trackId, index)) ?? ""; }
     public int MidiEffectParamCount(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectParamCount(_handle, trackId, index); }
     public string MidiEffectParamName(int trackId, int index, int paramIndex) { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.MidiEffectParamName(_handle, trackId, index, paramIndex)) ?? ""; }
@@ -194,6 +262,37 @@ public sealed partial class NotaEngine
     public void SetMidiEffectCcDepth(int trackId, int index, float depth) { ThrowIfDisposed(); NativeMethods.MidiEffectSetCcDepth(_handle, trackId, index, depth); }
     public int MidiEffectCcDestDevice(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectCcDestDevice(_handle, trackId, index); }
     public int MidiEffectCcDestParam(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectCcDestParam(_handle, trackId, index); }
+    public (int Chain, int Slot) MidiEffectCcDestPath(int trackId, int index)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.MidiEffectCcDestPath(_handle, trackId, index, out int c, out int s) == 0 ? (c, s) : (-1, -1);
+    }
+    public bool SetMidiEffectCcDestPath(int trackId, int index, int chain, int slot)
+    { ThrowIfDisposed(); return NativeMethods.MidiEffectSetCcDestPath(_handle, trackId, index, chain, slot) == 0; }
+    public NestedCcDest? RackChainMidiCcDest(int trackId, int rackAddress, int chain, int index)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackChainMidiCcDest(_handle, trackId, rackAddress, chain, index, out int dev, out int dc, out int ds,
+                                                 out int p, out float depth) == 0 ? new NestedCcDest(dev, dc, ds, p, depth) : null;
+    }
+    public bool RackChainMidiSetCcDest(int trackId, int rackAddress, int chain, int index, NestedCcDest dest)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackChainMidiSetCcDest(_handle, trackId, rackAddress, chain, index, dest.Device, dest.Chain,
+                                                    dest.Slot, dest.Param, dest.Depth) == 0;
+    }
+    public NestedSidechain? RackChainSidechain(int trackId, int rackAddress, int chain, int slot)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackChainSidechain(_handle, trackId, rackAddress, chain, slot, out int src, out int pre,
+                                                out float g, out float m) == 0 ? new NestedSidechain(src, pre != 0, g, m) : null;
+    }
+    public bool RackChainSetSidechain(int trackId, int rackAddress, int chain, int slot, NestedSidechain sc)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackChainSetSidechain(_handle, trackId, rackAddress, chain, slot, sc.SourceTrack, sc.TapPre ? 1 : 0,
+                                                   sc.GainDb, sc.Mix) == 0;
+    }
     public float MidiEffectCcDepth(int trackId, int index) { ThrowIfDisposed(); return NativeMethods.MidiEffectCcDepth(_handle, trackId, index); }
 
     public void SetDeviceSidechainSource(int trackId, int deviceIndex, int sourceTrackId)
@@ -229,6 +328,16 @@ public sealed partial class NotaEngine
 
     /// <summary>Deterministic DSP self-test of the built-in EQ + Compressor. True if sane.</summary>
     public static bool FxSelfTest() => NativeMethods.FxSelfTest() != 0;
+    /// <summary>The EQ cards' spectrum analyzer over <paramref name="mono"/> on a fixed clock (a
+    /// frame every <paramref name="hop"/> samples, <paramref name="dt"/> s apart), for tests:
+    /// each frame's 256-point curve in dB.</summary>
+    public static float[][] SpectrumAnalyzeOffline(float[] mono, double sampleRate, int hop, double dt, int maxFrames)
+    {
+        const int pts = 256;
+        var flat = new float[maxFrames * pts];
+        int n = NativeMethods.SpectrumAnalyzeOffline(mono, mono.Length, sampleRate, hop, dt, flat, maxFrames);
+        return Enumerable.Range(0, Math.Max(0, n)).Select(f => flat.AsSpan(f * pts, pts).ToArray()).ToArray();
+    }
 
     /// <summary>Opens a hosted plugin's native GUI. deviceIndex &lt; 0 = the instrument.</summary>
     public void OpenPluginEditor(int trackId, int deviceIndex)
@@ -267,6 +376,33 @@ public sealed partial class NotaEngine
     {
         ThrowIfDisposed();
         Check(NativeMethods.PluginSetState(_handle, trackId, deviceIndex, data, data.Length));
+    }
+
+    /// <summary>The picture of a hosted plug-in's window taken when it was last hidden (JPEG,
+    /// specs/046); empty when there is none.</summary>
+    public byte[] GetPluginPreview(int trackId, int deviceIndex)
+    {
+        ThrowIfDisposed();
+        int size = NativeMethods.PluginPreviewGet(_handle, trackId, deviceIndex, null, 0);
+        if (size <= 0) return Array.Empty<byte>();
+        var buf = new byte[size];
+        int got = NativeMethods.PluginPreviewGet(_handle, trackId, deviceIndex, buf, size);
+        return got == size ? buf : Array.Empty<byte>();   // replaced in between: next poll catches it
+    }
+
+    /// <summary>Replaces a device's editor preview (project load); empty clears it. False for an
+    /// unknown device or an oversized blob — the card then just stays plain.</summary>
+    public bool SetPluginPreview(int trackId, int deviceIndex, byte[] jpeg)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.PluginPreviewSet(_handle, trackId, deviceIndex, jpeg.Length > 0 ? jpeg : null, jpeg.Length) == NativeMethods.NotaResult.Ok;
+    }
+
+    /// <summary>Changes whenever the device's editor preview does; 0 = none.</summary>
+    public int PluginPreviewSerial(int trackId, int deviceIndex)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.PluginPreviewSerial(_handle, trackId, deviceIndex);
     }
 
     /// <summary>Bypasses (or re-enables) the effect at deviceIndex on a track.</summary>
@@ -310,6 +446,7 @@ public sealed partial class NotaEngine
 
     /// <summary>Instrument identity: 0=Synth, 1=Sampler, -1=plugin/unknown, -2=no instrument.</summary>
     public int TrackInstrumentKind(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentKind(_handle, trackId); }
+    public long TrackInstrumentId(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentId(_handle, trackId); }
     public bool TrackInstrumentSupportsMpe(int trackId) { ThrowIfDisposed(); return NativeMethods.TrackInstrumentSupportsMpe(_handle, trackId) != 0; }
 
     /// <summary>Built-in device kind (0=EQ,1=Comp,2=Reverb,3=Delay,4=Utility) or -1 for a plugin.</summary>
@@ -340,6 +477,13 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.AddPluginAutomationLane(_handle, trackId, deviceIndex, paramId); }
     public string AutomationLaneParamId(int trackId, int laneIndex)
     { ThrowIfDisposed(); return Marshal.PtrToStringUTF8(NativeMethods.AutomationLaneParamId(_handle, trackId, laneIndex)) ?? ""; }
+    public (int Chain, int Slot) AutomationLanePath(int trackId, int laneIndex)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.AutomationLanePath(_handle, trackId, laneIndex, out int c, out int sl) == NativeMethods.NotaResult.Ok ? (c, sl) : (-1, -1);
+    }
+    public int AddNestedAutomationLane(int trackId, AutomationTarget target, int deviceIndex, int chain, int slot, int paramIndex, string? paramId)
+    { ThrowIfDisposed(); return NativeMethods.AddNestedAutomationLane(_handle, trackId, (int)target, deviceIndex, chain, slot, paramIndex, paramId); }
     public int PluginLastTouchedParam(int trackId, int deviceIndex)
     { ThrowIfDisposed(); return NativeMethods.PluginLastTouchedParam(_handle, trackId, deviceIndex); }
 }

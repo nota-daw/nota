@@ -23,6 +23,112 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Tempo-synced scope in Nota Lens** (#119): the Scope view gains **Sync**, which lines the
+  trace up with the song: pick a **Span** from a quarter beat to four bars and the scope shows
+  that stretch of the beat grid, with beat and bar lines, a sweep line at the playhead and the
+  previous pass fading out to its right. It draws from a min/max history, so a one-sample
+  transient keeps its full height at any span, and a seek or loop wrap restarts the pass
+  cleanly. Lens also takes a sidechain **Key** (any other track): its waveform is drawn in teal
+  over the main one or **Stacked** under it, with its own display gain, in both the synced and
+  the triggered scope. A new button opens Lens in its own resizable window. The audio still
+  passes through untouched. Five params are appended (Sync, Span, Key, Key Gain, Layout);
+  older projects open with Sync off.
+- **Band labels and notes in EQ-8** (#135): name a band in the band panel's new **Label** field
+  and the name shows next to its node in the graph (and on its chip); click the label, or
+  **Note**, for a multiline note on what the band is for. Labels that would overlap move apart,
+  **Labels** next to Peak hides them, and they are saved with the project, in user presets and
+  in copies, each edit one undo step. The sound is unchanged. MCP `read_eq8` returns each band's
+  label and note and `set_eq8_band` sets them.
+- **A proper spectrum analyzer in EQ-8 and EQ-3** (#265): the spectrum behind the curve is now
+  a smooth, filled area that rises at once and falls back over about 300 ms, read from 256
+  points in 1/6-octave bands, so a tone reads at its own level and pink noise reads flat. EQ-8
+  draws the output filled with the input as a dim line (Pre fills the input), and gains
+  **Range** (60 / 90 / 120 dB) and **Peak** hold next to Pre / Post / Off; both are saved with
+  the device and older projects open at 90 dB, peak off. It also fixes why the old display
+  jumped: half of every analysis window held stale audio. The sound is unchanged. MCP
+  `set_eq8` `analyzerRangeDb` / `analyzerPeak`.
+- **A plug-in's card shows its interface** (#270): once you've opened a plug-in's window,
+  its device card stands on a picture of it, darkened by a wash in the theme's card colour
+  so the name, facts and buttons stay readable — the whole small card, and the info column
+  of the full one. The picture fills the card without stretching, is retaken each time the
+  window closes (by Close editor or its own close button), follows the device when it's
+  moved, duplicated or copied, and is saved with the project. macOS and Windows; on Linux
+  the card stays plain.
+- **Devices remember their preset and show when you changed it** (#157): after you load a
+  preset, the card header keeps its name and adds a " *" as soon as a sound parameter moves
+  away from it (the tooltip says "Changed since you loaded …"); setting it back, undoing or
+  picking the preset again clears it. Card size and EQ Eight's analyzer settings don't count.
+  The name follows the device through undo, copy and paste, duplicate and moves, and is saved
+  with the project. Applying a preset or Init is now one undo step. **Save preset…** starts
+  from the loaded preset's name. MCP: `read_preset_state`.
+- **A bigger, more useful Modular Scope** (#266): drag the bar under the trace to make it
+  taller (76–320 px), or open the Scope in its own resizable window. New controls: a time
+  window in milliseconds (50 ms–8 s) or, with **Sync**, in beats (1/16 to 8 bars) at the
+  current tempo; a 1×–8× vertical zoom; a **Rise** trigger that starts the trace where the
+  input rises through 0, so a repeating shape holds still; and **Freeze**. The settings and
+  the height are saved with the project; older projects open with a 1 s window, as before.
+- **Fold the piano roll** (nota-daw/nota#344, #345): **Fold** in the piano roll toolbar (⌥⇧F)
+  shows only the scale's notes on a melodic track, or only the pads, each row named after its
+  pad, on a Drum Rack. Pitches that hold notes keep their rows, so nothing is hidden. ↑/↓ and
+  drags move between the visible rows, so notes stay in key. Each track remembers its Fold,
+  and it's saved with the project. MCP `set_piano_fold` / `get_piano_fold`.
+- **Automation on return tracks**: in automation mode each return row in the arrangement
+  footer has a lane like a track's — pick Volume, Pan or a parameter of a device on the
+  return's chain from its pill, then draw, drag, bend, select, copy and paste points. The
+  return plays its automation back, its fader and pan follow, and the lanes are saved with
+  the project and undo like track automation.
+- **Resizable return and master rows**: drag a return's or the master's bottom edge, or pick
+  Compact, Standard or Large under **Height** in its context menu; a double-click on the edge
+  goes back to Compact; ⌘- or ⇧-click returns to select several and size them together.
+  Their headers adapt like a track's (a return gains a mute button at Standard and its pan at
+  Large), the heights are saved with the project, and past about half the arrangement the
+  footer scrolls instead of crowding out the tracks.
+- **Select several devices and group them into a rack** (#328): in the Devices panel ⇧-click
+  selects a range across MIDI effects, the instrument and audio effects, ⌘-click adds or
+  removes one, Esc clears. Copy, cut, paste, duplicate, delete, Move to track ▸ and dragging a
+  header act on the whole selection in one undo step; with the instrument selected along with
+  other devices, Delete always asks before its track goes. ⌘G (or **Group into rack**) folds
+  the selection into the matching rack — Audio Effect Rack, MIDI Effect Rack, or an Instrument
+  Rack whose first chain holds the MIDI effects, the instrument and the audio effects — in
+  place, sounding the same; ⌘⇧G takes any one-chain rack apart. Automation, modulation links,
+  an Arp's CC lane and sidechain keys follow the devices into the rack and back out, keep
+  working, and are saved with the project. MCP `group_devices`, `ungroup_rack`.
+- **MIDI Effect Rack**: a new MIDI effect with chains of MIDI effects. Each chain takes the
+  notes its key and velocity zone lets in (or, in Select mode, the chains whose select range
+  holds the selector), runs them through its Arp, Chord, Scale and so on, can transpose them
+  and scale their velocity, and the chains' notes merge before the instrument. Merge duplicate
+  notes and pass notes outside every zone through are switches. In the Browser under MIDI
+  effects · Racks; saved with the project and in presets; the MCP tools are `midi_rack_*`.
+- **MIDI effects in Instrument Rack chains** (nota-daw/nota#329): a chain runs MIDI effects →
+  instrument → audio effects, like a track, so an instrument and its Arp or Chord can live in
+  one rack. They keep time with the song exactly as on a track.
+- **Mono and glide on the Instrument Rack**: Mono (last note) plays one note at a time; Glide
+  slides each new note from the previous pitch on instruments that take per-note bend.
+- **Duplicate a rack chain**, with its devices, zones, mix and macro mappings.
+- **Map a rack's selector to a macro** (Audio Effect and MIDI Effect Racks).
+- **Nota Vocoder in rack chains**: add it to an Instrument or Audio Effect Rack chain from the
+  card's menu or the Browser; inside a rack it uses its own Saw or Noise carrier.
+- **Nota Mosaic and the Drum Rack in Instrument Rack chains**: drop either on a rack from the
+  Browser or pick it in the card's chain menus. A Mosaic chain opens the full Mosaic editor
+  (presets, zones, loading) and its program is saved with the rack; a Drum Rack chain opens
+  the Drum Rack card in a window — pads, pad editor, macros and the factory kits — so one
+  track can play a kit on one octave and an instrument on the rest. Outer macros can drive
+  the Drum Rack's macros. Racks nest one level: a Drum Rack goes in an Instrument Rack chain
+  only, and a Drum Rack inside a chain has no swing or humanize of its own. Drum Rack pads take
+  Mosaic too. MCP: `set_chain_instrument` takes 17 and 4, `load_mosaic_preset` takes a chain,
+  `get_rack` reads a nested Drum Rack.
+- **Presets drop onto racks**: drag a preset from the Browser onto a rack — an instrument preset
+  (a factory or user preset, a Mosaic pack preset or a drum kit) starts a new chain with it, or
+  replaces a chain's instrument when dropped on that chain; an effect or MIDI-effect preset adds
+  the device to the chain, preset applied, in one undo step. Plug-in presets don't go into a
+  rack chain yet; a MIDI-effect preset brings its parameters.
+- **Move, copy and paste devices in rack chains**: drag a device's header to reorder it in its
+  chain (a drop bar shows where), or onto another chain's row to move it there with its macro
+  mappings. Click one to select it, then Copy, Cut, Paste, Duplicate or Delete from its menu or
+  with ⌘C / ⌘X / ⌘V / ⌘D / Delete. The clipboard is shared with the track's device chain, so a
+  device copies between the track chain and any rack chain, settings and all (a sidechain key
+  is dropped inside a rack). Each step is one undo step.
+- **Duplicate a device with ⌘D** on the track's device chain (also in its right-click menu).
 - **Move clips with the keyboard** (nota-daw/nota#302): in the Arrangement, ← / → nudge the
   selected clips by the grid step and ⌥← / ⌥→ by a 64th note, stopping at the song start;
   ⌥↑ / ⌥↓ move them to the next track up or down that takes them, at the same beats. Each
@@ -41,6 +147,32 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   of a one-chain rack back out. Also in the device's right-click menu (**Group into rack** /
   **Ungroup rack**). A device with a sidechain key, automation or CV links stays where it is
   and the status line says why. ⌘G on tracks still groups tracks.
+- **The instrument is a device you can select** (nota-daw/nota#327, nota-daw/nota#146): click
+  the instrument card to select it. Its right-click menu has **Replace…** (any built-in
+  instrument, an empty Instrument Rack or Drum Rack, or an installed plug-in, swapped in place
+  with the clips and effects kept), **Copy**, **Cut** and **Paste** — a copied instrument,
+  settings, chains and pads and all, replaces the instrument of the track it is pasted on — and
+  **Delete track**.
+- **Move a device to another track** (nota-daw/nota#327): **Move to track ▸** in any device's
+  menu, or drag the device's header out of the Devices panel onto a track in the Arrangement or
+  a column in Session view; hold ⌥ (Alt) to copy it instead. A moved device takes its
+  automation along; one undo puts it back. Moving the instrument replaces the other track's
+  instrument and removes its own track.
+- **A Remove button on every device** (nota-daw/nota#110): a small × in each device's header,
+  folded strip and rack chain card removes it; it is reachable with Tab and Enter. One undo
+  brings the device back.
+- **Drop instruments in Session view** (nota-daw/nota#313): an instrument or instrument preset
+  dropped on a column header or slot replaces that track's instrument (on a rack it adds a
+  chain or pad); dropped on an audio column it starts a new track after it, and right of the
+  last column a new track at the end.
+- **MCP**: `set_track_instrument` replaces a track's instrument with a built-in one (racks
+  included); `move_device_to_track` moves or copies a device, the instrument included, to
+  another track.
+- **Mono or stereo audio input** (nota-daw/nota#340): an audio track's record input lists the
+  hardware input as **Ext 1**, **Ext 2** and **Ext 1/2** (track menu, header box, Session I/O
+  row). A mono pick is recorded and monitored in the middle of both sides, so a mic on input 1
+  of a stereo interface is no longer left-only. New audio tracks take Ext 1; projects saved
+  before keep the stereo pair. Saved with the project; MCP `set_input_channels`.
 - **Text size** in Preferences → Appearance: Smaller, Default, Larger or Largest makes every
   text in the app a point smaller or up to two points larger, live, without changing the
   layout (Interface scale still scales everything). Device cards keep their text size.
@@ -89,8 +221,32 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     capped knobs with an orange value arc, value bars instead of thin sliders, the new
     switches and segment groups, pressed-in sections, one font, greys instead of the old
     identity colours, and inactive controls in a quieter grey instead of faded.
-
-### Changed
+- **Return and master rows start compact**: new projects, new returns and projects saved
+  before this version show them at the Compact height, so the tracks get the room.
+- **One click arms one track** (nota-daw/nota#332): a click on a track's arm button arms that
+  track and disarms the others, so picking which instrument the keyboard plays is one click.
+  ⌘-click (Ctrl-click on Windows / Linux) arms several. While recording, a click never
+  disarms another track. With **Transport ▸ Auto-arm selected track** on (off by default),
+  selecting an instrument track (a new one included) arms it the same way, unless several
+  tracks or an audio track are armed.
+- **The Envelope Follower is easier to find** (nota-daw/nota#133): searching Modular's palette
+  for "peak controller", "ducking" or "loudness" finds it, and the docs walk through ducking one
+  track under another.
+- **Delete on the instrument deletes its track**, as an instrument track always has an
+  instrument; Nota asks first when the track has clips.
+- **A new Instrument Rack starts empty** instead of with a Nota Volt chain: drop an instrument
+  or a preset on it to add the first chain.
+- **A Mosaic in a rack chain lists the presets a Mosaic track does** in its window — the factory
+  multisamples, the pack presets, the program it holds and Init.
+- **The rack cards are redesigned** (Instrument, Audio Effect and the new MIDI Effect Rack share
+  one card): eight macro knobs; Chains, Zones (Audio: Select) and Macros tabs; the chosen
+  chain's devices as compact cards with their key parameters; a Chain / Rack out panel; a
+  status line. Every theme draws it in its own colours.
+- **Map a macro in place**: press Map and click parameters right on the chain's devices; Esc
+  ends it. The Macros tab sets each target's range (min above max inverts) and the macro's
+  curve, shown as Mixed when an older project gave its targets different curves.
+- **Zones are dragged by their edges**, and hovering the keyboard strip shows which chains a
+  note would play.
 - **Splitting a long warped clip is instant** (nota-daw/nota#299, nota-daw/nota#259): a split,
   trim or range cut of a warped clip reuses the stretch the clip already has instead of
   stretching both halves again on the UI thread (13 s for a 20-minute clip before), and the
@@ -105,6 +261,52 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   decay), and the Space panel shows "size · diffuse" again, or "maximum density" on Plate.
   Delay: the Time panel says "channels linked / independent" in ms, or "L 1/8 · R 1/4" in Sync,
   and MIDI-learning the repeats graph maps Low Cut again, as before.
+- **Shell read-outs and controls lost in the restyle are back**: the Loop key writes the loop
+  range beside its icon again; the arrangement's header column names the **Sections** and
+  **Overview** lanes and the zoom keys carry their "Zoom" caption; the Return and Master rows'
+  dB number follows a drag, opens typed entry on double-click, and the bar writes its value
+  inside; the input picker stays on Standard-height track headers (it shrinks in a narrow
+  column) and the mouse wheel steps through its sources again; the piano roll's Loop switch
+  shows on (clips always loop); clip names show on rows taller than 34 px again; and the piano
+  roll's selection read-out labels its fields again (Pitch, Start, Length, Velocity / Notes,
+  Range, Velocity) while the gesture hint wraps to a second line instead of being cut off.
+- **Device cards: what the restyle dropped is back, in the new look.** Level meters turn red
+  only at 0 dBFS again (amber from −6 dB), Pentad's level bars included. Modulation depths and
+  amounts (env, LFO and fine-tune knobs, rack macros in mapping mode, Ceiling's Release while
+  Auto Release drives it) draw a dashed arc, and modulation sliders a hatched fill, so they read
+  apart from ordinary values. An inactive segment strip (Dynamic EQ-8 Mode, EQ-8 Slope, Bass
+  Legato, Flux's reaction target, Physical's resonator choices, a rack macro's Curve) shows
+  which option is picked again. Ceiling's Level graph has its reduction strip back; Chamber
+  shows the IR start time and the result lane's axis; Dynamic EQ-8 shows its "Response" title
+  and tells boost from cut by shade and a dashed ring; EQ-3's three band curves differ again
+  (shade and dash) and its faders have their 0 dB and half-cut ticks; EQ-8's L / R bands have a
+  dashed ring; Vintage's pitch-drift scale, Chorus's centre-line label and the Volt / Bass /
+  Aurora filter graph's frequency labels, −48 dB floor and +12 … −48 dB range are back;
+  Utility's correlation bar tints its out-of-phase half; Sampler's live cutoff line is lighter
+  and labelled; Flux shows when the reaction pulls the vector. ⌥-click resets Compressor's
+  Thresh / Makeup and EQ-3's faders and Output again (double-click the value, or right-click,
+  to type). Value bars and EQ-3's faders light up under the pointer, and the Auto Filter and
+  Compressor handles only look grabbed while hovered or dragged. Operator's OUT drop zone is the
+  bottom 22 % of the routing view again, and fixed Modular nodes show their lock. About 35
+  graph tooltips that named colours no longer drawn now describe what is on screen.
+- **Disarming a track no longer leaves a held note sounding** (nota-daw/nota#366): turning record arm off
+  (or the arm moving to another selected track) while a key is down releases the notes that
+  came in through live input, instead of leaving them on until panic or stop.
+- **Session clips no longer wait forever to start** (nota-daw/nota#343): a clip launched on a
+  muted track, or one silenced by another track's solo, starts on the next launch point and
+  keeps time while silent; a transport loop with no bar line inside it now launches at the
+  loop start instead of never.
+- **An audio take in Session stops the track's playing clip** (nota-daw/nota#337), as a MIDI
+  take does, rather than letting it play on until the take ends.
+- **Audio effects vanishing from the Browser** (nota-daw/nota#342): a search typed on one tab
+  and cleared on another left the first tab filtered, empty under an empty search box ("No
+  audio effects yet"). A tab now follows the search box whenever it's shown.
+- A rack card's faders, mode buttons and switches (and zone or select-range drags) undo one
+  gesture at a time on every rack, the MIDI Effect Rack included; a nested Drum Rack's window
+  follows its chain when chains in front of it are removed or moved.
+- Undoing or redoing a rack edit puts back what the rack's macros drive, and changes to a
+  mapping's range, curve or a macro's name are undoable.
+- "Save preset" on a MIDI effect's card saves that MIDI effect.
 - **Linux: file dialogs that never open** (nota-daw/nota#297): when xdg-desktop-portal has no
   working FileChooser backend, Open / Save / Export / Import used to do nothing. Nota now notices
   within 4 seconds (the request fails, answers without showing, or shows nothing) and opens its

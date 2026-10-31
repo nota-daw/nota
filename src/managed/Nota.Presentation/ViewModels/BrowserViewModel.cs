@@ -497,6 +497,16 @@ public sealed partial class BrowserViewModel : ObservableObject
         else RebuildVisible(tab);
     }
 
+    /// <summary>A tree tab comes into view: the search box is shared by every tab, but only the
+    /// tab on screen follows it as you type, so a tab shown again takes the box's query if it
+    /// changed meanwhile. Otherwise a search cleared on another tab kept this one filtered —
+    /// empty, under an empty box (#342).</summary>
+    public void ShowTab(int tab, string query)
+    {
+        if (tab < 0 || tab >= _treeQuery.Length) return;
+        if (_treeQuery[tab].Trim() != (query ?? "").Trim()) FilterTree(tab, query ?? "");
+    }
+
     // Flatten a tree into its visible ObservableCollection, honouring expand state and
     // the current query. With a query, matching is name/sub substring; a matching device
     // shows its category folders, and a device with matching presets shows just those

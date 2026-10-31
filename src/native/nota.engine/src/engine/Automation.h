@@ -48,4 +48,17 @@ struct AutomationLane {
     }
 };
 
+// A track's own automation lane (specs/044): it may point at a device grouped into a rack.
+// deviceIndex is then the rack's address on the track (>= 0 effect, -1 instrument,
+// midiHost(i) MIDI effect) and the lane drives the child at (chainUid, slot); `target` names
+// the child's param surface (DeviceParam / MidiDeviceParam generic params, PluginParam the
+// plugin-param surface, slot -1 = the chain instrument). chainUid 0 = a track-level lane.
+// Clip envelopes stay plain AutomationLanes: every audio clip copies two of them, and a
+// bigger lane made clip edits measurably slower.
+struct TrackLane : AutomationLane {
+    uint64_t chainUid = 0;
+    int32_t slot = -1;
+    bool nested() const { return chainUid != 0; }
+};
+
 } // namespace nota

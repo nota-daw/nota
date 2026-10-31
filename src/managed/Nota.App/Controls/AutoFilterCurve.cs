@@ -67,6 +67,11 @@ internal sealed class AutoFilterCurve : Control
 
     public bool Dragging => _drag;
 
+    // The whole graph is the handle: under the pointer its node looks grabbed.
+    private bool _hover;
+    protected override void OnPointerEntered(PointerEventArgs e) { base.OnPointerEntered(e); _hover = true; InvalidateVisual(); }
+    protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); _hover = false; InvalidateVisual(); }
+
     // Base (user-set) filter params — drives the drawn response + the handle.
     public void Set(double freqNorm, double res, int type, float morph, bool slope24)
     {
@@ -248,7 +253,7 @@ internal sealed class AutoFilterCurve : Control
         var baseFc = HzOf(_fcNorm);
         Stroke(CurvePen, Curve(baseFc, _res));
         double cx = _fcNorm * w, cy = YForDb(MagDb(baseFc, baseFc, _res), h);
-        NotaGraph.Node(ctx, new Point(cx, cy), active: true);   // the one point is always the picked one
+        NotaGraph.Node(ctx, new Point(cx, cy), active: _drag || _hover);   // looks grabbed only under the pointer or in the hand
 
         // Labels: title, legend, the range corners and the cutoff under its handle.
         NotaGraph.Title(ctx, frame, "Response");

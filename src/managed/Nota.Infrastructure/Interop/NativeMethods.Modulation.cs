@@ -39,6 +39,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_modulator_scope")]
     internal static partial int ModulatorScope(IntPtr engine, int trackId, int modId, [Out] float[] outv, int cap);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_modulator_scope_timed")]
+    internal static partial int ModulatorScopeTimed(IntPtr engine, int trackId, int modId, [Out] float[] values, [Out] float[] dts, int cap);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_add_cv_link")]
     internal static partial int AddCvLink(IntPtr engine, int trackId, int modId, int deviceIndex, int paramIndex);
 
@@ -86,6 +89,15 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_track_cv_link_param")]
     internal static partial int CvLinkParam(IntPtr engine, int trackId, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_cv_link_path")]
+    internal static partial int CvLinkPath(IntPtr engine, int trackId, int index, out int srcChain, out int srcSlot,
+                                           out int tgtChain, out int tgtSlot);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_add_nested_cv_link")]
+    internal static partial int AddNestedCvLink(IntPtr engine, int trackId, int sourceKind, int modId, int srcDevice,
+                                                int srcChain, int srcSlot, int srcParam, int targetKind, int targetTrack,
+                                                int targetDevice, int tgtChain, int tgtSlot, int targetParam);
 
     [LibraryImport(Lib, EntryPoint = "nota_track_cv_link_depth")]
     internal static partial float CvLinkDepth(IntPtr engine, int trackId, int index);

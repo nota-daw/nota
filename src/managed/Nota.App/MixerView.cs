@@ -580,23 +580,24 @@ public sealed class MixerView : UserControl
         MidiLearn.Bind(solo, MidiTarget.TrackSolo(id), "Solo");
         row.Children.Add(mute);
         row.Children.Add(solo);
-        if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, v => _engine.SetTrackArmed(id, v)));
+        if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive)));
         return new Border { Height = 28, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0), Child = row };
     }
 
     // Record-arm: neutral with a red disc at rest, solid record red with a pale disc when armed.
-    private Border ArmToggle(bool initial, Action<bool> set)
+    private Border ArmToggle(bool initial, Action<bool, bool> set)   // (armed, ⌘/Ctrl held) — #332
     {
         bool on = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
         var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Field, BorderThickness = new Thickness(1), Child = disc };
+        ToolTip.SetTip(b, TrackArming.Tip);
         void Paint()
         {
             b.Background = on ? NotaPalette.Record : MasterBg;
             b.BorderBrush = on ? NotaPalette.Record : NotaPalette.Seam;
             disc.Foreground = on ? NotaPalette.RecordInk : NotaPalette.Record;
         }
-        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on); Paint(); };
+        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on, TrackArming.IsAdditive(e.KeyModifiers)); Paint(); };
         Paint();
         return b;
     }

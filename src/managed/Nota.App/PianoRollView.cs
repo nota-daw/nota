@@ -12,6 +12,8 @@
 // the row height is per-clip view state like the horizontal zoom.
 // With note audition on (the clip editor's speaker chip, #46) a note sounds on the track's
 // instrument while it is placed, pressed or dragged; the keys column plays its keys (#47).
+// Rows come from a PianoRowMap (specs/045 Fold): every pitch ↔ y goes through it, so a
+// folded keyboard (scale rows, or a Drum Rack's pads) uses the same drawing and editing code.
 
 using System;
 using System.Collections.Generic;
@@ -27,6 +29,7 @@ using Avalonia.Threading;
 using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Application.Midi;
+using Nota.Presentation;
 
 namespace Nota.App;
 
@@ -111,6 +114,7 @@ public sealed partial class PianoRollView : UserControl
         if (preview is null && _recPreview is null) return;
         _recPreview = preview;
         _recClipStart = clipStart;
+        if (_fold) RebuildRows();   // a held key on a pitch with no folded row gets one
         _gridControl.InvalidateVisual();
     }
     /// <summary>A note's recorded MPE by <see cref="NotaNote.ExprId"/>, drawn over the note.
@@ -132,9 +136,11 @@ public sealed partial class PianoRollView : UserControl
     private DispatcherTimer? _heldTimer;
 
     // --- per-clip view persistence (scroll/zoom don't reset when you re-enter a clip) ------
-    private readonly record struct ViewState(double Ppb, double Scroll, double VOffset, bool HasV, double RowH);
+    // RowH is the keyboard's row height; PadRowH a folded kit's, when zoomed by hand (null: fitted).
+    private readonly record struct ViewState(double Ppb, double Scroll, double VOffset, bool HasV, double RowH, double? PadRowH = null);
     private static readonly Dictionary<(int, int), ViewState> s_view = new();
     private (int, int) _clipKey = (int.MinValue, int.MinValue);
+    private (int, int) _loadedKey = (int.MinValue, int.MinValue);   // the clip Load last showed
     private double? _pendingVOffset;   // absolute vertical offset to apply once the body is laid out
     private bool _pendingCenter;       // instead: centre on the clip's notes once laid out
     private bool _restoringView;       // suppress view-saves while we programmatically restore
@@ -372,7 +378,7 @@ public sealed partial class PianoRollView : UserControl
     private static readonly IBrush PressureShade = NotaPalette.Wash(NotaPalette.SurfaceAbyss, 0x66);
     private static readonly Typeface NumFace = NotaFonts.Sans;
 
-    private double RangeH => (MaxPitch - MinPitch + 1) * RowH;
+    private double RangeH => _rows.Count * RowH;
 
     public PianoRollView()
     {
@@ -389,6 +395,7 @@ public sealed partial class PianoRollView : UserControl
         // Body: keys pinned left, grid fills; both scroll vertically together.
         // Top-aligned: zoomed out past the viewport, the 88 rows stay pinned to the top.
         var body = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), VerticalAlignment = VerticalAlignment.Top };
+        _keyColumns.Add(body.ColumnDefinitions[0]);
         body.Children.Add(_keys);
         Avalonia.Controls.Grid.SetColumn(_gridControl, 1);
         body.Children.Add(_gridControl);
@@ -402,6 +409,7 @@ public sealed partial class PianoRollView : UserControl
 
         // Ruler row (corner + ruler) pinned above; velocity row pinned below.
         var rulerRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = RulerH };
+        _keyColumns.Add(rulerRow.ColumnDefinitions[0]);
         var corner = new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 1) };
         rulerRow.Children.Add(corner);
         Avalonia.Controls.Grid.SetColumn(_ruler, 1);
@@ -409,12 +417,14 @@ public sealed partial class PianoRollView : UserControl
 
         // The clip strip (several clips open): corner + strip, under the ruler.
         var stripRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*") };
+        _keyColumns.Add(stripRow.ColumnDefinitions[0]);
         stripRow.Children.Add(new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 1) });
         Avalonia.Controls.Grid.SetColumn(_strip, 1);
         stripRow.Children.Add(_strip);
         stripRow.Bind(IsVisibleProperty, _strip.GetObservable(IsVisibleProperty));
 
         var velRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = VelH };
+        _keyColumns.Add(velRow.ColumnDefinitions[0]);
         _laneRow = velRow;
         // The lane's gutter picks what it edits: velocity, or a recorded-MPE dimension.
         var velLabelHost = new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 1, 0) };
@@ -426,6 +436,7 @@ public sealed partial class PianoRollView : UserControl
         // Horizontal zoom scrollbar pinned below the velocity lane, aligned under the
         // grid (56px keys gutter on the left).
         var scrollRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*") };
+        _keyColumns.Add(scrollRow.ColumnDefinitions[0]);
         _hScroll = new ScrollBar { Orientation = Orientation.Horizontal, Height = 10, IsVisible = false, Minimum = 0 };
         _hScroll.Scroll += (_, _) => SetScrollBeats(_hScroll.Value);
         Avalonia.Controls.Grid.SetColumn(_hScroll, 1);
@@ -450,6 +461,7 @@ public sealed partial class PianoRollView : UserControl
         // Persist vertical scroll per clip; apply a pending restore once the body is laid out.
         _bodyScroll.ScrollChanged += (_, _) => { if (!_restoringView) SaveView(); };
         _bodyScroll.LayoutUpdated += (_, _) => ApplyPendingVOffset();
+        _bodyScroll.SizeChanged += (_, e) => { if (e.HeightChanged) RefitPadsOnResize(); };
 
         // Poll the pressed key(s) ~40 Hz while the editor is on screen.
         AttachedToVisualTree += (_, _) =>
@@ -486,7 +498,9 @@ public sealed partial class PianoRollView : UserControl
     private void SaveView()
     {
         if (_clipKey.Item1 == int.MinValue || _pixelsPerBeat <= 0) return;
-        s_view[_clipKey] = new ViewState(_pixelsPerBeat, _scrollBeats, _bodyScroll.Offset.Y, true, _rowH);
+        // A fitted kit's height is refit on reopening; keep the keyboard's own for unfolding.
+        double? padRowH = _fold && _rowsArePads && !_padFit ? _rowH : null;
+        s_view[_clipKey] = new ViewState(_pixelsPerBeat, _scrollBeats, _bodyScroll.Offset.Y, true, _rowHBeforePadFit ?? _rowH, padRowH);
     }
 
     private void ApplyPendingVOffset()
@@ -513,6 +527,7 @@ public sealed partial class PianoRollView : UserControl
         if (_gridControl.Dragging) return;
         double h0 = _rowH, h1 = Math.Clamp(h, MinRowH, MaxRowH);
         if (Math.Abs(h1 - h0) < 1e-9) return;
+        PadRowsZoomed();   // a fitted kit keeps the height the user chose (a clamped no-op doesn't count)
         double c = (_pendingVOffset ?? _bodyScroll.Offset.Y) + viewportY;
         _rowH = h1;
         _keys.Height = RangeH;
@@ -532,17 +547,19 @@ public sealed partial class PianoRollView : UserControl
         => (m & (KeyModifiers.Control | KeyModifiers.Meta)) != 0 && (m & KeyModifiers.Alt) != 0;
 
     /// <summary>Fit to notes (⇧F): every note of the clip in view, one row of margin above
-    /// and below, centred; an empty clip goes back to the default height around C5.</summary>
+    /// and below, centred; an empty clip goes back to the default height around C5. Folded to a
+    /// Drum Rack's pads, it fits every pad row instead, so the kit fills the editor.</summary>
     public void FitToNotes()
     {
         if (_gridControl.Dragging) return;
         double vh = _bodyScroll.Viewport.Height;
         double h = DefaultRowH;
-        if (_notes.Count > 0 && vh > 0)
+        if (_rowsArePads && vh > 0) h = Math.Min(MaxPadRowH, vh / _rows.Count);
+        else if (_notes.Count > 0 && vh > 0)
         {
             int minP = int.MaxValue, maxP = int.MinValue;
             foreach (var n in _notes) { if (n.Pitch < minP) minP = n.Pitch; if (n.Pitch > maxP) maxP = n.Pitch; }
-            h = vh / (maxP - minP + 1 + 2);
+            h = vh / (_rows.NearestRow(minP) - _rows.NearestRow(maxP) + 1 + 2);
         }
         _rowH = Math.Clamp(h, MinRowH, MaxRowH);
         _keys.Height = RangeH;
@@ -711,7 +728,12 @@ public sealed partial class PianoRollView : UserControl
         // length horizontally and centre vertically on the clip's own notes at the default
         // row height. Row heights are per clip: zooming one never changes another.
         bool saved = s_view.TryGetValue(_clipKey, out var vs) && vs.HasV;
-        _rowH = saved ? Math.Clamp(vs.RowH, MinRowH, MaxRowH) : DefaultRowH;
+        // The same clip reloaded (undo, a recording pass): a folded kit keeps the rows it has,
+        // fitted or zoomed by hand. The saved height is the keyboard's, for unfolding.
+        bool reload = _clipKey.Item1 != int.MinValue && _clipKey == _loadedKey;
+        _loadedKey = _clipKey;
+        bool keepKitRows = reload && _fold && _rowsArePads;
+        if (!keepKitRows) _rowH = saved ? Math.Clamp(vs.RowH, MinRowH, MaxRowH) : DefaultRowH;
         _keys.Height = RangeH;
         _gridControl.Height = RangeH;
         if (saved)
@@ -727,6 +749,7 @@ public sealed partial class PianoRollView : UserControl
             _pendingVOffset = null; _pendingCenter = true;
         }
         Invalidate();
+        if (!keepKitRows) RefitPadsOnClipLoad(saved ? vs.PadRowH : null);   // another clip: a folded kit fits (or takes its zoom) again
         Changed?.Invoke();
         ApplyPendingVOffset();   // apply now if laid out; LayoutUpdated retries otherwise
     }
@@ -740,10 +763,10 @@ public sealed partial class PianoRollView : UserControl
         {
             int minP = int.MaxValue, maxP = int.MinValue;
             foreach (var n in _notes) { if (n.Pitch < minP) minP = n.Pitch; if (n.Pitch > maxP) maxP = n.Pitch; }
-            double mid = (minP + maxP) * 0.5;
-            return Math.Max(0, (MaxPitch - mid) * RowH - vh * 0.5);
+            double mid = (_rows.NearestRow(minP) + _rows.NearestRow(maxP) + 1) * 0.5;
+            return Math.Max(0, mid * RowH - vh * 0.5);
         }
-        return Math.Max(0, (MaxPitch - 72) * RowH);   // C5 near the top
+        return Math.Max(0, _rows.NearestRow(72) * RowH);   // C5 near the top
     }
 
     public string SelectionInfo
@@ -945,7 +968,7 @@ public sealed partial class PianoRollView : UserControl
         double top = _bodyScroll.Offset.Y, bottom = top + vh;
         foreach (var n in _notes)
         {
-            double y = (MaxPitch - n.Pitch) * RowH;
+            double y = PitchY(n.Pitch);
             if (y >= top && y + RowH <= bottom) return;
         }
         _pendingVOffset = CenterOffsetForNotes();
@@ -1171,10 +1194,11 @@ public sealed partial class PianoRollView : UserControl
         return (Math.Min(lo, 0), Math.Max(hi, 0));
     }
 
-    /// <summary>Nudges the selection by dPitch semitones and/or dBeat beats, clamped to the
-    /// pitch range and clip bounds (moves as a block, stopping at the edge). A note whose start
-    /// crosses into a neighbouring open clip of its track moves into that clip. Undoable.
-    /// Scrolls vertically to keep pitch-moved notes in view.</summary>
+    /// <summary>Nudges the selection by dPitch and/or dBeat beats, clamped to the pitch range
+    /// and clip bounds (moves as a block, stopping at the edge). ±12 is an octave in semitones;
+    /// any other dPitch counts rows, which is semitones unfolded and the next visible row when
+    /// folded (specs/045). A note whose start crosses into a neighbouring open clip of its
+    /// track moves into that clip. Undoable. Scrolls vertically to keep pitch-moved notes in view.</summary>
     public bool MoveSelection(int dPitch, double dBeat)
     {
         var sel = _selection.Where(i => i >= 0 && i < _notes.Count).ToList();
@@ -1187,19 +1211,39 @@ public sealed partial class PianoRollView : UserControl
         }
         var (lo, hi) = ShiftRange(sel, i => (_notes[i].StartBeat, _notes[i].LengthBeats, _owner[i]), endsInside: true);
         double db = Math.Clamp(dBeat, lo, hi);
+        bool octave = Math.Abs(dPitch) == 12;
         int dp = dPitch;
-        if (minP + dp < MinPitch) dp = MinPitch - minP;
-        if (maxP + dp > MaxPitch) dp = MaxPitch - maxP;
+        if (octave)
+        {
+            if (minP + dp < MinPitch) dp = MinPitch - minP;
+            if (maxP + dp > MaxPitch) dp = MaxPitch - maxP;
+        }
+        else dp = ClampRows(sel.Select(i => _notes[i].Pitch), dp);
         if (Math.Abs(db) < 1e-9 && dp == 0) return false;
+        int edge = -1;
         foreach (int i in sel)
         {
-            var n = _notes[i]; n.StartBeat += db; n.Pitch += dp; _notes[i] = n;
+            var n = _notes[i]; n.StartBeat += db; n.Pitch = octave ? n.Pitch + dp : _rows.Step(n.Pitch, dp); _notes[i] = n;
             _owner[i] = _set.OwnerAfterMove(_owner[i], n.StartBeat);
+            if (edge < 0 || (dp > 0 ? n.Pitch > edge : n.Pitch < edge)) edge = n.Pitch;
         }
         _placementPending = true;
         Invalidate(); CommitNotes(); Changed?.Invoke();
-        if (dp != 0) EnsurePitchVisible(dp > 0 ? maxP + dp : minP + dp);
+        if (dp != 0) EnsurePitchVisible(edge);
         return true;
+    }
+
+    /// <summary>A row delta clamped so every one of <paramref name="pitches"/> stays on the map:
+    /// the group moves as a block and keeps its shape (in scale degrees when folded).</summary>
+    internal int ClampRows(IEnumerable<int> pitches, int rows)
+    {
+        int lo = int.MinValue, hi = int.MaxValue;
+        foreach (int p in pitches)
+        {
+            var (down, up) = _rows.Reach(p);
+            lo = Math.Max(lo, down); hi = Math.Min(hi, up);
+        }
+        return lo > hi ? 0 : Math.Clamp(rows, lo, hi);
     }
 
     /// <summary>Lengthens (dir +1) or shortens (dir −1) every selected note by one grid step,
@@ -1285,7 +1329,7 @@ public sealed partial class PianoRollView : UserControl
         var sv = _bodyScroll;
         double viewH = sv.Viewport.Height;
         if (viewH <= 0) return;
-        double y = (MaxPitch - pitch) * RowH, top = sv.Offset.Y, margin = RowH;
+        double y = PitchY(pitch), top = sv.Offset.Y, margin = RowH;
         if (y < top + margin) sv.Offset = new Vector(sv.Offset.X, Math.Max(0, y - margin));
         else if (y + RowH > top + viewH - margin) sv.Offset = new Vector(sv.Offset.X, y + RowH - viewH + margin);
     }
@@ -1361,6 +1405,7 @@ public sealed partial class PianoRollView : UserControl
 
     private void Invalidate()
     {
+        if (_fold) RebuildRows();   // notes, scale or pads may have moved the folded rows
         _overlayHost.Child?.InvalidateVisual();
         _ruler.InvalidateVisual();
         _strip.InvalidateVisual();
@@ -1620,7 +1665,7 @@ public sealed partial class PianoRollView : UserControl
         private Press _press;
         private double _pressY, _pressRowH;
 
-        private int PitchAt(double y) => (int)Math.Clamp(MaxPitch - Math.Floor(y / RowH), MinPitch, MaxPitch);
+        private int PitchAt(double y) => _o.PitchAtY(y);
         private const float KeyVelocity = 0.8f;
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -1695,49 +1740,65 @@ public sealed partial class PianoRollView : UserControl
         {
             double w = Bounds.Width;
             ctx.FillRectangle(KeysBg, new Rect(0, 0, w, Bounds.Height));
-            for (int p = MinPitch; p <= MaxPitch; p++)
+            var rows = _o._rows;
+            // Folded, every row is labelled (there are few, and they aren't a keyboard any more).
+            bool labelAll = !rows.IsChromatic;
+            for (int r = 0; r < rows.Count; r++)
             {
-                double y = (MaxPitch - p) * RowH;
-                ctx.FillRectangle(IsBlack(p) ? KeyBlack : KeyWhite, new Rect(0, y, w, RowH));
-                if (_o._scaleOn)
+                int p = rows.PitchAt(r);
+                double y = r * RowH;
+                ctx.FillRectangle(IsBlack(p) && rows.IsChromatic ? KeyBlack : KeyWhite, new Rect(0, y, w, RowH));
+                if (rows.Mark(r) == PianoRowMark.NoPad) ctx.FillRectangle(OutScaleWash, new Rect(0, y, w, RowH));
+                else if (_o._scaleOn && !_o._rowsArePads)
                 {
                     if (_o.IsRoot(p)) ctx.FillRectangle(RootTint, new Rect(0, y, w, RowH));
                     else if (!_o.InScale(p)) ctx.FillRectangle(OutScaleWash, new Rect(0, y, w, RowH));
                 }
-                ctx.DrawLine(p % 12 == 0 ? KeyOctaveLine : KeyLine, new Point(0, y + RowH - 0.5), new Point(w, y + RowH - 0.5));
-                if (p % 12 == 0) DrawKeyLabel(ctx, p, y, w, KeyLabel);
+                bool octave = rows.IsChromatic ? p % 12 == 0 : r == rows.Count - 1 || rows.PitchAt(r + 1) / 12 != p / 12;
+                ctx.DrawLine(octave ? KeyOctaveLine : KeyLine, new Point(0, y + RowH - 0.5), new Point(w, y + RowH - 0.5));
+                if (labelAll || p % 12 == 0) DrawKeyLabel(ctx, p, y, w, KeyLabel);
             }
             // Currently-pressed keys (computer keyboard / MIDI): light the key solid + label it.
             if (_o._held.Count > 0)
                 foreach (int hp in _o._held)
                 {
-                    if (hp < MinPitch || hp > MaxPitch) continue;
-                    double y = (MaxPitch - hp) * RowH;
+                    if (!_o.HasRow(hp)) continue;
+                    double y = _o.PitchY(hp);
                     ctx.FillRectangle(HeldKeyFill, new Rect(0, y, w, RowH - 1));
                     DrawKeyLabel(ctx, hp, y, w, KeyLabelOnAccent);
                 }
             // The key the roll itself is sounding (a pressed key, an auditioned note).
-            if (_o._auditionPitch >= MinPitch && !_o._held.Contains(_o._auditionPitch))
+            if (_o._auditionPitch >= MinPitch && !_o._held.Contains(_o._auditionPitch) && _o.HasRow(_o._auditionPitch))
             {
-                double y = (MaxPitch - _o._auditionPitch) * RowH;
+                double y = _o.PitchY(_o._auditionPitch);
                 ctx.FillRectangle(HeldKeyFill, new Rect(0, y, w, RowH - 1));
                 DrawKeyLabel(ctx, _o._auditionPitch, y, w, KeyLabelOnAccent);
             }
             // Hovered key: highlight it and label its note name (works for black keys too,
             // where the octave-C label wouldn't otherwise show).
-            if (_hover >= MinPitch && _hover != _o._auditionPitch)
+            if (_hover >= MinPitch && _hover != _o._auditionPitch && _o.HasRow(_hover))
             {
-                double hy = (MaxPitch - _hover) * RowH;
+                double hy = _o.PitchY(_hover);
                 ctx.FillRectangle(KeyHover, new Rect(0, hy, w, RowH - 1));
                 DrawKeyLabel(ctx, _hover, hy, w, KeyLabelHot);
             }
         }
 
+        // The note name, right-aligned; on a folded Drum Rack the pad's name instead, left-aligned
+        // and cut to the column.
         private void DrawKeyLabel(DrawingContext ctx, int pitch, double y, double w, IBrush ink)
         {
             // The axis size once a row has room for it (the default 12px row does); down to the
             // type floor on squeezed rows.
             double size = Math.Clamp(RowH - 2, NotaType.Floor, NotaType.Axis);
+            string? pad = _o._rows.Label(_o._rows.NearestRow(pitch));
+            if (pad is not null)
+            {
+                var name = new NotaFormattedText(pad, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans, size, ink)
+                    { MaxTextWidth = Math.Max(1, w - 8), MaxLineCount = 1, Trimming = TextTrimming.CharacterEllipsis };
+                ctx.DrawText(name, new Point(4, y + (RowH - name.Height) / 2));
+                return;
+            }
             var ft = new NotaFormattedText(NoteName(pitch), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NumFace, size, ink);
             ctx.DrawText(ft, new Point(w - ft.Width - 5, y + (RowH - ft.Height) / 2));
         }
@@ -1810,8 +1871,8 @@ public sealed partial class PianoRollView : UserControl
         private double BeatToX(double b) => _o.BeatToX(b);
         private double XToBeat(double x) => _o.XToBeat(x);
         private double RowH => _o.RowH;
-        private double PitchToY(int p) => (MaxPitch - p) * RowH;
-        private int YToPitch(double y) => (int)Math.Clamp(MaxPitch - Math.Floor(y / RowH), MinPitch, MaxPitch);
+        private double PitchToY(int p) => _o.PitchY(p);
+        private int YToPitch(double y) => _o.PitchAtY(y);
         // Alt held during the gesture positions freely, as in the arrangement (FR-009).
         private bool _free;
         private double Snap(double b) => _free ? b : _o.SnapBeat(b);
@@ -1822,22 +1883,26 @@ public sealed partial class PianoRollView : UserControl
             if (w <= 0) return;
             _o.EnsurePpb(w);
             ctx.FillRectangle(Bg, new Rect(0, 0, w, h));
-            for (int p = MinPitch; p <= MaxPitch; p++)
+            var rows = _o._rows;
+            for (int r = 0; r < rows.Count; r++)
             {
-                double y = PitchToY(p);
-                ctx.FillRectangle(IsBlack(p) ? LaneBlack : LaneWhite, new Rect(0, y, w, RowH));
-                if (_o._scaleOn)
+                int p = rows.PitchAt(r);
+                double y = r * RowH;
+                ctx.FillRectangle(IsBlack(p) && rows.IsChromatic ? LaneBlack : LaneWhite, new Rect(0, y, w, RowH));
+                if (rows.Mark(r) == PianoRowMark.NoPad) ctx.FillRectangle(OutScaleWash, new Rect(0, y, w, RowH));
+                else if (_o._scaleOn && !_o._rowsArePads)
                 {
                     if (_o.IsRoot(p)) ctx.FillRectangle(RootTint, new Rect(0, y, w, RowH));
                     else if (_o.InScale(p)) ctx.FillRectangle(InScaleTint, new Rect(0, y, w, RowH));
                     else ctx.FillRectangle(OutScaleWash, new Rect(0, y, w, RowH));
                 }
-                ctx.DrawLine(p % 12 == 0 ? RowOctaveLine : RowLine, new Point(0, y + RowH - 0.5), new Point(w, y + RowH - 0.5));
+                bool octave = rows.IsChromatic ? p % 12 == 0 : r == rows.Count - 1 || rows.PitchAt(r + 1) / 12 != p / 12;
+                ctx.DrawLine(octave ? RowOctaveLine : RowLine, new Point(0, y + RowH - 0.5), new Point(w, y + RowH - 0.5));
             }
             // Played-key rows: a faint wash across the grid so you see where the pressed note sits.
             if (_o._held.Count > 0)
                 foreach (int hp in _o._held)
-                    if (hp >= MinPitch && hp <= MaxPitch)
+                    if (_o.HasRow(hp))
                         ctx.FillRectangle(HeldRowTint, new Rect(0, PitchToY(hp), w, RowH));
             double ppb = Ppb;
             _o.DrawGridLines(ctx, w, h);
@@ -1848,7 +1913,7 @@ public sealed partial class PianoRollView : UserControl
             for (int i = 0; i < notes.Count; i++)
             {
                 var n = notes[i];
-                if (n.Pitch < MinPitch || n.Pitch > MaxPitch) continue;
+                if (!_o.HasRow(n.Pitch)) continue;
                 if (multi && (_o._owner[i] == _o._set.Active) != (pass == 1)) continue;
                 double x = BeatToX(n.StartBeat), y = PitchToY(n.Pitch);
                 double nw = Math.Max(3, n.LengthBeats * ppb);
@@ -1908,7 +1973,7 @@ public sealed partial class PianoRollView : UserControl
             if (_o._recPreview is { } rp)
                 foreach (var hn in rp.Held)
                 {
-                    if (hn.Pitch < MinPitch || hn.Pitch > MaxPitch) continue;
+                    if (!_o.HasRow(hn.Pitch)) continue;
                     double s = hn.StartBeat - _o._recClipStart, e = Math.Max(hn.StartBeat, rp.NowBeat) - _o._recClipStart;
                     double hx = BeatToX(s), hw = Math.Max(3, (e - s) * ppb);
                     if (hx + hw < 0 || hx > w) continue;
@@ -1998,7 +2063,7 @@ public sealed partial class PianoRollView : UserControl
             for (int i = notes.Count - 1; i >= 0; i--)
             {
                 var n = notes[i];
-                if (n.Pitch < MinPitch || n.Pitch > MaxPitch || _o.IsLocked(i)) continue;
+                if (!_o.HasRow(n.Pitch) || _o.IsLocked(i)) continue;
                 double x = BeatToX(n.StartBeat), y = PitchToY(n.Pitch), nw = Math.Max(3, n.LengthBeats * Ppb);
                 if (!new Rect(x, y, nw, RowH).Contains(p)) continue;
                 if (_o._owner[i] != _o._set.Active)
@@ -2127,19 +2192,18 @@ public sealed partial class PianoRollView : UserControl
                 double targetStart = Snap(XToBeat(p.X) - _grabBeat);
                 var pr = _orig[_primary];
                 double dBeat = targetStart - pr.start;
-                int dPitch = YToPitch(p.Y) - pr.pitch;
+                // Rows, not semitones: folded, the group moves between visible rows (specs/045).
+                int dRows = _o._rows.NearestRow(pr.pitch) - (int)Math.Floor(p.Y / RowH);
                 // Clamp the shared delta so the whole group stays in-bounds (keeps shape): every
                 // start within its reach — its clip and the open clips of its track it touches.
-                int minP = int.MaxValue, maxP = int.MinValue;
-                foreach (var v in _orig.Values) { minP = Math.Min(minP, v.pitch); maxP = Math.Max(maxP, v.pitch); }
                 var (lo, hi) = _o.ShiftRange(_orig.Keys, i => (_orig[i].start, _orig[i].len, _orig[i].owner), endsInside: false);
                 dBeat = Math.Clamp(dBeat, lo, hi);
-                dPitch = Math.Clamp(dPitch, MinPitch - minP, MaxPitch - maxP);
+                dRows = _o.ClampRows(_orig.Values.Select(v => v.pitch), dRows);
                 foreach (var kv in _orig)
                 {
                     var n = _o._notes[kv.Key];
                     n.StartBeat = kv.Value.start + dBeat;
-                    n.Pitch = kv.Value.pitch + dPitch;
+                    n.Pitch = _o._rows.Step(kv.Value.pitch, dRows);
                     _o._notes[kv.Key] = n;
                     _o._owner[kv.Key] = _o._set.OwnerAfterMove(kv.Value.owner, n.StartBeat);
                 }
@@ -2250,6 +2314,7 @@ public sealed partial class PianoRollView : UserControl
             var was = _drag;
             _drag = Mode.None;
             e.Pointer.Capture(null);
+            Avalonia.Threading.Dispatcher.UIThread.Post(_o.ApplyDeferredFold);   // after the edit lands
             if (was is Mode.PlayheadPending or Mode.Scrub)
             {
                 // A click without movement on the line: what an empty-space click does — clear the selection.
@@ -2346,6 +2411,7 @@ public sealed partial class PianoRollView : UserControl
             // ⇧F: Fit to notes. Handled here, the window's computer-keyboard note map never
             // sees it, so no F sounds.
             if (e.Key == Key.F && e.KeyModifiers == KeyModifiers.Shift) { _o.FitToNotes(); e.Handled = true; return; }
+            if (e.Key == Key.F && e.KeyModifiers == (KeyModifiers.Shift | KeyModifiers.Alt)) { _o.SetFold(!_o.Folded, user: true); e.Handled = true; return; }   // Fold (specs/045)
             if (!meta && e.Key == Key.Escape && _o._selection.Count > 0)
             {
                 _o.SettlePlacement();

@@ -27,7 +27,7 @@ using Nota.Presentation;
 
 namespace Nota.App;
 
-public sealed class ModularView : UserControl
+public sealed partial class ModularView : UserControl
 {
     // ---- palette --------------------------------------------------------
     private static readonly IBrush CanvasBg   = NotaPalette.CanvasBg;
@@ -1071,42 +1071,6 @@ public sealed class ModularView : UserControl
         WrapFrame(n, col, headBorder);
     }
 
-    // Scope: a CV monitor — one CV input (patch a cable in) drives a rolling
-    // oscilloscope; the incoming CV also passes straight through to CV-out.
-    private void BuildScopeView(GNode n, int modId)
-    {
-        var col = new StackPanel();
-        var headBorder = NodeHeader(n);
-        col.Children.Add(headBorder);
-        col.Children.Add(PortsBlock(n));
-
-        var viz = new ScopeViz();
-        int t = _trackId; var e = _engine;
-        var buf = new float[128];
-        _liveKnobs.Add(() =>
-        {
-            int m = e.ModulatorScope(t, modId, buf);
-            viz.Set(buf, m);
-        });
-        // Unwired, the scope says what it can watch: a modulator's CV, patched into its input. It
-        // doesn't tap audio — a first-time user tried to hang it off a filter's output (#261). The hint
-        // stands in for the trace, which would only draw a flat line through it.
-        Control body = viz;
-        if ((int)Math.Round(e.ModulatorGet(t, modId, 10)) < 0)
-        {
-            var hint = new TextBlock
-            {
-                Text = "Watches CV. Drag a modulator's CV out onto this node. For audio, put Lens on the chain.",
-                FontSize = 10, Foreground = Text3, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0),
-            };
-            body = hint;
-        }
-        var vizBox = new Border { Height = 76, Margin = new Thickness(10, 0, 10, 8), Child = body };
-        col.Children.Add(new Border { Child = vizBox, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 8, 0, 0) });
-        WrapFrame(n, col, headBorder);
-    }
-
     private static Control MathLabeledRow(string label, Control field)
     {
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("62,*"), ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 2) };
@@ -1162,16 +1126,21 @@ public sealed class ModularView : UserControl
     }
 
     // A compact Sync/Free toggle beside the Rate row's name.
-    private Border SyncToggle(int modId, bool synced)
+    private Border SyncToggle(int modId, bool synced) =>
+        ToggleLabel(synced ? "Sync" : "Free", synced ? "Synced to the tempo — click for a free rate in Hz" : "Free rate in Hz — click to sync to the tempo",
+            () => { _engine.ModulatorSet(_trackId, modId, 1, synced ? 0f : 1f); Rebuild(); });
+
+    // A small clickable label chip (Sync/Free, the Scope's ms/Sync).
+    private static Border ToggleLabel(string text, string? tip, Action onClick)
     {
         var b = new Border
         {
             Height = 16, CornerRadius = NotaRadius.Switch, Padding = new Thickness(5, 0),
             Background = NotaPalette.Well, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock { Text = synced ? "Sync" : "Free", FontSize = 10, Foreground = Text2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+            Child = new TextBlock { Text = text, FontSize = 10, Foreground = Text2, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
-        ToolTip.SetTip(b, synced ? "Synced to the tempo — click for a free rate in Hz" : "Free rate in Hz — click to sync to the tempo");
-        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; _engine.ModulatorSet(_trackId, modId, 1, synced ? 0f : 1f); Rebuild(); e.Handled = true; };
+        if (tip is not null) ToolTip.SetTip(b, tip);
+        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; onClick(); e.Handled = true; };
         return b;
     }
 
@@ -1516,10 +1485,21 @@ public sealed class ModularView : UserControl
         else if (n.Slot == Slot.Modulator)
         {
             actions.Children.Add(BadgeText(string.IsNullOrEmpty(n.Badge) ? "LFO" : n.Badge));
+            if (n.IsScopeNode)
+            {
+                int scopeTrack = _trackId, scopeMod = n.ModId;
+                Control? pop = null;
+                // Opens on release: opened on the press, the release raises the main window over it (macOS).
+                pop = HeaderGlyph(GlyphKind.PopOut, Text3, "Open in a window", () => { });
+                pop.PointerReleased += (_, e) => { OpenScopeWindow(scopeTrack, scopeMod, pop!); e.Handled = true; };
+                actions.Children.Add(pop);
+            }
             actions.Children.Add(HeaderGlyph(GlyphKind.Trash, Text3, "Delete (⌫)", () => RemoveModulatorNode(n)));
         }
         else if (!string.IsNullOrEmpty(n.Badge))
             actions.Children.Add(BadgeText(n.Badge));
+        // A fixed node (instrument, track in / out) shows a lock: it can't be deleted (#261).
+        if (FixedReason(n) is not null) actions.Children.Add(LockGlyph(n));
         if (actions.Children.Count > 0)
         {
             DockPanel.SetDock(actions, Dock.Right);
@@ -1532,10 +1512,18 @@ public sealed class ModularView : UserControl
             Height = HeaderH, Child = head, Background = HeaderFill(n), BorderBrush = HeaderEdge(n),
             BorderThickness = new Thickness(0, 0, 0, 1), CornerRadius = NotaRadius.Top(NotaRadius.GroupValue),
         };
-        // The fixed nodes (instrument, track in / out) say why they can't be deleted (#261) — the lock
-        // glyph that carried this is gone now the header has a power switch or a status dot.
+        // The fixed nodes (instrument, track in / out) say why they can't be deleted (#261): the lock
+        // glyph, and the same reason on the whole header.
         if (FixedReason(n) is { } why) ToolTip.SetTip(border, why);
         return border;
+    }
+
+    private static Control LockGlyph(GNode n)
+    {
+        var g = new Glyph(GlyphKind.Lock, 9) { Foreground = Text3, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Width = 16, Height = 16, Background = Brushes.Transparent, Child = g, VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(b, FixedReason(n));
+        return b;
     }
 
     private static TextBlock BadgeText(string badge) => new()
@@ -2419,43 +2407,6 @@ public sealed class ModularView : UserControl
 
     // Rolling CV oscilloscope for a Scope node. Fed a snapshot (oldest→newest)
     // each Tick; draws a brass trace over a zero line in the -1..1 CV range.
-    private sealed class ScopeViz : Control
-    {
-        private float[] _buf = Array.Empty<float>();
-        private int _n;
-        public ScopeViz() { IsHitTestVisible = false; }
-        public void Set(float[] buf, int n)
-        {
-            if (_buf.Length < n) _buf = new float[n];
-            Array.Copy(buf, _buf, n);
-            _n = n;
-            InvalidateVisual();
-        }
-        public override void Render(DrawingContext ctx)
-        {
-            double w = Bounds.Width, h = Bounds.Height;
-            if (w <= 0 || h <= 0) return;
-            ctx.DrawRectangle(ScopeBg, null, new Rect(0, 0, w, h), 4, 4);
-            double mid = h / 2;
-            ctx.DrawLine(new Pen(BorderInner, 1), new Point(0, mid), new Point(w, mid));
-            if (_n < 2) return;
-            const double range = 1.15;   // headroom past unity
-            var geo = new StreamGeometry();
-            using (var g = geo.Open())
-            {
-                for (int i = 0; i < _n; i++)
-                {
-                    double x = _n == 1 ? 0 : i / (double)(_n - 1) * w;
-                    double v = Math.Clamp(_buf[i] / range, -1, 1);
-                    double y = mid - v * (mid - 2);
-                    var p = new Point(x, y);
-                    if (i == 0) g.BeginFigure(p, false); else g.LineTo(p);
-                }
-            }
-            ctx.DrawGeometry(null, new Pen(Brass, 1.5), geo);
-        }
-    }
-
     private static readonly IBrush ScopeBg = NotaPalette.SurfaceDeep;
 
     private sealed class GridLayer : Control

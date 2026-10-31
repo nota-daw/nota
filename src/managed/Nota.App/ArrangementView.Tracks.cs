@@ -133,6 +133,10 @@ public sealed partial class ArrangementView
         return true;
     }
 
+    /// <summary>Deletes one track the way the header's Delete does (selection and refresh
+    /// included) — the Devices panel's route for deleting a track with its instrument (specs/043).</summary>
+    public bool DeleteTrack(int trackId) => DeleteTracks(new[] { trackId });
+
     private bool DeleteTracks(IReadOnlyList<int> ids)
     {
         if (_engine is null || ids.Count == 0 || !_engine.RemoveTracks(ids.ToArray())) return false;
@@ -248,6 +252,19 @@ public sealed partial class ArrangementView
         {
             if (all) SetAllTrackHeights(h); else SetTrackHeights(ids, h);
         });
+    }
+
+    // Compact / Standard / Large for a footer row (specs/045): the right-clicked return — or the
+    // selected returns it belongs to — or the master. Never "all tracks", so Alt/Option is ignored.
+    private MenuItem FooterHeightRow(int footerRow)
+    {
+        (string, double)[] presets = { ("Compact", CompactRowHeight), ("Standard", StandardRowHeight), ("Large", LargeRowHeight) };
+        var (returns, master) = FooterResizeTargets(footerRow);
+        var current = returns.Select(StoredRowHeight).Concat(master ? new[] { _masterHeight } : Array.Empty<double>()).ToList();
+        double? chosen = presets.Select(p => p.Item2)
+            .Where(h => current.Count > 0 && current.All(c => Math.Abs(c - h) < 0.5))
+            .Select(h => (double?)h).FirstOrDefault();
+        return MenuKit.Segments("Height", presets, chosen, (h, _) => SetFooterHeights(returns, master, h));
     }
 
     // "Recent" instruments under Add track (spec 034 US5): the host (MainWindow) builds the

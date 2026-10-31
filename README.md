@@ -224,3 +224,5 @@ Licensed under **AGPL-3.0-only** — see [`LICENSES/`](LICENSES/) for the terms,
 
 Nota links JUCE, which is AGPLv3, so the open build is AGPL rather than GPL — see
 [`LICENSES/README.md`](LICENSES/README.md#why-agpl-and-not-gpl).
+
+[![Greptile: The War on Bugs](https://www.greptile.com/badge.svg)](https://www.greptile.com/?utm_source=oss_badge&utm_medium=readme&utm_campaign=greptile_for_open_source)

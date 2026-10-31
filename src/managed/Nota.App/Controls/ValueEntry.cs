@@ -6,7 +6,8 @@
 // for every knob, fader, slider, graph handle and matrix cell:
 //
 //   double-click   on the control restores the default (or clears a route)
-//   ⌥/Alt-click    (and a double-click on the read-out) turns the read-out itself editable —
+//   ⌥/Alt-click    (and a double-click on the read-out) turns the read-out itself editable
+//                  (a field marked AltResets keeps ⌥-click on the control as a reset) —
 //                  a borderless text box in its place (an adorner, so it works whatever panel
 //                  the read-out sits in) with a 1px accent line under it and the number
 //                  selected; Enter or a click away commits, Escape cancels, Tab / Shift+Tab
@@ -158,7 +159,9 @@ internal static partial class ValueEntry
         bool onReadout = false)
     {
         if (!e.GetCurrentPoint(at).Properties.IsLeftButtonPressed) return false;
-        if ((e.KeyModifiers & KeyModifiers.Alt) != 0 || onReadout && e.ClickCount == 2)
+        bool alt = (e.KeyModifiers & KeyModifiers.Alt) != 0;
+        if (alt && field.AltResets && !onReadout) return false;   // the control's own ⌥-click reset runs
+        if (alt || onReadout && e.ClickCount == 2)
         {
             e.Handled = true;
             return true;

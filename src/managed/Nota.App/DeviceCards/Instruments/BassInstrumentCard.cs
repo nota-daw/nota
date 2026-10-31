@@ -406,8 +406,8 @@ internal sealed class BassInstrumentCard : IInstrumentCard
                     PKnob("filfreq", "CUTOFF", "Filter Freq", Hz, 26, 38),
                     PKnob("filreso", "RESO", "Filter Reso", Pct, 26, 30),
                     PKnob("fildrive", "DRIVE", "Filter Drive", Pct, 26, 32),
-                    PKnob("filenv", "ENV", "Filter Env", Bip, 26, 30, null),
-                    PKnob("filkey", "KEY", "Filter Key", Pct, 26, 30, null),
+                    PKnob("filenv", "ENV", "Filter Env", Bip, 26, 30, Teal),
+                    PKnob("filkey", "KEY", "Filter Key", Pct, 26, 30, Teal),
                 },
             };
             filtRow.Children.Add(left);
@@ -466,8 +466,8 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             var ks = new[]
             {
                 PKnob("lforate", "RATE", "LFO Rate", v => SlowHz(ExpMap(v, 0.05, 30)), 26, 40),
-                PKnob("fillfo", "→ FLT", "Filter LFO", Bip, 26, 40, null),
-                PKnob("lfopitch", "→ PIT", "LFO → Pitch", LfoPitch, 26, 40, null),
+                PKnob("fillfo", "→ FLT", "Filter LFO", Bip, 26, 40, Teal),
+                PKnob("lfopitch", "→ PIT", "LFO → Pitch", LfoPitch, 26, 40, Teal),
             };
             for (int i = 0; i < ks.Length; i++) { Grid.SetColumn(ks[i], i); lfoKnobs.Children.Add(ks[i]); }
         }

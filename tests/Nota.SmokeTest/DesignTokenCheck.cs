@@ -357,8 +357,8 @@ internal static partial class DesignTokenCheck
             ballistics.Length == 0 ? "meters and spectra have no release ballistics" : $"meter/spectrum ballistics in: {string.Join(", ", ballistics)}");
 
         var meter = File.ReadAllText(Path.Combine(app, "Controls/MeterBar.cs"));
-        yield return (Regex.IsMatch(meter, @"ChannelW = 3, Step = 1\.5") && Regex.IsMatch(meter, @"CautionAt = 0\.70, AlertAt = 0\.88"),
-            "level meter channels are 3px, 1.5 apart, green to 70 %, amber to 88 %");
+        yield return (Regex.IsMatch(meter, @"ChannelW = 3, Step = 1\.5") && Regex.IsMatch(meter, @"CautionDb = -6, AlertDb = 0;"),
+            "level meter channels are 3px, 1.5 apart, amber from −6 dBFS, red from 0 dBFS");
 
         var arr = string.Concat(Files(app, "ArrangementView*.cs").Select(File.ReadAllText));
         yield return (!arr.Contains("PlayheadGlow") && Regex.IsMatch(arr, @"PlayheadPen = new Pen\(PlayheadBrush, 1\)"),
@@ -380,7 +380,7 @@ internal static partial class DesignTokenCheck
         // two device hue tables. Each is only ever painted through NotaPalette.Ink().
         var hexData = new[] { "TagEditorWindow.cs", "DeviceCards/Bodies/StrataDeviceBody.cs", "DeviceCards/Instruments/RhythmInstrumentCard.cs" };
         // Opacity is allowed for exactly one thing: the ghost of a card being dragged.
-        var dragGhost = new Regex(@"\b(card|_devDragCard)\.Opacity = (0\.55|1\.0);");
+        var dragGhost = new Regex(@"\b(card|_devDragCard|_rcDragCard)\.Opacity = (0\.55|1\.0);");
 
         var rules = new (string Name, Regex Re, Func<string, string, bool>? Allow)[]
         {

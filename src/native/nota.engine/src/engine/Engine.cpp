@@ -4,6 +4,8 @@
 // Engine — lifecycle, audio/MIDI device config, preview, tone/transport setters, immutable-graph publish/clone/undo/reset, post-fader meters. Definitions of the rest of the class live in the sibling Engine_*.cpp slices.
 
 #include "Engine.h"
+#include "devices/effects/Eq.h"
+#include "devices/racks/RackCore.h"
 #include "audio_io/AudioBackendFactory.h"
 #include "media/AudioFile.h"
 #include "bridge/PluginHostBridge.h"
@@ -553,6 +555,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->setReturnIndex(t.returnIndex());                             // M6-1
     nt->setGroupId(t.groupId());                                     // group membership
     nt->setRecordInputSource(t.recordInputSource());                 // internal record routing
+    nt->setInputChannels(t.inputChannels());                         // mono / stereo hardware input
     nt->setMonitor(t.monitor());                                     // live input monitoring
     nt->setMidiFromTrackId(t.midiFromTrackId());                     // MIDI routing
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, t.send(b)); // M6-1: send levels
@@ -566,13 +569,16 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->automation = t.automation;     // automation lanes (M9)
     nt->modulators = t.modulators;     // CV modulation sources (Phase 3)
     nt->cvLinks = t.cvLinks;           // CV modulation edges (Phase 3)
+    nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
+    nt->liveHeld = t.liveHeld;           // shared — held live notes persist (#366)
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
     nt->frozenSpb = t.frozenSpb;
     nt->name = t.name; // UI metadata
     nt->colorIndex = t.colorIndex;
+    nt->pianoFold = t.pianoFold;
     return nt;
 }
 
@@ -609,6 +615,14 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
     authoring_ = g;
     retired_.push_back(g);
     if (g) ensureRenderScratch(g->tracks.size());
+    // Fresh track objects only: the audio thread never sees them change. Before any CC target
+    // exists their routes are complete as they are (empty): marking them so keeps an undo to
+    // such a snapshot from rebuilding them from targets set later.
+    if (g && ccDestsSet_) syncCcRoutes(*g);
+    else if (g) {
+        for (auto& t : g->tracks) t->ccRoutesDirty = false;
+        if (g->masterTrack) g->masterTrack->ccRoutesDirty = false;
+    }
     liveGraph_.store(g.get(), std::memory_order_release);
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
@@ -688,12 +702,30 @@ bool Engine::undo() {
         if (e.graph) {
             publishRaw(std::move(e.graph));
             recomputePdc();
+            reapplyRackMacros();
+            reapplyCcRoutes();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, false);
         if (applied) return true;
     }
     return false;
+}
+
+// The restored racks drive their mapped targets again: the children they share with the
+// copies an edit made still hold what those copies' mappings gave them (specs/040).
+void Engine::reapplyRackMacros() {
+    if (!authoring_) return;
+    auto each = [](const std::shared_ptr<Track>& t) {
+        if (!t) return;
+        if (auto* r = dynamic_cast<RackCore*>(t->instrument.get())) r->reapplyMacros();
+        for (auto& d : t->devices)
+            if (auto* r = dynamic_cast<RackCore*>(d.get())) r->reapplyMacros();
+        for (auto& m : t->midiEffects)
+            if (auto* r = dynamic_cast<RackCore*>(m.get())) r->reapplyMacros();
+    };
+    for (auto& t : authoring_->tracks) each(t);
+    each(authoring_->masterTrack);
 }
 
 bool Engine::redo() {
@@ -705,6 +737,8 @@ bool Engine::redo() {
         if (e.graph) {
             publishRaw(std::move(e.graph));
             recomputePdc();
+            reapplyRackMacros();
+            reapplyCcRoutes();
             applied = true;
         }
         for (const auto& c : e.mix) applied |= applyMix(c, true);
@@ -744,6 +778,12 @@ bool Engine::paramTargetExists(MixKind kind, int32_t trackId, int32_t deviceInde
 }
 
 bool Engine::mixValue(const MixTarget& t, float& v) const {
+    if (t.kind == MixKind::PresetTag) { // specs/048: the tag index, exact in a float
+        const int32_t tag = presetTagOf(t.trackId, t.paramIndex, t.deviceIndex);
+        if (tag < 0) return false;
+        v = static_cast<float>(tag);
+        return true;
+    }
     if (t.kind == MixKind::MasterVolume) {
         v = masterVolume();
         return true;
@@ -768,6 +808,16 @@ bool Engine::mixValue(const MixTarget& t, float& v) const {
 
 bool Engine::applyMix(const MixChange& c, bool after) {
     const float v = after ? c.after : c.before;
+    if (c.kind == MixKind::PresetTag)
+        return setPresetTagIndex(c.trackId, c.paramIndex, c.deviceIndex, static_cast<int32_t>(v)); // gone: skip
+    if (c.kind == MixKind::DeviceNotes) { // specs/049: an EQ-8's labels and notes
+        auto* eq = dynamic_cast<Eq*>(deviceAt(c.trackId, c.deviceIndex));
+        const auto at = static_cast<size_t>(v);
+        if (!eq || at >= noteStates_.size()) return false; // gone (or no longer an EQ-8): skip
+        const auto& st = noteStates_[at];
+        eq->setState(st.data(), static_cast<int32_t>(st.size()));
+        return true;
+    }
     if (c.kind == MixKind::MasterVolume) {
         setMasterVolume(v);
         return true;

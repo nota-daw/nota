@@ -314,7 +314,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             curve.DragV += v => Raw(Drive, (float)v);
             curve.GestureBegin += () => Begin(Drive);
             curve.GestureEnd += () => End(Drive);
-            ToolTip.SetTip(curve, "The transfer curve the saturation runs — input level across, output up; dashed is the dry line, teal what you hear with Mix and Output, the dot where the input peak sits. Drag up or down for the drive.");
+            ToolTip.SetTip(curve, "The transfer curve the saturation runs — input level across, output up; dashed is the dry line, the darker grey what you hear with Mix and Output, the dot where the input peak sits. Drag up or down for the drive.");
             Learn(curve, Drive);
 
             var thd = Mono("", 7, TextTertiary);
@@ -352,7 +352,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             wearView.DragH += v => Raw(wearShow == 1 ? FlutterRate : WowRate, (float)v);
             wearView.GestureBegin += () => { Begin(Wow); Begin(Flutter); Begin(WowRate); Begin(FlutterRate); };
             wearView.GestureEnd += () => { End(Wow); End(Flutter); End(WowRate); End(FlutterRate); };
-            ToolTip.SetTip(wearView, "The pitch drift over the last four seconds — wow in neutral ink, flutter in teal. Drag up or down for the depth of what is picked above, sideways for its rate.");
+            ToolTip.SetTip(wearView, "The pitch drift over the last four seconds — wow in the bright line, flutter in the darker grey. Drag up or down for the depth of what is picked above, sideways for its rate.");
             Learn(wearView, Wow);
 
             var show = Chips(new[] { "Wow", "Flutter", "Both" }, i => wearShow == i, i => wearShow = i, -1);
@@ -397,7 +397,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             harm.DragV += v => Raw(Drive, (float)v);
             harm.GestureBegin += () => Begin(Drive);
             harm.GestureEnd += () => End(Drive);
-            ToolTip.SetTip(harm, "The harmonics the saturation adds at the input's level (the fundamental at the top), against the hiss floor in teal. Drag up or down for the drive.");
+            ToolTip.SetTip(harm, "The harmonics the saturation adds at the input's level (the fundamental at the top), against the hiss floor in the darker grey. Drag up or down for the drive.");
             Learn(harm, Drive);
 
             var peak = Mono("", 7, TextSecondary);

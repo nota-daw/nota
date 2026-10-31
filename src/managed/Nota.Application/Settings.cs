@@ -163,6 +163,9 @@ public sealed class Settings
     /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
     /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
     public bool PianoRollAudition { get; set; } = true;
+    /// <summary>Arm-on-select (#332): selecting an instrument track arms it alone, so the
+    /// keyboard plays the track you're on. Transport ▸ Auto-arm selected track; off by default.</summary>
+    public bool ArmOnSelect { get; set; }
 }
 
 public interface ISettingsService

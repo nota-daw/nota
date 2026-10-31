@@ -127,7 +127,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
         static Control Center(Control c) { c.HorizontalAlignment = HorizontalAlignment.Center; return c; }
 
         Control K(string id, string name, Func<float, string> fmt, bool mod = false, double sz = Knob.SizeSecondary, double cw = 44, bool inline = false)
-            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, null, inline);
+            => InstrumentControls.InstKnob(ctx, idx, id, name, Refresh, fmt, sz, cw, mod ? TealC : null, inline);
 
         // A compact horizontal knob: [inline knob] value — for the oscillator table.
         Control MiniKnob(string id, Func<float, string> fmt, double valW, IBrush valColor)
