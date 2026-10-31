@@ -148,10 +148,10 @@ internal sealed class LensDeviceBody : IDeviceBody
             return Learn(wrap, p);
         }
 
-        Control Seg(int p, string[] names, Action? changed = null)
+        Control Seg(int p, string[] names, Action? changed = null, double padX = 6)
         {
             int n = names.Length;
-            var seg = DeviceCardKit.Segments(names, () => Sel(p, n), iv => { SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); changed?.Invoke(); }, out var sync);
+            var seg = DeviceCardKit.Segments(names, () => Sel(p, n), iv => { SetP(p, n > 1 ? iv / (float)(n - 1) : 0f); changed?.Invoke(); }, out var sync, padX: padX);
             readouts.Add(sync);
             return Learn(seg, p);
         }
@@ -275,7 +275,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         }
 
         Control SpectrumPanel() => Rows(
-            SegRow("FFT", Seg(FftSizeP, new[] { "512", "2048", "4096", "16k" })),
+            SegRow("FFT", Seg(FftSizeP, new[] { "512", "2048", "4096", "16k" }, padX: 4)),   // narrower cells keep 16k inside the panel's inset
             SegRow("WINDOW", Seg(WindowP, new[] { "Hann", "B-H", "Flat" })),
             Row("SMOOTH", SmoothP, v => Pc(v)),
             Row("DECAY", DecayP, v => Sec(Exp(v, 0.05, 8))),

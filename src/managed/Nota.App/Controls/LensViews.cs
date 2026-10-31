@@ -145,6 +145,14 @@ internal static class LensInk
         if (value.Length > 0) Text(ctx, value, x + head.Width + 5, y, Axis, 8);
     }
 
+    /// <summary>Where <see cref="Title"/> ends on the right, so its read-out can step aside for a marker.</summary>
+    public static double TitleRight(string caps, string value, double x = 6)
+    {
+        double head = new NotaFormattedText(NotaText.Label(caps), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            NotaFonts.SansSemiBold, NotaGraph.TitleSize, Label, NotaTextSize.InCard).Width;
+        return value.Length > 0 ? x + head + 5 + TextW(value, 8) : x + head;
+    }
+
     public static readonly string[] NoteNames = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
 
     /// <summary>"A#3 +4 ¢" for a frequency, or "—" below hearing.</summary>
@@ -440,7 +448,14 @@ internal sealed class LensScopeView : Control
             LensInk.Text(ctx, s, w - LensInk.TextW(s, 8) - 4, h - 22, LensInk.TraceLit, 8);   // a line above the time axis label
         }
 
-        LensInk.Title(ctx, "SCOPE", _d.ScopeNote);   // the divisions are on the Time/div and Volt/div knobs
+        // The divisions are on the Time/div and Volt/div knobs. The capture state moves right of the
+        // trigger marker when it would run under it.
+        if (LensInk.TitleRight("SCOPE", _d.ScopeNote) <= tx - 4) LensInk.Title(ctx, "SCOPE", _d.ScopeNote);
+        else
+        {
+            LensInk.Title(ctx, "SCOPE", "");
+            LensInk.Text(ctx, _d.ScopeNote, tx + 6, 4, LensInk.Axis, 8);
+        }
         string trig = _d.Held ? "held" : NotaNum.F($"trig {(_d.TrigRising ? "↑" : "↓")} {_d.TrigLevel:0.00}{(_d.TrigOk ? "" : " ·free")}");
         LensInk.Text(ctx, trig, w - LensInk.TextW(trig) - 4, 3, _d.TrigOk || _d.Held ? LensInk.TraceLit : LensInk.Axis);
         LensInk.Text(ctx, "0", 4, h - 10, LensInk.Axis);
