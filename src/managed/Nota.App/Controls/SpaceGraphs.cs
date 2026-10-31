@@ -274,18 +274,21 @@ internal abstract class CutHandleGraph : Control, IValueHandles
 /// (the curve), dB against time, now at the right. A dashed guide falls from the tail's latest
 /// peak at the set RT60, so a tail that rings longer or shorter than the setting shows at once.
 /// Drag to lengthen or shorten the decay (right or up = longer), double-click to reset it. The grey
-/// pre-delay marker has its own scale (0 … 200 ms between 3 % and 33 % of the width, as on the old
-/// tail picture): drag it for the pre-delay, double-click it to reset. ⌥-click the marker to type the
-/// pre-delay, anywhere else to type the decay (the owner supplies the fields, specs/035).</summary>
+/// pre-delay marker stands where the tail starts: the pre-delay after the latest hit of the input, on
+/// the graph's time scale (hidden while no hit is on screen). Drag it for the pre-delay (a third of
+/// the width spans 0 … 200 ms, so it moves finer than the pointer), double-click it to reset. ⌥-click
+/// the marker to type the pre-delay, anywhere else to type the decay (the owner supplies the fields,
+/// specs/035).</summary>
 internal sealed class ReverbSpaceView : Control, IValueHandles
 {
-    private const double PreLo = 0.03, PreSpan = 0.30;
+    private const double PreSpan = 0.30;
     private float[] _s = Array.Empty<float>();
     private int _off;
     private bool _has, _freeze;
     private double _rt60 = 2, _preNorm = 0.1, _preMs = 20;
     private bool _drag, _dragPre, _hoverPre;
     private double _dragX, _dragY, _dragV;
+    private double _hitAge = -1;   // seconds since the latest hit of the input, −1 = none on screen
 
     public event Action<double>? Changed;   // the Decay param, normalised
     public event Action? GestureBegin;
@@ -310,7 +313,24 @@ internal sealed class ReverbSpaceView : Control, IValueHandles
     public void Set(float[] scope, int off, bool has, double rt60, bool freeze)
     {
         _s = scope; _off = off; _has = has && scope.Length >= off + SpaceDraw.Floats; _rt60 = rt60; _freeze = freeze;
+        _hitAge = HitAge();
         InvalidateVisual();
+    }
+
+    // The latest hit of the input: a jump of 9 dB within 12 ms, above −50 dB (as the Delay's repeats).
+    private double HitAge()
+    {
+        if (!_has) return -1;
+        for (int k = SpaceDraw.Points - 1; k >= 3; k--)
+        {
+            float v = _s[_off + k];
+            if (v > -50 && v - _s[_off + k - 3] > 9 && v >= _s[_off + k - 1])
+            {
+                while (k > 3 && _s[_off + k - 1] - _s[_off + k - 4] > 9) k--;   // back to the start of the rise
+                return (SpaceDraw.Points - 1 - k) * SpaceDraw.PointSec;
+            }
+        }
+        return -1;
     }
 
     /// <summary>The pre-delay: normalised (where the marker sits) and in ms (its label).</summary>
@@ -322,8 +342,14 @@ internal sealed class ReverbSpaceView : Control, IValueHandles
     }
 
     private (double x0, double x1) Span() => (6, Bounds.Width - 6);
-    private double PreX() { var (x0, x1) = Span(); return x0 + (PreLo + PreSpan * _preNorm) * (x1 - x0); }
-    private bool OnPre(Point p) => Math.Abs(p.X - PreX()) <= 6;
+    private bool HasPre => _hitAge >= 0;
+    // The hit, then the pre-delay on the graph's time scale (now at the right).
+    private double PreX()
+    {
+        var (x0, x1) = Span();
+        return x1 - Math.Max(0, _hitAge - _preMs / 1000) / SpaceDraw.HistorySec * (x1 - x0);
+    }
+    private bool OnPre(Point p) => HasPre && Math.Abs(p.X - PreX()) <= 6;
 
     // Typed entry: handle 0 = the decay (the tail anywhere), 1 = the pre-delay marker.
     public int HandleAt(Point p) => OnPre(p) ? 1 : 0;
@@ -336,7 +362,7 @@ internal sealed class ReverbSpaceView : Control, IValueHandles
     {
         var (x0, x1) = Span();
         if (x1 <= x0) return;
-        _preNorm = Math.Clamp(((p.X - x0) / (x1 - x0) - PreLo) / PreSpan, 0, 1);
+        _preNorm = Math.Clamp(_dragV + (p.X - _dragX) / (PreSpan * (x1 - x0)), 0, 1);
         _preMs = _preNorm * 200;
         PreChanged?.Invoke(_preNorm);
         InvalidateVisual();
@@ -355,8 +381,8 @@ internal sealed class ReverbSpaceView : Control, IValueHandles
         }
         if (pre)
         {
-            _dragPre = true; PreGestureBegin?.Invoke();
-            e.Pointer.Capture(this); ApplyPre(p); e.Handled = true; return;
+            _dragPre = true; _dragX = p.X; _dragV = _preNorm; PreGestureBegin?.Invoke();
+            e.Pointer.Capture(this); e.Handled = true; return;
         }
         _drag = true; _dragX = p.X; _dragY = p.Y; _dragV = DecayValue?.Invoke() ?? 0.5;
         GestureBegin?.Invoke();
@@ -421,14 +447,18 @@ internal sealed class ReverbSpaceView : Control, IValueHandles
         }
         else SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), "Play audio to see its tail");
 
-        // The pre-delay marker (grey, orange in the hand; its own 0 … 200 ms scale): drag it, double-click resets.
+        // The pre-delay marker (grey, orange in the hand), where the tail starts after the latest hit: drag it, double-click resets.
+        if (HasPre)
         {
             double px = PreX();
             bool hot = _hoverPre || _dragPre;
             ctx.DrawLine(new Pen(hot ? NotaPalette.Accent : NotaPalette.TextSecondary, hot ? 1.2 : 1, new DashStyle(new double[] { 2, 3 }, 0)), new Point(px, top), new Point(px, bot));
             NotaGraph.Node(ctx, new Point(px, top + 4), hot);
             var lbl = SpaceDraw.Text(NotaNum.F($"pre {_preMs:0} ms"), hot ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
-            ctx.DrawText(lbl, new Point(Math.Min(px + 6, x1 - lbl.Width), top + 4 - lbl.Height / 2));
+            // Left of the marker, over the quiet before the hit, so the tail's peak never runs under it;
+            // right of it only when the hit is too close to the left edge (and its "0 dB").
+            double lx = px - 6 - lbl.Width >= x0 + 34 ? px - 6 - lbl.Width : px + 6;
+            ctx.DrawText(lbl, new Point(lx, top + 4 - lbl.Height / 2));
         }
 
         if (_freeze) ctx.DrawText(new NotaFormattedText("Tail held · no decay", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
