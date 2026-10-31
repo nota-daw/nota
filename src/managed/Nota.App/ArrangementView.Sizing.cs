@@ -226,14 +226,14 @@ public sealed partial class ArrangementView
         var children = _headers.Children;
         int crossing = 0;
         for (int i = 0; i < _tracks.Count; i++)
-            if (!IsSlimRow(_tracks[i]) && _cardTiers.TryGetValue(_tracks[i].Id, out var b) && b != TierFor(RowHeightAt(i))) crossing++;
+            if (!IsSlimRow(_tracks[i]) && _cardTiers.TryGetValue(_tracks[i].Id, out var b) && b != TierFor(ClipAreaHeightAt(i))) crossing++;
         bool rebuildTiers = crossing <= LiveTierRebuildLimit;
         for (int i = 0; i < _tracks.Count; i++)
         {
             var t = _tracks[i];
             if (!_headerCards.TryGetValue(t.Id, out var hc)) continue;
             Control card = hc.card;
-            double h = RowHeightAt(i);
+            double h = ClipAreaHeightAt(i);
             if (rebuildTiers && !IsSlimRow(t) && _cardTiers.TryGetValue(t.Id, out var built) && built != TierFor(h))
             {
                 int at = children.IndexOf(card);
@@ -245,6 +245,7 @@ public sealed partial class ArrangementView
             Canvas.SetTop(card, RowTop(i));
             card.Height = h;
         }
+        PlaceTakeHeaders();
         PlaceRowSeamGrips();
         _headers.Height = Math.Max(DefaultRowHeight, RowsHeight);
         _lanes.Height = _headers.Height;

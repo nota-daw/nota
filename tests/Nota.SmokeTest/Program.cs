@@ -408,6 +408,7 @@ if (args.Length >= 1 && args[0] == "--paramundo")
 {
     Console.WriteLine("-- param + section undo --");
     foreach (var (ok, label) in ParamSectionUndoTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in SectionNamingTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "PARAMUNDO PASSED" : $"PARAMUNDO FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -649,6 +650,14 @@ if (args.Length >= 1 && args[0] == "--live-record")
     Console.WriteLine("-- loop record mode --");
     foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "LIVE RECORD PASSED" : $"LIVE RECORD FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Take lanes alone (fast iteration): `--takes`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--takes")
+{
+    Console.WriteLine("-- take lanes --");
+    foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TAKES PASSED" : $"TAKES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // MIDI controllers alone (fast iteration): `--midi-ctl`. Also part of the full run.
@@ -13200,8 +13209,8 @@ Console.WriteLine("-- simultaneous instrument + audio record --");
 }
 
 // ============ loop recording punches the loop region =======================
-// Loop on → each pass wraps and overwrites the loop region in place; the take is bounded
-// to the loop and placed at its start. The playhead wraps with the loop (stays inside it).
+// Loop on → each pass is kept as a take (specs/067). The comp covers the loop: the newest
+// pass where it recorded, earlier passes behind it. The playhead wraps with the loop.
 Console.WriteLine("-- loop recording (punch) --");
 {
     using var le = new NotaEngine();
@@ -13222,10 +13231,17 @@ Console.WriteLine("-- loop recording (punch) --");
     le.SetRecording(false);
     le.Poll();
     le.TryGetTrackInfo(1, out var lti);
-    Check(lti.ClipCount == 1, $"loop record makes one clip ({lti.ClipCount})");
-    le.TryGetClipInfo(lr, 0, out var lci);
-    Check(Math.Abs(lci.StartBeat) < 1e-6, $"take placed at the loop start ({lci.StartBeat:F2})");
-    Check(Math.Abs(lci.LengthBeats - 2.0) < 0.3, $"take is bounded to the loop (~2 beats) ({lci.LengthBeats:F2})");
+    double lLo = double.MaxValue, lHi = 0;
+    for (int c = 0; c < lti.ClipCount; c++)
+        if (le.TryGetClipInfo(lr, c, out var ci))
+        {
+            lLo = Math.Min(lLo, ci.StartBeat);
+            lHi = Math.Max(lHi, ci.StartBeat + ci.LengthBeats);
+        }
+    Check(lti.ClipCount >= 2 && le.TakeCount(lr) >= 2,
+        $"loop record keeps a take per pass ({lti.ClipCount} comp clips, {le.TakeCount(lr)} takes)");
+    Check(Math.Abs(lLo) < 1e-6 && Math.Abs(lHi - 2.0) < 0.3,
+        $"comp covers the loop [{lLo:F2}, {lHi:F2}]");
     le.SetTrackMute(li, true);
     le.SetLoop(false, 0, 0); le.Seek(0); le.Play();
     var lpb = new float[8192 * 2]; le.RenderOffline(lpb, 8192); le.StopTransport();
@@ -13251,9 +13267,16 @@ Console.WriteLine("-- loop enabled mid-record --");
     for (int b = 0; b < 60; b++) { me.RenderOffline(mcap, 2048); me.Poll(); }
     me.SetRecording(false);
     me.Poll();
-    me.TryGetClipInfo(mr, 0, out var mci);
-    Check(Math.Abs(mci.StartBeat) < 1e-6 && Math.Abs(mci.LengthBeats - 2.0) < 0.3,
-        $"mid-record loop switches to punch (start={mci.StartBeat:F2} len={mci.LengthBeats:F2})");
+    me.TryGetTrackInfo(1, out var mti);
+    double mLo = double.MaxValue, mHi = 0;
+    for (int c = 0; c < mti.ClipCount; c++)
+        if (me.TryGetClipInfo(mr, c, out var mci))
+        {
+            mLo = Math.Min(mLo, mci.StartBeat);
+            mHi = Math.Max(mHi, mci.StartBeat + mci.LengthBeats);
+        }
+    Check(mti.ClipCount >= 2 && me.TakeCount(mr) >= 2 && Math.Abs(mLo) < 1e-6 && Math.Abs(mHi - 2.0) < 0.3,
+        $"mid-record loop switches to punch (takes {me.TakeCount(mr)}, comp [{mLo:F2}, {mHi:F2}])");
 }
 
 // ============ overwrite / comp: a dropped clip carves what it lands on ======
@@ -15049,6 +15072,26 @@ Console.WriteLine("-- background audio import --");
             Check(sn == 64 && err < 1e-6, $"range peaks: source sub-range matches a full scan (max err {err:E1})");
             var tiny = new float[100 * 2];
             Check(ie.GetClipSourcePeaksRange(ct, cc, 5000, 5010, tiny, 100) == 100, "range peaks: sub-frame buckets read single frames");
+
+            // The waveform's RMS body (#267): the same min/max as without it, and each bucket's
+            // RMS matches a scan — over short spans (frame scans) and long ones (block table).
+            double ScanRms(long f0, long f1) { double s = 0; for (long f = f0; f < f1; f++) { double m = Mid(f); s += m * m; } return Math.Sqrt(s / (f1 - f0)); }
+            var sub2 = new float[64 * 2]; var subRms = new float[64];
+            ie.GetClipSourcePeaksRange(ct, cc, 1000, 1000 + 64 * 64, sub2, 64, subRms);
+            double rErr = 0;
+            for (int b = 0; b < 64; b++) rErr = Math.Max(rErr, Math.Abs(ScanRms(1000 + b * 64, 1000 + (b + 1) * 64) - subRms[b]));
+            Check(sub2.SequenceEqual(sub) && rErr < 1e-5, $"waveform rms: short buckets match a scan (max err {rErr:E1})");
+            var whole = new float[8 * 2]; var wholeRms = new float[8];
+            int wn = ie.GetClipSourcePeaks(ct, cc, whole, 8, wholeRms);
+            long per = psi.Frames / Math.Max(1, wn);
+            rErr = 0;
+            for (int b = 0; b < wn; b++) rErr = Math.Max(rErr, Math.Abs(ScanRms(b * per, (b + 1) * per) - wholeRms[b]));
+            Check(wn == 8 && rErr < 1e-4, $"waveform rms: long buckets read from the block table match a scan (max err {rErr:E1})");
+            var fullRms = new float[256]; var full2 = new float[256 * 2];
+            ie.GetClipWarpFullPeaks(ct, cc, full2, 256, fullRms);
+            bool inside = true;
+            for (int b = 0; b < 256; b++) inside &= fullRms[b] >= 0 && fullRms[b] <= Math.Max(Math.Abs(full2[b * 2]), Math.Abs(full2[b * 2 + 1])) + 1e-6;
+            Check(full2.SequenceEqual(full) && inside && fullRms.Any(v => v > 0.001f), "waveform rms: warped buckets keep their peaks, RMS inside them");
         }
 
         // Background warp build: a deferred marker edit keeps the old cache playing (not
@@ -15223,6 +15266,8 @@ Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop record mode --");
 foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
+Console.WriteLine("-- take lanes --");
+foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
 Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
@@ -15249,6 +15294,8 @@ foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- velocity wheel --");
 foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
+Console.WriteLine("-- status bar audio format --");
+foreach (var (ok, label) in AudioFormatStatusTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- process cpu --");
 foreach (var (ok, label) in ProcessCpuTests.Run()) Check(ok, label);
@@ -15318,6 +15365,8 @@ foreach (var (ok, label) in MixUndoTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- param + section undo --");
 foreach (var (ok, label) in ParamSectionUndoTests.Run()) Check(ok, label);
+Console.WriteLine("-- section names --");
+foreach (var (ok, label) in SectionNamingTests.Run()) Check(ok, label);
 Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device copy + rack undo --");

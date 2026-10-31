@@ -38,6 +38,7 @@ internal enum GlyphKind
     Arrangement, Session, Modular, Keyboard, Sliders, Downloads, Star, StarFilled, Bookmark, Doc, Midi, Map, History, Sidebar, Options, Search, CaretRight, CaretDown, Levels, Gamepad, Phone, Plug, Library, Appearance, Shortcuts, MidiPort, Action, Track, Device, Preset, Patch, Loop, Speaker, SpeakerMute, SpeakerLow, SpeakerHigh, Metronome, Follow, Snap, Automation, Apple, Windows, Linux, ChainLink, Update,
     Lock, LockOpen,                // a reference (read-only) clip in the multi-clip editor, and the unlocked toggle
     DockIn,                        // PopOut's opposite: bring a floating window back into the main one
+    Expand, Shrink,                // a panel filling the window, and back to its split
 }
 
 internal sealed class Glyph : Control
@@ -524,6 +525,9 @@ internal sealed class Glyph : Control
         // A padlock, shut and open: a clip locked as reference in the multi-clip editor (specs/029).
         [GlyphKind.Lock] = ("M3.333 7.333 h9.333 v6.667 h-9.333 z M5.333 7.333 v-2 a2.667 2.667 0 0 1 5.333 0 v2", null),
         [GlyphKind.LockOpen] = ("M3.333 7.333 h9.333 v6.667 h-9.333 z M5.333 7.333 v-2 a2.667 2.667 0 0 1 5.2 -0.8", null),
+        // Two arrows out to opposite corners (fill the window), and the same arrows turned in.
+        [GlyphKind.Expand] = ("M9.333 2.667 H13.333 V6.667 M13.333 2.667 L9.333 6.667 M6.667 13.333 H2.667 V9.333 M2.667 13.333 L6.667 9.333", null),
+        [GlyphKind.Shrink] = ("M13.333 2.667 L9.333 6.667 M9.333 3.333 V6.667 H12.667 M2.667 13.333 L6.667 9.333 M3.333 9.333 H6.667 V12.667", null),
         [GlyphKind.ChainLink] = ("M2.711 5.619 L6.266 9.175 A2.057 2.057 0 0 0 9.175 6.266 L5.619 2.711 A2.057 2.057 0 0 0 2.711 5.619 ZM6.825 9.734 L10.381 13.289 A2.057 2.057 0 0 0 13.289 10.381 L9.734 6.825 A2.057 2.057 0 0 0 6.825 9.734 Z", null),
     };
 
