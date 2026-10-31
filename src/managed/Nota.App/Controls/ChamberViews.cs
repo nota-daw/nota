@@ -111,7 +111,7 @@ internal sealed class ChamberFader : Control
 // The IR: a peak envelope of the source (left / LL above the centre line in neutral ink, right / RR
 // below in teal), veiled outside the Start … Decay window. Drag a trim line to move it,
 // double-click to reset both. Drop an audio file (Finder or the browser) to load it.
-internal sealed class ChamberIrView : Control
+internal sealed class ChamberIrView : Control, IValueHandles
 {
     private float[] _l = Array.Empty<float>(), _r = Array.Empty<float>();
     private double _sec, _start, _end = 1, _attackSec;
@@ -169,6 +169,11 @@ internal sealed class ChamberIrView : Control
         else _end = Math.Max(f, Math.Max(0.05, _start + 0.02));
         TrimChanged?.Invoke(_start, _end); InvalidateVisual();
     }
+    // Typed entry (specs/035): handle 0 = the start trim, 1 = the decay trim (source lane only).
+    public int HandleAt(Point p)
+        => _empty != null || p.Y > Bounds.Height * SourceShare ? -1 : Math.Abs(p.X - X(_start)) <= Math.Abs(p.X - X(_end)) ? 0 : 1;
+    public Rect HandleRect(int handle) => ValueEntry.Near(new Point(X(handle == 0 ? _start : _end), 0), Bounds.Size);
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
@@ -329,7 +334,7 @@ internal sealed class ChamberIrView : Control
 // DECAY PER BAND: the energy decay (dB, straight lines) of the low / mid / high bands after the
 // pre-delay, each ending at its RT60 on the time axis. Drag a band's end marker to set its RT60
 // (mid = Decay; low / high are stored relative to it).
-internal sealed class ChamberDecayGraph : Control
+internal sealed class ChamberDecayGraph : Control, IValueHandles
 {
     private double _pre, _tmax = 4;
     private readonly double[] _rt = { 3, 3, 1.5 };
@@ -365,6 +370,16 @@ internal sealed class ChamberDecayGraph : Control
     private const double Pad = 6, Top = 16;
     private double X(double t) => Pad + t / _tmax * (Bounds.Width - 2 * Pad);
     private double T(double x) => (x - Pad) / Math.Max(1, Bounds.Width - 2 * Pad) * _tmax;
+
+    // Typed entry (specs/035): handle b = band b's marker (low · mid · high), the nearest one.
+    public int HandleAt(Point p)
+    {
+        if (_freeze) return -1;
+        int hb = -1; double best = double.MaxValue;
+        for (int b = 0; b < 3; b++) { double d = Math.Abs(p.X - X(_pre + _rt[b])); if (d < best) { best = d; hb = b; } }
+        return hb;
+    }
+    public Rect HandleRect(int handle) => ValueEntry.Near(new Point(X(_pre + _rt[handle]), Top), Bounds.Size);
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -466,7 +481,7 @@ internal sealed class ChamberDecayGraph : Control
 // TAIL EQ response (log 30 Hz … 18 kHz, ±20 dB): low cut + low shelf, high shelf + high cut
 // (the same RBJ biquads the engine runs). Handle 0 (neutral ink) = low cut (X) + low shelf gain (Y);
 // handle 1 = high cut (X) + high shelf gain (Y).
-internal sealed class ChamberEqCurve : Control
+internal sealed class ChamberEqCurve : Control, IValueHandles
 {
     private double _lc, _lg = 0.5, _hs = 0.5, _hc = 1;
     private int _drag = -1;
@@ -494,9 +509,16 @@ internal sealed class ChamberEqCurve : Control
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         var p = e.GetPosition(this);
         double d0 = Dist(p, X(LowCutHz(_lc)), Y((_lg - 0.5) * 36)), d1 = Dist(p, X(HighCutHz(_hc)), Y((_hs - 0.5) * 36));
+
         _drag = d0 <= d1 ? 0 : 1;
         DragStarted?.Invoke(_drag); e.Pointer.Capture(this); OnPointerMoved(e); e.Handled = true;
     }
+    // Typed entry (specs/035): handle 0 = low cut + low shelf, 1 = high cut + high shelf (the nearer).
+    public int HandleAt(Point p)
+        => Dist(p, X(LowCutHz(_lc)), Y((_lg - 0.5) * 36)) <= Dist(p, X(HighCutHz(_hc)), Y((_hs - 0.5) * 36)) ? 0 : 1;
+    public Rect HandleRect(int handle) => ValueEntry.Near(handle == 0 ? new Point(X(LowCutHz(_lc)), Y((_lg - 0.5) * 36))
+        : new Point(X(HighCutHz(_hc)), Y((_hs - 0.5) * 36)), Bounds.Size);
+
     private static double Dist(Point p, double x, double y) => Math.Sqrt((p.X - x) * (p.X - x) + (p.Y - y) * (p.Y - y));
     protected override void OnPointerMoved(PointerEventArgs e)
     {

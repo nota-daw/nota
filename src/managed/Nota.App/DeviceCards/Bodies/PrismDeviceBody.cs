@@ -177,6 +177,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
         }
 
         // A mono readout that edits its param by vertical drag (~140 px full range); double-click resets.
+        // A typeable value for a graph handle (⌥-click it, specs/035).
+        ValueField PF(int p, string name, Func<double, string> fmt) => ValueEntry.DeviceParam(engine, track, di, p, name, fmt, () => { foreach (var a in readouts) a(); });
+
         Control DragVal(int p, Func<double, string> fmt, Func<IBrush> color)
         {
             var tb = Mono("", 8, TxtC); tb.TextAlignment = TextAlignment.Right; tb.HorizontalAlignment = HorizontalAlignment.Stretch;
@@ -193,6 +196,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             host.PointerCaptureLost += (_, _) => { if (drag) { drag = false; End(p); } };
             readouts.Add(() => { tb.Text = fmt(P(p)); tb.Foreground = color(); });
             Learn(host, p);
+            ValueEntry.Attach(host, ValueEntry.DeviceParam(engine, track, di, p, engine.DeviceParamName(track, di, p), fmt), tb);   // ⌥-click types (specs/035)
             return host;
         }
 
@@ -256,7 +260,8 @@ internal sealed class PrismDeviceBody : IDeviceBody
             spec.DragStarted += h => Begin(h == 0 ? XoverLow : XoverHigh);
             spec.DragEnded += h => End(h == 0 ? XoverLow : XoverHigh);
             spec.BandClicked += SelectBand;
-            ToolTip.SetTip(spec, "Input spectrum (fill) and output (line). Drag a crossover line to move it; double-click resets. Click a band to select it.");
+            ValueEntry.AttachHandles(spec, [PF(XoverLow, "Low / mid crossover", v => HzF(XHz(v)))], [PF(XoverHigh, "Mid / high crossover", v => HzF(XHz(v)))]);
+            ToolTip.SetTip(spec, MenuKit.Keys("Input spectrum (fill) and output (line). Drag a crossover line to move it; ⌥-click to type, double-click resets. Click a band to select it."));
             readouts.Add(() => { spec.Set(P(XoverLow), P(XoverHigh), BandCount(), band, Sc(S_SampleRate)); spec.Tick(); });
 
             const string cols = "50,*,*,40,40";
@@ -323,12 +328,15 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 foreach (var a in readouts) a();
             };
             tr.DragEnded += _ => { End(dragThr); End(dragRat); };
+            ValueEntry.AttachHandles(tr,
+                [PF(BP(b, AboveThresh), "Above threshold", v => ThrF(ThrA(v))), PF(BP(b, AboveRatio), "Above ratio", RatioAF)],
+                [PF(BP(b, BelowThresh), "Below threshold", v => ThrF(ThrB(v))), PF(BP(b, BelowRatio), "Below ratio", RatioBF)]);
             tr.ResetRequested += h =>
             {
                 int t = BP(b, h == 1 ? AboveThresh : BelowThresh), r = BP(b, h == 1 ? AboveRatio : BelowRatio);
                 SetP(t, Def(t)); SetP(r, Def(r));
             };
-            ToolTip.SetTip(tr, "Drag a dot: ← → threshold, ↑ ↓ ratio (down = more). The bright dot is compression above, the grey one expansion below. Double-click a dot resets it.");
+            ToolTip.SetTip(tr, MenuKit.Keys("Drag a dot: ← → threshold, ↑ ↓ ratio (down = more). The bright dot is compression above, the grey one expansion below. Double-click a dot resets it. · ⌥-click to type"));
             readouts.Add(() =>
             {
                 if (!tr.IsEffectivelyVisible) return;
@@ -512,14 +520,14 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 new StackPanel { Spacing = 2, Children = { meterR, Center(Caps("R")) } }, scale } };
             var top = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { K(Output, "OUTPUT", v => DbF((v - 0.5) * 48), 38, 54), meters } };
 
-            // Sidechain source (None + every other track).
+            // Sidechain source (None + every other track, and the pads / chains / voices of a
+            // track's instrument, specs/050).
             var scName = new TextBlock { FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
             bool scOk = engine.DeviceAcceptsSidechain(track, di);
-            string SrcName(int id) { string n = TrackNames.Of(engine, id); return n == "—" ? "None" : n; }
             readouts.Add(() =>
             {
                 int src = scOk ? engine.DeviceSidechainSource(track, di) : -1;
-                scName.Text = !scOk ? "n/a in a rack" : src < 0 ? "None — own input" : SrcName(src);
+                scName.Text = !scOk ? "n/a in a rack" : src < 0 ? "None — own input" : SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di));
                 scName.Foreground = src >= 0 ? TxtC : Txt2;
             });
             var scBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0),
@@ -530,18 +538,17 @@ internal sealed class PrismDeviceBody : IDeviceBody
             {
                 if (!e.GetCurrentPoint(scBox).Properties.IsLeftButtonPressed || !scOk) return;
                 var fly = new MenuFlyout();
-                int cur = engine.DeviceSidechainSource(track, di);
-                void Item(string name, int id)
+                void Changed() { ctx.NotifyChanged(); foreach (var a in readouts) a(); }
+                void Item(string name, bool on, Action pick)
                 {
                     var mi = new MenuItem { Header = name };
-                    mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = id == cur;
-                    mi.Click += (_, _) => { engine.SetDeviceSidechainSource(track, di, id); ctx.NotifyChanged(); foreach (var a in readouts) a(); };
+                    mi.ToggleType = MenuItemToggleType.Radio; mi.IsChecked = on;
+                    mi.Click += (_, _) => pick();
                     fly.Items.Add(mi);
                 }
-                Item("None — own input", -1);
+                Item("None — own input", engine.DeviceSidechainSource(track, di) < 0, () => { engine.SetDeviceSidechainSource(track, di, -1); Changed(); });
                 fly.Items.Add(new Separator());
-                for (int i = 0; i < engine.TrackCount; i++)
-                    if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track) Item(SrcName(ti.Id), ti.Id);
+                foreach (var row in SidechainSourcePicker.MenuRows(engine, track, di, Changed)) fly.Items.Add(SidechainSourcePicker.MenuItemFor(row));
                 fly.ShowAt(scBox);
                 e.Handled = true;
             };
@@ -657,7 +664,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 {
                     var autos = Enumerable.Range(0, 3).Where(b => BandActive(b) && On(BP(b, AutoRelease))).Select(b => PrismInk.Names[b]).ToList();
                     int src = engine.DeviceAcceptsSidechain(track, di) ? engine.DeviceSidechainSource(track, di) : -1;
-                    string sc = src >= 0 ? "sidechain: " + TrackNames.Of(engine, src) : "own input";
+                    string sc = src >= 0 ? "sidechain: " + SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di)) : "own input";
                     return Inv($"{(On(Detect) ? "RMS" : "Peak")} detector · {(autos.Count > 0 ? "auto release on " + string.Join(", ", autos) : "fixed release")} · {sc}");
                 }
                 default:

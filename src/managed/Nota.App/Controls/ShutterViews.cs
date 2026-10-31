@@ -15,7 +15,8 @@
 //    levels) with the gain it makes on top — smooth and swing bend the curve — the current
 //    step lit (accent) and the playhead. Draw / Line / Erase / Flip edit the steps with the mouse.
 // Shared drag contract (ShDragView): left button only, a gesture per drag, double-click
-// resets the handle, right-click bubbles to the MIDI-learn menu.
+// resets the handle, ⌥-click types its value (the card supplies the fields, specs/035),
+// right-click opens the parameter menu on a handle and bubbles to MIDI learn elsewhere.
 
 using System;
 using System.Collections.Generic;
@@ -28,7 +29,7 @@ namespace Nota.App;
 
 /// <summary>A window with draggable handles: subclasses say which handle is under the pointer
 /// and what value a drag gives it.</summary>
-internal abstract class ShDragView : Control
+internal abstract class ShDragView : Control, IValueHandles
 {
     private int _drag = -1;
     private Point _start;
@@ -82,6 +83,11 @@ internal abstract class ShDragView : Control
         base.OnPointerCaptureLost(e);
     }
     protected virtual StandardCursorType CursorFor(int handle) => StandardCursorType.SizeNorthSouth;
+
+    // Typed entry: the handles are the drag handles; the box opens by the one last pointed at.
+    private Point _asked;
+    public int HandleAt(Point p) { _asked = p; return Hit(p); }
+    public Rect HandleRect(int handle) => ValueEntry.Near(_asked, Bounds.Size);
 
     private void Move(Point p)
     {

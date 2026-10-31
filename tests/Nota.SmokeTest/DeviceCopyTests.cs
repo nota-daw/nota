@@ -32,6 +32,54 @@ internal static class DeviceCopyTests
         foreach (var r in DrumRackUndo()) yield return r;
         foreach (var r in InstrumentRackUndo()) yield return r;
         foreach (var r in WrapInRack()) yield return r;
+        foreach (var r in CopiesKeepLinks()) yield return r;
+    }
+
+    // What points at or out of a copy follows it: a duplicate shifts the Arp CC targets behind
+    // it, and a duplicated rack chain keeps its children's keys, Arp targets and built-in state.
+    private static IEnumerable<(bool, string)> CopiesKeepLinks()
+    {
+        using var e = new NotaEngine();
+        int t = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(t, 6);   // Volt
+        int arp = e.AddMidiEffect(t, Arp);
+        int a = e.AddBuiltinDevice(t, 0);
+        int b = e.AddBuiltinDevice(t, 3);
+        e.SetMidiEffectCcDest(t, arp, b, 1);
+        int dup = e.DuplicateDevice(t, a);
+        yield return (dup == a + 1 && e.MidiEffectCcDestDevice(t, arp) == b + 1,
+            $"copies keep links: duplicating an effect before an Arp's target moves the target with it ({e.MidiEffectCcDestDevice(t, arp)})");
+        int arp2 = e.DuplicateMidiEffect(t, arp);
+        yield return (arp2 == arp + 1 && e.MidiEffectCcDestDevice(t, arp) == b + 1 && e.MidiEffectCcDestDevice(t, arp2) == b + 1,
+            "copies keep links: a duplicated Arp drives the same effect");
+        e.Undo();
+        yield return (e.Undo() && e.MidiEffectCcDestDevice(t, arp) == b, "copies keep links: undo puts the target back");
+
+        // An Arp inside an Instrument Rack chain driving a device of the same chain: the copied
+        // chain's Arp drives the copied device.
+        e.GroupDevices(t, 0, 1, true, 0, 2);   // Arp, Volt, EQ-8, Delay in one chain
+        var d0 = e.RackChainMidiCcDest(t, -1, 0, 0);
+        int c1 = e.RackDuplicateChain(t, 0);
+        var d1 = e.RackChainMidiCcDest(t, -1, c1, 0);
+        yield return (d0 is { Chain: 0, Slot: 1, Param: 1 } && c1 == 1 && d1 is { Chain: 1, Slot: 1, Param: 1 }
+                      && e.RackChainMidiCcDest(t, -1, 0, 0) == d0,
+            $"copies keep links: a duplicated chain's Arp drives its own chain's device ({d0} → {d1})");
+
+        // A keyed Compressor and a labelled EQ-8 in an Audio Effect Rack chain.
+        int src = e.AddAudioTrack();
+        int at = e.AddAudioTrack();
+        int eq = e.AddBuiltinDevice(at, 0);
+        e.EqSetBandText(at, eq, 2, "Mud", "200 Hz build-up");
+        int r = e.WrapDeviceInRack(at, eq);
+        e.RackDevAddChainDevice(at, r, 0, 1);
+        e.RackChainSetSidechain(at, r, 0, 1, new NestedSidechain(src, false, 3f, 0.5f));
+        int rc = e.RackDevDuplicateChain(at, r, 0);
+        yield return (rc == 1 && e.RackChainSidechain(at, r, 1, 1) is { SourceTrack: var k, GainDb: 3f, Mix: 0.5f } && k == src,
+            $"copies keep links: a duplicated chain's Compressor keeps its key ({e.RackChainSidechain(at, r, 1, 1)})");
+        e.RackDevRemoveChain(at, r, 0);
+        int n = e.UnwrapRack(at, r);
+        yield return (n == 2 && e.EqBandText(at, 0, 2, 0) == "Mud" && e.EqBandText(at, 0, 2, 1) == "200 Hz build-up",
+            $"copies keep links: an EQ-8 in a duplicated chain keeps its band labels (\"{e.EqBandText(at, 0, 2, 0)}\")");
     }
 
     private static string Chain(NotaEngine e, int t)

@@ -15,6 +15,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -318,14 +319,18 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
             LastChildFill = true, Margin = new Thickness(8, 5, 8, 0),
             Children = { Docked(head, Dock.Top), Docked(knobs, Dock.Bottom), new Border { Margin = new Thickness(0, 5, 0, 0), Child = window } },
         };
-        void WireDrag(ShDragView v, Func<int, int> param)
+        void WireDrag<T>(T v, Func<int, int> param, params ValueField[] handles) where T : ShDragView
         {
+            // ⌥-click a handle to type it (specs/035): one field per handle, in the view's handle order.
+            ValueEntry.AttachHandles(v, handles.Select(f => (IReadOnlyList<ValueField>)new[] { f }).ToArray());
             v.Value = h => P(param(h));
             v.Changed += (h, x) => { Raw(param(h), x); Refresh(); };
             v.GestureBegin += h => Begin(param(h));
             v.GestureEnd += h => End(param(h));
             v.ResetRequested += h => { Reset(param(h)); RefreshAll(); };
         }
+
+        ValueField F(int p, string name, Func<double, string> fmt) => ValueEntry.DeviceParam(engine, track, di, p, name, fmt, RefreshAll);
 
         // ---- shared knob formats ----
         string ChanceF(double v) => PctF(v);
@@ -404,8 +409,8 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         Control SlicesTab()
         {
             slices = new BrSlicesView();
-            WireDrag(slices, h => h == BrSlicesView.HGate ? Gate : Offset);
-            ToolTip.SetTip(slices, "The last interval's sound (the darker grey) on the grid: the gate from the offset is shaded and the captured slice is the bright line. Drag the offset line or the gate's end sideways; double-click resets.");
+            WireDrag(slices, h => h == BrSlicesView.HGate ? Gate : Offset, F(Offset, "Offset", OffsetF), F(Gate, "Gate", GateF));
+            ToolTip.SetTip(slices, MenuKit.Keys("The last interval's sound (the darker grey) on the grid: the gate from the offset is shaded and the captured slice is the bright line. Drag the offset line or the gate's end sideways; ⌥-click to type, double-click resets."));
             Learn(slices, Offset);
             var head = HeadRow(Row(6, Caps("INTERVAL"), IntervalSegC(), Caps("GRID"), GridSegC(), TripletChip()), new Border());
             var knobs = KnobRow(new[]
@@ -429,8 +434,9 @@ internal sealed class BeatRepeatDeviceBody : IDeviceBody
         Control FilterTab()
         {
             filter = new BrFilterView();
-            WireDrag(filter, h => h == BrFilterView.HFreq ? FilterFreq : FilterWidth);
-            ToolTip.SetTip(filter, "The repeat filter — only the repeats go through it. Solid: the first repeat; grey dashed: a later one when the band narrows and follows the pitch. Drag the node for the frequency, a band edge for the width; double-click resets.");
+            WireDrag(filter, h => h == BrFilterView.HFreq ? FilterFreq : FilterWidth,
+                F(FilterFreq, "Freq", FreqF), F(FilterWidth, "Width", WidthF), F(FilterWidth, "Width", WidthF));
+            ToolTip.SetTip(filter, MenuKit.Keys("The repeat filter — only the repeats go through it. Solid: the first repeat; grey dashed: a later one when the band narrows and follows the pitch. Drag the node for the frequency, a band edge for the width; ⌥-click to type, double-click resets."));
             Learn(filter, FilterFreq);
             var type = Seg(FilterNames, () => On(FilterOn) ? FType() + 1 : 0,
                 i => { if (i == 0) SetP(FilterOn, 0f); else { SetP(FilterType, (i - 1) / 2f); if (!On(FilterOn)) SetP(FilterOn, 1f); } },

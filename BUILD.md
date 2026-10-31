@@ -190,8 +190,11 @@ a single x64 host. An ARM64 build cannot be run on x64 — the smoke test is x64
 
 ### Platform details
 
-- Audio is **WASAPI** through miniaudio (fetched by CPM); ASIO is not
-  supported yet.
+- Audio is **WASAPI** through miniaudio, or **ASIO** (Preferences → Audio → Audio system).
+  Both are fetched by CPM; the Steinberg ASIO SDK 2.3.4 is used for its headers only,
+  under its GPLv3 option (`LICENSES/third-party.md`, note 8). With no audio interface at
+  hand, install [FlexASIO](https://github.com/dechamps/FlexASIO) to test the ASIO path; the
+  device-free part is covered by the smoke test's fake-driver self-test on every platform.
 - MIDI input is **WinMM** through RtMidi (fetched by CPM).
 - Plugin hosting is **VST3** (AU is macOS-only).
 - Settings, logs and projects are written to `%APPDATA%\Nota` (the counterpart of

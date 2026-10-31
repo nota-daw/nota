@@ -199,7 +199,8 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         comb.Changed += (d, f) => { Raw(Delay, d); Raw(Feedback, f); RefreshAll(); };
         comb.ResetRequested += () => { Reset(Delay); Reset(Feedback); RefreshAll(); };
         Learn(comb, Delay);
-        ToolTip.SetTip(comb, "The comb the delay carves into the spectrum, L in the bright line and R in the darker grey, with the first notch dashed. Drag left / right to move the notch (Delay), up / down for Feedback; double-click resets both.");
+        ToolTip.SetTip(comb, MenuKit.Keys("The comb the delay carves into the spectrum, L in the bright line and R in the darker grey, with the first notch dashed. Drag left / right to move the notch (Delay), up / down for Feedback; ⌥-click types, double-click resets both."));
+        ValueEntry.AttachAll(comb, ValueEntry.DeviceParam(engine, track, di, Delay, "Delay", v => FlangerMath.Ms(FlangerMath.BaseMs(v)) + "\u2009ms", RefreshAll), ValueEntry.DeviceParam(engine, track, di, Feedback, "Feedback", v => FbF(FlangerMath.Fb(v)), RefreshAll));
 
         var sweep = new FlangerSweepView { Margin = new Thickness(0, 4, 0, 0) };
         ToolTip.SetTip(sweep, "The delay τ of both channels over two LFO cycles, and where each is now");

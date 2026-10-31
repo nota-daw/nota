@@ -24,6 +24,7 @@ confined to the plugin-hosting module.
 | File | What it is |
 |---|---|
 | [`AGPL-3.0-only.txt`](AGPL-3.0-only.txt) | Full GNU AGPLv3 text (verbatim from the FSF) |
+| [`GPL-3.0-only.txt`](GPL-3.0-only.txt) | Full GNU GPLv3 text — the license the Steinberg ASIO SDK is used under (Windows builds) |
 | [`third-party.md`](third-party.md) | Register of every dependency and its license |
 | [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md) | Copyright & attribution notices for bundled/linked third-party software |
 

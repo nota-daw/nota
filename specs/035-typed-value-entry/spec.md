@@ -210,24 +210,29 @@ type each value it sets, and check the graph and the paired controls.
 
 ### Functional Requirements
 
+> **Amendment (#274, after PR 1 review):** the gestures were swapped — **⌥/Alt-click types**
+> (as does a double-click on a read-out) and **double-click resets** (or clears a route). The
+> requirements below are written in the amended form; where the user stories still say
+> "double-click types" / "⌥-click resets", read them the other way round.
+
 - **FR-001**: Every control that edits a numeric parameter MUST offer a text-entry mode in which the user types the value in the units the control displays.
-- **FR-002**: Text entry MUST open on double-click of the control or of its read-out, from a "Type value…" item in the control's context menu, and by Tab / Shift+Tab from another open box on the same card. Return outside a text box keeps its transport meaning (Stop; launch in the Session grid).
+- **FR-002**: Text entry MUST open on ⌥/Alt-click of the control, on double-click of its read-out, from a "Type value…" item in the control's context menu, and by Tab / Shift+Tab from another open box on the same card. Return outside a text box keeps its transport meaning (Stop; launch in the Session grid).
 - **FR-003**: Typed text MUST be read by one shared parser everywhere: sign, decimals (dot or comma) and fractions, unit multipliers (k, ms, µs, s, Hz/kHz, dB, %, st/ct), L/R/C for pan, ∞, and any word the control's read-out shows (off, HOLD …).
 - **FR-004**: A typed value outside the parameter's range MUST be clamped to the range; text that cannot be read MUST leave the value unchanged and add nothing to undo or automation.
 - **FR-005**: Enter and a click outside the box MUST commit; Esc MUST cancel and restore the value shown before the box opened.
 - **FR-006**: A commit MUST be exactly one undo step and exactly one automation gesture (begin / end), indistinguishable in history and automation from a drag that ends at the same value.
 - **FR-007**: Tab MUST commit and open entry on the next typeable parameter of the same card (or editor panel) in reading order, wrapping at the end; Shift+Tab MUST go the other way.
 - **FR-008**: While the box is open, keystrokes MUST go to the box and not trigger app-wide shortcuts.
-- **FR-009**: Reset to default MUST move from double-click to ⌥/Alt-click on every control that previously reset on double-click, and be available on every control that has a default; it MUST be one undo step and one automation gesture.
+- **FR-009**: Reset to default MUST stay on double-click of the control (amended by #274: ⌥/Alt-click types instead), and be available on every control that has a default; a handle with several values resets them together; it MUST be one undo step and one automation gesture.
 - **FR-010**: Every typeable control's context menu MUST offer "Reset to default" (and "Clear" where the value is a route or point that can be removed), so reset is reachable where ⌥/Alt already has another meaning.
 - **FR-011**: Fine-drag modifiers (Shift, Ctrl/⌘) MUST keep their current behaviour.
-- **FR-012**: Envelope / ADSR graph editors MUST open typed entry on double-click of a breakpoint (time first, Tab to level when it has one) and of a segment (that stage's time).
+- **FR-012**: Envelope / ADSR graph editors MUST open typed entry on ⌥/Alt-click of a breakpoint (time first, Tab to level when it has one) and of a segment (that stage's time).
 - **FR-013**: Envelope graph editors that have no adjacent numeric controls for their stages MUST show compact editable A/D/S/R (or the editor's own stage) read-outs next to the graph.
-- **FR-014**: Modulation matrix cells MUST open typed entry for their amount (−100…+100 %) on double-click; clearing a cell MUST move to ⌥/Alt-click and a "Clear" context-menu item.
-- **FR-015**: Graph controls whose handles set numeric parameters (filter / compressor / EQ curves, XY pads, value / pan / mix bars) MUST open typed entry on double-click of a handle, cycling with Tab through the values that handle sets; existing double-click actions on empty graph space MUST be kept.
+- **FR-014**: Modulation matrix cells MUST open typed entry for their amount (−100…+100 %) on ⌥/Alt-click; clearing a cell MUST be on double-click and a "Clear" context-menu item, and undoable.
+- **FR-015**: Graph controls whose handles set numeric parameters (filter / compressor / EQ curves, XY pads, value / pan / mix bars) MUST open typed entry on ⌥/Alt-click of a handle, cycling with Tab through the values that handle sets; existing double-click actions on empty graph space MUST be kept.
 - **FR-016**: The text box MUST look the same on every control and in every colour theme: a flat box over (or beside) the read-out, Studio tokens, mono figures, current value pre-selected; it MUST stay inside the window.
 - **FR-017**: The feature MUST ship with an audit list of every numeric control type and every place that builds one outside the shared kits, each item checked off as converted (or recorded as exempt with a reason).
-- **FR-018**: The Shortcuts pane, the user docs (EN + RU) and FEATURES.md MUST describe the new gestures (double-click = type, ⌥/Alt-click = reset, Enter / Tab / Esc in the box), and CHANGELOG `[Unreleased]` MUST note that double-click no longer resets.
+- **FR-018**: The Shortcuts pane, the user docs (EN + RU) and FEATURES.md MUST describe the gestures (⌥/Alt-click or a double-click on the read-out = type, double-click = reset / clear, Enter / Tab / Esc in the box), and CHANGELOG `[Unreleased]` MUST note them.
 
 ### Key Entities
 

@@ -5,12 +5,12 @@
 //  · Eq3Fader — a band's gain fader, drawn as an upright value bar filling from 0 dB to the
 //    value, the range's ends and 0 dB marked beside it. Vertical drag (relative — a click never
 //    jumps), 0.5 dB steps with a 0 dB detent; Shift / Ctrl / ⌘ for fine 0.1 dB steps;
-//    double-click resets (0 dB, and the kill off).
+//    double-click resets (0 dB, and the kill off); ⌥-click types the gain.
 //  · Eq3Graph — the response window: the output spectrum (engine FFT) behind, each band's own
 //    curve thin in grey (Low light, Mid darker, High light and dashed), the sum in neutral ink, the two crossovers as dashed lines with handles
 //    along the top that drag left / right (the low/mid one held to at most half the mid/high
 //    one). A drag anywhere else in a band's zone rides that band's gain up / down; double-click
-//    a handle or a zone to reset it.
+//    a handle or a zone to reset it, ⌥-click it to type the crossover / the band's gain.
 // Eq3Math mirrors Eq3.h (Linkwitz-Riley tree, the low band's allpass) so the curves are the DSP.
 
 using System;
@@ -191,7 +191,7 @@ internal sealed class Eq3Fader : Control
     }
 }
 
-internal sealed class Eq3Graph : Control
+internal sealed class Eq3Graph : Control, IValueHandles
 {
     private readonly double[] _db = new double[3];
     private readonly bool[] _kill = new bool[3];
@@ -254,6 +254,17 @@ internal sealed class Eq3Graph : Control
     {
         double f = Eq3Math.F(x / Math.Max(1, Bounds.Width));
         return f < _f1 ? 0 : f < _f2 ? 1 : 2;
+    }
+
+    // Typed entry: handles 0 / 1 are the crossovers (the box over the handle), 2…4 the bands' zones.
+    public int HandleAt(Point p) => HitHandle(p) is var h and >= 0 ? h : 2 + ZoneAt(p.X);
+    public Rect HandleRect(int handle)
+    {
+        if (handle < 2) return Handle(handle, out _);
+        int b = handle - 2;
+        double lo = b == 0 ? Eq3Math.FMin : b == 1 ? _f1 : _f2, hi = b == 0 ? _f1 : b == 1 ? _f2 : Eq3Math.FMax;
+        double x = Eq3Math.X(Math.Sqrt(lo * hi)) * Bounds.Width;
+        return ValueEntry.Near(new Point(x, Y(_db[b], Bounds.Height)), Bounds.Size);
     }
 
     protected override void OnPointerExited(PointerEventArgs e) { base.OnPointerExited(e); if (_hover != -1) { _hover = -1; InvalidateVisual(); } }

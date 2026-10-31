@@ -15,6 +15,7 @@ public domain, or AGPL-compatible copyleft.
 | JUCE | 8.0.14 | Plugin hosting (VST3 / AU) | **AGPL-3.0** | ✅ in use — CPM release tarball — see note 1 |
 | Steinberg VST3 SDK | bundled with JUCE 8 | VST3 hosting | MIT | ✅ in use — see note 2 |
 | miniaudio | 0.11.25 | Audio device I/O (WASAPI / PulseAudio / ALSA) | Unlicense **or** MIT-0 | ✅ in use — CPM release tarball, fetched to build dir |
+| Steinberg ASIO SDK | 2.3.4 (2025-10-15) | ASIO driver I/O (Windows) | **GPL-3.0** (dual: proprietary / GPLv3, used under GPLv3) | ✅ in use — CPM pinned zip, headers only, Windows only — see note 8 |
 | RtMidi | 6.0.0 (byte-identical to former snapshot) | MIDI I/O (WinMM / ALSA) | MIT-like (RtMidi) | ✅ in use — CPM pinned tarball, fetched to build dir |
 | dr_libs (dr_wav / dr_flac / dr_mp3) | headers wav 0.14.6 / flac 0.13.4 / mp3 0.7.4 (byte-identical to former snapshot) | WAV / FLAC / MP3 decoding | Unlicense **or** MIT-0 | ✅ in use — CPM pinned tarball, fetched to build dir — see note 3 |
 | libFLAC (xiph) | 1.5.0 | FLAC encoding (export) | BSD-3-Clause | ✅ in use — CPM release tarball, fetched to build dir |
@@ -87,6 +88,20 @@ complete corresponding source is pinned and fetchable (upstream tarball URL+HASH
 the LGPL text ships in LICENSES/, the register carries this row and note, and the
 combined work stays AGPL-3.0-only. No LAME symbol leaves the dylib (the `nota_*` export
 lists hide it, same as JUCE in note 1).
+
+**8 — The ASIO SDK is used under its GPLv3 option.**
+Steinberg's ASIO SDK 2.3.4 is dual-licensed: the proprietary Steinberg ASIO License, or
+the GNU GPL version 3 (SDK `LICENSE.txt`; steinberg.net/developers/asiosdk-open). Nota
+uses it under **GPLv3**. GPLv3 §13 and AGPLv3 §13 explicitly allow combining a GPLv3
+work with an AGPLv3 work: each part keeps its own license and the combined build is
+conveyed under AGPLv3 terms for Nota's part, with full source — which the AGPL release
+process already provides. Accepted as an *accounted* copyleft dependency
+(specs/049-asio-backend). Scope: Windows builds only; only the headers `common/asio.h`,
+`common/iasiodrv.h` and `common/asiosys.h` are compiled against (no SDK `.cpp`), fetched
+by CPM from Steinberg's own URL pinned by SHA256. The GPLv3 text ships as
+`GPL-3.0-only.txt`. **Trademark:** "ASIO" is a trademark of Steinberg Media Technologies
+GmbH, governed by Steinberg's usage guidelines rather than the GPL; Nota uses the word only
+as the name of the driver type (Preferences → Audio) and ships no ASIO logo.
 
 ## Not shipped
 

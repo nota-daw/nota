@@ -60,6 +60,14 @@ AudioConfig loadAudioConfig() {
         cfg.sampleRate = getNumberTolerant(j, "sampleRate", 0.0);
         cfg.bufferFrames = static_cast<int32_t>(getNumberTolerant(j, "bufferFrames", 0.0));
         cfg.wasapiExclusive = getBoolTolerant(j, "wasapiExclusive", false);
+        // ASIO (specs/049): missing keys keep today's behaviour (WASAPI); only Windows has ASIO.
+#if defined(_WIN32)
+        cfg.audioSystem = getStringTolerant(j, "audioSystem") == "asio" ? AudioSystem::Asio : AudioSystem::Wasapi;
+#endif
+        cfg.asioDriverClsid = getStringTolerant(j, "asioDriver");
+        cfg.asioDriverName = getStringTolerant(j, "asioDriverName");
+        cfg.asioOutputPair = std::max(0, static_cast<int32_t>(getNumberTolerant(j, "asioOutputPair", 0.0)));
+        cfg.asioInputPair = std::max(0, static_cast<int32_t>(getNumberTolerant(j, "asioInputPair", 0.0)));
     } catch (...) {
         // Corrupt file -> defaults, like before.
     }
@@ -75,6 +83,11 @@ void saveAudioConfig(const AudioConfig& cfg) {
     j["sampleRate"] = cfg.sampleRate;
     j["bufferFrames"] = cfg.bufferFrames;
     j["wasapiExclusive"] = cfg.wasapiExclusive;
+    j["audioSystem"] = cfg.audioSystem == AudioSystem::Asio ? "asio" : "wasapi";
+    j["asioDriver"] = cfg.asioDriverClsid;
+    j["asioDriverName"] = cfg.asioDriverName;
+    j["asioOutputPair"] = cfg.asioOutputPair;
+    j["asioInputPair"] = cfg.asioInputPair;
     cfgfile::writeFileAtomic((std::filesystem::path(dir) / "audio.json").string(), j.dump(2) + "\n");
 }
 

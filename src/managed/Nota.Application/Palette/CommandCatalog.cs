@@ -53,6 +53,7 @@ public static class CommandCatalog
         C("view.session", "Show Session", "View", "", "clips grid launch"),
         C("view.modular", "Show Modular", "View", "", "graph patch cv"),
         C("view.mixer", "Show Mixer", "View", Shortcut.CmdShift('M'), "faders channels"),
+        C("view.mixerFloat", "Mixer in its own window", "View", "", "dock undock float pop out mixer window"),
         C("view.connectPhone", "Connect phone…", "View", "", "remote mobile qr"),
         C("view.toggleBrowser", "Toggle browser", "View", "", "library sidebar"),
         C("view.toggleDetail", "Toggle detail panel", "View", "", "devices clip"),
