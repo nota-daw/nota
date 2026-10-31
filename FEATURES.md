@@ -353,6 +353,12 @@ docks as a panel under any of the three, or floats in its own window — see
     click its lock to keep it as a dimmed, read-only reference. While the Clip tab is
     open it follows the arrangement selection. ⌘D copies that run past a clip's end continue
     into the next open clip; past the last one they are left out.
+  - **Track mode**: the **Clip | Track** switch at the top of the inspector (also *Toggle
+    clip editor track mode* in the command palette) opens every MIDI clip of the track on the
+    arrangement's bars from bar 1, each clip marked in the clip strip, with the same editing
+    as several clips at once. Selecting a clip of the track makes it active and scrolls to it;
+    a clip on another track opens that track; new clips on the track join. The mode is
+    remembered.
 - **Clip tools (generate and transform)**: a **Tools** rail beside the piano roll with
   fifteen tools that write or rewrite notes. Six **generators** — *Rhythm* (a pattern that
   leans on the strong beats), *Seed* (learns the clip's own intervals and rhythm, then

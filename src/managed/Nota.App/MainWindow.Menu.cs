@@ -134,6 +134,7 @@ public partial class MainWindow
     private void OnMenuSplit(object? sender, EventArgs e)
     {
         if (_vm is null) return;
+        _editorRoll?.SettlePlacement();   // lands in the clips as they are numbered now, before the split re-indexes them
         // In the piano roll Cmd+E has no note meaning; only split arrangement clips.
         // A time-range selection wins: split every covered track at the range edges.
         if (Timeline.SplitTimeSelection()) { _session?.Refresh(); _vm.StatusText = "Split at selection"; return; }

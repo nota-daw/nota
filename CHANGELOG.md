@@ -23,6 +23,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Clip editor track mode** (#49): a **Clip | Track** switch at the top of the Clip editor's
+  inspector (and *Toggle clip editor track mode* in the command palette). Track shows every MIDI clip of the
+  track on the arrangement's timeline from bar 1, each clip's borders marked in the clip strip,
+  so you can scroll through the whole part and edit any note without re-selecting clips —
+  moves across clip seams, rubber band across clips, reference locks and one-step undo work as
+  in multi-clip editing. Selecting another clip of the track makes it active and scrolls to it;
+  a clip on another track opens that track; clips drawn, pasted or recorded on the track join.
+  Nota remembers the mode; Clip opens one clip as before.
 - **Automatic section names and Reset to default** (#106): new arrangement sections are named
   "Section N" for their place in the song — left to right, custom-named sections counted — and
   renumber when sections are added, moved, duplicated or deleted; custom names stay as typed.

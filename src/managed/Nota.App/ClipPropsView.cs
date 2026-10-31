@@ -2,7 +2,8 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // The 232px inspector beside the piano roll (nota-design "Nota Clip Editor" 1a): CLIP
-// (Start / Length in bars.beats.16ths, the Loop switch and its length), QUANTIZE (its step,
+// (the Clip | Track switch for arrangement clips, Start / Length in bars.beats.16ths, the Loop
+// switch and its length), QUANTIZE (its step,
 // Quantize, strength — the snap grid itself is the header chip), TRANSPOSE (− value +) and SELECTION (the selected note's
 // pitch / start / length / velocity, or the range of several), ending in one hint line.
 // Edits drive the PianoRollView; read-outs follow its Changed event.
@@ -42,7 +43,9 @@ public sealed class ClipPropsView : UserControl
 
     public ColumnFlow Flow { get; }
 
-    public ClipPropsView(PianoRollView roll, double startBeat)
+    /// <param name="mode">The Clip | Track switch (specs/059) heading the CLIP section; none for
+    /// a Session slot.</param>
+    public ClipPropsView(PianoRollView roll, double startBeat, Control? mode = null)
     {
         _roll = roll;
         _startText.Text = Position(startBeat);
@@ -52,9 +55,8 @@ public sealed class ClipPropsView : UserControl
         var loop = SwitchRow("Loop", () => true, () => { }, out _, _loopText);
         loop.IsEnabled = false;
         ToolTip.SetTip(loop, "Clips always loop");
-        var clip = Section("Clip",
-            Pair(Labeled("Start", Field(_startText)), Labeled("Length", Field(_lengthText))),
-            loop);
+        var pair = Pair(Labeled("Start", Field(_startText)), Labeled("Length", Field(_lengthText)));
+        var clip = mode is null ? Section("Clip", pair, loop) : Section("Clip", mode, pair, loop);
 
         // QUANTIZE — its own step (not the snap grid, which follows the zoom), one-tap
         // Quantize at the strength below.
