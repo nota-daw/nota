@@ -21,6 +21,13 @@ Licensed under the **MIT License**. Bundled with JUCE for VST3 hosting. "VST" is
 trademark of Steinberg Media Technologies GmbH — its name and logo are governed by
 Steinberg's VST trademark guidelines, separate from the code license.
 
+## Steinberg ASIO SDK
+Copyright © 2025 Steinberg Media Technologies GmbH.
+Used under the **GPL-3.0** option of its dual license (see [`GPL-3.0-only.txt`](GPL-3.0-only.txt)).
+Interface headers for ASIO driver I/O on Windows. Source:
+<https://www.steinberg.net/developers/asiosdk-open>. "ASIO" is a trademark of Steinberg
+Media Technologies GmbH.
+
 ## Avalonia
 Copyright © .NET Foundation and Contributors.
 Licensed under the **MIT License**. <https://avaloniaui.net>

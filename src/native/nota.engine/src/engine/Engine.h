@@ -76,6 +76,28 @@ class Engine {
     bool audioSilentFallback() const { return backend_ ? backend_->silentFallback() : false; }
     int32_t bufferFrames() const { return backend_ ? backend_->bufferFrames() : 0; }
 
+    // --- ASIO (Windows; specs/049) ---
+    // Staged like the rest of the config; applyAudioConfig() persists and restarts. Off
+    // Windows the setters change nothing (the native backend is the only system).
+    void setAudioSystem(AudioSystem system);
+    void setAsioDriver(const std::string& clsid, const std::string& name);
+    void setAsioPair(bool input, int32_t firstChannel);
+    // What actually runs: Wasapi after a failed ASIO start fell back (FR-011).
+    AudioSystem activeAudioSystem() const { return activeSystem_; }
+    // Why the last ASIO start failed ("" if it didn't, or ASIO wasn't asked for).
+    const std::string& audioFallbackReason() const { return audioFallbackReason_; }
+    // Device event since the last call (0 none, 1 reset requested, 2 driver failed).
+    // A driver that stopped calling back makes the next start skip ASIO once (FR-011).
+    int32_t pollAudioDeviceEvent();
+    int32_t audioInputLatencyFrames() const { return backend_ ? backend_->inputLatencyFrames() : 0; }
+    int32_t audioOutputLatencyFrames() const { return backend_ ? backend_->outputLatencyFrames() : 0; }
+
+    // Where a hardware take really starts once the device's round-trip latency is taken
+    // out (research R7): `latencyFrames` earlier, in device frames. A take that would
+    // start before beat 0 stays at 0 and drops its first frames instead (`trimFrames`).
+    static double latencyCompensatedStart(double startBeat, int32_t latencyFrames, double samplesPerBeat,
+                                          double* trimFrames);
+
     // --- MIDI device settings (M7-2) ---
     // Which inputs the engine listens to; persisted as a blocklist of disabled
     // uids in midi.json (empty = all on). Setters stage midiConfig_; apply
@@ -272,8 +294,12 @@ class Engine {
         int32_t destSlot, int32_t param, float depth);
     bool rackChainSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* src, int32_t* tapPre,
         float* gainDb, float* mix) const;
-    bool rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t tapPre,
+    int32_t rackChainSetSidechain(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t tapPre,
         float gainDb, float mix);
+    bool rackChainSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t* part) const;
+    int32_t rackChainSetSidechainPart(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t part);
+    int32_t rackChainSetKey(int32_t t, int32_t host, int32_t chain, int32_t slot, int32_t src, int32_t part,
+        int32_t tapPre, float gainDb, float mix);
     int32_t nestedChainIndex(int32_t trackId, int32_t host, uint64_t uid) const;
 
     // --- automation write / record (M9-C) ---
@@ -859,6 +885,27 @@ class Engine {
     int32_t instrumentSidechainSource(int32_t trackId) const;
     bool instrumentAcceptsSidechain(int32_t trackId) const;
     void recomputeRouting(); // message thread: assign route-bus slots to source tracks
+    // Sidechain sub-sources (specs/050). Parts are addressed by their current index on the
+    // source track's instrument (-1 = the whole track); the key keeps the part's stable id.
+    // Set: 0 done, -1 bad address / part, -2 no free route (the key is left as it was).
+    // Get: *part -1 whole track, -2 the keyed part is gone (the key is silent).
+    int32_t trackPartCount(int32_t trackId) const;
+    std::string trackPartName(int32_t trackId, int32_t index) const;
+    int32_t setDeviceSidechainKey(int32_t trackId, int32_t deviceIndex, int32_t sourceTrackId, int32_t part);
+    bool deviceSidechainKey(int32_t trackId, int32_t deviceIndex, int32_t* source, int32_t* part) const;
+    int32_t setInstrumentSidechainKey(int32_t trackId, int32_t sourceTrackId, int32_t part);
+    bool instrumentSidechainKey(int32_t trackId, int32_t* source, int32_t* part) const;
+    int32_t sidechainRoutesFree() const;
+    static constexpr int32_t kSidechainRoutes = 16; // == kMaxRoutes (private)
+    bool sidechainRouteInUse(int32_t sourceTrackId, int32_t part) const;
+    // A key's part as an index on its source track now (-1 whole track, -2 gone), and back
+    // (index -1 → 0; an index that isn't a part → no value). Message thread.
+    int32_t partIndexOf(int32_t sourceTrackId, uint64_t part) const;
+    bool partIdAt(int32_t sourceTrackId, int32_t index, uint64_t* part) const;
+    template <typename Consumer>
+    int32_t applySidechainKey(Consumer& c, int32_t src, uint64_t part, bool routed = true);
+    template <typename Fn>
+    void forEachRouteKey(Fn&& fn) const;
     // Open/close a hosted plugin's native GUI. deviceIndex < 0 = the instrument;
     // otherwise the effect at that chain position. Message thread only.
     void openTrackEditor(int32_t trackId, int32_t deviceIndex);
@@ -1203,6 +1250,9 @@ class Engine {
     void setTrackMonitor(int32_t trackId, bool on);
     bool trackMonitor(int32_t trackId) const;
     void pushMonitorFramesForTest(const float* interleavedStereo, int32_t frames); // feed the hw monitor ring
+    // Device-free: under a shared input clock (ASIO) one driver block rendered in two segments
+    // (a loop boundary) reaches monitoring whole — the rest of the block isn't trimmed as stale.
+    bool monitorSharedClockSelfTest();
     // MIDI routing: forward an instrument track's MIDI to another instrument track (-1 = off).
     void setTrackMidiSource(int32_t trackId, int32_t sourceTrackId);
     int32_t trackMidiSource(int32_t trackId) const;
@@ -1342,6 +1392,7 @@ class Engine {
     void feedMidiKey(Graph* g, Device& d, int32_t srcTrackId);
     // Sidechain / MIDI key for a device and, for a rack, its chain children (specs/044).
     void feedDeviceKey(Graph* g, Device& d, int32_t ownTrackId, int32_t frames);
+    void feedInstrumentKeys(Graph* g, Track& t, int32_t frames);
     void feedRackChildKeys(Graph* g, const RackCore& r, int32_t ownTrackId, int32_t frames);
     void renderSessionSlotRaw(Track& t, float* dst, int32_t frames, double spb);
     // Session P0 (audio thread): queue a follow action / Repeat retrigger before the launch
@@ -1465,6 +1516,9 @@ class Engine {
 
     std::unique_ptr<AudioBackend> backend_;
     AudioConfig config_;    // chosen device/rate/buffer (M7-1)
+    AudioSystem activeSystem_ = AudioSystem::Wasapi; // what backend_ is (after any fallback)
+    std::string audioFallbackReason_;                // why ASIO didn't start (specs/049)
+    std::string asioSkipOnce_; // set when the running driver went silent: the next start runs WASAPI
     MidiConfig midiConfig_; // enabled MIDI inputs (M7-2)
     std::unique_ptr<MidiInput> midiInput_;
     std::unique_ptr<GamepadInput> gamepadInput_; // game controller note input
@@ -1670,6 +1724,9 @@ class Engine {
     // Set by start() before the device opens, cleared (release) once every node is re-prepared
     // at the negotiated rate: while set, render() outputs silence and never touches the graph.
     std::atomic<bool> renderSuspended_{false};
+    // Device callbacks inside render() right now. start() waits for 0 before re-preparing
+    // nodes: a render stuck in a plug-in (an ASIO driver given up on) must not overlap it.
+    std::atomic<int32_t> rendersInFlight_{0};
     std::atomic<double> launchQuant_{4.0}; // Session launch quantize, beats (M5-2)
     // Arrangement playback active (M5): true after main Play / arrangement record; false in a
     // session-only jam. Read on the audio thread to gate arrangement clip content per track.
@@ -1945,6 +2002,7 @@ class Engine {
     std::vector<float> monitorHwBuf_;          // audio thread, this segment's hw input
     bool monitorPrimed_ = false;               // audio thread: cushion reached
     std::atomic<int32_t> inputBlockFrames_{0}; // largest capture callback seen (cushion size)
+    std::atomic<bool> monitorSharedClock_{false}; // capture shares the output callback (ASIO): no cushion
     std::atomic<bool> hwMonitorTap_{false};    // input thread -> monitorQueue_
     std::atomic<bool> hwRecordTap_{false};     // input thread -> inputQueue_ (hw take rolling)
     bool hwMonitorWanted_ = false;             // message thread: some track monitors hw input
@@ -1976,6 +2034,7 @@ class Engine {
     int32_t audioRecordTrackId_ = 0;
     double audioRecordStartBeat_ = 0.0;
     double audioRecordSampleRate_ = 0.0;
+    int32_t audioRecordLatencyFrames_ = 0; // device round trip to take out of a hardware take
     // Internal-resampling source for the active take (0 = hardware/off, -1 = master,
     // >0 = source track id). Read on the audio thread in mixGraph to tap the ring.
     std::atomic<int32_t> internalRecordSource_{0};
@@ -2196,14 +2255,41 @@ class Engine {
     // the cost of one block of detector latency — inaudible after attack/release.
     // Each source slot mirrors two tap points so consumers can pick (Phase D):
     // routeBus{Post,Pre}_ = post-FX post-fader and pre-FX pre-fader signal.
-    static constexpr int32_t kMaxRoutes = 8;
+    // A slot may also mirror one part of the source's instrument (specs/050): a Drum Rack pad,
+    // an Instrument Rack chain or a Rhythm voice, filled from inside the instrument's render
+    // (Instrument::setPartTaps). For a part, Pre = the part before its own inserts and Post =
+    // after its inserts and gain / pan, before the instrument sums it. Whole tracks and parts
+    // share the pool.
+    static constexpr int32_t kMaxRoutes = kSidechainRoutes;
     std::array<std::vector<float>, kMaxRoutes> routeBus_, routeBusNext_;       // post-FX (post-fader)
     std::array<std::vector<float>, kMaxRoutes> routeBusPre_, routeBusPreNext_; // pre-FX (pre-fader)
     std::atomic<int32_t> routeSlotTrackId_[kMaxRoutes]; // which source track each slot mirrors (-1 = free)
-    int32_t routeSlotForTrack(int32_t trackId) const {  // audio + message thread; scan is tiny
-        for (int32_t s = 0; s < kMaxRoutes; ++s)
-            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId) return s;
+    std::atomic<uint64_t> routeSlotPart_[kMaxRoutes];   // which part of it (0 = the whole track)
+    // recomputeRouting fills slots 0..count-1 in order, so lookups scan only the used ones — a
+    // project without sidechains pays one load per lookup, and these run several times per
+    // track per block. A reroute racing a block can mis-key that one block (as it always could:
+    // the table is cleared and refilled in place), never touch a buffer out of range.
+    std::atomic<int32_t> routeSlotCount_{0};
+    std::vector<float> silentKey_; // kMaxBlock stereo zeros: the key of a part that is gone
+    void feedPartTaps(const Track& t);                                  // audio thread
+    const float* keyBuffer(int32_t src, uint64_t part, bool pre) const; // audio thread
+    // Audio + message thread.
+    int32_t routeSlotFor(int32_t trackId, uint64_t part) const {
+        const int32_t n = routeSlotCount_.load(std::memory_order_acquire);
+        for (int32_t s = 0; s < n; ++s)
+            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId &&
+                routeSlotPart_[s].load(std::memory_order_relaxed) == part)
+                return s;
         return -1;
+    }
+    int32_t routeSlotForTrack(int32_t trackId) const { return routeSlotFor(trackId, 0); }
+    // Whether any slot (whole track or one of its parts) mirrors this track: it keeps rendering
+    // while muted or solo-gated, for its taps.
+    bool trackFeedsRoute(int32_t trackId) const {
+        const int32_t n = routeSlotCount_.load(std::memory_order_acquire);
+        for (int32_t s = 0; s < n; ++s)
+            if (routeSlotTrackId_[s].load(std::memory_order_relaxed) == trackId) return true;
+        return false;
     }
 };
 

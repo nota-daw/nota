@@ -191,7 +191,7 @@ a dot and check the arrangement selection.
   at L100, L50, C, R50, R100) and Y = fader volume on the same scale as the Mixer fader
   (grid lines and labels at its top, 0 dB, −6, −12, −24), C and 0 dB lines emphasised.
 - **FR-004**: The map header MUST read **STEREO MAP**. A hint line under the map MUST read
-  "Drag: pan + volume · Shift locks axis · double-click centres pan · ⌥ double-click 0 dB".
+  "Drag: pan + volume · Shift locks axis · double-click centres pan · ⌥-click types".
 
 **Measurement**
 

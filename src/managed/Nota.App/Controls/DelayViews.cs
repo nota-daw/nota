@@ -3,9 +3,9 @@
 //
 // The custom-drawn views of the Nota Delay card: the repeat window (the echo train per
 // channel, L in the light graph grey above the axis and R in a darker grey below, the sounding
-// repeat lit in accent) and the feedback tone graph (low cut / high cut, dragged by its
-// handles). The Loop column's faders are upright value bars. They draw what the card hands
-// them and own no engine state.
+// repeat lit in accent), the Loop column's upright value bars, and the feedback tone graph (low
+// cut / high cut, dragged by its handles). They draw what the card hands them and own no engine
+// state; ⌥-click a fader or a tone handle to type its value (the card supplies the field, specs/035).
 
 using System;
 using System.Globalization;
@@ -113,7 +113,7 @@ internal sealed class DelayTaps : Control
 
 // The feedback tone: the band the repeats live in, between the low cut and the high cut.
 // Drag either handle horizontally to move its corner; double-click opens the band wide again.
-internal sealed class DelayFilterCurve : Control
+internal sealed class DelayFilterCurve : Control, IValueHandles
 {
     private const double FMin = 20, FMax = 20000;
 
@@ -146,6 +146,10 @@ internal sealed class DelayFilterCurve : Control
 
     private int NearestHandle(double x, double w)
         => Math.Abs(x - XOf(_lowHz, w)) <= Math.Abs(x - XOf(_highHz, w)) ? 1 : 2;
+
+    // Typed entry: handle 0 = low cut, 1 = high cut (the nearer one, as a drag picks it).
+    public int HandleAt(Point p) => NearestHandle(p.X, Bounds.Width) - 1;
+    public Rect HandleRect(int handle) => ValueEntry.Near(new Point(XOf(handle == 0 ? _lowHz : _highHz, Bounds.Width), 10), Bounds.Size);
 
     private void Apply(PointerEventArgs e)
     {

@@ -60,6 +60,8 @@ internal sealed class CrushDeviceBody : IDeviceBody
 
         var readouts = new List<Action>();
         void RefreshAll() { for (int i = 0; i < readouts.Count; i++) readouts[i](); }
+        // A typeable value for a graph (⌥-click it, specs/035).
+        ValueField F(int p, string name, Func<double, string> fmt) => ValueEntry.DeviceParam(engine, track, di, p, name, fmt, RefreshAll);
         var scope = new float[kScope];
         int scN = 0;
         double Sc(int i) => scN > i ? scope[i] : 0;
@@ -261,7 +263,8 @@ internal sealed class CrushDeviceBody : IDeviceBody
             quant.Changed += (b, r) => { Raw(Bits, b); Raw(Rate, r); RefreshAll(); };
             quant.ResetRequested += () => { Reset(Bits); Reset(Rate); RefreshAll(); };
             Learn(quant, Bits);
-            ToolTip.SetTip(quant, "10\u2009ms of a sine through the crusher: the source dashed, the held and quantised steps in neutral ink. Drag up / down for Bits, left / right for Rate; double-click resets both.");
+            ToolTip.SetTip(quant, MenuKit.Keys("10\u2009ms of a sine through the crusher: the source dashed, the held and quantised steps in neutral ink. Drag up / down for Bits, left / right for Rate; ⌥-click types, double-click resets both."));
+            ValueEntry.AttachAll(quant, F(Bits, "Bits", BitsF), F(Rate, "Rate", RateF));
             var knobs = KnobRow(
                 () => NotaNum.F($"{KHz(Sr())} → {KHz(RateHz(P(Rate)))} · 1 of {Hold():0.#}"),
                 () => NotaNum.F($"quant. noise {-(6.02 * BitsOf(P(Bits)) + 1.76):0}\u2009dB"));
@@ -279,7 +282,8 @@ internal sealed class CrushDeviceBody : IDeviceBody
             spectrum.GestureEnd += h => End(map[h]);
             spectrum.ResetRequested += h => { Reset(map[h]); RefreshAll(); };
             Learn(spectrum, Rate);
-            ToolTip.SetTip(spectrum, "The output spectrum: the bright ink is the signal, grey what the crush added — lighter above the reduced Nyquist (the images). Drag the Nyquist line for Rate, the filter line for the post filter; double-click resets.");
+            ToolTip.SetTip(spectrum, MenuKit.Keys("The output spectrum: the bright ink is the signal, grey what the crush added — lighter above the reduced Nyquist (the images). Drag the Nyquist line for Rate, the filter line for the post filter; ⌥-click types, double-click resets."));
+            ValueEntry.AttachHandles(spectrum, [F(Rate, "Rate", RateF)], [F(PostFilter, "Post filter", FiltF)]);
             var knobs = KnobRow(
                 () => Sc(S_Analysed) < 0.5 ? "no signal" : ScDb(S_Images) <= -119 ? NotaNum.F($"no images above {KHz(Sc(S_Nyquist))}")
                     : NotaNum.F($"images above {KHz(Sc(S_Nyquist))} {ScDb(S_Images):0}\u2009dB"),
@@ -298,7 +302,8 @@ internal sealed class CrushDeviceBody : IDeviceBody
             curve.GestureEnd += _ => End(Drive);
             curve.ResetRequested += _ => { Reset(Drive); RefreshAll(); };
             Learn(curve, Drive);
-            ToolTip.SetTip(curve, "Input → output through Drive, the mode and the levels; the dot is where the signal peaks. Drag up / down for Drive; double-click resets.");
+            ToolTip.SetTip(curve, MenuKit.Keys("Input → output through Drive, the mode and the levels; the dot is where the signal peaks. Drag up / down for Drive; ⌥-click types, double-click resets."));
+            ValueEntry.AttachHandles(curve, [F(Drive, "Drive", DriveF)]);
             wave = new CrWaveView();
             ToolTip.SetTip(wave, "Two cycles of a sine at the driven level (dashed) and what comes out");
             var pair = new DockPanel { LastChildFill = true, Children = { Docked(curve, Dock.Left), new Border { Margin = new Thickness(5, 0, 0, 0), Child = wave } } };

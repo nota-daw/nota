@@ -92,14 +92,18 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         space.PreGestureBegin += () => Begin(PreDelay);
         space.PreGestureEnd += () => End(PreDelay);
         space.PreReset += () => { Reset(PreDelay); SyncGraphs(); };
-        ToolTip.SetTip(space, "The tail of your audio — the input (grey) and the reverb's tail before the mix, over the last six seconds. The dashed line falls from the tail's latest peak at the set RT60. Drag the dotted pre-delay marker (0 … 200 ms), drag anywhere else to lengthen or shorten the decay; double-click to reset.");
+        ToolTip.SetTip(space, MenuKit.Keys("The tail of your audio — the input (grey) and the reverb's tail before the mix, over the last six seconds. The dashed line falls from the tail's latest peak at the set RT60. Drag the dotted pre-delay marker (0 … 200 ms), drag anywhere else to lengthen or shorten the decay; ⌥-click to type, double-click to reset."));
+        ValueEntry.AttachHandles(space, [ValueEntry.DeviceParam(engine, track, di, Decay, "Decay", DecayF, SyncGraphs)],
+            [ValueEntry.DeviceParam(engine, track, di, PreDelay, "Pre-delay", PreF, SyncGraphs)]);
         MidiLearn.Bind(space, MidiTarget.DeviceParam(track, di, Decay), "Decay");
 
         tone.Changed += (hd, v) => { Raw(hd == 0 ? LowCut : HighCut, (float)v); SyncGraphs(); };
         tone.GestureBegin += hd => Begin(hd == 0 ? LowCut : HighCut);
         tone.GestureEnd += hd => End(hd == 0 ? LowCut : HighCut);
         tone.Reset += hd => { Reset(hd == 0 ? LowCut : HighCut); SyncGraphs(); };
-        ToolTip.SetTip(tone, "Decay by frequency — how long the tail rings at each pitch (HF Damp shortens the highs), the low and high cut on the tail (drag the handles; double-click resets) and the tail's live spectrum (grey).");
+        ToolTip.SetTip(tone, MenuKit.Keys("Decay by frequency — how long the tail rings at each pitch (HF Damp shortens the highs), the low and high cut on the tail (drag the handles; ⌥-click one to type it, double-click resets) and the tail's live spectrum (grey)."));
+        ValueEntry.AttachHandles(tone, [ValueEntry.DeviceParam(engine, track, di, LowCut, "Low cut", v => Hz(LowHz(v)), SyncGraphs)],
+            [ValueEntry.DeviceParam(engine, track, di, HighCut, "High cut", v => Hz(HighHz(v)), SyncGraphs)]);
         MidiLearn.Bind(tone, MidiTarget.DeviceParam(track, di, HighCut), "High Cut");
 
         void SyncGraphs()

@@ -33,11 +33,18 @@ public static class PresetEdit
             };
         targets[^1] = MixTarget.PresetTag(trackId, surface, index);
         string warn = "";
-        MixEdit.Step(engine, () =>
+        // A group around the gesture: what apply() changes beside the parameters (an EQ-8's band
+        // labels, each its own undo entry) undoes with them however few parameters there are.
+        engine.BeginUndoGroup();
+        try
         {
-            warn = apply();
-            if (warn.Length == 0) engine.SetDevicePresetTag(trackId, surface, index, presetId, name);
-        }, targets);
+            MixEdit.Step(engine, () =>
+            {
+                warn = apply();
+                if (warn.Length == 0) engine.SetDevicePresetTag(trackId, surface, index, presetId, name);
+            }, targets);
+        }
+        finally { engine.EndUndoGroup(); }
         return warn;
     }
 

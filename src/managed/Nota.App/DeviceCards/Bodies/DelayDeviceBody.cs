@@ -112,7 +112,10 @@ internal sealed class DelayDeviceBody : IDeviceBody
         repeats.GestureBegin += hd => Begin(hd == 0 ? LowCut : HighCut);
         repeats.GestureEnd += hd => End(hd == 0 ? LowCut : HighCut);
         repeats.Reset += hd => { Begin(hd == 0 ? LowCut : HighCut); Raw(hd == 0 ? LowCut : HighCut, hd == 0 ? 0f : 1f); End(hd == 0 ? LowCut : HighCut); };
-        ToolTip.SetTip(repeats, "The repeats — each pass round the loop goes through the low cut, the high cut (and the tape's head loss) again and loses the feedback, so each curve sits lower and narrower. Drag the handles for the cuts; double-click one to open it. Grey: the echoes' live spectrum.");
+        ToolTip.SetTip(repeats, MenuKit.Keys("The repeats — each pass round the loop goes through the low cut, the high cut (and the tape's head loss) again and loses the feedback, so each curve sits lower and narrower. Drag the handles for the cuts; ⌥-click one to type it, double-click one to open it. Grey: the echoes' live spectrum."));
+        // A double-click opens the cut (the graph's own Reset), so the fields leave it alone; the menu's Reset to default still resets.
+        ValueEntry.AttachHandles(repeats, [ValueEntry.DeviceParam(engine, track, di, LowCut, "Low cut", LowCutF) with { ResetOnDoubleClick = false }],
+            [ValueEntry.DeviceParam(engine, track, di, HighCut, "High cut", HighCutF) with { ResetOnDoubleClick = false }]);
         MidiLearn.Bind(repeats, MidiTarget.DeviceParam(track, di, LowCut), "Low Cut");
         void SyncTaps()
         {
@@ -211,16 +214,18 @@ internal sealed class DelayDeviceBody : IDeviceBody
         // ======================================================================
         // LEFT — Loop column (Feedback · Spread)
         // ======================================================================
-        Control LoopFader(int p, string label, IBrush ink, IBrush handle, Func<string> value, string tip)
+        Control LoopFader(int p, string label, IBrush ink, IBrush handle, Func<double, string> fmt, string tip)
         {
             var f = new DelayFader { Ink = ink, Handle = handle, Width = 18, VerticalAlignment = VerticalAlignment.Stretch, Default = engine.DeviceParamDefault(track, di, p) };
             f.Changed += v => Raw(p, (float)v);
             f.GestureBegin += () => Begin(p);
             f.GestureEnd += () => End(p);
             MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
-            ToolTip.SetTip(f, tip);
+            ToolTip.SetTip(f, MenuKit.Keys(tip));
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
             var val = Mono("", 7, TextPrimary); val.HorizontalAlignment = HorizontalAlignment.Center;
+            ValueEntry.Attach(f, ValueEntry.DeviceParam(engine, track, di, p, NotaText.Label(label), fmt), val);
+            string value() => fmt(P(p));
             readouts.Add(() =>
             {
                 f.Set(P(p));
@@ -234,11 +239,11 @@ internal sealed class DelayDeviceBody : IDeviceBody
         var loopTitle = Caps("LOOP"); loopTitle.HorizontalAlignment = HorizontalAlignment.Center;
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 2) };
         faders.Children.Add(LoopFader(Feedback, "FEEDBACK", NotaPalette.VizInk, NotaPalette.VizInk,
-            () => On(Freeze) ? "Hold" : Pct(P(Feedback)),
-            "Feedback — how much of each repeat goes round again; Freeze pins it at 100 %. Double-click resets."));
+            v => On(Freeze) ? "Hold" : Pct(v),
+            "Feedback — how much of each repeat goes round again; Freeze pins it at 100 %. ⌥-click types, double-click resets."));
         faders.Children.Add(Col(LoopFader(Spread, "SPREAD", DeviceCardKit.ModInk, DeviceCardKit.ModInkBright,
-            () => NotaNum.F($"{P(Spread) * 50:0} ms"),
-            "Spread — pushes the right channel later, up to 50 ms. Double-click resets."), 1));
+            v => NotaNum.F($"{v * 50:0}\u2009ms"),
+            "Spread — pushes the right channel later, up to 50 ms. ⌥-click types, double-click resets."), 1));
         var loopCol = new RuleSection
         {
             Width = 96, Padding = new Thickness(0, 5, 0, 4),

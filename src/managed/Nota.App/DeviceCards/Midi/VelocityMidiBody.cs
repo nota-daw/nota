@@ -299,7 +299,15 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             range.GestureBegin += h => Begin(h == 0 ? POutLo : POutHi);
             range.GestureEnd += h => End(h == 0 ? POutLo : POutHi);
             range.Changed += (h, n) => { if (h == 0) SetLo(1 + n * 126); else SetHi(1 + n * 126); Refresh(); };
-            ToolTip.SetTip(range, "Out range — drag a handle, double-click resets to 1–127");
+            ToolTip.SetTip(range, MenuKit.Keys("Out range — drag a handle, ⌥-click to type it, double-click resets to 1–127"));
+            {
+                string Vel(double n) => ((int)Math.Round(1 + Math.Clamp(n, 0, 1) * 126)).ToString(NotaNum.Culture);
+                ValueEntry.AttachHandles(range,
+                    [new ValueField("Out low", () => range.Lo, Vel, n => SetLo(1 + n * 126), () => Begin(POutLo), () => End(POutLo))
+                        { Reset = range.Reset, After = Refresh }],
+                    [new ValueField("Out high", () => range.Hi, Vel, n => SetHi(1 + n * 126), () => Begin(POutHi), () => End(POutHi))
+                        { After = Refresh }]);
+            }
             Learn(range, POutHi, "Out High");
             readouts.Add(() =>
             {

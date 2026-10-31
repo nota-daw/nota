@@ -76,25 +76,15 @@ internal static class DeviceParamControls
         int di = index;
         var label = new TextBlock { Text = "Sidechain", FontSize = 9, FontWeight = FontWeight.Medium, Foreground = TextTertiary };
 
-        // Source: "None" first, then every track except this one.
-        var ids = new List<int> { -1 };
-        var combo = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch, FontSize = 9 };
-        combo.Items.Add("None");
-        int n = engine.TrackCount;
-        for (int i = 0; i < n; i++)
-        {
-            if (!engine.TryGetTrackInfo(i, out var ti) || ti.Id == track) continue;
-            ids.Add(ti.Id);
-            combo.Items.Add(TrackNames.Of(engine, ti));
-        }
-        combo.SelectedIndex = Math.Max(0, ids.IndexOf(engine.DeviceSidechainSource(track, di)));
-        combo.SelectionChanged += (_, _) =>
-        {
-            int sel = combo.SelectedIndex;
-            if (sel < 0 || sel >= ids.Count) return;
-            engine.SetDeviceSidechainSource(track, di, ids[sel]);
-            ctx.NotifyChanged();
-        };
+        // Source: "None" first, then every track except this one, each with its pads / chains /
+        // voices (specs/050).
+        var picker = new SidechainSourcePicker(engine, track, () => engine.DeviceSidechainKey(track, di),
+            (src, part) => engine.SetDeviceSidechainKey(track, di, src, part), "None");
+        var combo = picker.Combo;
+        combo.HorizontalAlignment = HorizontalAlignment.Stretch;
+        combo.FontSize = 9;
+        picker.Picked += _ => ctx.NotifyChanged();
+        ctx.AddDeviceRefresher(picker.Sync);   // follow MCP / project edits, and pads coming and going
 
         // Tap point: a small two-state toggle (Post FX ⇄ Pre FX).
         var tapText = new TextBlock { FontSize = 9, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };

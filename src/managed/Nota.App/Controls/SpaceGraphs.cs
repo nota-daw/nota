@@ -164,8 +164,9 @@ internal sealed class WetSpectrum
 }
 
 /// <summary>A frequency graph with a low-cut and a high-cut handle, each over its own parameter range
-/// (log Hz). Drag a handle to move it, double-click (or Alt-click) to reset it.</summary>
-internal abstract class CutHandleGraph : Control
+/// (log Hz). Drag a handle to move it, double-click to reset it; ⌥-click a handle to type its value
+/// (the owner supplies the fields, specs/035 — without them ⌥-click resets, as a double-click does).</summary>
+internal abstract class CutHandleGraph : Control, IValueHandles
 {
     protected double LowHz = 20, HighHz = 20000;
     protected bool LowOn = true, HighOn = true;
@@ -197,6 +198,14 @@ internal abstract class CutHandleGraph : Control
     {
         var (x0, x1, _, _) = Geo();
         return Math.Abs(x - SpaceDraw.LogX(LowHz, x0, x1)) <= Math.Abs(x - SpaceDraw.LogX(HighHz, x0, x1)) ? 1 : 2;
+    }
+
+    // Typed entry: handle 0 = low cut, 1 = high cut (the nearer one, as a drag picks it).
+    public int HandleAt(Point p) => Nearest(p.X) - 1;
+    public Rect HandleRect(int handle)
+    {
+        var (x0, x1, top, _) = Geo();
+        return ValueEntry.Near(new Point(SpaceDraw.LogX(handle == 0 ? LowHz : HighHz, x0, x1), top), Bounds.Size);
     }
 
     private void Apply(PointerEventArgs e)
@@ -266,8 +275,9 @@ internal abstract class CutHandleGraph : Control
 /// peak at the set RT60, so a tail that rings longer or shorter than the setting shows at once.
 /// Drag to lengthen or shorten the decay (right or up = longer), double-click to reset it. The grey
 /// pre-delay marker has its own scale (0 … 200 ms between 3 % and 33 % of the width, as on the old
-/// tail picture): drag it for the pre-delay, double-click it to reset.</summary>
-internal sealed class ReverbSpaceView : Control
+/// tail picture): drag it for the pre-delay, double-click it to reset. ⌥-click the marker to type the
+/// pre-delay, anywhere else to type the decay (the owner supplies the fields, specs/035).</summary>
+internal sealed class ReverbSpaceView : Control, IValueHandles
 {
     private const double PreLo = 0.03, PreSpan = 0.30;
     private float[] _s = Array.Empty<float>();
@@ -314,6 +324,14 @@ internal sealed class ReverbSpaceView : Control
     private (double x0, double x1) Span() => (6, Bounds.Width - 6);
     private double PreX() { var (x0, x1) = Span(); return x0 + (PreLo + PreSpan * _preNorm) * (x1 - x0); }
     private bool OnPre(Point p) => Math.Abs(p.X - PreX()) <= 6;
+
+    // Typed entry: handle 0 = the decay (the tail anywhere), 1 = the pre-delay marker.
+    public int HandleAt(Point p) => OnPre(p) ? 1 : 0;
+    public Rect HandleRect(int handle)
+    {
+        var (x0, x1) = Span();
+        return ValueEntry.Near(new Point(handle == 1 ? PreX() : (x0 + x1) / 2, NotaGraph.PlotTop), Bounds.Size);
+    }
     private void ApplyPre(Point p)
     {
         var (x0, x1) = Span();
