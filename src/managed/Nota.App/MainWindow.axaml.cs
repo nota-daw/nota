@@ -390,6 +390,9 @@ public partial class MainWindow : Window
         PianoRollView.AuditionToggled += OnAuditionToggled;
         PianoRollView.VelocityWheelReversed = vm.Settings.Current.PianoRollVelocityWheelReversed;
         PianoRollView.VelocityWheelMultiplier = Nota.Application.Editing.VelocityWheel.ClampMultiplier(vm.Settings.Current.PianoRollVelocityWheelMultiplier);
+        // The piano roll's key labels (every note, not just C) persist the same way.
+        PianoRollView.SetLabelAllNotes(vm.Settings.Current.PianoRollLabelAllNotes);
+        vm.Settings.Changed += () => PianoRollView.SetLabelAllNotes(vm.Settings.Current.PianoRollLabelAllNotes);
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         vm.Transport.LoopRecordReplace = vm.Settings.Current.LoopRecordReplace;
         SetArmOnSelect(vm.Settings.Current.ArmOnSelect);

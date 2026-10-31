@@ -65,6 +65,19 @@ public sealed partial class PianoRollView : UserControl
         AuditionToggled?.Invoke();
     }
 
+    /// <summary>Label every note of the keys column, not just C: a beginner aid
+    /// seeded from and saved to Settings by the host (cf. <see cref="AuditionEnabled"/>).
+    /// Off by default; folded rows and Drum Rack pads are always labelled either way.</summary>
+    public static bool LabelAllNotes { get; set; }
+    /// <summary>Fired when <see cref="LabelAllNotes"/> changes; the keys column repaints.</summary>
+    public static event Action? LabelModeChanged;
+    public static void SetLabelAllNotes(bool on)
+    {
+        if (LabelAllNotes == on) return;
+        LabelAllNotes = on;
+        LabelModeChanged?.Invoke();
+    }
+
     // The one pitch sounding from the roll (−1 = none): a new audition ends the previous one,
     // so a drag across pitches re-triggers instead of stacking notes.
     private int _auditionPitch = -1;
@@ -156,6 +169,9 @@ public sealed partial class PianoRollView : UserControl
     // Vertical zoom (specs/019-piano-roll-vertical-zoom): the row height is per-clip view
     // state, driven by ⌘⌥+wheel, a drag on the keys, ⌥+pinch and Fit to notes.
     private const double MinRowH = 6, DefaultRowH = 12, MaxRowH = 36;
+    // Full note labels need room for the 8pt mono name: below this height the
+    // keys column falls back to C-only labels so zoomed-out rows stay legible.
+    private const double MinLabelRowH = 10;
     private double _rowH = DefaultRowH;
     internal double RowH => _rowH;
 
@@ -1832,6 +1848,19 @@ public sealed partial class PianoRollView : UserControl
         private int PitchAt(double y) => _o.PitchAtY(y);
         private const float KeyVelocity = 0.8f;
 
+        // The label mode (C-only vs. every note) is app-wide: follow it while on
+        // screen only — a roll is rebuilt for every clip, so a lasting subscription would leak.
+        protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnAttachedToVisualTree(e);
+            LabelModeChanged += InvalidateVisual;
+        }
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            base.OnDetachedFromVisualTree(e);
+            LabelModeChanged -= InvalidateVisual;
+        }
+
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || _o._gridControl.Dragging) return;
@@ -1906,7 +1935,9 @@ public sealed partial class PianoRollView : UserControl
             ctx.FillRectangle(KeysBg, new Rect(0, 0, w, Bounds.Height));
             var rows = _o._rows;
             // Folded, every row is labelled (there are few, and they aren't a keyboard any more).
-            bool labelAll = !rows.IsChromatic;
+            // Chromatic too when the user asked for every note, provided the rows
+            // are tall enough to fit the names.
+            bool labelAll = !rows.IsChromatic || (LabelAllNotes && RowH >= MinLabelRowH);
             for (int r = 0; r < rows.Count; r++)
             {
                 int p = rows.PitchAt(r);

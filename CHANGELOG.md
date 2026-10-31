@@ -60,6 +60,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   palette (*Reset section name*, for the section at the playhead) — restores the automatic
   name. Undo / redo bring back both the name and its mode. Sections named in earlier versions
   keep their names; MCP `list_sections` reports which names are automatic.
+- **Label every note in the piano roll**: Settings → Appearance → Piano roll
+  now offers "Label every note in the piano roll" — the keys column shows all note names
+  (C, C#, D…) instead of only C, an aid for beginners learning note names. Off by default,
+  applies immediately, remembered between launches; folded scale rows and Drum Rack pads
+  keep their labels either way, and very short rows fall back to C-only to stay legible.
 - **Dock the Mixer in the main window** (#39): View → Mixer (⌘⇧M / Ctrl+Shift+M) now shows
   the full Mixer — strips, Stereo map and the pan law footer — as a panel under Arrangement,
   Session or Modular, above the Devices / Clip panel; either, both or neither can be shown.
