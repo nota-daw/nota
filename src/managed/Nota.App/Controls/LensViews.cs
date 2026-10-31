@@ -56,6 +56,9 @@ internal sealed class LensData
     public double Bright = 0.66;
     public double WfSpanSec = 12;
 
+    /// <summary>Each graph's read-out beside its title, set by the card every tick.</summary>
+    public string SpecNote = "", ScopeNote = "", WfNote = "";
+
     // Tempo sync + the sidechain key (specs/050).
     public bool SyncOn, KeyOn, Stacked;
     public double KeyGain = 1;          // linear, display only
@@ -196,6 +199,8 @@ internal sealed class LensSpectrumView : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 2 || h <= 2) return;
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
+        // Everything drawn edge to edge stays inside the well's rounded corners.
+        using var clip = ctx.PushClip(new RoundedRect(new Rect(0, 0, w, h).Deflate(1), NotaGraph.Radius));
 
         double top = _d.TopDb, range = Math.Max(6, _d.RangeDb);
         // The frequency labels get their own lane under the plot, so the noise floor never
@@ -287,17 +292,21 @@ internal sealed class LensSpectrumView : Control
         }
         else
         {
-            LensInk.Title(ctx, "SPECTRUM", "");   // the top and range are on the Top and Rng bars
+            LensInk.Title(ctx, "SPECTRUM", _d.SpecNote);   // the top and range are on the Top and Rng bars
         }
 
         // The axis lane: the decade labels sit under the plot, each on its grid line.
         ctx.DrawLine(LensInk.GridFaint, new Point(0, plotH), new Point(w, plotH));
+        double lastEnd = double.NegativeInfinity;   // a linear axis bunches the low decades: skip a label that would overlap
         foreach (double hz in LabelHz)
         {
             if (hz >= _d.FreqHi) continue;
             double x = _d.FracOf(hz) * w;
             string s = hz >= 1000 ? NotaNum.F($"{hz / 1000:0} kHz") : NotaNum.F($"{hz:0} Hz");
-            LensInk.Text(ctx, s, Math.Min(x + 3, w - LensInk.TextW(s) - 3), plotH + 2, LensInk.Axis);
+            double tw = LensInk.TextW(s), lx = Math.Min(x + 3, w - tw - 3);
+            if (lx < lastEnd + 6) continue;
+            LensInk.Text(ctx, s, lx, plotH + 2, LensInk.Axis);
+            lastEnd = lx + tw;
         }
     }
 
@@ -388,6 +397,8 @@ internal sealed class LensScopeView : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 2 || h <= 2) return;
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
+        // Everything drawn edge to edge stays inside the well's rounded corners.
+        using var clip = ctx.PushClip(new RoundedRect(new Rect(0, 0, w, h).Deflate(1), NotaGraph.Radius));
         if (_d.SyncOn) { RenderSync(ctx, w, h); return; }
 
         for (int c = 1; c < Cols; c++)
@@ -426,10 +437,10 @@ internal sealed class LensScopeView : Control
             }
             double dt = Math.Abs(_d.CursorB - _d.CursorA) * _d.TimeDivSec * Cols;
             string s = NotaNum.F($"Δt {dt * 1000:0.000} ms · {(dt > 1e-9 ? 1 / dt : 0):0.0} Hz");
-            LensInk.Text(ctx, s, w - LensInk.TextW(s, 8) - 4, h - 11, LensInk.TraceLit, 8);
+            LensInk.Text(ctx, s, w - LensInk.TextW(s, 8) - 4, h - 22, LensInk.TraceLit, 8);   // a line above the time axis label
         }
 
-        LensInk.Title(ctx, "SCOPE", "");   // the divisions are on the Time/div and Volt/div knobs
+        LensInk.Title(ctx, "SCOPE", _d.ScopeNote);   // the divisions are on the Time/div and Volt/div knobs
         string trig = _d.Held ? "held" : NotaNum.F($"trig {(_d.TrigRising ? "↑" : "↓")} {_d.TrigLevel:0.00}{(_d.TrigOk ? "" : " ·free")}");
         LensInk.Text(ctx, trig, w - LensInk.TextW(trig) - 4, 3, _d.TrigOk || _d.Held ? LensInk.TraceLit : LensInk.Axis);
         LensInk.Text(ctx, "0", 4, h - 10, LensInk.Axis);
@@ -672,6 +683,8 @@ internal sealed class LensWaterfallView : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w <= 2 || h <= 2) return;
         NotaGraph.Window(ctx, new Rect(0, 0, w, h));
+        // Everything drawn edge to edge stays inside the well's rounded corners.
+        using var clip = ctx.PushClip(new RoundedRect(new Rect(0, 0, w, h).Deflate(1), NotaGraph.Radius));
         BuildRamp();
 
         // Time runs left (oldest) → right (now); frequency runs bottom → top. The rows a
@@ -713,7 +726,10 @@ internal sealed class LensWaterfallView : Control
             ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.GridBeat, 0x88), 1), new Point(0, y), new Point(w, y));
             if (y - 9 < 18 || y + 1 > lastLab) continue;
             lastLab = y - 9;
-            LensInk.Text(ctx, hz >= 1000 ? NotaNum.F($"{hz / 1000:0} kHz") : NotaNum.F($"{hz:0} Hz"), 4, y - 9, LensInk.Axis);
+            string lab = hz >= 1000 ? NotaNum.F($"{hz / 1000:0} kHz") : NotaNum.F($"{hz:0} Hz");
+            // A dark plate keeps the label readable over a bright spectrogram.
+            ctx.DrawRectangle(NotaPalette.Wash(NotaPalette.SurfaceDeep, 0xCC), null, new Rect(2, y - 9, LensInk.TextW(lab) + 4, 9), 2, 2);
+            LensInk.Text(ctx, lab, 4, y - 9, LensInk.Axis);
         }
         if (_d.NoteGrid)
         {
@@ -731,7 +747,7 @@ internal sealed class LensWaterfallView : Control
             ctx.DrawLine(new Pen(NotaPalette.Wash(NotaPalette.AccentBright, 0x99), 1), new Point(0, y), new Point(w, y));
         }
         ctx.DrawLine(LensInk.GridFaint, new Point(0, plotH), new Point(w, plotH));
-        LensInk.Title(ctx, "WATERFALL", NotaNum.F($"{_d.WfSpanSec:0} s"));
+        LensInk.Title(ctx, "WATERFALL", NotaNum.F($"{_d.WfSpanSec:0} s") + (_d.WfNote.Length > 0 ? " · " + _d.WfNote : ""));
         string span = NotaNum.F($"−{_d.WfSpanSec:0} s");
         LensInk.Text(ctx, span, 4, plotH + 1, LensInk.Axis);
         LensInk.Text(ctx, "now", w - LensInk.TextW("now") - 4, plotH + 1, LensInk.Axis);
