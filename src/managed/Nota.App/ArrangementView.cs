@@ -357,18 +357,44 @@ public sealed partial class ArrangementView : UserControl
         zoomOut.Click += (_, _) => Zoom(1 / 1.25);
         zoomIn.Click += (_, _) => Zoom(1.25);
         // The visible range ("bars 1 to 8 of 36", 11 ink 3) with zoom out / in at the right.
-        _overviewRange = new TextBlock { FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center };
+        _overviewRange = new TextBlock
+        {
+            FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+        };
         _overviewRange.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
+        // "Zoom" names the two keys. On a header narrowed so far that the range read-out
+        // would be cut, the caption steps aside first (the keys keep their tooltips).
+        var zoomLabel = new TextBlock
+        {
+            Text = "Zoom", Classes = { "SectionLabel" },
+            VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 2, 0),
+        };
         var zoomBar = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 4,
+            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"), ColumnSpacing = 4,
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(NameGap, 0, HeaderRightPad - 4, 0),
         };
         zoomBar.Children.Add(_overviewRange);
-        Grid.SetColumn(zoomOut, 1);
-        Grid.SetColumn(zoomIn, 2);
+        Grid.SetColumn(zoomLabel, 1);
+        Grid.SetColumn(zoomOut, 2);
+        Grid.SetColumn(zoomIn, 3);
+        zoomBar.Children.Add(zoomLabel);
         zoomBar.Children.Add(zoomOut);
         zoomBar.Children.Add(zoomIn);
+        void FitZoomLabel()
+        {
+            if (zoomBar.Bounds.Width <= 0) return;
+            // The TextBlock's FontSize already carries the text-size step, so measure it as is.
+            static double TextW(TextBlock t) => new NotaFormattedText(t.Text ?? "", CultureInfo.CurrentCulture,
+                FlowDirection.LeftToRight, new Typeface(t.FontFamily, t.FontStyle, t.FontWeight), t.FontSize, null,
+                NotaTextSize.InCard).Width;
+            double need = Math.Ceiling(TextW(_overviewRange)) + Math.Ceiling(TextW(zoomLabel)) + zoomLabel.Margin.Right
+                          + zoomOut.Width + zoomIn.Width + 3 * zoomBar.ColumnSpacing;
+            zoomLabel.IsVisible = need <= zoomBar.Bounds.Width;
+        }
+        zoomBar.SizeChanged += (_, _) => FitZoomLabel();
+        _overviewRange.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) FitZoomLabel(); };
         var topLeft = HeaderPanel(zoomBar);
         var topGrid = new Grid { Height = RulerH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         topGrid.Children.Add(topLeft);
@@ -2281,18 +2307,26 @@ public sealed partial class ArrangementView : UserControl
                 break;
             default:
                 stack.VerticalAlignment = VerticalAlignment.Center;
-                // A column too narrow for volume, pan and the picker on one row leaves the
-                // picker to the context menu, as a compact row does.
-                if (picker is not null && HeaderW - x - NameGap - MeterW < MiniFader.MinW + PanBar.W + PickerW + 2 * 6)
-                {
-                    picker = null;
-                    monitor?.SetSource(_engine?.GetTrackRecordInput(t.Id) ?? 0);
-                }
+                // The picker stays on a standard row. A narrow column shrinks it (the source
+                // name trims) and then lets the volume bar give way; only when even "In ⌄"
+                // and a sliver of volume can't sit beside the pan does it go to the context menu.
                 if (picker is not null)
                 {
-                    picker.Width = PickerW;
-                    Grid.SetColumn(picker, 2);
-                    volRow.Children.Add(picker);
+                    double room = HeaderW - x - NameGap - MeterW - PanBar.W - 2 * 6;
+                    double pickerW = Math.Clamp(room - MiniFader.MinW, PickerMinW, PickerW);
+                    double faderMin = Math.Min(MiniFader.MinW, room - pickerW);
+                    if (faderMin < FaderSqueezeW)
+                    {
+                        picker = null;
+                        monitor?.SetSource(_engine?.GetTrackRecordInput(t.Id) ?? 0);
+                    }
+                    else
+                    {
+                        fader.MinWidth = faderMin;
+                        picker.Width = pickerW;
+                        Grid.SetColumn(picker, 2);
+                        volRow.Children.Add(picker);
+                    }
                 }
                 else volRow.ColumnSpacing = 10;
                 stack.Children.Add(volRow);
@@ -2367,7 +2401,7 @@ public sealed partial class ArrangementView : UserControl
         }
     }
 
-    private const double ChipGap = 4, HeaderRowGap = 6, NameGap = 12, PickerW = 66, PickerH = 22, HeaderRightPad = 10, MeterW = 7 + 6 + 4;
+    private const double ChipGap = 4, HeaderRowGap = 6, NameGap = 12, PickerW = 66, PickerMinW = 36, FaderSqueezeW = 20, PickerH = 22, HeaderRightPad = 10, MeterW = 7 + 6 + 4;
 
     private TextBlock HeaderName(string text) => new()
     {
@@ -2732,6 +2766,19 @@ public sealed partial class ArrangementView : UserControl
             }
             fly.ShowAt(box);
         };
+        // The wheel over the closed picker steps through the sources, as a dropdown does:
+        // down picks the next one, up the previous; it stops at either end.
+        box.PointerWheelChanged += (_, e) =>
+        {
+            if (e.Delta.Y == 0 || sources.Count == 0) return;
+            e.Handled = true;
+            int at = Math.Max(0, sources.FindIndex(x => x.src == current));
+            int next = Math.Clamp(at + (e.Delta.Y < 0 ? 1 : -1), 0, sources.Count - 1);
+            if (next == at && sources[at].src == current) return;
+            current = sources[next].src;
+            Show();
+            set(current);
+        };
         ToolTip.SetTip(box, "Input");
         return box;
     }
@@ -3002,7 +3049,7 @@ public sealed partial class ArrangementView : UserControl
             Margin = new Thickness(6, 0, 0, 0),
         };
         db = dbText;
-        fader = new MiniFader(volume) { VerticalAlignment = VerticalAlignment.Center, Default = 1.0 };
+        fader = new MiniFader(volume) { VerticalAlignment = VerticalAlignment.Center, Default = 1.0, Text = VolumeDbText };
         // One undo step per drag / reset (specs/009): the master row targets the master volume.
         var undo = _engine is { } ue ? new MixGesture(ue, masterSpine ? MixTarget.Master : MixTarget.Volume(trackId)) : null;
         fader.GestureBegin += () => undo?.Begin();
@@ -3012,8 +3059,9 @@ public sealed partial class ArrangementView : UserControl
             fader.GestureEnd   += () => _engine?.EndAutomationWrite(trackId, AutomationTarget.Volume, -1, -1, "");
         }
         fader.GestureEnd   += () => undo?.End();
-        fader.ValueChanged += v => Change(undo, v, setVolume);
-        ValueEntry.Attach(fader, fader.EntryField("Volume", VolumeDbText));
+        // The dB read-out follows the drag, and double-clicking it types a value (as the bar does).
+        fader.ValueChanged += v => { Change(undo, v, setVolume); dbText.Text = VolumeDbText(v); };
+        ValueEntry.Attach(fader, fader.EntryField("Volume", VolumeDbText), dbText);
 
         Control? mute = ret is null ? null
             : ChipToggle("M", ret.Muted, NotaPalette.Mute, v => { ret.Muted = v; _engine?.SetTrackMute(trackId, v); });

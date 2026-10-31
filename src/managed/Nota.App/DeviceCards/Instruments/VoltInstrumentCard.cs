@@ -361,7 +361,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             OscCell(WaveChips(pre + "wave"), o, 1);
             OscCell(PKnob(pre + "octave", "OCT", nm + " Octave", Oct, 26, 40), o, 2);
             OscCell(PKnob(pre + "semi", "SEMI", nm + " Semi", Semi, 26, 40), o, 3);
-            OscCell(PKnob(pre + "detune", "FINE", nm + " Fine", Cents, 26, 40, null), o, 4);
+            OscCell(PKnob(pre + "detune", "FINE", nm + " Fine", Cents, 26, 40, Teal), o, 4);
             OscCell(PKnob(pre + "shape", "SHAPE", nm + " Shape", ShapeText, 26, 40), o, 5);
             OscCell(PKnob(pre + "pw", "PW", nm + " Pulse Width", PwText, 26, 40), o, 6);
             OscCell(PKnob(pre + "phase", "PHASE", nm + " Phase", Phase, 26, 40), o, 7);
@@ -418,7 +418,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         {
             var drive = PKnob("fildrive", "Drive", "Filter Drive", Pct, 26, 44);
             Grid.SetColumn(drive, 3); filtKnobGrid.Children.Add(drive);
-            var wheel = PKnob("wheellfo", "Wheel", "Wheel → LFO", Pct, 26, 44, null);
+            var wheel = PKnob("wheellfo", "Wheel", "Wheel → LFO", Pct, 26, 44, Teal);
             Grid.SetColumn(wheel, 2); Grid.SetRow(wheel, 1); filtKnobGrid.Children.Add(wheel);
         }
         for (int f = 0; f < 2; f++)
@@ -434,7 +434,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
                 // Filter 2 has no "To F2" — it is the end of that path.
                 Control cell = k == 5 && f == 1
                     ? new Panel()
-                    : PKnob(id, filtLbl[k], $"Filter {f + 1} {filtLbl[k]}", fmt, 26, 44, null);
+                    : PKnob(id, filtLbl[k], $"Filter {f + 1} {filtLbl[k]}", fmt, 26, 44, k >= 2 ? Teal : null);
                 cell.IsVisible = false;
                 filtStack[f, k] = cell;
                 filtCells[k].Children.Add(cell);
@@ -584,9 +584,9 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             LfoCell(Chips(pre + "shape", ShapeNames), l, 1);
             string rateId = pre + "rate", syncId = pre + "sync";
             LfoCell(PKnob(rateId, "RATE", nm + " Rate", v => SyncDiv(G(syncId)) > 0 ? SyncText(G(syncId)) : SlowHz(ExpMap(v, 0.05, 20)), 28, 46), l, 2);
-            LfoCell(PKnob(pre + "depth", "DEPTH", nm + " Depth", Pct, 28, 46, null), l, 3);
+            LfoCell(PKnob(pre + "depth", "DEPTH", nm + " Depth", Pct, 28, 46, Teal), l, 3);
             LfoCell(PKnob(syncId, "SYNC", nm + " Sync", SyncText, 28, 46), l, 4);
-            LfoCell(PKnob(pre + "fade", "FADE", nm + " Fade", FadeT, 28, 46, null), l, 5);
+            LfoCell(PKnob(pre + "fade", "FADE", nm + " Fade", FadeT, 28, 46, Teal), l, 5);
             var dest = Mono("", Teal, NotaType.Axis);
             dest.HorizontalAlignment = HorizontalAlignment.Right; dest.Width = 62; dest.TextAlignment = TextAlignment.Right;
             readouts.Add(() => dest.Text = LfoDest(src));
@@ -598,7 +598,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             LfoCell(Section("VIBRATO"), 2, 0);
             LfoCell(Toggle("By wheel", "vibwheel"), 2, 1);
             LfoCell(PKnob("vibrate", "RATE", "Vibrato Rate", v => SlowHz(ExpMap(v, 0.1, 12)), 28, 46), 2, 2);
-            LfoCell(PKnob("vibamt", "DEPTH", "Vibrato Depth", VibDepth, 28, 46, null), 2, 3);
+            LfoCell(PKnob("vibamt", "DEPTH", "Vibrato Depth", VibDepth, 28, 46, Teal), 2, 3);
             var note = new TextBlock
             {
                 Text = "vibrato always rides the pitch", FontSize = NotaType.Axis, Foreground = TextDisabled,
@@ -687,7 +687,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
                             Children =
                             {
                                 PKnob($"mac{mv}val", "", $"Macro {mv + 1}", Pct, 30, 38),
-                                PKnob($"mac{mv}amt", "", $"Macro {mv + 1} Amount", Bip, 26, 38, null),
+                                PKnob($"mac{mv}amt", "", $"Macro {mv + 1} Amount", Bip, 26, 38, Teal),
                             },
                         },
                         name, dest,
@@ -877,7 +877,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
                         uniRow,
                         // With one voice Detune is the partner oscillator's distance (up to 25 c);
                         // with 2 / 4 / 7 it is the spread of the stack (±50 c) and Spread pans it.
-                        KnobRow(PKnob("unison", "DETUNE", "Unison", Pct, 24, 40, null), PKnob("unispread", "SPREAD", "Unison Spread", Pct, 24, 40),
+                        KnobRow(PKnob("unison", "DETUNE", "Unison", Pct, 24, 40, Teal), PKnob("unispread", "SPREAD", "Unison Spread", Pct, 24, 40),
                                 PKnob("velamp", "VEL AMP", "Vel→Amp", Pct, 24, 40), PKnob("velfilter", "VEL FIL", "Vel→Filter", Pct, 24, 40)),
                     },
                 }),

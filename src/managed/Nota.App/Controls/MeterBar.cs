@@ -4,8 +4,8 @@
 // Stereo level meter (style guide, spec 038):
 //   · each channel 3px wide, 1.5 apart, corner 2, on the well — narrower hosts scale both
 //     down in the same proportion;
-//   · three zones, bottom to top: safe green to 70 % of the scale, hot amber to 88 %,
-//     over red above;
+//   · three zones in dBFS, bottom to top: safe green below −6 dB, hot amber to 0 dBFS,
+//     over red at and above 0 dBFS, so red always means a clip;
 //   · no animation: the level is set the moment a reading arrives (a meter that eases
 //     lies about the sound), and the peak mark neither blinks nor falls on its own —
 //     it holds until the meter is clicked or reset.
@@ -90,7 +90,10 @@ internal static class MeterScale
 
     public static double NormDb(double db) => Math.Clamp((db - FloorDb) / (CeilDb - FloorDb), 0, 1);
 
-    public const double CautionAt = 0.70, AlertAt = 0.88;
+    // Zones are tied to dBFS: amber from −6 dB, red only at and above 0 dBFS, so red always
+    // means a clip (develop's meaning, kept through the style guide).
+    public const double CautionDb = -6, AlertDb = 0;
+    public static readonly double CautionAt = NormDb(CautionDb), AlertAt = NormDb(AlertDb);
 
     /// <summary>The zone colour at a point on the scale.</summary>
     public static IBrush Zone(double norm) => norm >= AlertAt ? NotaPalette.MeterOver : norm >= CautionAt ? NotaPalette.MeterHot : NotaPalette.MeterSafe;
@@ -104,9 +107,13 @@ internal static class MeterScale
         return ((across - gap) / 2, gap, 0);
     }
 
-    /// <summary>One channel: ground, zone-coloured level, a 2px hold mark in its zone colour.</summary>
-    public static void DrawChannel(DrawingContext ctx, Rect area, double level, double hold, bool horizontal)
+    /// <summary>One channel: ground, zone-coloured level, a 2px hold mark in its zone colour.
+    /// A meter on its own dB scale passes where −6 dB and 0 dBFS fall on it (<paramref name="caution"/>,
+    /// <paramref name="alert"/>, 0..1); otherwise the shared scale's zones apply.</summary>
+    public static void DrawChannel(DrawingContext ctx, Rect area, double level, double hold, bool horizontal,
+        double caution = double.NaN, double alert = double.NaN)
     {
+        double cAt = double.IsNaN(caution) ? CautionAt : caution, aAt = double.IsNaN(alert) ? AlertAt : alert;
         double r = Math.Min(NotaRadius.FineValue, Math.Min(area.Width, area.Height) / 2);
         ctx.DrawRectangle(Ground, null, new RoundedRect(area, r));
         double len = horizontal ? area.Width : area.Height;
@@ -120,9 +127,9 @@ internal static class MeterScale
                 : new Rect(area.X, area.Bottom - to * len, area.Width, (to - from) * len);
             ctx.FillRectangle(ink, rect);
         }
-        Seg(0, Math.Min(level, CautionAt), NotaPalette.MeterSafe);
-        Seg(CautionAt, Math.Min(level, AlertAt), NotaPalette.MeterHot);
-        Seg(AlertAt, level, NotaPalette.MeterOver);
+        Seg(0, Math.Min(level, cAt), NotaPalette.MeterSafe);
+        Seg(cAt, Math.Min(level, aAt), NotaPalette.MeterHot);
+        Seg(aAt, level, NotaPalette.MeterOver);
 
         if (hold > 0.02)
         {
@@ -130,7 +137,7 @@ internal static class MeterScale
             var mark = horizontal
                 ? new Rect(area.X + Math.Clamp(hold * len - t, 0, len - t), area.Y, t, area.Height)
                 : new Rect(area.X, area.Bottom - Math.Clamp(hold * len, t, len), area.Width, t);
-            ctx.FillRectangle(Zone(hold), mark);
+            ctx.FillRectangle(hold >= aAt ? NotaPalette.MeterOver : hold >= cAt ? NotaPalette.MeterHot : NotaPalette.MeterSafe, mark);
         }
     }
 }

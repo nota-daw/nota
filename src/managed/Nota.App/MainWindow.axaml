@@ -212,11 +212,18 @@
 
           <Border x:Name="LoopSep" Classes="tb-sep"/>
 
-          <!-- Loop on/off as an icon key (the range itself is on the ruler); on is the soft
+          <!-- Loop on/off as an icon key with the range beside it; on is the soft
                tint, the glyph takes the orange ink through ToggleButton:checked -->
           <ToggleButton x:Name="LoopCell" Classes="tp-icon" IsChecked="{Binding Transport.LoopOn}"
+                        Width="NaN" Padding="6,0,8,0"
                         ToolTip.Tip="Loop the range set on the ruler (⌘L)" AutomationProperties.Name="Loop">
-            <app:Glyph Kind="Loop" Size="16"/>
+            <!-- The loop range is written beside the glyph, so the numbers read at a glance -->
+            <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+              <app:Glyph Kind="Loop" Size="16" VerticalAlignment="Center"/>
+              <TextBlock Classes="Value" MinWidth="44" VerticalAlignment="Center"
+                         Text="{Binding Transport.LoopRangeText}"
+                         Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+            </StackPanel>
           </ToggleButton>
           <!-- Loop record mode as an icon key: Overdub stacks the passes (two layers, at rest);
                Replace keeps the latest (one layer and a turn arrow, picked: the soft tint) -->

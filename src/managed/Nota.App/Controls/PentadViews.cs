@@ -214,7 +214,7 @@ internal sealed class PentadVoiceStrip : Control
 }
 
 // A level bar in dBFS (−48..+3), drawn like every level meter (MeterScale): on the well,
-// corner 2, green to 70 % of its scale, amber to 88 %, red above. Upright it is one 3px
+// corner 2, green below −6 dB, amber to 0 dBFS, red at and above. Upright it is one 3px
 // channel centred in its width (the L / R caption under it keeps the width); lying down it
 // fills its height (a thin wet level).
 internal sealed class PentadLevelBar : Control
@@ -232,12 +232,14 @@ internal sealed class PentadLevelBar : Control
     {
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 1 || h < 1) return;
-        double f = Math.Clamp((_db + 48) / 51.0, 0, 1);
+        // Its own −48..+3 dBFS scale, with the shared zones in dB: amber from −6, red from 0 dBFS.
+        static double Frac(double db) => Math.Clamp((db + 48) / 51.0, 0, 1);
+        double f = Frac(_db), c = Frac(MeterScale.CautionDb), a = Frac(MeterScale.AlertDb);
         if (Vertical)
         {
             double cw = Math.Min(w, MeterScale.ChannelW);
-            MeterScale.DrawChannel(ctx, new Rect((w - cw) / 2, 0, cw, h), f, 0, horizontal: false);
+            MeterScale.DrawChannel(ctx, new Rect((w - cw) / 2, 0, cw, h), f, 0, horizontal: false, c, a);
         }
-        else MeterScale.DrawChannel(ctx, new Rect(0, 0, w, h), f, 0, horizontal: true);
+        else MeterScale.DrawChannel(ctx, new Rect(0, 0, w, h), f, 0, horizontal: true, c, a);
     }
 }

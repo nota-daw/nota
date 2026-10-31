@@ -93,7 +93,7 @@ internal sealed class FluxReactScope : Control
         }
 
         NotaGraph.Title(ctx, plot, "Sidechain");
-        NotaGraph.Axis(ctx, plot, NotaGraph.Corner.TopRight, "env · transients · tilt", NotaPalette.TextAxis);
+        NotaGraph.Axis(ctx, plot, NotaGraph.Corner.TopRight, "env · transients · tilt", _live ? NotaPalette.TextSecondary : NotaPalette.TextAxis);   // lifts while live
         if (!_live)
         {
             var none = NotaGraph.AxisText("no source assigned", NotaPalette.TextTertiary);

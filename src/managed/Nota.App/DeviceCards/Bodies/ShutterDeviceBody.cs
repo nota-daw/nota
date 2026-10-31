@@ -403,7 +403,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         {
             signal = new ShSignalView();
             WireDrag(signal, h => h == ShSignalView.HThreshold ? Threshold : Return);
-            ToolTip.SetTip(signal, "The input (teal) and what passes (neutral ink) over the window, with the threshold (dashed) and where the gate closes again (dashed). Drag a line up or down; double-click resets it.");
+            ToolTip.SetTip(signal, "The input (grey columns) and what passes (the bright line) over the window, with the threshold (dashed) and where the gate closes again (dashed). Drag a line up or down; double-click resets it.");
             Learn(signal, Threshold);
 
             var liveBtn = Latch(-1, () => live, () => { live = !live; if (!live) Array.Copy(scope, frozen, kScope); }, () => live ? "Live" : "Frozen",
@@ -432,7 +432,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         {
             envView = new ShEnvelopeView();
             WireDrag(envView, h => h switch { ShEnvelopeView.HAttack => Attack, ShEnvelopeView.HHold => Hold, ShEnvelopeView.HRelease => Release, _ => Floor });
-            ToolTip.SetTip(envView, "One opening: attack, hold, release in the chosen shape, down to the floor (inverted for Duck). Drag a node sideways for its time, the teal floor up or down; double-click resets.");
+            ToolTip.SetTip(envView, "One opening: attack, hold, release in the chosen shape, down to the floor (inverted for Duck). Drag a node sideways for its time, the dashed floor up or down; double-click resets.");
             Learn(envView, Release);
 
             var shapes = Chips(Shapes, i => Sel(Shape, 3) == i, i => SetP(Shape, i / 2f), Shape,
@@ -461,7 +461,7 @@ internal sealed class ShutterDeviceBody : IDeviceBody
         {
             keyView = new ShKeyView();
             WireDrag(keyView, h => h == ShKeyView.HHp ? DetHP : DetLP);
-            ToolTip.SetTip(keyView, "The detector's band-pass (teal) — only this part of the key opens the gate — over the reduction in the window (neutral ink). Drag the nodes sideways; double-click resets.");
+            ToolTip.SetTip(keyView, "The detector's band-pass (the grey curve) — only this part of the key opens the gate — over the reduction in the window (the bright line). Drag the nodes sideways; double-click resets.");
             Learn(keyView, DetHP);
 
             var eq = Latch(DetFilter, () => On(DetFilter), () => SetP(DetFilter, On(DetFilter) ? 0f : 1f), () => On(DetFilter) ? "SC EQ on" : "SC EQ off",

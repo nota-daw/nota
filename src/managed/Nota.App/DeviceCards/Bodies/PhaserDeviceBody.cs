@@ -202,7 +202,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         response.Changed += (c, f) => { Raw(Center, c); Raw(Feedback, f); RefreshAll(); };
         response.ResetRequested += () => { Reset(Center); Reset(Feedback); RefreshAll(); };
         Learn(response, Center);
-        ToolTip.SetTip(response, "The notches the stages cut into the spectrum, L neutral and R teal, with the corner dashed and each notch ticked on top. Drag left / right to move Center, up / down for Feedback; double-click resets both.");
+        ToolTip.SetTip(response, "The notches the stages cut into the spectrum, L in the bright line and R in the darker grey, with the corner dashed and each notch ticked on top. Drag left / right to move Center, up / down for Feedback; double-click resets both.");
 
         var sweep = new PhaserSweepView { Margin = new Thickness(0, 4, 0, 0) };
         ToolTip.SetTip(sweep, "The corner frequency of both channels over two LFO cycles (20 Hz … 20 kHz), and where each is now");
