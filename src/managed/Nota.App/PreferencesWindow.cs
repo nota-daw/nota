@@ -1158,14 +1158,15 @@ public sealed partial class PreferencesWindow : NotaWindow
         }
     }
 
-    // Bars / Solid for the arrangement's audio-clip waveforms and the browser preview. Saving
+    // Smooth / Solid / Bars for the arrangement's audio-clip waveforms (Solid and Bars also set
+    // the browser preview). Saving
     // fires Settings.Changed, which the lanes and the preview apply at once.
     private static Control WaveformPicker()
     {
         var settings = App.Services.GetRequiredService<ISettingsService>();
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         var buttons = new List<(int Style, ToggleButton Btn)>();
-        foreach (var (style, label) in new[] { (0, "Bars"), (1, "Solid") })
+        foreach (var (style, label) in new[] { (0, "Smooth"), (1, "Solid"), (2, "Bars") })
         {
             var st = style;
             var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label, IsChecked = settings.Current.ArrangementWaveform == st };
@@ -1295,7 +1296,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 TopRow("Colour theme", ThemePicker()),
                 Row("", Caption("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance.")),
                 Row("Waveform", WaveformPicker()),
-                Row("", Caption("How audio clips draw on the arrangement, and samples in the browser's preview: Bars spaces the peaks out so the rhythm reads; Solid draws every pixel.")),
+                Row("", Caption("How audio clips draw on the arrangement: Smooth outlines the peaks around the RMS level; Solid draws every pixel; Bars spaces the peaks out so the rhythm reads. Solid and Bars also set the browser's preview.")),
                 Row("Interface scale", ScalePicker()),
                 Row("", Caption("Makes the whole interface larger or smaller. Timeline, piano roll and audio editor zoom work on top of it."))),
             Section("AI control (MCP)", 12, enable, details));

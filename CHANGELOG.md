@@ -41,6 +41,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the same way.
 
 ### Changed
+- **Smoother, clearer waveforms on audio clips** (#267): clips in the Arrangement and the
+  audio clip editor now draw an anti-aliased peak outline around a denser body that follows
+  the loudness (RMS) of the audio. Every zoom level reads cleanly — zoomed out, no peak slips
+  between pixels; zoomed in, the wave slopes from point to point instead of stepping, down to
+  a fine line at sample level — and on a HiDPI screen it is drawn at the screen's full
+  resolution. This is the new default, **Smooth**; **Solid** and **Bars** are still in
+  Settings → Appearance → Waveform (a saved Bars choice moves to Smooth once).
 - **Clip inspector and MIDI tools in two columns** (#276): in a short clip editor the
   inspector (MIDI and audio) and the Tools rail lay their sections out in two columns instead
   of one scrolling column, so Clip, Quantize, Transpose and Selection (or Clip, Playback and
