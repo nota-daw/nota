@@ -25,6 +25,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -364,7 +365,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
         }
         fly.Items.Add(new Separator());
         int curM = BandMode(b);
-        string[] modeWords = { "Static", "Duck — acts above the threshold", "Lift — acts below the threshold" };
+        string[] modeWords = { "Static", Loc.T("Duck — acts above the threshold"), Loc.T("Lift — acts below the threshold") };
         for (int m = 0; m < 3; m++)
         {
             int mm = m;
@@ -373,7 +374,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
             fly.Items.Add(mi);
         }
         fly.Items.Add(new Separator());
-        var on = new MenuItem { Header = "Band on", ToggleType = MenuItemToggleType.CheckBox, IsChecked = BandOn(b) };
+        var on = new MenuItem { Header = Loc.T("Band on"), ToggleType = MenuItemToggleType.CheckBox, IsChecked = BandOn(b) };
         on.Click += (_, _) => { Gesture(DynEq.P(b, DynEq.On), () => SetP(b, DynEq.On, BandOn(b) ? 0 : 1)); Edited?.Invoke(); InvalidateVisual(); };
         fly.Items.Add(on);
         var solo = new MenuItem { Header = "Solo", ToggleType = MenuItemToggleType.CheckBox, IsChecked = SoloBand == b };
@@ -385,7 +386,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
         };
         fly.Items.Add(solo);
         fly.Items.Add(new Separator());
-        fly.Items.Add(MenuKit.Item("Type value…", GlyphKind.Edit, () => ValueEntry.Open(this, BandFields(b)[0])));
+        fly.Items.Add(MenuKit.Item(Loc.T("Type value…"), GlyphKind.Edit, () => ValueEntry.Open(this, BandFields(b)[0])));
         fly.ShowAt(this, showAtPointer: true);
     }
 

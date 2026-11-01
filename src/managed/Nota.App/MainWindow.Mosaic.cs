@@ -11,6 +11,7 @@ using System.Linq;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -42,6 +43,6 @@ public partial class MainWindow
         engine.MosaicSetProgram(t, prog.Serialize());
         Timeline.Refresh();
         ShowDevices(t);
-        _vm.StatusText = win.Created.Count == 1 ? $"Created the preset {prog.Name}" : $"Created {win.Created.Count} presets · loaded {prog.Name}";
+        _vm.StatusText = win.Created.Count == 1 ? Loc.F("Created the preset {0}", prog.Name) : Loc.F("Created {0} presets · loaded {1}", win.Created.Count, prog.Name);
     }
 }

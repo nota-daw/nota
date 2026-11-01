@@ -22,6 +22,7 @@ using Avalonia.Media;
 using Nota.Application;
 using Nota.Presentation;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -112,7 +113,7 @@ internal sealed partial class RackCardView
         key.Children.Add(dash);
         key.Children.Add(label);
         bool full = _rp.Kind == RackKind.MidiEffect && _ra.ChainCount() >= RcMidiChainLimit;
-        ToolTip.SetTip(key, full ? $"A MIDI Effect Rack holds up to {RcMidiChainLimit} chains" : "Add a chain — or drop a device from the Browser on the list");
+        ToolTip.SetTip(key, full ? Loc.F("A MIDI Effect Rack holds up to {0} chains", RcMidiChainLimit) : Loc.T("Add a chain — or drop a device from the Browser on the list"));
         key.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(key).Properties.IsLeftButtonPressed || full) return;
@@ -193,9 +194,9 @@ internal sealed partial class RackCardView
         var a = _ra;
         if (_rp.Kind == RackKind.AudioEffect)
         {
-            if (a.RackMode() == RackKindProfile.Select) { a.SelectRange(c, out int lo, out int hi); return $"sel {lo}–{hi}"; }
+            if (a.RackMode() == RackKindProfile.Select) { a.SelectRange(c, out int lo, out int hi); return Loc.F("sel {0}–{1}", lo, hi); }
             int n = a.ChainDeviceCount(c);
-            return n == 1 ? "1 device" : $"{n} devices";
+            return Loc.Plural(n, "{0} device", "{0} devices");
         }
         a.ChainZone(c, out int kl, out int kh, out int vl, out int vh);
         string s = $"{NoteName(kl)}–{NoteName(kh)}";
@@ -207,20 +208,20 @@ internal sealed partial class RackCardView
     {
         var a = _ra;
         var f = new MenuFlyout();
-        f.Items.Add(MenuKit.Header(RcChainName(c), null, $"Chain · {c + 1}"));
+        f.Items.Add(MenuKit.Header(RcChainName(c), null, Loc.F("Chain · {0}", c + 1)));
         f.Items.Add(new Separator());
-        var rename = new MenuItem { Header = "Rename…" };
+        var rename = new MenuItem { Header = Loc.T("Rename…") };
         rename.Click += (_, _) => RcPromptRename(anchor, RcChainName(c), n => a.SetChainName(c, n));
         f.Items.Add(rename);
         bool full = _rp.Kind == RackKind.MidiEffect && a.ChainCount() >= RcMidiChainLimit;
-        var dup = new MenuItem { Header = "Duplicate", IsEnabled = !full };
+        var dup = new MenuItem { Header = Loc.T("Duplicate"), IsEnabled = !full };
         dup.Click += (_, _) => { int d = a.DuplicateChain(c); if (d >= 0) Sel = d; DeferRebuild(); };
         f.Items.Add(dup);
         if (_ra.RackAddress is not null) { f.Items.Add(new Separator()); f.Items.Add(RcPasteItem(c)); }
         if (a.ChainCount() > 1)
         {
             f.Items.Add(new Separator());
-            f.Items.Add(MenuKit.Danger("Delete chain", GlyphKind.Trash, () => RcDeleteChain(c)));
+            f.Items.Add(MenuKit.Danger(Loc.T("Delete chain"), GlyphKind.Trash, () => RcDeleteChain(c)));
         }
         f.ShowAt(anchor, showAtPointer: true);
     }
@@ -304,39 +305,39 @@ internal sealed partial class RackCardView
             var pr = RcResolvePreset(it);
             switch (pr.For)
             {
-                case RcPresetFor.Plugin: why = "Plug-in presets can't go in a rack chain yet."; return false;
-                case RcPresetFor.None: why = "This preset can't go in a rack."; return false;
+                case RcPresetFor.Plugin: why = Loc.T("Plug-in presets can't go in a rack chain yet."); return false;
+                case RcPresetFor.None: why = Loc.T("This preset can't go in a rack."); return false;
                 case RcPresetFor.Instrument when !_rp.TakesInstrument:
-                    why = _rp.Kind == RackKind.MidiEffect ? "A MIDI Effect Rack takes MIDI effects only." : "An Audio Effect Rack takes audio effects only."; return false;
-                case RcPresetFor.Effect when !_rp.TakesAudioEffects: why = "A MIDI Effect Rack takes MIDI effects only."; return false;
-                case RcPresetFor.Effect when pr.Kind == 5: why = "A rack can't go inside a rack."; return false;
-                case RcPresetFor.Midi when !_rp.TakesMidiEffects: why = "An Audio Effect Rack takes audio effects only."; return false;
-                case RcPresetFor.Midi when pr.Kind is < 0 or > 5: why = "A rack can't go inside a rack."; return false;
+                    why = _rp.Kind == RackKind.MidiEffect ? Loc.T("A MIDI Effect Rack takes MIDI effects only.") : Loc.T("An Audio Effect Rack takes audio effects only."); return false;
+                case RcPresetFor.Effect when !_rp.TakesAudioEffects: why = Loc.T("A MIDI Effect Rack takes MIDI effects only."); return false;
+                case RcPresetFor.Effect when pr.Kind == 5: why = Loc.T("A rack can't go inside a rack."); return false;
+                case RcPresetFor.Midi when !_rp.TakesMidiEffects: why = Loc.T("An Audio Effect Rack takes audio effects only."); return false;
+                case RcPresetFor.Midi when pr.Kind is < 0 or > 5: why = Loc.T("A rack can't go inside a rack."); return false;
             }
             return true;
         }
         if (RcIsInstrument(it))
         {
             // A Drum Rack may sit in an Instrument Rack chain; an Instrument Rack can't (specs/041).
-            if (_rp.TakesInstrument && it.Kind == BrowserItemKind.BuiltinInstrument && it.BuiltinKind == 3) { why = "An Instrument Rack can't go inside a rack — add its instruments as chains."; return false; }
+            if (_rp.TakesInstrument && it.Kind == BrowserItemKind.BuiltinInstrument && it.BuiltinKind == 3) { why = Loc.T("An Instrument Rack can't go inside a rack — add its instruments as chains."); return false; }
             if (_rp.TakesInstrument) return true;
-            why = _rp.Kind == RackKind.MidiEffect ? "A MIDI Effect Rack takes MIDI effects only." : "An Audio Effect Rack takes audio effects only.";
+            why = _rp.Kind == RackKind.MidiEffect ? Loc.T("A MIDI Effect Rack takes MIDI effects only.") : Loc.T("An Audio Effect Rack takes audio effects only.");
             return false;
         }
         if (IsEffect(it))
         {
-            if (!_rp.TakesAudioEffects) { why = "A MIDI Effect Rack takes MIDI effects only."; return false; }
-            if (it.Kind == BrowserItemKind.PluginEffect && !_ra.HostsPlugins) { why = "This rack can't host plug-ins."; return false; }
-            if (it.Kind == BrowserItemKind.BuiltinEffect && it.BuiltinKind == 5) { why = "A rack can't go inside a rack."; return false; }
+            if (!_rp.TakesAudioEffects) { why = Loc.T("A MIDI Effect Rack takes MIDI effects only."); return false; }
+            if (it.Kind == BrowserItemKind.PluginEffect && !_ra.HostsPlugins) { why = Loc.T("This rack can't host plug-ins."); return false; }
+            if (it.Kind == BrowserItemKind.BuiltinEffect && it.BuiltinKind == 5) { why = Loc.T("A rack can't go inside a rack."); return false; }
             return true;
         }
         if (it.Kind == BrowserItemKind.BuiltinMidiEffect)
         {
-            if (!_rp.TakesMidiEffects) { why = "An Audio Effect Rack takes audio effects only."; return false; }
-            if (it.BuiltinKind is < 0 or > 5) { why = "A rack can't go inside a rack."; return false; }
+            if (!_rp.TakesMidiEffects) { why = Loc.T("An Audio Effect Rack takes audio effects only."); return false; }
+            if (it.BuiltinKind is < 0 or > 5) { why = Loc.T("A rack can't go inside a rack."); return false; }
             return true;
         }
-        why = "Drop a device here.";
+        why = Loc.T("Drop a device here.");
         return false;
     }
 
@@ -354,7 +355,7 @@ internal sealed partial class RackCardView
                 {
                     case RcPresetFor.Instrument:
                         // On a chain an instrument preset replaces the chain's instrument.
-                        if (!a.SetChainInstrument(c, pr.Kind)) { _ctx.Status($"Couldn't load {it.Name}."); return; }
+                        if (!a.SetChainInstrument(c, pr.Kind)) { _ctx.Status(Loc.F("Couldn't load {0}.", it.Name)); return; }
                         RcApplyPreset(pr, c, -1);
                         break;
                     case RcPresetFor.Effect:
@@ -395,7 +396,7 @@ internal sealed partial class RackCardView
     {
         if (!RcAccepts(it, out var why)) { _ctx.Status(why); return; }
         var a = _ra;
-        if (_rp.Kind == RackKind.MidiEffect && a.ChainCount() >= RcMidiChainLimit) { _ctx.Status($"A MIDI Effect Rack holds up to {RcMidiChainLimit} chains."); return; }
+        if (_rp.Kind == RackKind.MidiEffect && a.ChainCount() >= RcMidiChainLimit) { _ctx.Status(Loc.F("A MIDI Effect Rack holds up to {0} chains.", RcMidiChainLimit)); return; }
         int c = -1;
         if (it.Kind == BrowserItemKind.Preset && RcResolvePreset(it) is { For: RcPresetFor.Instrument } pr)
         {
@@ -404,7 +405,7 @@ internal sealed partial class RackCardView
             {
                 c = a.AddChain(pr.Kind);
                 if (c >= 0 && a.ChainInstrumentKind(c) == pr.Kind) RcApplyPreset(pr, c, -1);
-                else if (c >= 0) { a.RemoveChain(c); c = -1; _ctx.Status($"Couldn't load {it.Name}."); }
+                else if (c >= 0) { a.RemoveChain(c); c = -1; _ctx.Status(Loc.F("Couldn't load {0}.", it.Name)); }
             }
             finally { E.EndUndoGroup(); }
         }
@@ -412,7 +413,7 @@ internal sealed partial class RackCardView
         {
             // An instrument the rack can't host would leave an empty chain: take it back.
             c = a.AddChain(it.BuiltinKind);
-            if (c >= 0 && a.ChainInstrumentKind(c) != it.BuiltinKind) { a.RemoveChain(c); c = -1; _ctx.Status($"{it.Name} can't go in a rack chain."); }
+            if (c >= 0 && a.ChainInstrumentKind(c) != it.BuiltinKind) { a.RemoveChain(c); c = -1; _ctx.Status(Loc.F("{0} can't go in a rack chain.", it.Name)); }
         }
         else if (it.Kind == BrowserItemKind.PluginInstrument) c = a.AddPluginInstrumentChain(it.CatalogIndex);
         else
@@ -434,14 +435,14 @@ internal sealed partial class RackCardView
     private Control RcDeviceLane()
     {
         var a = _ra;
-        if (a.ChainCount() == 0) return new Border { Padding = new Thickness(4), Child = Hint("Add a chain to start.") };
+        if (a.ChainCount() == 0) return new Border { Padding = new Thickness(4), Child = Hint(Loc.T("Add a chain to start.")) };
         int c = Sel;
         Control head;
         if (_rs.Mapping)
         {
             var label = RcText("Mapping", NotaPalette.Teal, NotaType.KnobLabel, FontWeight.SemiBold);
-            var macro = RcName($"Macro {_rs.MappingMacro + 1} · {a.MacroName(_rs.MappingMacro)}", NotaPalette.TextPrimary, NotaType.KnobLabel);
-            var how = RcText("Click to add or remove", NotaPalette.TextSecondary, 7.5, FontWeight.Normal);
+            var macro = RcName(Loc.F("Macro {0} · {1}", _rs.MappingMacro + 1, a.MacroName(_rs.MappingMacro)), NotaPalette.TextPrimary, NotaType.KnobLabel);
+            var how = RcText(Loc.T("Click to add or remove"), NotaPalette.TextSecondary, 7.5, FontWeight.Normal);
             head = new Border
             {
                 Height = 16, CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0), BorderThickness = new Thickness(1),
@@ -459,7 +460,7 @@ internal sealed partial class RackCardView
                 Orientation = Orientation.Horizontal, Spacing = 6, Height = 16, Children =
                 {
                     dot, RcName(RcChainName(c), NotaPalette.TextPrimary, NotaType.RowLabel),
-                    RcMono($"{n} device{(n == 1 ? "" : "s")} · {flow} left → right", NotaPalette.TextTertiary, 7.5),
+                    RcMono(Loc.F("{0} · {1} left → right", Loc.Plural(n, "{0} device", "{0} devices"), flow), NotaPalette.TextTertiary, 7.5),
                 },
             };
         }
@@ -499,7 +500,7 @@ internal sealed partial class RackCardView
             Width = RcCompactWidth, CornerRadius = NotaRadius.Panel, BorderThickness = new Thickness(1), BorderBrush = NotaPalette.BorderDefault,
             Background = NotaPalette.SurfaceRaised, Cursor = new Cursor(StandardCursorType.Hand), Child = new Border { Padding = new Thickness(6), Child = tb },
         };
-        ToolTip.SetTip(slot, "Pick an instrument — or drop one from the Browser");
+        ToolTip.SetTip(slot, Loc.T("Pick an instrument — or drop one from the Browser"));
         slot.PointerPressed += (_, e) => { if (e.GetCurrentPoint(slot).Properties.IsLeftButtonPressed) { e.Handled = true; RcInstrumentMenu(slot, c); } };
         return slot;
     }
@@ -531,7 +532,7 @@ internal sealed partial class RackCardView
             Width = 30, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent,
             Children = { dash, new StackPanel { VerticalAlignment = VerticalAlignment.Center, Spacing = 2, Children = { plus, word } } },
         };
-        ToolTip.SetTip(box, slot == RcSlot.Midi ? "Add a MIDI effect — or drop one from the Browser" : "Add an effect — or drop one from the Browser");
+        ToolTip.SetTip(box, slot == RcSlot.Midi ? Loc.T("Add a MIDI effect — or drop one from the Browser") : Loc.T("Add an effect — or drop one from the Browser"));
         box.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed) return;
@@ -603,7 +604,7 @@ internal sealed partial class RackCardView
         };
         if (canBypass)
         {
-            ToolTip.SetTip(dot, bypassed ? "Turn on" : "Turn off");
+            ToolTip.SetTip(dot, bypassed ? Loc.T("Turn on") : Loc.T("Turn off"));
             dot.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(dot).Properties.IsLeftButtonPressed) return;
@@ -626,7 +627,7 @@ internal sealed partial class RackCardView
         // replaced from its menu, not removed.
         if (slot != RcSlot.Instrument)
         {
-            var remove = DeviceCardKit.RemoveButton("Remove device", () =>
+            var remove = DeviceCardKit.RemoveButton(Loc.T("Remove device"), () =>
             {
                 if (RcSelOf(c, slot, idx) is { } sel) { RcDelete(sel); return; }
                 if (slot == RcSlot.Midi) a.RemoveChainMidi(c, idx); else a.RemoveChainDevice(c, idx);
@@ -656,8 +657,8 @@ internal sealed partial class RackCardView
             : rows;
         body.Margin = new Thickness(4, 3);
 
-        var open = new TextBlock { Text = "Open", FontSize = 7.5, Foreground = NotaPalette.TextSecondary, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center };
-        ToolTip.SetTip(open, "Open the full editor");
+        var open = new TextBlock { Text = Loc.T("Open"), FontSize = 7.5, Foreground = NotaPalette.TextSecondary, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center };
+        ToolTip.SetTip(open, Loc.T("Open the full editor"));
         var grip = new Glyph(GlyphKind.Grip, 8) { Foreground = NotaPalette.TextDisabled, Cursor = new Cursor(StandardCursorType.SizeWestEast), VerticalAlignment = VerticalAlignment.Center };
         var foot = new Border
         {
@@ -709,18 +710,18 @@ internal sealed partial class RackCardView
     {
         var a = _ra;
         var f = new MenuFlyout();
-        var o = new MenuItem { Header = "Open" };
+        var o = new MenuItem { Header = Loc.T("Open") };
         o.Click += (_, _) => open();
         f.Items.Add(o);
         if (slot == RcSlot.Instrument)
         {
-            var replace = new MenuItem { Header = "Replace instrument" };
+            var replace = new MenuItem { Header = Loc.T("Replace instrument") };
             replace.Click += (_, _) => RcInstrumentMenu(anchor, c);
             f.Items.Add(replace);
         }
         else
         {
-            var b = new MenuItem { Header = bypassed ? "Turn on" : "Turn off" };
+            var b = new MenuItem { Header = bypassed ? Loc.T("Turn on") : Loc.T("Turn off") };
             b.Click += (_, _) =>
             {
                 if (slot == RcSlot.Midi) a.SetChainMidiBypassed(c, idx, !bypassed); else a.SetChainDeviceBypassed(c, idx, !bypassed);
@@ -731,7 +732,7 @@ internal sealed partial class RackCardView
             else
             {
                 f.Items.Add(new Separator());
-                f.Items.Add(MenuKit.Danger("Delete", GlyphKind.Trash, () =>
+                f.Items.Add(MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () =>
                 {
                     if (slot == RcSlot.Midi) a.RemoveChainMidi(c, idx); else a.RemoveChainDevice(c, idx);
                     DeferRebuild();
@@ -794,7 +795,7 @@ internal sealed partial class RackCardView
         if (mapping)
         {
             row.Cursor = new Cursor(StandardCursorType.Hand);
-            ToolTip.SetTip(row, onThis ? $"Unmap from {a.MacroName(_rs.MappingMacro)}" : $"Map to {a.MacroName(_rs.MappingMacro)}");
+            ToolTip.SetTip(row, onThis ? Loc.F("Unmap from {0}", a.MacroName(_rs.MappingMacro)) : Loc.F("Map to {0}", a.MacroName(_rs.MappingMacro)));
             row.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(row).Properties.IsLeftButtonPressed) return;
@@ -805,7 +806,7 @@ internal sealed partial class RackCardView
         else if (mapped)
         {
             row.Cursor = new Cursor(StandardCursorType.Hand);
-            ToolTip.SetTip(row, $"Controlled by {a.MacroName(macro)} · click to open the macro");
+            ToolTip.SetTip(row, Loc.F("Controlled by {0} · click to open the macro", a.MacroName(macro)));
             row.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(row).Properties.IsLeftButtonPressed) return;
@@ -874,6 +875,6 @@ internal sealed partial class RackCardView
             _ctx.AddRackParamRefresher(sync);
             return row;
         }
-        OpenParamWindow(anchor, a.ChainMidiName(c, j), P.Count, Row, () => $"{RcChainName(c)} · MIDI effect {j + 1}");
+        OpenParamWindow(anchor, a.ChainMidiName(c, j), P.Count, Row, () => Loc.F("{0} · MIDI effect {1}", RcChainName(c), j + 1));
     }
 }

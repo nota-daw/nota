@@ -25,6 +25,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -153,7 +154,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         var routeSeg = Segments(RouteNames, RouteI, i => { SetP(Routing, i / 3f); Refresh(); }, out var routeSync, fill: true, padX: 2);
         readouts.Add(routeSync);
         Learn(routeSeg, Routing);
-        ToolTip.SetTip(routeSeg, "Routing — Serial: 1 → 2 → 3. Parallel: all three from the same input, averaged. M/S: stage 1 drives the Mid, stage 2 the Side, stage 3 the recombined stereo. Multi: stage 1 the lows (< 180 Hz), 2 the mids, 3 the highs (> 2.4 kHz)");
+        ToolTip.SetTip(routeSeg, Loc.T("Routing — Serial: 1 → 2 → 3. Parallel: all three from the same input, averaged. M/S: stage 1 drives the Mid, stage 2 the Side, stage 3 the recombined stereo. Multi: stage 1 the lows (< 180 Hz), 2 the mids, 3 the highs (> 2.4 kHz)"));
 
         Control StageTile(int s)
         {
@@ -171,8 +172,8 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             head.Children.Add(dot); head.Children.Add(Col(num, 1)); head.Children.Add(Col(name, 2)); head.Children.Add(Col(role, 3)); head.Children.Add(Col(outBox, 4));
 
             bool Lit() => On(OnP(s)) && Active();
-            var drive = Slider("DRIVE", () => DriveP(s), PctF, $"Stage {s + 1} drive — how hard the stage is pushed (gain 1 … ×21, the level made up)", 42, 32);
-            var fb = Slider("FEEDBACK", () => FbP(s), FbF, $"Stage {s + 1} feedback — its output back into its input (0 … 85 %): thicker, and on the edge of ringing with Fold / Fuzz", 44, 30, teal: true);
+            var drive = Slider("DRIVE", () => DriveP(s), PctF, Loc.F("Stage {0} drive — how hard the stage is pushed (gain 1 … ×21, the level made up)", s + 1), 42, 32);
+            var fb = Slider("FEEDBACK", () => FbP(s), FbF, Loc.F("Stage {0} feedback — its output back into its input (0 … 85 %): thicker, and on the edge of ringing with Fold / Fuzz", s + 1), 44, 30, teal: true);
             var rows = new StackPanel { Spacing = 1, Children = { drive, fb } };
             var body = new DockPanel { Children = { Docked(head, Dock.Top), new Border { VerticalAlignment = VerticalAlignment.Bottom, Child = rows } } };
             var tile = new Border
@@ -192,7 +193,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
                 SetP(OnP(s), On(OnP(s)) ? 0f : 1f); Refresh(); e.Handled = true;
             };
             Learn(dot, OnP(s));
-            ToolTip.SetTip(dot, $"Stage {s + 1} on / off");
+            ToolTip.SetTip(dot, Loc.F("Stage {0} on / off", s + 1));
 
             // Output trim: drag the dB up / down; double-click resets.
             bool od = false; double oy = 0, ov = 0;
@@ -211,7 +212,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             outBox.PointerReleased += (_, e) => { if (od) { od = false; End(OutP(s)); e.Pointer.Capture(null); } };
             outBox.PointerCaptureLost += (_, _) => { if (od) { od = false; End(OutP(s)); } };
             Learn(outBox, OutP(s));
-            ToolTip.SetTip(outBox, MenuKit.Keys($"Stage {s + 1} output, −12 … +12 dB — drag up / down, ⌥-click to type, double-click resets"));
+            ToolTip.SetTip(outBox, MenuKit.Keys(Loc.F("Stage {0} output, −12 … +12 dB — drag up / down, ⌥-click to type, double-click resets", s + 1)));
             ValueEntry.Attach(outBox, ValueEntry.DeviceParam(engine, track, di, OutP(s), $"Stage {s + 1} output", OutF, Refresh), outTxt);
 
             readouts.Add(() =>
@@ -241,9 +242,9 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         // CENTRE — Amount / Wet / Out over the transfer curve and the harmonics
         // ======================================================================
         var macros = new Grid { ColumnDefinitions = new ColumnDefinitions("13*,10*,10*"), ColumnSpacing = 8, VerticalAlignment = VerticalAlignment.Center };
-        macros.Children.Add(Slider("AMOUNT", () => Amount, AmtF, "Amount — 0 … +30 dB into the stages. Drag the curve up / down for the same", 0, 0));
-        macros.Children.Add(Col(Slider("WET", () => Wet, PctF, "Wet — the forged signal against the dry one", 0, 0), 1));
-        macros.Children.Add(Col(Slider("OUT", () => Output, OutF, "Output, −24 … +24 dB", 0, 0, bipolar: true), 2));
+        macros.Children.Add(Slider("AMOUNT", () => Amount, AmtF, Loc.T("Amount — 0 … +30 dB into the stages. Drag the curve up / down for the same"), 0, 0));
+        macros.Children.Add(Col(Slider("WET", () => Wet, PctF, Loc.T("Wet — the forged signal against the dry one"), 0, 0), 1));
+        macros.Children.Add(Col(Slider("OUT", () => Output, OutF, Loc.T("Output, −24 … +24 dB"), 0, 0, bipolar: true), 2));
 
         var transfer = new FgTransferView { Value = _ => P(Amount) };
         transfer.GestureBegin += _ => Begin(Amount);
@@ -251,10 +252,10 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         transfer.Changed += (_, v) => { Raw(Amount, v); Refresh(); };
         transfer.ResetRequested += _ => { Reset(Amount); Refresh(); };
         Learn(transfer, Amount);
-        ToolTip.SetTip(transfer, MenuKit.Keys("Input → output through the device (in M/S and Multi through the selected stage): each stage alone faint, the LFO-modulated curve dashed teal, the node where the input sits now. Drag up / down for Amount; ⌥-click to type, double-click resets."));
+        ToolTip.SetTip(transfer, MenuKit.Keys(Loc.T("Input → output through the device (in M/S and Multi through the selected stage): each stage alone faint, the LFO-modulated curve dashed teal, the node where the input sits now. Drag up / down for Amount; ⌥-click to type, double-click resets.")));
         ValueEntry.Attach(transfer, new ValueField("Amount", () => P(Amount), AmtF, v => Raw(Amount, v), () => Begin(Amount), () => End(Amount), engine.DeviceParamDefault(track, di, Amount)) { After = Refresh });
         var harm = new FgHarmonicsView { Height = 50 };
-        ToolTip.SetTip(harm, "Harmonics 2 … 9 of a −6 dB sine through the curve: odd partials in full ink (hard, buzzy), even ones dimmer (warm, round), and the total harmonic distortion");
+        ToolTip.SetTip(harm, Loc.T("Harmonics 2 … 9 of a −6 dB sine through the curve: odd partials in full ink (hard, buzzy), even ones dimmer (warm, round), and the total harmonic distortion"));
         var graphs = new DockPanel
         {
             Margin = new Thickness(5), LastChildFill = true,
@@ -283,7 +284,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         var typeSeg = Segments(ForgeMath.ChipNames, () => Array.IndexOf(ForgeMath.ChipAlgo, TypeI(sel)),
             i => { SetP(TypeP(sel), ForgeMath.ChipAlgo[i] / 5f); Refresh(); }, out var typeSync, fill: true, padX: 1);
         readouts.Add(typeSync);
-        ToolTip.SetTip(typeSeg, "The selected stage's type — Tube: soft, asymmetric, warm; Tape: soft and even; Diode: hard on one side; Fuzz: squared-off, dense; Fold: folds the peaks back, bright and metallic; Digital: a hard clip");
+        ToolTip.SetTip(typeSeg, Loc.T("The selected stage's type — Tube: soft, asymmetric, warm; Tape: soft and even; Diode: hard on one side; Fuzz: squared-off, dense; Fold: folds the peaks back, bright and metallic; Digital: a hard clip"));
 
         // Gauge knob on the selected stage's param.
         Control StageKnob(Func<int> param, string label, Func<double, string> fmt, string tip)
@@ -309,16 +310,16 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             Rows = 1,
             Children =
             {
-                StageKnob(() => BiasP(sel), "BIAS", BiasF, "Bias — the stage's asymmetry, −100 … +100 %: pushes the curve off-centre, adding even harmonics"),
-                StageKnob(() => ToneP(sel), "TONE", ToneF, "Tone — a tilt after the stage, −12 … +12 dB around 800 Hz: darker or brighter distortion"),
-                StageKnob(() => WidthSP(sel), "WIDTH", WidthF, "Width — the stage's stereo image, 0 … 200 % (in M/S, stage 2's width scales the side)"),
+                StageKnob(() => BiasP(sel), "BIAS", BiasF, Loc.T("Bias — the stage's asymmetry, −100 … +100 %: pushes the curve off-centre, adding even harmonics")),
+                StageKnob(() => ToneP(sel), "TONE", ToneF, Loc.T("Tone — a tilt after the stage, −12 … +12 dB around 800 Hz: darker or brighter distortion")),
+                StageKnob(() => WidthSP(sel), "WIDTH", WidthF, Loc.T("Width — the stage's stereo image, 0 … 200 % (in M/S, stage 2's width scales the side)")),
             },
         };
 
         var syncSw = Switch("Sync", () => On(LfoSync), () => { SetP(LfoSync, On(LfoSync) ? 0f : 1f); Refresh(); }, out var syncSync);
         readouts.Add(syncSync);
         Learn(syncSw, LfoSync);
-        ToolTip.SetTip(syncSw, "Sync — the LFO rate as a note division locked to the song, or free in Hz");
+        ToolTip.SetTip(syncSw, Loc.T("Sync — the LFO rate as a note division locked to the song, or free in Hz"));
         var modHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         modHead.Children.Add(Caps("MODULATION", Teal)); modHead.Children.Add(Col(syncSw, 1));
         var mods = new StackPanel
@@ -326,15 +327,15 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             Spacing = 2,
             Children =
             {
-                Slider("LFO → DRIVE", () => LfoDrive, PctF, "LFO → Drive — the LFO sweeps every stage's drive, up to ±30 %", 50, 40, teal: true),
-                Slider("ENV → TONE", () => EnvTone, PctF, "Env → Tone — loud parts push the tone brighter", 50, 40, teal: true),
-                Slider("RATE", () => LfoRate, RateF, "LFO rate — free 0.05 … 20 Hz, or with Sync a division from 2 bars to 1/64", 50, 40, teal: true),
+                Slider("LFO → DRIVE", () => LfoDrive, PctF, Loc.T("LFO → Drive — the LFO sweeps every stage's drive, up to ±30 %"), 50, 40, teal: true),
+                Slider("ENV → TONE", () => EnvTone, PctF, Loc.T("Env → Tone — loud parts push the tone brighter"), 50, 40, teal: true),
+                Slider("RATE", () => LfoRate, RateF, Loc.T("LFO rate — free 0.05 … 20 Hz, or with Sync a division from 2 bars to 1/64"), 50, 40, teal: true),
             },
         };
         var osSeg = Segments(OsNames, OsI, i => { SetP(OS, i / 3f); Refresh(); }, out var osSync, fill: true, padX: 2);
         readouts.Add(osSync);
         Learn(osSeg, OS);
-        ToolTip.SetTip(osSeg, "Oversampling — runs the stages at 2 / 4 / 8 × the rate so the harmonics above Nyquist don't fold back (minimum phase, no latency)");
+        ToolTip.SetTip(osSeg, Loc.T("Oversampling — runs the stages at 2 / 4 / 8 × the rate so the harmonics above Nyquist don't fold back (minimum phase, no latency)"));
         var osRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
         osRow.Children.Add(Caps("OVERSAMPLE")); osRow.Children.Add(Col(osSeg, 1));
         static Control Rule(Control c) => new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = c };
@@ -355,16 +356,16 @@ internal sealed class ForgeDeviceBody : IDeviceBody
         var statusRight = Mono("", 8, TextSecondary);
         string StatusText()
         {
-            if (Sc(ForgeMath.S_Alias) > 0.5) return "Digital / Fold without oversampling alias: switch on 2× or more";
+            if (Sc(ForgeMath.S_Alias) > 0.5) return Loc.T("Digital / Fold without oversampling alias: switch on 2× or more");
             int on = 0; for (int s = 0; s < 3; s++) if (On(OnP(s))) on++;
             var parts = new List<string>
             {
-                $"{on} of 3 stages",
+                Loc.F("{0} of 3 stages", on),
                 new[] { "serial", "parallel", "mid/side", "multiband" }[RouteI()],
                 $"S{sel + 1} {ForgeMath.AlgoNames[TypeI(sel)]} {PctF(P(DriveP(sel)))}",
             };
             if (P(LfoDrive) > 0.005f) parts.Add($"LFO {PctF(P(LfoDrive))} {RateF(P(LfoRate))}");
-            if (P(EnvTone) > 0.005f) parts.Add($"env → tone {PctF(P(EnvTone))}");
+            if (P(EnvTone) > 0.005f) parts.Add(Loc.F("env → tone {0}", PctF(P(EnvTone))));
             // The master offsets have no knob on the card (their per-stage successors do) — say so when set.
             if (Math.Abs(P(Tone) - 0.5f) > 0.002f) parts.Add("master tone " + SgnI((P(Tone) - 0.5) * 200) + " %");
             if (Math.Abs(P(Bias) - 0.5f) > 0.002f) parts.Add("master bias " + BiasF(P(Bias)));
@@ -381,7 +382,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
                 ? NotaNum.F($"{sr / 1000:0.#} kHz · OS {(OsI() == 0 ? "off" : OsNames[OsI()])} · latency {Sc(ForgeMath.S_Latency):0} smp · CPU {Sc(ForgeMath.S_Cpu) * 100:0.0} %")
                 : "";
         });
-        ToolTip.SetTip(statusLeft, "What the device is doing; the master Tone / Bias / Width offsets of older projects show here when set");
+        ToolTip.SetTip(statusLeft, Loc.T("What the device is doing; the master Tone / Bias / Width offsets of older projects show here when set"));
         var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
         statusGrid.Children.Add(statusLeft);
         statusGrid.Children.Add(Col(statusRight, 1));
@@ -398,7 +399,7 @@ internal sealed class ForgeDeviceBody : IDeviceBody
             scN = engine.DeviceScope(track, di, scope, ForgeMath.kScope);
             for (int s = 0; s < 3; s++) onArr[s] = On(OnP(s));
             bool single = Single(), active = Active();
-            string mainLbl = single ? $"stage {sel + 1} · {ForgeMath.Role(RouteI(), sel).Split(' ')[0].ToLowerInvariant()}" : "static";
+            string mainLbl = single ? Loc.F("stage {0} · {1}", sel + 1, ForgeMath.Role(RouteI(), sel).Split(' ')[0].ToLowerInvariant()) : "static";
             transfer.Set(scope, scN, onArr, sel, single, active, P(LfoDrive) > 0.005f, mainLbl);
             int set = single ? sel + 1 : 0;
             int thdSlot = single ? ForgeMath.S_ThdS1 + sel : ForgeMath.S_ThdChain;

@@ -29,6 +29,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -310,7 +311,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
         bendVal.HorizontalAlignment = modVal.HorizontalAlignment = HorizontalAlignment.Center;
         var pitchCap = Cap("PITCH"); pitchCap.HorizontalAlignment = HorizontalAlignment.Center;
         var modCap = Cap("MOD"); modCap.HorizontalAlignment = HorizontalAlignment.Center;
-        ToolTip.SetTip(modWheel, "Mod wheel — opens the LFO onto the cutoff");
+        ToolTip.SetTip(modWheel, Loc.T("Mod wheel — opens the LFO onto the cutoff"));
         readouts.Add(() =>
         {
             int range = BendRange(G("bendrange"));
@@ -462,7 +463,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
 
         // LFO: shape, rate and where it lands — cutoff and pitch — then the velocity amounts.
         var lfoDest = Mono("", Teal, NotaType.Axis);
-        readouts.Add(() => lfoDest.Text = G("modwheel") > 1e-3f ? "→ cut/pitch · wheel" : "→ cut/pitch");
+        readouts.Add(() => lfoDest.Text = G("modwheel") > 1e-3f ? Loc.T("→ cut/pitch · wheel") : "→ cut/pitch");
         var lfoKnobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), VerticalAlignment = VerticalAlignment.Center };
         {
             var ks = new[]
@@ -567,7 +568,7 @@ internal sealed class BassInstrumentCard : IInstrumentCard
             out var legatoSync, dim: () => !IsMono());
         readouts.Add(legatoSync);
         if (I("legato") is var lgi and >= 0) MidiLearn.Bind(legato, MidiTarget.PluginParam(track, -1, lgi), "Legato");
-        ToolTip.SetTip(legato, "Slide into a note played over a held one without a new attack");
+        ToolTip.SetTip(legato, Loc.T("Slide into a note played over a held one without a new attack"));
         legato.HorizontalAlignment = HorizontalAlignment.Right;
         var bendRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5 };
         bendRow.Children.Add(Cap("BEND"));

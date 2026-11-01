@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using Avalonia;
 using Nota.Application;
 using Nota.Infrastructure;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -143,10 +144,10 @@ public partial class MainWindow
         string label;
         switch ((GamepadButton)ev.ButtonId)
         {
-            case GamepadButton.DpadUp:    ShiftGamepadOctave(+1);   label = "Octave +";   break;
-            case GamepadButton.DpadDown:  ShiftGamepadOctave(-1);   label = "Octave −";   break;
-            case GamepadButton.DpadLeft:  ShiftGamepadVelocity(-10); label = "Velocity −"; break;
-            case GamepadButton.DpadRight: ShiftGamepadVelocity(+10); label = "Velocity +"; break;
+            case GamepadButton.DpadUp:    ShiftGamepadOctave(+1);   label = Loc.T("Octave +");   break;
+            case GamepadButton.DpadDown:  ShiftGamepadOctave(-1);   label = Loc.T("Octave −");   break;
+            case GamepadButton.DpadLeft:  ShiftGamepadVelocity(-10); label = Loc.T("Velocity −"); break;
+            case GamepadButton.DpadRight: ShiftGamepadVelocity(+10); label = Loc.T("Velocity +"); break;
             default:
             {
                 // Generic button: index 1..N → a scale tone if within the 8-note
@@ -177,7 +178,7 @@ public partial class MainWindow
         {
             _vm.Settings.Current.GamepadOctave = _gamepadOctave;
             _vm.Settings.Save();
-            _vm.StatusText = $"Gamepad octave: C{4 + _gamepadOctave}";
+            _vm.StatusText = Loc.F("Gamepad octave: C{0}", 4 + _gamepadOctave);
         }
     }
 

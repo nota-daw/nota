@@ -8,6 +8,7 @@
 using System;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -43,7 +44,7 @@ internal static class TrackArming
     public static void ForgetSelection() => _followed = -1;
 
     /// <summary>The arm buttons' tooltip, with the platform's modifier spelled out.</summary>
-    public static string Tip => MenuKit.Keys("Arm for recording · ⌘-click to arm several tracks");
+    public static string Tip => MenuKit.Keys(Loc.T("Arm for recording · ⌘-click to arm several tracks"));
 
     /// <summary>⌘ on macOS, Ctrl elsewhere: the "add to the armed set" modifier.</summary>
     public static bool IsAdditive(Avalonia.Input.KeyModifiers m)

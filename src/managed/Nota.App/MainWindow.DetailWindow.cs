@@ -13,6 +13,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -95,7 +96,7 @@ public partial class MainWindow
     {
         Child = new TextBlock
         {
-            Text = "Select a clip in the arrangement to edit it here",
+            Text = Loc.T("Select a clip in the arrangement to edit it here"),
             FontSize = 12,
             Foreground = NotaPalette.TextTertiary,
             HorizontalAlignment = HorizontalAlignment.Center,

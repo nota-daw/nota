@@ -19,6 +19,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -350,7 +351,7 @@ internal sealed class MonolithInstrumentCard : IInstrumentCard
 
         var drift = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Width = 96, Children = { new TextBlock { Text = "Drift", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = MutedC, VerticalAlignment = VerticalAlignment.Center }, WithStretch(HSlider("drift", "", v => $"{v * 100:0}\u2009%", 0, 22)) } };
 
-        var centre = TabPanel(new[] { "Controllers · Osc Bank", "Modifiers" }, drift, centreHost, CentreBody);
+        var centre = TabPanel(new[] { Loc.T("Controllers · Osc Bank"), "Modifiers" }, drift, centreHost, CentreBody);
         var right = new RuleSection { Width = 186, Child = TabInner(new[] { "Mixer", "Output" }, null, rightHost, RightBody, true) };
         DockPanel.SetDock(right, Dock.Right);
 

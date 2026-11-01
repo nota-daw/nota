@@ -15,6 +15,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -35,7 +36,7 @@ internal sealed class DetailWindow : NotaWindow
         // can't steal them, exactly like the main window does.
         AddHandler(KeyDownEvent, (_, e) => _owner.HandleTransportKeyTunnel(e), RoutingStrategies.Tunnel);
 
-        Title = "Devices / Clip";
+        Title = Loc.T("Devices / Clip");
         Width = 900;
         Height = 760;
         MinWidth = 520;

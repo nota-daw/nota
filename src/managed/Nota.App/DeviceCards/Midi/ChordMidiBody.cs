@@ -27,6 +27,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -201,7 +202,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
         int KeyStart() { int lo = notes.Count > 0 ? Math.Min(root, notes[0].Pitch) : root; return (int)Math.Floor(lo / 12.0) * 12; }
         string NoteList() => notes.Count == 0 ? "—" : string.Join(" ", notes.Select(n => DeviceCardKit.NoteName(n.Pitch)));
         int RingPitch() => G(KeepRoot) >= 0.5f ? -1 : root;
-        string StatusRight() => engine.MidiEffectBypassed(track, mi) ? "bypassed" : "MIDI · latency 0 smp";
+        string StatusRight() => engine.MidiEffectBypassed(track, mi) ? "bypassed" : Loc.T("MIDI · latency 0 smp");
 
         Poll();
         Control rootView = mini ? BuildMini() : BuildLarge();
@@ -234,12 +235,12 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
                 rowB.PointerEntered += (_, _) => { hover = true; Paint(); };
                 rowB.PointerExited += (_, _) => { hover = false; Paint(); };
                 rowB.PointerPressed += (_, ev) => { if (!ev.GetCurrentPoint(rowB).Properties.IsLeftButtonPressed) return; ApplyType(ti); ev.Handled = true; };
-                ToolTip.SetTip(rowB, Types[i].Shifts is null ? "Custom: your own shifts" : $"{Types[i].Name}: set the shifts to {hint.Text}");
+                ToolTip.SetTip(rowB, Types[i].Shifts is null ? Loc.T("Custom: your own shifts") : Loc.F("{0}: set the shifts to {1}", Types[i].Name, hint.Text));
                 readouts.Add(Paint);
                 list.Children.Add(rowB);
             }
-            var flags = new StackPanel { Spacing = 4, Children = { Flag(KeepRoot, "Keep root", "Play the note you pressed as well as the added notes"),
-                                                                   Flag(Fold, "Fold in scale", "Drop added notes outside the scale a semitone into it") } };
+            var flags = new StackPanel { Spacing = 4, Children = { Flag(KeepRoot, "Keep root", Loc.T("Play the note you pressed as well as the added notes")),
+                                                                   Flag(Fold, "Fold in scale", Loc.T("Drop added notes outside the scale a semitone into it")) } };
             flags.Children.Add(ScaleLabel());
             var typeFoot = new Border { BorderBrush = Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 6), Child = flags };
             var typeIsland = IslandBox(IslandHead(Caps("TYPE"), null), new DockPanel { Children = { WithDock(typeFoot, Dock.Bottom), list } }, 100);
@@ -286,7 +287,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             var statusR = Mono("", Sub);
             readouts.Add(() =>
             {
-                statusL.Text = $"In {DeviceCardKit.NoteName(root)} · {Types[TypeIndex()].Name} · {voices} voices · strum {StrumMs()}\u2009ms · spread {SpreadText()}"
+                statusL.Text = Loc.F("In {0} · {1} · {2} voices · strum {3}\u2009ms · spread {4}", DeviceCardKit.NoteName(root), Types[TypeIndex()].Name, voices, StrumMs(), SpreadText())
                              + (G(Fold) >= 0.5f ? $" · fold {ScaleName(G, true)}" : "");
                 statusR.Text = StatusRight();
             });
@@ -313,8 +314,8 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             var spread = KnobCell("SPREAD", Spread, () => G(Spread) / 100, n => S(Spread, Math.Round(n * 100)), SpreadText);
             var flags = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children =
             {
-                Flag(KeepRoot, "Keep root", "Play the note you pressed as well as the added notes"),
-                Flag(Fold, "Fold in scale", $"Drop added notes outside {ScaleName(G, false)} a semitone into it"),
+                Flag(KeepRoot, "Keep root", Loc.T("Play the note you pressed as well as the added notes")),
+                Flag(Fold, "Fold in scale", Loc.F("Drop added notes outside {0} a semitone into it", ScaleName(G, false))),
             } };
             Grid.SetColumn(spread, 1); Grid.SetColumn(flags, 2);
             knobs.Children.Add(strum); knobs.Children.Add(spread); knobs.Children.Add(flags);
@@ -336,7 +337,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             var statusR = Mono("", Sub);
             readouts.Add(() =>
             {
-                statusL.Text = $"In {DeviceCardKit.NoteName(root)} · {Types[TypeIndex()].Name} · {voices} voices";
+                statusL.Text = Loc.F("In {0} · {1} · {2} voices", DeviceCardKit.NoteName(root), Types[TypeIndex()].Name, voices);
                 statusR.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : $"strum {StrumMs()}\u2009ms";
             });
             return Framed(island, statusL, statusR);
@@ -413,8 +414,8 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
                 if (!ev.GetCurrentPoint(modeTb).Properties.IsLeftButtonPressed) return;
                 S(FoldMode, G(FoldMode) >= 0.5f ? 0 : 1); Edited(); ev.Handled = true;
             };
-            ToolTip.SetTip(keyTb, "Fold key — click for the next, Shift-click for the previous");
-            ToolTip.SetTip(modeTb, "Fold scale — major / natural minor");
+            ToolTip.SetTip(keyTb, Loc.T("Fold key — click for the next, Shift-click for the previous"));
+            ToolTip.SetTip(modeTb, Loc.T("Fold scale — major / natural minor"));
             Learn(keyTb, FoldKey, "Fold Key"); Learn(modeTb, FoldMode, "Fold Mode");
             readouts.Add(() =>
             {
@@ -437,7 +438,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
                 if (!ev.GetCurrentPoint(dotHit).Properties.IsLeftButtonPressed) return;
                 S(pOn, G(pOn) >= 0.5f ? 0 : 1); ui.CustomPinned = false; Edited(); ev.Handled = true;
             };
-            ToolTip.SetTip(dotHit, $"Shift {s + 1} on / off");
+            ToolTip.SetTip(dotHit, Loc.F("Shift {0} on / off", s + 1));
             Learn(dotHit, pOn, $"Shift {s + 1} on");
             var st = Mono("", Txt, 9); st.FontWeight = FontWeight.SemiBold; st.Width = 24;
             var ruler = new ChordShiftTrack { Height = 14, Margin = new Thickness(0, 0, 2, 0) };
@@ -487,7 +488,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             void Stop() { if (!drag) return; drag = false; End(p); Edited(); }
             hit.PointerReleased += (_, ev) => { if (drag) ev.Pointer.Capture(null); Stop(); };
             hit.PointerCaptureLost += (_, _) => Stop();
-            ToolTip.SetTip(hit, MenuKit.Keys($"Shift {s + 1} velocity offset — drag sideways, ⌥-click to type, double-click resets"));
+            ToolTip.SetTip(hit, MenuKit.Keys(Loc.F("Shift {0} velocity offset — drag sideways, ⌥-click to type, double-click resets", s + 1)));
             ValueEntry.Attach(hit, new ValueField($"Shift {s + 1} velocity", () => (GI(p) + 64) / 127.0, n => Sgn((int)Math.Round(-64 + n * 127)),
                 n => { S(p, (int)Math.Round(-64 + Math.Clamp(n, 0, 1) * 127)); ui.CustomPinned = true; Refresh(); }, () => Begin(p), () => End(p), 64 / 127.0) { After = Edited }, tb);
             Learn(hit, p, $"Shift {s + 1} velocity");
@@ -503,7 +504,7 @@ internal sealed class ChordMidiBody : IMidiDeviceBody
             bar.Changed += v => SetShift(s, v);
             bar.GestureBegin += () => { Begin(pSt); Begin(pOn); }; bar.GestureEnd += () => { End(pSt); End(pOn); };
             Learn(bar, pSt, $"Shift {s + 1}");
-            ToolTip.SetTip(bar, $"Shift {s + 1}: drag up / down (±12 semitones) · ⌥-click to type · double-click resets");
+            ToolTip.SetTip(bar, Loc.F("Shift {0}: drag up / down (±12 semitones) · ⌥-click to type · double-click resets", s + 1));
             ValueEntry.Attach(bar, bar.EntryField($"Shift {s + 1}"));
             var lbl = Mono("", Txt); lbl.HorizontalAlignment = HorizontalAlignment.Center;
             var lblHit = new Border { Height = 11, Margin = new Thickness(0, 2, 0, 0), Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = lbl };

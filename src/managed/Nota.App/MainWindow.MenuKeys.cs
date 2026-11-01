@@ -14,6 +14,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Nota.Application.Palette;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -25,7 +26,7 @@ public partial class MainWindow
     private void InitMenuShortcuts()
     {
         BindCommands();
-        ToolTip.SetTip(AutomationToggle, MenuKit.Keys("Show parameter-automation lanes (⌘⇧A)"));
+        ToolTip.SetTip(AutomationToggle, MenuKit.Keys(Loc.T("Show parameter-automation lanes (⌘⇧A)")));
         // The XAML tips name the macOS keys; spell them Ctrl+… on Windows / Linux (#10).
         foreach (var c in new Control[] { RecordBtn, LoopRecordCell, MetronomeBtn, DetailMaximizeBtn })
             if (ToolTip.GetTip(c) is string tip) ToolTip.SetTip(c, MenuKit.Keys(tip));

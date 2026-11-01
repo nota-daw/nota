@@ -21,6 +21,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Application.Samples;
 using Nota.Infrastructure;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -51,12 +52,12 @@ public partial class MainWindow
         var pending = new ArrangementView.PendingImport
         {
             TrackId = t, OwnsTrack = ownsTrack, StartBeat = beat,
-            LengthBeats = 4, Label = $"{name} · Processing…",   // real length arrives with the header
+            LengthBeats = 4, Label = Loc.F("{0} · Processing…", name),   // real length arrives with the header
         };
         Timeline.AddPendingImport(pending);
         Timeline.Select(t, -1);   // the track it lands on (a new one included) is selected right away
         _session?.Refresh();
-        _vm.StatusText = $"Importing {name}…";
+        _vm.StatusText = Loc.F("Importing {0}…", name);
 
         // Not disposed: Progress<T> posts ticks asynchronously, so one can still arrive after
         // this method returned — `finished` makes it a no-op instead of touching a dead import.
@@ -71,7 +72,7 @@ public partial class MainWindow
                 pending.LengthBeats = tick.TotalFrames / tick.SampleRate * (double)_vm.Transport.Bpm / 60.0;
             pending.Peaks = tick.Peaks;
             pending.PeakCount = tick.Count;
-            pending.Label = $"{name} · Processing… {tick.Fraction * 100:0} %";
+            pending.Label = Loc.F("{0} · Processing… {1:0} %", name, tick.Fraction * 100);
             Timeline.UpdatePendingImport();
         });
 
@@ -81,12 +82,12 @@ public partial class MainWindow
         {
             string? project = _projectPath;
             (job, double bpm, SampleInfo? info) = await Task.Run(() => DecodeImport(path, project, progress, cts.Token));
-            if (job is null) { _vm.StatusText = $"Failed to load {name}"; return; }
-            if (!Alive()) { _vm.StatusText = $"Import of {name} cancelled"; return; }
+            if (job is null) { _vm.StatusText = Loc.F("Failed to load {0}", name); return; }
+            if (!Alive()) { _vm.StatusText = Loc.F("Import of {0} cancelled", name); return; }
 
             int clip = Engine.AddImportedAudioClip(t, job, beat);
             job.Dispose(); job = null;   // the engine holds its own reference to the buffer
-            if (clip < 0) { _vm.StatusText = $"Failed to load {name}"; return; }
+            if (clip < 0) { _vm.StatusText = Loc.F("Failed to load {0}", name); return; }
             placed = true;
             pending.ClipPlaced = true;
 
@@ -120,11 +121,11 @@ public partial class MainWindow
         }
         catch (OperationCanceledException)
         {
-            _vm.StatusText = $"Import of {name} cancelled";
+            _vm.StatusText = Loc.F("Import of {0} cancelled", name);
         }
         catch (Exception ex)
         {
-            _vm.StatusText = $"Failed to load {name}: {ex.Message}";
+            _vm.StatusText = Loc.F("Failed to load {0}: {1}", name, ex.Message);
         }
         finally
         {
@@ -151,15 +152,15 @@ public partial class MainWindow
 
     private string ImportedText(string name, SampleInfo? info, double warpedBpm, int semis)
     {
-        var parts = new System.Collections.Generic.List<string> { $"Imported {name}" };
+        var parts = new System.Collections.Generic.List<string> { Loc.F("Imported {0}", name) };
         double project = (double)_vm!.Transport.Bpm;
         if (warpedBpm > 0)
             parts.Add(info is { Kind: SampleKind.Loop, Bpm: > 0 } && Math.Abs(info.Bpm - project) > 0.01
-                ? $"loop warped {SampleInfo.FormatBpm(info.Bpm)} \u2192 {SampleInfo.FormatBpm(project)}\u2009BPM"
-                : string.Format(NotaNum.Culture, "warped to tempo ({0:0.0}\u2009BPM)", warpedBpm));
-        else if (info?.Kind == SampleKind.OneShot) parts.Add("one-shot, not warped");
+                ? Loc.F("loop warped {0} \u2192 {1}\u2009BPM", SampleInfo.FormatBpm(info.Bpm), SampleInfo.FormatBpm(project))
+                : string.Format(NotaNum.Culture, Loc.T("warped to tempo ({0:0.0}\u2009BPM)"), warpedBpm));
+        else if (info?.Kind == SampleKind.OneShot) parts.Add(Loc.T("one-shot, not warped"));
         if (semis != 0 && _vm.Transport.Key is { } k)
-            parts.Add($"transposed {(semis > 0 ? "+" : "\u2212")}{Math.Abs(semis)}\u2009st to {k.Long}");
+            parts.Add(Loc.F("transposed {0}\u2009st to {1}", (semis > 0 ? "+" : "\u2212") + Math.Abs(semis), k.Long));
         return string.Join(" · ", parts);
     }
 
@@ -223,7 +224,7 @@ public partial class MainWindow
         await PollWarpBuildAsync(alive, remaining =>
         {
             double frac = total > 0 ? Math.Clamp(1.0 - (double)remaining / total, 0.0, 1.0) : 1.0;
-            if (_vm is not null) _vm.StatusText = $"Warping {name}… {frac * 100:0}\u2009%";
+            if (_vm is not null) _vm.StatusText = Loc.F("Warping {0}… {1:0}\u2009%", name, frac * 100);
         });
     }
 

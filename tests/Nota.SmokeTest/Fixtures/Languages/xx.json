@@ -1,0 +1,12 @@
+{
+  "formatVersion": 1,
+  "code": "xx",
+  "name": "Xxxx",
+  "notes": "Test fixture for spec 068: a language the app does not ship. Not embedded.",
+  "strings": {
+    "Save": "Xsave",
+    "Open|menu": "Xopen",
+    "Open|clip": "Xopen clip",
+    "{0} tracks": { "one": "{0} xtrack", "other": "{0} xtracks" }
+  }
+}

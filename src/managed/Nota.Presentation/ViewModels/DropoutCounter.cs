@@ -6,6 +6,8 @@
 // started or since the user reset it, so a setting change can be judged by whether the
 // count stays at zero.
 
+using Nota.Application.Localization;
+
 namespace Nota.Presentation;
 
 public sealed class DropoutCounter
@@ -32,5 +34,5 @@ public sealed class DropoutCounter
     }
 
     /// <summary>"0 dropouts", "1 dropout", "3 dropouts".</summary>
-    public static string Text(int count) => count == 1 ? "1 dropout" : $"{count} dropouts";
+    public static string Text(int count) => Loc.Plural(count, "{0} dropout", "{0} dropouts");
 }

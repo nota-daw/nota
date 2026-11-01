@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -12,14 +13,14 @@ internal static class TrackNames
     {
         string stored = eng.GetTrackName(ti.Id);
         if (stored.Length > 0) return stored;
-        if (ti.IsGroup) return "Group";
-        if (ti.IsReturn) return $"Return {eng.TrackReturnIndex(ti.Id) + 1}";
+        if (ti.IsGroup) return Loc.T("Group");
+        if (ti.IsReturn) return Loc.F("Return {0}", eng.TrackReturnIndex(ti.Id) + 1);
         if (ti.IsInstrument)
         {
             string inst = eng.DeviceName(ti.Id, -1);   // Synth / Sampler / plugin name
-            return string.IsNullOrWhiteSpace(inst) ? "Inst " + ti.Id : inst;
+            return string.IsNullOrWhiteSpace(inst) ? Loc.F("Inst {0}", ti.Id) : inst;
         }
-        return "Audio " + ti.Id;
+        return Loc.F("Audio {0}", ti.Id);
     }
 
     /// <summary>By track id; "—" when no such track exists.</summary>

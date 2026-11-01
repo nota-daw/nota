@@ -19,6 +19,7 @@ using Avalonia.Dialogs;
 using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -76,13 +77,13 @@ internal static class LinuxFileDialogs
             {
                 FileDialogFallback.Verdict.Keep => result,
                 FileDialogFallback.Verdict.Wait => await WaitForDialog(task),
-                _ => await Broken(finished ? "the system file dialog answered without showing"
-                                           : $"the system file dialog didn't open within {ShowTimeout.TotalSeconds:0} s"),
+                _ => await Broken(finished ? Loc.T("the system file dialog answered without showing")
+                                           : Loc.F("the system file dialog didn't open within {0:0} s", ShowTimeout.TotalSeconds)),
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return await Broken($"the system file dialog failed: {ex.Message}");
+            return await Broken(Loc.F("the system file dialog failed: {0}", ex.Message));
         }
         finally
         {
@@ -103,7 +104,7 @@ internal static class LinuxFileDialogs
                 else if (activeSince == DateTime.MinValue) activeSince = DateTime.UtcNow;
                 var activeFor = active ? DateTime.UtcNow - activeSince : TimeSpan.Zero;
                 if (FileDialogFallback.WhileWaiting(false, activeFor, ShowTimeout) == FileDialogFallback.Verdict.Fallback)
-                    return await Broken($"the system file dialog didn't open within {ShowTimeout.TotalSeconds:0} s");
+                    return await Broken(Loc.F("the system file dialog didn't open within {0:0} s", ShowTimeout.TotalSeconds));
             }
         }
 
@@ -111,7 +112,7 @@ internal static class LinuxFileDialogs
         {
             SystemBroken = true;
             App.Services?.GetService<ILogSink>()?.Warn(
-                $"Using Nota's built-in file dialog: {why}. Check xdg-desktop-portal and its FileChooser backend.");
+                Loc.F("Using Nota's built-in file dialog: {0}. Check xdg-desktop-portal and its FileChooser backend.", why));
             return open(builtin);
         }
     }

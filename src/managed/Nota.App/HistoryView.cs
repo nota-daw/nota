@@ -19,6 +19,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -71,7 +72,7 @@ internal sealed class HistoryView : UserControl
         _history = history;
         _host = host;
 
-        var caption = new TextBlock { Text = "Versions", Classes = { "GroupLabel" }, VerticalAlignment = VerticalAlignment.Center };
+        var caption = new TextBlock { Text = Loc.T("Versions"), Classes = { "GroupLabel" }, VerticalAlignment = VerticalAlignment.Center };
         _summary.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto"), Height = RowH, Margin = new Thickness(10, 8, 6, 4) };
         header.Children.Add(caption);
@@ -85,7 +86,7 @@ internal sealed class HistoryView : UserControl
         PaintStarredOnly();
         _options.Click += (_, _) => BuildOptionsMenu().ShowAt(_options);
         ((Glyph)_options.Content!).BindResource(Glyph.ForegroundProperty, "Brush.TextTertiary");
-        ToolTip.SetTip(_options, "Clean up the history");
+        ToolTip.SetTip(_options, Loc.T("Clean up the history"));
 
         _empty.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
         _details.BindResource(Border.BackgroundProperty, "Brush.Panel");
@@ -147,12 +148,12 @@ internal sealed class HistoryView : UserControl
         ShowDetails(_list.SelectedItem as HistoryRow);
 
         _empty.Text = problem
-            ?? (_dir is null ? "Save the project to start its history."
-              : !_host.KeepVersionHistory && rows.Count == 0 ? "Version history is turned off in Settings."
-              : all.Count == 0 ? "Each save adds a version here."
-              : rows.Count == 0 ? "No starred versions yet. Right-click a version and choose Star." : "");
+            ?? (_dir is null ? Loc.T("Save the project to start its history.")
+              : !_host.KeepVersionHistory && rows.Count == 0 ? Loc.T("Version history is turned off in Settings.")
+              : all.Count == 0 ? Loc.T("Each save adds a version here.")
+              : rows.Count == 0 ? Loc.T("No starred versions yet. Right-click a version and choose Star.") : "");
         _empty.IsVisible = _empty.Text.Length > 0;
-        ToolTip.SetTip(_empty, problem is null ? null : "Its versions can't be listed until the file .history/versions.json is repaired.");
+        ToolTip.SetTip(_empty, problem is null ? null : Loc.T("Its versions can't be listed until the file .history/versions.json is repaired."));
 
         _options.IsVisible = all.Count > 1;
         _starredOnly.IsVisible = all.Count > 0;
@@ -163,7 +164,7 @@ internal sealed class HistoryView : UserControl
             long size = 0;
             try { size = _history.Size(_dir).HistoryOnly; } catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { }
             _summary.Text = $"{all.Count} · {NotaNum.Bytes(size)}";
-            ToolTip.SetTip(_summary, $"{all.Count} version{(all.Count == 1 ? "" : "s")} · older versions take {NotaNum.Bytes(size)} on disk");
+            ToolTip.SetTip(_summary, Loc.F("{0} · older versions take {1} on disk", Loc.Plural(all.Count, "{0} version", "{0} versions"), NotaNum.Bytes(size)));
         }
     }
 
@@ -173,7 +174,7 @@ internal sealed class HistoryView : UserControl
         var g = (Glyph)_starredOnly.Content!;
         g.Kind = _onlyStarred ? GlyphKind.StarFilled : GlyphKind.Star;
         g.BindResource(Glyph.ForegroundProperty, _onlyStarred ? "Brush.Accent" : "Brush.TextTertiary");
-        ToolTip.SetTip(_starredOnly, _onlyStarred ? "Show all versions" : "Show starred versions only");
+        ToolTip.SetTip(_starredOnly, _onlyStarred ? Loc.T("Show all versions") : Loc.T("Show starred versions only"));
     }
 
     // --- rows ----------------------------------------------------------------
@@ -249,7 +250,7 @@ internal sealed class HistoryView : UserControl
         var name = new TextBlock { Text = Title(v), Classes = { "Name" }, TextTrimming = TextTrimming.CharacterEllipsis };
         name.BindResource(TextBlock.ForegroundProperty, "Brush.TextPrimary");
         var meta = new List<string> { LongTime(v.CreatedAt) };
-        if (v.AppVersion.Length > 0) meta.Add("Nota " + v.AppVersion);
+        if (v.AppVersion.Length > 0) meta.Add(Loc.F("Nota {0}", v.AppVersion));
         if (v.AddedBytes > 0) meta.Add("+" + NotaNum.Bytes(v.AddedBytes));
         var metaText = new TextBlock { Text = string.Join(" · ", meta), Classes = { "Value" }, TextWrapping = TextWrapping.Wrap };
         metaText.BindResource(TextBlock.ForegroundProperty, "Brush.TextSecondary");
@@ -264,25 +265,25 @@ internal sealed class HistoryView : UserControl
         if (v.Note is { Length: > 0 } note && note != Title(v))   // the title already shows a one-line note
             stack.Children.Add(new TextBlock { Text = note, Classes = { "Caption" }, TextWrapping = TextWrapping.Wrap, MaxHeight = 64 });
         if (!v.CanOpen)
-            stack.Children.Add(new TextBlock { Text = "Saved by a newer Nota — update to open it.", Classes = { "Caption" }, TextWrapping = TextWrapping.Wrap });
+            stack.Children.Add(new TextBlock { Text = Loc.T("Saved by a newer Nota — update to open it."), Classes = { "Caption" }, TextWrapping = TextWrapping.Wrap });
 
         var switchBtn = new Button
         {
-            Content = ButtonText(row.IsHead ? "Current" : "Switch"),
+            Content = ButtonText(row.IsHead ? Loc.T("Current") : Loc.T("Switch")),
             Classes = { "primary" },
             IsEnabled = !row.IsHead && v.CanOpen,
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center,
         };
         if (row.IsHead) switchBtn.Classes.Remove("primary");
-        ToolTip.SetTip(switchBtn, row.IsHead ? "The project is at this version" : "Switch the project to this version");
+        ToolTip.SetTip(switchBtn, row.IsHead ? Loc.T("The project is at this version") : Loc.T("Switch the project to this version"));
         switchBtn.Click += (_, _) => _ = Switch(v);
         var copyBtn = new Button
         {
-            Content = ButtonText("Open copy"),
+            Content = ButtonText(Loc.T("Open copy")),
             IsEnabled = v.CanOpen,
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center,
         };
-        ToolTip.SetTip(copyBtn, "Open this version as a new project, keeping this one as it is");
+        ToolTip.SetTip(copyBtn, Loc.T("Open this version as a new project, keeping this one as it is"));
         copyBtn.Click += (_, _) => _ = _host.OpenVersionAsCopyAsync(v.Id);
         var buttons = new Grid { ColumnDefinitions = new ColumnDefinitions("*,6,*"), Margin = new Thickness(0, 4, 0, 0) };
         buttons.Children.Add(switchBtn);
@@ -316,20 +317,20 @@ internal sealed class HistoryView : UserControl
             return mi;
         }
 
-        menu.Items.Add(MenuKit.Header(v.Label ?? LongTime(v.CreatedAt), null, row.IsHead ? "Current version" : "Version"));
+        menu.Items.Add(MenuKit.Header(v.Label ?? LongTime(v.CreatedAt), null, row.IsHead ? Loc.T("Current version") : Loc.T("Version")));
         menu.Items.Add(new Separator());
-        Item("Switch to this version", () => _ = Switch(v), !row.IsHead && v.CanOpen, GlyphKind.Arrow);
-        Item("Open as copy…", () => _ = _host.OpenVersionAsCopyAsync(v.Id), v.CanOpen, GlyphKind.Duplicate);
+        Item(Loc.T("Switch to this version"), () => _ = Switch(v), !row.IsHead && v.CanOpen, GlyphKind.Arrow);
+        Item(Loc.T("Open as copy…"), () => _ = _host.OpenVersionAsCopyAsync(v.Id), v.CanOpen, GlyphKind.Duplicate);
         menu.Items.Add(new Separator());
-        Item(v.Label is null ? "Name…" : "Rename…", () => _ = Prompt("Name version", "Version name", v.Label, t => _history.SetLabel(_dir!, v.Id, t)), icon: GlyphKind.Edit);
-        if (v.Label is not null) Item("Remove name", () => Apply(() => _history.SetLabel(_dir!, v.Id, null)));
-        Item(v.Note is null ? "Add note…" : "Edit note…", () => _ = Prompt("Version note", "What changed in this version?", v.Note, t => _history.SetNote(_dir!, v.Id, t)), icon: GlyphKind.Note);
-        if (v.Note is not null) Item("Remove note", () => Apply(() => _history.SetNote(_dir!, v.Id, null)));
-        Item(v.Starred ? "Remove star" : "Star", () => Apply(() => _history.SetStarred(_dir!, v.Id, !v.Starred)));
+        Item(v.Label is null ? Loc.T("Name…") : Loc.T("Rename…"), () => _ = Prompt(Loc.T("Name version"), Loc.T("Version name"), v.Label, t => _history.SetLabel(_dir!, v.Id, t)), icon: GlyphKind.Edit);
+        if (v.Label is not null) Item(Loc.T("Remove name"), () => Apply(() => _history.SetLabel(_dir!, v.Id, null)));
+        Item(v.Note is null ? Loc.T("Add note…") : Loc.T("Edit note…"), () => _ = Prompt(Loc.T("Version note"), Loc.T("What changed in this version?"), v.Note, t => _history.SetNote(_dir!, v.Id, t)), icon: GlyphKind.Note);
+        if (v.Note is not null) Item(Loc.T("Remove note"), () => Apply(() => _history.SetNote(_dir!, v.Id, null)));
+        Item(v.Starred ? Loc.T("Remove star") : Loc.T("Star"), () => Apply(() => _history.SetStarred(_dir!, v.Id, !v.Starred)));
         menu.Items.Add(new Separator());
-        var del = Item("Delete version…", () => _ = Delete(v), !row.IsHead, GlyphKind.Trash);
+        var del = Item(Loc.T("Delete version…"), () => _ = Delete(v), !row.IsHead, GlyphKind.Trash);
         del.Classes.Add("danger");
-        if (row.IsHead) ToolTip.SetTip(del, "Switch to another version to delete this one");
+        if (row.IsHead) ToolTip.SetTip(del, Loc.T("Switch to another version to delete this one"));
         return menu;
     }
 
@@ -339,7 +340,7 @@ internal sealed class HistoryView : UserControl
         var unnamed = UnnamedVersions();
         var clean = new MenuItem
         {
-            Header = unnamed.Count == 0 ? "Delete unnamed versions…" : $"Delete {unnamed.Count} unnamed version{(unnamed.Count == 1 ? "" : "s")}…",
+            Header = unnamed.Count == 0 ? Loc.T("Delete unnamed versions…") : Loc.Plural(unnamed.Count, "Delete {0} unnamed version…", "Delete {0} unnamed versions…"),
             Icon = MenuKit.Icon(GlyphKind.Trash),
             IsEnabled = unnamed.Count > 0,
         };
@@ -362,13 +363,13 @@ internal sealed class HistoryView : UserControl
     private async Task DeleteUnnamed(IReadOnlyList<ProjectVersion> versions)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner || _dir is null || versions.Count == 0) return;
-        bool ok = await new ConfirmWindow("Delete unnamed versions",
-            $"Delete {versions.Count} version{(versions.Count == 1 ? "" : "s")} and the audio only they use? The current version, the latest version of each branch, and every named, starred or noted version stay. This can't be undone.",
-            "Delete", "Cancel").ShowDialog<bool>(owner);
+        bool ok = await new ConfirmWindow(Loc.T("Delete unnamed versions"),
+            Loc.Plural(versions.Count, "Delete {0} version and the audio only it uses? The current version, the latest version of each branch, and every named, starred or noted version stay. This can't be undone.", "Delete {0} versions and the audio only they use? The current version, the latest version of each branch, and every named, starred or noted version stay. This can't be undone."),
+            Loc.T("Delete"), Loc.T("Cancel")).ShowDialog<bool>(owner);
         if (!ok) return;
         long freed = 0;
         Apply(() => freed = _history.DeleteMany(_dir, versions.Select(v => v.Id).ToList()));
-        _host.ReportStatus($"Deleted {versions.Count} version{(versions.Count == 1 ? "" : "s")} · {NotaNum.Bytes(freed)} freed");
+        _host.ReportStatus(Loc.F("{0} · {1} freed", Loc.Plural(versions.Count, "Deleted {0} version", "Deleted {0} versions"), NotaNum.Bytes(freed)));
     }
 
     private async Task Prompt(string title, string prompt, string? initial, Action<string> apply)
@@ -381,9 +382,9 @@ internal sealed class HistoryView : UserControl
     private async Task Delete(ProjectVersion v)
     {
         if (TopLevel.GetTopLevel(this) is not Window owner || _dir is null) return;
-        bool ok = await new ConfirmWindow("Delete version",
-            $"Delete {Title(v)}? Audio that only this version uses is deleted from the project folder too. This can't be undone.",
-            "Delete", "Cancel").ShowDialog<bool>(owner);
+        bool ok = await new ConfirmWindow(Loc.T("Delete version"),
+            Loc.F("Delete {0}? Audio that only this version uses is deleted from the project folder too. This can't be undone.", Title(v)),
+            Loc.T("Delete"), Loc.T("Cancel")).ShowDialog<bool>(owner);
         if (ok) Apply(() => _history.Delete(_dir, v.Id));
     }
 
@@ -394,7 +395,7 @@ internal sealed class HistoryView : UserControl
         try { edit(); }
         catch (Exception ex) when (ex is ProjectHistoryException or System.IO.IOException or UnauthorizedAccessException)
         {
-            _host.ReportStatus($"Couldn't change the version: {ex.Message}");
+            _host.ReportStatus(Loc.F("Couldn't change the version: {0}", ex.Message));
         }
         Refresh();
     }
@@ -405,7 +406,7 @@ internal sealed class HistoryView : UserControl
     // number in save order.
     private string Title(ProjectVersion v)
         => v.Label ?? v.Note?.Split('\n')[0] ?? VersionSummary.Headline(v.Changes, NotaNum.Bpm)
-           ?? (_numbers.TryGetValue(v.Id, out int n) ? $"Version {n}" : "Version");
+           ?? (_numbers.TryGetValue(v.Id, out int n) ? Loc.F("Version {0}", n) : Loc.T("Version"));
 
     // Everything the version changed, as one line ("" when unknown or nothing nameable).
     private static string Changes(ProjectVersion v)

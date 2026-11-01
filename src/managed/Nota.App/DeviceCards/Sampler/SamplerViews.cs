@@ -27,6 +27,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -269,7 +270,7 @@ internal sealed class SamplerKeysView : Control
                 ctx.DrawText(t, new Point(rect.X + (rect.Width - t.Width) / 2, rect.Bottom - t.Height - 2));
             }
         }
-        string range = $"range {SamplerModel.NoteName(_lo)} — {SamplerModel.NoteName(_lo + 48)} · root {SamplerModel.NoteName(_root)} · keytrack {NotaNum.Pct(_track)}";
+        string range = Loc.F("range {0} — {1} · root {2} · keytrack {3}", SamplerModel.NoteName(_lo), SamplerModel.NoteName(_lo + 48), SamplerModel.NoteName(_root), NotaNum.Pct(_track));
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopLeft, range, NotaPalette.TextTertiary);
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopRight, _hint, NotaPalette.TextAxis);
     }

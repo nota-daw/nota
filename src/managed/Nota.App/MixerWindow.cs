@@ -14,6 +14,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -47,7 +48,7 @@ internal sealed class MixerWindow : NotaWindow
             Close();
         };
 
-        Title = "Mixer";
+        Title = Loc.T("Mixer");
         Width = 1040;
         Height = 460;
         MinWidth = 560;
@@ -60,10 +61,10 @@ internal sealed class MixerWindow : NotaWindow
         // Title bar: caption left, the view switch centred; empty bar area drags the window.
         var caption = new TextBlock
         {
-            Text = "Mixer", FontSize = NotaType.Name, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
+            Text = Loc.T("Mixer"), FontSize = NotaType.Name, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var seg = ClipEditorKit.Segments(new[] { "Strips", "Stereo map" }, view == MixerViewMode.StereoMap ? 1 : 0,
+        var seg = ClipEditorKit.Segments(new[] { Loc.T("Strips"), Loc.T("Stereo map") }, view == MixerViewMode.StereoMap ? 1 : 0,
             i => ViewPicked?.Invoke(i == 1 ? MixerViewMode.StereoMap : MixerViewMode.Strips), out _setViewSegment);
         seg.HorizontalAlignment = HorizontalAlignment.Center;
         seg.VerticalAlignment = VerticalAlignment.Center;
@@ -73,7 +74,7 @@ internal sealed class MixerWindow : NotaWindow
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
             Content = new Glyph(GlyphKind.DockIn),
         };
-        ToolTip.SetTip(dockBtn, "Dock the mixer in the main window");
+        ToolTip.SetTip(dockBtn, Loc.T("Dock the mixer in the main window"));
         dockBtn.Click += (_, _) => DockRequested?.Invoke();
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,*") };
         grid.Children.Add(caption);

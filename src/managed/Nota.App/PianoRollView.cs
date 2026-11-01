@@ -30,6 +30,7 @@ using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Application.Midi;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -884,17 +885,17 @@ public sealed partial class PianoRollView : UserControl
     {
         get
         {
-            if (_selection.Count == 0) return "No selection";
+            if (_selection.Count == 0) return Loc.T("No selection");
             if (_selection.Count == 1)
             {
                 int i = _selection.First();
                 if (i >= 0 && i < _notes.Count)
                 {
                     var n = _notes[i];
-                    return $"1 note · {NoteName(n.Pitch)} · vel {(int)Math.Round(n.Velocity * 127)}";
+                    return Loc.F("1 note · {0} · vel {1}", NoteName(n.Pitch), (int)Math.Round(n.Velocity * 127));
                 }
             }
-            return $"{_selection.Count} notes";
+            return Loc.F("{0} notes", _selection.Count);
         }
     }
 
@@ -1682,7 +1683,7 @@ public sealed partial class PianoRollView : UserControl
         SetPlayhead(b, true);   // immediate feedback; the transport tick keeps it in sync
     }
 
-    private const string SlotSeekTip = "A Session slot plays on its own loop clock — launch it to play from the start";
+    private static readonly string SlotSeekTip = Loc.T("A Session slot plays on its own loop clock — launch it to play from the start");
     private static readonly Cursor HandCursorShared = new(StandardCursorType.Hand);
     private static readonly Cursor LineCursor = new(StandardCursorType.SizeWestEast);
     private static readonly Cursor NoCursor = new(StandardCursorType.No);

@@ -20,6 +20,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -79,7 +80,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         ValueField BandField(int b) => new(NotaText.Label(Eq3Math.Names[b]) + " gain", () => P(Low + b),
             v => Eq3Math.Db(Eq3Math.GainDb(v, Iso())) + "\u2009dB", v => Raw(Low + b, v), () => Begin(Low + b), () => End(Low + b))
         { Reset = () => ResetBand(b), After = RefreshAll };
-        ValueField XoverField(int w) => new(w == 0 ? "Low / mid crossover" : "Mid / high crossover", () => P(w == 0 ? FreqLo : FreqHi),
+        ValueField XoverField(int w) => new(w == 0 ? Loc.T("Low / mid crossover") : Loc.T("Mid / high crossover"), () => P(w == 0 ? FreqLo : FreqHi),
             v => Eq3Math.Hz(w == 0 ? Eq3Math.LoHz(v) : Eq3Math.HiHz(v)),
             v => { if (w == 0) Raw(FreqLo, Eq3Math.LoNorm(Math.Min(Eq3Math.LoHz(v), F2() / 2))); else Raw(FreqHi, Eq3Math.HiNorm(Math.Max(Eq3Math.HiHz(v), F1() * 2))); },
             () => Begin(w == 0 ? FreqLo : FreqHi), () => End(w == 0 ? FreqLo : FreqHi))
@@ -127,7 +128,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
                 if (!e.GetCurrentPoint(btn).Properties.IsLeftButtonPressed) return;   // right-click bubbles (MIDI learn)
                 SetP(LowKill + b, Killed(b) ? 0 : 1); RefreshAll(); e.Handled = true;
             };
-            ToolTip.SetTip(btn, $"Kill the {Eq3Math.Names[b].ToLowerInvariant()} band — removes it outright, with a 5\u2009ms glide");
+            ToolTip.SetTip(btn, Loc.F("Kill the {0} band — removes it outright, with a 5\u2009ms glide", Eq3Math.Names[b].ToLowerInvariant()));
             Learn(btn, LowKill + b);
             readouts.Add(Paint); Paint();
             return btn;
@@ -144,7 +145,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             fader.GestureEnd += () => End(Low + b);
             fader.Changed += db => { GainRaw(b, db); RefreshAll(); };
             fader.ResetRequested += () => ResetBand(b);
-            ToolTip.SetTip(fader, MenuKit.Keys("Drag up / down for the band's gain (Shift for fine steps); ⌥-click types it; double-click resets to 0\u2009dB and lifts the kill"));
+            ToolTip.SetTip(fader, MenuKit.Keys(Loc.T("Drag up / down for the band's gain (Shift for fine steps); ⌥-click types it; double-click resets to 0\u2009dB and lifts the kill")));
             Learn(fader, Low + b);
             ValueEntry.Attach(fader, BandField(b), val);
             readouts.Add(() =>
@@ -189,7 +190,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
         graph.GainReset += ResetBand;
         Learn(graph, FreqLo);
         ValueEntry.AttachHandles(graph, [XoverField(0)], [XoverField(1)], [BandField(0)], [BandField(1)], [BandField(2)]);
-        ToolTip.SetTip(graph, MenuKit.Keys("Each band in its colour, the sum in brass, the output spectrum behind. Drag a crossover handle left / right; drag anywhere else to ride that band's gain. Double-click resets, ⌥-click types."));
+        ToolTip.SetTip(graph, MenuKit.Keys(Loc.T("Each band in its colour, the sum in brass, the output spectrum behind. Drag a crossover handle left / right; drag anywhere else to ride that band's gain. Double-click resets, ⌥-click types.")));
 
         // Header: crossover readouts · Output · Range · Slope.
         Control XRead(string label, Func<string> text)
@@ -230,7 +231,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
                 v.Text = Eq3Math.Db(db) + "\u2009dB";
                 v.Foreground = Math.Abs(db) > 0.05 ? TextPrimary : TextSecondary;
             });
-            ToolTip.SetTip(box, MenuKit.Keys("Output gain, ±24\u2009dB — drag up / down (Shift for fine), ⌥-click types, double-click resets"));
+            ToolTip.SetTip(box, MenuKit.Keys(Loc.T("Output gain, ±24\u2009dB — drag up / down (Shift for fine), ⌥-click types, double-click resets")));
             Learn(box, Gain);
             ValueEntry.Attach(box, new ValueField("Output", () => P(Gain), x => Eq3Math.Db(OutDb(x)) + "\u2009dB", x => Raw(Gain, x),
                 () => Begin(Gain), () => End(Gain), 0.5) { After = RefreshAll }, v);
@@ -260,7 +261,7 @@ internal sealed class Eq3DeviceBody : IDeviceBody
             var seg = Segments(new[] { "24\u2009dB", "48\u2009dB" }, () => Lr8() ? 1 : 0, i => { SetP(Slope, i); RefreshAll(); }, out var sync, padX: 4);
             readouts.Add(sync);
             Learn(seg, Slope);
-            ToolTip.SetTip(seg, "Crossover slope — Linkwitz-Riley 24 or 48\u2009dB/oct: steeper touches the neighbours less");
+            ToolTip.SetTip(seg, Loc.T("Crossover slope — Linkwitz-Riley 24 or 48\u2009dB/oct: steeper touches the neighbours less"));
             return Row(4, Caps("SLOPE"), seg);
         }
 
