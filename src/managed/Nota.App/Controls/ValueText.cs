@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -156,7 +157,7 @@ internal static partial class ValueText
         string s = Clean(text).Replace('−', '-').Replace(',', '.').Replace("±", "");
         if (Note().Match(s) is { Success: true } nm)   // a note name: C-1 = 0, C4 = 60 (DeviceCardKit.NoteName)
         {
-            int pc = "C D EF G A B".IndexOf(char.ToUpperInvariant(nm.Groups["n"].Value[0]));
+            int pc = Loc.T("C D EF G A B").IndexOf(char.ToUpperInvariant(nm.Groups["n"].Value[0]));
             int acc = nm.Groups["acc"].Value switch { "#" or "♯" => 1, "b" or "♭" => -1, _ => 0 };
             // MIDI's range only (C-1 … G9); a runaway octave ("C99999999999") reads as nothing.
             if (!int.TryParse(nm.Groups["oct"].Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int oct) || oct is < -1 or > 9)

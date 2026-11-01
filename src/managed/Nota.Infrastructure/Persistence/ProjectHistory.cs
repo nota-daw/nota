@@ -26,6 +26,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using Nota.Application.Localization;
 
 namespace Nota.Infrastructure;
 
@@ -138,7 +139,7 @@ public sealed partial class ProjectHistory : IProjectHistory
             var node = Find(doc, versionId) ?? throw new ProjectHistoryException("That version no longer exists.");
             if (node.ProjectFormat > ProjectService.CurrentFormatVersion)
                 throw new ProjectHistoryException(
-                    $"This version was saved by Nota {node.AppVersion}, which is newer than this one. Update Nota to open it.");
+                    Loc.F("This version was saved by Nota {0}, which is newer than this one. Update Nota to open it.", node.AppVersion));
 
             // Read and check everything before touching the working copy.
             var contents = new Dictionary<string, byte[]>(StringComparer.Ordinal);

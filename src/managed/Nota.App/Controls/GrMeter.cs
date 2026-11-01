@@ -4,6 +4,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -18,7 +19,7 @@ namespace Nota.App;
         private const double MaxDb = 24.0;   // full-scale reduction
         private double _gr, _hold;
 
-        public GrMeter() => ToolTip.SetTip(this, "Clear the peak hold");
+        public GrMeter() => ToolTip.SetTip(this, Loc.T("Clear the peak hold"));
 
         public double GrDb
         {

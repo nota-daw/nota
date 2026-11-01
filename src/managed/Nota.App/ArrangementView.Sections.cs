@@ -20,6 +20,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -57,7 +58,7 @@ public sealed partial class ArrangementView
     {
         var label = new TextBlock
         {
-            Text = "Sections", Classes = { "SectionLabel" },
+            Text = Loc.T("Sections"), Classes = { "SectionLabel" },
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
@@ -166,12 +167,12 @@ public sealed partial class ArrangementView
         string automaticName = SectionNames.Automatic(SectionIndex(s));
         var box = new TextBox { Text = automatic ? "" : s.Name, PlaceholderText = automaticName, Width = 180, FontSize = 12 };
         var caption = new TextBlock { Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
-        void Caption() => caption.Text = SectionNames.IsAutomatic(box.Text) ? "Automatic name" : "Custom name";
+        void Caption() => caption.Text = SectionNames.IsAutomatic(box.Text) ? Loc.T("Automatic name") : Loc.T("Custom name");
         Caption();
         box.TextChanged += (_, _) => Caption();
 
-        var reset = new Button { Content = "Reset to default", Classes = { "ghost" }, FontSize = 11, Height = 22, Padding = new Thickness(6, 0), IsEnabled = !automatic };
-        ToolTip.SetTip(reset, $"Back to the automatic name ({automaticName}), which follows the section's position");
+        var reset = new Button { Content = Loc.T("Reset to default"), Classes = { "ghost" }, FontSize = 11, Height = 22, Padding = new Thickness(6, 0), IsEnabled = !automatic };
+        ToolTip.SetTip(reset, Loc.F("Back to the automatic name ({0}), which follows the section's position", automaticName));
         var footer = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
         DockPanel.SetDock(reset, Dock.Right);
         footer.Children.Add(reset);
@@ -206,11 +207,11 @@ public sealed partial class ArrangementView
     public string ResetSectionNameAtPlayhead()
     {
         var s = SectionList.LastOrDefault(x => x.StartBeat <= _playheadBeats && _playheadBeats < x.StartBeat + x.LengthBeats);
-        if (s is null) return "No section at the playhead";
-        if (SectionNames.IsAutomatic(s.Name)) return $"{SectionDisplayName(s)} already has its automatic name";
+        if (s is null) return Loc.T("No section at the playhead");
+        if (SectionNames.IsAutomatic(s.Name)) return Loc.F("{0} already has its automatic name", SectionDisplayName(s));
         string was = s.Name, now = SectionNames.Automatic(SectionIndex(s));
         ResetSectionName(s);
-        return $"\u201C{was}\u201D is {now} again";
+        return Loc.F("\u201C{0}\u201D is {1} again", was, now);
     }
 
     // ---- the lane ---------------------------------------------------------
@@ -380,7 +381,7 @@ public sealed partial class ArrangementView
             if (s is not null)
             {
                 int bars = (int)Math.Round(s.LengthBeats / Math.Max(1, _o._beatsPerBar));
-                var dup = MenuKit.Item("Duplicate", GlyphKind.Duplicate, () =>
+                var dup = MenuKit.Item(Loc.T("Duplicate"), GlyphKind.Duplicate, () =>
                 {
                     if (_o.Live(s) is null) return;
                     var copy = _o.AddSection(s.StartBeat + s.LengthBeats, s.LengthBeats);
@@ -388,28 +389,28 @@ public sealed partial class ArrangementView
                     _o.SectionsEdited();   // one step: the copy arrives already named
                 });
                 MenuKit.AddGroups(flyout.Items,
-                    new Control[] { MenuKit.Header(_o.SectionDisplayName(s), null, $"Section · {bars} bar{(bars == 1 ? "" : "s")}") },
+                    new Control[] { MenuKit.Header(_o.SectionDisplayName(s), null, Loc.Plural(bars, "Section · {0} bar", "Section · {0} bars")) },
                     new Control[]
                     {
-                        MenuKit.Item("Rename…", GlyphKind.Edit, () => _o.RenameSection(this, s)),
-                        MenuKit.Item("Reset to default name", GlyphKind.Cycle, () => _o.ResetSectionName(s), enabled: !SectionNames.IsAutomatic(s.Name)),
+                        MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit, () => _o.RenameSection(this, s)),
+                        MenuKit.Item(Loc.T("Reset to default name"), GlyphKind.Cycle, () => _o.ResetSectionName(s), enabled: !SectionNames.IsAutomatic(s.Name)),
                     },
                     new Control[]
                     {
-                        MenuKit.Item("Loop section", GlyphKind.Cycle, () => _o.SetLoopRegion(s.StartBeat, s.StartBeat + s.LengthBeats)),   // raises LoopChanged itself
-                        MenuKit.Item("Select section", GlyphKind.Select, () => _o.SelectSectionRange(s)),
+                        MenuKit.Item(Loc.T("Loop section"), GlyphKind.Cycle, () => _o.SetLoopRegion(s.StartBeat, s.StartBeat + s.LengthBeats)),   // raises LoopChanged itself
+                        MenuKit.Item(Loc.T("Select section"), GlyphKind.Select, () => _o.SelectSectionRange(s)),
                     },
                     new Control[] { dup },
-                    new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => _o.RemoveSection(s)) });
+                    new Control[] { MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () => _o.RemoveSection(s)) });
             }
             else
             {
-                flyout.Items.Add(MenuKit.Item("Add section here", GlyphKind.Plus,
+                flyout.Items.Add(MenuKit.Item(Loc.T("Add section here"), GlyphKind.Plus,
                     () => { _o.AddSection(_o.SnapBar(beat), _o._beatsPerBar * 8); _o.SectionsEdited(); }));
                 if (_o._sections.Count > 0)
                 {
                     flyout.Items.Add(new Separator());
-                    flyout.Items.Add(MenuKit.Danger("Delete all sections", GlyphKind.Trash,
+                    flyout.Items.Add(MenuKit.Danger(Loc.T("Delete all sections"), GlyphKind.Trash,
                         () => { _o._sections.Clear(); _o.SectionsEdited(); }));
                 }
             }
@@ -425,7 +426,7 @@ public sealed partial class ArrangementView
             var list = _o._sections;
             if (list.Count == 0 && _mode != Mode.Draft)
             {
-                var hint = new FormattedText("drag here to mark a section", CultureInfo.InvariantCulture,
+                var hint = new FormattedText(Loc.T("drag here to mark a section"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, HintInk);
                 ctx.DrawText(hint, new Point(8, (h - hint.Height) / 2));
             }

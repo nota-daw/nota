@@ -18,6 +18,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -40,7 +41,7 @@ internal sealed partial class RackCardView
         var slot = RcText($"Macro {m + 1}", NotaPalette.TextTertiary, 7.5);
         var nameTb = RcName(name, NotaPalette.TextPrimary, 10);
         nameTb.Cursor = new Cursor(StandardCursorType.Hand);
-        ToolTip.SetTip(nameTb, "Double-click to rename");
+        ToolTip.SetTip(nameTb, Loc.T("Double-click to rename"));
         nameTb.DoubleTapped += (_, _) => RcPromptRename(nameTb, name, s => a.SetMacroName(m, s));
         var value = RcMono(NotaNum.Pct(a.MacroGet(m)), NotaPalette.TextPrimary, 9);
         value.Margin = new Thickness(8, 0, 0, 0);
@@ -62,7 +63,7 @@ internal sealed partial class RackCardView
         });
         var curveLabel = RcText(mixed ? "Curve · mixed" : "Curve", NotaPalette.TextTertiary, 7.5);
         var map = RcKey("Map", () => { _rs.MappingMacro = m; _rs.Centre = RackCentreTab.Chains; DeferRebuild(); },
-            tip: "Map this macro: click parameters on the Chains tab");
+            tip: Loc.T("Map this macro: click parameters on the Chains tab"));
         var right = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
@@ -78,14 +79,14 @@ internal sealed partial class RackCardView
 
         if (targets.Count == 0)
         {
-            var empty = new Border { Padding = new Thickness(4, 8), Child = Hint("No targets yet. Press Map, then click parameters on the Chains tab.") };
+            var empty = new Border { Padding = new Thickness(4, 8), Child = Hint(Loc.T("No targets yet. Press Map, then click parameters on the Chains tab.")) };
             return new DockPanel { LastChildFill = true, Children = { head, empty } };
         }
 
         var cols = new Grid { ColumnDefinitions = new ColumnDefinitions("*,150,56,12"), ColumnSpacing = 6, Height = 12, Margin = new Thickness(0, 4, 0, 0) };
         cols.Children.Add(RcText("Target", NotaPalette.TextTertiary, 7.5));
         var rangeTitle = RcText("Range", NotaPalette.TextTertiary, 7.5);
-        ToolTip.SetTip(rangeTitle, "Drag the ends · min above max inverts");
+        ToolTip.SetTip(rangeTitle, Loc.T("Drag the ends · min above max inverts"));
         Grid.SetColumn(rangeTitle, 1); cols.Children.Add(rangeTitle);
         var rows = new StackPanel { Spacing = 2 };
         rows.Children.Add(cols);

@@ -44,6 +44,7 @@ using Avalonia.Platform.Storage;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
 using RM = Nota.Application.RhythmModel;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -207,7 +208,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             if (topLevel is null) return;
             var files = await topLevel.PickFilesAsync(new FilePickerOpenOptions
             {
-                Title = $"Load a sample into {RM.VoiceNames[voice]}", AllowMultiple = false,
+                Title = Loc.F("Load a sample into {0}", RM.VoiceNames[voice]), AllowMultiple = false,
                 FileTypeFilter = new[] { new FilePickerFileType("Audio") { Patterns = new[] { "*.wav", "*.flac", "*.mp3", "*.aif", "*.aiff", "*.ogg" } } },
             });
             if (files.Count > 0 && files[0].TryGetLocalPath() is { } p && engine.SetRhythmVoiceSample(track, voice, p))
@@ -265,7 +266,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand),
                 Background = on ? NotaPalette.AccentSubtle : Brushes.Transparent, BorderBrush = restBorder, Child = row,
             };
-            ToolTip.SetTip(box, $"{RM.VoiceNames[v]} · MIDI {DeviceCardKit.NoteName(RM.MidiNotes[v])}\nClick: select and play · drop a file to load it · right-click for more");
+            ToolTip.SetTip(box, Loc.F("{0} · MIDI {1}\nClick: select and play · drop a file to load it · right-click for more", RM.VoiceNames[v], DeviceCardKit.NoteName(RM.MidiNotes[v])));
             AttachFxTip(fxTag, v);
             box.PointerPressed += (_, e) =>
             {
@@ -290,15 +291,15 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         void KitMenu(int v, Control anchor)
         {
             var fly = new MenuFlyout();
-            var load = new MenuItem { Header = "Load sample…" };
+            var load = new MenuItem { Header = Loc.T("Load sample…") };
             load.Click += (_, _) => LoadSample(anchor, v);
             fly.Items.Add(load);
             bool has = engine.TryGetRhythmVoiceInfo(track, v, out var vi) && vi.SampleId != 0;
-            var src = new MenuItem { Header = isSample[v] ? "Play the synth engine" : "Play the loaded sample", IsEnabled = isSample[v] || has };
+            var src = new MenuItem { Header = isSample[v] ? Loc.T("Play the synth engine") : Loc.T("Play the loaded sample"), IsEnabled = isSample[v] || has };
             src.Click += (_, _) => { Act(RM.A_SetSource, v, isSample[v] ? 0f : 1f); ctx.NotifyChanged(); ctx.RequestRebuild(); };
             fly.Items.Add(src);
             fly.Items.Add(new Separator());
-            fly.Items.Add(MenuKit.Danger($"Clear its steps in bank {RM.BankNames[bank]}", GlyphKind.Trash,
+            fly.Items.Add(MenuKit.Danger(Loc.F("Clear its steps in bank {0}", RM.BankNames[bank]), GlyphKind.Trash,
                 () => { Act(RM.A_ClearVoice, v); ctx.NotifyChanged(); ReloadPattern(); }));
             fly.ShowAt(anchor);
         }
@@ -319,7 +320,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             }
             else if (sampleMode) { Act(RM.A_SetSource, sel, 0f); ctx.NotifyChanged(); ctx.RequestRebuild(); }
         }, out _, padX: 6, fontSize: 7);
-        ToolTip.SetTip(srcSeg, "Synth: the voice's own engine · Sample: a loaded one-shot (loads one if the voice has none)");
+        ToolTip.SetTip(srcSeg, Loc.T("Synth: the voice's own engine · Sample: a loaded one-shot (loads one if the voice has none)"));
 
         var folder = new Glyph(GlyphKind.Folder, 8) { Foreground = NotaPalette.TextStrong };
         var fileText = new TextBlock
@@ -331,7 +332,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         var fileBtn = SmallButton(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { folder, fileText } }, fileText,
             () => LoadSample(kit, sel), () => sampleMode);
         readouts.Add(() => folder.Foreground = sampleMode ? NotaPalette.TextPrimary : NotaPalette.TextStrong);
-        ToolTip.SetTip(fileBtn, sampleMode ? $"{sampleName} — click to load another file" : "Load a one-shot into this voice (or drop a file on the voice)");
+        ToolTip.SetTip(fileBtn, sampleMode ? Loc.F("{0} — click to load another file", sampleName) : Loc.T("Load a one-shot into this voice (or drop a file on the voice)"));
 
         var voiceHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(7, 0), VerticalAlignment = VerticalAlignment.Center };
         // VOICE / MACRO: which the centre shows. The lit one is the one on screen.
@@ -340,7 +341,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             bool on = macro == _macroMode;
             var c = Cap(text, on ? (macro ? AccentBright : NotaPalette.TextStrong) : NotaPalette.TextDisabled);
             var host = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = c };
-            ToolTip.SetTip(host, macro ? "The kit's eight macros — knobs over every voice and its effects" : "The selected voice's sound and effects");
+            ToolTip.SetTip(host, macro ? Loc.T("The kit's eight macros — knobs over every voice and its effects") : Loc.T("The selected voice's sound and effects"));
             host.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(host).Properties.IsLeftButtonPressed) return;
@@ -358,17 +359,17 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             if (i == _voiceTab) return;
             _voiceTab = i; ctx.RequestRebuild();
         }, out _, padX: 6, fontSize: 7);
-        ToolTip.SetTip(tabSeg, "Sound: the voice's source and shape · FX: its own effects, before the kit bus");
+        ToolTip.SetTip(tabSeg, Loc.T("Sound: the voice's source and shape · FX: its own effects, before the kit bus"));
         if (!_macroMode) voiceHead.Children.Add(tabSeg);
         var voiceTools = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         var macros = new RhythmMacroSurface(engine, track, idx, isSample, Dots);
         if (_macroMode)
         {
-            voiceTools.Children.Add(Mono($"{MacroPanel.Count} slots · {MacroPanel.Assigned(macros)} assigned"));
+            voiceTools.Children.Add(Mono(Loc.F("{0} slots · {1} assigned", MacroPanel.Count, MacroPanel.Assigned(macros))));
             Border map = null!;
             map = MacroPanel.Button("Map", teal: true, () => MacroPanel.ShowMapMenu(ctx, macros, map, _macro));
             map.Height = 14;
-            ToolTip.SetTip(map, $"Add a receiver to {macros.MacroName(_macro)}: a voice param, a kit setting or a voice's effect");
+            ToolTip.SetTip(map, Loc.F("Add a receiver to {0}: a voice param, a kit setting or a voice's effect", macros.MacroName(_macro)));
             voiceTools.Children.Add(map);
         }
         else if (_voiceTab == 0) { voiceTools.Children.Add(srcSeg); voiceTools.Children.Add(fileBtn); }
@@ -382,7 +383,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             var revText = new TextBlock { Text = "Reverse", FontSize = 7, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
             var rev = SmallButton(revText, revText,
                 () => { Write(P("reverse"), G(P("reverse")) >= 0.5f ? 0f : 1f); Refresh(); }, () => G(P("reverse")) >= 0.5f);
-            ToolTip.SetTip(rev, "Play the region back to front");
+            ToolTip.SetTip(rev, Loc.T("Play the region back to front"));
             if (I(P("reverse")) is var ri and >= 0) MidiLearn.Bind(rev, MidiTarget.PluginParam(track, -1, ri), engine.PluginParamName(track, -1, ri));
             voiceTools.Children.Add(rev);
         }
@@ -411,7 +412,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 string secs = sampleSecs > 0 ? " · " + NotaNum.Unit((en - st) * sampleSecs, "0.00", "s") : "";
                 sv.Set(sampleName, Hue(sel), st, en, G(P("reverse")) >= 0.5f, posSel, $"{RM.Pct(st)} → {RM.Pct(en)}{secs}");
             });
-            ToolTip.SetTip(sv, MenuKit.Keys("Drag the Start and End lines to set them · ⌥-click one to type it · double-click to load another file"));
+            ToolTip.SetTip(sv, MenuKit.Keys(Loc.T("Drag the Start and End lines to set them · ⌥-click one to type it · double-click to load another file")));
             {
                 // ⌥-click a line to type it (specs/035); double-click still loads a file, so no reset here.
                 string st = P("start"), ln = P("length");
@@ -440,7 +441,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 string cap = pit > 0 ? $"{RM.Ms(pit)} · {RM.Ms(dec)}" : RM.Ms(dec);
                 hv.Set(RM.VoiceNames[sel], dec, pit, RM.DecaySeconds(sel, 1, 0) * 0.8, pu, flashSel, cap);
             });
-            ToolTip.SetTip(hv, MenuKit.Keys("The hit: amp contour over the pitch drop · drag across for Decay, up / down for Tune (Shift = fine) · ⌥-click to type them"));
+            ToolTip.SetTip(hv, MenuKit.Keys(Loc.T("The hit: amp contour over the pitch drop · drag across for Decay, up / down for Tune (Shift = fine) · ⌥-click to type them")));
             {
                 string dk = P("decay"), tn = P("tune");
                 ValueEntry.AttachAll(hv,
@@ -455,21 +456,21 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         Control[] cells = sampleMode
             ? new[]
             {
-                PKnob(P("start"), "START", v => RM.Pct(v), tip: "Where in the file the hit starts"),
-                PKnob(P("length"), "LENGTH", v => RM.Pct(v), tip: "How much of the file plays, from Start"),
-                PKnob(P("tune"), "TUNE", v => RM.Semis(RM.SampleSemis(v)), tip: "Transpose, ±12 semitones"),
-                PKnob(P("decay"), "DECAY", v => RM.Pct(v), tip: "Amp decay — shortens the hit"),
+                PKnob(P("start"), "START", v => RM.Pct(v), tip: Loc.T("Where in the file the hit starts")),
+                PKnob(P("length"), "LENGTH", v => RM.Pct(v), tip: Loc.T("How much of the file plays, from Start")),
+                PKnob(P("tune"), "TUNE", v => RM.Semis(RM.SampleSemis(v)), tip: Loc.T("Transpose, ±12 semitones")),
+                PKnob(P("decay"), "DECAY", v => RM.Pct(v), tip: Loc.T("Amp decay — shortens the hit")),
                 PKnob(P("drive"), "DRIVE", v => RM.Pct(v), tip: "Saturation"),
-                PKnob(P("level"), "LEVEL", v => RM.Pct(v), tip: "The voice's level in the kit"),
+                PKnob(P("level"), "LEVEL", v => RM.Pct(v), tip: Loc.T("The voice's level in the kit")),
             }
             : new[]
             {
-                PKnob(P("tune"), "TUNE", v => RM.Pct(v), tip: "Pitch (Kick, Snare, Tom, Hats, Perc) or noise colour (Clap, Rim)"),
+                PKnob(P("tune"), "TUNE", v => RM.Pct(v), tip: Loc.T("Pitch (Kick, Snare, Tom, Hats, Perc) or noise colour (Clap, Rim)")),
                 PKnob(P("decay"), "DECAY", v => RM.Pct(v), tip: "Amp decay"),
-                PKnob(P("punch"), "PUNCH", v => RM.Pct(v), tip: "Attack click / snap"),
-                PKnob(P("tone"), "TONE", v => RM.Pct(v), tip: "Snare body ↔ noise · Hats metal ↔ noise · Perc ring ratio"),
+                PKnob(P("punch"), "PUNCH", v => RM.Pct(v), tip: Loc.T("Attack click / snap")),
+                PKnob(P("tone"), "TONE", v => RM.Pct(v), tip: Loc.T("Snare body ↔ noise · Hats metal ↔ noise · Perc ring ratio")),
                 PKnob(P("drive"), "DRIVE", v => RM.Pct(v), tip: "Saturation"),
-                PKnob(P("level"), "LEVEL", v => RM.Pct(v), tip: "The voice's level in the kit"),
+                PKnob(P("level"), "LEVEL", v => RM.Pct(v), tip: Loc.T("The voice's level in the kit")),
             };
         for (int i = 0; i < cells.Length; i++) { Grid.SetColumn(cells[i], i); knobs.Children.Add(cells[i]); }
 
@@ -493,7 +494,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         // ---- PERFORM --------------------------------------------------------------------------
         var perfHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(8, 0) };
         perfHead.Children.Add(Cap("PERFORM"));
-        var perfSub = Mono("shift+step = accent", NotaPalette.TextDisabled); perfSub.HorizontalAlignment = HorizontalAlignment.Right;
+        var perfSub = Mono(Loc.T("shift+step = accent"), NotaPalette.TextDisabled); perfSub.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(perfSub, 1); perfHead.Children.Add(perfSub);
 
         var sliders = new StackPanel
@@ -501,9 +502,9 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             Spacing = 6,
             Children =
             {
-                Slider("SWING", "swing", "Swing: delays every second 16th — at 100\u2009% by half a step"),
-                Slider("HUMAN", "humanize", "Humanize: a random nudge to every hit's velocity"),
-                Slider("ACCENT", "accent", "How much louder an accented step plays"),
+                Slider("SWING", "swing", Loc.T("Swing: delays every second 16th — at 100\u2009% by half a step")),
+                Slider("HUMAN", "humanize", Loc.T("Humanize: a random nudge to every hit's velocity")),
+                Slider("ACCENT", "accent", Loc.T("How much louder an accented step plays")),
             },
         };
 
@@ -523,8 +524,8 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         meterBlock.Children.Add(meter);
         Grid.SetColumn(meterScale, 1); meterBlock.Children.Add(meterScale);
 
-        var master = PKnob("volume", "MASTER", v => RM.Pct(v), 40, 46, "The kit's output level");
-        var glue = PKnob("glue", "GLUE", v => RM.Pct(v), 30, 40, "Glue: a bus compressor on the whole kit — holds the hits together (0 = off)");
+        var master = PKnob("volume", "MASTER", v => RM.Pct(v), 40, 46, Loc.T("The kit's output level"));
+        var glue = PKnob("glue", "GLUE", v => RM.Pct(v), 30, 40, Loc.T("Glue: a bus compressor on the whole kit — holds the hits together (0 = off)"));
         var perfFoot = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6 };
         perfFoot.Children.Add(master);
         Grid.SetColumn(glue, 1); perfFoot.Children.Add(glue);
@@ -581,8 +582,8 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             }
             float cur = strip.Vel[s];
             bool on = strip.On[s];
-            Item($"Step {s + 1} accent", () => { strip.On[s] = true; strip.Acc[s] = !(on && strip.Acc[s]); strip.Vel[s] = Math.Max(cur, RM.NormalVel); strip.Commit!(s); strip.Changed(); }, on && strip.Acc[s]);
-            Item($"Step {s + 1} quiet", () => { strip.On[s] = true; strip.Acc[s] = false; strip.Vel[s] = RM.QuietVel; strip.Commit!(s); strip.Changed(); }, on && !strip.Acc[s] && cur < RM.QuietBelow);
+            Item(Loc.F("Step {0} accent", s + 1), () => { strip.On[s] = true; strip.Acc[s] = !(on && strip.Acc[s]); strip.Vel[s] = Math.Max(cur, RM.NormalVel); strip.Commit!(s); strip.Changed(); }, on && strip.Acc[s]);
+            Item(Loc.F("Step {0} quiet", s + 1), () => { strip.On[s] = true; strip.Acc[s] = false; strip.Vel[s] = RM.QuietVel; strip.Commit!(s); strip.Changed(); }, on && !strip.Acc[s] && cur < RM.QuietBelow);
             var velMenu = new MenuItem { Header = "Velocity" };
             foreach (var pv in new[] { 1f, 0.75f, 0.5f, 0.25f })
             {
@@ -593,17 +594,17 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             }
             fly.Items.Add(velMenu);
             fly.Items.Add(new Separator());
-            Item("Fill every beat", () => SetSteps(k => (k % 4 == 0, RM.NormalVel, false)));
-            Item("Fill every 8th", () => SetSteps(k => (k % 2 == 0, RM.NormalVel, false)));
-            Item("Fill every 16th", () => SetSteps(_ => (true, RM.NormalVel, false)));
-            Item("Off-beats", () => SetSteps(k => (k % 4 == 2, RM.NormalVel, false)));
+            Item(Loc.T("Fill every beat"), () => SetSteps(k => (k % 4 == 0, RM.NormalVel, false)));
+            Item(Loc.T("Fill every 8th"), () => SetSteps(k => (k % 2 == 0, RM.NormalVel, false)));
+            Item(Loc.T("Fill every 16th"), () => SetSteps(_ => (true, RM.NormalVel, false)));
+            Item(Loc.T("Off-beats"), () => SetSteps(k => (k % 4 == 2, RM.NormalVel, false)));
             fly.Items.Add(new Separator());
             (bool, float, bool)[] Snap() { var a = new (bool, float, bool)[RM.Steps]; for (int k = 0; k < RM.Steps; k++) a[k] = (strip.On[k], strip.Vel[k], strip.Acc[k]); return a; }
-            Item("Shift left", () => { var a = Snap(); SetSteps(k => a[(k + 1) % RM.Steps]); });
-            Item("Shift right", () => { var a = Snap(); SetSteps(k => a[(k + RM.Steps - 1) % RM.Steps]); });
-            Item("Reverse", () => { var a = Snap(); SetSteps(k => a[RM.Steps - 1 - k]); });
+            Item(Loc.T("Shift left"), () => { var a = Snap(); SetSteps(k => a[(k + 1) % RM.Steps]); });
+            Item(Loc.T("Shift right"), () => { var a = Snap(); SetSteps(k => a[(k + RM.Steps - 1) % RM.Steps]); });
+            Item(Loc.T("Reverse"), () => { var a = Snap(); SetSteps(k => a[RM.Steps - 1 - k]); });
             fly.Items.Add(new Separator());
-            fly.Items.Add(MenuKit.Danger($"Clear {RM.VoiceNames[sel]}", GlyphKind.Trash, () => SetSteps(k => (false, strip.Vel[k], false))));
+            fly.Items.Add(MenuKit.Danger(Loc.F("Clear {0}", RM.VoiceNames[sel]), GlyphKind.Trash, () => SetSteps(k => (false, strip.Vel[k], false))));
             fly.ShowAt(strip);
         };
 
@@ -614,7 +615,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             int bb = b;
             var tb = new TextBlock { Text = RM.BankNames[b], FontSize = 7, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
             var cell = new Border { CornerRadius = NotaRadius.Badge, Padding = new Thickness(5, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
-            ToolTip.SetTip(cell, $"Bank {RM.BankNames[b]} — play and edit this pattern · right-click to copy or clear it");
+            ToolTip.SetTip(cell, Loc.F("Bank {0} — play and edit this pattern · right-click to copy or clear it", RM.BankNames[b]));
             cell.PointerPressed += (_, e) =>
             {
                 var pt = e.GetCurrentPoint(cell);
@@ -638,18 +639,18 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         void BankMenu(int b, Control anchor)
         {
             var fly = new MenuFlyout();
-            var copy = new MenuItem { Header = $"Copy {RM.BankNames[b]} to" };
+            var copy = new MenuItem { Header = Loc.F("Copy {0} to", RM.BankNames[b]) };
             for (int d = 0; d < RM.Banks; d++)
             {
                 if (d == b) continue;
                 int dd = d;
-                var mi = new MenuItem { Header = $"Bank {RM.BankNames[d]}" };
+                var mi = new MenuItem { Header = Loc.F("Bank {0}", RM.BankNames[d]) };
                 mi.Click += (_, _) => { Act(RM.A_CopyBank, b * RM.Banks + dd); ctx.NotifyChanged(); ReloadPattern(); };
                 copy.Items.Add(mi);
             }
             fly.Items.Add(copy);
             fly.Items.Add(new Separator());
-            fly.Items.Add(MenuKit.Danger($"Clear bank {RM.BankNames[b]}", GlyphKind.Trash,
+            fly.Items.Add(MenuKit.Danger(Loc.F("Clear bank {0}", RM.BankNames[b]), GlyphKind.Trash,
                 () => { Act(RM.A_ClearBank, b); ctx.NotifyChanged(); ReloadPattern(); }));
             fly.ShowAt(anchor);
         }
@@ -661,7 +662,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
 
         var stepCount = Mono("", TextTertiary);
         stepCount.HorizontalAlignment = HorizontalAlignment.Right;
-        readouts.Add(() => stepCount.Text = $"{pat.Count(bank, sel)} of {RM.Steps} · 1/16 · bank {RM.BankNames[bank]}");
+        readouts.Add(() => stepCount.Text = Loc.F("{0} of {1} · 1/16 · bank {2}", pat.Count(bank, sel), RM.Steps, RM.BankNames[bank]));
         var stepHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*"), ColumnSpacing = 6, Height = 12 };
         stepHead.Children.Add(Cap("STEP"));
         var stepName = new TextBlock { Text = RM.VoiceNames[sel], FontSize = 8, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center };
@@ -748,7 +749,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
         public int MacroParamIndex(int m) => idx.TryGetValue(RM.MacroId(m), out int i) ? i : -1;
         public string MacroName(int m) => e.RhythmMacroName(track, m);
         public void SetMacroName(int m, string n) => e.RhythmSetMacroName(track, m, n);
-        public string SlotNoun => "voices";
+        public string SlotCount(int n) => Loc.Plural(n, "{0} voice", "{0} voices");
         public IReadOnlyList<int> Slots() => new[] { 0, 1, 2, 3, 4, 5, 6, 7 };
         public string SlotName(int v) => v < 0 ? "Kit" : VoiceLabel(e, track, v, isSample[v]);
         public IBrush SlotHue(int v) => v < 0 ? TextTertiary : NotaPalette.Ink(dots[v]);
@@ -788,7 +789,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
             int P(string id) => idx.TryGetValue(id, out int i) ? i : -1;
 
             // Every voice at once: the same param, or the same effect on each voice that has it.
-            var all = new MenuItem { Header = $"All {RM.Voices} voices" };
+            var all = new MenuItem { Header = Loc.Plural(RM.Voices, "All {0} voice", "All {0} voices") };
             foreach (var key in VoiceTargets)
             {
                 var mi = new MenuItem { Header = Title(key) };
@@ -814,7 +815,7 @@ internal sealed class RhythmInstrumentCard : IInstrumentCard
                 for (int v = 0; v < RM.Voices; v++)
                     for (int d = 0; d < e.RhythmVoiceDeviceCount(track, v); d++)
                         if (e.RhythmVoiceDeviceBuiltinKind(track, v, d) == kind) { holders.Add((v, d)); break; }
-                var fx = new MenuItem { Header = $"Every {dname} ({holders.Count} voice{(holders.Count == 1 ? "" : "s")})" };
+                var fx = new MenuItem { Header = Loc.F("Every {0} ({1})", dname, Loc.Plural(holders.Count, "{0} voice", "{0} voices")) };
                 for (int p = 0; p < e.RhythmVoiceDeviceParamCount(track, v0, d0); p++)
                 {
                     int pp = p;

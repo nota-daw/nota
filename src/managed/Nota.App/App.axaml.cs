@@ -2,11 +2,14 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
 using System;
+using System.Linq;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Localization;
 using Nota.Infrastructure;
 using Nota.Presentation;
 
@@ -101,6 +104,11 @@ public partial class App : Avalonia.Application
         // popup they open take it from here.
         NotaUiScale.InitPopups();
         NotaUiScale.Set(Services.GetRequiredService<ISettingsService>().Current.InterfaceScale);
+        // Interface language (spec 068), before any view model, window or static text table
+        // exists: the language is fixed for the run, so those texts are built once, in it.
+        InstallLanguage(Services.GetRequiredService<ISettingsService>().Current, log);
+        TranslateAppMenu();
+        TextBoxMenu.Install();   // the text boxes' Cut / Copy / Paste menu is Avalonia's, in English
 
         // Nota Mosaic's samples resolve against the Samples and data folders; installed sample
         // packs get their Mosaic presets in the background (once per pack version).
@@ -140,6 +148,8 @@ public partial class App : Avalonia.Application
             desktop.Exit += (_, _) => AppUpdates.Shared.CancelAll();
             // A Settings → Downloads install still running when the app quits is abandoned.
             desktop.Exit += (_, _) => DownloadJobs.Shared.CancelAll();
+            // A language change asked for a restart (Preferences → Appearance): start again once gone.
+            desktop.Exit += (_, _) => AppRestart.RunPending();
 
             // Show the splash immediately, then defer the heavy engine spin-up to a
             // background dispatcher tick so the splash actually paints before the audio
@@ -178,6 +188,39 @@ public partial class App : Avalonia.Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>Installs the interface language for this run. The saved choice, unless
+    /// NOTA_UI_LANGUAGE names one — which holds for this run only and is never saved, for
+    /// screenshots and layout checks. The OS language is deliberately not consulted: English
+    /// is the default everywhere (spec 068). An unknown code reads as English.</summary>
+    private static void InstallLanguage(Settings settings, ILogSink log)
+    {
+        foreach (var err in NotaLanguages.LoadErrors) log.Error($"Language skipped — {err}", null);
+        var wanted = Environment.GetEnvironmentVariable("NOTA_UI_LANGUAGE");
+        var code = UiLanguage.Normalize(string.IsNullOrWhiteSpace(wanted) ? settings.Language : wanted, NotaLanguages.Codes);
+        // A text asked for before this point was built in English and will not follow the language.
+        if (Loc.UsedBeforeInstall) log.Warn("Interface text was built before the language was installed");
+        // English is the default whatever the OS language is: only the stored choice (or the test override above) is read.
+        Loc.Install(NotaLanguages.Find(code), code);
+        // The system's own text (application menu, open panels) follows an explicit choice from the next start.
+        if (code != UiLanguage.Default) MacSystemLanguage.Set(code);
+        log.Info($"Interface language · {code}");
+    }
+
+    // App.axaml is loaded in Initialize(), before the language is installed, so the macOS
+    // application menu's few texts are set here, once it is. Keyed by their English text.
+    private void TranslateAppMenu()
+    {
+        if (NativeMenu.GetMenu(this) is not { } menu) return;
+        foreach (var item in menu.Items.OfType<NativeMenuItem>())
+            item.Header = item.Header switch
+            {
+                "About Nota" => Loc.T("About Nota"),
+                "Check for updates…" => Loc.T("Check for updates…"),
+                "Settings…" => Loc.T("Settings…"),
+                var other => other,
+            };
     }
 
     // macOS application-menu items (About / Check for updates / Settings) forward to the main window.

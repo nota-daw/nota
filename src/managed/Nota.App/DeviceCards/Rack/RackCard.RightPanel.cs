@@ -15,6 +15,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -26,7 +27,7 @@ internal sealed partial class RackCardView
     {
         var a = _ra;
         int n = a.ChainCount();
-        if (n == 0) return new Border { Padding = new Thickness(2), Child = Hint("No chain yet.") };
+        if (n == 0) return new Border { Padding = new Thickness(2), Child = Hint(Loc.T("No chain yet.")) };
         int c = Sel;
         var stack = new StackPanel { Spacing = 7 };
 
@@ -34,7 +35,7 @@ internal sealed partial class RackCardView
         string name = RcChainName(c);
         var nameTb = RcName(name, NotaPalette.TextPrimary, NotaType.RowLabel);
         nameTb.Cursor = new Cursor(StandardCursorType.Hand);
-        ToolTip.SetTip(nameTb, "Double-click to rename");
+        ToolTip.SetTip(nameTb, Loc.T("Double-click to rename"));
         nameTb.DoubleTapped += (_, _) => RcPromptRename(nameTb, name, s => a.SetChainName(c, s));
         var idx = RcMono($"{c + 1} / {n}", NotaPalette.TextTertiary, 7.5);
         stack.Children.Add(new DockPanel { LastChildFill = true, Children = { RcDock(dot, Dock.Left), RcDock(idx, Dock.Right), nameTb } });
@@ -74,8 +75,8 @@ internal sealed partial class RackCardView
 
         bool full = _rp.Kind == RackKind.MidiEffect && n >= RcMidiChainLimit;
         var dup = RcKey("Duplicate", () => { int d = a.DuplicateChain(c); if (d >= 0) Sel = d; DeferRebuild(); }, enabled: !full,
-            tip: full ? $"A MIDI Effect Rack holds up to {RcMidiChainLimit} chains" : "Copy this chain after itself");
-        var del = RcKey("Delete", () => RcDeleteChain(c), enabled: n > 1, tip: n > 1 ? "Delete this chain" : "A rack keeps at least one chain");
+            tip: full ? Loc.F("A MIDI Effect Rack holds up to {0} chains", RcMidiChainLimit) : Loc.T("Copy this chain after itself"));
+        var del = RcKey("Delete", () => RcDeleteChain(c), enabled: n > 1, tip: n > 1 ? Loc.T("Delete this chain") : Loc.T("A rack keeps at least one chain"));
         dup.HorizontalAlignment = del.HorizontalAlignment = HorizontalAlignment.Stretch;
         var buttons = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 4, Children = { dup, del } };
         Grid.SetColumn(del, 1);
@@ -95,7 +96,7 @@ internal sealed partial class RackCardView
             LastChildFill = true, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
             Children = { RcDock(k, Dock.Left), RcDock(chev, Dock.Right), v },
         };
-        ToolTip.SetTip(row, $"Edit on the {_rp.ZoneTab} tab");
+        ToolTip.SetTip(row, Loc.F("Edit on the {0} tab", _rp.ZoneTab));
         row.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(row).Properties.IsLeftButtonPressed) return;
@@ -141,11 +142,11 @@ internal sealed partial class RackCardView
                 MidiLearn.Bind(vol, MidiTarget.RackVolume(T, a.LearnDeviceIndex), "Rack Volume");
                 stack.Children.Add(vol);
                 var glide = RcSlider("Glide", () => a.RackGlide(), v => a.SetRackGlide((float)v), () => NotaNum.Unit(a.RackGlide() * 500, "0", "ms"), reset: () => a.SetRackGlide(0f));
-                ToolTip.SetTip(glide, "Glides between notes in mono mode");
+                ToolTip.SetTip(glide, Loc.T("Glides between notes in mono mode"));
                 stack.Children.Add(glide);
-                toggles.Children.Add(Switch("Mono (last note)", () => a.RackMono(), () => RcStep(() => a.SetRackMono(!a.RackMono())), out var monoSync));
+                toggles.Children.Add(Switch(Loc.T("Mono (last note)"), () => a.RackMono(), () => RcStep(() => a.SetRackMono(!a.RackMono())), out var monoSync));
                 _irTick.Add(monoSync);
-                ToolTip.SetTip(toggles.Children[^1], "All chains share one voice, the last key wins");
+                ToolTip.SetTip(toggles.Children[^1], Loc.T("All chains share one voice, the last key wins"));
                 break;
             }
             case RackKind.AudioEffect:
@@ -158,21 +159,21 @@ internal sealed partial class RackCardView
                     () => NotaNum.Db(20 * Math.Log10(Math.Max(1e-6, a.RackVolume())), signed: true), reset: () => a.SetRackVolume(1f), bipolar: true);
                 MidiLearn.Bind(gain, MidiTarget.RackVolume(T, a.LearnDeviceIndex), "Rack Gain");
                 stack.Children.Add(gain);
-                toggles.Children.Add(Switch("Follow input level", () => a.SelectorFollows(), () => RcStep(() => { a.SetSelectorFollows(!a.SelectorFollows()); DeferRebuild(); }), out var followSync));
+                toggles.Children.Add(Switch(Loc.T("Follow input level"), () => a.SelectorFollows(), () => RcStep(() => { a.SetSelectorFollows(!a.SelectorFollows()); DeferRebuild(); }), out var followSync));
                 _irTick.Add(followSync);
-                ToolTip.SetTip(toggles.Children[^1], "In Select mode the selector follows the input level instead of its handle");
+                ToolTip.SetTip(toggles.Children[^1], Loc.T("In Select mode the selector follows the input level instead of its handle"));
                 toggles.Children.Add(Switch("Latency compensation", () => a.RackPdc(), () => RcStep(() => a.SetRackPdc(!a.RackPdc())), out var pdcSync));
                 _irTick.Add(pdcSync);
-                ToolTip.SetTip(toggles.Children[^1], "Line up chains with different latency");
+                ToolTip.SetTip(toggles.Children[^1], Loc.T("Line up chains with different latency"));
                 break;
             }
             default:
-                toggles.Children.Add(Switch("Merge duplicate notes", () => a.RackMerge(), () => RcStep(() => a.SetRackMerge(!a.RackMerge())), out var mSync));
+                toggles.Children.Add(Switch(Loc.T("Merge duplicate notes"), () => a.RackMerge(), () => RcStep(() => a.SetRackMerge(!a.RackMerge())), out var mSync));
                 _irTick.Add(mSync);
-                ToolTip.SetTip(toggles.Children[^1], "Two chains sending the same pitch play one note");
-                toggles.Children.Add(Switch("Pass through outside zones", () => a.RackThru(), () => RcStep(() => a.SetRackThru(!a.RackThru())), out var tSync));
+                ToolTip.SetTip(toggles.Children[^1], Loc.T("Two chains sending the same pitch play one note"));
+                toggles.Children.Add(Switch(Loc.T("Pass through outside zones"), () => a.RackThru(), () => RcStep(() => a.SetRackThru(!a.RackThru())), out var tSync));
                 _irTick.Add(tSync);
-                ToolTip.SetTip(toggles.Children[^1], "Notes no chain takes reach the instrument unchanged");
+                ToolTip.SetTip(toggles.Children[^1], Loc.T("Notes no chain takes reach the instrument unchanged"));
                 break;
         }
         var foot = Section(toggles, SectionEdge.Top);
@@ -186,8 +187,8 @@ internal sealed partial class RackCardView
     {
         var a = _ra;
         int n = a.ChainCount(), mapped = RcMappedMacros();
-        string chains = n == 1 ? "1 chain" : $"{n} chains";
-        string macros = mapped == 1 ? "1 macro mapped" : $"{mapped} macros mapped";
+        string chains = Loc.Plural(n, "{0} chain", "{0} chains");
+        string macros = Loc.Plural(mapped, "{0} macro mapped", "{0} macros mapped");
         switch (_rp.Kind)
         {
             case RackKind.AudioEffect:
@@ -195,13 +196,13 @@ internal sealed partial class RackCardView
                 string mode = a.RackMode() switch
                 {
                     RackKindProfile.Serial => "Serial",
-                    RackKindProfile.Select => $"Select {(int)Math.Round(a.LiveSelector() * 127)}{(a.SelectorFollows() ? " · follows input" : "")}",
+                    RackKindProfile.Select => Loc.F("Select {0}", (int)Math.Round(a.LiveSelector() * 127)) + (a.SelectorFollows() ? Loc.T(" · follows input") : ""),
                     _ => "Parallel",
                 };
-                return $"{mode} · {chains} · dry/wet {NotaNum.Pct(a.RackDryWet())} · {macros}";
+                return Loc.F("{0} · {1} · dry/wet {2} · {3}", mode, chains, NotaNum.Pct(a.RackDryWet()), macros);
             }
             case RackKind.MidiEffect:
-                return $"{(a.RackMode() == RackKindProfile.Select ? "Select" : "Parallel")} · {chains} → merged MIDI · {macros}";
+                return Loc.F("{0} · {1} → merged MIDI · {2}", a.RackMode() == RackKindProfile.Select ? "Select" : "Parallel", chains, macros);
             default:
             {
                 var hits = RcProbeHits(_rs.ProbePitch);

@@ -9,6 +9,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -24,7 +25,7 @@ public sealed class MidiMapView : UserControl
 
         var header = new TextBlock
         {
-            Text = "MIDI mappings", FontSize = 10, Margin = new Avalonia.Thickness(12, 12, 12, 2),
+            Text = Loc.T("MIDI mappings"), FontSize = 10, Margin = new Avalonia.Thickness(12, 12, 12, 2),
             Foreground = NotaPalette.TextTertiary,
         };
         var body = new StackPanel { Margin = new Avalonia.Thickness(8, 4), Children = { _rows } };
@@ -39,7 +40,7 @@ public sealed class MidiMapView : UserControl
         {
             _rows.Children.Add(new TextBlock
             {
-                Text = "No mappings yet.\n\nClick MIDI (top-right), then click any highlighted\ncontrol and move a knob or fader on your controller —\nor press a button or move a stick on a gamepad.",
+                Text = Loc.T("No mappings yet.\n\nClick MIDI (top-right), then click any highlighted\ncontrol and move a knob or fader on your controller —\nor press a button or move a stick on a gamepad."),
                 FontSize = 11, TextWrapping = TextWrapping.Wrap, LineHeight = 16,
                 Margin = new Avalonia.Thickness(6, 10), Foreground = NotaPalette.TextTertiary,
             });
@@ -93,7 +94,7 @@ public sealed class MidiMapView : UserControl
         // Range + invert only make sense for continuous (non-button) targets.
         if (!m.Target.IsButton)
         {
-            var inv = new CheckBox { Content = "Invert", FontSize = 10, IsChecked = m.Invert, VerticalAlignment = VerticalAlignment.Center, Foreground = NotaPalette.TextSecondary };
+            var inv = new CheckBox { Content = Loc.T("Invert"), FontSize = 10, IsChecked = m.Invert, VerticalAlignment = VerticalAlignment.Center, Foreground = NotaPalette.TextSecondary };
             inv.IsCheckedChanged += (_, _) => m.Invert = inv.IsChecked == true;
             Grid.SetColumn(inv, 1);
             srcRow.Children.Add(inv);
@@ -103,8 +104,8 @@ public sealed class MidiMapView : UserControl
                 Orientation = Orientation.Horizontal, Spacing = 16,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            range.Children.Add(RangeField("Min", m.RangeMin, v => m.RangeMin = v));
-            range.Children.Add(RangeField("Max", m.RangeMax, v => m.RangeMax = v));
+            range.Children.Add(RangeField(Loc.T("Min"), m.RangeMin, v => m.RangeMin = v));
+            range.Children.Add(RangeField(Loc.T("Max"), m.RangeMax, v => m.RangeMax = v));
             body.Children.Add(range);
         }
 

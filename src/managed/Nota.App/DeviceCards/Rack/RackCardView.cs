@@ -23,6 +23,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -114,7 +115,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     }
 
     // The Remove control in a device slot header (#110): the same one as the track chain's cards.
-    private static Border SlotDelBtn(Action onDelete) => DeviceCardKit.RemoveButton("Remove device", onDelete);
+    private static Border SlotDelBtn(Action onDelete) => DeviceCardKit.RemoveButton(Loc.T("Remove device"), onDelete);
 
     private int MacrosOnTarget(IRackAccess a, int sc, int dev)
     {
@@ -126,7 +127,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     private Control IrInstrumentSlot(IRackAccess a, int sc)
     {
         int mc = MacrosOnTarget(a, sc, -1);
-        var footer = mc > 0 ? new TextBlock { Text = $"{mc} macro", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = IrTeal, VerticalAlignment = VerticalAlignment.Center }
+        var footer = mc > 0 ? new TextBlock { Text = Loc.Plural(mc, "{0} macro", "{0} macros"), FontSize = 7, FontWeight = FontWeight.Medium, Foreground = IrTeal, VerticalAlignment = VerticalAlignment.Center }
                             : (Control)new TextBlock { Text = "Instr", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = IrMuted, VerticalAlignment = VerticalAlignment.Center };
         Border slot = null!;
         slot = IrSlot(ChainHue(sc), string.IsNullOrEmpty(a.ChainInstrumentName(sc)) ? "Instrument" : a.ChainInstrumentName(sc),
@@ -138,7 +139,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     {
         bool byp = a.ChainDeviceBypassed(sc, d);
         int mc = MacrosOnTarget(a, sc, d);
-        var footer = mc > 0 ? (Control)new TextBlock { Text = $"{mc} macro", FontSize = 7, FontWeight = FontWeight.Medium, Foreground = IrTeal, VerticalAlignment = VerticalAlignment.Center }
+        var footer = mc > 0 ? (Control)new TextBlock { Text = Loc.Plural(mc, "{0} macro", "{0} macros"), FontSize = 7, FontWeight = FontWeight.Medium, Foreground = IrTeal, VerticalAlignment = VerticalAlignment.Center }
                             : IrMsBtn("Byp", byp, NotaPalette.TextTertiary, () => { a.SetChainDeviceBypassed(sc, d, !byp); _ctx.RequestRebuild(); });
         Border slot = null!;
         slot = IrSlot(byp ? IrMuted : Success, a.ChainDeviceName(sc, d), a.ChainDeviceBuiltinKind(sc, d) < 0 ? "Plug" : "FX", byp, () => OpenChainDeviceGui(a, sc, d, slot), () => OpenChainDeviceParams(a, sc, d, slot), footer,
@@ -161,7 +162,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         void Hover() { dash.Stroke = NotaPalette.TextTertiary; plus.Foreground = IrTxt; lbl.Foreground = NotaPalette.TextSecondary; }
         void Drop() { dash.IsVisible = true; dash.Stroke = IrTeal; dash.Fill = NotaPalette.Wash(NotaPalette.Teal, 0x22); plus.Foreground = IrTeal; lbl.Foreground = IrTeal; }
 
-        ToolTip.SetTip(box, "Add device — click for the list, or drop an effect here");
+        ToolTip.SetTip(box, Loc.T("Add device — click for the list, or drop an effect here"));
         box.PointerEntered += (_, _) => Hover();
         box.PointerExited += (_, _) => Idle();
         box.PointerPressed += (_, _) => ShowAddDeviceMenu(a, sc, box);
@@ -260,7 +261,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             // rather than drive another rack.
             int at = Resolve();
             if (id == 0 || at < 0 || a.ChainInstrumentKind(at) != 4)
-                return new DeviceWindowPage(new TextBlock { Text = "This Drum Rack is no longer in the rack.", Foreground = TextTertiary, Margin = new Thickness(12) }, 700, CardBodyH);
+                return new DeviceWindowPage(new TextBlock { Text = Loc.T("This Drum Rack is no longer in the rack."), Foreground = TextTertiary, Margin = new Thickness(12) }, 700, CardBodyH);
             tickReg(() => { if (Resolve() != at) win.Refill(); });
             var refreshers = new List<Action>();
             var ctx = new DeviceCardContext(proxy, T, tickReg, _ctx.NotifyChanged, (_, _, _, _) => { }, _ => { }, _ => { }, () => sel, v => sel = v,
@@ -283,7 +284,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
                 });
             }
             return new DeviceWindowPage(new Border { Width = 700, Height = CardBodyH, ClipToBounds = true, Child = body }, 700, CardBodyH, presets);
-        }, status: () => pp.Chain < 0 ? "Removed" : $"{ChainLocation(a, pp.Chain)} · {E.RackDevChainCount(T, RackMacroMapping.NestedRackBase - pp.Chain)} pads") { ContextTrackId = T };
+        }, status: () => pp.Chain < 0 ? "Removed" : Loc.F("{0} · {1} pads", ChainLocation(a, pp.Chain), E.RackDevChainCount(T, RackMacroMapping.NestedRackBase - pp.Chain))) { ContextTrackId = T };
         win.ShowFrom(anchor);
     }
 
@@ -298,14 +299,14 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             case InstrumentRackAccess:
                 string n = E.RackChainName(T, sc);
                 if (E.TrackInstrumentKind(T) == 4)
-                    return $"Drum Rack · pad {NoteName(a.ChainTriggerNote(sc))}{(n.Length > 0 ? " " + n : "")}";
-                return $"Instrument Rack · chain {sc + 1}{(n.Length > 0 ? " " + n : "")}";
+                    return Loc.F("Drum Rack · pad {0}{1}", NoteName(a.ChainTriggerNote(sc)), n.Length > 0 ? " " + n : "");
+                return Loc.F("Instrument Rack · chain {0}{1}", sc + 1, n.Length > 0 ? " " + n : "");
             case EffectRackAccess:
-                return $"Audio Effect Rack · chain {sc + 1}";
+                return Loc.F("Audio Effect Rack · chain {0}", sc + 1);
             case RhythmVoiceAccess:
-                return $"Nota Rhythm · voice {sc + 1}";
+                return Loc.F("Nota Rhythm · voice {0}", sc + 1);
             default:
-                return $"chain {sc + 1}";
+                return Loc.F("chain {0}", sc + 1);
         }
     }
 
@@ -315,13 +316,13 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         int v = proxy.InstrumentVoiceCount(T);
         if (v < 0) return where;
         string voices = strategy.VoiceLabel(proxy, T, v) ?? $"{Math.Max(0, v)}/16";
-        return $"{where} · voices {voices}";
+        return Loc.F("{0} · voices {1}", where, voices);
     }
 
     private string DeviceStatus(IRackAccess a, int sc, int d)
     {
         int n = a.ChainDeviceCount(sc);
-        return d < n ? $"{ChainLocation(a, sc)} · effect {d + 1} of {n}" : ChainLocation(a, sc);
+        return d < n ? Loc.F("{0} · effect {1} of {2}", ChainLocation(a, sc), d + 1, n) : ChainLocation(a, sc);
     }
 
     // A chain effect's bypass for its window; a flip there rebuilds the rack card so the
@@ -518,7 +519,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
     {
         var win = new DeviceWindow(name, E.GetTrackName(T), "Params",
             _ => new DeviceWindowPage(ParamGridContent(count, row), 476, double.NaN), bypass,
-            () => $"{status()} · {count} parameter{(count == 1 ? "" : "s")}") { ContextTrackId = T };
+            () => Loc.F("{0} · {1}", status(), Loc.Plural(count, "{0} parameter", "{0} parameters"))) { ContextTrackId = T };
         win.ShowFrom(anchor);
     }
 
@@ -586,7 +587,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         {
             if (e.GetCurrentPoint(host).Properties.IsRightButtonPressed) { e.Handled = true; ShowMacroMenu(a, host, m); }
         };
-        ToolTip.SetTip(host, "Drag to set · right-click to map");
+        ToolTip.SetTip(host, Loc.T("Drag to set · right-click to map"));
         return host;
     }
 
@@ -607,7 +608,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
                 : a.ChainDeviceParamName(lastChain, lastDev, lastParam);
             text = $"→ C{lastChain + 1} {pn}";
         }
-        else if (count > 1) text = $"→ {count} params";
+        else if (count > 1) text = Loc.Plural(count, "→ {0} param", "→ {0} params");
         return new TextBlock { Text = text, FontSize = 8, Foreground = NotaPalette.TealBright, TextTrimming = TextTrimming.CharacterEllipsis };
     }
 
@@ -616,11 +617,11 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         var f = new MenuFlyout();
         f.Items.Add(MenuKit.Header(a.MacroName(m), null, $"Macro · {m + 1}"));
         f.Items.Add(new Separator());
-        var map = new MenuItem { Header = "Map to parameter" };
+        var map = new MenuItem { Header = Loc.T("Map to parameter") };
         int chains = a.ChainCount();
         for (int c = 0; c < chains; c++)
         {
-            var chainItem = new MenuItem { Header = $"Chain {c + 1}" };
+            var chainItem = new MenuItem { Header = Loc.F("Chain {0}", c + 1) };
             if (a.HasInstrumentChains)
             {
                 var instItem = new MenuItem { Header = a.ChainInstrumentName(c) };
@@ -654,7 +655,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         f.Items.Add(map);
         if (a.Kind != RackKind.Instrument)
         {
-            var sel = new MenuItem { Header = "Map to the selector" };
+            var sel = new MenuItem { Header = Loc.T("Map to the selector") };
             sel.Click += (_, _) => { RcAddMapping(m, 0, RackMacroMapping.RackControl, 0, 0f, 1f); _ctx.RequestRebuild(); };
             f.Items.Add(sel);
         }
@@ -664,7 +665,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         if (mapped > 0)
         {
             f.Items.Add(new Separator());
-            f.Items.Add(MenuKit.Danger(mapped == 1 ? "Clear 1 mapping" : $"Clear {mapped} mappings", GlyphKind.Trash,
+            f.Items.Add(MenuKit.Danger(Loc.Plural(mapped, "Clear {0} mapping", "Clear {0} mappings"), GlyphKind.Trash,
                 () => { ClearMacroMappings(a, m); _ctx.RequestRebuild(); }));
         }
         f.ShowAt(anchor, showAtPointer: true);
@@ -759,7 +760,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             CornerRadius = NotaRadius.Badge, Padding = new Thickness(4, 0), Cursor = new Cursor(StandardCursorType.Hand),
             VerticalAlignment = VerticalAlignment.Center, Child = tb,
         };
-        ToolTip.SetTip(chip, mapped >= 0 ? $"Mapped to Macro {mapped + 1} — click to change" : "Map to a macro");
+        ToolTip.SetTip(chip, mapped >= 0 ? Loc.F("Mapped to Macro {0} — click to change", mapped + 1) : Loc.T("Map to a macro"));
         chip.PointerPressed += (_, e) =>
         {
             e.Handled = true;
@@ -773,7 +774,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
             }
             if (mapped >= 0)
             {
-                var un = new MenuItem { Header = "Unmap" };
+                var un = new MenuItem { Header = Loc.T("Unmap") };
                 un.Click += (_, _) => { RemoveParamMapping(a, chain, dev, param); _ctx.RequestRebuild(); };
                 f.Items.Add(un);
             }

@@ -10,6 +10,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -17,7 +18,7 @@ internal sealed class StereoMeter : Control
 {
     private double _l, _r, _pkL, _pkR;
 
-    public StereoMeter() => ToolTip.SetTip(this, "Clear the peak hold");
+    public StereoMeter() => ToolTip.SetTip(this, Loc.T("Clear the peak hold"));
 
     // Push the block's linear peak amplitudes (0..1+).
     public void Set(float peakL, float peakR)

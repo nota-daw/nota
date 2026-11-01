@@ -18,6 +18,7 @@ using Avalonia.VisualTree;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -284,17 +285,17 @@ public partial class MainWindow
             // so the shortcut falls through to the clip clipboard below.
             if (Timeline.AutomationMode)
             {
-                if (e.Key == Key.C && Timeline.CopyAutoSelection()) { _vm.StatusText = "Copied automation"; e.Handled = true; return; }
-                if (e.Key == Key.X && Timeline.CutAutoSelection()) { _vm.StatusText = "Cut automation"; e.Handled = true; return; }
-                if (e.Key == Key.V && Timeline.PasteAuto()) { _vm.StatusText = "Pasted automation"; e.Handled = true; return; }
+                if (e.Key == Key.C && Timeline.CopyAutoSelection()) { _vm.StatusText = Loc.T("Copied automation"); e.Handled = true; return; }
+                if (e.Key == Key.X && Timeline.CutAutoSelection()) { _vm.StatusText = Loc.T("Cut automation"); e.Handled = true; return; }
+                if (e.Key == Key.V && Timeline.PasteAuto()) { _vm.StatusText = Loc.T("Pasted automation"); e.Handled = true; return; }
             }
             // A time range (Shift+drag) copies / cuts the covered slice; it and a clip selection
             // are exclusive, so these return false whenever clips are selected instead.
-            if (e.Key == Key.C && Timeline.CopyTimeSelection()) { _vm.StatusText = "Copied range"; e.Handled = true; return; }
-            if (e.Key == Key.X && Timeline.CutTimeSelection()) { _session?.Refresh(); _vm.StatusText = "Cut range"; e.Handled = true; return; }
-            if (e.Key == Key.C && Timeline.CopySelectedClip()) { _vm.StatusText = "Copied clip(s)"; e.Handled = true; return; }
-            if (e.Key == Key.X && Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = "Cut clip(s)"; e.Handled = true; return; }
-            if (e.Key == Key.V && Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = "Pasted clip(s)"; e.Handled = true; return; }
+            if (e.Key == Key.C && Timeline.CopyTimeSelection()) { _vm.StatusText = Loc.T("Copied range"); e.Handled = true; return; }
+            if (e.Key == Key.X && Timeline.CutTimeSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("Cut range"); e.Handled = true; return; }
+            if (e.Key == Key.C && Timeline.CopySelectedClip()) { _vm.StatusText = Loc.T("Copied clip(s)"); e.Handled = true; return; }
+            if (e.Key == Key.X && Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = Loc.T("Cut clip(s)"); e.Handled = true; return; }
+            if (e.Key == Key.V && Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = Loc.T("Pasted clip(s)"); e.Handled = true; return; }
         }
 
         // ←/→ nudge the selected arrangement clips by the grid step (⌥: a 64th); ⌥↑/⌥↓ move them
@@ -318,21 +319,21 @@ public partial class MainWindow
         // note-deletion.
         if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && Timeline.AutomationMode && Timeline.DeleteAutoSelection())
         {
-            _vm.StatusText = "Deleted automation";
+            _vm.StatusText = Loc.T("Deleted automation");
             e.Handled = true;
             return;
         }
         if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && Timeline.DeleteTimeSelection())
         {
             _session?.Refresh();
-            _vm.StatusText = "Deleted range";
+            _vm.StatusText = Loc.T("Deleted range");
             e.Handled = true;
             return;
         }
         if (!mod && (e.Key == Key.Delete || e.Key == Key.Back) && Timeline.DeleteSelectedClips())
         {
             _session?.Refresh();
-            _vm.StatusText = "Deleted clip(s)";
+            _vm.StatusText = Loc.T("Deleted clip(s)");
             e.Handled = true;
             return;
         }
@@ -342,7 +343,7 @@ public partial class MainWindow
         if (!mod && (e.Key == Key.D0 || e.Key == Key.NumPad0)
             && _editorRoll is not { GridFocused: true } && _heldKeys.Add(e.Key))
         {
-            if (Timeline.ToggleSelectedClipsActive()) { _session?.Refresh(); _vm.StatusText = "Toggled clip(s)"; }
+            if (Timeline.ToggleSelectedClipsActive()) { _session?.Refresh(); _vm.StatusText = Loc.T("Toggled clip(s)"); }
             e.Handled = true;
             return;
         }
@@ -396,16 +397,16 @@ public partial class MainWindow
             switch (e.Key)
             {
                 case Key.A: return Timeline.SelectAllTracks();
-                case Key.C: return Report(Timeline.CopySelectedTracks(), "Copied track(s)");
-                case Key.X: return Report(Timeline.CutSelectedTracks(), "Cut track(s)");
-                case Key.V: return Report(Timeline.PasteTracks(), "Pasted track(s)");
+                case Key.C: return Report(Timeline.CopySelectedTracks(), Loc.T("Copied track(s)"));
+                case Key.X: return Report(Timeline.CutSelectedTracks(), Loc.T("Cut track(s)"));
+                case Key.V: return Report(Timeline.PasteTracks(), Loc.T("Pasted track(s)"));
                 // macOS: the Edit menu's ⌘D accelerator gets there first (OnMenuDuplicate).
-                case Key.D when !OperatingSystem.IsMacOS(): return Report(Timeline.DuplicateSelectedTracks(), "Duplicated track(s)");
+                case Key.D when !OperatingSystem.IsMacOS(): return Report(Timeline.DuplicateSelectedTracks(), Loc.T("Duplicated track(s)"));
             }
             return false;
         }
         if (e.KeyModifiers == KeyModifiers.None && (e.Key == Key.Delete || e.Key == Key.Back))
-            return Report(Timeline.DeleteSelectedTracks(), "Deleted track(s)");
+            return Report(Timeline.DeleteSelectedTracks(), Loc.T("Deleted track(s)"));
         return false;
 
         bool Report(bool done, string status)
@@ -437,7 +438,7 @@ public partial class MainWindow
         int prev = _typingOctave;
         _typingOctave = Math.Clamp(_typingOctave + delta, -4, 4);
         if (_vm is not null && _typingOctave != prev)
-            _vm.StatusText = $"Keyboard octave: C{4 + _typingOctave}";
+            _vm.StatusText = Loc.F("Keyboard octave: C{0}", 4 + _typingOctave);
     }
 
     // C/V: nudge the velocity typed notes play at (1..127, typing keyboard).
@@ -446,6 +447,6 @@ public partial class MainWindow
         int prev = _typingVelocity;
         _typingVelocity = Math.Clamp(_typingVelocity + delta, 1, 127);
         if (_vm is not null && _typingVelocity != prev)
-            _vm.StatusText = $"Keyboard velocity: {_typingVelocity}";
+            _vm.StatusText = Loc.F("Keyboard velocity: {0}", _typingVelocity);
     }
 }

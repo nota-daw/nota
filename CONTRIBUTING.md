@@ -93,6 +93,36 @@ into the directories the other agents read (`.agents/skills/`, `.github/skills/`
 `scripts/sync-agent-skills.sh`; CI fails if a copy is out of date. Typos, small fixes
 and doc edits don't need a spec — just open the pull request.
 
+## Translating Nota
+
+The desktop app's interface is translated through one mechanism (spec
+[068](specs/068-ui-language/)): the English text in the code is the key, and each language is one
+JSON file, `src/managed/Nota.App/Languages/<code>.json`, embedded in the app. English needs no
+file of strings; French is `fr.json`.
+
+- **Every new user-visible text goes through `Loc`.** Write `Loc.T("Save")` for a text,
+  `Loc.F("Delete {0} clips?", n)` for a text with values (the whole sentence is the key, never
+  a piece of it) and `Loc.Plural(n, "{0} clip", "{0} clips")` for a counted text; in XAML write
+  `{app:T 'Save'}`. The smoke test fails on a new plain literal that reads as interface text, and
+  on a `Loc` text that French does not cover. Text that is not translated on purpose — user
+  content, device and parameter names, proper nouns, units, logs, the Remote web page and MCP
+  — is listed with its reason as `# data:` in `tests/Nota.SmokeTest/LocalizationAllowList.txt`.
+- **Add a language**: copy `fr.json` to `<code>.json` (two lowercase letters), set `code` and
+  `name` (the language's own name, shown in Preferences → Appearance → Language), translate
+  the strings you can and delete the rest — anything missing shows in English. Plural rules
+  live in `UiLanguage.Plural`; a language without a rule counts like English. Also list the code in
+  `CFBundleLocalizations` of `scripts/bundle-mac.sh` and `scripts/package-dmg.sh` (the smoke test checks it), so
+  macOS shows its own text — Hide, Quit, the open panels — in that language too. The file format
+  is in [specs/068-ui-language/contracts/translation-file.md](specs/068-ui-language/contracts/translation-file.md).
+- **Translate or fix a string**: edit its value in the language file. Keep the placeholders
+  (`{0}`, `{1}`) and give a counted text both forms (`one`, `other`; French counts 0 and 1 as
+  one). Follow the glossary in [specs/068-ui-language/glossary.md](specs/068-ui-language/glossary.md)
+  (infinitive for actions, sentence case, a narrow no-break space before `:` `;` `?` `!`).
+  Device and parameter names stay in English.
+- **Look at it**: run `NOTA_UI_LANGUAGE=fr` to start in a language for that run without
+  touching the saved setting, and check that nothing is clipped or overlaps at each interface
+  scale. `NOTA_LOC_WRITE_BASELINE=1` rewrites the allow-list after you wrap or add text.
+
 ## Building
 
 See [`README.md`](README.md) for prerequisites and per-platform build commands, and

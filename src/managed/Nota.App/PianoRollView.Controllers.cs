@@ -21,6 +21,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -109,7 +110,7 @@ public sealed partial class PianoRollView
         foreach (int c in CommonControllers)
             if (Array.IndexOf(data, c) < 0) f.Items.Add(Item(c, MidiController.Name(c)));
         f.Items.Add(new Separator());
-        var other = new MenuItem { Header = "Other CC" };
+        var other = new MenuItem { Header = Loc.T("Other CC") };
         for (int g = 0; g < 128; g += 16)
         {
             var ctls = Enumerable.Range(g, 16).Where(c => !MidiController.IsReserved(c)).ToList();
@@ -379,7 +380,7 @@ public sealed partial class PianoRollView
             ctx.DrawText(name, new Point(4, 3));
             if (c.Count == 0 && Editable && _drag == Drag.None)
             {
-                var hint = new FormattedText(IsSwitch ? "Drag to draw a block" : "Drag to draw", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
+                var hint = new FormattedText(IsSwitch ? Loc.T("Drag to draw a block") : Loc.T("Drag to draw"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
                 ctx.DrawText(hint, new Point((w - hint.Width) / 2, (h - hint.Height) / 2));
             }
             if (!double.IsNaN(_hoverBeat) || _drag != Drag.None)
@@ -666,7 +667,7 @@ public sealed partial class PianoRollView
         private void ShowClearMenu()
         {
             int ctl = Ctl;
-            ClipEditorKit.ShowMenu(this, new[] { $"Clear {MidiController.Name(ctl)}" }, -1, _ =>
+            ClipEditorKit.ShowMenu(this, new[] { Loc.F("Clear {0}", MidiController.Name(ctl)) }, -1, _ =>
             {
                 _selBlock = -1;
                 _o.StoreController(ctl, new List<AutomationPoint>());

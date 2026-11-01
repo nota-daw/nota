@@ -8,25 +8,26 @@
 namespace Nota.Application.Midi;
 
 using U = MidiToolUtil;
+using Nota.Application.Localization;
 
 public static class MidiTransforms
 {
     // ---------------------------------------------------------------- Arpeggiate
 
     private static readonly string[] ArpStyles =
-        { "Up", "Down", "Up-Down", "Down-Up", "Converge", "Diverge", "Random", "Chord" };
+        { Loc.T("Up"), Loc.T("Down"), Loc.T("Up-Down"), Loc.T("Down-Up"), Loc.T("Converge"), Loc.T("Diverge"), Loc.T("Random"), Loc.T("Chord") };
 
     public static MidiTool Arpeggiate { get; } = new(
-        "arpeggiate", "Arpeggiate", MidiToolKind.Transform,
-        "Breaks chords into a running sequence.",
+        "arpeggiate", Loc.T("Arpeggiate"), MidiToolKind.Transform,
+        Loc.T("Breaks chords into a running sequence."),
         new[]
         {
-            MidiToolParam.Rate("rate", "Rate"),
-            MidiToolParam.Choice("style", "Style", ArpStyles, 0),
-            MidiToolParam.Int("octaves", "Octaves", 1, 4, 1),
-            MidiToolParam.Float("gate", "Gate", 0.05, 2.0, 0.9, "×"),
-            MidiToolParam.Int("distance", "Distance", -12, 12, 12, " st"),
-            MidiToolParam.Float("decay", "Vel Decay", -1, 1, 0, "×"),
+            MidiToolParam.Rate("rate", Loc.T("Rate")),
+            MidiToolParam.Choice("style", Loc.T("Style"), ArpStyles, 0),
+            MidiToolParam.Int("octaves", Loc.T("Octaves"), 1, 4, 1),
+            MidiToolParam.Float("gate", Loc.T("Gate"), 0.05, 2.0, 0.9, "×"),
+            MidiToolParam.Int("distance", Loc.T("Distance"), -12, 12, 12, " st"),
+            MidiToolParam.Float("decay", Loc.T("Vel Decay"), -1, 1, 0, "×"),
         },
         RunArpeggiate);
 
@@ -123,19 +124,19 @@ public static class MidiTransforms
 
     // ------------------------------------------------------------------- Connect
 
-    private static readonly string[] ConnectModes = { "Chromatic", "In scale" };
+    private static readonly string[] ConnectModes = { Loc.T("Chromatic"), Loc.T("In scale") };
 
     public static MidiTool Connect { get; } = new(
-        "connect", "Connect", MidiToolKind.Transform,
-        "Fills the gaps between notes with runs that walk to the next pitch.",
+        "connect", Loc.T("Connect"), MidiToolKind.Transform,
+        Loc.T("Fills the gaps between notes with runs that walk to the next pitch."),
         new[]
         {
-            MidiToolParam.Rate("rate", "Rate", 5),
-            MidiToolParam.Choice("mode", "Steps", ConnectModes, 1),
-            MidiToolParam.Percent("fill", "Fill", 0.5),
-            MidiToolParam.Float("gate", "Gate", 0.1, 1.5, 0.9, "×"),
-            MidiToolParam.Float("velocity", "Velocity", 0.1, 1.5, 0.7, "×"),
-            MidiToolParam.Int("maxsteps", "Max Steps", 1, 16, 4),
+            MidiToolParam.Rate("rate", Loc.T("Rate"), 5),
+            MidiToolParam.Choice("mode", Loc.T("Steps"), ConnectModes, 1),
+            MidiToolParam.Percent("fill", Loc.T("Fill"), 0.5),
+            MidiToolParam.Float("gate", Loc.T("Gate"), 0.1, 1.5, 0.9, "×"),
+            MidiToolParam.Float("velocity", Loc.T("Velocity"), 0.1, 1.5, 0.7, "×"),
+            MidiToolParam.Int("maxsteps", Loc.T("Max Steps"), 1, 16, 4),
         },
         RunConnect);
 
@@ -199,19 +200,19 @@ public static class MidiTransforms
     // ------------------------------------------------------------------ Ornament
 
     private static readonly string[] OrnamentTypes =
-        { "Grace", "Trill", "Mordent", "Turn", "Flam", "Roll" };
+        { Loc.T("Grace"), Loc.T("Trill"), Loc.T("Mordent"), Loc.T("Turn"), Loc.T("Flam"), Loc.T("Roll") };
 
     public static MidiTool Ornament { get; } = new(
-        "ornament", "Ornament", MidiToolKind.Transform,
-        "Decorates notes with grace notes, trills and rolls.",
+        "ornament", Loc.T("Ornament"), MidiToolKind.Transform,
+        Loc.T("Decorates notes with grace notes, trills and rolls."),
         new[]
         {
-            MidiToolParam.Choice("type", "Type", OrnamentTypes, 0),
-            MidiToolParam.Rate("rate", "Rate", 5),
-            MidiToolParam.Percent("chance", "Chance", 1.0),
-            MidiToolParam.Int("interval", "Interval", -4, 4, 1, " deg"),
-            MidiToolParam.Float("velocity", "Velocity", 0.1, 1.5, 0.75, "×"),
-            MidiToolParam.Toggle("scale", "In Scale", true),
+            MidiToolParam.Choice("type", Loc.T("Type"), OrnamentTypes, 0),
+            MidiToolParam.Rate("rate", Loc.T("Rate"), 5),
+            MidiToolParam.Percent("chance", Loc.T("Chance"), 1.0),
+            MidiToolParam.Int("interval", Loc.T("Interval"), -4, 4, 1, " deg"),
+            MidiToolParam.Float("velocity", Loc.T("Velocity"), 0.1, 1.5, 0.75, "×"),
+            MidiToolParam.Toggle("scale", Loc.T("In Scale"), true),
         },
         RunOrnament);
 
@@ -294,15 +295,15 @@ public static class MidiTransforms
     // ------------------------------------------------------------------ Quantize
 
     public static MidiTool Quantize { get; } = new(
-        "quantize", "Quantize", MidiToolKind.Transform,
-        "Pulls notes onto the grid, with swing and a strength short of rigid.",
+        "quantize", Loc.T("Quantize"), MidiToolKind.Transform,
+        Loc.T("Pulls notes onto the grid, with swing and a strength short of rigid."),
         new[]
         {
-            MidiToolParam.Rate("rate", "Grid"),
-            MidiToolParam.Percent("amount", "Amount", 1.0),
-            MidiToolParam.Float("swing", "Swing", -0.75, 0.75, 0, "×"),
-            MidiToolParam.Toggle("ends", "Quantize Ends", false),
-            MidiToolParam.Float("humanize", "Humanize", 0, 0.25, 0, " b"),
+            MidiToolParam.Rate("rate", Loc.T("Grid")),
+            MidiToolParam.Percent("amount", Loc.T("Amount"), 1.0),
+            MidiToolParam.Float("swing", Loc.T("Swing"), -0.75, 0.75, 0, "×"),
+            MidiToolParam.Toggle("ends", Loc.T("Quantize Ends"), false),
+            MidiToolParam.Float("humanize", Loc.T("Humanize"), 0, 0.25, 0, " b"),
         },
         RunQuantize);
 
@@ -343,17 +344,17 @@ public static class MidiTransforms
     // ----------------------------------------------------------------- Recombine
 
     private static readonly string[] RecombineModes =
-        { "Shuffle Pitch", "Shuffle Rhythm", "Shuffle Both", "Rotate Pitch", "Reverse Pitch", "Mirror Pitch", "Reverse Time" };
+        { Loc.T("Shuffle Pitch"), Loc.T("Shuffle Rhythm"), Loc.T("Shuffle Both"), Loc.T("Rotate Pitch"), Loc.T("Reverse Pitch"), Loc.T("Mirror Pitch"), Loc.T("Reverse Time") };
 
     public static MidiTool Recombine { get; } = new(
-        "recombine", "Recombine", MidiToolKind.Transform,
-        "Pulls pitch and rhythm apart and puts them back together differently.",
+        "recombine", Loc.T("Recombine"), MidiToolKind.Transform,
+        Loc.T("Pulls pitch and rhythm apart and puts them back together differently."),
         new[]
         {
-            MidiToolParam.Choice("mode", "Mode", RecombineModes, 0),
-            MidiToolParam.Percent("amount", "Amount", 0.6),
-            MidiToolParam.Int("rotate", "Rotate", -16, 16, 1),
-            MidiToolParam.Int("chunk", "Chunk", 1, 8, 1),
+            MidiToolParam.Choice("mode", Loc.T("Mode"), RecombineModes, 0),
+            MidiToolParam.Percent("amount", Loc.T("Amount"), 0.6),
+            MidiToolParam.Int("rotate", Loc.T("Rotate"), -16, 16, 1),
+            MidiToolParam.Int("chunk", Loc.T("Chunk"), 1, 8, 1),
         },
         RunRecombine);
 
@@ -453,18 +454,18 @@ public static class MidiTransforms
 
     // ---------------------------------------------------------------------- Span
 
-    private static readonly string[] SpanModes = { "To Next Note", "Scale Length", "Fixed" };
+    private static readonly string[] SpanModes = { Loc.T("To Next Note"), Loc.T("Scale Length"), Loc.T("Fixed") };
 
     public static MidiTool Span { get; } = new(
-        "span", "Span", MidiToolKind.Transform,
-        "Rewrites note lengths — from staccato through legato to overlapping.",
+        "span", Loc.T("Span"), MidiToolKind.Transform,
+        Loc.T("Rewrites note lengths — from staccato through legato to overlapping."),
         new[]
         {
-            MidiToolParam.Choice("mode", "Mode", SpanModes, 0),
-            MidiToolParam.Float("amount", "Amount", 0.05, 2.0, 1.0, "×"),
-            MidiToolParam.Float("fixed", "Length", 0.03125, 8.0, 0.25, " b"),
-            MidiToolParam.Float("min", "Min", 0.015625, 2.0, 0.0625, " b"),
-            MidiToolParam.Toggle("perpitch", "Per Pitch", false),
+            MidiToolParam.Choice("mode", Loc.T("Mode"), SpanModes, 0),
+            MidiToolParam.Float("amount", Loc.T("Amount"), 0.05, 2.0, 1.0, "×"),
+            MidiToolParam.Float("fixed", Loc.T("Length"), 0.03125, 8.0, 0.25, " b"),
+            MidiToolParam.Float("min", Loc.T("Min"), 0.015625, 2.0, 0.0625, " b"),
+            MidiToolParam.Toggle("perpitch", Loc.T("Per Pitch"), false),
         },
         RunSpan);
 
@@ -505,18 +506,18 @@ public static class MidiTransforms
 
     // --------------------------------------------------------------------- Strum
 
-    private static readonly string[] StrumDirections = { "Up", "Down", "Alternate", "Centre Out", "Random" };
+    private static readonly string[] StrumDirections = { Loc.T("Up"), Loc.T("Down"), Loc.T("Alternate"), Loc.T("Centre Out"), Loc.T("Random") };
 
     public static MidiTool Strum { get; } = new(
-        "strum", "Strum", MidiToolKind.Transform,
-        "Rolls the notes of a chord out in time instead of hitting them together.",
+        "strum", Loc.T("Strum"), MidiToolKind.Transform,
+        Loc.T("Rolls the notes of a chord out in time instead of hitting them together."),
         new[]
         {
-            MidiToolParam.Float("amount", "Amount", 0, 1.0, 0.125, " b"),
-            MidiToolParam.Choice("direction", "Direction", StrumDirections, 0),
-            MidiToolParam.Float("tension", "Tension", -1, 1, 0, ""),
-            MidiToolParam.Float("velslope", "Vel Slope", -1, 1, 0, ""),
-            MidiToolParam.Toggle("keepend", "Keep Ends", true),
+            MidiToolParam.Float("amount", Loc.T("Amount"), 0, 1.0, 0.125, " b"),
+            MidiToolParam.Choice("direction", Loc.T("Direction"), StrumDirections, 0),
+            MidiToolParam.Float("tension", Loc.T("Tension"), -1, 1, 0, ""),
+            MidiToolParam.Float("velslope", Loc.T("Vel Slope"), -1, 1, 0, ""),
+            MidiToolParam.Toggle("keepend", Loc.T("Keep Ends"), true),
         },
         RunStrum);
 
@@ -560,18 +561,18 @@ public static class MidiTransforms
 
     // ----------------------------------------------------------------- Time Warp
 
-    private static readonly string[] WarpShapes = { "Curve", "S-Curve", "Sine", "Swing", "Snap to Grid" };
+    private static readonly string[] WarpShapes = { Loc.T("Curve"), Loc.T("S-Curve"), Loc.T("Sine"), Loc.T("Swing"), Loc.T("Snap to Grid") };
 
     public static MidiTool TimeWarp { get; } = new(
-        "timewarp", "Time Warp", MidiToolKind.Transform,
-        "Bends the time axis so a phrase accelerates, drags or breathes.",
+        "timewarp", Loc.T("Time Warp"), MidiToolKind.Transform,
+        Loc.T("Bends the time axis so a phrase accelerates, drags or breathes."),
         new[]
         {
-            MidiToolParam.Choice("shape", "Shape", WarpShapes, 0),
-            MidiToolParam.Float("curve", "Curve", -1, 1, 0.4, ""),
-            MidiToolParam.Percent("amount", "Amount", 1.0),
-            MidiToolParam.Int("cycles", "Cycles", 1, 8, 1),
-            MidiToolParam.Toggle("lengths", "Warp Lengths", true),
+            MidiToolParam.Choice("shape", Loc.T("Shape"), WarpShapes, 0),
+            MidiToolParam.Float("curve", Loc.T("Curve"), -1, 1, 0.4, ""),
+            MidiToolParam.Percent("amount", Loc.T("Amount"), 1.0),
+            MidiToolParam.Int("cycles", Loc.T("Cycles"), 1, 8, 1),
+            MidiToolParam.Toggle("lengths", Loc.T("Warp Lengths"), true),
         },
         RunTimeWarp);
 
@@ -636,20 +637,20 @@ public static class MidiTransforms
     // ----------------------------------------------------------- Velocity Shaper
 
     private static readonly string[] VelShapes =
-        { "Ramp Up", "Ramp Down", "Sine", "Triangle", "Random", "Accent", "Flatten" };
+        { Loc.T("Ramp Up"), Loc.T("Ramp Down"), Loc.T("Sine"), Loc.T("Triangle"), Loc.T("Random"), Loc.T("Accent"), Loc.T("Flatten") };
 
     public static MidiTool VelocityShaper { get; } = new(
-        "velshaper", "Velocity Shaper", MidiToolKind.Transform,
-        "Draws a curve through the velocities instead of editing them one by one.",
+        "velshaper", Loc.T("Velocity Shaper"), MidiToolKind.Transform,
+        Loc.T("Draws a curve through the velocities instead of editing them one by one."),
         new[]
         {
-            MidiToolParam.Choice("shape", "Shape", VelShapes, 2),
-            MidiToolParam.Rate("period", "Period", 0),
-            MidiToolParam.Percent("depth", "Depth", 0.35),
-            MidiToolParam.Percent("centre", "Centre", 0.7),
-            MidiToolParam.Float("phase", "Phase", 0, 1, 0, ""),
-            MidiToolParam.Percent("random", "Random", 0),
-            MidiToolParam.Percent("blend", "Blend", 1.0),
+            MidiToolParam.Choice("shape", Loc.T("Shape"), VelShapes, 2),
+            MidiToolParam.Rate("period", Loc.T("Period"), 0),
+            MidiToolParam.Percent("depth", Loc.T("Depth"), 0.35),
+            MidiToolParam.Percent("centre", Loc.T("Centre"), 0.7),
+            MidiToolParam.Float("phase", Loc.T("Phase"), 0, 1, 0, ""),
+            MidiToolParam.Percent("random", Loc.T("Random"), 0),
+            MidiToolParam.Percent("blend", Loc.T("Blend"), 1.0),
         },
         RunVelocityShaper);
 

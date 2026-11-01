@@ -12,6 +12,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -33,15 +34,14 @@ public partial class MainWindow
 
         bool one = offers.Count == 1;
         var names = string.Join(", ", offers.Select(p => p.Name));
-        var ok = await new ConfirmWindow("Missing plugins",
-            $"This project uses {names}, which {(one ? "isn't" : "aren't")} installed. " +
-            $"{(one ? "It's" : "They're")} open source and available from the Nota plugin registry. " +
-            "Install and reopen the project?",
-            "Install", "Not now").ShowDialog<bool>(this);
+        var ok = await new ConfirmWindow(Loc.T("Missing plugins"),
+            one ? Loc.F("This project uses {0}, which isn't installed. It's open source and available from the Nota plugin registry. Install and reopen the project?", names)
+                : Loc.F("This project uses {0}, which aren't installed. They're open source and available from the Nota plugin registry. Install and reopen the project?", names),
+            Loc.T("Install"), Loc.T("Not now")).ShowDialog<bool>(this);
         if (!ok || _vm is null) return;
 
         string? error = null;
-        await RunBackgroundAsync("Installing plugins…", async prog =>
+        await RunBackgroundAsync(Loc.T("Installing plugins…"), async prog =>
         {
             foreach (var p in offers)
             {
@@ -52,7 +52,7 @@ public partial class MainWindow
                 }
                 catch (StoreException e) { error ??= e.Message; }
             }
-            prog.Report(ProgressReport.Indeterminate("Scanning plugins…"));
+            prog.Report(ProgressReport.Indeterminate(Loc.T("Scanning plugins…")));
             await PluginScan.RescanAsync(_vm, new Progress<PluginScanProgress>(s =>
                 prog.Report(new ProgressReport(PluginScan.Fraction(s), PluginScan.Describe(s)))), onlyDir: store.PluginsDir);
         });
@@ -60,6 +60,6 @@ public partial class MainWindow
         if (error is not null) { _vm.StatusText = error; return; }
         // Reopen only when that's lossless: same project, nothing edited since it opened.
         if (_projectPath == dir && !HasUnsavedChanges()) OpenProject(dir);
-        else _vm.StatusText = $"Installed {names} — reopen the project to use {(one ? "it" : "them")}.";
+        else _vm.StatusText = one ? Loc.F("Installed {0} — reopen the project to use it.", names) : Loc.F("Installed {0} — reopen the project to use them.", names);
     }
 }

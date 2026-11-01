@@ -7,6 +7,8 @@
 // the list a musician would review. A new built-in device is added here too — the browser
 // design check (RunBrowser) fails until it is.
 
+using Nota.Application.Localization;
+
 namespace Nota.Application;
 
 public static class DeviceCategories
@@ -51,6 +53,28 @@ public static class DeviceCategories
         BuiltinDeviceType.Instrument => Instruments,
         BuiltinDeviceType.AudioEffect => AudioEffects,
         _ => MidiEffects,
+    };
+
+    /// <summary>The name a category chip shows. The English name is the identifier (order, filter,
+    /// plug-in mapping); only what is drawn is translated.</summary>
+    public static string Display(string name) => name switch
+    {
+        "Synths" => Loc.T("Synths"),
+        "Keys & physical" => Loc.T("Keys & physical"),
+        "Drums" => Loc.T("Drums"),
+        "Samplers" => Loc.T("Samplers"),
+        "Racks" => Loc.T("Racks"),
+        "EQ & filter" => Loc.T("EQ & filter"),
+        "Dynamics" => Loc.T("Dynamics"),
+        "Reverb & delay" => Loc.T("Reverb & delay"),
+        "Modulation" => Loc.T("Modulation"),
+        "Distortion" => Loc.T("Distortion"),
+        "Pitch & time" => Loc.T("Pitch & time"),
+        "Utility" => Loc.T("Utility"),
+        "Generate" => Loc.T("Generate"),
+        "Shape" => Loc.T("Shape"),
+        "Other" => Loc.T("Other"),
+        _ => name,
     };
 
     /// <summary>The category names of one tab, in display order (<see cref="Other"/> not included).</summary>

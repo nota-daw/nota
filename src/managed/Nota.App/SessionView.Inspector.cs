@@ -16,26 +16,27 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using Nota.Application.Input;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
 public sealed partial class SessionView
 {
-    private static readonly string[] ModeLabels = { "Trigger", "Gate", "Toggle", "Repeat" };
+    private static readonly string[] ModeLabels = { Loc.T("Trigger"), Loc.T("Gate"), Loc.T("Toggle"), Loc.T("Repeat") };
     private static readonly (SessionFollowAction Action, string Label)[] FollowActions =
     {
-        (SessionFollowAction.None, "None"), (SessionFollowAction.Next, "Next"), (SessionFollowAction.Again, "Again"),
-        (SessionFollowAction.Previous, "Previous"), (SessionFollowAction.First, "First"), (SessionFollowAction.Last, "Last"),
-        (SessionFollowAction.Any, "Any"), (SessionFollowAction.Other, "Other"), (SessionFollowAction.Stop, "Stop"),
-        (SessionFollowAction.Jump, "Jump"),
+        (SessionFollowAction.None, Loc.T("None")), (SessionFollowAction.Next, Loc.T("Next")), (SessionFollowAction.Again, Loc.T("Again")),
+        (SessionFollowAction.Previous, Loc.T("Previous")), (SessionFollowAction.First, Loc.T("First")), (SessionFollowAction.Last, Loc.T("Last")),
+        (SessionFollowAction.Any, Loc.T("Any")), (SessionFollowAction.Other, Loc.T("Other")), (SessionFollowAction.Stop, Loc.T("Stop")),
+        (SessionFollowAction.Jump, Loc.T("Jump")),
     };
     private static readonly (double Beats, string Label)[] LengthSteps =
     {
-        (1, "1 beat"), (2, "2 beats"), (4, "1 bar"), (8, "2 bars"), (16, "4 bars"), (32, "8 bars"), (64, "16 bars"),
+        (1, Loc.T("1 beat")), (2, Loc.T("2 beats")), (4, Loc.T("1 bar")), (8, Loc.T("2 bars")), (16, Loc.T("4 bars")), (32, Loc.T("8 bars")), (64, Loc.T("16 bars")),
     };
     private static readonly (double Beats, string Label)[] FollowTimes =
     {
-        (0, "One pass"), (1, "1 beat"), (2, "2 beats"), (4, "1 bar"), (8, "2 bars"), (16, "4 bars"), (32, "8 bars"), (64, "16 bars"),
+        (0, Loc.T("One pass")), (1, Loc.T("1 beat")), (2, Loc.T("2 beats")), (4, Loc.T("1 bar")), (8, Loc.T("2 bars")), (16, Loc.T("4 bars")), (32, Loc.T("8 bars")), (64, Loc.T("16 bars")),
     };
     private static readonly (int Num, int Den)[] Signatures = { (0, 0), (2, 4), (3, 4), (4, 4), (5, 4), (6, 8), (7, 8), (12, 8) };
 
@@ -56,7 +57,7 @@ public sealed partial class SessionView
 
         var hint = new TextBlock
         {
-            Text = MenuKit.Keys("Click selects · the triangle launches · Enter launches the selection\n←↑↓→ move · ⌘C ⌘V ⌘D · ⌫ delete · ⌘I insert scene\n⌘⇧C copy to arrangement · ⌘V pastes clips copied there"),
+            Text = MenuKit.Keys(Loc.T("Click selects · the triangle launches · Enter launches the selection\n←↑↓→ move · ⌘C ⌘V ⌘D · ⌫ delete · ⌘I insert scene\n⌘⇧C copy to arrangement · ⌘V pastes clips copied there")),
             FontSize = 9, LineHeight = 15, Foreground = NotaPalette.TextDisabled, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(16),
         };
         hint.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
@@ -198,7 +199,7 @@ public sealed partial class SessionView
                     BorderBrush = on ? NotaPalette.TextPrimary : Brushes.Transparent, BorderThickness = new Thickness(on ? 1.5 : 0),
                     Cursor = new Cursor(StandardCursorType.Hand),
                 };
-                ToolTip.SetTip(sw, on ? "Click again to use the default colour" : null);
+                ToolTip.SetTip(sw, on ? Loc.T("Click again to use the default colour") : null);
                 sw.PointerPressed += (_, e) =>
                 {
                     if (!e.GetCurrentPoint(sw).Properties.IsLeftButtonPressed) return;
@@ -207,7 +208,7 @@ public sealed partial class SessionView
                 };
                 grid.Children.Add(sw);
             }
-        return new StackPanel { Spacing = 7, Children = { SectionHead("Color"), grid } };
+        return new StackPanel { Spacing = 7, Children = { SectionHead(Loc.T("Color")), grid } };
     }
 
     // ---- clip ---------------------------------------------------------------------------
@@ -224,7 +225,7 @@ public sealed partial class SessionView
         }
         var brush = ClipBrush(c, scene);
         double len = _engine.SessionSlotLength(id, scene);
-        string kind = c.IsInstrument ? "MIDI" : "Audio";
+        string kind = c.IsInstrument ? "MIDI" : Loc.T("Audio");
         s.Children.Add(Title(brush, ClipName(c, scene), $"{c.Name} · {SceneName(scene)} · {NotaText.Label(kind)}"));
 
         _inspPreview = new InspectorPreview(this, c, scene, brush);
@@ -236,38 +237,38 @@ public sealed partial class SessionView
 
         bool loop = p.Loop != 0;
         s.Children.Add(TwoUp(
-            Field("Length", FormatLength(len), NotaPalette.TextPrimary, a => Pick(a, LengthSteps, b => Math.Abs(b - len) < 1e-6,
+            Field(Loc.T("Length"), FormatLength(len), NotaPalette.TextPrimary, a => Pick(a, LengthSteps, b => Math.Abs(b - len) < 1e-6,
                 b => { _engine.SetSessionSlotLength(id, scene, b); RefreshSlot(id, scene); })),
-            Field("Loop", loop ? "On" : "Off · one-shot", loop ? NotaPalette.TextPrimary : NotaPalette.Warning, _ => Set(x => { x.Loop = loop ? 0 : 1; return x; })),
-            Field("Start", "1.1.1", NotaPalette.TextSecondary, null),
-            Field("Loop end", FormatPosition(len), NotaPalette.TextSecondary, null)));
+            Field(Loc.T("Loop"), loop ? "On" : Loc.T("Off · one-shot"), loop ? NotaPalette.TextPrimary : NotaPalette.Warning, _ => Set(x => { x.Loop = loop ? 0 : 1; return x; })),
+            Field(Loc.T("Start"), "1.1.1", NotaPalette.TextSecondary, null),
+            Field(Loc.T("Loop end"), FormatPosition(len), NotaPalette.TextSecondary, null)));
 
         var launch = new StackPanel { Spacing = 10 };
-        launch.Children.Add(SectionHead("Launch"));
+        launch.Children.Add(SectionHead(Loc.T("Launch")));
         var modes = Segmented(ModeLabels, Math.Clamp(p.LaunchMode, 0, 3), i => Set(x => { x.LaunchMode = i; return x; }));
-        ToolTip.SetTip(modes, "Trigger starts · Gate plays while held · Toggle starts and stops · Repeat retriggers while held");
+        ToolTip.SetTip(modes, Loc.T("Trigger starts · Gate plays while held · Toggle starts and stops · Repeat retriggers while held"));
         launch.Children.Add(modes);
-        string quant = p.QuantBeats < 0 ? "Global" : QuantLabel(p.QuantBeats);
-        var quantItems = new List<(double, string)> { (-1.0, "Global") };
+        string quant = p.QuantBeats < 0 ? Loc.T("Global") : QuantLabel(p.QuantBeats);
+        var quantItems = new List<(double, string)> { (-1.0, Loc.T("Global")) };
         foreach (var q in QuantSteps) quantItems.Add(q);
-        launch.Children.Add(Row("Quantize", Chip(quant, false, a => Pick(a, quantItems, q => Math.Abs(q - p.QuantBeats) < 1e-6,
+        launch.Children.Add(Row(Loc.T("Quantize"), Chip(quant, false, a => Pick(a, quantItems, q => Math.Abs(q - p.QuantBeats) < 1e-6,
             q => Set(x => { x.QuantBeats = q; return x; })))));
-        launch.Children.Add(Row("Legato", Chip(p.Legato != 0 ? "On" : "Off", p.Legato != 0, _ => Set(x => { x.Legato = x.Legato != 0 ? 0 : 1; return x; }))));
+        launch.Children.Add(Row(Loc.T("Legato"), Chip(p.Legato != 0 ? "On" : Loc.T("Off"), p.Legato != 0, _ => Set(x => { x.Legato = x.Legato != 0 ? 0 : 1; return x; }))));
         var vel = new DragNumber(p.VelocityAmount * 100, 0, 100, 0.5, "0", 10) { Width = 44, Height = 22 };
         OneUndoStep(vel);
         vel.ValueChanged += v => { if (_engine.TryGetSessionClipProps(id, scene, out var cur)) { cur.VelocityAmount = (float)(v / 100); _engine.SetSessionClipProps(id, scene, cur); } };
-        ToolTip.SetTip(vel, "Velocity amount: how far the launch velocity scales the clip · drag");
-        launch.Children.Add(Row("Velocity %", new Border { CornerRadius = NotaRadius.Badge, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
+        ToolTip.SetTip(vel, Loc.T("Velocity amount: how far the launch velocity scales the clip · drag"));
+        launch.Children.Add(Row(Loc.T("Velocity %"), new Border { CornerRadius = NotaRadius.Badge, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = vel }));
         s.Children.Add(launch);
 
         // Follow actions.
         bool follow = _engine.SessionFollow;
         var fa = new StackPanel { Spacing = 10 };
         var faHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        faHead.Children.Add(SectionHead("Follow action"));
-        if (!follow) { var off = Mono("Off globally", 9, NotaPalette.TextTertiary); Grid.SetColumn(off, 1); faHead.Children.Add(off); }
+        faHead.Children.Add(SectionHead(Loc.T("Follow action")));
+        if (!follow) { var off = Mono(Loc.T("Off globally"), 9, NotaPalette.TextTertiary); Grid.SetColumn(off, 1); faHead.Children.Add(off); }
         fa.Children.Add(faHead);
-        string ActionLabel(int a) => Array.Find(FollowActions, x => (int)x.Action == a).Label ?? "None";
+        string ActionLabel(int a) => Array.Find(FollowActions, x => (int)x.Action == a).Label ?? Loc.T("None");
         Control ActionRow(string slot, int action, Action<int> setAction, Control chance)
         {
             var label = Mono(slot, 10, NotaPalette.TextTertiary);
@@ -301,29 +302,29 @@ public sealed partial class SessionView
             chanceB.Text = $"{100 - a}";
             if (_engine.TryGetSessionClipProps(id, scene, out var cur)) { cur.ChanceA = a; cur.ChanceB = 100 - a; _engine.SetSessionClipProps(id, scene, cur); }
         };
-        ToolTip.SetTip(chanceA, "Chance of A in percent · B gets the rest · drag");
+        ToolTip.SetTip(chanceA, Loc.T("Chance of A in percent · B gets the rest · drag"));
         fa.Children.Add(ActionRow("A", p.FollowA, a => Set(x => { x.FollowA = a; return x; }), chanceA));
         fa.Children.Add(ActionRow("B", p.FollowB, a => Set(x => { x.FollowB = a; return x; }), chanceB));
         if (p.FollowA == (int)SessionFollowAction.Jump || p.FollowB == (int)SessionFollowAction.Jump)
         {
             var scenes = new List<(int, string)>();
             for (int i = 0; i < _sceneCount; i++) scenes.Add((i, SceneName(i)));
-            fa.Children.Add(Row("Jump to", Chip(SceneName(Math.Clamp(p.JumpScene, 0, Math.Max(0, _sceneCount - 1))), false,
+            fa.Children.Add(Row(Loc.T("Jump to"), Chip(SceneName(Math.Clamp(p.JumpScene, 0, Math.Max(0, _sceneCount - 1))), false,
                 a => Pick(a, scenes, i => i == p.JumpScene, i => Set(x => { x.JumpScene = i; return x; })))));
         }
         double after = p.FollowBeats > 0 ? p.FollowBeats : len;
-        fa.Children.Add(Row("After", Chip(FormatDuration(after), false, a => Pick(a, FollowTimes, b => Math.Abs(b - p.FollowBeats) < 1e-6,
+        fa.Children.Add(Row(Loc.T("After"), Chip(FormatDuration(after), false, a => Pick(a, FollowTimes, b => Math.Abs(b - p.FollowBeats) < 1e-6,
             b => Set(x => { x.FollowBeats = b; return x; })))));
         s.Children.Add(fa);
         if (!follow) Inactive.Set(fa, true, interactive: true);
 
         s.Children.Add(Swatches(p.Color, idx => Set(x => { x.Color = idx; return x; })));
         s.Children.Add(Actions(
-            ("Duplicate", Shortcut.Cmd('D'), () => DuplicateSelection()),
-            ("Rename", "F2", () => RenameSelection()),
-            ("To Arrangement", Shortcut.CmdShift('C'), () => CopySelectionToArrangement()),
-            ("Edit", "", () => SlotEditRequested?.Invoke(id, scene)),
-            ("Delete", Shortcut.None(KeyGlyphs.Backspace), () => DeleteSelection())));
+            (Loc.T("Duplicate"), Shortcut.Cmd('D'), () => DuplicateSelection()),
+            (Loc.T("Rename"), "F2", () => RenameSelection()),
+            (Loc.T("To Arrangement"), Shortcut.CmdShift('C'), () => CopySelectionToArrangement()),
+            (Loc.T("Edit"), "", () => SlotEditRequested?.Invoke(id, scene)),
+            (Loc.T("Delete"), Shortcut.None(KeyGlyphs.Backspace), () => DeleteSelection())));
     }
 
     // A drag on a number is one undo step, however many values it passes through.
@@ -353,7 +354,7 @@ public sealed partial class SessionView
         int clips = 0;
         foreach (var c in LaunchCols) if (SlotFilled(c.TrackId, scene)) clips++;
         var color = p.Color >= 0 ? ArrangementView.TrackBrush(p.Color) : NotaPalette.BorderStrong;
-        s.Children.Add(Title(color, SceneName(scene), $"SCENE {scene + 1:00} · {clips} {(clips == 1 ? "clip" : "clips")}"));
+        s.Children.Add(Title(color, SceneName(scene), Loc.F("SCENE {0:00} · {1}", scene + 1, Loc.Plural(clips, "{0} clip", "{0} clips"))));
 
         Control tempo;
         if (p.Tempo > 0)
@@ -362,7 +363,7 @@ public sealed partial class SessionView
             OneUndoStep(dn);
             dn.ValueChanged += v => { if (_engine.TryGetSceneProps(scene, out var cur)) { cur.Tempo = v; _engine.SetSceneProps(scene, cur); } };
             var clear = new Button { Classes = { "ghost" }, Width = 22, Height = 22, Padding = new Thickness(0), Content = new Glyph(GlyphKind.Close, 8), HorizontalContentAlignment = HorizontalAlignment.Center };
-            ToolTip.SetTip(clear, "Launch without a tempo change");
+            ToolTip.SetTip(clear, Loc.T("Launch without a tempo change"));
             clear.Click += (_, _) => Set(x => { x.Tempo = 0; return x; });
             var row = new DockPanel { Children = { clear, dn } };
             DockPanel.SetDock(clear, Dock.Right);
@@ -371,39 +372,39 @@ public sealed partial class SessionView
                 Spacing = 4,
                 Children =
                 {
-                    new TextBlock { Text = "Tempo", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary },
+                    new TextBlock { Text = Loc.T("Tempo"), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextTertiary },
                     new Border { Height = NotaSize.Shell, CornerRadius = NotaRadius.Badge, Background = NotaPalette.BgSunken, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1), Child = row },
                 },
             };
-            ToolTip.SetTip(tempo, "Tempo set when the scene launches · drag to change");
+            ToolTip.SetTip(tempo, Loc.T("Tempo set when the scene launches · drag to change"));
         }
         else
-            tempo = Field("Tempo", "—", NotaPalette.TextDisabled, _ =>
+            tempo = Field(Loc.T("Tempo"), "—", NotaPalette.TextDisabled, _ =>
                 Set(x => { x.Tempo = GetTempo?.Invoke().Bpm ?? 120; return x; }));
         string sig = p.SigNum > 0 && p.SigDen > 0 ? $"{p.SigNum}/{p.SigDen}" : "—";
-        var sigField = Field("Signature", sig, p.SigNum > 0 ? NotaPalette.TextPrimary : NotaPalette.TextDisabled, a =>
-            Pick(a, Array.ConvertAll(Signatures, x => ((x.Num, x.Den), x.Num == 0 ? "None" : $"{x.Num}/{x.Den}")),
+        var sigField = Field(Loc.T("Signature"), sig, p.SigNum > 0 ? NotaPalette.TextPrimary : NotaPalette.TextDisabled, a =>
+            Pick(a, Array.ConvertAll(Signatures, x => ((x.Num, x.Den), x.Num == 0 ? Loc.T("None") : $"{x.Num}/{x.Den}")),
                 v => v.Num == p.SigNum && v.Den == p.SigDen, v => Set(x => { x.SigNum = v.Num; x.SigDen = v.Den; return x; })));
         s.Children.Add(TwoUp(tempo, sigField));
 
         var rows = new StackPanel { Spacing = 8 };
-        string follow = p.Follow != 0 ? $"Next · {FormatLength(p.FollowBeats)}" : "Off";
-        var followItems = new List<(double, string)> { (0, "Off") };
-        foreach (double bars in new[] { 1.0, 2, 4, 8, 16, 32 }) followItems.Add((bars * 4, $"Next after {FormatLength(bars * 4)}"));
-        rows.Children.Add(Row("Follow action", Chip(follow, p.Follow != 0, a => Pick(a, followItems,
+        string follow = p.Follow != 0 ? Loc.F("Next · {0}", FormatLength(p.FollowBeats)) : Loc.T("Off");
+        var followItems = new List<(double, string)> { (0, Loc.T("Off")) };
+        foreach (double bars in new[] { 1.0, 2, 4, 8, 16, 32 }) followItems.Add((bars * 4, Loc.F("Next after {0}", FormatLength(bars * 4))));
+        rows.Children.Add(Row(Loc.T("Follow action"), Chip(follow, p.Follow != 0, a => Pick(a, followItems,
             b => p.Follow == 0 ? b == 0 : Math.Abs(b - p.FollowBeats) < 1e-6,
             b => Set(x => { x.Follow = b > 0 ? 1 : 0; if (b > 0) x.FollowBeats = b; return x; })))));
-        rows.Children.Add(Row("Select next scene on launch", Chip(_selectNextOnLaunch ? "On" : "Off", _selectNextOnLaunch, _ => { _selectNextOnLaunch = !_selectNextOnLaunch; RebuildInspector(); })));
+        rows.Children.Add(Row(Loc.T("Select next scene on launch"), Chip(_selectNextOnLaunch ? "On" : Loc.T("Off"), _selectNextOnLaunch, _ => { _selectNextOnLaunch = !_selectNextOnLaunch; RebuildInspector(); })));
         s.Children.Add(rows);
 
         s.Children.Add(Swatches(p.Color, idx => Set(x => { x.Color = idx; return x; })));
         s.Children.Add(Actions(
-            ("Launch", "", () => LaunchSceneRow(scene)),
-            ("Insert below", Shortcut.Cmd('I'), () => InsertSceneAtSelection()),
-            ("Duplicate", Shortcut.Cmd('D'), () => DuplicateSelection()),
-            ("Rename", "F2", () => RenameSelection()),
-            ("To Arrangement", Shortcut.CmdShift('C'), () => CopySelectionToArrangement()),
-            ("Delete", Shortcut.None(KeyGlyphs.Backspace), () => DeleteSelection())));
+            (Loc.T("Launch"), "", () => LaunchSceneRow(scene)),
+            (Loc.T("Insert below"), Shortcut.Cmd('I'), () => InsertSceneAtSelection()),
+            (Loc.T("Duplicate"), Shortcut.Cmd('D'), () => DuplicateSelection()),
+            (Loc.T("Rename"), "F2", () => RenameSelection()),
+            (Loc.T("To Arrangement"), Shortcut.CmdShift('C'), () => CopySelectionToArrangement()),
+            (Loc.T("Delete"), Shortcut.None(KeyGlyphs.Backspace), () => DeleteSelection())));
     }
 
     // ---- empty slot + group slot ------------------------------------------------------------
@@ -411,21 +412,21 @@ public sealed partial class SessionView
     private void BuildEmptyInspector(StackPanel s, Column c, int scene)
     {
         bool rec = _recTrack == c.TrackId && _recScene == scene;
-        s.Children.Add(Title(NotaPalette.BorderStrong, rec ? "Recording" : "Empty slot", $"{c.Name} · {SceneName(scene)}"));
+        s.Children.Add(Title(NotaPalette.BorderStrong, rec ? Loc.T("Recording") : Loc.T("Empty slot"), $"{c.Name} · {SceneName(scene)}"));
         bool stop = _engine.GetSessionSlotStopButton(c.TrackId, scene);
         var rows = new StackPanel { Spacing = 8 };
-        rows.Children.Add(Row("Stop button", Chip(stop ? "On" : "Removed", false, _ => { _engine.SetSessionSlotStopButton(c.TrackId, scene, !stop); RefreshSlot(c.TrackId, scene); })));
+        rows.Children.Add(Row(Loc.T("Stop button"), Chip(stop ? "On" : Loc.T("Removed"), false, _ => { _engine.SetSessionSlotStopButton(c.TrackId, scene, !stop); RefreshSlot(c.TrackId, scene); })));
         rows.Children.Add(new TextBlock
         {
-            Text = stop ? $"Launching this scene stops {c.Name}." : $"Launching this scene keeps {c.Name} playing.",
+            Text = stop ? Loc.F("Launching this scene stops {0}.", c.Name) : Loc.F("Launching this scene keeps {0} playing.", c.Name),
             FontSize = 11, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
         s.Children.Add(rows);
         var actions = new List<(string, string, Action)>();
-        if (c.IsInstrument) actions.Add(("Insert MIDI clip", "", () => InsertMidiClip(c.TrackId, scene)));
-        actions.Add(rec ? ("Stop recording", "", () => { _engine.StopSessionRecord(); Refresh(); })
-                        : ("Record here", "", () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
-        if (CanPaste) actions.Add(("Paste", Shortcut.Cmd('V'), () => PasteSelection()));
+        if (c.IsInstrument) actions.Add((Loc.T("Insert MIDI clip"), "", () => InsertMidiClip(c.TrackId, scene)));
+        actions.Add(rec ? (Loc.T("Stop recording"), "", () => { _engine.StopSessionRecord(); Refresh(); })
+                        : (Loc.T("Record here"), "", () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
+        if (CanPaste) actions.Add((Loc.T("Paste"), Shortcut.Cmd('V'), () => PasteSelection()));
         s.Children.Add(Actions(actions.ToArray()));
     }
 
@@ -436,22 +437,22 @@ public sealed partial class SessionView
         s.Children.Add(new TextBlock
         {
             Text = c.Kind == ColKind.Master
-                ? "Every track ends up here. Its devices are in the Devices panel."
-                : "Tracks reach it through their sends. It has no clip slots; its devices are in the Devices panel.",
+                ? Loc.T("Every track ends up here. Its devices are in the Devices panel.")
+                : Loc.T("Tracks reach it through their sends. It has no clip slots; its devices are in the Devices panel."),
             FontSize = 11, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
     }
 
     private void BuildGroupInspector(StackPanel s, Column g, int scene)
     {
-        s.Children.Add(Title(g.Brush, $"{g.Name} · {SceneName(scene)}", $"GROUP SLOT · {g.Children.Count} TRACKS"));
+        s.Children.Add(Title(g.Brush, $"{g.Name} · {SceneName(scene)}", Loc.F("GROUP SLOT · {0} TRACKS", g.Children.Count)));
         s.Children.Add(new TextBlock
         {
-            Text = "Launches every track's slot in this scene. The stop button stops them all.",
+            Text = Loc.T("Launches every track's slot in this scene. The stop button stops them all."),
             FontSize = 11, LineHeight = 16, Foreground = NotaPalette.TextTertiary, TextWrapping = TextWrapping.Wrap,
         });
-        s.Children.Add(Actions(("Launch group slot", Shortcut.None(KeyGlyphs.Return), () => LaunchGroup(g, scene)), ("Stop group", "", () => StopColumn(g)),
-            ("To Arrangement", Shortcut.CmdShift('C'), () => CopySelectionToArrangement())));
+        s.Children.Add(Actions((Loc.T("Launch group slot"), Shortcut.None(KeyGlyphs.Return), () => LaunchGroup(g, scene)), (Loc.T("Stop group"), "", () => StopColumn(g)),
+            (Loc.T("To Arrangement"), Shortcut.CmdShift('C'), () => CopySelectionToArrangement())));
     }
 
     /// <summary>The selected clip's notes / waveform with a live playhead.</summary>

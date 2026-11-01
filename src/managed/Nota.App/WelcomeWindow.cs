@@ -25,6 +25,7 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -46,7 +47,7 @@ public sealed class WelcomeWindow : NotaWindow
         Action? onRecover = null,
         Action? onDismissRecovery = null)
     {
-        Title = "Welcome to Nota";
+        Title = Loc.T("Welcome to Nota");
         Width = 640;
         Height = 560;   // including the title-bar band
         CanResize = false;
@@ -69,7 +70,7 @@ public sealed class WelcomeWindow : NotaWindow
         var brand = new StackPanel { Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         brand.Children.Add(new TextBlock
         {
-            Text = "Nota",
+            Text = Loc.T("Nota"),
             FontSize = NotaType.Title,
             FontWeight = FontWeight.SemiBold,
             LetterSpacing = -0.4,
@@ -78,7 +79,7 @@ public sealed class WelcomeWindow : NotaWindow
         });
         brand.Children.Add(new TextBlock
         {
-            Text = $"Version {AppInfo.Version} · Engine {App.Services.GetRequiredService<EngineBuildInfo>().Version} · Desktop DAW",
+            Text = Loc.F("Version {0} · Engine {1} · Desktop DAW", AppInfo.Version, App.Services.GetRequiredService<EngineBuildInfo>().Version),
             FontFamily = NotaFonts.MonoFamily,
             FontSize = NotaType.Value,
             Foreground = NotaPalette.TextMuted,
@@ -94,9 +95,9 @@ public sealed class WelcomeWindow : NotaWindow
             Spacing = 8,
             Margin = new Thickness(0, 20, 0, 20),
         };
-        var newBtn = new Button { Content = "New project", Classes = { "primary" }, FontWeight = FontWeight.SemiBold };
+        var newBtn = new Button { Content = Loc.T("New project"), Classes = { "primary" }, FontWeight = FontWeight.SemiBold };
         newBtn.Click += (_, _) => { Close(); onNew(); };
-        var openBtn = new Button { Content = "Open project…" };
+        var openBtn = new Button { Content = Loc.T("Open project…") };
         openBtn.Click += (_, _) => { Close(); onOpen(); };
         actions.Children.Add(newBtn);
         actions.Children.Add(openBtn);
@@ -105,7 +106,7 @@ public sealed class WelcomeWindow : NotaWindow
 
         // --- Recent projects ----------------------------------------------
         var recentHead = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 0, 8) };
-        recentHead.Children.Add(new TextBlock { Classes = { "SectionLabel" }, Text = "Recent projects", VerticalAlignment = VerticalAlignment.Bottom });
+        recentHead.Children.Add(new TextBlock { Classes = { "SectionLabel" }, Text = Loc.T("Recent projects"), VerticalAlignment = VerticalAlignment.Bottom });
         recentHead.Children.Add(new TextBlock
         {
             Text = recent.Count.ToString(NotaNum.Culture),
@@ -121,7 +122,7 @@ public sealed class WelcomeWindow : NotaWindow
         {
             wellBody = new TextBlock
             {
-                Text = "No recent projects",
+                Text = Loc.T("No recent projects"),
                 FontSize = NotaType.Body,
                 Foreground = NotaPalette.TextTertiary,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -194,7 +195,7 @@ public sealed class WelcomeWindow : NotaWindow
                     startupTrack,
                     new TextBlock
                     {
-                        Text = "Show on startup",
+                        Text = Loc.T("Show on startup"),
                         FontSize = NotaType.Body,
                         Foreground = NotaPalette.TextStrong,
                         VerticalAlignment = VerticalAlignment.Center,
@@ -213,18 +214,18 @@ public sealed class WelcomeWindow : NotaWindow
         footer.Children.Add(startup);
 
         // The user manual, for a first launch that wants a guided start.
-        var docsBtn = FooterLink("Documentation");
+        var docsBtn = FooterLink(Loc.T("Documentation"));
         docsBtn.Click += (_, _) => NotaDocs.Open(this, "start-here/first-track");
         Grid.SetColumn(docsBtn, 2);
         footer.Children.Add(docsBtn);
 
-        var settingsBtn = FooterLink("Settings");
+        var settingsBtn = FooterLink(Loc.T("Settings"));
         settingsBtn.Margin = new Thickness(8, 0, 0, 0);
         settingsBtn.Click += (_, _) => onSettings();
         Grid.SetColumn(settingsBtn, 3);
         footer.Children.Add(settingsBtn);
 
-        var whatsNewBtn = FooterLink("What's New");
+        var whatsNewBtn = FooterLink(Loc.T("What's New"));
         whatsNewBtn.Margin = new Thickness(8, 0, 0, 0);
         whatsNewBtn.Click += (_, _) => onWhatsNew();
         Grid.SetColumn(whatsNewBtn, 4);
@@ -375,26 +376,26 @@ public sealed class WelcomeWindow : NotaWindow
             _card.Child = u.State switch
             {
                 AppUpdates.Stage.Downloading => Downloading(release),
-                AppUpdates.Stage.Ready => BannerContent($"Nota {release.Version} is ready to install",
-                    "Restart Nota to finish updating — or it installs the next time you quit.",
+                AppUpdates.Stage.Ready => BannerContent(Loc.F("Nota {0} is ready to install", release.Version),
+                    Loc.T("Restart Nota to finish updating — or it installs the next time you quit."),
                     progress: null,
-                    ("Restart now", true, () => u.Restart(_restart)),
-                    ("Later", false, u.Dismiss)),
-                AppUpdates.Stage.Failed => BannerContent("The update didn't download", u.Error ?? "",
+                    (Loc.T("Restart now"), true, () => u.Restart(_restart)),
+                    (Loc.T("Later"), false, u.Dismiss)),
+                AppUpdates.Stage.Failed => BannerContent(Loc.T("The update didn't download"), u.Error ?? "",
                     progress: null,
-                    ("Try again", true, () => u.Download(top)),
-                    ("Dismiss", false, u.Dismiss)),
-                _ when u.CanInstall => BannerContent("A new version of Nota is available",
-                    $"Nota {release.Version} is out — you have {AppInfo.Version}.",
+                    (Loc.T("Try again"), true, () => u.Download(top)),
+                    (Loc.T("Dismiss"), false, u.Dismiss)),
+                _ when u.CanInstall => BannerContent(Loc.T("A new version of Nota is available"),
+                    Loc.F("Nota {0} is out — you have {1}.", release.Version, AppInfo.Version),
                     progress: null,
-                    ("Update", true, () => u.Download(top)),
-                    ("Release notes", false, () => u.OpenReleasePage(top)),
-                    ("Dismiss", false, u.Dismiss)),
-                _ => BannerContent("A new version of Nota is available",
-                    $"Nota {release.Version} is out — you have {AppInfo.Version}.",
+                    (Loc.T("Update"), true, () => u.Download(top)),
+                    (Loc.T("Release notes"), false, () => u.OpenReleasePage(top)),
+                    (Loc.T("Dismiss"), false, u.Dismiss)),
+                _ => BannerContent(Loc.T("A new version of Nota is available"),
+                    Loc.F("Nota {0} is out — you have {1}.", release.Version, AppInfo.Version),
                     progress: null,
-                    ("Download", true, () => u.Download(top)),
-                    ("Dismiss", false, u.Dismiss)),
+                    (Loc.T("Download"), true, () => u.Download(top)),
+                    (Loc.T("Dismiss"), false, u.Dismiss)),
             };
         }
 
@@ -405,8 +406,8 @@ public sealed class WelcomeWindow : NotaWindow
                 Minimum = 0, Maximum = 1, Height = 4, Margin = new Thickness(0, 6, 0, 0),
                 Foreground = NotaPalette.Accent, Background = NotaPalette.BorderDefault,
             };
-            var content = BannerContent($"Downloading Nota {release.Version}…", "", _bar,
-                ("Cancel", false, _updates.CancelDownload));
+            var content = BannerContent(Loc.F("Downloading Nota {0}…", release.Version), "", _bar,
+                (Loc.T("Cancel"), false, _updates.CancelDownload));
             _message = (TextBlock)((StackPanel)content.Children[0]).Children[1];   // BannerContent's message line
             ShowProgress();
             return content;
@@ -431,7 +432,7 @@ public sealed class WelcomeWindow : NotaWindow
 
     // Offer to restore a crashed session.
     private static Border RecoveryBanner(string message, Action onRecover, Action onDismiss)
-        => Banner("Unsaved work available", message, "Recover", onRecover, onDismiss);
+        => Banner(Loc.T("Unsaved work available"), message, Loc.T("Recover"), onRecover, onDismiss);
 
     // A dismissible alert card with one action. Accent-tinted so it reads as an action
     // prompt, not an error.
@@ -440,7 +441,7 @@ public sealed class WelcomeWindow : NotaWindow
     {
         var card = BannerCard();
         card.Child = BannerContent(title, message, progress: null,
-            (actionLabel, true, onAction), ("Dismiss", false, onDismiss));
+            (actionLabel, true, onAction), (Loc.T("Dismiss"), false, onDismiss));
         return card;
     }
 
@@ -557,7 +558,7 @@ public sealed class WelcomeWindow : NotaWindow
 
         public void ShowOpening()
         {
-            _meta.Text = "Opening…";
+            _meta.Text = Loc.T("Opening…");
             _meta.Foreground = NotaPalette.AccentHover;
         }
 
