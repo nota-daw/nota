@@ -26,6 +26,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  agent-skills:
+    name: Agent skills in sync
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check the skill copies for other agents
+        run: bash scripts/sync-agent-skills.sh --check
+
   macos:
     name: macOS
     runs-on: macos-26

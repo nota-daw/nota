@@ -84,7 +84,13 @@ Two things govern agents working here: the project constitution at
 `.specify/memory/constitution.md` (principles distilled from this document and
 [`ARCHITECTURE.md`](ARCHITECTURE.md)), and this document — which remains canonical for
 humans. You don't need an AI agent to contribute: writing `spec.md` and `plan.md` by
-hand from the templates in `.specify/templates/` is equally welcome. Typos, small fixes
+hand from the templates in `.specify/templates/` is equally welcome.
+
+The project skills (`nota-design`, `nota-docs`, `nota-features`, `nota-instrument`,
+`nota-pr`, `nota-shortcuts`, `release`) are written once in `.claude/skills/` and copied
+into the directories the other agents read (`.agents/skills/`, `.github/skills/`,
+`.cursor/skills/`, `.gemini/skills/`). Edit the source, then run
+`scripts/sync-agent-skills.sh`; CI fails if a copy is out of date. Typos, small fixes
 and doc edits don't need a spec — just open the pull request.
 
 ## Building
