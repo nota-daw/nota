@@ -31,7 +31,7 @@ internal static class NotaThemes
 {
     /// <summary>The built-in themes, in the order Preferences lists them. Adding a built-in
     /// theme is its JSON file plus one id here — nothing else names a theme.</summary>
-    public static readonly string[] BuiltInOrder = { "studio-dark", "studio-light", "ember-graphite", "ember-paper" };
+    public static readonly string[] BuiltInOrder = { "studio-dark", "studio-light", "ember-graphite", "ember-paper", "logic-grey" };
 
     /// <summary>Tokens a theme carries that are not palette slots: the shadow colours (their
     /// geometry is Studio structure, built in NotaThemeService) and Fluent's accent ramp.</summary>

@@ -1,0 +1,17 @@
+{
+  "theme": "logic-grey",
+  "checks": [
+    "application startup reapplied the saved theme palette",
+    "real Appearance picker saved the selected theme",
+    "track colours and MIDI notes survived live switching",
+    "raised fill is static shading only in Logic Grey",
+    "Studio Dark returns to its original solid raised fill",
+    "switching back preserves project data",
+    "serialized project content is identical after switching themes",
+    "all three views captured at four render scales"
+  ],
+  "colours": {
+    "background": "#ff303033",
+    "playhead": "#fff1c45d"
+  }
+}

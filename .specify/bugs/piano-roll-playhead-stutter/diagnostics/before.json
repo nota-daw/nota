@@ -1,0 +1,26 @@
+{
+  "mode": "before",
+  "backend": "Wasapi",
+  "NegotiatedBufferFrames": 480,
+  "frameCount": 1120,
+  "cursorUpdates": 150,
+  "arrangementUpdates": 1120,
+  "cursorUpdatesPerSecond": 29.899109568397314,
+  "medianGapMs": 33.335099999999784,
+  "p95GapMs": 33.59090000000015,
+  "gridDraws": 150,
+  "rulerDraws": 150,
+  "dropouts": 0,
+  "checks": [
+    "paused seek maps global beat through clip origin",
+    "outside clip hides cursor",
+    "playing=false hides cursor",
+    "resuming advances cursor after seek",
+    "song loop stays within clip-local bounds",
+    "floating editor owns frames when arrangement is minimized",
+    "suspension stops frame delivery",
+    "resuming polling restarts floating frames",
+    "pause detaches animation loop",
+    "stopped seek updates floating piano roll"
+  ]
+}

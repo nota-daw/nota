@@ -1,0 +1,21 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <UseAppHost>false</UseAppHost>
+    <NotaBinaries>$(MSBuildThisFileDirectory)..\..\..\..\src\managed\Nota.App\bin\Release\net10.0</NotaBinaries>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="AppFrameProbe/**" />
+    <Reference Include="$(NotaBinaries)\Avalonia*.dll" />
+    <Reference Include="$(NotaBinaries)\SkiaSharp.dll" />
+    <Reference Include="$(NotaBinaries)\HarfBuzzSharp.dll" />
+    <None Include="$(NotaBinaries)\runtimes\win-x64\native\*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="..\..\..\..\src\managed\Nota.App\AvaloniaPeriodicTimer.cs" Link="AvaloniaPeriodicTimer.cs" />
+    <Compile Include="..\..\..\..\src\managed\Nota.Application\Ports\IPeriodicTimer.cs" Link="IPeriodicTimer.cs" />
+  </ItemGroup>
+</Project>

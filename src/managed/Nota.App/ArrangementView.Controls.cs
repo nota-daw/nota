@@ -235,7 +235,7 @@ public sealed partial class ArrangementView
         private void RenderPlayheadAndReadout(DrawingContext ctx, double w, double h)
         {
             // Playhead flag: a 7×5 brass triangle at the top of the ruler.
-            double px = _o.BeatToX(_o._playheadBeats);
+            double px = _o.BeatToX(_o._displayPlayheadBeats);
             if (px >= -5 && px <= w + 5)
             {
                 var tri = new StreamGeometry();
@@ -501,7 +501,7 @@ public sealed partial class ArrangementView
             }
 
             // Playhead across the footer lanes: a 1px brass line.
-            double px = _o.BeatToX(_o._playheadBeats);
+            double px = _o.BeatToX(_o._displayPlayheadBeats);
             if (px >= 0 && px <= w)
             {
                 ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, h));

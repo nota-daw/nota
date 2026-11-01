@@ -295,12 +295,13 @@ public partial class MainWindow : Window
         {
             _learn?.Tick();          // apply incoming MIDI mappings / capture a learn message
             SyncSceneTempo();        // a launched scene set tempo / signature
+            EnsurePlayheadFrames();
             // Nothing of the window can be seen: keep servicing MIDI and scenes, skip the
             // meters, playheads and live knobs — they'd redraw ~30×/s for nobody (#55).
             if (WindowState == WindowState.Minimized
                 && _detailWindow is not { IsVisible: true, WindowState: not WindowState.Minimized }) return;
             LearnOverlay.Refresh();  // keep highlights over rebuilt cards while armed
-            Timeline.SetPlayhead(beats);
+            Timeline.SetPlayhead(beats, preserveDisplay: _playheadFrameOwner is not null);
             _masterMeter?.Push(vm.Engine.MasterMeter());
             Timeline.UpdateMeters();                                   // per-track headers (M6-2)
             Timeline.RefreshAutomationLive();                          // show writes live (M9-C)
@@ -312,7 +313,7 @@ public partial class MainWindow : Window
             // Detail contents update wherever they're shown — docked panel or the floating
             // Devices/Clip window — so key off IsEffectivelyVisible, not the docked panel.
             if (_deviceChain is { IsEffectivelyVisible: true }) _deviceChain.RefreshSynthLive(); // synth graphs follow automation
-            if (_audioEditor is { IsEffectivelyVisible: true })
+            if (_audioEditor is { IsEffectivelyVisible: true } && _playheadFrameOwner is null)
                 _audioEditor.OnPlayhead(beats, vm.Engine.IsPlaying);       // live clip playback cursor
             // Piano-roll playback cursor: map the global beat to clip-local time for the
             // open arrangement MIDI clip, shown stopped too, where play will start (#50); a
@@ -322,7 +323,8 @@ public partial class MainWindow : Window
                 if (_editorTrackId > 0)
                 {
                     // Editor beats count from the open clips' origin (the clip's start for one).
-                    if (Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
+                    if (_playheadFrameOwner is null
+                        && Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
                         _editorRoll.SetPlayhead(beats - _editorRoll.Origin, true);
                 }
                 else if (_sessionSlotTrack > 0 && _sessionSlotScene >= 0)
@@ -562,7 +564,12 @@ public partial class MainWindow : Window
         SetUpAudioFormatButton();
         DropoutButton.Click += (_, _) => vm.ResetDropouts();   // count again from zero (#271)
 
-        Closed += (_, _) => vm.Dispose();
+        Closed += (_, _) =>
+        {
+            _playheadFramesClosed = true;
+            StopPlayheadFrames();
+            vm.Dispose();
+        };
         SetUpCpuTip(vm.Engine);
 
         // MCP server: MCP tool edits redraw the arrangement + device panel; start the server if

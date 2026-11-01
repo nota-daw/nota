@@ -126,7 +126,7 @@ public sealed partial class ArrangementView
         if (!_overviewRow.IsVisible) return;
         double w = _overview.Bounds.Width;
         if (w <= 0) return;
-        int px = (int)(_playheadBeats / OverviewSpan * w);
+        int px = (int)(_displayPlayheadBeats / OverviewSpan * w);
         if (px == _ovPlayheadPx) return;
         _ovPlayheadPx = px;
         _overview.InvalidateVisual();
@@ -353,7 +353,7 @@ public sealed partial class ArrangementView
             }
 
             // Playhead over the whole project.
-            double px = BeatToX(_o._playheadBeats);
+            double px = BeatToX(_o._displayPlayheadBeats);
             if (px >= 0 && px <= w) ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, h));
         }
 

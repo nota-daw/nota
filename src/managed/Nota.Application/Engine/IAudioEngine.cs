@@ -44,6 +44,8 @@ public interface IAudioEngine : IDisposable
     void SetMetronome(bool enabled);
     void Seek(double beat);
     double PositionBeats { get; }
+    /// <summary>Display-only rendered-block snapshot. False before rendering or during publication.</summary>
+    bool TryGetTransportSnapshot(out NotaTransportSnapshot snapshot);
     bool IsPlaying { get; }
     /// <summary>Loop region mirror (for UI display + toggling).</summary>
     bool LoopEnabled { get; }
