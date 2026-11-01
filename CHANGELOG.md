@@ -129,6 +129,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Right-click menu on knobs and graph handles** — right-clicking a knob, or a handle on an
+  envelope or filter graph (Aurora, Volt, Bass, Synth and others), showed no menu, though
+  the same menu opened on the value under it. Right-click now shows Type value… and Reset to
+  default there too.
 - **Session clips open in the Clip editor** (#334): a click on a slot that holds a clip shows
   that clip in the Clip tab instead of the track's devices, the **Clip** button opens the
   selected slot, and with the editor open, clicking another clip — on the same track or

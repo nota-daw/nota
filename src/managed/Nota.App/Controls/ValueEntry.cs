@@ -96,7 +96,23 @@ internal static partial class ValueEntry
             ShowMenu(control, field, () => Open(control, field, AnchorOf(field)));
         }
         control.AddHandler(Control.ContextRequestedEvent, Context);
+        RightClickRaisesContext(control);
         if (readout is not null && !ReferenceEquals(readout, control)) readout.AddHandler(Control.ContextRequestedEvent, Context);
+    }
+
+    /// <summary>Avalonia raises ContextRequested from Control.OnPointerReleased, so a control that
+    /// overrides it without calling base (a knob, an envelope or filter graph) never gets its
+    /// right-click menu. Raise it here for such a control: only when nothing handled the release,
+    /// so a control that does call base (and so already showed the menu) does not get a second one.</summary>
+    private static void RightClickRaisesContext(Control c)
+    {
+        c.AddHandler(InputElement.PointerReleasedEvent, (_, e) =>
+        {
+            if (e.Handled || e.InitialPressMouseButton != MouseButton.Right || !ReferenceEquals(e.Source, c)) return;
+            var args = new ContextRequestedEventArgs(e);
+            c.RaiseEvent(args);
+            e.Handled = args.Handled;
+        });
     }
 
     /// <summary>A knob and its value line: typed through its Format, or — without one — by reading
@@ -163,6 +179,7 @@ internal static partial class ValueEntry
             e.Handled = true;
             ShowMenu(host, fs[0], () => Open(host, fs[0], AnchorOf(fs[0])), fs);
         });
+        RightClickRaisesContext(host);
     }
 
     /// <summary>A slider row's read-out, typed by probing the row's own setter (<paramref name="setNorm"/>
