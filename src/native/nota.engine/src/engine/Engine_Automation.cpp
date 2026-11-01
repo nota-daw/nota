@@ -136,7 +136,13 @@ std::string Engine::pluginParamText(int32_t trackId, int32_t deviceIndex, int32_
 float Engine::pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0.0f;
-    if (deviceIndex < 0) return t->instrument ? t->instrument->pluginParamDefault(paramIndex) : 0.0f;
+    if (deviceIndex < 0) {
+        if (!t->instrument) return 0.0f;
+        // A built-in instrument has no plugin default of its own (the base returns 0, which
+        // sent a graph's "Reset to default" to 0); its default is a fresh instance's value.
+        if (t->instrument->kind() >= 0) return instrumentParamDefault(trackId, paramIndex);
+        return t->instrument->pluginParamDefault(paramIndex);
+    }
     if (deviceIndex >= static_cast<int32_t>(t->devices.size())) return 0.0f;
     auto& d = t->devices[deviceIndex];
     return d ? d->pluginParamDefault(paramIndex) : 0.0f;
