@@ -1,6 +1,6 @@
 # Tasks: Delete several versions at once
 
-**Input**: [spec.md](spec.md)
+**Input**: [spec.md](spec.md), [plan.md](plan.md)
 
 ## Phase 1: User Story 1 — delete a hand-picked set (P1)
 
