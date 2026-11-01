@@ -96,8 +96,40 @@ internal static partial class ValueEntry
             ShowMenu(control, field, () => Open(control, field, AnchorOf(field)));
         }
         control.AddHandler(Control.ContextRequestedEvent, Context);
+        RightClickRaisesContext(control);
         if (readout is not null && !ReferenceEquals(readout, control)) readout.AddHandler(Control.ContextRequestedEvent, Context);
     }
+
+    /// <summary>Avalonia raises ContextRequested from Control.OnPointerReleased, so a control that
+    /// overrides it without calling base (a knob, an envelope or filter graph) never gets its
+    /// right-click menu. Raise it here for such a control, only when nothing handled the release
+    /// (a control that does call base has already shown the menu) and nothing handled the press
+    /// (a cell around the control that opens its own menu on a right press keeps that menu alone).</summary>
+    private static void RightClickRaisesContext(Control c)
+    {
+        static void Hook(TopLevel? top)
+        {
+            if (top is null || HookedTops.TryGetValue(top, out _)) return;
+            HookedTops.Add(top, new object());
+            // Bubble, handled events too: this runs after every handler on the route.
+            top.AddHandler(InputElement.PointerPressedEvent, (_, e) =>
+            {
+                if (e.GetCurrentPoint(top).Properties.IsRightButtonPressed) _rightPressHandled = e.Handled;
+            }, RoutingStrategies.Bubble, handledEventsToo: true);
+        }
+        if (c.IsAttachedToVisualTree()) Hook(TopLevel.GetTopLevel(c));
+        c.AttachedToVisualTree += (_, _) => Hook(TopLevel.GetTopLevel(c));
+        c.AddHandler(InputElement.PointerReleasedEvent, (_, e) =>
+        {
+            if (e.Handled || _rightPressHandled || e.InitialPressMouseButton != MouseButton.Right || !ReferenceEquals(e.Source, c)) return;
+            var args = new ContextRequestedEventArgs(e);
+            c.RaiseEvent(args);
+            e.Handled = args.Handled;
+        });
+    }
+
+    private static readonly ConditionalWeakTable<TopLevel, object> HookedTops = new();
+    private static bool _rightPressHandled;   // the last right press, as it left the window
 
     /// <summary>A knob and its value line: typed through its Format, or — without one — by reading
     /// <paramref name="readout"/> back after each probe. Nothing without either.</summary>
@@ -163,6 +195,7 @@ internal static partial class ValueEntry
             e.Handled = true;
             ShowMenu(host, fs[0], () => Open(host, fs[0], AnchorOf(fs[0])), fs);
         });
+        RightClickRaisesContext(host);
     }
 
     /// <summary>A slider row's read-out, typed by probing the row's own setter (<paramref name="setNorm"/>

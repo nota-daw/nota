@@ -133,6 +133,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Right-click menu on knobs and graph handles** — right-clicking a knob, or a handle on an
+  envelope or filter graph (Aurora, Volt, Bass, Synth and others), showed no menu, though
+  the same menu opened on the value under it. Right-click now shows Type value… and Reset to
+  default there too.
 - **"Reset to default" on an instrument's graph handles reset to zero** — right-clicking an
   envelope or filter handle on a built-in instrument (Aurora's Sustain, for one) and choosing
   Reset to default set the value to 0 instead of the instrument's default. It now matches
