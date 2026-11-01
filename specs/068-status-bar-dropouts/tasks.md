@@ -1,6 +1,6 @@
 # Tasks: Audio dropouts in the status bar
 
-**Input**: [spec.md](spec.md)
+**Input**: [spec.md](spec.md), [plan.md](plan.md)
 
 ## Phase 1: Foundation
 
