@@ -559,7 +559,7 @@ public sealed partial class DeviceChainView
     {
         var flyout = new MenuFlyout();
         int n = _sel.Count;
-        flyout.Items.Add(MenuKit.Header(Loc.F("{0} devices", n), null, _sel.HasInstrument ? Loc.T("With the instrument") : Loc.T("Selected")));
+        flyout.Items.Add(MenuKit.Header(Loc.Plural(n, "{0} device", "{0} devices"), null, _sel.HasInstrument ? Loc.T("With the instrument") : Loc.T("Selected")));
         flyout.Items.Add(new Separator());
         MenuKit.AddGroups(flyout.Items,
             new Control[]

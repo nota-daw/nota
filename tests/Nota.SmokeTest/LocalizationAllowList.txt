@@ -277,6 +277,7 @@ Nota.App/Controls/SynthViz.cs	sustain	# data: device parameter, port and value n
 Nota.App/Controls/UtilityViews.cs	Stereo field	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ValueBar.cs	Value	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/ValueEntry.cs	Scope	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/Controls/ValueText.cs	C D EF G A B	# data: note-letter lookup table for typed pitches, not interface text
 Nota.App/Controls/VintageViews.cs	Harmonics	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/VintageViews.cs	Pitch drift	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/Controls/VintageViews.cs	Transfer curve	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2066,6 +2067,7 @@ Nota.App/DeviceCards/PluginCard.cs	Sidechain	# data: device parameter, port and 
 Nota.App/DeviceCards/PluginCard.cs	Unknown vendor	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/MacroPanel.cs	$"Macro {m + 1}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/MacroPanel.cs	$"Macro · {m + 1}"	# data: device parameter, port and value names and live readouts of their values (FR-004)
+Nota.App/DeviceCards/Rack/MacroPanel.cs	Macro 	# data: saved in the project in English; translated when drawn (MidiMapView.Shown)
 Nota.App/DeviceCards/Rack/MacroPanel.cs	min → max	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCard.Chains.cs	Chain	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Rack/RackCard.Chains.cs	Chain Mute	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -2254,6 +2256,10 @@ Nota.App/MainWindow.axaml	DSP 0%	# data: placeholder replaced at startup
 Nota.App/MainWindow.axaml	MIDI	# data: acronym
 Nota.App/MainWindow.axaml	Nota	# data: product name
 Nota.App/MainWindow.axaml	Untitled	# data: placeholder replaced at startup
+Nota.App/MainWindow.axaml.cs	Master Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MainWindow.axaml.cs	Play	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MainWindow.axaml.cs	Record	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MainWindow.axaml.cs	Stop	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/Mcp/McpAppServices.cs	Note	# data: MCP tools are not translated
 Nota.App/MenuKit.cs	Trailing	# data: key name as the keyboard spells it, or attached-property name
 Nota.App/MidiLearn.cs	Binding	# data: property name
@@ -2263,6 +2269,19 @@ Nota.App/MidiLearnService.cs	MIDI learn: gamepad {0} → bound to '{1}'	# data: 
 Nota.App/MidiLearnService.cs	MIDI learn: phone {0} → bound to '{1}'	# data: log text (stays English)
 Nota.App/MidiLearnService.cs	MIDI learn: {0} → bound to '{1}'	# data: log text (stays English)
 Nota.App/MidiLearnService.cs	Note	# data: log text (stays English)
+Nota.App/MidiMapView.cs	Master Volume	# data: lookup key of a name saved in the project in English; translated on the same line
+Nota.App/MidiMapView.cs	Mute	# data: lookup key of a name saved in the project in English; translated on the same line
+Nota.App/MidiMapView.cs	Play	# data: lookup key of a name saved in the project in English; translated on the same line
+Nota.App/MidiMapView.cs	Record	# data: lookup key of a name saved in the project in English; translated on the same line
+Nota.App/MidiMapView.cs	Solo	# data: lookup key of a name saved in the project in English; translated on the same line
+Nota.App/MidiMapView.cs	Stop	# data: lookup key of a name saved in the project in English; translated on the same line
+Nota.App/MidiMapView.cs	Track Pan	# data: lookup key of a name saved in the project in English; translated on the same line
+Nota.App/MidiMapView.cs	Track Volume	# data: lookup key of a name saved in the project in English; translated on the same line
+Nota.App/MixerView.cs	Master Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MixerView.cs	Mute	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MixerView.cs	Solo	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MixerView.cs	Track Pan	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
+Nota.App/MixerView.cs	Track Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/ModularView.cs	Env	# data: Modular node name (FR-004)
 Nota.App/ModularView.cs	plural by hand: == 1 ? "Env" : "LFO"	# data: a device readout or label that spells parameter words (FR-004)
 Nota.App/PreferencesWindow.Store.cs	$"{(pr.Fraction * size / 1048576.0).ToString("	# data: numbers and units, or a plug-in name and its architectures
@@ -2632,8 +2651,6 @@ Nota.Application/Palette/PluginDescriptors.cs	keys bell bass	# data: search keyw
 Nota.Application/Palette/PluginDescriptors.cs	master vocals bus	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/PluginDescriptors.cs	pad bass lead	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Ports/ISampleStore.cs	Downloaded	# data: folder name on disk
-Nota.Presentation/PaletteProviders.cs	Instruments	# data: view / category id or search keyword, not shown
-Nota.Presentation/PaletteProviders.cs	MIDI Effects	# data: view / category id or search keyword, not shown
 Nota.Presentation/PaletteProviders.cs	Plug-in	# data: identifier compared in code
 Nota.Presentation/PaletteProviders.cs	return send bus aux	# data: view / category id or search keyword, not shown
 Nota.Presentation/ViewModels/BrowserViewModel.cs	Audio Effects	# data: identifier compared in code

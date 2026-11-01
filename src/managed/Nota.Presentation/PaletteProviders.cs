@@ -146,10 +146,11 @@ public sealed class PresetPaletteProvider(BrowserViewModel browser) : IPalettePr
                 foreach (var p in devNode.Children)
                 {
                     if (p.Kind != BrowserItemKind.Preset) continue;
-                    var role = cat.Name switch
+                    // The folder's id (Path), not its shown name: the name is translated.
+                    var role = cat.Path switch
                     {
-                        "Instruments" => PaletteDeviceRole.Instrument,
-                        "MIDI Effects" => PaletteDeviceRole.MidiEffect,
+                        "presetcat:Instruments" => PaletteDeviceRole.Instrument,
+                        "presetcat:MIDI Effects" => PaletteDeviceRole.MidiEffect,
                         _ => PaletteDeviceRole.AudioEffect,
                     };
                     var b = BuiltinDeviceCatalog.All.FirstOrDefault(x => x.Name == devNode.Name);

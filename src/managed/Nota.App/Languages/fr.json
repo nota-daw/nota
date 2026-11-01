@@ -1021,7 +1021,10 @@
     "Couldn't take the clip's audio: {0}": "Impossible de récupérer l’audio du clip : {0}",
     "Insert MIDI clip": "Insérer un clip MIDI",
     "Consolidate selection": "Consolider la sélection",
-    "{0} clips": "{0} clips",
+    "{0} clips": {
+      "one": "{0} clip",
+      "other": "{0} clips"
+    },
     "Audio clip": "Clip audio",
     "MIDI clip": "Clip MIDI",
     "Rename…": "Renommer…",
@@ -1779,7 +1782,6 @@
     "Building pads…": "Création des pads…",
     "Bypassed": "Contourné",
     "Bypassed — click to enable": "Contourné — cliquer pour activer",
-    "C D EF G A B": "C D EF G A B",
     "CV utility": "Utilitaire CV",
     "Cabinet — Match follows the model; 1×12 open, 2×12 combo, 4×12 closed, 1×15 bass": "Cabinet — Match suit le modèle ; 1×12 ouvert, 2×12 combo, 4×12 fermé, 1×15 basse",
     "Cabinet — Match follows the model; the others bring their own low resonance and presence peak. Scroll to step.": "Cabinet — Match suit le modèle ; les autres apportent leur propre résonance grave et leur pic de présence. Défiler pour changer.",

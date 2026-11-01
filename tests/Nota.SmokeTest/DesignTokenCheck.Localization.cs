@@ -285,9 +285,11 @@ internal static partial class DesignTokenCheck
             if (!Placeholders(t.Other).SetEquals(want)) parity.Add($"\"{key}\" (other form has {{{string.Join(",", Placeholders(t.Other).Order())}}}, key has {{{string.Join(",", want.Order())}}})");
             // The singular form may drop the number ("Une piste") but may not invent a placeholder.
             else if (t.One is not null && !Placeholders(t.One).IsSubsetOf(want)) parity.Add($"\"{key}\" (singular form has a placeholder the key lacks)");
-            if (used.TryGetValue(key, out var u) && u.Plural != (t.One is not null))
-                parity.Add($"\"{key}\" ({(u.Plural ? "counted in the source but has no singular form" : "plain in the source but has a singular form")})");
         }
+        // Every call, not one per key: a text counted in one place and plain in another is a bug in the plain one.
+        foreach (var c in calls)
+            if (fr.TryGet(c.Key, out var ct) && c.Plural != (ct.One is not null))
+                parity.Add($"\"{c.Key}\" at {c.Path}:{c.Line} ({(c.Plural ? "counted in the source but has no singular form" : "plain in the source but has a singular form")})");
         yield return (parity.Count == 0,
             parity.Count == 0 ? "French placeholders match their English and counted texts have both forms"
                 : "French placeholder or plural mismatch: " + string.Join("; ", parity.Take(6)));

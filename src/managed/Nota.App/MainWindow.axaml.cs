@@ -183,9 +183,9 @@ public partial class MainWindow : Window
         LearnOverlay.Service = _learn;
         _learn.PendingChanged += () => LearnOverlay.Refresh();
         Browser.SetMidiLearn(_learn);
-        MidiLearn.Bind(PlayBtn, MidiTarget.TransportPlay, Loc.T("Play"));
-        MidiLearn.Bind(StopBtn, MidiTarget.TransportStop, Loc.T("Stop"));
-        MidiLearn.Bind(RecordBtn, MidiTarget.TransportRecord, Loc.T("Record"));
+        MidiLearn.Bind(PlayBtn, MidiTarget.TransportPlay, "Play");
+        MidiLearn.Bind(StopBtn, MidiTarget.TransportStop, "Stop");
+        MidiLearn.Bind(RecordBtn, MidiTarget.TransportRecord, "Record");
 
         _projects = App.Services.GetRequiredService<IProjectStore>();
         _history = App.Services.GetRequiredService<IProjectHistory>();
@@ -246,7 +246,7 @@ public partial class MainWindow : Window
         // Double-click the fader or its dB number to type the master gain, ⌥-click for 0 dB.
         ValueEntry.Attach(masterVol, masterVol.EntryField(Loc.T("Master volume"), v => NotaNum.GainDb(v)), MasterDb);
         MasterVolHost.Children.Add(masterVol);
-        MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, Loc.T("Master Volume"));
+        MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
         // BPM as a drag/type field (HANDOFF §4).
         // Tempo reads with two decimals (almanac § Numbers); a drag lands on whole BPM

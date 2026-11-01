@@ -144,7 +144,18 @@ public partial class App : Avalonia.Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             // A downloaded update installs once the app is gone (see AppUpdater).
-            desktop.Exit += (_, _) => Services.GetRequiredService<IAppUpdater>().RunPendingInstall();
+            // When a language restart is also pending, the installer owns the relaunch: a second helper
+            // would start the old app, or open the bundle between the installer's two moves.
+            desktop.Exit += (_, _) =>
+            {
+                var updater = Services.GetRequiredService<IAppUpdater>();
+                if (updater.PendingVersion is not null && AppRestart.Pending)
+                {
+                    updater.RelaunchAfterInstall = true;
+                    AppRestart.Cancel();
+                }
+                updater.RunPendingInstall();
+            };
             desktop.Exit += (_, _) => AppUpdates.Shared.CancelAll();
             // A Settings → Downloads install still running when the app quits is abandoned.
             desktop.Exit += (_, _) => DownloadJobs.Shared.CancelAll();

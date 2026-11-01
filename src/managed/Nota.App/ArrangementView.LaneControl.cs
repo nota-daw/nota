@@ -954,7 +954,7 @@ public sealed partial class ArrangementView
 
             var track = _o._tracks.FirstOrDefault(v => v.Id == trackId);
             var header = inGroup
-                ? MenuKit.Header(Loc.F("{0} clips", _o.Selection.Count), null, "")
+                ? MenuKit.Header(Loc.Plural(_o.Selection.Count, "{0} clip", "{0} clips"), null, "")
                 : MenuKit.Header(clip.Name.Length > 0 ? clip.Name : Loc.T("Clip"),
                                  track is null ? null : TrackBrush(track.ColorIndex), clip.IsMidi ? Loc.T("MIDI clip") : Loc.T("Audio clip"));
 

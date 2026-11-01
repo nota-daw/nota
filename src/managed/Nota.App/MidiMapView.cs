@@ -13,7 +13,7 @@ using Nota.Application.Localization;
 
 namespace Nota.App;
 
-public sealed class MidiMapView : UserControl
+public sealed partial class MidiMapView : UserControl
 {
     private readonly MidiLearnService _learn;
     private readonly StackPanel _rows = new() { Spacing = 6 };
@@ -49,11 +49,31 @@ public sealed class MidiMapView : UserControl
         foreach (var m in _learn.Mappings) _rows.Children.Add(Row(m));
     }
 
+    // The name a mapping was learned under is saved in the project in English; it is translated
+    // here, when the row is drawn, so a project reads in whichever language is running.
+    private static string Shown(string name) => name switch
+    {
+        "Play" => Loc.T("Play"),
+        "Stop" => Loc.T("Stop"),
+        "Record" => Loc.T("Record"),
+        "Master Volume" => Loc.T("Master Volume"),
+        "Track Pan" => Loc.T("Track Pan"),
+        "Track Volume" => Loc.T("Track Volume"),
+        "Mute" => Loc.T("Mute"),
+        "Solo" => Loc.T("Solo"),
+        _ when MacroLabel().Match(name) is { Success: true } g
+            => Loc.F("Macro {0} · {1}", g.Groups[1].Value, g.Groups[2].Value),
+        _ => name,
+    };
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^Macro (\d+) · (.*)$")]
+    private static partial System.Text.RegularExpressions.Regex MacroLabel();
+
     private Control Row(MidiMapping m)
     {
         var name = new TextBlock
         {
-            Text = string.IsNullOrEmpty(m.DisplayName) ? m.Target.Kind.ToString() : m.DisplayName,
+            Text = string.IsNullOrEmpty(m.DisplayName) ? m.Target.Kind.ToString() : Shown(m.DisplayName),
             FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };

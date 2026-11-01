@@ -292,7 +292,7 @@ public sealed partial class PreferencesWindow
         }
         actions.Children.Add(new TextBlock
         {
-            Text = inst is null ? Loc.F("{0} · {1} samples", Megabytes(p.Asset.Size), p.Asset.Files) : Loc.F("{0} samples", inst.Files),
+            Text = inst is null ? Loc.F("{0} · {1} samples", Megabytes(p.Asset.Size), p.Asset.Files) : Loc.Plural(inst.Files, "{0} sample", "{0} samples"),
             FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
         });
         if (inst is null)

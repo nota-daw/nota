@@ -626,7 +626,7 @@ public sealed class MixerView : UserControl
         {
             knob.GestureBegin += () => _engine.BeginAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
             knob.GestureEnd   += () => _engine.EndAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
-            MidiLearn.Bind(knob, MidiTarget.TrackPan(id), Loc.T("Track Pan"));
+            MidiLearn.Bind(knob, MidiTarget.TrackPan(id), "Track Pan");
         }
         knob.GestureEnd += undo.End;
         Control label = Mono(Loc.T("Pan"), TextTertiary);
@@ -676,7 +676,7 @@ public sealed class MixerView : UserControl
         }
         fader.GestureEnd += undo.End;
         dbNum.GestureEnd += undo.End;
-        MidiLearn.Bind(fader, id > 0 ? MidiTarget.TrackVolume(id) : MidiTarget.MasterVolume, id > 0 ? Loc.T("Track Volume") : Loc.T("Master Volume"));
+        MidiLearn.Bind(fader, id > 0 ? MidiTarget.TrackVolume(id) : MidiTarget.MasterVolume, id > 0 ? "Track Volume" : "Master Volume");
         ValueEntry.Attach(fader, fader.EntryField(Loc.T("Volume"), v => NotaNum.GainDb(v, signed: true), 1.0));
         db = dbNum;
 
@@ -714,8 +714,8 @@ public sealed class MixerView : UserControl
         var sync = SyncOf(id);
         var mute = Toggle("M", false, ti.Muted != 0, v => _engine.SetTrackMute(id, v), out sync.Mute);
         var solo = Toggle("S", false, ti.Soloed != 0, v => _engine.SetTrackSolo(id, v), out sync.Solo);
-        MidiLearn.Bind(mute, MidiTarget.TrackMute(id), Loc.T("Mute"));
-        MidiLearn.Bind(solo, MidiTarget.TrackSolo(id), Loc.T("Solo"));
+        MidiLearn.Bind(mute, MidiTarget.TrackMute(id), "Mute");
+        MidiLearn.Bind(solo, MidiTarget.TrackSolo(id), "Solo");
         row.Children.Add(mute);
         row.Children.Add(solo);
         if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm));
