@@ -426,11 +426,11 @@
         </StackPanel>
         <!-- A newer Nota release: available / downloading / ready to install (MainWindow.Updates.cs). -->
         <Panel x:Name="UpdateHost" Grid.Column="3" VerticalAlignment="Center"/>
-        <!-- Audio dropouts since the device started; red once there is one, a click resets it (#271). -->
-        <Button x:Name="DropoutButton" Grid.Column="4" Classes="ghost"
+        <!-- Audio dropouts since the device started, in red and hidden at 0; a click resets it (#271). -->
+        <Button x:Name="DropoutButton" Grid.Column="4" Classes="ghost" IsVisible="{Binding HasDropouts}"
                 VerticalAlignment="Center" Margin="0" Padding="6,1" MinHeight="0" Cursor="Hand"
                 ToolTip.Tip="Audio dropouts since the device started: buffers Nota couldn't fill in time, heard as clicks or gaps. If they keep coming, raise the buffer size or freeze heavy tracks. Click to reset">
-          <TextBlock Classes="Caption Mono" Classes.alert="{Binding HasDropouts}" Text="{Binding DropoutText}"/>
+          <TextBlock Classes="Caption Mono alert" Text="{Binding DropoutText}"/>
         </Button>
         <!-- Sample rate · buffer size: opens the buffer menu (MainWindow.AudioFormat.cs, #373). -->
         <Button x:Name="AudioFormatButton" Grid.Column="5" Classes="ghost"

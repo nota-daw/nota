@@ -39,15 +39,15 @@ specs/061) and the version.
 A producer hears a click and wants to know whether the audio device actually missed a
 buffer, without opening Settings.
 
-**Independent Test**: Start Nota; the status bar reads "0 dropouts" in the caption ink.
-Force a dropout (a tiny buffer under heavy load); the counter reads "1 dropout" in red.
+**Independent Test**: Start Nota; the status bar shows no dropout counter. Force a dropout
+(a tiny buffer under heavy load); the counter appears and reads "1 dropout" in red.
 
 **Acceptance Scenarios**:
 
-1. **Given** no dropout since the device started, **Then** the status bar shows
-   "0 dropouts" beside the sample rate, in the neutral caption colour.
-2. **When** the device reports a dropout, **Then** the count goes up ("1 dropout",
-   "3 dropouts") and turns to the danger ink.
+1. **Given** no dropout since the device started, **Then** the status bar shows no
+   counter, so a healthy session adds nothing to read.
+2. **When** the device reports a dropout, **Then** the counter appears beside the sample
+   rate in the danger ink and counts up ("1 dropout", "3 dropouts").
 3. **When** the user hovers the counter, **Then** the tooltip says what a dropout is, what
    usually helps, and that a click resets it.
 
@@ -56,15 +56,16 @@ Force a dropout (a tiny buffer under heavy load); the counter reads "1 dropout" 
 After raising the buffer size or freezing a track, the producer wants to see whether
 dropouts stop.
 
-**Independent Test**: With dropouts counted, click the counter; it reads "0 dropouts" and
-counts only new ones from then on.
+**Independent Test**: With dropouts counted, click the counter; it disappears and comes
+back only for new ones.
 
 **Acceptance Scenarios**:
 
-1. **When** the user clicks the counter, **Then** it reads "0 dropouts" in the caption ink
-   and counts from there.
+1. **When** the user clicks the counter, **Then** it resets to 0 and hides until the next
+   dropout, which reads "1 dropout".
 2. **When** the audio device, sample rate or buffer size changes (Settings → Audio, the
-   status bar's buffer menu, an ASIO driver reset), **Then** the counter starts again at 0.
+   status bar's buffer menu, an ASIO driver reset), **Then** the counter resets to 0 and
+   hides.
 
 ### Edge Cases
 
@@ -72,17 +73,17 @@ counts only new ones from then on.
 - **Dropouts between the last clock tick and a reset**: they don't count, but the next tick
   still logs them, so the log never misses one.
 - **Backends that don't report dropouts** (miniaudio: PulseAudio / ALSA, WASAPI): the count
-  stays at 0. The engine's count only moves where the backend reports dropouts (Core Audio,
-  ASIO).
+  stays at 0, so the counter never appears. The engine's count only moves where the backend
+  reports dropouts (Core Audio, ASIO).
 
 ## Requirements
 
 ### Functional Requirements
 
 - **FR-001**: The status bar MUST show the number of dropouts since the device started or
-  the last reset ("0 dropouts", "1 dropout", "N dropouts"), left of the sample rate.
-- **FR-002**: The count MUST use the caption ink at 0 and the danger ink from the first
-  dropout (DESIGN.md: red is overload).
+  the last reset ("1 dropout", "N dropouts"), left of the sample rate, and MUST hide it
+  while that number is 0.
+- **FR-002**: The count MUST use the danger ink (DESIGN.md: red is overload).
 - **FR-003**: Clicking the counter MUST reset it to 0.
 - **FR-004**: Every audio apply that restarts the device MUST reset it to 0.
 - **FR-005**: The tooltip MUST explain a dropout and the usual fix (a larger buffer,
@@ -110,4 +111,4 @@ counts only new ones from then on.
 - [x] Smoke-test impact: counting, reset and text covered by `DropoutCounterTests`
 - [x] User-visible change → `CHANGELOG.md` `[Unreleased]` entry and FEATURES.md
 - [x] UI change → follows `DESIGN.md` (ghost button like its neighbours, caption text,
-      danger ink only while something is wrong)
+      shown in danger ink only while something is wrong)

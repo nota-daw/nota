@@ -4,10 +4,10 @@
 
 ## Summary
 
-Put a ghost button reading "0 dropouts" left of the status bar's sample-rate readout. The
+Put a ghost button counting dropouts left of the status bar's sample-rate readout. The
 existing `MainWindowViewModel.ReportDropouts` poll feeds a small `DropoutCounter` that holds
 the reset point, so the button shows the dropouts since the device started or the user last
-clicked it. It turns to the danger ink from the first dropout.
+clicked it. It appears in the danger ink from the first dropout and is hidden at 0.
 
 ## Technical Context
 
@@ -31,9 +31,9 @@ the running app.
 - `MainWindowViewModel` — `DropoutText` and `HasDropouts`, updated by `ReportDropouts` only
   when the count changes (every dropout is still logged); `ResetDropouts()` for the click and
   after every successful `ApplyAudioSettings` (device, rate or buffer change, ASIO reset).
-- `MainWindow.axaml` — `DropoutButton` (ghost, caption mono text, tooltip) in a new status
-  bar column before `AudioFormatButton`; `MainWindow.axaml.cs` wires its click to
-  `ResetDropouts`.
+- `MainWindow.axaml` — `DropoutButton` (ghost, caption mono text, tooltip), visible while
+  `HasDropouts`, in a new status bar column before `AudioFormatButton`; `MainWindow.axaml.cs`
+  wires its click to `ResetDropouts`.
 - `Theme/NotaTheme.axaml` — `TextBlock.Caption.alert` takes `Brush.DangerBright`, the overload
   readout ink.
 

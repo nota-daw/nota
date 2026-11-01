@@ -49,9 +49,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     [ObservableProperty] private string _engineInfo = "";
-    /// <summary>The status bar's dropout count (#271): "0 dropouts" while the device keeps up.</summary>
+    /// <summary>The status bar's dropout count (#271): "1 dropout", "3 dropouts".</summary>
     [ObservableProperty] private string _dropoutText = DropoutCounter.Text(0);
-    /// <summary>At least one dropout since the device started or the count was reset.</summary>
+    /// <summary>At least one dropout since the device started or the count was reset; the
+    /// status bar shows the count only then.</summary>
     [ObservableProperty] private bool _hasDropouts;
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private ToolbarSide _toolbarSide = ToolbarSide.Left;

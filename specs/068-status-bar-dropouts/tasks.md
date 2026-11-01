@@ -9,7 +9,7 @@
 ## Phase 2: User Story 1 — see the dropouts (P1)
 
 - [x] T002 `DropoutText` / `HasDropouts`, fed by `ReportDropouts` in `src/managed/Nota.Presentation/ViewModels/MainWindowViewModel.cs` (FR-001, FR-006)
-- [x] T003 Ghost `DropoutButton` with tooltip, left of the sample rate, in `src/managed/Nota.App/MainWindow.axaml` (FR-001, FR-005)
+- [x] T003 Ghost `DropoutButton` with tooltip, left of the sample rate and hidden at 0, in `src/managed/Nota.App/MainWindow.axaml` (FR-001, FR-005)
 - [x] T004 `TextBlock.Caption.alert` (danger ink) in `src/managed/Nota.App/Theme/NotaTheme.axaml` (FR-002)
 
 ## Phase 3: User Story 2 — reset (P1)
