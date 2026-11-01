@@ -50,21 +50,26 @@ public sealed partial class MidiMapView : UserControl
     }
 
     // The name a mapping was learned under is saved in the project in English; it is translated
-    // here, when the row is drawn, so a project reads in whichever language is running.
-    private static string Shown(string name) => name switch
+    // here, when the row is drawn, so a project reads in whichever language is running. Only the
+    // names Nota itself gives (by target kind): a plug-in or device parameter keeps the name it has.
+    private static string Shown(MidiMapping m)
     {
-        "Play" => Loc.T("Play"),
-        "Stop" => Loc.T("Stop"),
-        "Record" => Loc.T("Record"),
-        "Master Volume" => Loc.T("Master Volume"),
-        "Track Pan" => Loc.T("Track Pan"),
-        "Track Volume" => Loc.T("Track Volume"),
-        "Mute" => Loc.T("Mute"),
-        "Solo" => Loc.T("Solo"),
-        _ when MacroLabel().Match(name) is { Success: true } g
-            => Loc.F("Macro {0} · {1}", g.Groups[1].Value, g.Groups[2].Value),
-        _ => name,
-    };
+        var name = m.DisplayName;
+        switch (m.Target.Kind)
+        {
+            case MidiTargetKind.TransportPlay: return name == "Play" ? Loc.T("Play") : name;
+            case MidiTargetKind.TransportStop: return name == "Stop" ? Loc.T("Stop") : name;
+            case MidiTargetKind.TransportRecord: return name == "Record" ? Loc.T("Record") : name;
+            case MidiTargetKind.MasterVolume: return name == "Master Volume" ? Loc.T("Master Volume") : name;
+            case MidiTargetKind.TrackVolume: return name == "Track Volume" ? Loc.T("Track Volume") : name;
+            case MidiTargetKind.TrackPan: return name == "Track Pan" ? Loc.T("Track Pan") : name;
+            case MidiTargetKind.TrackMute: return name == "Mute" ? Loc.T("Mute") : name;
+            case MidiTargetKind.TrackSolo: return name == "Solo" ? Loc.T("Solo") : name;
+            case MidiTargetKind.PluginParam when MacroLabel().Match(name) is { Success: true } g:
+                return Loc.F("Macro {0} · {1}", g.Groups[1].Value, g.Groups[2].Value);   // a rack macro
+            default: return name;
+        }
+    }
 
     [System.Text.RegularExpressions.GeneratedRegex(@"^Macro (\d+) · (.*)$")]
     private static partial System.Text.RegularExpressions.Regex MacroLabel();
@@ -73,7 +78,7 @@ public sealed partial class MidiMapView : UserControl
     {
         var name = new TextBlock
         {
-            Text = string.IsNullOrEmpty(m.DisplayName) ? m.Target.Kind.ToString() : Shown(m.DisplayName),
+            Text = string.IsNullOrEmpty(m.DisplayName) ? m.Target.Kind.ToString() : Shown(m),
             FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };

@@ -2269,14 +2269,6 @@ Nota.App/MidiLearnService.cs	MIDI learn: gamepad {0} → bound to '{1}'	# data: 
 Nota.App/MidiLearnService.cs	MIDI learn: phone {0} → bound to '{1}'	# data: log text (stays English)
 Nota.App/MidiLearnService.cs	MIDI learn: {0} → bound to '{1}'	# data: log text (stays English)
 Nota.App/MidiLearnService.cs	Note	# data: log text (stays English)
-Nota.App/MidiMapView.cs	Master Volume	# data: lookup key of a name saved in the project in English; translated on the same line
-Nota.App/MidiMapView.cs	Mute	# data: lookup key of a name saved in the project in English; translated on the same line
-Nota.App/MidiMapView.cs	Play	# data: lookup key of a name saved in the project in English; translated on the same line
-Nota.App/MidiMapView.cs	Record	# data: lookup key of a name saved in the project in English; translated on the same line
-Nota.App/MidiMapView.cs	Solo	# data: lookup key of a name saved in the project in English; translated on the same line
-Nota.App/MidiMapView.cs	Stop	# data: lookup key of a name saved in the project in English; translated on the same line
-Nota.App/MidiMapView.cs	Track Pan	# data: lookup key of a name saved in the project in English; translated on the same line
-Nota.App/MidiMapView.cs	Track Volume	# data: lookup key of a name saved in the project in English; translated on the same line
 Nota.App/MixerView.cs	Master Volume	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MixerView.cs	Mute	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
 Nota.App/MixerView.cs	Solo	# data: name a MIDI mapping is saved under, in English; translated when drawn (MidiMapView.Shown)
