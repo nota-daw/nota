@@ -34,8 +34,9 @@ public static class VelocityReset
         var picked = new List<int>();
         if (hit < 0 || hit >= velocities.Count) return picked;
         IEnumerable<int> candidates = selection.Contains(hit) ? selection : new[] { hit };
+        var seen = new HashSet<int>();
         foreach (int i in candidates)
-            if (i >= 0 && i < velocities.Count && !isLocked(i) && !IsDefault(velocities[i]) && !picked.Contains(i))
+            if (i >= 0 && i < velocities.Count && !isLocked(i) && !IsDefault(velocities[i]) && seen.Add(i))
                 picked.Add(i);
         picked.Sort();
         return picked;

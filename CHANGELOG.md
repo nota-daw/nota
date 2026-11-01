@@ -28,7 +28,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   default velocity (0.8, the one a first note gets). When the note is selected, the whole
   selection is reset. One undo step brings the old velocities back, even though the double-click
   also clicked the stem. A note already at the default is left alone and a locked reference
-  clip's notes are never touched.
+  clip's notes are never touched. Grabbing a stem by its cap no longer makes it jump to the pixel
+  you pressed: it moves from where it is.
 - **French interface and a Language setting**: Preferences → Appearance → **Language** lists
   English and Français (each in its own name). The choice is saved and applies after a restart;
   the row says so and offers a **Restart** button (the usual unsaved-changes prompt comes first).

@@ -82,3 +82,4 @@ MVP = Phase 2 + User Story 1: a working double-click on one stem with one undo s
 ## Phase 8: Convergence
 
 - [X] T020 Leave tool-preview (ghost) notes out of the reset: in `src/managed/Nota.App/PianoRollView.cs` `VelocityLane.ResetVelocity` and `CanReset`, pass `i => _o.IsLocked(i) || _o.IsGhost(i)` instead of `_o.IsLocked` to `VelocityReset.Targets`, per FR-007 and the Edge Cases ("ghost notes … are not reset") (partial)
+- [X] T021 Review follow-up (nota-daw/nota#418): a press within 6 px of a stem's cap is a grab, not a set (`VelocityLane._grabCap` in `src/managed/Nota.App/PianoRollView.cs`), so a double-click on a note at the default adds no undo step, per FR-003 and FR-005 (partial); `VelocityReset.Targets` tracks duplicates in a `HashSet` instead of scanning the result list.

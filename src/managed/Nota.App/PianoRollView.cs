@@ -2839,6 +2839,11 @@ public sealed partial class PianoRollView : UserControl
         // selected note with it, each keeping its offset (so a stacked chord moves together).
         private readonly Dictionary<int, float> _grabbed = new();
         private double _grabY;
+        // A press within a few pixels of the cap is a grab: the stem moves with the pointer from
+        // where it is, it does not jump to the pixel clicked. A click on a note already at the
+        // default therefore changes nothing, and the double-click that follows adds no undo step.
+        private const double CapGrab = 6;
+        private bool _grabCap;
 
         // A lane gesture is a velocity burst (the wheel's, specs/063): its first real change seeds
         // the undo step with the notes as they were, then streams live; the burst stays open for
@@ -2972,9 +2977,11 @@ public sealed partial class PianoRollView : UserControl
             foreach (int i in _o._selection)
                 if (i >= 0 && i < _o._notes.Count) _grabbed[i] = _o._notes[i].Velocity;
             _velNote = hit; _drag = true;
-            // A click on one stem sets it where you clicked; a group moves by the drag distance.
-            if (_grabbed.Count == 1) Apply(p.Y);
+            _grabCap = Math.Abs(CapY(hit) - p.Y) <= CapGrab;
             _grabY = p.Y;
+            // A click on one stem away from its cap sets it where you clicked; a group, or a grab on
+            // the cap, moves by the drag distance.
+            if (_grabbed.Count == 1 && !_grabCap) Apply(p.Y);
             e.Pointer.Capture(this);
             _o.Invalidate(); _o.Changed?.Invoke();
             e.Handled = true;
@@ -3006,7 +3013,7 @@ public sealed partial class PianoRollView : UserControl
 
         private void Apply(double y)
         {
-            if (_grabbed.Count == 1)
+            if (_grabbed.Count == 1 && !_grabCap)
             {
                 if (_velNote < 0 || _velNote >= _o._notes.Count) return;
                 var n = _o._notes[_velNote];

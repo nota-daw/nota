@@ -87,6 +87,7 @@ Preferences → Shortcuts lists the double-click and the right-click on a veloci
 ### Edge Cases
 
 - A double-click is two presses. The first press still sets the velocity where it landed, as it does today; the double-click then overrides it. One undo after the double-click returns to the velocity from before the double-click, not to the value the first press produced.
+- A press within a few pixels of a stem's cap grabs it: the stem moves with the pointer from where it is instead of jumping to the pixel clicked (a click farther from the cap still sets the height where it landed, as before). So a double-click on a note already at the default changes nothing and adds no undo step.
 - A double-click on empty space in the lane (no stem within reach) does nothing, as a single click does today.
 - Stems of a locked reference clip, or ghost notes, are not on offer in the lane and are not reset.
 - Notes that start together share one x position; the stem picked for the double-click is the same one a single click would pick.
