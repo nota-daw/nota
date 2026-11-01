@@ -667,14 +667,16 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             // right-click menu still reset).
             var field = stageField with { ResetOnDoubleClick = false };
             ValueEntry.Attach(cell, field, readout);
-            bool drag = false; double lastY = 0, at = 0;
+            // The automation gesture opens on the first real change, not on the press: a
+            // press alone (the first click of a double-click) must not override automation.
+            bool drag = false, began = false; double lastY = 0, at = 0;
             cell.PointerPressed += (_, e) =>
             {
                 if (e.Handled || !e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
                 e.Handled = true;
                 if (e.ClickCount == 2) { ValueEntry.Open(cell, field); return; }
-                drag = true; lastY = e.GetPosition(cell).Y; at = G(id);
-                Begin(id); e.Pointer.Capture(cell);
+                drag = true; began = false; lastY = e.GetPosition(cell).Y; at = G(id);
+                e.Pointer.Capture(cell);
             };
             cell.PointerMoved += (_, e) =>
             {
@@ -684,10 +686,12 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 at = Math.Clamp(at + (lastY - y) / ((e.KeyModifiers & KeyModifiers.Shift) != 0 ? 600.0 : 120.0), 0, 1);
                 lastY = y;
                 if ((float)at == G(id)) return;
+                if (!began) { began = true; Begin(id); }
                 SetP(id, (float)at); Touch();
             };
-            cell.PointerReleased += (_, e) => { if (!drag) return; drag = false; e.Pointer.Capture(null); End(id); };
-            cell.PointerCaptureLost += (_, _) => { if (drag) { drag = false; End(id); } };
+            void Stop() { drag = false; if (began) { began = false; End(id); } }
+            cell.PointerReleased += (_, e) => { if (!drag) return; Stop(); e.Pointer.Capture(null); };
+            cell.PointerCaptureLost += (_, _) => { if (drag) Stop(); };
             ToolTip.SetTip(cell, field.Name + " · drag or turn to change, double-click to type");
         }
 
