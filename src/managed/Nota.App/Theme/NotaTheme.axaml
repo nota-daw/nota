@@ -394,6 +394,12 @@
       </ControlTemplate>
     </Setter>
   </Style>
+  <!-- Fluent's caption theme fills the inner presenter on hover / press with the button's
+       own Background (#E81123 on close): a second tile around the glyph. Keep it clear. -->
+  <Style Selector="WindowDrawnDecorations /template/ Button:pointerover /template/ ContentPresenter,
+                   WindowDrawnDecorations /template/ Button:pressed /template/ ContentPresenter">
+    <Setter Property="Background" Value="Transparent"/>
+  </Style>
   <Style Selector="WindowDrawnDecorations /template/ Button:pointerover /template/ Border#PART_CaptionFace">
     <Setter Property="Background" Value="{DynamicResource Brush.SurfaceHover}"/>
   </Style>
