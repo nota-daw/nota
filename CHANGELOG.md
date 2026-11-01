@@ -140,6 +140,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Window buttons on Windows** — minimize, maximize and close in the title bar showed as
+  grey rounded tiles with an always-red close button, plus an extra fullscreen button. They
+  are flat again, as in other Windows apps: the hover tone under the pointer, red only while
+  the pointer is on close. Fullscreen stays on F11 and View ▸ Toggle full screen.
 - **Right-click menu on knobs and graph handles** — right-clicking a knob, or a handle on an
   envelope or filter graph (Aurora, Volt, Bass, Synth and others), showed no menu, though
   the same menu opened on the value under it. Right-click now shows Type value… and Reset to
