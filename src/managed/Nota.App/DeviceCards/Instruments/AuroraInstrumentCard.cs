@@ -12,7 +12,8 @@
 //               Filter — the selected filter's response as a drag pad, with its type,
 //                        slope, cutoff, resonance, env / LFO / key amounts and where each
 //                        source (Osc 1 / Osc 2 / Sub) is sent.
-//               Env    — Env 1 (amp) and Env 2 (free) drawn and draggable.
+//               Env    — Env 1 (amp) and Env 2 (free) drawn and draggable; each stage box
+//                        under a graph has a knob, drags, and types on double-click.
 //               LFO    — both LFOs as a table, each naming where it lands, over a window
 //                        that draws the selected LFO's own shape.
 //               Mod    — the 8 × 7 matrix: drag a cell up for +, down for −.
@@ -644,6 +645,52 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var filtBody = new Border { Padding = new Thickness(7, 5), Child = filtGrid };
 
         // ---- Env tab --------------------------------------------------------------
+        // Each stage box under a graph carries a small knob and a read-out. The knob turns
+        // and double-click resets like any knob; the rest of the box is a drag value too
+        // (vertical drag, Shift for fine), and a double-click anywhere on it types the value.
+        Knob EnvKnob(string id, int pi, string name, Func<float, string> fmt, IBrush? arc)
+        {
+            var knob = new Knob(G(id), 1.0)
+            {
+                Accent = true, Inline = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
+                VerticalAlignment = VerticalAlignment.Center, Format = v => fmt((float)v),
+            };
+            knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); Touch(); };
+            knob.GestureBegin += () => Begin(id);
+            knob.GestureEnd += () => End(id);
+            readouts.Add(() => { if (!knob.Dragging) knob.Value = G(id); ToolTip.SetTip(knob, name + " · " + fmt(G(id))); });
+            return knob;
+        }
+        void EnvBox(Border cell, string id, TextBlock readout, ValueField stageField)
+        {
+            // The box keeps its double-click for typing: no reset there (the knob and the
+            // right-click menu still reset).
+            var field = stageField with { ResetOnDoubleClick = false };
+            ValueEntry.Attach(cell, field, readout);
+            bool drag = false; double lastY = 0, at = 0;
+            cell.PointerPressed += (_, e) =>
+            {
+                if (e.Handled || !e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;
+                if (e.ClickCount == 2) { ValueEntry.Open(cell, field); return; }
+                drag = true; lastY = e.GetPosition(cell).Y; at = G(id);
+                Begin(id); e.Pointer.Capture(cell);
+            };
+            cell.PointerMoved += (_, e) =>
+            {
+                if (!drag) return;
+                // Step by step, so Shift (fine) can come and go mid-drag without a jump.
+                double y = e.GetPosition(cell).Y;
+                at = Math.Clamp(at + (lastY - y) / ((e.KeyModifiers & KeyModifiers.Shift) != 0 ? 600.0 : 120.0), 0, 1);
+                lastY = y;
+                if ((float)at == G(id)) return;
+                SetP(id, (float)at); Touch();
+            };
+            cell.PointerReleased += (_, e) => { if (!drag) return; drag = false; e.Pointer.Capture(null); End(id); };
+            cell.PointerCaptureLost += (_, _) => { if (drag) { drag = false; End(id); } };
+            ToolTip.SetTip(cell, field.Name + " · drag or turn to change, double-click to type");
+        }
+
         Control EnvPanel(string title, Func<string> route, VoltEnv view, string[] ids, Func<string> summary)
         {
             view.Target(title, P(ids[0]), P(ids[1]), P(ids[2]), P(ids[3]));
@@ -655,18 +702,26 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             {
                 string id = ids[k];
                 var fk = fmt[k];
+                string name = title + " · " + stage[k];
                 var v = Mono(fk(G(id)), TextPrimary, NotaType.RowLabel);
                 v.HorizontalAlignment = HorizontalAlignment.Center;
                 readouts.Add(() => v.Text = fk(G(id)));
-                if (view.Field(k) is { } vf) ValueEntry.Attach(v, vf);   // double-click the read-out to type
                 var cap = Cap(stage[k]); cap.HorizontalAlignment = HorizontalAlignment.Center;
+                var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { cap, v } };
+                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 3 };
                 var cell = new Border
                 {
                     Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
                     CornerRadius = NotaRadius.Badge, Padding = new Thickness(2, 1),
-                    Child = new StackPanel { Children = { cap, v } },
+                    Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = row,
                 };
-                if (I(id) is var pi and >= 0) MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), title + " · " + stage[k]);
+                if (I(id) is var pi and >= 0)
+                {
+                    row.Children.Add(EnvKnob(id, pi, name, fk, ReferenceEquals(view, env2) ? Teal : null));
+                    MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), name);
+                }
+                Grid.SetColumn(text, 1); row.Children.Add(text);
+                if (view.Field(k) is { } vf) EnvBox(cell, id, v, vf);
                 Grid.SetColumn(cell, k); cells.Children.Add(cell);
             }
             var sum = Mono("", TextSecondary, NotaType.Axis);

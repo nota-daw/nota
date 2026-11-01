@@ -103,6 +103,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the same way.
 
 ### Changed
+- **Aurora envelope boxes have knobs and drag** — the A, D, S and R boxes under each Env
+  graph now each carry a small knob, and the box itself is a drag value: drag it up or down
+  (Shift for fine steps), or double-click anywhere on it to type an exact value. The graph
+  handles still edit the envelope as before.
 - **Smoother, clearer waveforms on audio clips** (#267): clips in the Arrangement and the
   audio clip editor now draw an anti-aliased peak outline around a denser body that follows
   the loudness (RMS) of the audio. Every zoom level reads cleanly — zoomed out, no peak slips
