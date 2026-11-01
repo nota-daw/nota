@@ -62,7 +62,8 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 - **Version history**: every save records a version inside the project. The browser's
   **History** tab draws them as a branching tree (the current one has an orange dot), each
   described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch
-  to any version, open one as a copy, or name, note, star and delete versions; a star button
+  to any version, open one as a copy, or name, note, star and delete versions (⌘/Ctrl-click and
+  Shift-click select several, deleted together from the footer or the context menu); a star button
   in the tab's header lists starred versions only. Saving on top
   of an older version branches. **Save Version with Note…** (⌥⌘S). The tab's menu deletes all
   unnamed versions at once; Settings → Library turns history off (erasing it, after a warning). Versions share their

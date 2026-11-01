@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Delete several versions at once** (#228): in the History tab, ⌘-click (Ctrl-click on
+  Windows and Linux) adds a version to the selection and Shift-click selects a run. With
+  more than one selected, the footer shows how many and when they were saved, and its
+  **Delete N versions…** button — or the same item in the right-click menu — deletes them
+  in one go, after one confirmation. The current version is never deleted: it stays, and the
+  footer says so.
 - **Take lanes for audio loop recording** (#187): an Arrangement audio recording that comes
   back around the loop keeps every pass as a take (Take 1, Take 2, …) instead of overwriting
   the earlier ones. The comp — what plays, on the track's own row — starts as the newest pass
