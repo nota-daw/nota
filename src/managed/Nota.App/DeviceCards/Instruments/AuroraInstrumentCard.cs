@@ -704,23 +704,27 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 var fk = fmt[k];
                 string name = title + " · " + stage[k];
                 var v = Mono(fk(G(id)), TextPrimary, NotaType.RowLabel);
-                v.HorizontalAlignment = HorizontalAlignment.Center;
                 readouts.Add(() => v.Text = fk(G(id)));
-                var cap = Cap(stage[k]); cap.HorizontalAlignment = HorizontalAlignment.Center;
-                var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Children = { cap, v } };
-                var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 3 };
+                // The knob on top, the stage letter and its value on one line under it: a box
+                // is too narrow to hold a knob beside a full value like "180 ms".
+                v.HorizontalAlignment = HorizontalAlignment.Right;
+                var cap = Cap(stage[k]); cap.HorizontalAlignment = HorizontalAlignment.Left;
+                var box = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 2 };
                 var cell = new Border
                 {
                     Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
-                    CornerRadius = NotaRadius.Badge, Padding = new Thickness(2, 1),
-                    Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = row,
+                    CornerRadius = NotaRadius.Badge, Padding = new Thickness(3, 2, 3, 1),
+                    Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = box,
                 };
                 if (I(id) is var pi and >= 0)
                 {
-                    row.Children.Add(EnvKnob(id, pi, name, fk, ReferenceEquals(view, env2) ? Teal : null));
+                    var knob = EnvKnob(id, pi, name, fk, ReferenceEquals(view, env2) ? Teal : null);
+                    knob.HorizontalAlignment = HorizontalAlignment.Center;
+                    Grid.SetColumnSpan(knob, 2); box.Children.Add(knob);
                     MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), name);
                 }
-                Grid.SetColumn(text, 1); row.Children.Add(text);
+                Grid.SetRow(cap, 1); box.Children.Add(cap);
+                Grid.SetRow(v, 1); Grid.SetColumn(v, 1); box.Children.Add(v);
                 if (view.Field(k) is { } vf) EnvBox(cell, id, v, vf);
                 Grid.SetColumn(cell, k); cells.Children.Add(cell);
             }
