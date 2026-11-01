@@ -20,6 +20,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -65,7 +66,7 @@ public partial class MainWindow
         }
         if (dead is null) return;
         foreach (int s in dead) _links.Remove(s);
-        if (_vm is not null) _vm.StatusText = "Live-freeze link removed — its track was deleted.";
+        if (_vm is not null) _vm.StatusText = Loc.T("Live-freeze link removed — its track was deleted.");
         UpdateFreezeButton(_freezeTrackId);
         ApplyFrozenChainDim(_freezeTrackId);
     }
@@ -112,10 +113,10 @@ public partial class MainWindow
     {
         if (_vm is null || !IsFreezable(sourceId) || LinkForSource(sourceId) is not null) return;
         double endBeats = ProjectEndBeats();
-        if (endBeats <= 0.0) { _vm.StatusText = "Nothing to freeze — the arrangement is empty."; return; }
+        if (endBeats <= 0.0) { _vm.StatusText = Loc.T("Nothing to freeze — the arrangement is empty."); return; }
 
-        string? wav = await RenderSourceToWavAsync(sourceId, "Live freeze");
-        if (wav is null) { _vm.StatusText = "Couldn't freeze this track."; return; }
+        string? wav = await RenderSourceToWavAsync(sourceId, Loc.T("Live freeze"));
+        if (wav is null) { _vm.StatusText = Loc.T("Couldn't freeze this track."); return; }
 
         try
         {
@@ -141,9 +142,9 @@ public partial class MainWindow
 
             Engine.SetTrackMute(sourceId, true);   // implicit mute: engine skips its instrument/devices
             _links[sourceId] = new FreezeLink { SourceId = sourceId, FrozenId = frozenId };
-            _vm.StatusText = "Track live-frozen — press Edit to change it, then Done.";
+            _vm.StatusText = Loc.T("Track live-frozen — press Edit to change it, then Done.");
         }
-        catch (Exception ex) { _vm.StatusText = $"Live freeze failed: {ex.Message}"; }
+        catch (Exception ex) { _vm.StatusText = Loc.F("Live freeze failed: {0}", ex.Message); }
         finally { try { File.Delete(wav); } catch { } }
 
         Timeline.Refresh();
@@ -157,7 +158,7 @@ public partial class MainWindow
         Engine.SetTrackMute(sourceId, false);       // wake the source — it plays live now
         Engine.SetTrackMute(link.FrozenId, true);    // silence the stale bounce
         link.State = LinkState.Editing;
-        _vm.StatusText = "Editing the frozen source — press Done to re-freeze, or Discard.";
+        _vm.StatusText = Loc.T("Editing the frozen source — press Done to re-freeze, or Discard.");
         Timeline.Refresh();
         UpdateLiveFreezeButtons(_freezeTrackId);
         ApplyFrozenChainDim(_freezeTrackId);
@@ -169,7 +170,7 @@ public partial class MainWindow
         if (link is null || _vm is null) return;
 
         string? wav = await RenderSourceToWavAsync(sourceId, "Re-freeze");
-        if (wav is null) { _vm.StatusText = "Re-freeze failed — the source is still live."; return; }
+        if (wav is null) { _vm.StatusText = Loc.T("Re-freeze failed — the source is still live."); return; }
 
         try
         {
@@ -185,7 +186,7 @@ public partial class MainWindow
             link.Revision++;
             _vm.StatusText = "Re-frozen.";
         }
-        catch (Exception ex) { _vm.StatusText = $"Re-freeze failed: {ex.Message}"; }
+        catch (Exception ex) { _vm.StatusText = Loc.F("Re-freeze failed: {0}", ex.Message); }
         finally { try { File.Delete(wav); } catch { } }
 
         Timeline.Refresh();
@@ -200,7 +201,7 @@ public partial class MainWindow
         Engine.SetTrackMute(sourceId, true);
         Engine.SetTrackMute(link.FrozenId, false);
         link.State = LinkState.Frozen;
-        _vm.StatusText = "Left edit mode (the frozen audio was not changed).";
+        _vm.StatusText = Loc.T("Left edit mode (the frozen audio was not changed).");
         Timeline.Refresh();
         UpdateLiveFreezeButtons(_freezeTrackId);
         ApplyFrozenChainDim(_freezeTrackId);
@@ -214,7 +215,7 @@ public partial class MainWindow
         Engine.RemoveTrack(link.FrozenId);
         Engine.SetTrackMute(sourceId, false);
         _links.Remove(sourceId);
-        if (_vm is not null) _vm.StatusText = "Unfrozen — the source is live again.";
+        if (_vm is not null) _vm.StatusText = Loc.T("Unfrozen — the source is live again.");
         Timeline.Refresh();
         Timeline.Select(sourceId, -1);   // the frozen track may have been selected — it's gone now
     }
@@ -224,9 +225,9 @@ public partial class MainWindow
     {
         var link = LinkForSource(sourceId);
         if (link is null || _vm is null) return;
-        bool ok = await new ConfirmWindow("Flatten track",
-            "Flatten keeps the frozen audio track and permanently removes its source (instrument, MIDI and devices). Continue?",
-            "Flatten", "Cancel").ShowDialog<bool>(this);
+        bool ok = await new ConfirmWindow(Loc.T("Flatten track"),
+            Loc.T("Flatten keeps the frozen audio track and permanently removes its source (instrument, MIDI and devices). Continue?"),
+            Loc.T("Flatten"), Loc.T("Cancel")).ShowDialog<bool>(this);
         if (!ok) return;
         int frozenId = link.FrozenId;
         _links.Remove(sourceId);
@@ -235,7 +236,7 @@ public partial class MainWindow
         string name = Engine.GetTrackName(frozenId);
         if (name.EndsWith(FrozenSuffix, StringComparison.Ordinal))
             Engine.SetTrackName(frozenId, name[..^FrozenSuffix.Length]);   // no longer a "frozen" copy
-        _vm.StatusText = "Flattened — the frozen audio is now a plain track.";
+        _vm.StatusText = Loc.T("Flattened — the frozen audio is now a plain track.");
         Timeline.Refresh();
         if (Engine.TryGetTrackInfo(TrackIndexOf(frozenId), out _)) Timeline.Select(frozenId, -1);
     }
@@ -252,21 +253,21 @@ public partial class MainWindow
         _vm.SuspendEnginePolling = true;
         try
         {
-            await RunBlockingAsync(title, "Rendering…", async prog =>
+            await RunBlockingAsync(title, Loc.T("Rendering…"), async prog =>
             {
-                var frac = new Progress<double>(f => prog.Report(ProgressReport.At(f, $"Rendering… {f * 100:0}\u2009%")));
+                var frac = new Progress<double>(f => prog.Report(ProgressReport.At(f, Loc.F("Rendering… {0:0}\u2009%", f * 100))));
                 ok = await Task.Run(() => _freezer.Freeze(Engine, sourceId, endBeats,
                     _vm.Transport.LoopOn, _vm.Transport.MetronomeOn, frac));
             });
         }
-        catch (Exception ex) { _vm.StatusText = $"{title} failed: {ex.Message}"; }
+        catch (Exception ex) { _vm.StatusText = Loc.F("{0} failed: {1}", title, ex.Message); }
         finally { _vm.SuspendEnginePolling = false; }
 
         if (!ok) { Engine.UnfreezeTrack(sourceId); return null; }
         byte[] blob = Engine.GetFreezeState(sourceId);
         Engine.UnfreezeTrack(sourceId);   // we only wanted the PCM; the link owns the audio
         try { return WriteFreezeBlobToWav(blob); }
-        catch (Exception ex) { _vm.StatusText = $"{title} failed: {ex.Message}"; return null; }
+        catch (Exception ex) { _vm.StatusText = Loc.F("{0} failed: {1}", title, ex.Message); return null; }
     }
 
     // --- context menu (Live freeze switch / Flatten), shared by source + frozen tracks ---
@@ -277,9 +278,9 @@ public partial class MainWindow
         if (_liveFreezeMenuBuilt) return;
         _liveFreezeMenuBuilt = true;
         // The same switch the track menu shows: on while linked; switching it off unfreezes.
-        var unfreeze = MenuKit.SwitchItem("Live freeze", GlyphKind.ChainLink, true,
+        var unfreeze = MenuKit.SwitchItem(Loc.T("Live freeze"), GlyphKind.ChainLink, true,
             () => { int s = LinkSourceFor(_freezeTrackId); if (s > 0) UnfreezeLink(s); });
-        var flatten = MenuKit.Danger("Flatten (remove source)", GlyphKind.Flatten,
+        var flatten = MenuKit.Danger(Loc.T("Flatten (remove source)"), GlyphKind.Flatten,
             () => { int s = LinkSourceFor(_freezeTrackId); if (s > 0) FlattenLinkAsync(s); });
         var menu = new ContextMenu();
         menu.Items.Add(unfreeze);

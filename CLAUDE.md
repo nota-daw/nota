@@ -20,5 +20,7 @@ restrictions).
 - Bug reports go through `/speckit-bug-assess` → `/speckit-bug-fix` → `/speckit-bug-test`.
 - The `nota-*` skills in `.claude/skills/` (design, docs, features, instrument,
   shortcuts, release, pr) encode project-specific workflows — prefer them over improvising.
+  `.claude/skills/` is their source; after editing one, run `scripts/sync-agent-skills.sh`
+  to refresh the copies other agents read (CI checks they match).
 - Before any pull request: `scripts/build.sh` (or the Linux/Windows siblings) must pass;
   it runs the smoke test that drives the engine end-to-end.

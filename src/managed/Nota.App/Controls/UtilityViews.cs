@@ -18,6 +18,7 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -137,7 +138,7 @@ internal sealed class UtFieldView : VtWindowBase
         }
         else
         {
-            var hint = NotaGraph.AxisText("lows at the bottom · highs at the top", NotaPalette.TealBright);
+            var hint = NotaGraph.AxisText(Loc.T("lows at the bottom · highs at the top"), NotaPalette.TealBright);
             ctx.DrawText(hint, new Point(w - hint.Width - 5, h - hint.Height - 14));
         }
     }
@@ -239,7 +240,7 @@ internal sealed class UtWidthView : VtWindowBase
             if (!double.IsNaN(_monoHz)) NotaGraph.Node(ctx, new Point(X(_monoHz), Y(At(_resp, _nr, _rLo, _rHi, _monoHz))), Dragging);
         }
 
-        NotaGraph.Title(ctx, frame, "Width by frequency");
+        NotaGraph.Title(ctx, frame, Loc.T("Width by frequency"));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _legend, NotaPalette.VizInk);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, "20");
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "18 k");
@@ -314,7 +315,7 @@ internal sealed class UtLevelView : VtWindowBase
             }
         }
 
-        NotaGraph.Title(ctx, frame, "Input and output");
+        NotaGraph.Title(ctx, frame, Loc.T("Input and output"));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, _legend, NotaPalette.VizInk);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, NotaNum.F($"−{_sec:0} s"));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "now");

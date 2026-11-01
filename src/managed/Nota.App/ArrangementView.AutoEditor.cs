@@ -16,6 +16,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -325,10 +326,10 @@ public sealed partial class ArrangementView
         {
             bool hasSel = _o.HasAutoSelection && ReferenceEquals(_o._autoSelTrack, t);
             var flyout = new MenuFlyout();
-            var copy = MenuKit.Item("Copy automation", GlyphKind.Copy, () => _o.CopyAutoSelection(), MenuKit.CopyKey, hasSel);
-            var cut = MenuKit.Item("Cut automation", GlyphKind.Cut, () => _o.CutAutoSelection(), MenuKit.CutKey, hasSel);
-            var paste = MenuKit.Item("Paste automation", GlyphKind.Paste, () => _o.PasteAutoAt(t, _o.Snap(beat)), MenuKit.PasteKey, _o.HasAutoClip);
-            var del = MenuKit.Danger("Delete automation", GlyphKind.Trash, () => _o.DeleteAutoSelection(), MenuKit.DeleteKey, hasSel);
+            var copy = MenuKit.Item(Loc.T("Copy automation"), GlyphKind.Copy, () => _o.CopyAutoSelection(), MenuKit.CopyKey, hasSel);
+            var cut = MenuKit.Item(Loc.T("Cut automation"), GlyphKind.Cut, () => _o.CutAutoSelection(), MenuKit.CutKey, hasSel);
+            var paste = MenuKit.Item(Loc.T("Paste automation"), GlyphKind.Paste, () => _o.PasteAutoAt(t, _o.Snap(beat)), MenuKit.PasteKey, _o.HasAutoClip);
+            var del = MenuKit.Danger(Loc.T("Delete automation"), GlyphKind.Trash, () => _o.DeleteAutoSelection(), MenuKit.DeleteKey, hasSel);
             MenuKit.AddGroups(flyout.Items, new Control[] { copy, cut, paste }, new Control[] { del });
             flyout.ShowAt(_owner, showAtPointer: true);
         }

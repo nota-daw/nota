@@ -27,6 +27,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   studio greys, subtle raised-control shading and a gold playhead. The choice applies
   immediately and is remembered; Studio Dark remains the default, and musical/status
   colours, layout and editing behavior retain their existing roles.
+- **French interface and a Language setting**: Preferences → Appearance → **Language** lists
+  English and Français (each in its own name). The choice is saved and applies after a restart;
+  the row says so and offers a **Restart** button (the usual unsaved-changes prompt comes first).
+  English stays the default, whatever the OS language is. Menus, panels, dialogs, tooltips,
+  status and error messages and the command palette are translated; device and parameter
+  names stay in English, and project, track and clip names you typed are never translated.
+  On macOS the system's own text (the application menu's Hide / Quit, the open and save panels) follows the
+  chosen language from the next start. Another language is one JSON file (see *Translating Nota* in CONTRIBUTING).
 - **Take lanes for audio loop recording** (#187): an Arrangement audio recording that comes
   back around the loop keeps every pass as a take (Take 1, Take 2, …) instead of overwriting
   the earlier ones. The comp — what plays, on the track's own row — starts as the newest pass
@@ -150,6 +158,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Windows playback cursor**: the Arrangement playhead now follows display frames,
   interpolating the engine's rendered blocks instead of jumping on the UI polling timer.
   Editing positions and audio timing remain tied to the engine transport.
+- **Window buttons on Windows** — minimize, maximize and close in the title bar showed as
+  grey rounded tiles with an always-red close button, plus an extra fullscreen button. They
+  are flat again, as in other Windows apps: the hover tone under the pointer, red only while
+  the pointer is on close. Fullscreen stays on F11 and View ▸ Toggle full screen.
 - **Right-click menu on knobs and graph handles** — right-clicking a knob, or a handle on an
   envelope or filter graph (Aurora, Volt, Bass, Synth and others), showed no menu, though
   the same menu opened on the value under it. Right-click now shows Type value… and Reset to

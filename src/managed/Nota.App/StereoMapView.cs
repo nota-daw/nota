@@ -19,6 +19,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
 using Nota.Application.Editing;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -106,10 +107,10 @@ public sealed class StereoMapView : Control, IValueEntryHost
                 () => { g = new MixGesture(_engine, target); g.Begin(); _engine.BeginAutomationWrite(id, auto, -1, -1, ""); },
                 () => { _engine.EndAutomationWrite(id, auto, -1, -1, ""); g?.End(); g = null; }) { After = InvalidateVisual };
         }
-        var pan = One("Pan", MixTarget.Pan(id), AutomationTarget.Pan, () => ((Of()?.Pan ?? 0f) + 1) / 2, n => NotaNum.Pan(n * 2 - 1),
+        var pan = One(Loc.T("Pan"), MixTarget.Pan(id), AutomationTarget.Pan, () => ((Of()?.Pan ?? 0f) + 1) / 2, n => NotaNum.Pan(n * 2 - 1),
             n => _engine.SetTrackPan(id, (float)Math.Clamp(n * 2 - 1, -1, 1)))
             with { Reset = () => _engine.SetTrackPan(id, 0f) };   // double-click centres the pan, as before
-        var vol = One("Volume", MixTarget.Volume(id), AutomationTarget.Volume, () => FaderScale.Frac(Of()?.Volume ?? 1f),
+        var vol = One(Loc.T("Volume"), MixTarget.Volume(id), AutomationTarget.Volume, () => FaderScale.Frac(Of()?.Volume ?? 1f),
             n => NotaNum.GainDb(FaderScale.Gain(n), signed: true), n => _engine.SetTrackVolume(id, (float)FaderScale.Gain(n)))
             with { Default = FaderScale.Frac(1.0), ResetOnDoubleClick = false };   // 0 dB from the menu; a double-click centres the pan
         _entry = (id, [pan, vol]);
@@ -183,7 +184,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         int masterId = _engine.MasterTrackId;
         var master = new Item
         {
-            Id = masterId, Name = _engine.GetTrackName(masterId) is { Length: > 0 } mn ? mn : "Master",
+            Id = masterId, Name = _engine.GetTrackName(masterId) is { Length: > 0 } mn ? mn : Loc.T("Master"),
             Color = NotaPalette.Accent, Pan = 0, Volume = _engine.MasterVolume, Master = true,
         };
         if (_measureAt.TryGetValue(masterId, out int mm)) { master.M = _measures[mm]; master.Has = true; }
@@ -228,7 +229,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         // Panel, header, well.
         ctx.DrawRectangle(NotaPalette.SurfaceCard, new Pen(NotaPalette.BorderDefault, 1), new Rect(0.5, 0.5, b.Width - 1, b.Height - 1), Radius, Radius);
         ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, HeaderH), new Point(b.Width, HeaderH));
-        DrawText(ctx, "Stereo map", NotaFonts.SansBold, 10, NotaPalette.TextPrimary, new Point(12, HeaderH / 2), vCenter: true);
+        DrawText(ctx, Loc.T("Stereo map"), NotaFonts.SansBold, 10, NotaPalette.TextPrimary, new Point(12, HeaderH / 2), vCenter: true);
         var well = new Rect(Inset, HeaderH + Inset, b.Width - 2 * Inset, b.Height - HeaderH - BottomH - 2 * Inset);
         ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), well, 4, 4);
         DrawGrid(ctx, plot);
@@ -321,7 +322,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         double y0 = b.Height - BottomH, cy = y0 + BottomH / 2;
         ctx.DrawLine(new Pen(NotaPalette.BorderDefault, 1), new Point(0, y0), new Point(b.Width, y0));
         double x = 10;
-        x += DrawText(ctx, "Correlation", NotaFonts.SansBold, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
+        x += DrawText(ctx, Loc.T("Correlation"), NotaFonts.SansBold, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
         x += DrawText(ctx, "−1", NotaFonts.Mono, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 6;
         var bar = new Rect(x, cy - 3, 180, 6);
         ctx.DrawRectangle(NotaPalette.BgSunken, new Pen(NotaPalette.BorderDefault, 1), bar, 2, 2);
@@ -335,7 +336,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
         x = bar.Right + 6;
         x += DrawText(ctx, "+1", NotaFonts.Mono, 8, NotaPalette.TextTertiary, new Point(x, cy), vCenter: true) + 10;
         DrawText(ctx, Signed(corr, 2), NotaFonts.Mono, 10, corr < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary, new Point(x, cy), vCenter: true);
-        DrawText(ctx, MenuKit.Keys("Drag: pan + volume · Shift locks axis · double-click centres pan · ⌥-click types"),
+        DrawText(ctx, MenuKit.Keys(Loc.T("Drag: pan + volume · Shift locks axis · double-click centres pan · ⌥-click types")),
                  NotaFonts.Sans, 10, NotaPalette.TextTertiary, new Point(b.Width - 10, cy), vCenter: true, rightAlign: true);
     }
 
@@ -347,21 +348,21 @@ public sealed class StereoMapView : Control, IValueEntryHost
         var it = _items[idx];
         var rows = new List<(string k, string v, IBrush ink)>
         {
-            ("Pan", it.Master ? "—" : PanText(it.Pan), NotaPalette.TextPrimary),
-            ("Volume", DbText(it.Volume), NotaPalette.TextPrimary),
+            (Loc.T("Pan"), it.Master ? "—" : PanText(it.Pan), NotaPalette.TextPrimary),
+            (Loc.T("Volume"), DbText(it.Volume), NotaPalette.TextPrimary),
         };
         if (it.Has)
         {
-            rows.Add(("Balance", Signed(it.M.Balance, 2), NotaPalette.TextSecondary));
-            rows.Add(("Width", it.M.Width.ToString("0.00", NotaNum.Culture), NotaPalette.TextSecondary));
-            rows.Add(("Correlation", Signed(it.M.Correlation, 2), it.M.Correlation < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary));
-            rows.Add(("Level", it.M.Silent ? "below −60 dBFS" : Signed(it.M.LevelDb, 1) + NotaNum.Thin + "dBFS", NotaPalette.TextSecondary));
+            rows.Add((Loc.T("Balance"), Signed(it.M.Balance, 2), NotaPalette.TextSecondary));
+            rows.Add((Loc.T("Width"), it.M.Width.ToString("0.00", NotaNum.Culture), NotaPalette.TextSecondary));
+            rows.Add((Loc.T("Correlation"), Signed(it.M.Correlation, 2), it.M.Correlation < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary));
+            rows.Add((Loc.T("Level"), it.M.Silent ? "below −60 dBFS" : Signed(it.M.LevelDb, 1) + NotaNum.Thin + "dBFS", NotaPalette.TextSecondary));
         }
         var notes = new List<(string title, string body, IBrush ink)>();
         if (it.Has && !it.M.Silent && !it.Muted && !it.Master && Math.Abs(it.M.Balance - it.Pan) > OffPanNote)
-            notes.Add(("Image is off the pan", $"The pan is at {PanText(it.Pan)}, but the signal measures {PanText(it.M.Balance)}. The source itself is unbalanced.", NotaPalette.Accent));
-        if (it.Muted) notes.Add(("Muted", "No cloud while the track is muted.", NotaPalette.TextSecondary));
-        else if (!it.Has || it.M.Silent) notes.Add(("Silent", "Below −60 dBFS, so the cloud is hidden.", NotaPalette.TextSecondary));
+            notes.Add((Loc.T("Image is off the pan"), Loc.F("The pan is at {0}, but the signal measures {1}. The source itself is unbalanced.", PanText(it.Pan), PanText(it.M.Balance)), NotaPalette.Accent));
+        if (it.Muted) notes.Add((Loc.T("Muted"), Loc.T("No cloud while the track is muted."), NotaPalette.TextSecondary));
+        else if (!it.Has || it.M.Silent) notes.Add((Loc.T("Silent"), Loc.T("Below −60 dBFS, so the cloud is hidden."), NotaPalette.TextSecondary));
 
         _tooltipRows.Clear();
         foreach (var (k, v, _) in rows) _tooltipRows.Add((k, v));

@@ -22,6 +22,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -315,7 +316,7 @@ internal sealed class RhythmStepStrip : Control
     public RhythmStepStrip()
     {
         Cursor = new Cursor(StandardCursorType.Hand);
-        ToolTip.SetTip(this, "Click: step on / off · Shift-click: accent · Alt-click: quiet step\nDrag across to paint · drag up / down or scroll to set the velocity · right-click for more");
+        ToolTip.SetTip(this, Loc.T("Click: step on / off · Shift-click: accent · Alt-click: quiet step\nDrag across to paint · drag up / down or scroll to set the velocity · right-click for more"));
     }
 
     public void SetHead(int head) { if (head != _head) { _head = head; InvalidateVisual(); } }

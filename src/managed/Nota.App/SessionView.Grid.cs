@@ -15,6 +15,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -51,7 +52,7 @@ public sealed partial class SessionView
                 Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    Text("Scenes", 10, NotaPalette.TextMuted, FontWeight.SemiBold),
+                    Text(Loc.T("Scenes"), 10, NotaPalette.TextMuted, FontWeight.SemiBold),
                     Mono(_sceneCount.ToString(CultureInfo.CurrentCulture), 9, NotaPalette.TextDisabled),
                 },
             },
@@ -66,8 +67,8 @@ public sealed partial class SessionView
         }
         _cellsRow.Children.Add(mid);
 
-        var addScene = new Button { Content = "+ Scene", Classes = { "ghost" }, Height = SpacerH, FontSize = 10, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0) };
-        ToolTip.SetTip(addScene, "Add a scene at the end");
+        var addScene = new Button { Content = Loc.T("+ Scene"), Classes = { "ghost" }, Height = SpacerH, FontSize = 10, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0) };
+        ToolTip.SetTip(addScene, Loc.T("Add a scene at the end"));
         addScene.Click += (_, _) => { int s = _engine.InsertScene(_engine.SceneCount); Refresh(); if (s >= 0) Select(new Selection(SelKind.Scene, 0, s)); };
 
         var stopAll = new Button
@@ -76,10 +77,10 @@ public sealed partial class SessionView
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 7,
-                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = "Stop all clips", FontSize = 10, FontWeight = FontWeight.SemiBold } },
+                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = Loc.T("Stop all clips"), FontSize = 10, FontWeight = FontWeight.SemiBold } },
             },
         };
-        ToolTip.SetTip(stopAll, "Stop every session clip");
+        ToolTip.SetTip(stopAll, Loc.T("Stop every session clip"));
         stopAll.Click += (_, _) => { _engine.StopAllSession(); UpdateStates(); };
 
         var foot = new StackPanel { Width = SceneRailW, Spacing = Gap, Children = { addScene, stopAll } };
@@ -113,7 +114,7 @@ public sealed partial class SessionView
         if (c.Kind is ColKind.Track or ColKind.Group)
         {
             var stop = new Button { Height = StopRowH, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0), Content = new Glyph(GlyphKind.Stop, 7) };
-            ToolTip.SetTip(stop, c.Kind == ColKind.Group ? "Stop every track in this group" : "Stop this track");
+            ToolTip.SetTip(stop, c.Kind == ColKind.Group ? Loc.T("Stop every track in this group") : Loc.T("Stop this track"));
             stop.Click += (_, _) => { StopColumn(c); UpdateStates(); };
             foot.Children.Add(stop);
         }
@@ -241,7 +242,7 @@ public sealed partial class SessionView
                     Child = new Glyph(folded ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = NotaPalette.TextSecondary },
                     Margin = new Thickness(0, 0, 4, 0),
                 };
-                ToolTip.SetTip(chevron, folded ? "Show the group's tracks" : "Fold the group into one column");
+                ToolTip.SetTip(chevron, folded ? Loc.T("Show the group's tracks") : Loc.T("Fold the group into one column"));
                 chevron.PointerPressed += (_, e) =>
                 {
                     e.Handled = true;
@@ -253,7 +254,7 @@ public sealed partial class SessionView
             }
             if (c.Kind == ColKind.Track)
             {
-                var arrText = new TextBlock { Text = "Arr", FontSize = 8, FontWeight = FontWeight.Medium, Foreground = NotaPalette.Accent };
+                var arrText = new TextBlock { Text = Loc.T("Arr"), FontSize = 8, FontWeight = FontWeight.Medium, Foreground = NotaPalette.Accent };
                 arrText.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
                 _arr = new Border
                 {
@@ -261,7 +262,7 @@ public sealed partial class SessionView
                     Padding = new Thickness(3, 0), Margin = new Thickness(4, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
                     Cursor = new Cursor(StandardCursorType.Hand), Child = arrText, IsVisible = false,
                 };
-                ToolTip.SetTip(_arr, "Back to Arrangement for this track");
+                ToolTip.SetTip(_arr, Loc.T("Back to Arrangement for this track"));
                 _arr.PointerPressed += (_, e) => { e.Handled = true; o._engine.TrackBackToArrangement(c.TrackId); o.UpdateStates(); };
                 DockPanel.SetDock(_arr, Dock.Right);
                 top.Children.Add(_arr);
@@ -479,9 +480,9 @@ public sealed partial class SessionView
                 if (_o.MoveOrCopySlot(_c.TrackId, _scene, t.TrackId, t.Scene, move: !copy))
                 {
                     _o.Select(new Selection(SelKind.Slot, t.TrackId, t.Scene));
-                    _o.Say(copy ? "Copied clip" : "Moved clip");
+                    _o.Say(copy ? Loc.T("Copied clip") : Loc.T("Moved clip"));
                 }
-                else _o.Say("Drop a MIDI clip on a MIDI track, audio on audio.");
+                else _o.Say(Loc.T("Drop a MIDI clip on a MIDI track, audio on audio."));
                 return;
             }
             if (_o._dragTarget is not null) { _o._dragTarget = null; _o.UpdateStates(); }
@@ -586,7 +587,7 @@ public sealed partial class SessionView
             var lenFt = Ft(FormatDuration(_o._recElapsed), NotaFonts.Mono, 9, NotaPalette.DangerBright);
             double lenX = r.Width - 6 - lenFt.Width;
             ctx.DrawText(lenFt, new Point(lenX, (TopRowH - lenFt.Height) / 2));
-            var nameFt = Ft(waiting ? "Rec in…" : "Recording", NotaFonts.SansMedium, 11, NotaPalette.TextHeading, lenX - 31);
+            var nameFt = Ft(waiting ? Loc.T("Rec in…") : Loc.T("Recording"), NotaFonts.SansMedium, 11, NotaPalette.TextHeading, lenX - 31);
             ctx.DrawText(nameFt, new Point(27, (TopRowH - nameFt.Height) / 2));
             if (!_c.IsInstrument)
             {
@@ -754,7 +755,7 @@ public sealed partial class SessionView
             Width = SceneRailW; Height = CellH;
             string n = o._engine.GetSceneName(scene);
             _named = n.Length > 0;
-            _name = _named ? n : $"Scene {scene + 1}";
+            _name = _named ? n : Loc.F("Scene {0}", scene + 1);
             o._engine.TryGetSceneProps(scene, out var p);
             _color = p.Color >= 0 ? ArrangementView.TrackBrush(p.Color) : NotaPalette.BorderStrong;
             var parts = new List<string>();
@@ -808,7 +809,7 @@ public sealed partial class SessionView
             if (_o._sceneDragTarget is { } to && wasDragging)
             {
                 _o._sceneDragTarget = null;
-                if (_o._engine.MoveScene(_scene, to)) { _o.Refresh(); _o.Select(new Selection(SelKind.Scene, 0, to)); _o.Say("Moved scene"); }
+                if (_o._engine.MoveScene(_scene, to)) { _o.Refresh(); _o.Select(new Selection(SelKind.Scene, 0, to)); _o.Say(Loc.T("Moved scene")); }
                 return;
             }
             if (_o._sceneDragTarget is not null) { _o._sceneDragTarget = null; _o.InvalidateAll(); }
@@ -887,27 +888,27 @@ public sealed partial class SessionView
         {
             string name = _engine.GetSessionClipName(c.TrackId, scene);
             MenuKit.AddGroups(f.Items,
-                new Control[] { MenuKit.Header(name.Length > 0 ? name : "Clip", c.Brush, $"{c.Name} · scene {scene + 1}") },
+                new Control[] { MenuKit.Header(name.Length > 0 ? name : Loc.T("Clip"), c.Brush, Loc.F("{0} · scene {1}", c.Name, scene + 1)) },
                 new Control[]
                 {
-                    MenuKit.Item("Launch", GlyphKind.Play, () => _engine.LaunchSlot(c.TrackId, scene)),
-                    MenuKit.Item("Edit", GlyphKind.Edit, () => SlotEditRequested?.Invoke(c.TrackId, scene)),
-                    MenuKit.Item("Rename…", GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
+                    MenuKit.Item(Loc.T("Launch"), GlyphKind.Play, () => _engine.LaunchSlot(c.TrackId, scene)),
+                    MenuKit.Item(Loc.T("Edit"), GlyphKind.Edit, () => SlotEditRequested?.Invoke(c.TrackId, scene)),
+                    MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
                 },
-                new Control[] { MenuKit.Item("Copy to Arrangement", GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey) },
+                new Control[] { MenuKit.Item(Loc.T("Copy to Arrangement"), GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey) },
                 new Control[] { AddTrackSubmenu(c.TrackId) },
                 MenuKit.ClipboardGroup(() => CopySelection(), () => CutSelection(), () => PasteSelection(), () => DuplicateSelection(), CanPaste),
-                new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => DeleteSelection(), MenuKit.DeleteKey) });
+                new Control[] { MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () => DeleteSelection(), MenuKit.DeleteKey) });
         }
         else
         {
             var create = new List<Control>();
-            if (c.IsInstrument) create.Add(MenuKit.Item("Insert MIDI clip", GlyphKind.Plus, () => InsertMidiClip(c.TrackId, scene)));
-            create.Add(MenuKit.Item("Record here", GlyphKind.Record, () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
+            if (c.IsInstrument) create.Add(MenuKit.Item(Loc.T("Insert MIDI clip"), GlyphKind.Plus, () => InsertMidiClip(c.TrackId, scene)));
+            create.Add(MenuKit.Item(Loc.T("Record here"), GlyphKind.Record, () => { _engine.RecordSessionSlot(c.TrackId, scene); Refresh(); }));
             bool stop = _engine.GetSessionSlotStopButton(c.TrackId, scene);
-            create.Add(MenuKit.Item(stop ? "Remove stop button" : "Add stop button", GlyphKind.Stop, () => { _engine.SetSessionSlotStopButton(c.TrackId, scene, !stop); RefreshSlot(c.TrackId, scene); }));
+            create.Add(MenuKit.Item(stop ? Loc.T("Remove stop button") : Loc.T("Add stop button"), GlyphKind.Stop, () => { _engine.SetSessionSlotStopButton(c.TrackId, scene, !stop); RefreshSlot(c.TrackId, scene); }));
             MenuKit.AddGroups(f.Items, create,
-                new Control[] { MenuKit.Item("Paste", GlyphKind.Paste, () => PasteSelection(), MenuKit.PasteKey, CanPaste) },
+                new Control[] { MenuKit.Item(Loc.T("Paste"), GlyphKind.Paste, () => PasteSelection(), MenuKit.PasteKey, CanPaste) },
                 new Control[] { AddTrackSubmenu(c.TrackId) });
         }
         f.ShowAt(anchor, showAtPointer: true);
@@ -916,9 +917,9 @@ public sealed partial class SessionView
     // "Add …" entries: the new track lands after `anchorTrackId` (inside it for a group), or at the end.
     private IEnumerable<MenuItem> AddTrackItems(int anchorTrackId)
     {
-        yield return MenuKit.Item("Add instrument track", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Instrument, anchorTrackId));
-        yield return MenuKit.Item("Add audio track", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Audio, anchorTrackId));
-        yield return MenuKit.Item("Add return track", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Return, anchorTrackId));
+        yield return MenuKit.Item(Loc.T("Add instrument track"), GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Instrument, anchorTrackId));
+        yield return MenuKit.Item(Loc.T("Add audio track"), GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Audio, anchorTrackId));
+        yield return MenuKit.Item(Loc.T("Add return track"), GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Return, anchorTrackId));
     }
 
     // "Add track ▸ Instrument / Audio / Return · Recent" — the same submenu the arrangement
@@ -927,10 +928,10 @@ public sealed partial class SessionView
 
     private MenuItem AddTrackSubmenu(int anchorTrackId)
     {
-        var add = MenuKit.Item("Add track", GlyphKind.Plus);
-        add.Items.Add(MenuKit.Item("Instrument", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Instrument, anchorTrackId)));
-        add.Items.Add(MenuKit.Item("Audio", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Audio, anchorTrackId)));
-        add.Items.Add(MenuKit.Item("Return", GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Return, anchorTrackId)));
+        var add = MenuKit.Item(Loc.T("Add track"), GlyphKind.Plus);
+        add.Items.Add(MenuKit.Item(Loc.T("Instrument"), GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Instrument, anchorTrackId)));
+        add.Items.Add(MenuKit.Item(Loc.T("Audio"), GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Audio, anchorTrackId)));
+        add.Items.Add(MenuKit.Item(Loc.T("Return"), GlyphKind.Plus, () => AddTrackRequested?.Invoke(NewTrackKind.Return, anchorTrackId)));
         MenuKit.AddRecent(add, RecentInstrumentItems?.Invoke(anchorTrackId));
         return add;
     }
@@ -942,7 +943,7 @@ public sealed partial class SessionView
         if (RecentInstrumentItems?.Invoke(anchorTrackId) is { Count: > 0 } recent)
         {
             f.Items.Add(new Separator());
-            f.Items.Add(MenuKit.Caption("Recent"));
+            f.Items.Add(MenuKit.Caption(Loc.T("Recent")));
             foreach (var mi in recent) f.Items.Add(mi);
         }
         f.ShowAt(anchor, showAtPointer: true);
@@ -956,7 +957,7 @@ public sealed partial class SessionView
         if (c.Kind == ColKind.Master)
         {
             MenuKit.AddGroups(f.Items,
-                new Control[] { MenuKit.Header("Master", NotaPalette.Master, "Master") },
+                new Control[] { MenuKit.Header(Loc.T("Master"), NotaPalette.Master, Loc.T("Master")) },
                 new Control[] { AddTrackSubmenu(-1) });
             f.ShowAt(anchor, showAtPointer: true);
             return;
@@ -973,11 +974,11 @@ public sealed partial class SessionView
         MenuKit.AddGroups(f.Items,
             new Control[] { MenuKit.Header(c.Name, c.Brush, pos >= 0 ? $"{c.KindLabel} · {pos + 1}" : c.KindLabel) },
             new Control[] { colour },
-            new Control[] { MenuKit.Item("Rename…", GlyphKind.Edit, () => PromptRenameTrack(anchor, c.TrackId)) },
+            new Control[] { MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit, () => PromptRenameTrack(anchor, c.TrackId)) },
             new Control[] { AddTrackSubmenu(c.TrackId) },
             new Control[]
             {
-                MenuKit.Danger(c.Kind == ColKind.Group ? "Delete group and its tracks" : "Delete", GlyphKind.Trash, () =>
+                MenuKit.Danger(c.Kind == ColKind.Group ? Loc.T("Delete group and its tracks") : Loc.T("Delete"), GlyphKind.Trash, () =>
                 {
                     _engine.RemoveTracks(new[] { c.TrackId });   // a group takes its tracks along, one undo step
                     Refresh();
@@ -1000,21 +1001,21 @@ public sealed partial class SessionView
         var f = new MenuFlyout();
         string name = _engine.GetSceneName(scene);
         MenuKit.AddGroups(f.Items,
-            new Control[] { MenuKit.Header(name.Length > 0 ? name : $"Scene {scene + 1}", null, $"Scene · {scene + 1}") },
+            new Control[] { MenuKit.Header(name.Length > 0 ? name : Loc.F("Scene {0}", scene + 1), null, Loc.F("Scene · {0}", scene + 1)) },
             new Control[]
             {
-                MenuKit.Item("Launch scene", GlyphKind.Play, () => LaunchSceneRow(scene)),
-                MenuKit.Item("Stop scene", GlyphKind.Stop, () => _engine.StopScene(scene)),
-                MenuKit.Item("Rename…", GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
+                MenuKit.Item(Loc.T("Launch scene"), GlyphKind.Play, () => LaunchSceneRow(scene)),
+                MenuKit.Item(Loc.T("Stop scene"), GlyphKind.Stop, () => _engine.StopScene(scene)),
+                MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit, () => RenameSelection(), new KeyGesture(Key.F2)),
             },
             new Control[]
             {
-                MenuKit.Item("Insert scene below", GlyphKind.Plus, () => InsertSceneAtSelection(), MenuKit.Cmd(Key.I)),
-                MenuKit.Item("Capture playing clips below", GlyphKind.Copy, CaptureScene),
-                MenuKit.Item("Copy scene to Arrangement", GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey, SelectedSlots().Length > 0),
+                MenuKit.Item(Loc.T("Insert scene below"), GlyphKind.Plus, () => InsertSceneAtSelection(), MenuKit.Cmd(Key.I)),
+                MenuKit.Item(Loc.T("Capture playing clips below"), GlyphKind.Copy, CaptureScene),
+                MenuKit.Item(Loc.T("Copy scene to Arrangement"), GlyphKind.Arrow, () => CopySelectionToArrangement(), MenuKit.CopyToOtherViewKey, SelectedSlots().Length > 0),
             },
             MenuKit.ClipboardGroup(null, null, () => PasteSelection(), () => DuplicateSelection(), ClipTransfer.FromArrangement(_engine)),
-            new Control[] { MenuKit.Danger("Delete scene", GlyphKind.Trash, () => DeleteSelection(), MenuKit.DeleteKey, _sceneCount > 1) });
+            new Control[] { MenuKit.Danger(Loc.T("Delete scene"), GlyphKind.Trash, () => DeleteSelection(), MenuKit.DeleteKey, _sceneCount > 1) });
         f.ShowAt(anchor, showAtPointer: true);
     }
 }

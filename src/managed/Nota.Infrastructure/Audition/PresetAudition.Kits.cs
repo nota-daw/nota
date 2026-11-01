@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.IO;
 using Nota.Application;
 using Nota.Infrastructure.Kits;
+using Nota.Application.Localization;
 
 namespace Nota.Infrastructure;
 
@@ -92,7 +93,7 @@ public sealed partial class PresetAudition
     {
         reason = "";
         var kit = KitCatalog.ById(kitId);
-        if (kit is null) { reason = "Kit not found."; return null; }
+        if (kit is null) { reason = Loc.T("Kit not found."); return null; }
         return new AuditionPlan(keyBase, rhythm ? "Nota Rhythm" : "Nota Drum Rack", $"groove · {kit.Name}", false, "", "",
             rig => SetupKit(rig, kit, rhythm), KitGroove(kit.Swing), KitBpm(kit), 8, 2.5, false);
     }

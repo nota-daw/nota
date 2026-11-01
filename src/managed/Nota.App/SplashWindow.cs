@@ -16,6 +16,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -55,7 +56,7 @@ public sealed class SplashWindow : Window
         stack.Children.Add(logo);
         stack.Children.Add(new TextBlock
         {
-            Text = "Nota",
+            Text = Loc.T("Nota"),
             FontSize = 30,
             FontWeight = FontWeight.SemiBold,
             Foreground = NotaPalette.TextPrimary,
@@ -63,7 +64,7 @@ public sealed class SplashWindow : Window
         });
         stack.Children.Add(new TextBlock
         {
-            Text = $"Version {AppInfo.Version}",
+            Text = Loc.F("Version {0}", AppInfo.Version),
             FontSize = 12,
             Foreground = NotaPalette.TextTertiary,
             HorizontalAlignment = HorizontalAlignment.Center,

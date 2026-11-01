@@ -21,6 +21,7 @@ using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.Infrastructure;
 
@@ -198,19 +199,19 @@ public sealed partial class AppUpdater : IAppUpdater
 
     public async Task DownloadAsync(AppRelease release, IProgress<StoreProgress>? progress = null, CancellationToken ct = default)
     {
-        var asset = release.Asset ?? throw new StoreException($"Nota {release.Version} has no download for this computer.");
-        if (!CanInstallInPlace) throw new StoreException("This copy of Nota can't update itself — download the new version from the release page.");
+        var asset = release.Asset ?? throw new StoreException(Loc.F("Nota {0} has no download for this computer.", release.Version));
+        if (!CanInstallInPlace) throw new StoreException(Loc.T("This copy of Nota can't update itself — download the new version from the release page."));
         _pending = null;
         CleanUpdatesDir();
         Directory.CreateDirectory(_updatesDir);
 
         var file = Path.Combine(_updatesDir, Path.GetFileName(asset.Name));
-        await DownloadVerifiedAsync(asset, file, $"Downloading Nota {release.Version}…", progress, ct).ConfigureAwait(false);
+        await DownloadVerifiedAsync(asset, file, Loc.F("Downloading Nota {0}…", release.Version), progress, ct).ConfigureAwait(false);
 
         switch (_os == OSPlatform.OSX ? InstallKind.MacBundle : _os == OSPlatform.Windows ? InstallKind.WindowsInstaller : InstallKind.AppImage)
         {
             case InstallKind.MacBundle:
-                progress?.Report(new StoreProgress(-1, "Preparing the update…"));
+                progress?.Report(new StoreProgress(-1, Loc.T("Preparing the update…")));
                 var staged = Path.Combine(_updatesDir, $"Nota-{release.Version}.app");
                 await Task.Run(() => StageMacBundle(file, staged, release.Version), ct).ConfigureAwait(false);
                 TryDelete(file);
@@ -251,7 +252,7 @@ public sealed partial class AppUpdater : IAppUpdater
                 while ((n = await src.ReadAsync(buf, ct).ConfigureAwait(false)) > 0)
                 {
                     total += n;
-                    if (total > asset.Size) throw new StoreException("The update download is larger than expected — not installing it.");
+                    if (total > asset.Size) throw new StoreException(Loc.T("The update download is larger than expected — not installing it."));
                     sha.AppendData(buf, 0, n);
                     await dst.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
                     progress?.Report(new StoreProgress((double)total / asset.Size, label));
@@ -261,7 +262,7 @@ public sealed partial class AppUpdater : IAppUpdater
         catch (HttpRequestException e)
         {
             TryDelete(file);
-            throw new StoreException($"Couldn't download the update: {e.Message}", e);
+            throw new StoreException(Loc.F("Couldn't download the update: {0}", e.Message), e);
         }
         catch
         {
@@ -273,7 +274,7 @@ public sealed partial class AppUpdater : IAppUpdater
         if (total != asset.Size || asset.Sha256 is not null && digest != asset.Sha256)
         {
             TryDelete(file);
-            throw new StoreException("The update download is damaged (checksum mismatch) — not installing it.");
+            throw new StoreException(Loc.T("The update download is damaged (checksum mismatch) — not installing it."));
         }
     }
 
@@ -286,7 +287,7 @@ public sealed partial class AppUpdater : IAppUpdater
         try
         {
             var app = Directory.EnumerateDirectories(mount, "*.app").FirstOrDefault()
-                      ?? throw new StoreException("The update disk image doesn't contain Nota.app.");
+                      ?? throw new StoreException(Loc.T("The update disk image doesn't contain Nota.app."));
             RunTool("ditto", app, staged);
         }
         finally
@@ -296,7 +297,7 @@ public sealed partial class AppUpdater : IAppUpdater
         var plist = Path.Combine(staged, "Contents", "Info.plist");
         var m = File.Exists(plist) ? BundleVersion().Match(File.ReadAllText(plist)) : Match.Empty;
         if (!m.Success || m.Groups[1].Value.Trim() != version)
-            throw new StoreException("The downloaded Nota.app isn't the expected version — not installing it.");
+            throw new StoreException(Loc.T("The downloaded Nota.app isn't the expected version — not installing it."));
     }
 
     [GeneratedRegex(@"<key>CFBundleShortVersionString</key>\s*<string>([^<]*)</string>")]
@@ -306,11 +307,11 @@ public sealed partial class AppUpdater : IAppUpdater
     {
         var psi = new ProcessStartInfo(exe) { UseShellExecute = false, RedirectStandardError = true, RedirectStandardOutput = true };
         foreach (var a in args) psi.ArgumentList.Add(a);
-        using var p = Process.Start(psi) ?? throw new StoreException($"Couldn't start {exe}.");
+        using var p = Process.Start(psi) ?? throw new StoreException(Loc.F("Couldn't start {0}.", exe));
         var err = p.StandardError.ReadToEndAsync();
         _ = p.StandardOutput.ReadToEndAsync();
-        if (!p.WaitForExit(TimeSpan.FromMinutes(2))) { try { p.Kill(); } catch { } throw new StoreException($"{exe} timed out."); }
-        if (p.ExitCode != 0) throw new StoreException($"Couldn't prepare the update ({exe}: {err.Result.Trim()}).");
+        if (!p.WaitForExit(TimeSpan.FromMinutes(2))) { try { p.Kill(); } catch { } throw new StoreException(Loc.F("{0} timed out.", exe)); }
+        if (p.ExitCode != 0) throw new StoreException(Loc.F("Couldn't prepare the update ({0}: {1}).", exe, err.Result.Trim()));
     }
 
     // ---- install on exit --------------------------------------------------------------------

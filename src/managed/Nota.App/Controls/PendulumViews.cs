@@ -20,6 +20,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -178,7 +179,7 @@ internal sealed class PendulumBarView : Control
         const double padX = 6;
         var cap = new FormattedText("Notes", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 7, NotaPalette.TextTertiary);
         ctx.DrawText(cap, new Point(padX, 3));
-        var sub = PendulumInk.Mono($"bar · quantize {_quant.ToLowerInvariant()}", NotaPalette.TextAxis);
+        var sub = PendulumInk.Mono(Loc.F("bar · quantize {0}", _quant.ToLowerInvariant()), NotaPalette.TextAxis);
         ctx.DrawText(sub, new Point(padX + cap.Width + 6, 3));
         int shown = Visible(_s);
         var right = PendulumInk.Mono($"{_sort} · {shown} {(shown == 1 ? "note" : "notes")}", NotaPalette.TealBright);

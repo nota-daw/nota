@@ -1,3 +1,4 @@
+using Nota.Application.Localization;
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
@@ -32,30 +33,30 @@ internal sealed record RackKindProfile(
         RackKind.Instrument, "Zones", KeyZones: true, VelocityZones: true, SelectRanges: false,
         Modes: [], OutputTab: "Rack out", ChainPan: true, ChainTranspose: false, VolumeIsVelocity: false,
         LevelMeter: true, TakesInstrument: true, TakesAudioEffects: true, TakesMidiEffects: true,
-        ChainsHint: "Drop an instrument to add a layer.");
+        ChainsHint: Loc.T("Drop an instrument to add a layer."));
 
     public static readonly RackKindProfile AudioEffect = new(
         RackKind.AudioEffect, "Select", KeyZones: false, VelocityZones: false, SelectRanges: true,
         Modes:
         [
-            (Parallel, "Parallel", "All chains get the input. Outputs are summed."),
-            (Serial, "Serial", "Chain 1 feeds chain 2, top to bottom."),
-            (Select, "Select", "Only chains whose range holds the selector play."),
+            (Parallel, "Parallel", Loc.T("All chains get the input. Outputs are summed.")),
+            (Serial, "Serial", Loc.T("Chain 1 feeds chain 2, top to bottom.")),
+            (Select, "Select", Loc.T("Only chains whose range holds the selector play.")),
         ],
         OutputTab: "Rack out", ChainPan: true, ChainTranspose: false, VolumeIsVelocity: false,
         LevelMeter: true, TakesInstrument: false, TakesAudioEffects: true, TakesMidiEffects: false,
-        ChainsHint: "Drop an effect to add a chain.");
+        ChainsHint: Loc.T("Drop an effect to add a chain."));
 
     public static readonly RackKindProfile MidiEffect = new(
         RackKind.MidiEffect, "Zones", KeyZones: true, VelocityZones: true, SelectRanges: true,
         Modes:
         [
-            (Parallel, "Parallel", "Each note goes to every chain whose zone it hits. Outputs merge before the instrument."),
-            (Select, "Select", "Only chains whose range holds the selector get notes."),
+            (Parallel, "Parallel", Loc.T("Each note goes to every chain whose zone it hits. Outputs merge before the instrument.")),
+            (Select, "Select", Loc.T("Only chains whose range holds the selector get notes.")),
         ],
         OutputTab: "Output", ChainPan: false, ChainTranspose: true, VolumeIsVelocity: true,
         LevelMeter: false, TakesInstrument: false, TakesAudioEffects: false, TakesMidiEffects: true,
-        ChainsHint: "Drop MIDI effects here. Output goes to the track instrument.");
+        ChainsHint: Loc.T("Drop MIDI effects here. Output goes to the track instrument."));
 
     public static RackKindProfile For(RackKind kind) => kind switch
     {

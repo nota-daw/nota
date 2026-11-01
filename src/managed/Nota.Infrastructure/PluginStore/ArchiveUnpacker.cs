@@ -13,6 +13,7 @@
 
 using System.Diagnostics;
 using System.IO.Compression;
+using Nota.Application.Localization;
 
 namespace Nota.Infrastructure;
 
@@ -58,13 +59,13 @@ public static class ArchiveUnpacker
                 UnpackDeb(archive, dest, ct);
                 break;
             default:
-                throw new StoreException($"Unsupported archive type \"{kind}\".");
+                throw new StoreException(Loc.F("Unsupported archive type \"{0}\".", kind));
         }
     }
 
     private static void RequireMac(string kind)
     {
-        if (!OperatingSystem.IsMacOS()) throw new StoreException($"A .{kind} archive can only be unpacked on macOS.");
+        if (!OperatingSystem.IsMacOS()) throw new StoreException(Loc.F("A .{0} archive can only be unpacked on macOS.", kind));
     }
 
     // Refuses entries that would land outside the destination (absolute, drive-rooted or
@@ -78,7 +79,7 @@ public static class ArchiveUnpacker
         {
             var rel = e.FullName.Replace('\\', '/');
             if (rel.StartsWith('/') || rel.Contains(':') || rel.Split('/').Contains(".."))
-                throw new StoreException($"The archive contains an unsafe path: {e.FullName}");
+                throw new StoreException(Loc.F("The archive contains an unsafe path: {0}", e.FullName));
             backslashes |= e.FullName.Contains('\\');
         }
         return backslashes;
@@ -94,7 +95,7 @@ public static class ArchiveUnpacker
             var rel = e.FullName.Replace('\\', '/');
             var target = Path.GetFullPath(Path.Combine(dest, rel));
             if (!target.StartsWith(root, StringComparison.Ordinal) && target + Path.DirectorySeparatorChar != root)
-                throw new StoreException($"The archive contains an unsafe path: {e.FullName}");
+                throw new StoreException(Loc.F("The archive contains an unsafe path: {0}", e.FullName));
             if (rel.EndsWith('/')) { Directory.CreateDirectory(target); continue; }
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             e.ExtractToFile(target, overwrite: true);
@@ -126,7 +127,7 @@ public static class ArchiveUnpacker
         using var f = File.OpenRead(archive);
         var magic = new byte[8];
         if (f.Read(magic) != 8 || System.Text.Encoding.ASCII.GetString(magic) != "!<arch>\n")
-            throw new StoreException("The .deb archive is damaged.");
+            throw new StoreException(Loc.T("The .deb archive is damaged."));
         var header = new byte[60];
         while (f.Read(header) == 60)
         {
@@ -146,7 +147,7 @@ public static class ArchiveUnpacker
             }
             f.Seek(size + (size & 1), SeekOrigin.Current);
         }
-        throw new StoreException("The .deb archive has no data.");
+        throw new StoreException(Loc.T("The .deb archive has no data."));
     }
 
     private static void CopyExactly(Stream from, Stream to, long count)
@@ -155,7 +156,7 @@ public static class ArchiveUnpacker
         while (count > 0)
         {
             int n = from.Read(buf, 0, (int)Math.Min(buf.Length, count));
-            if (n <= 0) throw new StoreException("The .deb archive is truncated.");
+            if (n <= 0) throw new StoreException(Loc.T("The .deb archive is truncated."));
             to.Write(buf, 0, n);
             count -= n;
         }
@@ -199,8 +200,8 @@ public static class ArchiveUnpacker
         foreach (var a in args) psi.ArgumentList.Add(a);
 
         Process p;
-        try { p = Process.Start(psi) ?? throw new StoreException($"Couldn't start {exe}."); }
-        catch (System.ComponentModel.Win32Exception e) { throw new StoreException($"Unpacking needs \"{exe}\", which wasn't found.", e); }
+        try { p = Process.Start(psi) ?? throw new StoreException(Loc.F("Couldn't start {0}.", exe)); }
+        catch (System.ComponentModel.Win32Exception e) { throw new StoreException(Loc.F("Unpacking needs \"{0}\", which wasn't found.", exe), e); }
         using (p)
         {
             if (stdin is not null) { p.StandardInput.Write(stdin); p.StandardInput.Close(); }
@@ -209,7 +210,7 @@ public static class ArchiveUnpacker
             try { p.WaitForExitAsync(ct).GetAwaiter().GetResult(); }
             catch (OperationCanceledException) { try { p.Kill(entireProcessTree: true); } catch { } throw; }
             if (p.ExitCode != 0)
-                throw new StoreException($"{exe} failed ({p.ExitCode}): {stderr.GetAwaiter().GetResult().Trim()}");
+                throw new StoreException(Loc.F("{0} failed ({1}): {2}", exe, p.ExitCode, stderr.GetAwaiter().GetResult().Trim()));
         }
     }
 }

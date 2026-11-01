@@ -83,6 +83,10 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
     Console.WriteLine("-- design: interface scale --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunInterfaceScale()) Check(ok, label);
+    Console.WriteLine("-- localization: language --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLanguage()) Check(ok, label);
+    Console.WriteLine("-- localization: source --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLocalization()) Check(ok, label);
     Console.WriteLine("-- design: labels --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLabels()) Check(ok, label);
     Console.WriteLine("-- design: icons --");
@@ -126,6 +130,14 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     return f == 0 ? 0 : 1;
 }
 
+// Design and localization checks alone, without the engine tests: `--localization`.
+// NOTA_LOC_WRITE_BASELINE=1 rewrites LocalizationAllowList.txt; NOTA_LOC_STRICT=1 fails on any
+// text French lacks.
+if (args.Length >= 1 && args[0] == "--localization")
+{
+    Console.WriteLine(failures == 0 ? "LOCALIZATION PASSED" : $"LOCALIZATION FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Command palette alone: `--palette`; `--palette-dump <query>` prints a query's ranking.
 if (args.Length >= 2 && args[0] == "--palette-dump") { PaletteTests.Dump(string.Join(' ', args[1..])); return 0; }
 if (args.Length >= 1 && args[0] == "--palette")
@@ -245,6 +257,14 @@ if (args.Length >= 1 && args[0] == "--release-notes")
     Console.WriteLine("-- app: What's New release notes --");
     foreach (var (ok, label) in ReleaseNotesTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "RELEASE NOTES PASSED" : $"RELEASE NOTES FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
+// A project saved in either language alone: `--language-project`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--language-project")
+{
+    foreach (var (ok, label) in LanguageProjectTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "LANGUAGE PROJECT PASSED" : $"LANGUAGE PROJECT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 
@@ -15257,6 +15277,7 @@ foreach (var (ok, label) in ClipEditorTests.Run()) Check(ok, label);
 // --- project: content-addressed bundle (samples / plugin states named by hash) ---
 Console.WriteLine("-- project: content-addressed bundle --");
 foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
+foreach (var (ok, label) in LanguageProjectTests.Run()) Check(ok, label);
 Console.WriteLine("-- project: version history --");
 foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
 foreach (var (ok, label) in HistoryTests.RunGraph()) Check(ok, label);

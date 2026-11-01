@@ -22,6 +22,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -107,8 +108,8 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         int MeterI() => Idx(Meter);
         string Unit() => Units[MeterI()];
         string MonoF(double v) => On(MonoBelow) ? HzF(v) : "off";
-        string PhaseText() => On(InvertL) && On(InvertR) ? "both phases inverted" : On(InvertL) ? "phase L inverted" : On(InvertR) ? "phase R inverted" : "phase normal";
-        string MonoText() => On(MonoBelow) ? NotaNum.F($"mono below {HzF(P(MonoFreq))}") : "bass mono off";
+        string PhaseText() => On(InvertL) && On(InvertR) ? Loc.T("both phases inverted") : On(InvertL) ? "phase L inverted" : On(InvertR) ? "phase R inverted" : "phase normal";
+        string MonoText() => On(MonoBelow) ? NotaNum.F($"mono below {HzF(P(MonoFreq))}") : Loc.T("bass mono off");
         string BalanceText()
         {
             double b = Sc(S_EnergyBal);
@@ -118,7 +119,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         {
             double c = Sc(S_Corr);
             if (Sc(S_OutPk) < 1e-4) return "no signal";
-            if (c < 0) return "out of phase — mono risk";
+            if (c < 0) return Loc.T("out of phase — mono risk");
             if (c < 0.3) return "wide — check in mono";
             return P(Width_) > 100.5 ? "wider, still in phase" : "in phase";
         }
@@ -299,8 +300,8 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             SetP(Gain, 0f);
             engine.DeviceAction(track, di, 1, 0, 0);
         }
-        const string GainMatchTip = "Gain match — moves Gain once so the output meets the reference (the input's level, or Target) over the last 3 s, in the meter's unit";
-        const string ResetTip = "Reset — Gain back to 0 dB, and the meters, holds and the level history start over";
+        string GainMatchTip = Loc.T("Gain match — moves Gain once so the output meets the reference (the input's level, or Target) over the last 3 s, in the meter's unit");
+        string ResetTip = Loc.T("Reset — Gain back to 0 dB, and the meters, holds and the level history start over");
 
         // ======================================================================
         // LEFT — Level column (input · output)
@@ -311,8 +312,8 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         var outMeter = MeterBar(Teal);
         var levelIn = Mono("", 7, TextPrimary); levelIn.HorizontalAlignment = HorizontalAlignment.Center;
         var levelOut = Mono("", 7, TextPrimary); levelOut.HorizontalAlignment = HorizontalAlignment.Center;
-        ToolTip.SetTip(levelIn, "The input's level in the meter's unit (LUFS-S, 1 s peak or 300 ms RMS)");
-        ToolTip.SetTip(levelOut, "The output's level in the meter's unit");
+        ToolTip.SetTip(levelIn, Loc.T("The input's level in the meter's unit (LUFS-S, 1 s peak or 300 ms RMS)"));
+        ToolTip.SetTip(levelOut, Loc.T("The output's level in the meter's unit"));
         static double MeterN(double lin) => lin > 1e-6 ? Math.Clamp((20 * Math.Log10(lin) + 60) / 60, 0, 1) : 0;
         readouts.Add(() =>
         {
@@ -330,8 +331,8 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             return d;
         }
         var meters = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        meters.Children.Add(MeterCell(inMeter, "IN", "Input peak, −60 … 0 dBFS"));
-        meters.Children.Add(Col(MeterCell(outMeter, "OUT", "Output peak, −60 … 0 dBFS"), 1));
+        meters.Children.Add(MeterCell(inMeter, "IN", Loc.T("Input peak, −60 … 0 dBFS")));
+        meters.Children.Add(Col(MeterCell(outMeter, "OUT", Loc.T("Output peak, −60 … 0 dBFS")), 1));
         var levelCol = new RuleSection
         {
             Width = 56, Padding = new Thickness(0, 5, 0, 4),
@@ -340,7 +341,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         DockPanel.SetDock(levelCol, Dock.Left);
 
         Control WidthModeSeg() => Seg(WidthMode, new[] { "L/R", "M/S" },
-            "Width law — L/R: the side is scaled, so wider is louder; M/S: mid and side are traded, so the level holds (200 % = side only)");
+            Loc.T("Width law — L/R: the side is scaled, so wider is louder; M/S: mid and side are traded, so the level holds (200 % = side only)"));
 
         // ======================================================================
         // CENTRE — Field
@@ -355,12 +356,12 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             field.DragV += v => SetN(Width_, v);
             field.GestureBegin += () => { Begin(Balance); Begin(Width_); };
             field.GestureEnd += () => { End(Balance); End(Width_); };
-            ToolTip.SetTip(field, "The output's stereo field by frequency over the last second — lows at the bottom, highs at the top. Solid: where each band sits between L and R; teal: how far it spreads; dashed: how far the width setting spreads an uncorrelated band. Drag sideways for the balance, up or down for the width.");
+            ToolTip.SetTip(field, Loc.T("The output's stereo field by frequency over the last second — lows at the bottom, highs at the top. Solid: where each band sits between L and R; teal: how far it spreads; dashed: how far the width setting spreads an uncorrelated band. Drag sideways for the balance, up or down for the width."));
             Learn(field, Width_);
 
             var corr = Mono("", 7, TextTertiary);
             readouts.Add(() => corr.Text = "corr " + CorrF(Sc(S_Corr)));
-            var chips = IndexChips(ChannelMode, Modes, "Channel — Stereo; Left or Right on both sides; Swap the sides");
+            var chips = IndexChips(ChannelMode, Modes, Loc.T("Channel — Stereo; Left or Right on both sides; Swap the sides"));
             var head = HeadRow(Row(6, Caps("CHANNEL"), chips, WidthModeSeg()), corr);
             var knobs = KnobRow(new[]
             {
@@ -387,19 +388,19 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             widthView.DragV += v => SetN(Width_, v);
             widthView.GestureBegin += () => { Begin(MonoFreq); Begin(Width_); };
             widthView.GestureEnd += () => { End(MonoFreq); End(Width_); };
-            ToolTip.SetTip(widthView, "The width over frequency — solid: what the settings do (0 % = mono, 100 % = unchanged), the mono region shaded; teal dashed: the output's measured width (side against mid). Drag sideways for the mono cutoff, up or down for the width.");
+            ToolTip.SetTip(widthView, Loc.T("The width over frequency — solid: what the settings do (0 % = mono, 100 % = unchanged), the mono region shaded; teal dashed: the output's measured width (side against mid). Drag sideways for the mono cutoff, up or down for the width."));
             Learn(widthView, MonoFreq);
 
             var wv = Mono("", 7, TextSecondary);
             readouts.Add(() => wv.Text = NotaNum.F($"width {Sc(S_EffWidth):0}"));
-            var onOff = ToggleLatch(MonoBelow, () => On(MonoBelow) ? "On" : "Off", "Mono below — removes the side below the cutoff, so the low end is mono");
+            var onOff = ToggleLatch(MonoBelow, () => On(MonoBelow) ? "On" : "Off", Loc.T("Mono below — removes the side below the cutoff, so the low end is mono"));
             float[] quick = { 60, 120, 240 };
             var quickSeg = Segments(new[] { "60", "120", "240" }, () => NearestHz(P(MonoFreq), quick), iv => { SetP(MonoFreq, quick[iv]); if (!On(MonoBelow)) SetP(MonoBelow, 1f); RefreshAll(); }, out var qSync, padX: 6);
             readouts.Add(qSync);
-            ToolTip.SetTip(quickSeg, "The usual cutoffs — 60, 120 or 240 Hz (turns Mono below on)");
+            ToolTip.SetTip(quickSeg, Loc.T("The usual cutoffs — 60, 120 or 240 Hz (turns Mono below on)"));
             Learn(quickSeg, MonoFreq);
             var slope = Latch(MonoSlope, () => Idx(MonoSlope) > 0, () => SetP(MonoSlope, (Idx(MonoSlope) + 1) % 3),
-                () => NotaNum.F($"Slope {Slopes[Idx(MonoSlope)]}"), "Slope of the mono cutoff — 6, 12 or 24 dB/oct; click to step");
+                () => NotaNum.F($"Slope {Slopes[Idx(MonoSlope)]}"), Loc.T("Slope of the mono cutoff — 6, 12 or 24 dB/oct; click to step"));
             var head = HeadRow(Row(6, Caps("MONO"), onOff, quickSeg, WidthModeSeg(), slope), wv);
             var knobs = KnobRow(new[]
             {
@@ -424,12 +425,12 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             levelView.DragV += v => SetN(Target, v);
             levelView.GestureBegin += () => Begin(Target);
             levelView.GestureEnd += () => End(Target);
-            ToolTip.SetTip(levelView, "Input (teal) and output (neutral ink) over the last 8 s in the meter's unit; dashed: the target. Drag up or down for the target.");
+            ToolTip.SetTip(levelView, Loc.T("Input (teal) and output (neutral ink) over the last 8 s in the meter's unit; dashed: the target. Drag up or down for the target."));
             Learn(levelView, Target);
 
             var delta = Mono("", 7, TextSecondary);
             readouts.Add(() => delta.Text = DeltaText());
-            var chips = IndexChips(Meter, Meters, "Meter — LUFS-S: short-term loudness (3 s, K-weighted); Peak: sample peak; RMS: 300 ms");
+            var chips = IndexChips(Meter, Meters, Loc.T("Meter — LUFS-S: short-term loudness (3 s, K-weighted); Peak: sample peak; RMS: 300 ms"));
             var head = HeadRow(Row(6, Caps("METER"), chips, Button("Gain match", GainMatch, GainMatchTip, true), Button("Reset", ResetLevels, ResetTip, false)), delta);
             var knobs = KnobRow(new[]
             {
@@ -466,9 +467,9 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         Control RoutingTab()
         {
             var phase = Row(3,
-                ToggleLatch(InvertL, () => "Ø L", "Invert the left channel's phase", h: 15, padX: 6),
-                ToggleLatch(InvertR, () => "Ø R", "Invert the right channel's phase", h: 15, padX: 6),
-                ToggleLatch(Mute, () => "Mute", "Mute the output", h: 15, padX: 6));
+                ToggleLatch(InvertL, () => "Ø L", Loc.T("Invert the left channel's phase"), h: 15, padX: 6),
+                ToggleLatch(InvertR, () => "Ø R", Loc.T("Invert the right channel's phase"), h: 15, padX: 6),
+                ToggleLatch(Mute, () => "Mute", Loc.T("Mute the output"), h: 15, padX: 6));
             // Mono on: WIDTH · MONO f | BALANCE; off: WIDTH · BALANCE | GAIN — the mockup's two states.
             var monoRow = SliderRow("Mono f", MonoFreq, HzF);
             var balA = SliderRow("BALANCE", Balance, v => NotaNum.F($"{v:+0.00;−0.00;0.00}"), bipolar: true);
@@ -484,7 +485,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             corrText.TextTrimming = TextTrimming.CharacterEllipsis;
             var corrBox = new Border { Background = Sunken, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 4),
                 Child = new StackPanel { Spacing = 3, Children = { corrTitle, corrBar, corrText } } };
-            ToolTip.SetTip(corrBox, "Output correlation — +1 mono, 0 unrelated, below 0 out of phase (it cancels in mono)");
+            ToolTip.SetTip(corrBox, Loc.T("Output correlation — +1 mono, 0 unrelated, below 0 out of phase (it cancels in mono)"));
             readouts.Add(() =>
             {
                 double c = Sc(S_Corr);
@@ -502,7 +503,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
                 Divided(slot3),
                 corrBox,
                 new StackPanel { Spacing = 5, Children = {
-                    Toggle(MonoBelow, "Mono below freq", () => On(MonoBelow) ? NotaNum.F($"Mono below {HzF(P(MonoFreq))}") : "Mono below freq"),
+                    Toggle(MonoBelow, Loc.T("Mono below freq"), () => On(MonoBelow) ? NotaNum.F($"Mono below {HzF(P(MonoFreq))}") : Loc.T("Mono below freq")),
                     Toggle(AutoMatch, "Level match", () => On(AutoMatch) ? NotaNum.F($"Level match {Sc(S_AutoDb):+0.0;−0.0;0.0} dB") : "Level match") } });
         }
 
@@ -526,7 +527,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
                     Line("out", () => NotaNum.F($"{LvlF(ScDb(S_OutLevel))} {Unit()}")),
                     Line("true peak", () => NotaNum.F($"{LvlF(ScDb(S_TruePeak))} dBTP"), TextPrimary) } },
             };
-            var matchTo = Seg(MatchTo, new[] { "Input", "Target" }, "What Gain match and Level match aim for — the input's level, or Target");
+            var matchTo = Seg(MatchTo, new[] { "Input", "Target" }, Loc.T("What Gain match and Level match aim for — the input's level, or Target"));
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
             var gm = Button("Gain match", GainMatch, GainMatchTip, false);
             ((TextBlock)gm.Child!).FontWeight = FontWeight.SemiBold;
@@ -559,7 +560,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
             {
                 1 => NotaNum.F($"width by frequency · {(On(WidthMode) ? "M/S" : "L/R")}"),
                 2 => NotaNum.F($"{Sc(S_HistSec):0} s window · {Meters[MeterI()]}"),
-                _ => "pan by frequency · 1 s window",
+                _ => Loc.T("pan by frequency · 1 s window"),
             };
         });
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => MonoTab(), 2 => LevelsTab(), _ => FieldTab() };
@@ -594,7 +595,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
                     parts.Add(Meters[MeterI()]);
                     parts.Add("in " + LvlF(ScDb(S_InLevel)));
                     parts.Add("out " + LvlF(ScDb(S_OutLevel)));
-                    parts.Add(On(MatchTo) ? NotaNum.F($"target {P(Target):0.0}") : "match to input");
+                    parts.Add(On(MatchTo) ? NotaNum.F($"target {P(Target):0.0}") : Loc.T("match to input"));
                     parts.Add("gain " + GainF(P(Gain)));
                     if (On(AutoMatch)) parts.Add(NotaNum.F($"auto {Sc(S_AutoDb):+0.0;−0.0;0.0} dB"));
                     if (On(TpLimit)) parts.Add("TP " + CeilF(P(TpCeiling)));

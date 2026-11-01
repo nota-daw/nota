@@ -10,6 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -48,14 +49,14 @@ public partial class MainWindow
 
     // The track's name as the Arrangement shows it (an unnamed instrument track reads as its instrument).
     private string TrackLabel(int trackId)
-        => trackId == Engine.MasterTrackId ? "Master" : TrackNames.Of(Engine, trackId);
+        => trackId == Engine.MasterTrackId ? Loc.T("Master") : TrackNames.Of(Engine, trackId);
 
     // Asks before a device-panel action takes a track that has clips; a track without clips goes
     // without asking (one undo brings it back either way).
     private async Task<bool> ConfirmTrackGoesAsync(int trackId, string message, string affirmative)
     {
         if (!TrackHasClips(trackId)) return true;
-        return await new ConfirmWindow("Delete track", message, affirmative, "Cancel").ShowDialog<bool>(this);
+        return await new ConfirmWindow(Loc.T("Delete track"), message, affirmative, Loc.T("Cancel")).ShowDialog<bool>(this);
     }
 
     // selected: how many devices the panel had selected. With the instrument and more (specs/044)
@@ -67,14 +68,14 @@ public partial class MainWindow
         string name = TrackLabel(trackId), inst = Engine.DeviceName(trackId, -1);
         if (selected > 1)
         {
-            if (!await new ConfirmWindow("Delete track", $"Delete track “{name}”? The track and its {selected} selected devices will be removed.",
-                    "Delete", "Cancel").ShowDialog<bool>(this)) return;
+            if (!await new ConfirmWindow(Loc.T("Delete track"), Loc.F("Delete track “{0}”? The track and its {1} selected devices will be removed.", name, selected),
+                    Loc.T("Delete"), Loc.T("Cancel")).ShowDialog<bool>(this)) return;
         }
-        else if (!await ConfirmTrackGoesAsync(trackId, $"“{name}” has clips. Delete the track with its clips?", "Delete")) return;
+        else if (!await ConfirmTrackGoesAsync(trackId, Loc.F("“{0}” has clips. Delete the track with its clips?", name), Loc.T("Delete"))) return;
         if (!Timeline.DeleteTrack(trackId)) return;
         if (_deviceChain?.TrackId == trackId) ShowDevices(-1, takeOverPanel: false);   // its cards would edit a removed track
         _session?.Refresh();
-        _vm.StatusText = cut ? $"Cut {inst} — deleted {name}" : $"Deleted {name}";
+        _vm.StatusText = cut ? Loc.F("Cut {0} — deleted {1}", inst, name) : Loc.F("Deleted {0}", name);
     }
 
     // Move to track ▸ for several selected devices (specs/044): one undo step, in chain order so
@@ -87,8 +88,8 @@ public partial class MainWindow
         int srcId = moves[0].SrcTrackId, dstId = moves[0].DstTrackId;
         string src = TrackLabel(srcId), dst = TrackLabel(dstId);
         bool withInstrument = moves.Any(m => m.Family == DeviceFamily.Instrument);
-        if (withInstrument && !await new ConfirmWindow("Delete track",
-                $"Move {moves.Count} devices to “{dst}” and delete “{src}”?", "Move", "Cancel").ShowDialog<bool>(this))
+        if (withInstrument && !await new ConfirmWindow(Loc.T("Delete track"),
+                Loc.F("Move {0} devices to “{1}” and delete “{2}”?", moves.Count, dst, src), Loc.T("Move"), Loc.T("Cancel")).ShowDialog<bool>(this))
             return;
         int moved = 0, failed = 0;
         var shift = new Dictionary<DeviceFamily, int>();   // earlier moves of a section close its gaps
@@ -111,7 +112,7 @@ public partial class MainWindow
         _session?.Refresh();
         if (dstId != Engine.MasterTrackId) Timeline.Select(dstId, -1);
         ShowDevices(dstId);
-        _vm.StatusText = failed == 0 ? $"Moved {moved} devices to {dst}" : $"Moved {moved} devices to {dst} · {failed} couldn't move";
+        _vm.StatusText = failed == 0 ? Loc.F("Moved {0} devices to {1}", moved, dst) : Loc.F("Moved {0} devices to {1} · {2} couldn't move", moved, dst, failed);
     }
 
     // Move to track ▸, or a device card dropped on a track header (⌥ = copy). One undo step; an
@@ -127,12 +128,12 @@ public partial class MainWindow
             _ => Engine.DeviceName(r.SrcTrackId, r.Index),
         };
         if (r.Family == DeviceFamily.Instrument && !r.Copy
-            && !await ConfirmTrackGoesAsync(r.SrcTrackId, $"Move {device} to “{dst}” and delete “{src}” with its clips?", "Move"))
+            && !await ConfirmTrackGoesAsync(r.SrcTrackId, Loc.F("Move {0} to “{1}” and delete “{2}” with its clips?", device, dst, src), Loc.T("Move")))
             return;
         int at = Engine.TransferDevice(r.SrcTrackId, r.Family, r.Index, r.DstTrackId, -1, r.Copy, out var flags);
         if (at < 0)
         {
-            _vm.StatusText = at == -2 ? $"“{dst}” can't take {device}." : at == -3 ? $"Couldn't copy {device}." : $"Couldn't move {device}.";
+            _vm.StatusText = at == -2 ? Loc.F("“{0}” can't take {1}.", dst, device) : at == -3 ? Loc.F("Couldn't copy {0}.", device) : Loc.F("Couldn't move {0}.", device);
             return;
         }
         _deviceChain?.DeviceTransferred(r, at);   // card state (preset label, A/B) follows the device
@@ -141,10 +142,10 @@ public partial class MainWindow
         // The device panel follows the device to its new track.
         if (r.DstTrackId != Engine.MasterTrackId) Timeline.Select(r.DstTrackId, -1);
         ShowDevices(r.DstTrackId);
-        string msg = $"{(r.Copy ? "Copied" : "Moved")} {device} to {dst}";
-        if (flags.HasFlag(TransferFlags.SidechainCleared)) msg += " · sidechain cleared";
-        if (flags.HasFlag(TransferFlags.LinksDropped)) msg += $" · modulation links left on {src}";
-        if (flags.HasFlag(TransferFlags.SourceTrackRemoved)) msg += $" · deleted {src}";
+        string msg = r.Copy ? Loc.F("Copied {0} to {1}", device, dst) : Loc.F("Moved {0} to {1}", device, dst);
+        if (flags.HasFlag(TransferFlags.SidechainCleared)) msg += Loc.T(" · sidechain cleared");
+        if (flags.HasFlag(TransferFlags.LinksDropped)) msg += Loc.F(" · modulation links left on {0}", src);
+        if (flags.HasFlag(TransferFlags.SourceTrackRemoved)) msg += Loc.F(" · deleted {0}", src);
         _vm.StatusText = msg;
     }
 }
