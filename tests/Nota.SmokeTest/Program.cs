@@ -8281,6 +8281,12 @@ Console.WriteLine("-- Param defaults (knob reset) --");
     de.PluginParamSet(t, -1, pos, Math.Clamp(idef + 0.4f, 0f, 1f));
     Check(Math.Abs(de.InstrumentParamDefault(t, pos) - idef) < 1e-4f, "instrument param default is stable after a change");
     Check(Math.Abs(de.PluginParamGet(t, -1, pos) - idef) > 0.1f, "changed instrument value differs from its default");
+    // A graph handle's "Reset to default" asks through PluginParamDefault(track, -1, …): a
+    // built-in instrument must answer with its own default there too (Aurora Sustain read 0).
+    int sus = -1; for (int i = 0; i < de.PluginParamCount(t, -1); i++) if (de.PluginParamId(t, -1, i) == "sustain") sus = i;
+    Check(sus >= 0 && de.InstrumentParamDefault(t, sus) > 0.1f
+          && Math.Abs(de.PluginParamDefault(t, -1, sus) - de.InstrumentParamDefault(t, sus)) < 1e-6f,
+        "a built-in instrument's plugin-param default is its own default (Aurora Sustain, not 0)");
 
     int cmp = de.AddBuiltinDevice(t, 1);   // Compressor
     float ddef = de.DeviceParamDefault(t, cmp, 0);

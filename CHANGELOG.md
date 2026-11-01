@@ -133,6 +133,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **"Reset to default" on an instrument's graph handles reset to zero** — right-clicking an
+  envelope or filter handle on a built-in instrument (Aurora's Sustain, for one) and choosing
+  Reset to default set the value to 0 instead of the instrument's default. It now matches
+  what a knob's double-click resets to.
 - **Session clips open in the Clip editor** (#334): a click on a slot that holds a clip shows
   that clip in the Clip tab instead of the track's devices, the **Clip** button opens the
   selected slot, and with the editor open, clicking another clip — on the same track or
