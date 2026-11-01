@@ -408,7 +408,7 @@
     <Border x:Name="StatusBar" DockPanel.Dock="Bottom" Background="{DynamicResource Brush.BgApp}"
             BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,1,0,0"
             Height="22" Padding="16,0">
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto">
         <TextBlock Classes="Caption" VerticalAlignment="Center" Text="{Binding StatusText}"/>
         <!-- Settings → Downloads job (MainWindow.Downloads.cs): it keeps running after Settings closes. -->
         <Panel x:Name="DownloadHost" Grid.Column="1" VerticalAlignment="Center"/>
@@ -426,14 +426,20 @@
         </StackPanel>
         <!-- A newer Nota release: available / downloading / ready to install (MainWindow.Updates.cs). -->
         <Panel x:Name="UpdateHost" Grid.Column="3" VerticalAlignment="Center"/>
+        <!-- Audio dropouts since the device started, in red and hidden at 0; a click resets it (#271). -->
+        <Button x:Name="DropoutButton" Grid.Column="4" Classes="ghost" IsVisible="{Binding HasDropouts}"
+                VerticalAlignment="Center" Margin="0" Padding="6,1" MinHeight="0" Cursor="Hand"
+                ToolTip.Tip="Audio dropouts since the device started: buffers Nota couldn't fill in time, heard as clicks or gaps. If they keep coming, raise the buffer size or freeze heavy tracks. Click to reset">
+          <TextBlock Classes="Caption Mono alert" Text="{Binding DropoutText}"/>
+        </Button>
         <!-- Sample rate · buffer size: opens the buffer menu (MainWindow.AudioFormat.cs, #373). -->
-        <Button x:Name="AudioFormatButton" Grid.Column="4" Classes="ghost"
+        <Button x:Name="AudioFormatButton" Grid.Column="5" Classes="ghost"
                 VerticalAlignment="Center" Margin="0" Padding="6,1" MinHeight="0" Cursor="Hand"
                 ToolTip.Tip="Sample rate and buffer size. Click to change the buffer size">
           <TextBlock Classes="Caption Mono" Text="{Binding EngineInfo}"/>
         </Button>
         <!-- The installed version: opens its release notes (What's New), never an update (#127). -->
-        <Button x:Name="VersionButton" Grid.Column="5" Classes="ghost"
+        <Button x:Name="VersionButton" Grid.Column="6" Classes="ghost"
                 VerticalAlignment="Center" Margin="0,0,-6,0" Padding="6,1" MinHeight="0"
                 Cursor="Hand" ToolTip.Tip="View release notes">
           <TextBlock x:Name="VersionText" Classes="Caption Mono"/>

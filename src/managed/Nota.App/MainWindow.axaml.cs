@@ -560,6 +560,7 @@ public partial class MainWindow : Window
         VersionText.Text = $"v{AppInfo.Version}";
         VersionButton.Click += (_, _) => ShowWhatsNew();
         SetUpAudioFormatButton();
+        DropoutButton.Click += (_, _) => vm.ResetDropouts();   // count again from zero (#271)
 
         Closed += (_, _) => vm.Dispose();
         SetUpCpuTip(vm.Engine);

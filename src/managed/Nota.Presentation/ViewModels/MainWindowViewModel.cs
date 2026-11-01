@@ -17,6 +17,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IPeriodicTimer _autosave;
     private readonly ILogSink _log;
     private int _lastXrunCount;
+    private readonly DropoutCounter _dropouts = new();
 
     public IAudioEngine Engine { get; }
     public TransportViewModel Transport { get; }
@@ -48,6 +49,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     [ObservableProperty] private string _engineInfo = "";
+    /// <summary>The status bar's dropout count (#271): "1 dropout", "3 dropouts".</summary>
+    [ObservableProperty] private string _dropoutText = DropoutCounter.Text(0);
+    /// <summary>At least one dropout since the device started or the count was reset; the
+    /// status bar shows the count only then.</summary>
+    [ObservableProperty] private bool _hasDropouts;
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private ToolbarSide _toolbarSide = ToolbarSide.Left;
 
@@ -149,8 +155,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!SuspendEnginePolling && Engine.TrackCount > 0) AutosaveRequested?.Invoke();
     }
 
-    // Surface any new audio dropouts (M7-8): log to stderr + a non-fatal status
-    // message. Playback is never interrupted — the counter is passive.
+    // Surface any new audio dropouts (M7-8): log to stderr, count them in the status bar
+    // (#271) and show a non-fatal status message. Playback is never interrupted — the
+    // counter is passive.
     private void ReportDropouts()
     {
         int count = Engine.XrunCount;
@@ -158,7 +165,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _lastXrunCount = count;
         Console.Error.WriteLine($"[xrun] audio dropout #{count} at {DateTime.Now:o}");
         _log.Warn($"Audio dropout #{count}");
-        StatusText = $"⚠ Audio dropout ({count})";
+        if (!_dropouts.Observe(count)) return;   // all from before the last reset: logged only
+        ShowDropouts();
+        StatusText = $"⚠ Audio dropout ({_dropouts.Count})";
+    }
+
+    /// <summary>Count dropouts from zero again (#271): a click on the status bar's counter,
+    /// and every device (re)start — a new device, rate or buffer is a fresh measurement.
+    /// The log still gets every dropout.</summary>
+    public void ResetDropouts()
+    {
+        _dropouts.Reset(Engine.XrunCount);
+        ShowDropouts();
+    }
+
+    private void ShowDropouts()
+    {
+        DropoutText = DropoutCounter.Text(_dropouts.Count);
+        HasDropouts = _dropouts.Count > 0;
     }
 
     /// <summary>
@@ -203,6 +227,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         RefusedSampleRate = askedRate > 0 && Engine.ActiveAudioSystem == AudioSystem.Asio
                             && Engine.GetAudioConfig().SampleRate == 0 ? askedRate : 0;
         UpdateEngineInfo();
+        ResetDropouts();
         int buf = Engine.NegotiatedBufferFrames;
         _log.Info($"Audio applied · {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames");
         if (NoAudioOutput is { } why)

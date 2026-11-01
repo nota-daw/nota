@@ -1288,6 +1288,11 @@ audio effects after it keep running and keep their settings; saved with the proj
   Audio settings…; picking a size restarts the device and playback carries on. Under ASIO
   the menu offers Driver settings… instead (the driver owns the buffer); in WASAPI exclusive
   mode it says the device's own buffer is used.
+- **Audio dropouts in the status bar** ("3 dropouts" in red, left of the sample rate): the
+  dropouts the audio device reported since it started, shown from the first one and hidden
+  while there are none; a click resets the count, and so does a new device, sample rate or
+  buffer size. Core Audio (macOS) and ASIO report dropouts; the PulseAudio / ALSA and WASAPI
+  backends don't yet, so there it never appears.
 - **About** — the app and engine versions, the copyright notice, and a pointer to the
   third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
 - **Settings** — a larger window with a sidebar grouped into Devices, Plug-ins and General

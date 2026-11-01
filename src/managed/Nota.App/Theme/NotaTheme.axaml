@@ -913,6 +913,10 @@
     <Setter Property="LineHeight" Value="16"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
   </Style>
+  <!-- A caption reporting something wrong (the status bar's dropout count): overload readout ink. -->
+  <Style Selector="TextBlock.Caption.alert">
+    <Setter Property="Foreground" Value="{DynamicResource Brush.DangerBright}"/>
+  </Style>
   <Style Selector="TextBlock.SectionLabel">   <!-- panel group heading: 11 / 600, muted, sentence case -->
     <Setter Property="FontSize" Value="11"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
