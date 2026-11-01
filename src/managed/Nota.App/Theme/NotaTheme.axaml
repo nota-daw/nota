@@ -363,6 +363,59 @@
   <!-- .danger no longer paints red: red belongs to recording and errors. A destructive
        action is an ordinary raised button; its label says what it does. -->
 
+  <!-- ===== Window caption buttons (Windows) =====
+       Avalonia draws the minimize / maximize / close buttons itself over the extended title
+       bar, as plain Buttons — so the raised Button face above would turn each into a grey
+       tile and keep the close button red at rest. Give them back a flat face: no ground at
+       rest, the hover tone under the pointer, and red only while the pointer is on close.
+       The glyph colour is CaptionButtonForeground (NotaThemeService publishes it). The
+       fullscreen button goes: Windows windows carry three, and F11 / View cover fullscreen.
+       Avalonia's own title text goes too: every Nota window draws its own title bar. -->
+  <!-- Opacity, not IsVisible: the template binds IsVisible, which outranks a style. -->
+  <Style Selector="WindowDrawnDecorations /template/ Panel#PART_TitleTextPanel">
+    <Setter Property="Opacity" Value="0"/>
+  </Style>
+  <Style Selector="WindowDrawnDecorations /template/ Button">
+    <Setter Property="Width" Value="46"/>
+    <Setter Property="Height" Value="NaN"/>
+    <Setter Property="VerticalAlignment" Value="Stretch"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border x:Name="PART_CaptionFace" Background="{DynamicResource Brush.SurfaceHoverClear}">
+          <Border.Transitions>
+            <Transitions>
+              <BrushTransition Property="Background" Duration="0:0:0.12" Easing="CubicEaseOut"/>
+            </Transitions>
+          </Border.Transitions>
+          <ContentPresenter Content="{TemplateBinding Content}"
+                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="WindowDrawnDecorations /template/ Button:pointerover /template/ Border#PART_CaptionFace">
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceHover}"/>
+  </Style>
+  <Style Selector="WindowDrawnDecorations /template/ Button:pressed /template/ Border#PART_CaptionFace">
+    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceActive}"/>
+  </Style>
+  <Style Selector="WindowDrawnDecorations /template/ Button#PART_CloseButton:pointerover /template/ Border#PART_CaptionFace,
+                   WindowDrawnDecorations /template/ Button#PART_PopoverCloseButton:pointerover /template/ Border#PART_CaptionFace">
+    <Setter Property="Background" Value="{DynamicResource Brush.Danger}"/>
+  </Style>
+  <Style Selector="WindowDrawnDecorations /template/ Button#PART_CloseButton:pressed /template/ Border#PART_CaptionFace,
+                   WindowDrawnDecorations /template/ Button#PART_PopoverCloseButton:pressed /template/ Border#PART_CaptionFace">
+    <Setter Property="Background" Value="{DynamicResource Brush.DangerBright}"/>
+  </Style>
+  <Style Selector="WindowDrawnDecorations /template/ Button#PART_CloseButton:pointerover Path,
+                   WindowDrawnDecorations /template/ Button#PART_PopoverCloseButton:pointerover Path">
+    <Setter Property="Fill" Value="{DynamicResource Brush.RecordInk}"/>
+  </Style>
+  <Style Selector="WindowDrawnDecorations /template/ Button#PART_FullScreenButton">
+    <Setter Property="IsVisible" Value="False"/>
+  </Style>
+
   <!-- ===== Toggle buttons ===== -->
   <Style Selector="ToggleButton">
     <Setter Property="IsTabStop" Value="False"/>

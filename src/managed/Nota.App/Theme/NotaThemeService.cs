@@ -86,6 +86,9 @@ internal static class NotaThemeService
     {
         if (_published) return;
         foreach (var (key, brush) in NotaPalette.AllKeys) app.Resources[key] = brush;
+        // The glyphs of the caption buttons Avalonia draws on Windows read this Fluent key;
+        // point it at the secondary-text brush so they follow the theme like our own icons.
+        app.Resources["CaptionButtonForeground"] = app.Resources["Brush.TextSecondary"];
         _published = true;
     }
 
