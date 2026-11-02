@@ -3125,6 +3125,14 @@ public sealed partial class ArrangementView : UserControl
             card.PointerPressed += (_, e) =>
             {
                 if (e.GetCurrentPoint(card).Properties.IsRightButtonPressed) { ShowFooterMenu(card, trackId); return; }
+                // Double-click a return or the master → its devices, as on a track header (#308).
+                if (e.ClickCount == 2 && e.GetCurrentPoint(card).Properties.IsLeftButtonPressed)
+                {
+                    if (SelTrackId != trackId) Select(trackId, -1);
+                    TrackDevicesRequested?.Invoke(trackId);
+                    e.Handled = true;
+                    return;
+                }
                 if (ret is not null && (e.KeyModifiers & KeyModifiers.Shift) != 0) { SelectReturnRange(trackId); e.Handled = true; return; }
                 if (ret is not null && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
                 {
