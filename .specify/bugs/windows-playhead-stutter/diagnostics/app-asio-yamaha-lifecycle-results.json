@@ -1,0 +1,25 @@
+{
+  "device": {
+    "requestedAsioDriver": "Yamaha Steinberg USB ASIO",
+    "driverId": "{CB7F9FFD-A33B-48B2-8BC0-437D94F37142}",
+    "backend": "Asio",
+    "sampleRate": 48000,
+    "bufferFrames": 64,
+    "fallbackReason": "",
+    "dropouts": 0
+  },
+  "checks": [
+    "play starts frame callbacks",
+    "export suspension stops frame callbacks",
+    "device restart and export resume restart frame callbacks",
+    "minimization stops frame callbacks",
+    "restoring the window restarts frame callbacks",
+    "seek immediately replaces the display block",
+    "repeated short loops keep the display inside the loop",
+    "tempo change and forward seek reconcile together",
+    "stop returns to the launch anchor and ends animation",
+    "play restarts after stop",
+    "closing detaches the frame owner before disposing the engine",
+    "a late frame callback after close does not access the disposed engine"
+  ]
+}

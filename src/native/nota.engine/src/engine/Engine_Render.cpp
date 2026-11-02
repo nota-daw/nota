@@ -1801,6 +1801,8 @@ void Engine::processBlock(float* out, int32_t numFrames) {
     int32_t done = 0;
     int32_t loopSeams[16];
     int32_t nLoopSeams = 0; // block offsets where the loop wrapped
+    double presentationStart = transport_.playheadSamples();
+    int32_t presentationFrames = 0, presentationLead = 0;
     while (done < numFrames) {
         if (playing && transport_.isLooping() && transport_.playheadSamples() >= transport_.loopEndSamples() - 0.5) {
             // No voice flush here: clip notes crossing the loop end get note-offs in the next
@@ -1823,6 +1825,10 @@ void Engine::processBlock(float* out, int32_t numFrames) {
             if (left < seg) seg = std::max(1, static_cast<int32_t>(std::lround(left)));
         }
         const double segStart = transport_.playheadSamples();
+        if (playing) {
+            if (presentationFrames == 0) { presentationStart = segStart; presentationLead = done; }
+            presentationFrames += seg;
+        }
         chaseNotes_ = chase;
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
         chaseNotes_ = chase = seamOffs_ = false;
@@ -1914,6 +1920,8 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         stereoBlockStep(numFrames, transport_.sampleRate()));
     masterPeakL_.store(mpkL, std::memory_order_relaxed);
     masterPeakR_.store(mpkR, std::memory_order_relaxed);
+    transport_.publishPresentation(presentationStart, presentationFrames, presentationLead,
+        deviceBlock_ && backend_ ? std::max(numFrames, backend_->bufferFrames()) : numFrames);
     masterRmsL_.store(numFrames ? static_cast<float>(std::sqrt(msqL / numFrames)) : 0.0f, std::memory_order_relaxed);
     masterRmsR_.store(numFrames ? static_cast<float>(std::sqrt(msqR / numFrames)) : 0.0f, std::memory_order_relaxed);
 }

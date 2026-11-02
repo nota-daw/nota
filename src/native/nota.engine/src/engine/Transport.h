@@ -11,16 +11,18 @@
 #include <cstdint>
 
 #include "TransportInfo.h"
+#include "nota/nota_engine.h"
 
 namespace nota {
 
 class Transport {
   public:
-    void setSampleRate(double sr) { sampleRate_ = sr; }
+    void setSampleRate(double sr) { sampleRate_ = sr; ++presentationEpoch_; }
     double sampleRate() const { return sampleRate_; }
 
     // --- control (applied on the audio thread) ---
     void play() {
+        if (!playing_) ++presentationEpoch_;
         playing_ = true;
         publish();
     }
@@ -28,12 +30,13 @@ class Transport {
     // position), so the next Play begins where the user launched from — not where it
     // happened to halt. Classic transport behaviour.
     void stop() {
+        ++presentationEpoch_;
         playing_ = false;
         playheadSamples_ = startAnchorSamples_;
         publish();
     }
     void setBpm(double bpm) {
-        if (bpm > 0) bpm_ = bpm;
+        if (bpm > 0 && bpm != bpm_) { bpm_ = bpm; ++presentationEpoch_; }
         publish();
     }
     double bpm() const { return bpm_; }
@@ -48,6 +51,7 @@ class Transport {
     // Seeking sets the insert marker: the playhead moves here and this becomes the
     // start anchor that Stop rewinds to and the next Play launches from.
     void seekBeats(double beat) {
+        ++presentationEpoch_;
         playheadSamples_ = beat * samplesPerBeat();
         startAnchorSamples_ = playheadSamples_;
         publish();
@@ -85,6 +89,10 @@ class Transport {
     double uiPositionBeats() const { return uiBeats_.load(std::memory_order_relaxed); }
     bool uiIsPlaying() const { return uiPlaying_.load(std::memory_order_relaxed); }
 
+    // Publish once per completed block; readers may skip a frame, never delay audio.
+    void publishPresentation(double startSamples, int32_t playingFrames, int32_t leadingFrames, int32_t windowFrames);
+    bool presentationSnapshot(NotaTransportSnapshot& out) const;
+
   private:
     void publish();
 
@@ -100,6 +108,21 @@ class Transport {
 
     std::atomic<double> uiBeats_{0.0};
     std::atomic<bool> uiPlaying_{false};
+
+    // Atomic payloads avoid data races even when a reader overlaps the writer.
+    // A bounded version check rejects mixed blocks. Release/acquire on each field
+    // makes observing any new payload also expose the writer's odd sequence.
+    std::atomic<uint32_t> presentationSequence_{0};
+    std::atomic<double> presentationStart_{0.0}, presentationEnd_{0.0}, presentationBpm_{120.0};
+    std::atomic<double> presentationLoopStart_{0.0}, presentationLoopEnd_{0.0};
+    std::atomic<double> presentationDuration_{0.0}, presentationDelay_{0.0};
+    std::atomic<int64_t> presentationStamp_{0};
+    std::atomic<int32_t> presentationPlaying_{0}, presentationLooping_{0};
+    // Audio-thread history spans a hardware period when WASAPI batches smaller
+    // client callbacks. Control discontinuities reset it before any interpolation.
+    uint64_t presentationEpoch_ = 0, presentationPublishedEpoch_ = 0;
+    int64_t presentationFrames_ = 0;
+    double presentationOrigin_ = 0.0;
 };
 
 } // namespace nota

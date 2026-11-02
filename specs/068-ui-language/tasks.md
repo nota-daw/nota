@@ -357,4 +357,3 @@ After Phase 2, one person per area in 3b/3c/3d (the wrapping is file-disjoint). 
   `preferences/appearance` (EN + RU) now has a **Language** row and a **Language** section; `coverage.yml` lists the new sources; `npm run build` and `npm run check` pass (0 errors).
   Nothing is committed or pushed there: the three changed files wait in that clone for the maintainer. A dedicated screenshot of the Language row was not taken (the existing
   Appearance shot frames the top of the page; a new scene would be needed).
-

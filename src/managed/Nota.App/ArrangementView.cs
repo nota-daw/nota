@@ -39,6 +39,7 @@ public sealed partial class ArrangementView : UserControl
     private double _pixelsPerBeat = 28;
     private double _scrollBeats;
     private double _playheadBeats;
+    private double _displayPlayheadBeats; // paint/follow only; edits keep using _playheadBeats
     private double _totalBeats = 64;
     private int _beatsPerBar = 4;
     private ResolvedGrid _lastGrid;                // what the snap chip last showed (GridChanged)
@@ -642,9 +643,9 @@ public sealed partial class ArrangementView : UserControl
         double laneWidth = _lanes.Bounds.Width;
         if (laneWidth <= 0 || _pixelsPerBeat <= 0) return false;
         double viewportBeats = laneWidth / _pixelsPerBeat;
-        double rel = _playheadBeats - _scrollBeats, margin = viewportBeats * 0.05;
+        double rel = _displayPlayheadBeats - _scrollBeats, margin = viewportBeats * 0.05;
         if (rel >= margin && rel <= viewportBeats - margin) return false;
-        double target = Math.Clamp(_playheadBeats - viewportBeats * 0.25, 0, Math.Max(0, _hScroll.Maximum));
+        double target = Math.Clamp(_displayPlayheadBeats - viewportBeats * 0.25, 0, Math.Max(0, _hScroll.Maximum));
         if (Math.Abs(target - _scrollBeats) < 1e-6) return false;
         _scrollBeats = target;
         _hScroll.Value = target;
@@ -656,7 +657,7 @@ public sealed partial class ArrangementView : UserControl
     /// of it, 0 on screen (the ruler draws an arrow at that edge, #105).</summary>
     internal int PlayheadOffscreen()
     {
-        double x = BeatToX(_playheadBeats), w = _lanes.Bounds.Width;
+        double x = BeatToX(_displayPlayheadBeats), w = _lanes.Bounds.Width;
         return w <= 0 ? 0 : x < 0 ? -1 : x > w ? 1 : 0;
     }
 
@@ -684,25 +685,17 @@ public sealed partial class ArrangementView : UserControl
         double laneWidth = _lanes.Bounds.Width;
         if (laneWidth <= 0 || _pixelsPerBeat <= 0) return false;
         double viewportBeats = laneWidth / _pixelsPerBeat;
-        double target = Math.Clamp(_playheadBeats - viewportBeats / 2.0, 0, Math.Max(0, _hScroll.Maximum));
+        double target = Math.Clamp(_displayPlayheadBeats - viewportBeats / 2.0, 0, Math.Max(0, _hScroll.Maximum));
         if (Math.Abs(target - _scrollBeats) < 1e-6) return false;
         _scrollBeats = target;
         _hScroll.Value = target;   // the InvalidateVisual calls below repaint with the new scroll
         return true;
     }
 
-    public void SetPlayhead(double beats)
+    public void SetPlayhead(double beats, bool preserveDisplay = false)
     {
-        bool moved = beats != _playheadBeats;
         _playheadBeats = beats;
-        // While following, the view scrolls under the playhead — the lane surface (clips /
-        // waveforms) must repaint along with the ruler+overlay, not just the overlay.
-        // Every Play starts Follow afresh, even when the last run left it paused.
         bool playing = _engine is { IsPlaying: true };
-        if (playing && !_wasPlaying) SetFollowSuspended(false);
-        _wasPlaying = playing;
-        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && CenterOnPlayhead();
-        if (scrolled) _lanes.InvalidateVisual();
         // Converge the loop highlight with the engine (~30 Hz) so transport-bar
         // toggles/changes reflect here too — except mid-drag, where we show a preview.
         bool loopChanged = false;
@@ -716,6 +709,25 @@ public sealed partial class ArrangementView : UserControl
         // follow a knob turned in the device. Redraw the lanes only when a visible empty lane's
         // baseline actually changed (params with points are automation-driven — no baseline).
         if (_automationMode) RefreshAutoBaselines();
+        UpdatePlayheadDisplay(preserveDisplay && playing ? _displayPlayheadBeats : beats, playing, loopChanged);
+    }
+
+    /// <summary>Frame-rate display update; does no meter, automation or loop polling.</summary>
+    public void SetPlayheadFrame(double positionBeats, double displayBeats, bool playing)
+    {
+        _playheadBeats = positionBeats;
+        UpdatePlayheadDisplay(displayBeats, playing, false);
+    }
+
+    private void UpdatePlayheadDisplay(double beats, bool playing, bool loopChanged)
+    {
+        bool moved = beats != _displayPlayheadBeats;
+        _displayPlayheadBeats = beats;
+        if (playing && !_wasPlaying) SetFollowSuspended(false);
+        _wasPlaying = playing;
+        // Follow must repaint the content as well as the moving overlay.
+        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && CenterOnPlayhead();
+        if (scrolled) _lanes.InvalidateVisual();
         // Stopped with nothing moving: the playhead chrome is already right — repainting it
         // every tick kept the whole window redrawing ~30×/s while idle (#55).
         if (!moved && !scrolled && !loopChanged) return;
@@ -3177,7 +3189,7 @@ public sealed partial class ArrangementView : UserControl
     // Playhead: a 1px accent line with a 7×5 flag on the ruler, no glow (almanac § timeline).
     // The brush is the palette slot itself — a SolidColorBrush built from its Color froze the
     // playhead in one theme.
-    private static readonly IBrush PlayheadBrush = NotaPalette.Accent;
+    private static readonly IBrush PlayheadBrush = NotaPalette.Playhead;
     private static readonly IPen PlayheadPen = new Pen(PlayheadBrush, 1);
     // Selection edges a clip with 1px brass — a state never thickens a border to 2px.
     private static readonly IPen ClipSelBorder = new Pen(NotaPalette.Accent, 1);
@@ -3228,8 +3240,8 @@ public sealed partial class ArrangementView : UserControl
         { DashStyle = new DashStyle(new double[] { 3, 3 }, 0) };
     // Write-arm REC button (M9-C): red dot + "REC", lit when armed.
     // Hover feedback (M9-D): brass-accent brighter line + point ring under the cursor.
-    private static readonly IPen   AutoHoverPen = new Pen(PlayheadBrush, 2.6);
-    private static readonly IPen   AutoHoverRing = new Pen(PlayheadBrush, 1.5);
+    private static readonly IPen   AutoHoverPen = new Pen(NotaPalette.Accent, 2.6);
+    private static readonly IPen   AutoHoverRing = new Pen(NotaPalette.Accent, 1.5);
     // Automation range selection (Phase 2): teal band + edges over the picked time span,
     // distinct from the brass loop band so the two never read as the same thing.
     private static readonly IBrush AutoSelBand = NotaPalette.Wash(NotaPalette.Ink("#4CC2B0"), 0x30);

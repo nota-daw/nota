@@ -23,6 +23,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Logic Grey colour theme**: choose it under Settings → Appearance → Dark for neutral
+  studio greys, subtle raised-control shading and a gold playhead. The choice applies
+  immediately and is remembered; Studio Dark remains the default, and musical/status
+  colours, layout and editing behavior retain their existing roles.
 - **French interface and a Language setting**: Preferences → Appearance → **Language** lists
   English and Français (each in its own name). The choice is saved and applies after a restart;
   the row says so and offers a **Restart** button (the usual unsaved-changes prompt comes first).
@@ -148,6 +152,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Piano-roll playback cursor**: arrangement MIDI clips now follow the same smooth
+  display-frame position as the arrangement. Cursor movement redraws lightweight
+  overlays instead of repainting all notes and ruler labels.
+- **Windows playback cursor**: the Arrangement playhead now follows display frames,
+  interpolating the engine's rendered blocks instead of jumping on the UI polling timer.
+  Editing positions and audio timing remain tied to the engine transport.
 - **Window buttons on Windows** — minimize, maximize and close in the title bar showed as
   grey rounded tiles with an always-red close button, plus an extra fullscreen button. They
   are flat again, as in other Windows apps: the hover tone under the pointer, red only while

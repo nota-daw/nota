@@ -208,6 +208,9 @@ NotaResult nota_transport_seek(NotaEngine* e, double beat) {
 double nota_transport_position_beats(const NotaEngine* e) {
     return e ? CENG(e)->positionBeats() : 0.0;
 }
+int32_t nota_transport_snapshot(const NotaEngine* e, NotaTransportSnapshot* out_snapshot) {
+    return e && out_snapshot && CENG(e)->transportSnapshot(*out_snapshot) ? 1 : 0;
+}
 int32_t nota_transport_is_playing(const NotaEngine* e) {
     return (e && CENG(e)->isPlaying()) ? 1 : 0;
 }

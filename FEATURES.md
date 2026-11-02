@@ -1251,6 +1251,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   orange accent; the default, and what a DAW wants for long sessions in a dark room),
   **Studio Light** (the same system in light greys, the orange a shade deeper), and
   **Ember Graphite** / **Ember Paper** (warm browns with a brass accent, dark and light).
+  **Logic Grey** adds brighter neutral greys, subtle raised-control shading and a gold
+  playhead while retaining Studio Dark's musical and status colours.
   A theme changes colours only — track colours included — never the layout. Panels dock edge
   to edge on thin seams; orange marks only what is playing, selected or switched on, and a
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
@@ -1345,7 +1347,7 @@ audio effects after it keep running and keep their settings; saved with the proj
 - **Downloads**: Plug-ins, Sample Packs and AI Models (see [Plugin hosting](#plugin-hosting)).
 - **Library**: library folders.
 - **Appearance**: **Colour theme** — **Dark**, **Light** or **Follow system** over two
-  rows of cards (Studio Dark and Ember Graphite; Studio Light and Ember Paper), each a
+  rows of cards (Studio Dark, Ember Graphite and Logic Grey; Studio Light and Ember Paper), each a
   miniature Nota window in its own colours. Pick one theme, or with Follow system one for
   dark mode and one for light mode, switched with the OS appearance; the choice applies
   live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole

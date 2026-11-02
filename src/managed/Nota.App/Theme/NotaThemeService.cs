@@ -98,6 +98,7 @@ internal static class NotaThemeService
     private static void ApplyResources(Avalonia.Application app, NotaColourTheme t)
     {
         var res = app.Resources;
+        res["Brush.RaisedFill"] = NotaPalette.RaisedFill;
         res["Shadow.Raised"] = new BoxShadows(new BoxShadow { IsInset = true, OffsetY = 1, Color = t["ShadowBevel"] });
         res["Shadow.Sunken"] = new BoxShadows(new BoxShadow { IsInset = true, Spread = 1, Color = t["Rule"] });
         res["Shadow.Popover"] = new BoxShadows(new BoxShadow { Spread = 1, Color = t["Seam"] },

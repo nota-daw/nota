@@ -11,7 +11,7 @@ Track colours, clips, waveforms and meters read first; the chrome around them st
 until you touch it.
 
 Colour is a **theme** (§ Colour themes): the structure — layout, type, geometry, which
-element carries the accent — is Studio's in every theme; only the values change. Four
+element carries the accent — is Studio's in every theme; only the values change. Five
 themes are built in:
 
 - **Studio Dark** (the default) — a DAW is used in dark rooms for long sessions.
@@ -19,6 +19,8 @@ themes are built in:
   shade deeper (and its line variant darker still) so marks hold contrast on pale grey.
 - **Ember Graphite** / **Ember Paper** — the warm browns and brass of Nota's earlier
   language, dark and light, on Studio's structure.
+- **Logic Grey** — brighter neutral studio greys, a warm orange accent and gold playhead,
+  with subtle static shading on raised controls. Musical and status hues match Studio Dark.
 
 Preferences → Appearance picks a mode — **Dark**, **Light** or **Follow system** (a
 dark-mode and a light-mode theme, switched with the OS) — then a theme of that kind, each
@@ -94,12 +96,21 @@ element carries the accent.
 | Studio Light | light | The § Tokens tables below |
 | Ember Graphite | dark | Nota 0.52.1's dark palette by token name; the tokens Studio added are derived by the role Studio gives them (seam = Ember's gutter, rule = its strong border, faint = its disabled ink, mute = its amber, solo = its steel blue, viz ink = 92 % primary over the well, viz grid = its well grid, master = its muted ink) |
 | Ember Paper | light | The same, from 0.52.1's light palette |
+| Logic Grey | dark | Neutral grey ground/panels, contrast-adjusted pale text, warm accent; complete values in `Theme/Themes/logic-grey.json` |
 
 **Appearance.** Preferences → Appearance stores one theme, or **Follow system** with a
 dark-mode and a light-mode theme (each list offers only themes of that kind). Old
 settings carry over: Dark → Studio Dark, Light → Studio Light, System → follow system with
 the two Studio themes. An unknown or wrong-kind id falls back to the Studio theme of the
 kind needed (`Nota.Application.Appearance`).
+
+**Raised fills and cursors.** `Playhead` is the cursor colour; original presets match their
+`Accent`. `SurfaceRaisedTop` matches `SurfaceRaised` in original presets. When they differ,
+`Brush.RaisedFill` uses a single shared static vertical gradient; equal stops use the exact
+original solid brush. KeyMap/ByKey expose its representative solid colour; the theme service
+publishes the computed fill for dynamic XAML bindings. No view constructs a gradient.
+The design HTML mirrors the same rule. Logic Grey uses `#505054` → `#4A4A4E` and a
+`#F1C45D` cursor. Text is checked against both raised endpoints.
 
 **Adding a theme.** Add `Theme/Themes/<id>.json` with every token and append its id to
 `NotaThemes.BuiltInOrder`. Nothing else names a theme. The smoke test checks the file
@@ -126,6 +137,10 @@ Track colours are not compared with state colours: solo blue is the Keys track b
 design. **Known gap:** in Studio Light the accent line on the ground (2.39) and faint ink
 (2.58) sit below WCAG's 3:1 for graphics and incidental text; T3.3 / T3.4 hold Studio at
 those values until a Studio change raises them.
+
+T3.1–T3.3 also cover `SurfaceRaisedTop`, so static depth cannot lower text contrast.
+Logic Grey refines the supplied secondary/disabled greys to meet this bar: secondary
+`#CBCBD0`, muted `#C8C8CD`, tertiary `#A3A3A9`, faint/disabled/axis `#96969C`.
 
 ### Ember adjustments
 
@@ -172,7 +187,9 @@ HSL lightness (hue kept) that passes the bar:
    segmented group; items inside a panel are divided by the lighter 1px `Rule` (toolbar and
    menu separators, field edges, graph frames). A device card's sections are not boxes:
    they sit on the card and a rule divides neighbours (§ Device cards).
-6. **Flat docked, blur only floating.** No gradients, glow, textures or skeuomorphism.
+6. **Flat docked, blur only floating.** No view-local gradients, glow, textures or skeuomorphism.
+   Logic Grey's requested static raised-fill shading is the palette-owned exception
+   described above; every original preset remains flat.
    Depth is a tone step plus a 1px seam, with a faint top bevel on raised controls. Only
    floating layers (the command palette, in-window overlays) cast a blurred shadow.
    One exception, which is the work and not the chrome: a hosted plug-in's card stands on

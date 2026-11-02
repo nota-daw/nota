@@ -143,7 +143,7 @@
                      HorizontalOffset="2" VerticalOffset="-5"
                      IsLightDismissEnabled="False"
                      IsOpen="{TemplateBinding IsSubMenuOpen, Mode=TwoWay}">
-                <Border Background="{DynamicResource Brush.SurfaceRaised}"
+                <Border Background="{DynamicResource Brush.RaisedFill}"
                         BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="1"
                         CornerRadius="{StaticResource Radius.Control}"
                         Padding="4" MinWidth="200" MaxHeight="560">
@@ -282,7 +282,7 @@
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
     <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="Medium"/>
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderDefault}"/>
     <Setter Property="BorderThickness" Value="1"/>
@@ -432,7 +432,7 @@
     <Setter Property="FontFamily" Value="{StaticResource Font.UI}"/>
     <Setter Property="FontSize" Value="12"/>
     <Setter Property="FontWeight" Value="Medium"/>
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextStrong}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderDefault}"/>
     <Setter Property="BorderThickness" Value="1"/>
@@ -512,7 +512,7 @@
     <Setter Property="Padding" Value="0"/>
     <Setter Property="FontSize" Value="12"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Tile}"/>
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderDefault}"/>
     <Setter Property="BorderThickness" Value="1"/>
   </Style>
@@ -532,7 +532,7 @@
   <!-- Follow, paused because the view was scrolled away (#105): still on, no longer live —
        an accent outline and glyph on the resting key instead of the solid accent key. -->
   <Style Selector="ToggleButton.tp-icon.paused:checked /template/ ContentPresenter#PART_ContentPresenter">
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Accent}"/>
     <Setter Property="TextElement.Foreground" Value="{DynamicResource Brush.Accent}"/>
   </Style>
@@ -543,7 +543,7 @@
     <Setter Property="Height" Value="{StaticResource Control.Transport}"/>
     <Setter Property="Padding" Value="0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Tile}"/>
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderDefault}"/>
     <Setter Property="BorderThickness" Value="1"/>
   </Style>
@@ -575,7 +575,7 @@
     <Setter Property="Padding" Value="8,0"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
     <Setter Property="FontSize" Value="12"/>
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.BorderDefault}"/>
     <Setter Property="BorderThickness" Value="1"/>
@@ -724,7 +724,7 @@
     <Setter Property="Padding" Value="10,0"/>
     <Setter Property="CornerRadius" Value="0"/>
     <Setter Property="FontSize" Value="12"/>
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextSecondary}"/>
   </Style>
@@ -788,7 +788,7 @@
   </Style>
   <!-- dropdown flyout + items -->
   <Style Selector="ComboBox /template/ Popup Border">
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Seam}"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
   </Style>
@@ -922,7 +922,7 @@
     <Setter Property="MinHeight" Value="0"/>
   </Style>
   <Style Selector="TextBox.value.solid /template/ Border#PART_BorderElement, TextBox.value.solid:pointerover /template/ Border#PART_BorderElement, TextBox.value.solid:focus /template/ Border#PART_BorderElement">
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
   </Style>
 
   <!-- ===== Keyboard focus: a 1px accent edge, no ring and no glow ===== -->
@@ -1197,6 +1197,7 @@
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="BorderThickness" Value="0"/>
     <Setter Property="Padding" Value="0"/>
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto"/>
   </Style>
   <Style Selector="ListBox.themes ListBoxItem">
     <Setter Property="Padding" Value="0"/>
@@ -1258,7 +1259,7 @@
        drawn inside the main window (command palette). Menu items are 24px; hover is a
        full accent fill with derived ink. -->
   <Style Selector="MenuFlyoutPresenter">
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Seam}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
@@ -1275,7 +1276,7 @@
   </Style>
   <!-- A plain flyout (a popover with its own content). -->
   <Style Selector="FlyoutPresenter">
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Seam}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
@@ -1289,7 +1290,7 @@
     <Setter Property="MaxHeight" Value="720"/>
   </Style>
   <Style Selector="ContextMenu">
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Seam}"/>
     <Setter Property="BorderThickness" Value="1"/>
     <Setter Property="CornerRadius" Value="{StaticResource Radius.Control}"/>
@@ -1315,7 +1316,7 @@
   <Style Selector="Menu > MenuItem:selected /template/ Border#PART_LayoutRoot,
                    Menu > MenuItem:pointerover /template/ Border#PART_LayoutRoot,
                    Menu > MenuItem:open /template/ Border#PART_LayoutRoot">
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
   </Style>
   <Style Selector="Menu > MenuItem:selected, Menu > MenuItem:pointerover, Menu > MenuItem:open">
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
@@ -1329,7 +1330,7 @@
 
   <!-- Tooltip: a small raised popover, primary ink, 11px. -->
   <Style Selector="ToolTip">
-    <Setter Property="Background" Value="{DynamicResource Brush.SurfaceRaised}"/>
+    <Setter Property="Background" Value="{DynamicResource Brush.RaisedFill}"/>
     <Setter Property="Foreground" Value="{DynamicResource Brush.TextPrimary}"/>
     <Setter Property="BorderBrush" Value="{DynamicResource Brush.Seam}"/>
     <Setter Property="BorderThickness" Value="1"/>

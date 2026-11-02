@@ -83,6 +83,27 @@ internal static partial class DesignTokenCheck
                     : $"{id}: {fails.Count} pairing(s) below the bar — " +
                       string.Join("; ", fails.Take(6).Select(f => $"{f.Id} {f.What} {f.Value:0.00} < {f.Min}")));
         }
+
+        var studio = LoadTheme(File.ReadAllText(Path.Combine(app, "Theme/Themes/studio-dark.json")), cat).Theme;
+        var grey = LoadTheme(File.ReadAllText(Path.Combine(app, "Theme/Themes/logic-grey.json")), cat).Theme;
+        if (studio is not null && grey is not null)
+        {
+            var musical = Enumerable.Range(1, 9).Select(i => $"Track{i}")
+                .Concat(new[] { "ReturnA", "ReturnB", "Master", "ShadeUp", "ShadeDown", "Mute", "Solo", "Record",
+                    "RecordInk", "Success", "SuccessInk", "SuccessDim", "Warning", "Danger", "DangerHover",
+                    "DangerBright", "DangerDeep", "DangerPale", "Teal", "TealBright", "Rose", "RoseBright",
+                    "Steel", "Sage", "Threshold", "Marker", "MarkerHot", "Frozen" }).ToArray();
+            yield return (musical.All(k => studio.Colors[k] == grey.Colors[k]),
+                "Logic Grey preserves Studio Dark musical, note-shading, meter and status colours");
+        }
+        foreach (var file in files.Where(f => !f.EndsWith("logic-grey.json")))
+        {
+            var original = LoadTheme(File.ReadAllText(file), cat).Theme;
+            if (original is null) continue;
+            yield return (original.Colors["Playhead"] == original.Colors["Accent"]
+                && original.Colors["SurfaceRaisedTop"] == original.Colors["SurfaceRaised"],
+                $"{original.Id}: cursor and raised-fill defaults preserve the original rendering");
+        }
     }
 
     private sealed record ThemeData(string Id, string Kind, Dictionary<string, string> Colors);
@@ -123,16 +144,16 @@ internal static partial class DesignTokenCheck
 
     private sealed record Pairing(string Id, string What, double Value, double Min);
 
-    private static readonly string[] FiveSurfaces = { "BgApp", "Panel", "SurfaceRaised", "SurfaceHover", "BgSunken" };
+    private static readonly string[] TextSurfaces = { "BgApp", "Panel", "SurfaceRaised", "SurfaceRaisedTop", "SurfaceHover", "BgSunken" };
 
     private static IEnumerable<Pairing> Pairings(Dictionary<string, string> c)
     {
         Pairing Cr(string id, string a, string b, double min) => new(id, $"{a}/{b}", Contrast(c[a], c[b]), min);
         foreach (var t in new[] { "TextPrimary", "TextSecondary", "TextMuted" })
-            foreach (var s in FiveSurfaces) yield return Cr("T3.1", t, s, 4.5);
-        foreach (var s in FiveSurfaces) yield return Cr("T3.2", "TextTertiary", s, 3.0);
+            foreach (var s in TextSurfaces) yield return Cr("T3.1", t, s, 4.5);
+        foreach (var s in TextSurfaces) yield return Cr("T3.2", "TextTertiary", s, 3.0);
         foreach (var t in new[] { "TextFaint", "TextDisabled", "TextAxis" })
-            foreach (var s in FiveSurfaces) yield return Cr("T3.3", t, s, 2.5);
+            foreach (var s in TextSurfaces) yield return Cr("T3.3", t, s, 2.5);
         foreach (var s in new[] { "BgApp", "Panel", "BgSunken" }) yield return Cr("T3.4", "AccentBright", s, 2.3);
         foreach (var f in new[] { "Accent", "Mute", "Solo", "Record" })
             yield return new("T3.5", $"ink on {f}", Contrast(Ink(c[f]), c[f]), 4.5);
@@ -209,6 +230,7 @@ internal static partial class DesignTokenCheck
         var known = new Dictionary<string, bool>
         {
             ["studio-dark"] = true, ["studio-light"] = false, ["ember-graphite"] = true, ["ember-paper"] = false,
+            ["logic-grey"] = true,
         };
         AppearanceChoice R(Settings s) => Appearance.Resolve(s, known);
 
@@ -255,5 +277,12 @@ internal static partial class DesignTokenCheck
         Appearance.Store(s, a with { FollowSystem = true }, singleIsDark: false);
         yield return (s.ColourTheme == "system" && s.Theme == AppTheme.System && R(s).FollowSystem && R(s).Light == "studio-light",
             "follow system stores as \"system\", legacy Theme = System");
+        var grey = Appearance.WithPick(R(new Settings()), "logic-grey", isDark: true);
+        Appearance.Store(s, grey, singleIsDark: true);
+        yield return (R(s).Single == "logic-grey" && R(s).Dark == "logic-grey",
+            "Logic Grey selection round-trips through existing appearance settings");
+        Appearance.Store(s, grey with { FollowSystem = true }, singleIsDark: true);
+        yield return (R(s).Active(true) == "logic-grey" && R(s).Active(false) == "studio-light",
+            "Follow system retains Logic Grey for dark mode and the existing light pick");
     }
 }

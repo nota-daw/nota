@@ -102,6 +102,11 @@ public sealed partial class NotaEngine : IAudioEngine
 
     /// <summary>Current playhead position in beats (lock-free UI read).</summary>
     public double PositionBeats { get { ThrowIfDisposed(); return NativeMethods.PositionBeats(_handle); } }
+    public bool TryGetTransportSnapshot(out NotaTransportSnapshot snapshot)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.TransportSnapshot(_handle, out snapshot) != 0;
+    }
     public bool IsPlaying { get { ThrowIfDisposed(); return NativeMethods.IsPlaying(_handle) != 0; } }
 
     /// <summary>Loop region mirror (for UI display + toggling).</summary>

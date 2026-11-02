@@ -693,7 +693,7 @@ public sealed class AudioClipEditorView : UserControl
         private static readonly IBrush RulerBar = NotaPalette.TextStrong;
         private static readonly IBrush RulerBeat = NotaPalette.TextDisabled;
         private static readonly IPen MidPen = new Pen(NotaPalette.GridBeat, 1);
-        private static readonly IPen PlayheadPen = new Pen(NotaPalette.Accent, 1);
+        private static readonly IPen PlayheadPen = new Pen(NotaPalette.Playhead, 1);
         private static readonly IBrush MarkerInk = NotaPalette.TextMuted;
         private static readonly IBrush MarkerHot = NotaPalette.Accent;
         private static readonly IPen SelLine = new Pen(NotaPalette.AccentDim, 1);

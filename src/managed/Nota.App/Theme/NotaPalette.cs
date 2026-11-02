@@ -281,6 +281,7 @@ internal static class NotaPalette
     public static readonly SolidColorBrush SurfaceCard   = T(nameof(SurfaceCard)); // Brush.SurfaceCard — a section inside a device (panel tone; divided by rules)
     public static readonly SolidColorBrush SurfaceInset  = T(nameof(SurfaceInset)); // Brush.SurfaceInset — rail, sunken chip, hovered well
     public static readonly SolidColorBrush SurfaceRaised = T(nameof(SurfaceRaised)); // Brush.SurfaceRaised — button at rest
+    public static readonly SolidColorBrush SurfaceRaisedTop = T(nameof(SurfaceRaisedTop));
     public static readonly SolidColorBrush SurfaceHover  = T(nameof(SurfaceHover)); // Brush.SurfaceHover
     public static readonly SolidColorBrush TrackOff      = T(nameof(TrackOff)); // Brush.TrackOff — track of an off toggle
     // Pressed goes *into* the recess rather than to a fourth raised step.
@@ -324,7 +325,8 @@ internal static class NotaPalette
 
     // ---- Accent: Studio orange. Live or chosen only — playing, selected, looping,
     //      toggled on, or a control while it is dragged. Never a resting value. ---
-    public static readonly SolidColorBrush Accent       = T(nameof(Accent)); // Brush.Accent — playhead, selection, toggled-on fill
+    public static readonly SolidColorBrush Accent       = T(nameof(Accent)); // Brush.Accent — selection, toggled-on fill
+    public static readonly SolidColorBrush Playhead     = T(nameof(Playhead)); // Brush.Playhead — live timeline/editor cursor
     public static readonly SolidColorBrush AccentBright = T(nameof(AccentBright)); // Brush.AccentBright — accent glow: the line/ink variant
     public static readonly SolidColorBrush AccentHover  = T(nameof(AccentHover)); // Brush.AccentHover — accent text on hover
     public static readonly SolidColorBrush AccentDeep   = T(nameof(AccentDeep)); // Brush.AccentDeep — press, left half of the loop
@@ -435,6 +437,10 @@ internal static class NotaPalette
     // through TryFindResource: a resource read is a one-time snapshot, while the slot
     // brush follows the theme. (Bind-style reads — ControlExtensions.BindResource —
     // are already live and should keep using the resource observable.)
+    private static readonly LinearGradientBrush RaisedGradient = VGradient((SurfaceRaisedTop, 0), (SurfaceRaised, 1));
+    // Equal endpoints preserve the exact solid brush used by the original themes.
+    public static IBrush RaisedFill => SurfaceRaisedTop.Color == SurfaceRaised.Color ? SurfaceRaised : RaisedGradient;
+
     private static readonly Dictionary<string, SolidColorBrush> KeyMap = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Brush.SurfaceAbyss"] = SurfaceAbyss,   ["Brush.Gutter"] = Gutter,
@@ -443,6 +449,8 @@ internal static class NotaPalette
         ["Brush.Panel"] = Panel,                 ["Brush.TrackOff"] = TrackOff,
         ["Brush.SurfaceCard"] = SurfaceCard,     ["Brush.SurfaceRaised"] = SurfaceRaised,
         ["Brush.SurfaceInset"] = SurfaceInset,
+        // Representative solid colour; NotaThemeService publishes the computed raised fill.
+        ["Brush.RaisedFill"] = SurfaceRaised,     ["Brush.Playhead"] = Playhead,
         ["Brush.SurfaceHover"] = SurfaceHover,   ["Brush.SurfaceActive"] = SurfaceActive,
         ["Brush.SurfaceSelected"] = SelHeaderBg,
         ["Brush.GridBeat"] = GridBeat,           ["Brush.GridBar"] = GridBar,

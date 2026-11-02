@@ -1081,7 +1081,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         var list = new ListBox
         {
             Classes = { "themes" }, SelectionMode = SelectionMode.Single,
-            HorizontalAlignment = HorizontalAlignment.Left,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
             ItemsPanel = new FuncTemplate<Panel?>(() => new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12 }),
             ItemsSource = NotaThemes.OfKind(kind).ToList(),
         };
@@ -1149,7 +1149,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 ctx.FillRectangle(B(track), r, (float)NotaRadius.ClipValue);
                 if (i < 3) HLine(y + laneH - 1, x0, W);
             }
-            ctx.FillRectangle(B(NotaPalette.Accent), new Rect(x0 + (W - x0) * 0.46, top, 1, detailTop - top));
+            ctx.FillRectangle(B(NotaPalette.Playhead), new Rect(x0 + (W - x0) * 0.46, top, 1, detailTop - top));
 
             // Device panel: two cards with their header strips.
             HLine(detailTop, 0, W);
