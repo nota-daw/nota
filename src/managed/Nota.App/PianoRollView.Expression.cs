@@ -56,7 +56,7 @@ public sealed partial class PianoRollView
         _laneMode = m;
         if (m == LaneMode.Controller && _laneCtl < 0) _laneCtl = DefaultController();
         _velHost.Child = m switch { LaneMode.Velocity => _vel, LaneMode.Controller => _ctlLane, _ => _expr };
-        _laneRow.Height = m == LaneMode.Velocity ? VelH : ExprH;
+        FitControllerLanes();
         Invalidate();
         _laneTabs.InvalidateVisual();
     }

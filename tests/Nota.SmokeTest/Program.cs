@@ -130,6 +130,12 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     return f == 0 ? 0 : 1;
 }
 
+if (args.Length >= 1 && args[0] == "--midi-lane-heights")
+{
+    foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+
 // Design and localization checks alone, without the engine tests: `--localization`.
 // NOTA_LOC_WRITE_BASELINE=1 rewrites LocalizationAllowList.txt; NOTA_LOC_STRICT=1 fails on any
 // text French lacks.
@@ -15387,6 +15393,9 @@ foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- MIDI lane heights --");
+foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- velocity wheel --");
 foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);

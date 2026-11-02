@@ -655,6 +655,7 @@ public partial class MainWindow
         PianoRollView roll = null!;
         roll = new PianoRollView
         {
+            LaneSettings = _vm.Settings,
             BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
             // Each clip whose notes changed, as one undo step. The roll can outlive a clip: the
             // track/clip may have been removed, shifted by a lower-index delete, undone, or
@@ -1329,6 +1330,7 @@ public partial class MainWindow
         _editorRoll?.SettlePlacement();
         var roll = new PianoRollView
         {
+            LaneSettings = _vm.Settings,
             BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
             Commit = notes =>
             {

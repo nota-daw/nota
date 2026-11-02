@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Multiple MIDI controller lanes** (#422): **+** beneath the piano roll adds a CC
+  lane with its own picker; **−** hides a lane without deleting its MIDI data.
+  Extra lanes scroll vertically and share the notes' horizontal zoom and position.
+- **Resizable piano-roll lanes** (#422): drag the divider above Velocity or any CC
+  lane to resize it independently. Heights are remembered when editors reopen and
+  Nota restarts; re-add the corresponding lane/controller to restore its height.
 - **French interface and a Language setting**: Preferences → Appearance → **Language** lists
   English and Français (each in its own name). The choice is saved and applies after a restart;
   the row says so and offers a **Restart** button (the usual unsaved-changes prompt comes first).

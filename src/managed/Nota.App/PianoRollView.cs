@@ -471,7 +471,7 @@ public sealed partial class PianoRollView : UserControl
         Avalonia.Controls.Grid.SetColumn(_hScroll, 1);
         scrollRow.Children.Add(_hScroll);
 
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
+        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto,Auto,Auto") };
         root.Children.Add(rulerRow);
         Avalonia.Controls.Grid.SetRow(stripRow, 1);
         root.Children.Add(stripRow);
@@ -481,9 +481,16 @@ public sealed partial class PianoRollView : UserControl
         Avalonia.Controls.Grid.SetRow(_overlayHost, 2);
         _overlayHost.Margin = new Thickness(KeysW, 0, 0, 0);
         root.Children.Add(_overlayHost);
-        Avalonia.Controls.Grid.SetRow(velRow, 3);
-        root.Children.Add(velRow);
-        Avalonia.Controls.Grid.SetRow(scrollRow, 4);
+        var primaryLane = ResizableLane(velRow, () => PrimaryLaneKey);
+        Avalonia.Controls.Grid.SetRow(primaryLane, 3);
+        root.Children.Add(primaryLane);
+        var controllerTools = ControllerLaneTools();
+        Avalonia.Controls.Grid.SetRow(controllerTools, 4);
+        root.Children.Add(controllerTools);
+        var controllerRows = ControllerLaneRows();
+        Avalonia.Controls.Grid.SetRow(controllerRows, 5);
+        root.Children.Add(controllerRows);
+        Avalonia.Controls.Grid.SetRow(scrollRow, 6);
         root.Children.Add(scrollRow);
         Content = root;
 
@@ -1598,7 +1605,7 @@ public sealed partial class PianoRollView : UserControl
         _gridControl.InvalidateVisual();
         _vel.InvalidateVisual();
         _expr.InvalidateVisual();
-        _ctlLane.InvalidateVisual();
+        InvalidateControllerLanes();
         NotifyGrid();
     }
 

@@ -4,6 +4,12 @@
   "name": "Français",
   "notes": "Glossary and register: specs/068-ui-language/glossary.md. Actions use the infinitive; sentence case; device and parameter names stay English. A key is the English text, or \"text|context\" when one English word needs two translations; counted texts take {\"one\", \"other\"} and French counts 0 and 1 as one.",
   "strings": {
+    "Add controller lane": "Ajouter une piste de contrôleur",
+    "Hide controller lane (keep its data)": "Masquer la piste de contrôleur (conserver ses données)",
+    "CC lanes": "Pistes CC",
+    "Drag to resize lane": "Faire glisser pour redimensionner la piste",
+    "Drag a lane divider": "Faire glisser un séparateur de piste",
+    "Resize that velocity or controller lane · height is remembered": "Redimensionner cette piste de vélocité ou de contrôleur · la hauteur est mémorisée",
     "About Nota": "À propos de Nota",
     "Check for updates…": "Rechercher des mises à jour…",
     "Settings…": "Réglages…",
