@@ -60,6 +60,10 @@ re-added; no data is cleared. Default primary/extra heights remain 72/112 logica
 pixels, with saved sizes normalized to 48–480. The primary row additionally keeps a
 72-pixel display minimum so all five tabs remain reachable, including in short editors
 and when restoring older saved sizes. Extra lanes retain a 48-pixel minimum.
+The docked MIDI Clip panel has a 300-pixel minimum, including both headers, to keep
+a usable note viewport alongside the lane controls. Other Detail tabs retain their
+existing minimum. The main window's minimum accounts for visible panel minima when
+the Mixer is docked too; hiding panels releases the extra minimum.
 No new key binding is introduced.
 The personal workspace/zoom changes and named portable build stay outside this PR.
 No additional user clarification is needed for this bounded contribution.

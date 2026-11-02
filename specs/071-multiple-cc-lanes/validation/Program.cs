@@ -142,6 +142,7 @@ internal static class Program
                 Require(commits==1,"view, theme and zoom operations never write controller data");
                 CheckFoldedLanes(root, Require);
                 CheckPrimaryLaneTabs(root, settings, Require);
+                CheckDockedNotes(root, (MainWindow)lifetime.MainWindow!, Require);
                 File.WriteAllText(Path.Combine(root,"cc-results.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
                 window.Close();
                 // Drain theme-change work before disposing the real app's engine.
@@ -155,6 +156,90 @@ internal static class Program
         Dispatcher.UIThread.MainLoop(stop.Token);
         if(failure is not null)throw failure; if(!done)throw new Exception("Probe timed out");
         Console.WriteLine(string.Join(Environment.NewLine,checks));
+    }
+
+    static void CheckDockedNotes(string root, MainWindow window, Action<bool,string> require)
+    {
+        window.WindowState=WindowState.Normal;window.Width=1200;window.Height=680;
+        var roll=new PianoRollView();roll.SetNotes([new NotaNote(60,2,1,.8f)],8);
+        var editor=new ClipEditorView(roll,"Docked regression",0);
+        typeof(MainWindow).GetField("_clipEditor",Hidden)!.SetValue(window,editor);
+        typeof(MainWindow).GetField("_editorRoll",Hidden)!.SetValue(window,roll);
+        typeof(MainWindow).GetField("_detailHeight",Hidden)!.SetValue(window,190.0);
+        Call(window,"ShowClipPanel");window.UpdateLayout();
+        var frame=new DispatcherFrame();DispatcherTimer.RunOnce(()=>frame.Continue=false,TimeSpan.FromMilliseconds(150));Dispatcher.UIThread.PushFrame(frame);
+        var body=(ScrollViewer)Get(roll,"_bodyScroll")!;
+        var row=(RowDefinition)Get(window,"_detailRow")!;
+        Console.WriteLine($"Docked layout: panel {row.ActualHeight}, roll {roll.Bounds.Height}, notes {body.Viewport.Height}");
+        using(var bitmap=new RenderTargetBitmap(new PixelSize((int)window.Bounds.Width,(int)window.Bounds.Height)))
+        {bitmap.Render(window);bitmap.Save(Path.Combine(root,"docked-notes.png"));}
+        require(body.Viewport.Height>=48,"actual docked editor keeps a usable note viewport when restoring a small panel height");
+        window.FindControl<Border>("DetailPanel")!.IsVisible=false;window.UpdateLayout();
+        window.FindControl<Border>("DetailPanel")!.IsVisible=true;window.UpdateLayout();
+        require(body.Viewport.Height>=48,"hiding and showing the docked editor preserves its note viewport");
+        Call(window,"ResetDetailHeight");window.UpdateLayout();
+        require(body.Viewport.Height>=48,"resetting the docked panel height preserves its note viewport");
+        Call(window,"SetDetailMaximized",true);window.UpdateLayout();
+        Call(window,"SetDetailMaximized",false);window.UpdateLayout();
+        require(body.Viewport.Height>=48,"maximizing and restoring the docked editor preserves notes");
+        ((Control)Get(roll,"_strip")!).IsVisible=true;
+        ((Control)Get(roll,"_hScroll")!).IsVisible=true;
+        for(int i=0;i<3;i++)Call(roll,"AddControllerLane");
+        row.Height=new GridLength(120);window.UpdateLayout();Call(roll,"FitControllerLanes");window.UpdateLayout();
+        Console.WriteLine($"Smallest dock: min {row.MinHeight}, panel {row.ActualHeight}, roll {roll.Bounds.Height}, notes {body.Viewport.Height}, primary {((Grid)Get(roll,"_laneRow")!).Height}, extra {((ScrollViewer)Get(roll,"_controllerScroll")!).Bounds.Height}");
+        require(body.Viewport.Height>=48,"minimum docked panel keeps notes with clip strip scrollbar and extra CC lanes");
+        void Pump()
+        {
+            window.UpdateLayout();var pending=new DispatcherFrame();
+            DispatcherTimer.RunOnce(()=>pending.Continue=false,TimeSpan.FromMilliseconds(100));Dispatcher.UIThread.PushFrame(pending);
+        }
+        void Click(Control target,Point point)
+        {
+            using var pointer=new Avalonia.Input.Pointer(46,PointerType.Mouse,true);
+            target.RaiseEvent(new PointerPressedEventArgs(target,pointer,window,point,1,
+                new PointerPointProperties(RawInputModifiers.LeftMouseButton,PointerUpdateKind.LeftButtonPressed),KeyModifiers.None,1));
+            target.RaiseEvent(new PointerReleasedEventArgs(target,pointer,window,point,2,
+                new PointerPointProperties(RawInputModifiers.None,PointerUpdateKind.LeftButtonReleased),KeyModifiers.None,MouseButton.Left));
+        }
+        var modes=new[]{"Velocity","Bend","Pressure","Slide","Controller"};
+        for(int i=0;i<modes.Length;i++)
+        {
+            Pump();var tabs=(Control)Get(roll,"_laneTabs")!;
+            var point=tabs.TranslatePoint(new Point(20,8+13*i),window)!.Value;
+            require(ReferenceEquals(window.InputHitTest(point),tabs),$"docked minimum exposes {modes[i]} tab to pointer input");
+            Click(tabs,point);
+            require(Get(roll,"_laneMode")!.ToString()==modes[i],$"docked minimum allows selecting {modes[i]}");
+        }
+        double pitchY=(double)Call(roll,"PitchY",60)!;
+        body.Offset=new Vector(0,Math.Max(0,pitchY-12));Pump();
+        var grid=(Control)Get(roll,"_gridControl")!;
+        var notePoint=grid.TranslatePoint(new Point((double)Call(roll,"BeatToX",2.1)!,pitchY+6),window)!.Value;
+        require(ReferenceEquals(window.InputHitTest(notePoint),grid),"note grid receives pointer hits in the minimum docked editor");
+        Click(grid,notePoint);
+        require(roll.SelectionIndices.Contains(0),"a note can be selected in the minimum docked editor");
+        Call(window,"DockMixer");window.UpdateLayout();
+        frame=new DispatcherFrame();DispatcherTimer.RunOnce(()=>frame.Continue=false,TimeSpan.FromMilliseconds(200));Dispatcher.UIThread.PushFrame(frame);window.UpdateLayout();
+        var panel=window.FindControl<Border>("DetailPanel")!;
+        var bottom=panel.TranslatePoint(new Point(0,panel.Bounds.Height),window)!.Value.Y;
+        Console.WriteLine($"Docked mixer: window {window.Bounds.Height}, panel bottom {bottom}, notes {body.Viewport.Height}");
+        require(body.Viewport.Height>=48 && bottom<=window.Bounds.Height,
+            "docked Mixer and MIDI editor fit inside the minimum-size main window");
+        var edge=window.FindControl<Border>("DetailEdge")!;
+        var edgePoint=edge.TranslatePoint(new Point(20,2),window)!.Value;
+        using(var pointer=new Avalonia.Input.Pointer(47,PointerType.Mouse,true))
+        {
+            var down=new PointerPointProperties(RawInputModifiers.LeftMouseButton,PointerUpdateKind.LeftButtonPressed);
+            edge.RaiseEvent(new PointerPressedEventArgs(edge,pointer,window,edgePoint,1,down,KeyModifiers.None,1));
+            edge.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent,edge,pointer,window,edgePoint.WithY(edgePoint.Y+400),2,down,KeyModifiers.None));
+            edge.RaiseEvent(new PointerReleasedEventArgs(edge,pointer,window,edgePoint.WithY(edgePoint.Y+400),3,
+                new PointerPointProperties(RawInputModifiers.None,PointerUpdateKind.LeftButtonReleased),KeyModifiers.None,MouseButton.Left));
+        }
+        Pump();require(row.ActualHeight>=300 && body.Viewport.Height>=48,"dragging the docked panel edge stops before hiding notes");
+        Call(window,"HideMixer");Pump();
+        require(window.MinHeight==680,"hiding the docked Mixer restores the ordinary window minimum");
+        window.FindControl<ContentControl>("DetailBody")!.Content=new Border();
+        Call(window,"ShowDetail",250.0,false,true);Pump();
+        require(row.MinHeight==120,"non-MIDI Detail content retains the existing 120-pixel minimum");
     }
 
     static void CheckPrimaryLaneTabs(string root, ISettingsService settings, Action<bool,string> require)

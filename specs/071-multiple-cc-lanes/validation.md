@@ -78,6 +78,27 @@ Matching Studio Light captures (1000 × 720, identical clip and divider drag):
 [before](https://raw.githubusercontent.com/thoi1/nota/pr-assets/issue-422/primary-tabs-before.png),
 [after](https://raw.githubusercontent.com/thoi1/nota/pr-assets/issue-422/primary-tabs-after.png).
 
+## PR #425 docked note-area correction
+
+The real MainWindow/ClipEditorView regression reproduces the issue on `a80d1654`:
+a 190-pixel docked panel leaves a 119-pixel roll and a zero-height note viewport.
+The MIDI-specific 300-pixel host minimum instead leaves a 104-pixel note viewport;
+with clip strip, horizontal scrollbar and extra lanes present it still leaves 57
+pixels (over four default note rows). The primary tabs retain their 72-pixel minimum.
+
+All 60 UI checks pass. The 21 new checks include real note selection and all five
+tab selections through window hit testing, restored/default/hidden/maximized panels,
+extra lane overflow, actual panel-edge dragging, a docked Mixer fitting inside the
+window, restoration of the ordinary window minimum after hiding the Mixer, and the
+unchanged minimum for non-MIDI content. Saved lane heights still restore in a fresh
+process. The full Windows build/smoke/scanner gate is recorded in the bug report.
+
+Matching full-window Studio Light evidence (1200 × 711 render bounds; identical
+clip and requested 190-pixel panel height):
+[before](https://raw.githubusercontent.com/thoi1/nota/pr-assets/issue-422/docked-notes-before.png),
+[after](https://raw.githubusercontent.com/thoi1/nota/pr-assets/issue-422/docked-notes-after.png).
+Assessment and verification: `.specify/bugs/docked-note-area/`.
+
 ## Limits
 
 Windows x64 was built and exercised; macOS/Linux and physical mixed-DPI monitor moves

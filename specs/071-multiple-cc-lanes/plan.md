@@ -24,6 +24,13 @@ an older 48-pixel preference. Extra lanes keep the 48-pixel minimum.
 Save on release, not on every move.
 Fit lanes to the available height while retaining note editing. Inject the existing
 settings service into both Arrangement and Session editor construction paths.
+The MIDI Clip host reserves at least 300 logical pixels, including its 32-pixel
+Detail toolbar and 38-pixel clip header. Apply that minimum on opening, saved-height
+restoration and visibility restoration; existing splitter/edge/fit paths respect it.
+Fit the main-window minimum to the visible panel minima plus window chrome so a
+docked Mixer cannot push the editor beyond the window. Restore the original minimum
+when the panels no longer require the extra space. Validate through MainWindow,
+including pointer access to notes/tabs, rather than only a standalone roll.
 
 Update CHANGELOG [Unreleased], FEATURES, French strings and the divider row in
 Preferences > Shortcuts. The external manual repo is absent; include paired EN/RU

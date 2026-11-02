@@ -131,9 +131,13 @@ public partial class MainWindow
     // switching back to Clip restores the persisted size. The Devices tab also can't be
     // resized at all (no splitter): its cards have a fixed layout, so extra height is wasted
     // and less clips them.
+    // MIDI needs both headers, the roll's lane controls and a usable note viewport,
+    // including the multi-clip strip and horizontal scrollbar at the smallest size.
+    private double DetailMinimumHeight => DetailBody.Content is ClipEditorView ? 300 : 120;
+
     private void ShowDetail(double height, bool honorPersist, bool resizable = true)
     {
-        _detailDefault = height;
+        _detailDefault = Math.Max(height, DetailMinimumHeight);
         // Filling the window, a clip tab keeps it; Devices goes back to the split.
         if (_detailMaximized && resizable)
         {
@@ -143,8 +147,8 @@ public partial class MainWindow
         SetDetailMaximized(false);
         DetailMaximizeBtn.IsVisible = resizable;
         var row = _detailRow;
-        row.MinHeight = 120;
-        double h = honorPersist && _detailHeight > 120 ? _detailHeight : height;
+        row.MinHeight = DetailMinimumHeight;
+        double h = Math.Max(row.MinHeight, honorPersist && _detailHeight > 120 ? _detailHeight : height);
         row.Height = new GridLength(h);
         DetailSplitter.IsVisible = resizable;
         DetailPanel.IsVisible = true;
@@ -1084,10 +1088,12 @@ public partial class MainWindow
     private bool _mixerDocked;      // the Mixer is shown in MixerPanel
     private double _mixerWanted;    // its height before fitting into the window
     private double _detailWanted;   // the Detail panel's, likewise
+    private double _baseWindowMinHeight;
     private double _edgeStartY, _edgeStartH;   // a DetailEdge drag in progress
 
     private void InitBottomPanels()
     {
+        _baseWindowMinHeight = MinHeight;
         var rows = BodyGrid.RowDefinitions;
         _mainRow = rows[0];
         _detailSplitRow = rows[1];
@@ -1191,8 +1197,8 @@ public partial class MainWindow
             return;
         }
         if (Height(_detailRow) > 0) return;   // ShowDetail sized it already
-        _detailRow.MinHeight = 120;
-        _detailRow.Height = new GridLength(_detailWanted > 120 ? _detailWanted : 240);
+        _detailRow.MinHeight = DetailMinimumHeight;
+        _detailRow.Height = new GridLength(Math.Max(_detailRow.MinHeight, _detailWanted > 120 ? _detailWanted : 240));
         DetailSplitter.IsVisible = _detailSplitterWasVisible;
     }
 
@@ -1274,11 +1280,17 @@ public partial class MainWindow
     // minimum. The Mixer grows back toward the height the user chose; a fit never changes it.
     private void FitBottomPanels()
     {
-        if (_detailMaximized) return;   // the Detail row is all there is
+        if (_detailMaximized) { MinHeight = _baseWindowMinHeight; return; }   // the Detail row is all there is
         double total = BodyGrid.Bounds.Height;
         double mixer = _mixerDocked ? Math.Max(_mixerWanted, _mixerRow.MinHeight) : 0;
         if (total > 0)
         {
+            // The visible panels' minima must fit as a whole. In particular, the MIDI
+            // editor must not be pushed below the window by a docked Mixer.
+            double minimumBody = _mainRow.MinHeight
+                + (DetailPanel.IsVisible ? _detailRow.MinHeight + _detailSplitRow.ActualHeight : 0)
+                + (_mixerDocked ? _mixerRow.MinHeight + _mixerSplitRow.ActualHeight : 0);
+            MinHeight = Math.Max(_baseWindowMinHeight, ClientSize.Height - total + minimumBody);
             double room = total - _mainRow.MinHeight;
             double detail = !DetailPanel.IsVisible ? 0 : _detailWanted > 0 ? Math.Max(_detailWanted, _detailRow.MinHeight) : Height(_detailRow);
             double over = mixer + detail - room;

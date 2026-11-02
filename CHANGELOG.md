@@ -154,6 +154,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Docked MIDI clip editors** reserve enough height for notes and all five lane
+  tabs, including when restoring a small saved panel. The window minimum accounts
+  for both panels when the Mixer is also docked (#422).
 - **Resizing the primary piano-roll lane** keeps all five tabs reachable, including
   after restoring a saved height. Extra CC lanes retain their smaller minimum (#422).
 - **CC lanes added to a folded Drum Rack** use the wider pad-name gutter immediately,
