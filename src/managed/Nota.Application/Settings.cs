@@ -192,6 +192,10 @@ public sealed class Settings
     /// <summary>Arm-on-select (#332): selecting an instrument track arms it alone, so the
     /// keyboard plays the track you're on. Transport ▸ Auto-arm selected track; off by default.</summary>
     public bool ArmOnSelect { get; set; }
+    /// <summary>Open the Detail panel on select (#308): selecting a track or clip opens a closed
+    /// Detail panel, as before #308. Off by default — a selection only follows an open panel and
+    /// a double-click opens it. Settings → Appearance.</summary>
+    public bool OpenDetailOnSelect { get; set; }
 
     /// <summary>Label every note of the piano-roll keyboard: the keys column
     /// shows all note names (C, C#, D …) instead of only C. Off by default; a beginner aid

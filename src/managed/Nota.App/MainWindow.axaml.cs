@@ -445,6 +445,7 @@ public partial class MainWindow : Window
         _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         HookDeviceMoves();   // Replace… / Delete track on the instrument, Move to track (specs/043)
         Timeline.TrackSelected += OnTrackSelected;
+        Timeline.TrackDevicesRequested += id => ShowDevices(id);   // header double-click (#308)
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
         Timeline.ClipsSplit += SyncTrackModeClips;   // a split re-indexes the track's later clips
         Timeline.ClipsMoved += OnClipsMoved;   // a block move can re-index the open editor's clips
