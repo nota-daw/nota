@@ -16,6 +16,7 @@ using Avalonia.Interactivity;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Remote;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -63,10 +64,10 @@ public partial class MainWindow : IRemoteHost
         if (_remote is null || _vm is null) return;
         bool on = _vm.Settings.Current.RemoteEnabled && _remote.Running;
         int n = _remote.Hub.Devices.Count;
-        RemoteCount.Text = on ? n.ToString() : "Off";
+        RemoteCount.Text = on ? n.ToString() : Loc.T("Off", "remote");   // short: the bar sheds this button when it is too wide
         RemoteBtn.Classes.Set("lit", on);
-        ToolTip.SetTip(RemoteBtn, !_vm.Settings.Current.RemoteEnabled ? "Play and control Nota from a phone"
-            : _remote.Error ?? (n == 0 ? "Remote is on · scan the code with a phone" : $"{n} phone{(n == 1 ? "" : "s")} connected"));
+        ToolTip.SetTip(RemoteBtn, !_vm.Settings.Current.RemoteEnabled ? Loc.T("Play and control Nota from a phone")
+            : _remote.Error ?? (n == 0 ? Loc.T("Remote is on · scan the code with a phone") : Loc.Plural(n, "{0} phone connected", "{0} phones connected")));
         Timeline.Refresh();
     }
 
@@ -136,7 +137,7 @@ public partial class MainWindow : IRemoteHost
     int IRemoteHost.ProjectKeyCode => _vm?.Transport.KeyCode ?? -1;
 
     IReadOnlyList<(string Name, double StartBeat)> IRemoteHost.Sections =>
-        Timeline.SectionList.OrderBy(s => s.StartBeat).Select(s => (s.Name, s.StartBeat)).ToList();
+        Timeline.SectionList.Select((s, i) => (SectionNames.Display(s.Name, i), s.StartBeat)).ToList();
 
     bool IRemoteHost.Recording => _vm?.Transport.RecordOn ?? false;
     bool IRemoteHost.LoopOn => _vm?.Transport.LoopOn ?? false;
@@ -168,9 +169,10 @@ public partial class MainWindow : IRemoteHost
 
     bool IRemoteHost.Undo()
     {
+        _editorRoll?.EndVelocityWheel();
         if (!Engine.Undo()) return false;
         RefreshAfterUndoRedo();
-        if (_vm is not null) _vm.StatusText = "Undo (from a phone)";
+        if (_vm is not null) _vm.StatusText = Loc.T("Undo (from a phone)");
         return true;
     }
 

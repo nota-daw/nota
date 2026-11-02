@@ -15,6 +15,7 @@ using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -65,8 +66,12 @@ public partial class MainWindow
         _closePromptOpen = true;
         try
         {
-            if (!await ConfirmLeaveChangesAsync("Unsaved changes",
-                    "Do you really want to quit without saving your changes?")) return;
+            if (!await ConfirmLeaveChangesAsync(Loc.T("Unsaved changes"),
+                    Loc.T("Do you really want to quit without saving your changes?")))
+            {
+                AppRestart.Cancel();   // a language restart waits on this prompt (spec 068)
+                return;
+            }
             _closeConfirmed = true;
         }
         finally { _closePromptOpen = false; }
@@ -77,10 +82,10 @@ public partial class MainWindow
     private string UnsavedAgeText()
     {
         var age = _dirtySince is { } since ? DateTime.Now - since : TimeSpan.Zero;
-        string when = age.TotalMinutes < 1 ? "just now"
+        string when = age.TotalMinutes < 1 ? Loc.T("just now")
             : age.TotalHours < 1 ? NotaNum.F($"{(int)age.TotalMinutes}{NotaNum.Thin}min")
             : NotaNum.F($"{(int)age.TotalHours}{NotaNum.Thin}h {age.Minutes}{NotaNum.Thin}min");
-        return "unsaved changes · " + when;
+        return Loc.F("unsaved changes · {0}", when);
     }
 
     private async void OnOpenedRecoveryCheck(object? sender, EventArgs e)
@@ -114,7 +119,7 @@ public partial class MainWindow
     {
         string when = info.SavedAt;
         if (DateTime.TryParse(info.SavedAt, out var dt)) when = dt.ToString("g");
-        return $"Nota didn't shut down cleanly. Recover unsaved work from {when}?";
+        return Loc.F("Nota didn't shut down cleanly. Recover unsaved work from {0}?", when);
     }
 
     /// <summary>Load the crash snapshot into the engine and point the next Save at the real
@@ -125,15 +130,15 @@ public partial class MainWindow
         _projectPath = info.OriginalPath;   // next Save targets the real bundle (null → prompt)
         UpdateWindowTitle();
         _cleanFingerprint = null;           // recovered work is unsaved until the user saves it
-        if (_vm is not null) _vm.StatusText = "Recovered unsaved work.";
+        if (_vm is not null) _vm.StatusText = Loc.T("Recovered unsaved work.");
         try { _recovery.ClearRecovery(); } catch { }
     }
 
     // Fallback path when the welcome launcher is disabled: a modal Recover / Discard dialog.
     private async Task OfferRecoveryDialogAsync(RecoveryInfo info)
     {
-        bool restore = await new ConfirmWindow("Recover project",
-            RecoveryPromptText(info), "Recover", "Discard").ShowDialog<bool>(this);
+        bool restore = await new ConfirmWindow(Loc.T("Recover project"),
+            RecoveryPromptText(info), Loc.T("Recover"), Loc.T("Discard")).ShowDialog<bool>(this);
         if (restore) ApplyPendingRecovery(info);
         else try { _recovery.ClearRecovery(); } catch { }
     }

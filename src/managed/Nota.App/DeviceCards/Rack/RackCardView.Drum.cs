@@ -35,6 +35,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -77,11 +78,11 @@ internal sealed partial class RackCardView
             _ => DrumGrid(a),
         };
         if (_drumView == 3)
-            readout.Text = $"{MacroPanel.Count} slots · {MacroPanel.Assigned(macros)} assigned";
+            readout.Text = Loc.F("{0} slots · {1} assigned", MacroPanel.Count, MacroPanel.Assigned(macros));
         else if (_drumView != 1)
         {
             int inBank = pads.Count(c => InBank(a.ChainTriggerNote(c)));
-            readout.Text = $"{BankNames[_drumBank]} · {inBank}/16 loaded";
+            readout.Text = Loc.F("{0} · {1}/16 loaded", BankNames[_drumBank], inBank);
         }
 
         var left = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*") };
@@ -155,18 +156,18 @@ internal sealed partial class RackCardView
             if (first >= 0) Sel = first;
             DeferRebuild();
         }, out _, padX: 5);
-        ToolTip.SetTip(bank, "Pad bank: sixteen notes from C1, C2, C3 or C4");
+        ToolTip.SetTip(bank, Loc.T("Pad bank: sixteen notes from C1, C2, C3 or C4"));
 
         var swing = SliderRow("SWING", () => E.RackSwing(T), v => E.RackSetSwing(T, (float)v),
             () => NotaNum.Pct(E.RackSwing(T)), out var swingSync, reset: () => E.RackSetSwing(T, 0f), valueWidth: 28);
-        ToolTip.SetTip(swing, "Push the off-beat sixteenths late");
+        ToolTip.SetTip(swing, Loc.T("Push the off-beat sixteenths late"));
         var humanize = SliderRow("HUMANIZE", () => E.RackHumanize(T), v => E.RackSetHumanize(T, (float)v),
             () => NotaNum.Pct(E.RackHumanize(T)), out var humSync, reset: () => E.RackSetHumanize(T, 0f), valueWidth: 28);
-        ToolTip.SetTip(humanize, "Nudge every hit's timing at random");
+        ToolTip.SetTip(humanize, Loc.T("Nudge every hit's timing at random"));
         _irTick.Add(swingSync); _irTick.Add(humSync);
 
         var fold = DrumButton("Fold", _drumFold, () => { _drumFold = !_drumFold; DeferRebuild(); });
-        ToolTip.SetTip(fold, _drumFold ? "Show every pad of the bank" : "Hide the empty pads");
+        ToolTip.SetTip(fold, _drumFold ? Loc.T("Show every pad of the bank") : Loc.T("Hide the empty pads"));
         if (_drumView != 0) fold.AttachedToVisualTree += (_, _) => Inactive.Set(fold, true);   // Fold is a Pads view setting
 
         var g = new Grid
@@ -209,7 +210,7 @@ internal sealed partial class RackCardView
         }
         if (notes.Count == 0)
         {
-            var empty = DrumHint($"No pads in bank {BankNames[_drumBank]}.");
+            var empty = DrumHint(Loc.F("No pads in bank {0}.", BankNames[_drumBank]));
             Grid.SetRowSpan(empty, 4); Grid.SetColumnSpan(empty, 4);
             grid.Children.Add(empty);
         }
@@ -250,8 +251,8 @@ internal sealed partial class RackCardView
             CornerRadius = NotaRadius.Badge, Cursor = new Cursor(StandardCursorType.Hand), ClipToBounds = true, Child = cell,
         };
         ToolTip.SetTip(pad, filled
-            ? $"{name} · {NoteName(note)} — click to play, right-click for more"
-            : $"{NoteName(note)} — click to add an instrument, or drop a sample here");
+            ? Loc.F("{0} · {1} — click to play, right-click for more", name, NoteName(note))
+            : Loc.F("{0} — click to add an instrument, or drop a sample here", NoteName(note)));
 
         if (filled)
         {
@@ -311,28 +312,28 @@ internal sealed partial class RackCardView
     {
         Sel = chain;
         var f = new MenuFlyout();
-        f.Items.Add(MenuKit.Header(PadName(a, chain), null, "Pad"));
+        f.Items.Add(MenuKit.Header(PadName(a, chain), null, Loc.T("Pad")));
         f.Items.Add(new Separator());
-        var rename = MenuKit.Item("Rename…", GlyphKind.Edit);
+        var rename = MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit);
         rename.Click += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => PromptRenamePad(a, anchor, chain));
         f.Items.Add(rename);
 
-        var chokeMenu = new MenuItem { Header = "Choke group" };
+        var chokeMenu = new MenuItem { Header = Loc.T("Choke group") };
         int cur = E.RackChainChoke(T, chain);
         for (int g = 0; g < ChokeNames.Length; g++)
         {
             int gv = g;
-            var mi = new MenuItem { Header = g == 0 ? "None" : $"Group {g}", ToggleType = MenuItemToggleType.Radio, IsChecked = g == cur };
+            var mi = new MenuItem { Header = g == 0 ? Loc.T("None", "choke group") : Loc.F("Group {0}", g), ToggleType = MenuItemToggleType.Radio, IsChecked = g == cur };
             mi.Click += (_, _) => E.RackSetChainChoke(T, chain, gv);
             chokeMenu.Items.Add(mi);
         }
         f.Items.Add(chokeMenu);
 
-        var open = new MenuItem { Header = "Open chain" };
+        var open = new MenuItem { Header = Loc.T("Open chain") };
         open.Click += (_, _) => _drumView = 2;
         f.Items.Add(open);
         f.Items.Add(new Separator());
-        f.Items.Add(MenuKit.Danger("Remove pad", GlyphKind.Trash, () => { a.RemoveChain(chain); _ctx.NotifyChanged(); }));
+        f.Items.Add(MenuKit.Danger(Loc.T("Remove pad"), GlyphKind.Trash, () => { a.RemoveChain(chain); _ctx.NotifyChanged(); }));
 
         bool renaming = false;
         rename.Click += (_, _) => renaming = true;
@@ -382,8 +383,8 @@ internal sealed partial class RackCardView
         Control list;
         if (pads.Count == 0)
         {
-            list = DrumHint($"No pads in bank {BankNames[_drumBank]} — drop samples on the Pads view.");
-            readout.Text = $"{BankNames[_drumBank]} · empty";
+            list = DrumHint(Loc.F("No pads in bank {0} — drop samples on the Pads view.", BankNames[_drumBank]));
+            readout.Text = Loc.F("{0} · empty", BankNames[_drumBank]);
         }
         else
         {
@@ -396,11 +397,11 @@ internal sealed partial class RackCardView
                 int shown = Math.Max(1, (int)Math.Floor((scroll.Viewport.Height - 2) / rowH));
                 int last = Math.Min(pads.Count, first + shown);
                 readout.Text = last - first >= pads.Count
-                    ? $"{BankNames[_drumBank]} · {pads.Count} pad{(pads.Count == 1 ? "" : "s")}"
+                    ? Loc.F("{0} · {1}", BankNames[_drumBank], Loc.Plural(pads.Count, "{0} pad", "{0} pads"))
                     : $"{BankNames[_drumBank]} · {first + 1}–{last} of {pads.Count}";
             }
             scroll.ScrollChanged += (_, _) => Visible();
-            readout.Text = $"{BankNames[_drumBank]} · {pads.Count} pad{(pads.Count == 1 ? "" : "s")}";
+            readout.Text = Loc.F("{0} · {1}", BankNames[_drumBank], Loc.Plural(pads.Count, "{0} pad", "{0} pads"));
             list = scroll;
         }
         DockPanel.SetDock(headBar, Dock.Top);
@@ -426,7 +427,7 @@ internal sealed partial class RackCardView
             if (!e.GetCurrentPoint(nameCell).Properties.IsLeftButtonPressed) return;
             e.Handled = true; SelectPad(c);
         };
-        ToolTip.SetTip(nameCell, "Select the pad");
+        ToolTip.SetTip(nameCell, Loc.T("Select the pad"));
         g.Children.Add(nameCell);
 
         var noteTb = DrumMono(NoteName(note), sel ? AccentBright : TextTertiary, 7);
@@ -435,7 +436,7 @@ internal sealed partial class RackCardView
         var vol = new SliderTrack { Norm = VolNorm(a.ChainGain(c)), Reset = () => a.SetChainGain(c, 1f) };
         vol.Changed += v => a.SetChainGain(c, NormVol(v));
         _irTick.Add(() => { if (!vol.Dragging) vol.Norm = VolNorm(a.ChainGain(c)); });
-        ToolTip.SetTip(vol, "Pad volume · drag up or down, ⌥-click to type, double-click for 0\u2009dB");
+        ToolTip.SetTip(vol, Loc.T("Pad volume · drag up or down, ⌥-click to type, double-click for 0\u2009dB"));
         ValueEntry.Attach(vol, new ValueField("Pad volume", () => VolNorm(a.ChainGain(c)), n => VolText(NormVol(n)),
             n => { vol.Norm = n; a.SetChainGain(c, NormVol(n)); }, Default: VolNorm(1f)));
         if (!Nested) MidiLearn.Bind(vol, MidiTarget.RackChainGain(T, a.AutomationDeviceIndex, c), "Pad Volume");
@@ -449,7 +450,7 @@ internal sealed partial class RackCardView
         var solo = MixBtn("S", () => a.ChainSolo(c), NotaPalette.Solo, () => a.SetChainSolo(c, !a.ChainSolo(c)));
         var chk = MixBtn(choke > 0 ? choke.ToString() : "·", () => E.RackChainChoke(T, c) > 0, NotaPalette.Teal,
             () => { E.RackSetChainChoke(T, c, (E.RackChainChoke(T, c) + 1) % ChokeNames.Length); DeferRebuild(); }, choke: true);
-        ToolTip.SetTip(mute, "Mute the pad"); ToolTip.SetTip(solo, "Solo the pad"); ToolTip.SetTip(chk, "Choke group: click for the next");
+        ToolTip.SetTip(mute, Loc.T("Mute the pad")); ToolTip.SetTip(solo, Loc.T("Solo the pad")); ToolTip.SetTip(chk, Loc.T("Choke group: click for the next"));
         if (!Nested) MidiLearn.Bind(mute, MidiTarget.RackChainMute(T, a.AutomationDeviceIndex, c), "Pad Mute");
         if (!Nested) MidiLearn.Bind(solo, MidiTarget.RackChainSolo(T, a.AutomationDeviceIndex, c), "Pad Solo");
         var msc = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = { mute, solo, chk } };
@@ -463,7 +464,7 @@ internal sealed partial class RackCardView
         var tb = DrumMono(PanText(a.ChainPan(c)), TextSecondary, 7);
         tb.HorizontalAlignment = HorizontalAlignment.Center;
         var host = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = tb };
-        ToolTip.SetTip(host, MenuKit.Keys("Pad pan · drag up or down, ⌥-click to type, double-click to centre"));
+        ToolTip.SetTip(host, MenuKit.Keys(Loc.T("Pad pan · drag up or down, ⌥-click to type, double-click to centre")));
         ValueEntry.Attach(host, new ValueField("Pan", () => (a.ChainPan(c) + 1) / 2, n => PanText((float)(n * 2 - 1)),
             n => a.SetChainPan(c, (float)Math.Clamp(n * 2 - 1, -1, 1)), Default: 0.5) { After = () => tb.Text = PanText(a.ChainPan(c)) }, tb);   // specs/035
         bool drag = false; double lastY = 0;
@@ -525,7 +526,7 @@ internal sealed partial class RackCardView
 
     private Control DrumChain(IRackAccess a)
     {
-        if (!IsPad(a, Sel)) return DrumHint("Select a pad to see its device chain.");
+        if (!IsPad(a, Sel)) return DrumHint(Loc.T("Select a pad to see its device chain."));
         int sc = Sel, note = a.ChainTriggerNote(sc);
         var head = new StackPanel
         {
@@ -535,7 +536,7 @@ internal sealed partial class RackCardView
                 new Border { Width = 6, Height = 6, CornerRadius = NotaRadius.Clip, Background = PadHue(sc), VerticalAlignment = VerticalAlignment.Center },
                 new TextBlock { Text = PadName(a, sc), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center },
                 DrumMono(NoteName(note), TextTertiary, 7),
-                new TextBlock { Text = "instrument, then its effects · signal left → right", FontSize = 8, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = Loc.T("instrument, then its effects · signal left → right"), FontSize = 8, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
             },
         };
         var slots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
@@ -559,7 +560,7 @@ internal sealed partial class RackCardView
                 Height = DrumTabH, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(8, 0),
                 Child = new TextBlock { Text = "No pad", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
             });
-            var hint = DrumHint("Drop a sample on a pad, or pick a kit above.");
+            var hint = DrumHint(Loc.T("Drop a sample on a pad, or pick a kit above."));
             Grid.SetRow(hint, 1); g0.Children.Add(hint);
             return g0;
         }
@@ -567,9 +568,9 @@ internal sealed partial class RackCardView
         var hue = PadHue(c);
 
         // header (20): dot · name · note · Open chain
-        var link = new TextBlock { Text = _drumView == 2 ? "Back to pads" : "Open chain", FontSize = 7, Foreground = NotaPalette.TextMuted, VerticalAlignment = VerticalAlignment.Center };
+        var link = new TextBlock { Text = _drumView == 2 ? Loc.T("Back to pads") : Loc.T("Open chain"), FontSize = 7, Foreground = NotaPalette.TextMuted, VerticalAlignment = VerticalAlignment.Center };
         var linkHost = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = link };
-        ToolTip.SetTip(linkHost, _drumView == 2 ? "Show the pads" : "Show the pad's instrument and effects");
+        ToolTip.SetTip(linkHost, _drumView == 2 ? Loc.T("Show the pads") : Loc.T("Show the pad's instrument and effects"));
         linkHost.PointerEntered += (_, _) => link.Foreground = TextPrimary;
         linkHost.PointerExited += (_, _) => link.Foreground = NotaPalette.TextMuted;
         linkHost.PointerPressed += (_, e) =>
@@ -605,7 +606,7 @@ internal sealed partial class RackCardView
             durTb.Text = a.ChainInstrumentKind(c) == 1 ? "empty" : "synth";
             var none = new TextBlock
             {
-                Text = a.ChainInstrumentKind(c) == 1 ? "No sample — drop one on the pad" : "A synth voice, no sample",
+                Text = a.ChainInstrumentKind(c) == 1 ? Loc.T("No sample — drop one on the pad") : Loc.T("A synth voice, no sample"),
                 FontSize = 7, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 12, 0, 0),
             };
             waveBox.Children.Add(none);
@@ -624,22 +625,22 @@ internal sealed partial class RackCardView
         var tuneRow = Row("TUNE", () => (E.RackChainTune(T, c) + 48) / 96.0, v => E.RackSetChainTune(T, c, (int)Math.Round(v * 96 - 48)),
             () => NotaNum.Unit(E.RackChainTune(T, c), "+0;−0;0", "st"), () => E.RackSetChainTune(T, c, 0), bipolar: true);
         var decayRow = Row("DECAY", () => E.RackChainDecay(T, c), v => E.RackSetChainDecay(T, c, (float)v), () => DecayText(E.RackChainDecay(T, c)), () => E.RackSetChainDecay(T, c, 1f));
-        ToolTip.SetTip(tuneRow, "Transpose the note the pad plays, in semitones");
-        ToolTip.SetTip(decayRow, "Shorten the pad's tail; hold lets it ring");
+        ToolTip.SetTip(tuneRow, Loc.T("Transpose the note the pad plays, in semitones"));
+        ToolTip.SetTip(decayRow, Loc.T("Shorten the pad's tail; hold lets it ring"));
         var sliders = new StackPanel { Spacing = 6, Children = { volRow, panRow, tuneRow, decayRow } };
 
         // choke · instrument
         var chokeSeg = Segments(ChokeNames, () => { int g = E.RackChainChoke(T, c); return g < ChokeNames.Length ? g : -1; },
             i => { E.RackSetChainChoke(T, c, i); DeferRebuild(); }, out var chokeSync, padX: 5);
         _irTick.Add(chokeSync);
-        ToolTip.SetTip(chokeSeg, "Pads in the same group cut each other off");
+        ToolTip.SetTip(chokeSeg, Loc.T("Pads in the same group cut each other off"));
         var chokeRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
         chokeRow.Children.Add(DrumCap("Choke"));
         Grid.SetColumn(chokeSeg, 1); chokeRow.Children.Add(chokeSeg);
 
         Border inst = null!;
         inst = DrumWideButton(InstrumentWord(a, c), () => OpenChainInstrumentGui(a, c, inst));
-        ToolTip.SetTip(inst, "Open the pad's instrument");
+        ToolTip.SetTip(inst, Loc.T("Open the pad's instrument"));
         var foot = new StackPanel { Spacing = 5, Children = { chokeRow, inst } };
         var footer = new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), VerticalAlignment = VerticalAlignment.Bottom, Child = foot };
 
@@ -667,35 +668,35 @@ internal sealed partial class RackCardView
         var status = new TextBlock { FontSize = 8, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
         var meta = DrumMono("", TextSecondary, 8);
         int groups = pads.Select(c => E.RackChainChoke(T, c)).Where(g => g > 0).Distinct().Count();
-        meta.Text = $"{pads.Count} pad{(pads.Count == 1 ? "" : "s")} · {groups} choke group{(groups == 1 ? "" : "s")}"
+        meta.Text = Loc.F("{0} · {1}", Loc.Plural(pads.Count, "{0} pad", "{0} pads"), Loc.Plural(groups, "{0} choke group", "{0} choke groups"))
             + (E.SampleRate > 0 ? " · " + NotaNum.Unit(E.SampleRate / 1000.0, "0.#", "kHz") : "");
 
         // A Drum Rack in a chain has no kit timing (specs/041).
-        string Timing() => Nested ? "" : $" · swing {NotaNum.Pct(E.RackSwing(T))} · humanize {NotaNum.Pct(E.RackHumanize(T))}";
+        string Timing() => Nested ? "" : Loc.F(" · swing {0} · humanize {1}", NotaNum.Pct(E.RackSwing(T)), NotaNum.Pct(E.RackHumanize(T)));
         string PadWords(int c)
         {
             string src = E.RackChainSamplerInfo(T, c, out var si) && si.SampleId != 0 && E.TryGetSampleInfo(si.SampleId, out var inf) && inf.SampleRate > 0
-                ? $"sampler {NotaNum.Time(inf.Frames / inf.SampleRate)}"
+                ? Loc.F("sampler {0}", NotaNum.Time(inf.Frames / inf.SampleRate))
                 : InstrumentWord(a, c).ToLowerInvariant();
             int g = E.RackChainChoke(T, c);
-            return $"{PadName(a, c)} {NoteName(a.ChainTriggerNote(c))} selected · {src} · choke {(g > 0 ? g.ToString() : "off")}";
+            return Loc.F("{0} {1} selected · {2} · choke {3}", PadName(a, c), NoteName(a.ChainTriggerNote(c)), src, g > 0 ? g.ToString() : Loc.T("off"));
         }
         string Summary()
         {
-            string bank = $"Bank {BankNames[_drumBank]}";
+            string bank = Loc.F("Bank {0}", BankNames[_drumBank]);
             if (_drumView == 3) return MacroPanel.Status(E, macros, _drumMacro);
             if (_drumView == 1)
             {
                 var inBank = pads.Where(c => InBank(a.ChainTriggerNote(c))).ToList();
                 var chokes = inBank.GroupBy(c => E.RackChainChoke(T, c)).Where(gr => gr.Key > 0).OrderBy(gr => gr.Key)
-                    .Select(gr => $"choke group {gr.Key}: {string.Join(", ", gr.Select(c => PadName(a, c)))}").ToList();
-                return $"{bank} · {inBank.Count} pad{(inBank.Count == 1 ? "" : "s")}" + (chokes.Count > 0 ? " · " + string.Join(" · ", chokes) : " · no choke groups");
+                    .Select(gr => Loc.F("choke group {0}: {1}", gr.Key, string.Join(", ", gr.Select(c => PadName(a, c))))).ToList();
+                return Loc.F("{0} · {1}", bank, Loc.Plural(inBank.Count, "{0} pad", "{0} pads")) + (chokes.Count > 0 ? " · " + string.Join(" · ", chokes) : Loc.T(" · no choke groups"));
             }
-            if (!IsPad(a, Sel)) return $"{bank} · no pad selected{Timing()}";
+            if (!IsPad(a, Sel)) return Loc.F("{0} · no pad selected{1}", bank, Timing());
             if (_drumView == 2)
             {
                 int d = a.ChainDeviceCount(Sel);
-                return $"{PadName(a, Sel)} {NoteName(a.ChainTriggerNote(Sel))} · {a.ChainInstrumentName(Sel)} → {d} effect{(d == 1 ? "" : "s")} → pad volume, pan";
+                return Loc.F("{0} {1} · {2} → {3} → pad volume, pan", PadName(a, Sel), NoteName(a.ChainTriggerNote(Sel)), a.ChainInstrumentName(Sel), Loc.Plural(d, "{0} effect", "{0} effects"));
             }
             return $"{bank} · {PadWords(Sel)}{Timing()}";
         }
@@ -794,7 +795,7 @@ internal sealed partial class RackCardView
                 break;
             case Nota.Presentation.BrowserItemKind.BuiltinInstrument:
                 // Racks nest one level, and only in an Instrument Rack chain (specs/041).
-                if (item.BuiltinKind is 3 or 4) { _ctx.Status("A rack can't go on a Drum Rack pad."); return; }
+                if (item.BuiltinKind is 3 or 4) { _ctx.Status(Loc.T("A rack can't go on a Drum Rack pad.")); return; }
                 if (existing >= 0) a.RemoveChain(existing);
                 added = a.AddChain(item.BuiltinKind);
                 if (added >= 0) a.SetChainTriggerNote(added, note);
@@ -967,7 +968,7 @@ internal sealed partial class RackCardView
         public int MacroParamIndex(int m) => m;
         public string MacroName(int m) => a.MacroName(m);
         public void SetMacroName(int m, string n) => a.SetMacroName(m, n);
-        public string SlotNoun => "pads";
+        public string SlotCount(int n) => Loc.Plural(n, "{0} pad", "{0} pads");
         public IReadOnlyList<int> Slots() => LoadedPads(a);
         public string SlotName(int c) => v.PadName(a, c);
         public IBrush SlotHue(int c) => PadHue(c);
@@ -1035,10 +1036,10 @@ internal sealed partial class RackCardView
         public void FillMapMenu(MenuFlyout menu, int macro, Action changed)
         {
             var pads = LoadedPads(a);
-            if (pads.Count == 0) { menu.Items.Add(new MenuItem { Header = "No pads to map", IsEnabled = false }); return; }
+            if (pads.Count == 0) { menu.Items.Add(new MenuItem { Header = Loc.T("No pads to map"), IsEnabled = false }); return; }
 
             // Every pad at once: its own controls, or the same effect on each pad that has it.
-            var all = new MenuItem { Header = $"All {pads.Count} pads" };
+            var all = new MenuItem { Header = Loc.Plural(pads.Count, "All {0} pad", "All {0} pads") };
             for (int p = 0; p < 4; p++)
             {
                 int pp = p;
@@ -1059,7 +1060,7 @@ internal sealed partial class RackCardView
             {
                 // The pads holding this effect; each maps its first one.
                 var holders = pads.Select(c => (c, d: FirstOfKind(c, kind))).Where(x => x.d >= 0).ToList();
-                var fx = new MenuItem { Header = $"Every {dname} ({holders.Count} pad{(holders.Count == 1 ? "" : "s")})" };
+                var fx = new MenuItem { Header = Loc.F("Every {0} ({1})", dname, Loc.Plural(holders.Count, "{0} pad", "{0} pads")) };
                 for (int p = 0; p < a.ChainDeviceParamCount(c0, d0); p++)
                 {
                     int pp = p;
@@ -1081,7 +1082,7 @@ internal sealed partial class RackCardView
             foreach (int c in pads)
             {
                 var pad = new MenuItem { Header = $"{v.PadName(a, c)}  ·  {NoteName(a.ChainTriggerNote(c))}" };
-                var ctl = new MenuItem { Header = "Pad" };
+                var ctl = new MenuItem { Header = Loc.T("Pad") };
                 for (int p = 0; p < 4; p++)
                 {
                     var (lo, hi) = PadDefault(p);

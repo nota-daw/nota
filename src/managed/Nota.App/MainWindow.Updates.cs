@@ -14,6 +14,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -93,17 +94,17 @@ public partial class MainWindow
         var p = u.Progress;
         _upText.Text = u.State switch
         {
-            AppUpdates.Stage.Downloading => $"Downloading Nota {version}…",
-            AppUpdates.Stage.Ready => $"Restart to update to Nota {version}",
-            AppUpdates.Stage.Failed => "The update didn't download",
-            _ => $"Nota {version} is available",
+            AppUpdates.Stage.Downloading => Loc.F("Downloading Nota {0}…", version),
+            AppUpdates.Stage.Ready => Loc.F("Restart to update to Nota {0}", version),
+            AppUpdates.Stage.Failed => Loc.T("The update didn't download"),
+            _ => Loc.F("Nota {0} is available", version),
         };
         ToolTip.SetTip(_upOpen, u.State switch
         {
             AppUpdates.Stage.Downloading => null,
-            AppUpdates.Stage.Ready => $"Nota {version} is downloaded. Click to restart now — or it installs the next time you quit.",
+            AppUpdates.Stage.Ready => Loc.F("Nota {0} is downloaded. Click to restart now — or it installs the next time you quit.", version),
             AppUpdates.Stage.Failed => u.Error,
-            _ => $"You have {AppInfo.Version}. Click to update or read the release notes.",
+            _ => Loc.F("You have {0}. Click to update or read the release notes.", AppInfo.Version),
         });
         _upDot.IsVisible = !busy;
         _upBar.IsVisible = busy;
@@ -111,8 +112,8 @@ public partial class MainWindow
         if (busy && p.Fraction >= 0) _upBar.Value = p.Fraction;
         _upDetail.Text = busy && p.Fraction >= 0 ? NotaNum.Unit(p.Fraction * 100, "0", "%") : "";
         _upDetail.IsVisible = _upDetail.Text.Length > 0;
-        ToolTip.SetTip(_upClose, busy ? "Cancel the download"
-            : u.State == AppUpdates.Stage.Ready ? "Hide — it still installs when you quit" : "Not now");
+        ToolTip.SetTip(_upClose, busy ? Loc.T("Cancel the download")
+            : u.State == AppUpdates.Stage.Ready ? Loc.T("Hide — it still installs when you quit") : Loc.T("Not now"));
     }
 
     // Available / failed: what to do about it.
@@ -122,12 +123,12 @@ public partial class MainWindow
         var version = u.Release?.Version ?? "";
         var menu = new ContextMenu();
         menu.Items.Add(MenuKit.Item(
-            u.State == AppUpdates.Stage.Failed ? "Try again"
-                : u.CanInstall ? $"Update to Nota {version}" : $"Download Nota {version}…",
+            u.State == AppUpdates.Stage.Failed ? Loc.T("Try again")
+                : u.CanInstall ? Loc.F("Update to Nota {0}", version) : Loc.F("Download Nota {0}…", version),
             GlyphKind.Update, () => u.Download(this)));
-        menu.Items.Add(MenuKit.Item("Release notes", GlyphKind.Doc, () => u.OpenReleasePage(this)));
+        menu.Items.Add(MenuKit.Item(Loc.T("Release notes"), GlyphKind.Doc, () => u.OpenReleasePage(this)));
         menu.Items.Add(new Separator());
-        menu.Items.Add(MenuKit.Item("Not now", click: u.Dismiss));
+        menu.Items.Add(MenuKit.Item(Loc.T("Not now"), click: u.Dismiss));
         return menu;
     }
 
@@ -136,21 +137,21 @@ public partial class MainWindow
     public async Task CheckForUpdatesAsync()
     {
         var u = AppUpdates.Shared;
-        const string checking = "Checking for updates…";
+        var checking = Loc.T("Checking for updates…");
         if (_vm is not null) _vm.StatusText = checking;
         bool? found = await u.CheckAsync();
         if (_vm is not null && _vm.StatusText == checking) _vm.StatusText = "";
-        var title = "Check for updates";
+        var title = Loc.T("Check for updates");
 
         if (found is null)
         {
-            await new ConfirmWindow(title, "Couldn't reach GitHub to check for a newer version of Nota. Check your internet connection and try again.",
+            await new ConfirmWindow(title, Loc.T("Couldn't reach GitHub to check for a newer version of Nota. Check your internet connection and try again."),
                 "OK", null).ShowDialog<bool>(this);
             return;
         }
         if (found == false || u.Release is not { } release)
         {
-            await new ConfirmWindow(title, $"You're up to date: Nota {AppInfo.Version} is the latest version.", "OK", null).ShowDialog<bool>(this);
+            await new ConfirmWindow(title, Loc.F("You're up to date: Nota {0} is the latest version.", AppInfo.Version), "OK", null).ShowDialog<bool>(this);
             return;
         }
 
@@ -160,14 +161,14 @@ public partial class MainWindow
             case AppUpdates.Stage.Downloading:
                 return;   // its progress is in the status bar already
             case AppUpdates.Stage.Ready:
-                if (await new ConfirmWindow(title, $"Nota {release.Version} is ready to install. Restart Nota to finish updating — or it installs the next time you quit.",
-                        "Restart now", "Later").ShowDialog<bool>(this))
+                if (await new ConfirmWindow(title, Loc.F("Nota {0} is ready to install. Restart Nota to finish updating — or it installs the next time you quit.", release.Version),
+                        Loc.T("Restart now"), Loc.T("Later")).ShowDialog<bool>(this))
                     u.Restart(Close);
                 return;
             default:
-                var message = $"Nota {release.Version} is out — you have {AppInfo.Version}."
-                    + (u.CanInstall ? " Nota downloads it here and installs it when you restart or quit." : " Download it from the release page.");
-                if (await new ConfirmWindow("Update available", message, u.CanInstall ? "Update" : "Download", "Later").ShowDialog<bool>(this))
+                var message = Loc.F("Nota {0} is out — you have {1}.", release.Version, AppInfo.Version)
+                    + (u.CanInstall ? Loc.T(" Nota downloads it here and installs it when you restart or quit.") : Loc.T(" Download it from the release page."));
+                if (await new ConfirmWindow(Loc.T("Update available"), message, u.CanInstall ? Loc.T("Update") : Loc.T("Download"), Loc.T("Later")).ShowDialog<bool>(this))
                     u.Download(this);
                 return;
         }

@@ -17,6 +17,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -55,8 +56,8 @@ internal sealed partial class RackCardView
             int sel = (int)Math.Round(a.LiveSelector() * 127);
             var bar = new RackRangeBar { Single = true, Lo = sel, Hi = sel, Dim = !selectOn || follows, Height = 10, IsHitTestVisible = !follows };
             ToolTip.SetTip(bar, follows
-                ? "The selector follows the input level · turn Follow input off on the Rack out tab to set it by hand"
-                : "Drag to choose which chains play · right-click to map it to a macro");
+                ? Loc.T("The selector follows the input level · turn Follow input off on the Rack out tab to set it by hand")
+                : Loc.T("Drag to choose which chains play · right-click to map it to a macro"));
             var barg = RcEditGesture();
             bar.Changed += (lo, _) => { barg.Begin(); a.SetSelector(lo / 127f); RcProbeUpdate(); };
             bar.Committed += () => { barg.End(); DeferRebuild(); };
@@ -90,7 +91,7 @@ internal sealed partial class RackCardView
                 kb.Changed += (lo, hi) => { kbg.Begin(); a.ChainZone(cc, out _, out _, out int l, out int h); a.SetChainZone(cc, lo, hi, l, h); RcProbeUpdate(); };
                 kb.Committed += () => { kbg.End(); Sel = cc; DeferRebuild(); };
                 kb.Hover += v => { _rs.ProbePitch = v; RcProbeUpdate(); };
-                ToolTip.SetTip(kb, "Drag the edges to set the key zone · hover to test a note");
+                ToolTip.SetTip(kb, Loc.T("Drag the edges to set the key zone · hover to test a note"));
                 Grid.SetColumn(kb, 1); grid.Children.Add(kb);
                 keyBars.Add(kb);
                 if (vel)
@@ -99,7 +100,7 @@ internal sealed partial class RackCardView
                     var vbg = RcEditGesture();
                     vb.Changed += (lo, hi) => { vbg.Begin(); a.ChainZone(cc, out int k0, out int k1, out _, out _); a.SetChainZone(cc, k0, k1, lo, hi); RcProbeUpdate(); };
                     vb.Committed += () => { vbg.End(); Sel = cc; DeferRebuild(); };
-                    ToolTip.SetTip(vb, "Drag the edges to set the velocity zone");
+                    ToolTip.SetTip(vb, Loc.T("Drag the edges to set the velocity zone"));
                     Grid.SetColumn(vb, 2); grid.Children.Add(vb);
                 }
                 if (select)
@@ -110,7 +111,7 @@ internal sealed partial class RackCardView
                     var sbg = RcEditGesture();
                     sb.Changed += (lo, hi) => { sbg.Begin(); a.SetSelectRange(cc, lo, hi); RcProbeUpdate(); };
                     sb.Committed += () => { sbg.End(); Sel = cc; DeferRebuild(); };
-                    ToolTip.SetTip(sb, "Select range: in Select mode this chain plays while the selector is inside it");
+                    ToolTip.SetTip(sb, Loc.T("Select range: in Select mode this chain plays while the selector is inside it"));
                     kb.VerticalAlignment = VerticalAlignment.Top;
                     kb.Height = 12;
                     grid.Children.Remove(kb); // it moves into the stack with the select bar
@@ -126,7 +127,7 @@ internal sealed partial class RackCardView
                 var sbg = RcEditGesture();
                 sb.Changed += (lo, hi) => { sbg.Begin(); a.SetSelectRange(cc, lo, hi); RcProbeUpdate(); };
                 sb.Committed += () => { sbg.End(); Sel = cc; DeferRebuild(); };
-                ToolTip.SetTip(sb, "Drag the edges to set the select range");
+                ToolTip.SetTip(sb, Loc.T("Drag the edges to set the select range"));
                 Grid.SetColumn(sb, 1); grid.Children.Add(sb);
             }
             var rowBorder = new Border { CornerRadius = NotaRadius.Badge, Padding = new Thickness(4, 0, 0, 0), Child = grid };
@@ -134,8 +135,8 @@ internal sealed partial class RackCardView
             rowHosts.Add((rowBorder, name, c));
         }
 
-        string hint = keys ? "Drag zone edges · hover to test a note"
-            : selectOn ? "Drag the selector or map it to a macro" : "Ranges apply when Chains run is set to Select";
+        string hint = keys ? Loc.T("Drag zone edges · hover to test a note")
+            : selectOn ? Loc.T("Drag the selector or map it to a macro") : Loc.T("Ranges apply when Chains run is set to Select");
         var foot = new DockPanel
         {
             LastChildFill = false, Height = 16,
@@ -159,9 +160,9 @@ internal sealed partial class RackCardView
             }
             string names = string.Join(keys ? " + " : ", ", hits.Select(RcChainName));
             if (keys)
-                result.Text = probe < 0 ? "Hover the zones" : $"{NoteName(probe)} · vel {RcProbeVelocity} → {(names.Length > 0 ? names : "nothing")}";
+                result.Text = probe < 0 ? Loc.T("Hover the zones") : Loc.F("{0} · vel {1} → {2}", NoteName(probe), RcProbeVelocity, names.Length > 0 ? names : Loc.T("nothing"));
             else
-                result.Text = $"selector {(int)Math.Round(a.LiveSelector() * 127)} → {(names.Length > 0 ? names : "silence")}{(selectOn ? "" : " · inactive")}";
+                result.Text = Loc.F("selector {0} → {1}{2}", (int)Math.Round(a.LiveSelector() * 127), names.Length > 0 ? names : Loc.T("silence"), selectOn ? "" : Loc.T(" · inactive"));
             result.Foreground = hits.Count > 0 ? NotaPalette.TealBright : NotaPalette.TextTertiary;
         };
         RcProbeUpdate();
@@ -172,12 +173,12 @@ internal sealed partial class RackCardView
     private void RcSelectorMenu(Control anchor)
     {
         var f = new MenuFlyout();
-        f.Items.Add(MenuKit.Header("Selector", null, "Map to a macro"));
+        f.Items.Add(MenuKit.Header("Selector", null, Loc.T("Map to a macro")));
         f.Items.Add(new Separator());
         for (int m = 0; m < 8; m++)
         {
             int mm = m;
-            var mi = new MenuItem { Header = $"Macro {m + 1} · {_ra.MacroName(m)}" };
+            var mi = new MenuItem { Header = Loc.F("Macro {0} · {1}", m + 1, _ra.MacroName(m)) };
             mi.Click += (_, _) => RcMapSelector(mm);
             f.Items.Add(mi);
         }

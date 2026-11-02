@@ -22,6 +22,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -137,12 +138,12 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         syncSeg.Width = 76;
         readouts.Add(syncSync);
         Learn(syncSeg, Sync);
-        ToolTip.SetTip(syncSeg, "Hz runs the LFO free; Sync takes its rate from the tempo and locks it to the bar while the transport plays");
+        ToolTip.SetTip(syncSeg, Loc.T("Hz runs the LFO free; Sync takes its rate from the tempo and locks it to the bar while the transport plays"));
 
         var waveSeg = Segments(FlangerMath.Waves, WaveI, i => { SetP(Waveform, i / 2.0); RefreshAll(); }, out var waveSync, fill: true, padX: 0);
         readouts.Add(waveSync);
         Learn(waveSeg, Waveform);
-        ToolTip.SetTip(waveSeg, "The LFO shape that sweeps the delay: Sine glides, Tri sweeps evenly, Saw rises and drops back");
+        ToolTip.SetTip(waveSeg, Loc.T("The LFO shape that sweeps the delay: Sine glides, Tri sweeps evenly, Saw rises and drops back"));
 
         var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
         var bigSub = new TextBlock { FontSize = 8, Foreground = TextSecondary };
@@ -165,15 +166,15 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
         });
         var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
-        ToolTip.SetTip(bigBlock, "The LFO rate: in Hz, or the note value it takes from the tempo");
+        ToolTip.SetTip(bigBlock, Loc.T("The LFO rate: in Hz, or the note value it takes from the tempo"));
 
-        var rateRow = Slider("RATE", Rate, v => HzF(FlangerMath.FreeHz(v)) + " Hz", "Rate — the free LFO rate, 0.02 … 8 Hz", 38, 46);
+        var rateRow = Slider("RATE", Rate, v => HzF(FlangerMath.FreeHz(v)) + " Hz", Loc.T("Rate — the free LFO rate, 0.02 … 8 Hz"), 38, 46);
         var divRow = Slider("RATE", Division, v => FlangerMath.DivNames[FlangerMath.DivIndex(v)],
-            "Rate — the note value of one LFO cycle, 2/1 … 1/16 with dotted (D) and triplet (T) values", 38, 46,
+            Loc.T("Rate — the note value of one LFO cycle, 2/1 … 1/16 with dotted (D) and triplet (T) values"), 38, 46,
             snap: v => FlangerMath.DivNorm(FlangerMath.DivIndex(v)));
         readouts.Add(() => { rateRow.IsVisible = !Synced(); divRow.IsVisible = Synced(); });
         var stereoRow = Slider("STEREO", Stereo, v => NotaNum.F($"{v * 180:0}°"),
-            "Stereo — the right LFO against the left: 0° sweeps both together, 90° spreads them, 180° moves them opposite", 38, 46,
+            Loc.T("Stereo — the right LFO against the left: 0° sweeps both together, 90° spreads them, 180° moves them opposite"), 38, 46,
             modulation: true, snap: v => Math.Round(v * 180) / 180);
 
         var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
@@ -199,11 +200,11 @@ internal sealed class FlangerDeviceBody : IDeviceBody
         comb.Changed += (d, f) => { Raw(Delay, d); Raw(Feedback, f); RefreshAll(); };
         comb.ResetRequested += () => { Reset(Delay); Reset(Feedback); RefreshAll(); };
         Learn(comb, Delay);
-        ToolTip.SetTip(comb, MenuKit.Keys("The comb the delay carves into the spectrum, L neutral and R teal, with the first notch dashed. Drag left / right to move the notch (Delay), up / down for Feedback; ⌥-click types, double-click resets both."));
+        ToolTip.SetTip(comb, MenuKit.Keys(Loc.T("The comb the delay carves into the spectrum, L neutral and R teal, with the first notch dashed. Drag left / right to move the notch (Delay), up / down for Feedback; ⌥-click types, double-click resets both.")));
         ValueEntry.AttachAll(comb, ValueEntry.DeviceParam(engine, track, di, Delay, "Delay", v => FlangerMath.Ms(FlangerMath.BaseMs(v)) + " ms", RefreshAll), ValueEntry.DeviceParam(engine, track, di, Feedback, "Feedback", v => FbF(FlangerMath.Fb(v)), RefreshAll));
 
         var sweep = new FlangerSweepView { Margin = new Thickness(0, 4, 0, 0) };
-        ToolTip.SetTip(sweep, "The delay τ of both channels over two LFO cycles, and where each is now");
+        ToolTip.SetTip(sweep, Loc.T("The delay τ of both channels over two LFO cycles, and where each is now"));
         var centreBody = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(sweep, Dock.Bottom), comb } };
         var centre = Island(HeadRow(Caps("COMB RESPONSE"), legend), centreBody);
         centre.Margin = new Thickness(5, 0);
@@ -219,14 +220,14 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             modeWord.Text = m;
             modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? NotaPalette.TealBright : TextSecondary;
         });
-        ToolTip.SetTip(modeWord, "What the feedback makes: positive sharpens the peaks, negative hollows the tone, past 85\u2009% the comb rings");
+        ToolTip.SetTip(modeWord, Loc.T("What the feedback makes: positive sharpens the peaks, negative hollows the tone, past 85\u2009% the comb rings"));
 
-        var delayRow = Slider("DELAY", Delay, v => FlangerMath.Ms(FlangerMath.BaseMs(v)) + " ms", "Delay — the centre of the sweep, 0.1 … 8 ms: shorter puts the notches higher");
-        var depthRow = Slider("DEPTH", Depth, v => PctF(v), "Depth — how far the LFO swings the delay around its centre");
+        var delayRow = Slider("DELAY", Delay, v => FlangerMath.Ms(FlangerMath.BaseMs(v)) + " ms", Loc.T("Delay — the centre of the sweep, 0.1 … 8 ms: shorter puts the notches higher"));
+        var depthRow = Slider("DEPTH", Depth, v => PctF(v), Loc.T("Depth — how far the LFO swings the delay around its centre"));
         var fbRow = Slider("FEEDBACK", Feedback, v => FbF(FlangerMath.Fb(v)),
-            "Feedback — the delayed signal fed back in, ±95 %: positive for the classic jet, negative for a hollow tone", modulation: true, bipolar: true,
+            Loc.T("Feedback — the delayed signal fed back in, ±95 %: positive for the classic jet, negative for a hollow tone"), modulation: true, bipolar: true,
             snap: v => FlangerMath.FbNorm(Math.Round(FlangerMath.Fb(v) * 100) / 100));
-        var mixRow = Slider("MIX", Mix, v => PctF(v), "Mix — 50 % gives the deepest notches; 100 % is the delayed signal alone, a vibrato");
+        var mixRow = Slider("MIX", Mix, v => PctF(v), Loc.T("Mix — 50 % gives the deepest notches; 100 % is the delayed signal alone, a vibrato"));
 
         Border Snap(string text, double fb)
         {
@@ -248,7 +249,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
                 tb.Foreground = on ? TextPrimary : TextTertiary;
             });
             Learn(b, Feedback);
-            ToolTip.SetTip(b, fb < 0 ? "Feedback −70\u2009%: hollow" : fb > 0 ? "Feedback +70\u2009%: the classic jet" : "Feedback 0: a plain comb");
+            ToolTip.SetTip(b, fb < 0 ? Loc.T("Feedback −70\u2009%: hollow") : fb > 0 ? Loc.T("Feedback +70\u2009%: the classic jet") : Loc.T("Feedback 0: a plain comb"));
             return b;
         }
         var snaps = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 1, Margin = new Thickness(46, 0, 0, 0) };
@@ -278,8 +279,8 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             {
                 Spacing = 4, Children =
                 {
-                    ReadRow("NOTCH", notchBar, notchVal, "The first notch now, over the range the sweep moves it (20 Hz … 20 kHz)"),
-                    ReadRow("NULL", nullBar, nullVal, "How deep the notches cut, dB (0 … −36 on the bar)"),
+                    ReadRow("NOTCH", notchBar, notchVal, Loc.T("The first notch now, over the range the sweep moves it (20 Hz … 20 kHz)")),
+                    ReadRow("NULL", nullBar, nullVal, Loc.T("How deep the notches cut, dB (0 … −36 on the bar)")),
                 },
             },
         };
@@ -304,14 +305,14 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             double fb = Fb(), afb = Math.Abs(fb);
             bool warn = false;
             string foot;
-            if (!On()) foot = "Flanger bypassed: the signal passes unchanged";
-            else if (P(Mix) < 0.01f) { foot = "Mix at zero: only the dry signal is heard"; warn = true; }
+            if (!On()) foot = Loc.T("Flanger bypassed: the signal passes unchanged");
+            else if (P(Mix) < 0.01f) { foot = Loc.T("Mix at zero: only the dry signal is heard"); warn = true; }
             else if (afb >= 0.85)
             {
                 foot = "Feedback " + FbF(fb) + NotaNum.F($": peaks up to +{FlangerMath.PeakDb(P(Mix), fb):0.0} dB, the comb rings");
                 warn = true;
             }
-            else if (P(Depth) < 0.01f) foot = "Depth at zero: the comb stands still, a static effect";
+            else if (P(Depth) < 0.01f) foot = Loc.T("Depth at zero: the comb stands still, a static effect");
             else
             {
                 var (th, _) = FlangerMath.Notch(P(Mix), fb);

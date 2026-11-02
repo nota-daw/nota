@@ -94,6 +94,9 @@ struct AudioClip {
     AutomationLane panEnvelope;
     // ADSR amplitude shape (identity by default). Applied per sample with the envelopes.
     ClipAdsr adsr;
+    // The take this clip plays a section of (specs/067), 0 = none. Drives the take lanes'
+    // highlight and flatten only; playback never looks at it.
+    int32_t takeId = 0;
 
     int64_t effectiveLength() const;
     // Played warp window (beats). Default (0/0) is the whole warp [0, warpBeats].
@@ -102,6 +105,36 @@ struct AudioClip {
     // Playback speed multiplier from the transpose (2^(semitones/12)). >1 plays
     // faster + higher-pitched over fewer beats; <1 slower + lower over more beats.
     double pitchRatio() const { return std::pow(2.0, static_cast<double>(pitchSemitones) / 12.0); }
+};
+
+// The short edge fade (~3 ms) an unwarped clip plays at both ends, so one that starts or ends
+// mid-waveform doesn't click: the gain `into` device frames into a clip `len` device frames
+// long at device rate `sr`. Flatten (specs/067) bakes the same fades into the joins it removes.
+inline double audioClipEdgeGain(double into, double len, double sr) {
+    const double edge = std::min(3.0 * sr / 1000.0, len * 0.5);
+    if (edge <= 1.0) return 1.0;
+    double eg = 1.0;
+    if (into < edge) eg = into / edge;
+    else if (into > len - edge)
+        eg = (len - into) / edge;
+    return std::clamp(eg, 0.0, 1.0);
+}
+
+// One pass of an Arrangement audio loop recording (specs/067), kept so it can be comped.
+// Every take of one recording has a loop-length buffer whose frame 0 sits at the loop start
+// (originBeat), so a frame inside a take is the same point of the loop in every take. The
+// track plays ordinary clips (the comp); a take is never played directly.
+struct AudioTake {
+    std::shared_ptr<SampleBuffer> sample;
+    int32_t id = 0;     // engine-unique; comp clips carry it in AudioClip::takeId
+    int32_t number = 0; // "Take N" on its track, in recording order
+    int32_t group = 0;  // the loop recording it came from
+    double originBeat = 0.0;
+    double sourceOffsetFrames = 0.0; // the range the pass recorded, inside `sample`
+    int64_t lengthFrames = 0;
+    // Beats per frame of `sample` that the take and its comp sections are laid out with: the
+    // tempo's mapping when they were placed. A tempo change re-places both (placeTakesForTempo).
+    double beatsPerFrame = 0.0;
 };
 
 // A Session-view clip slot (M5). One per scene on each track. Holds a MIDI clip
@@ -278,6 +311,7 @@ class Track {
 
     // Immutable after publish (only touched while building a snapshot).
     std::vector<AudioClip> clips;           // audio tracks
+    std::vector<AudioTake> takes;           // audio loop-recording passes (specs/067), recording order
     std::vector<MidiClip> midiClips;        // instrument tracks
     std::vector<SessionSlot> sessionSlots;  // Session view, one per scene (M5)
     std::vector<TrackLane> automation; // parameter automation lanes (M9)

@@ -29,6 +29,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -53,7 +54,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
     private static readonly string[] TabHints =
     {
         "wave · ratio · fine · level",
-        "11 topologies · feedback on A",
+        Loc.T("11 topologies · feedback on A"),
         "type · freq · reso · key track",
     };
 
@@ -451,7 +452,7 @@ internal sealed class OperatorInstrumentCard : IInstrumentCard
         var modeRow = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 12, VerticalAlignment = VerticalAlignment.Center,
-            Children = { Toggle("Mono", "mono"), Toggle("Vel → FM", "veltofm", () => G("veltofm") >= 0.5f ? $"Vel → FM  {NotaNum.Pct(G("veltofm"))}" : "Vel → FM  off") },
+            Children = { Toggle("Mono", "mono"), Toggle("Vel → FM", "veltofm", () => G("veltofm") >= 0.5f ? $"Vel → FM  {NotaNum.Pct(G("veltofm"))}" : Loc.T("Vel → FM  off")) },
         };
 
         var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };

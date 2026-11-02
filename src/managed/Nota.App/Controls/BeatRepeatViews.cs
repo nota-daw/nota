@@ -20,6 +20,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -29,7 +30,7 @@ internal sealed class BrTimelineView : Control
     private int _n;
     private double _winBeats = 8, _intervalBeats = 4, _gridBeats = 0.25, _barBeats = 4, _offset, _phase;
     private bool _playing;
-    private string _title = "Capture and repeat";
+    private string _title = Loc.T("Capture and repeat");
 
     public BrTimelineView() { ClipToBounds = true; MinHeight = 36; }
 
@@ -205,7 +206,7 @@ internal sealed class BrSlicesView : ShDragView
         ctx.DrawLine(new Pen(hotG ? NotaPalette.Accent : NotaPalette.TextSecondary, hotG ? 1.6 : 1.1, new DashStyle(new double[] { 3, 3 }, 0)),
             new Point(Xf(GateEnd), 0), new Point(Xf(GateEnd), h));
 
-        NotaGraph.Title(ctx, frame, _repeating ? "Captured sound · repeating" : "Captured sound");
+        NotaGraph.Title(ctx, frame, _repeating ? Loc.T("Captured sound · repeating") : "Captured sound");
         NotaGraph.Legend(ctx, w - 6, 3, ("slice", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TealBright, NotaGraph.Mark.Line));
         int off = (int)Math.Round(_offset * 16), gate = (int)Math.Round(_gate * 16);
         double ox = Math.Clamp(Xf(_offset) + 3, 4, w - 110);
@@ -311,7 +312,7 @@ internal sealed class BrFilterView : ShDragView
             NotaGraph.Node(ctx, node, Active == HFreq);
         }
 
-        NotaGraph.Title(ctx, frame, _on ? "Repeat filter" : "Repeat filter · off");
+        NotaGraph.Title(ctx, frame, _on ? "Repeat filter" : Loc.T("Repeat filter · off"));
         if (_on && _laterRepeat > 1)
             NotaGraph.Legend(ctx, w - 6, 3, ("repeat 1", NotaPalette.VizInk, NotaGraph.Mark.Line),
                 (NotaNum.F($"repeat {_laterRepeat}"), NotaPalette.TealBright, NotaGraph.Mark.Dashed));

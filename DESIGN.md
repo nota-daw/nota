@@ -701,7 +701,10 @@ Every region is **docked**: radius 0, no gutter, separated by 1 px seams (the wi
 - **Clip editor** (MIDI and audio share one frame, `ClipEditorKit`): header 38 whose first
   232 is the clip cell (3 px track-colour bar, name, mono kind badge), modes as shell
   segments after it; inspector 232 on the left, sections split by rules and ending in one
-  Ink 5 hint line; the canvas sits in the well. MIDI: keys 48, rows 12, a beats-only
+  Ink 5 hint line; the canvas sits in the well. The inspector and the tools panel take a
+  second column of the same width (464 / 544 in all) when one column would scroll and the
+  canvas keeps 480; sections stay whole and in order, the clip cell follows the inspector's
+  width, and only past two columns does a panel scroll. MIDI: keys 48, rows 12, a beats-only
   ruler 24 with the loop as a 3 px accent strip, notes in the track colour quieter by
   velocity, selected notes accent, scale rows a neutral lift; the tools panel is 272 and
   Apply is its primary action. Audio: a ruler 24, a 22 px warp-marker strip, and

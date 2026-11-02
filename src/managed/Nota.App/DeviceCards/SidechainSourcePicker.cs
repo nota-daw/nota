@@ -19,6 +19,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -73,7 +74,7 @@ internal sealed class SidechainSourcePicker
             if (k == _get()) return;
             if (_set(k.Source, k.Part) == -2)
             {
-                ToolTip.SetTip(Combo, "No free routes — every sidechain route is in use");
+                ToolTip.SetTip(Combo, Loc.T("No free routes — every sidechain route is in use"));
                 Sync();
                 return;
             }
@@ -90,7 +91,7 @@ internal sealed class SidechainSourcePicker
         if (k.Source < 0) return none;
         string track = TrackNames.Of(engine, k.Source);
         if (k.Part == SidechainKey.WholeTrack) return track;
-        if (k.Part == SidechainKey.Missing) return $"{track} · missing";
+        if (k.Part == SidechainKey.Missing) return Loc.F("{0} · missing", track);
         string part = engine.TrackPartName(k.Source, k.Part);
         return $"{track} · {(part.Length > 0 ? part : $"Part {k.Part + 1}")}";
     }
@@ -154,7 +155,7 @@ internal sealed class SidechainSourcePicker
         // A source is takeable when it already has a route, when it is the one this key holds
         // (moving off it frees that route), or while any route is free.
         bool Takeable(int src, int part) => !full || engine.SidechainRouteInUse(src, part) || cur == new SidechainKey(src, part);
-        const string NoRoute = "No free routes — every sidechain route is in use";
+        string NoRoute = Loc.T("No free routes — every sidechain route is in use");
         for (int i = 0; i < engine.TrackCount; i++)
         {
             if (!engine.TryGetTrackInfo(i, out var ti) || ti.Id == ownTrack) continue;
@@ -166,11 +167,11 @@ internal sealed class SidechainSourcePicker
             {
                 string name = engine.TrackPartName(ti.Id, p);
                 bool ok = !frozen && Takeable(ti.Id, p);
-                list.Add(new Entry(new SidechainKey(ti.Id, p), name.Length > 0 ? name : $"Part {p + 1}", true, ok,
-                    frozen ? "Frozen — its parts don't play until the track is unfrozen" : ok ? null : NoRoute));
+                list.Add(new Entry(new SidechainKey(ti.Id, p), name.Length > 0 ? name : Loc.F("Part {0}", p + 1), true, ok,
+                    frozen ? Loc.T("Frozen — its parts don't play until the track is unfrozen") : ok ? null : NoRoute));
             }
             if (parts && cur.Source == ti.Id && cur.Part == SidechainKey.Missing)
-                list.Add(new Entry(cur, "missing part", true, false, "The keyed part was deleted — undo brings it back"));
+                list.Add(new Entry(cur, "missing part", true, false, Loc.T("The keyed part was deleted — undo brings it back")));
         }
         return list;
     }

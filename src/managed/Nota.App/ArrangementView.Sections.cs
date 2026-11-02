@@ -20,6 +20,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -57,15 +58,16 @@ public sealed partial class ArrangementView
     {
         var label = new TextBlock
         {
-            Text = "Sections", Classes = { "SectionLabel" },
+            Text = Loc.T("Sections"), Classes = { "SectionLabel" },
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
         };
-        var grid = new Grid { Height = SectionsH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        grid.Children.Add(HeaderPanel(label));
-        Grid.SetColumn(_sectionsLane, 1);
+        var grid = new Grid { Height = SectionsH };
+        var header = HeaderPanel(label);
+        grid.Children.Add(header);
         grid.Children.Add(_sectionsLane);
+        AddSideRow(grid, header, _sectionsLane);
 
         // A hairline, lighter than the lines above and below: the sections belong with the
         // ruler under them, while Overview and the tracks are separate areas.
@@ -107,24 +109,30 @@ public sealed partial class ArrangementView
         SectionsChanged?.Invoke();
     }
 
-    // A new section is named for the slot it lands in, so a session gets Section 1..n without
-    // a dialog in the way; renaming is one double-click.
-    private string NextSectionName()
+    // Position in start order, ties kept in list order — what an automatic name counts
+    // (specs/058). Computed, not sorted in place, so it also holds mid-drag.
+    private int SectionIndex(ArrangementSection s)
     {
-        for (int i = 1; ; i++)
+        int self = _sections.IndexOf(s), n = 0;
+        for (int i = 0; i < _sections.Count; i++)
         {
-            string candidate = "Section " + i.ToString(NotaNum.Culture);
-            if (!_sections.Any(s => string.Equals(s.Name, candidate, StringComparison.Ordinal))) return candidate;
+            var x = _sections[i];
+            if (i != self && (x.StartBeat < s.StartBeat || (x.StartBeat == s.StartBeat && i < self))) n++;
         }
+        return n;
     }
 
+    /// <summary>The name a section shows: its own, or "Section N" for its position when automatic.</summary>
+    public string SectionDisplayName(ArrangementSection s) => SectionNames.Display(s.Name, SectionIndex(s));
+
+    // A new section is automatic ("Section N", renumbering with its position), so a session
+    // gets Section 1..n without a dialog in the way; renaming is one double-click.
     private ArrangementSection AddSection(double startBeat, double lengthBeats)
     {
         var s = new ArrangementSection
         {
             StartBeat = Math.Max(0, startBeat),
             LengthBeats = Math.Max(_beatsPerBar, lengthBeats),
-            Name = NextSectionName(),
         };
         _sections.Add(s);
         return s;
@@ -150,21 +158,60 @@ public sealed partial class ArrangementView
         return Math.Max(0, Math.Round(beat / bar) * bar);
     }
 
+    // Enter commits; Escape or a click elsewhere drops the edit. An automatic section opens
+    // empty with its automatic name as the placeholder, so Enter on an empty box keeps (or
+    // returns to) automatic naming, and the caption says which kind of name Enter will store.
     private void RenameSection(Control anchor, ArrangementSection s)
     {
-        var box = new TextBox { Text = s.Name, Width = 160, FontSize = 12 };
-        var flyout = new Flyout { Content = box, Placement = PlacementMode.Bottom };
+        bool automatic = SectionNames.IsAutomatic(s.Name);
+        string automaticName = SectionNames.Automatic(SectionIndex(s));
+        var box = new TextBox { Text = automatic ? "" : s.Name, PlaceholderText = automaticName, Width = 180, FontSize = 12 };
+        var caption = new TextBlock { Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
+        void Caption() => caption.Text = SectionNames.IsAutomatic(box.Text) ? Loc.T("Automatic name") : Loc.T("Custom name");
+        Caption();
+        box.TextChanged += (_, _) => Caption();
+
+        var reset = new Button { Content = Loc.T("Reset to default"), Classes = { "ghost" }, FontSize = 11, Height = 22, Padding = new Thickness(6, 0), IsEnabled = !automatic };
+        ToolTip.SetTip(reset, Loc.F("Back to the automatic name ({0}), which follows the section's position", automaticName));
+        var footer = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
+        DockPanel.SetDock(reset, Dock.Right);
+        footer.Children.Add(reset);
+        footer.Children.Add(caption);
+
+        var flyout = new Flyout { Content = new StackPanel { Children = { box, footer } }, Placement = PlacementMode.Bottom };
+        reset.Click += (_, _) => { ResetSectionName(s); flyout.Hide(); };
         box.KeyDown += (_, ke) =>
         {
             if (ke.Key == Key.Enter)
             {
-                if (Live(s) is { } live) { live.Name = box.Text ?? ""; SectionsEdited(); }
+                string name = SectionNames.Normalize(box.Text);
+                if (Live(s) is { } live && live.Name != name) { live.Name = name; SectionsEdited(); }
                 flyout.Hide(); ke.Handled = true;
             }
             else if (ke.Key == Key.Escape) { flyout.Hide(); ke.Handled = true; }
         };
         flyout.ShowAt(anchor);
         Dispatcher.UIThread.Post(() => { box.SelectAll(); box.Focus(); }, DispatcherPriority.Input);
+    }
+
+    /// <summary>Return a section to automatic naming — one undo step, none if it already is.</summary>
+    private void ResetSectionName(ArrangementSection s)
+    {
+        if (Live(s) is not { } live || SectionNames.IsAutomatic(live.Name)) return;
+        live.Name = "";
+        SectionsEdited();
+    }
+
+    /// <summary>Reset the name of the section under the playhead (command palette). Returns
+    /// what happened, for the status bar.</summary>
+    public string ResetSectionNameAtPlayhead()
+    {
+        var s = SectionList.LastOrDefault(x => x.StartBeat <= _playheadBeats && _playheadBeats < x.StartBeat + x.LengthBeats);
+        if (s is null) return Loc.T("No section at the playhead");
+        if (SectionNames.IsAutomatic(s.Name)) return Loc.F("{0} already has its automatic name", SectionDisplayName(s));
+        string was = s.Name, now = SectionNames.Automatic(SectionIndex(s));
+        ResetSectionName(s);
+        return Loc.F("\u201C{0}\u201D is {1} again", was, now);
     }
 
     // ---- the lane ---------------------------------------------------------
@@ -334,7 +381,7 @@ public sealed partial class ArrangementView
             if (s is not null)
             {
                 int bars = (int)Math.Round(s.LengthBeats / Math.Max(1, _o._beatsPerBar));
-                var dup = MenuKit.Item("Duplicate", GlyphKind.Duplicate, () =>
+                var dup = MenuKit.Item(Loc.T("Duplicate"), GlyphKind.Duplicate, () =>
                 {
                     if (_o.Live(s) is null) return;
                     var copy = _o.AddSection(s.StartBeat + s.LengthBeats, s.LengthBeats);
@@ -342,24 +389,28 @@ public sealed partial class ArrangementView
                     _o.SectionsEdited();   // one step: the copy arrives already named
                 });
                 MenuKit.AddGroups(flyout.Items,
-                    new Control[] { MenuKit.Header(s.Name.Length > 0 ? s.Name : "Section", null, $"Section · {bars} bar{(bars == 1 ? "" : "s")}") },
-                    new Control[] { MenuKit.Item("Rename…", GlyphKind.Edit, () => _o.RenameSection(this, s)) },
+                    new Control[] { MenuKit.Header(_o.SectionDisplayName(s), null, Loc.Plural(bars, "Section · {0} bar", "Section · {0} bars")) },
                     new Control[]
                     {
-                        MenuKit.Item("Loop section", GlyphKind.Cycle, () => _o.SetLoopRegion(s.StartBeat, s.StartBeat + s.LengthBeats)),   // raises LoopChanged itself
-                        MenuKit.Item("Select section", GlyphKind.Select, () => _o.SelectSectionRange(s)),
+                        MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit, () => _o.RenameSection(this, s)),
+                        MenuKit.Item(Loc.T("Reset to default name"), GlyphKind.Cycle, () => _o.ResetSectionName(s), enabled: !SectionNames.IsAutomatic(s.Name)),
+                    },
+                    new Control[]
+                    {
+                        MenuKit.Item(Loc.T("Loop section"), GlyphKind.Cycle, () => _o.SetLoopRegion(s.StartBeat, s.StartBeat + s.LengthBeats)),   // raises LoopChanged itself
+                        MenuKit.Item(Loc.T("Select section"), GlyphKind.Select, () => _o.SelectSectionRange(s)),
                     },
                     new Control[] { dup },
-                    new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => _o.RemoveSection(s)) });
+                    new Control[] { MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () => _o.RemoveSection(s)) });
             }
             else
             {
-                flyout.Items.Add(MenuKit.Item("Add section here", GlyphKind.Plus,
+                flyout.Items.Add(MenuKit.Item(Loc.T("Add section here"), GlyphKind.Plus,
                     () => { _o.AddSection(_o.SnapBar(beat), _o._beatsPerBar * 8); _o.SectionsEdited(); }));
                 if (_o._sections.Count > 0)
                 {
                     flyout.Items.Add(new Separator());
-                    flyout.Items.Add(MenuKit.Danger("Delete all sections", GlyphKind.Trash,
+                    flyout.Items.Add(MenuKit.Danger(Loc.T("Delete all sections"), GlyphKind.Trash,
                         () => { _o._sections.Clear(); _o.SectionsEdited(); }));
                 }
             }
@@ -375,7 +426,7 @@ public sealed partial class ArrangementView
             var list = _o._sections;
             if (list.Count == 0 && _mode != Mode.Draft)
             {
-                var hint = new FormattedText("drag here to mark a section", CultureInfo.InvariantCulture,
+                var hint = new FormattedText(Loc.T("drag here to mark a section"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, HintInk);
                 ctx.DrawText(hint, new Point(8, (h - hint.Height) / 2));
             }
@@ -393,7 +444,7 @@ public sealed partial class ArrangementView
                     ctx.FillRectangle(warm ? WarmEdge : ColdEdge, new Rect(r.X, r.Y, 2, r.Height));
                     if (r.Width > 22)
                     {
-                        var ft = new FormattedText(s.Name, CultureInfo.InvariantCulture,
+                        var ft = new FormattedText(_o.SectionDisplayName(s), CultureInfo.InvariantCulture,
                             FlowDirection.LeftToRight, Typeface.Default, 9, warm ? WarmInk : ColdInk)
                         { MaxTextWidth = Math.Max(8, r.Width - 10), Trimming = TextTrimming.CharacterEllipsis };
                         ctx.DrawText(ft, new Point(r.X + 7, r.Y + (r.Height - ft.Height) / 2));

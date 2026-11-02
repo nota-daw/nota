@@ -28,6 +28,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -92,7 +93,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             2 => Pct((float)n), _ => Secs(PhysicalModel.NoiseRelease((float)n)),
         };
         var partials = new PhysPartialsView { VerticalAlignment = VerticalAlignment.Stretch };
-        ToolTip.SetTip(partials, "Partials as the engine tunes them — drag ↔ to spread the series (Ratio), ↕ to tilt the highs (Bright)");
+        ToolTip.SetTip(partials, Loc.T("Partials as the engine tunes them — drag ↔ to spread the series (Ratio), ↕ to tilt the highs (Bright)"));
 
         static TextBlock Cap(string t, IBrush? c = null) => new()
         {
@@ -211,7 +212,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
                 PKnob("malletstiff", "STIFF", Pct),
                 PKnob("malletnoise", "NOISE", Pct),
                 PKnob("malletcolor", "COLOR", Pct));
-            ToolTip.SetTip(knobs, "Stiffness sets the contact time: soft = long and dark, hard = short and bright");
+            ToolTip.SetTip(knobs, Loc.T("Stiffness sets the contact time: soft = long and dark, hard = short and bright"));
             malletGrid.Children.Add(Cap("MALLET"));
             Grid.SetRow(knobs, 1); malletGrid.Children.Add(knobs);
         }
@@ -223,7 +224,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             readouts.Add(() =>
             {
                 double oct = PhysicalModel.NoiseEnvOct(G("noiseenv"));
-                envCap.Text = Math.Abs(oct) < 0.05 ? "env → freq off" : "env → freq " + NotaNum.Unit(oct, "+0.0;−0.0;0", "oct");
+                envCap.Text = Math.Abs(oct) < 0.05 ? Loc.T("env → freq off") : "env → freq " + NotaNum.Unit(oct, "+0.0;−0.0;0", "oct");
             });
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 5 };
             var typeChips = Chips("noisetype", PhysicalModel.NoiseTypes);
@@ -297,7 +298,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
                 cap.Foreground = d ? TextDisabled : TextTertiary;
             });
             var cell = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, Children = { cap, trackC, val } };
-            ToolTip.SetTip(cell, "Res 1 against Res 2 — both at full level in the middle; in 1→2, res 1's own sound against the body it rings");
+            ToolTip.SetTip(cell, Loc.T("Res 1 against Res 2 — both at full level in the middle; in 1→2, res 1's own sound against the body it rings"));
             if (pi >= 0) MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), "Res Mix");
             return cell;
         }
@@ -329,13 +330,13 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
 
         var bankSeg = Segments(new[] { "1", "2" }, () => bank, iv => { bank = iv; showTab(); }, out var bankSync, padX: 5);
         readouts.Add(bankSync);
-        ToolTip.SetTip(bankSeg, "Which resonator the controls below edit");
+        ToolTip.SetTip(bankSeg, Loc.T("Which resonator the controls below edit"));
         // On / Off belongs to the bank on screen: bank 1 always rings, bank 2 is switchable.
         var onSeg = Chips("r2on", new[] { "Off", "On" }, () => bank == 0 || R2On() ? 1 : 0,
             iv => { if (bank == 1) { Write("r2on", iv); Refresh(); } }, dim: () => bank == 0);
-        ToolTip.SetTip(onSeg, "Resonator 2 on / off — resonator 1 always rings");
+        ToolTip.SetTip(onSeg, Loc.T("Resonator 2 on / off — resonator 1 always rings"));
         var structSeg = Chips("structure", new[] { "1→2", "1+2" }, dim: () => !R2On(), padX: 4);
-        ToolTip.SetTip(structSeg, "1→2: resonator 1 rings into resonator 2 · 1+2: both struck, mixed");
+        ToolTip.SetTip(structSeg, Loc.T("1→2: resonator 1 rings into resonator 2 · 1+2: both struck, mixed"));
         var typeHost = new Panel { Children = { typeHosts[0], typeHosts[1] } };
 
         var resHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,Auto,*,Auto,Auto"), ColumnSpacing = 5, Margin = new Thickness(6, 0) };
@@ -406,14 +407,14 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
         var monoChips = Chips("mono", new[] { "Poly", "Mono" }, () => IsMono() ? 1 : 0, iv => { Write("mono", iv); Refresh(); });
         monoChips.HorizontalAlignment = HorizontalAlignment.Right;
         monoChips.Margin = new Thickness(0, 0, 6, 0);
-        ToolTip.SetTip(monoChips, "Poly: 8 voices ring over each other · Mono: a new strike chokes the sounding note");
+        ToolTip.SetTip(monoChips, Loc.T("Poly: 8 voices ring over each other · Mono: a new strike chokes the sounding note"));
         var outCap = Cap("OUTPUT"); outCap.Margin = new Thickness(8, 0, 0, 0);
         var outHead = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         outHead.Children.Add(outCap);
         Grid.SetColumn(monoChips, 1); outHead.Children.Add(monoChips);
 
         var noteOffRow = Slider("NOTE OFF", "noteoff", () => Pct(G("noteoff")));
-        ToolTip.SetTip(noteOffRow, "How hard a released key damps the body — at 0 it rings on, fully up it stops at once");
+        ToolTip.SetTip(noteOffRow, Loc.T("How hard a released key damps the body — at 0 it rings on, fully up it stops at once"));
         var outTop = new StackPanel
         {
             Spacing = 6, Margin = new Thickness(8, 6, 8, 0),

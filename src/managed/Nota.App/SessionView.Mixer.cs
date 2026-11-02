@@ -16,6 +16,7 @@ using Avalonia.Media;
 using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -57,14 +58,14 @@ public sealed partial class SessionView
         };
         Border Row(double h, string text) => new() { Height = h, Child = Label(text) };
         if (_showIO)
-            stack.Children.Add(Section(Row(IoRowH, "Input"), Row(IoRowH, "Monitor"), Row(IoRowH, "Output")));
+            stack.Children.Add(Section(Row(IoRowH, Loc.T("Input")), Row(IoRowH, Loc.T("Monitor")), Row(IoRowH, Loc.T("Output"))));
         if (_showSends && ReturnRows > 0)
         {
-            var rows = Returns().Take(ReturnRows).Select((r, i) => (Control)Row(FaderRowH, $"Send {(char)('A' + i)} · {r.Name}")).ToArray();
+            var rows = Returns().Take(ReturnRows).Select((r, i) => (Control)Row(FaderRowH, Loc.F("Send {0} · {1}", (char)('A' + i), r.Name))).ToArray();
             stack.Children.Add(Section(rows));
         }
         if (_showMixer)
-            stack.Children.Add(Section(Row(FaderRowH, "Pan"), Row(FaderRowH, "Volume"), new Border { Height = MeterRowH }, new Border { Height = ButtonRowH }));
+            stack.Children.Add(Section(Row(FaderRowH, Loc.T("Pan")), Row(FaderRowH, Loc.T("Volume")), new Border { Height = MeterRowH }, new Border { Height = ButtonRowH }));
         return stack;
     }
 
@@ -73,6 +74,26 @@ public sealed partial class SessionView
         var s = new StackPanel { Spacing = Gap, Margin = new Thickness(0, SectionTop, 0, 0) };
         foreach (var r in rows) s.Children.Add(r);
         return s;
+    }
+
+    // Every track's info, read once per UI tick, so the sections below the grid follow volume,
+    // pan and M / S / Arm changed anywhere else — the docked Mixer sits right next to them
+    // (specs/054), and track headers, automation, undo and controllers move them too.
+    private readonly Dictionary<int, NotaTrackInfo> _mixInfo = new();
+
+    private void SnapshotMixInfo()
+    {
+        _mixInfo.Clear();
+        int n = _engine.TrackCount;
+        for (int i = 0; i < n; i++)
+            if (_engine.TryGetTrackInfo(i, out var t)) _mixInfo[t.Id] = t;
+        // Arming elsewhere (the docked Mixer, a track header) must also make an empty slot
+        // record: the cells read _armed, and they tick after this.
+        foreach (var c in _cols)
+        {
+            if (c.Kind != ColKind.Track || !_mixInfo.TryGetValue(c.TrackId, out var ct)) continue;
+            if (ct.Armed != 0) _armed.Add(c.TrackId); else _armed.Remove(c.TrackId);
+        }
     }
 
     private MixerParts BuildMixer(Column c)
@@ -102,7 +123,7 @@ public sealed partial class SessionView
                     var read = ReadoutText();
                     void Show() => read.Text = f.Value <= 0.005 ? "–" : NotaNum.Str(f.Value * 100, "0");
                     f.ValueChanged += v => { _engine.SetTrackSend(id, bus, (float)v); Show(); };
-                    ValueEntry.Attach(f, f.EntryField("Send", v => v <= 0.005 ? "–" : NotaNum.Str(v * 100, "0")), read);
+                    ValueEntry.Attach(f, f.EntryField(Loc.T("Send"), v => v <= 0.005 ? "–" : NotaNum.Str(v * 100, "0")), read);
                     Show();
                     sendSyncs.Add(() =>
                     {
@@ -118,6 +139,7 @@ public sealed partial class SessionView
         }
 
         Action meter = () => { };
+        var follow = new List<Action<NotaTrackInfo>>();
         if (_showMixer)
         {
             Control panRow;
@@ -130,7 +152,8 @@ public sealed partial class SessionView
                 pan.GestureEnd += panUndo.End;
                 Action<double> setPan = p => _engine.SetTrackPan(id, (float)p);
                 pan.PanChanged += p => panUndo.Change(p, setPan);
-                ValueEntry.Attach(pan, pan.EntryField("Pan"));
+                ValueEntry.Attach(pan, pan.EntryField(Loc.T("Pan")));
+                follow.Add(t => { if (!pan.Dragging && Math.Abs(pan.Pan - t.Pan) > 1e-3) pan.Pan = t.Pan; });
                 panRow = FaderRow(pan, ReadoutText());
             }
             else panRow = new Border { Height = FaderRowH };
@@ -148,8 +171,9 @@ public sealed partial class SessionView
                 else SetMasterVolume?.Invoke((float)v);
             };
             vol.ValueChanged += v => { volUndo.Change(v, setVol); ShowDb(); };
-            ValueEntry.Attach(vol, vol.EntryField("Volume", v => v <= 1e-4 ? "−∞" : NotaNum.Db(AudioMath.LinToDb(v), signed: true)), db);
+            ValueEntry.Attach(vol, vol.EntryField(Loc.T("Volume"), v => v <= 1e-4 ? "−∞" : NotaNum.Db(AudioMath.LinToDb(v), signed: true)), db);
             ShowDb();
+            if (hasTrack) follow.Add(t => { if (!vol.Dragging && Math.Abs(vol.Value - t.Volume) > 1e-3) { vol.Value = t.Volume; ShowDb(); } });
 
             var mL = new MeterLine(); var mR = new MeterLine();
             var meters = new StackPanel { Height = MeterRowH, Spacing = 1, Margin = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center, Children = { mL, mR } };
@@ -165,15 +189,19 @@ public sealed partial class SessionView
             if (hasTrack)
             {
                 int id = c.TrackId;
-                btns.Children.Add(MixToggle("M", ti.Muted != 0, false, (v, _) => _engine.SetTrackMute(id, v)));
-                btns.Children.Add(MixToggle("S", ti.Soloed != 0, false, (v, _) => _engine.SetTrackSolo(id, v)));
+                btns.Children.Add(MixToggle("M", ti.Muted != 0, false, (v, _) => _engine.SetTrackMute(id, v), out var syncMute));
+                btns.Children.Add(MixToggle("S", ti.Soloed != 0, false, (v, _) => _engine.SetTrackSolo(id, v), out var syncSolo));
+                follow.Add(t => { syncMute(t.Muted != 0); syncSolo(t.Soloed != 0); });
                 if (c.Kind == ColKind.Track)
+                {
                     btns.Children.Add(MixToggle(null, ti.Armed != 0, true, (v, additive) =>
                     {
                         TrackArming.Set(_engine, id, v, additive);
                         if (v) _armed.Add(id); else _armed.Remove(id);
                         UpdateStates();
-                    }));
+                    }, out var syncArm));
+                    follow.Add(t => syncArm(t.Armed != 0));
+                }
             }
             root.Children.Add(Section(panRow, FaderRow(vol, db), meters, btns));
         }
@@ -181,6 +209,16 @@ public sealed partial class SessionView
         {
             var meterOnly = meter;
             meter = () => { meterOnly(); foreach (var sync in sendSyncs) sync(); };
+        }
+        if (follow.Count > 0)
+        {
+            var before = meter;
+            int trackId = c.TrackId;
+            meter = () =>
+            {
+                before();
+                if (_mixInfo.TryGetValue(trackId, out var t)) foreach (var f in follow) f(t);
+            };
         }
         return new MixerParts { Root = root, UpdateMeter = meter };
     }
@@ -205,7 +243,7 @@ public sealed partial class SessionView
     // M / S / record-arm: a 20px key. Engaged mute fills amber, solo blue, arm the record red
     // with its white disc (DESIGN.md § Controls), each with derived ink.
     // set(on, additive): additive = ⌘/Ctrl held (the arm button arms without disarming the others, #332).
-    private static Control MixToggle(string? label, bool initial, bool arm, Action<bool, bool> set)
+    private static Control MixToggle(string? label, bool initial, bool arm, Action<bool, bool> set, out Action<bool> sync)
     {
         bool on = initial;
         var text = new TextBlock { Text = label ?? "", FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -230,13 +268,14 @@ public sealed partial class SessionView
             b.BorderBrush = on ? fill : NotaPalette.Seam;
             text.Foreground = on ? NotaPalette.InkOn(fill) : NotaPalette.TextSecondary;
         }
-        ToolTip.SetTip(b, arm ? TrackArming.Tip : label == "M" ? "Mute" : "Solo");
+        ToolTip.SetTip(b, arm ? TrackArming.Tip : label == "M" ? Loc.T("Mute") : Loc.T("Solo"));
         b.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
             on = !on; set(on, TrackArming.IsAdditive(e.KeyModifiers)); Paint();
         };
+        sync = v => { if (v == on) return; on = v; Paint(); };
         Paint();
         return b;
     }
@@ -256,14 +295,14 @@ public sealed partial class SessionView
         RecordInputPick cur;
         if (c.IsInstrument)
         {
-            items.Add((RecordInputPick.Track(-1), "All ins"));
+            items.Add((RecordInputPick.Track(-1), Loc.T("All ins")));
             foreach (var n in names.Where(n => n.Instrument)) items.Add((RecordInputPick.Track(n.Id), n.Name));
             cur = RecordInputPick.Track(_engine.GetTrackMidiSource(c.TrackId));
         }
         else
         {
             foreach (var (pick, _, shortName) in RecordInputPick.Hardware) items.Add((pick, shortName));
-            items.Add((RecordInputPick.Track(-1), "Master"));
+            items.Add((RecordInputPick.Track(-1), Loc.T("Master")));
             foreach (var n in names) items.Add((RecordInputPick.Track(n.Id), n.Name));
             cur = RecordInputPick.Of(_engine, c.TrackId);
         }
@@ -279,7 +318,7 @@ public sealed partial class SessionView
             var v = items[cb.SelectedIndex].Value;
             if (inst) _engine.SetTrackMidiSource(id, v.Source); else v.ApplyTo(_engine, id);
         };
-        ToolTip.SetTip(cb, inst ? "MIDI input: every input, or another instrument track" : "Record input");
+        ToolTip.SetTip(cb, inst ? Loc.T("MIDI input: every input, or another instrument track") : Loc.T("Record input"));
         return cb;
     }
 
@@ -288,15 +327,15 @@ public sealed partial class SessionView
         if (c.Kind != ColKind.Track || !c.IsAudio) return new Border { Height = IoRowH };
         int id = c.TrackId;
         bool on = _engine.GetTrackMonitor(id);
-        var seg = Segmented(new[] { "In", "Auto" }, on ? 0 : 1, i => _engine.SetTrackMonitor(id, i == 0), compact: true);
+        var seg = Segmented(new[] { "In", Loc.T("Auto") }, on ? 0 : 1, i => _engine.SetTrackMonitor(id, i == 0), compact: true);
         seg.Margin = new Thickness(4, 0);
-        ToolTip.SetTip(seg, "In: hear the input live through this track · Auto: only while recording");
+        ToolTip.SetTip(seg, Loc.T("In: hear the input live through this track · Auto: only while recording"));
         return seg;
     }
 
     private Control OutputRow(Column c)
     {
-        string text = c.Kind == ColKind.Master ? "Ext Out 1/2" : "Master";
+        string text = c.Kind == ColKind.Master ? "Ext Out 1/2" : Loc.T("Master");
         if (c.GroupId > 0 && ColumnFor(c.GroupId) is { } g) text = g.Name;
         else if (c.GroupId > 0)
             for (int i = 0; i < _engine.TrackCount; i++)
@@ -307,12 +346,12 @@ public sealed partial class SessionView
             Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(1),
             Child = new TextBlock { Text = text, FontSize = 10, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis },
         };
-        ToolTip.SetTip(b, "Output — group a track to route it through the group");
+        ToolTip.SetTip(b, Loc.T("Output — group a track to route it through the group"));
         return b;
     }
 
     /// <summary>A segmented switch (Border.segmented + ToggleButton.seg); exactly one is lit.</summary>
-    private static Border Segmented(IReadOnlyList<string> labels, int selected, Action<int> pick, bool compact = false, bool mono = false)
+    internal static Border Segmented(IReadOnlyList<string> labels, int selected, Action<int> pick, bool compact = false, bool mono = false)
     {
         var row = new UniformGrid { Rows = 1 };
         var buttons = new List<ToggleButton>();

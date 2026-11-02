@@ -30,6 +30,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -178,7 +179,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
             () => G("velamp") > 1e-3f,
             () => { if (G("velamp") > 1e-3f) { lastVel = G("velamp"); SetP("velamp", 0f); } else SetP("velamp", lastVel); Refresh(); },
             out var velSync,
-            liveLabel: () => G("velamp") > 1e-3f ? $"Vel → Vol  {NotaNum.Pct(G("velamp"))}" : "Vel → Vol  off");
+            liveLabel: () => G("velamp") > 1e-3f ? $"Vel → Vol  {NotaNum.Pct(G("velamp"))}" : Loc.T("Vel → Vol  off"));
         readouts.Add(velSync);
         if (I("velamp") is var vi and >= 0) MidiLearn.Bind(velSwitch, MidiTarget.PluginParam(track, -1, vi), "Vel → Vol");
 
@@ -362,7 +363,7 @@ internal sealed class SynthInstrumentCard : IInstrumentCard
                  + (Sel("wave", 4) == 1 ? $" · pulse {NotaNum.Pct(0.05 + G("pulsewidth") * 0.90)}" : ""),
             1 => $"Env {Secs(G("attack"), 0.001, 2.0)} · {Secs(G("decay"), 0.002, 2.0)} · {Db(G("sustain"))} · {Secs(G("release"), 0.002, 3.0)}",
             _ => Sel("filtype", 4) == 0
-                 ? "Filter off — the oscillator goes straight to the amplifier"
+                 ? Loc.T("Filter off — the oscillator goes straight to the amplifier")
                  : $"Filter {FilterNames[Sel("filtype", 4)]} · cutoff {KHz(G("cutoff"))} · Q {G("resonance").ToString("0.00", NotaNum.Culture)} · env {Bipolar(G("filenv"))}",
         };
         string Meta()

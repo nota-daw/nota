@@ -7,6 +7,7 @@
 
 using System.Collections.Generic;
 using System.Linq;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -33,9 +34,9 @@ public partial class ArrangementView
         // Half-done (a source the engine wouldn't copy, or a refused move): take the tracks back.
         if (!ok && newIds.Count > 0) _engine.Undo();
         Refresh();
-        if (!ok) { StatusMessage?.Invoke("Couldn't move the clips to new tracks"); return; }
+        if (!ok) { StatusMessage?.Invoke(Loc.T("Couldn't move the clips to new tracks")); return; }
         if (_engine.LastMoveKeptDeviceAutomation())
-            StatusMessage?.Invoke("Moved to new tracks — device automation stayed on the source");
+            StatusMessage?.Invoke(Loc.T("Moved to new tracks — device automation stayed on the source"));
         ReselectPlaced();
         ClipsMoved?.Invoke(move!);
         RevealTrack(newIds[sourceTracks[^1]]);

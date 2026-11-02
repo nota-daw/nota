@@ -128,6 +128,23 @@ int32_t nota_clip_get_source_peaks_range(const NotaEngine* e, int32_t track_id, 
     if (!e) return 0;
     return CENG(e)->getClipSourcePeaksRange(track_id, clip_index, frame0, frame1, out_min_max, max_points);
 }
+int32_t nota_clip_get_levels(const NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t view, double a,
+    double b, float* out_min_max, float* out_rms, int32_t max_points) {
+    if (!e || !out_min_max || max_points <= 0) return 0;
+    auto* eng = CENG(e);
+    switch (view) {
+    case NOTA_CLIP_LEVELS_PLAYED: return eng->getClipPeaks(track_id, clip_index, out_min_max, max_points, out_rms);
+    case NOTA_CLIP_LEVELS_SOURCE:
+        return eng->getClipSourcePeaks(track_id, clip_index, out_min_max, max_points, out_rms);
+    case NOTA_CLIP_LEVELS_WARP_FULL:
+        return eng->getClipWarpFullPeaks(track_id, clip_index, out_min_max, max_points, out_rms);
+    case NOTA_CLIP_LEVELS_WARP_RANGE:
+        return eng->getClipWarpPeaksRange(track_id, clip_index, a, b, out_min_max, max_points, out_rms);
+    case NOTA_CLIP_LEVELS_SOURCE_RANGE:
+        return eng->getClipSourcePeaksRange(track_id, clip_index, a, b, out_min_max, max_points, out_rms);
+    default: return 0;
+    }
+}
 
 // ---- Instrument tracks, MIDI clips & notes (M2) ---------------------------
 
@@ -810,6 +827,43 @@ int32_t nota_track_add_audio_clip_ex(NotaEngine* e, int32_t track_id, const char
     double source_offset_frames, int64_t length_frames, float gain) {
     if (!e || !path) return -1;
     return ENG(e)->addAudioClipEx(track_id, std::string(path), start_beat, source_offset_frames, length_frames, gain);
+}
+int32_t nota_track_take_count(const NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->takeCount(track_id) : 0;
+}
+int32_t nota_track_take_info(const NotaEngine* e, int32_t track_id, int32_t index, NotaTakeInfo* out) {
+    return (e && CENG(e)->takeInfo(track_id, index, out)) ? 1 : 0;
+}
+int32_t nota_track_take_peaks(const NotaEngine* e, int32_t track_id, int32_t index, float* out_min_max, int32_t max_points) {
+    return e ? CENG(e)->takePeaks(track_id, index, out_min_max, max_points) : 0;
+}
+NotaResult nota_track_take_comp(NotaEngine* e, int32_t track_id, int32_t take_id, double start_beat, double end_beat) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->compTake(track_id, take_id, start_beat, end_beat) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_track_take_delete(NotaEngine* e, int32_t track_id, int32_t take_id) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->deleteTake(track_id, take_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_track_takes_flatten(NotaEngine* e, int32_t track_id) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->flattenTakes(track_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_clip_take_id(const NotaEngine* e, int32_t track_id, int32_t clip_index) {
+    return e ? CENG(e)->clipTakeId(track_id, clip_index) : 0;
+}
+int32_t nota_track_restore_take(NotaEngine* e, int32_t track_id, const char* path, int32_t number, int32_t group,
+    double origin_beat, double source_offset_frames, int64_t length_frames) {
+    if (!e || !path) return -1;
+    return ENG(e)->restoreTake(track_id, std::string(path), number, group, origin_beat, source_offset_frames, length_frames);
+}
+NotaResult nota_clip_set_take_id(NotaEngine* e, int32_t track_id, int32_t clip_index, int32_t take_id) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setClipTakeId(track_id, clip_index, take_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_take_record_test(NotaEngine* e, int32_t track_id, const float* interleaved_stereo, int32_t frames,
+    double start_beat) {
+    return (e && ENG(e)->takeRecordTest(track_id, interleaved_stereo, frames, start_beat)) ? 1 : 0;
 }
 int32_t nota_sample_get_info(const NotaEngine* e, int64_t sample_id, NotaSampleInfo* out) {
     return (e && CENG(e)->sampleInfo(sample_id, out)) ? 1 : 0;

@@ -16,6 +16,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -228,7 +229,7 @@ internal sealed class OperatorRoutingViz : Control
 
         // Header caption.
         ctx.DrawText(new FormattedText("Routing", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Semi, 8, TextTertiary), new Point(padX, 2));
-        var hint = new FormattedText("drag an operator onto another to re-route", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, TextTertiary);
+        var hint = new FormattedText(Loc.T("drag an operator onto another to re-route"), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, 8, TextTertiary);
         ctx.DrawText(hint, new Point(gx1 - hint.Width, 2));
 
         // Connection lines (under the boxes).

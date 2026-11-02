@@ -17,8 +17,10 @@ restrictions).
   `specs/000-example/` shows a completed run. Trivial work — typos, small fixes, doc
   edits — skips the spec and goes straight to the change.
 - Bug reports go through the speckit `bug-assess` → `bug-fix` → `bug-test` commands.
-- The `nota-*` skills in `.claude/skills/` and `.agents/skills/` (design, docs,
-  features, instrument, shortcuts, release, pr) encode project-specific workflows — prefer
-  them over improvising.
+- The `nota-*` skills (design, docs, features, instrument, shortcuts, release, pr)
+  encode project-specific workflows — prefer them over improvising. Every agent finds
+  them in its own skill directory (`.agents/skills/`, `.github/skills/`,
+  `.cursor/skills/`, `.gemini/skills/`); those are copies. The source is
+  `.claude/skills/`: edit a skill there, then run `scripts/sync-agent-skills.sh`.
 - Before any pull request: `scripts/build.sh` (or the Linux/Windows siblings) must pass;
   it runs the smoke test that drives the engine end-to-end.

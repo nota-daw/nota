@@ -128,5 +128,23 @@ internal static class NoteEditingTests
         yield return (Midi(NoteOverwrite.VelocityBy(3 / 127f, -10)) == 1, "velocity: clamps at 1, never 0");
         var fine = NoteOverwrite.VelocityBy(0.8f, 1);
         yield return (Midi(fine) == (int)Math.Round(0.8 * 127) + 1 && OnStep(fine), "velocity: fine step lands on an integer MIDI value");
+
+        // ---- shaping a note while placing it (specs/066, #45) -----------------------------
+        yield return (NotePlacementDrag.KindFor(false, false) == PlaceDragKind.Move, "place drag: plain drag moves the new note");
+        yield return (NotePlacementDrag.KindFor(true, false) == PlaceDragKind.Length, "place drag: ⇧ drag sets its length");
+        yield return (NotePlacementDrag.KindFor(false, true) == PlaceDragKind.Velocity
+                      && NotePlacementDrag.KindFor(true, true) == PlaceDragKind.Velocity, "place drag: ⌘/Ctrl drag sets its velocity, over ⇧");
+        double step = NotePlacementDrag.PxPerVelocityStep;
+        yield return (Midi(NotePlacementDrag.Velocity(64 / 127f, -10 * step)) == 74, "place drag: dragging up 10 steps is 10 louder");
+        yield return (Midi(NotePlacementDrag.Velocity(64 / 127f, 10 * step)) == 54, "place drag: dragging down is quieter");
+        yield return (NotePlacementDrag.Velocity(64 / 127f, 0) == 64 / 127f, "place drag: no vertical movement keeps the velocity");
+        yield return (Midi(NotePlacementDrag.Velocity(0.8f, -1000)) == 127 && Midi(NotePlacementDrag.Velocity(0.8f, 1000)) == 1,
+                      "place drag: velocity clamps to 1..127");
+        // Half-beat grid: 0.7 snaps to 0.5. Switching into length (no pointer movement) must not.
+        static double Half(double b) => Math.Round(b * 2) / 2;
+        yield return (NotePlacementDrag.BeatAfter(0.7, 0, Half) == 0.7,
+                      "place drag: switching mode keeps an off-grid end");
+        yield return (NotePlacementDrag.BeatAfter(0.7, 0.2, Half) == 1.0,
+                      "place drag: a later horizontal drag snaps the end");
     }
 }

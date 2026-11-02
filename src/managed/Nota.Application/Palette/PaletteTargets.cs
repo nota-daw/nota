@@ -6,6 +6,8 @@
 // anywhere at all ("Select a track first"). Pure: reads the frozen context, so the line
 // changes only with the highlighted row and the held modifiers.
 
+using Nota.Application.Localization;
+
 namespace Nota.Application.Palette;
 
 public static class PaletteTargets
@@ -19,13 +21,13 @@ public static class PaletteTargets
             case PaletteKind.Action:
                 return actionCheck?.Invoke(it.Payload as string ?? "") ?? Availability.Yes;
             case PaletteKind.Modular:
-                return ctx.HasTrack ? Availability.Yes : Availability.No("Select a track first");
+                return ctx.HasTrack ? Availability.Yes : Availability.No(Loc.T("Select a track first"));
             case PaletteKind.Device:
             case PaletteKind.Preset:
                 if (it.Role == PaletteDeviceRole.Instrument) return Availability.Yes;   // no track → a new one (CP-4)
-                if (!ctx.HasTrack) return Availability.No("Select a track first");
+                if (!ctx.HasTrack) return Availability.No(Loc.T("Select a track first"));
                 if (it.Role == PaletteDeviceRole.MidiEffect && ctx.TrackType != PaletteTrackType.Instrument)
-                    return Availability.No("MIDI effects need an instrument track");
+                    return Availability.No(Loc.T("MIDI effects need an instrument track"));
                 return Availability.Yes;
         }
         return Availability.Yes;
@@ -38,14 +40,14 @@ public static class PaletteTargets
         if (it is null) return ("", false);
         var a = Check(it, ctx, actionCheck);
         if (!a.Ok) return (a.Reason, true);
-        string keep = (mode & ApplyMode.KeepOpen) != 0 && it.Kind is PaletteKind.Device or PaletteKind.Preset or PaletteKind.Modular ? " · keep open" : "";
-        string track = ctx.TrackName.Length > 0 ? ctx.TrackName : $"track {ctx.TrackId}";
+        string keep = (mode & ApplyMode.KeepOpen) != 0 && it.Kind is PaletteKind.Device or PaletteKind.Preset or PaletteKind.Modular ? Loc.T(" · keep open") : "";
+        string track = ctx.TrackName.Length > 0 ? ctx.TrackName : Loc.F("track {0}", ctx.TrackId);
         switch (it.Kind)
         {
-            case PaletteKind.Action: return ("↵ run", false);
+            case PaletteKind.Action: return (Loc.T("↵ run"), false);
             case PaletteKind.Track:
-                return ((mode & ApplyMode.NewTrack) != 0 ? $"→ open {it.Name} in Devices" : $"→ select {it.Name} in {ctx.View}", false);
-            case PaletteKind.Modular: return ($"→ {track} · canvas, unconnected{keep}", false);
+                return ((mode & ApplyMode.NewTrack) != 0 ? Loc.F("→ open {0} in Devices", it.Name) : Loc.F("→ select {0} in {1}", it.Name, ctx.View), false);
+            case PaletteKind.Modular: return (Loc.F("→ {0} · {1}{2}", track, Loc.T("canvas, unconnected"), keep), false);
         }
 
         bool newTrack = (mode & ApplyMode.NewTrack) != 0;
@@ -56,15 +58,15 @@ public static class PaletteTargets
             {
                 if (it.PresetOrigin == PresetOrigin.Kit)
                     return !newTrack && instTrack && ctx.InstrumentKind is 4 or 12
-                        ? ($"→ {track} · loads the kit{keep}", false) : ($"→ new track{keep}", false);
+                        ? (Loc.F("→ {0} · {1}{2}", track, Loc.T("loads the kit"), keep), false) : (Loc.F("→ new track{0}", keep), false);
                 if (it.PresetOrigin != PresetOrigin.Factory || newTrack || !instTrack || ctx.IsRack)
-                    return ($"→ new MIDI track{keep}", false);
-                return ($"→ {track} · {(ctx.InstrumentName.Length > 0 ? "replaces " + ctx.InstrumentName : "instrument")}{keep}", false);
+                    return (Loc.F("→ new MIDI track{0}", keep), false);
+                return (Loc.F("→ {0} · {1}{2}", track, ctx.InstrumentName.Length > 0 ? Loc.F("replaces {0}", ctx.InstrumentName) : Loc.T("instrument"), keep), false);
             }
-            if (newTrack || !instTrack) return ($"→ new MIDI track{keep}", false);
-            if (ctx.InstrumentKind == 4) return ($"→ {track} · new pad in Drum Rack{keep}", false);
-            if (ctx.InstrumentKind == 3) return ($"→ {track} · new chain in Instrument Rack{keep}", false);
-            return ($"→ {track} · replaces {(ctx.InstrumentName.Length > 0 ? ctx.InstrumentName : "the instrument")}{keep}", false);
+            if (newTrack || !instTrack) return (Loc.F("→ new MIDI track{0}", keep), false);
+            if (ctx.InstrumentKind == 4) return (Loc.F("→ {0} · {1}{2}", track, Loc.T("new pad in Drum Rack"), keep), false);
+            if (ctx.InstrumentKind == 3) return (Loc.F("→ {0} · {1}{2}", track, Loc.T("new chain in Instrument Rack"), keep), false);
+            return (Loc.F("→ {0} · {1}{2}", track, ctx.InstrumentName.Length > 0 ? Loc.F("replaces {0}", ctx.InstrumentName) : Loc.T("replaces the instrument"), keep), false);
         }
 
         bool midi = it.Role == PaletteDeviceRole.MidiEffect;
@@ -73,13 +75,13 @@ public static class PaletteTargets
         {
             var ins = ctx.Insert;
             bool alt = (mode & ApplyMode.Replace) != 0;
-            if (!midi && ins.Section == ChainSection.Audio && ins.Index >= 0) where = (alt ? "replaces " : "after ") + ins.DeviceName;
-            else if (midi && ins.Section == ChainSection.Midi && ins.Index >= 0) where = (alt ? "replaces " : "after ") + ins.DeviceName;
-            else if (!midi && ins.Section == ChainSection.Instrument && ctx.InstrumentName.Length > 0) where = "after " + ctx.InstrumentName;
-            else where = midi ? "end of MIDI FX" : "end of Audio FX";
+            if (!midi && ins.Section == ChainSection.Audio && ins.Index >= 0) where = alt ? Loc.F("replaces {0}", ins.DeviceName) : Loc.F("after {0}", ins.DeviceName);
+            else if (midi && ins.Section == ChainSection.Midi && ins.Index >= 0) where = alt ? Loc.F("replaces {0}", ins.DeviceName) : Loc.F("after {0}", ins.DeviceName);
+            else if (!midi && ins.Section == ChainSection.Instrument && ctx.InstrumentName.Length > 0) where = Loc.F("after {0}", ctx.InstrumentName);
+            else where = midi ? Loc.T("end of MIDI FX") : Loc.T("end of Audio FX");
         }
-        else where = midi ? "MIDI FX, end" : "end of chain";
-        return ($"→ {track} · {where}{keep}", false);
+        else where = midi ? Loc.T("MIDI FX, end") : Loc.T("end of chain");
+        return (Loc.F("→ {0} · {1}{2}", track, where, keep), false);
     }
 
     /// <summary>Ids suggested for an empty query in each context (CP-19).</summary>

@@ -14,13 +14,14 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
 public sealed partial class ArrangementView
 {
     // ---- lanes ------------------------------------------------------------
-    private sealed class LaneControl : Control, IAutoRows, IValueEntryHost
+    private sealed partial class LaneControl : Control, IAutoRows, IValueEntryHost
     {
         private readonly ArrangementView _o;
         private readonly AutoEditor _auto;   // automation mode (M9-A3), shared with the footer's return rows
@@ -69,7 +70,7 @@ public sealed partial class ArrangementView
         TrackVM IAutoRows.TrackAt(int i) => _o._tracks[i];
         int IAutoRows.IndexOf(TrackVM t) => _o._tracks.IndexOf(t);
         double IAutoRows.Top(int i) => _o.RowTop(i);
-        double IAutoRows.Height(int i) => _o.RowHeightAt(i);
+        double IAutoRows.Height(int i) => _o.ClipAreaHeightAt(i);
         bool IAutoRows.Editable(int i) => !_o.IsSlimRowAt(i);   // a slim group bar has no room for an envelope
         (int lo, int hi) IAutoRows.VisibleRange => _o.VisibleRowRange();
 
@@ -85,13 +86,15 @@ public sealed partial class ArrangementView
         // window [S0,S1] in that material's domain, captured at drag start. Drawing maps
         // each timeline beat through the committed anchor to a material point, so a resize
         // reveals/hides the REAL audio instead of squashing the fixed window peaks.
-        private float[]? _rpPeaks;
+        private float[]? _rpPeaks, _rpRms;
         private int _rpCount;
         private double _rpMTotal, _rpS0, _rpS1;   // material total + committed window (frames for unwarped, beats for warped)
         private bool _rpWarped;
         private int _rpTrack, _rpClip;
         private float[]? _rpDetail;                // the lane's visible material at one bucket per pixel (#299)
+        private float[]? _rpDetailRms;
         private int _rpDetailCount;
+        private readonly WaveformPainter _painter = new();
         private double _rpDetailM0, _rpDetailM1;
         private const double EdgePx = 6;
 
@@ -180,9 +183,9 @@ public sealed partial class ArrangementView
 
         /// <summary>A clip drag / trim, marquee, time-range or envelope edit is in progress:
         /// Follow must not scroll the lanes out from under it (#105).</summary>
-        public bool IsGesturing => _drag != Drag.None || _marquee is not null || _auto.IsActive;
+        public bool IsGesturing => _drag != Drag.None || _marquee is not null || _auto.IsActive || _takeSwipe is not null;
         private double RowTop(int i) => _o.RowTop(i);
-        private double RowH(int i) => _o.RowHeightAt(i);
+        private double RowH(int i) => _o.ClipAreaHeightAt(i);
         protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
             => _o.HandleLaneWheel(e, e.GetPosition(this).X);
 
@@ -190,7 +193,7 @@ public sealed partial class ArrangementView
         {
             beat = _o._scrollBeats + p.X / _o._pixelsPerBeat;
             int ti = _o.RowAtY(p.Y);
-            if (ti < 0) return null;
+            if (ti < 0 || p.Y >= RowTop(ti) + RowH(ti)) return null;   // below the clip area: take lanes
             var t = _o._tracks[ti];
             foreach (var c in t.Clips)
                 if (beat >= c.StartBeat && beat <= c.StartBeat + c.LengthBeats)
@@ -231,6 +234,7 @@ public sealed partial class ArrangementView
         protected override void OnPointerPressed(PointerPressedEventArgs e)
         {
             if (RowSeamPressed(e)) return;
+            if (TakeLanePressed(e)) return;
             if (_o._automationMode) { _auto.AutoPointerPressed(e); return; }
             var pt = e.GetCurrentPoint(this);
             var hit = HitTest(pt.Position, out double beat);
@@ -381,6 +385,7 @@ public sealed partial class ArrangementView
         protected override void OnPointerMoved(PointerEventArgs e)
         {
             if (_o.IsRowResizing) { _o.UpdateRowResize(e.GetPosition(this).Y); return; }
+            if (_takeSwipe is not null) { TakeSwipeMoved(e); return; }
             if (e.GetCurrentPoint(this).Properties is { IsLeftButtonPressed: false, IsRightButtonPressed: false }
                 && RowSeamHover(e.GetPosition(this))) return;
             if (_o._automationMode) { _auto.AutoPointerMoved(e); return; }
@@ -551,6 +556,7 @@ public sealed partial class ArrangementView
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
         {
             if (_o.IsRowResizing) { e.Pointer.Capture(null); _o.EndRowResize(); return; }
+            if (_takeSwipe is not null) { TakeSwipeReleased(e); return; }
             if (_o._automationMode) { _auto.AutoPointerReleased(e); return; }
             var eng = _o._engine;
 
@@ -662,7 +668,7 @@ public sealed partial class ArrangementView
                     move = _o.MoveBlock(moves);
                     committed = move is not null;
                     if (committed && eng.LastMoveKeptDeviceAutomation())   // explicit hint: only Volume/Pan followed across tracks (req 8.3.4)
-                        _o.StatusMessage?.Invoke("Moved across tracks — device automation stayed on the source");
+                        _o.StatusMessage?.Invoke(Loc.T("Moved across tracks — device automation stayed on the source"));
                 }
                 _groupMove = null; _drag = Drag.None; _moveRowDelta = 0;
                 e.Pointer.Capture(null);
@@ -711,9 +717,11 @@ public sealed partial class ArrangementView
             // OnPointerReleased turns it into a selection.
             bool active = _drag != Drag.None || _groupMove is not null || _rangeActive
                           || _auto.IsActive
-                          || _adsrDrag != AdsrHandle.None;
+                          || _adsrDrag != AdsrHandle.None
+                          || _takeSwipe is not null;
             if (!active) return false;
             _pending = false; _drag = Drag.None; _groupMove = null; _moveRowDelta = 0; _dragClip = null; _rpPeaks = null;
+            _takeSwipe = null; _takeMoved = false;   // an abandoned take swipe never comps
             _marqueeArmed = false; _rangeActive = false; _marquee = null; _shiftClipTrack = -1; _shiftClipIndex = -1;
             _auto.Cancel();
             _adsrDrag = AdsrHandle.None; _adsrClip = null;
@@ -731,7 +739,7 @@ public sealed partial class ArrangementView
             _loadRow = row;
             _o.SetDropTrack(row);
             _o.DwellOverTrack(row >= 0 ? _o._tracks[row].Id : -1);
-            if (row >= 0) _o.StatusMessage?.Invoke($"Release to load the clip into {_o._tracks[row].Name}");
+            if (row >= 0) _o.StatusMessage?.Invoke(Loc.F("Release to load the clip into {0}", _o._tracks[row].Name));
         }
 
         // The grabbed clip's audio as a sample file (null + a status line when it can't be).
@@ -739,7 +747,7 @@ public sealed partial class ArrangementView
         {
             string name = clip.Name.Length > 0 ? clip.Name : _o._tracks.Find(t => t.Id == _grabTrackId)?.Name ?? "";
             try { return ClipAudioExport.AsSample(eng, _grabTrackId, clip.ClipIndex, name); }
-            catch (Exception ex) { _o.StatusMessage?.Invoke($"Couldn't take the clip's audio: {ex.Message}"); return null; }
+            catch (Exception ex) { _o.StatusMessage?.Invoke(Loc.F("Couldn't take the clip's audio: {0}", ex.Message)); return null; }
         }
 
         // Hands the move over to a sample drag: the clip snaps back home and its audio rides
@@ -880,7 +888,7 @@ public sealed partial class ArrangementView
         private MenuItem? PasteBouncedItem(int trackId, double at)
         {
             if (!_o.CanPasteBouncedOnto(trackId)) return null;
-            var mi = new MenuItem { Header = "Paste bounced audio", Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteBouncedKey };
+            var mi = new MenuItem { Header = Loc.T("Paste bounced audio"), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteBouncedKey };
             mi.Click += (_, _) => _o.RequestPasteBounced(trackId, at);
             return mi;
         }
@@ -908,18 +916,18 @@ public sealed partial class ArrangementView
             foreach (var mi in clipboard) flyout.Items.Add(mi);
             if (track.IsInstrument)
             {
-                var insert = new MenuItem { Header = "Insert MIDI clip", Icon = MenuKit.Icon(GlyphKind.Plus) };
+                var insert = new MenuItem { Header = Loc.T("Insert MIDI clip"), Icon = MenuKit.Icon(GlyphKind.Plus) };
                 insert.Click += (_, _) => _o.AddMidiClipAt(trackId, beat);
                 flyout.Items.Add(new Separator());
                 flyout.Items.Add(insert);
             }
             if (inRange)
             {
-                var consolidate = new MenuItem { Header = "Consolidate selection", Icon = MenuKit.Icon(GlyphKind.Consolidate), InputGesture = MenuKit.ConsolidateKey };
+                var consolidate = new MenuItem { Header = Loc.T("Consolidate selection"), Icon = MenuKit.Icon(GlyphKind.Consolidate), InputGesture = MenuKit.ConsolidateKey };
                 consolidate.Click += (_, _) => _o.ConsolidateSelection();
-                var dupTime = new MenuItem { Header = "Duplicate time", Icon = MenuKit.Icon(GlyphKind.Duplicate), InputGesture = MenuKit.DuplicateTimeKey };
+                var dupTime = new MenuItem { Header = Loc.T("Duplicate time"), Icon = MenuKit.Icon(GlyphKind.Duplicate), InputGesture = MenuKit.DuplicateTimeKey };
                 dupTime.Click += (_, _) => _o.DuplicateTimeInsert();
-                var silence = new MenuItem { Header = "Insert silence", Icon = MenuKit.Icon(GlyphKind.Plus), InputGesture = MenuKit.InsertSilenceKey };
+                var silence = new MenuItem { Header = Loc.T("Insert silence"), Icon = MenuKit.Icon(GlyphKind.Plus), InputGesture = MenuKit.InsertSilenceKey };
                 silence.Click += (_, _) => _o.InsertSilenceAtTimeSelection();
                 flyout.Items.Add(new Separator());
                 flyout.Items.Add(consolidate);
@@ -946,45 +954,45 @@ public sealed partial class ArrangementView
 
             var track = _o._tracks.FirstOrDefault(v => v.Id == trackId);
             var header = inGroup
-                ? MenuKit.Header($"{_o.Selection.Count} clips", null, "")
-                : MenuKit.Header(clip.Name.Length > 0 ? clip.Name : "Clip",
-                                 track is null ? null : TrackBrush(track.ColorIndex), clip.IsMidi ? "MIDI clip" : "Audio clip");
+                ? MenuKit.Header(Loc.Plural(_o.Selection.Count, "{0} clip", "{0} clips"), null, "")
+                : MenuKit.Header(clip.Name.Length > 0 ? clip.Name : Loc.T("Clip"),
+                                 track is null ? null : TrackBrush(track.ColorIndex), clip.IsMidi ? Loc.T("MIDI clip") : Loc.T("Audio clip"));
 
-            var rename = MenuKit.Item("Rename…", GlyphKind.Edit,
+            var rename = MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit,
                 () => PromptRename(clip.Name, s => { _o._engine?.SetClipName(trackId, idx, s); _o.Refresh(); }));
 
             var edits = new List<Control>
             {
-                MenuKit.Item("Split here", GlyphKind.Split, () => { _o._engine?.SplitClip(trackId, idx, at); _o.Refresh(); }, MenuKit.SplitKey),
+                MenuKit.Item(Loc.T("Split here"), GlyphKind.Split, () => { _o._engine?.SplitClip(trackId, idx, at); _o.Refresh(); _o.ClipsSplit?.Invoke(); }, MenuKit.SplitKey),
             };
             // Reverse (audio only): non-destructive, so the label reflects the clicked clip.
             if (!clip.IsMidi && _o._engine is { } rev && rev.TryGetAudioClipInfo(trackId, idx, out var rai))
-                edits.Add(MenuKit.Item(rai.Reversed != 0 ? "Un-reverse" : "Reverse", GlyphKind.Reverse,
+                edits.Add(MenuKit.Item(rai.Reversed != 0 ? "Un-reverse" : Loc.T("Reverse"), GlyphKind.Reverse,
                     () => { EnsureSelected(); _o.ToggleSelectedClipsReverse(); }));
             // Consolidate: a right-click inside the time selection acts on that range; otherwise
             // on the multi-selection's span, or just this clip (bakes its edits into one clip).
             bool inRange = _o.TimeSelectionCovers(trackId, beat);
-            edits.Add(MenuKit.Item(inRange ? "Consolidate selection" : "Consolidate", GlyphKind.Consolidate,
+            edits.Add(MenuKit.Item(inRange ? Loc.T("Consolidate selection") : Loc.T("Consolidate"), GlyphKind.Consolidate,
                 () => { if (!inRange) EnsureSelected(); _o.ConsolidateSelection(); }, MenuKit.ConsolidateKey));
             // Clip deactivate (key 0): the label reflects the clicked clip's current state.
-            edits.Add(MenuKit.Item(clip.Active ? "Deactivate" : "Activate", GlyphKind.Bypass,
+            edits.Add(MenuKit.Item(clip.Active ? Loc.T("Deactivate") : Loc.T("Activate"), GlyphKind.Bypass,
                 () => { EnsureSelected(); _o.ToggleSelectedClipsActive(); }, MenuKit.ActivateKey));
             // Loop the current selection (or just this clip if nothing is selected).
-            edits.Add(MenuKit.Item("Loop selection", GlyphKind.Cycle, () =>
+            edits.Add(MenuKit.Item(Loc.T("Loop selection"), GlyphKind.Cycle, () =>
             {
                 if (!_o.LoopSelection())
                     _o.SetLoopRegion(clip.StartBeat, clip.StartBeat + clip.LengthBeats);
             }, MenuKit.LoopKey));
             // Several MIDI clips selected: open them together in the Clip editor (specs/029).
             if (clip.IsMidi && inGroup && _o.SelectedMidiClips().Count >= 2)
-                edits.Add(MenuKit.Item("Edit selected clips together", GlyphKind.Edit, () => _o.EditSelectedClipsRequested?.Invoke()));
+                edits.Add(MenuKit.Item(Loc.T("Edit selected clips together"), GlyphKind.Edit, () => _o.EditSelectedClipsRequested?.Invoke()));
 
             // Audio clip → stems (AI model) and → MIDI: Convert / Slice to a new MIDI track.
             var audio = new List<Control>();
             if (!clip.IsMidi)
             {
-                audio.Add(MenuKit.Item("Separate stems…", GlyphKind.Stems, () => _o.SeparateStemsRequested?.Invoke(trackId, idx)));
-                var convert = MenuKit.Item("Convert", GlyphKind.Arrow);
+                audio.Add(MenuKit.Item(Loc.T("Separate stems…"), GlyphKind.Stems, () => _o.SeparateStemsRequested?.Invoke(trackId, idx)));
+                var convert = MenuKit.Item(Loc.T("Convert"), GlyphKind.Arrow);
                 MenuItem ConvItem(string header, ClipConvertMode mode)
                     => MenuKit.Item(header, null, () => _o.ConvertClipRequested?.Invoke(trackId, idx, mode));
                 // Melody / Harmony are only offered on the AI model: the DSP fallback's results
@@ -994,15 +1002,15 @@ public sealed partial class ArrangementView
                 bool canTranscribe = _o.CanTranscribe?.Invoke() != false;
                 if (canTranscribe)
                 {
-                    convert.Items.Add(ConvItem("Melody to new MIDI track", ClipConvertMode.Melody));
-                    convert.Items.Add(ConvItem("Harmony to new MIDI track", ClipConvertMode.Harmony));
+                    convert.Items.Add(ConvItem(Loc.T("Melody to new MIDI track"), ClipConvertMode.Melody));
+                    convert.Items.Add(ConvItem(Loc.T("Harmony to new MIDI track"), ClipConvertMode.Harmony));
                 }
-                convert.Items.Add(ConvItem("Drums to new MIDI track", ClipConvertMode.Drums));
-                convert.Items.Add(ConvItem("Slice to new MIDI track", ClipConvertMode.Slice));
+                convert.Items.Add(ConvItem(Loc.T("Drums to new MIDI track"), ClipConvertMode.Drums));
+                convert.Items.Add(ConvItem(Loc.T("Slice to new MIDI track"), ClipConvertMode.Slice));
                 if (!canTranscribe)
                 {
                     convert.Items.Add(new Separator());
-                    convert.Items.Add(MenuKit.Item("Get the AI model for melody and harmony…", null, () => _o.TranscriptionModelRequested?.Invoke()));
+                    convert.Items.Add(MenuKit.Item(Loc.T("Get the AI model for melody and harmony…"), null, () => _o.TranscriptionModelRequested?.Invoke()));
                 }
                 audio.Add(convert);
             }
@@ -1012,13 +1020,13 @@ public sealed partial class ArrangementView
             var session = new List<Control>();
             if (_o._engine is { } eng)
             {
-                session.Add(MenuKit.Item("Copy to Session", GlyphKind.Grid, () => { EnsureSelected(); _o.CopySelectionToSession(); }, MenuKit.CopyToOtherViewKey));
-                var toScene = MenuKit.Item("Copy to scene", GlyphKind.Grid);
+                session.Add(MenuKit.Item(Loc.T("Copy to Session"), GlyphKind.Grid, () => { EnsureSelected(); _o.CopySelectionToSession(); }, MenuKit.CopyToOtherViewKey));
+                var toScene = MenuKit.Item(Loc.T("Copy to scene"), GlyphKind.Grid);
                 for (int s = 0; s < eng.SceneCount; s++)
                 {
                     int sc = s;
                     string name = eng.GetSceneName(sc);
-                    toScene.Items.Add(MenuKit.Item(name.Length > 0 ? $"{sc + 1} · {name}" : $"Scene {sc + 1}", null,
+                    toScene.Items.Add(MenuKit.Item(name.Length > 0 ? $"{sc + 1} · {name}" : Loc.F("Scene {0}", sc + 1), null,
                         () => { EnsureSelected(); _o.CopySelectionToSession(sc); }));
                 }
                 session.Add(toScene);
@@ -1033,7 +1041,7 @@ public sealed partial class ArrangementView
                 _o.HasClipClipboard).Cast<Control>().ToList();
             if (PasteBouncedItem(trackId, at) is { } bounced) clipboard.Insert(3, bounced);
 
-            var del = MenuKit.Danger("Delete", GlyphKind.Trash, () =>
+            var del = MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () =>
             {
                 if (inGroup) _o.DeleteSelectedClips();
                 else { _o._engine?.DeleteClip(trackId, idx); _o.Select(-1, -1); _o.Refresh(); }
@@ -1117,6 +1125,7 @@ public sealed partial class ArrangementView
                                      take ? rp : null);
                     }
                 if (take) DrawHeldNotes(ctx, rp!, _o._tracks[i].ColorIndex, y, rh, w, pitches);
+                if (_o.TakesOpen(_o._tracks[i])) DrawTakeLanes(ctx, _o._tracks[i], y + rh, w);
                 // Imports still decoding: a translucent placeholder whose waveform fills in.
                 using (ctx.PushOpacity(0.5))
                     foreach (var c in _o.PendingClipsFor(tid))
@@ -1155,7 +1164,7 @@ public sealed partial class ArrangementView
                         DrawRecPeaks(ctx, re, rr);
                         if (rr.Width > 34)
                         {
-                            var ft = new FormattedText("Rec", CultureInfo.InvariantCulture,
+                            var ft = new FormattedText(Loc.T("Rec"), CultureInfo.InvariantCulture,
                                 FlowDirection.LeftToRight, NotaFonts.SansBold, 9, RecText);
                             Glyph.Draw(ctx, GlyphKind.Record, new Rect(rr.X + 5, rr.Y + 3 + (ft.Height - 7) / 2, 7, 7), RecText);
                             ctx.DrawText(ft, new Point(rr.X + 16, rr.Y + 3));
@@ -1236,7 +1245,7 @@ public sealed partial class ArrangementView
             // Empty-state hint.
             if (_o._tracks.Count == 0)
             {
-                var ft = new FormattedText("Add an instrument from the browser",
+                var ft = new FormattedText(Loc.T("Add an instrument from the browser"),
                     CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Typeface.Default, 12, RulerText);
                 ctx.DrawText(ft, new Point(Math.Max(12, (w - ft.Width) / 2), h / 2 - 10));
             }
@@ -1407,7 +1416,7 @@ public sealed partial class ArrangementView
                 var r = new Rect(0, top + k * DefaultRowHeight, w, DefaultRowHeight);
                 ctx.FillRectangle(DropWash, r);
                 ctx.DrawRectangle(null, DropEdgePen, r.Deflate(1));
-                var ft = new FormattedText("New track", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                var ft = new FormattedText(Loc.T("New track"), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                     Typeface.Default, 11, RulerText);
                 ctx.DrawText(ft, new Point(Math.Max(8, w - ft.Width - 12), r.Y + 4));   // clear of clips at the song start
             }
@@ -1560,11 +1569,12 @@ public sealed partial class ArrangementView
             if (eng is null || !eng.TryGetAudioClipInfo(trackId, clipIndex, out var ai)) return;
             const int buckets = 2048;
             var peaks = new float[buckets * 2];
+            var rms = new float[buckets];
             if (ai.WarpEnabled != 0 && ai.WarpBeats > 0)
             {
-                int n = eng.GetClipWarpFullPeaks(trackId, clipIndex, peaks, buckets);
+                int n = eng.GetClipWarpFullPeaks(trackId, clipIndex, peaks, buckets, rms);
                 if (n <= 0) return;
-                _rpCount = n; _rpPeaks = peaks; _rpWarped = true;
+                _rpCount = n; _rpPeaks = peaks; _rpRms = rms; _rpWarped = true;
                 _rpMTotal = ai.WarpBeats;
                 _rpS0 = ai.WarpPlayStart;
                 _rpS1 = ai.WarpPlayEnd > 0 ? ai.WarpPlayEnd : ai.WarpBeats;
@@ -1572,9 +1582,9 @@ public sealed partial class ArrangementView
             else
             {
                 if (ai.SampleId == 0 || !eng.TryGetSampleInfo(ai.SampleId, out var si) || si.Frames <= 0) return;
-                int n = eng.GetClipSourcePeaks(trackId, clipIndex, peaks, buckets);
+                int n = eng.GetClipSourcePeaks(trackId, clipIndex, peaks, buckets, rms);
                 if (n <= 0) return;
-                _rpCount = n; _rpPeaks = peaks; _rpWarped = false;
+                _rpCount = n; _rpPeaks = peaks; _rpRms = rms; _rpWarped = false;
                 _rpMTotal = si.Frames;
                 _rpS0 = ai.SourceOffsetFrames;
                 double len = ai.LengthFrames > 0 ? ai.LengthFrames : si.Frames - ai.SourceOffsetFrames;
@@ -1595,21 +1605,44 @@ public sealed partial class ArrangementView
             // The whole-material overview, or — when the lane shows it wider than it has buckets —
             // the material under the whole lane at one bucket per pixel, fetched once per drag (#299).
             float[] pk = _rpPeaks!;
+            float[]? rms = _rpRms;
             int count = _rpCount;
             double m0 = 0, m1 = _rpMTotal;
             double lm0 = Math.Clamp(MaterialAt(0), 0, _rpMTotal), lm1 = Math.Clamp(MaterialAt(Bounds.Width), 0, _rpMTotal);
-            if (lm1 > lm0 && (lm1 - lm0) / _rpMTotal * _rpCount * 1.5 < Bounds.Width && _o._engine is { } eng)
+            bool smooth = _o.Waveform == WaveformStyle.Smooth;
+            double scale = smooth ? WaveformPainter.Scale(this) : 1;
+            if (lm1 > lm0 && (lm1 - lm0) / _rpMTotal * _rpCount * 1.5 < Bounds.Width * scale && _o._engine is { } eng)
             {
-                int n = Math.Clamp((int)Math.Ceiling(Bounds.Width), 1, 8192);
+                int n = Math.Clamp((int)Math.Ceiling(Bounds.Width * scale), 1, 8192);
                 if (_rpDetail is null || _rpDetailCount <= 0 || _rpDetailM0 != lm0 || _rpDetailM1 != lm1)
                 {
                     _rpDetail ??= new float[8192 * 2];
+                    _rpDetailRms ??= new float[8192];
                     _rpDetailCount = _rpWarped
-                        ? eng.GetClipWarpPeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n)
-                        : eng.GetClipSourcePeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n);
+                        ? eng.GetClipWarpPeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n, _rpDetailRms)
+                        : eng.GetClipSourcePeaksRange(_rpTrack, _rpClip, lm0, lm1, _rpDetail, n, _rpDetailRms);
                     (_rpDetailM0, _rpDetailM1) = (lm0, lm1);
                 }
-                if (_rpDetailCount > 0) (pk, count, m0, m1) = (_rpDetail, _rpDetailCount, lm0, lm1);
+                if (_rpDetailCount > 0) (pk, rms, count, m0, m1) = (_rpDetail, _rpDetailRms, _rpDetailCount, lm0, lm1);
+            }
+            if (smooth)
+            {
+                // Material → screen is linear while the drag holds the committed window.
+                double XAt(double m) => ((m - _rpS0) / rate + _origStart - scroll) * ppb;
+                double bm = (m1 - m0) / count;
+                int i0 = Math.Max(0, (int)Math.Floor((MaterialAt(vx0) - m0) / bm) - 1);
+                int i1 = Math.Min(count, (int)Math.Ceiling((MaterialAt(vx1) - m0) / bm) + 1);
+                _painter.Begin(scale);
+                for (int i = i0; i < i1; i++)
+                {
+                    double ma = m0 + i * bm, mb = ma + bm;
+                    if (mb <= 0 || ma >= _rpMTotal) continue;   // past the material's ends: nothing to draw
+                    _painter.Add(XAt(ma), XAt(mb), Math.Clamp(pk[i * 2] * gain, -1f, 1f), Math.Clamp(pk[i * 2 + 1] * gain, -1f, 1f),
+                                 rms is null ? -1f : Math.Min(1f, rms[i] * gain));
+                }
+                using (ctx.PushClip(new Rect(vx0, r.Y, Math.Max(0, vx1 - vx0), r.Height)))
+                    _painter.Fill(ctx, mid, amp, WaveformPainter.PeakInk(brush), brush);
+                return;
             }
             var geo = new StreamGeometry();
             using (var g = geo.Open())
@@ -1684,16 +1717,38 @@ public sealed partial class ArrangementView
             // The whole-clip overview, or — when the clip is drawn wider than it has buckets —
             // peaks for just the visible slice at one bucket per pixel (#299).
             float[] pk = c.Peaks;
+            float[]? rms = c.Rms;
             int count = c.PeakCount;
             double fa = 0, fb = 1;
-            if (r.Width > c.PeakCount * 1.5 && EnsureDetailPeaks(c, trackId, (vx0 - r.X) / r.Width, (vx1 - r.X) / r.Width,
-                    (int)Math.Ceiling(vx1 - vx0), r.Width))
+            // Smooth resolves to device pixels, so a HiDPI screen gets twice the detail.
+            bool smooth = _o.Waveform == WaveformStyle.Smooth;
+            double scale = smooth ? WaveformPainter.Scale(this) : 1;
+            if (r.Width * scale > c.PeakCount * 1.5 && EnsureDetailPeaks(c, trackId, (vx0 - r.X) / r.Width, (vx1 - r.X) / r.Width,
+                    (int)Math.Ceiling((vx1 - vx0) * scale), r.Width))
             {
-                (pk, count, fa, fb) = (c.DetailPeaks!, c.DetailCount, c.DetailF0, c.DetailF1);
+                (pk, rms, count, fa, fb) = (c.DetailPeaks!, c.DetailRms, c.DetailCount, c.DetailF0, c.DetailF1);
             }
             double span = (fb - fa) * r.Width;
             var adsr = c.Adsr.Fit(c.LengthBeats);
             bool shaped = !adsr.IsIdentity;
+            if (smooth)
+            {
+                double ox = r.X + fa * r.Width, bw = span / count;
+                int i0 = Math.Max(0, (int)Math.Floor((vx0 - ox) / bw) - 1);
+                int i1 = Math.Min(count, (int)Math.Ceiling((vx1 - ox) / bw) + 1);
+                _painter.Begin(scale);
+                for (int i = i0; i < i1; i++)
+                {
+                    double x0 = ox + i * bw;
+                    float g = c.Gain;
+                    if (shaped) g *= (float)adsr.GainAt((x0 + bw / 2 - r.X) / r.Width * c.LengthBeats, c.LengthBeats);
+                    _painter.Add(x0, x0 + bw, Math.Clamp(pk[i * 2] * g, -1f, 1f), Math.Clamp(pk[i * 2 + 1] * g, -1f, 1f),
+                                 rms is null ? -1f : Math.Min(1f, rms[i] * g));
+                }
+                using (ctx.PushClip(new Rect(vx0, r.Y, vx1 - vx0, r.Height)))
+                    _painter.Fill(ctx, mid, amp, WaveformPainter.PeakInk(brush), brush);
+                return;
+            }
             var geo = new StreamGeometry();
             using (var gc = geo.Open())
                 ForEachWaveColumn(r.X, vx0, vx1, (cx0, cx1, x) =>
@@ -1727,18 +1782,19 @@ public sealed partial class ArrangementView
             bool rev = ai.Reversed != 0;
             double a = rev ? 1 - f1 : f0, b = rev ? 1 - f0 : f1;   // file-order fractions of the window
             var buf = c.DetailPeaks is { } old && old.Length >= n * 2 ? old : new float[n * 2];
+            var rms = c.DetailRms is { } oldRms && oldRms.Length >= n ? oldRms : new float[n];
             int got;
             if (ai.WarpEnabled != 0 && ai.WarpBeats > 0)
             {
                 double ps = ai.WarpPlayStart, pe = ai.WarpPlayEnd > 0 ? ai.WarpPlayEnd : ai.WarpBeats;
-                got = eng.GetClipWarpPeaksRange(trackId, c.ClipIndex, ps + a * (pe - ps), ps + b * (pe - ps), buf, n);
+                got = eng.GetClipWarpPeaksRange(trackId, c.ClipIndex, ps + a * (pe - ps), ps + b * (pe - ps), buf, n, rms);
             }
             else
             {
                 double len = ai.LengthFrames;
                 if (len <= 0 && eng.TryGetSampleInfo(ai.SampleId, out var si)) len = si.Frames - ai.SourceOffsetFrames;
                 if (len <= 0) return false;
-                got = eng.GetClipSourcePeaksRange(trackId, c.ClipIndex, ai.SourceOffsetFrames + a * len, ai.SourceOffsetFrames + b * len, buf, n);
+                got = eng.GetClipSourcePeaksRange(trackId, c.ClipIndex, ai.SourceOffsetFrames + a * len, ai.SourceOffsetFrames + b * len, buf, n, rms);
             }
             if (got <= 0) return false;
             if (rev)
@@ -1746,8 +1802,9 @@ public sealed partial class ArrangementView
                 {
                     (buf[i * 2], buf[j * 2]) = (buf[j * 2], buf[i * 2]);
                     (buf[i * 2 + 1], buf[j * 2 + 1]) = (buf[j * 2 + 1], buf[i * 2 + 1]);
+                    (rms[i], rms[j]) = (rms[j], rms[i]);
                 }
-            (c.DetailPeaks, c.DetailCount, c.DetailF0, c.DetailF1) = (buf, got, f0, f1);
+            (c.DetailPeaks, c.DetailRms, c.DetailCount, c.DetailF0, c.DetailF1) = (buf, rms, got, f0, f1);
             return true;
         }
 

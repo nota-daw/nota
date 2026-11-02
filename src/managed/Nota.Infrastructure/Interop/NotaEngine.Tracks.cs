@@ -605,39 +605,54 @@ public sealed partial class NotaEngine
     }
 
     /// <summary>Fetches waveform peaks (min,max pairs) for a clip. Returns the number of buckets written.</summary>
-    public int GetClipPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints)
+    public int GetClipPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints, float[]? outRms = null)
     {
         ThrowIfDisposed();
-        return NativeMethods.ClipGetPeaks(_handle, trackId, clipIndex, outMinMax, maxPoints);
+        return outRms is null
+            ? NativeMethods.ClipGetPeaks(_handle, trackId, clipIndex, outMinMax, maxPoints)
+            : Levels(NativeMethods.ClipLevelsPlayed, trackId, clipIndex, 0, 0, outMinMax, maxPoints, outRms);
     }
 
     /// <summary>Fetches peaks over the whole sample (ignores the clip's trimmed region) for the clip editor.</summary>
-    public int GetClipSourcePeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints)
+    public int GetClipSourcePeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints, float[]? outRms = null)
     {
         ThrowIfDisposed();
-        return NativeMethods.ClipGetSourcePeaks(_handle, trackId, clipIndex, outMinMax, maxPoints);
+        return outRms is null
+            ? NativeMethods.ClipGetSourcePeaks(_handle, trackId, clipIndex, outMinMax, maxPoints)
+            : Levels(NativeMethods.ClipLevelsSource, trackId, clipIndex, 0, 0, outMinMax, maxPoints, outRms);
     }
 
     /// <summary>Fetches peaks over the full warped material (ignores the trim window) for the clip editor.</summary>
-    public int GetClipWarpFullPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints)
+    public int GetClipWarpFullPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints, float[]? outRms = null)
     {
         ThrowIfDisposed();
-        return NativeMethods.ClipGetWarpFullPeaks(_handle, trackId, clipIndex, outMinMax, maxPoints);
+        return outRms is null
+            ? NativeMethods.ClipGetWarpFullPeaks(_handle, trackId, clipIndex, outMinMax, maxPoints)
+            : Levels(NativeMethods.ClipLevelsWarpFull, trackId, clipIndex, 0, 0, outMinMax, maxPoints, outRms);
     }
 
     /// <summary>Peaks over warped beats [beat0, beat1] of the full material (zoomed clip editor).</summary>
-    public int GetClipWarpPeaksRange(int trackId, int clipIndex, double beat0, double beat1, float[] outMinMax, int maxPoints)
+    public int GetClipWarpPeaksRange(int trackId, int clipIndex, double beat0, double beat1, float[] outMinMax, int maxPoints, float[]? outRms = null)
     {
         ThrowIfDisposed();
-        return NativeMethods.ClipGetWarpPeaksRange(_handle, trackId, clipIndex, beat0, beat1, outMinMax, maxPoints);
+        return outRms is null
+            ? NativeMethods.ClipGetWarpPeaksRange(_handle, trackId, clipIndex, beat0, beat1, outMinMax, maxPoints)
+            : Levels(NativeMethods.ClipLevelsWarpRange, trackId, clipIndex, beat0, beat1, outMinMax, maxPoints, outRms);
     }
 
     /// <summary>Peaks over source frames [frame0, frame1) of the whole sample (zoomed clip editor).</summary>
-    public int GetClipSourcePeaksRange(int trackId, int clipIndex, double frame0, double frame1, float[] outMinMax, int maxPoints)
+    public int GetClipSourcePeaksRange(int trackId, int clipIndex, double frame0, double frame1, float[] outMinMax, int maxPoints, float[]? outRms = null)
     {
         ThrowIfDisposed();
-        return NativeMethods.ClipGetSourcePeaksRange(_handle, trackId, clipIndex, frame0, frame1, outMinMax, maxPoints);
+        return outRms is null
+            ? NativeMethods.ClipGetSourcePeaksRange(_handle, trackId, clipIndex, frame0, frame1, outMinMax, maxPoints)
+            : Levels(NativeMethods.ClipLevelsSourceRange, trackId, clipIndex, frame0, frame1, outMinMax, maxPoints, outRms);
     }
+
+    // Both buffers must hold maxPoints buckets; the native side writes past neither.
+    private int Levels(int view, int trackId, int clipIndex, double a, double b, float[] outMinMax, int maxPoints, float[] outRms)
+        => NativeMethods.ClipGetLevels(_handle, trackId, clipIndex, view, a, b, outMinMax, outRms,
+                                       System.Math.Min(maxPoints, System.Math.Min(outMinMax.Length / 2, outRms.Length)));
 
     // --- Instrument tracks, MIDI clips & notes -----------------------------
 

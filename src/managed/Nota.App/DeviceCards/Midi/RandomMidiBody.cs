@@ -28,6 +28,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.RandomModel;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -153,11 +154,11 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             var rows = new Grid { Margin = new Thickness(8, 4, 8, 5), RowDefinitions = new RowDefinitions("*,*,*,*,*") };
             var specs = new (string Label, int P, double Max, Func<double, string> Fmt, string Tip)[]
             {
-                ("Note", PNoteRange, 12, NoteText, "Transpose up or down by up to this many semitones"),
-                ("Velocity", PVelAmt, 1, VelText, "Push the velocity up or down by up to this much"),
-                ("Timing", PTimeAmt, 1, TimeText, "Play late by up to this long (a live effect can't play early)"),
-                ("Skip", PSkip, 1, SkipText, "Chance that a varied note is dropped"),
-                ("Octave", POctAmt, 1, OctText, "Jump up or down by up to two octaves"),
+                ("Note", PNoteRange, 12, NoteText, Loc.T("Transpose up or down by up to this many semitones")),
+                ("Velocity", PVelAmt, 1, VelText, Loc.T("Push the velocity up or down by up to this much")),
+                ("Timing", PTimeAmt, 1, TimeText, Loc.T("Play late by up to this long (a live effect can't play early)")),
+                ("Skip", PSkip, 1, SkipText, Loc.T("Chance that a varied note is dropped")),
+                ("Octave", POctAmt, 1, OctText, Loc.T("Jump up or down by up to two octaves")),
             };
             for (int i = 0; i < specs.Length; i++)
             {
@@ -169,11 +170,11 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
 
             // ---- OUTPUT ----
             var viz = new RandomOutputViz { Full = true };
-            ToolTip.SetTip(viz, "One bar of eight notes: dashed — the note in, filled — the note out (brightness = velocity, shifted right when delayed), × — skipped");
+            ToolTip.SetTip(viz, Loc.T("One bar of eight notes: dashed — the note in, filled — the note out (brightness = velocity, shifted right when delayed), × — skipped"));
             var outInfo = Mono("", Cap, 7);
             readouts.Add(() =>
             {
-                outInfo.Text = $"bar {ShownBar() + 1} · {Changed()} changed · {Skipped()} skipped" + (Locked(G) ? " · held" : "");
+                outInfo.Text = Loc.F("bar {0} · {1} changed · {2} skipped", ShownBar() + 1, Changed(), Skipped()) + (Locked(G) ? " · held" : "");
                 viz.Set(notes, now, Bypassed());
             });
             var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Height = 10, Margin = new Thickness(22, 3, 0, 0), Children =
@@ -196,12 +197,12 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
                 chanceVal.Foreground = Txt;
                 chanceVal.Text = ChanceText(G(PChance));
             });
-            ToolTip.SetTip(chanceTrk, "Chance — how many notes get varied at all");
+            ToolTip.SetTip(chanceTrk, Loc.T("Chance — how many notes get varied at all"));
             var chanceRow = new DockPanel { Children = { WithDock(chanceLbl, Dock.Left), WithDock(chanceVal, Dock.Right), chanceTrk } };
 
-            var distSeg = Seg(PDist, Dists, "Distribution: Gauss — mostly small moves · Even — any amount equally · Walk — drifts from note to note");
+            var distSeg = Seg(PDist, Dists, Loc.T("Distribution: Gauss — mostly small moves · Even — any amount equally · Walk — drifts from note to note"));
             var hist = new RandomHistViz();
-            ToolTip.SetTip(hist, "The shape of the roll — 1500 draws from the same generator");
+            ToolTip.SetTip(hist, Loc.T("The shape of the roll — 1500 draws from the same generator"));
             readouts.Add(() => hist.Set(Dist(G), Seed(G)));
             var axis = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
             var ac = Mono("centre", Faint, 6); ac.HorizontalAlignment = HorizontalAlignment.Center; Grid.SetColumn(ac, 1);
@@ -210,13 +211,13 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             var histBox = new DockPanel { Children = { WithDock(axis, Dock.Bottom), hist } };
             axis.Margin = new Thickness(0, 2, 0, 0);
 
-            var rateSeg = Seg(PRate, Rates, "Per note — every note rolls its own values · Per bar — one set of values for the whole bar");
+            var rateSeg = Seg(PRate, Rates, Loc.T("Per note — every note rolls its own values · Per bar — one set of values for the whole bar"));
 
             var seedTb = Mono("", Txt);
             readouts.Add(() => seedTb.Text = $"seed {Seed(G)}");
             Learn(seedTb, PSeed, "Seed");
-            var rerollBtn = Button("Reroll", "Next seed — a new roll", Reroll, out _);
-            var lockBtn = Button("Lock", "Hold the roll showing now — it repeats every bar", ToggleLock, out var lockSync);
+            var rerollBtn = Button("Reroll", Loc.T("Next seed — a new roll"), Reroll, out _);
+            var lockBtn = Button("Lock", Loc.T("Hold the roll showing now — it repeats every bar"), ToggleLock, out var lockSync);
             Learn(lockBtn, PLocked, "Locked");
             readouts.Add(() => lockSync(Locked(G)));
             var seedRow = new DockPanel { Children =
@@ -225,7 +226,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
                 seedTb,
             } };
 
-            var scaleRow = SwitchRow(PStayInScale, "Stay in scale · C maj", "Snap every varied note into C major");
+            var scaleRow = SwitchRow(PStayInScale, Loc.T("Stay in scale · C maj"), Loc.T("Snap every varied note into C major"));
 
             var dice = new DockPanel { Margin = new Thickness(8, 6), Children =
             {
@@ -244,7 +245,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             {
                 statusL.Text = $"Chance {ChanceText(G(PChance))} · {Dists[Dist(G)]} · {(G(PRate) >= 0.5f ? "per bar" : "per note")} · seed {Seed(G)}"
                              + (Locked(G) ? " locked" : "") + (G(PStayInScale) >= 0.5f ? " · C maj" : "");
-                statusR.Text = Bypassed() ? "bypassed" : "MIDI · latency 0 smp";
+                statusR.Text = Bypassed() ? "bypassed" : Loc.T("MIDI · latency 0 smp");
             });
             return Framed(islands, statusL, statusR);
         }
@@ -264,14 +265,14 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
                 int d = ev.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 2 : 1;
                 Set(PDist, (Dist(G) + d) % 3); Refresh(); ev.Handled = true;
             };
-            ToolTip.SetTip(distChip, "Distribution: Gauss / Even / Walk — click for the next, Shift-click for the previous");
+            ToolTip.SetTip(distChip, Loc.T("Distribution: Gauss / Even / Walk — click for the next, Shift-click for the previous"));
             Learn(distChip, PDist, "Dist");
             var barTb = Mono("", Cap, 7);
             var head = new DockPanel { Height = 14, Children = { WithDock(distChip, Dock.Left), WithDock(barTb, Dock.Right) } };
             barTb.HorizontalAlignment = HorizontalAlignment.Right;
 
             var viz = new RandomOutputViz { Full = false };
-            ToolTip.SetTip(viz, "Dashed — in · filled — out (brightness = velocity) · × — skipped");
+            ToolTip.SetTip(viz, Loc.T("Dashed — in · filled — out (brightness = velocity) · × — skipped"));
 
             var knobs = new Grid { Height = 53, ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
             var cells = new[]
@@ -296,9 +297,9 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             });
 
             // Footer: "seed N" rerolls, "lock" holds the roll.
-            var seedTb = FooterLink("", "Reroll — the next seed", Reroll);
+            var seedTb = FooterLink("", Loc.T("Reroll — the next seed"), Reroll);
             Learn(seedTb, PSeed, "Seed");
-            var lockTb = FooterLink("", "Lock — hold the roll showing now", ToggleLock, mono: false);
+            var lockTb = FooterLink("", Loc.T("Lock — hold the roll showing now"), ToggleLock, mono: false);
             Learn(lockTb, PLocked, "Locked");
             var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { seedTb, lockTb } };
             var statusR = Mono("", Sub);
@@ -310,7 +311,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
                 lockTb.FontWeight = on ? FontWeight.SemiBold : FontWeight.Normal;
                 lockTb.Tag = on ? NotaPalette.AccentHover : Sub;
                 if (!lockTb.IsPointerOver) lockTb.Foreground = (IBrush)lockTb.Tag;
-                statusR.Text = Bypassed() ? "bypassed" : $"{Changed()} changed · {Skipped()} skip";
+                statusR.Text = Bypassed() ? "bypassed" : Loc.F("{0} changed · {1} skip", Changed(), Skipped());
             });
             return Framed(island, left, statusR);
         }
@@ -366,7 +367,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             var l = new TextBlock { Text = label, FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
             var v = Mono("", Sub); v.HorizontalAlignment = HorizontalAlignment.Right;
             var trk = Slider(p, max);
-            ToolTip.SetTip(trk, $"{tip} — drag up / down, double-click resets");
+            ToolTip.SetTip(trk, Loc.F("{0} — drag up / down, double-click resets", tip));
             ValueEntry.Attach(v, () => G(p) / max, n => S(p, max > 1 ? Math.Round(n * max) : Math.Round(n * max, 3)), () => fmt(G(p)),
                 () => Begin(p), () => End(p), Refresh, control: trk);
             readouts.Add(() =>

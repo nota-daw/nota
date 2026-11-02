@@ -1,0 +1,6 @@
+{
+  "formatVersion": 1,
+  "code": "en",
+  "name": "English",
+  "notes": "The reference language. The English text at each call site is the key, so this file has no strings."
+}
