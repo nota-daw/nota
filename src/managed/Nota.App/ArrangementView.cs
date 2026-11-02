@@ -340,6 +340,7 @@ public sealed partial class ArrangementView : UserControl
     public ArrangementView()
     {
         EditorGrids.Shared.Changed += k => { if (k == EditorKind.Arrangement) Redraw(); };
+        _fold.Changed += OnFoldChanged;   // the default fold; MainWindow swaps in the shared one (specs/070)
         _ruler = new RulerControl(this) { Height = RulerH };
         _overview = new OverviewControl(this);
         _sectionsLane = new SectionsControl(this);
@@ -2124,7 +2125,7 @@ public sealed partial class ArrangementView : UserControl
         {
             Background = Brushes.Transparent, Padding = new Thickness(2, 0), Cursor = new Cursor(StandardCursorType.Hand),
             VerticalAlignment = VerticalAlignment.Center,
-            Child = new Glyph(_collapsed.Contains(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
+            Child = new Glyph(_fold.IsFolded(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
         };
         tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
 
@@ -2216,7 +2217,7 @@ public sealed partial class ArrangementView : UserControl
             {
                 Background = Brushes.Transparent, Padding = new Thickness(2, 0), Margin = new Thickness(0, 0, 4, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-                Child = new Glyph(_collapsed.Contains(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
+                Child = new Glyph(_fold.IsFolded(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
             };
             tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
             Grid.SetColumn(tri, 0);
