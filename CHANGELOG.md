@@ -161,6 +161,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the plug-in was called once per piece — with dense, short notes several times a block, at
   sizes down to a single sample — so a few heavy instances could run out of time and drop out.
   Timing is unchanged: events still land on their own sample.
+- **Memory no longer grows with every edit** (#437): the engine kept every past version of the
+  project's graph for the whole session. Replaced versions are now freed as soon as audio
+  can no longer be reading them (the undo history still keeps the ones it needs).
 - **Piano-roll playback cursor**: arrangement MIDI clips now follow the same smooth
   display-frame position as the arrangement. Cursor movement redraws lightweight
   overlays instead of repainting all notes and ruler labels.

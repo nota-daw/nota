@@ -153,6 +153,7 @@ class Engine {
     void notifyXrun() { xruns_.fetch_add(1, std::memory_order_relaxed); }
     int32_t xrunCount() const { return xruns_.load(std::memory_order_relaxed); }
     bool xrunSelfTest(); // device-free: notifyXrun bumps the count by one
+    bool graphRetireSelfTest(); // device-free: a replaced graph is freed two renders later
 
     // --- DSP load (Phase 11): RT render time / block budget, smoothed 0..1 ---
     float cpuLoad() const { return cpuLoad_.load(std::memory_order_relaxed); }
@@ -1562,8 +1563,9 @@ class Engine {
     Transport transport_;
 
     std::shared_ptr<Graph> authoring_;
-    std::vector<std::shared_ptr<Graph>> retired_;
-    std::atomic<Graph*> liveGraph_{nullptr};
+    // The graph the audio thread renders. A replaced one is freed once two renders have
+    // finished after it, on the message thread (deleted tracks' plug-ins with it).
+    SnapshotHistory<Graph> graphHist_;
     int32_t nextTrackId_ = 1;
     int32_t nextTakeId_ = 0;    // AudioTake::id (specs/067); never reused in a session
     int32_t nextTakeGroup_ = 0; // AudioTake::group
@@ -1940,11 +1942,14 @@ class Engine {
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot
     // mode; recordSlotPlayer_/recordSlotLen_ are read on the audio thread to time
     // captured notes against the slot's own loop clock (SessionPlayer is stable
-    // across snapshots, so the raw pointer stays valid while the track lives).
+    // across snapshots). recordSlotHold_ keeps it alive past its track: a track deleted
+    // mid-take is freed with its graph. Kept until the next take replaces it (message thread),
+    // so a block that read the pointer just before a stop can't outlive it either.
     int32_t recordSessionTrackId_ = 0;
     int32_t recordSessionScene_ = -1;
     bool recordSessionAudio_ = false; // audio take into slot (M5-4)
     std::atomic<SessionPlayer*> recordSlotPlayer_{nullptr};
+    std::shared_ptr<SessionPlayer> recordSlotHold_;
     std::atomic<double> recordSlotLen_{4.0};
 
     // audio-thread-owned state

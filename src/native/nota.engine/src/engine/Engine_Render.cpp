@@ -1773,9 +1773,10 @@ void Engine::processBlock(float* out, int32_t numFrames) {
 
     drainLiveMidi(transport_.playheadSamples() / spb, playing);
 
-    Graph* g = liveGraph_.load(std::memory_order_acquire);
-    // This block's scratch, read after the graph: publishRaw publishes the scratch first, so
-    // it always fits the graph seen here. Held until the scope ends the render epoch.
+    // The graph, then this block's scratch: publishRaw publishes the scratch first, so it
+    // always fits the graph seen here. Both held until their scopes end the render epoch.
+    const SnapshotHistory<Graph>::RenderScope graphScope(graphHist_);
+    Graph* g = graphHist_.live();
     const SnapshotHistory<RenderScratch>::RenderScope scratchScope(scratchHist_);
     rs_ = scratchHist_.live();
 

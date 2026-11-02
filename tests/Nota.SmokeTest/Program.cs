@@ -9822,6 +9822,7 @@ Console.WriteLine("-- M7-8: xrun / dropout telemetry --");
     Check(engine.XrunCount == 1, "xrun count reflects the dropout");
     Check(engine.TimedEventsSelfTest(),
         "a hosted plug-in renders once per block with its events at their offsets (#436)");
+    Check(engine.GraphRetireSelfTest(), "a replaced engine graph is freed two renders later, not kept for the session");
 }
 
 // ===================== M9-A1: parameter automation (engine) ================

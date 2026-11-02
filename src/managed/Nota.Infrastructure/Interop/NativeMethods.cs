@@ -292,6 +292,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_xrun_selftest")]
     internal static partial int XrunSelfTest(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_graph_retire_selftest")]
+    internal static partial int GraphRetireSelfTest(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_timed_events_selftest")]
     internal static partial int TimedEventsSelfTest(IntPtr engine);
 
