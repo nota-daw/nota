@@ -13211,8 +13211,47 @@ Console.WriteLine("-- input monitoring --");
     for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
     me.TryGetTrackMeter(mon, out var srcMeter);
     Check(srcMeter.Peak > 0.001f, $"an armed track meters its source track without monitoring (peak {srcMeter.Peak:F3})");
+
+    // The sources monitoring refuses (they would feed back) still meter: nothing is heard.
+    me.SetTrackRecordInput(mon, -1);
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var masterMeter);
+    Check(masterMeter.Peak > 0.001f, $"an armed track meters the master it records from (peak {masterMeter.Peak:F3})");
+    int monGroup = me.CreateGroup(new[] { minst, mon });
+    me.SetTrackRecordInput(mon, monGroup);
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var groupMeter);
+    Check(groupMeter.Peak > 0.001f, $"an armed track meters the group it sits in (peak {groupMeter.Peak:F3})");
     me.StopTransport();
     me.SetTrackArmed(mon, false);
+}
+
+// ============ an armed track's input meter never takes a sidechain route (#352) ============
+Console.WriteLine("-- armed input meter and the sidechain route pool --");
+{
+    using var re = new NotaEngine();
+    int armed = re.AddAudioTrack();                 // first in track order: claims would start here
+    int host = re.AddAudioTrack();
+    var keyed = new System.Collections.Generic.List<(int dev, int src)>();
+    for (int i = 0; i < 16; i++)
+    {
+        int d = re.AddBuiltinDevice(host, 1);
+        int s = re.AddAudioTrack();
+        re.SetDeviceSidechainKey(host, d, s, -1);
+        keyed.Add((d, s));
+    }
+    int metered = re.AddAudioTrack();
+    re.SetTrackRecordInput(armed, metered);
+    re.SetTrackArmed(armed, true);
+    Check(re.SidechainRoutesFree() == 0 && keyed.TrueForAll(k => re.SidechainRouteInUse(k.src, -1)) && !re.SidechainRouteInUse(metered, -1),
+          "arming a track with the route pool full leaves every sidechain route in place");
+    re.SetDeviceSidechainKey(host, keyed[15].dev, -1, -1);  // a free route: the meter takes it
+    Check(re.SidechainRouteInUse(metered, -1), "the armed track's meter takes a route once one is free");
+    int late = re.AddAudioTrack();
+    int r = re.SetDeviceSidechainKey(host, keyed[15].dev, late, -1);
+    Check(r == 0 && re.SidechainRouteInUse(late, -1) && !re.SidechainRouteInUse(metered, -1),
+          $"a new sidechain key takes the route back from the meter (result {r})");
+    re.SetTrackArmed(armed, false);
 }
 
 // ============ input monitoring survives a project round-trip ===============
