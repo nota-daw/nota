@@ -20,6 +20,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -112,13 +113,13 @@ internal static class PluginCard
         // Open editor toggles the plug-in's own window. Its close button only hides the
         // window behind our back, so the label re-reads the state whenever the pointer comes
         // back to the card instead of trusting the last click.
-        var open = ActionButton("Open editor", GlyphKind.PopOut, primary: true);
+        var open = ActionButton(Loc.T("Open editor"), GlyphKind.PopOut, primary: true);
         var openLabel = (TextBlock)((StackPanel)open.Content!).Children[1];
         void SyncOpen()
         {
             bool shown = EditorOpen(e, t, di);
-            openLabel.Text = shown ? "Close editor" : "Open editor";
-            ToolTip.SetTip(open, shown ? "Close the plug-in's own window" : "Open the plug-in's own window");
+            openLabel.Text = shown ? "Close editor" : Loc.T("Open editor");
+            ToolTip.SetTip(open, shown ? Loc.T("Close the plug-in's own window") : Loc.T("Open the plug-in's own window"));
         }
         SyncOpen();
         open.PointerEntered += (_, _) => SyncOpen();
@@ -130,14 +131,14 @@ internal static class PluginCard
                 else
                 {
                     e.OpenPluginEditor(t, di);
-                    if (!EditorOpen(e, t, di)) ctx.Status($"Couldn't open the {info.Name} window.");
+                    if (!EditorOpen(e, t, di)) ctx.Status(Loc.F("Couldn't open the {0} window.", info.Name));
                 }
             }
-            catch (Exception ex) { ctx.Status($"Couldn't open the {info.Name} window: {ex.Message}"); }
+            catch (Exception ex) { ctx.Status(Loc.F("Couldn't open the {0} window: {1}", info.Name, ex.Message)); }
             SyncOpen();
         };
-        var save = ActionButton("Save preset", GlyphKind.Save, primary: false);
-        ToolTip.SetTip(save, "Save the plug-in's state as a preset");
+        var save = ActionButton(Loc.T("Save preset"), GlyphKind.Save, primary: false);
+        ToolTip.SetTip(save, Loc.T("Save the plug-in's state as a preset"));
         save.Click += (_, _) => ctx.RequestPresetSave(di);
 
         var top = new StackPanel { Spacing = 1, Children = { name, vendor, tags, facts } };
@@ -254,7 +255,7 @@ internal static class PluginCard
             {
                 host.Content = new TextBlock
                 {
-                    Text = total == 0 ? "This plug-in exposes no parameters" : "No parameter matches",
+                    Text = total == 0 ? Loc.T("This plug-in exposes no parameters") : Loc.T("No parameter matches"),
                     FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 };
                 return;

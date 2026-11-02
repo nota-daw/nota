@@ -83,6 +83,10 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
     Console.WriteLine("-- design: interface scale --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunInterfaceScale()) Check(ok, label);
+    Console.WriteLine("-- localization: language --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLanguage()) Check(ok, label);
+    Console.WriteLine("-- localization: source --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLocalization()) Check(ok, label);
     Console.WriteLine("-- design: labels --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLabels()) Check(ok, label);
     Console.WriteLine("-- design: icons --");
@@ -126,6 +130,14 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     return f == 0 ? 0 : 1;
 }
 
+// Design and localization checks alone, without the engine tests: `--localization`.
+// NOTA_LOC_WRITE_BASELINE=1 rewrites LocalizationAllowList.txt; NOTA_LOC_STRICT=1 fails on any
+// text French lacks.
+if (args.Length >= 1 && args[0] == "--localization")
+{
+    Console.WriteLine(failures == 0 ? "LOCALIZATION PASSED" : $"LOCALIZATION FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Command palette alone: `--palette`; `--palette-dump <query>` prints a query's ranking.
 if (args.Length >= 2 && args[0] == "--palette-dump") { PaletteTests.Dump(string.Join(' ', args[1..])); return 0; }
 if (args.Length >= 1 && args[0] == "--palette")
@@ -248,12 +260,27 @@ if (args.Length >= 1 && args[0] == "--release-notes")
     return failures == 0 ? 0 : 1;
 }
 
+// A project saved in either language alone: `--language-project`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--language-project")
+{
+    foreach (var (ok, label) in LanguageProjectTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "LANGUAGE PROJECT PASSED" : $"LANGUAGE PROJECT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Content-addressed bundle alone (fast iteration): `--bundle`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--bundle")
 {
     Console.WriteLine("-- project: content-addressed bundle --");
     foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "BUNDLE PASSED" : $"BUNDLE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
+// Deterministic display math and the transport-snapshot ABI, without the full DSP suite.
+if (args.Length >= 1 && args[0] == "--transport-display")
+{
+    foreach (var (ok, label) in TransportDisplayTests.Run()) Check(ok, label);
     return failures == 0 ? 0 : 1;
 }
 
@@ -8281,6 +8308,12 @@ Console.WriteLine("-- Param defaults (knob reset) --");
     de.PluginParamSet(t, -1, pos, Math.Clamp(idef + 0.4f, 0f, 1f));
     Check(Math.Abs(de.InstrumentParamDefault(t, pos) - idef) < 1e-4f, "instrument param default is stable after a change");
     Check(Math.Abs(de.PluginParamGet(t, -1, pos) - idef) > 0.1f, "changed instrument value differs from its default");
+    // A graph handle's "Reset to default" asks through PluginParamDefault(track, -1, …): a
+    // built-in instrument must answer with its own default there too (Aurora Sustain read 0).
+    int sus = -1; for (int i = 0; i < de.PluginParamCount(t, -1); i++) if (de.PluginParamId(t, -1, i) == "sustain") sus = i;
+    Check(sus >= 0 && de.InstrumentParamDefault(t, sus) > 0.1f
+          && Math.Abs(de.PluginParamDefault(t, -1, sus) - de.InstrumentParamDefault(t, sus)) < 1e-6f,
+        "a built-in instrument's plugin-param default is its own default (Aurora Sustain, not 0)");
 
     int cmp = de.AddBuiltinDevice(t, 1);   // Compressor
     float ddef = de.DeviceParamDefault(t, cmp, 0);
@@ -13157,6 +13190,75 @@ Console.WriteLine("-- input monitoring --");
     me.SetTrackMonitor(mon, false);
     me.RenderOffline(mbuf, 2048);
     Check(Rms(mbuf, 2048) < 1e-4f, $"monitor off silences the input (RMS {Rms(mbuf, 2048):F5})");
+
+    // Armed without monitoring (#352): the meter shows the input, nothing is heard.
+    me.TryGetTrackMeter(mon, out var offMeter);
+    Check(offMeter.Peak < 1e-4f, $"an unarmed, unmonitored track meters nothing (peak {offMeter.Peak:F5})");
+    me.SetTrackArmed(mon, true);
+    me.PushMonitorFramesForTest(sine, 8192);
+    me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var armMeter);
+    Check(armMeter.Peak > 0.1f, $"an armed track meters its hardware input without monitoring (peak {armMeter.Peak:F3})");
+    Check(Rms(mbuf, 2048) < 1e-4f, $"... and the input stays unheard (RMS {Rms(mbuf, 2048):F5})");
+    me.SetTrackVolume(mon, 0f);
+    me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var preMeter);
+    Check(preMeter.Peak > 0.1f, $"the armed input meter is pre-fader (peak {preMeter.Peak:F3})");
+    me.SetTrackVolume(mon, 1f);
+    me.SetTrackArmed(mon, false);
+    me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var disarmMeter);
+    Check(disarmMeter.Peak < 1e-4f, $"disarming drops the input meter (peak {disarmMeter.Peak:F5})");
+
+    // An internal source: an armed track meters its source track's output.
+    me.SetTrackRecordInput(mon, minst);
+    me.SetTrackSolo(mon, false);
+    me.SetTrackArmed(mon, true);
+    me.Seek(0); me.Play();
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var srcMeter);
+    Check(srcMeter.Peak > 0.001f, $"an armed track meters its source track without monitoring (peak {srcMeter.Peak:F3})");
+
+    // The sources monitoring refuses (they would feed back) still meter: nothing is heard.
+    me.SetTrackRecordInput(mon, -1);
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var masterMeter);
+    Check(masterMeter.Peak > 0.001f, $"an armed track meters the master it records from (peak {masterMeter.Peak:F3})");
+    int monGroup = me.CreateGroup(new[] { minst, mon });
+    me.SetTrackRecordInput(mon, monGroup);
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var groupMeter);
+    Check(groupMeter.Peak > 0.001f, $"an armed track meters the group it sits in (peak {groupMeter.Peak:F3})");
+    me.StopTransport();
+    me.SetTrackArmed(mon, false);
+}
+
+// ============ an armed track's input meter never takes a sidechain route (#352) ============
+Console.WriteLine("-- armed input meter and the sidechain route pool --");
+{
+    using var re = new NotaEngine();
+    int armed = re.AddAudioTrack();                 // first in track order: claims would start here
+    int host = re.AddAudioTrack();
+    var keyed = new System.Collections.Generic.List<(int dev, int src)>();
+    for (int i = 0; i < 16; i++)
+    {
+        int d = re.AddBuiltinDevice(host, 1);
+        int s = re.AddAudioTrack();
+        re.SetDeviceSidechainKey(host, d, s, -1);
+        keyed.Add((d, s));
+    }
+    int metered = re.AddAudioTrack();
+    re.SetTrackRecordInput(armed, metered);
+    re.SetTrackArmed(armed, true);
+    Check(re.SidechainRoutesFree() == 0 && keyed.TrueForAll(k => re.SidechainRouteInUse(k.src, -1)) && !re.SidechainRouteInUse(metered, -1),
+          "arming a track with the route pool full leaves every sidechain route in place");
+    re.SetDeviceSidechainKey(host, keyed[15].dev, -1, -1);  // a free route: the meter takes it
+    Check(re.SidechainRouteInUse(metered, -1), "the armed track's meter takes a route once one is free");
+    int late = re.AddAudioTrack();
+    int r = re.SetDeviceSidechainKey(host, keyed[15].dev, late, -1);
+    Check(r == 0 && re.SidechainRouteInUse(late, -1) && !re.SidechainRouteInUse(metered, -1),
+          $"a new sidechain key takes the route back from the meter (result {r})");
+    re.SetTrackArmed(armed, false);
 }
 
 // ============ input monitoring survives a project round-trip ===============
@@ -15244,6 +15346,7 @@ foreach (var (ok, label) in ClipEditorTests.Run()) Check(ok, label);
 // --- project: content-addressed bundle (samples / plugin states named by hash) ---
 Console.WriteLine("-- project: content-addressed bundle --");
 foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
+foreach (var (ok, label) in LanguageProjectTests.Run()) Check(ok, label);
 Console.WriteLine("-- project: version history --");
 foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
 foreach (var (ok, label) in HistoryTests.RunGraph()) Check(ok, label);
@@ -15292,10 +15395,16 @@ foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- transport display --");
+foreach (var (ok, label) in TransportDisplayTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- velocity wheel --");
 foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
 Console.WriteLine("-- status bar audio format --");
 foreach (var (ok, label) in AudioFormatStatusTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- status bar dropout counter --");
+foreach (var (ok, label) in DropoutCounterTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- process cpu --");
 foreach (var (ok, label) in ProcessCpuTests.Run()) Check(ok, label);

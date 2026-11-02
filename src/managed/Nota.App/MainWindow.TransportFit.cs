@@ -15,6 +15,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -77,7 +79,7 @@ public partial class MainWindow
         }
 
         // The name leaves the bar for the caption, so the open project stays on screen.
-        DocTitleText.Text = ProjectNameText.IsVisible ? "Nota" : ProjectDisplayName();
+        DocTitleText.Text = ProjectNameText.IsVisible ? Loc.T("Nota") : ProjectDisplayName();
         TransportGrid.InvalidateMeasure();
     }
 
@@ -94,7 +96,12 @@ public partial class MainWindow
     {
         if (c.IsVisible == on) return;
         c.IsVisible = on;
-        for (var p = c.Parent as Layoutable; p is not null; p = p.Parent as Layoutable)
+        // A control brought back keeps the size it had when it was last measured, parts it shed
+        // meanwhile included (the Remote button came back 90 px too wide in French and was shed
+        // again for nothing), so what is inside it is measured afresh.
+        foreach (var inner in c.GetVisualDescendants()) (inner as Layoutable)?.InvalidateMeasure();
+        // The visual parents, which include the template parts of a button; the logical chain stops there.
+        for (var p = c.GetVisualParent() as Layoutable; p is not null; p = p.GetVisualParent() as Layoutable)
         {
             p.InvalidateMeasure();
             if (ReferenceEquals(p, TransportGrid)) break;

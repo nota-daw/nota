@@ -11,6 +11,25 @@ Start with [`ARCHITECTURE.md`](ARCHITECTURE.md). Nota is a real-time audio appli
 and a change that looks harmless in most codebases (allocating in a callback, taking a
 lock, logging from the wrong thread) will produce audible dropouts here.
 
+## Start with an approved issue
+
+**Every change needs an issue that a core contributor has approved — before you write
+code, a spec, or a prompt for an agent.** This includes typos and one-line fixes.
+Pull requests without one are closed unreviewed, however good the work is.
+
+1. Find an existing issue or [open one](https://github.com/nota-daw/nota/issues/new/choose):
+   what you want to change and why. For a bug, the report itself is enough.
+2. Wait for a core contributor (see [`.github/CODEOWNERS`](.github/CODEOWNERS)) to add
+   the **`approved`** label. They may ask questions, narrow the scope or decline —
+   that is the point: it costs a comment, not a weekend of your time and tokens.
+3. Comment that you are taking it, so two people don't build the same thing.
+4. Build exactly what the issue agreed. If the scope needs to change along the way, say
+   so in the issue first.
+5. Link it from the pull request: `Closes #N` (or `Refs #N`).
+
+Issues labelled `good first issue` or `help wanted` are already approved. Release pull
+requests cut by core contributors are the one exception.
+
 ## Licensing your contribution
 
 Nota is licensed under `AGPL-3.0-only` (see [`LICENSES/`](LICENSES/)).
@@ -84,8 +103,49 @@ Two things govern agents working here: the project constitution at
 `.specify/memory/constitution.md` (principles distilled from this document and
 [`ARCHITECTURE.md`](ARCHITECTURE.md)), and this document — which remains canonical for
 humans. You don't need an AI agent to contribute: writing `spec.md` and `plan.md` by
-hand from the templates in `.specify/templates/` is equally welcome. Typos, small fixes
-and doc edits don't need a spec — just open the pull request.
+hand from the templates in `.specify/templates/` is equally welcome.
+
+The project skills (`nota-design`, `nota-docs`, `nota-features`, `nota-instrument`,
+`nota-pr`, `nota-shortcuts`, `release`) are written once in `.claude/skills/` and copied
+into the directories the other agents read (`.agents/skills/`, `.github/skills/`,
+`.cursor/skills/`, `.gemini/skills/`). Edit the source, then run
+`scripts/sync-agent-skills.sh`; CI fails if a copy is out of date. Typos, small fixes
+and doc edits don't need a spec — but they still need an approved issue (see
+[Start with an approved issue](#start-with-an-approved-issue)).
+
+**If you work with an AI agent**, the agent instructions in [`AGENTS.md`](AGENTS.md) and
+[`CLAUDE.md`](CLAUDE.md) tell it to check for an approved issue before it does anything.
+Give it the issue number up front; don't override that check.
+
+## Translating Nota
+
+The desktop app's interface is translated through one mechanism (spec
+[068](specs/068-ui-language/)): the English text in the code is the key, and each language is one
+JSON file, `src/managed/Nota.App/Languages/<code>.json`, embedded in the app. English needs no
+file of strings; French is `fr.json`.
+
+- **Every new user-visible text goes through `Loc`.** Write `Loc.T("Save")` for a text,
+  `Loc.F("Delete {0} clips?", n)` for a text with values (the whole sentence is the key, never
+  a piece of it) and `Loc.Plural(n, "{0} clip", "{0} clips")` for a counted text; in XAML write
+  `{app:T 'Save'}`. The smoke test fails on a new plain literal that reads as interface text, and
+  on a `Loc` text that French does not cover. Text that is not translated on purpose — user
+  content, device and parameter names, proper nouns, units, logs, the Remote web page and MCP
+  — is listed with its reason as `# data:` in `tests/Nota.SmokeTest/LocalizationAllowList.txt`.
+- **Add a language**: copy `fr.json` to `<code>.json` (two lowercase letters), set `code` and
+  `name` (the language's own name, shown in Preferences → Appearance → Language), translate
+  the strings you can and delete the rest — anything missing shows in English. Plural rules
+  live in `UiLanguage.Plural`; a language without a rule counts like English. Also list the code in
+  `CFBundleLocalizations` of `scripts/bundle-mac.sh` and `scripts/package-dmg.sh` (the smoke test checks it), so
+  macOS shows its own text — Hide, Quit, the open panels — in that language too. The file format
+  is in [specs/068-ui-language/contracts/translation-file.md](specs/068-ui-language/contracts/translation-file.md).
+- **Translate or fix a string**: edit its value in the language file. Keep the placeholders
+  (`{0}`, `{1}`) and give a counted text both forms (`one`, `other`; French counts 0 and 1 as
+  one). Follow the glossary in [specs/068-ui-language/glossary.md](specs/068-ui-language/glossary.md)
+  (infinitive for actions, sentence case, a narrow no-break space before `:` `;` `?` `!`).
+  Device and parameter names stay in English.
+- **Look at it**: run `NOTA_UI_LANGUAGE=fr` to start in a language for that run without
+  touching the saved setting, and check that nothing is clipped or overlaps at each interface
+  scale. `NOTA_LOC_WRITE_BASELINE=1` rewrites the allow-list after you wrap or add text.
 
 ## Building
 
@@ -131,6 +191,7 @@ default, say), say why in the PR; a maintainer accepts it by adding the
 ## Pull requests
 
 - Target `develop`.
+- Link the approved issue it implements (`Closes #N`).
 - One logical change per pull request.
 - Match the style of the code around you. Comment headers explain *why* a file exists,
   not what each line does — keep that convention.

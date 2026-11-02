@@ -17,6 +17,10 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     auto t = findTrackAuthoring(trackId);
     const bool wasArmed = t && t->armed();
     if (t) t->setArmed(armed);
+    if (t && t->type() == TrackType::Audio && armed != wasArmed) {
+        recomputeRouting();   // an armed track meters its source track's tap (#352)
+        updateMonitorInput(); // ... or the hardware input: open / close the capture device
+    }
     if (armed) return;
     // A key still held from live input loses its note-off once the track stops taking live
     // notes (#366): the audio thread releases the live notes this track is sounding. The key
@@ -40,10 +44,10 @@ void Engine::setTrackRecordInput(int32_t trackId, int32_t source) {
     auto t = findTrackAuthoring(trackId);
     if (!t) return;
     t->setRecordInputSource(source);
-    if (t->monitor()) {
+    if (t->monitor() || t->armed()) {
         recomputeRouting();
         updateMonitorInput();
-    } // monitored source moved
+    } // monitored / metered source moved
 }
 int32_t Engine::trackRecordInput(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
@@ -106,12 +110,13 @@ void Engine::releaseAudioInputIfIdle() {
 }
 
 // Keep the capture device open exactly while some audio track monitors the hardware
-// input. Only acts on a change, so a failed open isn't retried on every edit.
+// input, or is armed on it and meters it (#352). Only acts on a change, so a failed open
+// isn't retried on every edit.
 void Engine::updateMonitorInput() {
     bool want = false;
     if (authoring_)
         for (auto& t : authoring_->tracks)
-            if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() == 0) {
+            if (t->type() == TrackType::Audio && (t->monitor() || t->armed()) && t->recordInputSource() == 0) {
                 want = true;
                 break;
             }

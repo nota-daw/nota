@@ -15,6 +15,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -47,7 +48,7 @@ public sealed partial class ArrangementView
     {
         var label = new TextBlock
         {
-            Text = "Overview", Classes = { "SectionLabel" },
+            Text = Loc.T("Overview"), Classes = { "SectionLabel" },
             VerticalAlignment = VerticalAlignment.Center,
         };
         _overviewRange = new TextBlock
@@ -116,7 +117,7 @@ public sealed partial class ArrangementView
         int first = (int)Math.Floor(_scrollBeats / bpb) + 1;
         int last = Math.Max(first, (int)Math.Ceiling((_scrollBeats + ViewportBeats) / bpb));
         int total = Math.Max(last, (int)Math.Ceiling(OverviewSpan / bpb));
-        _overviewRange.Text = $"bar {first}–{last} / {total}";
+        _overviewRange.Text = Loc.F("bar {0}–{1} / {2}", first, last, total);
     }
 
     // Repaint the strip when the playhead crossed into another of its pixels (called from
@@ -126,7 +127,7 @@ public sealed partial class ArrangementView
         if (!_overviewRow.IsVisible) return;
         double w = _overview.Bounds.Width;
         if (w <= 0) return;
-        int px = (int)(_playheadBeats / OverviewSpan * w);
+        int px = (int)(_displayPlayheadBeats / OverviewSpan * w);
         if (px == _ovPlayheadPx) return;
         _ovPlayheadPx = px;
         _overview.InvalidateVisual();
@@ -301,7 +302,7 @@ public sealed partial class ArrangementView
             int n = _o._tracks.Count;
             if (n == 0)
             {
-                var hint = new FormattedText("the project appears here", CultureInfo.InvariantCulture,
+                var hint = new FormattedText(Loc.T("the project appears here"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 10, OvEmptyText);
                 ctx.DrawText(hint, new Point(10, (h - hint.Height) / 2));
             }
@@ -353,7 +354,7 @@ public sealed partial class ArrangementView
             }
 
             // Playhead over the whole project.
-            double px = BeatToX(_o._playheadBeats);
+            double px = BeatToX(_o._displayPlayheadBeats);
             if (px >= 0 && px <= w) ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, h));
         }
 

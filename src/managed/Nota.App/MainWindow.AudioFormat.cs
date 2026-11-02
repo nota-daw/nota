@@ -9,6 +9,7 @@
 using System.Collections.Generic;
 using Avalonia.Controls;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -28,15 +29,15 @@ public partial class MainWindow
     private Control[] AudioFormatMenu(MainWindowViewModel vm)
     {
         var engine = vm.Engine;
-        var items = new List<Control> { MenuKit.Caption("Buffer size") };
+        var items = new List<Control> { MenuKit.Caption(Loc.T("Buffer size")) };
         switch (vm.BufferOwner)
         {
             case BufferOwner.Driver:
-                items.Add(MenuKit.Item("Driver settings…", click: () => engine.OpenAsioControlPanel()));
-                items.Add(MenuKit.Caption("Set in the ASIO driver's settings"));
+                items.Add(MenuKit.Item(Loc.T("Driver settings…"), click: () => engine.OpenAsioControlPanel()));
+                items.Add(MenuKit.Caption(Loc.T("Set in the ASIO driver's settings")));
                 break;
             case BufferOwner.Device:
-                items.Add(MenuKit.Caption("Exclusive mode uses the device's buffer"));
+                items.Add(MenuKit.Caption(Loc.T("Exclusive mode uses the device's buffer")));
                 break;
             default:
                 double rate = engine.NegotiatedSampleRate > 0 ? engine.NegotiatedSampleRate : engine.SampleRate;
@@ -45,7 +46,7 @@ public partial class MainWindow
                 foreach (int frames in AudioFormatStatus.BufferSizes)
                 {
                     int size = frames;
-                    var mi = MenuKit.Item(size == 0 ? "Device default" : size.ToString(),
+                    var mi = MenuKit.Item(size == 0 ? Loc.T("Device default") : size.ToString(),
                         click: () => { if (size != engine.GetAudioConfig().BufferFrames) vm.SetAudioBufferFrames(size); },
                         enabled: !recording);
                     mi.ToggleType = MenuItemToggleType.Radio;
@@ -53,11 +54,11 @@ public partial class MainWindow
                     MenuKit.SetTrailing(mi, AudioFormatStatus.Latency(rate, size));
                     items.Add(mi);
                 }
-                if (recording) items.Add(MenuKit.Caption("Stop recording to change it"));
+                if (recording) items.Add(MenuKit.Caption(Loc.T("Stop recording to change it")));
                 break;
         }
         items.Add(new Separator());
-        items.Add(MenuKit.Item("Audio settings…", GlyphKind.Levels, () => ShowPreferencesPage("Audio")));
+        items.Add(MenuKit.Item(Loc.T("Audio settings…"), GlyphKind.Levels, () => ShowPreferencesPage("Audio")));
         return items.ToArray();
     }
 }

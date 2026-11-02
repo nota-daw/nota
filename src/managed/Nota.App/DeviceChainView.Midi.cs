@@ -8,6 +8,7 @@
 
 using Avalonia;
 using Avalonia.Controls;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -25,7 +26,7 @@ public sealed partial class DeviceChainView
         {
             int chains = _engine.MidiRackChainCount(_trackId, index);
             var rackSpec = new ShellSpec(
-                Name: name, Subtitle: $"Rack · {chains} chain{(chains == 1 ? "" : "s")}", DeviceIndex: index, Count: count, Bypassed: bypassed, Bypassable: true,
+                Name: name, Subtitle: Loc.Plural(chains, "Rack · {0} chain", "Rack · {0} chains"), DeviceIndex: index, Count: count, Bypassed: bypassed, Bypassable: true,
                 CanMove: true, CanDelete: true, PresetKind: kind, IsInstrument: false, Width: 700, Kind: ChainKind.Midi);
             return BuildCardShell(rackSpec, new RackCardView(NewCardContext()).BuildMidiRackBody(index));
         }

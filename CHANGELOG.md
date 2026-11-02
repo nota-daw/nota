@@ -29,6 +29,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   **Delete N versions…** button — or the same item in the right-click menu — deletes them
   in one go, after one confirmation. The current version is never deleted: it stays, and the
   footer says so.
+- **French interface and a Language setting**: Preferences → Appearance → **Language** lists
+  English and Français (each in its own name). The choice is saved and applies after a restart;
+  the row says so and offers a **Restart** button (the usual unsaved-changes prompt comes first).
+  English stays the default, whatever the OS language is. Menus, panels, dialogs, tooltips,
+  status and error messages and the command palette are translated; device and parameter
+  names stay in English, and project, track and clip names you typed are never translated.
+  On macOS the system's own text (the application menu's Hide / Quit, the open and save panels) follows the
+  chosen language from the next start. Another language is one JSON file (see *Translating Nota* in CONTRIBUTING).
 - **Take lanes for audio loop recording** (#187): an Arrangement audio recording that comes
   back around the loop keeps every pass as a take (Take 1, Take 2, …) instead of overwriting
   the earlier ones. The comp — what plays, on the track's own row — starts as the newest pass
@@ -44,6 +52,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   "48 kHz · 256". Click it to pick another buffer size — Device default or 64 to 2048 frames,
   each with its latency — or to open Settings → Audio. Playback carries on across the change.
   Under ASIO the menu offers the driver's settings instead, since the driver sets the buffer.
+- **Audio dropouts in the status bar** (#271): from the first dropout the audio device
+  reports, a red counter beside the sample rate shows how many there have been since it
+  started ("1 dropout", "3 dropouts"); while there are none it stays hidden. Click it to
+  reset the count, e.g. after raising the buffer size, and see whether it comes back; a new
+  device, sample rate or buffer size resets it too. The tooltip says what a dropout is and
+  what usually helps. Core Audio (macOS) and ASIO report dropouts; the PulseAudio / ALSA and
+  WASAPI backends don't yet.
 - **Track inspector** (#186): a new tab at the bottom of the browser's left rail shows the
   selected track's settings in one place — name, Mute / Solo / Arm, record input and input
   monitoring or MIDI from, colour, row height and the freeze commands — so they no longer
@@ -109,6 +124,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the same way.
 
 ### Changed
+- **Aurora envelope boxes have knobs and drag** — the A, D, S and R boxes under each Env
+  graph now each carry a small knob, and the box itself is a drag value: drag it up or down
+  (Shift for fine steps), or double-click anywhere on it to type an exact value. The graph
+  handles still edit the envelope as before.
 - **Smoother, clearer waveforms on audio clips** (#267): clips in the Arrangement and the
   audio clip editor now draw an anti-aliased peak outline around a denser body that follows
   the loudness (RMS) of the audio. Every zoom level reads cleanly — zoomed out, no peak slips
@@ -135,6 +154,31 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Piano-roll playback cursor**: arrangement MIDI clips now follow the same smooth
+  display-frame position as the arrangement. Cursor movement redraws lightweight
+  overlays instead of repainting all notes and ruler labels.
+- **Windows playback cursor**: the Arrangement playhead now follows display frames,
+  interpolating the engine's rendered blocks instead of jumping on the UI polling timer.
+  Editing positions and audio timing remain tied to the engine transport.
+- **An armed audio track meters its input with monitoring off** (nota-daw/nota#352): arm a
+  track and its meter shows the level coming in (hardware input, or the source track it
+  records from) before and during a take, without hearing it. The meter reads the input
+  pre-fader; with monitoring on it still shows what the track plays.
+- **Modular lists tracks in the Arrangement's order** (nota-daw/nota#374): a new track no
+  longer shows up after the return tracks in the Track sidebar or as a Global island until
+  the tracks are reordered (the Mixer already follows the arrangement).
+- **Window buttons on Windows** — minimize, maximize and close in the title bar showed as
+  grey rounded tiles with an always-red close button, plus an extra fullscreen button. They
+  are flat again, as in other Windows apps: the hover tone under the pointer, red only while
+  the pointer is on close. Fullscreen stays on F11 and View ▸ Toggle full screen.
+- **Right-click menu on knobs and graph handles** — right-clicking a knob, or a handle on an
+  envelope or filter graph (Aurora, Volt, Bass, Synth and others), showed no menu, though
+  the same menu opened on the value under it. Right-click now shows Type value… and Reset to
+  default there too.
+- **"Reset to default" on an instrument's graph handles reset to zero** — right-clicking an
+  envelope or filter handle on a built-in instrument (Aurora's Sustain, for one) and choosing
+  Reset to default set the value to 0 instead of the instrument's default. It now matches
+  what a knob's double-click resets to.
 - **Session clips open in the Clip editor** (#334): a click on a slot that holds a clip shows
   that clip in the Clip tab instead of the track's devices, the **Clip** button opens the
   selected slot, and with the editor open, clicking another clip — on the same track or

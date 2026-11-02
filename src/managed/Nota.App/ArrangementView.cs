@@ -16,6 +16,7 @@ using Avalonia.VisualTree;
 using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -38,6 +39,7 @@ public sealed partial class ArrangementView : UserControl
     private double _pixelsPerBeat = 28;
     private double _scrollBeats;
     private double _playheadBeats;
+    private double _displayPlayheadBeats; // paint/follow only; edits keep using _playheadBeats
     private double _totalBeats = 64;
     private int _beatsPerBar = 4;
     private ResolvedGrid _lastGrid;                // what the snap chip last showed (GridChanged)
@@ -373,7 +375,7 @@ public sealed partial class ArrangementView : UserControl
             Margin = new Thickness(8, 0, 0, 0),
             Children =
             {
-                new TextBlock { Text = "Zoom", Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) },
+                new TextBlock { Text = Loc.T("Zoom"), Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) },
                 zoomOut, zoomIn,
             },
         };
@@ -641,9 +643,9 @@ public sealed partial class ArrangementView : UserControl
         double laneWidth = _lanes.Bounds.Width;
         if (laneWidth <= 0 || _pixelsPerBeat <= 0) return false;
         double viewportBeats = laneWidth / _pixelsPerBeat;
-        double rel = _playheadBeats - _scrollBeats, margin = viewportBeats * 0.05;
+        double rel = _displayPlayheadBeats - _scrollBeats, margin = viewportBeats * 0.05;
         if (rel >= margin && rel <= viewportBeats - margin) return false;
-        double target = Math.Clamp(_playheadBeats - viewportBeats * 0.25, 0, Math.Max(0, _hScroll.Maximum));
+        double target = Math.Clamp(_displayPlayheadBeats - viewportBeats * 0.25, 0, Math.Max(0, _hScroll.Maximum));
         if (Math.Abs(target - _scrollBeats) < 1e-6) return false;
         _scrollBeats = target;
         _hScroll.Value = target;
@@ -655,7 +657,7 @@ public sealed partial class ArrangementView : UserControl
     /// of it, 0 on screen (the ruler draws an arrow at that edge, #105).</summary>
     internal int PlayheadOffscreen()
     {
-        double x = BeatToX(_playheadBeats), w = _lanes.Bounds.Width;
+        double x = BeatToX(_displayPlayheadBeats), w = _lanes.Bounds.Width;
         return w <= 0 ? 0 : x < 0 ? -1 : x > w ? 1 : 0;
     }
 
@@ -683,25 +685,17 @@ public sealed partial class ArrangementView : UserControl
         double laneWidth = _lanes.Bounds.Width;
         if (laneWidth <= 0 || _pixelsPerBeat <= 0) return false;
         double viewportBeats = laneWidth / _pixelsPerBeat;
-        double target = Math.Clamp(_playheadBeats - viewportBeats / 2.0, 0, Math.Max(0, _hScroll.Maximum));
+        double target = Math.Clamp(_displayPlayheadBeats - viewportBeats / 2.0, 0, Math.Max(0, _hScroll.Maximum));
         if (Math.Abs(target - _scrollBeats) < 1e-6) return false;
         _scrollBeats = target;
         _hScroll.Value = target;   // the InvalidateVisual calls below repaint with the new scroll
         return true;
     }
 
-    public void SetPlayhead(double beats)
+    public void SetPlayhead(double beats, bool preserveDisplay = false)
     {
-        bool moved = beats != _playheadBeats;
         _playheadBeats = beats;
-        // While following, the view scrolls under the playhead — the lane surface (clips /
-        // waveforms) must repaint along with the ruler+overlay, not just the overlay.
-        // Every Play starts Follow afresh, even when the last run left it paused.
         bool playing = _engine is { IsPlaying: true };
-        if (playing && !_wasPlaying) SetFollowSuspended(false);
-        _wasPlaying = playing;
-        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && CenterOnPlayhead();
-        if (scrolled) _lanes.InvalidateVisual();
         // Converge the loop highlight with the engine (~30 Hz) so transport-bar
         // toggles/changes reflect here too — except mid-drag, where we show a preview.
         bool loopChanged = false;
@@ -715,6 +709,25 @@ public sealed partial class ArrangementView : UserControl
         // follow a knob turned in the device. Redraw the lanes only when a visible empty lane's
         // baseline actually changed (params with points are automation-driven — no baseline).
         if (_automationMode) RefreshAutoBaselines();
+        UpdatePlayheadDisplay(preserveDisplay && playing ? _displayPlayheadBeats : beats, playing, loopChanged);
+    }
+
+    /// <summary>Frame-rate display update; does no meter, automation or loop polling.</summary>
+    public void SetPlayheadFrame(double positionBeats, double displayBeats, bool playing)
+    {
+        _playheadBeats = positionBeats;
+        UpdatePlayheadDisplay(displayBeats, playing, false);
+    }
+
+    private void UpdatePlayheadDisplay(double beats, bool playing, bool loopChanged)
+    {
+        bool moved = beats != _displayPlayheadBeats;
+        _displayPlayheadBeats = beats;
+        if (playing && !_wasPlaying) SetFollowSuspended(false);
+        _wasPlaying = playing;
+        // Follow must repaint the content as well as the moving overlay.
+        bool scrolled = _followPlayhead && !FollowSuspended && playing && !_lanes.IsGesturing && !_footerLanes.IsGesturing && CenterOnPlayhead();
+        if (scrolled) _lanes.InvalidateVisual();
         // Stopped with nothing moving: the playhead chrome is already right — repainting it
         // every tick kept the whole window redrawing ~30×/s while idle (#55).
         if (!moved && !scrolled && !loopChanged) return;
@@ -816,8 +829,8 @@ public sealed partial class ArrangementView : UserControl
         }
         double len = _loopE - _loopS, bars = len / _beatsPerBar;
         string l = Math.Abs(bars - Math.Round(bars)) < 1e-6
-            ? (Math.Round(bars) == 1 ? "1 bar" : $"{Math.Round(bars)} bars")
-            : $"{len:0.##} beats";
+            ? Loc.Plural((long)Math.Round(bars), "{0} bar", "{0} bars")
+            : Loc.F("{0:0.##} beats", len);
         return $"{Pos(_loopS)} – {Pos(_loopE)} · {l}";
     }
 
@@ -1042,7 +1055,7 @@ public sealed partial class ArrangementView : UserControl
                     LiveRole = FreezeRole?.Invoke(ti.Id) ?? 0,                          // live-freeze (v1.1)
                     Player = PlayerBadge?.Invoke(ti.Id),                                 // Nota Remote
                     // A stored name (set via the header menu) wins; otherwise the derived default.
-                    Name = IsProcessingTrack(ti.Id) ? "Processing…" : TrackNames.Of(eng, ti),
+                    Name = IsProcessingTrack(ti.Id) ? Loc.T("Processing…") : TrackNames.Of(eng, ti),
                     Volume = ti.Volume,
                     Pan = ti.Pan,
                 };
@@ -1362,7 +1375,7 @@ public sealed partial class ArrangementView : UserControl
         if (_engine.PasteClipBlock(at, dest) <= 0)
         {
             if (dest <= 0) return false;
-            StatusMessage?.Invoke("Paste a MIDI clip onto a MIDI track, audio onto audio.");
+            StatusMessage?.Invoke(Loc.T("Paste a MIDI clip onto a MIDI track, audio onto audio."));
             return true;
         }
         Refresh();
@@ -1399,7 +1412,7 @@ public sealed partial class ArrangementView : UserControl
         finally { _engine.EndUndoGroup(); }
         if (placed <= 0)
         {
-            StatusMessage?.Invoke("Paste a MIDI clip onto a MIDI track, audio onto audio.");
+            StatusMessage?.Invoke(Loc.T("Paste a MIDI clip onto a MIDI track, audio onto audio."));
             return true;
         }
         if (src.Cut) { ClipTransfer.SlotMoved(null); SessionChanged?.Invoke(); }
@@ -1423,8 +1436,8 @@ public sealed partial class ArrangementView : UserControl
         int scene = _engine.ArrangementClipsToSession(sel, startScene);
         if (scene < 0) return -1;
         SessionChanged?.Invoke();
-        StatusMessage?.Invoke(sel.Length == 1 ? $"Copied clip to session scene {scene + 1}"
-                                              : $"Copied {sel.Length} clips to the session from scene {scene + 1}");
+        StatusMessage?.Invoke(sel.Length == 1 ? Loc.F("Copied clip to session scene {0}", scene + 1)
+                                              : Loc.F("Copied {0} clips to the session from scene {1}", sel.Length, scene + 1));
         return scene;
     }
 
@@ -2137,7 +2150,7 @@ public sealed partial class ArrangementView : UserControl
         Grid.SetColumn(tri, 0);
         Grid.SetColumn(name, 1);
         Grid.SetColumn(chips, 2);
-        var kind = TypeTag("Group");
+        var kind = TypeTag(Loc.T("Group"));
         Grid.SetColumn(kind, 3);
         row.Children.Add(tri);
         row.Children.Add(name);
@@ -2303,7 +2316,7 @@ public sealed partial class ArrangementView : UserControl
         fader.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
         fader.GestureEnd   += () => _engine?.EndAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
         fader.GestureEnd   += () => volUndo?.End();
-        ValueEntry.Attach(fader, fader.EntryField("Volume", VolumeDbText), db);
+        ValueEntry.Attach(fader, fader.EntryField(Loc.T("Volume"), VolumeDbText), db);
         _volFaders[t.Id] = fader; _volDb[t.Id] = db;
 
         var volCell = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -2320,7 +2333,7 @@ public sealed partial class ArrangementView : UserControl
         pan.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Pan, -1, -1, "");
         pan.GestureEnd   += () => _engine?.EndAutomationWrite(volTrackId, AutomationTarget.Pan, -1, -1, "");
         pan.GestureEnd   += () => panUndo?.End();
-        ValueEntry.Attach(pan, pan.EntryField("Pan"));
+        ValueEntry.Attach(pan, pan.EntryField(Loc.T("Pan")));
         _panBars[t.Id] = pan;
 
         var volRow = new Grid { ColumnDefinitions = new ColumnDefinitions("2*,*"), ColumnSpacing = 6, Margin = new Thickness(0, 6, 0, 0) };
@@ -2500,9 +2513,9 @@ public sealed partial class ArrangementView : UserControl
     {
         MenuItem Item(string full, string brief, NewTrackKind kind)
             => MenuKit.Item(inSubmenu ? brief : full, GlyphKind.Plus, () => AddTrackRequested?.Invoke(kind, anchorTrackId));
-        yield return Item("Add instrument track", "Instrument", NewTrackKind.Instrument);
-        yield return Item("Add audio track", "Audio", NewTrackKind.Audio);
-        yield return Item("Add return track", "Return", NewTrackKind.Return);
+        yield return Item(Loc.T("Add instrument track"), Loc.T("Instrument"), NewTrackKind.Instrument);
+        yield return Item(Loc.T("Add audio track"), Loc.T("Audio"), NewTrackKind.Audio);
+        yield return Item(Loc.T("Add return track"), Loc.T("Return"), NewTrackKind.Return);
     }
 
     // Right-click on the empty space below the tracks: add a track (the main thing to do
@@ -2513,7 +2526,7 @@ public sealed partial class ArrangementView : UserControl
         var flyout = new MenuFlyout();
         foreach (var mi in AddTrackItems()) flyout.Items.Add(mi);
         flyout.Items.Add(new Separator());
-        var paste = new MenuItem { Header = "Paste track", IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
+        var paste = new MenuItem { Header = Loc.T("Paste track"), IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
         paste.Click += (_, _) => PasteTracksAfter(-1);
         flyout.Items.Add(paste);
         flyout.ShowAt(anchor, showAtPointer: true);
@@ -2538,7 +2551,7 @@ public sealed partial class ArrangementView : UserControl
         var one = new[] { trackId };
         var vm = _tracks.FirstOrDefault(v => v.Id == trackId);
 
-        var rename = MenuKit.Item("Rename…", GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId));
+        var rename = MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId));
 
         // Record input ▸ (audio tracks only): hardware, master, or another track's output
         // (internal resampling). The active source is ticked and shown on the item.
@@ -2547,7 +2560,7 @@ public sealed partial class ArrangementView : UserControl
         if (isAudio)
         {
             var cur = RecordInputPick.Of(_engine, trackId);
-            string curName = "Ext";
+            string curName = Loc.T("Ext");
             var choices = new List<MenuItem>();
             void Src(string label, string shortName, RecordInputPick pick)
             {
@@ -2560,12 +2573,12 @@ public sealed partial class ArrangementView : UserControl
             }
             foreach (var (pick, label, shortName) in RecordInputPick.Hardware) Src(label, shortName, pick);
             int fixedCount = RecordInputPick.Hardware.Length + 1;   // the hardware entries + Master
-            Src("Master", "Master", RecordInputPick.Track(-1));
+            Src(Loc.T("Master"), Loc.T("Master"), RecordInputPick.Track(-1));
             foreach (var v in _tracks)
-                if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : $"Track {v.Id}"; Src(n, n, RecordInputPick.Track(v.Id)); }
+                if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : Loc.F("Track {0}", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
             foreach (var v in _returns)
-            { string n = v.Name.Length > 0 ? v.Name : $"Return {v.Id}"; Src(n, n, RecordInputPick.Track(v.Id)); }
-            recInput = MenuKit.ValueItem("Record input", GlyphKind.Input, curName);
+            { string n = v.Name.Length > 0 ? v.Name : Loc.F("Return {0}", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
+            recInput = MenuKit.ValueItem(Loc.T("Record input"), GlyphKind.Input, curName);
             foreach (var c in choices.Take(fixedCount)) recInput.Items.Add(c);
             if (choices.Count > fixedCount) recInput.Items.Add(new Separator());
             foreach (var c in choices.Skip(fixedCount)) recInput.Items.Add(c);
@@ -2577,33 +2590,33 @@ public sealed partial class ArrangementView : UserControl
         if (vm is { IsInstrument: true })
         {
             int curSrc = _engine.GetTrackMidiSource(trackId);
-            string curName = "None";
+            string curName = Loc.T("None");
             var others = _tracks.Where(v => v.Id != trackId && v.IsInstrument).ToList();
-            foreach (var v in others) if (v.Id == curSrc) curName = v.Name.Length > 0 ? v.Name : $"Track {v.Id}";
-            midiFrom = MenuKit.ValueItem("MIDI from", GlyphKind.Note, curName);
+            foreach (var v in others) if (v.Id == curSrc) curName = v.Name.Length > 0 ? v.Name : Loc.F("Track {0}", v.Id);
+            midiFrom = MenuKit.ValueItem(Loc.T("MIDI from"), GlyphKind.Note, curName);
             MenuItem Src(string label, int src)
             {
                 var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = curSrc == src };
                 mi.Click += (_, _) => _engine.SetTrackMidiSource(trackId, src);
                 return mi;
             }
-            midiFrom.Items.Add(Src("None", -1));
+            midiFrom.Items.Add(Src(Loc.T("None"), -1));
             if (others.Count > 0) midiFrom.Items.Add(new Separator());
             foreach (var v in others)
-                midiFrom.Items.Add(Src(v.Name.Length > 0 ? v.Name : $"Track {v.Id}", v.Id));
+                midiFrom.Items.Add(Src(v.Name.Length > 0 ? v.Name : Loc.F("Track {0}", v.Id), v.Id));
         }
 
         // Group / Ungroup (submix). "Group" folds the multi-selection (or this track) into a
         // new group; "Ungroup" dissolves the group this track is/belongs to.
         var create = new List<Control>();
-        var addTrack = MenuKit.Item("Add track", GlyphKind.Plus);
+        var addTrack = MenuKit.Item(Loc.T("Add track"), GlyphKind.Plus);
         foreach (var mi in AddTrackItems(trackId, inSubmenu: true)) addTrack.Items.Add(mi);
         AddRecentInstruments(addTrack, trackId);
         create.Add(addTrack);
-        create.Add(MenuKit.Item("Group tracks", GlyphKind.Folder, () => GroupTracks(trackId), MenuKit.GroupKey));
+        create.Add(MenuKit.Item(Loc.T("Group tracks"), GlyphKind.Folder, () => GroupTracks(trackId), MenuKit.GroupKey));
         int ungroupId = GroupToUngroupFor(trackId);
         if (ungroupId > 0)
-            create.Add(MenuKit.Item("Ungroup", GlyphKind.Ungroup, () => UngroupGroup(ungroupId), MenuKit.UngroupKey));
+            create.Add(MenuKit.Item(Loc.T("Ungroup"), GlyphKind.Ungroup, () => UngroupGroup(ungroupId), MenuKit.UngroupKey));
 
         // Clipboard + lifecycle go through the same set commands as the keys (a group carries
         // its children); paste lands right after this track.
@@ -2617,7 +2630,7 @@ public sealed partial class ArrangementView : UserControl
             FreezeMenuItems?.Invoke(trackId),
             create,
             clipboard,
-            new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => DeleteTracks(one), MenuKit.DeleteKey) });
+            new Control[] { MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () => DeleteTracks(one), MenuKit.DeleteKey) });
         return flyout;
     }
 
@@ -2635,7 +2648,7 @@ public sealed partial class ArrangementView : UserControl
         // "In" pinned left (faded), the source name pinned right, so the name stands out.
         void Add(string value, RecordInputPick src)
         {
-            var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
+            var inTb = new TextBlock { Text = Loc.T("In"), FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
             var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
             // The closed box hoists this content out of its item, where it stops following the
             // theme foreground and keeps whatever it was built with — so on the paper variant
@@ -2651,9 +2664,9 @@ public sealed partial class ArrangementView : UserControl
             sources.Add(src);
         }
         foreach (var (pick, _, shortName) in RecordInputPick.Hardware) Add(shortName, pick);
-        Add("Master", RecordInputPick.Track(-1));
-        foreach (var v in _tracks) if (v.Id != trackId) Add(v.Name.Length > 0 ? v.Name : $"Track {v.Id}", RecordInputPick.Track(v.Id));
-        foreach (var v in _returns) Add(v.Name.Length > 0 ? v.Name : $"Return {v.Id}", RecordInputPick.Track(v.Id));
+        Add(Loc.T("Master"), RecordInputPick.Track(-1));
+        foreach (var v in _tracks) if (v.Id != trackId) Add(v.Name.Length > 0 ? v.Name : Loc.F("Track {0}", v.Id), RecordInputPick.Track(v.Id));
+        foreach (var v in _returns) Add(v.Name.Length > 0 ? v.Name : Loc.F("Return {0}", v.Id), RecordInputPick.Track(v.Id));
         var cur = _engine is null ? RecordInputPick.Hardware[0].Pick : RecordInputPick.Of(_engine, trackId);
         int sel = sources.FindIndex(p => p.Matches(cur));
         cb.SelectedIndex = sel >= 0 ? sel : 0;
@@ -2695,8 +2708,8 @@ public sealed partial class ArrangementView : UserControl
             glyph.Foreground = Brush(state ? "Brush.TextOnAccent" : "Brush.TextSecondary");
             chip.Opacity = usable ? 1.0 : 0.4;
             ToolTip.SetTip(chip, usable
-                ? (state ? "Monitoring input — click to stop" : "Monitor input: hear it live through this track")
-                : "Master can't be monitored (it would feed back)");
+                ? (state ? Loc.T("Monitoring input — click to stop") : Loc.T("Monitor input: hear it live through this track"))
+                : Loc.T("Master can't be monitored (it would feed back)"));
         }
         Paint();
         chip.PointerPressed += (_, e) =>
@@ -2723,7 +2736,7 @@ public sealed partial class ArrangementView : UserControl
         // "In" pinned left (faded), the source name pinned right.
         void Add(string value, int src)
         {
-            var inTb = new TextBlock { Text = "In", FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
+            var inTb = new TextBlock { Text = Loc.T("In"), FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
             var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(6, 0) };
             // The closed box hoists this content out of its item, where it stops following the
             // theme foreground and keeps whatever it was built with — so on the paper variant
@@ -2735,8 +2748,8 @@ public sealed partial class ArrangementView : UserControl
             cb.Items.Add(new ComboBoxItem { Content = content, Padding = new Thickness(6, 2), MinHeight = 0, HorizontalContentAlignment = HorizontalAlignment.Stretch });
             sources.Add(src);
         }
-        Add("None", -1);
-        foreach (var v in _tracks) if (v.Id != trackId && v.IsInstrument) Add(v.Name.Length > 0 ? v.Name : $"Track {v.Id}", v.Id);
+        Add(Loc.T("None"), -1);
+        foreach (var v in _tracks) if (v.Id != trackId && v.IsInstrument) Add(v.Name.Length > 0 ? v.Name : Loc.F("Track {0}", v.Id), v.Id);
         int cur = _engine?.GetTrackMidiSource(trackId) ?? -1;
         int sel = sources.IndexOf(cur);
         cb.SelectedIndex = sel >= 0 ? sel : 0;
@@ -2799,7 +2812,7 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { phone, name } },
         };
-        ToolTip.SetTip(pill, $"Played from a phone: {who}");
+        ToolTip.SetTip(pill, Loc.F("Played from a phone: {0}", who));
         return pill;
     }
 
@@ -2939,7 +2952,7 @@ public sealed partial class ArrangementView : UserControl
         }
         // Master row: selectable (opens the master effect chain) via the reserved id.
         int masterId = _engine?.MasterTrackId ?? -1;
-        string masterName = _engine is { } me2 && me2.GetTrackName(masterId) is { Length: > 0 } mn ? mn : "Master";
+        string masterName = _engine is { } me2 && me2.GetTrackName(masterId) is { Length: > 0 } mn ? mn : Loc.T("Master");
         return BuildSlimRow(masterName, -1, masterId, "Brush.SurfaceRaised", GetMasterVolume?.Invoke() ?? 1f, h,
             v => SetMasterVolume?.Invoke((float)v), out _masterRowMeter, out _masterRowFader, out _masterRowDb,
             masterSpine: true);
@@ -3014,7 +3027,7 @@ public sealed partial class ArrangementView : UserControl
         }
         fader.GestureEnd   += () => undo?.End();
         fader.ValueChanged += v => { Change(undo, v, setVolume); dbText.Text = VolumeDbText(v); };
-        ValueEntry.Attach(fader, fader.EntryField("Volume", VolumeDbText), dbText);
+        ValueEntry.Attach(fader, fader.EntryField(Loc.T("Volume"), VolumeDbText), dbText);
 
         Control? mute = ret is null ? null
             : ChipToggle("M", ret.Muted, NotaPalette.Mute, v => { ret.Muted = v; _engine?.SetTrackMute(trackId, v); });
@@ -3066,7 +3079,7 @@ public sealed partial class ArrangementView : UserControl
                 pan.GestureBegin += () => _engine?.BeginAutomationWrite(trackId, AutomationTarget.Pan, -1, -1, "");
                 pan.GestureEnd   += () => _engine?.EndAutomationWrite(trackId, AutomationTarget.Pan, -1, -1, "");
                 pan.GestureEnd   += () => panUndo?.End();
-                ValueEntry.Attach(pan, pan.EntryField("Pan"));
+                ValueEntry.Attach(pan, pan.EntryField(Loc.T("Pan")));
                 _footerPans[trackId] = pan;
                 stack.Children.Add(pan);
             }
@@ -3127,12 +3140,12 @@ public sealed partial class ArrangementView : UserControl
         bool isReturn = _returns.Any(r => r.Id == trackId);
         string name = _engine.GetTrackName(trackId);
         MenuKit.AddGroups(flyout.Items,
-            new Control[] { MenuKit.Header(name.Length > 0 ? name : isReturn ? "Return" : "Master",
-                                           TrackBrush(EffectiveColorIndex(_engine, trackId)), isReturn ? "Return" : "Master") },
+            new Control[] { MenuKit.Header(name.Length > 0 ? name : isReturn ? Loc.T("Return") : Loc.T("Master"),
+                                           TrackBrush(EffectiveColorIndex(_engine, trackId)), isReturn ? Loc.T("Return") : Loc.T("Master")) },
             new Control[] { TrackColourRow(new[] { trackId }) },
             new Control[] { FooterHeightRow(isReturn ? _returns.FindIndex(r => r.Id == trackId) : _returns.Count) },
-            new Control[] { MenuKit.Item("Rename…", GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
-            isReturn ? new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => DeleteTracks(new[] { trackId }), MenuKit.DeleteKey) } : null);
+            new Control[] { MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
+            isReturn ? new Control[] { MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () => DeleteTracks(new[] { trackId }), MenuKit.DeleteKey) } : null);
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -3248,6 +3261,17 @@ public sealed partial class ArrangementView : UserControl
     internal static int AutoTrackColorIndex(int nth) => (nth % PaletteBases) * PaletteShades;
     /// <summary>Colour index for a return bus (0/1).</summary>
     internal static int ReturnColorIndex(int returnIdx) => ReturnColorBase + (Math.Max(0, returnIdx) % NotaPalette.ReturnColors.Length);
+
+    /// <summary>The engine's track indices in the order the arrangement lists them: regular
+    /// tracks first, then the returns. A new track is appended after the returns in the
+    /// engine, so views walking the raw order showed it below them (#374).</summary>
+    internal static IEnumerable<int> DisplayOrder(IAudioEngine eng)
+    {
+        int n = eng.TrackCount;
+        for (int pass = 0; pass < 2; pass++)
+            for (int i = 0; i < n; i++)
+                if (eng.TryGetTrackInfo(i, out var ti) && ti.IsReturn == (pass == 1)) yield return i;
+    }
 
     /// <summary>The effective palette index for a track: its stored colour if set, else its
     /// group's hue (shaded per sibling), else the automatic colour for its position. Shared by

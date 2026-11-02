@@ -18,6 +18,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.ClipEditorKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -57,10 +58,10 @@ public sealed class ClipEditorView : UserControl
         DockPanel.SetDock(_tools, Dock.Right);
         var body = new DockPanel { Children = { _props, _tools, roll } };
 
-        _toolsToggle = new ToggleButton { Content = "Tools", Padding = new Thickness(12, 0), Classes = { "chip" } };
+        _toolsToggle = new ToggleButton { Content = Loc.T("Tools"), Padding = new Thickness(12, 0), Classes = { "chip" } };
         _toolsToggle.Click += (_, _) => SetTools(_toolsToggle.IsChecked == true);
 
-        var tabs = Segments(new[] { "Notes", "Envelopes" }, 0, i => ShowTab(i == 1), out _setTab);
+        var tabs = Segments(new[] { Loc.T("Notes"), Loc.T("Envelopes") }, 0, i => ShowTab(i == 1), out _setTab);
         if (_envOverlay is null) Inactive.Set(tabs, true);   // session slots carry no clip envelope
         var right = new StackPanel
         {
@@ -90,8 +91,8 @@ public sealed class ClipEditorView : UserControl
     private static Control? ModeControl(PianoRollView roll, Action<bool>? setTrackMode)
     {
         if (setTrackMode is null) return null;
-        var seg = Segments(new[] { "Clip", "Track" }, roll.Clips.TrackMode ? 1 : 0, i => setTrackMode(i == 1), out _, fill: true);
-        ToolTip.SetTip(seg, "Clip: the selected clip · Track: every clip on the track");
+        var seg = Segments(new[] { Loc.T("Clip"), Loc.T("Track") }, roll.Clips.TrackMode ? 1 : 0, i => setTrackMode(i == 1), out _, fill: true);
+        ToolTip.SetTip(seg, Loc.T("Clip: the selected clip · Track: every clip on the track"));
         return seg;
     }
 
@@ -101,7 +102,7 @@ public sealed class ClipEditorView : UserControl
         if (_engine is null) return;
         var a = Roll.ActiveClip;
         if (a.TrackId <= 0) return;
-        _nameText.Text = HeaderName(ClipName(a.TrackId, a.ClipIndex, $"Track {a.TrackId} clip"));
+        _nameText.Text = HeaderName(ClipName(a.TrackId, a.ClipIndex, Loc.F("Track {0} clip", a.TrackId)));
         _colorBar.Background = Roll.TrackBrush;
         _props.SetStart(a.StartBeat);
         _envOverlay = new EnvOverlay(Roll, _engine, a.TrackId, a.ClipIndex, a.LengthBeats)
@@ -121,7 +122,7 @@ public sealed class ClipEditorView : UserControl
             Content = new Glyph(GlyphKind.Speaker, 14), Padding = new Thickness(8, 0), Classes = { "chip" },
             IsChecked = PianoRollView.AuditionEnabled,
         };
-        ToolTip.SetTip(b, "Hear notes as you place, click or drag them");
+        ToolTip.SetTip(b, Loc.T("Hear notes as you place, click or drag them"));
         b.Click += (_, _) => PianoRollView.SetAuditionEnabled(b.IsChecked == true);
         void Sync() => b.IsChecked = PianoRollView.AuditionEnabled;
         b.AttachedToVisualTree += (_, _) => { Sync(); PianoRollView.AuditionToggled += Sync; };
@@ -132,8 +133,8 @@ public sealed class ClipEditorView : UserControl
     // Fit to notes (⇧F): rows zoom so every note of the clip is in view.
     private static Control FitControl(PianoRollView roll)
     {
-        var b = new Button { Content = "Fit", Padding = new Thickness(10, 0), Classes = { "chip" } };
-        ToolTip.SetTip(b, "Fit to notes (⇧F)");
+        var b = new Button { Content = Loc.T("Fit"), Padding = new Thickness(10, 0), Classes = { "chip" } };
+        ToolTip.SetTip(b, Loc.T("Fit to notes (⇧F)"));
         b.Click += (_, _) => roll.FitToNotes();
         return b;
     }
@@ -184,19 +185,19 @@ public sealed class ClipEditorView : UserControl
     {
         _keyText = Mono("");
         _modeText = new TextBlock { FontSize = NotaType.Body };
-        var sw = SwitchRow("Scale", () => Roll.ScaleOn, () => { Roll.SetScale(!Roll.ScaleOn, Roll.ScaleRoot, Roll.ScaleIndex); PaintScale(); }, out _syncScale);
+        var sw = SwitchRow(Loc.T("Scale"), () => Roll.ScaleOn, () => { Roll.SetScale(!Roll.ScaleOn, Roll.ScaleRoot, Roll.ScaleIndex); PaintScale(); }, out _syncScale);
         var key = Dropdown(_keyText, a => ShowMenu(a, PianoRollView.KeyNames, Roll.ScaleRoot, i => { Roll.SetScale(true, i, Roll.ScaleIndex); PaintScale(); }));
         var mode = Dropdown(_modeText, a => ShowMenu(a, PianoRollView.ScaleNames, Roll.ScaleIndex, i => { Roll.SetScale(true, Roll.ScaleRoot, i); PaintScale(); }));
         // Deletes the notes the overlay dims; live only while some note is out of scale.
-        _dropOutOfScale = ClipEditorKit.Button("Remove out of scale", () => Roll.RemoveOutOfScaleNotes());
+        _dropOutOfScale = ClipEditorKit.Button(Loc.T("Remove out of scale"), () => Roll.RemoveOutOfScaleNotes());
         _dropOutOfScale.HorizontalAlignment = HorizontalAlignment.Left;
         _dropOutOfScale.VerticalAlignment = VerticalAlignment.Center;
-        ToolTip.SetTip(_dropOutOfScale, "Delete every note outside the scale");
+        ToolTip.SetTip(_dropOutOfScale, Loc.T("Delete every note outside the scale"));
         Roll.Changed += () => _dropOutOfScale.IsEnabled = Roll.HasOutOfScaleNotes;
         Roll.FoldToggled += _ => PaintScale();   // ⌥⇧F flips it from the keyboard too
         Roll.FoldChanged += PaintFold;           // …and the host switches it with the active clip's track
         // Fold (specs/045): the scale's rows, or a Drum Rack's pads, and nothing else.
-        _fold = SwitchRow("Fold", () => Roll.Folded, () => { Roll.SetFold(!Roll.Folded, user: true); PaintScale(); }, out _syncFold);
+        _fold = SwitchRow(Loc.T("Fold"), () => Roll.Folded, () => { Roll.SetFold(!Roll.Folded, user: true); PaintScale(); }, out _syncFold);
         PaintScale();
         return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { sw, key, mode, _fold, _dropOutOfScale } };
     }
@@ -207,8 +208,8 @@ public sealed class ClipEditorView : UserControl
     private void PaintFold()
     {
         _syncFold();
-        string what = Roll.FoldShowsPads ? "only the pads" : Roll.ScaleOn ? "only the scale's notes" : "only the notes in use";
-        string tip = MenuKit.Keys($"Fold: show {what} (⌥⇧F)");
+        string what = Roll.FoldShowsPads ? Loc.T("only the pads") : Roll.ScaleOn ? Loc.T("only the scale's notes") : Loc.T("only the notes in use");
+        string tip = MenuKit.Keys(Loc.F("Fold: show {0} (⌥⇧F)", what));
         if (Roll.FoldHasNothing) tip += Roll.FoldShowsPads ? "\nThe rack has no pads yet" : "\nSet a scale or add notes to fold";
         ToolTip.SetTip(_fold, tip);
     }
@@ -228,7 +229,7 @@ public sealed class ClipEditorView : UserControl
     // ---- envelope overlay: a wash over the notes, the curve, a target picker ----------
     private sealed class EnvOverlay : UserControl
     {
-        private static readonly string[] Targets = { "Velocity", "Volume" };
+        private static readonly string[] Targets = { Loc.T("Velocity"), Loc.T("Volume") };
         private readonly IAudioEngine _engine;
         private readonly int _trackId, _clipIndex;
         private readonly EnvCanvas _canvas;
@@ -254,7 +255,7 @@ public sealed class ClipEditorView : UserControl
                     {
                         new TextBlock
                         {
-                            Text = "Env", FontSize = 9, FontWeight = FontWeight.Medium,
+                            Text = Loc.T("Env"), FontSize = 9, FontWeight = FontWeight.Medium,
                             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
                         },
                         _targetText,
@@ -273,7 +274,7 @@ public sealed class ClipEditorView : UserControl
                     Load();
                 });
             };
-            ToolTip.SetTip(chip, "Click to add a point · drag to move · right-click to delete");
+            ToolTip.SetTip(chip, Loc.T("Click to add a point · drag to move · right-click to delete"));
             Content = new Grid
             {
                 Children =
@@ -476,7 +477,7 @@ public sealed class ClipEditorView : UserControl
             if (Background is not null) ctx.FillRectangle(Background, new Rect(0, 0, w, h));
             if (_pts.Count == 0)   // empty state: one Ink 5 line
             {
-                var ft = new FormattedText("Click to add a point", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Body, EmptyInk);
+                var ft = new FormattedText(Loc.T("Click to add a point"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Body, EmptyInk);
                 ctx.DrawText(ft, new Point((w - ft.Width) / 2, (h - ft.Height) / 2));
                 return;
             }

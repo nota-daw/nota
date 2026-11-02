@@ -14,6 +14,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -64,16 +65,16 @@ public sealed class SaveChangesWindow : NotaWindow
 
         _dontSave = new Button
         {
-            Content = "Don't save",
+            Content = Loc.T("Don't save"),
             Classes = { "ghost" },
             Padding = new Thickness(12, 0),
             Margin = new Thickness(-12, 0, 0, 0),   // the label, not the hover wash, lines up with the text
             Foreground = NotaPalette.TextSecondary,
         };
         _dontSave.Click += (_, _) => Choose(SaveChoice.DontSave);
-        _cancel = new Button { Content = "Cancel" };
+        _cancel = new Button { Content = Loc.T("Cancel") };
         _cancel.Click += (_, _) => Choose(SaveChoice.Cancel);
-        _save = new Button { Content = "Save", Classes = { "primary" }, FontWeight = FontWeight.SemiBold, MinWidth = 64 };
+        _save = new Button { Content = Loc.T("Save"), Classes = { "primary" }, FontWeight = FontWeight.SemiBold, MinWidth = 64 };
         _save.Click += (_, _) => _ = SaveAsync();
 
         var buttons = new DockPanel { LastChildFill = false };
@@ -146,7 +147,7 @@ public sealed class SaveChangesWindow : NotaWindow
         if (_saveInPlace is null) { Close(SaveChoice.Save); return; }
 
         _busy = true;
-        _save.Content = "Saving…";   // the other buttons stay as drawn; Choose ignores them meanwhile
+        _save.Content = Loc.T("Saving…");   // the other buttons stay as drawn; Choose ignores them meanwhile
         bool ok;
         try { ok = await _saveInPlace(); }
         catch { ok = false; }

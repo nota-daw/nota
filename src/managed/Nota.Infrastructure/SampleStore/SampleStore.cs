@@ -19,6 +19,7 @@
 // NOTA_SAMPLE_REGISTRY overrides the index URL (or points at a local index.json).
 
 using System.Text.Json;
+using Nota.Application.Localization;
 
 namespace Nota.Infrastructure;
 
@@ -71,14 +72,14 @@ public sealed class SampleStore : ISampleStore
     {
         var json = await _registry.FetchIndexAsync(refresh, j => SampleIndex.Parse(j), ct).ConfigureAwait(false);
         try { return SampleIndex.Parse(json); }
-        catch (JsonException e) { throw new StoreException("The sample registry index is damaged.", e); }
+        catch (JsonException e) { throw new StoreException(Loc.T("The sample registry index is damaged."), e); }
     }
 
     // ---- install / uninstall ----------------------------------------------------------
 
     public async Task InstallAsync(StorePack pack, IProgress<StoreProgress>? progress = null, CancellationToken ct = default)
     {
-        if (!RegistryClient.IsValidId(pack.Id)) throw new StoreException($"Invalid pack id \"{pack.Id}\".");
+        if (!RegistryClient.IsValidId(pack.Id)) throw new StoreException(Loc.F("Invalid pack id \"{0}\".", pack.Id));
         var asset = pack.Asset;
         var installDir = InstallDir;
         Directory.CreateDirectory(installDir);
@@ -90,12 +91,12 @@ public sealed class SampleStore : ISampleStore
             var file = Path.Combine(work, "pack" + RegistryClient.ExtensionOf(asset.Url, asset.Archive));
             await _registry.DownloadAsync(asset.Url, asset.Size, asset.Sha256, file, pack.Name, progress, ct).ConfigureAwait(false);
 
-            progress?.Report(new StoreProgress(-1, $"Unpacking {pack.Name}…"));
+            progress?.Report(new StoreProgress(-1, Loc.F("Unpacking {0}…", pack.Name)));
             var unpacked = Path.Combine(work, "x");
             await Task.Run(() => ArchiveUnpacker.Unpack(file, asset.Archive, unpacked, ct), ct).ConfigureAwait(false);
             try { File.Delete(file); } catch { /* temp; frees space for big packs */ }
             var packRoot = asset.Root is { } r ? RegistryClient.Resolve(unpacked, r) : unpacked;
-            if (!Directory.Exists(packRoot)) throw new StoreException($"The download of {pack.Name} doesn't contain {asset.Root}.");
+            if (!Directory.Exists(packRoot)) throw new StoreException(Loc.F("The download of {0} doesn't contain {1}.", pack.Name, asset.Root));
 
             var path = await Task.Run(() => Place(pack, packRoot, installDir, progress, ct), ct).ConfigureAwait(false);
             lock (_gate)
@@ -113,7 +114,7 @@ public sealed class SampleStore : ISampleStore
 
     public void Uninstall(string id)
     {
-        if (!RegistryClient.IsValidId(id)) throw new StoreException($"Invalid pack id \"{id}\".");
+        if (!RegistryClient.IsValidId(id)) throw new StoreException(Loc.F("Invalid pack id \"{0}\".", id));
         InstalledStorePack? inst;
         lock (_gate) inst = _installed.FirstOrDefault(i => i.Id == id);
         if (inst is null) return;
@@ -123,7 +124,7 @@ public sealed class SampleStore : ISampleStore
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            throw new StoreException("Couldn't remove the pack's files — close anything using them and try again.", e);
+            throw new StoreException(Loc.T("Couldn't remove the pack's files — close anything using them and try again."), e);
         }
         lock (_gate)
         {
@@ -138,9 +139,9 @@ public sealed class SampleStore : ISampleStore
         long need = pack.Asset.UnpackedSize + pack.Asset.UnpackedSize / 20;
         long needTemp = pack.Asset.Size + need;
         if (FreeBytes(installDir) is { } free && free < need)
-            throw new StoreException($"{pack.Name} needs {Mb(need)} of free space in your Samples folder, which has {Mb(free)}.");
+            throw new StoreException(Loc.F("{0} needs {1} of free space in your Samples folder, which has {2}.", pack.Name, Mb(need), Mb(free)));
         if (FreeBytes(work) is { } freeTemp && freeTemp < needTemp)
-            throw new StoreException($"Unpacking {pack.Name} needs {Mb(needTemp)} of free space on the system drive, which has {Mb(freeTemp)}.");
+            throw new StoreException(Loc.F("Unpacking {0} needs {1} of free space on the system drive, which has {2}.", pack.Name, Mb(needTemp), Mb(freeTemp)));
     }
 
     // Free space on the volume holding path: the drive whose root is the longest prefix of it
@@ -172,12 +173,12 @@ public sealed class SampleStore : ISampleStore
         Directory.CreateDirectory(staging);
         try
         {
-            string label = $"Installing {pack.Name}…";
+            string label = Loc.F("Installing {0}…", pack.Name);
             long copied = 0, total = Math.Max(1, pack.Asset.UnpackedSize);
             int files = 0;
             progress?.Report(new StoreProgress(0, label));
             CopyPack(new DirectoryInfo(packRoot), staging, ref files, ref copied, () => progress?.Report(new StoreProgress(Math.Min(1, (double)copied / total), label)), ct);
-            if (files == 0) throw new StoreException($"The download of {pack.Name} contains no samples Nota can use.");
+            if (files == 0) throw new StoreException(Loc.F("The download of {0} contains no samples Nota can use.", pack.Name));
             File.WriteAllText(Path.Combine(staging, MarkerFile), pack.Id);
 
             InstalledStorePack? previous;

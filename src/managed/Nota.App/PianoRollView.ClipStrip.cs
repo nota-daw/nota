@@ -15,6 +15,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -32,7 +33,7 @@ public sealed partial class PianoRollView
         {
             _o = o;
             Cursor = new Cursor(StandardCursorType.Hand);
-            ToolTip.SetTip(this, "Click a clip to edit it · the lock keeps a clip for reference");
+            ToolTip.SetTip(this, Loc.T("Click a clip to edit it · the lock keeps a clip for reference"));
         }
 
         /// <summary>Re-stacks the bars (clips added, removed, moved) and sizes the strip.</summary>
@@ -90,7 +91,7 @@ public sealed partial class PianoRollView
                     }
                     IBrush ink = active ? NotaPalette.InkOn(track) : locked ? NotaPalette.TextTertiary : NotaPalette.TextSecondary;
                     var clip = set.Clips[k];
-                    string name = _o.ClipNameOf?.Invoke(clip.TrackId, clip.ClipIndex) ?? $"Track {clip.TrackId}";
+                    string name = _o.ClipNameOf?.Invoke(clip.TrackId, clip.ClipIndex) ?? Loc.F("Track {0}", clip.TrackId);
                     var ft = new FormattedText(name, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, ink);
                     double textX = r.X + (active ? 6 : Stripe + 5);
                     double room = r.Width - (textX - r.X) - (active ? 6 : LockW + 2);

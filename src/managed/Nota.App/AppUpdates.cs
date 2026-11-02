@@ -16,6 +16,7 @@ using Avalonia.Controls;
 using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -152,7 +153,7 @@ internal sealed class AppUpdates
         State = Stage.Downloading;
         Dismissed = false;
         Error = null;
-        Progress = new StoreProgress(0, $"Downloading Nota {release.Version}…");
+        Progress = new StoreProgress(0, Loc.F("Downloading Nota {0}…", release.Version));
         Changed?.Invoke();
         var progress = new Progress<StoreProgress>(p =>
         {
@@ -170,7 +171,7 @@ internal sealed class AppUpdates
         catch (Exception e)
         {
             App.Services.GetRequiredService<ILogSink>().Error("Update download failed", e);
-            Fail($"Couldn't download the update: {e.Message}");
+            Fail(Loc.F("Couldn't download the update: {0}", e.Message));
         }
         finally
         {

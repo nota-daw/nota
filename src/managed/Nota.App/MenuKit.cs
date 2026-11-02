@@ -18,6 +18,7 @@ using Avalonia.Controls;
 using Avalonia.Data.Converters;
 using Avalonia.Input;
 using Nota.Application.Input;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -27,9 +28,9 @@ internal static partial class MenuKit
     /// wording (pairs with <c>MainWindow.RevealInFileManager</c>). Menus use this instead of
     /// hard-coding "Finder".</summary>
     public static string RevealLabel =>
-        OperatingSystem.IsMacOS() ? "Reveal in Finder"
-        : OperatingSystem.IsWindows() ? "Show in Explorer"
-        : "Show in file manager";
+        OperatingSystem.IsMacOS() ? Loc.T("Reveal in Finder")
+        : OperatingSystem.IsWindows() ? Loc.T("Show in Explorer")
+        : Loc.T("Show in file manager");
 
     private static KeyModifiers Primary => OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
 
@@ -112,10 +113,10 @@ internal static partial class MenuKit
     public static IEnumerable<MenuItem> ClipboardGroup(Action? copy, Action? cut, Action? paste,
                                                        Action? duplicate, bool canPaste = true)
     {
-        if (copy is not null) yield return Item("Copy", GlyphKind.Copy, copy, CopyKey);
-        if (cut is not null) yield return Item("Cut", GlyphKind.Cut, cut, CutKey);
-        if (paste is not null) yield return Item("Paste", GlyphKind.Paste, paste, PasteKey, canPaste);
-        if (duplicate is not null) yield return Item("Duplicate", GlyphKind.Duplicate, duplicate, DuplicateKey);
+        if (copy is not null) yield return Item(Loc.T("Copy"), GlyphKind.Copy, copy, CopyKey);
+        if (cut is not null) yield return Item(Loc.T("Cut"), GlyphKind.Cut, cut, CutKey);
+        if (paste is not null) yield return Item(Loc.T("Paste"), GlyphKind.Paste, paste, PasteKey, canPaste);
+        if (duplicate is not null) yield return Item(Loc.T("Duplicate"), GlyphKind.Duplicate, duplicate, DuplicateKey);
     }
 
     /// <summary>Adds groups to a menu with a rule between non-empty ones, so callers can pass

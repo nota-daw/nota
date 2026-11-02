@@ -14,6 +14,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -24,13 +25,13 @@ public sealed partial class ArrangementView
 
     private string AutoLabelFor(TrackVM t) => t.AutoChain >= 0 && _engine is { } ne ? Short(NestedParam(ne, t).Name) : t.AutoTarget switch
     {
-        AutomationTarget.Volume => "Vol",
-        AutomationTarget.Pan => "Pan",
+        AutomationTarget.Volume => Loc.T("Vol"),
+        AutomationTarget.Pan => Loc.T("Pan"),
         AutomationTarget.PluginParam => _engine is { } e
-            ? Short(e.PluginParamName(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t))) : "Param",
+            ? Short(e.PluginParamName(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t))) : Loc.T("Param"),
         AutomationTarget.MidiDeviceParam => _engine is { } e
-            ? Short(e.MidiEffectParamName(t.Id, t.AutoDeviceIndex, t.AutoParamIndex)) : "Param",
-        _ => _engine is { } e ? Short(e.DeviceParamName(t.Id, t.AutoDeviceIndex, t.AutoParamIndex)) : "Param",
+            ? Short(e.MidiEffectParamName(t.Id, t.AutoDeviceIndex, t.AutoParamIndex)) : Loc.T("Param"),
+        _ => _engine is { } e ? Short(e.DeviceParamName(t.Id, t.AutoDeviceIndex, t.AutoParamIndex)) : Loc.T("Param"),
     };
     private static string Short(string s) => s.Length <= 10 ? s : s.Substring(0, 10);
 
@@ -425,8 +426,8 @@ public sealed partial class ArrangementView
             if (top.Count > 0) flyout.Items.Add(new Separator());
         }
 
-        flyout.Items.Add(Leaf("Volume", "V", () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1), automated));
-        flyout.Items.Add(Leaf("Pan", "PAN", () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1), automated));
+        flyout.Items.Add(Leaf(Loc.T("Volume"), "V", () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1), automated));
+        flyout.Items.Add(Leaf(Loc.T("Pan"), "PAN", () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1), automated));
         if (_engine is { } e)
         {
             // An instrument (deviceIndex -1) exposing params — the built-in Nota Synth
@@ -439,7 +440,7 @@ public sealed partial class ArrangementView
                 // filterable picker + Learn.
                 flyout.Items.Add(e.TrackInstrumentKind(t.Id) >= 0
                     ? BuildBuiltinInstrumentAutoMenu(e, t, automated)
-                    : BuildPluginTargetMenu(e, t, -1, "Instrument"));
+                    : BuildPluginTargetMenu(e, t, -1, Loc.T("Instrument")));
             }
             int devCount = e.TrackDeviceCount(t.Id);
             bool sepAdded = false;
@@ -485,8 +486,8 @@ public sealed partial class ArrangementView
                         {
                             g = new MenuItem
                             {
-                                Header = bkind is 0 or 13 && int.TryParse(head, out _) ? "Band " + head
-                                    : bkind == 17 && head.Length == 2 && head[0] == 'S' && char.IsDigit(head[1]) ? "Stage " + head[1]
+                                Header = bkind is 0 or 13 && int.TryParse(head, out _) ? Loc.F("Band {0}", head)
+                                    : bkind == 17 && head.Length == 2 && head[0] == 'S' && char.IsDigit(head[1]) ? Loc.F("Stage {0}", head[1])
                                     : head,
                             };
                             groups[head] = g; devMenu.Items.Add(g);
@@ -653,8 +654,8 @@ public sealed partial class ArrangementView
 
     private string AutoLaneLabelTop(IAudioEngine e, TrackVM t, AutomationLaneInfo info, int laneIndex) => info.Target switch
     {
-        AutomationTarget.Volume => "Volume",
-        AutomationTarget.Pan => "Pan",
+        AutomationTarget.Volume => Loc.T("Volume"),
+        AutomationTarget.Pan => Loc.T("Pan"),
         AutomationTarget.MidiDeviceParam => $"{e.MidiEffectName(t.Id, info.DeviceIndex)} · {e.MidiEffectParamName(t.Id, info.DeviceIndex, info.ParamIndex)}",
         AutomationTarget.PluginParam => $"{e.DeviceName(t.Id, info.DeviceIndex)} · {PluginParamNameById(e, t, info.DeviceIndex, e.AutomationLaneParamId(t.Id, laneIndex))}",
         _ => $"{e.DeviceName(t.Id, info.DeviceIndex)} · {e.DeviceParamName(t.Id, info.DeviceIndex, info.ParamIndex)}",
@@ -785,9 +786,9 @@ public sealed partial class ArrangementView
     private MenuItem BuildPluginTargetMenu(IAudioEngine e, TrackVM t, int deviceIndex, string name)
     {
         var menu = new MenuItem { Header = name };
-        var choose = new MenuItem { Header = "Choose parameter…" };
+        var choose = new MenuItem { Header = Loc.T("Choose parameter…") };
         choose.Click += (_, _) => ShowPluginParamPicker(t, deviceIndex, name);
-        var learn = new MenuItem { Header = "Learn (touch a control in the plugin)" };
+        var learn = new MenuItem { Header = Loc.T("Learn (touch a control in the plugin)") };
         learn.Click += (_, _) => StartLearn(t, deviceIndex);
         menu.Items.Add(choose);
         menu.Items.Add(learn);
@@ -803,7 +804,7 @@ public sealed partial class ArrangementView
         for (int i = 0; i < n; i++)
             all.Add((e.PluginParamId(t.Id, deviceIndex, i), e.PluginParamName(t.Id, deviceIndex, i)));
 
-        var filter = new TextBox { PlaceholderText = "Filter parameters…", Margin = new Thickness(0, 0, 0, 6) };
+        var filter = new TextBox { PlaceholderText = Loc.T("Filter parameters…"), Margin = new Thickness(0, 0, 0, 6) };
         var list = new ListBox { MaxHeight = 260, Width = 260 };
         void Rebuild(string q)
         {

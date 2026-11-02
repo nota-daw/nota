@@ -8,6 +8,7 @@
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.Presentation;
 
@@ -17,6 +18,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly IPeriodicTimer _autosave;
     private readonly ILogSink _log;
     private int _lastXrunCount;
+    private readonly DropoutCounter _dropouts = new();
 
     public IAudioEngine Engine { get; }
     public TransportViewModel Transport { get; }
@@ -48,6 +50,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     [ObservableProperty] private string _engineInfo = "";
+    /// <summary>The status bar's dropout count (#271): "1 dropout", "3 dropouts".</summary>
+    [ObservableProperty] private string _dropoutText = DropoutCounter.Text(0);
+    /// <summary>At least one dropout since the device started or the count was reset; the
+    /// status bar shows the count only then.</summary>
+    [ObservableProperty] private bool _hasDropouts;
     [ObservableProperty] private string _statusText = "";
     [ObservableProperty] private ToolbarSide _toolbarSide = ToolbarSide.Left;
 
@@ -135,7 +142,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _log.Info(ev == AudioDeviceEvent.ResetRequested ? "Audio driver asked for a reset" : "Audio driver stopped responding");
         ApplyAudioSettings();
         if (ev == AudioDeviceEvent.ResetRequested && Engine.ActiveAudioSystem == AudioSystem.Asio)
-            StatusText = $"Audio: driver settings changed · {Engine.NegotiatedBufferFrames} frames";
+            StatusText = Loc.F("Audio: driver settings changed · {0} frames", Engine.NegotiatedBufferFrames);
         if (wasPlaying && Engine.IsRunning)
         {
             Engine.Seek(position);
@@ -149,8 +156,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!SuspendEnginePolling && Engine.TrackCount > 0) AutosaveRequested?.Invoke();
     }
 
-    // Surface any new audio dropouts (M7-8): log to stderr + a non-fatal status
-    // message. Playback is never interrupted — the counter is passive.
+    // Surface any new audio dropouts (M7-8): log to stderr, count them in the status bar
+    // (#271) and show a non-fatal status message. Playback is never interrupted — the
+    // counter is passive.
     private void ReportDropouts()
     {
         int count = Engine.XrunCount;
@@ -158,7 +166,24 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _lastXrunCount = count;
         Console.Error.WriteLine($"[xrun] audio dropout #{count} at {DateTime.Now:o}");
         _log.Warn($"Audio dropout #{count}");
-        StatusText = $"⚠ Audio dropout ({count})";
+        if (!_dropouts.Observe(count)) return;   // all from before the last reset: logged only
+        ShowDropouts();
+        StatusText = Loc.F("⚠ Audio dropout ({0})", _dropouts.Count);
+    }
+
+    /// <summary>Count dropouts from zero again (#271): a click on the status bar's counter,
+    /// and every device (re)start — a new device, rate or buffer is a fresh measurement.
+    /// The log still gets every dropout.</summary>
+    public void ResetDropouts()
+    {
+        _dropouts.Reset(Engine.XrunCount);
+        ShowDropouts();
+    }
+
+    private void ShowDropouts()
+    {
+        DropoutText = DropoutCounter.Text(_dropouts.Count);
+        HasDropouts = _dropouts.Count > 0;
     }
 
     /// <summary>
@@ -174,7 +199,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             _applyAfterPanel = true;
             RefusedSampleRate = 0;   // the old refusal no longer answers this new request
-            StatusText = "Close the driver's settings window to apply the change";
+            StatusText = Loc.T("Close the driver's settings window to apply the change");
             return StatusText;
         }
 
@@ -190,7 +215,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         catch (NotaEngineException ex)
         {
             _log.Error("Audio device apply failed", ex);
-            StatusText = $"Audio device error: {ex.Message}";
+            StatusText = Loc.F("Audio device error: {0}", ex.Message);
             return StatusText;
         }
         finally
@@ -203,6 +228,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         RefusedSampleRate = askedRate > 0 && Engine.ActiveAudioSystem == AudioSystem.Asio
                             && Engine.GetAudioConfig().SampleRate == 0 ? askedRate : 0;
         UpdateEngineInfo();
+        ResetDropouts();
         int buf = Engine.NegotiatedBufferFrames;
         _log.Info($"Audio applied · {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames");
         if (NoAudioOutput is { } why)
@@ -219,19 +245,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         if (Engine.ActiveAudioSystem == AudioSystem.Asio)
         {
-            StatusText = $"Audio: ASIO · {AsioDriverName()} · {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames";
+            StatusText = Loc.F("Audio: ASIO · {0} · {1:0}\u2009Hz · {2} frames", AsioDriverName(), Engine.NegotiatedSampleRate, buf);
             return StatusText;
         }
         bool fallback = Engine.AudioExclusiveFallback;
         if (fallback)
         {
             _log.Warn("WASAPI exclusive mode refused — fell back to shared");
-            StatusText = "WASAPI exclusive unavailable — using shared mode";
+            StatusText = Loc.T("WASAPI exclusive unavailable — using shared mode");
             return StatusText;
         }
         StatusText = buf > 0
-            ? $"Audio: {Engine.NegotiatedSampleRate:0}\u2009Hz · {buf} frames"
-            : $"Audio: {Engine.NegotiatedSampleRate:0}\u2009Hz";
+            ? Loc.F("Audio: {0:0}\u2009Hz · {1} frames", Engine.NegotiatedSampleRate, buf)
+            : Loc.F("Audio: {0:0}\u2009Hz", Engine.NegotiatedSampleRate);
         return StatusText;
     }
 
@@ -280,7 +306,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (Engine.AudioSystem != AudioSystem.Asio || Engine.ActiveAudioSystem == AudioSystem.Asio) return null;
         string reason = Engine.AudioFallbackReason;
         if (reason.Length > 0) reason = char.ToUpperInvariant(reason[0]) + reason[1..] + ".";
-        return $"ASIO driver ‘{AsioDriverName()}’ couldn't start — using WASAPI. {reason}".TrimEnd();
+        return Loc.F("ASIO driver ‘{0}’ couldn't start — using WASAPI. {1}", AsioDriverName(), reason).TrimEnd();
     }
 
     /// <summary>Display name of the staged ASIO driver (the first installed when none is staged).</summary>
@@ -296,8 +322,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Why nothing is heard when no output device opened (the engine runs silently
     /// or not at all), else null.</summary>
     public string? NoAudioOutput
-        => !Engine.IsRunning ? "No audio output could be opened — Nota runs without sound. Choose a device in Settings → Audio"
-         : Engine.AudioSilentFallback ? "No audio output device opened — Nota runs silently. Choose a device in Settings → Audio"
+        => !Engine.IsRunning ? Loc.T("No audio output could be opened — Nota runs without sound. Choose a device in Settings → Audio")
+         : Engine.AudioSilentFallback ? Loc.T("No audio output device opened — Nota runs silently. Choose a device in Settings → Audio")
          : null;
 
     /// <summary>
@@ -311,12 +337,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             Engine.ApplyMidi();
             _log.Info("MIDI inputs updated");
-            StatusText = "MIDI inputs updated.";
+            StatusText = Loc.T("MIDI inputs updated.");
         }
         catch (NotaEngineException ex)
         {
             _log.Error("MIDI apply failed", ex);
-            StatusText = $"MIDI error: {ex.Message}";
+            StatusText = Loc.F("MIDI error: {0}", ex.Message);
         }
     }
 

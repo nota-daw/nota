@@ -10,6 +10,7 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Microsoft.ML.OnnxRuntime;
+using Nota.Application.Localization;
 
 namespace Nota.Infrastructure;
 
@@ -27,7 +28,7 @@ internal static class OnnxRuntimeLoader
         {
             if (_handle != IntPtr.Zero) return;   // already loaded; a process can't swap it
             if (!NativeLibrary.TryLoad(libraryPath, out var h))
-                throw new StoreException("Nota couldn't load the AI runtime. Remove it in Settings → Downloads → AI Models and install it again.");
+                throw new StoreException(Loc.T("Nota couldn't load the AI runtime. Remove it in Settings → Downloads → AI Models and install it again."));
             _handle = h;
             if (_path is null)
                 NativeLibrary.SetDllImportResolver(typeof(InferenceSession).Assembly, Resolve);
@@ -50,7 +51,7 @@ internal static class OnnxRuntimeLoader
         try { return new InferenceSession(modelPath, opts); }
         catch (OnnxRuntimeException e)
         {
-            throw new StoreException("The AI model file is damaged. Remove it in Settings → Downloads → AI Models and install it again.", e);
+            throw new StoreException(Loc.T("The AI model file is damaged. Remove it in Settings → Downloads → AI Models and install it again."), e);
         }
     }
 }

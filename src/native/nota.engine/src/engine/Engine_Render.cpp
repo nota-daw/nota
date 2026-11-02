@@ -1801,6 +1801,8 @@ void Engine::processBlock(float* out, int32_t numFrames) {
     int32_t done = 0;
     int32_t loopSeams[16];
     int32_t nLoopSeams = 0; // block offsets where the loop wrapped
+    double presentationStart = transport_.playheadSamples();
+    int32_t presentationFrames = 0, presentationLead = 0;
     while (done < numFrames) {
         if (playing && transport_.isLooping() && transport_.playheadSamples() >= transport_.loopEndSamples() - 0.5) {
             // No voice flush here: clip notes crossing the loop end get note-offs in the next
@@ -1823,6 +1825,10 @@ void Engine::processBlock(float* out, int32_t numFrames) {
             if (left < seg) seg = std::max(1, static_cast<int32_t>(std::lround(left)));
         }
         const double segStart = transport_.playheadSamples();
+        if (playing) {
+            if (presentationFrames == 0) { presentationStart = segStart; presentationLead = done; }
+            presentationFrames += seg;
+        }
         chaseNotes_ = chase;
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
         chaseNotes_ = chase = seamOffs_ = false;
@@ -1914,6 +1920,8 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         stereoBlockStep(numFrames, transport_.sampleRate()));
     masterPeakL_.store(mpkL, std::memory_order_relaxed);
     masterPeakR_.store(mpkR, std::memory_order_relaxed);
+    transport_.publishPresentation(presentationStart, presentationFrames, presentationLead,
+        deviceBlock_ && backend_ ? std::max(numFrames, backend_->bufferFrames()) : numFrames);
     masterRmsL_.store(numFrames ? static_cast<float>(std::sqrt(msqL / numFrames)) : 0.0f, std::memory_order_relaxed);
     masterRmsR_.store(numFrames ? static_cast<float>(std::sqrt(msqR / numFrames)) : 0.0f, std::memory_order_relaxed);
 }
@@ -2530,6 +2538,40 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 continue;
             }
             t.stereoFold(sqL, sqR, sLR, frames, stereoA);
+            t.setMeter(
+                pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
+        }
+
+        // An armed audio track that isn't monitoring meters its input instead (#352): the
+        // level to set before a take, without hearing it. Pre-fader, like a console's input
+        // meter; a monitoring track already meters what it hears. Nothing here is heard, so
+        // the sources monitoring refuses (they would feed back) meter too: the master (its
+        // previous block's level) and a group the track sits in (its post-fader tap).
+        for (auto& tptr : g->tracks) {
+            Track& t = *tptr;
+            if (t.type() != TrackType::Audio || !t.armed() || (t.frozen() && t.frozenBuf)) continue;
+            if (t.monitor() && t.id() != capTrackId) continue;
+            const int32_t src = t.recordInputSource();
+            if (src == -1) {
+                t.setMeter(masterPeakL_.load(std::memory_order_relaxed), masterPeakR_.load(std::memory_order_relaxed),
+                    masterRmsL_.load(std::memory_order_relaxed), masterRmsR_.load(std::memory_order_relaxed));
+                continue;
+            }
+            const float* in = scratch_.data();
+            if (src > 0 && src != t.id()) {
+                const int32_t slot = routeSlotForTrack(src);
+                if (slot >= 0) in = routeBus_[slot].data();
+                else std::fill_n(scratch_.data(), frames * 2, 0.0f);
+            } else renderMonitorInput(g, t, scratch_.data(), frames);
+            float pkL = 0.0f, pkR = 0.0f;
+            double sqL = 0.0, sqR = 0.0;
+            for (int32_t i = 0; i < frames; ++i) {
+                const float l = in[i * 2], r = in[i * 2 + 1];
+                pkL = std::max(pkL, std::fabs(l));
+                pkR = std::max(pkR, std::fabs(r));
+                sqL += l * (double)l;
+                sqR += r * (double)r;
+            }
             t.setMeter(
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
         }

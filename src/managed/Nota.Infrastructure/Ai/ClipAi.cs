@@ -12,6 +12,8 @@
 // AudioClipState) and line up with it sample for sample. The original clip is switched off,
 // not deleted.
 
+using Nota.Application.Localization;
+
 namespace Nota.Infrastructure;
 
 /// <summary>An audio clip read for separation: its shape, and the source audio to separate.</summary>
@@ -102,17 +104,17 @@ public sealed class ClipAi(IAudioEngine engine, IModelStore models) : IClipAi
     {
         var src = (StemSource)job;
         var (runtime, model) = Require(AiModels.Stems);
-        progress?.Report((0, "Preparing audio…"));
+        progress?.Report((0, Loc.T("Preparing audio…")));
         double sr = src.SampleRate;
         var l = Resampler.Convert(src.Left, sr, StemSeparator.SampleRate, ct);
         var r = Resampler.Convert(src.Right, sr, StemSeparator.SampleRate, ct);
 
         float[][][] stems;
-        progress?.Report((0, "Loading the model…"));
+        progress?.Report((0, Loc.T("Loading the model…")));
         using (var sep = new StemSeparator(runtime, model))
-            stems = sep.Separate(l, r, new Progress(p => progress?.Report((p, "Separating stems…"))), ct);
+            stems = sep.Separate(l, r, new Progress(p => progress?.Report((p, Loc.T("Separating stems…")))), ct);
 
-        progress?.Report((1, "Writing stems…"));
+        progress?.Report((1, Loc.T("Writing stems…")));
         var files = new StemFiles { Paths = new string[StemSeparator.Stems.Length] };
         try
         {

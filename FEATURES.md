@@ -1289,6 +1289,11 @@ audio effects after it keep running and keep their settings; saved with the proj
   Audio settings…; picking a size restarts the device and playback carries on. Under ASIO
   the menu offers Driver settings… instead (the driver owns the buffer); in WASAPI exclusive
   mode it says the device's own buffer is used.
+- **Audio dropouts in the status bar** ("3 dropouts" in red, left of the sample rate): the
+  dropouts the audio device reported since it started, shown from the first one and hidden
+  while there are none; a click resets the count, and so does a new device, sample rate or
+  buffer size. Core Audio (macOS) and ASIO report dropouts; the PulseAudio / ALSA and WASAPI
+  backends don't yet, so there it never appears.
 - **About** — the app and engine versions, the copyright notice, and a pointer to the
   third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
 - **Settings** — a larger window with a sidebar grouped into Devices, Plug-ins and General
@@ -1351,6 +1356,14 @@ audio effects after it keep running and keep their settings; saved with the proj
   headers** — Left / Right side of the arrangement's track list. Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
+- **Language** (Appearance): the interface language — **English** (default) or **Français**,
+  each shown in its own name in a drop-down. The choice is saved; it applies after a restart,
+  and the row beside the list says so, with a **Restart** button that closes Nota by its usual
+  path (unsaved changes first) and starts it again. Menus, panels, dialogs, tooltips, status
+  and error messages and the command palette follow the language; device and parameter names,
+  and anything you typed, stay as they are. Another language is one JSON file in
+  `src/managed/Nota.App/Languages/`; a text it does not cover shows in English. On macOS the system's own text (application menu, open and save panels) follows the language from the next start. The Remote
+  phone page, MCP tool descriptions and logs are not translated.
 - **Shortcuts**: the shortcut list.
 - Settings, logs and autosaves live in `~/Library/Application Support/Nota/` (macOS) and
   `%APPDATA%\Nota` (Windows).

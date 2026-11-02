@@ -14,6 +14,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -234,7 +235,7 @@ internal static class DeviceCardKit
         }
         repaint = Paint;
         track.Changed += v => { setNorm(v); val.Text = text(); };
-        string name = label.Length > 0 ? label : "Value";
+        string name = label.Length > 0 ? label : Loc.T("Value");
         Action? rowReset = reset is null ? null : () => { reset(); Paint(); };
         var field = textAt is null
             ? ValueEntry.Probing(name, norm, setNorm, text, begin, end, Paint, rowReset)
@@ -307,7 +308,7 @@ internal static class DeviceCardKit
     {
         BorderBrush = NotaPalette.Rule, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
         Padding = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock { Text = "Bypassed", FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextSecondary },
+        Child = new TextBlock { Text = Loc.T("Bypassed"), FontSize = NotaType.RowLabel, FontWeight = FontWeight.Medium, Foreground = TextSecondary },
     };
 
     // A caption above a control (centered, sentence case, secondary ink).
@@ -334,7 +335,7 @@ internal static class DeviceCardKit
         double H = height;   // 18 in a card header, 22 in the device window's title bar
         var label = new TextBlock
         {
-            Text = string.IsNullOrEmpty(current) ? "Init" : current, FontSize = NotaType.Value + 1, FontWeight = FontWeight.Medium,
+            Text = string.IsNullOrEmpty(current) ? Loc.T("Init") : current, FontSize = NotaType.Value + 1, FontWeight = FontWeight.Medium,
             Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var chevron = new Glyph(GlyphKind.ChevronDown, 8) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
@@ -345,7 +346,7 @@ internal static class DeviceCardKit
             Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),   // the whole field is clickable, not just the text
             Child = new DockPanel { Children = { chevron, label } },
         };
-        ToolTip.SetTip(name, "Choose a preset");
+        ToolTip.SetTip(name, Loc.T("Choose a preset"));
         // A sound parameter moved away from the loaded preset (specs/048): "Name *", read live.
         if (modified != null && !string.IsNullOrEmpty(current))
         {
@@ -356,7 +357,7 @@ internal static class DeviceCardKit
                 if (m == shown) return;
                 shown = m;
                 label.Text = m ? current + " *" : current;
-                ToolTip.SetTip(name, m ? $"Changed since you loaded {current} · choose a preset" : "Choose a preset");
+                ToolTip.SetTip(name, m ? Loc.F("Changed since you loaded {0} · choose a preset", current) : Loc.T("Choose a preset"));
             }
             Mark();
             addLive?.Invoke(Mark);
@@ -368,7 +369,7 @@ internal static class DeviceCardKit
             var flyout = new MenuFlyout();
             if (init != null)
             {
-                var mi = new MenuItem { Header = "Init", ToggleType = MenuItemToggleType.Radio, IsChecked = cur < 0 && string.IsNullOrEmpty(current) };
+                var mi = new MenuItem { Header = Loc.T("Init"), ToggleType = MenuItemToggleType.Radio, IsChecked = cur < 0 && string.IsNullOrEmpty(current) };
                 mi.Click += (_, _) => init();
                 flyout.Items.Add(mi);
                 flyout.Items.Add(new Separator());
@@ -388,7 +389,7 @@ internal static class DeviceCardKit
             var g = new Glyph(dir < 0 ? GlyphKind.ChevronLeft : GlyphKind.ChevronRight, 8)
                 { Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var b = new Border { Width = H, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = g };
-            ToolTip.SetTip(b, dir < 0 ? "Previous preset" : "Next preset");
+            ToolTip.SetTip(b, dir < 0 ? Loc.T("Previous preset") : Loc.T("Next preset"));
             b.PointerEntered += (_, _) => g.Foreground = TextPrimary;
             b.PointerExited += (_, _) => g.Foreground = TextTertiary;
             b.PointerPressed += (_, e) =>

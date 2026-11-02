@@ -12,6 +12,7 @@ using System.IO;
 using CommunityToolkit.Mvvm.ComponentModel;
 using Nota.Application;
 using Nota.Application.Samples;
+using Nota.Application.Localization;
 
 namespace Nota.Presentation;
 
@@ -356,7 +357,7 @@ public sealed partial class BrowserViewModel : ObservableObject
             var list = _mosaic.Presets();
             if (list.Count > 0)
             {
-                var packs = new BrowserItem { Name = "Packs", Kind = BrowserItemKind.Folder, Path = $"category:{mosaicDev.LibraryKey}/Packs", Depth = 1 };
+                var packs = new BrowserItem { Name = Loc.T("Packs"), Kind = BrowserItemKind.Folder, Path = $"category:{mosaicDev.LibraryKey}/Packs", Depth = 1 };
                 foreach (var g in list.GroupBy(p => p.Folder))
                 {
                     var folder = new BrowserItem { Name = g.Key, Kind = BrowserItemKind.Folder, Path = $"category:{mosaicDev.LibraryKey}/Packs/{g.Key}", Depth = 2 };
@@ -551,7 +552,7 @@ public sealed partial class BrowserViewModel : ObservableObject
                     collapsed = _collapsedSections.Contains(key);
                     dst.Add(new BrowserItem
                     {
-                        Name = s,
+                        Name = node.IsPlugin ? Loc.T("PLUG-INS") : Loc.T("BUILT-IN"),
                         Kind = BrowserItemKind.Group,
                         Path = key,
                         IsExpanded = !collapsed,
@@ -751,7 +752,7 @@ public sealed partial class BrowserViewModel : ObservableObject
 
         var rootNode = new BrowserItem
         {
-            Name = "Nota Kits",
+            Name = Loc.T("Nota Kits"),
             Kind = BrowserItemKind.Folder,
             Sub = "factory",
             Path = root,
@@ -808,7 +809,7 @@ public sealed partial class BrowserViewModel : ObservableObject
                     Name = segments[i],
                     Kind = BrowserItemKind.Folder,
                     Sub = "",
-                    Tip = downloads ? "sample packs installed from Settings → Downloads" : "",
+                    Tip = downloads ? Loc.T("sample packs installed from Settings → Downloads") : "",
                     Path = abs,
                     Depth = i,
                     IsExpanded = _expandedTreeKeys.Contains(abs),
@@ -935,9 +936,12 @@ public sealed partial class BrowserViewModel : ObservableObject
         foreach (var p in _presets.List(root))
         {
             string cat = CategoryOf(p.Type);
-            string dev = string.IsNullOrWhiteSpace(p.DeviceName) ? "Other" : p.DeviceName;
-            var catNode = GetOrAddPresetFolder(cats, cat, cat, $"presetcat:{cat}", depth: 0, parent: _presetTree);
-            var devNode = GetOrAddPresetFolder(devs, $"{cat}/{dev}", dev, $"presetdev:{cat}/{dev}", depth: 1, parent: catNode.Children);
+            bool noDevice = string.IsNullOrWhiteSpace(p.DeviceName);
+            string dev = noDevice ? Loc.T("Other") : p.DeviceName;
+            // The ids (the keys and Paths) stay English so a remembered open folder survives a language change;
+            // only the shown name is translated.
+            var catNode = GetOrAddPresetFolder(cats, cat, CategoryName(cat), $"presetcat:{cat}", depth: 0, parent: _presetTree);
+            var devNode = GetOrAddPresetFolder(devs, $"{cat}/{dev}", noDevice ? Loc.T("Other") : dev, $"presetdev:{cat}/{dev}", depth: 1, parent: catNode.Children);
             devNode.Children.Add(new BrowserItem
             {
                 Name = p.DisplayName,
@@ -956,6 +960,14 @@ public sealed partial class BrowserViewModel : ObservableObject
         => type.Contains("midi", StringComparison.OrdinalIgnoreCase) ? "MIDI Effects"
          : type.Contains("instrument", StringComparison.OrdinalIgnoreCase) ? "Instruments"
          : "Audio Effects";
+
+    // The shown name of a category id from CategoryOf.
+    private static string CategoryName(string category) => category switch
+    {
+        "MIDI Effects" => Loc.T("MIDI Effects"),
+        "Instruments" => Loc.T("Instruments"),
+        _ => Loc.T("Audio Effects"),
+    };
 
     // Fetches or creates a preset-tree folder node (category or device), keyed for expansion
     // persistence and linked under `parent`.
