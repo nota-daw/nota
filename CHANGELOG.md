@@ -23,6 +23,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Reset a note's velocity to the default**: in the piano roll's velocity lane, double-click a
+  note's stem — or right-click it and choose **Reset velocity** — to put the note back to the
+  default velocity (0.8, the one a first note gets). When the note is selected, the whole
+  selection is reset. One undo step brings the old velocities back, even though the double-click
+  also clicked the stem. A note already at the default is left alone and a locked reference
+  clip's notes are never touched. Grabbing a stem by its cap no longer makes it jump to the pixel
+  you pressed: it moves from where it is.
 - **Multiple MIDI controller lanes** (#422): **+** beneath the piano roll adds a CC
   lane with its own picker; **−** hides a lane without deleting its MIDI data.
   Extra lanes scroll vertically and share the notes' horizontal zoom and position.
@@ -154,6 +161,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Piano-roll playback cursor**: arrangement MIDI clips now follow the same smooth
+  display-frame position as the arrangement. Cursor movement redraws lightweight
+  overlays instead of repainting all notes and ruler labels.
+- **Windows playback cursor**: the Arrangement playhead now follows display frames,
+  interpolating the engine's rendered blocks instead of jumping on the UI polling timer.
+  Editing positions and audio timing remain tied to the engine transport.
 - **Docked MIDI clip editors** reserve enough height for notes and all five lane
   tabs, including when restoring a small saved panel. The window minimum accounts
   for both panels when the Mixer is also docked (#422).

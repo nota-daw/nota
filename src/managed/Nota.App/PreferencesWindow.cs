@@ -1526,6 +1526,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             (Loc.T("Click · drag the ruler"), Loc.T("Move the playhead there · drag to scrub, snapped to the grid · ⌥ off the grid")),
             (Loc.T("Drag the playhead line"), Loc.T("Scrub the playhead · on the ruler or over empty grid")),
             (Loc.T("Drag velocity stem"), Loc.T("Set velocity · selected notes move together · ⇧ adds a note")),
+            (Loc.T("Double-click velocity stem"), Loc.T("Put the note back to the default velocity (0.8) · the whole selection's when the note is selected · undo is one step")),
+            (Loc.T("Right-click velocity stem"), Loc.T("Reset velocity from a menu · same as the double-click")),
             (Loc.T("Drag in the Bend / Pres / Slide lane"), Loc.T("Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it")),
             (Loc.T("Double-click in an MPE lane"), Loc.T("Add a point · on a point, delete it · right-click to clear the curve")),
             (Loc.T("Click the controller tab"), Loc.T("Show a MIDI controller under the notes · click it again to pick another CC, the pitch wheel or channel pressure")),

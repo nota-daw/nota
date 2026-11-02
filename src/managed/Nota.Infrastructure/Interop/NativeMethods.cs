@@ -102,6 +102,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_transport_position_beats")]
     internal static partial double PositionBeats(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_transport_snapshot")]
+    internal static partial int TransportSnapshot(IntPtr engine, out NotaTransportSnapshot snapshot);
+
     [LibraryImport(Lib, EntryPoint = "nota_transport_is_playing")]
     internal static partial int IsPlaying(IntPtr engine);
 
