@@ -3635,6 +3635,18 @@
     "Delete {0} unnamed versions…": {
       "one": "Supprimer {0} version sans nom…",
       "other": "Supprimer {0} versions sans nom…"
+    },
+    "The current version stays.": "La version actuelle reste.",
+    "Delete the selected versions and the audio only they use": "Supprimer les versions sélectionnées et l’audio que seules elles utilisent",
+    "The current version stays": "La version actuelle reste",
+    "Delete {0} versions…": {
+      "one": "Supprimer {0} version…",
+      "other": "Supprimer {0} versions…"
+    },
+    "Delete versions": "Supprimer les versions",
+    "Delete {0} versions? Audio that only they use is deleted from the project folder too. This can't be undone.": {
+      "one": "Supprimer {0} version ? L’audio qu’elle seule utilise est aussi supprimé du dossier du projet. Cette action est irréversible.",
+      "other": "Supprimer {0} versions ? L’audio que seules elles utilisent est aussi supprimé du dossier du projet. Cette action est irréversible."
     }
   }
 }

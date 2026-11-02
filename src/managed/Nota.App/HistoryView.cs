@@ -334,14 +334,14 @@ internal sealed class HistoryView : UserControl
         _details.IsVisible = true;
         var deletable = Deletable(rows);
 
-        var name = new TextBlock { Text = $"{rows.Count} versions", Classes = { "Name" }, TextTrimming = TextTrimming.CharacterEllipsis };
+        var name = new TextBlock { Text = Loc.Plural(rows.Count, "{0} version", "{0} versions"), Classes = { "Name" }, TextTrimming = TextTrimming.CharacterEllipsis };
         name.BindResource(TextBlock.ForegroundProperty, "Brush.TextPrimary");
         string first = LongTime(rows.Min(r => r.Version.CreatedAt)), last = LongTime(rows.Max(r => r.Version.CreatedAt));
         var metaText = new TextBlock { Text = first == last ? first : $"{first} – {last}", Classes = { "Value" }, TextWrapping = TextWrapping.Wrap };
         metaText.BindResource(TextBlock.ForegroundProperty, "Brush.TextSecondary");
         var stack = new StackPanel { Spacing = 4, Children = { name, metaText } };
         if (deletable.Count < rows.Count)
-            stack.Children.Add(new TextBlock { Text = "The current version stays.", Classes = { "Caption" }, TextWrapping = TextWrapping.Wrap });
+            stack.Children.Add(new TextBlock { Text = Loc.T("The current version stays."), Classes = { "Caption" }, TextWrapping = TextWrapping.Wrap });
 
         var deleteBtn = new Button
         {
@@ -350,7 +350,7 @@ internal sealed class HistoryView : UserControl
             HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center,
             Margin = new Thickness(0, 4, 0, 0),
         };
-        ToolTip.SetTip(deleteBtn, "Delete the selected versions and the audio only they use");
+        ToolTip.SetTip(deleteBtn, Loc.T("Delete the selected versions and the audio only they use"));
         deleteBtn.Click += (_, _) => _ = DeleteSelected(deletable);
         stack.Children.Add(deleteBtn);
         _details.Child = stack;
@@ -402,11 +402,11 @@ internal sealed class HistoryView : UserControl
     {
         var deletable = Deletable(rows);
         var menu = new MenuFlyout();
-        menu.Items.Add(MenuKit.Header($"{rows.Count} versions", null, ""));
+        menu.Items.Add(MenuKit.Header(Loc.Plural(rows.Count, "{0} version", "{0} versions"), null, ""));
         menu.Items.Add(new Separator());
         var del = new MenuItem { Header = DeleteManyLabel(deletable.Count), Icon = MenuKit.Icon(GlyphKind.Trash), IsEnabled = deletable.Count > 0 };
         del.Classes.Add("danger");
-        if (deletable.Count < rows.Count) ToolTip.SetTip(del, "The current version stays");
+        if (deletable.Count < rows.Count) ToolTip.SetTip(del, Loc.T("The current version stays"));
         del.Click += (_, _) => _ = DeleteSelected(deletable);
         menu.Items.Add(del);
         return menu;
@@ -416,7 +416,7 @@ internal sealed class HistoryView : UserControl
     private static List<ProjectVersion> Deletable(IEnumerable<HistoryRow> rows)
         => rows.Where(r => !r.IsHead).Select(r => r.Version).ToList();
 
-    private static string DeleteManyLabel(int count) => count == 1 ? "Delete version…" : $"Delete {count} versions…";
+    private static string DeleteManyLabel(int count) => count == 1 ? Loc.T("Delete version…") : Loc.Plural(count, "Delete {0} version…", "Delete {0} versions…");
 
     private MenuFlyout BuildOptionsMenu()
     {
@@ -460,13 +460,13 @@ internal sealed class HistoryView : UserControl
     {
         if (versions.Count == 1) { await Delete(versions[0]); return; }
         if (TopLevel.GetTopLevel(this) is not Window owner || _dir is null || versions.Count == 0) return;
-        bool ok = await new ConfirmWindow("Delete versions",
-            $"Delete {versions.Count} versions? Audio that only they use is deleted from the project folder too. This can't be undone.",
-            "Delete", "Cancel").ShowDialog<bool>(owner);
+        bool ok = await new ConfirmWindow(Loc.T("Delete versions"),
+            Loc.Plural(versions.Count, "Delete {0} version? Audio that only it uses is deleted from the project folder too. This can't be undone.", "Delete {0} versions? Audio that only they use is deleted from the project folder too. This can't be undone."),
+            Loc.T("Delete"), Loc.T("Cancel")).ShowDialog<bool>(owner);
         if (!ok) return;
         long freed = 0;
         Apply(() => freed = _history.DeleteMany(_dir, versions.Select(v => v.Id).ToList()));
-        _host.ReportStatus($"Deleted {versions.Count} versions · {NotaNum.Bytes(freed)} freed");
+        _host.ReportStatus(Loc.F("{0} · {1} freed", Loc.Plural(versions.Count, "Deleted {0} version", "Deleted {0} versions"), NotaNum.Bytes(freed)));
     }
 
     private async Task Prompt(string title, string prompt, string? initial, Action<string> apply)
