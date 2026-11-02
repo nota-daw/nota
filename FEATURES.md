@@ -329,6 +329,9 @@ docks as a panel under any of the three, or floats in its own window — see
     plays on its own loop clock, so its editor counts from the slot's start and doesn't seek.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
+  - **Reset velocity**: double-click a velocity stem, or right-click it → **Reset velocity**, to put
+    the note — or the whole selection, when the note is selected — back to the default velocity
+    (0.8); one undo step. Notes already at the default and a reference clip's notes are left alone.
   - Notes replace the same-pitch notes they land on instead of stacking: moved, stretched,
     drawn or pasted notes cut or remove what they cover once the selection is let go
     (click elsewhere, Esc, another clip, save); until then the part that will go is drawn
