@@ -908,8 +908,9 @@ class Engine {
     bool partIdAt(int32_t sourceTrackId, int32_t index, uint64_t* part) const;
     template <typename Consumer>
     int32_t applySidechainKey(Consumer& c, int32_t src, uint64_t part, bool routed = true);
+    // meters = false leaves out the meter-only keys (an armed, unmonitored audio track, #352).
     template <typename Fn>
-    void forEachRouteKey(Fn&& fn) const;
+    void forEachRouteKey(Fn&& fn, bool meters = true) const;
     // Open/close a hosted plugin's native GUI. deviceIndex < 0 = the instrument;
     // otherwise the effect at that chain position. Message thread only.
     void openTrackEditor(int32_t trackId, int32_t deviceIndex);

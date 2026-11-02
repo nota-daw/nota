@@ -148,6 +148,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **An armed audio track meters its input with monitoring off** (nota-daw/nota#352): arm a
+  track and its meter shows the level coming in (hardware input, or the source track it
+  records from) before and during a take, without hearing it. The meter reads the input
+  pre-fader; with monitoring on it still shows what the track plays.
+- **Modular lists tracks in the Arrangement's order** (nota-daw/nota#374): a new track no
+  longer shows up after the return tracks in the Track sidebar or as a Global island until
+  the tracks are reordered (the Mixer already follows the arrangement).
 - **Window buttons on Windows** — minimize, maximize and close in the title bar showed as
   grey rounded tiles with an always-red close button, plus an extra fullscreen button. They
   are flat again, as in other Windows apps: the hover tone under the pointer, red only while
