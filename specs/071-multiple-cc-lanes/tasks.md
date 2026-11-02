@@ -22,6 +22,8 @@
 - [x] T008 Update CHANGELOG [Unreleased], FEATURES, French strings, Shortcuts and EN/RU manual handoff.
 - [x] T009 Capture comparable base/branch UI evidence into pr-assets, and inspect it.
 - [x] T010 Run scripts/build-win.ps1, UI checks and convergence; record validation.md.
-- [ ] T011 Commit scoped source/spec changes under the configured identity, push the fork over HTTPS and open a PR against upstream develop referencing #422.
+- [x] T011 Commit scoped source/spec changes under the configured identity, push the fork over HTTPS and open a PR against upstream develop referencing #422.
 
 Dependencies: T001 -> T002-T004 -> T006 -> T005/T007 -> T008-T010 -> T011.
+
+Submitted as [nota-daw/nota#425](https://github.com/nota-daw/nota/pull/425) against develop.

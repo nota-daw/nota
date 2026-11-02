@@ -37,7 +37,8 @@ probe data and binaries are excluded from the code branch.
 Converged: nine functional requirements, five success criteria, three user stories,
 implementation tasks and plan decisions checked against source and fresh evidence.
 No missing, partial, conflicting or unrequested work remains in the specified PR
-scope. Submission is tracked separately as T011. No extension hooks are registered.
+scope. Submission task T011 is complete: [PR #425](https://github.com/nota-daw/nota/pull/425) targets develop.
+No extension hooks are registered.
 
 This is a partial implementation of issue #422: lane reordering, a dedicated collapse
 control, and persistence of which extra lanes are visible remain follow-up work.
