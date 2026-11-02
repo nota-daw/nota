@@ -316,6 +316,14 @@ if (args.Length >= 1 && args[0] == "--velocity-wheel")
     Console.WriteLine(failures == 0 ? "VELOCITY WHEEL PASSED" : $"VELOCITY WHEEL FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Piano-roll velocity reset alone: `--velocity-reset`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--velocity-reset")
+{
+    Console.WriteLine("-- velocity reset --");
+    foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "VELOCITY RESET PASSED" : $"VELOCITY RESET FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Filter knob glide alone: `--glide`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--glide")
 {
@@ -15400,6 +15408,8 @@ foreach (var (ok, label) in TransportDisplayTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- velocity wheel --");
 foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
+Console.WriteLine("-- velocity reset --");
+foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
 Console.WriteLine("-- status bar audio format --");
 foreach (var (ok, label) in AudioFormatStatusTests.Run()) Check(ok, label);
 
