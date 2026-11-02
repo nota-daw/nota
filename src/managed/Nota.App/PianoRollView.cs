@@ -226,7 +226,7 @@ public sealed partial class PianoRollView : UserControl
     }
     private bool IsRoot(int pitch) => _scaleOn && ((((pitch - _scaleRoot) % 12) + 12) % 12) == 0;
 
-    // Live playback cursor in clip-local beats; < 0 = hidden. Set by the host each tick.
+    // Live display cursor in clip-local beats; < 0 = hidden. Updated on display frames.
     private double _playheadBeat = -1;
 
     // Note clipboard, shared across clips (copy here, paste into another clip): each note at
@@ -269,6 +269,8 @@ public sealed partial class PianoRollView : UserControl
     public Func<int, int, string?>? ClipNameOf { get; set; }
     private readonly KeysColumn _keys;
     private readonly NoteGrid _gridControl;
+    private readonly PlayheadLayer _gridPlayhead;
+    private readonly PlayheadLayer _rulerPlayhead;
     private readonly VelocityLane _vel;
     private readonly Border _velHost;
     private readonly Border _overlayHost = new() { IsVisible = false, ClipToBounds = true };
@@ -378,7 +380,7 @@ public sealed partial class PianoRollView : UserControl
     // Scale rows are a neutral lift, not the accent: a key at rest is neither live nor chosen.
     private static readonly IBrush InScaleTint = NotaPalette.Wash(NotaPalette.VizInk, 0x0C);
     private static readonly IBrush RootTint = NotaPalette.Wash(NotaPalette.VizInk, 0x1E);
-    private static readonly IPen PlayheadPen = new Pen(NotaPalette.Accent, 1);   // the playhead: 1px accent
+    private static readonly IPen PlayheadPen = new Pen(NotaPalette.Accent, 1);   // the playhead: 1px live cursor
     private static readonly IBrush KeyHover = NotaPalette.Wash(NotaPalette.AccentBright, 0x66);
     // Played-key highlight (currently-pressed keyboard / MIDI note): a solid key tint + a faint row wash.
     private static readonly IBrush HeldKeyFill = NotaPalette.Accent;
@@ -416,6 +418,8 @@ public sealed partial class PianoRollView : UserControl
         _strip = new ClipStrip(this) { ClipToBounds = true, IsVisible = false, Height = ClipStrip.RowH };
         _keys = new KeysColumn(this) { Height = RangeH };
         _gridControl = new NoteGrid(this) { Height = RangeH, ClipToBounds = true };
+        _gridPlayhead = new PlayheadLayer(this);
+        _rulerPlayhead = new PlayheadLayer(this);
         _vel = new VelocityLane(this) { ClipToBounds = true };
         _expr = new ExpressionLane(this) { ClipToBounds = true };
         _ctlLane = new ControllerLane(this) { ClipToBounds = true, Focusable = true };
@@ -428,6 +432,8 @@ public sealed partial class PianoRollView : UserControl
         body.Children.Add(_keys);
         Avalonia.Controls.Grid.SetColumn(_gridControl, 1);
         body.Children.Add(_gridControl);
+        Avalonia.Controls.Grid.SetColumn(_gridPlayhead, 1);
+        body.Children.Add(_gridPlayhead);
         _bodyScroll = new ScrollViewer
         {
             Content = body,
@@ -443,6 +449,8 @@ public sealed partial class PianoRollView : UserControl
         rulerRow.Children.Add(corner);
         Avalonia.Controls.Grid.SetColumn(_ruler, 1);
         rulerRow.Children.Add(_ruler);
+        Avalonia.Controls.Grid.SetColumn(_rulerPlayhead, 1);
+        rulerRow.Children.Add(_rulerPlayhead);
 
         // The clip strip (several clips open): corner + strip, under the ruler.
         var stripRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*") };
@@ -1233,15 +1241,40 @@ public sealed partial class PianoRollView : UserControl
     }
 
     /// <summary>Live playback cursor in editor beats (clip-local for one clip); playing=false
-    /// or an out-of-range beat hides it. Cheap: repaints only the grid + ruler, not the whole roll.</summary>
+    /// or an out-of-range beat hides it. Repaints only the two cursor overlays.</summary>
     public void SetPlayhead(double clipLocalBeat, bool playing)
     {
         double b = (playing && clipLocalBeat >= 0 && clipLocalBeat <= _lengthBeats) ? clipLocalBeat : -1;
         bool wasHidden = _playheadBeat < 0;
         if (Math.Abs(b - _playheadBeat) < 1e-6 && (b < 0) == wasHidden) return;
         _playheadBeat = b;
-        _gridControl.InvalidateVisual();
-        _ruler.InvalidateVisual();
+        InvalidatePlayhead();
+    }
+
+    private void InvalidatePlayhead()
+    {
+        _gridPlayhead.InvalidateVisual();
+        _rulerPlayhead.InvalidateVisual();
+    }
+
+    // Separate render nodes retain the grid's notes and ruler labels between cursor frames.
+    // Being siblings in their existing cells keeps clipping, scroll and pointer routing intact.
+    private sealed class PlayheadLayer : Control
+    {
+        private readonly PianoRollView _o;
+        public PlayheadLayer(PianoRollView o)
+        {
+            _o = o;
+            IsHitTestVisible = false;
+            ClipToBounds = true;
+        }
+        public override void Render(DrawingContext ctx)
+        {
+            if (_o._playheadBeat < 0) return;
+            double x = _o.BeatToX(_o._playheadBeat);
+            if (x >= 0 && x <= Bounds.Width)
+                ctx.DrawLine(PlayheadPen, new Point(x, 0), new Point(x, Bounds.Height));
+        }
     }
 
     /// <summary>Copies the selected notes to the shared clipboard, each with the clip it came
@@ -1591,6 +1624,7 @@ public sealed partial class PianoRollView : UserControl
     private void Invalidate()
     {
         if (_fold) RebuildRows();   // notes, scale or pads may have moved the folded rows
+        InvalidatePlayhead();
         _overlayHost.Child?.InvalidateVisual();
         _ruler.InvalidateVisual();
         _strip.InvalidateVisual();
@@ -1819,11 +1853,6 @@ public sealed partial class PianoRollView : UserControl
                 }
             }
             _o.DrawOutsideClip(ctx, w, h);
-            if (_o._playheadBeat >= 0)
-            {
-                double px = _o.BeatToX(_o._playheadBeat);
-                if (px >= 0 && px <= w) ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, h));
-            }
         }
     }
 
@@ -2187,11 +2216,6 @@ public sealed partial class PianoRollView : UserControl
                         : new SolidColorBrush(Color.FromArgb((byte)(255 * (0.45 + 0.55 * Math.Clamp(hn.Velocity, 0, 1))), c.R, c.G, c.B)), hr, 2);
                 }
             _o.DrawOutsideClip(ctx, w, h);
-            if (_o._playheadBeat >= 0)
-            {
-                double px = BeatToX(_o._playheadBeat);
-                if (px >= 0 && px <= w) ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, h));
-            }
             if (_drag == Mode.Marquee)
             {
                 var r = RectOf(_marqueeA, _marqueeB);

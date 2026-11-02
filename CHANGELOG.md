@@ -148,6 +148,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Piano-roll playback cursor**: arrangement MIDI clips now follow the same smooth
+  display-frame position as the arrangement. Cursor movement redraws lightweight
+  overlays instead of repainting all notes and ruler labels.
+- **Windows playback cursor**: the Arrangement playhead now follows display frames,
+  interpolating the engine's rendered blocks instead of jumping on the UI polling timer.
+  Editing positions and audio timing remain tied to the engine transport.
 - **Window buttons on Windows** — minimize, maximize and close in the title bar showed as
   grey rounded tiles with an always-red close button, plus an extra fullscreen button. They
   are flat again, as in other Windows apps: the hover tone under the pointer, red only while

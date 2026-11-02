@@ -1837,7 +1837,7 @@ public sealed partial class ArrangementView
             }
 
             // Playhead across all lanes: brass line with a soft glow.
-            double px = _o.BeatToX(_o._playheadBeats);
+            double px = _o.BeatToX(_o._displayPlayheadBeats);
             if (px >= 0 && px <= w)
             {
                 ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, h));

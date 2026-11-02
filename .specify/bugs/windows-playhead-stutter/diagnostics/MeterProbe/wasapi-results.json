@@ -1,0 +1,130 @@
+{
+  "platform": "Microsoft Windows NT 10.0.26300.0",
+  "backend": "Wasapi",
+  "requestedAsioDriver": "",
+  "sampleRate": 48000,
+  "bufferFrames": 480,
+  "measuredSeconds": 10,
+  "animationCallbacks": {
+    "count": 2380,
+    "updatesPerSecond": 237.99840281962958,
+    "medianGapMs": 4.16150000000016,
+    "p95GapMs": 4.379500000000007,
+    "maxGapMs": 29.272799999999734
+  },
+  "serviceTicks": {
+    "count": 300,
+    "updatesPerSecond": 29.926765601350873,
+    "medianGapMs": 33.33209999999963,
+    "p95GapMs": 33.715000000000146,
+    "maxGapMs": 40.11030000000028
+  },
+  "meters": [
+    {
+      "name": "transport master",
+      "effectivelyVisible": true,
+      "rebuiltControls": 0,
+      "stateChanges": {
+        "count": 299,
+        "updatesPerSecond": 29.92395910286484,
+        "medianGapMs": 33.336599999999635,
+        "p95GapMs": 33.77280000000019,
+        "maxGapMs": 42.07020000000011
+      },
+      "drawListChanges": {
+        "count": 299,
+        "updatesPerSecond": 29.924066676644703,
+        "medianGapMs": 33.33679999999913,
+        "p95GapMs": 33.68229999999994,
+        "maxGapMs": 41.8112000000001
+      },
+      "minNormalizedLevel": 0.09856397976570568,
+      "maxNormalizedLevel": 0.3106413789791302
+    },
+    {
+      "name": "arrangement track",
+      "effectivelyVisible": true,
+      "rebuiltControls": 0,
+      "stateChanges": {
+        "count": 299,
+        "updatesPerSecond": 29.92395910286484,
+        "medianGapMs": 33.336599999999635,
+        "p95GapMs": 33.77280000000019,
+        "maxGapMs": 42.07020000000011
+      },
+      "drawListChanges": {
+        "count": 299,
+        "updatesPerSecond": 29.924066676644703,
+        "medianGapMs": 33.33679999999913,
+        "p95GapMs": 33.68229999999994,
+        "maxGapMs": 41.8112000000001
+      },
+      "minNormalizedLevel": 0.09856397976570568,
+      "maxNormalizedLevel": 0.3106413789791302
+    },
+    {
+      "name": "arrangement master",
+      "effectivelyVisible": true,
+      "rebuiltControls": 0,
+      "stateChanges": {
+        "count": 299,
+        "updatesPerSecond": 29.92395910286484,
+        "medianGapMs": 33.336599999999635,
+        "p95GapMs": 33.77280000000019,
+        "maxGapMs": 42.07020000000011
+      },
+      "drawListChanges": {
+        "count": 299,
+        "updatesPerSecond": 29.924066676644703,
+        "medianGapMs": 33.33679999999913,
+        "p95GapMs": 33.68229999999994,
+        "maxGapMs": 41.8112000000001
+      },
+      "minNormalizedLevel": 0.09856397976570568,
+      "maxNormalizedLevel": 0.3106413789791302
+    },
+    {
+      "name": "mixer track",
+      "effectivelyVisible": true,
+      "rebuiltControls": 0,
+      "stateChanges": {
+        "count": 299,
+        "updatesPerSecond": 29.92395910286484,
+        "medianGapMs": 33.336599999999635,
+        "p95GapMs": 33.77280000000019,
+        "maxGapMs": 42.07020000000011
+      },
+      "drawListChanges": {
+        "count": 299,
+        "updatesPerSecond": 29.924066676644703,
+        "medianGapMs": 33.33679999999913,
+        "p95GapMs": 33.68229999999994,
+        "maxGapMs": 41.8112000000001
+      },
+      "minNormalizedLevel": 0.09856397976570568,
+      "maxNormalizedLevel": 0.3106413789791302
+    },
+    {
+      "name": "mixer master",
+      "effectivelyVisible": true,
+      "rebuiltControls": 0,
+      "stateChanges": {
+        "count": 299,
+        "updatesPerSecond": 29.92395910286484,
+        "medianGapMs": 33.336599999999635,
+        "p95GapMs": 33.77280000000019,
+        "maxGapMs": 42.07020000000011
+      },
+      "drawListChanges": {
+        "count": 299,
+        "updatesPerSecond": 29.924066676644703,
+        "medianGapMs": 33.33679999999913,
+        "p95GapMs": 33.68229999999994,
+        "maxGapMs": 41.8112000000001
+      },
+      "minNormalizedLevel": 0.09856397976570568,
+      "maxNormalizedLevel": 0.3106413789791302
+    }
+  ],
+  "dropouts": 0
+}
