@@ -57,6 +57,9 @@ are visible are deferred; use Refs #422 rather than closing the whole issue.
 Extra lane slots are editor-local; sizes are preferences, not MIDI/project edits.
 Reserved controllers retain the current picker's restrictions. A hidden lane may be
 re-added; no data is cleared. Default primary/extra heights remain 72/112 logical
-pixels, normalized to 48–480. No new key binding is introduced.
+pixels, with saved sizes normalized to 48–480. The primary row additionally keeps a
+72-pixel display minimum so all five tabs remain reachable, including in short editors
+and when restoring older saved sizes. Extra lanes retain a 48-pixel minimum.
+No new key binding is introduced.
 The personal workspace/zoom changes and named portable build stay outside this PR.
 No additional user clarification is needed for this bounded contribution.

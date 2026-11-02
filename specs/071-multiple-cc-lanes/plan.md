@@ -18,7 +18,10 @@ Use a native plus toolbar, per-lane picker/minus and bounded vertical scroll are
 
 Wrap the primary and extra lanes in captured upper dividers. Store stable logical
 height keys for the primary mode and extra slot/controller; clamp finite heights to
-48–480 and use original defaults otherwise. Save on release, not on every move.
+48–480 and use original defaults otherwise. The primary row's final layout must be
+at least 72 pixels so all five tabs fit, even after available-space fitting or loading
+an older 48-pixel preference. Extra lanes keep the 48-pixel minimum.
+Save on release, not on every move.
 Fit lanes to the available height while retaining note editing. Inject the existing
 settings service into both Arrangement and Session editor construction paths.
 

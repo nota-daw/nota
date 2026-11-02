@@ -60,6 +60,24 @@ Matching Studio Light captures (1000 × 720, identical clip, before the pointer 
 [after](https://raw.githubusercontent.com/thoi1/nota/pr-assets/issue-422/folded-cc-after.png).
 Assessment, fix and verification records: `.specify/bugs/folded-cc-gutter/`.
 
+## PR #425 primary lane tab correction
+
+The primary row now has a 72-pixel layout minimum after available-space fitting,
+including when restoring an older 48-pixel preference. Extra CC lanes keep their
+48-pixel minimum. The expanded probe performs actual window hit testing and pointer
+selection for all five tabs after dragging the divider; it repeats the controller
+selection in a short reopened editor with disk-restored settings. It also checks the
+note viewport, extra lane minimum and absence of controller commits.
+
+The corrected harness fails against `20cbc8f3`: the controller-tab position hits the
+toolbar's ContentPresenter with a 48-pixel primary row. The fixed implementation passes
+all 39 UI assertions, and the full Windows build/smoke/scan-scale gate passes again.
+Assessment and evidence: `.specify/bugs/primary-lane-tabs/`.
+
+Matching Studio Light captures (1000 × 720, identical clip and divider drag):
+[before](https://raw.githubusercontent.com/thoi1/nota/pr-assets/issue-422/primary-tabs-before.png),
+[after](https://raw.githubusercontent.com/thoi1/nota/pr-assets/issue-422/primary-tabs-after.png).
+
 ## Limits
 
 Windows x64 was built and exercised; macOS/Linux and physical mixed-DPI monitor moves

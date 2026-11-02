@@ -130,8 +130,9 @@ public sealed partial class PianoRollView
     {
         // Leave room for notes even in the normal short docked detail panel.
         double space = Math.Max(0, Bounds.Height - RulerH - (_strip.IsVisible ? ClipStrip.RowH : 0) - 22 - 10 - 64 - 6);
-        _laneRow.Height = Math.Min(LaneHeight(PrimaryLaneKey, _laneMode == LaneMode.Velocity ? VelH : ExprH),
-            Math.Max(MidiLaneHeight.Minimum, space));
+        // All five primary tabs must fit, including when restoring an older saved height.
+        _laneRow.Height = Math.Max(VelH, Math.Min(
+            LaneHeight(PrimaryLaneKey, _laneMode == LaneMode.Velocity ? VelH : ExprH), space));
         foreach (var item in _controllerLanes)
             item.Row.Height = LaneHeight(item.HeightKey, ExprH);
         _controllerScroll.MaxHeight = Math.Max(0, space - _laneRow.Height);

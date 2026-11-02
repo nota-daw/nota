@@ -141,6 +141,7 @@ internal static class Program
                 }
                 Require(commits==1,"view, theme and zoom operations never write controller data");
                 CheckFoldedLanes(root, Require);
+                CheckPrimaryLaneTabs(root, settings, Require);
                 File.WriteAllText(Path.Combine(root,"cc-results.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
                 window.Close();
                 // Drain theme-change work before disposing the real app's engine.
@@ -154,6 +155,69 @@ internal static class Program
         Dispatcher.UIThread.MainLoop(stop.Token);
         if(failure is not null)throw failure; if(!done)throw new Exception("Probe timed out");
         Console.WriteLine(string.Join(Environment.NewLine,checks));
+    }
+
+    static void CheckPrimaryLaneTabs(string root, ISettingsService settings, Action<bool,string> require)
+    {
+        var previous=new Dictionary<string,double>(settings.Current.PianoRollLaneHeights);
+        var shortHeights=new Dictionary<string,double> {
+            ["Velocity"]=48,["Bend"]=48,["Pressure"]=48,["Slide"]=48,["cc:1"]=48,["extra:0:cc:1"]=48 };
+        settings.Current.PianoRollLaneHeights=shortHeights;settings.Save();
+        int commits=0;
+        PianoRollView NewRoll(ISettingsService saved)
+        {
+            var view=new PianoRollView {LaneSettings=saved,ControllersInClip=()=>[1],GetController=_=>[],
+                SetController=(_,_)=>commits++};
+            view.SetNotes([new NotaNote(60,2,1,.8f)],8);
+            return view;
+        }
+        var roll=NewRoll(settings);
+        var window=new Window {Content=roll,Width=1000,Height=720};window.Show();window.UpdateLayout();
+        var row=(Grid)Get(roll,"_laneRow")!;
+        var divider=((DockPanel)row.Parent!).Children.OfType<Border>().Single();
+        var start=divider.TranslatePoint(new Point(20,3),window)!.Value;
+        using(var pointer=new Avalonia.Input.Pointer(44,PointerType.Mouse,true))
+        {
+            var down=new PointerPointProperties(RawInputModifiers.LeftMouseButton,PointerUpdateKind.LeftButtonPressed);
+            divider.RaiseEvent(new PointerPressedEventArgs(divider,pointer,window,start,1,down,KeyModifiers.None,1));
+            divider.RaiseEvent(new PointerEventArgs(InputElement.PointerMovedEvent,divider,pointer,window,start.WithY(start.Y+200),2,down,KeyModifiers.None));
+            divider.RaiseEvent(new PointerReleasedEventArgs(divider,pointer,window,start.WithY(start.Y+200),3,
+                new PointerPointProperties(RawInputModifiers.None,PointerUpdateKind.LeftButtonReleased),KeyModifiers.None,MouseButton.Left));
+        }
+        window.UpdateLayout();
+        using(var bitmap=new RenderTargetBitmap(new PixelSize(1000,720)))
+        { bitmap.Render(window);bitmap.Save(Path.Combine(root,"primary-tabs.png")); }
+        void ClickTab(int index,string expected)
+        {
+            // Let the new window's compositor publish its hit-test scene.
+            var frame=new DispatcherFrame();
+            DispatcherTimer.RunOnce(()=>frame.Continue=false,TimeSpan.FromMilliseconds(100));
+            Dispatcher.UIThread.PushFrame(frame);
+            var tabs=(Control)Get(roll,"_laneTabs")!;
+            var point=tabs.TranslatePoint(new Point(20,8+13*index),window)!.Value;
+            var target=window.InputHitTest(point);
+            if(!ReferenceEquals(target,tabs)) Console.WriteLine($"Tab hit mismatch: expected {expected}, hit {target?.GetType().Name}, tabs {tabs.Bounds}, row {((Grid)Get(roll,"_laneRow")!).Height}, point {point}");
+            require(ReferenceEquals(target,tabs),$"{expected} tab receives pointer hit after shrinking primary lane");
+            using var pointer=new Avalonia.Input.Pointer(45,PointerType.Mouse,true);
+            tabs.RaiseEvent(new PointerPressedEventArgs(tabs,pointer,window,point,1,
+                new PointerPointProperties(RawInputModifiers.LeftMouseButton,PointerUpdateKind.LeftButtonPressed),KeyModifiers.None,1));
+            window.UpdateLayout();
+            require(Get(roll,"_laneMode")!.ToString()==expected,$"pointer click selects {expected} after shrinking primary lane");
+        }
+        ClickTab(4,"Controller");ClickTab(0,"Velocity");ClickTab(1,"Bend");ClickTab(2,"Pressure");ClickTab(3,"Slide");
+        require(row.Height==72,"all primary modes retain a 72-pixel minimum");
+        Call(roll,"AddControllerLane");window.UpdateLayout();
+        var lanes=(IList)Get(roll,"_controllerLanes")!;
+        require(((Grid)lanes[0]!.GetType().GetProperty("Row")!.GetValue(lanes[0])!).Height==48,
+            "extra CC lanes retain their independent 48-pixel minimum");
+        window.Close();
+        roll=NewRoll(new Nota.Infrastructure.SettingsService());
+        window=new Window {Content=roll,Width=1000,Height=300};window.Show();window.UpdateLayout();
+        require(((Grid)Get(roll,"_laneRow")!).Height==72,"reopened short editor clamps saved 48-pixel primary height to 72");
+        ClickTab(4,"Controller");
+        require(((ScrollViewer)Get(roll,"_bodyScroll")!).Viewport.Height>=40,"short editor keeps note viewport with reachable primary tabs");
+        require(commits==0,"shrinking and switching primary tabs never commit controller data");
+        window.Close();settings.Current.PianoRollLaneHeights=previous;settings.Save();
     }
 
     static void CheckFoldedLanes(string root, Action<bool,string> require)
