@@ -9820,6 +9820,8 @@ Console.WriteLine("-- M7-8: xrun / dropout telemetry --");
     Check(engine.XrunCount == 0, "xrun count starts at zero");
     Check(engine.XrunSelfTest(), "notifying a dropout bumps the counter");
     Check(engine.XrunCount == 1, "xrun count reflects the dropout");
+    Check(engine.TimedEventsSelfTest(),
+        "a hosted plug-in renders once per block with its events at their offsets (#436)");
 }
 
 // ===================== M9-A1: parameter automation (engine) ================

@@ -214,6 +214,7 @@ class Engine {
     bool modulationSelfTest();
     bool rackSelfTest();       // Instrument Rack: chains sum, macros map, blob round-trips
     bool rackDeviceSelfTest(); // Audio Effect Rack: pass-through, parallel sum, blob round-trips
+    bool timedEventsSelfTest(); // #436: a hosted plug-in renders once per block, events at their offsets
     bool drumRackSelfTest();   // Drum Rack: notes route only to the matching pad chain
     // Lane CRUD — structural (snapshot + undo). addAutomationLane returns the lane
     // index, reusing an existing lane on the same target. get/set use the ABI point

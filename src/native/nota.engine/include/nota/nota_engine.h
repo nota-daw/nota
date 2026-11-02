@@ -362,6 +362,10 @@ NOTA_API int32_t nota_engine_rack_device_selftest(NotaEngine* engine);
 /* Drum Rack: device-free check that notes route only to the matching pad chain
  * and the pad note survives the blob round-trip. */
 NOTA_API int32_t nota_engine_drum_rack_selftest(NotaEngine* engine);
+/* Hosted plug-in instruments (#436): device-free check that an instrument taking timed
+ * events renders once per block with every event at its sample offset, while a built-in
+ * still renders in segments between events. */
+NOTA_API int32_t nota_engine_timed_events_selftest(NotaEngine* engine);
 /* Plugin-parameter automation (M9-B, target 3). Device-free structural self-test;
  * the plugin-param introspection + lane-add C ABI arrives in B2. */
 NOTA_API int32_t nota_engine_plugin_automation_selftest(NotaEngine* engine);

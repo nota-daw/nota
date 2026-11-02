@@ -155,6 +155,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Plug-in instruments use less CPU on busy MIDI** (#436): a hosted instrument (Kontakt,
+  Serum, any AU or VST3) is now processed once per audio block, with every note and controller
+  placed at its exact sample inside the block. Before, the block was cut at every MIDI event and
+  the plug-in was called once per piece — with dense, short notes several times a block, at
+  sizes down to a single sample — so a few heavy instances could run out of time and drop out.
+  Timing is unchanged: events still land on their own sample.
 - **Piano-roll playback cursor**: arrangement MIDI clips now follow the same smooth
   display-frame position as the arrangement. Cursor movement redraws lightweight
   overlays instead of repainting all notes and ruler labels.

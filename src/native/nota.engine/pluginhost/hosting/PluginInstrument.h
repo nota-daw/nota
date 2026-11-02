@@ -32,6 +32,7 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
 
     const char* displayName() const override { return name_.empty() ? "Plugin" : name_.c_str(); }
     bool handlesSustain() const override { return true; } // the plug-in gets CC64 itself
+    bool takesTimedEvents() const override { return true; } // one processBlock per block (#436)
 
     void setSampleRate(double sr) override;
 
