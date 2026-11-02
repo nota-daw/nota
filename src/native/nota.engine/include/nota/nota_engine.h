@@ -539,6 +539,27 @@ NOTA_API NotaResult nota_transport_seek(NotaEngine* engine, double beat);
 /* UI polls these (lock-free reads of the mirrored transport state). */
 NOTA_API double     nota_transport_position_beats(const NotaEngine* engine);
 NOTA_API int32_t    nota_transport_is_playing(const NotaEngine* engine);
+/* Coherent display-only snapshot of the last rendered audio window (at most one
+ * hardware period or client block, and never before the latest seek/start/tempo
+ * change). This covers WASAPI's batching of small client buffers. elapsed_seconds is
+ * measured on the native monotonic clock, relative to the start of its playing
+ * portion (negative during a leading count-in). Interpolate start_beat at bpm for
+ * clamp(elapsed_seconds, 0, duration_seconds), wrapping at the loop end. Never
+ * extrapolate beyond that block or use the visual result for editing commands.
+ * Returns 1 on success, 0 before the first block or if publication is in progress;
+ * on failure out_snapshot is untouched. No allocation, locks or waiting. */
+typedef struct NotaTransportSnapshot {
+    double start_beat;
+    double position_beats;
+    double bpm;
+    double loop_start;
+    double loop_end;
+    double duration_seconds;
+    double elapsed_seconds;
+    int32_t playing;
+    int32_t looping;
+} NotaTransportSnapshot;
+NOTA_API int32_t nota_transport_snapshot(const NotaEngine* engine, NotaTransportSnapshot* out_snapshot);
 /* Loop region (message-thread mirror) for UI display + toggling. */
 NOTA_API int32_t    nota_transport_loop_enabled(const NotaEngine* engine);
 NOTA_API double     nota_transport_loop_start(const NotaEngine* engine);

@@ -354,6 +354,7 @@ class Engine {
     void setMetronome(bool on);
     void seekBeats(double beat);
     double positionBeats() const { return transport_.uiPositionBeats(); }
+    bool transportSnapshot(NotaTransportSnapshot& out) const { return transport_.presentationSnapshot(out); }
     bool isPlaying() const { return transport_.uiIsPlaying(); }
     // Message-thread mirror of the loop region (for UI display; the audio thread
     // gets the range via the command queue).

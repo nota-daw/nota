@@ -277,6 +277,13 @@ if (args.Length >= 1 && args[0] == "--bundle")
     return failures == 0 ? 0 : 1;
 }
 
+// Deterministic display math and the transport-snapshot ABI, without the full DSP suite.
+if (args.Length >= 1 && args[0] == "--transport-display")
+{
+    foreach (var (ok, label) in TransportDisplayTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+
 // Render pool performance guards alone: `--perf`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--perf")
 {
@@ -15387,6 +15394,9 @@ foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- transport display --");
+foreach (var (ok, label) in TransportDisplayTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- velocity wheel --");
 foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);

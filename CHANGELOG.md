@@ -148,6 +148,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Piano-roll playback cursor**: arrangement MIDI clips now follow the same smooth
+  display-frame position as the arrangement. Cursor movement redraws lightweight
+  overlays instead of repainting all notes and ruler labels.
+- **Windows playback cursor**: the Arrangement playhead now follows display frames,
+  interpolating the engine's rendered blocks instead of jumping on the UI polling timer.
+  Editing positions and audio timing remain tied to the engine transport.
 - **An armed audio track meters its input with monitoring off** (nota-daw/nota#352): arm a
   track and its meter shows the level coming in (hardware input, or the source track it
   records from) before and during a take, without hearing it. The meter reads the input
