@@ -1305,6 +1305,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   a Nota Rhythm voice): the title bar carries the device, track, preset picker, bypass and
   S / L size switch; a footer shows where the device sits, its live voice count and type.
 - **Edit Tags** — the browser's tag editor.
+- **Detail panel (Devices / Pattern / Clip)** — opens on a double-click: a track header shows
+  its devices, a clip or a filled Session slot opens in the Clip tab; also View → Toggle
+  detail panel and Show devices. A plain click on a track, clip, mixer strip or slot only
+  selects; an open panel follows the selection. A plug-in instrument's own window opens
+  from **Open editor** on its card. Settings → Appearance → **Open the detail panel when
+  you select a track or clip** makes every selection open it.
 - **Devices/Clip panel in its own window** — the ⧉ button in the bottom panel's header
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
@@ -1355,7 +1361,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
   remembered; timeline, piano roll and audio editor zoom work on top of it. **Waveform** —
   **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Track
-  headers** — Left / Right side of the arrangement's track list. Also
+  headers** — Left / Right side of the arrangement's track list. **Open the detail panel
+  when you select a track or clip** (off by default: a double-click opens it). Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Language** (Appearance): the interface language — **English** (default) or **Français**,

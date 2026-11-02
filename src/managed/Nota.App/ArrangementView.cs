@@ -294,6 +294,8 @@ public sealed partial class ArrangementView : UserControl
     public event Action<int, int>? AudioClipActivated;
     /// <summary>Raised when a track becomes selected (clip or header click).</summary>
     public event Action<int>? TrackSelected;
+    /// <summary>Raised when a track header is double-clicked: open its devices (#308).</summary>
+    public event Action<int>? TrackDevicesRequested;
     /// <summary>Live-freeze (v1.1): per-track role for the header badge — 0 none, 1 sleeping
     /// source, 2 linked frozen. Set by MainWindow; queried while rebuilding headers.</summary>
     public Func<int, int>? FreezeRole;
@@ -2440,10 +2442,14 @@ public sealed partial class ArrangementView : UserControl
             // which would rebuild the header and destroy the combo before its dropdown opens).
             if (e.Source is Visual vsrc && vsrc.FindAncestorOfType<ComboBox>(includeSelf: true) is not null) return;
             if (e.GetCurrentPoint(card).Properties.IsRightButtonPressed) { ShowTrackMenu(card, t.Id); return; }
-            // Double-click an instrument track → open its instrument/plugin GUI (if any).
-            if (e.ClickCount == 2 && t.IsInstrument)
+            // Double-click a track → its devices in the Detail panel, opening the panel if it is
+            // closed (#308; a plain click only selects). A plug-in's own window is Open
+            // editor on its card there.
+            if (e.ClickCount == 2 && e.GetCurrentPoint(card).Properties.IsLeftButtonPressed)
             {
-                try { _engine?.OpenPluginEditor(t.Id, -1); } catch { /* builtin/no editor: no-op */ }
+                if (SelTrackId != t.Id) Select(t.Id, -1);
+                TrackDevicesRequested?.Invoke(t.Id);
+                e.Handled = true;
                 return;
             }
             // Shift-click selects the range from the anchor; Ctrl/Cmd-click adds or removes one (#249).
@@ -3119,6 +3125,14 @@ public sealed partial class ArrangementView : UserControl
             card.PointerPressed += (_, e) =>
             {
                 if (e.GetCurrentPoint(card).Properties.IsRightButtonPressed) { ShowFooterMenu(card, trackId); return; }
+                // Double-click a return or the master → its devices, as on a track header (#308).
+                if (e.ClickCount == 2 && e.GetCurrentPoint(card).Properties.IsLeftButtonPressed)
+                {
+                    if (SelTrackId != trackId) Select(trackId, -1);
+                    TrackDevicesRequested?.Invoke(trackId);
+                    e.Handled = true;
+                    return;
+                }
                 if (ret is not null && (e.KeyModifiers & KeyModifiers.Shift) != 0) { SelectReturnRange(trackId); e.Handled = true; return; }
                 if (ret is not null && (e.KeyModifiers & (KeyModifiers.Control | KeyModifiers.Meta)) != 0)
                 {
