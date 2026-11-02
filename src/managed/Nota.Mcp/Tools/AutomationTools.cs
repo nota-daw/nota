@@ -20,7 +20,8 @@ public sealed class AutomationTools(IAudioEngine engine, IEngineDispatch dispatc
 
     private static string TargetName(AutomationTarget t) => t switch
     { AutomationTarget.Volume => "volume", AutomationTarget.Pan => "pan", AutomationTarget.DeviceParam => "device_param",
-      AutomationTarget.PluginParam => "plugin_param", AutomationTarget.MidiDeviceParam => "midi_param", _ => t.ToString() };
+      AutomationTarget.PluginParam => "plugin_param", AutomationTarget.MidiDeviceParam => "midi_param",
+      AutomationTarget.Send => "send", _ => t.ToString() };
 
     [McpServerTool(Name = "list_automation"), Description("List a track's automation lanes (index, target, device/param index, point count).")]
     public Task<Lane[]> ListAutomation(int trackId) => Read(() =>
@@ -41,12 +42,14 @@ public sealed class AutomationTools(IAudioEngine engine, IEngineDispatch dispatc
 
     [McpServerTool(Name = "add_automation_lane"), Description(
         "Add an automation lane. target: \"volume\", \"pan\", \"device_param\" (with deviceIndex+paramIndex) or "
-        + "\"midi_param\" (a MIDI effect: deviceIndex = its index from list_midi_fx, paramIndex from get_midi_fx_params). "
+        + "\"midi_param\" (a MIDI effect: deviceIndex = its index from list_midi_fx, paramIndex from get_midi_fx_params) or "
+        + "\"send\" (a send level 0..1: deviceIndex = the return bus, 0 = A). "
         + "Returns the lane index.")]
     public Task<int> AddAutomationLane(int trackId, string target, int deviceIndex = -1, int paramIndex = -1) => Mutate(() =>
     {
         var t = target.ToLowerInvariant() switch
-        { "pan" => AutomationTarget.Pan, "device_param" => AutomationTarget.DeviceParam, "midi_param" => AutomationTarget.MidiDeviceParam, _ => AutomationTarget.Volume };
+        { "pan" => AutomationTarget.Pan, "device_param" => AutomationTarget.DeviceParam, "midi_param" => AutomationTarget.MidiDeviceParam,
+          "send" => AutomationTarget.Send, _ => AutomationTarget.Volume };
         return E.AddAutomationLane(trackId, t, deviceIndex, paramIndex);
     });
 

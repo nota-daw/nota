@@ -68,5 +68,5 @@ public sealed class TrackTools(IAudioEngine engine, IEngineDispatch dispatch, IA
     public Task SetTrackGroup(int trackId, int groupId) => Mutate(() => E.SetTrackGroup(trackId, groupId));
 
     [McpServerTool(Name = "set_send"), Description("Set a track's post-fader send level (0..1) to a return bus (0-based).")]
-    public Task SetSend(int trackId, int returnBus, [Description("0..1")] float level) => Mutate(() => E.SetTrackSend(trackId, returnBus, Math.Clamp(level, 0f, 1f)));
+    public Task SetSend(int trackId, int returnBus, [Description("0..1")] float level) => Mutate(() => MixEdit.Step(E, () => E.SetTrackSend(trackId, returnBus, Math.Clamp(level, 0f, 1f)), MixTarget.Send(trackId, returnBus)));   // one undo step
 }

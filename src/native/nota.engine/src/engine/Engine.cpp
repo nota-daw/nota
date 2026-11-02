@@ -890,6 +890,11 @@ bool Engine::mixValue(const MixTarget& t, float& v) const {
     }
     auto tr = findTrackAuthoring(t.trackId);
     if (!tr) return false;
+    if (t.kind == MixKind::TrackSend) { // specs/072: a bus that can't exist has no value
+        if (t.deviceIndex < 0 || t.deviceIndex >= kMaxReturns) return false;
+        v = tr->send(t.deviceIndex);
+        return true;
+    }
     v = t.kind == MixKind::TrackVolume ? tr->volume() : tr->pan();
     return true;
 }
@@ -921,6 +926,11 @@ bool Engine::applyMix(const MixChange& c, bool after) {
     }
     auto tr = findTrackAuthoring(c.trackId);
     if (!tr) return false; // the track is gone: skip quietly
+    if (c.kind == MixKind::TrackSend) {
+        if (c.deviceIndex < 0 || c.deviceIndex >= kMaxReturns) return false;
+        tr->setSend(c.deviceIndex, v);
+        return true;
+    }
     if (c.kind == MixKind::TrackVolume) tr->setVolume(v);
     else
         tr->setPan(v);

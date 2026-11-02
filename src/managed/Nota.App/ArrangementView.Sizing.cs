@@ -53,11 +53,19 @@ public sealed partial class ArrangementView
     private readonly List<(Border grip, int trackId)> _rowSeamGrips = new();
     // Layout tier each live card was built at, so a drag rebuilds a card only when it crosses one.
     private readonly Dictionary<int, HeaderTier> _cardTiers = new();
+    // Whether each live card was built with its send row (specs/072).
+    private readonly Dictionary<int, bool> _cardSends = new();
     // Heights of the tracks last copied/cut, in order — the engine's track clipboard knows no view sizes.
     private List<double?>? _clipboardHeights;
     private Border _columnSeam = null!;
 
     internal enum HeaderTier { Compact, Standard, Large }
+
+    // A live card was built for another layout than this height asks for: another tier, or the
+    // send row (specs/072) coming or going inside one.
+    private bool CardLayoutStale(TrackVM t, double h)
+        => _cardTiers.TryGetValue(t.Id, out var built)
+           && (built != TierFor(h) || (_cardSends.TryGetValue(t.Id, out var sends) && sends != ShowSendsOn(t, TierFor(h), h)));
 
     // The standard header needs ~61 px of visible content (three rows), the large one ~106,
     // so each tier starts where its layout fits — below 62 a row is compact.
@@ -226,7 +234,7 @@ public sealed partial class ArrangementView
         var children = _headers.Children;
         int crossing = 0;
         for (int i = 0; i < _tracks.Count; i++)
-            if (!IsSlimRow(_tracks[i]) && _cardTiers.TryGetValue(_tracks[i].Id, out var b) && b != TierFor(ClipAreaHeightAt(i))) crossing++;
+            if (!IsSlimRow(_tracks[i]) && CardLayoutStale(_tracks[i], ClipAreaHeightAt(i))) crossing++;
         bool rebuildTiers = crossing <= LiveTierRebuildLimit;
         for (int i = 0; i < _tracks.Count; i++)
         {
@@ -234,7 +242,7 @@ public sealed partial class ArrangementView
             if (!_headerCards.TryGetValue(t.Id, out var hc)) continue;
             Control card = hc.card;
             double h = ClipAreaHeightAt(i);
-            if (rebuildTiers && !IsSlimRow(t) && _cardTiers.TryGetValue(t.Id, out var built) && built != TierFor(h))
+            if (rebuildTiers && !IsSlimRow(t) && CardLayoutStale(t, h))
             {
                 int at = children.IndexOf(card);
                 var fresh = BuildHeaderCard(t);
@@ -629,6 +637,8 @@ public sealed partial class ArrangementView
         [JsonPropertyName("trackHeights")] public List<TrackHeightDto> TrackHeights { get; set; } = new();
         // specs/045: return rows ride in trackHeights by index; the master has no index.
         [JsonPropertyName("masterHeight")] public double? MasterHeight { get; set; }
+        // specs/072: the Sends key; absent = shown.
+        [JsonPropertyName("showSends")] public bool? ShowSends { get; set; }
     }
 
     private sealed class TrackHeightDto
@@ -637,7 +647,7 @@ public sealed partial class ArrangementView
         [JsonPropertyName("height")] public double Height { get; set; }
     }
 
-    /// <summary>Write the track, return and master heights and the header width into a .nota bundle, keyed by track
+    /// <summary>Write the track, return and master heights, the header width and the Sends key into a .nota bundle, keyed by track
     /// index (ids only last a session). Cosmetic — a failure here never fails the save.</summary>
     public void SaveTrackView(string bundleDir)
     {
@@ -651,7 +661,8 @@ public sealed partial class ArrangementView
                     if (_engine.TryGetTrackInfo(i, out var ti) && _trackHeights.TryGetValue(ti.Id, out var h))
                         dto.TrackHeights.Add(new TrackHeightDto { Index = i, Height = h });
             if (Math.Abs(_masterHeight - DefaultFooterRowHeight) >= 0.5) dto.MasterHeight = _masterHeight;
-            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null)
+            if (!_showSends) dto.ShowSends = false;
+            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null && dto.ShowSends is null)
             {
                 if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
                 return;
@@ -677,6 +688,7 @@ public sealed partial class ArrangementView
                 if (th.Index >= 0 && _engine.TryGetTrackInfo(th.Index, out var ti))
                     StoreRowHeight(ti.Id, th.Height);
             if (dto.MasterHeight is { } mh) _masterHeight = ClampRowHeight(mh);
+            if (dto.ShowSends is { } ss) _showSends = ss;
         }
         catch { /* a corrupt sidecar just means the default layout */ }
         finally { ApplyHeaderWidth(final: false); }
@@ -689,6 +701,8 @@ public sealed partial class ArrangementView
         _masterHeight = DefaultFooterRowHeight;
         _clipboardHeights = null;
         _userHeaderW = DefaultHeaderW;
+        _showSends = true;
+        PaintSendsToggle();
         ApplyHeaderWidth(final: false);
     }
 }

@@ -297,7 +297,7 @@ public sealed partial class DeviceChainView : UserControl
             value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
             var knob = new Knob(_engine.GetTrackSend(_trackId, bus), 1.0) { Accent = true, Default = 0, Format = v => Pct((float)v) };
             int b = bus;
-            knob.ValueChanged += v => { _engine.SetTrackSend(_trackId, b, (float)v); value.Text = Pct((float)v); };
+            SendControl.Attach(knob, _engine, _trackId, b, v => value.Text = Pct((float)v));   // undoable, writes automation (specs/072)
             // Follow the Session / Mixer send faders and automation (#138).
             _deviceLiveRefreshers.Add(() =>
             {
