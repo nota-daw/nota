@@ -154,6 +154,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **CC lanes added to a folded Drum Rack** use the wider pad-name gutter immediately,
+  keeping their curves and pointer edits aligned with the notes (#422).
 - **An armed audio track meters its input with monitoring off** (nota-daw/nota#352): arm a
   track and its meter shows the level coming in (hardware input, or the source track it
   records from) before and during a take, without hearing it. The meter reads the input

@@ -140,6 +140,7 @@ internal static class Program
                     using var bitmap=new RenderTargetBitmap(new PixelSize(1000,720)); bitmap.Render(window); bitmap.Save(Path.Combine(root,theme+"-cc.png"));
                 }
                 Require(commits==1,"view, theme and zoom operations never write controller data");
+                CheckFoldedLanes(root, Require);
                 File.WriteAllText(Path.Combine(root,"cc-results.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
                 window.Close();
                 // Drain theme-change work before disposing the real app's engine.
@@ -153,5 +154,51 @@ internal static class Program
         Dispatcher.UIThread.MainLoop(stop.Token);
         if(failure is not null)throw failure; if(!done)throw new Exception("Probe timed out");
         Console.WriteLine(string.Join(Environment.NewLine,checks));
+    }
+
+    static void CheckFoldedLanes(string root, Action<bool,string> require)
+    {
+        var roll = new PianoRollView { FoldPads=()=>new Dictionary<int,string> { [36]="Kick", [38]="Snare" } };
+        roll.SetNotes([new NotaNote(36,2,1,.8f),new NotaNote(38,4,1,.7f)],8);
+        var points = new[] { new AutomationPoint(0,.2f), new AutomationPoint(6,.8f) };
+        roll.ControllersInClip=()=>[1]; roll.GetController=_=>points;
+        int commits=0;
+        roll.SetController=(_,updated)=>{points=updated;commits++;};
+        var window=new Window {Content=roll,Width=1000,Height=720};
+        window.Show();window.UpdateLayout();
+        roll.SetFold(true);
+        Call(roll,"AddControllerLane");window.UpdateLayout();
+        var lanes=(IList)Get(roll,"_controllerLanes")!;
+        Control Lane()=> (Control)lanes[0]!.GetType().GetProperty("Lane")!.GetValue(lanes[0])!;
+        var grid=(Control)Get(roll,"_gridControl")!;
+        bool Aligned()=>Math.Abs(Lane().TranslatePoint(default,window)!.Value.X
+            - grid.TranslatePoint(default,window)!.Value.X)<.01;
+        using(var bitmap=new RenderTargetBitmap(new PixelSize(1000,720)))
+        {
+            bitmap.Render(window);bitmap.Save(Path.Combine(root,"folded-cc.png"));
+        }
+        double noteX=grid.TranslatePoint(new Point((double)Call(roll,"BeatToX",2.0)!,0),window)!.Value.X;
+        var click=new Point(noteX,Lane().TranslatePoint(new Point(0,50),window)!.Value.Y);
+        using(var pointer=new Avalonia.Input.Pointer(43,PointerType.Mouse,true))
+        {
+            var down=new PointerPointProperties(RawInputModifiers.LeftMouseButton,PointerUpdateKind.LeftButtonPressed);
+            Lane().RaiseEvent(new PointerPressedEventArgs(Lane(),pointer,window,click,1,down,KeyModifiers.None,2));
+            Lane().RaiseEvent(new PointerReleasedEventArgs(Lane(),pointer,window,click,2,
+                new PointerPointProperties(RawInputModifiers.None,PointerUpdateKind.LeftButtonReleased),KeyModifiers.None,MouseButton.Left));
+        }
+        require(commits==1 && points.Any(p=>Math.Abs(p.Beat-2)<1e-6),
+            "click directly below a folded drum note writes CC at the same beat");
+        require(Aligned(),"CC lane added after Drum Rack folding starts aligned with notes");
+        roll.RefreshFold();window.UpdateLayout();
+        require(Aligned(),"unchanged folded pad rows preserve new CC lane alignment");
+        roll.SetFold(false);window.UpdateLayout();
+        require(Aligned() && grid.TranslatePoint(default,roll)!.Value.X==48,
+            "unfolding restores the normal aligned 48-pixel gutter");
+        roll.SetFold(true);window.UpdateLayout();
+        require(Aligned() && grid.TranslatePoint(default,roll)!.Value.X==96,
+            "refolding updates existing CC lanes to the 96-pixel pad gutter");
+        Call(roll,"RemoveControllerLane",lanes[0]!);Call(roll,"AddControllerLane");window.UpdateLayout();
+        require(Aligned(),"CC lane removed and readded while folded keeps alignment");
+        window.Close();
     }
 }

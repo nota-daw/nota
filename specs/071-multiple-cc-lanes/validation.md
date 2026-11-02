@@ -45,6 +45,21 @@ control, and persistence of which extra lanes are visible remain follow-up work.
 The current picker retains its reserved-controller restrictions. Lane sizes persist
 by mode or extra-lane slot/controller; the extra view list itself is editor-local.
 
+## PR #425 folded Drum Rack review correction
+
+The expanded probe reproduces the reported bug on commit `836f736c`: a double-click
+directly beneath a beat-2 drum note fails to write its CC point at beat 2. Initializing
+new columns from the current pad-row state fixes it. All 22 UI checks pass, including
+the six new checks for pointer beat mapping, immediate alignment, unchanged-row refresh,
+unfold/refold and removal/readdition. Fresh-process height restoration also passes.
+The full `scripts/build-win.ps1` gate passes again, including the native scanner
+self-test, complete smoke suite and scan-scale check.
+
+Matching Studio Light captures (1000 × 720, identical clip, before the pointer edit):
+[before](https://raw.githubusercontent.com/thoi1/nota/pr-assets/issue-422/folded-cc-before.png),
+[after](https://raw.githubusercontent.com/thoi1/nota/pr-assets/issue-422/folded-cc-after.png).
+Assessment, fix and verification records: `.specify/bugs/folded-cc-gutter/`.
+
 ## Limits
 
 Windows x64 was built and exercised; macOS/Linux and physical mixed-DPI monitor moves

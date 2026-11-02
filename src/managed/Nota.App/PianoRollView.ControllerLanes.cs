@@ -165,7 +165,7 @@ public sealed partial class PianoRollView
         }
         Select(ctl);
         var remove = LaneButton(GlyphKind.Minus, Loc.T("Hide controller lane (keep its data)"));
-        var row = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = ExprH };
+        var row = new Grid { ColumnDefinitions = new ColumnDefinitions($"{(_rowsArePads ? FoldedPadKeysW : KeysW)},*"), Height = ExprH };
         int slot = Enumerable.Range(0, _controllerLanes.Count + 1).First(s => _controllerLanes.All(l => l.Slot != s));
         var container = ResizableLane(row, () => $"extra:{slot}:cc:{lane.Controller ?? MidiController.Sustain}");
         var item = new ExtraControllerLane(lane, row, container, slot);
