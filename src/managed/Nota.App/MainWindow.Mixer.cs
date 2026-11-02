@@ -53,6 +53,7 @@ public partial class MainWindow
             settings.Save();
         };
         Timeline.TrackSelected += id => _mixer?.FollowSelection(id);
+        Timeline.SelectionCleared += () => _mixer?.FollowSelection(-1);
         if (_modular is not null) _modular.TrackActivated += id => _mixer?.FollowSelection(id);
     }
 

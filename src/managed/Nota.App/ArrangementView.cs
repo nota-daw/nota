@@ -294,6 +294,9 @@ public sealed partial class ArrangementView : UserControl
     public event Action<int, int>? AudioClipActivated;
     /// <summary>Raised when a track becomes selected (clip or header click).</summary>
     public event Action<int>? TrackSelected;
+    /// <summary>Raised when the track selection is cleared (Escape, a click on empty space), so
+    /// views that mark the selected track — the Mixer's outline (specs/070) — can drop it.</summary>
+    public event Action? SelectionCleared;
     /// <summary>Raised when a track header is double-clicked: open its devices (#308).</summary>
     public event Action<int>? TrackDevicesRequested;
     /// <summary>Live-freeze (v1.1): per-track role for the header badge — 0 none, 1 sleeping
@@ -1652,6 +1655,7 @@ public sealed partial class ArrangementView : UserControl
         RebuildFooterHeaders();   // returns/master carry the selection highlight too (1e)
         Redraw();
         if (trackId > 0) TrackSelected?.Invoke(trackId);
+        else if (prev > 0) SelectionCleared?.Invoke();
     }
 
     private bool IsGroupTrack(int id)

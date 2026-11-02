@@ -147,12 +147,14 @@ public sealed partial class MixerView : UserControl
         public Control? SoloDot, ArmDot, ClipDot;   // group strips: hidden-member state, when folded
         public int[] HiddenIds = Array.Empty<int>();       // a group's descendants (ids)
         public int[] HiddenIndices = Array.Empty<int>();   // … and their engine indices
-        public bool ClipLatched;
     }
     private readonly List<StripEntry> _strips = new();
     private readonly Dictionary<int, StripEntry> _stripById = new();
     private int _maxDepth;
     private int _selectedId = -1;
+    // Hidden-track clip warnings by group id: a rebuild (Compact, a rename, a regroup) makes new
+    // StripEntries but must not drop a warning; only unfolding, the dot or a new project clears it.
+    private readonly HashSet<int> _clipLatched = new();
 
     /// <summary>The fold state shared with the Arrangement (specs/070).</summary>
     internal GroupFold? Fold
@@ -296,6 +298,7 @@ public sealed partial class MixerView : UserControl
             if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsReturn) AddStrip(ti, 0, -1, returns);
         _row.Children.Add(_compact ? CompactMasterStrip() : MasterStrip());
         CollectDescendants(rows);
+        _clipLatched.RemoveWhere(id => !_stripById.TryGetValue(id, out var g) || !g.IsGroup);   // a group that is gone
         _row.Margin = new Thickness(10, 10 + BandsH, 10, 10);
         _bands.Top = 10;
         _shownLaw = null;   // the strips are new: repaint the law state onto them
@@ -375,7 +378,7 @@ public sealed partial class MixerView : UserControl
             e.Strip.IsVisible = !HiddenByFold(e);
             bool folded = e.IsGroup && _fold?.IsFolded(e.Id) == true;
             e.PaintFold?.Invoke(folded);
-            if (!folded) e.ClipLatched = false;
+            if (!folded) _clipLatched.Remove(e.Id);
         }
         var bands = new List<GroupBandsLayer.Band>();
         for (int i = 0; i < _strips.Count; i++)
@@ -457,12 +460,13 @@ public sealed partial class MixerView : UserControl
             {
                 foreach (int idx in g.HiddenIndices)
                     if (_engine.TryGetTrackInfo(idx, out var ti)) { solo |= ti.Soloed != 0; arm |= ti.Armed != 0; }
-                foreach (int id in g.HiddenIds)
-                    if (!g.ClipLatched && _engine.TryGetTrackMeter(id, out var m) && (m.PeakL >= 1f || m.PeakR >= 1f)) g.ClipLatched = true;
+                if (!_clipLatched.Contains(g.Id))
+                    foreach (int id in g.HiddenIds)
+                        if (_engine.TryGetTrackMeter(id, out var m) && (m.PeakL >= 1f || m.PeakR >= 1f)) { _clipLatched.Add(g.Id); break; }
             }
             g.SoloDot.IsVisible = solo;
             g.ArmDot!.IsVisible = arm;
-            g.ClipDot!.IsVisible = folded && g.ClipLatched;
+            g.ClipDot!.IsVisible = folded && _clipLatched.Contains(g.Id);
         }
     }
 
@@ -822,7 +826,7 @@ public sealed partial class MixerView : UserControl
             group.SoloDot = Dot(NotaPalette.Solo, Loc.T("A hidden track is soloed"));
             group.ArmDot = Dot(NotaPalette.Record, Loc.T("A hidden track is armed"));
             group.ClipDot = Dot(NotaPalette.Danger, Loc.T("A hidden track clipped · click to clear"));
-            group.ClipDot.PointerPressed += (_, e) => { e.Handled = true; group.ClipLatched = false; group.ClipDot.IsVisible = false; };
+            group.ClipDot.PointerPressed += (_, e) => { e.Handled = true; _clipLatched.Remove(group.Id); group.ClipDot.IsVisible = false; };
             dots.Children.Add(group.SoloDot); dots.Children.Add(group.ArmDot); dots.Children.Add(group.ClipDot);
             DockPanel.SetDock(dots, Dock.Right);
             line.Children.Add(dots);
