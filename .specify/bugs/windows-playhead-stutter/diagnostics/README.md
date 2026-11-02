@@ -64,3 +64,11 @@ dotnet run --project tests/Nota.SmokeTest -c Release -- --transport-display
 
 Timing results depend on the display, audio backend, foreground/occluded window state,
 and system load. Keep wall-clock cadence measurements out of CI pass/fail assertions.
+
+## Recorded results
+
+The JSON measurements named by the assessment/fix/verification reports are preserved
+on [pr-assets](https://github.com/thoi1/nota/tree/pr-assets/issue-423/historical-results/windows-playhead-stutter/diagnostics),
+including the WASAPI, Yamaha ASIO, lifecycle and meter-cadence samples. Generated
+measurements are ignored locally so benchmark output stays out of the code branch.
+The commands above regenerate the same local output paths.
