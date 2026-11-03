@@ -145,6 +145,18 @@ internal static class SectionRearrangeTests
                 "section move: a cut audio clip's envelope is re-based to each piece");
         }
 
+        // Duplicate with content keeps a curved lane's shape around the copy too: the quadratic
+        // ramp reads at beat 16 what it read at 12 (0.5625), the copy plays B's curve.
+        {
+            var s = Build();
+            using var e = s.E;
+            e.SetAutomationPoints(s.B, s.Lane, new[] { new AutomationPoint(0, 0f, -0.25f), new AutomationPoint(16, 1f) });
+            float Sq(double b) => (float)Math.Pow(Math.Clamp(b, 0, 16) / 16.0, 2);
+            bool dup = e.DuplicateSectionWithContent(1);   // B [4,8): copy at 8, the rest +4
+            yield return (dup && LaneFollows(e.GetAutomationPoints(s.B, s.Lane), Sq, (3, 3), (6, 6), (9, 5), (11.5, 7.5), (13, 9), (16, 12), (19, 15), (21, 17)),
+                "section duplicate: curved automation keeps its shape before, in and after the copy");
+        }
+
         // Move A after C: B · C · A.
         {
             var s = Build();

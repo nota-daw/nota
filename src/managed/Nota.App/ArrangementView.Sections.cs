@@ -231,17 +231,18 @@ public sealed partial class ArrangementView
     // covers the music it did, and cuts and removals re-index the clips, so a clip selection
     // would point at other clips: both go, and open clip editors re-sync as after a split.
     // Clips and sections are re-read. Clips only moved, so the track headers stay — rebuilding
-    // them is what makes a big song slow (SC-004) — unless a take lane came or went, which a
-    // header shows.
+    // them is what makes a big song slow (SC-004) — unless the song has take lanes: their
+    // headers hold each take's place (its menu comps by it), so they are rebuilt.
     private bool SectionContentEdit(Func<IAudioEngine, bool> edit)
     {
         if (_engine is not { } eng) return false;
         int Takes() { int n = 0; foreach (var t in _tracks) n += eng.TakeCount(t.Id); return n; }
-        int before = Takes();
+        bool takes = Takes() > 0;
         if (!edit(eng)) return false;
+        takes |= Takes() > 0;
         ClearTimeSelection();
         Select(-1, -1);
-        if (Takes() == before) RefreshMovedClips(); else Refresh();
+        if (takes) Refresh(); else RefreshMovedClips();
         ReloadSections();
         ClipsSplit?.Invoke();
         SectionsChanged?.Invoke();

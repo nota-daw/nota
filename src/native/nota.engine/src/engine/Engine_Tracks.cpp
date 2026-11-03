@@ -2231,6 +2231,30 @@ bool laneRemap(AutomationLane& lane, double lo, double hi, const std::vector<Tim
     return true;
 }
 
+// The lane with a copy of [a,b) inserted at b (Duplicate with content): the original up to b,
+// the copy, then the rest from b on, later by the section's length — every piece playing as
+// it did, cuts laid as in laneRemap. False when the lane is empty or holds one value from a on.
+bool laneDuplicate(AutomationLane& lane, double a, double b) {
+    constexpr double eps = 1e-9;
+    auto& p = lane.points;
+    if (p.empty() || p.back().beat < a - eps) return false;
+    const double len = b - a;
+    std::vector<AutomationPoint> out;
+    out.reserve(p.size() * 2 + 4);
+    for (const auto& q : p)
+        if (q.beat < b - eps) out.push_back(q);
+    out.push_back({b, lane.valueAt(b), 0.0f}); // the left side ends as it did
+    for (auto q : laneSliceExact(lane, a, b)) {
+        q.beat += b;
+        out.push_back(q);
+    }
+    appendLaneFrom(out, lane, b, std::numeric_limits<double>::infinity(), len);
+    for (const auto& q : p)
+        if (q.beat > b + eps) out.push_back({q.beat + len, q.value, q.curve});
+    p.swap(out);
+    return true;
+}
+
 } // namespace
 
 void Engine::remapTimeline(double lo, double hi, const std::vector<TimeRegion>& rs, std::vector<Section> sections) {
@@ -2379,6 +2403,22 @@ bool Engine::duplicateSectionWithContent(int32_t index) {
     auto g = std::make_shared<Graph>();
     inheritGraphLevel(*g, *authoring_);
     insertTimeInto(*g, b, len, true); // nothing to copy is fine: the section still doubles
+    // Automation: Duplicate time's gap closes a curved segment cut at b with a straight line, so
+    // the lanes are rebuilt from the originals the way a move lays them (laneDuplicate).
+    auto redoLanes = [&](std::shared_ptr<Track>& t, const Track& orig) {
+        if (std::none_of(orig.automation.begin(), orig.automation.end(), [](const TrackLane& l) { return !l.points.empty(); }))
+            return;
+        auto nt = cloneTrack(*t);
+        for (size_t j = 0; j < nt->automation.size() && j < orig.automation.size(); ++j) {
+            nt->automation[j].points = orig.automation[j].points;
+            laneDuplicate(nt->automation[j], a, b);
+        }
+        t = nt;
+    };
+    for (size_t i = 0; i < g->tracks.size() && i < authoring_->tracks.size(); ++i) redoLanes(g->tracks[i], *authoring_->tracks[i]);
+    if (g->masterTrack && authoring_->masterTrack) redoLanes(g->masterTrack, *authoring_->masterTrack);
+    g->masterVolume = authoring_->masterVolume;
+    laneDuplicate(g->masterVolume, a, b);
     // Take lanes: later ones move with the song; one starting in the section gets a copy (a new
     // id and number) under the copied section, and the copied comp clips point at it so the
     // copy can be comped on its own (specs/067).
