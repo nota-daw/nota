@@ -197,6 +197,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
     macOS schedules them against the audio deadline.
   - A hosted plug-in's buffers are cleared only for the current block, not for their full
     maximum size on every output.
+- **Mixed projects at small buffers no longer drop out with render threads idle** (#450): Nota
+  spreads built-in tracks over its render threads only when one thread can't keep up, and it
+  used to judge that by the built-in tracks alone, on average. A project whose plug-ins (which
+  stay on the audio thread) and built-ins together overran the buffer, or overran it only in
+  its busiest moments, kept every render thread idle while the dropouts piled up. Now the
+  whole block counts, and so do blocks that come close to the deadline.
 - **Memory no longer grows with every edit** (#437): the engine kept every past version of the
   project's graph for the whole session. Replaced versions are now freed as soon as audio
   can no longer be reading them (the undo history still keeps the ones it needs).

@@ -2210,6 +2210,18 @@ class Engine {
     bool rtParallel_ = false;
     double rtParallelLeftNs_ = 0;
     double rtProbeLeftNs_ = 0;
+    // The rest of the block (#450): plug-in leaves, the master, returns — work only this thread
+    // can do. render() measures the whole block and the time spent in the pool's dispatch, and
+    // keeps the remainder as a fraction of the block (serialFrac_) plus a score of near-late
+    // blocks (nearLate_: +1 per block over kRtNearLate of its period, decaying). leafWorkNs_
+    // alone missed a block that overran because of the serial share or a spike, and kept nine
+    // render threads parked through a storm of dropouts. Audio thread only.
+    double serialFrac_ = 0.0;
+    double nearLate_ = 0.0;
+    int64_t dispatchNs_ = 0; // this block's wall time inside pool_->dispatch (mixGraph adds)
+    static constexpr double kRtNearLate = 0.9;  // a block this full of its period counts as near-late
+    static constexpr double kRtLateJoin = 1.8;  // nearLate_ score that joins: ~2 such blocks in ~20
+    static constexpr double kRtMinBudget = 0.2; // helpers aim at no less than this much of the period
     static constexpr double kRtSizeLoad = 0.85; // helpers: finish within this much of the buffer
     static constexpr double kRtHoldSeconds = 2.0;
     static constexpr double kRtMaxHoldSeconds = 32.0;

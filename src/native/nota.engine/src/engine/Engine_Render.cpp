@@ -812,7 +812,19 @@ void Engine::render(float* out, int32_t numFrames) {
     dsp::ScopedNoDenormals noDenormals;
     const auto t0 = std::chrono::steady_clock::now();
     deviceBlock_ = true; // a deadline, whatever the gap since the last block
+    dispatchNs_ = 0;
     processBlock(out, numFrames);
+    {   // What only this thread could do, and how close the block came to its deadline (#450).
+        const double rate = transport_.sampleRate(); // the rate the block rendered at
+        const double blockNs = rate > 0.0 && numFrames > 0 ? 1e9 * numFrames / rate : 0.0;
+        if (blockNs > 0.0) {
+            const double tookNs = (double)std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+            const double serial = std::clamp((tookNs - (double)dispatchNs_) / blockNs, 0.0, 2.0);
+            serialFrac_ += (serial - serialFrac_) / 16;
+            nearLate_ = nearLate_ * 0.9 + (tookNs > kRtNearLate * blockNs ? 1.0 : 0.0);
+        }
+    }
     // DSP load = render time / block budget, smoothed (Phase 11). Live-device
     // path only; renderOffline stays untimed.
     const double sr = sampleRate();
@@ -2397,8 +2409,9 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             int helpers = -1;
             if (!offline) {
                 helpers = 0;
+                const double serialNs = serialFrac_ * periodNs; // see serialFrac_
                 if (rtParallel_ && (rtParallelLeftNs_ -= periodNs) <= 0) {
-                    if (parWorkNs_ <= periodNs) {
+                    if (parWorkNs_ + serialNs <= periodNs && nearLate_ < 1.0) {
                         rtParallel_ = false; // even the over-reading bound fits: try alone
                         leafWorkNs_ = parWorkNs_;
                         rtProbeLeftNs_ = kRtProbeSeconds * 1e9;
@@ -2407,11 +2420,14 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     }
                 }
                 if (rtParallel_) {
+                    // Enough threads to finish the eligible work in what the serial share leaves.
                     const double work = (double)std::max(leafWorkNs_, parWorkNs_);
-                    const int threads = (int)std::ceil(work / (kRtSizeLoad * periodNs));
+                    const double budget = std::max(kRtMinBudget * periodNs, kRtSizeLoad * periodNs - serialNs);
+                    const int threads = (int)std::ceil(work / budget);
                     helpers = std::clamp(threads - 1, 1, std::max(1, m - 1));
                 }
             }
+            const auto dispatchT0 = std::chrono::steady_clock::now();
             pool_->dispatch(
                 m,
                 [&](int wid, int j) {
@@ -2427,6 +2443,8 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                         std::chrono::steady_clock::now() - t0).count();
                 },
                 helpers);
+            dispatchNs_ += std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::steady_clock::now() - dispatchT0).count();
             // The single-thread cost, from blocks this thread rendered alone, and the
             // pool's summed task time while it runs (see leafWorkNs_).
             if (!offline && m > 0) {
@@ -2442,9 +2460,16 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 } else {
                     // Just left the pool: one block over its period proves the bound wrong.
                     // Rejoin at once and wait twice as long before the next try.
-                    const bool probeMissed = rtProbeLeftNs_ > 0 && (double)work > periodNs;
+                    // The whole block counts: the eligible leaves plus the serial share (#450).
+                    const double serialNs = serialFrac_ * periodNs;
+                    const bool probeMissed = rtProbeLeftNs_ > 0 && (double)work + serialNs > periodNs;
                     if (alone) leafWorkNs_ += (work - leafWorkNs_) / 16;
-                    if (probeMissed || (alone && leafWorkNs_ > periodNs)) {
+                    // Join when the block as a whole doesn't fit — on average, or in its tail
+                    // (near-late blocks) — and the eligible leaves are worth spreading.
+                    const bool worthIt = leafWorkNs_ > kRtMinBudget * periodNs;
+                    const bool over = leafWorkNs_ + serialNs > kRtSizeLoad * periodNs;
+                    if (probeMissed || (alone && (leafWorkNs_ > periodNs ||
+                                                     (worthIt && (over || nearLate_ >= kRtLateJoin))))) {
                         if (probeMissed) rtHoldNs_ = std::min(2 * rtHoldNs_, kRtMaxHoldSeconds * 1e9);
                         rtParallel_ = true;
                         rtParallelLeftNs_ = rtHoldNs_;

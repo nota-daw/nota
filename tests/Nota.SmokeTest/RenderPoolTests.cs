@@ -58,6 +58,38 @@ internal static class RenderPoolTests
         return e;
     }
 
+    // #450: `serial` armed tracks playing another track's MIDI — leaves only the callback thread
+    // renders (as it does hosted plug-ins) — plus `eligible` audio tracks the pool can take.
+    // Every serial leaf runs a Reverb on a sustained chord, so both kinds cost real DSP.
+    private static NotaEngine MixedSession(int serial, int eligible, int renderThreads)
+    {
+        var e = new NotaEngine();
+        if (renderThreads >= 0) e.RenderThreads = renderThreads;
+        e.SetBpm(120);
+        int src = e.AddInstrumentTrack();
+        int clip = e.AddMidiClip(src, 0.0, 64.0);
+        e.SetClipNotes(src, clip, new[] { new NotaNote(48, 0.0, 64.0, 0.8f), new NotaNote(55, 0.0, 64.0, 0.7f),
+            new NotaNote(60, 0.0, 64.0, 0.7f), new NotaNote(64, 0.0, 64.0, 0.6f) });
+        for (int i = 0; i < serial; i++)
+        {
+            int t = e.AddInstrumentTrack();
+            e.SetTrackMidiSource(t, src);
+            e.SetTrackArmed(t, true); // an armed MIDI destination renders on the callback thread
+            e.AddBuiltinDevice(t, 2);  // Reverb
+        }
+        string noise = NoiseClip();
+        for (int i = 0; i < eligible; i++)
+        {
+            int t = e.AddAudioTrack();
+            e.AddAudioClip(t, noise, 0.0);
+            e.AddBuiltinDevice(t, 2);
+        }
+        var b = new float[Block * 2];
+        e.RenderOffline(b, Block, Rate);
+        e.Seek(0); e.Play();
+        return e;
+    }
+
     // Parallel engines get at least two render threads, so the comparison means something
     // on a two-core runner too (where the default is none).
     private static int ParallelThreads()
@@ -201,6 +233,32 @@ internal static class RenderPoolTests
                 $"overloaded: {lateWarm} of {blocks} blocks late with render threads after warm-up (<= 1 %)");
             yield return TimingBudget.Check(true, burst <= 4,
                 $"overloaded: at most {burst} late blocks within 50 ms (<= 4: no bursts when the pool re-checks the load)");
+        }
+
+        // 3c. #450: the block overruns because of the serial share (here armed MIDI
+        //     destinations; in the field, hosted plug-ins) plus built-ins that alone fit easily.
+        //     Before, the pool joined only once the built-ins alone averaged a whole period, so
+        //     it stayed parked through every late block. Sized for this machine: about 0.6 of a
+        //     64-frame period each, so one thread needs ~1.2 periods and the pool makes it fit.
+        {
+            int Calibrate(bool serial)
+            {
+                using var e = serial ? MixedSession(16, 0, 0) : MixedSession(0, 16, 0);
+                var cal = Measure(e, 0.5, paced: false, block: Small);
+                double perTrack = cal.Cpu / (int)(0.5 / smallPeriod) / 16;
+                return Math.Clamp((int)Math.Round(0.6 * smallPeriod / perTrack), 1, 1024);
+            }
+            int serialN = Calibrate(true), eligibleN = Calibrate(false);
+            var lateAt = new List<int>();
+            using (var e = MixedSession(serialN, eligibleN, par)) prl = Measure(e, 4.0, paced: true, block: Small, lateAt: lateAt);
+            int warm = (int)(0.5 / smallPeriod), blocks = (int)(4.0 / smallPeriod) - warm;
+            int lateWarm = lateAt.Count(i => i >= warm);
+            yield return (prl.Threads > 0.05,
+                $"serial share + built-ins overrun a 64-frame block ({serialN} serial + {eligibleN} poolable tracks): render threads join ({prl.Threads * 1000:0} ms CPU)");
+            // Before the fix every block was late; scheduler noise on a busy runner stays well
+            // under the bound.
+            yield return TimingBudget.Check(true, lateWarm <= blocks / 10,
+                $"serial share + built-ins: {lateWarm} of {blocks} blocks late after warm-up (<= 10 %, all of them before #450)");
         }
 
         // 4. Bounce (blocks back-to-back): CPU work bounded, and never slower than one thread.
