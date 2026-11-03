@@ -179,6 +179,13 @@ HSL lightness (hue kept) that passes the bar:
    a picture of the plug-in's own window under `NotaPalette.PluginPreviewWash`, a vertical
    wash of the card's own `SurfaceCard` (specs/046). It lives in `Theme/` like every
    token; views still draw no gradients of their own.
+   A second exception: the launch splash's release art (`Theme/SplashArt/`, specs/074),
+   generated from the version number so every release opens with a picture of its own.
+   It may use gradients between theme tokens (including fades to transparent) and strokes
+   heavier than 1px. It still draws only theme tokens: track colours as the work,
+   neutral greys for its structure, and one accent mark that reads as live (a playhead,
+   the current step). It has no glow, blur or shadow, and the text beside it stays on the
+   plain ground behind a 1px seam.
 7. **Small, nearly square corners.** 2 for inner keys, rows, clips and menu items; 3 for
    controls, cards, graph windows and popovers; 4 only for modals. 0 for docked panels; 1
    for bars inside a plot.
@@ -813,7 +820,7 @@ sections) and fails the build on:
 | `Run` | `NotaTheme.axaml` holds no colour; every referenced `Brush.*` key is published (`KeyMap`); every `Shadow.*` key is built from the theme |
 | `RunThemes` | Every theme file: shape, id, kind, exactly the token catalogue, valid opaque colours (shadows may be translucent), and every readability pairing (§ Readability bar); `BuiltInOrder` lists exactly the files |
 | `RunAppearance` | Old settings migrate (Dark / Light / System); unknown and wrong-kind ids fall back; storing keeps the legacy setting in step |
-| `RunGeometry` | XAML ↔ `NotaGeometry` values; no undefined `Radius`/`Control`/`Space` keys; no `CornerRadius` literals, drop shadows or gradients in views; `Rectangle` `RadiusX` / `RadiusY` literals on the 0/1/2/3/4 scale (`RadiusAllowList.txt`) |
+| `RunGeometry` | XAML ↔ `NotaGeometry` values; no undefined `Radius`/`Control`/`Space` keys; no `CornerRadius` literals, drop shadows or gradients in views; gradients inside `Theme/` only in `NotaPalette.cs` and `Theme/SplashArt/`; `Rectangle` `RadiusX` / `RadiusY` literals on the 0/1/2/3/4 scale (`RadiusAllowList.txt`) |
 | `RunType` | Fonts bundled and matched; no font names in views; nothing under 7 px |
 | `RunControls` | No unicode icons typed as text; Knob / Switch / Slider sizes |
 | `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter ballistics; meter 11/5; playhead 1 px without glow |
