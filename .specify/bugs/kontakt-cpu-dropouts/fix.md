@@ -3,7 +3,7 @@
 - **Slug**: kontakt-cpu-dropouts
 - **Fixed**: 2026-11-02
 - **Assessment**: ./assessment.md
-- **Status**: partial (remediation step 1 applied; steps 2–3 are follow-ups by agreement)
+- **Status**: partial (steps 1 and 2 applied — step 2 as workgroup join for pool workers and AUs, plug-ins still serial; step 3 follow-up; built-in Consort storm in demo21 still open)
 
 ## Summary
 
@@ -82,6 +82,31 @@ if (timed) {
   (−3…−9 %) — the gain is in the tail (blocks with many events). Four instances still take
   ~50 % of a 64-frame period on one thread, so remediation step 2 (plug-in tracks on the render
   pool) is what removes the single-core ceiling.
+
+## Round 2: live test on `demo21.nota` (2026-11-03)
+
+The reporter tested the branch with a second project, `demo21.nota`, and got dropout storms. It
+has 4 built-in instrument tracks (Consort + Arp among them) plus Splice Bridge (VST3) and
+Maschine 2 (AU), with empty clips on the plug-in tracks. At 48 kHz / 64 frames the dropouts
+built up after about 10 s and lasted until Stop. The cause was found with `sample` on the
+live app's CoreAudio IO thread, then checked by muting tracks through MCP.
+
+| Finding | Evidence | Change |
+|---|---|---|
+| Splice Bridge calls JUCE `PluginHostType::getHostType()` every block. For a host JUCE doesn't know by path, that ends in `[[NSRunningApplication currentApplication] localizedName]`: a fresh object whose first property read is a synchronous LaunchServices XPC. | It took 21–52 % of the IO thread in profiles. Timed alone: median 67 µs, p99 6 ms, p99.9 31 ms. Muting the track cut dropouts from about 2600/30 s to 141/40 s. | `cacheCurrentApplication()` (PluginHost.cpp): `currentApplication` returns one retained instance, and its `localizedName` is a copy taken at plug-in host init. Other apps are untouched. Timed: median 0.08 µs. Profile: 0 LaunchServices frames. `dspLoad` 0.64 → 0.20. |
+| Maschine 2 waits inside its render for its own 9 `AudioWorker` threads, and Nota never handed AUs the device workgroup. | Probe: Maschine 2 and all Splice AUs offer `kAudioUnitProperty_RenderContextObserver`. | `CoreAudioBackend::ioWorkgroup()` (`kAudioDevicePropertyIOThreadOSWorkgroup`) → `setPluginAudioWorkgroup` → `WorkgroupLink` calls each AU's observer on the render thread when the workgroup changes. |
+| The render pool's workers were plain threads. Once `rtParallel_` joined, the callback spun in `dispatch` waiting for them: 37 % of the IO thread in one profile. | Profile of the branch bundle. | `AudioThreadPool::setWorkgroup`: workers take `THREAD_TIME_CONSTRAINT` for the buffer period and `os_workgroup_join` the device workgroup, leaving it when the device stops. The next profile had no dispatch spin. |
+| `PluginInstrument` / `PluginEffect` cleared every output channel for `maxBlock` samples each block. | About 10 % of Maschine's render in the first profile. | `storage_.clear(0, frames)`. |
+| Review P1 (Greptile): `recordSlotHold_` could free the previous `SessionPlayer` while a render still read it. | Valid. | `recordSlotHist_` (`SnapshotHistory<SessionPlayer>`) with a `RenderScope` around all of `processBlock`. Covered by `graphRetireSelfTest`. |
+
+**Not fixed here: the built-in Consort track.** With Splice fixed, the storm still built up over
+time. Muting track 4 (Consort + Arp + Delay/Chamber/Shutter/Reverb) cut it from about 500 to
+63 per 30 s, and process CPU halved. A headless render of the same project (device-block path,
+same rate and buffer) never showed it, so it needs its own issue and investigation.
+
+Tested on a bundle built with `NOTA_APP_DIR=/private/tmp/nota-branch-app scripts/bundle-mac.sh`.
+Running the app as a bare `dotnet Nota.App.dll` makes LaunchServices lookups much slower, so
+that is not a fair test of this.
 
 ## Follow-ups
 

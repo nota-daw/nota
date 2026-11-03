@@ -67,10 +67,11 @@ void PluginInstrument::render(float* out, int32_t frames) {
     for (GuiNote g; guiNotes_.pop(g);)
         pending_.addEvent(
             g.on ? juce::MidiMessage::noteOn(1, g.pitch, g.velocity) : juce::MidiMessage::noteOff(1, g.pitch), 0);
-    storage_.clear();
+    storage_.clear(0, frames); // only what this block uses: a multi-out plug-in has many channels
     float* ptrs[kMaxChans];
     juce::AudioBuffer<float> block(
         ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, chanFloor_, ptrs), frames);
+    workgroup_.update();
     plugin_->processBlock(block, pending_);
     pending_.clear();
     const float* l = block.getReadPointer(0);
@@ -171,6 +172,7 @@ void PluginInstrument::prepare(double sr) {
     plugin_->setRateAndBufferSizeDetails(sr, maxBlock_);
     plugin_->prepareToPlay(sr, maxBlock_);
     plugin_->setPlayHead(&playHead_); // DAW transport sync
+    workgroup_.bind(*plugin_);
     // In and out share the buffer, so it spans the wider side.
     storage_.setSize(
         juce::jmax(2, plugin_->getTotalNumInputChannels(), plugin_->getTotalNumOutputChannels()), maxBlock_);

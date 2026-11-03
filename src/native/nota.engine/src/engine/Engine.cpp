@@ -112,6 +112,13 @@ bool Engine::start() {
         reconfigureAllWarpStreams();                 // warp transpose + window sizes depend on the device SR
         recomputePdc();                              // latencies are known once plugins are prepared
     }
+    // Plug-ins with real-time threads of their own, and the render pool, join the device's IO
+    // workgroup (#436).
+    void* const wg = ok ? backend_->ioWorkgroup() : nullptr;
+    setPluginAudioWorkgroup(wg);
+    const int32_t bf = ok ? backend_->bufferFrames() : 0;
+    if (pool_)
+        pool_->setWorkgroup(wg, wg && bf > 0 && backend_->sampleRate() > 0 ? 1e9 * bf / backend_->sampleRate() : 0.0);
     renderSuspended_.store(false, std::memory_order_release);
     if (ok) openMidiInput();
     return ok;
@@ -192,6 +199,8 @@ int32_t Engine::gamepadAxisValues(int32_t pad, int32_t* out, int32_t max) const 
 
 void Engine::stop() {
     if (midiInput_) midiInput_->close();
+    setPluginAudioWorkgroup(nullptr); // before the device (and its workgroup) goes
+    if (pool_) pool_->setWorkgroup(nullptr, 0.0);
     if (backend_) backend_->stop();
 }
 

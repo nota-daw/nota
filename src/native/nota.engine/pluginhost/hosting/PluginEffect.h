@@ -94,6 +94,7 @@ class PluginEffect : public nota::Device, private juce::AudioProcessorListener {
     std::vector<float> spare_; // the channels past storage_ (see pluginChannelPtrs)
     int chanFloor_ = 0;        // pluginChannelPtrs floor (see minProcessChannels)
     juce::MidiBuffer empty_;
+    WorkgroupLink workgroup_; // the device workgroup for the plug-in's own threads (#436)
     int maxBlock_ = 0;
     bool stereoIn_ = true, stereoOut_ = true; // main buses have a channel 1 (see setSampleRate)
     EditorHost editor_;                       // declared last: destroyed before plugin_

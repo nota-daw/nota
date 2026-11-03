@@ -93,6 +93,7 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     std::vector<float> spare_; // the channels past storage_ (see pluginChannelPtrs)
     int chanFloor_ = 0;        // pluginChannelPtrs floor (see minProcessChannels)
     juce::MidiBuffer pending_;
+    WorkgroupLink workgroup_; // the device workgroup for the plug-in's own threads (#436)
     int maxBlock_;
     bool stereoOut_ = true;                                  // main output bus has a channel 1 (see prepare)
     std::string name_;                                       // cached plugin name for displayName()

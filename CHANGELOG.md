@@ -161,6 +161,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the plug-in was called once per piece — with dense, short notes several times a block, at
   sizes down to a single sample — so a few heavy instances could run out of time and drop out.
   Timing is unchanged: events still land on their own sample.
+- **Fewer dropouts with plug-ins on macOS** (#436):
+  - Some JUCE-built plug-ins (Splice Bridge among them) ask the host for its name on every audio
+    block, and for Nota that question went to a macOS system service, taking up to tens of
+    milliseconds now and then. Nota now answers it from a copy taken at startup.
+  - Audio Units that render on threads of their own (Maschine 2, Splice and others that ask)
+    now get the audio device's real-time workgroup, and so do Nota's own render threads, so
+    macOS schedules them against the audio deadline.
+  - A hosted plug-in's buffers are cleared only for the current block, not for their full
+    maximum size on every output.
 - **Memory no longer grows with every edit** (#437): the engine kept every past version of the
   project's graph for the whole session. Replaced versions are now freed as soon as audio
   can no longer be reading them (the undo history still keeps the ones it needs).
