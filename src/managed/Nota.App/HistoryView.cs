@@ -5,7 +5,9 @@
 // the way `git log --graph` draws branches (HistoryGraph lays it out). The current version
 // carries a brass dot. Selecting a version shows its details in the footer with Switch and
 // Open as copy; double-click switches; the context menu also renames, notes, stars and
-// deletes. Rebuilds whenever the window reports the history changed.
+// deletes. ⌘/Ctrl-click and Shift-click select several versions, which the footer and the
+// context menu then delete together (#228). Rebuilds whenever the window reports the
+// history changed.
 
 using System;
 using System.Collections.Generic;
@@ -42,7 +44,8 @@ internal sealed class HistoryView : UserControl
 
     private readonly IProjectHistory _history;
     private readonly IHistoryHost _host;
-    private readonly ListBox _list = new() { Classes = { "browser" }, Padding = new Thickness(0, 0, 0, 6) };
+    // Multiple: a click selects one version, ⌘/Ctrl-click adds or removes one, Shift-click a run.
+    private readonly ListBox _list = new() { Classes = { "browser" }, Padding = new Thickness(0, 0, 0, 6), SelectionMode = SelectionMode.Multiple };
     private readonly TextBlock _summary = new() { Classes = { "Mono" }, FontSize = 9, VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _empty = new()
     {
@@ -94,17 +97,24 @@ internal sealed class HistoryView : UserControl
         _details.IsVisible = false;
 
         _list.ItemTemplate = new Avalonia.Controls.Templates.FuncDataTemplate<HistoryRow>((row, _) => row is null ? new Control() : Row(row), supportsRecycling: false);
-        _list.SelectionChanged += (_, _) => ShowDetails(_list.SelectedItem as HistoryRow);
-        _list.DoubleTapped += (_, _) => { if (_list.SelectedItem is HistoryRow r && !r.IsHead) _ = Switch(r.Version); };
+        _list.SelectionChanged += (_, _) => ShowSelection();
+        _list.DoubleTapped += (_, _) => { if (Single() is { IsHead: false } r) _ = Switch(r.Version); };
         _list.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Enter && _list.SelectedItem is HistoryRow { IsHead: false } r) { _ = Switch(r.Version); e.Handled = true; }
+            if (e.Key == Key.Enter && Single() is { IsHead: false } r) { _ = Switch(r.Version); e.Handled = true; }
         };
         _list.ContextRequested += (_, e) =>
         {
             if ((e.Source as StyledElement)?.DataContext is not HistoryRow row) return;
-            _list.SelectedItem = row;
-            BuildMenu(row).ShowAt(_list, showAtPointer: true);
+            // A right-click inside a multiple selection acts on all of it; anywhere else it
+            // selects the row under the pointer, as before.
+            var selected = Selected();
+            if (selected.Count > 1 && selected.Contains(row)) BuildManyMenu(selected).ShowAt(_list, showAtPointer: true);
+            else
+            {
+                _list.SelectedItem = row;
+                BuildMenu(row).ShowAt(_list, showAtPointer: true);
+            }
             e.Handled = true;
         };
 
@@ -124,7 +134,7 @@ internal sealed class HistoryView : UserControl
     /// <summary>Re-reads the open project's history (after a save, switch, open or new).</summary>
     public void Refresh()
     {
-        string? keep = (_list.SelectedItem as HistoryRow)?.Version.Id;
+        var keep = Selected().Select(r => r.Version.Id).ToHashSet();
         _dir = _host.ProjectPath;
         string? problem = null;
         _state = ProjectHistoryState.Empty;
@@ -144,8 +154,9 @@ internal sealed class HistoryView : UserControl
                  .ToList()
             : all;
         _list.ItemsSource = rows;
-        _list.SelectedItem = rows.FirstOrDefault(r => r.Version.Id == keep);
-        ShowDetails(_list.SelectedItem as HistoryRow);
+        for (int i = 0; i < rows.Count; i++)
+            if (keep.Contains(rows[i].Version.Id)) _list.Selection.Select(i);
+        ShowSelection();
 
         _empty.Text = problem
             ?? (_dir is null ? Loc.T("Save the project to start its history.")
@@ -239,6 +250,29 @@ internal sealed class HistoryView : UserControl
         }
     }
 
+    // --- selection -----------------------------------------------------------
+
+    /// <summary>The selected rows, newest first (list order).</summary>
+    private List<HistoryRow> Selected()
+    {
+        var rows = _list.ItemsSource as IReadOnlyList<HistoryRow> ?? [];
+        return _list.Selection.SelectedIndexes.Where(i => i >= 0 && i < rows.Count).Order().Select(i => rows[i]).ToList();
+    }
+
+    /// <summary>The selected row when exactly one is selected.</summary>
+    private HistoryRow? Single()
+    {
+        var selected = Selected();
+        return selected.Count == 1 ? selected[0] : null;
+    }
+
+    private void ShowSelection()
+    {
+        var selected = Selected();
+        if (selected.Count > 1) ShowMany(selected);
+        else ShowDetails(selected.Count == 1 ? selected[0] : null);
+    }
+
     // --- details footer ------------------------------------------------------
 
     private void ShowDetails(HistoryRow? row)
@@ -293,6 +327,35 @@ internal sealed class HistoryView : UserControl
         _details.Child = stack;
     }
 
+    // Several versions selected: how many, when they were saved, and one button that deletes
+    // them. The current version is never deleted, so a selection holding it says it stays.
+    private void ShowMany(IReadOnlyList<HistoryRow> rows)
+    {
+        _details.IsVisible = true;
+        var deletable = Deletable(rows);
+
+        var name = new TextBlock { Text = Loc.Plural(rows.Count, "{0} version", "{0} versions"), Classes = { "Name" }, TextTrimming = TextTrimming.CharacterEllipsis };
+        name.BindResource(TextBlock.ForegroundProperty, "Brush.TextPrimary");
+        string first = LongTime(rows.Min(r => r.Version.CreatedAt)), last = LongTime(rows.Max(r => r.Version.CreatedAt));
+        var metaText = new TextBlock { Text = first == last ? first : $"{first} – {last}", Classes = { "Value" }, TextWrapping = TextWrapping.Wrap };
+        metaText.BindResource(TextBlock.ForegroundProperty, "Brush.TextSecondary");
+        var stack = new StackPanel { Spacing = 4, Children = { name, metaText } };
+        if (deletable.Count < rows.Count)
+            stack.Children.Add(new TextBlock { Text = Loc.T("The current version stays."), Classes = { "Caption" }, TextWrapping = TextWrapping.Wrap });
+
+        var deleteBtn = new Button
+        {
+            Content = ButtonText(DeleteManyLabel(deletable.Count)),
+            IsEnabled = deletable.Count > 0,
+            HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 4, 0, 0),
+        };
+        ToolTip.SetTip(deleteBtn, Loc.T("Delete the selected versions and the audio only they use"));
+        deleteBtn.Click += (_, _) => _ = DeleteSelected(deletable);
+        stack.Children.Add(deleteBtn);
+        _details.Child = stack;
+    }
+
     // Button captions trim instead of the button clipping when the browser is narrow.
     private static TextBlock ButtonText(string text) => new() { Text = text, TextTrimming = TextTrimming.CharacterEllipsis };
 
@@ -334,6 +397,27 @@ internal sealed class HistoryView : UserControl
         return menu;
     }
 
+    // The context menu of a multiple selection: delete them all (the current version stays).
+    private MenuFlyout BuildManyMenu(IReadOnlyList<HistoryRow> rows)
+    {
+        var deletable = Deletable(rows);
+        var menu = new MenuFlyout();
+        menu.Items.Add(MenuKit.Header(Loc.Plural(rows.Count, "{0} version", "{0} versions"), null, ""));
+        menu.Items.Add(new Separator());
+        var del = new MenuItem { Header = DeleteManyLabel(deletable.Count), Icon = MenuKit.Icon(GlyphKind.Trash), IsEnabled = deletable.Count > 0 };
+        del.Classes.Add("danger");
+        if (deletable.Count < rows.Count) ToolTip.SetTip(del, Loc.T("The current version stays"));
+        del.Click += (_, _) => _ = DeleteSelected(deletable);
+        menu.Items.Add(del);
+        return menu;
+    }
+
+    // Every selected version but the current one, which can't be deleted.
+    private static List<ProjectVersion> Deletable(IEnumerable<HistoryRow> rows)
+        => rows.Where(r => !r.IsHead).Select(r => r.Version).ToList();
+
+    private static string DeleteManyLabel(int count) => count == 1 ? Loc.T("Delete version…") : Loc.Plural(count, "Delete {0} version…", "Delete {0} versions…");
+
     private MenuFlyout BuildOptionsMenu()
     {
         var menu = new MenuFlyout();
@@ -365,6 +449,19 @@ internal sealed class HistoryView : UserControl
         if (TopLevel.GetTopLevel(this) is not Window owner || _dir is null || versions.Count == 0) return;
         bool ok = await new ConfirmWindow(Loc.T("Delete unnamed versions"),
             Loc.Plural(versions.Count, "Delete {0} version and the audio only it uses? The current version, the latest version of each branch, and every named, starred or noted version stay. This can't be undone.", "Delete {0} versions and the audio only they use? The current version, the latest version of each branch, and every named, starred or noted version stay. This can't be undone."),
+            Loc.T("Delete"), Loc.T("Cancel")).ShowDialog<bool>(owner);
+        if (!ok) return;
+        long freed = 0;
+        Apply(() => freed = _history.DeleteMany(_dir, versions.Select(v => v.Id).ToList()));
+        _host.ReportStatus(Loc.F("{0} · {1} freed", Loc.Plural(versions.Count, "Deleted {0} version", "Deleted {0} versions"), NotaNum.Bytes(freed)));
+    }
+
+    private async Task DeleteSelected(IReadOnlyList<ProjectVersion> versions)
+    {
+        if (versions.Count == 1) { await Delete(versions[0]); return; }
+        if (TopLevel.GetTopLevel(this) is not Window owner || _dir is null || versions.Count == 0) return;
+        bool ok = await new ConfirmWindow(Loc.T("Delete versions"),
+            Loc.Plural(versions.Count, "Delete {0} version? Audio that only it uses is deleted from the project folder too. This can't be undone.", "Delete {0} versions? Audio that only they use is deleted from the project folder too. This can't be undone."),
             Loc.T("Delete"), Loc.T("Cancel")).ShowDialog<bool>(owner);
         if (!ok) return;
         long freed = 0;

@@ -409,6 +409,9 @@
     "Enable MCP server (let an AI drive Nota)": "Activer le serveur MCP (laisser une IA piloter Nota)",
     "Copied": "Copié",
     "Label every note in the piano roll": "Nommer chaque note dans le piano roll",
+    "Open the detail panel when you select a track or clip": "Ouvrir le panneau de détail à la sélection d’une piste ou d’un clip",
+    "Detail panel": "Panneau de détail",
+    "Off: a click only selects, and an open panel follows it. Double-click a track for its devices or a clip to edit it.": "Désactivé : un clic ne fait que sélectionner, et un panneau ouvert suit la sélection. Double-cliquer sur une piste pour ses appareils ou sur un clip pour le modifier.",
     "Colour theme": "Thème de couleurs",
     "Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance.": "Les thèmes ne changent que les couleurs. « Suivre le système » alterne entre le thème du mode sombre et celui du mode clair, selon l’apparence de l’OS.",
     "Waveform": "Forme d’onde",
@@ -626,7 +629,9 @@
     "Sticks · triggers": "Sticks · gâchettes",
     "Mouse": "Souris",
     "Double-click clip": "Double-clic sur un clip",
-    "Open in the clip editor · on one of several selected MIDI clips, open them all together": "Ouvrir dans l’éditeur de clips · sur l’un de plusieurs clips MIDI sélectionnés, les ouvrir tous ensemble",
+    "Open in the clip editor, opening the detail panel · on one of several selected MIDI clips, open them all together": "Ouvrir dans l’éditeur de clips, en ouvrant le panneau de détail · sur l’un de plusieurs clips MIDI sélectionnés, les ouvrir tous ensemble",
+    "Double-click a track header": "Double-clic sur un en-tête de piste",
+    "Open its devices in the detail panel · a plug-in's own window is Open editor on its card": "Ouvrir ses appareils dans le panneau de détail · la fenêtre d’un plug-in s’ouvre avec Open editor sur sa carte",
     "Double-click a browser instrument": "Double-clic sur un instrument du navigateur",
     "Swap it onto the selected instrument track · clips and effects stay · no track selected starts one": "L’échanger sur la piste d’instrument sélectionnée · les clips et les effets restent · sans piste sélectionnée, en crée une",
     "Always start a new track with it": "Toujours créer une nouvelle piste avec lui",
@@ -3646,6 +3651,18 @@
     "Delete {0} unnamed versions…": {
       "one": "Supprimer {0} version sans nom…",
       "other": "Supprimer {0} versions sans nom…"
+    },
+    "The current version stays.": "La version actuelle reste.",
+    "Delete the selected versions and the audio only they use": "Supprimer les versions sélectionnées et l’audio que seules elles utilisent",
+    "The current version stays": "La version actuelle reste",
+    "Delete {0} versions…": {
+      "one": "Supprimer {0} version…",
+      "other": "Supprimer {0} versions…"
+    },
+    "Delete versions": "Supprimer les versions",
+    "Delete {0} versions? Audio that only they use is deleted from the project folder too. This can't be undone.": {
+      "one": "Supprimer {0} version ? L’audio qu’elle seule utilise est aussi supprimé du dossier du projet. Cette action est irréversible.",
+      "other": "Supprimer {0} versions ? L’audio que seules elles utilisent est aussi supprimé du dossier du projet. Cette action est irréversible."
     }
   }
 }

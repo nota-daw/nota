@@ -1350,6 +1350,14 @@ public sealed partial class PreferencesWindow : NotaWindow
             settings.Save();
         });
 
+        // Detail panel (#308): a selection opens a closed panel only when this is on.
+        var openOnSelect = SwitchRow(Loc.T("Open the detail panel when you select a track or clip"), settings?.Current.OpenDetailOnSelect ?? false, on =>
+        {
+            if (settings is null) return;
+            settings.Current.OpenDetailOnSelect = on;
+            settings.Save();
+        });
+
         return Sections(
             Section("UI", 10,
                 TopRow(Loc.T("Colour theme"), ThemePicker()),
@@ -1364,6 +1372,8 @@ public sealed partial class PreferencesWindow : NotaWindow
                 Row("", Caption(Loc.T("The language of menus, panels and messages. It changes when Nota restarts. Project files and the names you type are never translated.")))),
             Section(Loc.T("Piano roll"), 10, labelAll,
                 Caption(Loc.T("Shows every note name (C, D, E…) on the piano roll's keys instead of only C. Helpful when learning notes."))),
+            Section(Loc.T("Detail panel"), 10, openOnSelect,
+                Caption(Loc.T("Off: a click only selects, and an open panel follows it. Double-click a track for its devices or a clip to edit it."))),
             Section(Loc.T("AI control (MCP)"), 12, enable, details));
     }
 
@@ -1578,7 +1588,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         }),
         (Loc.T("Mouse"), new[]
         {
-            (Loc.T("Double-click clip"), Loc.T("Open in the clip editor · on one of several selected MIDI clips, open them all together")),
+            (Loc.T("Double-click clip"), Loc.T("Open in the clip editor, opening the detail panel · on one of several selected MIDI clips, open them all together")),
+            (Loc.T("Double-click a track header"), Loc.T("Open its devices in the detail panel · a plug-in's own window is Open editor on its card")),
             (Loc.T("Double-click a browser instrument"), Loc.T("Swap it onto the selected instrument track · clips and effects stay · no track selected starts one")),
             ("⌥ + double-click a browser instrument", Loc.T("Always start a new track with it")),
             (Loc.T("Right-click the metronome"), Loc.T("Count-in before Play / Record: off · 1 · 2 · 4 bars")),

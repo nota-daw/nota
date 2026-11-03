@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Delete several versions at once** (#228): in the History tab, ⌘-click (Ctrl-click on
+  Windows and Linux) adds a version to the selection and Shift-click selects a run. With
+  more than one selected, the footer shows how many and when they were saved, and its
+  **Delete N versions…** button — or the same item in the right-click menu — deletes them
+  in one go, after one confirmation. The current version is never deleted: it stays, and the
+  footer says so.
 - **Reset a note's velocity to the default**: in the piano roll's velocity lane, double-click a
   note's stem — or right-click it and choose **Reset velocity** — to put the note back to the
   default velocity (0.8, the one a first note gets). When the note is selected, the whole
@@ -131,6 +137,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the same way.
 
 ### Changed
+- **The detail panel opens on double-click, not on every selection** (#308): clicking a
+  track, a clip, a mixer strip or a Session slot now only selects it, so the arrangement keeps
+  its height on a small screen. While the panel is open it still follows the selection as
+  before. Double-click a track header to open its devices, or a clip or a filled Session slot
+  to open it in the Clip tab; View → Toggle detail panel and Show devices still open it too.
+  Double-clicking an instrument track's header no longer opens the plug-in's window — use
+  **Open editor** on the plug-in's card in Devices. To get the old behaviour back, turn on
+  **Open the detail panel when you select a track or clip** in Settings → Appearance.
 - **Aurora envelope boxes have knobs and drag** — the A, D, S and R boxes under each Env
   graph now each carry a small knob, and the box itself is a drag value: drag it up or down
   (Shift for fine steps), or double-click anywhere on it to type an exact value. The graph

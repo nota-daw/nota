@@ -209,7 +209,19 @@ public partial class MainWindow
         if (_detailMaximized) { SetDetailMaximized(false); Browser.IsVisible = true; return; }
         Browser.IsVisible = !Browser.IsVisible;
     }
-    private void OnMenuToggleClip(object? sender, EventArgs e) => DetailPanel.IsVisible = !DetailPanel.IsVisible;
+    private void OnMenuToggleClip(object? sender, EventArgs e)
+    {
+        if (DetailPanel.IsVisible || DetailFloating) { DetailPanel.IsVisible = !DetailPanel.IsVisible; return; }
+        // A closed panel kept following the selection (#308): reopen it through its checked tab
+        // so it comes back at that tab's height on the current selection.
+        if (DetailClipBtn.IsChecked == true && DetailClipBtn.IsEnabled) OnDetailClip(this, new RoutedEventArgs());
+        else if (DetailPatternBtn.IsChecked == true && DetailPatternBtn.IsEnabled) OnDetailPattern(this, new RoutedEventArgs());
+        // Devices: the track the chain already shows (Modular can point it at a track without
+        // moving the arrangement selection), else the arrangement's selected track.
+        else if ((_deviceChain?.TrackId ?? 0) is int shown and > 0) ShowDevices(shown);
+        else if (Timeline.SelectedTrackId > 0) ShowDevices(Timeline.SelectedTrackId);
+        DetailPanel.IsVisible = true;
+    }
     private void OnMenuToggleOverview(object? sender, EventArgs e)
     {
         Timeline.ShowOverview = !Timeline.ShowOverview;

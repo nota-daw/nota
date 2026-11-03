@@ -137,6 +137,10 @@ public partial class MainWindow
 
     private void ShowDetail(double height, bool honorPersist, bool resizable = true)
     {
+        // A selection only follows the panel; it opens a closed one only with the
+        // "Open Detail panel on select" preference (#308). Hosts and tabs are already updated,
+        // so the panel shows the current selection when it is opened later.
+        if (_followOnly > 0 && !DetailPanel.IsVisible && !OpenDetailOnSelect) return;
         _detailDefault = Math.Max(height, DetailMinimumHeight);
         // Filling the window, a clip tab keeps it; Devices goes back to the split.
         if (_detailMaximized && resizable)
@@ -156,7 +160,23 @@ public partial class MainWindow
         FitBottomPanels();   // under a docked Mixer in a short window it may not fit as asked
     }
 
-    private void OnTrackSelected(int trackId)
+    // Inside a FollowOnly scope a selection updates the panel's content but doesn't open it
+    // (see ShowDetail). Explicit "show me" paths — a double-click, the View menu, the tabs,
+    // a browser drop — run outside it and open the panel.
+    private int _followOnly;
+
+    private bool OpenDetailOnSelect => _vm?.Settings.Current.OpenDetailOnSelect == true;
+
+    private void FollowOnly(Action follow)
+    {
+        _followOnly++;
+        try { follow(); }
+        finally { _followOnly--; }
+    }
+
+    private void OnTrackSelected(int trackId) => FollowOnly(() => FollowTrack(trackId));
+
+    private void FollowTrack(int trackId)
     {
         TrackArming.FollowSelection(Engine, trackId);   // arm-on-select (#332)
 
@@ -244,7 +264,9 @@ public partial class MainWindow
     // Selecting a Session slot selects its track everywhere (devices below, the arrangement
     // header); a slot holding a clip opens it in the Clip tab, and the tab follows the
     // selection from clip to clip (#334). A Pattern grid stays a Pattern grid on a Drum Rack.
-    private void OnSessionSlotSelected(int trackId, int scene)
+    private void OnSessionSlotSelected(int trackId, int scene) => FollowOnly(() => FollowSessionSlot(trackId, scene));
+
+    private void FollowSessionSlot(int trackId, int scene)
     {
         if (scene >= 0 && Engine.SessionSlotState(trackId, scene) != 0)
         {
@@ -549,7 +571,9 @@ public partial class MainWindow
     // FR-001a): two or more selected MIDI clips open together — the clicked clip active when
     // it is one of them — and narrowing back to one clip returns to the single-clip editor.
     // Selecting a lone clip on another track is already followed through OnTrackSelected.
-    private void FollowClipSelection()
+    private void FollowClipSelection() => FollowOnly(FollowClips);
+
+    private void FollowClips()
     {
         if (_session?.IsVisible == true || _vm is null) return;
         bool shown = DetailFloating

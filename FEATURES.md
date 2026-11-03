@@ -62,7 +62,8 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 - **Version history**: every save records a version inside the project. The browser's
   **History** tab draws them as a branching tree (the current one has an orange dot), each
   described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch
-  to any version, open one as a copy, or name, note, star and delete versions; a star button
+  to any version, open one as a copy, or name, note, star and delete versions (⌘/Ctrl-click and
+  Shift-click select several, deleted together from the footer or the context menu); a star button
   in the tab's header lists starred versions only. Saving on top
   of an older version branches. **Save Version with Note…** (⌥⌘S). The tab's menu deletes all
   unnamed versions at once; Settings → Library turns history off (erasing it, after a warning). Versions share their
@@ -1309,6 +1310,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   a Nota Rhythm voice): the title bar carries the device, track, preset picker, bypass and
   S / L size switch; a footer shows where the device sits, its live voice count and type.
 - **Edit Tags** — the browser's tag editor.
+- **Detail panel (Devices / Pattern / Clip)** — opens on a double-click: a track header shows
+  its devices, a clip or a filled Session slot opens in the Clip tab; also View → Toggle
+  detail panel and Show devices. A plain click on a track, clip, mixer strip or slot only
+  selects; an open panel follows the selection. A plug-in instrument's own window opens
+  from **Open editor** on its card. Settings → Appearance → **Open the detail panel when
+  you select a track or clip** makes every selection open it.
 - **Devices/Clip panel in its own window** — the ⧉ button in the bottom panel's header
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
@@ -1359,7 +1366,8 @@ audio effects after it keep running and keep their settings; saved with the proj
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
   remembered; timeline, piano roll and audio editor zoom work on top of it. **Waveform** —
   **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Track
-  headers** — Left / Right side of the arrangement's track list. Also
+  headers** — Left / Right side of the arrangement's track list. **Open the detail panel
+  when you select a track or clip** (off by default: a double-click opens it). Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Language** (Appearance): the interface language — **English** (default) or **Français**,
