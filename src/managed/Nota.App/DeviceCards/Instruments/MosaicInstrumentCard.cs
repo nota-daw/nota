@@ -1330,6 +1330,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             prog = res.Program;
             ui.Zone = 0;
             SetImportReport(track, res.Report);
+            // Its envelope, bend range and filter, as an installed pack's SFZ preset sets them.
+            foreach (var (id, v) in SfzImporter.ParamsFrom(res.Report)) SetP(id, v);
             Commit(rebuild: true);
         }
 
@@ -1341,14 +1343,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 overlay.IsVisible = on;
                 if (on && overlay.Tag is Action<string, string, string?> set) set(t, l, h);
             }
-            // The SFZ a drag carries (#349), looked up once per drag: a folder is searched for it.
-            List<string>? sfzFor = null;
-            string? sfzFound = null;
-            string? SfzOf(List<string> paths)
-            {
-                if (sfzFor is null || !sfzFor.SequenceEqual(paths)) { sfzFor = paths; sfzFound = SfzImporter.ProgramIn(paths); }
-                return sfzFound;
-            }
+            // Whether a drag carries an SFZ (#349) is checked without reading any file; which
+            // program a folder holds is worked out once, on the drop.
             DragDrop.AddDragOverHandler(target, (_, e) =>
             {
                 var item = BrowserView.CurrentDrag;
@@ -1363,9 +1359,9 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 else
                 {
                     var paths = folder ? new List<string> { item!.Path } : DroppedPaths(e);
-                    if (SfzOf(paths) is { } sfz)
+                    if (SfzImporter.HasSfz(paths))
                     {
-                        Show(true, Loc.T("Release to load the SFZ"), Path.GetFileName(sfz), Loc.T("Its zones replace the instrument's; the import report says what it couldn't take."));
+                        Show(true, Loc.T("Release to load the SFZ"), Path.GetFileName(paths[0].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)), Loc.T("Its zones replace the instrument's; the import report says what it couldn't take."));
                         return;
                     }
                     var audio = ExpandAudio(paths);
@@ -1388,7 +1384,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 else if (item is { Kind: BrowserItemKind.Folder } && Directory.Exists(item.Path)) paths = new List<string> { item.Path };
                 else if (item is null) paths = DroppedPaths(e);
                 else return;
-                if (SfzOf(paths) is { } sfz)
+                if (SfzImporter.ProgramIn(paths) is { } sfz)
                 {
                     e.Handled = true;
                     LoadSfz(sfz);

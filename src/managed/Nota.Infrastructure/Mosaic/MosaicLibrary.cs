@@ -283,7 +283,7 @@ public sealed class MosaicPackLibrary : IMosaicPacks
             string name = sfz.Count == 1 || stem.Equals("main", StringComparison.OrdinalIgnoreCase) || stem.Equals(packName, StringComparison.OrdinalIgnoreCase)
                 ? packName : MultisampleMapper.Pretty(stem.Replace(' ', '_'));
             res.Program.Name = name; res.Program.SourceRef = ToRef(path); res.Program.PackId = packId; res.Program.PackName = packName;
-            made.Add((name, res.Program, ParamsFrom(res.Report)));
+            made.Add((name, res.Program, SfzImporter.ParamsFrom(res.Report)));
         }
         if (made.Count > 0) return made;
 
@@ -297,23 +297,6 @@ public sealed class MosaicPackLibrary : IMosaicPacks
             made.Add((name, p, new Dictionary<string, float>()));
         }
         return made;
-    }
-
-    // The envelope / bend / filter the SFZ names, as Mosaic params.
-    private static Dictionary<string, float> ParamsFrom(SfzImportReport r)
-    {
-        var d = new Dictionary<string, float>();
-        if (r.Attack is { } a) d["attack"] = MosaicModel.AttackNorm(a);
-        if (r.Decay is { } dc) d["decay"] = MosaicModel.DecayNorm(dc);
-        if (r.Sustain is { } s) d["sustain"] = (float)s;
-        if (r.Release is { } rel) d["release"] = MosaicModel.DecayNorm(rel);
-        if (r.BendSemis is { } b) d["bendrange"] = (float)Math.Clamp(b / 24.0, 0, 1);
-        if (r.CutoffHz is { } c && c < 18000)
-        {
-            d["filtertype"] = 1f / 3f;
-            d["cutoff"] = (float)Math.Clamp(Math.Log(Math.Max(20, c) / 20.0) / Math.Log(1000.0), 0, 1);
-        }
-        return d;
     }
 
     private static string Sanitize(string name)

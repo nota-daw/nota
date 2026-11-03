@@ -303,6 +303,37 @@ public static class SfzImporter
         return null;
     }
 
+    /// <summary>The envelope, bend range and filter the SFZ names, as Nota Mosaic params (by id).</summary>
+    public static Dictionary<string, float> ParamsFrom(SfzImportReport r)
+    {
+        var d = new Dictionary<string, float>();
+        if (r.Attack is { } a) d["attack"] = MosaicModel.AttackNorm(a);
+        if (r.Decay is { } dc) d["decay"] = MosaicModel.DecayNorm(dc);
+        if (r.Sustain is { } s) d["sustain"] = (float)s;
+        if (r.Release is { } rel) d["release"] = MosaicModel.DecayNorm(rel);
+        if (r.BendSemis is { } b) d["bendrange"] = (float)Math.Clamp(b / 24.0, 0, 1);
+        if (r.CutoffHz is { } c && c < 18000)
+        {
+            d["filtertype"] = 1f / 3f;
+            d["cutoff"] = (float)Math.Clamp(Math.Log(Math.Max(20, c) / 20.0) / Math.Log(1000.0), 0, 1);
+        }
+        return d;
+    }
+
+    /// <summary>Whether a drop carries an SFZ (an .sfz file, or one anywhere in a dropped folder),
+    /// without reading any: cheap enough for every drag-over event.</summary>
+    public static bool HasSfz(IEnumerable<string> paths)
+    {
+        foreach (var p in paths)
+        {
+            if (IsSfz(p) && File.Exists(p)) return true;
+            if (!Directory.Exists(p)) continue;
+            try { if (Directory.EnumerateFiles(p, "*", SearchOption.AllDirectories).Any(IsSfz)) return true; }
+            catch { }
+        }
+        return false;
+    }
+
     public static bool IsSfz(string path) => Path.GetExtension(path).Equals(".sfz", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The SFZ files under <paramref name="root"/> that no other SFZ there #includes —
@@ -310,7 +341,7 @@ public static class SfzImporter
     public static List<string> TopLevel(string root)
     {
         List<string> all;
-        try { all = Directory.EnumerateFiles(root, "*.sfz", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList(); }
+        try { all = Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories).Where(IsSfz).OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList(); }
         catch { return new List<string>(); }
         var included = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var f in all)
