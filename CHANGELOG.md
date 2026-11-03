@@ -33,6 +33,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the command palette has the same four for the section at the playhead, and MCP has
   `move_section`, `duplicate_section_with_content` and `delete_section_with_content`. Each
   is one undo step. A section that overlaps another keeps its content where it is.
+- **Every release opens with its own splash art**: the launch screen now shows an abstract
+  picture generated from the version number. It is built from piano-roll notes, rhythm
+  rings, waveform strata, panels, a Lissajous figure or fader rails, in a few of the
+  theme's track colours, so each release gets its own picture. The same version always
+  shows the same one, in whichever colour theme is active. The logo, version and progress
+  bar sit beside it on the plain ground.
 - **File → Open recent** (#443): the recent projects from the start window, newest first, are
   in the File menu too, so another project is two clicks away while you work. Picking one asks
   to save your changes first, as Open… does; hover an entry to see where it lives.
