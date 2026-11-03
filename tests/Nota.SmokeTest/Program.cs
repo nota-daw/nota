@@ -79,6 +79,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunStudio()) Check(ok, label);
     Console.WriteLine("-- design: themes --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunThemes()) Check(ok, label);
+    Console.WriteLine("-- design: splash art --");
+    foreach (var (ok, label) in Nota.SmokeTest.SplashArtTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: appearance --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
     Console.WriteLine("-- design: interface scale --");
@@ -137,6 +139,14 @@ if (args.Length >= 1 && args[0] == "--localization")
 {
     Console.WriteLine(failures == 0 ? "LOCALIZATION PASSED" : $"LOCALIZATION FAILED ({failures})");
     return failures == 0 ? 0 : 1;
+}
+// Splash art review sheet (specs/074): `--splash-sheet <out.html> [theme-id] [from-version] [count]`.
+if (args.Length >= 2 && args[0] == "--splash-sheet")
+{
+    var sheetError = SplashArtTests.WriteSheet(args[1], args.Length > 2 ? args[2] : "studio-dark", args.Length > 3 ? args[3] : null,
+        args.Length > 4 && int.TryParse(args[4], out var sheetCount) ? sheetCount : 40);
+    Console.WriteLine(sheetError ?? $"wrote {args[1]}");
+    return sheetError is null ? 0 : 1;
 }
 // Command palette alone: `--palette`; `--palette-dump <query>` prints a query's ranking.
 if (args.Length >= 2 && args[0] == "--palette-dump") { PaletteTests.Dump(string.Join(' ', args[1..])); return 0; }

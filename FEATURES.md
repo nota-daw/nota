@@ -1282,6 +1282,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
   record-arm red; labels are in sentence case. Switching applies immediately, across every
   open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
+- **Release splash art** — the launch splash shows an abstract picture generated from the
+  version number: piano-roll notes, rhythm rings, waveform strata, panels, a Lissajous
+  figure or fader rails, in a few of the theme's track colours, with one orange mark that
+  reads as live. The same version always shows the same picture, consecutive releases
+  always differ, and the picture follows the colour theme. The logo, version and progress
+  bar sit beside it on the plain ground.
 - **Right-click menus, one system** — every context menu opens with the object it acts on
   (name, colour, type and position: "Vocals · Audio · 3", "3 tracks", "MIDI clip") and lists
   its commands in one order: properties → settings → actions → create / group → Copy · Cut ·
