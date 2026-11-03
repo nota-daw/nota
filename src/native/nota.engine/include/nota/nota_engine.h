@@ -343,6 +343,9 @@ NOTA_API int32_t    nota_engine_preview_cached_at(NotaEngine* engine, const char
  * this each tick and surfaces a non-fatal message; playback never stops. */
 NOTA_API int32_t nota_engine_xrun_count(const NotaEngine* engine);
 NOTA_API int32_t nota_engine_xrun_selftest(NotaEngine* engine);
+/* Device-free: a replaced engine graph is freed once two renders have finished after it
+ * (engine stopped). */
+NOTA_API int32_t nota_engine_graph_retire_selftest(NotaEngine* engine);
 
 /* ---- parameter automation (M9) ------------------------------------------
  * Lanes are structural data on the track (snapshot + undo/redo, M6-6). A lane
@@ -362,6 +365,10 @@ NOTA_API int32_t nota_engine_rack_device_selftest(NotaEngine* engine);
 /* Drum Rack: device-free check that notes route only to the matching pad chain
  * and the pad note survives the blob round-trip. */
 NOTA_API int32_t nota_engine_drum_rack_selftest(NotaEngine* engine);
+/* Hosted plug-in instruments (#436): device-free check that an instrument taking timed
+ * events renders once per block with every event at its sample offset, while a built-in
+ * still renders in segments between events. */
+NOTA_API int32_t nota_engine_timed_events_selftest(NotaEngine* engine);
 /* Plugin-parameter automation (M9-B, target 3). Device-free structural self-test;
  * the plugin-param introspection + lane-add C ABI arrives in B2. */
 NOTA_API int32_t nota_engine_plugin_automation_selftest(NotaEngine* engine);

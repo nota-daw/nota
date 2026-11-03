@@ -128,6 +128,9 @@ int32_t nota_engine_xrun_count(const NotaEngine* e) {
 int32_t nota_engine_xrun_selftest(NotaEngine* e) {
     return (e && ENG(e)->xrunSelfTest()) ? 1 : 0;
 }
+int32_t nota_engine_graph_retire_selftest(NotaEngine* e) {
+    return (e && ENG(e)->graphRetireSelfTest()) ? 1 : 0;
+}
 float nota_engine_cpu_load(const NotaEngine* e) {
     return e ? CENG(e)->cpuLoad() : 0.0f;
 }

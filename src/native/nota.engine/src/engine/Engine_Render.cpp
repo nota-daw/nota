@@ -14,6 +14,7 @@
 #include "media/WarpStream.h"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <chrono>
 #include <cmath>
@@ -159,7 +160,8 @@ inline void deliverExpr(Instrument& inst, int32_t pitch, int32_t dim, float valu
 
 // Drive an instrument through one block: note events and clip-note expression merged by
 // sample offset (notes first at a shared offset, so a note's opening expression lands on it),
-// rendering the stretches in between. `live` runs once, before the first sample is rendered —
+// rendering the stretches in between (a hosted plug-in: the whole block at once, its events
+// stamped with their offsets — see Instrument::takesTimedEvents). `live` runs once, before the first sample is rendered —
 // after the offset-0 notes, where live input sits — to apply the block's live expression.
 // An instrument switched off (#148) renders its first block off once more, without the block's
 // events, fading what was sounding to silence, then releases every voice and held controller;
@@ -186,25 +188,47 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         inst.render(&dst[cursor * 2], to - cursor);
         cursor = to;
     };
+    // An instrument that takes timed events renders once: each event is stamped with its
+    // offset instead of being rendered up to (#436). The order is the same either way.
+    const bool timed = inst.takesTimedEvents();
+    auto liveAt0 = [&] {
+        if (liveDone) return;
+        inst.eventOffset = 0;
+        live();
+        liveDone = true;
+    };
     int k = 0, x = 0;
     while (k < n || x < xn) {
         const int32_t nOff = k < n ? std::clamp(evs[k].off, 0, frames) : INT32_MAX;
         const int32_t xOff = x < xn ? std::clamp(xev[x].off, 0, frames) : INT32_MAX;
+        const int32_t at = std::min(nOff, xOff);
+        if (timed) {
+            if (at >= frames) break; // after the render, at the next block's start (as segmented)
+            if (at > 0) liveAt0();   // live input sits after the offset-0 notes
+            inst.eventOffset = at;
+        } else {
+            renderTo(at);
+        }
         if (nOff <= xOff) {
-            renderTo(nOff);
             if (evs[k].on) sendNoteOn(inst, evs[k].pitch, evs[k].vel);
             else
                 sendNoteOff(inst, evs[k].pitch);
             ++k;
         } else {
-            renderTo(xOff);
             deliverExpr(inst, xev[x].pitch, xev[x].dim, xev[x].value);
             ++x;
         }
     }
-    if (!liveDone) {
-        live();
-        liveDone = true;
+    liveAt0();
+    if (timed) {
+        inst.eventOffset = 0;
+        inst.render(dst, frames);
+        cursor = frames;
+        for (; k < n; ++k) // end-of-block events: offset 0 of the next render
+            if (evs[k].on) sendNoteOn(inst, evs[k].pitch, evs[k].vel);
+            else
+                sendNoteOff(inst, evs[k].pitch);
+        for (; x < xn; ++x) deliverExpr(inst, xev[x].pitch, xev[x].dim, xev[x].value);
     }
     renderTo(frames);
     if (off) {
@@ -1740,6 +1764,9 @@ void Engine::triggerPassReplace() {
 }
 
 void Engine::processBlock(float* out, int32_t numFrames) {
+    // Every audio-thread read of recordSlotPlayer_ happens inside this block (count-in launch,
+    // live MIDI, capture), so this scope keeps the player it points at alive.
+    const SnapshotHistory<SessionPlayer>::RenderScope recordSlotScope(recordSlotHist_);
     drainCommands();
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = 0.0f;
 
@@ -1749,9 +1776,10 @@ void Engine::processBlock(float* out, int32_t numFrames) {
 
     drainLiveMidi(transport_.playheadSamples() / spb, playing);
 
-    Graph* g = liveGraph_.load(std::memory_order_acquire);
-    // This block's scratch, read after the graph: publishRaw publishes the scratch first, so
-    // it always fits the graph seen here. Held until the scope ends the render epoch.
+    // The graph, then this block's scratch: publishRaw publishes the scratch first, so it
+    // always fits the graph seen here. Both held until their scopes end the render epoch.
+    const SnapshotHistory<Graph>::RenderScope graphScope(graphHist_);
+    Graph* g = graphHist_.live();
     const SnapshotHistory<RenderScratch>::RenderScope scratchScope(scratchHist_);
     rs_ = scratchHist_.live();
 
@@ -2814,6 +2842,50 @@ void Engine::renderTone(float* out, int32_t numFrames) {
         tonePhase_ += inc;
         if (tonePhase_ >= kTwoPi) tonePhase_ -= kTwoPi;
     }
+}
+
+// #436: an instrument that takes timed events (a hosted plug-in) renders once per block, each
+// event stamped with its offset, in the same order the segmented render delivers them; an
+// instrument that doesn't is still rendered in segments with every event at offset 0.
+bool Engine::timedEventsSelfTest() {
+    struct Probe final : Instrument {
+        bool timed = false;
+        std::vector<int32_t> renders;                // frames per render() call
+        std::vector<std::array<int32_t, 4>> events; // kind (1 on, 0 off, 2 ctl, 3 live), pitch, offset, renders so far
+        bool takesTimedEvents() const override { return timed; }
+        void setSampleRate(double) override {}
+        void noteOn(int32_t p, float) override { events.push_back({1, p, eventOffset, (int32_t)renders.size()}); }
+        void noteOff(int32_t p) override { events.push_back({0, p, eventOffset, (int32_t)renders.size()}); }
+        void allNotesOff() override {}
+        void controller(int32_t ctl, float) override {
+            events.push_back({2, ctl, eventOffset, (int32_t)renders.size()});
+        }
+        void render(float*, int32_t frames) override { renders.push_back(frames); }
+    };
+    constexpr int32_t frames = 64;
+    // Off before on at a shared offset (midiEvLess order); the last note-off sits on the block's end.
+    const MidiEv evs[] = {{0, true, 60, 1.0f}, {10, false, 60, 0.0f}, {10, true, 62, 1.0f}, {frames, false, 62, 0.0f}};
+    const ExprEv xev[] = {{20, -1, kCtlDimBase + 1, 0.5f}};
+    float dst[frames * 2] = {};
+    auto run = [&](Probe& p) {
+        playEvents(p, dst, frames, evs, 4, xev, 1, 0.0, 0.0, false,
+            [&] { p.events.push_back({3, -1, p.eventOffset, (int32_t)p.renders.size()}); });
+    };
+    using E = std::array<int32_t, 4>;
+
+    Probe timed;
+    timed.timed = true;
+    run(timed);
+    const std::vector<E> wantTimed = {
+        {1, 60, 0, 0}, {3, -1, 0, 0}, {0, 60, 10, 0}, {1, 62, 10, 0}, {2, 1, 20, 0}, {0, 62, 0, 1}};
+    if (timed.renders != std::vector<int32_t>{frames} || timed.events != wantTimed || timed.eventOffset != 0)
+        return false;
+
+    Probe seg;
+    run(seg);
+    const std::vector<E> wantSeg = {
+        {1, 60, 0, 0}, {3, -1, 0, 0}, {0, 60, 0, 1}, {1, 62, 0, 1}, {2, 1, 0, 2}, {0, 62, 0, 3}};
+    return seg.renders == std::vector<int32_t>{10, 10, 44} && seg.events == wantSeg;
 }
 
 } // namespace nota

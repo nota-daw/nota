@@ -309,6 +309,16 @@ public sealed partial class NotaEngine : IAudioEngine
     public bool XrunSelfTest()
     { ThrowIfDisposed(); return NativeMethods.XrunSelfTest(_handle) != 0; }
 
+    /// <summary>Device-free self-test: a replaced engine graph is freed two renders later,
+    /// not kept for the whole session.</summary>
+    public bool GraphRetireSelfTest()
+    { ThrowIfDisposed(); return NativeMethods.GraphRetireSelfTest(_handle) != 0; }
+
+    /// <summary>Device-free self-test (#436): a hosted plug-in instrument renders once per block,
+    /// every event at its sample offset; a built-in still renders between events.</summary>
+    public bool TimedEventsSelfTest()
+    { ThrowIfDisposed(); return NativeMethods.TimedEventsSelfTest(_handle) != 0; }
+
     /// <summary>Smoothed real-time DSP load, 0..1 (render time / block budget).</summary>
     public float CpuLoad
     { get { ThrowIfDisposed(); return NativeMethods.CpuLoad(_handle); } }
