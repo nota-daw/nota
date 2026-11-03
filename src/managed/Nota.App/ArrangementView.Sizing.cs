@@ -637,7 +637,9 @@ public sealed partial class ArrangementView
         [JsonPropertyName("trackHeights")] public List<TrackHeightDto> TrackHeights { get; set; } = new();
         // specs/045: return rows ride in trackHeights by index; the master has no index.
         [JsonPropertyName("masterHeight")] public double? MasterHeight { get; set; }
-        // specs/072: the Sends key; absent = shown.
+        // specs/070: folded groups by track index, shared with the Mixer. Additive — version stays 1.
+        [JsonPropertyName("collapsedGroups")] public List<int>? CollapsedGroups { get; set; }
+        // specs/072: the Sends key; absent = shown. Additive too.
         [JsonPropertyName("showSends")] public bool? ShowSends { get; set; }
     }
 
@@ -647,8 +649,8 @@ public sealed partial class ArrangementView
         [JsonPropertyName("height")] public double Height { get; set; }
     }
 
-    /// <summary>Write the track, return and master heights, the header width and the Sends key into a .nota bundle, keyed by track
-    /// index (ids only last a session). Cosmetic — a failure here never fails the save.</summary>
+    /// <summary>Write the track, return and master heights, the header width, the folded groups and the Sends key
+    /// into a .nota bundle, keyed by track index (ids only last a session). Cosmetic — a failure here never fails the save.</summary>
     public void SaveTrackView(string bundleDir)
     {
         var path = System.IO.Path.Combine(bundleDir, TrackViewSidecar);
@@ -661,8 +663,16 @@ public sealed partial class ArrangementView
                     if (_engine.TryGetTrackInfo(i, out var ti) && _trackHeights.TryGetValue(ti.Id, out var h))
                         dto.TrackHeights.Add(new TrackHeightDto { Index = i, Height = h });
             if (Math.Abs(_masterHeight - DefaultFooterRowHeight) >= 0.5) dto.MasterHeight = _masterHeight;
+            if (_engine is not null && _fold.Folded.Count > 0)
+            {
+                var folded = new List<int>();
+                for (int i = 0; i < _engine.TrackCount; i++)
+                    if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsGroup && _fold.IsFolded(ti.Id)) folded.Add(i);
+                if (folded.Count > 0) dto.CollapsedGroups = folded;
+            }
             if (!_showSends) dto.ShowSends = false;
-            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null && dto.ShowSends is null)
+            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null && dto.CollapsedGroups is null
+                && dto.ShowSends is null)
             {
                 if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
                 return;
@@ -688,6 +698,13 @@ public sealed partial class ArrangementView
                 if (th.Index >= 0 && _engine.TryGetTrackInfo(th.Index, out var ti))
                     StoreRowHeight(ti.Id, th.Height);
             if (dto.MasterHeight is { } mh) _masterHeight = ClampRowHeight(mh);
+            if (dto.CollapsedGroups is { } groups)   // an index out of range or not a group is skipped
+            {
+                var ids = new List<int>();
+                foreach (int idx in groups)
+                    if (idx >= 0 && _engine.TryGetTrackInfo(idx, out var gi) && gi.IsGroup) ids.Add(gi.Id);
+                _fold.Set(ids);
+            }
             if (dto.ShowSends is { } ss) _showSends = ss;
         }
         catch { /* a corrupt sidecar just means the default layout */ }
@@ -698,6 +715,7 @@ public sealed partial class ArrangementView
     public void ResetTrackView()
     {
         _trackHeights.Clear();
+        _fold.Clear();
         _masterHeight = DefaultFooterRowHeight;
         _clipboardHeights = null;
         _userHeaderW = DefaultHeaderW;

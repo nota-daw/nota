@@ -500,6 +500,7 @@ public partial class MainWindow : Window
         _modular.TrackActivated += OnTrackSelected;   // Global-view island → select that track
         _modular.ItemDropped += OnModularDrop;        // browser drag onto the modular canvas
         MainContent.Children.Add(_modular);
+        WireMixerGroups();   // fold state, selection and compact strips (specs/070)
 
         vm.AutosaveRequested += OnAutosaveTick;
         vm.VersionHistoryTurnedOff += OnVersionHistoryTurnedOff;

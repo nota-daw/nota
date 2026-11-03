@@ -680,7 +680,12 @@ Every region is **docked**: radius 0, no gutter, separated by 1 px seams (the wi
   only when an unrecognised plug-in lands there. "Category chips" in ⋮ hides the row. The
   categories live in `DeviceCategories.cs`.
 - **Mixer strips** are panel-tone columns on seams, each with a 3 px top bar in the track
-  colour (muted grey for master).
+  colour (muted grey for master). They follow the Arrangement's hierarchy — a group strip,
+  then its members — under one 14 px bar per nesting level with the group's name on a wash
+  of its colour and a fainter wash behind its strips; a group folds from the triangle on its
+  strip, the hidden count in its bar (specs/070). Compact strips are 72 wide: one-line I/O,
+  send and pan bars, a wide meter that is the fader (a triangle at the volume's dB on the
+  meter's scale), M / S / Arm at full width.
 - **Arrangement** (geometry unchanged): track rows 64 (the header carries every control),
   group rows 26 (open to 64 while selected), header column 228, default zoom 28 px per
   beat. Every y ↔ row conversion goes through `ArrangementView.RowTop` / `RowAtY`. A
@@ -862,6 +867,9 @@ Places where a screen's needs override a general rule, kept on purpose:
 - **Hero readouts** larger than the device scale — Strata bar number, Shutter Open/Shut,
   Auto Shift note, Level value.
 - **Filter chips 20**, not 24 — the browser's chip row is dense.
+- **Compact mixer meters are 18 px a channel**, 3 apart, against the 11 / 5 meter rule
+  (specs/070, #386): the wide meter is what keeps a 72 px compact strip readable, and it is
+  also the strip's fader. Zones, the hold mark and the −60…+6 scale are unchanged.
 
 ## Known drift
 

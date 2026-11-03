@@ -39,6 +39,19 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   **Delete N versions…** button — or the same item in the right-click menu — deletes them
   in one go, after one confirmation. The current version is never deleted: it stays, and the
   footer says so.
+- **Groups in the Mixer** (#386): the Mixer lists a group's strip followed by its tracks, as
+  the Arrangement does, under a bar with the group's name in its colour and a faint tint of it
+  behind the group's strips; a group inside a group shows as a second bar. The triangle on a
+  group's strip folds it: its tracks hide in the Mixer and in the Arrangement alike, the bar
+  says how many (**Drums +3**), and dots on the group strip show when a hidden track is soloed,
+  armed or clipped. Folding never changes the sound. Folded groups are now saved with the
+  project. The Mixer follows the selected track with an outline (a hidden track outlines its
+  folded group) and scrolls to it.
+- **Compact mixer strips** (#386): **Compact** in the Mixer's footer narrows every strip to
+  72 px, so about twice as many tracks fit on screen. A compact strip keeps everything a
+  regular one has — I/O, A/B sends, pan, the typed dB value, MIDI learn — with a wide level
+  meter that is also the fader: drag anywhere on it, and a small triangle marks the volume on
+  the meter's own scale. Mute, Solo and Arm span the strip's width. The choice is remembered.
 - **Reset a note's velocity to the default**: in the piano roll's velocity lane, double-click a
   note's stem — or right-click it and choose **Reset velocity** — to put the note back to the
   default velocity (0.8, the one a first note gets). When the note is selected, the whole

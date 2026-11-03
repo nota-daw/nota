@@ -160,7 +160,8 @@ docks as a panel under any of the three, or floats in its own window — see
   - **Group rows are slim** — a group collapses to a titled bar with its disclosure,
     mute/solo and level, and opens to the full control set when selected, so groups read as
     families rather than as more tracks. A track without a colour of its own takes its
-    group's hue, shaded per sibling.
+    group's hue, shaded per sibling. The disclosure folds the group here and in the Mixer
+    alike; folded groups are saved with the project.
   - **Return and Master rows stay pinned** under the tracks, each with a level meter, a
     volume fader and its dB value (the Master fader is the same master volume as the
     transport's and the Mixer's). They start Compact and resize like tracks — drag the
@@ -235,8 +236,9 @@ docks as a panel under any of the three, or floats in its own window — see
   arms that track alone, ⌘-click arms several; **Transport ▸ Auto-arm selected track** (off by
   default) arms the instrument track you select.
   Double-click resets to the default.
-- **Mixer** (**View → Mixer**, ⌘⇧M / Ctrl+Shift+M): a strip per track, then the returns, then
-  the master (I/O, A/B sends, pan, fader with a stereo meter and dB read-out, M / S / Arm), the
+- **Mixer** (**View → Mixer**, ⌘⇧M / Ctrl+Shift+M): a strip per track in the Arrangement's
+  order — each group, then its tracks — then the returns, then the master (I/O, A/B sends,
+  pan, fader with a stereo meter and dB read-out, M / S / Arm), the
   **Strips | Stereo map** switch and the pan law footer. It docks as a resizable panel under
   Arrangement, Session or Modular, above the Devices / Clip panel (either, both or neither),
   or pops out into its own window for a second screen — the panel's pop-out button, the
@@ -244,7 +246,17 @@ docks as a panel under any of the three, or floats in its own window — see
   as its strips and closes with Escape. Whether it is shown, where and how tall come back on
   the next launch. Strips fit the height they get: I/O rows hide first, then sends, then the
   fader shortens; the footer's **Sends** / **I/O** toggles show a hidden section anyway (the
-  strips then scroll). Faders, pan and M / S / Arm follow changes made anywhere else.
+  strips then scroll). Faders, pan and M / S / Arm follow changes made anywhere else. The
+  selected track's strip is outlined and scrolled into view.
+  - **Groups**: a bar with the group's name in its colour spans the group's strips, one bar
+    row per nesting level. The triangle on a group strip folds it — in the Mixer and the
+    Arrangement at once; the bar shows how many strips are hidden (**Drums +3**) and dots on
+    the group strip flag a hidden track that is soloed, armed or clipped. Folding never
+    changes the sound.
+  - **Compact strips** (footer **Compact**, remembered): 72 px strips, about twice as many on
+    screen, with the same controls — one-line I/O, A/B send bars, a pan bar, a wide stereo
+    meter that is also the fader (drag anywhere on it; a triangle marks the volume on the
+    meter's scale), the dB value, and full-width M / S / Arm.
 - **Pan law** (per project, in the Mixer footer: **Pan law** Stereo / Balance): under
   Stereo, panning a stereo track or return moves its whole image — at full pan both
   channels play from one side; under Balance the opposite channel fades out. Mono
