@@ -125,8 +125,15 @@ internal static class PluginCard
             ToolTip.SetTip(open, shown ? Loc.T("Close the plug-in's own window") : Loc.T("Open the plug-in's own window"));
         }
         SyncOpen();
-        int openTicks = 0;
-        ctx.AddDeviceRefresher(() => { if (++openTicks % 15 == 0) SyncOpen(); });   // ~4 Hz of the 60 Hz tick
+        // By elapsed time, not tick count: the tick's rate depends on where the card is shown.
+        long nextSync = 0;
+        ctx.AddDeviceRefresher(() =>
+        {
+            long now = Environment.TickCount64;
+            if (now < nextSync) return;
+            nextSync = now + 250;   // 4 times a second
+            SyncOpen();
+        });
         open.Click += (_, _) =>
         {
             try
