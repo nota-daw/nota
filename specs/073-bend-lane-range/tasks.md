@@ -11,7 +11,7 @@
 
 ## Phase 2: User Story 3 — the pick stays with the clip (P2)
 
-- [x] T005 `BendPick` per clip for the session, keyed like the view state; on the instance without a clip identity (FR-004)
+- [x] T005 `BendPick` per clip for the session, keyed like the view state; on the instance without a clip identity; forgotten on project load (FR-004)
 
 ## Phase 3: Polish
 

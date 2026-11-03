@@ -59,6 +59,10 @@ public sealed partial class PianoRollView
     private static readonly Dictionary<(int, int), double> s_bendPick = new();
     private double _bendPick = BendLaneRange.Default;
 
+    /// <summary>Forgets every clip's picked Bend range: a load or new project reuses track ids,
+    /// so another project's clip must not inherit a pick.</summary>
+    internal static void ForgetBendPicks() => s_bendPick.Clear();
+
     private double BendPick
     {
         get => _clipKey.Item1 != int.MinValue && s_bendPick.TryGetValue(_clipKey, out var r) ? r : _bendPick;

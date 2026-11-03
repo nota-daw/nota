@@ -98,7 +98,8 @@ The user picks ±24 on a clip, opens another clip and comes back: the first clip
 - **FR-002**: The lane MUST show the smallest step that is at least the picked range and fits
   the largest bend on the notes.
 - **FR-003**: Steps that would clip a bend already on the notes MUST be disabled in the menu.
-- **FR-004**: The pick MUST be remembered per clip for the session.
+- **FR-004**: The pick MUST be remembered per clip for the session, and forgotten when a
+  project is opened, created or recovered, since the new project reuses track ids.
 - **FR-005**: The gesture MUST be listed in Preferences → Shortcuts, through `Loc` with French.
 
 ## Success Criteria

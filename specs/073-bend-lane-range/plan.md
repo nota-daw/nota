@@ -28,6 +28,8 @@ Shortcuts texts. Manual check in the running app.
 - `PianoRollView.Expression.cs`:
   - `BendPick` — the picked range, kept per clip in a static map keyed like `s_view`
     (`_clipKey`); a view without a clip identity (track mode) keeps it on the instance.
+    `ForgetBendPicks` clears the map from `MainWindow.RefreshAfterLoad`, so a clip in another
+    project with the same track id and index opens at the default.
   - `ExpressionLane.UpdateRange` stores the largest bend and shows `BendLaneRange.Shown`.
   - `Render` draws the label with a caret (like the controller tab) in hot ink under the
     pointer and keeps its rect; `OnPointerMoved` sets the hover and hand cursor;
