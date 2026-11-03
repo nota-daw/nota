@@ -42,7 +42,11 @@ C ABI function, no engine code, no new allocation, lock, I/O or logging on the a
   stored value, so half-pedal values survive moves). Partial values draw as fill height.
 - Continuous controllers: the MPE lane's stroke model over one clip-wide curve — the stroke
   replaces the stretch it covers, the old curve resumes after it; RDP thinning on release.
-  Existing points keep their `Curve` shaping; new points are linear.
+  Existing points keep their `Curve` shaping; new points are linear. Splitting a shaped
+  segment keeps playback outside the stroke within one CC step (`ControllerStroke`): the
+  shortened left piece keeps its exponent, and the right piece is refit instead of starting
+  at curve 0. A reload while a stroke is down paints that stroke onto the curve just read,
+  so releasing does not write the pre-reload copy over points recorded during the drag.
 - One `SetController` call per gesture (on release) → one undo step.
 
 ### Lane tabs (`App/PianoRollView.Expression.cs`)

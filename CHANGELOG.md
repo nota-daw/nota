@@ -220,6 +220,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Drawing a controller no longer changes the rest of the curve** (#169): a stroke in the
+  piano-roll controller lane replaces only the stretch you draw. A shaped curve on either side
+  keeps its bend, and points recorded while the button is down are not replaced by the older
+  copy from when the drag began.
 - **The loop region is saved with the project** (#455): its start and end, and whether the
   loop is on, come back when you open the project again. A new project starts without one.
 - **The Mixer's volume reaches −∞** (#453): a fader pulled all the way down, a dB value dragged

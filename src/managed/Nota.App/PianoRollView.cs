@@ -766,6 +766,7 @@ public sealed partial class PianoRollView : UserControl
         if (!_set.SetActive(slot)) return;
         _trackBrush = slot < _slotBrushes.Count ? _slotBrushes[slot] : _trackBrush;
         DropControllerCache();
+        _ctlLane.ResetGesture();
         Invalidate();
         ActiveClipChanged?.Invoke();
         Changed?.Invoke();
@@ -813,6 +814,7 @@ public sealed partial class PianoRollView : UserControl
                 burstVel.Add((_notes[i].Pitch, _notes[i].StartBeat, _notes[i].Velocity));
         }
         DropControllerCache();
+        _ctlLane.OnClipReloaded(sameClip);
         ReplaceAll(notes, owners);
         if (burstVel is not null)
         {
