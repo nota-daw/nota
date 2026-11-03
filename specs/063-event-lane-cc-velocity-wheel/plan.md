@@ -47,6 +47,9 @@ C ABI function, no engine code, no new allocation, lock, I/O or logging on the a
   shortened left piece keeps its exponent, and the right piece is refit instead of starting
   at curve 0. A reload while a stroke is down paints that stroke onto the curve just read,
   so releasing does not write the pre-reload copy over points recorded during the drag.
+  A multi-clip editor clears the per-clip view key on every reload, so that match uses the
+  active clip's track and index. A stroke that ends before the first point pins the held
+  value there, so the untouched stretch does not ramp up to it.
 - One `SetController` call per gesture (on release) → one undo step.
 
 ### Lane tabs (`App/PianoRollView.Expression.cs`)

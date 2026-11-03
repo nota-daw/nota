@@ -61,7 +61,14 @@ public static class ControllerStroke
         double edge = b + Junction;
         int next = 0;
         while (next < orig.Count && orig[next].Beat <= edge) next++;
-        if (next > 0 && next < orig.Count)
+        if (next == 0 && orig.Count > 0)
+        {
+            // The stroke ends before the first point. The old value is held there, so pin it
+            // just after the stroke. Without that pin the last drawn value ramps up to the
+            // first point and the untouched stretch moves.
+            outp.Add(new AutomationPoint(edge, ValueAt(orig, edge)));
+        }
+        else if (next > 0 && next < orig.Count)
         {
             var left = orig[next - 1];
             var right = orig[next];

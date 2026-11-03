@@ -83,5 +83,13 @@ internal static class ControllerStrokeTests
         var held = ControllerStroke.Apply(new AutomationPoint[] { new(0, 0.25f, 0.5f) }, stroke);
         yield return (held[^1].Beat <= 2 + 1e-6,
             "with nothing after the stroke the drawn value holds");
+
+        // A stroke that ends before the first point must pin the held value. Otherwise the
+        // last drawn value ramps across the untouched stretch up to that point.
+        var ahead = new AutomationPoint[] { new(4, 1f, 0f) };
+        var early = ControllerStroke.Apply(ahead, new (double Beat, float Value)[] { (1, 0.2f), (2, 0f) });
+        float at3 = Oracle(early, 3);
+        yield return (Math.Abs(at3 - 1f) < 1e-3f,
+            $"drawing before the first point leaves the later value (read {at3:0.00} at beat 3)");
     }
 }
