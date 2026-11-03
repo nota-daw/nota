@@ -13,6 +13,10 @@
 
 #include "nota/nota_engine.h"
 
+#if defined(__linux__)
+#include <dlfcn.h>
+#endif
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -309,7 +313,13 @@ int run(const std::string& id, double seconds) {
         // is tiny and already moves by a percent or two when unrelated code is added; the
         // fade pushed it just over the gate while the wall time stayed 0.00 ms. Playing a
         // faded split is audio-warp-split. The fade itself is in the smoke test.
-        nota_engine_set_split_fades(e, 0);
+        // Resolved at runtime: this file is also compiled against the base engine, which
+        // does not export the call.
+#if defined(__linux__)
+        using SetSplitFades = void (*)(NotaEngine*, int);
+        if (auto set = reinterpret_cast<SetSplitFades>(dlsym(RTLD_DEFAULT, "nota_engine_set_split_fades")))
+            set(e, 0);
+#endif
         constexpr int kEdits = 8;
         // Warm-up, not measured: one split + undo first, so the counted edits don't include the
         // first-call costs (lazy symbol binding, function-local statics). Those depend on the
