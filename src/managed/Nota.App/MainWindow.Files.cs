@@ -187,6 +187,8 @@ public partial class MainWindow
         _vm.Transport.MasterVolume = 1.0;
         _vm.Transport.MetronomeOn = false;
         _vm.Transport.LoopOn = false;
+        Engine.SetLoop(false, 0, 0);   // nor the old project's loop region
+        _vm.Transport.SyncLoop();
         _vm.Transport.TimeSigNumerator = 4;
         _vm.Transport.TimeSigDenominator = 4;
         _vm.Transport.KeyCode = -1;
@@ -271,7 +273,9 @@ public partial class MainWindow
             _vm.Transport.Bpm = (decimal)result.Transport.Bpm;
             _vm.Transport.MasterVolume = result.Transport.MasterVolume;
             _vm.Transport.MetronomeOn = result.Transport.MetronomeOn;
-            _vm.Transport.LoopOn = result.Transport.LoopOn;
+            _vm.Transport.SyncLoop();   // the loop (on/off and its region) came with the project (#455)
+            if (result.Transport.LoopOn && !Engine.LoopEnabled)
+                _vm.Transport.LoopOn = true;   // an older file saved no region: Loop on picks its default
             _vm.Transport.TimeSigNumerator = result.Transport.TimeSigNumerator;
             _vm.Transport.TimeSigDenominator = result.Transport.TimeSigDenominator;
             _vm.Transport.KeyCode = result.Transport.Key;

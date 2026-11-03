@@ -49,6 +49,21 @@ public partial class MainWindow
     private void InitTransportFit()
     {
         TransportBar.SizeChanged += (_, _) => FitTransport();
+        CpuText.AttachedToVisualTree += (_, _) => ReserveCpuTextWidth();
+    }
+
+    /// <summary>The DSP read-out grows a digit at 10% and 100%; without the bar beside it
+    /// (folded first on a narrow bar) that nudged the master well, and could even flip the
+    /// fit. Reserve the widest reading — "DSP 100%" in the current language — up front (#442).</summary>
+    private void ReserveCpuTextWidth()
+    {
+        string shown = CpuText.Text ?? "";
+        CpuText.MinWidth = 0;
+        CpuText.Text = Loc.F("DSP {0}%", 100);
+        CpuText.Measure(Avalonia.Size.Infinity);
+        double widest = CpuText.DesiredSize.Width;
+        CpuText.Text = shown;
+        CpuText.MinWidth = Math.Ceiling(widest);
     }
 
     /// <summary>Re-fit after something in the bar changed width (the project name, the

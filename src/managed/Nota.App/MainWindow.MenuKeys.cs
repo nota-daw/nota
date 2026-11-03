@@ -32,7 +32,12 @@ public partial class MainWindow
             if (ToolTip.GetTip(c) is string tip) ToolTip.SetTip(c, MenuKit.Keys(tip));
         if (NativeMenu.GetMenu(this) is not { } menu) return;
         // macOS quits from the app menu (Quit Nota, ⌘Q); File → Exit is for Windows / Linux (#316).
-        if (OperatingSystem.IsMacOS()) RemoveWithSeparatorAbove(menu, "file.exit");
+        // Settings… lives in the app menu there too (Nota → Settings…, ⌘,), so File doesn't repeat it (#444).
+        if (OperatingSystem.IsMacOS())
+        {
+            RemoveWithSeparatorAbove(menu, "file.exit");
+            RemoveWithSeparatorAbove(menu, "prefs.open");
+        }
         Collect(menu);
 
         void Collect(NativeMenu m)
@@ -43,9 +48,7 @@ public partial class MainWindow
                 {
                     _menuItems[id] = item;
                     item.Click += (_, _) => _commands.Run(id);
-                    // Settings… keeps ⌘, on the app menu (App.axaml) on macOS; one key, one item.
-                    bool appMenuOwnsIt = OperatingSystem.IsMacOS() && id == "prefs.open";
-                    if (Commands.CanMenuGesture(cmd.Gesture) && !appMenuOwnsIt && Commands.Parse(cmd.Gesture) is { } g)
+                    if (Commands.CanMenuGesture(cmd.Gesture) && Commands.Parse(cmd.Gesture) is { } g)
                     {
                         item.Gesture = g;
                         if (!OperatingSystem.IsMacOS()) _menuShortcuts.Add(item);

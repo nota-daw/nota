@@ -33,6 +33,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the command palette has the same four for the section at the playhead, and MCP has
   `move_section`, `duplicate_section_with_content` and `delete_section_with_content`. Each
   is one undo step. A section that overlaps another keeps its content where it is.
+- **File → Open recent** (#443): the recent projects from the start window, newest first, are
+  in the File menu too, so another project is two clicks away while you work. Picking one asks
+  to save your changes first, as Open… does; hover an entry to see where it lives.
 - **Pick the Bend lane's range in the piano roll** (#426): the **±2 st** label at the top
   left of the Bend lane is now a menu — ±2, 12, 24, 48 or 96 semitones — so a bend wider than
   2 semitones can be drawn on a note that has none, without recording one from an MPE
@@ -211,6 +214,17 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **The loop region is saved with the project** (#455): its start and end, and whether the
+  loop is on, come back when you open the project again. A new project starts without one.
+- **The Mixer's volume reaches −∞** (#453): a fader pulled all the way down, a dB value dragged
+  to the bottom, or `-inf` typed in it now reads **−∞** instead of −60 dB.
+- **Open editor follows the plug-in's window** (#458): closing a plug-in's window with its own
+  close button turns the card's **Close editor** back into **Open editor** right away, not on
+  the next hover.
+- **The DSP meter no longer nudges the transport bar** (#442): its readout keeps room for
+  "DSP 100%", so going from 9 % to 10 % doesn't shift the master strip beside it.
+- **Settings… appears once on macOS** (#444): it is in the Nota menu (⌘,) only; File no
+  longer repeats it.
 - **Plug-in instruments use less CPU on busy MIDI** (#436): a hosted instrument (Kontakt,
   Serum, any AU or VST3) is now processed once per audio block, with every note and controller
   placed at its exact sample inside the block. Before, the block was cut at every MIDI event and

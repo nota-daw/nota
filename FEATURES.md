@@ -71,6 +71,8 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 - **Start window**: the logo follows the theme, recent projects sit in one compact list with
   their dates — click to select, double-click (or the arrow keys and Return) to open. Escape
   or a click outside closes it, keeping the current project.
+- **File → Open recent** lists the start window's recent projects, newest first; picking one
+  asks to save unsaved changes first.
 - **File → Exit** (Ctrl+Q) on Windows and Linux; Quit Nota (⌘Q) in the app menu on macOS.
 - **Quit without saving** dialog names the project and how long its changes have gone
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
@@ -95,7 +97,7 @@ on a pool of render threads, export and freeze use every core, and an idle engin
   tempo from tapped beats — mean of the last eight gaps, restarts on a pace change or a 3 s pause.
 - **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection; drag an end of the brace
   to resize it, the brace to move it; double-click the brace to switch the loop off and on;
-  right-click the ruler to clear it). Notes held across the
+  right-click the ruler to clear it; saved with the project). Notes held across the
   loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
   pattern going across the seam.
 - **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).

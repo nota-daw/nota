@@ -2051,7 +2051,6 @@ Nota.App/DeviceCards/Midi/VelocityMidiBody.cs	TRANSFER	# data: device parameter,
 Nota.App/DeviceCards/Midi/VelocityMidiBody.cs	Value	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/VelocityMidiBody.cs	Velocity mode	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Midi/VelocityMidiBody.cs	in 1	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/PluginCard.cs	Close editor	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/PluginCard.cs	Effect	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/PluginCard.cs	Filter	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/PluginCard.cs	Instrument	# data: device parameter, port and value names and live readouts of their values (FR-004)
