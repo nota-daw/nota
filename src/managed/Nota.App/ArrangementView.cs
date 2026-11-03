@@ -2035,6 +2035,25 @@ public sealed partial class ArrangementView : UserControl
         }
         if (!_engine.FadeSplits(tracks, clips)) return false;
         Refresh();
+        // The open audio editor caches the ADSR it loaded. Both sides of each join have to
+        // reload, including a neighbour that was not selected, or the next edit writes the
+        // pre-fade shape back over the fade.
+        const double join = 1e-4;
+        foreach (var track in _tracks)
+        {
+            var ordered = track.Clips.OrderBy(c => c.StartBeat).ToList();
+            for (int j = 0; j + 1 < ordered.Count; j++)
+            {
+                var left = ordered[j];
+                var right = ordered[j + 1];
+                if (left.IsMidi || right.IsMidi) continue;
+                if (!_sel.Contains((track.Id, left.ClipIndex)) && !_sel.Contains((track.Id, right.ClipIndex)))
+                    continue;
+                if (Math.Abs(left.StartBeat + left.LengthBeats - right.StartBeat) > join) continue;
+                RaiseClipGeometryChanged(track.Id, left.ClipIndex);
+                RaiseClipGeometryChanged(track.Id, right.ClipIndex);
+            }
+        }
         return true;
     }
 

@@ -1646,16 +1646,15 @@ void Engine::mixAudioClip(
             int32_t head = 0, tail = segLen;
             if (clip.adsr.attack > 0.0) {
                 const double n = startSamples + clip.adsr.attack * spb + 1.0 - ovStart; // j < n
-                if (n >= static_cast<double>(segLen)) head = segLen;
-                else if (n > 0.0) {
-                    const int32_t v = static_cast<int32_t>(n);
-                    head = static_cast<double>(v) == n ? v : v + 1;
-                }
+                // Clamp in double before the narrowing cast. The span only covers this
+                // block; a long attack must not overflow int32 on the way there.
+                const double c = std::clamp(std::ceil(n), 0.0, static_cast<double>(segLen));
+                head = static_cast<int32_t>(c);
             }
             if (clip.adsr.release > 0.0) {
                 const double n = startSamples + clipDeviceLen - clip.adsr.release * spb - 1.0 - ovStart; // j > n
-                if (n < 0.0) tail = 0;
-                else if (n < static_cast<double>(segLen)) tail = static_cast<int32_t>(n) + 1;
+                const double c = std::clamp(std::floor(n) + 1.0, 0.0, static_cast<double>(segLen));
+                tail = static_cast<int32_t>(c);
             }
             if (head > tail) head = tail = segLen; // edges overlap: the whole block fades
             for (int32_t j = 0; j < head; ++j) {

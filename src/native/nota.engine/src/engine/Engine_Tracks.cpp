@@ -1518,7 +1518,7 @@ bool raiseSplitEdge(AudioClip& clip, bool fadeIn, bool fadeOut, double fadeBeats
     if (!(fadeBeats > 0.0) || !(lenBeats > 1e-9)) return false;
     bool changed = false;
     if (fadeIn && clip.adsr.attack + 1e-9 < fadeBeats) {
-        const double cap = std::min(lenBeats * 0.5, std::max(0.0, lenBeats - clip.adsr.release));
+        const double cap = std::min(lenBeats * 0.5, std::max(0.0, lenBeats - clip.adsr.decay - clip.adsr.release));
         const double v = std::min(fadeBeats, cap);
         if (v > clip.adsr.attack + 1e-12) {
             clip.adsr.attack = v;

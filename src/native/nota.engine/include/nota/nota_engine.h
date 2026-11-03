@@ -124,10 +124,12 @@ typedef struct NotaTakeInfo {
 } NotaTakeInfo;
 
 /* Audio-clip ADSR amplitude shape, in played time (clip-local beats). Attack ramps
- * 0->1 from the clip start, decay falls 1->sustain, sustain holds, release fades to 0
- * over the last release_beats before the clip end (multiplying the ADS stage, so
- * overlapping stages on a short clip stay smooth). The default {0,0,0,1} is the
- * identity: the sample plays its full length at full level. */
+ * 0->1 from the clip start when a decay follows, and straight to the sustain level
+ * when decay is 0 (a split clears that decay, and a rise to 1 would click). Decay
+ * falls 1->sustain, sustain holds, release fades to 0 over the last release_beats
+ * before the clip end (multiplying the ADS stage, so overlapping stages on a short
+ * clip stay smooth). The default {0,0,0,1} is the identity: the sample plays its
+ * full length at full level. */
 typedef struct NotaClipAdsr {
     double attack_beats;
     double decay_beats;

@@ -86,7 +86,7 @@ internal static class SplitFadeTests
             yield return (e.FadeSplits(new[] { t }, new[] { right }), "a shorter fade is raised");
             yield return (Near(e.GetClipAdsr(t, c).ReleaseBeats, 0.5) && Near(e.GetClipAdsr(t, right).AttackBeats, expect),
                 "a longer fade is not shortened");
-            yield return (!e.FadeSplits(new[] { t }, new[] { c, right }), "nothing to change returns false, so there is no extra undo");
+            yield return (!e.FadeSplits(new[] { t, t }, new[] { c, right }), "nothing to change returns false, so there is no extra undo");
             yield return (e.Undo() && Near(e.GetClipAdsr(t, right).AttackBeats, expect * 0.25),
                 "one undo puts the raised fade back");
         }
@@ -121,7 +121,7 @@ internal static class SplitFadeTests
             int mt = e.AddInstrumentTrack();
             int mc = e.AddMidiClip(mt, 0.0, 4.0);
             int mr = e.SplitClip(mt, mc, 2.0);
-            yield return (mr == mc + 1 && !e.FadeSplits(new[] { mt }, new[] { mc, mr }), "MIDI splits are left alone");
+            yield return (mr == mc + 1 && !e.FadeSplits(new[] { mt, mt }, new[] { mc, mr }), "MIDI splits are left alone");
         }
 
         using (var e = new NotaEngine())
@@ -148,6 +148,69 @@ internal static class SplitFadeTests
             double soft = Rms(split, cut - 80, cut + 80);
             yield return (right > c && body < 1e-4 && soft < hard * 0.75 && hard > 0.05,
                 $"warped split dips only at the cut (body {body:E1}, seam {soft:F3} vs {hard:F3})");
+        }
+
+        // A right piece whose decay was cleared used to ramp the new attack to 1 and then
+        // drop to the sustain level. The attack now ends on that level, so the rendered
+        // join has no step. The unwarped ~3 ms edge fade is skipped; the check starts after it.
+        string dc = Path.Combine(Path.GetTempPath(), "nota_smoke_split_fade_dc.wav");
+        WavWriter.WriteStereo(dc, 2.0, Sr, _ => (0.8, 0.8));
+        using (var e = new NotaEngine())
+        {
+            e.SetBpm(120);
+            int t = e.AddAudioTrack();
+            int c = e.AddAudioClip(t, dc, 0.0);
+            e.SetClipAdsr(t, c, new ClipAdsr { Sustain = 0.5f });
+            e.TryGetClipInfo(t, c, out var info);
+            double mid = info.StartBeat + info.LengthBeats * 0.5;
+            var whole = Render(e, info.LengthBeats);
+            int right = e.SplitClip(t, c, mid);
+            var split = Render(e, info.LengthBeats);
+            int cut = (int)Math.Round(mid * Sr * 60.0 / 120.0);
+            int bodyAt = Math.Min(whole.Length / 2 - 1, cut + (int)(0.05 * Sr));
+            double level = Math.Abs(whole[bodyAt * 2]);
+            int edge = (int)(0.003 * Sr) + 8;
+            int atk = (int)Math.Ceiling(FadeSeconds * Sr);
+            double peak = 0, step = 0;
+            int n = 0;
+            for (int f = cut + edge; f < cut + atk + 16 && (f + 1) * 2 < split.Length; f++)
+            {
+                float v = split[f * 2];
+                peak = Math.Max(peak, Math.Abs(v));
+                step = Math.Max(step, Math.Abs(v - split[(f - 1) * 2]));
+                n++;
+            }
+            int settled = Math.Min(split.Length / 2 - 1, cut + atk + (int)(0.002 * Sr));
+            double after = Math.Abs(split[settled * 2]);
+            var shape = new ClipAdsr { AttackBeats = expect, Sustain = 0.5f };
+            var decayed = new ClipAdsr { AttackBeats = 0.5, DecayBeats = 0.5, Sustain = 0.5f };
+            bool curve = Math.Abs(shape.GainAt(shape.AttackBeats, 2) - 0.5) < 1e-6
+                         && shape.GainAt(shape.AttackBeats * 0.5, 2) < 0.3
+                         && Math.Abs(decayed.GainAt(0.5, 4) - 1) < 1e-6;
+            yield return (right > c && curve && n > 0 && level > 0.05
+                          && peak < level * 1.2 && step < level * 0.2
+                          && after > level * 0.85 && after < level * 1.15,
+                $"a sustain below 1 rises to that level, with no step (peak {peak:F3}, step {step:F3}, level {level:F3})");
+        }
+
+        string piece = Path.Combine(Path.GetTempPath(), "nota_smoke_split_fade_piece.wav");
+        WavWriter.WriteSine(piece, seconds: 1.0, freq: 440, sampleRate: Sr);
+        using (var e = new NotaEngine())
+        {
+            e.SetBpm(120);
+            int t = e.AddAudioTrack();
+            int left = e.AddAudioClip(t, piece, 0.0);
+            e.TryGetClipInfo(t, left, out var li);
+            int right = e.AddAudioClip(t, piece, li.StartBeat + li.LengthBeats);
+            e.TryGetClipInfo(t, right, out var ri);
+            double release = Math.Min(0.4, ri.LengthBeats * 0.2);
+            double decay = Math.Max(0, ri.LengthBeats - release);
+            e.SetClipAdsr(t, right, new ClipAdsr { DecayBeats = decay, Sustain = 0.5f, ReleaseBeats = release });
+            bool faded = e.FadeSplits(new[] { t }, new[] { right });
+            var adsr = e.GetClipAdsr(t, right);
+            yield return (faded && adsr.AttackBeats == 0 && Near(adsr.DecayBeats, decay) && Near(adsr.ReleaseBeats, release)
+                          && adsr.AttackBeats + adsr.DecayBeats + adsr.ReleaseBeats <= ri.LengthBeats + 1e-9,
+                "a fade-in stops where the decay and release already fill the piece");
         }
     }
 
