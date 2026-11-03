@@ -994,17 +994,20 @@ public sealed partial class MixerView : UserControl
     // two-way sync with the fader.
     private const double MaxLin = 1.5;
     private static readonly double MaxDb = AudioMath.LinToDb(MaxLin);
+    // The field's floor is silence: the fader's bottom, a drag to it or a typed "-inf" all read
+    // "−∞" (#453), and anything quieter than −60 dB reads −∞ too, as the track headers do.
     private const double MinDb = -60.0;
-    private static double LinToDb(double v) => v <= 1e-4 ? MinDb : Math.Clamp(AudioMath.LinToDb(v), MinDb, MaxDb);
+    private static double LinToDb(double v) => v <= 1e-3 ? MinDb : Math.Clamp(AudioMath.LinToDb(v), MinDb, MaxDb);
     private static double DbToLin(double db) => db <= MinDb + 1e-6 ? 0.0 : Math.Clamp(AudioMath.DbToLin(db), 0, MaxLin);
+    private static DragNumber DbField(float vol) => new(LinToDb(vol), MinDb, MaxDb, 0.3, "+0.0;−0.0;0.0", 8)
+    {
+        Width = 52, HorizontalAlignment = HorizontalAlignment.Center, FloorText = "−∞",
+    };
 
     private Control FaderRow(int id, float vol, IBrush color, out Control db, out MeterBar meter)
     {
         var fader = new VFader(vol, color);
-        var dbNum = new DragNumber(LinToDb(vol), MinDb, MaxDb, 0.3, "+0.0;−0.0;0.0", 8)
-        {
-            Width = 52, HorizontalAlignment = HorizontalAlignment.Center,
-        };
+        var dbNum = DbField(vol);
         ToolTip.SetTip(dbNum, Loc.T("Set the gain — drag, or double-click to type"));
         void SetVolume(double v) { if (id < 0) SetMasterVolume?.Invoke((float)v); else _engine.SetTrackVolume(id, (float)v); }
         if (id < 0) { _masterFader = fader; _masterDb = dbNum; }

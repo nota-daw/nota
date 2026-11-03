@@ -111,18 +111,22 @@ internal static class PluginCard
         Fact(facts, 1, "Latency", $"{ms.ToString("0.0", NotaNum.Culture)}\u2009ms");
 
         // Open editor toggles the plug-in's own window. Its close button only hides the
-        // window behind our back, so the label re-reads the state whenever the pointer comes
-        // back to the card instead of trusting the last click.
+        // window behind our back (and MCP can open or close it too), so the label re-reads
+        // the state a few times a second on the UI tick instead of trusting the last click.
         var open = ActionButton(Loc.T("Open editor"), GlyphKind.PopOut, primary: true);
         var openLabel = (TextBlock)((StackPanel)open.Content!).Children[1];
+        bool? shownLast = null;
         void SyncOpen()
         {
             bool shown = EditorOpen(e, t, di);
-            openLabel.Text = shown ? "Close editor" : Loc.T("Open editor");
+            if (shown == shownLast) return;
+            shownLast = shown;
+            openLabel.Text = shown ? Loc.T("Close editor") : Loc.T("Open editor");
             ToolTip.SetTip(open, shown ? Loc.T("Close the plug-in's own window") : Loc.T("Open the plug-in's own window"));
         }
         SyncOpen();
-        open.PointerEntered += (_, _) => SyncOpen();
+        int openTicks = 0;
+        ctx.AddDeviceRefresher(() => { if (++openTicks % 15 == 0) SyncOpen(); });   // ~4 Hz of the 60 Hz tick
         open.Click += (_, _) =>
         {
             try
