@@ -966,9 +966,9 @@ NOTA_API NotaResult nota_engine_poll(NotaEngine* engine);
 /* ---- Undo / redo (M6-6) -------------------------------------------------- */
 /* Undo/redo of structural edits (tracks, clips, notes, device chains, session
  * slots, arrangement sections) — restores a retained Graph snapshot — and of volume /
- * pan / sends / master volume (009, 072) and device-parameter (016) steps made through value
+ * pan / master volume (009) and device-parameter (016) steps made through value
  * gestures. Returns NOTA_OK if a step was applied, NOTA_ERR_UNKNOWN if there was nothing
- * to undo/redo. Mute, solo, bypass and the transport are not covered. */
+ * to undo/redo. Mute, solo, sends, bypass and the transport are not covered. */
 NOTA_API NotaResult nota_engine_undo(NotaEngine* engine);
 NOTA_API NotaResult nota_engine_redo(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_can_undo(const NotaEngine* engine);
@@ -983,7 +983,7 @@ NOTA_API void       nota_engine_undo_group_end(NotaEngine* engine);
 NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
 
 /* ---- Value undo (009, 016) ----------------------------------------------- */
-/* Volume / pan / send / master volume and device-parameter changes become undo steps through
+/* Volume / pan / master volume and device-parameter changes become undo steps through
  * gestures. A gesture
  * records its targets' values at begin and, at end, pushes ONE undo step with the values
  * that changed (none changed → no step). If a structural checkpoint was pushed during the
@@ -997,8 +997,8 @@ NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
 #define NOTA_MIX_PLUGIN_PARAM      5   /* normalized 0..1; device_index -1 = the instrument */
 #define NOTA_MIX_PRESET_TAG        6   /* a device's preset tag (specs/048): device_index as the
                                          * surface needs, param_index = the surface (below) */
-#define NOTA_MIX_TRACK_SEND        8   /* a track's send level (specs/072): device_index = the
-                                         * return bus 0..3 */
+#define NOTA_MIX_TRACK_SEND        8   /* rejected (specs/069): a send level is not an undo step.
+                                         * A gesture that names this kind records nothing. */
 
 typedef struct NotaMixTarget {
     int32_t kind;          /* NOTA_MIX_* */

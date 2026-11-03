@@ -42,14 +42,15 @@ public sealed class AutomationTools(IAudioEngine engine, IEngineDispatch dispatc
 
     [McpServerTool(Name = "add_automation_lane"), Description(
         "Add an automation lane. target: \"volume\", \"pan\", \"device_param\" (with deviceIndex+paramIndex) or "
-        + "\"midi_param\" (a MIDI effect: deviceIndex = its index from list_midi_fx, paramIndex from get_midi_fx_params) or "
-        + "\"send\" (a send level 0..1: deviceIndex = the return bus, 0 = A). "
+        + "\"midi_param\" (a MIDI effect: deviceIndex = its index from list_midi_fx, paramIndex from get_midi_fx_params). "
+        + "A send is not an automation target: \"send\" returns -1. "
         + "Returns the lane index.")]
     public Task<int> AddAutomationLane(int trackId, string target, int deviceIndex = -1, int paramIndex = -1) => Mutate(() =>
     {
+        if (target.Equals("send", StringComparison.OrdinalIgnoreCase)) return -1;   // specs/069
         var t = target.ToLowerInvariant() switch
         { "pan" => AutomationTarget.Pan, "device_param" => AutomationTarget.DeviceParam, "midi_param" => AutomationTarget.MidiDeviceParam,
-          "send" => AutomationTarget.Send, _ => AutomationTarget.Volume };
+          _ => AutomationTarget.Volume };
         return E.AddAutomationLane(trackId, t, deviceIndex, paramIndex);
     });
 

@@ -411,8 +411,7 @@ public sealed partial class ArrangementView
                     case AutomationTarget.Pan:
                         key = "PAN"; apply = () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1); break;
                     case AutomationTarget.Send:
-                    { int bus = info.DeviceIndex;
-                      key = $"S:{bus}"; apply = () => SetAutoTarget(t, AutomationTarget.Send, bus, -1); break; }
+                        continue;   // sends are not an automation target (specs/069)
                     case AutomationTarget.PluginParam:
                     { string pid = eA.AutomationLaneParamId(t.Id, i); int dv = info.DeviceIndex;
                       key = $"P:{dv}:{pid}"; apply = () => SetAutoPluginTarget(t, dv, pid); break; }
@@ -437,11 +436,6 @@ public sealed partial class ArrangementView
 
         flyout.Items.Add(Leaf(Loc.T("Volume"), "V", () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1), automated));
         flyout.Items.Add(Leaf(Loc.T("Pan"), "PAN", () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1), automated));
-        // One send per return (specs/072); returns themselves send nowhere.
-        if (!t.IsReturn)
-            foreach (var (bus, name) in SendBuses())
-                flyout.Items.Add(Leaf(Loc.F("Send {0} · {1}", SendLetter(bus), name), $"S:{bus}",
-                    () => SetAutoTarget(t, AutomationTarget.Send, bus, -1), automated));
         if (_engine is { } e)
         {
             // An instrument (deviceIndex -1) exposing params — the built-in Nota Synth

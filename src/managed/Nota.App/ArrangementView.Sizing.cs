@@ -639,8 +639,6 @@ public sealed partial class ArrangementView
         [JsonPropertyName("masterHeight")] public double? MasterHeight { get; set; }
         // specs/070: folded groups by track index, shared with the Mixer. Additive — version stays 1.
         [JsonPropertyName("collapsedGroups")] public List<int>? CollapsedGroups { get; set; }
-        // specs/072: the Sends key; absent = shown. Additive too.
-        [JsonPropertyName("showSends")] public bool? ShowSends { get; set; }
     }
 
     private sealed class TrackHeightDto
@@ -649,7 +647,7 @@ public sealed partial class ArrangementView
         [JsonPropertyName("height")] public double Height { get; set; }
     }
 
-    /// <summary>Write the track, return and master heights, the header width, the folded groups and the Sends key
+    /// <summary>Write the track, return and master heights, the header width and the folded groups
     /// into a .nota bundle, keyed by track index (ids only last a session). Cosmetic — a failure here never fails the save.</summary>
     public void SaveTrackView(string bundleDir)
     {
@@ -670,9 +668,7 @@ public sealed partial class ArrangementView
                     if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsGroup && _fold.IsFolded(ti.Id)) folded.Add(i);
                 if (folded.Count > 0) dto.CollapsedGroups = folded;
             }
-            if (!_showSends) dto.ShowSends = false;
-            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null && dto.CollapsedGroups is null
-                && dto.ShowSends is null)
+            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null && dto.CollapsedGroups is null)
             {
                 if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
                 return;
@@ -705,7 +701,6 @@ public sealed partial class ArrangementView
                     if (idx >= 0 && _engine.TryGetTrackInfo(idx, out var gi) && gi.IsGroup) ids.Add(gi.Id);
                 _fold.Set(ids);
             }
-            if (dto.ShowSends is { } ss) _showSends = ss;
         }
         catch { /* a corrupt sidecar just means the default layout */ }
         finally { ApplyHeaderWidth(final: false); }
@@ -719,8 +714,6 @@ public sealed partial class ArrangementView
         _masterHeight = DefaultFooterRowHeight;
         _clipboardHeights = null;
         _userHeaderW = DefaultHeaderW;
-        _showSends = true;
-        PaintSendsToggle();
         ApplyHeaderWidth(final: false);
     }
 }

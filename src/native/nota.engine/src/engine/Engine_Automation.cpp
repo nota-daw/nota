@@ -34,7 +34,7 @@ void Engine::applyAutomation(Graph* g, double beat) {
             switch (lane.target) {
             case AutomationTarget::Volume: t.setVolume(v); break;
             case AutomationTarget::Pan: t.setPan(v); break;
-            case AutomationTarget::Send: t.setSend(lane.deviceIndex, std::clamp(v, 0.0f, 1.0f)); break; // bus-guarded
+            case AutomationTarget::Send: break; // specs/069: a send lane does not move the level
             case AutomationTarget::DeviceParam:
                 if (lane.deviceIndex >= 0 && lane.deviceIndex < static_cast<int32_t>(t.devices.size()))
                     if (auto* d = t.devices[lane.deviceIndex].get()) d->setParam(lane.paramIndex, v);
@@ -564,20 +564,18 @@ int32_t Engine::addAutomationLane(int32_t trackId, int32_t target, int32_t devic
     auto old = findTrackAuthoring(trackId);
     if (!old) return -1;
     const auto tgt = static_cast<AutomationTarget>(target);
+    if (tgt == AutomationTarget::Send) return -1; // specs/069: sends are not an automation target
     const bool usesDev = tgt == AutomationTarget::DeviceParam || tgt == AutomationTarget::MidiDeviceParam;
-    const bool send = tgt == AutomationTarget::Send; // specs/072: one lane per return bus
-    if (send && (deviceIndex < 0 || deviceIndex >= kMaxReturns)) return -1;
     // Reuse an existing lane on the same target (no snapshot) — one lane per target.
     for (size_t i = 0; i < old->automation.size(); ++i) {
         const TrackLane& l = old->automation[i];
-        if (!l.nested() && l.target == tgt && (!usesDev || (l.deviceIndex == deviceIndex && l.paramIndex == paramIndex)) &&
-            (!send || l.deviceIndex == deviceIndex))
+        if (!l.nested() && l.target == tgt && (!usesDev || (l.deviceIndex == deviceIndex && l.paramIndex == paramIndex)))
             return static_cast<int32_t>(i);
     }
     auto nt = cloneTrack(*old);
     TrackLane lane;
     lane.target = tgt;
-    lane.deviceIndex = usesDev || send ? deviceIndex : -1;
+    lane.deviceIndex = usesDev ? deviceIndex : -1;
     lane.paramIndex = usesDev ? paramIndex : -1;
     nt->automation.push_back(std::move(lane));
     const int32_t index = static_cast<int32_t>(nt->automation.size()) - 1;

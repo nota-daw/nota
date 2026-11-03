@@ -1,19 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Arrangement · send levels in the track headers (specs/072, #143). A track card tall enough
-// for it carries a row of inline knobs, one per return in bus order, so a send can be set
-// without leaving the Arrangement. The knobs go through SendControl (one undo step per drag,
-// automation write like volume / pan) and follow sends moved anywhere else on the meter tick.
-// A "Sends" key in the header column's top strip shows or hides the row on every card; it is
-// view state, saved in the track-view sidecar with the row heights.
+// Arrangement · send levels in the track headers (specs/069, #143). A Large track card carries
+// a row of inline knobs, one per return in bus order, so a send can be set without leaving
+// the Arrangement. The knobs write the live level only (not an undo step, not an automation
+// lane) and follow sends moved anywhere else on the meter tick.
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
@@ -23,21 +19,19 @@ namespace Nota.App;
 
 public sealed partial class ArrangementView
 {
-    // A standard row shows its sends from this height: its three rows plus the knob row.
-    internal const double SendsMinStandardHeight = 88;
     private const double SendRowTop = 6;
     // A full cell: the inline knob, then the bus letter over the level; narrower → knob only.
     private const double SendCellW = 41, SendCellGap = 4;
 
-    private bool _showSends = true;
-    // Header send knobs, refreshed each meter tick so automation and other surfaces move them.
+    // Header send knobs, refreshed each meter tick so other surfaces move them.
     private readonly List<(int trackId, int bus, Knob knob, TextBlock? value, Control cell, string name)> _sendKnobs = new();
-    private Border? _sendsToggle;
 
-    /// <summary>Whether a track card at this height shows its send row (specs/072 FR-001, FR-007).</summary>
+    /// <summary>Whether a track card at this height shows its send row (specs/069 FR-001).
+    /// The Large layout below the preset has no room for another line, so the knobs wait
+    /// for the Large height itself.</summary>
     private bool ShowSendsOn(TrackVM t, HeaderTier tier, double rowH)
-        => _showSends && !t.IsReturn && _returns.Count > 0
-           && (tier == HeaderTier.Large || (tier == HeaderTier.Standard && rowH >= SendsMinStandardHeight));
+        => !t.IsReturn && _returns.Count > 0
+           && tier == HeaderTier.Large && rowH + 0.5 >= LargeRowHeight;
 
     // The returns in bus order, with their bus and name.
     private List<(int bus, string name)> SendBuses()
@@ -144,7 +138,7 @@ public sealed partial class ArrangementView
         return row;
     }
 
-    // Follow sends changed elsewhere — the Mixer, the Sends card, automation, MCP — unless in the hand.
+    // Follow sends changed elsewhere — the Mixer, the Sends card, MCP — unless in the hand.
     private void FollowSends(IAudioEngine e)
     {
         foreach (var (id, bus, knob, value, cell, name) in _sendKnobs)
@@ -156,45 +150,5 @@ public sealed partial class ArrangementView
             if (value is not null) value.Text = SendLevelText(v);
             ToolTip.SetTip(cell, SendTip(bus, name, v));
         }
-    }
-
-    // The "Sends" key at the right end of the header column's top strip: on = a solid accent key.
-    private Border BuildSendsToggle()
-    {
-        var text = new TextBlock { Text = Loc.T("Sends"), FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
-        var key = new Border
-        {
-            Height = 18, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1),
-            VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = text,
-            IsVisible = false,
-        };
-        ToolTip.SetTip(key, Loc.T("Show sends in track headers"));
-        key.PointerPressed += (_, e) =>
-        {
-            if (!e.GetCurrentPoint(key).Properties.IsLeftButtonPressed) return;
-            e.Handled = true;
-            SetShowSends(!_showSends);
-        };
-        _sendsToggle = key;
-        PaintSendsToggle();
-        return key;
-    }
-
-    private void PaintSendsToggle()
-    {
-        if (_sendsToggle is not { Child: TextBlock text } key) return;
-        key.Background = _showSends ? NotaPalette.Accent : NotaPalette.SurfaceRaised;
-        key.BorderBrush = _showSends ? NotaPalette.Accent : NotaPalette.Seam;
-        text.Foreground = _showSends ? NotaPalette.InkOn(NotaPalette.Accent) : NotaPalette.TextSecondary;
-        key.IsVisible = _returns.Count > 0;
-    }
-
-    /// <summary>Show or hide the send row on every track header (the top-strip key).</summary>
-    internal void SetShowSends(bool on)
-    {
-        if (_showSends == on) return;
-        _showSends = on;
-        PaintSendsToggle();
-        RebuildHeaders();
     }
 }

@@ -49,11 +49,11 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 ## Project and transport
 
 - **Project**: create / open / save (`.nota`), autosaves, undo/redo for every editing
-  operation — including volume, pan, send and master-volume moves and the parameters of effects,
+  operation — including volume, pan and master-volume moves and the parameters of effects,
   MIDI effects, instruments and plug-ins, from any source (device cards, Mixer, track
   headers, Session mixer, **MST**, Nota Remote, a MIDI controller, MCP), one step per move,
   and every arrangement section edit; a recorded automation pass undoes with its value.
-  Mute, solo and devices inside racks are not in the history; automation playback,
+  Mute, solo, sends and devices inside racks are not in the history; automation playback,
   opening a project and freezing add no steps.
 - **New project template**: a new project (and the workspace Nota opens with) starts with an
   instrument track (Nota Volt), an audio track and two returns — **Reverb** (Nota Reverb)
@@ -162,10 +162,11 @@ docks as a panel under any of the three, or floats in its own window — see
     fit their height: one line (name, M / S / arm) when short, input, fader and pan on rows
     of their own when tall. Drag the seam between headers and lanes to set the header
     width (160–480 px). Both are saved with the project.
-  - **Sends in the track headers** — a large row, or a standard one from 88 px, shows one
+  - **Sends in the track headers** — a track at the Large height (128 px) or taller shows one
     small knob per return (A–D) under volume and pan with its level; hover names the
-    return, double-click turns the send off, ⌥-click types a value. The **Sends** key at
-    the top of the header column shows or hides them on every track (saved with the project).
+    return, double-click turns the send off, ⌥-click types a value. The level is the same
+    one the Mixer and the Sends card show, and it is not an undo step. A shorter row has no
+    knobs.
   - **Track headers left or right** — View ▸ Track headers on the right (or Settings →
     Appearance → Track headers) moves the header column, the return / master headers and
     the header strips to the right edge, so the timeline starts at the left; remembered
@@ -616,8 +617,7 @@ docks as a panel under any of the three, or floats in its own window — see
 ## Automation
 
 - **Automation lanes** on tracks and returns, with curved segments (Alt+drag) and points
-  (double-click to add, double-click a point to remove). A track lane drives Volume, Pan, a
-  send (**Send A · Reverb** … one per return; deleting a return drops its send lanes) or a
+  (double-click to add, double-click a point to remove). A track lane drives Volume, Pan or a
   device parameter. A return's lane (Volume, Pan or a
   device on its chain) is edited in its footer row, the master's volume in the Master row.
 - **Automation mode** (⌘⇧A): the first time it opens, each track that already has automation
@@ -1445,8 +1445,8 @@ Coverage:
   device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move
   and split; read and write a clip's controller curves (sustain, wheels, any CC).
-- **Automation**: create a lane (volume, pan, a send, a device or instrument parameter),
-  read and write points.
+- **Automation**: create a lane (volume, pan, a device or instrument parameter),
+  read and write points. A send is not a lane target.
 - **MIDI effects** and engine status.
 - **Session**: the clip launcher (grid snapshot with clip and scene properties, create, copy,
   move and clear slots, read and write slot notes, loop length, clip name / colour / launch
