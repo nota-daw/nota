@@ -66,6 +66,7 @@ void PluginEffect::setSampleRate(double sr, int32_t maxBlock) {
         scNumChans_ = plugin_->getBus(true, 1)->getNumberOfChannels();
     }
     plugin_->setPlayHead(&playHead_); // DAW transport sync
+    workgroup_.bind(*plugin_);
 }
 
 int32_t PluginEffect::latencySamples() const {
@@ -75,7 +76,7 @@ int32_t PluginEffect::latencySamples() const {
 void PluginEffect::process(float* buf, int32_t frames) {
     if (frames <= 0 || frames > maxBlock_ || plugin_ == nullptr) return;
     const int nc = juce::jmin(storage_.getNumChannels(), kMaxChans);
-    storage_.clear();
+    storage_.clear(0, frames); // only what this block uses: a multi-out plug-in has many channels
     float* l = storage_.getWritePointer(0);
     float* r = stereoIn_ ? storage_.getWritePointer(1) : spare_.data(); // mono main: drop R
     simd_audio::deinterleaveStereo(l, r, buf, frames);
@@ -102,6 +103,7 @@ void PluginEffect::process(float* buf, int32_t frames) {
     juce::AudioBuffer<float> block(
         ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, chanFloor_, ptrs), frames);
     empty_.clear();
+    workgroup_.update();
     plugin_->processBlock(block, empty_);
 
     const float* ol = block.getReadPointer(0);

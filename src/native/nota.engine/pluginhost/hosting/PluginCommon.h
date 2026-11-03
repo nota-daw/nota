@@ -46,6 +46,24 @@ void enableEveryBus(juce::AudioPluginInstance& p);
 // Bus layout on stderr when NOTA_DEBUG_PLUGIN_BUSES is set. Message thread.
 void logBuses(const juce::AudioPluginInstance& p);
 
+// Hands the device workgroup (setPluginAudioWorkgroup) to one Audio Unit through its render
+// context observer (kAudioUnitProperty_RenderContextObserver, macOS 12+), the way Logic does:
+// on the render thread, before processing, whenever the workgroup changed. A plug-in without
+// an observer (VST3, an AU that doesn't ask) is left alone.
+class WorkgroupLink {
+  public:
+    WorkgroupLink() = default;
+    WorkgroupLink(const WorkgroupLink&) = delete;
+    WorkgroupLink& operator=(const WorkgroupLink&) = delete;
+    ~WorkgroupLink();
+    void bind(juce::AudioPluginInstance& p); // message thread, after prepareToPlay
+    void update();                           // audio thread, right before processBlock
+
+  private:
+    void* observer_ = nullptr; // the AU's AURenderContextObserver block (copied)
+    uint32_t seen_ = 0;        // generation of the workgroup last handed over
+};
+
 // Opaque plugin state <-> byte vector (M3-5).
 std::vector<uint8_t> readState(juce::AudioPluginInstance* p);
 void writeState(juce::AudioPluginInstance* p, const uint8_t* data, int32_t size);

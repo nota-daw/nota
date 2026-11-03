@@ -334,6 +334,7 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
     recordSessionTrackId_ = trackId;
     recordSessionScene_ = scene;
     recordSlotLen_.store(t->sessionSlots[scene].lengthBeats, std::memory_order_relaxed);
+    recordSlotHist_.publish(t->sessionPlayer); // the previous take's player waits out two renders
     recordSlotPlayer_.store(t->sessionPlayer.get(), std::memory_order_release);
     if (countIn && t->sessionPlayer) {
         // The slot waits for the count-in: the audio thread launches it the moment the

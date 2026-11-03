@@ -32,6 +32,7 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
 
     const char* displayName() const override { return name_.empty() ? "Plugin" : name_.c_str(); }
     bool handlesSustain() const override { return true; } // the plug-in gets CC64 itself
+    bool takesTimedEvents() const override { return true; } // one processBlock per block (#436)
 
     void setSampleRate(double sr) override;
 
@@ -92,6 +93,7 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     std::vector<float> spare_; // the channels past storage_ (see pluginChannelPtrs)
     int chanFloor_ = 0;        // pluginChannelPtrs floor (see minProcessChannels)
     juce::MidiBuffer pending_;
+    WorkgroupLink workgroup_; // the device workgroup for the plug-in's own threads (#436)
     int maxBlock_;
     bool stereoOut_ = true;                                  // main output bus has a channel 1 (see prepare)
     std::string name_;                                       // cached plugin name for displayName()
