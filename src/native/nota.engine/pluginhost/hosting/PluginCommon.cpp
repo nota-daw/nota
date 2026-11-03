@@ -118,6 +118,36 @@ std::unique_ptr<juce::AudioPluginInstance> createInstance(
     return scanner::sharedFormatManager().createPluginInstance(desc, sr, maxBlock, err);
 }
 
+void advanceTransport(nota::TransportInfo& ti, int32_t frames, double sr) {
+    if (!ti.isPlaying || frames <= 0 || sr <= 0.0) return;
+    const double secs = frames / sr;
+    ti.timeInSamples += frames;
+    ti.timeInSeconds += secs;
+    ti.ppqPosition += secs * ti.bpm / 60.0;
+    const double loopLen = ti.ppqLoopEnd - ti.ppqLoopStart;
+    if (ti.isLooping && loopLen > 0.0 && ti.ppqPosition >= ti.ppqLoopEnd) ti.ppqPosition -= loopLen;
+}
+
+std::unique_ptr<juce::AudioPluginInstance> cloneInstance(juce::AudioPluginInstance& src, double sr, int maxBlock) {
+    // A running instance describes itself by its binary (a VST3 on Linux names the .so inside
+    // its bundle), which no format can load again (#454). The catalog entry it came from is the
+    // description that loaded it: take that, matched by format, name and id, and fall back to the
+    // instance's own only for a plug-in the catalog no longer lists.
+    const juce::PluginDescription own = src.getPluginDescription();
+    juce::PluginDescription desc = own;
+    auto& catalog = scanner::PluginCatalog::instance();
+    catalog.loadOnce();
+    const int32_t idx = catalog.indexOfId(own.createIdentifierString().toRawUTF8());
+    if (idx >= 0) catalog.typeAt(idx, desc);
+    auto inst = createInstance(desc, sr, maxBlock);
+    if (!inst && idx >= 0) inst = createInstance(own, sr, maxBlock);
+    if (!inst) return nullptr;
+    juce::MemoryBlock mb;
+    src.getStateInformation(mb);
+    if (mb.getSize() > 0) inst->setStateInformation(mb.getData(), (int)mb.getSize());
+    return inst;
+}
+
 std::unique_ptr<juce::AudioPluginInstance> instantiateCatalog(
     int catalogIndex, double sr, int maxBlock, bool instrumentOnly) {
     auto& catalog = scanner::PluginCatalog::instance();

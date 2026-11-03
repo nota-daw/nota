@@ -207,6 +207,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Duplicating a track keeps its plug-ins** (#454): Duplicate track, a copied and pasted
+  plug-in effect and a copied rack now bring their VST3 plug-ins along, with every setting.
+  The copy used to come back without them, because a running plug-in describes itself by the
+  file inside its bundle, which can't be loaded again; the copy now loads the plug-in the way
+  the browser does.
+- **Plug-ins that cap their block size load** (#447): sfizz and other plug-ins with a maximum
+  block size stopped Nota when added, because every plug-in was prepared for 16384-sample
+  blocks. Plug-ins are now prepared for at most 4096; a longer block (an export, a large audio
+  buffer) is played to them in pieces, each with its own notes and transport position.
 - **The loop region is saved with the project** (#455): its start and end, and whether the
   loop is on, come back when you open the project again. A new project starts without one.
 - **The Mixer's volume reaches −∞** (#453): a fader pulled all the way down, a dB value dragged
