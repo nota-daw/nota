@@ -217,6 +217,12 @@ class Track {
     // isn't sent again every block. Audio thread only.
     bool sessionSilentReleased = false;
 
+    // Effects on an audio track ring out after the track stops sounding (#449): -1 when there
+    // is no tail to play, else how long (frames) the chain's output has been silent. Set to 0
+    // by every block the track plays; the chain then runs on silence until it has been quiet
+    // for Engine::kTailQuietSeconds. Audio thread only.
+    int64_t tailQuietFrames = -1;
+
     // The untargeted live notes (keyboard, MIDI) the track was given and not yet the note-off
     // of, and whether it was disarmed with them down (#366): released on its next render.
     // Shared by every version of the track (edits, undo) and with no other track, so it

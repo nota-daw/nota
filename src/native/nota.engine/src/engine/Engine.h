@@ -2145,7 +2145,11 @@ class Engine {
     std::vector<float> mixTmp_;
     // Parallel Pass 1 : per-leaf work items, sized on the message
     // thread (no audio-thread allocation).
-    enum class LeafPath : uint8_t { Skip, Frozen, Monitor, SessionInst, SessionAudio, Instrument, AudioClips };
+    enum class LeafPath : uint8_t { Skip, Frozen, Monitor, SessionInst, SessionAudio, Instrument, AudioClips, Tail };
+    // A stopped audio track's effects ring out (#449, LeafPath::Tail) until their output has
+    // stayed under kTailFloor (-100 dBFS) this long: long enough for a delay's next repeat.
+    static constexpr double kTailQuietSeconds = 3.0;
+    static constexpr float kTailFloor = 1.0e-5f;
     struct LeafWork {
         Track* t = nullptr;
         bool audible = false, capturing = false, feeding = false, toMix = false;

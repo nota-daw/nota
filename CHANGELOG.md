@@ -207,6 +207,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Effects on an audio track ring out after Stop** (#449): a reverb or delay placed on an
+  audio track used to fall silent the instant the transport stopped, while the same reverb on
+  a return track rang on. The track's effects now keep playing on silence until their output
+  has died away (3 seconds under −100 dB), then the track costs nothing again. Plug-ins on it
+  also get stopped blocks now, so one that acts on Stop (PitchNet finishing a capture) does.
 - **The loop region is saved with the project** (#455): its start and end, and whether the
   loop is on, come back when you open the project again. A new project starts without one.
 - **The Mixer's volume reaches −∞** (#453): a fader pulled all the way down, a dB value dragged
