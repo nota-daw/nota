@@ -385,6 +385,7 @@ if (args.Length >= 1 && args[0] == "--moves")
 {
     Console.WriteLine("-- arrangement moves --");
     foreach (var (ok, label) in ArrangementMovesTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in SectionRearrangeTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "MOVES PASSED" : $"MOVES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -15453,6 +15454,9 @@ foreach (var (ok, label) in SendAutomationTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- arrangement moves --");
 foreach (var (ok, label) in ArrangementMovesTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- section rearrange (specs/073) --");
+foreach (var (ok, label) in SectionRearrangeTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- linux desktop --");
 foreach (var (ok, label) in LinuxDesktopTests.Run()) Check(ok, label);

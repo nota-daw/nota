@@ -1095,6 +1095,23 @@ NOTA_API const char* nota_engine_section_name(const NotaEngine* engine, int32_t 
  * undo entry (project load). count 0 clears. Message thread only. */
 NOTA_API NotaResult  nota_engine_set_sections(NotaEngine* engine, const NotaSection* sections,
                                               int32_t count, int32_t checkpoint);
+/* Section edits that carry the arrangement with them (specs/073). Indices are into the
+ * start-sorted section list. Each is one undo step covering clips (audio + MIDI, cut at the
+ * edges), automation (every track, the master track, master volume), take lanes and the
+ * sections; the playhead does not move. NOTA_ERR_INVALID_ARG (nothing changed) for an index
+ * out of range, a section that overlaps another, a target inside an overlap, or a no-op.
+ * Message thread only.
+ * move: insert section `index` at boundary `to_boundary` (0..count: before section k, or
+ * after the last when == count); the sections in between shift by its length, the song's
+ * length is unchanged.
+ * duplicate_with_content: a copy of the section and everything in its span goes right after
+ * it (same name; automatic stays automatic); the rest of the song moves later by its length.
+ * delete_with_content: the section and everything in its span go; the rest moves earlier. */
+NOTA_API NotaResult  nota_section_move(NotaEngine* engine, int32_t index, int32_t to_boundary);
+NOTA_API NotaResult  nota_section_duplicate_with_content(NotaEngine* engine, int32_t index);
+NOTA_API NotaResult  nota_section_delete_with_content(NotaEngine* engine, int32_t index);
+/* 1 when section `index` overlaps another (the with-content edits are unavailable), else 0. */
+NOTA_API int32_t     nota_section_overlaps(const NotaEngine* engine, int32_t index);
 
 /* ---- Project load (M7-6) ------------------------------------------------- */
 /* Clear the session to an empty project: stop transport, drop all tracks,

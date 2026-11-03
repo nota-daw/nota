@@ -73,6 +73,14 @@ public sealed partial class ArrangementView
     /// can't be held by reference while dragging). Committed back as AutomationPoint[].</summary>
     internal sealed class AutoPt { public double Beat; public float Value; public float Curve; }
 
+    /// <summary>Everything an audio clip's peaks depend on except its position (specs/073).</summary>
+    internal readonly record struct PeakSourceKey(long SampleId, double SourceOffsetFrames, long LengthFrames, float Gain,
+        float PitchSemitones, int WarpEnabled, int WarpMode, double WarpBeats, double WarpPlayStart, double WarpPlayEnd, int Reversed)
+    {
+        public static PeakSourceKey Of(in NotaAudioClipInfo a) => new(a.SampleId, a.SourceOffsetFrames, a.LengthFrames, a.Gain,
+            a.PitchSemitones, a.WarpEnabled, a.WarpMode, a.WarpBeats, a.WarpPlayStart, a.WarpPlayEnd, a.Reversed);
+    }
+
     internal sealed class ClipVM
     {
         public int ClipIndex;
@@ -81,6 +89,9 @@ public sealed partial class ArrangementView
         public bool IsMidi;
         public bool Active = true;   // false = deactivated (key 0): stays but silent + greyed
         public int TakeId;           // the take this comp section came from (specs/067), 0 = none
+        /// <summary>What the audio clip's peaks were drawn from (everything but where it sits), so a
+        /// refresh after a clip only moved can keep them (specs/073). Null for MIDI.</summary>
+        public PeakSourceKey? PeakSource;
         public float[]? Peaks;
         public int PeakCount;
         /// <summary>RMS level per bucket of <see cref="Peaks"/> (null when unknown — an import placeholder).</summary>
