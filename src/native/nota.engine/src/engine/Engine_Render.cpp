@@ -1677,7 +1677,8 @@ void Engine::mixAudioClip(
         float l = static_cast<float>(l0 + (l1 - l0) * frac) * clip.gain * extraGain;
         float r = static_cast<float>(r0 + (r1 - r0) * frac) * clip.gain * extraGain;
         // Short edge fade (~3 ms) so a clip that starts/ends mid-waveform doesn't click.
-        const float eg = static_cast<float>(audioClipEdgeGain(p - startSamples, clipDeviceLen, sr));
+        const float eg = static_cast<float>(
+            audioClipEdgeGain(p - startSamples, clipDeviceLen, sr, clip.fadeHead, clip.fadeTail));
         l *= eg;
         r *= eg;
         applyEnv(p, l, r);

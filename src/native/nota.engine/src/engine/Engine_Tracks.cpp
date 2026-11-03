@@ -1509,7 +1509,10 @@ AudioClip audioSlice(const AudioClip& c, double ns, double ne, double spb, doubl
 } // namespace
 
 void Engine::overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne) {
-    audioOverwriteRange(clips, ns, ne, transport_.samplesPerBeat(), transport_.sampleRate());
+    // compTake and the recording-stop carve run here, on the message thread. setBpm has
+    // already stored the requested tempo; the transport still has the previous one until
+    // the next audio block, so the cut must use the same clock as the new section.
+    audioOverwriteRange(clips, ns, ne, authoringSamplesPerBeat(), transport_.sampleRate());
 }
 
 int32_t Engine::pasteAudioFrames(

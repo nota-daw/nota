@@ -30,11 +30,54 @@ bool atTakePosition(const AudioClip& c, const AudioTake& k) {
     return std::abs(c.startBeat - (k.originBeat + c.sourceOffsetFrames * k.beatsPerFrame)) < 1e-6;
 }
 
+// Timeline length (beats) of an unwarped clip at `spb` samples per beat. Matches playback.
+double unwarpedLenBeats(const AudioClip& c, double spb, double devSR) {
+    if (!c.sample || spb <= 0.0 || devSR <= 0.0 || c.sample->sourceSampleRate <= 0.0) return 0.0;
+    const double devFrames =
+        static_cast<double>(c.effectiveLength()) * devSR / c.sample->sourceSampleRate / c.pitchRatio();
+    return devFrames / spb;
+}
+
 } // namespace
 
 double Engine::beatsPerSourceFrame(double sampleRate) const {
     const double sr = sampleRate > 0.0 ? sampleRate : transport_.sampleRate();
     return sr > 0.0 && authoringBpm_ > 0.0 ? authoringBpm_ / 60.0 / sr : 0.0;
+}
+
+double Engine::authoringSamplesPerBeat() const {
+    const double devSR = transport_.sampleRate();
+    if (authoringBpm_ > 0.0 && devSR > 0.0) return devSR * 60.0 / authoringBpm_;
+    return transport_.samplesPerBeat();
+}
+
+void Engine::settleTakeJoins(Track& nt) {
+    for (auto& c : nt.clips) {
+        c.fadeHead = true;
+        c.fadeTail = true;
+    }
+    const double devSR = transport_.sampleRate();
+    const double spb = authoringSamplesPerBeat();
+    constexpr double eps = 1e-6;
+    const size_t n = nt.clips.size();
+    for (size_t i = 0; i < n; ++i) {
+        AudioClip& a = nt.clips[i];
+        if (a.takeId == 0 || a.warpEnabled || !a.active) continue;
+        const AudioTake* ka = findTake(nt, a.takeId);
+        if (!ka) continue;
+        const double aEnd = a.startBeat + unwarpedLenBeats(a, spb, devSR);
+        for (size_t j = 0; j < n; ++j) {
+            if (i == j) continue;
+            AudioClip& b = nt.clips[j];
+            if (b.takeId == 0 || b.warpEnabled || !b.active) continue;
+            const AudioTake* kb = findTake(nt, b.takeId);
+            if (!kb || kb->group != ka->group) continue;
+            if (std::abs(b.startBeat - aEnd) < eps) {
+                a.fadeTail = false;
+                b.fadeHead = false;
+            }
+        }
+    }
 }
 
 void Engine::placeTakesForTempo() {
@@ -66,6 +109,7 @@ void Engine::placeTakesForTempo() {
         }
         for (auto& k : nt->takes)
             if (k.sample) k.beatsPerFrame = beatsPerSourceFrame(k.sample->sourceSampleRate);
+        settleTakeJoins(*nt); // joins that met still meet; recompute on the new mapping
         g->tracks.push_back(std::move(nt));
         any = true;
     }
@@ -215,8 +259,9 @@ bool Engine::flattenTakes(int32_t trackId) {
             merged.push_back(&c);
         }
 
-        // Each section keeps the edge fades it played with, so the joins sound as the comp did;
-        // only where the merged clip's own edge falls does its playback fade take over.
+        // Each section keeps the edge fades it played with, so the joins sound as the comp did.
+        // A butt-joined take section has that shared edge off. Only where the merged clip's
+        // own edge falls does its playback fade take over.
         std::vector<float> buf;
         if (hi > lo) buf.assign(static_cast<size_t>(frames) * ch, 0.0f);
         const double devSR = transport_.sampleRate();
@@ -225,7 +270,7 @@ bool Engine::flattenTakes(int32_t trackId) {
             const int64_t off = static_cast<int64_t>(std::round(c->sourceOffsetFrames));
             const int64_t len = c->effectiveLength();
             const double devLen = static_cast<double>(len) * devPerFrame;
-            const bool fadeIn = off != lo, fadeOut = off + len != hi;
+            const bool fadeIn = c->fadeHead && off != lo, fadeOut = c->fadeTail && off + len != hi;
             const float* src = c->sample->samples.data() + off * ch;
             float* dst = buf.data() + off * ch;
             for (int64_t j = 0; j < len; ++j) {

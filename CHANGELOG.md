@@ -220,6 +220,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Take lanes no longer dip, cut on the old tempo, or highlight a moved clip** (#187):
+  where two sections of one loop recording meet, playback stays at full level instead of
+  fading out and back in. Comping a take after a tempo change cuts the neighbouring clips
+  on the new tempo, even before the next audio block. Moving a comp clip no longer lights
+  the wrong part of its take lane.
 - **The loop region is saved with the project** (#455): its start and end, and whether the
   loop is on, come back when you open the project again. A new project starts without one.
 - **The Mixer's volume reaches −∞** (#453): a fader pulled all the way down, a dB value dragged

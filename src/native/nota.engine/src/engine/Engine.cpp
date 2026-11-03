@@ -790,6 +790,7 @@ void Engine::publish(std::shared_ptr<Graph> g) {
 }
 
 void Engine::republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt) {
+    if (nt) settleTakeJoins(*nt); // the clone only; authoring_ still shares the previous tracks
     auto g = std::make_shared<Graph>();
     inheritGraphLevel(*g, *authoring_);
     if (trackId == kMasterTrackId) g->masterTrack = nt; // master chain edit

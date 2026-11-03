@@ -97,6 +97,11 @@ struct AudioClip {
     // The take this clip plays a section of (specs/067), 0 = none. Drives the take lanes'
     // highlight and flatten only; playback never looks at it.
     int32_t takeId = 0;
+    // Edge fades (~3 ms) at the played ends. Take sections of one recording that meet turn
+    // the shared edge off, so the comp does not dip to silence there. Derived when the
+    // track is published (settleTakeJoins); not stored in the project.
+    bool fadeHead = true;
+    bool fadeTail = true;
 
     int64_t effectiveLength() const;
     // Played warp window (beats). Default (0/0) is the whole warp [0, warpBeats].
@@ -107,15 +112,16 @@ struct AudioClip {
     double pitchRatio() const { return std::pow(2.0, static_cast<double>(pitchSemitones) / 12.0); }
 };
 
-// The short edge fade (~3 ms) an unwarped clip plays at both ends, so one that starts or ends
-// mid-waveform doesn't click: the gain `into` device frames into a clip `len` device frames
-// long at device rate `sr`. Flatten (specs/067) bakes the same fades into the joins it removes.
-inline double audioClipEdgeGain(double into, double len, double sr) {
+// The short edge fade (~3 ms) an unwarped clip plays at an end that asks for one, so a clip
+// that starts or ends mid-waveform doesn't click: the gain `into` device frames into a clip
+// `len` device frames long at device rate `sr`. A take join turns the shared end off
+// (AudioClip::fadeHead / fadeTail). Flatten (specs/067) bakes the fades the section played with.
+inline double audioClipEdgeGain(double into, double len, double sr, bool fadeHead = true, bool fadeTail = true) {
     const double edge = std::min(3.0 * sr / 1000.0, len * 0.5);
     if (edge <= 1.0) return 1.0;
     double eg = 1.0;
-    if (into < edge) eg = into / edge;
-    else if (into > len - edge)
+    if (fadeHead && into < edge) eg = into / edge;
+    else if (fadeTail && into > len - edge)
         eg = (len - into) / edge;
     return std::clamp(eg, 0.0, 1.0);
 }

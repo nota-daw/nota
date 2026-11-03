@@ -1595,9 +1595,15 @@ class Engine {
     // Beats per frame of `sampleRate` audio at authoringBpm_ (the mapping unwarped clips play
     // at; the device rate cancels out); 0 without a rate.
     double beatsPerSourceFrame(double sampleRate) const;
+    // Samples per beat at authoringBpm_. setBpm stores that before the transport applies it,
+    // so a message-thread carve reads this instead of transport_.samplesPerBeat().
+    double authoringSamplesPerBeat() const;
     // Re-place every take and the unwarped comp sections still where their take put them on
     // authoringBpm_'s mapping (after a tempo change or an undo/redo). No undo entry.
     void placeTakesForTempo();
+    // Turn off the shared edge fade where unwarped take sections of one group meet.
+    // Message thread, on the clone about to be published — never a track the audio thread holds.
+    void settleTakeJoins(Track& nt);
 
     // Clip clipboard (copy/cut/paste). Holds a clone of the copied clip; kind -1 empty.
     int32_t clipboardKind_ = -1; // -1 none, 0 audio, 1 midi

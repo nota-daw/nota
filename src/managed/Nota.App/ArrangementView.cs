@@ -1167,6 +1167,7 @@ public sealed partial class ArrangementView : UserControl
                         cvm.Gain = ai.Gain;
                         cvm.Adsr = eng.GetClipAdsr(ti.Id, c);
                         cvm.TakeId = eng.ClipTakeId(ti.Id, c);
+                        cvm.SourceOffsetFrames = ai.SourceOffsetFrames;
                     }
                     tvm.Clips.Add(cvm);
                 }

@@ -3,9 +3,10 @@
 //
 // Take lanes (#187, specs/067-take-lanes-comping): an Arrangement audio recording that wraps
 // the loop keeps every pass as a take; the default comp sounds exactly as the single loop
-// buffer did; comping a swiped range, deleting a take and flattening are one undo step each;
-// flatten sounds as the comp did; a tempo change keeps the takes and their comp on one
-// mapping; and takes + comp survive save/reopen.
+// buffer did, including across the join a partial last pass makes; comping a swiped range,
+// deleting a take and flattening are one undo step each; flatten sounds as the comp did; a
+// tempo change keeps the takes and their comp on one mapping, and a comp cut made before the
+// next audio block uses that mapping too; takes + comp survive save/reopen.
 
 using Nota.Application;
 using Nota.Infrastructure;
@@ -22,6 +23,7 @@ internal static class TakeLaneTests
     {
         foreach (var r in ThreePasses()) yield return r;
         foreach (var r in TempoChange()) yield return r;
+        foreach (var r in CompBeforeBlock()) yield return r;
         foreach (var r in NoTakes()) yield return r;
         foreach (var r in SaveReopen()) yield return r;
     }
@@ -173,6 +175,18 @@ internal static class TakeLaneTests
         bool allTagged = Enumerable.Range(0, clips).All(c => e.ClipTakeId(track, c) != 0);
         yield return (clips == 2 && allTagged, $"default comp is two take sections ({clips})");
 
+        // The two sections meet at frame 30000. Playback used to fade both edges there (~6 ms
+        // of silence). The outer head of the comp still fades, as one clip always did.
+        // Render goes through the mixer, so compare the join to a full-level frame of the
+        // same clip rather than to the raw sample.
+        var played = Render(e);
+        double scale = tl[200] != 0f ? played[200] / tl[200] : 0;
+        yield return (Math.Abs(played[0]) < 1e-3
+                      && scale > 0.5
+                      && Math.Abs(played[29999] - tl[29999] * scale) < 1e-3
+                      && Math.Abs(played[30000] - tl[30000] * scale) < 1e-3,
+            $"a butt-joined take section does not dip (head {played[0]:G4}, join {played[29999]:G4}/{played[30000]:G4}, scale {scale:G4})");
+
         // Swipe take 1 over beats 1.5–2.5.
         int clipsBefore = clips;
         yield return (e.CompTake(track, takes[0].Id, 1.5, 2.5), "comp a swiped range of take 1");
@@ -204,8 +218,8 @@ internal static class TakeLaneTests
         e.Undo();
         yield return (e.TakeCount(track) == 3, "undo brings the deleted take back");
 
-        // Flatten: one clip, no takes, and it renders as the comp did — the joins keep the edge
-        // fades their sections played with.
+        // Flatten: one clip, no takes, and it renders as the comp did — including joins that
+        // no longer fade.
         var compSound = Render(e);
         yield return (e.FlattenTakes(track), "flatten the takes");
         Timeline(e, track, out mirrored);
@@ -261,6 +275,48 @@ internal static class TakeLaneTests
         yield return (e.Redo() && SectionsOnTakes(e, track), "...and after redoing it");
         yield return (e.FlattenTakes(track) && ClipCount(e, track) == 1,
             $"flatten after a tempo change still merges the comp into one clip ({ClipCount(e, track)})");
+    }
+
+    private static bool ClipIs(NotaEngine e, int track, int takeId, double start, double offset, long length)
+    {
+        int n = ClipCount(e, track);
+        for (int c = 0; c < n; c++)
+        {
+            if (e.ClipTakeId(track, c) != takeId) continue;
+            if (!e.TryGetAudioClipInfo(track, c, out var ac)) continue;
+            if (Math.Abs(ac.StartBeat - start) < 1e-6
+                && Math.Abs(ac.SourceOffsetFrames - offset) < 1.0
+                && ac.LengthFrames == length)
+                return true;
+        }
+        return false;
+    }
+
+    // SetBpm updates the authoring tempo immediately and the transport only on the next block.
+    // A comp in between must cut neighbours with the new samples-per-beat. At 60 BPM, take 1
+    // (source frames 24000–96000) over beats 0.5–1.0 is frames 24000–48000; the partial last
+    // pass keeps frames 0–24000 and the full pass continues from frame 48000.
+    private static IEnumerable<(bool, string)> CompBeforeBlock()
+    {
+        using var e = Rig(out int track);
+        if (!Record(e, track, RecFrames, 1.0))
+        {
+            yield return (false, "tempo cut: recording failed");
+            yield break;
+        }
+        var takes = Takes(e, track);
+        if (takes.Length != 3)
+        {
+            yield return (false, $"tempo cut: expected 3 takes ({takes.Length})");
+            yield break;
+        }
+        e.SetBpm(60);
+        bool shaped = e.CompTake(track, takes[0].Id, 0.5, 1.0)
+                      && ClipIs(e, track, takes[0].Id, 0.5, 24000, 24000)
+                      && ClipIs(e, track, takes[2].Id, 0.0, 0, 24000)
+                      && ClipIs(e, track, takes[1].Id, 1.0, 48000, 48000)
+                      && ClipCount(e, track) == 3;
+        yield return (shaped, "comping after a tempo change, before the next block, cuts neighbours on the new tempo");
     }
 
     private static IEnumerable<(bool, string)> NoTakes()
