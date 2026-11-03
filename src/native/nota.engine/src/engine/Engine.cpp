@@ -449,11 +449,18 @@ bool Engine::graphRetireSelfTest() {
     const std::weak_ptr<Graph> held = first;
     publishRaw(std::move(first));
     publishRaw(std::make_shared<Graph>(*authoring_)); // replaced, but no render has passed yet
-    if (held.expired()) return false;
+    // A recording slot's player outlives its track the same way (#438 review): the next take
+    // retires it, and a render that read the old pointer finishes before it goes.
+    auto player = std::make_shared<SessionPlayer>();
+    const std::weak_ptr<SessionPlayer> heldPlayer = player;
+    recordSlotHist_.publish(std::move(player)); // its track is gone: the history is the last owner
+    recordSlotHist_.publish(std::make_shared<SessionPlayer>());
+    if (held.expired() || heldPlayer.expired()) return false;
     renderOffline(buf.data(), 64);
     renderOffline(buf.data(), 64);
     publishRaw(std::make_shared<Graph>(*authoring_)); // frees what the two renders moved past
-    return held.expired();
+    recordSlotHist_.publish(std::make_shared<SessionPlayer>());
+    return held.expired() && heldPlayer.expired();
 }
 
 bool Engine::previewSelfTest() {

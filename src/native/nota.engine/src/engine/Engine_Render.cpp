@@ -1764,6 +1764,9 @@ void Engine::triggerPassReplace() {
 }
 
 void Engine::processBlock(float* out, int32_t numFrames) {
+    // Every audio-thread read of recordSlotPlayer_ happens inside this block (count-in launch,
+    // live MIDI, capture), so this scope keeps the player it points at alive.
+    const SnapshotHistory<SessionPlayer>::RenderScope recordSlotScope(recordSlotHist_);
     drainCommands();
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = 0.0f;
 

@@ -1942,14 +1942,14 @@ class Engine {
     // session-slot recording target (M5-4). recordSessionScene_ >= 0 selects slot
     // mode; recordSlotPlayer_/recordSlotLen_ are read on the audio thread to time
     // captured notes against the slot's own loop clock (SessionPlayer is stable
-    // across snapshots). recordSlotHold_ keeps it alive past its track: a track deleted
-    // mid-take is freed with its graph. Kept until the next take replaces it (message thread),
-    // so a block that read the pointer just before a stop can't outlive it either.
+    // across snapshots). recordSlotHist_ owns it, so a track deleted mid-take (freed with its
+    // graph) can't take it along: the next take retires it, and it is freed only once two
+    // renders have finished after that, so a block that read the old pointer is done with it.
     int32_t recordSessionTrackId_ = 0;
     int32_t recordSessionScene_ = -1;
     bool recordSessionAudio_ = false; // audio take into slot (M5-4)
     std::atomic<SessionPlayer*> recordSlotPlayer_{nullptr};
-    std::shared_ptr<SessionPlayer> recordSlotHold_;
+    SnapshotHistory<SessionPlayer> recordSlotHist_; // lifetime only; read through recordSlotPlayer_
     std::atomic<double> recordSlotLen_{4.0};
 
     // audio-thread-owned state
