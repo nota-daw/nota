@@ -1373,36 +1373,20 @@ std::vector<AutomationPoint> laneSliceExact(const AutomationLane& lane, double a
     return out;
 }
 
-// Cut a piece's copy of a clip envelope (clip-local beats) to [from, from+len) of its clip.
-// Most clips have none: then there is nothing to do (a split is a hot edit, perf-gate).
-void sliceEnvelope(AutomationLane& piece, const AutomationLane& src, double from, double len) {
-    if (!src.points.empty()) piece.points = laneSliceExact(src, from, from + len);
-}
 
-// A MIDI clip carve keeps everything the clip carries — name, deactivation, envelopes,
-// controllers — cut to the piece, not just its notes. (Fields one by one, so the notes aren't
-// copied only to be dropped.)
-MidiClip midiCarveShell(const MidiClip& src) {
+MidiClip midiCarveLeft(const MidiClip& src, double endLocal) { // keep [start, start+endLocal)
     MidiClip r;
     r.name = src.name;
-    r.active = src.active;
-    r.velocityEnvelope = src.velocityEnvelope;
-    r.volumeEnvelope = src.volumeEnvelope;
-    return r;
-}
-MidiClip midiCarveLeft(const MidiClip& src, double endLocal) { // keep [start, start+endLocal)
-    MidiClip r = midiCarveShell(src);
     r.startBeat = src.startBeat;
     r.lengthBeats = endLocal;
     for (const auto& n : src.notes)
         if (n.startBeat < endLocal) r.notes.push_back(n);
-    sliceEnvelope(r.velocityEnvelope, src.velocityEnvelope, 0.0, endLocal);
-    sliceEnvelope(r.volumeEnvelope, src.volumeEnvelope, 0.0, endLocal);
     r.sliceControllersFrom(src, 0.0, endLocal);
     return r;
 }
 MidiClip midiCarveRight(const MidiClip& src, double startLocal) { // keep [start+startLocal, end)
-    MidiClip r = midiCarveShell(src);
+    MidiClip r;
+    r.name = src.name;
     r.startBeat = src.startBeat + startLocal;
     r.lengthBeats = src.lengthBeats - startLocal;
     for (const auto& n : src.notes)
@@ -1411,8 +1395,6 @@ MidiClip midiCarveRight(const MidiClip& src, double startLocal) { // keep [start
             m.startBeat -= startLocal;
             r.notes.push_back(m);
         }
-    sliceEnvelope(r.velocityEnvelope, src.velocityEnvelope, startLocal, r.lengthBeats);
-    sliceEnvelope(r.volumeEnvelope, src.volumeEnvelope, startLocal, r.lengthBeats);
     r.sliceControllersFrom(src, startLocal, r.lengthBeats);
     return r;
 }
@@ -1421,8 +1403,6 @@ MidiClip midiCarveRight(const MidiClip& src, double startLocal) { // keep [start
 AudioClip audioCarveLeft(const AudioClip& src, double endLocal, double spb, double devSR) {
     AudioClip left = src;
     left.adsr.release = 0.0; // the cut is a new, hard end: the tail's release stays with the right piece
-    sliceEnvelope(left.volumeEnvelope, src.volumeEnvelope, 0.0, endLocal);
-    sliceEnvelope(left.panEnvelope, src.panEnvelope, 0.0, endLocal);
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
         if (src.reversed) {
             left.warpPlayStart = std::max(0.0, src.warpPlayEndEff() - endLocal);
@@ -1444,11 +1424,6 @@ AudioClip audioCarveRight(const AudioClip& src, double startLocal, double spb, d
     right.startBeat = src.startBeat + startLocal;
     right.adsr.attack = 0.0;
     right.adsr.decay = 0.0; // the head's attack/decay stay with the left piece
-    if (!src.volumeEnvelope.points.empty() || !src.panEnvelope.points.empty()) {
-        const double len = audioDisplayLenBeats(src, spb, devSR) - startLocal; // envelopes are in played beats
-        sliceEnvelope(right.volumeEnvelope, src.volumeEnvelope, startLocal, len);
-        sliceEnvelope(right.panEnvelope, src.panEnvelope, startLocal, len);
-    }
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
         if (src.reversed) {
             right.warpPlayStart = src.warpPlayStart;
@@ -1498,15 +1473,33 @@ void audioOverwriteRange(std::vector<AudioClip>& clips, double ns, double ne, do
 }
 // A clip clipped to the timeline range [ns,ne] (its intersection), timeline positions
 // preserved — used to lift the covered slice for a range duplicate.
+// The carves keep a MIDI piece's notes and controllers only, and leave an audio piece's
+// envelopes where the whole clip had them. A slice is a piece that moves on its own (range
+// duplicate, insert time, section edits — specs/073), so it also keeps the clip's
+// deactivation and its own share of the envelopes. (The carves themselves stay lean: a split
+// is a hot edit, perf-gate edit-warp-split.)
 MidiClip midiSlice(const MidiClip& c, double ns, double ne) {
     const double cs = c.startBeat, ce = cs + c.lengthBeats;
     const double a = std::max(cs, ns), b = std::min(ce, ne);
-    return midiCarveLeft(midiCarveRight(c, a - cs), b - a);
+    MidiClip r = midiCarveLeft(midiCarveRight(c, a - cs), b - a);
+    r.active = c.active;
+    if (!c.velocityEnvelope.points.empty()) {
+        r.velocityEnvelope = c.velocityEnvelope;
+        r.velocityEnvelope.points = laneSliceExact(c.velocityEnvelope, a - cs, b - cs);
+    }
+    if (!c.volumeEnvelope.points.empty()) {
+        r.volumeEnvelope = c.volumeEnvelope;
+        r.volumeEnvelope.points = laneSliceExact(c.volumeEnvelope, a - cs, b - cs);
+    }
+    return r;
 }
 AudioClip audioSlice(const AudioClip& c, double ns, double ne, double spb, double devSR) {
     const double cs = c.startBeat, ce = cs + audioDisplayLenBeats(c, spb, devSR);
     const double a = std::max(cs, ns), b = std::min(ce, ne);
-    return audioCarveLeft(audioCarveRight(c, a - cs, spb, devSR), b - a, spb, devSR);
+    AudioClip r = audioCarveLeft(audioCarveRight(c, a - cs, spb, devSR), b - a, spb, devSR);
+    if (!c.volumeEnvelope.points.empty()) r.volumeEnvelope.points = laneSliceExact(c.volumeEnvelope, a - cs, b - cs);
+    if (!c.panEnvelope.points.empty()) r.panEnvelope.points = laneSliceExact(c.panEnvelope, a - cs, b - cs);
+    return r;
 }
 } // namespace
 
