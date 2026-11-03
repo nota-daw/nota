@@ -1373,39 +1373,46 @@ std::vector<AutomationPoint> laneSliceExact(const AutomationLane& lane, double a
     return out;
 }
 
-// A clip envelope (clip-local beats) for the piece [from, from+len) of its clip.
-AutomationLane envelopeSlice(const AutomationLane& env, double from, double len) {
-    AutomationLane r = env;
-    r.points = laneSliceExact(env, from, from + len);
-    return r;
+// Cut a piece's copy of a clip envelope (clip-local beats) to [from, from+len) of its clip.
+// Most clips have none: then there is nothing to do (a split is a hot edit, perf-gate).
+void sliceEnvelope(AutomationLane& piece, const AutomationLane& src, double from, double len) {
+    if (!src.points.empty()) piece.points = laneSliceExact(src, from, from + len);
 }
 
 // A MIDI clip carve keeps everything the clip carries — name, deactivation, envelopes,
-// controllers — cut to the piece, not just its notes.
+// controllers — cut to the piece, not just its notes. (Fields one by one, so the notes aren't
+// copied only to be dropped.)
+MidiClip midiCarveShell(const MidiClip& src) {
+    MidiClip r;
+    r.name = src.name;
+    r.active = src.active;
+    r.velocityEnvelope = src.velocityEnvelope;
+    r.volumeEnvelope = src.volumeEnvelope;
+    return r;
+}
 MidiClip midiCarveLeft(const MidiClip& src, double endLocal) { // keep [start, start+endLocal)
-    MidiClip r = src;
+    MidiClip r = midiCarveShell(src);
+    r.startBeat = src.startBeat;
     r.lengthBeats = endLocal;
-    r.notes.clear();
     for (const auto& n : src.notes)
         if (n.startBeat < endLocal) r.notes.push_back(n);
-    r.velocityEnvelope = envelopeSlice(src.velocityEnvelope, 0.0, endLocal);
-    r.volumeEnvelope = envelopeSlice(src.volumeEnvelope, 0.0, endLocal);
+    sliceEnvelope(r.velocityEnvelope, src.velocityEnvelope, 0.0, endLocal);
+    sliceEnvelope(r.volumeEnvelope, src.volumeEnvelope, 0.0, endLocal);
     r.sliceControllersFrom(src, 0.0, endLocal);
     return r;
 }
 MidiClip midiCarveRight(const MidiClip& src, double startLocal) { // keep [start+startLocal, end)
-    MidiClip r = src;
+    MidiClip r = midiCarveShell(src);
     r.startBeat = src.startBeat + startLocal;
     r.lengthBeats = src.lengthBeats - startLocal;
-    r.notes.clear();
     for (const auto& n : src.notes)
         if (n.startBeat >= startLocal) {
             Note m = n;
             m.startBeat -= startLocal;
             r.notes.push_back(m);
         }
-    r.velocityEnvelope = envelopeSlice(src.velocityEnvelope, startLocal, r.lengthBeats);
-    r.volumeEnvelope = envelopeSlice(src.volumeEnvelope, startLocal, r.lengthBeats);
+    sliceEnvelope(r.velocityEnvelope, src.velocityEnvelope, startLocal, r.lengthBeats);
+    sliceEnvelope(r.volumeEnvelope, src.volumeEnvelope, startLocal, r.lengthBeats);
     r.sliceControllersFrom(src, startLocal, r.lengthBeats);
     return r;
 }
@@ -1414,8 +1421,8 @@ MidiClip midiCarveRight(const MidiClip& src, double startLocal) { // keep [start
 AudioClip audioCarveLeft(const AudioClip& src, double endLocal, double spb, double devSR) {
     AudioClip left = src;
     left.adsr.release = 0.0; // the cut is a new, hard end: the tail's release stays with the right piece
-    left.volumeEnvelope = envelopeSlice(src.volumeEnvelope, 0.0, endLocal);
-    left.panEnvelope = envelopeSlice(src.panEnvelope, 0.0, endLocal);
+    sliceEnvelope(left.volumeEnvelope, src.volumeEnvelope, 0.0, endLocal);
+    sliceEnvelope(left.panEnvelope, src.panEnvelope, 0.0, endLocal);
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
         if (src.reversed) {
             left.warpPlayStart = std::max(0.0, src.warpPlayEndEff() - endLocal);
@@ -1437,10 +1444,10 @@ AudioClip audioCarveRight(const AudioClip& src, double startLocal, double spb, d
     right.startBeat = src.startBeat + startLocal;
     right.adsr.attack = 0.0;
     right.adsr.decay = 0.0; // the head's attack/decay stay with the left piece
-    {
+    if (!src.volumeEnvelope.points.empty() || !src.panEnvelope.points.empty()) {
         const double len = audioDisplayLenBeats(src, spb, devSR) - startLocal; // envelopes are in played beats
-        right.volumeEnvelope = envelopeSlice(src.volumeEnvelope, startLocal, len);
-        right.panEnvelope = envelopeSlice(src.panEnvelope, startLocal, len);
+        sliceEnvelope(right.volumeEnvelope, src.volumeEnvelope, startLocal, len);
+        sliceEnvelope(right.panEnvelope, src.panEnvelope, startLocal, len);
     }
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
         if (src.reversed) {
