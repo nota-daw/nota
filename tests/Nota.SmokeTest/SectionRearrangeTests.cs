@@ -68,14 +68,19 @@ internal static class SectionRearrangeTests
         return s.Count == want.Length && s.Zip(want).All(p => Math.Abs(p.First.StartBeat - p.Second.start) < Eps && p.First.Name == p.Second.name);
     }
 
-    // The lane's value at `beat` (linear segments; at a step, the later point wins).
+    // The lane's value at `beat` as the engine plays it: each segment shaped by its start point's
+    // curve (t^e, e = 2^(−4·curve)); at a step, the later point wins.
     private static float At(AutomationPoint[] pts, double beat)
     {
         if (pts.Length == 0) return 0;
         if (beat <= pts[0].Beat) return pts[0].Value;
         for (int i = 1; i < pts.Length; i++)
             if (beat < pts[i].Beat)
-                return (float)(pts[i - 1].Value + (pts[i].Value - pts[i - 1].Value) * (beat - pts[i - 1].Beat) / (pts[i].Beat - pts[i - 1].Beat));
+            {
+                double t = (beat - pts[i - 1].Beat) / (pts[i].Beat - pts[i - 1].Beat);
+                double shaped = pts[i - 1].Curve == 0 ? t : Math.Pow(t, Math.Pow(2, -pts[i - 1].Curve * 4));
+                return (float)(pts[i - 1].Value + (pts[i].Value - pts[i - 1].Value) * shaped);
+            }
         return pts[^1].Value;
     }
 
@@ -109,6 +114,35 @@ internal static class SectionRearrangeTests
                 "section move: one undo restores clips, automation and sections (a refused move added no step)");
             yield return (e.Redo() && SectionsAre(e, (0, "A"), (4, ""), (8, "B")) && NotesAre(e, s.A, (60, 1), (64, 5), (62, 9)),
                 "section move: redo repeats it");
+        }
+
+        // A curved automation segment cut by a move keeps its shape on both sides (a 0 → 1 ramp
+        // over [0,16) with curve −0.25 is (b/16)²), and a cut clip keeps its deactivation and
+        // its envelopes, re-based to each piece.
+        {
+            var s = Build();
+            using var e = s.E;
+            e.SetAutomationPoints(s.B, s.Lane, new[] { new AutomationPoint(0, 0f, -0.25f), new AutomationPoint(16, 1f) });
+            float Sq(double b) => (float)Math.Pow(Math.Clamp(b, 0, 16) / 16.0, 2);
+            e.SetClipActive(s.A, 0, false);
+            e.SetMidiClipEnvelope(s.A, 0, MidiClipEnvelope.Volume, new[] { P(0, 0f), P(12, 1f) });
+            string wav = Path.Combine(Path.GetTempPath(), "nota_smoke_sections_env.wav");
+            WavWriter.WriteSine(wav, seconds: 6.0, freq: 220.0, sampleRate: 44100);   // 12 beats at 120
+            e.RenderOffline(new float[64 * 2], 64, 48000);   // a sample rate, so the clip has its length in beats
+            int audio = e.AddAudioTrack();
+            int ac = e.AddAudioClip(audio, wav, startBeat: 0.0);
+            e.SetClipVolumeEnvelope(audio, ac, new[] { P(0, 0f), P(12, 1f) });
+            bool moved = e.MoveSection(2, 1);   // C before B: cuts at 4, 8, 12
+            yield return (moved && LaneFollows(e.GetAutomationPoints(s.B, s.Lane), Sq, (2, 2), (5, 9), (6, 10), (9, 5), (11, 7), (13, 13), (14, 14), (15.5, 15.5)),
+                "section move: curved automation keeps its shape on both sides of every cut");
+            var pieces = Enumerable.Range(0, 8).Select(i => e.TryGetClipInfo(s.A, i, out var ci) ? (ok: true, i, ci) : (ok: false, i, ci)).Where(x => x.ok).ToArray();
+            var cPiece = pieces.FirstOrDefault(x => Math.Abs(x.ci.StartBeat - 4) < Eps);
+            yield return (pieces.Length == 3 && pieces.All(x => !x.ci.IsActive)
+                && Math.Abs(At(e.GetMidiClipEnvelope(s.A, cPiece.i, MidiClipEnvelope.Volume), 2) - 10 / 12f) < 1e-3,
+                "section move: cut MIDI pieces stay deactivated and keep their part of the clip envelope");
+            int audioC = Enumerable.Range(0, 8).FirstOrDefault(i => e.TryGetClipInfo(audio, i, out var ci) && Math.Abs(ci.StartBeat - 4) < Eps, -1);
+            yield return (audioC >= 0 && Math.Abs(At(e.GetClipVolumeEnvelope(audio, audioC), 2) - 10 / 12f) < 1e-3,
+                "section move: a cut audio clip's envelope is re-based to each piece");
         }
 
         // Move A after C: B · C · A.

@@ -73,7 +73,8 @@ public sealed partial class ArrangementView
     /// can't be held by reference while dragging). Committed back as AutomationPoint[].</summary>
     internal sealed class AutoPt { public double Beat; public float Value; public float Curve; }
 
-    /// <summary>Everything an audio clip's peaks depend on except its position (specs/073).</summary>
+    /// <summary>Everything an unwarped audio clip's peaks depend on except its position (specs/073).
+    /// Warped clips have no key: their warp markers shape the peaks too.</summary>
     internal readonly record struct PeakSourceKey(long SampleId, double SourceOffsetFrames, long LengthFrames, float Gain,
         float PitchSemitones, int WarpEnabled, int WarpMode, double WarpBeats, double WarpPlayStart, double WarpPlayEnd, int Reversed)
     {

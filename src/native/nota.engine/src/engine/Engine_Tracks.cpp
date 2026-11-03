@@ -1324,27 +1324,88 @@ double placeAudioNonOverlap(const Track& t, double start, double len, double spb
 // --- overwrite / comp: carve existing clips out of a timeline range ---------
 // Replace-on-drop: a newly placed clip (recorded / dragged) replaces the region it covers.
 // The parts of an existing clip outside the range survive as trimmed remainders.
+// The curvature of the lane's segment running through `t` (0 before the first point).
+float curveThrough(const AutomationLane& lane, double t) {
+    float c = 0.0f;
+    for (const auto& q : lane.points) {
+        if (q.beat > t + 1e-9) break;
+        c = q.curve;
+    }
+    return c;
+}
+
+// Append the lane from `t` up to (not including) its next point, shifted by `shift`, stopping
+// before `limit`. Cut at its end a power curve keeps its shape with the same curve (t^e
+// scales), but cut at its start it is no power curve any more: that partial segment is laid
+// as short straight pieces, well under 0.1 % off.
+void appendLaneFrom(std::vector<AutomationPoint>& out, const AutomationLane& lane, double t, double limit, double shift) {
+    constexpr double eps = 1e-9;
+    constexpr int pieces = 32;
+    const auto& p = lane.points;
+    const auto next = std::find_if(p.begin(), p.end(), [&](const AutomationPoint& q) { return q.beat > t + eps; });
+    const bool before = next != p.begin(), onPoint = before && std::abs(std::prev(next)->beat - t) < eps;
+    const float k = before ? std::prev(next)->curve : 0.0f;
+    if (k == 0.0f || onPoint || next == p.end()) {
+        out.push_back({t + shift, lane.valueAt(t), onPoint ? k : 0.0f});
+        return;
+    }
+    out.push_back({t + shift, lane.valueAt(t), 0.0f});
+    for (int i = 1; i < pieces; ++i) {
+        const double b = t + (next->beat - t) * i / pieces;
+        if (b >= limit - eps) break;
+        out.push_back({b + shift, lane.valueAt(b), 0.0f});
+    }
+}
+
+// The lane over [a,b] re-based so `a` is 0, playing as it did: the value at each edge plus
+// every point strictly inside. Empty when the lane is.
+std::vector<AutomationPoint> laneSliceExact(const AutomationLane& lane, double a, double b) {
+    constexpr double eps = 1e-9;
+    std::vector<AutomationPoint> out;
+    if (lane.points.empty()) return out;
+    appendLaneFrom(out, lane, a, b, -a);
+    for (const auto& q : lane.points)
+        if (q.beat > a + eps && q.beat < b - eps) {
+            if (!out.empty() && q.beat - a <= out.back().beat + eps) continue;
+            out.push_back({q.beat - a, q.value, q.curve});
+        }
+    out.push_back({b - a, lane.valueAt(b), 0.0f});
+    return out;
+}
+
+// A clip envelope (clip-local beats) for the piece [from, from+len) of its clip.
+AutomationLane envelopeSlice(const AutomationLane& env, double from, double len) {
+    AutomationLane r = env;
+    r.points = laneSliceExact(env, from, from + len);
+    return r;
+}
+
+// A MIDI clip carve keeps everything the clip carries — name, deactivation, envelopes,
+// controllers — cut to the piece, not just its notes.
 MidiClip midiCarveLeft(const MidiClip& src, double endLocal) { // keep [start, start+endLocal)
-    MidiClip r;
-    r.name = src.name;
-    r.startBeat = src.startBeat;
+    MidiClip r = src;
     r.lengthBeats = endLocal;
+    r.notes.clear();
     for (const auto& n : src.notes)
         if (n.startBeat < endLocal) r.notes.push_back(n);
+    r.velocityEnvelope = envelopeSlice(src.velocityEnvelope, 0.0, endLocal);
+    r.volumeEnvelope = envelopeSlice(src.volumeEnvelope, 0.0, endLocal);
     r.sliceControllersFrom(src, 0.0, endLocal);
     return r;
 }
 MidiClip midiCarveRight(const MidiClip& src, double startLocal) { // keep [start+startLocal, end)
-    MidiClip r;
-    r.name = src.name;
+    MidiClip r = src;
     r.startBeat = src.startBeat + startLocal;
     r.lengthBeats = src.lengthBeats - startLocal;
+    r.notes.clear();
     for (const auto& n : src.notes)
         if (n.startBeat >= startLocal) {
             Note m = n;
             m.startBeat -= startLocal;
             r.notes.push_back(m);
         }
+    r.velocityEnvelope = envelopeSlice(src.velocityEnvelope, startLocal, r.lengthBeats);
+    r.volumeEnvelope = envelopeSlice(src.volumeEnvelope, startLocal, r.lengthBeats);
     r.sliceControllersFrom(src, startLocal, r.lengthBeats);
     return r;
 }
@@ -1353,6 +1414,8 @@ MidiClip midiCarveRight(const MidiClip& src, double startLocal) { // keep [start
 AudioClip audioCarveLeft(const AudioClip& src, double endLocal, double spb, double devSR) {
     AudioClip left = src;
     left.adsr.release = 0.0; // the cut is a new, hard end: the tail's release stays with the right piece
+    left.volumeEnvelope = envelopeSlice(src.volumeEnvelope, 0.0, endLocal);
+    left.panEnvelope = envelopeSlice(src.panEnvelope, 0.0, endLocal);
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
         if (src.reversed) {
             left.warpPlayStart = std::max(0.0, src.warpPlayEndEff() - endLocal);
@@ -1374,6 +1437,11 @@ AudioClip audioCarveRight(const AudioClip& src, double startLocal, double spb, d
     right.startBeat = src.startBeat + startLocal;
     right.adsr.attack = 0.0;
     right.adsr.decay = 0.0; // the head's attack/decay stay with the left piece
+    {
+        const double len = audioDisplayLenBeats(src, spb, devSR) - startLocal; // envelopes are in played beats
+        right.volumeEnvelope = envelopeSlice(src.volumeEnvelope, startLocal, len);
+        right.panEnvelope = envelopeSlice(src.panEnvelope, startLocal, len);
+    }
     if (src.warpEnabled && src.warpMarkers.size() >= 2 && src.warpBeats > 0.0) {
         if (src.reversed) {
             right.warpPlayStart = src.warpPlayStart;
@@ -1922,21 +1990,10 @@ double Engine::duplicateRange(const std::vector<int32_t>& trackIds, double start
 
 // --- insert time (Insert Silence ⌘⇧I / Duplicate Time ⌘⇧D) ----------------------
 namespace {
-// The lane's curve over [a,b] re-based so `a` is 0: the value at each edge plus every point
-// strictly inside (a partial first segment keeps its curvature).
+// The lane's curve over [a,b] re-based so `a` is 0 (laneSliceExact: the value at each edge,
+// every point strictly inside, a curved segment cut at its start laid as short straight pieces).
 std::vector<AutomationPoint> laneSlice(const AutomationLane& lane, double a, double b) {
-    constexpr double eps = 1e-9;
-    std::vector<AutomationPoint> out;
-    float c0 = 0.0f;
-    for (const auto& q : lane.points) {
-        if (q.beat > a + eps) break;
-        c0 = q.curve;
-    }
-    out.push_back({0.0, lane.valueAt(a), c0});
-    for (const auto& q : lane.points)
-        if (q.beat > a + eps && q.beat < b - eps) out.push_back({q.beat - a, q.value, q.curve});
-    out.push_back({b - a, lane.valueAt(b), 0.0f});
-    return out;
+    return laneSliceExact(lane, a, b);
 }
 
 // Opens a `len`-beat gap at `at`: points at or after `at` move right. With `fill` (a
@@ -2128,16 +2185,6 @@ bool remapClips(std::vector<Clip>& clips, double lo, double hi, const std::vecto
     return changed;
 }
 
-// The curvature of the segment running through `t`.
-float curveAt(const AutomationLane& lane, double t) {
-    float c = 0.0f;
-    for (const auto& q : lane.points) {
-        if (q.beat > t + 1e-9) break;
-        c = q.curve;
-    }
-    return c;
-}
-
 // Rebuild the lane over [lo,hi): points before and after keep their place, each kept region's
 // curve (laneSlice: exact values at both edges) is laid at its new start, in new order. Every
 // cut and join holds the value the original had there (FR-005). False when the lane is empty
@@ -2166,20 +2213,18 @@ bool laneRemap(AutomationLane& lane, double lo, double hi, const std::vector<Tim
                 q.beat += at;
                 out.push_back(q);
             }
-        } else { // to the end of the song: the edge value, then every later point
-            out.push_back({at, lane.valueAt(r->start), curveAt(lane, r->start)});
+        } else { // to the end of the song: the curve from its start, then every later point
+            appendLaneFrom(out, lane, r->start, std::numeric_limits<double>::infinity(), r->offset);
             for (const auto& q : p)
                 if (q.beat > r->start + eps) out.push_back({q.beat + r->offset, q.value, q.curve});
         }
     }
 
     if (std::isfinite(hi)) {
-        // The right side starts (or holds) on hi as it did, with the curve that ran through it.
+        // The right side starts (or holds) on hi as it did, playing the rest of the segment
+        // that ran through it.
         const auto right = std::find_if(p.begin(), p.end(), [&](const AutomationPoint& q) { return q.beat > hi + eps; });
-        if (std::abs(out.back().beat - hi) < eps && out.back().value == lane.valueAt(hi))
-            out.back().curve = curveAt(lane, hi);
-        else
-            out.push_back({hi, lane.valueAt(hi), curveAt(lane, hi)});
+        appendLaneFrom(out, lane, hi, std::numeric_limits<double>::infinity(), 0.0);
         out.insert(out.end(), right, p.end());
     }
     p.swap(out);

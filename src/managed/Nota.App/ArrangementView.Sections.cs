@@ -228,9 +228,11 @@ public sealed partial class ArrangementView
         => Loc.F("{0} overlaps another section \u2014 separate them to move its content with it", SectionDisplayName(s));
 
     // Run an edit that carries content with a section. Afterwards a time selection no longer
-    // covers the music it did, so it goes; clips and sections are re-read. Clips only moved, so
-    // the track headers stay — rebuilding them is what makes a big song slow (SC-004) — unless a
-    // take lane came or went, which a header shows.
+    // covers the music it did, and cuts and removals re-index the clips, so a clip selection
+    // would point at other clips: both go, and open clip editors re-sync as after a split.
+    // Clips and sections are re-read. Clips only moved, so the track headers stay — rebuilding
+    // them is what makes a big song slow (SC-004) — unless a take lane came or went, which a
+    // header shows.
     private bool SectionContentEdit(Func<IAudioEngine, bool> edit)
     {
         if (_engine is not { } eng) return false;
@@ -238,8 +240,10 @@ public sealed partial class ArrangementView
         int before = Takes();
         if (!edit(eng)) return false;
         ClearTimeSelection();
+        Select(-1, -1);
         if (Takes() == before) RefreshMovedClips(); else Refresh();
         ReloadSections();
+        ClipsSplit?.Invoke();
         SectionsChanged?.Invoke();
         return true;
     }

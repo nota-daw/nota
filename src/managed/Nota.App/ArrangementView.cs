@@ -1122,7 +1122,9 @@ public sealed partial class ArrangementView : UserControl
                     };
                     NotaAudioClipInfo ai = default;
                     bool audioInfo = !ci.IsMidi && eng.TryGetAudioClipInfo(ti.Id, c, out ai);
-                    if (audioInfo) cvm.PeakSource = PeakSourceKey.Of(ai);
+                    // A warped clip's peaks also follow its warp markers, which the key can't see:
+                    // it is always re-read.
+                    if (audioInfo && ai.WarpEnabled == 0) cvm.PeakSource = PeakSourceKey.Of(ai);
                     ClipVM? same = null;
                     if (ci.IsMidi)
                     {
