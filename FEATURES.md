@@ -481,7 +481,9 @@ docks as a panel under any of the three, or floats in its own window — see
     span; drag across a selected note to draw its curve (⌥ for a straight line), drag a point
     to move it, double-click to add or delete a point, right-click for **Clear Bend /
     Pressure / Slide** and **Clear All Expression**. The bend lane scales itself (±2, 12, 24,
-    48 or 96 semitones); each gesture is one undo step and plays back straight away.
+    48 or 96 semitones) and its **±N st** label picks the least range it shows, so a big bend
+    can be drawn on a note without one; each gesture is one undo step and plays back straight
+    away.
 - **Nota Remote — a phone as a controller**: **Remote** in the top bar (View → Connect
   Phone…) shows a QR code; the phone opens a PWA with pads, keys in the project's scale with
   chords, an XY pad with tilt, the mixer, macros and the Session grid — over Wi-Fi or a USB

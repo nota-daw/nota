@@ -455,6 +455,7 @@ public partial class MainWindow
         _modular?.ForgetScopes();          // so do frozen Scope traces and Scope windows
         LensWindow.CloseAll();             // and Lens windows
         TrackArming.ForgetSelection();     // the arm-on-select memory too
+        PianoRollView.ForgetBendPicks();   // and the Bend lane ranges picked per clip
         Timeline.Refresh();
         _session?.Refresh();
         // Popped out, the window stays up: show the new project's chain, not the old one's.
