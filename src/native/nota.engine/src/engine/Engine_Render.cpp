@@ -262,7 +262,7 @@ ChainRest chainRest(const Track& t) {
     ChainRest r = ChainRest::Settled;
     for (const auto& d : t.devices) {
         if (!d || d->bypassed() || d->isIdle()) continue;
-        if (d->pluginIdentifier().empty()) return ChainRest::Busy;
+        if (!d->hostsPlugin()) return ChainRest::Busy; // audio-thread safe, unlike pluginIdentifier()
         r = ChainRest::Opaque;
     }
     return r;
