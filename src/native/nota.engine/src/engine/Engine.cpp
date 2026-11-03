@@ -816,6 +816,7 @@ bool Engine::undo() {
         // Restore without a new checkpoint; the restored chains may add or drop a latent
         // device (a removed look-ahead coming back, #109), so compensation follows them.
         if (e.graph) {
+            if (authoring_) keepLiveSends(*e.graph, *authoring_);
             publishRaw(std::move(e.graph));
             placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
@@ -827,6 +828,44 @@ bool Engine::undo() {
         if (applied) return true;
     }
     return false;
+}
+
+// specs/069. Message thread, before the restored graph is published. A shared track object
+// already holds the live levels, so it is left alone (the audio thread may be reading it).
+void Engine::keepLiveSends(Graph& restored, const Graph& live) const {
+    std::map<int32_t, int32_t> liveBus, oldBus;
+    auto take = [](std::map<int32_t, int32_t>& m, const Graph& g) {
+        for (const auto& t : g.tracks)
+            if (t && t->type() == TrackType::Return && t->returnIndex() >= 0 && t->returnIndex() < kMaxReturns)
+                m.emplace(t->id(), t->returnIndex());
+    };
+    take(liveBus, live);
+    take(oldBus, restored);
+    const bool sameBuses = liveBus == oldBus;
+
+    std::map<int32_t, const Track*> liveById;
+    for (const auto& t : live.tracks)
+        if (t) liveById.emplace(t->id(), t.get());
+
+    for (auto& t : restored.tracks) {
+        if (!t || t->type() == TrackType::Return) continue;
+        auto it = liveById.find(t->id());
+        if (it == liveById.end() || it->second == t.get()) continue;
+        const Track& src = *it->second;
+        if (sameBuses) {
+            for (int b = 0; b < kMaxReturns; ++b)
+                if (t->send(b) != src.send(b)) t->setSend(b, src.send(b));
+            continue;
+        }
+        // A return on both sides keeps the level the user left on it. A return only the
+        // snapshot has (one this edit brings back) keeps the level stored with that bus.
+        for (const auto& [id, busNow] : liveBus) {
+            auto o = oldBus.find(id);
+            if (o == oldBus.end()) continue;
+            const float level = src.send(busNow);
+            if (t->send(o->second) != level) t->setSend(o->second, level);
+        }
+    }
 }
 
 // The restored racks drive their mapped targets again: the children they share with the
@@ -852,6 +891,7 @@ bool Engine::redo() {
         bool applied = false;
         undoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
         if (e.graph) {
+            if (authoring_) keepLiveSends(*e.graph, *authoring_);
             publishRaw(std::move(e.graph));
             placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();

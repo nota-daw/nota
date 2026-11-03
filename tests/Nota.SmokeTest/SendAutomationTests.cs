@@ -66,6 +66,18 @@ internal static class SendAutomationTests
         tools.SetSend(t, 0, 0.75f).GetAwaiter().GetResult();
         yield return (Math.Abs(eng.GetTrackSend(t, 0) - 0.75f) < 1e-6f && !eng.CanUndo,
             "sends: an MCP set_send call is not an undo step");
+
+        // A rename snapshots the track, sends included. Undoing it must not put the send back.
+        eng.ClearUndoHistory();
+        eng.SetTrackName(t, "Bass");
+        eng.SetTrackSend(t, 0, 0.42f);
+        bool undoneName = eng.Undo() && eng.GetTrackName(t) != "Bass"
+                          && Math.Abs(eng.GetTrackSend(t, 0) - 0.42f) < 1e-6f;
+        eng.SetTrackSend(t, 0, 0.2f);
+        bool redoneName = eng.Redo() && eng.GetTrackName(t) == "Bass"
+                          && Math.Abs(eng.GetTrackSend(t, 0) - 0.2f) < 1e-6f;
+        yield return (undoneName && redoneName,
+            "sends: undo and redo of a rename leave the send");
     }
 
     // ---- not an automation target -------------------------------------------------------
