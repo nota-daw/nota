@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Every release opens with its own splash art**: the launch screen now shows an abstract
+  picture generated from the version number. It is built from piano-roll notes, rhythm
+  rings, waveform strata, panels, a Lissajous figure or fader rails, in a few of the
+  theme's track colours, so each release gets its own picture. The same version always
+  shows the same one, in whichever colour theme is active. The logo, version and progress
+  bar sit beside it on the plain ground.
 - **Pick the Bend lane's range in the piano roll** (#426): the **±2 st** label at the top
   left of the Bend lane is now a menu — ±2, 12, 24, 48 or 96 semitones — so a bend wider than
   2 semitones can be drawn on a note that has none, without recording one from an MPE
