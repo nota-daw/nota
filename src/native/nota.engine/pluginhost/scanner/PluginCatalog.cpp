@@ -105,9 +105,21 @@ std::string PluginCatalog::idAt(int32_t index) const {
 }
 
 int32_t PluginCatalog::indexOfId(const char* identifier) const {
+    std::shared_lock lock(mutex_);
+    return indexOfIdLocked(identifier);
+}
+
+bool PluginCatalog::typeOfId(const char* identifier, juce::PluginDescription& out) const {
+    std::shared_lock lock(mutex_);
+    const int32_t i = indexOfIdLocked(identifier);
+    if (i < 0) return false;
+    out = impl_->types[static_cast<size_t>(i)];
+    return true;
+}
+
+int32_t PluginCatalog::indexOfIdLocked(const char* identifier) const {
     if (identifier == nullptr) return -1;
     const juce::String want{juce::CharPointer_UTF8(identifier)};
-    std::shared_lock lock(mutex_);
     const auto& types = impl_->types;
     const int n = static_cast<int>(types.size());
     for (int i = 0; i < n; ++i)

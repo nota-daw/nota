@@ -137,10 +137,9 @@ std::unique_ptr<juce::AudioPluginInstance> cloneInstance(juce::AudioPluginInstan
     juce::PluginDescription desc = own;
     auto& catalog = scanner::PluginCatalog::instance();
     catalog.loadOnce();
-    const int32_t idx = catalog.indexOfId(own.createIdentifierString().toRawUTF8());
-    if (idx >= 0) catalog.typeAt(idx, desc);
+    const bool listed = catalog.typeOfId(own.createIdentifierString().toRawUTF8(), desc);
     auto inst = createInstance(desc, sr, maxBlock);
-    if (!inst && idx >= 0) inst = createInstance(own, sr, maxBlock);
+    if (!inst && listed) inst = createInstance(own, sr, maxBlock);
     if (!inst) return nullptr;
     juce::MemoryBlock mb;
     src.getStateInformation(mb);
