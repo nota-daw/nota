@@ -573,6 +573,8 @@
     "Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it": "Dessiner la courbe MPE de la note sélectionnée · ⌥ trace une ligne droite · glisser un point pour le déplacer",
     "Add a point · on a point, delete it · right-click to clear the curve": "Ajouter un point · sur un point, le supprimer · clic droit pour effacer la courbe",
     "Double-click in an MPE lane": "Double-clic dans un couloir MPE",
+    "Click the Bend lane's range": "Clic sur l’amplitude du couloir Bend",
+    "Pick how far the Bend lane reaches: ±2, 12, 24, 48 or 96 semitones · a bend already on the notes can widen it further": "Choisir l’amplitude du couloir Bend : ±2, 12, 24, 48 ou 96 demi-tons · un bend déjà présent sur les notes peut l’élargir davantage",
     "Click the controller tab": "Clic sur l’onglet de contrôleur",
     "Show a MIDI controller under the notes · click it again to pick another CC, the pitch wheel or channel pressure": "Afficher un contrôleur MIDI sous les notes · cliquer à nouveau pour choisir un autre CC, la molette de hauteur ou la pression de canal",
     "Drag in the Sustain lane": "Glisser dans le couloir Sustain",

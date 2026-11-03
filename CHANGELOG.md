@@ -23,6 +23,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Pick the Bend lane's range in the piano roll** (#426): the **±2 st** label at the top
+  left of the Bend lane is now a menu — ±2, 12, 24, 48 or 96 semitones — so a bend wider than
+  2 semitones can be drawn on a note that has none, without recording one from an MPE
+  controller or Nota Remote first. The lane still widens by itself when a bend on the notes
+  needs more than the range picked (a step that would clip one is disabled in the menu), and
+  each clip keeps its pick for the session, like its scroll and zoom.
 - **Delete several versions at once** (#228): in the History tab, ⌘-click (Ctrl-click on
   Windows and Linux) adds a version to the selection and Shift-click selects a run. With
   more than one selected, the footer shows how many and when they were saved, and its
