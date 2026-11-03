@@ -1374,6 +1374,20 @@ class Engine {
     // Arrangement sections (specs/016): project-level, replaced as a whole. checkpoint =
     // one undo step (an identical list makes none); false = baseline (project load).
     void setSections(std::vector<Section> sections, bool checkpoint);
+    // Section edits that carry the arrangement with them (specs/073). `index` is into the
+    // start-sorted list. Each is one undo step over clips (cut at the edges), automation (every
+    // track, the master track, master volume), take lanes and the sections; the playhead stays.
+    // False — nothing changed — for an index out of range, a section that overlaps another, a
+    // target inside an overlap, or a no-op. moveSection inserts the section at boundary
+    // `toBoundary` (0..count: before section k, or after the last), shifting the sections in
+    // between by its length; duplicate inserts a copy right after it and delete removes it,
+    // both rippling the rest of the song.
+    bool moveSection(int32_t index, int32_t toBoundary);
+    bool duplicateSectionWithContent(int32_t index);
+    bool deleteSectionWithContent(int32_t index);
+    // True when section `index`'s span intersects another section's (with-content edits are
+    // unavailable for it).
+    bool sectionOverlaps(int32_t index) const;
     const std::vector<Section>& sections() const {
         static const std::vector<Section> none;
         return authoring_ ? authoring_->sections : none;
@@ -1492,6 +1506,12 @@ class Engine {
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
+    // specs/073: rebuild the arrangement with [lo,hi) remapped by `regions` (which tile it),
+    // set `sections`, and publish it as one undo step.
+    void remapTimeline(double lo, double hi, const std::vector<TimeRegion>& regions, std::vector<Section> sections);
+    // insertTime's track/lane work into a fresh graph `g` (graph-level fields already
+    // inherited); false when nothing moved.
+    bool insertTimeInto(Graph& g, double at, double len, bool duplicate);
     void reapplyRackMacros(); // after undo/redo: racks drive their shared children again
     void reapplyCcRoutes();             // after undo/redo: Arps take their restored snapshot's targets
     void syncCcRoutes(Graph& g);        // before a publish: routes of fresh tracks from their Arps

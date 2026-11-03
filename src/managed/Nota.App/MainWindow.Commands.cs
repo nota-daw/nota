@@ -33,6 +33,9 @@ public partial class MainWindow
         var r = _commands;
         r.ContextProvider = () => SnapshotContext(null);
         void B(string id, Action run, Func<PaletteContext, Availability>? can = null) => r.Bind(id, (_, _) => run(), can);
+        // Section edits with content (specs/073) report in the status bar; the Session view's
+        // clip lists may have changed with them.
+        void SectionStatus(string status) { if (_vm is not null) _vm.StatusText = status; _session?.Refresh(); }
         var e = new RoutedEventArgs();
         static Availability Need(bool ok, string why) => ok ? Availability.Yes : Availability.No(why);
 
@@ -82,6 +85,10 @@ public partial class MainWindow
         B("view.toggleOverview", () => OnMenuToggleOverview(this, e));
         B("view.toggleSections", () => OnMenuToggleSections(this, e));
         B("edit.resetSectionName", () => { string status = Timeline.ResetSectionNameAtPlayhead(); if (_vm is not null) _vm.StatusText = status; });
+        B("edit.moveSectionEarlier", () => SectionStatus(Timeline.MoveSectionAtPlayhead(later: false)));
+        B("edit.moveSectionLater", () => SectionStatus(Timeline.MoveSectionAtPlayhead(later: true)));
+        B("edit.duplicateSectionWithContent", () => SectionStatus(Timeline.DuplicateSectionWithContentAtPlayhead()));
+        B("edit.deleteSectionWithContent", () => SectionStatus(Timeline.DeleteSectionWithContentAtPlayhead()));
         B("view.follow", () => OnMenuToggleFollow(this, e));
         B("view.showPlayhead", ShowPlayhead);
         B("view.clipNames", () => OnMenuCycleClipNames(this, e));

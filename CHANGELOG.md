@@ -23,6 +23,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Rearrange the song by its sections** (#192): drag a section in the Sections lane and it
+  moves with everything in it — audio and MIDI clips (cut at its edges), automation on every
+  track and the master, take lanes — to the boundary marked while you drag; the sections in
+  between close up, and the song keeps its length. A ghost follows the pointer, the landing
+  place and the new order show before you let go, and Esc cancels. The section's menu adds
+  **Move earlier** / **Move later**, **Duplicate with content** (a copy goes right after it,
+  pushing the rest later) and **Delete with content** (the rest moves up to close the gap);
+  the command palette has the same four for the section at the playhead, and MCP has
+  `move_section`, `duplicate_section_with_content` and `delete_section_with_content`. Each
+  is one undo step. A section that overlaps another keeps its content where it is.
 - **Every release opens with its own splash art**: the launch screen now shows an abstract
   picture generated from the version number. It is built from piano-roll notes, rhythm
   rings, waveform strata, panels, a Lissajous figure or fader rails, in a few of the
@@ -169,6 +179,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the same way.
 
 ### Changed
+- **Dragging a section now moves its content too** (#192). To move only the section marker,
+  as before, hold ⌥ (Alt on Windows and Linux) while dragging; resizing a section's edges
+  still never touches the music.
 - **The detail panel opens on double-click, not on every selection** (#308): clicking a
   track, a clip, a mixer strip or a Session slot now only selects it, so the arrangement keeps
   its height on a small screen. While the panel is open it still follows the selection as

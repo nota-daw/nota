@@ -217,6 +217,14 @@ public sealed partial class NotaEngine : IAudioEngine
             foreach (var r in rows) if (r.Name != IntPtr.Zero) Marshal.FreeCoTaskMem(r.Name);
         }
     }
+    public bool MoveSection(int index, int toBoundary)
+    { ThrowIfDisposed(); return NativeMethods.SectionMove(_handle, index, toBoundary) == NativeMethods.NotaResult.Ok; }
+    public bool DuplicateSectionWithContent(int index)
+    { ThrowIfDisposed(); return NativeMethods.SectionDuplicateWithContent(_handle, index) == NativeMethods.NotaResult.Ok; }
+    public bool DeleteSectionWithContent(int index)
+    { ThrowIfDisposed(); return NativeMethods.SectionDeleteWithContent(_handle, index) == NativeMethods.NotaResult.Ok; }
+    public bool SectionOverlaps(int index)
+    { ThrowIfDisposed(); return NativeMethods.SectionOverlaps(_handle, index) != 0; }
 
     // --- Value undo (specs/009, specs/016) -------------------------------------
     public int BeginMixGesture(params MixTarget[] targets)

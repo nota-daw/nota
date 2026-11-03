@@ -132,10 +132,21 @@ docks as a panel under any of the three, or floats in its own window — see
   to zoom, double-click to fit the project.
   - **Sections** — a lane between the Overview and the ruler names spans of the song
     (Intro, Verse, Drop). Drag the empty lane to mark one, click it to jump the playhead
-    there, double-click to rename, drag its body or edges to move and resize it (always on
-    whole bars). Its menu loops the section, selects it as a time range across every track,
-    duplicates it or deletes it. Each edit is one undo step. Saved with the project (MCP
-    `list_sections` / `set_sections`); View ▸ Toggle sections hides it.
+    there, double-click to rename, ⌥-drag its body to move the marker alone and drag its
+    edges to resize it (always on whole bars). Its menu loops the section, selects it as a
+    time range across every track, duplicates it or deletes it. Each edit is one undo step.
+    Saved with the project (MCP `list_sections` / `set_sections`); View ▸ Toggle sections
+    hides it.
+  - **Rearranging by sections** — drag a section to another place in the song and
+    everything in it goes along: audio and MIDI clips (cut at its edges), automation on every
+    track and the master, take lanes. It lands on the boundary between sections marked while
+    dragging (a ghost follows the pointer, the others show their new places, Esc cancels);
+    the sections in between close up and the song keeps its length. The section menu's
+    **Move earlier** / **Move later**, **Duplicate with content** (the rest moves later) and
+    **Delete with content** (the rest moves up), and the same four palette commands for the
+    section at the playhead, do it without dragging. One undo step each; a section that
+    overlaps another keeps its content in place. MCP `move_section`,
+    `duplicate_section_with_content`, `delete_section_with_content`.
   - **Automatic section names** — a new section is named "Section N" for its place in the
     song, left to right, custom-named sections counted, and renumbers as sections are added,
     moved or deleted; a custom name never changes on its own. Renaming: Return keeps the name
@@ -1419,7 +1430,8 @@ Coverage:
 - **Transport**: play/stop, tempo, time signature, loop, metronome, loop record mode
   (`set_loop_record_mode`; `get_transport` reports it).
 - **Project**: `get_overview` (a full snapshot); the arrangement's sections
-  (`list_sections`, `set_sections`); version history — `list_versions` (with what
+  (`list_sections`, `set_sections`) and rearranging the song by them (`move_section`,
+  `duplicate_section_with_content`, `delete_section_with_content`); version history — `list_versions` (with what
   each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
   star). Deleting versions stays with the user.
 - **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.

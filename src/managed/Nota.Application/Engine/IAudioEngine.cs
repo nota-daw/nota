@@ -1110,6 +1110,19 @@ public interface IAudioEngine : IDisposable
     /// <summary>Replaces the sections (sorted; zero-length dropped). <paramref name="checkpoint"/>
     /// = one undo step (an identical list makes none); false = baseline (project load).</summary>
     void SetSections(IReadOnlyList<SectionInfo> sections, bool checkpoint = true);
+    /// <summary>Moves section <paramref name="index"/> (start order) with everything in its span
+    /// to boundary <paramref name="toBoundary"/> (0..Count: before section k, or after the last);
+    /// the sections in between shift by its length (specs/073). One undo step; false — nothing
+    /// changed — when out of range, overlapping, landing inside an overlap, or a no-op.</summary>
+    bool MoveSection(int index, int toBoundary);
+    /// <summary>Inserts a copy of the section and everything in its span right after it, moving
+    /// the rest of the song later (specs/073). One undo step; false as for <see cref="MoveSection"/>.</summary>
+    bool DuplicateSectionWithContent(int index);
+    /// <summary>Removes the section and everything in its span, moving the rest of the song
+    /// earlier (specs/073). One undo step; false as for <see cref="MoveSection"/>.</summary>
+    bool DeleteSectionWithContent(int index);
+    /// <summary>True when the section overlaps another: the with-content edits are unavailable.</summary>
+    bool SectionOverlaps(int index);
 
     // --- Value undo (specs/009, specs/016) -------------------------------
     /// <summary>Starts a gesture on volume / pan / master volume / device parameters: their

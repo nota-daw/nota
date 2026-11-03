@@ -1029,7 +1029,15 @@ public sealed partial class ArrangementView : UserControl
     /// take's row. Owned and updated by the window on its recording tick.</summary>
     internal RecordPreview? RecordPreview { get; set; }
 
-    public void Refresh(bool rebuildHeaders = true)
+    public void Refresh(bool rebuildHeaders = true) => Refresh(rebuildHeaders, movedOnly: false);
+
+    /// <summary>After an edit that only moved, cut or removed clips (a section rearrange,
+    /// specs/073): reload clip and automation data without rebuilding the track headers — the
+    /// slow part on a big song — and keep the peaks of every audio clip whose source is unchanged,
+    /// wherever it now sits.</summary>
+    internal void RefreshMovedClips() => Refresh(rebuildHeaders: false, movedOnly: true);
+
+    private void Refresh(bool rebuildHeaders, bool movedOnly)
     {
         if (rebuildHeaders) RefreshStarting?.Invoke();
         // Peak reuse (⑤): on a live refresh (no header rebuild) the audio content of existing
@@ -1038,7 +1046,17 @@ public sealed partial class ArrangementView : UserControl
         // peaks over instead of recomputing 2048 buckets per clip on every 60 Hz tick. A full
         // Refresh (after an edit) always refetches, so trims/reverses/warps stay correct.
         Dictionary<(int track, int clip), ClipVM>? oldClips = null;
-        if (!rebuildHeaders)
+        // A moved clip keeps its index only by chance (a cut adds pieces), so after a move the
+        // peaks are matched by what they show — the clip's source and length — not by index.
+        Dictionary<(int track, PeakSourceKey source, double length), ClipVM>? movedClips = null;
+        if (movedOnly)
+        {
+            movedClips = new();
+            foreach (var t in _tracks)
+                foreach (var c in t.Clips)
+                    if (c.PeakSource is { } src && c.Peaks is not null) movedClips[(t.Id, src, c.LengthBeats)] = c;
+        }
+        else if (!rebuildHeaders)
         {
             oldClips = new();
             foreach (var t in _tracks)
@@ -1102,9 +1120,24 @@ public sealed partial class ArrangementView : UserControl
                         Active = ci.IsActive,
                         Name = eng.GetClipName(ti.Id, c),
                     };
+                    NotaAudioClipInfo ai = default;
+                    bool audioInfo = !ci.IsMidi && eng.TryGetAudioClipInfo(ti.Id, c, out ai);
+                    // A warped clip's peaks also follow its warp markers, which the key can't see:
+                    // it is always re-read.
+                    if (audioInfo && ai.WarpEnabled == 0) cvm.PeakSource = PeakSourceKey.Of(ai);
+                    ClipVM? same = null;
                     if (ci.IsMidi)
                     {
                         cvm.Notes = eng.GetClipNotes(ti.Id, c);
+                    }
+                    else if (movedClips is not null && cvm.PeakSource is { } src
+                             && movedClips.TryGetValue((ti.Id, src, ci.LengthBeats), out same))
+                    {
+                        cvm.Peaks = same.Peaks;
+                        cvm.Rms = same.Rms;
+                        cvm.PeakCount = same.PeakCount;
+                        (cvm.DetailPeaks, cvm.DetailRms, cvm.DetailCount, cvm.DetailF0, cvm.DetailF1)
+                            = (same.DetailPeaks, same.DetailRms, same.DetailCount, same.DetailF0, same.DetailF1);
                     }
                     else if (oldClips is not null
                              && oldClips.TryGetValue((ti.Id, c), out var prev)
@@ -1129,7 +1162,7 @@ public sealed partial class ArrangementView : UserControl
                         cvm.Peaks = peaks;
                         cvm.Rms = rms;
                     }
-                    if (!ci.IsMidi && eng.TryGetAudioClipInfo(ti.Id, c, out var ai))
+                    if (audioInfo)
                     {
                         cvm.Gain = ai.Gain;
                         cvm.Adsr = eng.GetClipAdsr(ti.Id, c);
@@ -1734,11 +1767,11 @@ public sealed partial class ArrangementView : UserControl
     /// <summary>Esc: cancel an in-progress lane gesture if one is active (no model change),
     /// otherwise clear any selection (req 1.2.6 / 2.11). Returns true if it did something.</summary>
     /// <summary>Abort any in-progress lane gesture with no model change (window focus loss).</summary>
-    public void CancelActiveGesture() { _lanes.CancelGesture(); _footerLanes.CancelGesture(); }
+    public void CancelActiveGesture() { _lanes.CancelGesture(); _footerLanes.CancelGesture(); CancelSectionsGesture(); }
 
     internal bool EscapePressed()
     {
-        if (_lanes.CancelGesture() | _footerLanes.CancelGesture()) return true;
+        if (_lanes.CancelGesture() | _footerLanes.CancelGesture() | CancelSectionsGesture()) return true;
         bool had = _sel.Count > 0 || SelTrackId > 0 || HasAutoSelection || HasTimeSelection;
         if (HasAutoSelection) ClearAutoSelection();
         if (HasTimeSelection) ClearTimeSelection();
