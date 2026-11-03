@@ -1543,7 +1543,7 @@ bool Engine::moveClipToTrack(int32_t srcTrackId, int32_t clipIndex, int32_t sour
     }
 
     // Automation follow across tracks (req 8.3.1/8.3.4). Identical device layout → everything
-    // follows, exactly like a same-track move. Otherwise only the common params (Volume/Pan)
+    // follows, exactly like a same-track move. Otherwise only the mix lanes (volume, pan, sends)
     // move and device/plugin automation stays on the source (its indices are positional); we
     // flag that so the UI can tell the user.
     if (!automationLock_ && len > 1e-6) {
@@ -1553,14 +1553,14 @@ bool Engine::moveClipToTrack(int32_t srcTrackId, int32_t clipIndex, int32_t sour
             applyClipAutomation(*ndst, sourceTrackId, snips, newStartBeat, len, /*sameTrack*/ true);
         } else {
             for (const auto& s : snips)
-                if (s.target != AutomationTarget::Volume && s.target != AutomationTarget::Pan) {
+                if (!isMixTarget(s.target)) {
                     lastMoveKeptDeviceAuto_ = true;
                     break;
                 }
-            // Clear only Volume/Pan from the source span; leave device/plugin points in place.
+            // Clear only the mix lanes from the source span; leave device/plugin points in place.
             constexpr double eps = 1e-6;
             for (auto& lane : nsrc->automation) {
-                if (lane.target != AutomationTarget::Volume && lane.target != AutomationTarget::Pan) continue;
+                if (!isMixTarget(lane.target)) continue;
                 auto& pts = lane.points;
                 pts.erase(std::remove_if(pts.begin(), pts.end(),
                               [&](const AutomationPoint& p) {
@@ -1705,12 +1705,12 @@ bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
             continue;
         }
         for (const auto& s : it.snips)
-            if (s.target != AutomationTarget::Volume && s.target != AutomationTarget::Pan) {
+            if (!isMixTarget(s.target)) {
                 lastMoveKeptDeviceAuto_ = true;
                 break;
             }
         for (auto& lane : src.automation) {
-            if (lane.target != AutomationTarget::Volume && lane.target != AutomationTarget::Pan) continue;
+            if (!isMixTarget(lane.target)) continue;
             auto& pts = lane.points;
             pts.erase(std::remove_if(pts.begin(), pts.end(),
                           [&](const AutomationPoint& p) {
@@ -2559,7 +2559,7 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<T
     double placedStart, double len, bool sameTrack) const {
     const double s = placedStart, e = placedStart + len;
     for (const auto& snip : snips) {
-        if (!sameTrack && snip.target != AutomationTarget::Volume && snip.target != AutomationTarget::Pan) continue;
+        if (!sameTrack && !isMixTarget(snip.target)) continue;
         // Find the matching lane on nt, or create one bound to the same target.
         TrackLane* lane = nullptr;
         for (auto& l : nt.automation) {
@@ -2573,6 +2573,7 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<T
             case AutomationTarget::PluginParam:
                 match = l.deviceIndex == snip.deviceIndex && l.paramId == snip.paramId;
                 break;
+            case AutomationTarget::Send: match = l.deviceIndex == snip.deviceIndex; break; // one lane per bus
             default: break; // Volume / Pan: single lane
             }
             if (match) {
@@ -3379,7 +3380,8 @@ std::vector<std::shared_ptr<Track>> Engine::expandTrackSet(const int32_t* ids, i
 
 // Deleting a return leaves a hole in the bus slots, but the renderer only runs buses
 // 0..count-1 and addReturnTrack hands out slot `count` — so the survivors move down to
-// 0..n-1 (in track order) and every send follows its bus; sends to a deleted bus go.
+// 0..n-1 (in track order) and every send — level and lane — follows its bus; sends to a
+// deleted bus go.
 // Changed tracks are cloned, never edited in place: the old graph is the undo snapshot.
 void Engine::compactReturns(Graph& g) const {
     int32_t remap[kMaxReturns];
@@ -3406,9 +3408,21 @@ void Engine::compactReturns(Graph& g) const {
         bool changed = false;
         for (int32_t b = 0; b < kMaxReturns; ++b)
             if (sends[b] != t->send(b)) changed = true;
+        // Send lanes (specs/072) follow their bus too; a lane to a deleted bus goes.
+        auto busOf = [&](const TrackLane& l) {
+            return l.deviceIndex >= 0 && l.deviceIndex < kMaxReturns ? remap[l.deviceIndex] : -1;
+        };
+        for (const auto& l : t->automation)
+            if (l.target == AutomationTarget::Send && !l.nested() && busOf(l) != l.deviceIndex) changed = true;
         if (!changed) continue;
         auto nt = cloneTrack(*t);
         for (int32_t b = 0; b < kMaxReturns; ++b) nt->setSend(b, sends[b]);
+        auto& lanes = nt->automation;
+        for (auto& l : lanes)
+            if (l.target == AutomationTarget::Send && !l.nested()) l.deviceIndex = busOf(l);
+        lanes.erase(std::remove_if(lanes.begin(), lanes.end(),
+                        [](const TrackLane& l) { return l.target == AutomationTarget::Send && l.deviceIndex < 0; }),
+            lanes.end());
         t = std::move(nt);
     }
 }

@@ -29,6 +29,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   controller or Nota Remote first. The lane still widens by itself when a bend on the notes
   needs more than the range picked (a step that would clip one is disabled in the menu), and
   each clip keeps its pick for the session, like its scroll and zoom.
+- **Send levels in the Arrangement's track headers** (#143): a track row tall enough for
+  them — a large row, or a standard one from 88 px — shows a small knob per return track
+  (A, B, …) under volume and pan, with the level beside it; hover names the return,
+  double-click turns the send off and ⌥-click types a value. A **Sends** key at the top of
+  the header column hides or shows them on every track (saved with the project).
+- **Sends are undoable and automatable**: a send change made anywhere — the track header,
+  the Mixer, the Session mixer, the Sends card or the MCP `set_send` tool — is one undo step.
+  The automation lane's target menu lists **Send A · Reverb**-style entries after Pan; draw a
+  send's envelope, or record it by moving a send control with automation record on, as with
+  volume. Deleting a return removes the send automation to it, and later returns keep theirs.
 - **Delete several versions at once** (#228): in the History tab, ⌘-click (Ctrl-click on
   Windows and Linux) adds a version to the selection and Shift-click selects a run. With
   more than one selected, the footer shows how many and when they were saved, and its

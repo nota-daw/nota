@@ -122,7 +122,7 @@ public sealed partial class SessionView
                     var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { Default = 0 };
                     var read = ReadoutText();
                     void Show() => read.Text = f.Value <= 0.005 ? "–" : NotaNum.Str(f.Value * 100, "0");
-                    f.ValueChanged += v => { _engine.SetTrackSend(id, bus, (float)v); Show(); };
+                    SendControl.Attach(f, _engine, id, bus, _ => Show());   // undoable, writes automation (specs/072)
                     ValueEntry.Attach(f, f.EntryField(Loc.T("Send"), v => v <= 0.005 ? "–" : NotaNum.Str(v * 100, "0")), read);
                     Show();
                     sendSyncs.Add(() =>
