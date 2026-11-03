@@ -33,6 +33,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the command palette has the same four for the section at the playhead, and MCP has
   `move_section`, `duplicate_section_with_content` and `delete_section_with_content`. Each
   is one undo step. A section that overlaps another keeps its content where it is.
+- **Pick the Bend lane's range in the piano roll** (#426): the **±2 st** label at the top
+  left of the Bend lane is now a menu — ±2, 12, 24, 48 or 96 semitones — so a bend wider than
+  2 semitones can be drawn on a note that has none, without recording one from an MPE
+  controller or Nota Remote first. The lane still widens by itself when a bend on the notes
+  needs more than the range picked (a step that would clip one is disabled in the menu), and
+  each clip keeps its pick for the session, like its scroll and zoom.
 - **Send levels in the Arrangement's track headers** (#143): a track row tall enough for
   them — a large row, or a standard one from 88 px — shows a small knob per return track
   (A, B, …) under volume and pan, with the level beside it; hover names the return,

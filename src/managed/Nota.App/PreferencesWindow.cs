@@ -1540,6 +1540,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             (Loc.T("Right-click velocity stem"), Loc.T("Reset velocity from a menu · same as the double-click")),
             (Loc.T("Drag in the Bend / Pres / Slide lane"), Loc.T("Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it")),
             (Loc.T("Double-click in an MPE lane"), Loc.T("Add a point · on a point, delete it · right-click to clear the curve")),
+            (Loc.T("Click the Bend lane's range"), Loc.T("Pick how far the Bend lane reaches: ±2, 12, 24, 48 or 96 semitones · a bend already on the notes can widen it further")),
             (Loc.T("Click the controller tab"), Loc.T("Show a MIDI controller under the notes · click it again to pick another CC, the pitch wheel or channel pressure")),
             (Loc.T("Drag in the Sustain lane"), Loc.T("Draw a pedal block on the grid · ⌘ off the grid · drag an edge to resize, the body to move · double-click or Delete removes it")),
             (Loc.T("Drag in a controller lane"), Loc.T("Draw the controller's curve · ⌥ draws a straight line · drag a point to move it · double-click adds or deletes a point")),
