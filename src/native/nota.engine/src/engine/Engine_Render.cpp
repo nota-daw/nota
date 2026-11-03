@@ -1636,32 +1636,66 @@ void Engine::mixAudioClip(
         const int64_t cacheBase = std::llround(ovStart) - startF; // 0-based into the cache
         const float* csamp = wc.data();
         const float g = clip.gain * extraGain;
-        // A split fade is a few milliseconds of attack or release with the sustain left at
-        // full level. The body of the clip is then unity, so it stays a straight read; only
-        // the edges call the envelope. Applying it to every sample made a warped clip split
-        // into pieces ~40% more work for a fade the ear barely hears (perf: audio-warp-split).
-        const bool unityBody = hasAdsr && clip.adsr.sustain >= 1.0f && !hasVol && !hasPan;
-        const double attackEnd = startSamples + clip.adsr.attack * spb;
-        const double releaseStart = startSamples + clipDeviceLen - clip.adsr.release * spb;
-        const bool hasAttack = clip.adsr.attack > 0.0;
-        const bool hasRelease = clip.adsr.release > 0.0;
-        for (int32_t j = 0; j < segLen; ++j) {
-            // Reverse reads the same cache back-to-front: the window is already the
-            // played length, so mirroring the index is exact (no resample).
-            const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
-            if (ci < 0 || ci >= wc.frames) continue;
-            float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
-            if (unityBody) {
-                const double p = ovStart + j;
-                // Same edges gainAt uses (t < attack, t > len - release), plus one sample so a
-                // rounding difference cannot skip a fade sample. A sample this pulls in from
-                // the body has sustain gain 1, so multiplying it changes nothing.
-                if ((hasAttack && p < attackEnd + 1.0) || (hasRelease && p > releaseStart - 1.0))
-                    applyEnv(p, l, r);
-            } else if (hasEnv)
-                applyEnv(ovStart + j, l, r);
+        // Reverse reads the same cache back-to-front: the window is already the played
+        // length, so mirroring the index is exact (no resample).
+        auto sampleAt = [&](int32_t j, int64_t& ci, float& l, float& r) -> bool {
+            ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+            if (ci < 0 || ci >= wc.frames) return false;
+            l = csamp[ci * 2];
+            r = csamp[ci * 2 + 1];
+            return true;
+        };
+        auto store = [&](int32_t j, float l, float r) {
             dst[(dstOff + j) * 2] += l * g;
             dst[(dstOff + j) * 2 + 1] += r * g;
+        };
+        // A split fade is a few milliseconds of attack or release with the sustain left at
+        // full level. Decay cannot leave 1 either, so the body is a straight read and only
+        // the edges call the envelope. A per-sample test was still ~11% more instructions
+        // on audio-warp-split; the spans below keep that test out of the body. The extra
+        // sample on each edge covers a rounding step, and a body sample it pulls in has
+        // sustain gain 1, so multiplying it changes nothing.
+        const bool unityBody = hasAdsr && clip.adsr.sustain >= 1.0f && !hasVol && !hasPan;
+        if (unityBody) {
+            const double attackEnd = startSamples + clip.adsr.attack * spb;
+            const double releaseStart = startSamples + clipDeviceLen - clip.adsr.release * spb;
+            int32_t head = 0;
+            int32_t tail = segLen;
+            if (clip.adsr.attack > 0.0) {
+                const double n = attackEnd + 1.0 - ovStart; // j < n
+                if (n > 0.0) head = std::min(segLen, static_cast<int32_t>(std::ceil(n - 1e-9)));
+            }
+            if (clip.adsr.release > 0.0) {
+                const double n = releaseStart - 1.0 - ovStart; // j > n
+                if (n < static_cast<double>(segLen))
+                    tail = std::clamp(static_cast<int32_t>(std::floor(n)) + 1, 0, segLen);
+            }
+            if (head > tail) head = segLen, tail = segLen; // edges overlap: the whole block fades
+            auto edge = [&](int32_t j0, int32_t j1) {
+                for (int32_t j = j0; j < j1; ++j) {
+                    int64_t ci;
+                    float l, r;
+                    if (!sampleAt(j, ci, l, r)) continue;
+                    applyEnv(ovStart + j, l, r);
+                    store(j, l, r);
+                }
+            };
+            edge(0, head);
+            for (int32_t j = head; j < tail; ++j) {
+                int64_t ci;
+                float l, r;
+                if (!sampleAt(j, ci, l, r)) continue;
+                store(j, l, r);
+            }
+            edge(tail, segLen);
+        } else {
+            for (int32_t j = 0; j < segLen; ++j) {
+                int64_t ci;
+                float l, r;
+                if (!sampleAt(j, ci, l, r)) continue;
+                if (hasEnv) applyEnv(ovStart + j, l, r);
+                store(j, l, r);
+            }
         }
         return;
     }
