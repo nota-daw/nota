@@ -1636,13 +1636,30 @@ void Engine::mixAudioClip(
         const int64_t cacheBase = std::llround(ovStart) - startF; // 0-based into the cache
         const float* csamp = wc.data();
         const float g = clip.gain * extraGain;
+        // A split fade is a few milliseconds of attack or release with the sustain left at
+        // full level. The body of the clip is then unity, so it stays a straight read; only
+        // the edges call the envelope. Applying it to every sample made a warped clip split
+        // into pieces ~40% more work for a fade the ear barely hears (perf: audio-warp-split).
+        const bool unityBody = hasAdsr && clip.adsr.sustain >= 1.0f && !hasVol && !hasPan;
+        const double attackEnd = startSamples + clip.adsr.attack * spb;
+        const double releaseStart = startSamples + clipDeviceLen - clip.adsr.release * spb;
+        const bool hasAttack = clip.adsr.attack > 0.0;
+        const bool hasRelease = clip.adsr.release > 0.0;
         for (int32_t j = 0; j < segLen; ++j) {
             // Reverse reads the same cache back-to-front: the window is already the
             // played length, so mirroring the index is exact (no resample).
             const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
             if (ci < 0 || ci >= wc.frames) continue;
             float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
-            if (hasEnv) applyEnv(ovStart + j, l, r);
+            if (unityBody) {
+                const double p = ovStart + j;
+                // Same edges gainAt uses (t < attack, t > len - release), plus one sample so a
+                // rounding difference cannot skip a fade sample. A sample this pulls in from
+                // the body has sustain gain 1, so multiplying it changes nothing.
+                if ((hasAttack && p < attackEnd + 1.0) || (hasRelease && p > releaseStart - 1.0))
+                    applyEnv(p, l, r);
+            } else if (hasEnv)
+                applyEnv(ovStart + j, l, r);
             dst[(dstOff + j) * 2] += l * g;
             dst[(dstOff + j) * 2 + 1] += r * g;
         }
