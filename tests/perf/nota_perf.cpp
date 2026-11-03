@@ -305,6 +305,11 @@ int run(const std::string& id, double seconds) {
         return 2;
     }
     if (id == "edit-warp-split") { // split the last piece 8 times, then undo them
+        // Count the split and the undo, not the 4 ms fade a split now writes. This count
+        // is tiny and already moves by a percent or two when unrelated code is added; the
+        // fade pushed it just over the gate while the wall time stayed 0.00 ms. Playing a
+        // faded split is audio-warp-split. The fade itself is in the smoke test.
+        nota_engine_set_split_fades(e, 0);
         constexpr int kEdits = 8;
         // Warm-up, not measured: one split + undo first, so the counted edits don't include the
         // first-call costs (lazy symbol binding, function-local statics). Those depend on the
