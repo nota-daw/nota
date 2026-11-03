@@ -1496,7 +1496,12 @@ MidiClip midiSlice(const MidiClip& c, double ns, double ne) {
 AudioClip audioSlice(const AudioClip& c, double ns, double ne, double spb, double devSR) {
     const double cs = c.startBeat, ce = cs + audioDisplayLenBeats(c, spb, devSR);
     const double a = std::max(cs, ns), b = std::min(ce, ne);
-    AudioClip r = audioCarveLeft(audioCarveRight(c, a - cs, spb, devSR), b - a, spb, devSR);
+    // Carve only the edges that are cut: a carve resets that edge's ADSR stages (attack and
+    // decay at a new head, release at a new tail), and a piece that keeps the clip's own start
+    // or end keeps the user's fade there.
+    constexpr double eps = 1e-6;
+    AudioClip r = a > cs + eps ? audioCarveRight(c, a - cs, spb, devSR) : c;
+    if (b < ce - eps) r = audioCarveLeft(r, b - a, spb, devSR);
     if (!c.volumeEnvelope.points.empty()) r.volumeEnvelope.points = laneSliceExact(c.volumeEnvelope, a - cs, b - cs);
     if (!c.panEnvelope.points.empty()) r.panEnvelope.points = laneSliceExact(c.panEnvelope, a - cs, b - cs);
     return r;
@@ -2185,6 +2190,30 @@ bool remapClips(std::vector<Clip>& clips, double lo, double hi, const std::vecto
     return changed;
 }
 
+// Two points on one beat make a step, but AutomationLane::valueAt returns the first (outgoing)
+// value exactly on that beat — so a section starting there would begin with its neighbour's
+// setting for a block. The outgoing point moves a hair earlier (a millionth of a beat, under a
+// sample at any tempo), so the incoming value holds from the join itself; where there is no
+// room for it (beat 0, or right after another point) it goes, and an equal pair is merged.
+void settleJoins(std::vector<AutomationPoint>& pts) {
+    constexpr double eps = 1e-9, nudge = 1e-6;
+    std::vector<AutomationPoint> out;
+    out.reserve(pts.size());
+    for (size_t i = 0; i < pts.size(); ++i) {
+        const bool join = i + 1 < pts.size() && std::abs(pts[i + 1].beat - pts[i].beat) < eps;
+        if (!join) {
+            out.push_back(pts[i]);
+            continue;
+        }
+        if (pts[i + 1].value == pts[i].value) continue; // same value: the incoming point alone
+        AutomationPoint q = pts[i];
+        q.beat -= nudge;
+        if (q.beat < 0.0 || (!out.empty() && out.back().beat > q.beat - eps)) continue; // no room: drop it
+        out.push_back(q);
+    }
+    pts.swap(out);
+}
+
 // Rebuild the lane over [lo,hi): points before and after keep their place, each kept region's
 // curve (laneSlice: exact values at both edges) is laid at its new start, in new order. Every
 // cut and join holds the value the original had there (FR-005). False when the lane is empty
@@ -2227,6 +2256,7 @@ bool laneRemap(AutomationLane& lane, double lo, double hi, const std::vector<Tim
         appendLaneFrom(out, lane, hi, std::numeric_limits<double>::infinity(), 0.0);
         out.insert(out.end(), right, p.end());
     }
+    settleJoins(out);
     p.swap(out);
     return true;
 }
@@ -2251,6 +2281,7 @@ bool laneDuplicate(AutomationLane& lane, double a, double b) {
     appendLaneFrom(out, lane, b, std::numeric_limits<double>::infinity(), len);
     for (const auto& q : p)
         if (q.beat > b + eps) out.push_back({q.beat + len, q.value, q.curve});
+    settleJoins(out);
     p.swap(out);
     return true;
 }

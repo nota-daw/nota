@@ -157,6 +157,45 @@ internal static class SectionRearrangeTests
                 "section duplicate: curved automation keeps its shape before, in and after the copy");
         }
 
+        // At a join the incoming section's setting holds from the join itself, read through the
+        // engine's own evaluator: the playhead parked there, one block rendered, the track's volume.
+        // C (the ramp's 8..12) moved to the front: beat 0 plays C's start, beat 4 A's, beat 8 B's.
+        {
+            var s = Build();
+            using var e = s.E;
+            e.RenderOffline(new float[64 * 2], 64, 48000);
+            bool moved = e.MoveSection(2, 0);
+            float VolumeAt(double beat)
+            {
+                e.Seek(beat);
+                e.RenderOffline(new float[128 * 2], 128);
+                return Enumerable.Range(0, e.TrackCount).Select(i => e.TryGetTrackInfo(i, out var ti) && ti.Id == s.B ? ti.Volume : float.NaN).First(v => !float.IsNaN(v));
+            }
+            float v0 = VolumeAt(0), v4 = VolumeAt(4), v8 = VolumeAt(8);
+            yield return (moved && Math.Abs(v0 - 8 / 12f) < 0.01f && Math.Abs(v4 - 0f) < 0.01f && Math.Abs(v8 - 4 / 12f) < 0.01f,
+                $"section move: each section starts with its own automation value at the join (0: {v0:0.000}, 4: {v4:0.000}, 8: {v8:0.000})");
+        }
+
+        // A cut keeps the user's fade on the edges it doesn't cut: the piece with the clip's start
+        // keeps its attack, the one with its end keeps its release.
+        {
+            var s = Build();
+            using var e = s.E;
+            e.RenderOffline(new float[64 * 2], 64, 48000);
+            string wav = Path.Combine(Path.GetTempPath(), "nota_smoke_sections_fade.wav");
+            WavWriter.WriteSine(wav, seconds: 6.0, freq: 220.0, sampleRate: 44100);   // 12 beats at 120
+            int audio = e.AddAudioTrack();
+            int ac = e.AddAudioClip(audio, wav, startBeat: 0.0);
+            e.SetClipAdsr(audio, ac, new ClipAdsr { AttackBeats = 1, ReleaseBeats = 2, Sustain = 1f });
+            bool moved = e.MoveSection(2, 1);   // C before B: pieces [0,4) A, [4,8) C (the clip's end), [8,12) B
+            int At(double start) => Enumerable.Range(0, 8).FirstOrDefault(i => e.TryGetClipInfo(audio, i, out var ci) && Math.Abs(ci.StartBeat - start) < Eps, -1);
+            int head = At(0), tail = At(4);
+            var h = head >= 0 ? e.GetClipAdsr(audio, head) : default;
+            var t = tail >= 0 ? e.GetClipAdsr(audio, tail) : default;
+            yield return (moved && Math.Abs(h.AttackBeats - 1) < Eps && Math.Abs(t.ReleaseBeats - 2) < Eps,
+                $"section move: the clip's fade-in and fade-out stay on the pieces that keep its start and end (attack {h.AttackBeats}, release {t.ReleaseBeats})");
+        }
+
         // Move A after C: B · C · A.
         {
             var s = Build();
