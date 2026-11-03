@@ -90,6 +90,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         InitBottomPanels();    // BodyGrid rows for the docked Mixer + Detail panels (specs/054)
         InitMenuShortcuts();   // Ctrl instead of Win on Windows / Linux, and bound there
+        InitRecentMenu();      // File → Open recent (#443)
         UpdateWindowTitle();   // "Nota — Untitled" until a project is opened/saved
         // Custom frameless title bar (Phase 2): extend the client area under the
         // decorations on macOS/Windows (traffic lights / caption buttons overlay it).

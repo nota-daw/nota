@@ -464,6 +464,14 @@ if (args.Length >= 1 && args[0] == "--mixundo")
     Console.WriteLine(failures == 0 ? "MIXUNDO PASSED" : $"MIXUNDO FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The loop region saved with the project alone: `--loop`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--loop")
+{
+    Console.WriteLine("-- loop persistence --");
+    foreach (var (ok, label) in LoopPersistenceTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "LOOP PASSED" : $"LOOP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Device-parameter and section undo alone: `--paramundo`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--paramundo")
 {
@@ -15520,6 +15528,8 @@ Console.WriteLine("-- param + section undo --");
 foreach (var (ok, label) in ParamSectionUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- section names --");
 foreach (var (ok, label) in SectionNamingTests.Run()) Check(ok, label);
+Console.WriteLine("-- loop persistence --");
+foreach (var (ok, label) in LoopPersistenceTests.Run()) Check(ok, label);
 Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device copy + rack undo --");
