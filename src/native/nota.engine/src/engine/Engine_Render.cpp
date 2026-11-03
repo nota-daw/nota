@@ -262,7 +262,9 @@ ChainRest chainRest(const Track& t) {
     ChainRest r = ChainRest::Settled;
     for (const auto& d : t.devices) {
         if (!d || d->bypassed() || d->isIdle()) continue;
-        if (!d->hostsPlugin()) return ChainRest::Busy; // audio-thread safe, unlike pluginIdentifier()
+        // Only a hosted plug-in itself is opaque (builtinKind < 0); a rack that holds one is
+        // built-in and still busy while its own delays hold sound. Audio-thread safe.
+        if (d->builtinKind() >= 0) return ChainRest::Busy;
         r = ChainRest::Opaque;
     }
     return r;
