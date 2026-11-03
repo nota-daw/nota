@@ -294,6 +294,9 @@ public sealed partial class ArrangementView : UserControl
     public event Action<int, int>? AudioClipActivated;
     /// <summary>Raised when a track becomes selected (clip or header click).</summary>
     public event Action<int>? TrackSelected;
+    /// <summary>Raised when the track selection is cleared (Escape, a click on empty space), so
+    /// views that mark the selected track — the Mixer's outline (specs/070) — can drop it.</summary>
+    public event Action? SelectionCleared;
     /// <summary>Raised when a track header is double-clicked: open its devices (#308).</summary>
     public event Action<int>? TrackDevicesRequested;
     /// <summary>Live-freeze (v1.1): per-track role for the header badge — 0 none, 1 sleeping
@@ -340,6 +343,7 @@ public sealed partial class ArrangementView : UserControl
     public ArrangementView()
     {
         EditorGrids.Shared.Changed += k => { if (k == EditorKind.Arrangement) Redraw(); };
+        _fold.Changed += OnFoldChanged;   // the default fold; MainWindow swaps in the shared one (specs/070)
         _ruler = new RulerControl(this) { Height = RulerH };
         _overview = new OverviewControl(this);
         _sectionsLane = new SectionsControl(this);
@@ -1651,6 +1655,7 @@ public sealed partial class ArrangementView : UserControl
         RebuildFooterHeaders();   // returns/master carry the selection highlight too (1e)
         Redraw();
         if (trackId > 0) TrackSelected?.Invoke(trackId);
+        else if (prev > 0) SelectionCleared?.Invoke();
     }
 
     private bool IsGroupTrack(int id)
@@ -2124,7 +2129,7 @@ public sealed partial class ArrangementView : UserControl
         {
             Background = Brushes.Transparent, Padding = new Thickness(2, 0), Cursor = new Cursor(StandardCursorType.Hand),
             VerticalAlignment = VerticalAlignment.Center,
-            Child = new Glyph(_collapsed.Contains(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
+            Child = new Glyph(_fold.IsFolded(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
         };
         tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
 
@@ -2216,7 +2221,7 @@ public sealed partial class ArrangementView : UserControl
             {
                 Background = Brushes.Transparent, Padding = new Thickness(2, 0), Margin = new Thickness(0, 0, 4, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-                Child = new Glyph(_collapsed.Contains(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
+                Child = new Glyph(_fold.IsFolded(t.Id) ? GlyphKind.ChevronRight : GlyphKind.ChevronDown, 8) { Foreground = Brush("Brush.TextSecondary") },
             };
             tri.PointerPressed += (_, e) => { e.Handled = true; ToggleCollapse(t.Id); };
             Grid.SetColumn(tri, 0);

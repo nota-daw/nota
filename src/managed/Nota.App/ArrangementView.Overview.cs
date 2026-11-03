@@ -314,14 +314,14 @@ public sealed partial class ArrangementView
                 // fixed pitch and squeeze together only when the strip can't hold them all.
                 int lines = 0;
                 for (int i = 0; i < n; i++)
-                    if (!_o._tracks[i].IsGroup || _o._collapsed.Contains(_o._tracks[i].Id)) lines++;
+                    if (!_o._tracks[i].IsGroup || _o._fold.IsFolded(_o._tracks[i].Id)) lines++;
                 double rowH = Math.Min(LineStride, (h - 2 * PadY - LineH) / Math.Max(1, lines - 1));
                 double bandH = Math.Min(LineH, Math.Max(1, rowH - 0.6));
                 int line = 0;
                 for (int i = 0; i < n; i++)
                 {
                     var t = _o._tracks[i];
-                    bool collapsedGroup = t.IsGroup && _o._collapsed.Contains(t.Id);
+                    bool collapsedGroup = t.IsGroup && _o._fold.IsFolded(t.Id);
                     if (t.IsGroup && !collapsedGroup) continue;
                     double y = PadY + line++ * rowH;
                     if (collapsedGroup)
