@@ -122,6 +122,10 @@ public static class SfzImporter
         {
             if (kv.Key.StartsWith("set_cc", StringComparison.Ordinal) && int.TryParse(kv.Key[6..], NumberStyles.Integer, Inv, out int n))
                 cc[n] = (int)Math.Round(Num(kv.Value, 0));
+            // ARIA's high-resolution form, 0..1 (#349: Salamander starts its string resonance,
+            // hammer and pedal noise controllers at 0.5 this way).
+            else if (kv.Key.StartsWith("set_hdcc", StringComparison.Ordinal) && int.TryParse(kv.Key[8..], NumberStyles.Integer, Inv, out int hn))
+                cc[hn] = Math.Clamp((int)Math.Round(Num(kv.Value, 0) * 127), 0, 127);
             else if (kv.Key.StartsWith("label_cc", StringComparison.Ordinal) && int.TryParse(kv.Key[8..], NumberStyles.Integer, Inv, out int l))
                 report.CcLabels[l] = kv.Value;
         }
@@ -284,6 +288,39 @@ public static class SfzImporter
             result[cc] = list.OrderBy(x => x.Item1).Select(x => (x.Item1, x.Item2, $"{name} {x.Item1}–{x.Item2}")).ToList();
         }
         return result;
+    }
+
+    /// <summary>The SFZ a drop asks to open (#349): an .sfz file among <paramref name="paths"/>,
+    /// else the instrument in a dropped folder (its first SFZ no other SFZ there #includes).
+    /// Null when there is none.</summary>
+    public static string? ProgramIn(IEnumerable<string> paths)
+    {
+        var list = paths.ToList();
+        foreach (var p in list)
+            if (IsSfz(p) && File.Exists(p)) return p;
+        foreach (var p in list)
+            if (Directory.Exists(p) && TopLevel(p) is { Count: > 0 } top) return top[0];
+        return null;
+    }
+
+    public static bool IsSfz(string path) => Path.GetExtension(path).Equals(".sfz", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The SFZ files under <paramref name="root"/> that no other SFZ there #includes —
+    /// the instruments, not the fragments they are built from — by name.</summary>
+    public static List<string> TopLevel(string root)
+    {
+        List<string> all;
+        try { all = Directory.EnumerateFiles(root, "*.sfz", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList(); }
+        catch { return new List<string>(); }
+        var included = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var f in all)
+        {
+            string text;
+            try { text = File.ReadAllText(f); } catch { continue; }
+            foreach (Match m in IncludeRx.Matches(text))
+                included.Add(Path.GetFileName(m.Groups[1].Value.Replace('\\', '/')));
+        }
+        return all.Where(f => !included.Contains(Path.GetFileName(f))).ToList();
     }
 
     // ---- loading (#include, #define, comments) ---------------------------------------------

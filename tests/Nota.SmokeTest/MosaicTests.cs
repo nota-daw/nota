@@ -384,6 +384,18 @@ internal static class MosaicTests
             bool ok = WaitReady(e, t);
             e.TrackNoteOn(t, 60, 0.3f);
             yield return (ok && Rms(Render(e, 4096)) > 0.01, "an imported SFZ plays");
+
+            // #349 (Salamander Grand Piano): a dropped folder opens its instrument, not a fragment
+            // it #includes, and set_hdcc (0..1) starts a controller as set_cc does.
+            yield return (SfzImporter.ProgramIn(new[] { sfzDir }) is { } found && Path.GetFileName(found) == "main.sfz"
+                          && SfzImporter.ProgramIn(new[] { Path.Combine(sfzDir, "Samples", "brush.wav"), Path.Combine(sfzDir, "Programs", "map", "keys.sfz") }) is { } named
+                          && Path.GetFileName(named) == "keys.sfz",
+                "a dropped SFZ, or the SFZ instrument in a dropped folder, is what opens");
+            string hdPath = Path.Combine(dir, "sfz-hd.sfz");   // beside the pack folder, not in it
+            File.WriteAllText(hdPath, "<control> set_hdcc20=0.5\n<global> trigger=release\n<region> sample=sfz/Samples/c4_rel.wav key=c4 locc20=1\n");
+            var hd = SfzImporter.Import(hdPath);
+            yield return (hd.Report.Imported == 1 && hd.Program.Zones[0].Release && hd.Report.CcState.TryGetValue(20, out int cc20) && cc20 == 64,
+                $"set_hdcc20=0.5 starts CC20 at 64, so its release layer imports ({hd.Report.Imported} zones)");
         }
 
         // ---- factory multisamples: rendered once, mapped by their names, playable -----------------

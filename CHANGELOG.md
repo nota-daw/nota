@@ -207,6 +207,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Open an SFZ by dropping it on Nota Mosaic** (#349): drop an `.sfz` file, or the folder of
+  an SFZ library (such as the Salamander Grand Piano), on a Mosaic card and its zones load, with
+  the import report. Before, only installed sample packs could bring an SFZ in, so a library
+  you downloaded yourself couldn't be opened. Controllers an SFZ starts with `set_hdcc` (0–1)
+  now count too, so Salamander's string resonance and hammer noise release layers come along.
 - **The loop region is saved with the project** (#455): its start and end, and whether the
   loop is on, come back when you open the project again. A new project starts without one.
 - **The Mixer's volume reaches −∞** (#453): a fader pulled all the way down, a dB value dragged

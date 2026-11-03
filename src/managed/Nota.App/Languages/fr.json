@@ -6,6 +6,9 @@
   "strings": {
     "About Nota": "À propos de Nota",
     "Check for updates…": "Rechercher des mises à jour…",
+    "Drop samples, a folder or an SFZ here · or pick a preset": "Déposer des échantillons, un dossier ou un SFZ ici · ou choisir un préréglage",
+    "Its zones replace the instrument's; the import report says what it couldn't take.": "Ses zones remplacent celles de l’instrument ; le rapport d’import indique ce qu’il n’a pas pu reprendre.",
+    "Release to load the SFZ": "Relâcher pour charger le SFZ",
     "Settings…": "Réglages…",
     "Nothing to undo": "Rien à annuler",
     "Select a clip or a range first": "Sélectionner d’abord un clip ou une plage",
@@ -81,6 +84,7 @@
     "Clip names: none": "Noms des clips : aucun",
     "Loop set to selection": "Boucle réglée sur la sélection",
     "Show parameter-automation lanes (⌘⇧A)": "Afficher les couloirs d’automation des paramètres (⌘⇧A)",
+    "{0} has no zones Nota Mosaic can play ({1})": "{0} n’a aucune zone que Nota Mosaic puisse jouer ({1})",
     "{0} is no longer installed.": "{0} n’est plus installé.",
     "Couldn't load {0}.": "Impossible de charger {0}.",
     "Added {0} (track {1})": "{0} ajouté (piste {1})",
@@ -1999,7 +2003,6 @@
     "Drop effects onto a column.": "Déposer des effets sur une colonne.",
     "Drop samples and MIDI files onto a slot.": "Déposer des échantillons et des fichiers MIDI sur un emplacement.",
     "Drop samples onto audio slots.": "Déposer des échantillons sur les emplacements audio.",
-    "Drop samples or a folder here · or pick a preset": "Déposer des échantillons ou un dossier ici · ou choisir un préréglage",
     "Drum Rack · pad {0}{1}": "Drum Rack · pad {0}{1}",
     "Drums · {0} pads": {
       "one": "Drums · {0} pad",
