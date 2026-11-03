@@ -72,6 +72,8 @@ public sealed class ProjectService
                 MasterVolume = transport.MasterVolume,
                 MetronomeOn = transport.MetronomeOn,
                 LoopOn = transport.LoopOn,
+                LoopStart = engine.LoopEnd > engine.LoopStart ? engine.LoopStart : null,
+                LoopEnd = engine.LoopEnd > engine.LoopStart ? engine.LoopEnd : null,
                 TimeSigNumerator = transport.TimeSigNumerator,
                 TimeSigDenominator = transport.TimeSigDenominator,
                 Key = Nota.Application.Samples.MusicalKey.FromCode(transport.Key)?.Short,
@@ -563,6 +565,12 @@ public sealed class ProjectService
         // The saved tempo before any clip (specs/067): take lanes lay their comp out on it, so a
         // section the user moved isn't mistaken for one still on its take when the UI's tempo lands.
         if (doc.Transport.Bpm > 0) engine.SetBpm(doc.Transport.Bpm);
+
+        // The loop: its region as saved (#455) and whether it's on; the transport bar reads both back.
+        if (doc.Transport.LoopStart is double ls && doc.Transport.LoopEnd is double le && le > ls)
+            engine.SetLoop(doc.Transport.LoopOn, ls, le);
+        else
+            engine.SetLoop(doc.Transport.LoopOn, engine.LoopStart, engine.LoopEnd);
 
         // Pan law (specs/006) first, as the baseline rather than an undo step. A missing mixer
         // is a pre-v21 project: Balance, so the mix sounds as it was saved.

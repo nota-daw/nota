@@ -161,7 +161,7 @@ public sealed partial class MixerView
     private Control CompactLevel(int id, float vol, out Control db)
     {
         var fader = new MeterFader(vol) { HorizontalAlignment = HorizontalAlignment.Center };
-        var dbNum = new DragNumber(LinToDb(vol), MinDb, MaxDb, 0.3, "+0.0;−0.0;0.0", 8) { Width = 52, HorizontalAlignment = HorizontalAlignment.Center };
+        var dbNum = DbField(vol);
         ToolTip.SetTip(dbNum, Loc.T("Set the gain — drag, or double-click to type"));
         void SetVolume(double v) { if (id < 0) SetMasterVolume?.Invoke((float)v); else _engine.SetTrackVolume(id, (float)v); }
         if (id < 0) { _masterMeterFader = fader; _masterDb = dbNum; }
