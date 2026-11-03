@@ -584,8 +584,13 @@ docks as a panel under any of the three, or floats in its own window — see
   SUSTAIN / RELEASE sliders. The waveform is drawn shaped the way it sounds. By default the
   sample plays its full length at full level; double-click a handle to reset its stage.
   Editing in either place updates the other, each edit is one undo step, split keeps the
-  attack on the left piece and the release on the right, and the shape is saved with the
-  project.
+  attack on the left piece and the release on the right, and — unless Settings → Appearance →
+  **Fade audio clips when splitting** is off — also writes a 4 ms fade at the cut (release on
+  the left, attack on the right) so the cut does not click. Drag those corner handles to make
+  it longer or shorter. **Fade at splits** (command palette, or an audio clip's menu; no
+  shortcut) writes that fade onto a join where the selected clips already touch, without
+  shortening a longer one, in one undo step. MIDI clips are left alone. The shape is saved
+  with the project.
 - **Separate Stems** (right-click an audio clip): the **htdemucs** AI model (Demucs v4)
   splits the clip into Drums, Bass, Other and Vocals — a group of four audio tracks under the
   clip's track. Each stem clip copies the original's shape exactly (region, warp markers, trim,
@@ -1399,8 +1404,10 @@ audio effects after it keep running and keep their settings; saved with the proj
   dark mode and one for light mode, switched with the OS appearance; the choice applies
   live and is remembered. **Interface scale** — 75 / 100 / 125 / 150 / 200 % for the whole
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
-  remembered; timeline, piano roll and audio editor zoom work on top of it. **Waveform** —
-  **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Track
+  remembered; timeline, piano roll and audio editor zoom work on top of it.   **Waveform** —
+  **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Fade audio
+  clips when splitting** — on by default; a split then writes a 4 ms fade at the cut, which
+  the corner handles can drag longer or shorter. **Track
   headers** — Left / Right side of the arrangement's track list. **Open the detail panel
   when you select a track or clip** (off by default: a double-click opens it). Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a

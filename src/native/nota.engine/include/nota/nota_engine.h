@@ -1407,6 +1407,14 @@ NOTA_API NotaResult nota_midi_clip_env_set(NotaEngine* engine, int32_t track_id,
 NOTA_API NotaResult nota_clip_set_warp_markers(NotaEngine* engine, int32_t track_id, int32_t clip_index, const double* src_frames, const double* beats, int32_t count);
 NOTA_API int32_t     nota_clip_get_warp_markers(const NotaEngine* engine, int32_t track_id, int32_t clip_index, double* out_src, double* out_beat, int32_t max_count);
 NOTA_API int32_t    nota_clip_split(NotaEngine* engine, int32_t track_id, int32_t clip_index, double at_beat);   /* -> new clip index, or -1 */
+/* Automatic 4 ms fade at an audio split (issue #286). On by default. MIDI splits ignore it.
+ * The fade is the clip's attack/release, so the user can drag the corner handles to change it. */
+NOTA_API void       nota_engine_set_split_fades(NotaEngine* engine, int32_t on);
+NOTA_API int32_t    nota_engine_split_fades(const NotaEngine* engine);
+/* Raises a short fade on both sides of every join where two audio clips abut and at least
+ * one listed clip is in the pair. Does not shorten a longer fade. One undo step.
+ * NOTA_ERR_INVALID_ARG when nothing changed. */
+NOTA_API NotaResult nota_clips_fade_splits(NotaEngine* engine, const int32_t* track_ids, const int32_t* clip_indices, int32_t n);
 NOTA_API int32_t    nota_clip_duplicate(NotaEngine* engine, int32_t track_id, int32_t clip_index);              /* right after itself, overwriting what it covers -> new clip index, or -1 */
 NOTA_API NotaResult nota_clip_delete(NotaEngine* engine, int32_t track_id, int32_t clip_index);
 /* Time-range clip ops for the arrangement time-selection: split at the range boundaries

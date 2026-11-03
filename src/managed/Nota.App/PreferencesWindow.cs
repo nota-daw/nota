@@ -1358,12 +1358,22 @@ public sealed partial class PreferencesWindow : NotaWindow
             settings.Save();
         });
 
+        var splitFades = SwitchRow(Loc.T("Fade audio clips when splitting"), settings?.Current.SplitFades ?? true, on =>
+        {
+            if (settings is null) return;
+            settings.Current.SplitFades = on;
+            settings.Save();
+            _main.Engine.SplitFades = on;
+        });
+
         return Sections(
             Section("UI", 10,
                 TopRow(Loc.T("Colour theme"), ThemePicker()),
                 Row("", Caption(Loc.T("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance."))),
                 Row(Loc.T("Waveform"), WaveformPicker()),
                 Row("", Caption(Loc.T("How audio clips draw on the arrangement: Smooth outlines the peaks around the RMS level; Solid draws every pixel; Bars spaces the peaks out so the rhythm reads. Solid and Bars also set the browser's preview."))),
+                Row("", splitFades),
+                Row("", Caption(Loc.T("Splitting an audio clip adds a 4\u2009ms fade at the cut, so it doesn't click. Drag the corner handles on the clip to make it longer or shorter. MIDI clips are left alone."))),
                 Row(Loc.T("Track headers"), HeaderSidePicker()),
                 Row("", Caption(Loc.T("Which side of the arrangement the track list sits on. Right starts the timeline at the left edge, next to the browser. Also in the View menu."))),
                 Row(Loc.T("Interface scale"), ScalePicker()),

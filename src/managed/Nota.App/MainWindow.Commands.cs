@@ -54,6 +54,7 @@ public partial class MainWindow
         B("edit.redo", () => OnMenuRedo(this, e));
         B("edit.duplicate", () => OnMenuDuplicate(this, e));
         B("edit.split", () => OnMenuSplit(this, e), c => Need(c.SelectedClips > 0 || c.HasTimeSelection, Loc.T("Select a clip or a range first")));
+        B("edit.fadeSplits", () => OnMenuFadeSplits(this, e), c => Need(c.SelectedClips > 0, Loc.T("Select audio clips that touch first")));
         B("edit.consolidate", () => OnMenuConsolidate(this, e), c => Need(c.SelectedClips > 0 || c.HasTimeSelection, Loc.T("Select clips or a range first")));
         B("edit.duplicateTime", () => OnMenuDuplicateTime(this, e), c => Need(c.HasTimeSelection, Loc.T("Select a time range first")));
         B("edit.insertSilence", () => OnMenuInsertSilence(this, e), c => Need(c.HasTimeSelection, Loc.T("Select a time range first")));

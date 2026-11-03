@@ -259,6 +259,14 @@ public interface IAudioEngine : IDisposable
     /// <summary>Splits the given tracks' clips at both [start] and [end] (keeping all content) so
     /// the covered slice becomes its own clip(s). One undo step, no ripple. False = nothing changed.</summary>
     bool SplitClipsInRange(int[] trackIds, double start, double end);
+    /// <summary>When true (the default), splitting an audio clip writes a short fade at the cut
+    /// — release on the left piece, attack on the right — so the corner handles show it and
+    /// the user can drag them. MIDI splits are unchanged. An app preference, not project data.</summary>
+    bool SplitFades { get; set; }
+    /// <summary>Raises that short fade on both sides of every join where two audio clips abut
+    /// and at least one of the listed clips is in the pair. Does not shorten a longer fade.
+    /// One undo step. False when nothing changed. Runs even when <see cref="SplitFades"/> is off.</summary>
+    bool FadeSplits(int[] trackIds, int[] clipIndices);
     /// <summary>Consolidate: replaces each given track's content in [start,end) with ONE clip
     /// spanning the range — MIDI notes merged, audio clips rendered (gain/pitch/warp/fades/clip
     /// envelopes baked) into a new sample. Parts of clips outside the range survive. One undo

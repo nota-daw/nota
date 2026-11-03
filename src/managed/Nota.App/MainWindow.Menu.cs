@@ -134,6 +134,13 @@ public partial class MainWindow
         else _vm.StatusText = Loc.T("Nothing after the selection to move.");
     }
 
+    private void OnMenuFadeSplits(object? sender, EventArgs e)
+    {
+        if (_vm is null) return;
+        if (Timeline.FadeSelectedSplits()) _vm.StatusText = Loc.T("Faded the splits");
+        else _vm.StatusText = Loc.T("Select audio clips that touch first");
+    }
+
     private void OnMenuSplit(object? sender, EventArgs e)
     {
         if (_vm is null) return;

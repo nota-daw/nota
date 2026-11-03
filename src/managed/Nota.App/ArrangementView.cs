@@ -2019,6 +2019,25 @@ public sealed partial class ArrangementView : UserControl
         return any;
     }
 
+    /// <summary>Fade at splits: a short fade on both sides of every join where two audio clips
+    /// touch and at least one of them is selected. One undo step. False when nothing changed.</summary>
+    public bool FadeSelectedSplits()
+    {
+        if (_engine is null || _sel.Count == 0) return false;
+        var tracks = new int[_sel.Count];
+        var clips = new int[_sel.Count];
+        int i = 0;
+        foreach (var s in _sel)
+        {
+            tracks[i] = s.track;
+            clips[i] = s.clip;
+            i++;
+        }
+        if (!_engine.FadeSplits(tracks, clips)) return false;
+        Refresh();
+        return true;
+    }
+
     /// <summary>Cmd+A — select every clip in the arrangement. False when there are none,
     /// so the key falls through.</summary>
     public bool SelectAllClips()

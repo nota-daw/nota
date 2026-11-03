@@ -172,6 +172,10 @@ public sealed class Settings
     /// saved 0 moves to the new default), 1 solid — one column per pixel, 2 bars — spaced
     /// peak strokes.</summary>
     public int ArrangementWaveform { get; set; }
+    /// <summary>Splitting an audio clip writes a short fade at the cut (issue #286). On by
+    /// default; a missing key in an older settings file stays on. MIDI clips are left alone.
+    /// The command palette and the clip menu can still fade a join when this is off.</summary>
+    public bool SplitFades { get; set; } = true;
     /// <summary>Interface scale in percent (Settings → Appearance, spec 027): one of
     /// <see cref="Application.InterfaceScale.Presets"/>; anything else reads as 100.</summary>
     public int InterfaceScale { get; set; } = Application.InterfaceScale.Default;

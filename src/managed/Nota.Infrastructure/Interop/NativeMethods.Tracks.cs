@@ -189,6 +189,15 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_clip_split")]
     internal static partial int ClipSplit(IntPtr engine, int trackId, int clipIndex, double atBeat);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_set_split_fades")]
+    internal static partial void EngineSetSplitFades(IntPtr engine, int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_engine_split_fades")]
+    internal static partial int EngineSplitFades(IntPtr engine);
+
+    [LibraryImport(Lib, EntryPoint = "nota_clips_fade_splits")]
+    internal static partial NotaResult ClipsFadeSplits(IntPtr engine, [In] int[] trackIds, [In] int[] clipIndices, int count);
+
     [LibraryImport(Lib, EntryPoint = "nota_clip_duplicate")]
     internal static partial int ClipDuplicate(IntPtr engine, int trackId, int clipIndex);
 

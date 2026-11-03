@@ -333,6 +333,19 @@ public sealed partial class NotaEngine
     public bool SplitClipsInRange(int[] trackIds, double start, double end)
     { ThrowIfDisposed(); return NativeMethods.ClipsSplitRange(_handle, trackIds, trackIds.Length, start, end) == NativeMethods.NotaResult.Ok; }
 
+    public bool SplitFades
+    {
+        get { ThrowIfDisposed(); return NativeMethods.EngineSplitFades(_handle) != 0; }
+        set { ThrowIfDisposed(); NativeMethods.EngineSetSplitFades(_handle, value ? 1 : 0); }
+    }
+
+    public bool FadeSplits(int[] trackIds, int[] clipIndices)
+    {
+        ThrowIfDisposed();
+        if (trackIds.Length == 0 || trackIds.Length != clipIndices.Length) return false;
+        return NativeMethods.ClipsFadeSplits(_handle, trackIds, clipIndices, trackIds.Length) == NativeMethods.NotaResult.Ok;
+    }
+
     /// <summary>Consolidate: replaces each given track's content in [start,end) with one clip
     /// spanning the range (MIDI merged, audio rendered to a new sample). One undo step; the new
     /// clips are reported by <see cref="LastPlacedClips"/>. False when no track had content.</summary>

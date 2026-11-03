@@ -36,6 +36,7 @@ public static class CommandCatalog
         C("edit.redo", Loc.T("Redo"), Loc.T("Edit"), Shortcut.CmdShift('Z'), "forward"),
         C("edit.duplicate", Loc.T("Duplicate"), Loc.T("Edit"), Shortcut.Cmd('D'), "copy clone"),
         C("edit.split", Loc.T("Split at playhead"), Loc.T("Edit"), Shortcut.Cmd('E'), "cut slice", view: "Arrangement"),
+        C("edit.fadeSplits", Loc.T("Fade at splits"), Loc.T("Edit"), "", "crossfade declick", view: "Arrangement"),
         C("edit.consolidate", Loc.T("Consolidate"), Loc.T("Edit"), Shortcut.Cmd('J'), "join merge glue", view: "Arrangement"),
         C("edit.duplicateTime", Loc.T("Duplicate time"), Loc.T("Edit"), Shortcut.CmdShift('D'), "repeat range", view: "Arrangement"),
         C("edit.insertSilence", Loc.T("Insert silence"), Loc.T("Edit"), Shortcut.CmdShift('I'), "gap space", view: "Arrangement"),
