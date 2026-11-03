@@ -2335,7 +2335,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     t.sessionPlayer->localBeats += frames / spb;
                     sessionPostRender(t, frames / spb);
                 }
-                *t.tailQuiet = -1; // muted: its tail is gone, not saved for the unmute
+                t.tailQuiet() = -1; // muted: its tail is gone, not saved for the unmute
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
@@ -2368,10 +2368,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 w.path = LeafPath::Instrument;
             } else if (playing && arrangementActive) {
                 w.path = LeafPath::AudioClips;
-            } else if (*t.tailQuiet >= 0 && hasLiveDevice(t)) {
+            } else if (t.tailQuiet() >= 0 && hasLiveDevice(t)) {
                 w.path = LeafPath::Tail; // its effects ring out on silence (#449)
             } else {
-                *t.tailQuiet = -1;
+                t.tailQuiet() = -1;
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
@@ -2525,7 +2525,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             //      the tail path the chain's output is watched until it has been quiet long
             //      enough, and the track goes back to costing nothing.
             if (w.path == LeafPath::Tail) {
-                int64_t& quiet = *t.tailQuiet;
+                int64_t& quiet = t.tailQuiet();
                 if (simd_audio::peakAbs(post, frames * 2) > kTailFloor) quiet = 0;
                 else quiet += frames;
                 if (quiet > 0) {
@@ -2537,7 +2537,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                         quiet = -1;
                 }
             } else if (w.path == LeafPath::AudioClips || w.path == LeafPath::SessionAudio || w.path == LeafPath::Monitor)
-                *t.tailQuiet = 0;
+                t.tailQuiet() = 0;
 
             // 2c) Freeze capture (M7): stash this track's post-device, pre-fader signal
             //     into the freeze buffer. Sequential from a seek(0) render, so the write
