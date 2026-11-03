@@ -409,6 +409,22 @@ internal static class MosaicTests
             var upParams = SfzImporter.ParamsFrom(SfzImporter.Import(upFound!).Report);
             yield return (upParams.TryGetValue("release", out float relN) && Math.Abs(MosaicModel.ReleaseSec(relN) - 4.0) < 0.2,
                 $"a dropped SFZ's ampeg_release=4 sets Mosaic's release (got {(upParams.TryGetValue("release", out float r2) ? MosaicModel.ReleaseSec(r2) : -1):F2} s)");
+
+            // The card loads a dropped SFZ as an undoable program and then sets its params on the
+            // instrument that published: one undo brings back the old zones with their own release.
+            using (var ue = new NotaEngine())
+            {
+                int ut = ue.AddMosaicTrack();
+                int ri = Pi(ue, ut, "release");
+                ue.PluginParamSet(ut, -1, ri, 0.2f);
+                ue.MosaicSetProgram(ut, SfzImporter.Import(upFound!).Program.Serialize());
+                ue.PluginParamSet(ut, -1, ri, relN);
+                float after = ue.PluginParamGet(ut, -1, ri);
+                ue.Undo();
+                float undone = ue.PluginParamGet(ut, -1, ri);
+                yield return (Math.Abs(after - relN) < 1e-4 && Math.Abs(undone - 0.2f) < 1e-4,
+                    $"undoing an SFZ drop brings back the old release too ({undone:F3}, was 0.200)");
+            }
         }
 
         // ---- factory multisamples: rendered once, mapped by their names, playable -----------------

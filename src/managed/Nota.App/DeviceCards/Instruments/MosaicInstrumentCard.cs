@@ -1330,9 +1330,11 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             prog = res.Program;
             ui.Zone = 0;
             SetImportReport(track, res.Report);
-            // Its envelope, bend range and filter, as an installed pack's SFZ preset sets them.
-            foreach (var (id, v) in SfzImporter.ParamsFrom(res.Report)) SetP(id, v);
             Commit(rebuild: true);
+            // Its envelope, bend range and filter, as an installed pack's SFZ preset sets them.
+            // After the commit, so they land on the new instrument it published: undo brings
+            // back the old one with its own settings.
+            foreach (var (id, v) in SfzImporter.ParamsFrom(res.Report)) SetP(id, v);
         }
 
         void HookDrop(Control target, Control overlay)
