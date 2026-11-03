@@ -1514,8 +1514,9 @@ class Engine {
     bool insertTimeInto(Graph& g, double at, double len, bool duplicate);
     void reapplyRackMacros(); // after undo/redo: racks drive their shared children again
     // specs/069: a structural snapshot freezes send levels, and a send is not its own undo
-    // step. Copy the live levels onto the restored tracks. A return that was added or
-    // removed keeps that edit's bus mapping; a return on both sides keeps the live level.
+    // step. When the returns still sit on the same buses, copy the live levels onto the
+    // restored tracks. When a return was added, removed or moved, keep the snapshot's
+    // levels — those buses belong to that edit.
     void keepLiveSends(Graph& restored, const Graph& live) const;
     void reapplyCcRoutes();             // after undo/redo: Arps take their restored snapshot's targets
     void syncCcRoutes(Graph& g);        // before a publish: routes of fresh tracks from their Arps

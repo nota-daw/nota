@@ -78,6 +78,27 @@ internal static class SendAutomationTests
                           && Math.Abs(eng.GetTrackSend(t, 0) - 0.2f) < 1e-6f;
         yield return (undoneName && redoneName,
             "sends: undo and redo of a rename leave the send");
+
+        // Deleting the first return slides the survivor down a bus. Undoing that puts
+        // each level back on its own return, not on the bus the survivor just left.
+        int r0 = -1, r1 = -1;
+        for (int i = 0; i < eng.TrackCount; i++)
+        {
+            if (!eng.TryGetTrackInfo(i, out var ti) || !ti.IsReturn) continue;
+            if (r0 < 0) r0 = ti.Id;
+            else r1 = ti.Id;
+        }
+        eng.ClearUndoHistory();
+        eng.SetTrackSend(t, 0, 0.25f);
+        eng.SetTrackSend(t, 1, 0.8f);
+        bool deleted = r0 > 0 && eng.RemoveTrack(r0) && eng.TrackReturnIndex(r1) == 0
+                       && Math.Abs(eng.GetTrackSend(t, 0) - 0.8f) < 1e-6f;
+        eng.SetTrackSend(t, 0, 0.15f);
+        bool restored = deleted && eng.Undo()
+                        && eng.TrackReturnIndex(r0) == 0 && eng.TrackReturnIndex(r1) == 1
+                        && Math.Abs(eng.GetTrackSend(t, 0) - 0.25f) < 1e-6f
+                        && Math.Abs(eng.GetTrackSend(t, 1) - 0.8f) < 1e-6f;
+        yield return (restored, "sends: undo of a deleted return puts each send back on its return");
     }
 
     // ---- not an automation target -------------------------------------------------------

@@ -841,7 +841,9 @@ void Engine::keepLiveSends(Graph& restored, const Graph& live) const {
     };
     take(liveBus, live);
     take(oldBus, restored);
-    const bool sameBuses = liveBus == oldBus;
+    // A return edit remaps buses. Copying a live slot onto the restored graph would put
+    // that level on a different return. The snapshot already has the levels for its buses.
+    if (liveBus != oldBus) return;
 
     std::map<int32_t, const Track*> liveById;
     for (const auto& t : live.tracks)
@@ -852,19 +854,8 @@ void Engine::keepLiveSends(Graph& restored, const Graph& live) const {
         auto it = liveById.find(t->id());
         if (it == liveById.end() || it->second == t.get()) continue;
         const Track& src = *it->second;
-        if (sameBuses) {
-            for (int b = 0; b < kMaxReturns; ++b)
-                if (t->send(b) != src.send(b)) t->setSend(b, src.send(b));
-            continue;
-        }
-        // A return on both sides keeps the level the user left on it. A return only the
-        // snapshot has (one this edit brings back) keeps the level stored with that bus.
-        for (const auto& [id, busNow] : liveBus) {
-            auto o = oldBus.find(id);
-            if (o == oldBus.end()) continue;
-            const float level = src.send(busNow);
-            if (t->send(o->second) != level) t->setSend(o->second, level);
-        }
+        for (int b = 0; b < kMaxReturns; ++b)
+            if (t->send(b) != src.send(b)) t->setSend(b, src.send(b));
     }
 }
 
