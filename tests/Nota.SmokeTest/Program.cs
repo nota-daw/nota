@@ -398,6 +398,14 @@ if (args.Length >= 1 && args[0] == "--linux-desktop")
     return failures == 0 ? 0 : 1;
 }
 
+// Sends as undoable, automatable mix values alone: `--sends` (specs/072). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--sends")
+{
+    Console.WriteLine("-- sends --");
+    foreach (var (ok, label) in SendAutomationTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SENDS PASSED" : $"SENDS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Return-track automation alone: `--return-automation`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--return-automation")
 {
@@ -15439,6 +15447,9 @@ foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- return automation --");
 foreach (var (ok, label) in ReturnAutomationTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- sends --");
+foreach (var (ok, label) in SendAutomationTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- arrangement moves --");
 foreach (var (ok, label) in ArrangementMovesTests.Run()) Check(ok, label);

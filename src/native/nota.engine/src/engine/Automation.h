@@ -16,7 +16,14 @@
 
 namespace nota {
 
-enum class AutomationTarget : int32_t { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4 };
+// Send (specs/072): a track's send level into return bus `deviceIndex` (0..kMaxReturns-1).
+enum class AutomationTarget : int32_t { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5 };
+
+// The track's own mix values — volume, pan and the sends. Not tied to a device, so their lanes
+// follow clips to any track (a device lane's index is only meaningful on its own chain).
+inline bool isMixTarget(AutomationTarget t) {
+    return t == AutomationTarget::Volume || t == AutomationTarget::Pan || t == AutomationTarget::Send;
+}
 
 // `curve` (M9-D) shapes the segment FROM this point TO the next: 0 = linear,
 // >0 = ease-out (fast start), <0 = ease-in (slow start), range [-1,1].
@@ -28,7 +35,7 @@ struct AutomationPoint {
 
 struct AutomationLane {
     AutomationTarget target = AutomationTarget::Volume;
-    int32_t deviceIndex = -1;  // DeviceParam / PluginParam (PluginParam: <0 = instrument)
+    int32_t deviceIndex = -1;  // DeviceParam / PluginParam (PluginParam: <0 = instrument); Send: the bus
     int32_t paramIndex = -1;   // DeviceParam; PluginParam: resolved from paramId
     std::string paramId;       // PluginParam only: stable JUCE parameter ID (M9-B)
     bool suppressRead = false; // transient (M9-C): while this target is being written,

@@ -1564,6 +1564,7 @@
     "Monitor": "Écoute",
     "Send {0} · {1}": "Envoi {0} · {1}",
     "Send": "Envoi",
+    "Show sends in track headers": "Afficher les envois dans les en-têtes de piste",
     "All ins": "Toutes les entrées",
     "MIDI input: every input, or another instrument track": "Entrée MIDI : toutes les entrées, ou une autre piste d’instrument",
     "In: hear the input live through this track · Auto: only while recording": "Entrée : entendre l’entrée en direct à travers cette piste · Auto : seulement pendant l’enregistrement",

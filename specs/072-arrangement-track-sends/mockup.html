@@ -1,0 +1,148 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>specs/072 · Sends in the arrangement track headers — mockup</title>
+<style>
+  /* Studio Dark tokens (src/managed/Nota.App/Theme/Themes/studio-dark.json). */
+  :root {
+    --BgApp:#1E1F22; --BgSunken:#17181A; --LaneB:#222326; --SurfaceCard:#2B2D31; --SurfaceRaised:#34363B;
+    --SelHeaderBg:#393C41; --Seam:#141517; --Rule:#45484E; --TextPrimary:#E8E9EB; --TextSecondary:#C0C4C9;
+    --TextTertiary:#92969D; --TextDisabled:#82868C; --VizInk:#D7D8DA; --Accent:#FF9F1C; --TextOnAccent:#17181A;
+    --Mute:#F2B53C; --Solo:#6A9FD8; --Record:#F06A6E; --Success:#6CC673;
+  }
+  body { margin:0; padding:24px; background:#101113; color:var(--TextPrimary); font:11px "Geist", system-ui, sans-serif; }
+  h1 { font-size:14px; font-weight:600; margin:0 0 4px; }
+  p.note { color:var(--TextTertiary); margin:0 0 18px; max-width:880px; line-height:1.45; }
+  .row { display:flex; gap:28px; align-items:flex-start; flex-wrap:wrap; }
+  .shot { display:flex; flex-direction:column; gap:6px; }
+  .cap { color:var(--TextTertiary); font-size:10px; }
+  .col { background:var(--BgApp); border:1px solid var(--Seam); }
+  .mono { font-family:"Geist Mono", ui-monospace, monospace; }
+
+  /* top strip of the header column: Zoom − + … Sends */
+  .strip { height:24px; display:flex; align-items:center; gap:5px; padding:0 8px 0 14px; background:var(--SurfaceCard);
+           border-bottom:1px solid var(--Seam); border-right:1px solid var(--Seam); box-sizing:border-box; }
+  .label { color:var(--TextTertiary); font-size:9px; font-weight:600; margin-right:2px; }
+  .zchip { width:24px; height:18px; display:grid; place-items:center; border:1px solid var(--Seam); border-radius:3px;
+           background:var(--SurfaceRaised); box-shadow: inset 0 1px 0 rgba(255,255,255,.06); }
+  .spacer { flex:1; }
+  .toggle { height:18px; padding:0 7px; display:grid; place-items:center; border:1px solid var(--Seam); border-radius:3px;
+            background:var(--SurfaceRaised); color:var(--TextSecondary); font-size:9px; }
+  .toggle.on { background:var(--Accent); color:var(--TextOnAccent); font-weight:600; }
+
+  /* a track header card */
+  .card { position:relative; display:flex; border-bottom:1px solid var(--Seam); border-right:1px solid var(--Seam); background:var(--SurfaceCard);
+          box-sizing:border-box; overflow:hidden; }
+  .card.sel { background:var(--SelHeaderBg); }
+  .spine { width:3px; flex:none; }
+  .body { flex:1; display:flex; min-width:0; }
+  .stack { flex:1; display:flex; flex-direction:column; padding:6px 8px; min-width:0; gap:0; }
+  .meter { width:8px; margin:6px 3px 6px 0; background:var(--BgSunken); border-radius:1px; position:relative; }
+  .meter i { position:absolute; left:0; right:0; bottom:0; background:var(--Success); border-radius:1px; }
+  .name { display:flex; align-items:center; gap:6px; height:16px; }
+  .name b { flex:1; font-size:11px; font-weight:600; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+  .tag { font-family:"Geist Mono", monospace; font-size:7.5px; color:var(--TextTertiary); border:1px solid var(--Rule); border-radius:2px; padding:0 3px; }
+  .r2 { display:flex; gap:3px; margin-top:5px; align-items:center; }
+  .combo { flex:1; height:16px; border:1px solid var(--Rule); border-radius:3px; background:var(--BgSunken); color:var(--TextSecondary);
+           font-size:9px; display:flex; align-items:center; padding:0 5px; }
+  .chip { width:18px; height:16px; border-radius:2px; background:var(--SurfaceRaised); border:1px solid var(--Seam); display:grid; place-items:center;
+          font-size:9px; font-weight:600; color:var(--TextSecondary); box-sizing:border-box; }
+  .chip.s { background:var(--Solo); color:var(--TextOnAccent); }
+  .vol { display:grid; gap:6px; margin-top:6px; align-items:center; }
+  .fader { height:4px; background:var(--BgSunken); border-radius:2px; position:relative; }
+  .fader i { position:absolute; left:0; top:0; bottom:0; background:var(--VizInk); border-radius:2px; }
+  .fader u { position:absolute; top:-3px; width:3px; height:10px; background:var(--TextPrimary); border-radius:1px; }
+  .db { font-size:9px; color:var(--TextTertiary); width:30px; text-align:right; }
+  .pan { height:4px; background:var(--BgSunken); border-radius:2px; position:relative; }
+  .pan i { position:absolute; top:0; bottom:0; background:var(--VizInk); }
+
+  /* NEW: the send row — one inline knob per return */
+  .sends { display:grid; margin-top:6px; height:24px; column-gap:4px; align-items:center; }
+  .send { display:flex; align-items:center; gap:3px; min-width:0; }
+  .send .lv { display:flex; flex-direction:column; line-height:10px; }
+  .send .lt { font-size:8px; font-weight:500; color:var(--TextSecondary); }
+  .send .vv { font-size:8px; color:var(--TextTertiary); }
+  .send.hot .lt { color:var(--TextPrimary); }
+  .send.hot .vv { color:var(--TextPrimary); }
+  .tip { position:absolute; background:var(--SurfaceRaised); color:var(--TextPrimary); border:1px solid var(--Seam); border-radius:3px;
+         font-size:10px; padding:3px 6px; white-space:nowrap; }
+  .lanes { background:var(--BgApp); }
+  ul { color:var(--TextSecondary); line-height:1.5; max-width:880px; padding-left:18px; }
+</style>
+</head>
+<body>
+<h1>Sends in the arrangement track headers (specs/072, nota-daw/nota#143)</h1>
+<p class="note">Studio Dark, 1 : 1. The send row is new; everything else is today's header. One <b>inline knob (24)</b> per
+return in bus order, each with its bus letter over a mono percent read-out. Arcs rest in <b>VizInk</b>; the accent
+appears only on the knob under the pointer or in the hand (bus A below is being dragged). The <b>Sends</b> toggle sits at the
+right end of the header column's top strip; on = the solid accent key.</p>
+
+<div class="row" id="shots"></div>
+
+<ul>
+  <li><b>Standard row, ≥ 88 px</b>: name · routing + M/S/● · volume|pan (2 : 1) · <b>sends</b>. Below 88 px the standard header is unchanged.</li>
+  <li><b>Large row</b>: with sends shown, volume and pan share one row (as on a standard row) so the send row fits the 128 px preset; with sends hidden the large layout is unchanged (pan on its own row).</li>
+  <li><b>Narrow column</b>: when a cell can't hold knob + letter/value, the cells drop to knobs only; the letter, return name and value move to the tooltip and the ⌥-click value box.</li>
+  <li>Tooltip: "Send A · Reverb · 42 %". Double-click resets to 0 %. Compact rows, return / master footer rows and the slim group bar get no send row.</li>
+  <li>No returns → no send row and no Sends toggle.</li>
+</ul>
+
+<script>
+const css = n => getComputedStyle(document.documentElement).getPropertyValue('--' + n).trim();
+// The Studio knob on its 52-unit grid, drawn at 24 px (Knob.Inline).
+function knob(v, live) {
+  const S = 24, k = S / 52, cx = S / 2, cy = S / 2, R = 21 * k, sw = 5 * k;
+  const a0 = 135, sweep = 270, a1 = a0 + sweep * v;
+  const pt = (deg, r) => [cx + r * Math.cos(deg * Math.PI / 180), cy + r * Math.sin(deg * Math.PI / 180)];
+  const arc = (from, to) => { const [x0, y0] = pt(from, R), [x1, y1] = pt(to, R);
+    return `M${x0} ${y0} A${R} ${R} 0 ${to - from > 180 ? 1 : 0} 1 ${x1} ${y1}`; };
+  const [px, py] = pt(a1, 14 * k);
+  return `<svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
+    <path d="${arc(a0, a0 + sweep)}" stroke="${css('BgSunken')}" stroke-width="${sw}" fill="none"/>
+    ${v > 0.002 ? `<path d="${arc(a0, a1)}" stroke="${live ? css('Accent') : css('VizInk')}" stroke-width="${sw}" fill="none"/>` : ''}
+    <circle cx="${cx}" cy="${cy}" r="${14 * k}" fill="${css('SurfaceRaised')}" stroke="${css('Seam')}" stroke-width="1"/>
+    <line x1="${cx}" y1="${cy}" x2="${px}" y2="${py}" stroke="${css('TextPrimary')}" stroke-width="${2.4 * k}" stroke-linecap="round"/>
+  </svg>`;
+}
+const pct = v => v <= 0.005 ? '–' : String(Math.round(v * 100));
+function sendRow(vals, opts = {}) {
+  const cells = vals.map((v, i) => {
+    const hot = opts.hot === i, letter = 'ABCD'[i];
+    const lv = opts.knobsOnly ? '' : `<span class="lv"><span class="lt">${letter}</span><span class="vv mono">${pct(v)}</span></span>`;
+    return `<span class="send${hot ? ' hot' : ''}">${knob(v, hot)}${lv}</span>`;
+  }).join('');
+  return `<div class="sends" style="grid-template-columns:repeat(${vals.length},${opts.knobsOnly ? 'auto' : '1fr'});${opts.knobsOnly ? 'justify-content:space-between' : ''}">${cells}</div>`;
+}
+function strip(w, on, hasReturns = true) {
+  return `<div class="strip" style="width:${w}px"><span class="label">Zoom</span><span class="zchip">−</span><span class="zchip">+</span>
+    <span class="spacer"></span>${hasReturns ? `<span class="toggle${on ? ' on' : ''}">Sends</span>` : ''}</div>`;
+}
+function card({ w = 228, h, name, tag = 'MIDI', color = '#D77A8F', sends, sendOpts, large = false, sel = false, volPanShared = true, meter = .55 }) {
+  const volRow = volPanShared
+    ? `<div class="vol" style="grid-template-columns:2fr 1fr"><div style="display:flex;align-items:center"><div class="fader" style="flex:1"><i style="width:62%"></i><u style="left:62%"></u></div><span class="db mono">−3.2</span></div><div class="pan"><i style="left:50%;width:14%"></i></div></div>`
+    : `<div class="vol" style="grid-template-columns:1fr"><div style="display:flex;align-items:center"><div class="fader" style="flex:1"><i style="width:62%"></i><u style="left:62%"></u></div><span class="db mono">−3.2</span></div><div class="pan"><i style="left:50%;width:14%"></i></div></div>`;
+  const routing = large ? `<div class="r2"><span class="combo">All ins · Ch 1</span></div>` : '';
+  const r2 = large
+    ? `<div class="r2" style="justify-content:flex-end"><span class="chip">M</span><span class="chip s">S</span><span class="chip">●</span></div>`
+    : `<div class="r2"><span class="combo">All ins · Ch 1</span><span class="chip">M</span><span class="chip">S</span><span class="chip">●</span></div>`;
+  return `<div class="card${sel ? ' sel' : ''}" style="width:${w}px;height:${h}px">
+    <div class="spine" style="background:${sel ? css('Accent') : color}"></div>
+    <div class="body"><div class="stack">
+      <div class="name"><b>${name}</b><span class="tag">${tag}</span></div>
+      ${r2}${routing}${volRow}${sends ? sendRow(sends, sendOpts) : ''}
+    </div><div class="meter"><i style="height:${meter * 100}%"></i></div></div></div>`;
+}
+const shots = [
+  { cap: 'Standard row at 88 px · two returns · bus A in the hand', html: strip(228, true) + card({ h: 88, name: 'Lead vocal', tag: 'AUDIO', color: '#5FB3A8', sends: [0.42, 0.18], sendOpts: { hot: 0 } }) + card({ h: 64, name: 'Bass', color: '#6A9FD8' }) },
+  { cap: 'Large row (128) · four returns · selected', html: strip(228, true) + card({ h: 128, name: 'Pad', large: true, sel: true, sends: [0.25, 0, 0.6, 0.1] }) },
+  { cap: 'Large row · Sends toggle off (layout as today)', html: strip(228, false) + card({ h: 128, name: 'Pad', large: true, volPanShared: false }) },
+  { cap: 'Narrowest column (160) · four returns · knobs only', html: strip(160, true) + card({ w: 160, h: 88, name: 'Drums', color: '#E0A84A', sends: [0.3, 0.05, 0, 0.7], sendOpts: { knobsOnly: true } })
+      + `<div style="position:relative;height:26px"><div class="tip" style="left:22px;top:3px">Send B · Delay · 5 %</div></div>` },
+];
+document.getElementById('shots').innerHTML = shots.map(s => `<div class="shot"><div class="cap">${s.cap}</div><div class="col">${s.html}</div></div>`).join('');
+</script>
+</body>
+</html>

@@ -112,7 +112,7 @@ public sealed partial class MixerView
             {
                 var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center };
                 int b = bus;
-                f.ValueChanged += v => _engine.SetTrackSend(id, b, (float)v);
+                SendControl.Attach(f, _engine, id, b);   // undoable, writes automation (specs/072)
                 ValueEntry.Attach(f, f.EntryField(Loc.F("Send {0}", (char)('A' + b)), NotaNum.Pct));
                 _sendFaders.Add((id, b, f));
                 bar = f;

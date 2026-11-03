@@ -87,7 +87,7 @@ struct ControlEvent {
     int32_t value;
 };
 
-// Value undo (specs/009, specs/016): volume / pan / master volume live in atomics outside the
+// Value undo (specs/009, specs/016): volume / pan / sends / master volume live in atomics outside the
 // graph, and device parameters live in Device objects that cloned tracks share — restoring
 // an older graph restores neither. Their undo steps carry values instead of a snapshot. They
 // share one history with the structural snapshots (UndoEntry), which keeps the order of all
@@ -102,7 +102,8 @@ enum class MixKind : int32_t {
     MidiDeviceParam = 4,
     PluginParam = 5,
     PresetTag = 6,  // a device's preset tag (specs/048): deviceIndex as above, paramIndex = the surface
-    DeviceNotes = 7 // an EQ-8's band labels and notes (specs/049): the value indexes Engine::noteStates_
+    DeviceNotes = 7, // an EQ-8's band labels and notes (specs/049): the value indexes Engine::noteStates_
+    TrackSend = 8    // a track's send level (specs/072): deviceIndex = the return bus
 };
 struct MixTarget {
     MixKind kind;

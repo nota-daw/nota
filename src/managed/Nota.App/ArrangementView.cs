@@ -374,17 +374,27 @@ public sealed partial class ArrangementView : UserControl
         var zoomIn = ZoomChip("+");
         zoomOut.Click += (_, _) => Zoom(1 / 1.25);
         zoomIn.Click += (_, _) => Zoom(1.25);
-        var zoomBar = new StackPanel
+        var zoomKeys = new StackPanel
         {
-            Orientation = Orientation.Horizontal, Spacing = 5, Width = HeaderW,
+            Orientation = Orientation.Horizontal, Spacing = 5,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
             Children =
             {
                 new TextBlock { Text = Loc.T("Zoom"), Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) },
                 zoomOut, zoomIn,
             },
         };
+        // The Sends key (specs/072) at the strip's far end; hidden while there are no returns.
+        var sendsKey = BuildSendsToggle();
+        DockPanel.SetDock(sendsKey, Dock.Right);
+        var zoomBar = new DockPanel
+        {
+            Width = HeaderW, LastChildFill = true,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0),
+            Children = { sendsKey, zoomKeys },
+        };
+        sendsKey.Margin = new Thickness(0, 0, 16, 0);
         _headerColumnParts.Add(zoomBar);
         var topLeft = HeaderPanel(zoomBar);
         var topGrid = new Grid { Height = RulerH };
@@ -919,7 +929,7 @@ public sealed partial class ArrangementView : UserControl
     }
 
     /// <summary>Pushes fresh per-track meter readings into the header meters (~30 Hz, M6-2),
-    /// and refreshes the volume/pan controls so automation (playback or scrub) moves them live.</summary>
+    /// and refreshes the volume/pan/send controls so automation (playback or scrub) moves them live.</summary>
     public void UpdateMeters()
     {
         if (_engine is not { } eng) return;
@@ -955,6 +965,7 @@ public sealed partial class ArrangementView : UserControl
             if (_footerPans.TryGetValue(ti.Id, out var rp) && !rp.Dragging && Math.Abs(rp.Pan - ti.Pan) > 1e-3)
                 rp.Pan = ti.Pan;
         }
+        FollowSends(eng);
     }
 
     // Moves a footer fader and its read-out to a volume changed elsewhere (Mixer, MST, MCP,
@@ -1074,6 +1085,7 @@ public sealed partial class ArrangementView : UserControl
                     {
                         (tvm.AutoTarget, tvm.AutoDeviceIndex, tvm.AutoParamIndex, tvm.AutoParamId, tvm.AutoChain, tvm.AutoSlot, tvm.AutoLane) = sel;
                         if (tvm.AutoChain >= 0) ResyncNestedTarget(tvm);   // a rack edit may have moved its device
+                        if (tvm.AutoTarget == AutomationTarget.Send) ResyncSendTarget(tvm);   // a return delete may have moved its bus
                     }
                     tvm.AutoLabel = AutoLabelFor(tvm);
                     LoadAutoPoints(tvm);
@@ -2097,6 +2109,9 @@ public sealed partial class ArrangementView : UserControl
         _volDb.Clear();
         _headerCards.Clear();
         _cardTiers.Clear();
+        _cardSends.Clear();
+        _sendKnobs.Clear();
+        PaintSendsToggle();
         for (int i = 0; i < _tracks.Count; i++)
         {
             var card = BuildHeaderCard(_tracks[i]);
@@ -2201,6 +2216,9 @@ public sealed partial class ArrangementView : UserControl
         double rowH = TrackRowHeight(t);
         var tier = TierFor(rowH);
         _cardTiers[t.Id] = tier;
+        bool sends = ShowSendsOn(t, tier, rowH);   // specs/072: the send row under volume / pan
+        _cardSends[t.Id] = sends;
+        _sendKnobs.RemoveAll(k => k.trackId == t.Id);
 
         // Row 1: [group ▸/▾] name (ellipsised) + type-tag chip.
         var name = new TextBlock
@@ -2367,12 +2385,16 @@ public sealed partial class ArrangementView : UserControl
                 stack.Children.Add(nameRow);
                 break;
             case HeaderTier.Large:
-                // A row each: the fader takes the full width, the pan its own row below.
-                volRow.ColumnDefinitions = new ColumnDefinitions("*");
-                volRow.RowDefinitions = new RowDefinitions("Auto,Auto");
-                volRow.RowSpacing = 6;
-                Grid.SetColumn(pan, 0);
-                Grid.SetRow(pan, 1);
+                // A row each: the fader takes the full width, the pan its own row below — unless
+                // the send row needs that room, then volume and pan share a row as on a standard card.
+                if (!sends)
+                {
+                    volRow.ColumnDefinitions = new ColumnDefinitions("*");
+                    volRow.RowDefinitions = new RowDefinitions("Auto,Auto");
+                    volRow.RowSpacing = 6;
+                    Grid.SetColumn(pan, 0);
+                    Grid.SetRow(pan, 1);
+                }
                 stack.Children.Add(nameRow);
                 stack.Children.Add(row2);
                 if (routingRow is not null) stack.Children.Add(routingRow);
@@ -2384,6 +2406,9 @@ public sealed partial class ArrangementView : UserControl
                 stack.Children.Add(volRow);
                 break;
         }
+        // Room for the knobs: the card minus its group indent, spine, padding and meter.
+        if (sends && BuildSendRow(t, HeaderW - Math.Max(0, t.Depth) * GroupIndent - 3 - 16 - 11) is { } sendRow)
+            stack.Children.Add(sendRow);
 
         var meter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = 8, Margin = tier == HeaderTier.Compact ? new Thickness(0, 4, 3, 4) : new Thickness(0, 6, 3, 6) };
         _meters[t.Id] = meter;
