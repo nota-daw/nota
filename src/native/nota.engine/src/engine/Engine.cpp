@@ -725,6 +725,19 @@ bool Engine::setRenderThreads(int n) {
 }
 
 void Engine::publishRaw(std::shared_ptr<Graph> g) {
+    // Fade flags are derived, not stored. Recompute them on tracks this graph does not
+    // share with the one still playing: those are the clones an edit just built. A track
+    // still in authoring_ is the audio thread's (and the undo snapshot's) — leave it.
+    if (g && authoring_) {
+        auto shared = [&](const std::shared_ptr<Track>& t) {
+            for (const auto& old : authoring_->tracks)
+                if (old == t) return true;
+            return authoring_->masterTrack && authoring_->masterTrack == t;
+        };
+        for (auto& t : g->tracks)
+            if (t && !shared(t)) settleTakeJoins(*t);
+        if (g->masterTrack && !shared(g->masterTrack)) settleTakeJoins(*g->masterTrack);
+    }
     // Ensure every track has a session slot per scene (M5). Only grows freshly
     // added tracks (already-sized tracks are a no-op), so no race with audio.
     for (auto& t : g->tracks)
@@ -790,7 +803,6 @@ void Engine::publish(std::shared_ptr<Graph> g) {
 }
 
 void Engine::republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt) {
-    if (nt) settleTakeJoins(*nt); // the clone only; authoring_ still shares the previous tracks
     auto g = std::make_shared<Graph>();
     inheritGraphLevel(*g, *authoring_);
     if (trackId == kMasterTrackId) g->masterTrack = nt; // master chain edit

@@ -5,8 +5,10 @@
 // the loop keeps every pass as a take; the default comp sounds exactly as the single loop
 // buffer did, including across the join a partial last pass makes; comping a swiped range,
 // deleting a take and flattening are one undo step each; flatten sounds as the comp did; a
-// tempo change keeps the takes and their comp on one mapping, and a comp cut made before the
-// next audio block uses that mapping too; takes + comp survive save/reopen.
+// tempo change keeps the takes and their comp on one mapping, and a comp cut or a recording
+// stopped before the next audio block uses that mapping too; a reversed section that cannot
+// flatten still meets its neighbour at full level afterwards; moving one half of a join onto
+// another track fades the edges that used to meet; takes + comp survive save/reopen.
 
 using Nota.Application;
 using Nota.Infrastructure;
@@ -24,6 +26,9 @@ internal static class TakeLaneTests
         foreach (var r in ThreePasses()) yield return r;
         foreach (var r in TempoChange()) yield return r;
         foreach (var r in CompBeforeBlock()) yield return r;
+        foreach (var r in RecordBeforeBlock()) yield return r;
+        foreach (var r in FlattenKeepsSeparateJoin()) yield return r;
+        foreach (var r in MoveToTrackFadesExposedEdge()) yield return r;
         foreach (var r in NoTakes()) yield return r;
         foreach (var r in SaveReopen()) yield return r;
     }
@@ -317,6 +322,102 @@ internal static class TakeLaneTests
                       && ClipIs(e, track, takes[1].Id, 1.0, 48000, 48000)
                       && ClipCount(e, track) == 3;
         yield return (shaped, "comping after a tempo change, before the next block, cuts neighbours on the new tempo");
+    }
+
+    // 48,000 frames at 48 kHz is two beats on the transport's 120 BPM and one beat at the
+    // tempo setBpm has stored. The new clip and the hole it cuts must both be that one beat.
+    private static IEnumerable<(bool, string)> RecordBeforeBlock()
+    {
+        using var e = Rig(out int track);
+        e.SetLoop(false, 0.0, 4.0);
+        if (!Record(e, track, Loop, 0.0))
+        {
+            yield return (false, "record carve: the existing clip failed");
+            yield break;
+        }
+        e.SetBpm(60);
+        const int frames = 2 * Fpb; // 48,000
+        if (!Record(e, track, frames, 0.0))
+        {
+            yield return (false, "record carve: the second recording failed");
+            yield break;
+        }
+        bool neu = false, rest = false;
+        int n = ClipCount(e, track);
+        for (int c = 0; c < n; c++)
+        {
+            if (!e.TryGetAudioClipInfo(track, c, out var ac)) continue;
+            // An untrimmed recording leaves lengthFrames at 0, meaning the whole buffer.
+            bool whole = ac.LengthFrames == frames || ac.LengthFrames == 0;
+            if (Math.Abs(ac.StartBeat) < 1e-6 && whole && Math.Abs(ac.SourceOffsetFrames) < 1.0
+                && e.TryGetSampleInfo(ac.SampleId, out var si) && si.Frames == frames)
+                neu = true;
+            if (Math.Abs(ac.StartBeat - 1.0) < 1e-6 && ac.LengthFrames == frames
+                && Math.Abs(ac.SourceOffsetFrames - frames) < 1.0)
+                rest = true;
+        }
+        yield return (e.TakeCount(track) == 0 && n == 2 && neu && rest,
+            "stopping a recording after a tempo change, before the next block, cuts one beat");
+    }
+
+    private static int ClipAt(NotaEngine e, int track, double startBeat)
+    {
+        int n = ClipCount(e, track);
+        for (int c = 0; c < n; c++)
+            if (e.TryGetAudioClipInfo(track, c, out var ac) && Math.Abs(ac.StartBeat - startBeat) < 1e-4)
+                return c;
+        return -1;
+    }
+
+    // Reverse keeps a section out of the merge. The join played full-level; flatten must too.
+    private static IEnumerable<(bool, string)> FlattenKeepsSeparateJoin()
+    {
+        using var e = Rig(out int track);
+        if (!Record(e, track, RecFrames, 1.0))
+        {
+            yield return (false, "flatten join: recording failed");
+            yield break;
+        }
+        int left = ClipAt(e, track, 0.0);
+        if (left < 0)
+        {
+            yield return (false, "flatten join: no section at beat 0");
+            yield break;
+        }
+        e.SetClipReverse(track, left, true);
+        var comp = Render(e);
+        bool full = Math.Abs(comp[0]) < 1e-3 && Math.Abs(comp[29999]) > 0.05 && Math.Abs(comp[30000]) > 0.05;
+        yield return (full,
+            $"a reversed take section stays full-level at the join (head {comp[0]:G4}, join {comp[29999]:G4}/{comp[30000]:G4})");
+        var before = Render(e);
+        yield return (e.FlattenTakes(track) && e.TakeCount(track) == 0, "flatten with one section left reversed");
+        int bad = RenderMismatch(Render(e), before);
+        yield return (bad < 0, $"flatten keeps the full-level join (first mismatch {bad})");
+    }
+
+    // The half that stays, and the half that moved, both get their edge fade back.
+    private static IEnumerable<(bool, string)> MoveToTrackFadesExposedEdge()
+    {
+        using var e = Rig(out int track);
+        if (!Record(e, track, RecFrames, 1.0))
+        {
+            yield return (false, "move fade: recording failed");
+            yield break;
+        }
+        var before = Render(e);
+        int left = ClipAt(e, track, 0.0);
+        int other = e.AddAudioTrack();
+        if (left < 0)
+        {
+            yield return (false, "move fade: no section at beat 0");
+            yield break;
+        }
+        e.MoveClipToTrack(track, left, other, 8.0);
+        var after = Render(e);
+        bool faded = Math.Abs(before[30000]) > 0.05 && Math.Abs(after[30000]) < 1e-3
+                     && Math.Abs(after[30200] - before[30200]) < 1e-3;
+        yield return (faded,
+            $"moving one half of a join onto another track fades the edge that was shared ({after[30000]:G4})");
     }
 
     private static IEnumerable<(bool, string)> NoTakes()

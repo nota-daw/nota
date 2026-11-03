@@ -1601,8 +1601,10 @@ class Engine {
     // Re-place every take and the unwarped comp sections still where their take put them on
     // authoringBpm_'s mapping (after a tempo change or an undo/redo). No undo entry.
     void placeTakesForTempo();
-    // Turn off the shared edge fade where unwarped take sections of one group meet.
-    // Message thread, on the clone about to be published — never a track the audio thread holds.
+    // Turn off the shared edge fade where unwarped take sections of one group meet, and
+    // keep a join that already played full-level when those clips still meet (flatten and
+    // delete clear the take id). Message thread. publishRaw runs it on tracks the new
+    // graph does not share with the one still playing.
     void settleTakeJoins(Track& nt);
 
     // Clip clipboard (copy/cut/paste). Holds a clone of the copied clip; kind -1 empty.
@@ -1683,7 +1685,8 @@ class Engine {
     std::vector<int32_t> insertTrackClones(
         const std::vector<std::shared_ptr<Track>>& src, int32_t afterId, int32_t rootParent, bool keepParent);
     // Carve [ns, ne) out of a track's audio clips (overwrite/comp on record + drag).
-    void overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne);
+    // `spb` is the samples-per-beat the caller used to measure `ns` and `ne`.
+    void overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne, double spb);
 
     // Loop region mirror (see loopEnabled()/loopStart()/loopEnd()).
     bool loopEnabled_ = false;

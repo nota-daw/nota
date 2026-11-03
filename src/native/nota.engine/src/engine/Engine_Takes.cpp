@@ -52,29 +52,59 @@ double Engine::authoringSamplesPerBeat() const {
 }
 
 void Engine::settleTakeJoins(Track& nt) {
-    for (auto& c : nt.clips) {
-        c.fadeHead = true;
-        c.fadeTail = true;
-    }
     const double devSR = transport_.sampleRate();
     const double spb = authoringSamplesPerBeat();
     constexpr double eps = 1e-6;
     const size_t n = nt.clips.size();
+    // Edges that already played full-level. Flatten and delete clear the take id, and the
+    // clips that stay still meet; those joins are restored after the reset below.
+    std::vector<double> headAt(n), tailAt(n);
+    std::vector<char> headOff(n, 0), tailOff(n, 0);
     for (size_t i = 0; i < n; ++i) {
-        AudioClip& a = nt.clips[i];
+        AudioClip& c = nt.clips[i];
+        if (c.sample && !c.warpEnabled) {
+            headAt[i] = c.startBeat;
+            tailAt[i] = c.startBeat + unwarpedLenBeats(c, spb, devSR);
+            headOff[i] = c.fadeHead ? 0 : 1;
+            tailOff[i] = c.fadeTail ? 0 : 1;
+        }
+        c.fadeHead = true;
+        c.fadeTail = true;
+    }
+
+    struct Item {
+        size_t index;
+        double start;
+        double end;
+        int32_t group;
+    };
+    std::vector<Item> items;
+    items.reserve(n);
+    for (size_t i = 0; i < n; ++i) {
+        const AudioClip& a = nt.clips[i];
         if (a.takeId == 0 || a.warpEnabled || !a.active) continue;
-        const AudioTake* ka = findTake(nt, a.takeId);
-        if (!ka) continue;
-        const double aEnd = a.startBeat + unwarpedLenBeats(a, spb, devSR);
+        const AudioTake* k = findTake(nt, a.takeId);
+        if (!k) continue;
+        items.push_back({i, a.startBeat, tailAt[i], k->group});
+    }
+    std::sort(items.begin(), items.end(), [](const Item& a, const Item& b) { return a.start < b.start; });
+    for (size_t a = 0; a < items.size(); ++a) {
+        for (size_t b = a + 1; b < items.size() && items[b].start <= items[a].end + eps; ++b) {
+            if (items[a].group != items[b].group) continue;
+            if (std::abs(items[b].start - items[a].end) < eps) {
+                nt.clips[items[a].index].fadeTail = false;
+                nt.clips[items[b].index].fadeHead = false;
+            }
+        }
+    }
+
+    for (size_t i = 0; i < n; ++i) {
+        if (!tailOff[i]) continue;
         for (size_t j = 0; j < n; ++j) {
-            if (i == j) continue;
-            AudioClip& b = nt.clips[j];
-            if (b.takeId == 0 || b.warpEnabled || !b.active) continue;
-            const AudioTake* kb = findTake(nt, b.takeId);
-            if (!kb || kb->group != ka->group) continue;
-            if (std::abs(b.startBeat - aEnd) < eps) {
-                a.fadeTail = false;
-                b.fadeHead = false;
+            if (i == j || !headOff[j]) continue;
+            if (std::abs(nt.clips[j].startBeat - tailAt[i]) < eps) {
+                nt.clips[i].fadeTail = false;
+                nt.clips[j].fadeHead = false;
             }
         }
     }
@@ -109,8 +139,7 @@ void Engine::placeTakesForTempo() {
         }
         for (auto& k : nt->takes)
             if (k.sample) k.beatsPerFrame = beatsPerSourceFrame(k.sample->sourceSampleRate);
-        settleTakeJoins(*nt); // joins that met still meet; recompute on the new mapping
-        g->tracks.push_back(std::move(nt));
+        g->tracks.push_back(std::move(nt)); // publishRaw settles joins on this clone
         any = true;
     }
     if (any) publishRaw(std::move(g));
@@ -173,7 +202,7 @@ bool Engine::compTake(int32_t trackId, int32_t takeId, double startBeat, double 
 
     auto nt = cloneTrack(*old);
     const double ns = k->originBeat + f0 * bpf, ne = k->originBeat + f1 * bpf;
-    overwriteAudioClipsInRange(nt->clips, ns, ne);
+    overwriteAudioClipsInRange(nt->clips, ns, ne, authoringSamplesPerBeat());
     AudioClip clip;
     clip.sample = k->sample;
     clip.startBeat = ns;
@@ -292,6 +321,15 @@ bool Engine::flattenTakes(int32_t trackId) {
             clip.startBeat = origin + static_cast<double>(lo) * bpf;
             clip.sourceOffsetFrames = static_cast<double>(lo);
             clip.lengthFrames = hi - lo;
+            // A neighbour that could not merge (reversed, moved, pitched) and met this range
+            // at full level keeps that join. publishRaw would otherwise fade both new edges.
+            const double mergedEnd = clip.startBeat + static_cast<double>(hi - lo) * bpf;
+            for (const auto& kpt : nt->clips) {
+                if (!kpt.sample || kpt.warpEnabled) continue;
+                const double kEnd = kpt.startBeat + unwarpedLenBeats(kpt, authoringSamplesPerBeat(), devSR);
+                if (!kpt.fadeTail && std::abs(kEnd - clip.startBeat) < 1e-6) clip.fadeHead = false;
+                if (!kpt.fadeHead && std::abs(kpt.startBeat - mergedEnd) < 1e-6) clip.fadeTail = false;
+            }
             nt->clips.push_back(std::move(clip));
         }
         nt->takes.erase(std::remove_if(nt->takes.begin(), nt->takes.end(), [&](const AudioTake& k) { return k.group == g; }),

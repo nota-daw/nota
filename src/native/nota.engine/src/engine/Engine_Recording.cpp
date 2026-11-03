@@ -680,7 +680,9 @@ void Engine::stopAudioRecording() {
     // Place the take and carve whatever it lands on (overwrite/comp). Loop punch: a
     // completed pass fills the loop region [loopStart, loopEnd]; a partial pass is the
     // recorded sub-range. Linear: sits where recording began, spanning the captured length.
-    const double spb = transport_.samplesPerBeat();
+    // setBpm stores the new tempo before the transport applies it. Playback will measure
+    // this clip in that tempo, so the beat range it occupies — and the carve — must too.
+    const double spb = authoringSamplesPerBeat();
     const double devSR = transport_.sampleRate();
     const double sampleSR = sample->sourceSampleRate > 0 ? sample->sourceSampleRate : devSR;
     const double beatsPerFrame = (spb > 0.0 && sampleSR > 0.0) ? devSR / sampleSR / spb : 0.0;
@@ -718,7 +720,7 @@ void Engine::stopAudioRecording() {
         ne = clip.startBeat + kept * beatsPerFrame;
     }
     if (ne <= ns) return;
-    overwriteAudioClipsInRange(nt->clips, ns, ne);
+    overwriteAudioClipsInRange(nt->clips, ns, ne, spb);
     nt->clips.push_back(clip);
     republishWithTrack(trackId, nt);
 }
@@ -753,7 +755,8 @@ void Engine::materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size
         takes.push_back(std::move(k));
     }
 
-    overwriteAudioClipsInRange(nt.clips, loopStartBeat, loopStartBeat + static_cast<double>(loopFrames) * bpf);
+    overwriteAudioClipsInRange(nt.clips, loopStartBeat,
+                               loopStartBeat + static_cast<double>(loopFrames) * bpf, authoringSamplesPerBeat());
     std::vector<std::pair<size_t, size_t>> open{{0, loopFrames}}; // loop frames no newer pass covers yet
     for (size_t i = passes.size(); i-- > 0 && !open.empty();) {
         const size_t from = passes[i].from, to = passes[i].to;
