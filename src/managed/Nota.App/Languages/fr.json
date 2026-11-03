@@ -2031,7 +2031,7 @@
     "Eight-band parametric EQ with a live spectrum.": "EQ paramétrique à huit bandes avec spectre en direct.",
     "Eight-voice drum machine with a step sequencer.": "Boîte à rythmes à huit voix avec séquenceur pas à pas.",
     "Empty the delay buffer — silences what is still circulating": "Vider le tampon de delay — coupe ce qui circule encore",
-    "Empty · drop samples or a folder, or pick a preset": "Vide · déposer des échantillons ou un dossier, ou choisir un préréglage",
+    "Empty · drop samples, a folder or an SFZ, or pick a preset": "Vide · déposer des échantillons, un dossier ou un SFZ, ou choisir un préréglage",
     "End": "Fin",
     "Enter or Esc to close": "Entrée ou Échap pour fermer",
     "Env {0} — {1}": "Env {0} — {1}",

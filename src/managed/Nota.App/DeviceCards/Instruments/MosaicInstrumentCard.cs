@@ -1181,7 +1181,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         {
             if (AllMissing() && prog.Zones.Count > 0) return Loc.T("Samples unavailable · notes muted");
             if (Loading()) return Loc.F("Loading · {0} / {1} · notes muted", NotaNum.Bytes(status.RamBytes), NotaNum.Bytes(RamEstimate()));
-            if (prog.IsEmpty) return Loc.T("Empty · drop samples or a folder, or pick a preset");
+            if (prog.IsEmpty) return Loc.T("Empty · drop samples, a folder or an SFZ, or pick a preset");
             string name = prog.Name.Length > 0 ? prog.Name + " · " : "";
             switch (tab)
             {
