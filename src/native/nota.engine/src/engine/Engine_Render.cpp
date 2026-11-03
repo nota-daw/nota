@@ -244,13 +244,28 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
     }
 }
 
-// Something on the track that holds sound after its input stops: a device that runs, or the
-// plug-in delay compensation line (#449).
+// Something on the track that holds sound after its input stops: a device that runs, or a
+// plug-in delay compensation line that is delaying (#449).
 bool hasLiveDevice(const Track& t) {
-    if (t.pdc) return true;
+    if (t.pdc && !t.pdc->isIdle()) return true;
     for (const auto& d : t.devices)
         if (d && !d->bypassed()) return true;
     return false;
+}
+
+// How settled a track's chain is once its output has gone quiet (#449): every live device
+// reports idle (Settled); some are hosted plug-ins, whose state the host can't see, and the
+// rest are idle (Opaque); or a built-in device still holds sound or never reports idle (Busy).
+enum class ChainRest : uint8_t { Settled, Opaque, Busy };
+ChainRest chainRest(const Track& t) {
+    if (t.pdc && !t.pdc->isIdle()) return ChainRest::Busy;
+    ChainRest r = ChainRest::Settled;
+    for (const auto& d : t.devices) {
+        if (!d || d->bypassed() || d->isIdle()) continue;
+        if (d->pluginIdentifier().empty()) return ChainRest::Busy;
+        r = ChainRest::Opaque;
+    }
+    return r;
 }
 
 } // namespace
@@ -2318,7 +2333,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     t.sessionPlayer->localBeats += frames / spb;
                     sessionPostRender(t, frames / spb);
                 }
-                t.tailQuietFrames = -1; // muted: its tail is gone, not saved for the unmute
+                *t.tailQuiet = -1; // muted: its tail is gone, not saved for the unmute
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
@@ -2351,10 +2366,10 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 w.path = LeafPath::Instrument;
             } else if (playing && arrangementActive) {
                 w.path = LeafPath::AudioClips;
-            } else if (t.tailQuietFrames >= 0 && hasLiveDevice(t)) {
+            } else if (*t.tailQuiet >= 0 && hasLiveDevice(t)) {
                 w.path = LeafPath::Tail; // its effects ring out on silence (#449)
             } else {
-                t.tailQuietFrames = -1;
+                *t.tailQuiet = -1;
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
@@ -2508,12 +2523,19 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             //      the tail path the chain's output is watched until it has been quiet long
             //      enough, and the track goes back to costing nothing.
             if (w.path == LeafPath::Tail) {
-                if (simd_audio::peakAbs(post, frames * 2) > kTailFloor) t.tailQuietFrames = 0;
-                else t.tailQuietFrames += frames;
-                if (t.tailQuietFrames >= static_cast<int64_t>(kTailQuietSeconds * transport_.sampleRate()))
-                    t.tailQuietFrames = -1;
+                int64_t& quiet = *t.tailQuiet;
+                if (simd_audio::peakAbs(post, frames * 2) > kTailFloor) quiet = 0;
+                else quiet += frames;
+                if (quiet > 0) {
+                    const double sr = transport_.sampleRate();
+                    const ChainRest rest = chainRest(t);
+                    if (rest == ChainRest::Settled ||
+                        (rest == ChainRest::Opaque && quiet >= static_cast<int64_t>(kTailQuietSeconds * sr)) ||
+                        quiet >= static_cast<int64_t>(kTailMaxQuietSeconds * sr))
+                        quiet = -1;
+                }
             } else if (w.path == LeafPath::AudioClips || w.path == LeafPath::SessionAudio || w.path == LeafPath::Monitor)
-                t.tailQuietFrames = 0;
+                *t.tailQuiet = 0;
 
             // 2c) Freeze capture (M7): stash this track's post-device, pre-fader signal
             //     into the freeze buffer. Sequential from a seek(0) render, so the write

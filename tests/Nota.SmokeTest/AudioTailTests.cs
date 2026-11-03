@@ -14,7 +14,7 @@ namespace Nota.SmokeTest;
 
 internal static class AudioTailTests
 {
-    private const int Rate = 44100, Block = 512, Reverb = 2;
+    private const int Rate = 44100, Block = 512, Reverb = 2, Delay = 3;
 
     public static IEnumerable<(bool ok, string label)> Run()
     {
@@ -33,12 +33,24 @@ internal static class AudioTailTests
             yield return (Rms(dry, 0, Rate) == 0, "an audio track without effects is silent at once after Stop");
 
             yield return (NeverPlayed(), "an audio track with a reverb that never played stays silent while stopped");
+
+            // Greptile on #469: an edit after Stop makes a new version of the track; the tail
+            // has to ring on through it rather than reset.
+            var (edited, _) = AfterStop(wav, withReverb: true, seconds: 1, thenSeconds: 0, editAfterStop: true);
+            yield return (Rms(edited, Rate / 2, Rate) > 1e-4,
+                $"…and keeps ringing when a clip is edited after Stop (0.5–1 s rms {Rms(edited, Rate / 2, Rate):G3})");
+
+            // Two 2 s delays in series: the first echo comes out about 4 s after the input, so
+            // more than 3 s of silence at the output is not the end of the tail.
+            double late = LateEcho(wav);
+            yield return (late > 1e-3, $"two 2 s delays in series still sound their echo ~4 s after Stop (rms {late:F4})");
         }
         finally { try { File.Delete(wav); } catch { } }
     }
 
     // The first second after Stop, and whether the last 2 s of `thenSeconds` more are all zero.
-    private static (float[] After, bool QuietAtEnd) AfterStop(string wav, bool withReverb, int seconds, int thenSeconds)
+    private static (float[] After, bool QuietAtEnd) AfterStop(string wav, bool withReverb, int seconds, int thenSeconds,
+        bool editAfterStop = false)
     {
         using var e = new NotaEngine();
         e.SetBpm(120);
@@ -54,6 +66,11 @@ internal static class AudioTailTests
         e.Play();
         Render(e, seconds * Rate);
         e.StopTransport();
+        if (editAfterStop)
+        {
+            Render(e, Block);
+            e.SetClipGain(t, 0, 0.5f);
+        }
         var after = Render(e, Rate);
         bool quiet = true;
         if (thenSeconds > 0)
@@ -63,6 +80,31 @@ internal static class AudioTailTests
             quiet = end.All(v => v == 0f);
         }
         return (after, quiet);
+    }
+
+    // RMS of the 3.5–4.5 s after Stop, with 0.25 s of the tone played into two delays in series.
+    private static double LateEcho(string wav)
+    {
+        using var e = new NotaEngine();
+        e.SetBpm(120);
+        int t = e.AddAudioTrack();
+        e.AddAudioClip(t, wav, 0.0);
+        for (int k = 0; k < 2; k++)
+        {
+            int d = e.AddBuiltinDevice(t, Delay);
+            SetByName(e, t, d, "sync", 0f);
+            SetByName(e, t, d, "time l", 1f);
+            SetByName(e, t, d, "time r", 1f);
+            SetByName(e, t, d, "feedback", 0f);
+            SetByName(e, t, d, "wow depth", 0f);
+            SetByName(e, t, d, "wet only", 1f);
+        }
+        e.Seek(0.0);
+        e.Play();
+        Render(e, Rate / 4);
+        e.StopTransport();
+        var after = Render(e, 5 * Rate);
+        return Rms(after, Rate * 7 / 2, Rate * 9 / 2);
     }
 
     private static bool NeverPlayed()

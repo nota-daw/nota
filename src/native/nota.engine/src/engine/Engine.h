@@ -2146,9 +2146,13 @@ class Engine {
     // Parallel Pass 1 : per-leaf work items, sized on the message
     // thread (no audio-thread allocation).
     enum class LeafPath : uint8_t { Skip, Frozen, Monitor, SessionInst, SessionAudio, Instrument, AudioClips, Tail };
-    // A stopped audio track's effects ring out (#449, LeafPath::Tail) until their output has
-    // stayed under kTailFloor (-100 dBFS) this long: long enough for a delay's next repeat.
+    // A stopped audio track's effects ring out (#449, LeafPath::Tail) while its output is over
+    // kTailFloor (-100 dBFS) or a device still holds sound. Built-in devices say when they have
+    // settled (Device::isIdle, which counts a delay's time in flight); a hosted plug-in can't,
+    // so for it the output has to stay quiet kTailQuietSeconds; and a device that never reports
+    // idle (an LFO's clock) lets the track go after kTailMaxQuietSeconds of quiet.
     static constexpr double kTailQuietSeconds = 3.0;
+    static constexpr double kTailMaxQuietSeconds = 30.0;
     static constexpr float kTailFloor = 1.0e-5f;
     struct LeafWork {
         Track* t = nullptr;

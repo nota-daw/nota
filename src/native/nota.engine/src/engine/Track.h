@@ -219,9 +219,10 @@ class Track {
 
     // Effects on an audio track ring out after the track stops sounding (#449): -1 when there
     // is no tail to play, else how long (frames) the chain's output has been silent. Set to 0
-    // by every block the track plays; the chain then runs on silence until it has been quiet
-    // for Engine::kTailQuietSeconds. Audio thread only.
-    int64_t tailQuietFrames = -1;
+    // by every block the track plays; the chain then runs on silence until its devices have
+    // settled (see Engine::kTailQuietSeconds). Audio thread only; shared by every version of
+    // the track (edits, undo), so an edit while a tail rings doesn't cut it.
+    std::shared_ptr<int64_t> tailQuiet = std::make_shared<int64_t>(-1);
 
     // The untargeted live notes (keyboard, MIDI) the track was given and not yet the note-off
     // of, and whether it was disarmed with them down (#366): released on its next render.

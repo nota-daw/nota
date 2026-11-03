@@ -690,6 +690,7 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
     nt->liveHeld = t.liveHeld;           // shared — held live notes persist (#366)
+    nt->tailQuiet = t.tailQuiet;         // shared — an effect tail rings on through edits (#449)
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
     nt->frozenSpb = t.frozenSpb;
