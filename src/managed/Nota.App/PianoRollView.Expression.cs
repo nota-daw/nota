@@ -55,8 +55,11 @@ public sealed partial class PianoRollView
 
     // The Bend lane's picked range is remembered per clip for the session, like its scroll and
     // zoom (s_view): the roll is rebuilt for every clip it opens. A multi-clip view has no clip
-    // identity and keeps its pick for as long as it is open.
-    private static readonly Dictionary<(int, int), double> s_bendPick = new();
+    // identity and keeps its pick for as long as it is open. A clip index is not a lasting
+    // identity (a moved clip goes to the end of its track), so a pick also holds the clip's
+    // start and applies only while the clip at that index still starts there: a pick is then
+    // lost by a moved clip rather than handed to the clip that took its index.
+    private static readonly Dictionary<(int, int), (double Start, double Range)> s_bendPick = new();
     private double _bendPick = BendLaneRange.Default;
 
     /// <summary>Forgets every clip's picked Bend range: a load or new project reuses track ids,
@@ -65,11 +68,12 @@ public sealed partial class PianoRollView
 
     private double BendPick
     {
-        get => _clipKey.Item1 != int.MinValue && s_bendPick.TryGetValue(_clipKey, out var r) ? r : _bendPick;
+        get => _clipKey.Item1 != int.MinValue && s_bendPick.TryGetValue(_clipKey, out var p)
+               && Math.Abs(p.Start - _set.ActiveClip.StartBeat) < 1e-9 ? p.Range : _bendPick;
         set
         {
             _bendPick = value;
-            if (_clipKey.Item1 != int.MinValue) s_bendPick[_clipKey] = value;
+            if (_clipKey.Item1 != int.MinValue) s_bendPick[_clipKey] = (_set.ActiveClip.StartBeat, value);
         }
     }
 

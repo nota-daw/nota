@@ -88,6 +88,9 @@ The user picks ±24 on a clip, opens another clip and comes back: the first clip
   view.
 - **Pressure and Slide lanes**: no label, no menu; their scale is 0..1.
 - **During a gesture** the range does not change, as before.
+- **A moved clip**: a clip is known by its track and index, and a move changes the index.
+  A pick holds only while the clip at that index starts where it did, so a moved clip opens at
+  the default and no other clip inherits its pick.
 
 ## Requirements
 

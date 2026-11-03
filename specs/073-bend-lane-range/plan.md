@@ -27,7 +27,10 @@ Shortcuts texts. Manual check in the running app.
   was inline in the lane.
 - `PianoRollView.Expression.cs`:
   - `BendPick` — the picked range, kept per clip in a static map keyed like `s_view`
-    (`_clipKey`); a view without a clip identity (track mode) keeps it on the instance.
+    (`_clipKey`), with the clip's start beat: the pick applies only while the clip at that
+    index still starts there, so a moved clip (which takes a new index) loses its pick instead
+    of handing it to the clip that took its index. A view without a clip identity (track mode)
+    keeps it on the instance.
     `ForgetBendPicks` clears the map from `MainWindow.RefreshAfterLoad`, so a clip in another
     project with the same track id and index opens at the default.
   - `ExpressionLane.UpdateRange` stores the largest bend and shows `BendLaneRange.Shown`.
