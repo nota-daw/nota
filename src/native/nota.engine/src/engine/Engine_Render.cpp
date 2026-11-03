@@ -1636,65 +1636,61 @@ void Engine::mixAudioClip(
         const int64_t cacheBase = std::llround(ovStart) - startF; // 0-based into the cache
         const float* csamp = wc.data();
         const float g = clip.gain * extraGain;
-        // Reverse reads the same cache back-to-front: the window is already the played
-        // length, so mirroring the index is exact (no resample).
-        auto sampleAt = [&](int32_t j, int64_t& ci, float& l, float& r) -> bool {
-            ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
-            if (ci < 0 || ci >= wc.frames) return false;
-            l = csamp[ci * 2];
-            r = csamp[ci * 2 + 1];
-            return true;
-        };
-        auto store = [&](int32_t j, float l, float r) {
-            dst[(dstOff + j) * 2] += l * g;
-            dst[(dstOff + j) * 2 + 1] += r * g;
-        };
         // A split fade is a few milliseconds of attack or release with the sustain left at
-        // full level. Decay cannot leave 1 either, so the body is a straight read and only
-        // the edges call the envelope. A per-sample test was still ~11% more instructions
-        // on audio-warp-split; the spans below keep that test out of the body. The extra
-        // sample on each edge covers a rounding step, and a body sample it pulls in has
-        // sustain gain 1, so multiplying it changes nothing.
-        const bool unityBody = hasAdsr && clip.adsr.sustain >= 1.0f && !hasVol && !hasPan;
-        if (unityBody) {
-            const double attackEnd = startSamples + clip.adsr.attack * spb;
-            const double releaseStart = startSamples + clipDeviceLen - clip.adsr.release * spb;
-            int32_t head = 0;
-            int32_t tail = segLen;
+        // full level, so the body is unity. It is its own loop, with no envelope test and no
+        // helper call: folding the test into the sample loop cost audio-warp-split +11%, and
+        // a body loop that reloaded its pointers cost another +3.6%. The extra sample on
+        // each edge covers a rounding step; a body sample it pulls in has sustain gain 1.
+        // Every other clip takes the original loop below, unchanged.
+        if (hasAdsr && clip.adsr.sustain >= 1.0f && !hasVol && !hasPan) {
+            int32_t head = 0, tail = segLen;
             if (clip.adsr.attack > 0.0) {
-                const double n = attackEnd + 1.0 - ovStart; // j < n
-                if (n > 0.0) head = std::min(segLen, static_cast<int32_t>(std::ceil(n - 1e-9)));
+                const double n = startSamples + clip.adsr.attack * spb + 1.0 - ovStart; // j < n
+                if (n >= static_cast<double>(segLen)) head = segLen;
+                else if (n > 0.0) {
+                    const int32_t v = static_cast<int32_t>(n);
+                    head = static_cast<double>(v) == n ? v : v + 1;
+                }
             }
             if (clip.adsr.release > 0.0) {
-                const double n = releaseStart - 1.0 - ovStart; // j > n
-                if (n < static_cast<double>(segLen))
-                    tail = std::clamp(static_cast<int32_t>(std::floor(n)) + 1, 0, segLen);
+                const double n = startSamples + clipDeviceLen - clip.adsr.release * spb - 1.0 - ovStart; // j > n
+                if (n < 0.0) tail = 0;
+                else if (n < static_cast<double>(segLen)) tail = static_cast<int32_t>(n) + 1;
             }
-            if (head > tail) head = segLen, tail = segLen; // edges overlap: the whole block fades
-            auto edge = [&](int32_t j0, int32_t j1) {
-                for (int32_t j = j0; j < j1; ++j) {
-                    int64_t ci;
-                    float l, r;
-                    if (!sampleAt(j, ci, l, r)) continue;
-                    applyEnv(ovStart + j, l, r);
-                    store(j, l, r);
-                }
-            };
-            edge(0, head);
+            if (head > tail) head = tail = segLen; // edges overlap: the whole block fades
+            for (int32_t j = 0; j < head; ++j) {
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                applyEnv(ovStart + j, l, r);
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
+            }
             for (int32_t j = head; j < tail; ++j) {
-                int64_t ci;
-                float l, r;
-                if (!sampleAt(j, ci, l, r)) continue;
-                store(j, l, r);
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                const float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
             }
-            edge(tail, segLen);
+            for (int32_t j = tail; j < segLen; ++j) {
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                applyEnv(ovStart + j, l, r);
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
+            }
         } else {
             for (int32_t j = 0; j < segLen; ++j) {
-                int64_t ci;
-                float l, r;
-                if (!sampleAt(j, ci, l, r)) continue;
+                // Reverse reads the same cache back-to-front: the window is already the
+                // played length, so mirroring the index is exact (no resample).
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
                 if (hasEnv) applyEnv(ovStart + j, l, r);
-                store(j, l, r);
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
             }
         }
         return;
