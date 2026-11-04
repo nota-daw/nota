@@ -46,7 +46,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     [ObservableProperty] private bool _recordOn;
     /// <summary>Which clock the position readout is showing, printed under it so the
     /// number is never ambiguous (transport console, mockup 1b).</summary>
-    [ObservableProperty] private string _positionUnitText = Loc.T("bars");
+    [ObservableProperty] private string _positionUnitText = Loc.T("transport.bars");
 
     private bool _revertingRec;
 
@@ -152,9 +152,9 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         _revertingRec = true; RecordOn = false; _revertingRec = false;
         Message?.Invoke(_engine.RecordStartStatus switch
         {
-            1 => Loc.T("Can't record: arm a track first (click Arm on a track header)."),
-            2 => Loc.T("Can't record: no audio input — grant microphone access (needs a bundled app)."),
-            _ => Loc.T("Recording didn't start."),
+            1 => Loc.T("transport.cant_record_arm_a_track"),
+            2 => Loc.T("transport.cant_record_no_audio_input"),
+            _ => Loc.T("transport.recording_didnt_start"),
         });
     }
 
@@ -180,7 +180,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
             double here = _engine.PositionBeats;
             StopAll();
             if (!counting) _engine.Seek(here);   // a count-in hasn't moved anything yet
-            Message?.Invoke(Loc.T("Paused · Play carries on from here"));
+            Message?.Invoke(Loc.T("transport.paused_play_carries_on_from"));
         }
         else _engine.PlayWithCountIn();
     }
@@ -214,7 +214,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     {
         ShowTimeDisplay = !ShowTimeDisplay;
         if (IsCountingIn) return;         // the readout is showing the count-in; Tick restores it
-        PositionUnitText = ShowTimeDisplay ? Loc.T("time") : Loc.T("bars");
+        PositionUnitText = ShowTimeDisplay ? Loc.T("transport.time") : Loc.T("transport.bars");
         UpdatePositionText(_lastBeats);   // reflect immediately, don't wait for the next tick
     }
 
@@ -228,7 +228,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         IsCountingIn = countIn > 0;
         if (IsCountingIn) PositionText = CountInText(countIn);
         else UpdatePositionText(beats);
-        if (IsCountingIn != wasCounting) PositionUnitText = IsCountingIn ? Loc.T("count-in") : ShowTimeDisplay ? Loc.T("time") : Loc.T("bars");
+        if (IsCountingIn != wasCounting) PositionUnitText = IsCountingIn ? Loc.T("transport.count_in") : ShowTimeDisplay ? Loc.T("transport.time") : Loc.T("transport.bars");
         IsPlaying = _engine.IsPlaying || IsCountingIn;   // the Play button lights from the first click
         PlayLabel = IsPlaying ? "■ Stop" : "▶ Play";
         // The loop record mode can also be set from outside the UI (MCP): follow the engine.

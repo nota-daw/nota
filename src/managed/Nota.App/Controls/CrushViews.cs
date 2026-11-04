@@ -180,7 +180,7 @@ internal sealed class CrQuantView : Control
         double rate = _sr / _hold;
         NotaGraph.Legend(ctx, w - 6, 3, ("source", NotaPalette.TextSecondary, NotaGraph.Mark.Dashed),
             (NotaNum.F($"{_bits:0.0} bit @ {CrushMath.Hz(rate)}"), NotaPalette.VizInk, NotaGraph.Mark.Line));
-        if (enlarged) NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, Loc.T("level step shown enlarged"));
+        if (enlarged) NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomLeft, Loc.T("device.crush.level_step_shown_enlarged"));
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.BottomRight, "10\u2009ms");
     }
 }

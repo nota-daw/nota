@@ -104,17 +104,17 @@ public sealed class ClipAi(IAudioEngine engine, IModelStore models) : IClipAi
     {
         var src = (StemSource)job;
         var (runtime, model) = Require(AiModels.Stems);
-        progress?.Report((0, Loc.T("Preparing audio…")));
+        progress?.Report((0, Loc.T("ai.clip_ai.preparing_audio")));
         double sr = src.SampleRate;
         var l = Resampler.Convert(src.Left, sr, StemSeparator.SampleRate, ct);
         var r = Resampler.Convert(src.Right, sr, StemSeparator.SampleRate, ct);
 
         float[][][] stems;
-        progress?.Report((0, Loc.T("Loading the model…")));
+        progress?.Report((0, Loc.T("ai.clip_ai.loading_the_model")));
         using (var sep = new StemSeparator(runtime, model))
-            stems = sep.Separate(l, r, new Progress(p => progress?.Report((p, Loc.T("Separating stems…")))), ct);
+            stems = sep.Separate(l, r, new Progress(p => progress?.Report((p, Loc.T("ai.clip_ai.separating_stems")))), ct);
 
-        progress?.Report((1, Loc.T("Writing stems…")));
+        progress?.Report((1, Loc.T("ai.clip_ai.writing_stems")));
         var files = new StemFiles { Paths = new string[StemSeparator.Stems.Length] };
         try
         {

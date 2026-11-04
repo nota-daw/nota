@@ -49,7 +49,7 @@ internal static class TrackArming
     public static void ForgetSelection() => _followed = -1;
 
     /// <summary>The arm buttons' tooltip, with the platform's modifier spelled out.</summary>
-    public static string Tip => MenuKit.Keys(Loc.T("Arm for recording · ⌘-click to arm several tracks · ⌥-click to arm one track of a linked group"));
+    public static string Tip => MenuKit.Keys(Loc.T("track_arming.arm_for_recording_click_to"));
 
     /// <summary>⌘ on macOS, Ctrl elsewhere: the "add to the armed set" modifier.</summary>
     public static bool IsAdditive(Avalonia.Input.KeyModifiers m)

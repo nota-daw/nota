@@ -51,14 +51,14 @@ public sealed class SplashWindow : Window
         var words = new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
         words.Children.Add(new TextBlock
         {
-            Text = Loc.T("Nota"),
+            Text = Loc.T("common.nota"),
             FontSize = 24,
             FontWeight = FontWeight.SemiBold,
             Foreground = NotaPalette.TextPrimary,
         });
         words.Children.Add(new TextBlock
         {
-            Text = Loc.F("Version {0}", AppInfo.Version),
+            Text = Loc.F("common.version", AppInfo.Version),
             FontSize = 12,
             Foreground = NotaPalette.TextTertiary,
         });
@@ -113,7 +113,7 @@ public sealed class SplashWindow : Window
         stack.Children.Add(logo);
         stack.Children.Add(new TextBlock
         {
-            Text = Loc.T("Nota"),
+            Text = Loc.T("common.nota"),
             FontSize = 30,
             FontWeight = FontWeight.SemiBold,
             Foreground = NotaPalette.TextPrimary,
@@ -121,7 +121,7 @@ public sealed class SplashWindow : Window
         });
         stack.Children.Add(new TextBlock
         {
-            Text = Loc.F("Version {0}", AppInfo.Version),
+            Text = Loc.F("common.version", AppInfo.Version),
             FontSize = 12,
             Foreground = NotaPalette.TextTertiary,
             HorizontalAlignment = HorizontalAlignment.Center,

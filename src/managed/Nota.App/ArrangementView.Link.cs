@@ -171,7 +171,7 @@ public sealed partial class ArrangementView
     }
 
     /// <summary>The tooltip of every Link key (Arrangement and Mixer).</summary>
-    internal static string LinkTip => MenuKit.Keys(Loc.T("Link tracks — arming and clip edits act on every track of the group · ⌥-click a clip or an arm to act on one track"));
+    internal static string LinkTip => MenuKit.Keys(Loc.T("arrangement.link.link_tracks_arming_and_clip"));
 
     /// <summary>Turns a group's Link on or off (one undo step) and says so.</summary>
     internal void SetGroupLink(int groupId, bool on)
@@ -180,7 +180,7 @@ public sealed partial class ArrangementView
         _ = Link;   // what the selection was linked by, so Refresh can reconcile it with the new sets
         if (!_engine.SetTrackEditLink(groupId, on)) return;
         Refresh();
-        if (on) StatusMessage?.Invoke(Loc.T("The group's tracks are linked"));
+        if (on) StatusMessage?.Invoke(Loc.T("arrangement.link.the_groups_tracks_are_linked"));
     }
 
     /// <summary>The group header's Link key: a chain-link chip, accent-filled while on.</summary>
@@ -219,7 +219,7 @@ public sealed partial class ArrangementView
             Foreground = NotaPalette.TextSecondary, Margin = new Thickness(0, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center,
         };
         string group = _engine is { } eng ? eng.GetTrackName(Link.RootOf(t.Id)) : "";
-        ToolTip.SetTip(mark, Loc.F("Linked with {0}", group.Length > 0 ? group : Loc.T("Group")));
+        ToolTip.SetTip(mark, Loc.F("arrangement.link.linked_with", group.Length > 0 ? group : Loc.T("common.group")));
         return mark;
     }
 

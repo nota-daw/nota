@@ -53,7 +53,7 @@ public sealed class ModelStore : IModelStore
 
     public long DownloadSize(string id)
     {
-        var m = Find(id) ?? throw new StoreException(Loc.F("Unknown AI model \"{0}\".", id));
+        var m = Find(id) ?? throw new StoreException(Loc.F("model_store.unknown_ai_model", id));
         long size = Installed(m) ? 0 : m.Asset.Size;
         if (id != AiModels.Runtime && _runtime is not null && !Installed(_runtime)) size += _runtime.Asset.Size;
         return size;
@@ -65,9 +65,9 @@ public sealed class ModelStore : IModelStore
 
     public async Task InstallAsync(string id, IProgress<StoreProgress>? progress = null, CancellationToken ct = default)
     {
-        var model = Find(id) ?? throw new StoreException(Loc.F("Unknown AI model \"{0}\".", id));
+        var model = Find(id) ?? throw new StoreException(Loc.F("model_store.unknown_ai_model", id));
         if (id != AiModels.Runtime && _runtime is null)
-            throw new StoreException(Loc.T("AI models aren't available for this computer: ONNX Runtime has no build for it."));
+            throw new StoreException(Loc.T("model_store.ai_models_arent_available_for"));
         await _installGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -99,7 +99,7 @@ public sealed class ModelStore : IModelStore
 
     private async Task InstallOneAsync(CatalogModel m, IProgress<StoreProgress>? progress, CancellationToken ct)
     {
-        if (!RegistryClient.IsValidId(m.Info.Id)) throw new StoreException(Loc.F("Invalid model id \"{0}\".", m.Info.Id));
+        if (!RegistryClient.IsValidId(m.Info.Id)) throw new StoreException(Loc.F("model_store.invalid_model_id", m.Info.Id));
         var work = Directory.CreateTempSubdirectory("nota-model-").FullName;
         var staging = Path.Combine(_root, ".staging-" + m.Info.Id);
         try
@@ -116,17 +116,17 @@ public sealed class ModelStore : IModelStore
             }
             else
             {
-                progress?.Report(new StoreProgress(-1, Loc.F("Unpacking {0}…", m.Info.Name)));
+                progress?.Report(new StoreProgress(-1, Loc.F("common.unpacking", m.Info.Name)));
                 var unpacked = Path.Combine(work, "x");
                 await Task.Run(() => ArchiveUnpacker.Unpack(file, a.Archive, unpacked, ct), ct).ConfigureAwait(false);
                 foreach (var keep in a.Keep)
                 {
                     var src = RegistryClient.Resolve(unpacked, keep);
-                    if (!File.Exists(src)) throw new StoreException(Loc.F("The download of {0} doesn't contain {1}.", m.Info.Name, keep));
+                    if (!File.Exists(src)) throw new StoreException(Loc.F("model_store.the_download_of_doesnt_contain", m.Info.Name, keep));
                     File.Copy(src, Path.Combine(staging, Path.GetFileName(src)));
                 }
             }
-            if (!File.Exists(Path.Combine(staging, a.Entry))) throw new StoreException(Loc.F("The download of {0} doesn't contain {1}.", m.Info.Name, a.Entry));
+            if (!File.Exists(Path.Combine(staging, a.Entry))) throw new StoreException(Loc.F("model_store.the_download_of_doesnt_contain", m.Info.Name, a.Entry));
             File.WriteAllText(Path.Combine(staging, MarkerFile), a.Sha256);
 
             var final = FolderOf(m);
@@ -153,7 +153,7 @@ public sealed class ModelStore : IModelStore
             if (m is not null && !Installed(m)) need += m.Asset.Size + m.Info.UnpackedSize;
         need += need / 20;
         if (FreeBytes(_root) is { } free && free < need)
-            throw new StoreException(Loc.F("Installing this model needs {0} of free disk space, and there is {1}.", Mb(need), Mb(free)));
+            throw new StoreException(Loc.F("model_store.installing_this_model_needs_of", Mb(need), Mb(free)));
     }
 
     private static long? FreeBytes(string path)
@@ -193,7 +193,7 @@ public sealed class ModelStore : IModelStore
         try { Directory.Delete(dir, recursive: true); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            throw new StoreException(Loc.F("Couldn't remove {0} — it may be in use. Restart Nota and try again.", m.Info.Name), e);
+            throw new StoreException(Loc.F("model_store.couldnt_remove_it_may_be", m.Info.Name), e);
         }
     }
 }

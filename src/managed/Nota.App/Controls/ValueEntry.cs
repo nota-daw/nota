@@ -204,7 +204,7 @@ internal static partial class ValueEntry
     /// <paramref name="reset"/> — by default the slider's own Reset — is what a double-click and the menu run.</summary>
     public static void Attach(TextBlock readout, Func<double> norm, Action<double> setNorm, Func<string> text,
         Action? begin = null, Action? end = null, Action? after = null, Action? reset = null, Control? control = null, string? name = null)
-        => Attach(control ?? readout, Probing(name ?? Loc.T("Value"), norm, setNorm, text, begin, end, after, reset ?? (control as SliderTrack)?.Reset), readout);
+        => Attach(control ?? readout, Probing(name ?? Loc.T("control.value_entry.value"), norm, setNorm, text, begin, end, after, reset ?? (control as SliderTrack)?.Reset), readout);
 
     /// <summary>A field typed by probing <paramref name="setNorm"/> + <paramref name="text"/>.</summary>
     public static ValueField Probing(string name, Func<double> norm, Action<double> setNorm, Func<string> text,
@@ -295,10 +295,10 @@ internal static partial class ValueEntry
 
     private static IEnumerable<Control> MenuItems(ValueField field, Action open, IReadOnlyList<ValueField>? all = null)
     {
-        yield return MenuKit.Item(Loc.T("Type value…"), GlyphKind.Edit, open);
+        yield return MenuKit.Item(Loc.T("common.type_value"), GlyphKind.Edit, open);
         var fs = all ?? [field];
-        if (field.Clear is not null) yield return MenuKit.Danger(Loc.T("Clear"), GlyphKind.Trash, () => Clear(field));
-        else yield return MenuKit.Item(Loc.T("Reset to default"), GlyphKind.Cycle, () => ResetAll(fs),
+        if (field.Clear is not null) yield return MenuKit.Danger(Loc.T("common.clear"), GlyphKind.Trash, () => Clear(field));
+        else yield return MenuKit.Item(Loc.T("control.value_entry.reset_to_default"), GlyphKind.Cycle, () => ResetAll(fs),
             enabled: fs.Any(f => f.CanReset && !AtDefault(f)));
     }
 
@@ -312,7 +312,7 @@ internal static partial class ValueEntry
     private static void ShowMenu(Control control, ValueField field, Action open, IReadOnlyList<ValueField>? all = null)
     {
         var fly = new MenuFlyout();
-        fly.Items.Add(MenuKit.Header(field.Name, null, Loc.T("Parameter")));
+        fly.Items.Add(MenuKit.Header(field.Name, null, Loc.T("control.value_entry.parameter")));
         fly.Items.Add(new Separator());
         foreach (var c in MenuItems(field, open, all)) fly.Items.Add(c);
         fly.ShowAt(control, showAtPointer: true);

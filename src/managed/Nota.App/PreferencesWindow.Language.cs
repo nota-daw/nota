@@ -39,11 +39,11 @@ public sealed partial class PreferencesWindow
         var canRelaunch = AppRestart.CanRelaunch;
         var pending = new TextBlock
         {
-            Text = canRelaunch ? Loc.T("Applies after restart") : Loc.T("Applies the next time Nota starts"),
+            Text = canRelaunch ? Loc.T("preferences.language.applies_after_restart") : Loc.T("preferences.language.applies_the_next_time_nota"),
             FontSize = 11, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center,
             TextWrapping = Avalonia.Media.TextWrapping.Wrap,
         };
-        var restart = Btn(Loc.T("Restart"));
+        var restart = Btn(Loc.T("preferences.language.restart"));
         restart.Height = 24;
         restart.Padding = new Avalonia.Thickness(10, 0);
         restart.Click += (_, _) =>

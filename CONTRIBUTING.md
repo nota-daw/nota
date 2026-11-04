@@ -119,30 +119,50 @@ Give it the issue number up front; don't override that check.
 
 ## Translating Nota
 
-The desktop app's interface is translated through one mechanism (spec
-[068](specs/068-ui-language/)): the English text in the code is the key, and each language is one
-JSON file, `src/managed/Nota.App/Languages/<code>.json`, embedded in the app. English needs no
-file of strings; French is `fr.json`.
+The desktop app's interface is translated through one mechanism (specs
+[068](specs/068-ui-language/) and [077](specs/077-key-based-localization/)): every text is asked
+for by a **key**, and its English lives in one file, the English reference
+`src/managed/Nota.Application/Localization/en.json`. Each other language is one JSON file of the
+same keys, `src/managed/Nota.App/Languages/<code>.json` (French is `fr.json`); the languages are
+moving to their own repository, [nota-daw/nota-translations](https://github.com/nota-daw/nota-translations),
+from the next release.
 
-- **Every new user-visible text goes through `Loc`.** Write `Loc.T("Save")` for a text,
-  `Loc.F("Delete {0} clips?", n)` for a text with values (the whole sentence is the key, never
-  a piece of it) and `Loc.Plural(n, "{0} clip", "{0} clips")` for a counted text; in XAML write
-  `{app:T 'Save'}`. The smoke test fails on a new plain literal that reads as interface text, and
-  on a `Loc` text that French does not cover. Text that is not translated on purpose — user
-  content, device and parameter names, proper nouns, units, logs, the Remote web page and MCP
-  — is listed with its reason as `# data:` in `tests/Nota.SmokeTest/LocalizationAllowList.txt`.
-- **Add a language**: copy `fr.json` to `<code>.json` (two lowercase letters), set `code` and
-  `name` (the language's own name, shown in Preferences → Appearance → Language), translate
-  the strings you can and delete the rest — anything missing shows in English. Plural rules
-  live in `UiLanguage.Plural`; a language without a rule counts like English. Also list the code in
-  `CFBundleLocalizations` of `scripts/bundle-mac.sh` and `scripts/package-dmg.sh` (the smoke test checks it), so
-  macOS shows its own text — Hide, Quit, the open panels — in that language too. The file format
-  is in [specs/068-ui-language/contracts/translation-file.md](specs/068-ui-language/contracts/translation-file.md).
-- **Translate or fix a string**: edit its value in the language file. Keep the placeholders
-  (`{0}`, `{1}`) and give a counted text both forms (`one`, `other`; French counts 0 and 1 as
-  one). Follow the glossary in [specs/068-ui-language/glossary.md](specs/068-ui-language/glossary.md)
-  (infinitive for actions, sentence case, a narrow no-break space before `:` `;` `?` `!`).
-  Device and parameter names stay in English.
+- **Every new user-visible text goes through `Loc`, by key.** Add the key and its English to
+  `en.json`, then write `Loc.T("preferences.language.restart")` for a text,
+  `Loc.F("arrangement.delete_clips", n)` for a text with values (`"Delete {0} clips?"` — the whole
+  sentence, never a piece of it) and `Loc.Plural("arrangement.clips", n)` for a counted text
+  (`{ "one": "{0} clip", "other": "{0} clips" }` in `en.json`); in XAML write
+  `{app:T 'main.save_as'}`. The key is always a plain literal.
+- **Keys**: lower-case, dot-separated, area first, then what the text says —
+  `<area>[.<sub-area>].<what>`, segments of `a-z 0-9 _`, up to 80 characters. The area is the
+  window or view the text belongs to (`preferences`, `arrangement`, `main.menu`,
+  `device.reverb`); a text used the same way in three or more areas is `common.<what>`
+  (`common.cancel`). Two meanings of one English word are two keys (`menu.open`, `clip.open`) —
+  there are no contexts.
+- **Changing English**: edit the text in `en.json` only; no call site and no translation file
+  changes, and every translation stays attached. If the *meaning* or the placeholders change,
+  make a new key instead and delete the old one, so translators see a new text rather than a
+  stale one.
+- The smoke test fails on a key used in the code that is not in `en.json`, an `en.json` key
+  nothing uses, a key used against its shape (a counted text through `Loc.T`, a pattern with
+  `{0}` through `Loc.T`), a new plain literal that reads as interface text, and a key French does
+  not cover. Text that is not translated on purpose — user content, device and parameter names,
+  proper nouns, units, logs, the Remote web page and MCP — is listed with its reason as `# data:`
+  in `tests/Nota.SmokeTest/LocalizationAllowList.txt`.
+- **Add a language**: copy `fr.json` to `<code>.json` (two lowercase letters), set `code`,
+  `name` (the language's own name, shown in Preferences → Appearance → Language) and `plural`
+  (`one_is_1` when only 1 is singular, as in English; `one_is_0_1` when 0 and 1 are, as in
+  French), translate the strings you can and delete the rest — anything missing shows in
+  English. Also list the code in `CFBundleLocalizations` of `scripts/bundle-mac.sh` and
+  `scripts/package-dmg.sh` (the smoke test checks it), so macOS shows its own text — Hide, Quit,
+  the open panels — in that language too. The file format is in
+  [specs/077-key-based-localization/contracts/language-file.md](specs/077-key-based-localization/contracts/language-file.md).
+- **Translate or fix a string**: edit its value in the language file; the English it stands for
+  is the same key in `en.json`. Keep the placeholders (`{0}`, `{1}`) and give a counted text
+  both forms (`one`, `other`). Follow the glossary in
+  [specs/068-ui-language/glossary.md](specs/068-ui-language/glossary.md) (infinitive for
+  actions, sentence case, a narrow no-break space before `:` `;` `?` `!`). Device and parameter
+  names stay in English.
 - **Look at it**: run `NOTA_UI_LANGUAGE=fr` to start in a language for that run without
   touching the saved setting, and check that nothing is clipped or overlaps at each interface
   scale. `NOTA_LOC_WRITE_BASELINE=1` rewrites the allow-list after you wrap or add text.

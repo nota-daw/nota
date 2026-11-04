@@ -29,9 +29,9 @@ public sealed class TextPromptWindow : NotaWindow
         _input = new TextBox { Text = initial, PlaceholderText = prompt };
         _input.KeyDown += (_, e) => { if (e.Key == Key.Enter) Accept(); else if (e.Key == Key.Escape) Close(null); };
 
-        var ok = new Button { Content = Loc.T("OK"), Classes = { "primary" } };
+        var ok = new Button { Content = Loc.T("text_prompt.ok_caps"), Classes = { "primary" } };
         ok.Click += (_, _) => Accept();
-        var cancel = new Button { Content = Loc.T("Cancel"), Classes = { "ghost" } };
+        var cancel = new Button { Content = Loc.T("common.cancel"), Classes = { "ghost" } };
         cancel.Click += (_, _) => Close(null);
 
         SetBody(new StackPanel

@@ -93,12 +93,12 @@ public sealed partial class ArrangementView
     private MenuFlyout BuildTakeMenu(int trackId, TakeVM take)
     {
         var flyout = new MenuFlyout();
-        var header = MenuKit.Header(Loc.F("Take {0}", take.Number), null, "");
-        var use = MenuKit.Item(Loc.T("Use whole take"), GlyphKind.Check,
+        var header = MenuKit.Header(Loc.F("arrangement.takes.take", take.Number), null, "");
+        var use = MenuKit.Item(Loc.T("arrangement.takes.use_whole_take"), GlyphKind.Check,
             () => CompTake(trackId, take.Id, take.StartBeat, take.StartBeat + take.LengthBeats));
-        var flatten = MenuKit.Danger(Loc.T("Flatten takes"), GlyphKind.Flatten,
+        var flatten = MenuKit.Danger(Loc.T("arrangement.takes.flatten_takes"), GlyphKind.Flatten,
             () => { if (_engine?.FlattenTakes(trackId) == true) { _takesOpen.Remove(trackId); Refresh(); } });
-        var del = MenuKit.Danger(Loc.T("Delete take"), GlyphKind.Trash,
+        var del = MenuKit.Danger(Loc.T("arrangement.takes.delete_take"), GlyphKind.Trash,
             () => { if (_engine?.DeleteTake(trackId, take.Id) == true) Refresh(); });
         MenuKit.AddGroups(flyout.Items, new Control[] { header }, new Control[] { use, flatten }, new Control[] { del });
         return flyout;
@@ -128,7 +128,7 @@ public sealed partial class ArrangementView
                 },
             },
         };
-        ToolTip.SetTip(toggle, open ? Loc.T("Hide takes") : Loc.F("Show {0} takes", t.Takes.Count));
+        ToolTip.SetTip(toggle, open ? Loc.T("arrangement.takes.hide_takes") : Loc.F("arrangement.takes.show_takes", t.Takes.Count));
         toggle.PointerPressed += (_, e) => { e.Handled = true; ToggleTakes(t.Id); };
         return toggle;
     }
@@ -151,7 +151,7 @@ public sealed partial class ArrangementView
                     Padding = new Thickness(22, 0, 8, 0),
                     Child = new TextBlock
                     {
-                        Text = Loc.F("Take {0}", take.Number), FontSize = 11, Foreground = Brush("Brush.TextSecondary"),
+                        Text = Loc.F("arrangement.takes.take", take.Number), FontSize = 11, Foreground = Brush("Brush.TextSecondary"),
                         VerticalAlignment = VerticalAlignment.Center,
                     },
                 };
@@ -279,7 +279,7 @@ public sealed partial class ArrangementView
                 }
 
                 // The lane's name stays at the left edge while the take scrolls past.
-                var ft = new FormattedText(Loc.F("Take {0}", take.Number), CultureInfo.InvariantCulture,
+                var ft = new FormattedText(Loc.F("arrangement.takes.take", take.Number), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, NotaFonts.SansSemiBold, 9.5, RulerText);
                 double lx = Math.Max(4, Math.Min(x0 + 4, w - ft.Width - 8));
                 var plate = new Rect(lx - 3, y + 4, ft.Width + 6, ft.Height + 1);

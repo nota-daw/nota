@@ -52,12 +52,12 @@ public static class GamepadControls
         if (IsAxis(controlId))
             return Axis(controlId) switch
             {
-                GamepadAxis.LeftX => Loc.T("Left stick ←→"),
-                GamepadAxis.LeftY => Loc.T("Left stick ↑↓"),
-                GamepadAxis.RightX => Loc.T("Right stick ←→"),
-                GamepadAxis.RightY => Loc.T("Right stick ↑↓"),
-                GamepadAxis.LeftTrigger => Loc.T("Left trigger"),
-                _ => Loc.T("Right trigger"),
+                GamepadAxis.LeftX => Loc.T("midi_learn.left_stick"),
+                GamepadAxis.LeftY => Loc.T("midi_learn.left_stick_2"),
+                GamepadAxis.RightX => Loc.T("midi_learn.right_stick"),
+                GamepadAxis.RightY => Loc.T("midi_learn.right_stick_2"),
+                GamepadAxis.LeftTrigger => Loc.T("midi_learn.left_trigger"),
+                _ => Loc.T("midi_learn.right_trigger"),
             };
         return (GamepadButton)controlId switch
         {
@@ -65,7 +65,7 @@ public static class GamepadControls
             GamepadButton.DpadDown => "D-pad ↓",
             GamepadButton.DpadLeft => "D-pad ←",
             GamepadButton.DpadRight => "D-pad →",
-            _ => Loc.F("Button {0}", controlId),
+            _ => Loc.F("midi_learn.button", controlId),
         };
     }
 }
@@ -173,8 +173,8 @@ public sealed class MidiMapping
     public string SourceLabel => SourceKind switch
     {
         MidiSourceKind.Cc => $"CC {Number} · ch{Channel + 1}",
-        MidiSourceKind.Gamepad => Loc.F("Pad · {0}", GamepadControls.Name(Number)),
-        MidiSourceKind.Phone => Loc.F("Phone · {0}", Nota.Remote.PhoneControls.Name(Number)),
-        _ => Loc.F("Note {0} · ch{1}", Number, Channel + 1),
+        MidiSourceKind.Gamepad => Loc.F("midi_learn.pad", GamepadControls.Name(Number)),
+        MidiSourceKind.Phone => Loc.F("midi_learn.phone", Nota.Remote.PhoneControls.Name(Number)),
+        _ => Loc.F("midi_learn.note_ch", Number, Channel + 1),
     };
 }

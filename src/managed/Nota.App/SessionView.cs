@@ -295,14 +295,14 @@ public sealed partial class SessionView : UserControl
             {
                 col.Kind = ColKind.Group;
                 col.Children = infos.Where(c => !c.IsGroup && !c.IsReturn && Under(c, ti.Id)).Select(c => c.Id).ToList();
-                col.KindLabel = Loc.F("Group · {0}{1}", col.Children.Count, Parent(ti));
+                col.KindLabel = Loc.F("session.group", col.Children.Count, Parent(ti));
             }
             else
             {
                 col.Kind = ColKind.Track;
                 col.IsInstrument = ti.IsInstrument;
                 col.IsAudio = ti.Type == 0;
-                col.KindLabel = (ti.IsInstrument ? "MIDI" : Loc.T("Audio")) + Parent(ti);
+                col.KindLabel = (ti.IsInstrument ? "MIDI" : Loc.T("common.audio")) + Parent(ti);
             }
             _cols.Add(col);
         }
@@ -311,11 +311,11 @@ public sealed partial class SessionView : UserControl
         {
             _cols.Add(new Column
             {
-                Kind = ColKind.Return, TrackId = ti.Id, Name = TrackNames.Of(_engine, ti), KindLabel = Loc.T("Return"),
+                Kind = ColKind.Return, TrackId = ti.Id, Name = TrackNames.Of(_engine, ti), KindLabel = Loc.T("common.return"),
                 ColorIndex = ArrangementView.ReturnColorIndex(r++), Width = ReturnColW,
             });
         }
-        _cols.Add(new Column { Kind = ColKind.Master, TrackId = 0, Name = Loc.T("Master"), KindLabel = "Out 1/2", ColorIndex = -1, Width = MasterColW });
+        _cols.Add(new Column { Kind = ColKind.Master, TrackId = 0, Name = Loc.T("common.master"), KindLabel = "Out 1/2", ColorIndex = -1, Width = MasterColW });
     }
 
     // ---- live state ---------------------------------------------------------------
@@ -463,7 +463,7 @@ public sealed partial class SessionView : UserControl
         if (_sel.Kind == SelKind.Bus) return true;   // a Return / Master has no clip to act on; keep it from reaching the Arrangement
         if (_sel.Kind != SelKind.Slot || !SlotFilled(_sel.TrackId, _sel.Scene)) return false;
         ClipTransfer.TookSlot(_sel.TrackId, _sel.Scene, cut: false);
-        Say(Loc.T("Copied clip"));
+        Say(Loc.T("session.copied_clip"));
         return true;
     }
 
@@ -473,7 +473,7 @@ public sealed partial class SessionView : UserControl
         if (_sel.Kind == SelKind.Bus) return true;   // a Return / Master has no clip to act on; keep it from reaching the Arrangement
         if (_sel.Kind != SelKind.Slot || !SlotFilled(_sel.TrackId, _sel.Scene)) return false;
         ClipTransfer.TookSlot(_sel.TrackId, _sel.Scene, cut: true);
-        Say(Loc.T("Cut clip — paste to move it"));
+        Say(Loc.T("session.cut_clip_paste_to_move"));
         return true;
     }
 
@@ -490,11 +490,11 @@ public sealed partial class SessionView : UserControl
         bool move = src.Cut && (src.TrackId, src.Scene) != (_sel.TrackId, _sel.Scene);
         if (!MoveOrCopySlot(src.TrackId, src.Scene, _sel.TrackId, _sel.Scene, move))
         {
-            Say(Loc.T("Paste a MIDI clip onto a MIDI track, audio onto audio."));
+            Say(Loc.T("session.paste_a_midi_clip_onto"));
             return true;
         }
         if (move) ClipTransfer.SlotMoved((_sel.TrackId, _sel.Scene));
-        Say(move ? Loc.T("Moved clip") : Loc.T("Pasted clip"));
+        Say(move ? Loc.T("session.moved_clip") : Loc.T("session.pasted_clip"));
         return true;
     }
 
@@ -508,12 +508,12 @@ public sealed partial class SessionView : UserControl
         int first = _engine.PasteClipBlockToSession(dest, _sel.Scene);
         if (first < 0)
         {
-            Say(Loc.T("Paste a MIDI clip onto a MIDI track, audio onto audio."));
+            Say(Loc.T("session.paste_a_midi_clip_onto"));
             return true;
         }
         Refresh();   // the paste may have added scene rows
         if (dest > 0) Select(new Selection(SelKind.Slot, dest, first));
-        Say(n == 1 ? Loc.T("Pasted clip from the arrangement") : Loc.F("Pasted {0} clips from the arrangement", n));
+        Say(n == 1 ? Loc.T("session.pasted_clip_from_the_arrangement") : Loc.F("session.pasted_clips_from_the_arrangement", n));
         return true;
     }
     // Copy a slot onto another (same track kind), and for a move clear the source — one undo
@@ -559,15 +559,15 @@ public sealed partial class SessionView : UserControl
             if (s < 0) return false;
             Refresh();
             Select(new Selection(SelKind.Scene, 0, s));
-            Say(Loc.T("Duplicated scene"));
+            Say(Loc.T("session.duplicated_scene"));
             return true;
         }
         int below = _sel.Scene + 1;
         if (_sel.Kind != SelKind.Slot || !SlotFilled(_sel.TrackId, _sel.Scene)) return false;
-        if (below >= _sceneCount || SlotFilled(_sel.TrackId, below)) { Say(Loc.T("The slot below is taken.")); return true; }
+        if (below >= _sceneCount || SlotFilled(_sel.TrackId, below)) { Say(Loc.T("session.the_slot_below_is_taken")); return true; }
         MoveOrCopySlot(_sel.TrackId, _sel.Scene, _sel.TrackId, below, move: false);
         Select(_sel with { Scene = below });
-        Say(Loc.T("Duplicated clip"));
+        Say(Loc.T("session.duplicated_clip"));
         return true;
     }
 
@@ -579,12 +579,12 @@ public sealed partial class SessionView : UserControl
         {
             if (!_engine.RemoveScene(_sel.Scene)) return false;
             Refresh();
-            Say(Loc.T("Deleted scene"));
+            Say(Loc.T("session.deleted_scene"));
             return true;
         }
         if (_sel.Kind != SelKind.Slot || !_engine.ClearSessionSlot(_sel.TrackId, _sel.Scene)) return false;
         RefreshSlot(_sel.TrackId, _sel.Scene);
-        Say(Loc.T("Deleted clip"));
+        Say(Loc.T("session.deleted_clip"));
         return true;
     }
 
@@ -595,7 +595,7 @@ public sealed partial class SessionView : UserControl
         if (s < 0) return false;
         Refresh();
         Select(new Selection(SelKind.Scene, 0, s));
-        Say(Loc.T("Inserted scene"));
+        Say(Loc.T("session.inserted_scene"));
         return true;
     }
 
@@ -603,10 +603,10 @@ public sealed partial class SessionView : UserControl
     {
         int s = _engine.CaptureScene(Math.Min(_sel.Scene + 1, _sceneCount));
         if (s < 0) return;
-        if (string.IsNullOrEmpty(_engine.GetSceneName(s))) _engine.SetSceneName(s, Loc.T("Captured"));
+        if (string.IsNullOrEmpty(_engine.GetSceneName(s))) _engine.SetSceneName(s, Loc.T("session.captured"));
         Refresh();
         Select(new Selection(SelKind.Scene, 0, s));
-        Say(Loc.T("Captured the playing clips into a new scene"));
+        Say(Loc.T("session.captured_the_playing_clips_into"));
     }
 
     // The filled slots a selection covers: a track's slot, a group's slots in that scene, or a
@@ -628,8 +628,8 @@ public sealed partial class SessionView : UserControl
         int placed = _engine.SessionSlotsToArrangement(slots, _engine.PositionBeats);
         if (placed <= 0) return false;
         ArrangementChanged?.Invoke();
-        Say(placed == 1 ? Loc.T("Copied clip to the arrangement at the playhead")
-                        : Loc.F("Copied {0} clips to the arrangement at the playhead", placed));
+        Say(placed == 1 ? Loc.T("session.copied_clip_to_the_arrangement")
+                        : Loc.F("session.copied_clips_to_the_arrangement", placed));
         return true;
     }
 
@@ -721,16 +721,16 @@ public sealed partial class SessionView : UserControl
     private string SceneName(int scene)
     {
         string n = _engine.GetSceneName(scene);
-        return n.Length > 0 ? n : Loc.F("Scene {0}", scene + 1);
+        return n.Length > 0 ? n : Loc.F("session.scene", scene + 1);
     }
 
     /// <summary>"2 bars", "3 beats", "2.2 bars" — a clip length as the grid shows it.</summary>
     internal static string FormatLength(double beats)
     {
         if (beats <= 0) return "";
-        if (Math.Abs(beats % 4) < 1e-6) { int n = (int)Math.Round(beats / 4); return Loc.Plural(n, "{0} bar", "{0} bars"); }
+        if (Math.Abs(beats % 4) < 1e-6) { int n = (int)Math.Round(beats / 4); return Loc.Plural("session.bars", n); }
         if (beats < 4) return NotaNum.Str(beats, "0.##") + (Math.Abs(beats - 1) < 1e-6 ? " beat" : " beats");
-        return Loc.F("{0}.{1} bars", (int)(beats / 4), NotaNum.Str(beats % 4, "0.##"));
+        return Loc.F("session.bars_n", (int)(beats / 4), NotaNum.Str(beats % 4, "0.##"));
     }
 
     /// <summary>bars.beats.sixteenths, 1-based, the way positions read in the transport.</summary>

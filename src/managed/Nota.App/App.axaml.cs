@@ -207,7 +207,9 @@ public partial class App : Avalonia.Application
     /// is the default everywhere (spec 068). An unknown code reads as English.</summary>
     private static void InstallLanguage(Settings settings, ILogSink log)
     {
-        foreach (var err in NotaLanguages.LoadErrors) log.Error($"Language skipped — {err}", null);
+        foreach (var err in NotaLanguages.LoadErrors) log.Error($"Interface language — {err}", null);
+        // A key in no table, not even English, shows as itself: the smoke test rules it out.
+        Loc.MissingKey += key => log.Warn($"Interface text key not found: {key}");
         var wanted = Environment.GetEnvironmentVariable("NOTA_UI_LANGUAGE");
         var code = UiLanguage.Normalize(string.IsNullOrWhiteSpace(wanted) ? settings.Language : wanted, NotaLanguages.Codes);
         // A text asked for before this point was built in English and will not follow the language.
@@ -220,16 +222,17 @@ public partial class App : Avalonia.Application
     }
 
     // App.axaml is loaded in Initialize(), before the language is installed, so the macOS
-    // application menu's few texts are set here, once it is. Keyed by their English text.
+    // application menu's few texts are set here, once it is: each item is found by its English
+    // header in App.axaml and given the text of its key.
     private void TranslateAppMenu()
     {
         if (NativeMenu.GetMenu(this) is not { } menu) return;
         foreach (var item in menu.Items.OfType<NativeMenuItem>())
             item.Header = item.Header switch
             {
-                "About Nota" => Loc.T("About Nota"),
-                "Check for updates…" => Loc.T("Check for updates…"),
-                "Settings…" => Loc.T("Settings…"),
+                "About Nota" => Loc.T("common.about_nota"),
+                "Check for updates…" => Loc.T("common.check_for_updates"),
+                "Settings…" => Loc.T("app.settings"),
                 var other => other,
             };
     }

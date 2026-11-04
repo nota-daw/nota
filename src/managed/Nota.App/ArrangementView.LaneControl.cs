@@ -721,7 +721,7 @@ public sealed partial class ArrangementView
                     move = _o.MoveBlock(moves.ToArray());
                     committed = move is not null;
                     if (committed && eng.LastMoveKeptDeviceAutomation())   // explicit hint: only Volume/Pan followed across tracks (req 8.3.4)
-                        _o.StatusMessage?.Invoke(Loc.T("Moved across tracks — device automation stayed on the source"));
+                        _o.StatusMessage?.Invoke(Loc.T("arrangement.moved_across_tracks_device_automation"));
                 }
                 _groupMove = null; _drag = Drag.None; _moveRowDelta = 0;
                 e.Pointer.Capture(null);
@@ -800,7 +800,7 @@ public sealed partial class ArrangementView
             _loadRow = row;
             _o.SetDropTrack(row);
             _o.DwellOverTrack(row >= 0 ? _o._tracks[row].Id : -1);
-            if (row >= 0) _o.StatusMessage?.Invoke(Loc.F("Release to load the clip into {0}", _o._tracks[row].Name));
+            if (row >= 0) _o.StatusMessage?.Invoke(Loc.F("arrangement.lane_control.release_to_load_the_clip", _o._tracks[row].Name));
         }
 
         // The grabbed clip's audio as a sample file (null + a status line when it can't be).
@@ -808,7 +808,7 @@ public sealed partial class ArrangementView
         {
             string name = clip.Name.Length > 0 ? clip.Name : _o._tracks.Find(t => t.Id == _grabTrackId)?.Name ?? "";
             try { return ClipAudioExport.AsSample(eng, _grabTrackId, clip.ClipIndex, name); }
-            catch (Exception ex) { _o.StatusMessage?.Invoke(Loc.F("Couldn't take the clip's audio: {0}", ex.Message)); return null; }
+            catch (Exception ex) { _o.StatusMessage?.Invoke(Loc.F("arrangement.lane_control.couldnt_take_the_clips_audio", ex.Message)); return null; }
         }
 
         // Hands the move over to a sample drag: the clip snaps back home and its audio rides
@@ -957,7 +957,7 @@ public sealed partial class ArrangementView
         private MenuItem? PasteBouncedItem(int trackId, double at)
         {
             if (!_o.CanPasteBouncedOnto(trackId)) return null;
-            var mi = new MenuItem { Header = Loc.T("Paste bounced audio"), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteBouncedKey };
+            var mi = new MenuItem { Header = Loc.T("common.paste_bounced_audio"), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteBouncedKey };
             mi.Click += (_, _) => _o.RequestPasteBounced(trackId, at);
             return mi;
         }
@@ -985,18 +985,18 @@ public sealed partial class ArrangementView
             foreach (var mi in clipboard) flyout.Items.Add(mi);
             if (track.IsInstrument)
             {
-                var insert = new MenuItem { Header = Loc.T("Insert MIDI clip"), Icon = MenuKit.Icon(GlyphKind.Plus) };
+                var insert = new MenuItem { Header = Loc.T("arrangement.lane_control.insert_midi_clip"), Icon = MenuKit.Icon(GlyphKind.Plus) };
                 insert.Click += (_, _) => _o.AddMidiClipAt(trackId, beat);
                 flyout.Items.Add(new Separator());
                 flyout.Items.Add(insert);
             }
             if (inRange)
             {
-                var consolidate = new MenuItem { Header = Loc.T("Consolidate selection"), Icon = MenuKit.Icon(GlyphKind.Consolidate), InputGesture = MenuKit.ConsolidateKey };
+                var consolidate = new MenuItem { Header = Loc.T("arrangement.lane_control.consolidate_selection"), Icon = MenuKit.Icon(GlyphKind.Consolidate), InputGesture = MenuKit.ConsolidateKey };
                 consolidate.Click += (_, _) => _o.ConsolidateSelection();
-                var dupTime = new MenuItem { Header = Loc.T("Duplicate time"), Icon = MenuKit.Icon(GlyphKind.Duplicate), InputGesture = MenuKit.DuplicateTimeKey };
+                var dupTime = new MenuItem { Header = Loc.T("common.duplicate_time"), Icon = MenuKit.Icon(GlyphKind.Duplicate), InputGesture = MenuKit.DuplicateTimeKey };
                 dupTime.Click += (_, _) => _o.DuplicateTimeInsert();
-                var silence = new MenuItem { Header = Loc.T("Insert silence"), Icon = MenuKit.Icon(GlyphKind.Plus), InputGesture = MenuKit.InsertSilenceKey };
+                var silence = new MenuItem { Header = Loc.T("common.insert_silence"), Icon = MenuKit.Icon(GlyphKind.Plus), InputGesture = MenuKit.InsertSilenceKey };
                 silence.Click += (_, _) => _o.InsertSilenceAtTimeSelection();
                 flyout.Items.Add(new Separator());
                 flyout.Items.Add(consolidate);
@@ -1023,45 +1023,45 @@ public sealed partial class ArrangementView
 
             var track = _o._tracks.FirstOrDefault(v => v.Id == trackId);
             var header = inGroup
-                ? MenuKit.Header(Loc.Plural(_o.Selection.Count, "{0} clip", "{0} clips"), null, "")
-                : MenuKit.Header(clip.Name.Length > 0 ? clip.Name : Loc.T("Clip"),
-                                 track is null ? null : TrackBrush(track.ColorIndex), clip.IsMidi ? Loc.T("MIDI clip") : Loc.T("Audio clip"));
+                ? MenuKit.Header(Loc.Plural("arrangement.lane_control.clips", _o.Selection.Count), null, "")
+                : MenuKit.Header(clip.Name.Length > 0 ? clip.Name : Loc.T("common.clip"),
+                                 track is null ? null : TrackBrush(track.ColorIndex), clip.IsMidi ? Loc.T("arrangement.lane_control.midi_clip") : Loc.T("arrangement.lane_control.audio_clip"));
 
-            var rename = MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit,
+            var rename = MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit,
                 () => PromptRename(clip.Name, s => { _o._engine?.SetClipName(trackId, idx, s); _o.Refresh(); }));
 
             var edits = new List<Control>
             {
-                MenuKit.Item(Loc.T("Split here"), GlyphKind.Split, () => { if (_o.SplitLinkedAt(new[] { (trackId, idx) }, at)) { _o.Refresh(); _o.ClipsSplit?.Invoke(); } }, MenuKit.SplitKey),
+                MenuKit.Item(Loc.T("arrangement.lane_control.split_here"), GlyphKind.Split, () => { if (_o.SplitLinkedAt(new[] { (trackId, idx) }, at)) { _o.Refresh(); _o.ClipsSplit?.Invoke(); } }, MenuKit.SplitKey),
             };
             // Reverse (audio only): non-destructive, so the label reflects the clicked clip.
             if (!clip.IsMidi && _o._engine is { } rev && rev.TryGetAudioClipInfo(trackId, idx, out var rai))
-                edits.Add(MenuKit.Item(rai.Reversed != 0 ? "Un-reverse" : Loc.T("Reverse"), GlyphKind.Reverse,
+                edits.Add(MenuKit.Item(rai.Reversed != 0 ? "Un-reverse" : Loc.T("common.reverse"), GlyphKind.Reverse,
                     () => { EnsureSelected(); _o.ToggleSelectedClipsReverse(); }));
             // Consolidate: a right-click inside the time selection acts on that range; otherwise
             // on the multi-selection's span, or just this clip (bakes its edits into one clip).
             bool inRange = _o.TimeSelectionCovers(trackId, beat);
-            edits.Add(MenuKit.Item(inRange ? Loc.T("Consolidate selection") : Loc.T("Consolidate"), GlyphKind.Consolidate,
+            edits.Add(MenuKit.Item(inRange ? Loc.T("arrangement.lane_control.consolidate_selection") : Loc.T("common.consolidate"), GlyphKind.Consolidate,
                 () => { if (!inRange) EnsureSelected(); _o.ConsolidateSelection(); }, MenuKit.ConsolidateKey));
             // Clip deactivate (key 0): the label reflects the clicked clip's current state.
-            edits.Add(MenuKit.Item(clip.Active ? Loc.T("Deactivate") : Loc.T("Activate"), GlyphKind.Bypass,
+            edits.Add(MenuKit.Item(clip.Active ? Loc.T("arrangement.lane_control.deactivate") : Loc.T("arrangement.lane_control.activate"), GlyphKind.Bypass,
                 () => { EnsureSelected(); _o.ToggleSelectedClipsActive(); }, MenuKit.ActivateKey));
             // Loop the current selection (or just this clip if nothing is selected).
-            edits.Add(MenuKit.Item(Loc.T("Loop selection"), GlyphKind.Cycle, () =>
+            edits.Add(MenuKit.Item(Loc.T("arrangement.loop_selection"), GlyphKind.Cycle, () =>
             {
                 if (!_o.LoopSelection())
                     _o.SetLoopRegion(clip.StartBeat, clip.StartBeat + clip.LengthBeats);
             }, MenuKit.LoopKey));
             // Several MIDI clips selected: open them together in the Clip editor (specs/029).
             if (clip.IsMidi && inGroup && _o.SelectedMidiClips().Count >= 2)
-                edits.Add(MenuKit.Item(Loc.T("Edit selected clips together"), GlyphKind.Edit, () => _o.EditSelectedClipsRequested?.Invoke()));
+                edits.Add(MenuKit.Item(Loc.T("arrangement.lane_control.edit_selected_clips_together"), GlyphKind.Edit, () => _o.EditSelectedClipsRequested?.Invoke()));
 
             // Audio clip → stems (AI model) and → MIDI: Convert / Slice to a new MIDI track.
             var audio = new List<Control>();
             if (!clip.IsMidi)
             {
-                audio.Add(MenuKit.Item(Loc.T("Separate stems…"), GlyphKind.Stems, () => _o.SeparateStemsRequested?.Invoke(trackId, idx)));
-                var convert = MenuKit.Item(Loc.T("Convert"), GlyphKind.Arrow);
+                audio.Add(MenuKit.Item(Loc.T("arrangement.lane_control.separate_stems"), GlyphKind.Stems, () => _o.SeparateStemsRequested?.Invoke(trackId, idx)));
+                var convert = MenuKit.Item(Loc.T("arrangement.lane_control.convert"), GlyphKind.Arrow);
                 MenuItem ConvItem(string header, ClipConvertMode mode)
                     => MenuKit.Item(header, null, () => _o.ConvertClipRequested?.Invoke(trackId, idx, mode));
                 // Melody / Harmony are only offered on the AI model: the DSP fallback's results
@@ -1071,15 +1071,15 @@ public sealed partial class ArrangementView
                 bool canTranscribe = _o.CanTranscribe?.Invoke() != false;
                 if (canTranscribe)
                 {
-                    convert.Items.Add(ConvItem(Loc.T("Melody to new MIDI track"), ClipConvertMode.Melody));
-                    convert.Items.Add(ConvItem(Loc.T("Harmony to new MIDI track"), ClipConvertMode.Harmony));
+                    convert.Items.Add(ConvItem(Loc.T("arrangement.lane_control.melody_to_new_midi_track"), ClipConvertMode.Melody));
+                    convert.Items.Add(ConvItem(Loc.T("arrangement.lane_control.harmony_to_new_midi_track"), ClipConvertMode.Harmony));
                 }
-                convert.Items.Add(ConvItem(Loc.T("Drums to new MIDI track"), ClipConvertMode.Drums));
-                convert.Items.Add(ConvItem(Loc.T("Slice to new MIDI track"), ClipConvertMode.Slice));
+                convert.Items.Add(ConvItem(Loc.T("arrangement.lane_control.drums_to_new_midi_track"), ClipConvertMode.Drums));
+                convert.Items.Add(ConvItem(Loc.T("arrangement.lane_control.slice_to_new_midi_track"), ClipConvertMode.Slice));
                 if (!canTranscribe)
                 {
                     convert.Items.Add(new Separator());
-                    convert.Items.Add(MenuKit.Item(Loc.T("Get the AI model for melody and harmony…"), null, () => _o.TranscriptionModelRequested?.Invoke()));
+                    convert.Items.Add(MenuKit.Item(Loc.T("arrangement.lane_control.get_the_ai_model_for"), null, () => _o.TranscriptionModelRequested?.Invoke()));
                 }
                 audio.Add(convert);
             }
@@ -1089,13 +1089,13 @@ public sealed partial class ArrangementView
             var session = new List<Control>();
             if (_o._engine is { } eng)
             {
-                session.Add(MenuKit.Item(Loc.T("Copy to Session"), GlyphKind.Grid, () => { EnsureSelected(); _o.CopySelectionToSession(); }, MenuKit.CopyToOtherViewKey));
-                var toScene = MenuKit.Item(Loc.T("Copy to scene"), GlyphKind.Grid);
+                session.Add(MenuKit.Item(Loc.T("arrangement.lane_control.copy_to_session"), GlyphKind.Grid, () => { EnsureSelected(); _o.CopySelectionToSession(); }, MenuKit.CopyToOtherViewKey));
+                var toScene = MenuKit.Item(Loc.T("arrangement.lane_control.copy_to_scene"), GlyphKind.Grid);
                 for (int s = 0; s < eng.SceneCount; s++)
                 {
                     int sc = s;
                     string name = eng.GetSceneName(sc);
-                    toScene.Items.Add(MenuKit.Item(name.Length > 0 ? $"{sc + 1} · {name}" : Loc.F("Scene {0}", sc + 1), null,
+                    toScene.Items.Add(MenuKit.Item(name.Length > 0 ? $"{sc + 1} · {name}" : Loc.F("arrangement.lane_control.scene", sc + 1), null,
                         () => { EnsureSelected(); _o.CopySelectionToSession(sc); }));
                 }
                 session.Add(toScene);
@@ -1110,7 +1110,7 @@ public sealed partial class ArrangementView
                 _o.HasClipClipboard).Cast<Control>().ToList();
             if (PasteBouncedItem(trackId, at) is { } bounced) clipboard.Insert(3, bounced);
 
-            var del = MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () =>
+            var del = MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, () =>
             {
                 if (inGroup) _o.DeleteSelectedClips();
                 else { _o._engine?.DeleteClip(trackId, idx); _o.Select(-1, -1); _o.Refresh(); }
@@ -1233,7 +1233,7 @@ public sealed partial class ArrangementView
                         DrawRecPeaks(ctx, re, rr);
                         if (rr.Width > 34)
                         {
-                            var ft = new FormattedText(Loc.T("Rec"), CultureInfo.InvariantCulture,
+                            var ft = new FormattedText(Loc.T("arrangement.lane_control.rec"), CultureInfo.InvariantCulture,
                                 FlowDirection.LeftToRight, NotaFonts.SansBold, 9, RecText);
                             Glyph.Draw(ctx, GlyphKind.Record, new Rect(rr.X + 5, rr.Y + 3 + (ft.Height - 7) / 2, 7, 7), RecText);
                             ctx.DrawText(ft, new Point(rr.X + 16, rr.Y + 3));
@@ -1315,7 +1315,7 @@ public sealed partial class ArrangementView
             // Empty-state hint.
             if (_o._tracks.Count == 0)
             {
-                var ft = new FormattedText(Loc.T("Add an instrument from the browser"),
+                var ft = new FormattedText(Loc.T("arrangement.lane_control.add_an_instrument_from_the"),
                     CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Typeface.Default, 12, RulerText);
                 ctx.DrawText(ft, new Point(Math.Max(12, (w - ft.Width) / 2), h / 2 - 10));
             }
@@ -1487,7 +1487,7 @@ public sealed partial class ArrangementView
                 var r = new Rect(0, top + k * DefaultRowHeight, w, DefaultRowHeight);
                 ctx.FillRectangle(DropWash, r);
                 ctx.DrawRectangle(null, DropEdgePen, r.Deflate(1));
-                var ft = new FormattedText(Loc.T("New track"), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                var ft = new FormattedText(Loc.T("arrangement.lane_control.new_track"), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
                     Typeface.Default, 11, RulerText);
                 ctx.DrawText(ft, new Point(Math.Max(8, w - ft.Width - 12), r.Y + 4));   // clear of clips at the song start
             }

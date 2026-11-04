@@ -22,12 +22,12 @@ public static class ModularCatalog
 
     public static IReadOnlyList<ModularNode> All { get; } = new ModularNode[]
     {
-        new("LFO", 0, Loc.T("Modulator"), D("lfo oscillator wobble", Loc.T("A low-frequency oscillator, free or synced to the tempo."))),
-        new("Envelope Follower", 1, Loc.T("Modulator"), D("envelope follower env sidechain peak controller ducking duck pump loudness level volume", Loc.T("Turns the track's loudness into a control signal: a peak controller, for ducking one track under another."))),
-        new("MIDI → CV", 2, Loc.T("Converter"), D("midi cv velocity note pitch", Loc.T("Turns notes, velocity and controllers into control signals."))),
-        new("ADSR", 3, Loc.T("Modulator"), D("adsr envelope", Loc.T("An attack-decay-sustain-release envelope triggered by notes."))),
-        new("Macro", 4, Loc.T("Control"), D("macro knob", Loc.T("One knob driving several destinations."))),
-        new("Math", 5, Loc.T("CV utility"), D("math add multiply mixer attenuverter", Loc.T("Adds, multiplies or mixes two control signals."))),
-        new("Scope", 6, Loc.T("Monitor"), D("scope oscilloscope monitor", Loc.T("Shows a control signal over time."))),
+        new("LFO", 0, Loc.T("palette.modular.modulator"), D("lfo oscillator wobble", Loc.T("palette.modular.a_low_frequency_oscillator_free"))),
+        new("Envelope Follower", 1, Loc.T("palette.modular.modulator"), D("envelope follower env sidechain peak controller ducking duck pump loudness level volume", Loc.T("palette.modular.turns_the_tracks_loudness_into"))),
+        new("MIDI → CV", 2, Loc.T("palette.modular.converter"), D("midi cv velocity note pitch", Loc.T("palette.modular.turns_notes_velocity_and_controllers"))),
+        new("ADSR", 3, Loc.T("palette.modular.modulator"), D("adsr envelope", Loc.T("palette.modular.an_attack_decay_sustain_release"))),
+        new("Macro", 4, Loc.T("palette.modular.control"), D("macro knob", Loc.T("palette.modular.one_knob_driving_several_destinations"))),
+        new("Math", 5, Loc.T("palette.modular.cv_utility"), D("math add multiply mixer attenuverter", Loc.T("palette.modular.adds_multiplies_or_mixes_two"))),
+        new("Scope", 6, Loc.T("palette.modular.monitor"), D("scope oscilloscope monitor", Loc.T("palette.modular.shows_a_control_signal_over"))),
     };
 }

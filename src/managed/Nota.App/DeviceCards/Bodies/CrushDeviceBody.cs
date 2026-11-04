@@ -186,10 +186,10 @@ internal sealed class CrushDeviceBody : IDeviceBody
             var seg = Segments(CrushMath.Modes, ModeI, i => { SetP(Mode, i / 2f); RefreshAll(); }, out var sync, padX: 6);
             readouts.Add(sync);
             Learn(seg, Mode);
-            ToolTip.SetTip(seg, Loc.T("Mode — Digital: hard truncation to the levels; Analog: a soft tanh clip before them (+4\u2009dB, rounder); Fold: a wavefolder — more Drive folds the peaks back more times"));
+            ToolTip.SetTip(seg, Loc.T("device.crush.mode_digital_hard_truncation_to"));
             var words = new TextBlock { FontSize = 7, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
             readouts.Add(() => words.Text = ModeWords[ModeI()]);
-            var aa = ParamChip(AntiAlias, "Anti-alias", Loc.T("Anti-alias — a 4th-order low-pass at the reduced rate's Nyquist before the hold, so less folds back as images"));
+            var aa = ParamChip(AntiAlias, "Anti-alias", Loc.T("device.crush.anti_alias_a_4th_order"));
             return HeadRow(Row(6, Caps("MODE"), seg, words), aa);
         }
 
@@ -202,10 +202,10 @@ internal sealed class CrushDeviceBody : IDeviceBody
             i1.TextTrimming = i2.TextTrimming = TextTrimming.CharacterEllipsis;
             readouts.Add(() => { i1.Text = info1(); i2.Text = info2(); });
             var knobs = Row(2,
-                K(Bits, "BITS", BitsF, Loc.T("Bits — the bit depth, 1 … 24: fewer bits, fewer levels, more grit"), lit: () => centreTab == 0),
-                K(Rate, "RATE", RateF, Loc.T("Rate — the reduced sample rate, 500\u2009Hz … full: lower holds each value longer and adds images above its Nyquist"), lit: () => centreTab == 1),
-                K(Drive, "DRIVE", DriveF, Loc.T("Drive — −12 … +24\u2009dB into the crusher: pushes the signal up the levels, into the Analog clip or into more folds"), lit: () => centreTab == 2),
-                K(DryWet, "WET", v => Pct(v), Loc.T("Wet — the crushed signal against the dry one"), teal: true));
+                K(Bits, "BITS", BitsF, Loc.T("device.crush.bits_the_bit_depth_1"), lit: () => centreTab == 0),
+                K(Rate, "RATE", RateF, Loc.T("device.crush.rate_the_reduced_sample_rate"), lit: () => centreTab == 1),
+                K(Drive, "DRIVE", DriveF, Loc.T("device.crush.drive_12_24_db_into"), lit: () => centreTab == 2),
+                K(DryWet, "WET", v => Pct(v), Loc.T("device.crush.wet_the_crushed_signal_against"), teal: true));
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), Height = 52, ColumnSpacing = 8 };
             g.Children.Add(knobs);
             g.Children.Add(Col(new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { i1, i2 } }, 1));
@@ -223,8 +223,8 @@ internal sealed class CrushDeviceBody : IDeviceBody
         var colTitle = Caps("CRUSH"); colTitle.HorizontalAlignment = HorizontalAlignment.Center;
         var inPill = new ShPill { Ink = Teal, VerticalAlignment = VerticalAlignment.Stretch, Width = 14 };
         var outPill = new ShPill { Ink = NotaPalette.VizInk, VerticalAlignment = VerticalAlignment.Stretch, Width = 14 };
-        ToolTip.SetTip(inPill, Loc.T("The input peak, −60 … 0\u2009dBFS"));
-        ToolTip.SetTip(outPill, Loc.T("The output peak, −60 … 0\u2009dBFS"));
+        ToolTip.SetTip(inPill, Loc.T("device.crush.the_input_peak_60_0"));
+        ToolTip.SetTip(outPill, Loc.T("device.crush.the_output_peak_60_0"));
         var colIn = Mono("", 7, TextPrimary); colIn.HorizontalAlignment = HorizontalAlignment.Center;
         var colOut = Mono("", 7, TextPrimary); colOut.HorizontalAlignment = HorizontalAlignment.Center;
         static double NormLvl(double db) => Math.Clamp((db + 60) / 60, 0, 1);
@@ -283,7 +283,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
             spectrum.GestureEnd += h => End(map[h]);
             spectrum.ResetRequested += h => { Reset(map[h]); RefreshAll(); };
             Learn(spectrum, Rate);
-            ToolTip.SetTip(spectrum, MenuKit.Keys(Loc.T("The output spectrum: neutral ink is the signal, teal what the crush added — bright above the reduced Nyquist (the images). Drag the Nyquist line for Rate, the filter line for the post filter; ⌥-click types, double-click resets.")));
+            ToolTip.SetTip(spectrum, MenuKit.Keys(Loc.T("device.crush.the_output_spectrum_neutral_ink")));
             ValueEntry.AttachHandles(spectrum, [F(Rate, "Rate", RateF)], [F(PostFilter, "Post filter", FiltF)]);
             var knobs = KnobRow(
                 () => Sc(S_Analysed) < 0.5 ? "no signal" : ScDb(S_Images) <= -119 ? NotaNum.F($"no images above {KHz(Sc(S_Nyquist))}")
@@ -303,10 +303,10 @@ internal sealed class CrushDeviceBody : IDeviceBody
             curve.GestureEnd += _ => End(Drive);
             curve.ResetRequested += _ => { Reset(Drive); RefreshAll(); };
             Learn(curve, Drive);
-            ToolTip.SetTip(curve, MenuKit.Keys(Loc.T("Input → output through Drive, the mode and the levels; the dot is where the signal peaks. Drag up / down for Drive; ⌥-click types, double-click resets.")));
+            ToolTip.SetTip(curve, MenuKit.Keys(Loc.T("device.crush.input_output_through_drive_the")));
             ValueEntry.AttachHandles(curve, [F(Drive, "Drive", DriveF)]);
             wave = new CrWaveView();
-            ToolTip.SetTip(wave, Loc.T("Two cycles of a sine at the driven level (dashed) and what comes out"));
+            ToolTip.SetTip(wave, Loc.T("device.crush.two_cycles_of_a_sine"));
             var pair = new DockPanel { LastChildFill = true, Children = { Docked(curve, Dock.Left), new Border { Margin = new Thickness(5, 0, 0, 0), Child = wave } } };
             string DriveX() => NotaNum.F($"×{Math.Pow(10, DriveDb(P(Drive)) / 20):0.0}");
             var knobs = KnobRow(
@@ -316,7 +316,7 @@ internal sealed class CrushDeviceBody : IDeviceBody
                     1 => NotaNum.F($"drive {DriveX()} → soft clip"),
                     _ => NotaNum.F($"drive {DriveX()} · straight"),
                 },
-                () => ModeI() == 2 ? LvF(Levels()) + Loc.T(" levels after the fold") : LvF(Levels()) + " levels");
+                () => ModeI() == 2 ? LvF(Levels()) + Loc.T("device.crush.levels_after_the_fold") : LvF(Levels()) + " levels");
             return TabBody(ModeHead(), pair, knobs);
         }
 
@@ -332,8 +332,8 @@ internal sealed class CrushDeviceBody : IDeviceBody
             return new Border { Padding = new Thickness(8, 6), Child = g };
         }
         static Control Rule(Control c) => new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = c };
-        Control FilterRow() => SliderRow("FILTER", PostFilter, FiltF, Loc.T("Post filter — a low-pass after the crush, 200\u2009Hz … 20 kHz: under the Nyquist it smooths the steps"), modulation: true);
-        Control GainRow() => SliderRow("GAIN", Output, GainF, Loc.T("Output gain, ±12\u2009dB"), bipolar: true);
+        Control FilterRow() => SliderRow("FILTER", PostFilter, FiltF, Loc.T("device.crush.post_filter_a_low_pass"), modulation: true);
+        Control GainRow() => SliderRow("GAIN", Output, GainF, Loc.T("device.crush.output_gain_12_db"), bipolar: true);
 
         Control GritTab()
         {
@@ -353,17 +353,17 @@ internal sealed class CrushDeviceBody : IDeviceBody
                 string tail = (ModeI() switch { 1 => " · soft", 2 => " · fold", _ => "" }) + (On(AntiAlias) ? " · AA" : "");
                 double rate = RateHz(P(Rate));
                 l1.Text = NotaNum.F($"{BitsOf(P(Bits)):0.0} bit · ") + (rate >= 1000 ? NotaNum.F($"{rate / 1000:0.0}\u2009kHz") : NotaNum.F($"{rate:0}\u2009Hz")) + tail;
-                l2.Text = filt < nyq ? Loc.T("the filter cuts the images")
+                l2.Text = filt < nyq ? Loc.T("device.crush.the_filter_cuts_the_images")
                     : NotaNum.F($"Nyquist {Hz(nyq)} · filter above");
                 t.Foreground = hot ? AccentBright : TextTertiary;
                 l1.Foreground = hot ? AccentBright : TextPrimary;
                 box.BorderBrush = hot ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
             });
-            ToolTip.SetTip(box, Loc.T("What comes out: the bit depth and the rate, and whether the post filter cuts the images above the reduced Nyquist or lets them through"));
+            ToolTip.SetTip(box, Loc.T("device.crush.what_comes_out_the_bit"));
             return Spread(
-                SliderRow("DITHER", Dither, v => Pct(v), Loc.T("Dither — up to ±½ LSB of triangular noise before the levels: softens the steps into hiss")),
-                SliderRow("JITTER", Jitter, v => Pct(v), Loc.T("Jitter — the hold length wanders up to ±50 %: an unsteady, broken clock")),
-                SliderRow("NOISE", NoiseFloor, v => Pct(v), Loc.T("Noise — a white noise floor under the crush, up to −50\u2009dBFS")),
+                SliderRow("DITHER", Dither, v => Pct(v), Loc.T("device.crush.dither_up_to_lsb_of")),
+                SliderRow("JITTER", Jitter, v => Pct(v), Loc.T("device.crush.jitter_the_hold_length_wanders")),
+                SliderRow("NOISE", NoiseFloor, v => Pct(v), Loc.T("device.crush.noise_a_white_noise_floor")),
                 Rule(FilterRow()), GainRow(), box);
         }
 
@@ -392,14 +392,14 @@ internal sealed class CrushDeviceBody : IDeviceBody
                     },
                 },
             };
-            ToolTip.SetTip(meters, Loc.T("Peaks in and out, and the output's crest factor (peak over RMS) — the crush flattens it"));
+            ToolTip.SetTip(meters, Loc.T("device.crush.peaks_in_and_out_and"));
             var toggles = new StackPanel
             {
                 Spacing = 5, Children =
                 {
-                    Toggle(AutoGain, "Auto gain", Loc.T("Auto gain — rides the output back to the input's loudness (300\u2009ms RMS, ±24\u2009dB), so turning Bits or Drive doesn't jump in level"),
+                    Toggle(AutoGain, "Auto gain", Loc.T("device.crush.auto_gain_rides_the_output"),
                         () => On(AutoGain) ? "Auto gain " + Sgn(Sc(S_AutoGain)) + "\u2009dB" : "Auto gain"),
-                    Toggle(DcFilter, "DC filter", Loc.T("DC filter — a 10\u2009Hz high-pass on the crushed signal: takes out the offset a coarse, folded or noisy crush can leave")),
+                    Toggle(DcFilter, "DC filter", Loc.T("device.crush.dc_filter_a_10_hz")),
                 },
             };
             return Spread(meters, FilterRow(), GainRow(), Rule(toggles));

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The interface languages (spec 068). Languages/<code>.json is the only place a translation
-// lives; each file is embedded as Nota.Languages.<code>.json and read here at startup. The
+// The interface languages (spec 068, keyed since spec 077). English is the reference built into
+// Loc; Languages/<code>.json is where a translation lives, embedded as Nota.Languages.<code>.json
+// and read here at startup, checked against the English reference. The
 // picker lists whatever loads, so adding a language is adding a file. Like the colour-theme
 // loader, this validates rather than trusts: a file that fails is left out and noted in
 // LoadErrors, never thrown at the UI, and Nota still starts in English.
@@ -60,11 +61,14 @@ public static class NotaLanguages
             var table = TranslationTable.Parse(json, out var error);
             if (table is null) { _loadErrors.Add($"{fileCode}: {error}"); continue; }
             if (table.Code != fileCode) { _loadErrors.Add($"{fileCode}: file declares code '{table.Code}'"); continue; }
+            if (table.Code == UiLanguage.Default) continue;   // English is the built-in reference
+            var (problems, _) = table.ValidateAgainst(Loc.English);
+            foreach (var p in problems) _loadErrors.Add($"{fileCode}: {p.Key} — {p.Problem} (English is shown)");
             tables[table.Code] = table;
         }
-        // English is the fallback of every text; it is offered even if its file were lost.
-        if (!tables.ContainsKey(UiLanguage.Default))
-            tables[UiLanguage.Default] = TranslationTable.Parse("{\"formatVersion\":1,\"code\":\"en\",\"name\":\"English\"}", out _)!;
+        // English is the reference of every text, built into Loc (spec 077); it is always offered.
+        if (Loc.EnglishError is { } englishError) _loadErrors.Add($"en: {englishError}");
+        tables[UiLanguage.Default] = Loc.English;
         return tables;
     }
 }

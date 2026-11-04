@@ -34,3 +34,6 @@ dist/
 src/managed/Nota.Remote/wwwroot/
 
 .netcoredbg_hist
+
+# spec 077 migration working file (scripts/loc-migrate.py --plan)
+keymap.tsv
