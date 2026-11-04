@@ -122,10 +122,10 @@ Give it the issue number up front; don't override that check.
 The desktop app's interface is translated through one mechanism (specs
 [068](specs/068-ui-language/) and [077](specs/077-key-based-localization/)): every text is asked
 for by a **key**, and its English lives in one file, the English reference
-`src/managed/Nota.Application/Localization/en.json`. Each other language is one JSON file of the
-same keys, `src/managed/Nota.App/Languages/<code>.json` (French is `fr.json`); the languages are
-moving to their own repository, [nota-daw/nota-translations](https://github.com/nota-daw/nota-translations),
-from the next release.
+`src/managed/Nota.Application/Localization/en.json`. Nota ships English only. Every other
+language lives in [nota-daw/nota-translations](https://github.com/nota-daw/nota-translations) —
+translating, fixing a translation and adding a language happen there, with its own README —
+and Nota downloads it from **Settings → Appearance → Language**.
 
 - **Every new user-visible text goes through `Loc`, by key.** Add the key and its English to
   `en.json`, then write `Loc.T("preferences.language.restart")` for a text,
@@ -139,33 +139,26 @@ from the next release.
   `device.reverb`); a text used the same way in three or more areas is `common.<what>`
   (`common.cancel`). Two meanings of one English word are two keys (`menu.open`, `clip.open`) —
   there are no contexts.
-- **Changing English**: edit the text in `en.json` only; no call site and no translation file
+- **Changing English**: edit the text in `en.json` only; no call site and no translation
   changes, and every translation stays attached. If the *meaning* or the placeholders change,
   make a new key instead and delete the old one, so translators see a new text rather than a
-  stale one.
+  stale one. Placeholders are `{0}` … `{9}`, and every text must format.
 - The smoke test fails on a key used in the code that is not in `en.json`, an `en.json` key
   nothing uses, a key used against its shape (a counted text through `Loc.T`, a pattern with
-  `{0}` through `Loc.T`), a new plain literal that reads as interface text, and a key French does
-  not cover. Text that is not translated on purpose — user content, device and parameter names,
-  proper nouns, units, logs, the Remote web page and MCP — is listed with its reason as `# data:`
-  in `tests/Nota.SmokeTest/LocalizationAllowList.txt`.
-- **Add a language**: copy `fr.json` to `<code>.json` (two lowercase letters), set `code`,
-  `name` (the language's own name, shown in Preferences → Appearance → Language) and `plural`
-  (`one_is_1` when only 1 is singular, as in English; `one_is_0_1` when 0 and 1 are, as in
-  French), translate the strings you can and delete the rest — anything missing shows in
-  English. Also list the code in `CFBundleLocalizations` of `scripts/bundle-mac.sh` and
-  `scripts/package-dmg.sh` (the smoke test checks it), so macOS shows its own text — Hide, Quit,
-  the open panels — in that language too. The file format is in
-  [specs/077-key-based-localization/contracts/language-file.md](specs/077-key-based-localization/contracts/language-file.md).
-- **Translate or fix a string**: edit its value in the language file; the English it stands for
-  is the same key in `en.json`. Keep the placeholders (`{0}`, `{1}`) and give a counted text
-  both forms (`one`, `other`). Follow the glossary in
-  [specs/068-ui-language/glossary.md](specs/068-ui-language/glossary.md) (infinitive for
-  actions, sentence case, a narrow no-break space before `:` `;` `?` `!`). Device and parameter
-  names stay in English.
-- **Look at it**: run `NOTA_UI_LANGUAGE=fr` to start in a language for that run without
-  touching the saved setting, and check that nothing is clipped or overlaps at each interface
-  scale. `NOTA_LOC_WRITE_BASELINE=1` rewrites the allow-list after you wrap or add text.
+  `{0}` through `Loc.T`), an English text that does not format, a translation file inside the
+  app, and a new plain literal that reads as interface text. Text that is not translated on
+  purpose — user content, device and parameter names, proper nouns, units, logs, the Remote web
+  page and MCP — is listed with its reason as `# data:` in
+  `tests/Nota.SmokeTest/LocalizationAllowList.txt`.
+- **New texts reach translators by themselves**: nota-translations pulls `en.json` from
+  `develop` and from every release tag, and checks each language against them. A new key shows
+  in English until a translation for it is merged there — nothing to do in this repository.
+- **Look at it**: `NOTA_UI_LANGUAGE=fr` (an installed language) or
+  `NOTA_UI_LANGUAGE=/path/to/fr.json` (any language file) starts Nota in that language for one
+  run without touching the saved setting; check that nothing is clipped or overlaps at each
+  interface scale. `NOTA_LANGUAGES_URL` points the language list at another copy of
+  nota-translations (a URL, or a local folder with its layout). `NOTA_LOC_WRITE_BASELINE=1`
+  rewrites the allow-list after you wrap or add text.
 
 ## Building
 

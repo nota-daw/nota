@@ -24,7 +24,7 @@ Baseline (pre-migration) commit: `7b58fe881bc6503e0ff7508dc1bd4c180dc909bd` (`or
 ## PR 2 — nota-translations (story 2, SC-004)
 
 1. `gh workflow run publish.yml --repo nota-daw/nota-translations` → `reference/develop.json`
-   and `index.json` appear on `main`, committed by the bot.
+   and `index.json` appear on the `published` branch, committed by the bot.
 2. Open a PR that breaks a placeholder in `languages/fr.json` → `check.yml` fails naming the
    key, in < 5 min; fix it → passes and reports French coverage.
 3. Run `tools/validate.py --fixtures` and the app smoke test's fixture parity check → same
@@ -33,7 +33,7 @@ Baseline (pre-migration) commit: `7b58fe881bc6503e0ff7508dc1bd4c180dc909bd` (`or
 ## PR 3 — downloading (stories 3–5, SC-005…008)
 
 Serve a test copy: `python3 -m http.server -d <nota-translations checkout>` and
-`export NOTA_LANGUAGES_URL=http://127.0.0.1:8000` (layout `<base>/main/index.json`,
+`export NOTA_LANGUAGES_URL=http://127.0.0.1:8000` (layout `<base>/published/index.json`,
 `<base>/<commit>/<path>` reproduced by the smoke fixture builder).
 
 1. Clean data dir, open Preferences → Language: English + Français · 100% (available).

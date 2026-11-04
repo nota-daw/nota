@@ -52,14 +52,6 @@
     <EmbeddedResource Include="Theme\Themes\*.json" LogicalName="Nota.Themes.%(Filename)%(Extension)" />
   </ItemGroup>
 
-  <!-- The interface translations (spec 068, keyed since spec 077): one JSON file per language,
-       key → translation. English is not here: it is the reference, embedded in Nota.Application
-       beside Loc. Read by NotaLanguages at startup; the picker lists whatever is embedded here.
-       The smoke test reads the same files from disk. -->
-  <ItemGroup>
-    <EmbeddedResource Include="Languages\*.json" LogicalName="Nota.Languages.%(Filename)%(Extension)" />
-  </ItemGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\Nota.Presentation\Nota.Presentation.csproj" />
     <ProjectReference Include="..\Nota.Infrastructure\Nota.Infrastructure.csproj" />

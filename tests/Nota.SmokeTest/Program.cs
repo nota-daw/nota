@@ -89,6 +89,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLanguage()) Check(ok, label);
     Console.WriteLine("-- localization: source --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLocalization()) Check(ok, label);
+    Console.WriteLine("-- localization: downloadable languages --");
+    foreach (var (ok, label) in Nota.SmokeTest.LanguageCatalogTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: labels --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLabels()) Check(ok, label);
     Console.WriteLine("-- design: icons --");
