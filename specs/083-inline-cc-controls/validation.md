@@ -38,7 +38,7 @@ budget so they cannot consume the entire note viewport.
 | `git diff --check` | Passed |
 | External manual `npm run build` / `npm run check` | Passed; 106 pages, zero errors, 72 existing warnings |
 | Manual screenshots | Clip editor, multi-clip editor and Shortcuts retaken in Dark/Light |
-| Manual publication patch | Reverse application checked against the locally updated EN/RU pages |
+| Manual publication patch | Zero-context patch reverse-checked against the locally updated EN/RU pages |
 
 Commands are in [quickstart.md](quickstart.md). Logs and generated harness output
 remain in ignored `build/`. The existing CCProbe is extended instead of adding a
@@ -72,14 +72,17 @@ and [stacked-clip](https://raw.githubusercontent.com/thoi1/nota/pr-assets/issue-
   pages/screenshots were updated; the shortcut generator used the existing workspace
   source plus the new controller rows to preserve its other pending feature entries.
   No manual commit or push is included in this app-only PR. Apply [manual.patch](manual.patch)
-  in nota-docs and regenerate shortcuts when publishing its separate update.
+  with `git apply --unidiff-zero` in nota-docs and regenerate shortcuts when publishing
+  its separate update.
 
 ## Submission
 
 Implementation converged: nine functional requirements, four buildable success criteria,
 nine story acceptance scenarios and all eight constitution principles reviewed; zero
-remaining code findings. SC-005 and task T016 are submission verification, performed
-after the ordinary fast-forward push to the existing branch. No new branch or PR.
+remaining code findings. SC-005 and task T016 also passed: commit `54a69e30259e1ebb2de9bc87c6382a366ba213c3`
+was pushed with an ordinary fast forward and the GitHub API confirmed it as the head
+of the still-open PR #425 on the same fork/branch. The original PR head remains an
+ancestor. No new branch or PR was created. All 16 tasks are complete.
 
 Final quiet gate: `build/build-win-quiet.log` ends with `SMOKE TEST PASSED` and
 `SCAN SCALE PASSED` (exit 0). The concurrent timing failure was not reproduced.

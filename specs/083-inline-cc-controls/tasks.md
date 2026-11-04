@@ -34,7 +34,7 @@
 - [x] T013 Update Languages/fr.json, CHANGELOG.md, FEATURES.md and EN/RU manual text.
 - [x] T014 Run build-win.ps1, CCProbe and fresh-process height checks; inspect before/after screenshots; record validation.md.
 - [x] T015 Run speckit-converge against these artifacts and resolve remaining work.
-- [ ] T016 Commit and push to existing PR branch; verify PR #425 head includes the commit.
+- [x] T016 Commit and push to existing PR branch; verify PR #425 head includes the commit.
 
 ## Dependencies and strategy
 
