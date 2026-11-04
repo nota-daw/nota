@@ -102,6 +102,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   also clicked the stem. A note already at the default is left alone and a locked reference
   clip's notes are never touched. Grabbing a stem by its cap no longer makes it jump to the pixel
   you pressed: it moves from where it is.
+- **Multiple MIDI controller lanes** (#422): **+ lane** below the left sidebar entries
+  adds a CC lane. Each lane has an in-lane dropdown showing its controller name and
+  CC number, with **×** beside it to hide the lane without deleting MIDI data.
+  A **127 / 64 / 0** scale lines up with the curve on the left of each CC lane.
+  Extra lanes scroll vertically and share the notes' horizontal zoom and position.
+  Stacked clips scroll in their own strip when needed to keep notes accessible.
+- **Resizable piano-roll lanes** (#422): drag the divider above Velocity or any CC
+  lane to resize it independently. Heights are remembered when editors reopen and
+  Nota restarts; re-add the corresponding lane/controller to restore its height.
 - **French interface and a Language setting**: Preferences → Appearance → **Language** lists
   English and Français (each in its own name). The choice is saved and applies after a restart;
   the row says so and offers a **Restart** button (the usual unsaved-changes prompt comes first).
@@ -296,6 +305,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Windows playback cursor**: the Arrangement playhead now follows display frames,
   interpolating the engine's rendered blocks instead of jumping on the UI polling timer.
   Editing positions and audio timing remain tied to the engine transport.
+- **Docked MIDI clip editors** reserve enough height for notes and all five lane
+  tabs, including when restoring a small saved panel. The window minimum accounts
+  for both panels when the Mixer is also docked (#422).
+- **Resizing the primary piano-roll lane** keeps all five tabs reachable, including
+  after restoring a saved height. Extra CC lanes retain their smaller minimum (#422).
+- **CC lanes added to a folded Drum Rack** use the wider pad-name gutter immediately,
+  keeping their curves and pointer edits aligned with the notes (#422).
 - **An armed audio track meters its input with monitoring off** (nota-daw/nota#352): arm a
   track and its meter shows the level coming in (hardware input, or the source track it
   records from) before and during a take, without hearing it. The meter reads the input

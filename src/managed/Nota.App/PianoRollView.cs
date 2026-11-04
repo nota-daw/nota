@@ -423,6 +423,10 @@ public sealed partial class PianoRollView : UserControl
         _vel = new VelocityLane(this) { ClipToBounds = true };
         _expr = new ExpressionLane(this) { ClipToBounds = true };
         _ctlLane = new ControllerLane(this) { ClipToBounds = true, Focusable = true };
+        _primaryControllerBody = ControllerLaneBody(_ctlLane, SelectController,
+            () => SetLaneMode(LaneMode.Velocity), () => _laneMode == LaneMode.Controller,
+            out _primaryControllerPicker);
+        _primaryControllerScale = new ControllerValueScale(_ctlLane) { Width = 18, IsVisible = false };
         _velHost = new Border { BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0), Child = _vel };
 
         // Body: keys pinned left, grid fills; both scroll vertically together.
@@ -456,8 +460,9 @@ public sealed partial class PianoRollView : UserControl
         var stripRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*") };
         _keyColumns.Add(stripRow.ColumnDefinitions[0]);
         stripRow.Children.Add(new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 1) });
-        Avalonia.Controls.Grid.SetColumn(_strip, 1);
-        stripRow.Children.Add(_strip);
+        _clipStripScroll.Content = _strip;
+        Avalonia.Controls.Grid.SetColumn(_clipStripScroll, 1);
+        stripRow.Children.Add(_clipStripScroll);
         stripRow.Bind(IsVisibleProperty, _strip.GetObservable(IsVisibleProperty));
 
         var velRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = VelH };
@@ -465,7 +470,15 @@ public sealed partial class PianoRollView : UserControl
         _laneRow = velRow;
         // The lane's gutter picks what it edits: velocity, or a recorded-MPE dimension.
         var velLabelHost = new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 1, 0) };
-        velLabelHost.Child = _laneTabs = new LaneTabs(this);
+        var sidebar = new Grid { RowDefinitions = new RowDefinitions($"*,{AddLaneH}"),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        sidebar.Children.Add(_laneTabs = new LaneTabs(this));
+        var addLane = AddControllerLaneButton();
+        Avalonia.Controls.Grid.SetRow(addLane, 1); sidebar.Children.Add(addLane);
+        Avalonia.Controls.Grid.SetColumn(_primaryControllerScale, 1);
+        Avalonia.Controls.Grid.SetRowSpan(_primaryControllerScale, 2);
+        sidebar.Children.Add(_primaryControllerScale);
+        velLabelHost.Child = sidebar;
         velRow.Children.Add(velLabelHost);
         Avalonia.Controls.Grid.SetColumn(_velHost, 1);
         velRow.Children.Add(_velHost);
@@ -479,7 +492,7 @@ public sealed partial class PianoRollView : UserControl
         Avalonia.Controls.Grid.SetColumn(_hScroll, 1);
         scrollRow.Children.Add(_hScroll);
 
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
+        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto,Auto") };
         root.Children.Add(rulerRow);
         Avalonia.Controls.Grid.SetRow(stripRow, 1);
         root.Children.Add(stripRow);
@@ -489,9 +502,13 @@ public sealed partial class PianoRollView : UserControl
         Avalonia.Controls.Grid.SetRow(_overlayHost, 2);
         _overlayHost.Margin = new Thickness(KeysW, 0, 0, 0);
         root.Children.Add(_overlayHost);
-        Avalonia.Controls.Grid.SetRow(velRow, 3);
-        root.Children.Add(velRow);
-        Avalonia.Controls.Grid.SetRow(scrollRow, 4);
+        var primaryLane = ResizableLane(velRow, () => PrimaryLaneKey);
+        Avalonia.Controls.Grid.SetRow(primaryLane, 3);
+        root.Children.Add(primaryLane);
+        var controllerRows = ControllerLaneRows();
+        Avalonia.Controls.Grid.SetRow(controllerRows, 4);
+        root.Children.Add(controllerRows);
+        Avalonia.Controls.Grid.SetRow(scrollRow, 5);
         root.Children.Add(scrollRow);
         Content = root;
 
@@ -1639,7 +1656,7 @@ public sealed partial class PianoRollView : UserControl
         _gridControl.InvalidateVisual();
         _vel.InvalidateVisual();
         _expr.InvalidateVisual();
-        _ctlLane.InvalidateVisual();
+        InvalidateControllerLanes();
         NotifyGrid();
     }
 

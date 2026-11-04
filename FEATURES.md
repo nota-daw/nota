@@ -483,8 +483,14 @@ docks as a panel under any of the three, or floats in its own window — see
   Operator, Pentad, Consort). The sustain pedal holds released keys on every melodic built-in
   (Keys and Mosaic model their own damper; drums ignore it); a re-struck held key restarts.
   MCP `get_clip_controllers` / `set_clip_controller`.
+  - **Multiple controller lanes in the piano roll** — **+ lane** below the sidebar entries
+    adds independent CC lanes. Each lane has a controller-name/CC-number dropdown and
+    adjacent **×** to hide it while preserving data, plus a **127 / 64 / 0** value scale.
+    Extra lanes scroll vertically and share the notes' horizontal zoom and position.
+    Stacked clips scroll in their strip to keep notes visible. Drag the divider above Velocity
+    or a CC lane to resize it; heights return across editor reopening and restarts.
   - **Controller lane in the piano roll** — the fifth tab of the lane under the notes edits
-    any controller: click the active tab for a picker (the clip's controllers first, then
+    any controller: use its in-lane dropdown (the clip's controllers first, then
     Sustain, Mod wheel, Pitch wheel, Channel pressure, Expression, Breath and **Other CC**).
     Pedals (CC64–69) are on/off blocks — drag to draw, move or resize one on the grid (⌘ free),
     double-click or Delete removes it; other controllers are a curve — drag to draw (⌥ for a

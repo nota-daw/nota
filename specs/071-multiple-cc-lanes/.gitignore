@@ -1,0 +1,7 @@
+validation/*.log
+validation/*.png
+validation/probe-data/
+validation/results.json
+validation/cc-results.json
+validation/lane-height-expected.json
+validation/Capture/evidence/
