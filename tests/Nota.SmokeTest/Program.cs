@@ -15483,6 +15483,8 @@ Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
 Console.WriteLine("-- group link --");
 foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
+Console.WriteLine("-- group membership --");
+foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");

@@ -93,6 +93,7 @@
     "arrangement.paste_track": "Paste track",
     "arrangement.played_from_a_phone": "Played from a phone: {0}",
     "arrangement.processing": "Processing…",
+    "arrangement.remove_from_group": "Remove from group",
     "arrangement.sections.add_section_here": "Add section here",
     "arrangement.sections.already_has_its_automatic_name": "{0} already has its automatic name",
     "arrangement.sections.automatic_name": "Automatic name",
