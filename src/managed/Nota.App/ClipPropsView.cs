@@ -109,6 +109,13 @@ public sealed class ClipPropsView : UserControl
     /// left in the arrangement. LENGTH / LOOP follow the roll's own Changed event.</summary>
     public void SetStart(double startBeat) => _startText.Text = Position(startBeat);
 
+    /// <summary>The bar length changed (#405): every bar.beat read-out re-counts.</summary>
+    public void Recount(double startBeat)
+    {
+        SetStart(startBeat);
+        OnRollChanged();
+    }
+
     private void OnRollChanged()
     {
         double len = _roll.ActiveLengthBeats;   // the active clip's own length, several clips open or one

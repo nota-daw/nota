@@ -868,8 +868,7 @@ public partial class MainWindow
         _audioEditor?.Reload();
         if (_editorRoll is not { } roll) return;
         roll.BeatsPerBar = bpb;
-        if (_clipEditor is not null && _editorTrackId > 0 && roll.ActiveClip is var a)
-            _clipEditor.SetClipBounds(a.StartBeat, a.LengthBeats);   // its Start readout re-counts
+        _clipEditor?.RecountBars(roll.ActiveClip.StartBeat);   // its Start / Length read-outs
     }
 
     // A clip was trimmed / stretched / moved in the arrangement. Both clip editors snapshot the
