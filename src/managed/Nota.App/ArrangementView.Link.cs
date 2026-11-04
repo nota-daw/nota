@@ -33,14 +33,16 @@ public sealed partial class ArrangementView
     private GroupLink? _link, _linkSeen;
     private GroupLink Link => _link ??= _linkSeen = _engine is { } e ? TrackArm.Links(e) : GroupLink.None;
 
-    // The selection was picked with ⌥ (one track alone): split and the other linked edits keep to it
-    // until the selection changes again.
-    private bool _linkBypass;
+    // Clips picked with ⌥ on a linked track (one track alone): split, trim and fades on them stay
+    // on their track, and no partners join them. Per clip, so a ⌘-click on another clip still
+    // brings that clip's partners along.
+    private readonly HashSet<(int track, int clip)> _selAlone = new();
 
-    private void ClearLinkState() { _selLinked.Clear(); _linkBypass = false; }
+    private void ClearLinkState() { _selLinked.Clear(); _selAlone.Clear(); }
 
-    /// <summary>True when the clip selection was picked alone with ⌥ on a linked track.</summary>
-    internal bool LinkBypassed => _linkBypass;
+    /// <summary>True when the clip is selected and was picked alone with ⌥ on a linked track.</summary>
+    internal bool IsPickedAlone(int trackId, int clipIndex)
+        => _selAlone.Contains((trackId, clipIndex)) && _sel.Contains((trackId, clipIndex));
 
     // The link sets changed under a selection: drop the partners that no longer pair with a picked
     // clip (only those — other groups keep theirs), and add the new ones unless the selection was
@@ -51,13 +53,13 @@ public sealed partial class ArrangementView
         var pickedSet = new HashSet<(int track, int clip)>(picked);
         var want = new HashSet<(int track, int clip)>();
         foreach (var p in picked)
-            foreach (var m in MatchesOf(p.track, p.clip))
-                if (!pickedSet.Contains(m)) want.Add(m);
+            if (!_selAlone.Contains(p))
+                foreach (var m in MatchesOf(p.track, p.clip))
+                    if (!pickedSet.Contains(m)) want.Add(m);
         foreach (var c in _selLinked.ToList())
             if (!want.Contains(c)) { _selLinked.Remove(c); _sel.Remove(c); }
-        if (!_linkBypass)
-            foreach (var m in want)
-                if (_sel.Add(m)) _selLinked.Add(m);
+        foreach (var m in want)
+            if (_sel.Add(m)) _selLinked.Add(m);
         UpdateHeaderSelection();
         Redraw();
     }
@@ -116,7 +118,8 @@ public sealed partial class ArrangementView
         var targets = new HashSet<(int track, int clip)>(clips);
         if (linked)
         {
-            var linkedTracks = targets.Select(c => c.track).Distinct().Where(Link.IsLinked).ToList();
+            // Clips picked alone with ⌥ cut only their own track.
+            var linkedTracks = targets.Where(c => !_selAlone.Contains(c)).Select(c => c.track).Distinct().Where(Link.IsLinked).ToList();
             if (linkedTracks.Count > 0)
                 foreach (var c in ClipsSpanning(LinkTracks(linkedTracks).Except(linkedTracks), beat)) targets.Add(c);
         }

@@ -1364,9 +1364,10 @@ public sealed partial class ArrangementView : UserControl
         var placed = _engine.LastPlacedClips();
         if (placed.Length > 0)
         {
-            bool bypass = _linkBypass;   // an edit on a clip picked alone keeps it alone
+            // An edit on clips picked alone keeps them alone (indices move, so it is all or nothing).
+            bool allAlone = _sel.Count > 0 && _sel.All(c => _selAlone.Contains(c));
             SetSelection(placed);
-            _linkBypass = bypass;
+            if (allAlone) foreach (var c in placed) _selAlone.Add(c);
             RelinkSelection();
         }
     }
@@ -1715,7 +1716,7 @@ public sealed partial class ArrangementView : UserControl
         {
             _sel.Add((trackId, clipIndex));
             if (linked) AddMatches(trackId, clipIndex);
-            else _linkBypass = Link.IsLinked(trackId);   // ⌥-click: the edits that follow stay on this track
+            else if (Link.IsLinked(trackId)) _selAlone.Add((trackId, clipIndex));   // ⌥-click: the edits that follow stay on this track
         }
         // Selecting into or out of a group changes that row's height, so the rows below it
         // move: re-lay them before the headers repaint their selection.
@@ -1764,6 +1765,7 @@ public sealed partial class ArrangementView : UserControl
         {
             // Its partners leave with it — those the link added, not ones picked by hand.
             _selLinked.Remove((trackId, clipIndex));
+            _selAlone.Remove((trackId, clipIndex));
             foreach (var m in MatchesOf(trackId, clipIndex))
                 if (_selLinked.Remove(m)) _sel.Remove(m);
             // Removed: keep the primary stable unless we just removed it.
@@ -1777,7 +1779,8 @@ public sealed partial class ArrangementView : UserControl
         {
             _sel.Add((trackId, clipIndex));
             _selLinked.Remove((trackId, clipIndex));
-            if (!_linkBypass) AddMatches(trackId, clipIndex);
+            _selAlone.Remove((trackId, clipIndex));
+            AddMatches(trackId, clipIndex);
             SelTrackId = trackId; SelClipIndex = clipIndex; FocusTrackId = trackId;   // the just-clicked clip is the primary
         }
         UpdateHeaderSelection();
@@ -2039,7 +2042,7 @@ public sealed partial class ArrangementView : UserControl
         double at = Math.Max(0, _playheadBeats);
         // One undo step; on a linked group the other tracks are cut at the playhead too, whatever
         // clip they have there (specs/076).
-        bool any = SplitLinkedAt(_sel.ToList(), at, linked: !_linkBypass);
+        bool any = SplitLinkedAt(_sel.ToList(), at);
         if (any) { Select(-1, -1); Refresh(); ClipsSplit?.Invoke(); }
         return any;
     }

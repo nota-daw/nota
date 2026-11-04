@@ -291,7 +291,7 @@ public sealed partial class ArrangementView
                     CommitAdsr(ah.track.Id, ah.clip, ClipAdsrKit.Reset(ah.handle, ah.clip.Adsr.Fit(ah.clip.LengthBeats)));
                     return;
                 }
-                bool alone = _o.IsSelected(ah.track.Id, ah.clip.ClipIndex) && _o.LinkBypassed;   // picked alone (⌥-click)
+                bool alone = _o.IsPickedAlone(ah.track.Id, ah.clip.ClipIndex);   // picked alone (⌥-click)
                 _o.Select(ah.track.Id, ah.clip.ClipIndex, linked: !alone && !ArrangementView.IsLinkBypass(e.KeyModifiers));
                 _adsrDrag = ah.handle;
                 _adsrClip = ah.clip;
@@ -370,10 +370,12 @@ public sealed partial class ArrangementView
             _groupMove = new List<(int, int, ClipVM, double, int)>();
             _groupPartners.Clear();
             _groupHidden = new();
-            // The grabbed clip is the picked one (specs/076): its matches are its partners, even when
-            // the link had added the grabbed clip as another clip's partner — then roles swap.
+            // Grabbing a clip the link added (another clip's partner) swaps their roles (specs/076): the
+            // grabbed one is picked and its matches become its partners. Clips picked by hand — a
+            // marquee, ⌘A, ⌘-click — stay picked.
             int grabIdx = _grabClip?.ClipIndex ?? -1;
-            var grabMatches = grabIdx >= 0 ? new HashSet<(int, int)>(_o.MatchesOf(grabTrackId, grabIdx)) : new HashSet<(int, int)>();
+            bool grabIsPartner = grabIdx >= 0 && _o.IsLinkedPartner(grabTrackId, grabIdx);
+            var grabMatches = grabIsPartner ? new HashSet<(int, int)>(_o.MatchesOf(grabTrackId, grabIdx)) : new HashSet<(int, int)>();
             for (int r = 0; r < _o._tracks.Count; r++)
             {
                 var t = _o._tracks[r];
@@ -490,7 +492,7 @@ public sealed partial class ArrangementView
                 {
                     // A trim acts on its clip — and on a linked group, on the clips paired with it (specs/076).
                     // A clip picked alone (⌥-click) stays alone.
-                    bool alone = _pendingWasSelected && _o.LinkBypassed;
+                    bool alone = _o.IsPickedAlone(_pendingTrackId, _pendingClipIndex);
                     _o.Select(_pendingTrackId, _pendingClipIndex, linked: !alone);
                     var trimEng = _o._engine;
                     _trimPartners = _o.SelectedPartnersOf(_pendingTrackId, _pendingClipIndex)
@@ -620,7 +622,7 @@ public sealed partial class ArrangementView
                 e.Pointer.Capture(null);
                 bool bypass = ArrangementView.IsLinkBypass(_pendingMods);
                 // A plain click on a clip picked alone with ⌥ links it again (specs/076).
-                if (!_pendingWasSelected || _o.SelectionCount > 1 || (_o.LinkBypassed && !bypass))
+                if (!_pendingWasSelected || _o.SelectionCount > 1 || (_o.IsPickedAlone(_pendingTrackId, _pendingClipIndex) && !bypass))
                 {
                     // The first click of a double-click narrows too; keep what it narrowed so the
                     // double-click can open the whole selection together (specs/029).
@@ -628,7 +630,7 @@ public sealed partial class ArrangementView
                     _o.Select(_pendingTrackId, _pendingClipIndex);
                 }
                 // ⌥-click: this clip alone, without the clips a group Link pairs it with (specs/076).
-                if (bypass && (_o.SelectionCount > 1 || !_o.LinkBypassed))
+                if (bypass && (_o.SelectionCount > 1 || !_o.IsPickedAlone(_pendingTrackId, _pendingClipIndex)))
                     _o.Select(_pendingTrackId, _pendingClipIndex, linked: false);
                 // Also drop the playhead where the user clicked (same as clicking empty lane) —
                 // but not during playback: scrubbing off the grid is disruptive, use the ruler.
@@ -1030,7 +1032,7 @@ public sealed partial class ArrangementView
 
             var edits = new List<Control>
             {
-                MenuKit.Item(Loc.T("Split here"), GlyphKind.Split, () => { if (_o.SplitLinkedAt(new[] { (trackId, idx) }, at, linked: !(_o.LinkBypassed && _o.IsSelected(trackId, idx)))) { _o.Refresh(); _o.ClipsSplit?.Invoke(); } }, MenuKit.SplitKey),
+                MenuKit.Item(Loc.T("Split here"), GlyphKind.Split, () => { if (_o.SplitLinkedAt(new[] { (trackId, idx) }, at)) { _o.Refresh(); _o.ClipsSplit?.Invoke(); } }, MenuKit.SplitKey),
             };
             // Reverse (audio only): non-destructive, so the label reflects the clicked clip.
             if (!clip.IsMidi && _o._engine is { } rev && rev.TryGetAudioClipInfo(trackId, idx, out var rai))
