@@ -343,11 +343,16 @@ NOTA_API int32_t    nota_engine_preview_cached_at(NotaEngine* engine, const char
  * this each tick and surfaces a non-fatal message; playback never stops. */
 NOTA_API int32_t nota_engine_xrun_count(const NotaEngine* engine);
 NOTA_API int32_t nota_engine_xrun_selftest(NotaEngine* engine);
+/* Device-free: a replaced engine graph is freed once two renders have finished after it
+ * (engine stopped). */
+NOTA_API int32_t nota_engine_graph_retire_selftest(NotaEngine* engine);
 
 /* ---- parameter automation (M9) ------------------------------------------
  * Lanes are structural data on the track (snapshot + undo/redo, M6-6). A lane
- * targets track volume (target 0), pan (1) or a built-in device param (2, with
- * device_index/param_index); add/set/remove checkpoint undo. add returns the
+ * targets track volume (target 0), pan (1), a built-in device param (2, with
+ * device_index/param_index) or a send level (5, specs/072: device_index = the return bus
+ * 0..3, values 0..1; deleting a return drops its bus's lanes and renumbers later buses);
+ * add/set/remove checkpoint undo. add returns the
  * lane index (an existing lane on the same target is reused, not duplicated).
  * get_points with out=NULL returns the point count. */
 NOTA_API int32_t nota_engine_automation_selftest(NotaEngine* engine);
@@ -362,6 +367,10 @@ NOTA_API int32_t nota_engine_rack_device_selftest(NotaEngine* engine);
 /* Drum Rack: device-free check that notes route only to the matching pad chain
  * and the pad note survives the blob round-trip. */
 NOTA_API int32_t nota_engine_drum_rack_selftest(NotaEngine* engine);
+/* Hosted plug-in instruments (#436): device-free check that an instrument taking timed
+ * events renders once per block with every event at its sample offset, while a built-in
+ * still renders in segments between events. */
+NOTA_API int32_t nota_engine_timed_events_selftest(NotaEngine* engine);
 /* Plugin-parameter automation (M9-B, target 3). Device-free structural self-test;
  * the plugin-param introspection + lane-add C ABI arrives in B2. */
 NOTA_API int32_t nota_engine_plugin_automation_selftest(NotaEngine* engine);
@@ -916,6 +925,18 @@ NOTA_API void       nota_engine_set_audition_track(NotaEngine* engine, int32_t t
  * the armed instrument track are recorded into a clip. */
 NOTA_API NotaResult nota_engine_set_recording(NotaEngine* engine, int32_t enabled);
 NOTA_API int32_t    nota_engine_is_recording(const NotaEngine* engine);
+/* Discard the take in progress and record it again (#185, specs/078). Drops everything the
+ * take wrote — audio, loop passes, MIDI notes/controllers/expression, a clip it created,
+ * automation written while recording — with no undo or redo step, then:
+ *  - Arrangement: returns to where the transport was started for the take (its start when
+ *    the take started the transport, else the Play position) and records again, counting in
+ *    again when the take did;
+ *  - Session slot: leaves other clips and the transport running and records into the same
+ *    slot again from the next launch quantum (immediately when quantize is off).
+ * Returns 0 nothing was recording (no change), 1 Arrangement take retried, 2 Session slot
+ * take retried, -1 discarded but recording could not start again (see
+ * nota_engine_record_start_status). Message thread. */
+NOTA_API int32_t    nota_engine_retry_take(NotaEngine* engine);
 /* Why the last set_recording(1) did (not) start: 0 ok, 1 no armed track, 2 audio input failed. */
 NOTA_API int32_t    nota_engine_record_start_status(const NotaEngine* engine);
 /* Live audio-capture geometry for drawing a growing take: the armed track id
@@ -957,9 +978,9 @@ NOTA_API NotaResult nota_engine_poll(NotaEngine* engine);
 /* ---- Undo / redo (M6-6) -------------------------------------------------- */
 /* Undo/redo of structural edits (tracks, clips, notes, device chains, session
  * slots, arrangement sections) — restores a retained Graph snapshot — and of volume /
- * pan / master volume (009) and device-parameter (016) steps made through value
+ * pan / sends / master volume (009, 072) and device-parameter (016) steps made through value
  * gestures. Returns NOTA_OK if a step was applied, NOTA_ERR_UNKNOWN if there was nothing
- * to undo/redo. Mute, solo, sends, bypass and the transport are not covered. */
+ * to undo/redo. Mute, solo, bypass and the transport are not covered. */
 NOTA_API NotaResult nota_engine_undo(NotaEngine* engine);
 NOTA_API NotaResult nota_engine_redo(NotaEngine* engine);
 NOTA_API int32_t    nota_engine_can_undo(const NotaEngine* engine);
@@ -974,7 +995,7 @@ NOTA_API void       nota_engine_undo_group_end(NotaEngine* engine);
 NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
 
 /* ---- Value undo (009, 016) ----------------------------------------------- */
-/* Volume / pan / master volume and device-parameter changes become undo steps through
+/* Volume / pan / send / master volume and device-parameter changes become undo steps through
  * gestures. A gesture
  * records its targets' values at begin and, at end, pushes ONE undo step with the values
  * that changed (none changed → no step). If a structural checkpoint was pushed during the
@@ -988,6 +1009,8 @@ NOTA_API void       nota_engine_clear_undo_history(NotaEngine* engine);
 #define NOTA_MIX_PLUGIN_PARAM      5   /* normalized 0..1; device_index -1 = the instrument */
 #define NOTA_MIX_PRESET_TAG        6   /* a device's preset tag (specs/048): device_index as the
                                          * surface needs, param_index = the surface (below) */
+#define NOTA_MIX_TRACK_SEND        8   /* a track's send level (specs/072): device_index = the
+                                         * return bus 0..3 */
 
 typedef struct NotaMixTarget {
     int32_t kind;          /* NOTA_MIX_* */
@@ -1084,6 +1107,23 @@ NOTA_API const char* nota_engine_section_name(const NotaEngine* engine, int32_t 
  * undo entry (project load). count 0 clears. Message thread only. */
 NOTA_API NotaResult  nota_engine_set_sections(NotaEngine* engine, const NotaSection* sections,
                                               int32_t count, int32_t checkpoint);
+/* Section edits that carry the arrangement with them (specs/073). Indices are into the
+ * start-sorted section list. Each is one undo step covering clips (audio + MIDI, cut at the
+ * edges), automation (every track, the master track, master volume), take lanes and the
+ * sections; the playhead does not move. NOTA_ERR_INVALID_ARG (nothing changed) for an index
+ * out of range, a section that overlaps another, a target inside an overlap, or a no-op.
+ * Message thread only.
+ * move: insert section `index` at boundary `to_boundary` (0..count: before section k, or
+ * after the last when == count); the sections in between shift by its length, the song's
+ * length is unchanged.
+ * duplicate_with_content: a copy of the section and everything in its span goes right after
+ * it (same name; automatic stays automatic); the rest of the song moves later by its length.
+ * delete_with_content: the section and everything in its span go; the rest moves earlier. */
+NOTA_API NotaResult  nota_section_move(NotaEngine* engine, int32_t index, int32_t to_boundary);
+NOTA_API NotaResult  nota_section_duplicate_with_content(NotaEngine* engine, int32_t index);
+NOTA_API NotaResult  nota_section_delete_with_content(NotaEngine* engine, int32_t index);
+/* 1 when section `index` overlaps another (the with-content edits are unavailable), else 0. */
+NOTA_API int32_t     nota_section_overlaps(const NotaEngine* engine, int32_t index);
 
 /* ---- Project load (M7-6) ------------------------------------------------- */
 /* Clear the session to an empty project: stop transport, drop all tracks,
@@ -1190,7 +1230,8 @@ NOTA_API NotaResult nota_session_set_slot_length(NotaEngine* engine, int32_t tra
 /* Audio-slot playback gain (linear). Get returns 1.0 when the slot isn't an audio take. */
 NOTA_API float      nota_session_slot_gain(const NotaEngine* engine, int32_t track_id, int32_t scene);
 NOTA_API NotaResult nota_session_set_slot_gain(NotaEngine* engine, int32_t track_id, int32_t scene, float gain);
-/* Slot state: 0 empty, 1 filled, 2 queued, 3 playing, 4 recording. */
+/* Slot state: 0 empty, 1 filled, 2 queued, 3 playing, 4 recording,
+ * 5 record pending (the slot's take starts capturing on the next launch quantum). */
 NOTA_API int32_t nota_session_slot_state(const NotaEngine* engine, int32_t track_id, int32_t scene);
 /* Quantized launch/stop (M5-2). Launch of an empty slot stops the track. */
 NOTA_API NotaResult nota_session_set_launch_quant(NotaEngine* engine, double beats);
@@ -1462,6 +1503,13 @@ NOTA_API int32_t    nota_track_get_color(NotaEngine* engine, int32_t track_id);
    never reads it. get returns 1 folded, 0 not, -1 for an unknown track. */
 NOTA_API NotaResult nota_track_set_piano_fold(NotaEngine* engine, int32_t track_id, int32_t on);
 NOTA_API int32_t    nota_track_get_piano_fold(NotaEngine* engine, int32_t track_id);
+/* Group Link (specs/076, #184): a group track's "link its tracks for editing and recording"
+ * flag. Saved with the project, copied with the group, and an undo step when changed; the
+ * audio thread never reads it — the app applies the link to arming and clip edits.
+ * set: NOTA_ERR_INVALID_ARG for an unknown track or one that is not a group.
+ * get: 1 linked, 0 not, -1 unknown track (0 for a track that is not a group). */
+NOTA_API NotaResult nota_track_set_edit_link(NotaEngine* engine, int32_t track_id, int32_t on);
+NOTA_API int32_t    nota_track_get_edit_link(NotaEngine* engine, int32_t track_id);
 /* Track clipboard: copy stores independent clones (a group brings its children), paste
  * appends fresh copies (new ids) top-level. copy_many / paste_after are the multi-track forms:
  * paste_after lands the copies after after_track_id inside its group (-1 = top-level at the

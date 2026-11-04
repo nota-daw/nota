@@ -95,6 +95,8 @@ public interface IAudioEngine : IDisposable
     int AddScene();
     /// <summary>Removes a scene row (always keeps at least one). False if it couldn't.</summary>
     bool RemoveScene(int scene);
+    /// <summary>0 empty, 1 filled, 2 queued, 3 playing, 4 recording, 5 record pending (the take
+    /// starts capturing on the next launch quantum, specs/078).</summary>
     int SessionSlotState(int trackId, int scene);
     double SessionSlotLength(int trackId, int scene);
     void SetSessionSlotLength(int trackId, int scene, double lengthBeats);
@@ -322,6 +324,10 @@ public interface IAudioEngine : IDisposable
     /// <summary>Sets/gets a track's piano roll Fold (specs/045): a view flag saved with the project.</summary>
     void SetTrackPianoFold(int trackId, bool on);
     bool GetTrackPianoFold(int trackId);
+    /// <summary>Group Link (specs/076): links a group's tracks for arming and clip edits. One undo
+    /// step; false for a track that is not a group.</summary>
+    bool SetTrackEditLink(int trackId, bool on);
+    bool GetTrackEditLink(int trackId);
     /// <summary>Copies a whole track to the clipboard; pastes it as a new track (-1 on fail).</summary>
     bool CopyTrack(int trackId);
     int PasteTrack();
@@ -1067,6 +1073,11 @@ public interface IAudioEngine : IDisposable
     void SetAuditionTrack(int trackId);
     void SetRecording(bool enabled);
     bool IsRecording { get; }
+    /// <summary>Discard the take in progress and record it again (#185, specs/078): nothing of
+    /// it stays, not even an undo step. The Arrangement goes back to where the transport was
+    /// started and counts in again if the take did; a Session slot records again from the next
+    /// launch quantum while everything else keeps playing.</summary>
+    RetryTakeResult RetryTake();
     int RecordStartStatus { get; }
     /// <summary>Track id of the in-progress audio take (0 when not capturing).</summary>
     int AudioRecordTrackId { get; }
@@ -1110,6 +1121,19 @@ public interface IAudioEngine : IDisposable
     /// <summary>Replaces the sections (sorted; zero-length dropped). <paramref name="checkpoint"/>
     /// = one undo step (an identical list makes none); false = baseline (project load).</summary>
     void SetSections(IReadOnlyList<SectionInfo> sections, bool checkpoint = true);
+    /// <summary>Moves section <paramref name="index"/> (start order) with everything in its span
+    /// to boundary <paramref name="toBoundary"/> (0..Count: before section k, or after the last);
+    /// the sections in between shift by its length (specs/073). One undo step; false — nothing
+    /// changed — when out of range, overlapping, landing inside an overlap, or a no-op.</summary>
+    bool MoveSection(int index, int toBoundary);
+    /// <summary>Inserts a copy of the section and everything in its span right after it, moving
+    /// the rest of the song later (specs/073). One undo step; false as for <see cref="MoveSection"/>.</summary>
+    bool DuplicateSectionWithContent(int index);
+    /// <summary>Removes the section and everything in its span, moving the rest of the song
+    /// earlier (specs/073). One undo step; false as for <see cref="MoveSection"/>.</summary>
+    bool DeleteSectionWithContent(int index);
+    /// <summary>True when the section overlaps another: the with-content edits are unavailable.</summary>
+    bool SectionOverlaps(int index);
 
     // --- Value undo (specs/009, specs/016) -------------------------------
     /// <summary>Starts a gesture on volume / pan / master volume / device parameters: their

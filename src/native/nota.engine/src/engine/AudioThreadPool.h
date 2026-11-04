@@ -72,6 +72,13 @@ class AudioThreadPool {
     // Dedicated threads (excludes the caller-helper slot).
     int workerCount() const noexcept { return (int)workers_.size(); }
 
+    // The audio device's IO workgroup (an os_workgroup_t, macOS 11+) and its buffer period.
+    // Each worker, the next time it wakes, becomes a real-time thread for that period and
+    // joins the workgroup, so the OS schedules it against the device's deadline instead of
+    // as a background thread the callback then spins waiting for (#436). Null leaves it
+    // (offline renders have no deadline). Message thread; a no-op off macOS.
+    void setWorkgroup(void* osWorkgroup, double periodNs);
+
     // Caller thread: whether the next job follows the previous one back-to-back
     // (an offline render: no deadline, finish fast) rather than a buffer period
     // later (a device callback: finish in time, spend little CPU).
@@ -205,6 +212,10 @@ class AudioThreadPool {
 #endif
     std::atomic<WakeWord> wake_{0};
     std::atomic<int64_t> lingerNs_{0};                // set per dispatch (see dispatch())
+    std::atomic<void*> workgroup_{nullptr};           // see setWorkgroup
+    std::atomic<double> workgroupPeriodNs_{0.0};
+    std::atomic<uint32_t> workgroupGen_{0};
+    void followWorkgroup(uint32_t& seenGen, void*& joined, void* token); // worker thread
 
     JobSlot slots_[kSlots]; // gen-indexed descriptors (see header comment)
     uint64_t doneBase_ = 0; // caller-thread only (single audio thread)

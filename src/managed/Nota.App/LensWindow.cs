@@ -32,7 +32,7 @@ internal sealed class LensWindow : NotaWindow
     {
         _engine = card.Engine; _trackId = card.TrackId; _device = device;
         _instance = Instance();
-        Title = Loc.F("Nota Lens · {0}", TrackNames.Of(_engine, _trackId));
+        Title = Loc.F("lens.nota_lens", TrackNames.Of(_engine, _trackId));
         Width = 1100; Height = 520; MinWidth = 640; MinHeight = 260;
         CanResize = true;
         ShowInTaskbar = false;

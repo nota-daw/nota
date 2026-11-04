@@ -121,7 +121,7 @@ public sealed partial class PianoRollView
         foreach (int c in CommonControllers)
             if (Array.IndexOf(data, c) < 0) f.Items.Add(Item(c, ControllerLabel(c)));
         f.Items.Add(new Separator());
-        var other = new MenuItem { Header = Loc.T("Other CC") };
+        var other = new MenuItem { Header = Loc.T("piano_roll.controllers.other_cc") };
         for (int g = 0; g < 128; g += 16)
         {
             var ctls = Enumerable.Range(g, 16).Where(c => !MidiController.IsReserved(c)).ToList();
@@ -399,7 +399,7 @@ public sealed partial class PianoRollView
 
             if (c.Count == 0 && Editable && _drag == Drag.None)
             {
-                var hint = new FormattedText(IsSwitch ? Loc.T("Drag to draw a block") : Loc.T("Drag to draw"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
+                var hint = new FormattedText(IsSwitch ? Loc.T("piano_roll.controllers.drag_to_draw_a_block") : Loc.T("piano_roll.controllers.drag_to_draw"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
                 ctx.DrawText(hint, new Point((w - hint.Width) / 2, (h - hint.Height) / 2));
             }
             if (!double.IsNaN(_hoverBeat) || _drag != Drag.None)
@@ -689,7 +689,7 @@ public sealed partial class PianoRollView
         {
             int ctl = Ctl;
             int generation = _o._controllerCacheGeneration, gesture = _gestureGeneration;
-            ClipEditorKit.ShowMenu(this, new[] { Loc.F("Clear {0}", MidiController.Name(ctl)) }, -1, _ =>
+            ClipEditorKit.ShowMenu(this, new[] { Loc.F("piano_roll.clear", MidiController.Name(ctl)) }, -1, _ =>
             {
                 if (generation != _o._controllerCacheGeneration || gesture != _gestureGeneration
                     || TopLevel.GetTopLevel(this) is null) return;

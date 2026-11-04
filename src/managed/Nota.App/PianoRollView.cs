@@ -910,17 +910,17 @@ public sealed partial class PianoRollView : UserControl
     {
         get
         {
-            if (_selection.Count == 0) return Loc.T("No selection");
+            if (_selection.Count == 0) return Loc.T("piano_roll.no_selection");
             if (_selection.Count == 1)
             {
                 int i = _selection.First();
                 if (i >= 0 && i < _notes.Count)
                 {
                     var n = _notes[i];
-                    return Loc.F("1 note · {0} · vel {1}", NoteName(n.Pitch), (int)Math.Round(n.Velocity * 127));
+                    return Loc.F("piano_roll.1_note_vel", NoteName(n.Pitch), (int)Math.Round(n.Velocity * 127));
                 }
             }
-            return Loc.F("{0} notes", _selection.Count);
+            return Loc.F("piano_roll.notes", _selection.Count);
         }
     }
 
@@ -1741,7 +1741,7 @@ public sealed partial class PianoRollView : UserControl
         SetPlayhead(b, true);   // immediate feedback; the transport tick keeps it in sync
     }
 
-    private static readonly string SlotSeekTip = Loc.T("A Session slot plays on its own loop clock — launch it to play from the start");
+    private static readonly string SlotSeekTip = Loc.T("piano_roll.a_session_slot_plays_on");
     private static readonly Cursor HandCursorShared = new(StandardCursorType.Hand);
     private static readonly Cursor LineCursor = new(StandardCursorType.SizeWestEast);
     private static readonly Cursor NoCursor = new(StandardCursorType.No);
@@ -2964,7 +2964,7 @@ public sealed partial class PianoRollView : UserControl
         private void ShowResetMenu(int hit)
         {
             var flyout = new MenuFlyout();
-            flyout.Items.Add(MenuKit.Item(Loc.T("Reset velocity"), click: () =>
+            flyout.Items.Add(MenuKit.Item(Loc.T("piano_roll.reset_velocity"), click: () =>
             {
                 _o.EndVelocityWheel();   // its own step, apart from anything just before it
                 Snapshot();

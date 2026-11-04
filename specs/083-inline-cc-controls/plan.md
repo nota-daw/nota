@@ -40,7 +40,7 @@ no safety exceptions. User instruction overrides creating a new branch or PR.
   leaving it, reserve sidebar action height, simplify controller tab selection.
 - `PianoRollView.cs`: remove toolbar row; install sidebar action below primary tabs.
 - `PianoRollView.ClipStrip.cs`: refit lanes when stacked strip height changes.
-- `Languages/fr.json`, `FEATURES.md`, `CHANGELOG.md`: labels/workflow.
+- `Nota.Application/Localization/en.json`, `FEATURES.md`, `CHANGELOG.md`: labels/workflow.
 - `specs/071-multiple-cc-lanes/validation/Program.cs`: existing regression harness.
 - `specs/083-inline-cc-controls/`: design and validation artifacts.
 - Sibling `nota-docs`: paired piano-roll manual update; include a paired handoff in
@@ -60,3 +60,13 @@ Available-height budgeting uses actual clip strip height, not one assumed row.
 Extra lanes scroll within the remaining budget, leaving notes visible. Existing
 minimum host protections remain. No unknown technology choices require research
 delegation; findings come from the existing component implementation.
+
+## Integration with current develop
+
+Merge `d57d86dc839433c654ae17f67267a96b328fa35b` into the existing PR branch without
+rewriting its history. Develop uses stable localization keys and downloads translations;
+adapt the lane controls and shortcut descriptions to that system. Keep English text in
+`src/managed/Nota.Application/Localization/en.json`, remove the obsolete bundled French
+file as develop does, and retain the controller gesture-generation guards alongside the
+localized clear-menu key. Keep develop's Bend-range picker and its Shortcuts instruction.
+The user-facing lane layout, controller data, settings keys and editing routes are unchanged.

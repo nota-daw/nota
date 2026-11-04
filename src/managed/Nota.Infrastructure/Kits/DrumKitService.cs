@@ -57,13 +57,13 @@ public sealed class DrumKitService : IDrumKits
     public int CreateTrack(IAudioEngine engine, string id, out string warning)
     {
         var kit = KitCatalog.ById(id);
-        if (kit is null) { warning = Loc.T("Unknown drum kit."); return -1; }
+        if (kit is null) { warning = Loc.T("kits.drum_kit.unknown_drum_kit"); return -1; }
         // One undo step: the new track with its whole kit.
         engine.BeginUndoGroup();
         try
         {
             int track = engine.AddDrumRackTrack();
-            if (track <= 0) { warning = Loc.T("Couldn't create a Drum Rack track."); return -1; }
+            if (track <= 0) { warning = Loc.T("kits.drum_kit.couldnt_create_a_drum_rack"); return -1; }
             Fill(engine, track, kit, out warning);
             return track;
         }
@@ -73,9 +73,9 @@ public sealed class DrumKitService : IDrumKits
     public int CreateRhythmTrack(IAudioEngine engine, string id, out string warning)
     {
         var kit = KitCatalog.ById(id);
-        if (kit is null) { warning = Loc.T("Unknown drum kit."); return -1; }
+        if (kit is null) { warning = Loc.T("kits.drum_kit.unknown_drum_kit"); return -1; }
         int track = engine.AddRhythmTrack();
-        if (track <= 0) { warning = Loc.T("Couldn't create a Nota Rhythm track."); return -1; }
+        if (track <= 0) { warning = Loc.T("kits.drum_kit.couldnt_create_a_nota_rhythm"); return -1; }
         FillRhythm(engine, track, kit, out warning);
         return track;
     }
@@ -83,7 +83,7 @@ public sealed class DrumKitService : IDrumKits
     public bool LoadInto(IAudioEngine engine, int trackId, string id, out string warning)
     {
         var kit = KitCatalog.ById(id);
-        if (kit is null) { warning = Loc.T("Unknown drum kit."); return false; }
+        if (kit is null) { warning = Loc.T("kits.drum_kit.unknown_drum_kit"); return false; }
         if (engine.TrackInstrumentKind(trackId) == RhythmModel.Kind) { FillRhythm(engine, trackId, kit, out warning); return true; }
         // Clear the existing pads first — a kit replaces the rack's contents rather than
         // layering onto whatever was there. One undo step brings the old pads back.

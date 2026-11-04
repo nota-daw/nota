@@ -42,3 +42,10 @@ Setup → shared foundation → US1 → US2 → US3 → polish. US1 is the first
 slice, then add sidebar and scale behavior, then full regression validation.
 Documentation and independent evidence capture can run alongside verification;
 same-file lane work is sequential. No additional agent delegation is needed.
+
+## Phase 7: Develop integration
+
+- [x] T017 Resolve controller/Shortcuts/translation-file conflicts with develop in PianoRollView.Controllers.cs, PreferencesWindow.cs and Localization/en.json, retaining both sets of behavior.
+- [x] T018 Run the existing CCProbe against the merged app and verify its new Bend-range Shortcuts check and fresh-process height restoration.
+- [x] T019 Run scripts/build-win.ps1 on the merged tree and record results in validation.md.
+- [x] T020 Recheck spec/plan convergence and verify no unresolved Git entries or PR-diff whitespace errors remain.

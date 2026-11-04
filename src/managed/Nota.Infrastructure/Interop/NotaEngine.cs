@@ -152,6 +152,7 @@ public sealed partial class NotaEngine : IAudioEngine
     public void SetAuditionTrack(int trackId) { ThrowIfDisposed(); NativeMethods.SetAuditionTrack(_handle, trackId); }
     public void SetRecording(bool enabled) { ThrowIfDisposed(); Check(NativeMethods.SetRecording(_handle, enabled ? 1 : 0)); }
     public bool IsRecording { get { ThrowIfDisposed(); return NativeMethods.IsRecording(_handle) != 0; } }
+    public RetryTakeResult RetryTake() { ThrowIfDisposed(); return (RetryTakeResult)NativeMethods.RetryTake(_handle); }
     /// <summary>Why the last SetRecording(true) did (not) start: 0 ok, 1 no armed track, 2 audio input failed.</summary>
     public int RecordStartStatus { get { ThrowIfDisposed(); return NativeMethods.RecordStartStatus(_handle); } }
     /// <summary>Track id of the in-progress audio take (0 when not capturing), for drawing a growing clip.</summary>
@@ -217,6 +218,14 @@ public sealed partial class NotaEngine : IAudioEngine
             foreach (var r in rows) if (r.Name != IntPtr.Zero) Marshal.FreeCoTaskMem(r.Name);
         }
     }
+    public bool MoveSection(int index, int toBoundary)
+    { ThrowIfDisposed(); return NativeMethods.SectionMove(_handle, index, toBoundary) == NativeMethods.NotaResult.Ok; }
+    public bool DuplicateSectionWithContent(int index)
+    { ThrowIfDisposed(); return NativeMethods.SectionDuplicateWithContent(_handle, index) == NativeMethods.NotaResult.Ok; }
+    public bool DeleteSectionWithContent(int index)
+    { ThrowIfDisposed(); return NativeMethods.SectionDeleteWithContent(_handle, index) == NativeMethods.NotaResult.Ok; }
+    public bool SectionOverlaps(int index)
+    { ThrowIfDisposed(); return NativeMethods.SectionOverlaps(_handle, index) != 0; }
 
     // --- Value undo (specs/009, specs/016) -------------------------------------
     public int BeginMixGesture(params MixTarget[] targets)
@@ -308,6 +317,16 @@ public sealed partial class NotaEngine : IAudioEngine
     /// <summary>Device-free self-test: notifying a dropout bumps the counter by one.</summary>
     public bool XrunSelfTest()
     { ThrowIfDisposed(); return NativeMethods.XrunSelfTest(_handle) != 0; }
+
+    /// <summary>Device-free self-test: a replaced engine graph is freed two renders later,
+    /// not kept for the whole session.</summary>
+    public bool GraphRetireSelfTest()
+    { ThrowIfDisposed(); return NativeMethods.GraphRetireSelfTest(_handle) != 0; }
+
+    /// <summary>Device-free self-test (#436): a hosted plug-in instrument renders once per block,
+    /// every event at its sample offset; a built-in still renders between events.</summary>
+    public bool TimedEventsSelfTest()
+    { ThrowIfDisposed(); return NativeMethods.TimedEventsSelfTest(_handle) != 0; }
 
     /// <summary>Smoothed real-time DSP load, 0..1 (render time / block budget).</summary>
     public float CpuLoad

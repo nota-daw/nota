@@ -152,6 +152,14 @@ internal static class Program
                     .Any(t=>t.Text=="Click a lane's controller dropdown"),"Shortcuts pane describes the in-lane controller dropdown");
                 using(var bitmap=new RenderTargetBitmap(new PixelSize(880,640)))
                 {bitmap.Render(preferences);bitmap.Save(Path.Combine(root,"controller-shortcuts.png"));}
+                preferences.GetVisualDescendants().OfType<TextBox>()
+                    .Single(t=>t.PlaceholderText=="Filter shortcuts").Text="Bend";
+                var shortcutsFrame=new DispatcherFrame();
+                DispatcherTimer.RunOnce(()=>shortcutsFrame.Continue=false,TimeSpan.FromMilliseconds(50));
+                Dispatcher.UIThread.PushFrame(shortcutsFrame);
+                preferences.UpdateLayout();
+                Require(preferences.GetVisualDescendants().OfType<TextBlock>()
+                    .Any(t=>t.Text=="Click the Bend lane's range"),"merged Shortcuts pane retains develop's Bend-range picker instruction");
                 preferences.Close();
                 File.WriteAllText(Path.Combine(root,"cc-results.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
                 window.Close();

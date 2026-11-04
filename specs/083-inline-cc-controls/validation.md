@@ -86,3 +86,36 @@ ancestor. No new branch or PR was created. All 16 tasks are complete.
 
 Final quiet gate: `build/build-win-quiet.log` ends with `SMOKE TEST PASSED` and
 `SCAN SCALE PASSED` (exit 0). The concurrent timing failure was not reproduced.
+
+## Merge with develop — 2026-11-04
+
+Integrated develop at `d57d86dc839433c654ae17f67267a96b328fa35b` into the existing PR
+branch, preserving the prior PR head `273051768eabd99201810044a37ca0d5e610c623`.
+
+Three conflict paths were resolved:
+
+- `PianoRollView.Controllers.cs`: retain the PR's cache/gesture generation checks
+  while using develop's stable localization key for the clear menu.
+- `PreferencesWindow.cs`: retain develop's Bend-range instruction and key-based
+  strings, plus the PR's in-lane dropdown, sidebar action and divider instructions.
+- `Languages/fr.json`: accept develop's removal of bundled translations. Migrate
+  the lane UI's English texts to stable keys in `Nota.Application/Localization/en.json`;
+  translations follow develop's downloaded-language and English-fallback model.
+
+Validation after integration:
+
+- **86 real Windows UI checks passed**, including the retained Bend-range instruction.
+- Independent lane heights restored in a fresh process.
+- Final `scripts/build-win.ps1` **passed**, exit 0: native/managed build, scanner
+  self-test, full smoke suite and scan-scale suite. Logs are in ignored
+  `build/merge-develop-build-win-final.log`.
+- Localization guards passed: every key resolves, no reference entries are unused,
+  and translations are no longer bundled. The redesign has 11 new stable text keys;
+  the superseded primary-controller instruction key was removed.
+- The first full run missed one render timing guard (five late blocks in 50 ms,
+  limit four). A standalone recheck passed, and the final full run also passed
+  (maximum burst three). No guard thresholds or native code were changed relative
+  to develop.
+- No unresolved Git entries remain; the PR diff against develop passes whitespace
+  checks. The original redesign spec and integration plan converge with no remaining
+  implementation gaps. macOS and Linux were not run locally.

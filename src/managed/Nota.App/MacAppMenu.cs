@@ -43,10 +43,10 @@ internal static class MacAppMenu
                 string current = TitleOf(item);
                 string? title = current switch
                 {
-                    "Hide Others" => Loc.T("Hide Others"),
-                    "Show All" => Loc.T("Show All"),
-                    var t when t.StartsWith("Hide ", StringComparison.Ordinal) => Loc.F("Hide {0}", AppName),
-                    var t when t.StartsWith("Quit", StringComparison.Ordinal) => Loc.F("Quit {0}", AppName),
+                    "Hide Others" => Loc.T("menu.mac.hide_others"),
+                    "Show All" => Loc.T("menu.mac.show_all"),
+                    var t when t.StartsWith("Hide ", StringComparison.Ordinal) => Loc.F("menu.mac.hide", AppName),
+                    var t when t.StartsWith("Quit", StringComparison.Ordinal) => Loc.F("menu.mac.quit", AppName),
                     _ => null,
                 };
                 if (title is null || TitleOf(item) == title) continue;

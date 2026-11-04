@@ -48,7 +48,7 @@ public sealed partial class ArrangementView
     {
         var label = new TextBlock
         {
-            Text = Loc.T("Overview"), Classes = { "SectionLabel" },
+            Text = Loc.T("arrangement.overview.overview"), Classes = { "SectionLabel" },
             VerticalAlignment = VerticalAlignment.Center,
         };
         _overviewRange = new TextBlock
@@ -117,7 +117,7 @@ public sealed partial class ArrangementView
         int first = (int)Math.Floor(_scrollBeats / bpb) + 1;
         int last = Math.Max(first, (int)Math.Ceiling((_scrollBeats + ViewportBeats) / bpb));
         int total = Math.Max(last, (int)Math.Ceiling(OverviewSpan / bpb));
-        _overviewRange.Text = Loc.F("bar {0}–{1} / {2}", first, last, total);
+        _overviewRange.Text = Loc.F("arrangement.overview.bar", first, last, total);
     }
 
     // Repaint the strip when the playhead crossed into another of its pixels (called from
@@ -302,7 +302,7 @@ public sealed partial class ArrangementView
             int n = _o._tracks.Count;
             if (n == 0)
             {
-                var hint = new FormattedText(Loc.T("the project appears here"), CultureInfo.InvariantCulture,
+                var hint = new FormattedText(Loc.T("arrangement.overview.the_project_appears_here"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 10, OvEmptyText);
                 ctx.DrawText(hint, new Point(10, (h - hint.Height) / 2));
             }
@@ -314,14 +314,14 @@ public sealed partial class ArrangementView
                 // fixed pitch and squeeze together only when the strip can't hold them all.
                 int lines = 0;
                 for (int i = 0; i < n; i++)
-                    if (!_o._tracks[i].IsGroup || _o._collapsed.Contains(_o._tracks[i].Id)) lines++;
+                    if (!_o._tracks[i].IsGroup || _o._fold.IsFolded(_o._tracks[i].Id)) lines++;
                 double rowH = Math.Min(LineStride, (h - 2 * PadY - LineH) / Math.Max(1, lines - 1));
                 double bandH = Math.Min(LineH, Math.Max(1, rowH - 0.6));
                 int line = 0;
                 for (int i = 0; i < n; i++)
                 {
                     var t = _o._tracks[i];
-                    bool collapsedGroup = t.IsGroup && _o._collapsed.Contains(t.Id);
+                    bool collapsedGroup = t.IsGroup && _o._fold.IsFolded(t.Id);
                     if (t.IsGroup && !collapsedGroup) continue;
                     double y = PadY + line++ * rowH;
                     if (collapsedGroup)

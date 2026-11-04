@@ -25,13 +25,14 @@ public sealed partial class ArrangementView
 
     private string AutoLabelFor(TrackVM t) => t.AutoChain >= 0 && _engine is { } ne ? Short(NestedParam(ne, t).Name) : t.AutoTarget switch
     {
-        AutomationTarget.Volume => Loc.T("Vol"),
-        AutomationTarget.Pan => Loc.T("Pan"),
+        AutomationTarget.Volume => Loc.T("arrangement.vol"),
+        AutomationTarget.Pan => Loc.T("common.pan"),
+        AutomationTarget.Send => Loc.F("arrangement.send", SendLetter(t.AutoDeviceIndex), Short(SendBusName(t.AutoDeviceIndex))),
         AutomationTarget.PluginParam => _engine is { } e
-            ? Short(e.PluginParamName(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t))) : Loc.T("Param"),
+            ? Short(e.PluginParamName(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t))) : Loc.T("arrangement.automation.param"),
         AutomationTarget.MidiDeviceParam => _engine is { } e
-            ? Short(e.MidiEffectParamName(t.Id, t.AutoDeviceIndex, t.AutoParamIndex)) : Loc.T("Param"),
-        _ => _engine is { } e ? Short(e.DeviceParamName(t.Id, t.AutoDeviceIndex, t.AutoParamIndex)) : Loc.T("Param"),
+            ? Short(e.MidiEffectParamName(t.Id, t.AutoDeviceIndex, t.AutoParamIndex)) : Loc.T("arrangement.automation.param"),
+        _ => _engine is { } e ? Short(e.DeviceParamName(t.Id, t.AutoDeviceIndex, t.AutoParamIndex)) : Loc.T("arrangement.automation.param"),
     };
     private static string Short(string s) => s.Length <= 10 ? s : s.Substring(0, 10);
 
@@ -41,6 +42,7 @@ public sealed partial class ArrangementView
     {
         AutomationTarget.Volume => (0f, 2f),
         AutomationTarget.Pan => (-1f, 1f),
+        AutomationTarget.Send => (0f, 1f),
         AutomationTarget.PluginParam => (0f, 1f),   // normalized
         AutomationTarget.MidiDeviceParam => _engine is { } e
             ? (e.MidiEffectParamMin(t.Id, t.AutoDeviceIndex, t.AutoParamIndex),
@@ -57,6 +59,7 @@ public sealed partial class ArrangementView
     {
         AutomationTarget.Volume => t.Volume,
         AutomationTarget.Pan => t.Pan,
+        AutomationTarget.Send => _engine is { } es ? es.GetTrackSend(t.Id, t.AutoDeviceIndex) : 0f,
         AutomationTarget.PluginParam => _engine is { } e ? e.PluginParamGet(t.Id, t.AutoDeviceIndex, ResolvePluginParamIndex(t)) : 0f,
         AutomationTarget.MidiDeviceParam => _engine is { } e ? e.MidiEffectGetParam(t.Id, t.AutoDeviceIndex, t.AutoParamIndex) : 0f,
         _ => _engine is { } e ? e.DeviceGetParam(t.Id, t.AutoDeviceIndex, t.AutoParamIndex) : 0f,
@@ -92,6 +95,7 @@ public sealed partial class ArrangementView
                     info.DeviceIndex == t.AutoDeviceIndex && info.ParamIndex == t.AutoParamIndex,
                 AutomationTarget.PluginParam => info.DeviceIndex == t.AutoDeviceIndex
                                                 && e.AutomationLaneParamId(t.Id, i) == t.AutoParamId,
+                AutomationTarget.Send => info.DeviceIndex == t.AutoDeviceIndex,   // one lane per bus
                 _ => true,
             };
             if (match) return i;
@@ -121,6 +125,7 @@ public sealed partial class ArrangementView
         {
             AutomationTarget.DeviceParam or AutomationTarget.MidiDeviceParam => t.AutoDeviceIndex == dev && t.AutoParamIndex == param,
             AutomationTarget.PluginParam => t.AutoDeviceIndex == dev && t.AutoParamId == (paramId ?? ""),
+            AutomationTarget.Send => t.AutoDeviceIndex == dev,
             _ => true,
         };
         if (same) return;
@@ -131,11 +136,12 @@ public sealed partial class ArrangementView
     internal void SetAutoTarget(TrackVM t, AutomationTarget target, int dev, int param)
     {
         t.AutoTarget = target;
-        t.AutoDeviceIndex = target is AutomationTarget.DeviceParam or AutomationTarget.PluginParam or AutomationTarget.MidiDeviceParam ? dev : -1;
+        t.AutoDeviceIndex = target is AutomationTarget.DeviceParam or AutomationTarget.PluginParam or AutomationTarget.MidiDeviceParam or AutomationTarget.Send ? dev : -1;
         t.AutoParamIndex = target is AutomationTarget.DeviceParam or AutomationTarget.MidiDeviceParam ? param : -1;
         t.AutoParamId = "";
         t.AutoChain = t.AutoSlot = t.AutoLane = -1;
         _autoTargets[t.Id] = (t.AutoTarget, t.AutoDeviceIndex, t.AutoParamIndex, t.AutoParamId, -1, -1, -1);
+        NoteSendTarget(t);
         t.AutoLabel = AutoLabelFor(t);
         if (ReferenceEquals(_autoSelTrack, t)) _autoSelTrack = null;   // selection was for the old lane
         LoadAutoPoints(t);
@@ -165,7 +171,7 @@ public sealed partial class ArrangementView
 
     /// <summary>Forget every track's chosen lane target (a project was opened / created), so
     /// the next automation-mode visit picks each track's first automated param again.</summary>
-    public void ForgetAutoTargets() => _autoTargets.Clear();
+    public void ForgetAutoTargets() { _autoTargets.Clear(); _autoSendReturn.Clear(); }
 
     /// <summary>The device chain reordered / removed effects (midi=false) or MIDI effects on a
     /// track: keep its shown automation target on the same device (the engine moves the lanes
@@ -404,6 +410,9 @@ public sealed partial class ArrangementView
                         key = "V"; apply = () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1); break;
                     case AutomationTarget.Pan:
                         key = "PAN"; apply = () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1); break;
+                    case AutomationTarget.Send:
+                    { int bus = info.DeviceIndex;
+                      key = $"S:{bus}"; apply = () => SetAutoTarget(t, AutomationTarget.Send, bus, -1); break; }
                     case AutomationTarget.PluginParam:
                     { string pid = eA.AutomationLaneParamId(t.Id, i); int dv = info.DeviceIndex;
                       key = $"P:{dv}:{pid}"; apply = () => SetAutoPluginTarget(t, dv, pid); break; }
@@ -426,8 +435,13 @@ public sealed partial class ArrangementView
             if (top.Count > 0) flyout.Items.Add(new Separator());
         }
 
-        flyout.Items.Add(Leaf(Loc.T("Volume"), "V", () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1), automated));
-        flyout.Items.Add(Leaf(Loc.T("Pan"), "PAN", () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1), automated));
+        flyout.Items.Add(Leaf(Loc.T("common.volume"), "V", () => SetAutoTarget(t, AutomationTarget.Volume, -1, -1), automated));
+        flyout.Items.Add(Leaf(Loc.T("common.pan"), "PAN", () => SetAutoTarget(t, AutomationTarget.Pan, -1, -1), automated));
+        // One send per return (specs/072); returns themselves send nowhere.
+        if (!t.IsReturn)
+            foreach (var (bus, name) in SendBuses())
+                flyout.Items.Add(Leaf(Loc.F("arrangement.send", SendLetter(bus), name), $"S:{bus}",
+                    () => SetAutoTarget(t, AutomationTarget.Send, bus, -1), automated));
         if (_engine is { } e)
         {
             // An instrument (deviceIndex -1) exposing params — the built-in Nota Synth
@@ -440,7 +454,7 @@ public sealed partial class ArrangementView
                 // filterable picker + Learn.
                 flyout.Items.Add(e.TrackInstrumentKind(t.Id) >= 0
                     ? BuildBuiltinInstrumentAutoMenu(e, t, automated)
-                    : BuildPluginTargetMenu(e, t, -1, Loc.T("Instrument")));
+                    : BuildPluginTargetMenu(e, t, -1, Loc.T("common.instrument")));
             }
             int devCount = e.TrackDeviceCount(t.Id);
             bool sepAdded = false;
@@ -486,8 +500,8 @@ public sealed partial class ArrangementView
                         {
                             g = new MenuItem
                             {
-                                Header = bkind is 0 or 13 && int.TryParse(head, out _) ? Loc.F("Band {0}", head)
-                                    : bkind == 17 && head.Length == 2 && head[0] == 'S' && char.IsDigit(head[1]) ? Loc.F("Stage {0}", head[1])
+                                Header = bkind is 0 or 13 && int.TryParse(head, out _) ? Loc.F("arrangement.automation.band", head)
+                                    : bkind == 17 && head.Length == 2 && head[0] == 'S' && char.IsDigit(head[1]) ? Loc.F("arrangement.automation.stage", head[1])
                                     : head,
                             };
                             groups[head] = g; devMenu.Items.Add(g);
@@ -654,8 +668,9 @@ public sealed partial class ArrangementView
 
     private string AutoLaneLabelTop(IAudioEngine e, TrackVM t, AutomationLaneInfo info, int laneIndex) => info.Target switch
     {
-        AutomationTarget.Volume => Loc.T("Volume"),
-        AutomationTarget.Pan => Loc.T("Pan"),
+        AutomationTarget.Volume => Loc.T("common.volume"),
+        AutomationTarget.Pan => Loc.T("common.pan"),
+        AutomationTarget.Send => Loc.F("arrangement.send", SendLetter(info.DeviceIndex), SendBusName(info.DeviceIndex)),
         AutomationTarget.MidiDeviceParam => $"{e.MidiEffectName(t.Id, info.DeviceIndex)} · {e.MidiEffectParamName(t.Id, info.DeviceIndex, info.ParamIndex)}",
         AutomationTarget.PluginParam => $"{e.DeviceName(t.Id, info.DeviceIndex)} · {PluginParamNameById(e, t, info.DeviceIndex, e.AutomationLaneParamId(t.Id, laneIndex))}",
         _ => $"{e.DeviceName(t.Id, info.DeviceIndex)} · {e.DeviceParamName(t.Id, info.DeviceIndex, info.ParamIndex)}",
@@ -786,9 +801,9 @@ public sealed partial class ArrangementView
     private MenuItem BuildPluginTargetMenu(IAudioEngine e, TrackVM t, int deviceIndex, string name)
     {
         var menu = new MenuItem { Header = name };
-        var choose = new MenuItem { Header = Loc.T("Choose parameter…") };
+        var choose = new MenuItem { Header = Loc.T("arrangement.automation.choose_parameter") };
         choose.Click += (_, _) => ShowPluginParamPicker(t, deviceIndex, name);
-        var learn = new MenuItem { Header = Loc.T("Learn (touch a control in the plugin)") };
+        var learn = new MenuItem { Header = Loc.T("arrangement.automation.learn_touch_a_control_in") };
         learn.Click += (_, _) => StartLearn(t, deviceIndex);
         menu.Items.Add(choose);
         menu.Items.Add(learn);
@@ -804,7 +819,7 @@ public sealed partial class ArrangementView
         for (int i = 0; i < n; i++)
             all.Add((e.PluginParamId(t.Id, deviceIndex, i), e.PluginParamName(t.Id, deviceIndex, i)));
 
-        var filter = new TextBox { PlaceholderText = Loc.T("Filter parameters…"), Margin = new Thickness(0, 0, 0, 6) };
+        var filter = new TextBox { PlaceholderText = Loc.T("arrangement.automation.filter_parameters"), Margin = new Thickness(0, 0, 0, 6) };
         var list = new ListBox { MaxHeight = 260, Width = 260 };
         void Rebuild(string q)
         {

@@ -67,6 +67,9 @@ public sealed class Settings
     /// <summary>Height of the docked Mixer panel in design units, set by dragging its top edge
     /// (specs/054). 0 = its natural height (full strips), clamped to what the window fits.</summary>
     public double MixerDockHeight { get; set; }
+    /// <summary>The Mixer's strip layout (specs/070): false = regular strips, true = compact
+    /// 72 px strips. Shared by the docked panel and the pop-out window.</summary>
+    public bool MixerCompact { get; set; }
     /// <summary>Record a project version on every save (the History tab). On by default.</summary>
     public bool KeepVersionHistory { get; set; } = true;
     /// <summary>Bars of metronome count-in before Play / Record from stop (0 = off). Set from

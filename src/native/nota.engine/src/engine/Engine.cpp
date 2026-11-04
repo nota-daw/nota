@@ -38,8 +38,7 @@ Engine::Engine()
     for (auto& s : routeSlotPart_) s.store(0, std::memory_order_relaxed);
     silentKey_.assign(kMaxBlock * 2, 0.0f); // the key of a part that is gone (specs/050)
     ensureRenderScratch(authoring_->tracks.size());
-    liveGraph_.store(authoring_.get(), std::memory_order_release);
-    retired_.push_back(authoring_);
+    graphHist_.publish(authoring_);
     installRackPluginFactory(); // lets rack blobs rebuild hosted-plugin children on load
 }
 
@@ -113,6 +112,13 @@ bool Engine::start() {
         reconfigureAllWarpStreams();                 // warp transpose + window sizes depend on the device SR
         recomputePdc();                              // latencies are known once plugins are prepared
     }
+    // Plug-ins with real-time threads of their own, and the render pool, join the device's IO
+    // workgroup (#436).
+    void* const wg = ok ? backend_->ioWorkgroup() : nullptr;
+    setPluginAudioWorkgroup(wg);
+    const int32_t bf = ok ? backend_->bufferFrames() : 0;
+    if (pool_)
+        pool_->setWorkgroup(wg, wg && bf > 0 && backend_->sampleRate() > 0 ? 1e9 * bf / backend_->sampleRate() : 0.0);
     renderSuspended_.store(false, std::memory_order_release);
     if (ok) openMidiInput();
     return ok;
@@ -193,6 +199,8 @@ int32_t Engine::gamepadAxisValues(int32_t pad, int32_t* out, int32_t max) const 
 
 void Engine::stop() {
     if (midiInput_) midiInput_->close();
+    setPluginAudioWorkgroup(nullptr); // before the device (and its workgroup) goes
+    if (pool_) pool_->setWorkgroup(nullptr, 0.0);
     if (backend_) backend_->stop();
 }
 
@@ -441,6 +449,29 @@ bool Engine::xrunSelfTest() {
     return xrunCount() == before + 1;
 }
 
+// A replaced graph is freed once two renders have finished after it — not kept for the
+// session, and not before a render that may still be walking it is done.
+bool Engine::graphRetireSelfTest() {
+    if (isRunning() || !authoring_) return false;
+    std::vector<float> buf(64 * 2);
+    auto first = std::make_shared<Graph>(*authoring_); // a copy: no undo entry holds it
+    const std::weak_ptr<Graph> held = first;
+    publishRaw(std::move(first));
+    publishRaw(std::make_shared<Graph>(*authoring_)); // replaced, but no render has passed yet
+    // A recording slot's player outlives its track the same way (#438 review): the next take
+    // retires it, and a render that read the old pointer finishes before it goes.
+    auto player = std::make_shared<SessionPlayer>();
+    const std::weak_ptr<SessionPlayer> heldPlayer = player;
+    recordSlotHist_.publish(std::move(player)); // its track is gone: the history is the last owner
+    recordSlotHist_.publish(std::make_shared<SessionPlayer>());
+    if (held.expired() || heldPlayer.expired()) return false;
+    renderOffline(buf.data(), 64);
+    renderOffline(buf.data(), 64);
+    publishRaw(std::make_shared<Graph>(*authoring_)); // frees what the two renders moved past
+    recordSlotHist_.publish(std::make_shared<SessionPlayer>());
+    return held.expired() && heldPlayer.expired();
+}
+
 bool Engine::previewSelfTest() {
     // Synthetic 0.1 s stereo tone, previewed and rendered offline (no device).
     auto buf = std::make_shared<SampleBuffer>();
@@ -658,13 +689,14 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
-    nt->liveHeld = t.liveHeld;           // shared — held live notes persist (#366)
+    nt->liveHeld = t.liveHeld;           // shared — held live notes (#366) and effect tail (#449) persist
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
     nt->frozenSpb = t.frozenSpb;
     nt->name = t.name; // UI metadata
     nt->colorIndex = t.colorIndex;
     nt->pianoFold = t.pianoFold;
+    nt->editLink = t.editLink;
     return nt;
 }
 
@@ -699,7 +731,6 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
     for (auto& t : g->tracks)
         if (static_cast<int32_t>(t->sessionSlots.size()) < g->sceneCount) t->sessionSlots.resize(g->sceneCount);
     authoring_ = g;
-    retired_.push_back(g);
     if (g) ensureRenderScratch(g->tracks.size());
     // Fresh track objects only: the audio thread never sees them change. Before any CC target
     // exists their routes are complete as they are (empty): marking them so keeps an undo to
@@ -709,7 +740,7 @@ void Engine::publishRaw(std::shared_ptr<Graph> g) {
         for (auto& t : g->tracks) t->ccRoutesDirty = false;
         if (g->masterTrack) g->masterTrack->ccRoutesDirty = false;
     }
-    liveGraph_.store(g.get(), std::memory_order_release);
+    graphHist_.publish(g); // frees the graphs no render can still be walking
     recomputeRouting();   // Phase B: refresh sidechain source-track → route-slot table
     updateMonitorInput(); // a monitoring track may have come or gone (undo, delete, load)
 }
@@ -727,11 +758,14 @@ void Engine::pushUndo() {
                 return;
             }
     }
-    undoStack_.push_back({authoring_, {}}); // authoring_ is immutable after publish
+    // authoring_ is immutable after publish. A take's own checkpoint is marked so a retry can
+    // take it out without touching the user's edits made meanwhile (specs/078).
+    undoStack_.push_back({authoring_, {}, takePushing_ && takeAttempt_.active});
     ++undoPushCount_;
     if (undoStack_.size() > kMaxUndoDepth) {
         undoStack_.erase(undoStack_.begin());
         if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_; // keep the group's anchor
+        if (takeAttempt_.active && takeAttempt_.undoBase > 0) --takeAttempt_.undoBase; // specs/078
     }
     redoStack_.clear(); // a new edit invalidates the redo branch
 }
@@ -747,7 +781,10 @@ void Engine::endUndoGroup() {
     if (undoStack_.size() > undoGroupBase_ + 1) {
         auto first = undoStack_.begin() + static_cast<std::ptrdiff_t>(undoGroupBase_);
         for (auto it = first + 1; it != undoStack_.end(); ++it) {
-            if (!first->graph) first->graph = it->graph;
+            if (!first->graph) {
+                first->graph = it->graph;
+                first->take = it->take; // a take's checkpoint stays the take's (specs/078)
+            }
             mergeMix(first->mix, it->mix);
         }
         undoStack_.erase(first + 1, undoStack_.end());
@@ -890,6 +927,11 @@ bool Engine::mixValue(const MixTarget& t, float& v) const {
     }
     auto tr = findTrackAuthoring(t.trackId);
     if (!tr) return false;
+    if (t.kind == MixKind::TrackSend) { // specs/072: a bus that can't exist has no value
+        if (t.deviceIndex < 0 || t.deviceIndex >= kMaxReturns) return false;
+        v = tr->send(t.deviceIndex);
+        return true;
+    }
     v = t.kind == MixKind::TrackVolume ? tr->volume() : tr->pan();
     return true;
 }
@@ -921,6 +963,11 @@ bool Engine::applyMix(const MixChange& c, bool after) {
     }
     auto tr = findTrackAuthoring(c.trackId);
     if (!tr) return false; // the track is gone: skip quietly
+    if (c.kind == MixKind::TrackSend) {
+        if (c.deviceIndex < 0 || c.deviceIndex >= kMaxReturns) return false;
+        tr->setSend(c.deviceIndex, v);
+        return true;
+    }
     if (c.kind == MixKind::TrackVolume) tr->setVolume(v);
     else
         tr->setPan(v);
@@ -1028,7 +1075,10 @@ void Engine::endMixGesture(int32_t handle) {
         const size_t base = std::min(g.stackSizeAtBegin, undoStack_.size() - 1);
         auto first = undoStack_.begin() + static_cast<std::ptrdiff_t>(base);
         for (auto it = first + 1; it != undoStack_.end(); ++it) {
-            if (!first->graph) first->graph = it->graph;
+            if (!first->graph) {
+                first->graph = it->graph;
+                first->take = it->take; // a take's checkpoint stays the take's (specs/078)
+            }
             mergeMix(first->mix, it->mix);
         }
         undoStack_.erase(first + 1, undoStack_.end());
@@ -1103,7 +1153,7 @@ void Engine::reset() {
 
 void Engine::clearUndoHistory() {
     // The stacks hold old authoring graphs only — never the live one — and every published
-    // graph also sits in retired_ until the audio thread has moved past it, so dropping
+    // graph also stays in graphHist_ until the audio thread has moved past it, so dropping
     // them here frees nothing the audio thread can still be reading.
     undoStack_.clear();
     redoStack_.clear();

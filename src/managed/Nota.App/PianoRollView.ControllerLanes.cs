@@ -61,7 +61,7 @@ public sealed partial class PianoRollView
         var divider = new Border { Height = 6, Background = Brushes.Transparent,
             BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0),
             Cursor = new Cursor(StandardCursorType.SizeNorthSouth) };
-        ToolTip.SetTip(divider, Loc.T("Drag to resize lane"));
+        ToolTip.SetTip(divider, Loc.T("piano_roll.lanes.drag_to_resize"));
         double startY = 0, startHeight = 0;
         string? dragging = null;
         void Finish()
@@ -114,10 +114,10 @@ public sealed partial class PianoRollView
             {
                 Orientation = Orientation.Horizontal, Spacing = 2,
                 Children = { new Glyph(GlyphKind.Plus, 8), new TextBlock
-                    { Text = Loc.T("lane"), FontFamily = NotaFonts.Sans.FontFamily, FontSize = 8 } },
+                    { Text = Loc.T("piano_roll.lanes.lane"), FontFamily = NotaFonts.Sans.FontFamily, FontSize = 8 } },
             },
         };
-        ToolTip.SetTip(add, Loc.T("Add controller lane"));
+        ToolTip.SetTip(add, Loc.T("piano_roll.lanes.add"));
         add.Click += (_, _) => AddControllerLane();
         return add;
     }
@@ -212,7 +212,7 @@ public sealed partial class PianoRollView
                 if (active() && generation == _controllerCacheGeneration) select(id);
             });
         };
-        var close = LaneButton(GlyphKind.Close, Loc.T("Hide controller lane (keep its data)"));
+        var close = LaneButton(GlyphKind.Close, Loc.T("piano_roll.lanes.hide_keep_data"));
         close.Name = "RemoveControllerLane";
         close.Height = ControllerHeaderH;
         close.Click += (_, _) => remove();

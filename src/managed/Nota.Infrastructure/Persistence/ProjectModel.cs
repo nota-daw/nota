@@ -97,6 +97,10 @@ public sealed class TransportDto
     public double MasterVolume { get; set; } = 1.0;
     public bool MetronomeOn { get; set; }
     public bool LoopOn { get; set; }
+    /// <summary>The loop region in beats (#455); null in files from before it was saved, and
+    /// when no region is set — loading those leaves the region as it is.</summary>
+    public double? LoopStart { get; set; }
+    public double? LoopEnd { get; set; }
     public int TimeSigNumerator { get; set; } = 4;
     public int TimeSigDenominator { get; set; } = 4;
     /// <summary>The project key ("Am", "Eb"); null = none set. Loops dropped in can be
@@ -119,6 +123,7 @@ public sealed class TrackDto
     public int GroupId { get; set; } = -1;     // parent group's doc index, or -1 (top-level)
     public int ColorIndex { get; set; } = -1;  // palette slot; -1 = auto by position
     public bool? PianoFold { get; set; }       // piano roll Fold (specs/045); written only when on
+    public bool? EditLink { get; set; }        // group Link (specs/076); written only when on
     // Record input: 0 hardware, -1 master, or (2 + track-list index) for another track's
     // output (encoded so it survives id reassignment across save/load).
     public int RecordInput { get; set; }

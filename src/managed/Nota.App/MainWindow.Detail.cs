@@ -84,13 +84,13 @@ public partial class MainWindow
 
     private string ChipTrackName(int trackId)
     {
-        if (trackId == Engine.MasterTrackId) return Engine.GetTrackName(trackId) is { Length: > 0 } m ? m : Loc.T("Master");
+        if (trackId == Engine.MasterTrackId) return Engine.GetTrackName(trackId) is { Length: > 0 } m ? m : Loc.T("common.master");
         string stored = Engine.GetTrackName(trackId);
         if (stored.Length > 0) return stored;
         ChipTrackInfo(trackId, out var ti);
-        return ti.IsReturn ? Loc.F("Return {0}", Engine.TrackReturnIndex(trackId) + 1)
-             : ti.IsGroup ? Loc.F("Group {0}", trackId)
-             : (ti.IsInstrument ? Loc.T("Inst ") : Loc.T("Audio ")) + trackId;
+        return ti.IsReturn ? Loc.F("common.return_n", Engine.TrackReturnIndex(trackId) + 1)
+             : ti.IsGroup ? Loc.F("main.detail.group", trackId)
+             : (ti.IsInstrument ? Loc.T("main.detail.inst") : Loc.T("main.detail.audio")) + trackId;
     }
 
     // "· instrument · MIDI from Inst 1 · PDC 2.7 ms" / "· audio · In Ext · Monitor In · PDC 0.0 ms".
@@ -106,19 +106,19 @@ public partial class MainWindow
             {
                 parts.Add("instrument");
                 int src = Engine.GetTrackMidiSource(trackId);
-                if (src > 0) parts.Add(Loc.T("MIDI from ") + ChipTrackName(src));
+                if (src > 0) parts.Add(Loc.T("main.detail.midi_from") + ChipTrackName(src));
             }
             else
             {
                 parts.Add("audio");
                 int src = Engine.GetTrackRecordInput(trackId);
-                parts.Add(Loc.T("In ") + (src == 0 ? RecordInputPick.HardwareShort(Engine.GetTrackInputChannels(trackId)) : src == -1 ? Loc.T("Master") : ChipTrackName(src)));
+                parts.Add(Loc.T("main.detail.in") + (src == 0 ? RecordInputPick.HardwareShort(Engine.GetTrackInputChannels(trackId)) : src == -1 ? Loc.T("common.master") : ChipTrackName(src)));
                 // A Master source stays silent while monitored (it would feed back).
-                if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add(Loc.T("Monitor in"));
+                if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add(Loc.T("main.detail.monitor_in"));
             }
         }
         double ms = Engine.SampleRate > 0 ? Engine.TrackLatencySamples(trackId) / Engine.SampleRate * 1000.0 : 0;
-        parts.Add(string.Format(NotaNum.Culture, Loc.T("PDC {0:0.0}\u2009ms"), ms));
+        parts.Add(string.Format(NotaNum.Culture, Loc.T("main.detail.pdc_ms"), ms));
         return "· " + string.Join(" · ", parts);
     }
 
@@ -347,14 +347,14 @@ public partial class MainWindow
         string title;
         if (scene >= 0)
         {
-            title = Loc.F("Track {0} · Scene {1}", trackId, scene + 1);
+            title = Loc.F("main.detail.track_scene", trackId, scene + 1);
             get = () => Engine.GetSessionNotes(trackId, scene);
             set = notes => { Engine.SetSessionNotes(trackId, scene, notes); _session?.Refresh(); };
             length = () => { double l = Engine.SessionSlotLength(trackId, scene); return l > 0 ? l : 4; };
         }
         else
         {
-            title = Loc.F("Track {0} clip", trackId);
+            title = Loc.F("main.detail.track_clip", trackId);
             get = () => Engine.GetClipNotes(trackId, clipIndex);
             // Same staleness guard as the piano roll: the clip can be deleted, undone or
             // reloaded under an editor that is still on screen.
@@ -401,7 +401,7 @@ public partial class MainWindow
         if (!PatternTarget(out int tid, out int ci, out int scene))
         {
             DetailPatternBtn.IsChecked = false;
-            if (_vm is not null) _vm.StatusText = Loc.T("Select a MIDI clip on a Drum Rack track to step it.");
+            if (_vm is not null) _vm.StatusText = Loc.T("main.detail.select_a_midi_clip_on");
             return;
         }
         if (_patternView is null || _patternTrackId != tid || _patternClipIndex != ci || _patternScene != scene)
@@ -437,7 +437,7 @@ public partial class MainWindow
         if (trackId <= 0)
         {
             _deviceChain.Show(-1);
-            SetDetailChip(-1, Loc.T("Devices"));
+            SetDetailChip(-1, Loc.T("main.devices"));
             ApplyFrozenChainDim(-1);
             return;
         }
@@ -494,7 +494,7 @@ public partial class MainWindow
         if (_vm is null || ClipTrackMode == on) return;
         _vm.Settings.Current.ClipEditorTrackMode = on;
         _vm.Settings.Save();
-        _vm.StatusText = on ? Loc.T("Clip editor: every clip on the track") : Loc.T("Clip editor: one clip");
+        _vm.StatusText = on ? Loc.T("main.detail.clip_editor_every_clip_on") : Loc.T("main.detail.clip_editor_one_clip");
         if (!reopen || _editorRoll is not { } roll || _clipEditor is null || _editorTrackId <= 0) return;
         bool shown = ClipEditorShown(_clipEditor);
         var a = roll.ActiveClip;
@@ -728,7 +728,7 @@ public partial class MainWindow
             // A note sounds on its own clip's track; the keys column on the active clip's.
             AuditionOn = (pitch, vel) => AuditionNoteOn(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch, vel),
             AuditionOff = pitch => Engine.TrackNoteOff(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch),
-            ClipNameOf = (t, c) => Engine.GetClipName(t, c) is { Length: > 0 } n ? n : Loc.F("Track {0} clip", t),
+            ClipNameOf = (t, c) => Engine.GetClipName(t, c) is { Length: > 0 } n ? n : Loc.F("main.detail.track_clip", t),
             Bpm = () => Engine.Bpm,   // the ruler's time display (#275)
             // The ruler moves the transport (#50): editor beat → arrangement beat.
             Seek = local =>
@@ -746,7 +746,7 @@ public partial class MainWindow
         _editorTrackId = set.ActiveClip.TrackId;
         _editorClipIndex = set.ActiveClip.ClipIndex;
         _editorRoll = roll;
-        _clipEditor = new ClipEditorView(roll, Loc.F("Track {0} clip", _editorTrackId), set.ActiveClip.StartBeat, Engine,
+        _clipEditor = new ClipEditorView(roll, Loc.F("main.detail.track_clip", _editorTrackId), set.ActiveClip.StartBeat, Engine,
                                          _editorTrackId, _editorClipIndex, set.ActiveClip.LengthBeats,
                                          on => SetClipTrackMode(on));
         // The active clip drives the detail chip, the playhead's live check and the envelopes.
@@ -1056,7 +1056,7 @@ public partial class MainWindow
     {
         int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
         if (t > 0) ShowDevices(t);
-        else { DetailDevicesBtn.IsChecked = false; if (_vm is not null) _vm.StatusText = Loc.T("Select a track first."); }
+        else { DetailDevicesBtn.IsChecked = false; if (_vm is not null) _vm.StatusText = Loc.T("common.select_a_track_first"); }
     }
 
     private void OnDetailClip(object? sender, RoutedEventArgs e)
@@ -1068,12 +1068,12 @@ public partial class MainWindow
             if (SelectedSessionClip(out int st, out int ss)) ShowSessionSlot(st, ss);
             else if (_clipEditor is not null) ShowClipPanel();
             else if (SessionAudioEditorOpen) ShowAudioClipPanel();
-            else RejectClipTab(Loc.T("Select a clip to edit it."));
+            else RejectClipTab(Loc.T("main.detail.select_a_clip_to_edit"));
             return;
         }
         if (!SelectedClip(out int tid, out int ci, out bool isMidi))
         {
-            RejectClipTab(Loc.T("Select a clip to edit it."));
+            RejectClipTab(Loc.T("main.detail.select_a_clip_to_edit"));
             return;
         }
         if (isMidi)
@@ -1184,7 +1184,7 @@ public partial class MainWindow
     {
         if (!_detailMaximized && !CanMaximizeDetail)
         {
-            if (_vm is not null) _vm.StatusText = DetailFloating ? Loc.T("The clip editor is in its own window") : Loc.T("Open a clip in the clip editor first");
+            if (_vm is not null) _vm.StatusText = DetailFloating ? Loc.T("main.detail.the_clip_editor_is_in") : Loc.T("main.open_a_clip_in_the");
             return;
         }
         SetDetailMaximized(!_detailMaximized);
@@ -1200,7 +1200,7 @@ public partial class MainWindow
         _detailRow.Height = on ? new GridLength(1, GridUnitType.Star) : new GridLength(_detailWanted > 120 ? _detailWanted : _detailDefault);
         DetailSplitter.IsVisible = !on;
         DetailMaximizeGlyph.Kind = on ? GlyphKind.Shrink : GlyphKind.Expand;
-        ToolTip.SetTip(DetailMaximizeBtn, MenuKit.Keys(on ? Loc.T("Back to the split (⌘⇧F)") : Loc.T("Fill the window with the clip editor (⌘⇧F)")));
+        ToolTip.SetTip(DetailMaximizeBtn, MenuKit.Keys(on ? Loc.T("main.detail.back_to_the_split_f") : Loc.T("main.fill_the_window_with_the")));
         if (MenuItemFor("view.maximizeDetail") is { } mi) mi.IsChecked = on;
         LayoutBottomPanels();
     }
@@ -1400,7 +1400,7 @@ public partial class MainWindow
         _editorRoll = roll;
         _editorTrackId = -1;  // session slot: recording-tick reload N/A
         _editorClipIndex = -1;
-        _clipEditor = new ClipEditorView(roll, Loc.F("Track {0} · Scene {1}", trackId, scene + 1), 0);
+        _clipEditor = new ClipEditorView(roll, Loc.F("main.detail.track_scene", trackId, scene + 1), 0);
         _lastClipEditor = _clipEditor;
         SetHost(ClipDetailHost, _clipEditor);
         SetDetailChip(trackId);

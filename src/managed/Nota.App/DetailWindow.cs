@@ -36,7 +36,7 @@ internal sealed class DetailWindow : NotaWindow
         // can't steal them, exactly like the main window does.
         AddHandler(KeyDownEvent, (_, e) => _owner.HandleTransportKeyTunnel(e), RoutingStrategies.Tunnel);
 
-        Title = Loc.T("Devices / Clip");
+        Title = Loc.T("detail.devices_clip");
         Width = 900;
         Height = 760;
         MinWidth = 520;

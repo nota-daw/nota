@@ -72,6 +72,8 @@ public sealed class ProjectService
                 MasterVolume = transport.MasterVolume,
                 MetronomeOn = transport.MetronomeOn,
                 LoopOn = transport.LoopOn,
+                LoopStart = engine.LoopEnd > engine.LoopStart ? engine.LoopStart : null,
+                LoopEnd = engine.LoopEnd > engine.LoopStart ? engine.LoopEnd : null,
                 TimeSigNumerator = transport.TimeSigNumerator,
                 TimeSigDenominator = transport.TimeSigDenominator,
                 Key = Nota.Application.Samples.MusicalKey.FromCode(transport.Key)?.Short,
@@ -107,6 +109,7 @@ public sealed class ProjectService
                 GroupId = ti.GroupId >= 0 && idToIndex.TryGetValue(ti.GroupId, out var gix) ? gix : -1,   // parent → doc index
                 ColorIndex = engine.GetTrackColorIndex(ti.Id),
                 PianoFold = engine.GetTrackPianoFold(ti.Id) ? true : null,
+                EditLink = ti.IsGroup && engine.GetTrackEditLink(ti.Id) ? true : null,
                 RecordInput = engine.GetTrackRecordInput(ti.Id) is var rin && rin > 0
                     ? (idToIndex.TryGetValue(rin, out var rix) ? rix + 2 : 0)   // track source → doc index + 2
                     : rin,                                                       // 0 hardware / -1 master
@@ -564,6 +567,12 @@ public sealed class ProjectService
         // section the user moved isn't mistaken for one still on its take when the UI's tempo lands.
         if (doc.Transport.Bpm > 0) engine.SetBpm(doc.Transport.Bpm);
 
+        // The loop: its region as saved (#455) and whether it's on; the transport bar reads both back.
+        if (doc.Transport.LoopStart is double ls && doc.Transport.LoopEnd is double le && le > ls)
+            engine.SetLoop(doc.Transport.LoopOn, ls, le);
+        else
+            engine.SetLoop(doc.Transport.LoopOn, engine.LoopStart, engine.LoopEnd);
+
         // Pan law (specs/006) first, as the baseline rather than an undo step. A missing mixer
         // is a pre-v21 project: Balance, so the mix sounds as it was saved.
         engine.SetPanLaw(ParsePanLaw(doc.Mixer?.PanLaw, warnings), checkpoint: false);
@@ -734,6 +743,7 @@ public sealed class ProjectService
             if (t.Name is { Length: > 0 } trackName) engine.SetTrackName(id, trackName);
             if (t.ColorIndex >= 0) engine.SetTrackColorIndex(id, t.ColorIndex);
             if (t.PianoFold == true) engine.SetTrackPianoFold(id, true);
+            if (t.EditLink == true) engine.SetTrackEditLink(id, true);   // group Link (specs/076)
             if (t.RecordInput != 0) recInputDeferred.Add((id, t.RecordInput));   // resolve after all tracks exist
             if (t.Monitor) monitorDeferred.Add((id, true));                        // after record inputs resolve
             engine.SetTrackInputChannels(id, (InputChannels)(t.InputChannels ?? 0)); // older files: the stereo pair

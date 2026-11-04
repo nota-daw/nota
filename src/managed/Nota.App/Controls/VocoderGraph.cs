@@ -148,7 +148,7 @@ internal sealed class VocoderGraph : Control, IValueHandles
         }
         else
         {
-            var ft = new FormattedText(Loc.T("Pick a carrier track · until then the sound passes through"), System.Globalization.CultureInfo.InvariantCulture,
+            var ft = new FormattedText(Loc.T("device.vocoder.pick_a_carrier_track_until"), System.Globalization.CultureInfo.InvariantCulture,
                 FlowDirection.LeftToRight, NotaFonts.Sans, 10, NotaPalette.TextDisabled);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, y0 + 14));
         }

@@ -128,6 +128,9 @@ int32_t nota_engine_xrun_count(const NotaEngine* e) {
 int32_t nota_engine_xrun_selftest(NotaEngine* e) {
     return (e && ENG(e)->xrunSelfTest()) ? 1 : 0;
 }
+int32_t nota_engine_graph_retire_selftest(NotaEngine* e) {
+    return (e && ENG(e)->graphRetireSelfTest()) ? 1 : 0;
+}
 float nota_engine_cpu_load(const NotaEngine* e) {
     return e ? CENG(e)->cpuLoad() : 0.0f;
 }
@@ -292,6 +295,9 @@ NotaResult nota_engine_set_recording(NotaEngine* e, int32_t enabled) {
 int32_t nota_engine_is_recording(const NotaEngine* e) {
     return (e && CENG(e)->isRecording()) ? 1 : 0;
 }
+int32_t nota_engine_retry_take(NotaEngine* e) {
+    return e ? ENG(e)->retryTake() : 0;
+}
 int32_t nota_engine_record_start_status(const NotaEngine* e) {
     return e ? CENG(e)->recordStartStatus() : 0;
 }
@@ -353,7 +359,7 @@ int32_t nota_mix_gesture_begin(NotaEngine* e, const NotaMixTarget* targets, int3
     int32_t n = 0;
     for (int32_t i = 0; i < count; ++i) {
         const int32_t k = targets[i].kind;
-        if (k < NOTA_MIX_TRACK_VOLUME || k > NOTA_MIX_PRESET_TAG) continue;
+        if ((k < NOTA_MIX_TRACK_VOLUME || k > NOTA_MIX_PRESET_TAG) && k != NOTA_MIX_TRACK_SEND) continue; // 7 is internal
         t[n++] = {static_cast<nota::MixKind>(k), targets[i].track_id, targets[i].device_index, targets[i].param_index};
     }
     return n > 0 ? ENG(e)->beginMixGesture(t, n) : 0;
@@ -415,6 +421,18 @@ NotaResult nota_engine_set_sections(NotaEngine* e, const NotaSection* sections, 
             {sections[i].start_beat, sections[i].length_beats, sections[i].name_utf8 ? sections[i].name_utf8 : ""});
     ENG(e)->setSections(std::move(v), checkpoint != 0);
     return NOTA_OK;
+}
+NotaResult nota_section_move(NotaEngine* e, int32_t index, int32_t to_boundary) {
+    return e && ENG(e)->moveSection(index, to_boundary) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_section_duplicate_with_content(NotaEngine* e, int32_t index) {
+    return e && ENG(e)->duplicateSectionWithContent(index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_section_delete_with_content(NotaEngine* e, int32_t index) {
+    return e && ENG(e)->deleteSectionWithContent(index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_section_overlaps(const NotaEngine* e, int32_t index) {
+    return e && CENG(e)->sectionOverlaps(index) ? 1 : 0;
 }
 
 // ---- Project reset (M7-6) -------------------------------------------------
