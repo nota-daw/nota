@@ -138,10 +138,17 @@ internal static partial class DesignTokenCheck
                     foreach (Capture c in m.Groups["lit"].Captures)
                     {
                         if (!seen.Add(c.Index)) continue;
-                        // Loc.T("…") / Loc.F("…") (spec 068): still a label for the style rules, but
-                        // not a raw literal for the localization ratchet, which passes false.
-                        if (!includeWrapped && Regex.IsMatch(code[..c.Index], @"Loc\.(?:T|F)\(\s*$")) continue;
+                        // Loc.T("key") / Loc.F("key") (specs 068, 077): still a label for the style
+                        // rules — checked as the English text of its key — but not a raw literal
+                        // for the localization ratchet, which passes false.
+                        bool wrapped = Regex.IsMatch(code[..c.Index], @"Loc\.(?:T|F)\(\s*$");
+                        if (!includeWrapped && wrapped) continue;
                         var body = c.Value[1..^1];
+                        if (wrapped && Nota.Application.Localization.Loc.English.TryGet(body, out var english))
+                        {
+                            yield return (n, english.Other, english.Other, viaBuilder || InsideLabelCall(code, c.Index));
+                            continue;
+                        }
                         yield return (n, body, Unescape(body), viaBuilder || InsideLabelCall(code, c.Index));
                     }
                 }

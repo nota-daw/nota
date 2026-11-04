@@ -61,14 +61,14 @@ public sealed class NaBadge : Border
             // Neutral: "not built yet" is not active, selected or changed, so it takes no brass.
             this.BindResource(BackgroundProperty, "Brush.SurfaceRaised");
             _label.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-            ToolTip.SetTip(this, Loc.T("Not available yet"));
+            ToolTip.SetTip(this, Loc.T("control.na_badge.not_available_yet"));
         }
         else
         {
             _label.Text = "N/A";
             this.BindResource(BackgroundProperty, "Brush.SurfaceRaised");
             _label.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-            ToolTip.SetTip(this, Loc.T("Not available yet"));
+            ToolTip.SetTip(this, Loc.T("control.na_badge.not_available_yet"));
         }
     }
 }

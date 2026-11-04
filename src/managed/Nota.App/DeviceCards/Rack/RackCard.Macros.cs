@@ -28,7 +28,7 @@ internal sealed partial class RackCardView
             if (_rs.Mapping) _rs.MappingMacro = -1;
             else { _rs.MappingMacro = _rs.SelectedMacro; _rs.Centre = RackCentreTab.Chains; }
             DeferRebuild();
-        }, on: mapping, tip: mapping ? Loc.T("Stop mapping (Esc)") : Loc.T("Map the chosen macro: click parameters in the chain"));
+        }, on: mapping, tip: mapping ? Loc.T("device.rack.macros.stop_mapping_esc") : Loc.T("device.rack.macros.map_the_chosen_macro_click"));
         map.HorizontalAlignment = HorizontalAlignment.Right;
         var title = RcText("Macros", NotaPalette.TextTertiary, NotaType.KnobLabel, FontWeight.SemiBold);
         var head = new Grid { Height = RcTabHeight, ColumnDefinitions = new ColumnDefinitions("*,Auto"), Children = { title, map } };
@@ -128,8 +128,8 @@ internal sealed partial class RackCardView
             Child = host,
         };
         ToolTip.SetTip(cell, has
-            ? Loc.F("{0} → {1} · drag to turn · double-click resets", name, Loc.Plural(count, "{0} target", "{0} targets"))
-            : Loc.T("Not mapped · pick it and press Map"));
+            ? Loc.F("device.rack.macros.drag_to_turn_double_click", name, Loc.Plural("device.rack.macros.targets", count))
+            : Loc.T("device.rack.macros.not_mapped_pick_it_and"));
         cell.PointerPressed += (_, e) =>
         {
             var pt = e.GetCurrentPoint(cell).Properties;

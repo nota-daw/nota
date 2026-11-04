@@ -286,7 +286,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 bool moved = Math.Abs(G(id) - engine.InstrumentParamDefault(track, pi)) > 1e-4f;
                 cap.Foreground = moved && ink is null ? TextPrimary : TextTertiary;
             });
-            ToolTip.SetTip(cell, learn + Loc.T(" · drag to change, double-click to reset"));
+            ToolTip.SetTip(cell, learn + Loc.T("device.aurora.drag_to_change_double_click"));
             MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), learn);
             return cell;
         }
@@ -432,7 +432,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         }
         var oscPick = Segments(new[] { "1", "2" }, () => osel, iv => { osel = iv; Touch(); }, out var oscPickSync);
         readouts.Add(oscPickSync);
-        ToolTip.SetTip(oscPick, Loc.T("The oscillator whose table and warp mode this strip edits"));
+        ToolTip.SetTip(oscPick, Loc.T("device.aurora.the_oscillator_whose_table_and"));
         var oscTableStack = new Panel();
         foreach (var h in oscTableHosts) oscTableStack.Children.Add(h);
         var oscWarpStack = new Panel();
@@ -693,7 +693,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             void Stop() { drag = false; if (began) { began = false; End(id); } }
             cell.PointerReleased += (_, e) => { if (!drag) return; Stop(); e.Pointer.Capture(null); };
             cell.PointerCaptureLost += (_, _) => { if (drag) Stop(); };
-            ToolTip.SetTip(cell, Loc.F("{0} · drag or turn to change, double-click to type", field.Name));
+            ToolTip.SetTip(cell, Loc.F("device.aurora.drag_or_turn_to_change", field.Name));
         }
 
         Control EnvPanel(string title, Func<string> route, VoltEnv view, string[] ids, Func<string> summary)
@@ -791,14 +791,14 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         // The shape window follows whichever LFO you last touched — the pick doubles as
         // the label, so the picture is never anonymous.
         int lfoShown = 0;
-        var lfoShapeCap = Cap(Loc.T("SHAPE · LFO 1"));
+        var lfoShapeCap = Cap(Loc.T("device.aurora.shape_lfo_1_caps"));
         var lfoShapeSum = Mono("", TextSecondary, NotaType.Axis);
         var lfoPick = Segments(new[] { "1", "2" }, () => lfoShown, iv => { lfoShown = iv; Touch(); }, out var lfoPickSync);
         readouts.Add(lfoPickSync);
         readouts.Add(() =>
         {
             string pre = lfoShown == 0 ? "lfo1" : "lfo2";
-            lfoShapeCap.Text = Loc.F("Shape · LFO {0}", lfoShown + 1);
+            lfoShapeCap.Text = Loc.F("device.aurora.shape_lfo", lfoShown + 1);
             lfoStrip.Set(Sel(pre + "shape", 4), LfoCycles(lfoShown), G(pre + "depth"));
             lfoShapeSum.Text = $"{ShapeNames[Sel(pre + "shape", 4)]} · "
                 + (SyncDiv(G(pre + "sync")) > 0 ? SyncText(G(pre + "sync")) : SlowHz(ExpMap(G(pre + "rate"), 0.05, 20)))
@@ -826,7 +826,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         readouts.Add(matrix.Refresh);
         var modHint = new TextBlock
         {
-            Text = MenuKit.Keys(Loc.T("drag a cell — up adds, down subtracts · ⌥-click types · double-click clears")), FontSize = NotaType.Axis,
+            Text = MenuKit.Keys(Loc.T("device.aurora.drag_a_cell_up_adds")), FontSize = NotaType.Axis,
             Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center,
         };
         var modGrid = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 1 };
@@ -887,9 +887,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var bodies = new Control[] { oscBody, filtBody, envBody, lfoBody, modBody, fxBody };
         var tabCells = new Border[TabNames.Length];
         var tabTexts = new TextBlock[TabNames.Length];
-        var clearAll = TextButton(Loc.T("Clear all"));
+        var clearAll = TextButton(Loc.T("common.clear_all"));
         clearAll.Margin = new Thickness(0, 0, 6, 0);
-        ToolTip.SetTip(clearAll, Loc.T("Zero every route in the matrix"));
+        ToolTip.SetTip(clearAll, Loc.T("device.aurora.zero_every_route_in_the"));
         clearAll.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(clearAll).Properties.IsLeftButtonPressed) return;
@@ -1027,7 +1027,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 Cursor = new Cursor(StandardCursorType.Hand), TextTrimming = TextTrimming.CharacterEllipsis,
             };
             var nums = Mono("", TextSecondary, NotaType.Axis);
-            ToolTip.SetTip(dest, Loc.T("Click for the next target, right-click for the previous"));
+            ToolTip.SetTip(dest, Loc.T("device.aurora.click_for_the_next_target"));
             void Step(int dir)
             {
                 int n = MacroDests.Length;
@@ -1092,7 +1092,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 pagerText,
             },
         };
-        ToolTip.SetTip(pager, Loc.T("Click for the next macros, right-click for the previous"));
+        ToolTip.SetTip(pager, Loc.T("device.aurora.click_for_the_next_macros"));
         pager.PointerPressed += (_, e) =>
         {
             var pt = e.GetCurrentPoint(pager).Properties;
@@ -1122,7 +1122,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var railCount = Mono("", TextTertiary, NotaType.Axis);
         railCount.HorizontalAlignment = HorizontalAlignment.Right;
         railCount.Margin = new Thickness(0, 0, 7, 0);
-        readouts.Add(() => railCount.Text = railTab == 1 ? Loc.F("{0} / 8 in use", MacroAssigned()) : "");
+        readouts.Add(() => railCount.Text = railTab == 1 ? Loc.F("device.aurora.8_in_use", MacroAssigned()) : "");
         var railTabGrid = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*") };
         showRailTab = () =>
         {

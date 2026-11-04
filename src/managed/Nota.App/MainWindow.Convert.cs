@@ -31,7 +31,7 @@ public partial class MainWindow
         try
         {
             int n = Engine.GetClipAudioMono(trackId, clipIndex, null, out sr);
-            if (n <= 0 || sr <= 0) { _vm.StatusText = Loc.T("This clip has no audio to convert."); return; }
+            if (n <= 0 || sr <= 0) { _vm.StatusText = Loc.T("main.convert.this_clip_has_no_audio"); return; }
             mono = new float[n];
             Engine.GetClipAudioMono(trackId, clipIndex, mono, out sr);
 
@@ -41,11 +41,11 @@ public partial class MainWindow
             if (Engine.TryGetClipInfo(trackId, clipIndex, out var ci)) { startBeat = ci.StartBeat; clipBeats = ci.LengthBeats; }
             if (clipBeats <= 0) clipBeats = n / sr * (double)_vm.Transport.Bpm / 60.0;
         }
-        catch (Exception ex) { _vm.StatusText = Loc.F("Convert failed: {0}", ex.Message); return; }
+        catch (Exception ex) { _vm.StatusText = Loc.F("main.convert.convert_failed", ex.Message); return; }
 
         try
         {
-            await RunBlockingAsync(Loc.T("Convert to MIDI"), Loc.T("Analysing…"), async prog =>
+            await RunBlockingAsync(Loc.T("main.convert_to_midi"), Loc.T("main.convert.analysing"), async prog =>
             {
                 switch (mode)
                 {
@@ -56,18 +56,18 @@ public partial class MainWindow
                         await ConvertWithModelAsync(mono, sr, startBeat, clipBeats, mode == ClipConvertMode.Melody, prog); break;
                     case ClipConvertMode.Melody:  await ConvertMelodyAsync(mono, sr, startBeat, clipBeats, prog); break;
                     case ClipConvertMode.Harmony: await ConvertHarmonyAsync(mono, sr, startBeat, clipBeats, prog); break;
-                    default: _vm.StatusText = Loc.T("That converter isn't available yet."); break;
+                    default: _vm.StatusText = Loc.T("main.convert.that_converter_isnt_available_yet"); break;
                 }
             });
         }
-        catch (Exception ex) { _vm.StatusText = Loc.F("Convert failed: {0}", ex.Message); }
+        catch (Exception ex) { _vm.StatusText = Loc.F("main.convert.convert_failed", ex.Message); }
     }
 
     // Slice: chop the audio at onsets (or an even 16-slice grid), one pad per slice on ascending
     // notes from C1, and a MIDI clip that replays them in order.
     private async Task SliceToMidiAsync(float[] mono, double sr, double startBeat, double clipBeats, IProgress<ProgressReport> prog)
     {
-        prog.Report(ProgressReport.Indeterminate(Loc.T("Detecting transients…")));
+        prog.Report(ProgressReport.Indeterminate(Loc.T("main.convert.detecting_transients")));
         var cuts = await Task.Run(() =>
         {
             var c = AudioOnsets.Detect(mono, sr);
@@ -95,16 +95,16 @@ public partial class MainWindow
             if (LoadPad(dr, mono, sr, a, b, note) < 0) continue;
             notes.Add(new NotaNote(note, a * toBeat, Math.Max(0.05, (b - a) * toBeat), 0.9f));
             pads++;
-            prog.Report(ProgressReport.At((double)(i + 1) / cuts.Count, Loc.F("Slicing pads… {0}", pads)));
+            prog.Report(ProgressReport.At((double)(i + 1) / cuts.Count, Loc.F("main.convert.slicing_pads", pads)));
         }
-        FinishConvert(dr, startBeat, clipBeats, notes, pads == 0 ? Loc.T("Nothing to slice.") : Loc.F("Sliced into {0} pads", pads));
+        FinishConvert(dr, startBeat, clipBeats, notes, pads == 0 ? Loc.T("main.convert.nothing_to_slice") : Loc.F("main.convert.sliced_into_pads", pads));
     }
 
     // Convert Drums: classify onsets into kick/snare/hat, voice each class with its strongest hit as
     // a pad, and place a MIDI note per onset at the class's pad note.
     private async Task ConvertDrumsAsync(float[] mono, double sr, double startBeat, double clipBeats, IProgress<ProgressReport> prog)
     {
-        prog.Report(ProgressReport.Indeterminate(Loc.T("Detecting hits…")));
+        prog.Report(ProgressReport.Indeterminate(Loc.T("main.convert.detecting_hits")));
         var (onsets, cls, vel) = await Task.Run(() =>
         {
             var on = AudioOnsets.Detect(mono, sr);
@@ -126,7 +126,7 @@ public partial class MainWindow
         for (int i = 0; i < onsets.Count; i++)
             if (!best.TryGetValue(cls[i], out var cur) || vel[i] > cur.str) best[cls[i]] = (onsets[i], vel[i]);
 
-        prog.Report(ProgressReport.Indeterminate(Loc.T("Building pads…")));
+        prog.Report(ProgressReport.Indeterminate(Loc.T("main.convert.building_pads")));
         int dr = Engine.AddDrumRackTrack();
         // Build one pad per class that occurred, voiced by its strongest hit.
         var loaded = new HashSet<DrumClass>();
@@ -141,7 +141,7 @@ public partial class MainWindow
             if (!loaded.Contains(cls[i])) continue;
             notes.Add(new NotaNote(padNote[cls[i]], onsets[i] * toBeat, noteLen, Math.Clamp(0.3f + vel[i] * 0.7f, 0.2f, 1f)));
         }
-        FinishConvert(dr, startBeat, clipBeats, notes, notes.Count == 0 ? Loc.T("No drum hits found.") : Loc.F("Converted {0} hits", notes.Count));
+        FinishConvert(dr, startBeat, clipBeats, notes, notes.Count == 0 ? Loc.T("main.convert.no_drum_hits_found") : Loc.F("main.convert.converted_hits", notes.Count));
     }
 
     // Convert Melody: YIN pitch per frame → median-smoothed MIDI pitch → note segmentation, onto a
@@ -153,9 +153,9 @@ public partial class MainWindow
         int win = (int)(sr / minHz);                // one lowest-note period of comparison window
         int need = win + (int)(sr / minHz);
         int frames = mono.Length > need ? (mono.Length - need) / hop + 1 : 0;
-        if (frames < 2) { Status(Loc.T("No melody found.")); return; }
+        if (frames < 2) { Status(Loc.T("main.convert.no_melody_found")); return; }
 
-        prog.Report(ProgressReport.At(0, Loc.T("Detecting pitch…")));
+        prog.Report(ProgressReport.At(0, Loc.T("main.convert.detecting_pitch")));
         var (pitch, rms) = await Task.Run(() =>
         {
             var midi = new int[frames];
@@ -174,7 +174,7 @@ public partial class MainWindow
                     midi[i] = f0 > 0 ? (int)Math.Round(69 + 12 * Math.Log2(f0 / 440.0)) : -1;
                 }
                 int pct = (int)(100.0 * (i + 1) / frames);
-                if (pct != lastPct) { lastPct = pct; prog.Report(ProgressReport.At((double)(i + 1) / frames, Loc.T("Detecting pitch…"))); }
+                if (pct != lastPct) { lastPct = pct; prog.Report(ProgressReport.At((double)(i + 1) / frames, Loc.T("main.convert.detecting_pitch"))); }
             }
             return (MedianFilter(midi, 2), r);      // ±2-frame median kills octave/jitter blips
         });
@@ -199,12 +199,12 @@ public partial class MainWindow
         }
         Flush(frames);
 
-        if (notes.Count == 0) { Status(Loc.T("No melody found.")); return; }
+        if (notes.Count == 0) { Status(Loc.T("main.convert.no_melody_found")); return; }
         int t = Engine.AddVoltSynthTrack();         // Nota Volt
         int mc = Engine.AddMidiClip(t, startBeat, Math.Max(0.25, clipBeats));
         Engine.SetClipNotes(t, mc, notes.ToArray());
         Timeline.Refresh(); Timeline.Select(t, mc); ShowDevices(t); _session?.Refresh();
-        Status(Loc.F("Converted melody: {0} notes → new track {1}", notes.Count, t));
+        Status(Loc.F("main.convert.converted_melody_notes_new_track", notes.Count, t));
     }
 
     private static IClipAi Ai => App.Services.GetRequiredService<IClipAi>();
@@ -215,28 +215,28 @@ public partial class MainWindow
     private async Task ConvertWithModelAsync(float[] mono, double sr, double startBeat, double clipBeats, bool melody, IProgress<ProgressReport> prog)
     {
         string what = melody ? "melody" : "harmony";
-        prog.Report(ProgressReport.At(0, Loc.T("Listening for notes…")));
-        var p = new Progress<double>(f => prog.Report(ProgressReport.At(f, Loc.T("Listening for notes…"))));
+        prog.Report(ProgressReport.At(0, Loc.T("main.convert.listening_for_notes")));
+        var p = new Progress<double>(f => prog.Report(ProgressReport.At(f, Loc.T("main.convert.listening_for_notes"))));
         var heard = await Task.Run(() => Ai.Transcribe(mono, sr, p));
         if (melody) heard = Transcription.Monophonic(heard);
         var notes = Transcription.ToClipNotes(heard, mono.Length / sr, clipBeats);
-        if (notes.Length == 0) { Status(Loc.F("No {0} found.", what)); return; }
+        if (notes.Length == 0) { Status(Loc.F("main.convert.no_found", what)); return; }
         int t = Engine.AddVoltSynthTrack();         // Nota Volt
         int mc = Engine.AddMidiClip(t, startBeat, Math.Max(0.25, clipBeats));
         Engine.SetClipNotes(t, mc, notes);
         Timeline.Refresh(); Timeline.Select(t, mc); ShowDevices(t); _session?.Refresh();
-        Status(Loc.F("Converted {0}: {1} notes → new track {2}", what, notes.Length, t));
+        Status(Loc.F("main.convert.converted_notes_new_track", what, notes.Length, t));
     }
 
     // Convert Harmony: harmonic-sum pitch estimation (AudioHarmony) → polyphonic note spans on a new
     // Nota Volt track. Approximate — best on sustained chords / pads.
     private async Task ConvertHarmonyAsync(float[] mono, double sr, double startBeat, double clipBeats, IProgress<ProgressReport> prog)
     {
-        prog.Report(ProgressReport.Indeterminate(Loc.T("Detecting harmony…")));
+        prog.Report(ProgressReport.Indeterminate(Loc.T("main.convert.detecting_harmony")));
         // Shortest kept note: an eighth (half a beat) at the clip's own beats-per-second.
         double secPerBeat = clipBeats > 0 ? mono.Length / sr / clipBeats : 0.5;
         var spans = await Task.Run(() => AudioHarmony.Detect(mono, sr, minNoteSec: 0.5 * secPerBeat));
-        if (spans.Count == 0) { Status(Loc.T("No harmony found.")); return; }
+        if (spans.Count == 0) { Status(Loc.T("main.convert.no_harmony_found")); return; }
         double toBeat = mono.Length > 0 ? clipBeats / mono.Length : 0;
         var notes = new List<NotaNote>(spans.Count);
         foreach (var s in spans)
@@ -245,7 +245,7 @@ public partial class MainWindow
         int mc = Engine.AddMidiClip(t, startBeat, Math.Max(0.25, clipBeats));
         Engine.SetClipNotes(t, mc, notes.ToArray());
         Timeline.Refresh(); Timeline.Select(t, mc); ShowDevices(t); _session?.Refresh();
-        Status(Loc.F("Converted harmony: {0} notes → new track {1}", notes.Count, t));
+        Status(Loc.F("main.convert.converted_harmony_notes_new_track", notes.Count, t));
     }
 
     private void Status(string s) { if (_vm is not null) _vm.StatusText = s; }
@@ -293,6 +293,6 @@ public partial class MainWindow
         Timeline.Select(dr, mc);
         ShowDevices(dr);
         _session?.Refresh();
-        if (_vm is not null) _vm.StatusText = Loc.F("{0} → new Drum Rack track {1}", status, dr);
+        if (_vm is not null) _vm.StatusText = Loc.F("main.convert.new_drum_rack_track", status, dr);
     }
 }

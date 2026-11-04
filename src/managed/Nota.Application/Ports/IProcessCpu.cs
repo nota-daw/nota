@@ -32,5 +32,5 @@ public static class ProcessCpuScale
         wholeMachine ? corePercent / Math.Max(1, logicalCpus) : corePercent;
 
     /// <summary>What a displayed figure is a percentage of, for tooltips.</summary>
-    public static string Unit(bool wholeMachine) => wholeMachine ? Loc.T("of all CPUs") : Loc.T("of one core");
+    public static string Unit(bool wholeMachine) => wholeMachine ? Loc.T("ports.i_process_cpu.of_all_cpus") : Loc.T("ports.i_process_cpu.of_one_core");
 }

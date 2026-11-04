@@ -295,6 +295,9 @@ NotaResult nota_engine_set_recording(NotaEngine* e, int32_t enabled) {
 int32_t nota_engine_is_recording(const NotaEngine* e) {
     return (e && CENG(e)->isRecording()) ? 1 : 0;
 }
+int32_t nota_engine_retry_take(NotaEngine* e) {
+    return e ? ENG(e)->retryTake() : 0;
+}
 int32_t nota_engine_record_start_status(const NotaEngine* e) {
     return e ? CENG(e)->recordStartStatus() : 0;
 }
@@ -418,6 +421,18 @@ NotaResult nota_engine_set_sections(NotaEngine* e, const NotaSection* sections, 
             {sections[i].start_beat, sections[i].length_beats, sections[i].name_utf8 ? sections[i].name_utf8 : ""});
     ENG(e)->setSections(std::move(v), checkpoint != 0);
     return NOTA_OK;
+}
+NotaResult nota_section_move(NotaEngine* e, int32_t index, int32_t to_boundary) {
+    return e && ENG(e)->moveSection(index, to_boundary) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_section_duplicate_with_content(NotaEngine* e, int32_t index) {
+    return e && ENG(e)->duplicateSectionWithContent(index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+NotaResult nota_section_delete_with_content(NotaEngine* e, int32_t index) {
+    return e && ENG(e)->deleteSectionWithContent(index) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_section_overlaps(const NotaEngine* e, int32_t index) {
+    return e && CENG(e)->sectionOverlaps(index) ? 1 : 0;
 }
 
 // ---- Project reset (M7-6) -------------------------------------------------

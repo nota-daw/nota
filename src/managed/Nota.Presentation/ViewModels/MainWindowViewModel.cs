@@ -142,7 +142,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _log.Info(ev == AudioDeviceEvent.ResetRequested ? "Audio driver asked for a reset" : "Audio driver stopped responding");
         ApplyAudioSettings();
         if (ev == AudioDeviceEvent.ResetRequested && Engine.ActiveAudioSystem == AudioSystem.Asio)
-            StatusText = Loc.F("Audio: driver settings changed · {0} frames", Engine.NegotiatedBufferFrames);
+            StatusText = Loc.F("main.audio_driver_settings_changed_frames", Engine.NegotiatedBufferFrames);
         if (wasPlaying && Engine.IsRunning)
         {
             Engine.Seek(position);
@@ -168,7 +168,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _log.Warn($"Audio dropout #{count}");
         if (!_dropouts.Observe(count)) return;   // all from before the last reset: logged only
         ShowDropouts();
-        StatusText = Loc.F("⚠ Audio dropout ({0})", _dropouts.Count);
+        StatusText = Loc.F("main.audio_dropout", _dropouts.Count);
     }
 
     /// <summary>Count dropouts from zero again (#271): a click on the status bar's counter,
@@ -199,7 +199,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             _applyAfterPanel = true;
             RefusedSampleRate = 0;   // the old refusal no longer answers this new request
-            StatusText = Loc.T("Close the driver's settings window to apply the change");
+            StatusText = Loc.T("main.close_the_drivers_settings_window");
             return StatusText;
         }
 
@@ -215,7 +215,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         catch (NotaEngineException ex)
         {
             _log.Error("Audio device apply failed", ex);
-            StatusText = Loc.F("Audio device error: {0}", ex.Message);
+            StatusText = Loc.F("main.audio_device_error", ex.Message);
             return StatusText;
         }
         finally
@@ -245,19 +245,19 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
         if (Engine.ActiveAudioSystem == AudioSystem.Asio)
         {
-            StatusText = Loc.F("Audio: ASIO · {0} · {1:0}\u2009Hz · {2} frames", AsioDriverName(), Engine.NegotiatedSampleRate, buf);
+            StatusText = Loc.F("main.audio_asio_hz_frames", AsioDriverName(), Engine.NegotiatedSampleRate, buf);
             return StatusText;
         }
         bool fallback = Engine.AudioExclusiveFallback;
         if (fallback)
         {
             _log.Warn("WASAPI exclusive mode refused — fell back to shared");
-            StatusText = Loc.T("WASAPI exclusive unavailable — using shared mode");
+            StatusText = Loc.T("main.wasapi_exclusive_unavailable_using_shared");
             return StatusText;
         }
         StatusText = buf > 0
-            ? Loc.F("Audio: {0:0}\u2009Hz · {1} frames", Engine.NegotiatedSampleRate, buf)
-            : Loc.F("Audio: {0:0}\u2009Hz", Engine.NegotiatedSampleRate);
+            ? Loc.F("main.audio_hz_frames", Engine.NegotiatedSampleRate, buf)
+            : Loc.F("main.audio_hz", Engine.NegotiatedSampleRate);
         return StatusText;
     }
 
@@ -306,7 +306,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (Engine.AudioSystem != AudioSystem.Asio || Engine.ActiveAudioSystem == AudioSystem.Asio) return null;
         string reason = Engine.AudioFallbackReason;
         if (reason.Length > 0) reason = char.ToUpperInvariant(reason[0]) + reason[1..] + ".";
-        return Loc.F("ASIO driver ‘{0}’ couldn't start — using WASAPI. {1}", AsioDriverName(), reason).TrimEnd();
+        return Loc.F("main.asio_driver_couldnt_start_using", AsioDriverName(), reason).TrimEnd();
     }
 
     /// <summary>Display name of the staged ASIO driver (the first installed when none is staged).</summary>
@@ -322,8 +322,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     /// <summary>Why nothing is heard when no output device opened (the engine runs silently
     /// or not at all), else null.</summary>
     public string? NoAudioOutput
-        => !Engine.IsRunning ? Loc.T("No audio output could be opened — Nota runs without sound. Choose a device in Settings → Audio")
-         : Engine.AudioSilentFallback ? Loc.T("No audio output device opened — Nota runs silently. Choose a device in Settings → Audio")
+        => !Engine.IsRunning ? Loc.T("main.no_audio_output_could_be")
+         : Engine.AudioSilentFallback ? Loc.T("main.no_audio_output_device_opened")
          : null;
 
     /// <summary>
@@ -337,12 +337,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             Engine.ApplyMidi();
             _log.Info("MIDI inputs updated");
-            StatusText = Loc.T("MIDI inputs updated.");
+            StatusText = Loc.T("main.midi_inputs_updated");
         }
         catch (NotaEngineException ex)
         {
             _log.Error("MIDI apply failed", ex);
-            StatusText = Loc.F("MIDI error: {0}", ex.Message);
+            StatusText = Loc.F("main.midi_error", ex.Message);
         }
     }
 

@@ -222,7 +222,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, Margin = new Thickness(6, 0, 0, 0) }, Dock.Right), name } },
             };
             readouts.Add(() => name.Text = ModeName());
-            ToolTip.SetTip(box, Loc.T("Character — the era the signal passes through: its saturation, tone, band-limit and how much hiss, crackle, wow and flutter it brings. Scroll to step."));
+            ToolTip.SetTip(box, Loc.T("device.vintage.character_the_era_the_signal"));
             Learn(box, Mode);
             box.PointerPressed += (_, e) =>
             {
@@ -298,8 +298,8 @@ internal sealed class VintageDeviceBody : IDeviceBody
             stateTitle.Foreground = Sc(S_InPk) > 0.01 ? AccentBright : TextTertiary;   // lit while signal passes
         });
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(StateFader(Drive, "DRV", NotaPalette.VizInk, Pct, Loc.T("Drive — how hard the signal hits the saturation. ⌥-click types, double-click resets.")));
-        faders.Children.Add(Col(StateFader(Wear, "WEAR", Teal, Pct, Loc.T("Wear — the age of the medium: a narrower band, more hiss and crackle, a wandering flutter. ⌥-click types, double-click resets.")), 1));
+        faders.Children.Add(StateFader(Drive, "DRV", NotaPalette.VizInk, Pct, Loc.T("device.vintage.drive_how_hard_the_signal")));
+        faders.Children.Add(Col(StateFader(Wear, "WEAR", Teal, Pct, Loc.T("device.vintage.wear_the_age_of_the")), 1));
         var stateCol = new RuleSection
         {
             Width = 56, Padding = new Thickness(0, 5, 0, 4),
@@ -318,7 +318,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             curve.DragV += v => Raw(Drive, (float)v);
             curve.GestureBegin += () => Begin(Drive);
             curve.GestureEnd += () => End(Drive);
-            ToolTip.SetTip(curve, MenuKit.Keys(Loc.T("The transfer curve the saturation runs — input level across, output up; dashed is the dry line, teal what you hear with Mix and Output, the dot where the input peak sits. Drag up or down for the drive, ⌥-click to type it.")));
+            ToolTip.SetTip(curve, MenuKit.Keys(Loc.T("device.vintage.the_transfer_curve_the_saturation")));
             ValueEntry.AttachAll(curve, F(Drive, "Drive", Pct));
             Learn(curve, Drive);
 
@@ -357,7 +357,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             wearView.DragH += v => Raw(wearShow == 1 ? FlutterRate : WowRate, (float)v);
             wearView.GestureBegin += () => { Begin(Wow); Begin(Flutter); Begin(WowRate); Begin(FlutterRate); };
             wearView.GestureEnd += () => { End(Wow); End(Flutter); End(WowRate); End(FlutterRate); };
-            ToolTip.SetTip(wearView, MenuKit.Keys(Loc.T("The pitch drift over the last four seconds — wow in neutral ink, flutter in teal. Drag up or down for the depth of what is picked above, sideways for its rate; ⌥-click to type them.")));
+            ToolTip.SetTip(wearView, MenuKit.Keys(Loc.T("device.vintage.the_pitch_drift_over_the")));
             ValueEntry.AttachAll(wearView,
                 new ValueField("Depth", () => P(wearShow == 1 ? Flutter : Wow), Pct, v => Raw(wearShow == 1 ? Flutter : Wow, (float)v),
                     () => Begin(wearShow == 1 ? Flutter : Wow), () => End(wearShow == 1 ? Flutter : Wow)) { After = RefreshAll },
@@ -367,10 +367,10 @@ internal sealed class VintageDeviceBody : IDeviceBody
             Learn(wearView, Wow);
 
             var show = Chips(new[] { "Wow", "Flutter", "Both" }, i => wearShow == i, i => wearShow = i, -1);
-            ToolTip.SetTip(show, Loc.T("What the window shows and a drag in it edits"));
+            ToolTip.SetTip(show, Loc.T("device.vintage.what_the_window_shows_and"));
             var sync = Latch(WowSync, () => On(WowSync), () => SetP(WowSync, On(WowSync) ? 0f : 1f),
                 () => Synced() ? "Sync " + SyncNames[Sel(WowRate, 6)] : "Sync off",
-                Loc.T("Sync — the wow follows the tempo: one sway every 4 bars … 1/8 (RATE picks it)"));
+                Loc.T("device.vintage.sync_the_wow_follows_the"));
             var drift = Mono("", 7, TextSecondary);
             readouts.Add(() => drift.Text = "drift " + HzF(WowHz()));
             var head = HeadRow(Row(6, Caps("CHAR"), CharDrop(), show, sync), drift);
@@ -408,14 +408,14 @@ internal sealed class VintageDeviceBody : IDeviceBody
             harm.DragV += v => Raw(Drive, (float)v);
             harm.GestureBegin += () => Begin(Drive);
             harm.GestureEnd += () => End(Drive);
-            ToolTip.SetTip(harm, MenuKit.Keys(Loc.T("The harmonics the saturation adds at the input's level (the fundamental at the top), against the hiss floor in teal. Drag up or down for the drive, ⌥-click to type it.")));
+            ToolTip.SetTip(harm, MenuKit.Keys(Loc.T("device.vintage.the_harmonics_the_saturation_adds")));
             ValueEntry.AttachAll(harm, F(Drive, "Drive", Pct));
             Learn(harm, Drive);
 
             var peak = Mono("", 7, TextSecondary);
             readouts.Add(() => peak.Text = DbfsF(Sc(S_OutPk)));
             var comp = ToggleLatch(AutoComp, () => Sc(S_CompDb) != 0 && On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0}") : "Auto-comp",
-                Loc.T("Auto-comp — the output level follows the input's, however hard the drive"));
+                Loc.T("device.vintage.auto_comp_the_output_level"));
             var head = HeadRow(Row(6, Caps("CHAR"), CharDrop(), new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames), comp), peak);
             var knobs = KnobRow(new[]
             {
@@ -460,7 +460,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
         Control ModelRow()
         {
             var chips = Chips(new[] { "Warm", "Flat", "Dark" }, i => Sel(ToneModel, 3) == i, i => SetP(ToneModel, i / 2f), ToneModel, h: 15, padX: 6);
-            ToolTip.SetTip(chips, Loc.T("Tone model — Warm: the era's own tilt and head bump; Flat: the TONE knob alone; Dark: a lower, darker tilt"));
+            ToolTip.SetTip(chips, Loc.T("device.vintage.tone_model_warm_the_eras"));
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("40,*") };
             g.Children.Add(Caps("MODEL")); g.Children.Add(Col(chips, 1));
             return g;
@@ -495,7 +495,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             Box("WEAR", () => NotaNum.F($"{CentsF(Sc(S_WowCents) + Sc(S_FlutCents))} · peak drift"),
                 () => NotaNum.F($"wow {Pct(P(Wow))} + flutter {Pct(P(Flutter))}"), () => P(Wow) + P(Flutter) > 0.01f),
             new StackPanel { Spacing = 5, Children = {
-                Toggle(WearFollow, Loc.T("Wear follows input")),
+                Toggle(WearFollow, Loc.T("device.vintage.wear_follows_input")),
                 Toggle(StereoDrift, "Stereo drift") } });
         Control ToneTab()
         {
@@ -536,13 +536,13 @@ internal sealed class VintageDeviceBody : IDeviceBody
             // Output stage: Tube / Analog, a click on the lit one switches the stage off.
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
             btns.Children.Add(Latch(OutputStage, () => Sel(OutputStage, 3) == 1, () => SetP(OutputStage, Sel(OutputStage, 3) == 1 ? 0f : 0.5f), () => "Tube",
-                Loc.T("Tube stage — a warm, asymmetric valve stage after the saturation (click again for none)"), fill: true));
+                Loc.T("device.vintage.tube_stage_a_warm_asymmetric"), fill: true));
             btns.Children.Add(Col(Latch(OutputStage, () => Sel(OutputStage, 3) == 2, () => SetP(OutputStage, Sel(OutputStage, 3) == 2 ? 0f : 1f), () => "Analog",
-                Loc.T("Analog stage — a console-style soft clip after the saturation (click again for none)"), fill: true), 1));
+                Loc.T("device.vintage.analog_stage_a_console_style"), fill: true), 1));
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
                 Docked(new Border { Margin = new Thickness(0, 7, 0, 0), Child = sliders }, Dock.Top),
-                Docked(new StackPanel { Spacing = 5, Children = { Toggle(AutoComp, "Auto-compensation"), Toggle(EvenOnly, Loc.T("Even harmonics only")) } }, Dock.Bottom),
+                Docked(new StackPanel { Spacing = 5, Children = { Toggle(AutoComp, "Auto-compensation"), Toggle(EvenOnly, Loc.T("device.vintage.even_harmonics_only")) } }, Dock.Bottom),
                 Docked(new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 5), Child = btns }, Dock.Bottom) } };
             return new Border { Padding = new Thickness(8, 6), Child = body };
         }

@@ -18,7 +18,7 @@ internal sealed class StereoMeter : Control
 {
     private double _l, _r, _pkL, _pkR;
 
-    public StereoMeter() => ToolTip.SetTip(this, Loc.T("Clear the peak hold"));
+    public StereoMeter() => ToolTip.SetTip(this, Loc.T("control.clear_the_peak_hold"));
 
     // Push the block's linear peak amplitudes (0..1+).
     public void Set(float peakL, float peakR)

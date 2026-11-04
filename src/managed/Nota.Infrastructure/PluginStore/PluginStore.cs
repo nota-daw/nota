@@ -88,10 +88,10 @@ public sealed class PluginStore : IPluginStore
             var file = Path.Combine(work, "asset" + RegistryClient.ExtensionOf(asset.Url, asset.Archive));
             await _registry.DownloadAsync(asset.Url, asset.Size, asset.Sha256, file, plugin.Name, progress, ct).ConfigureAwait(false);
 
-            progress?.Report(new StoreProgress(-1, Loc.F("Unpacking {0}…", plugin.Name)));
+            progress?.Report(new StoreProgress(-1, Loc.F("common.unpacking", plugin.Name)));
             var bundleRoot = await Task.Run(() => Expand(asset, file, work, ct), ct).ConfigureAwait(false);
 
-            progress?.Report(new StoreProgress(-1, Loc.F("Installing {0}…", plugin.Name)));
+            progress?.Report(new StoreProgress(-1, Loc.F("plugin_store.installing", plugin.Name)));
             var bundles = await Task.Run(() => Place(plugin.Id, asset, bundleRoot, ct), ct).ConfigureAwait(false);
 
             lock (_gate)

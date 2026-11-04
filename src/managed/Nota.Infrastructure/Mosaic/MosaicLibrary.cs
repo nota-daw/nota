@@ -196,7 +196,7 @@ public sealed class MosaicPackLibrary : IMosaicPacks
     public string ApplyInPlace(IAudioEngine engine, string path, int trackId)
     {
         try { return PresetService.ApplyInPlace(PresetService.Load(path), engine, trackId, -1); }
-        catch (Exception e) { return Loc.F("Couldn't load the preset: {0}", e.Message); }
+        catch (Exception e) { return Loc.F("mosaic.library.couldnt_load_the_preset", e.Message); }
     }
 
     public MosaicProgram? Read(string path)

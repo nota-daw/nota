@@ -2,7 +2,7 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // MCP tools — whole-project snapshot (so the AI can see before it acts), undo/redo and the
-// arrangement's song sections.
+// arrangement's song sections, including rearranging the song by them (specs/073).
 
 using System.ComponentModel;
 using ModelContextProtocol.Server;
@@ -80,6 +80,48 @@ public sealed class ProjectTools(IAudioEngine engine, IEngineDispatch dispatch, 
         // here would rewrite a legacy " Chorus " on a list → set round trip and add an undo step.
         E.SetSections(sections.Select(s => new SectionInfo(s.StartBeat, s.LengthBeats,
             s.Automatic || SectionNames.IsAutomatic(s.Name) ? "" : s.Name)).ToList());
+        return Listed();
+    });
+
+    // The with-content edits refuse the same cases the Sections lane does; say which one.
+    private string Refusal(int index, string what)
+    {
+        int n = E.Sections.Count;
+        if (index < 0 || index >= n) return $"There is no section {index} (list_sections has {n}).";
+        if (E.SectionOverlaps(index)) return $"Section {index} overlaps another section, so it can't {what}; separate them first with set_sections.";
+        return $"Section {index} can't {what} there.";
+    }
+
+    [McpServerTool(Name = "move_section"), Description(
+        "Rearrange the song: move section `index` (list_sections order) together with everything in its span — audio and MIDI "
+        + "clips (cut at its edges), automation on every track and the master, take lanes — to boundary `toBoundary` "
+        + "(0..count: before section k, or after the last section when it equals the count). The sections it passes shift by "
+        + "its length to make room; the song's length is unchanged and nothing outside the affected span moves. "
+        + "Moving to its own place (toBoundary = index or index + 1) is an error. A section that overlaps another can't be moved "
+        + "with content. One undo step. Returns the sections in their new order.")]
+    public Task<Section[]> MoveSection(int index, int toBoundary) => Mutate(() =>
+    {
+        if (toBoundary == index || toBoundary == index + 1) throw new ArgumentException($"Section {index} is already at boundary {toBoundary}.");
+        if (!E.MoveSection(index, toBoundary)) throw new InvalidOperationException(Refusal(index, "move with its content"));
+        return Listed();
+    });
+
+    [McpServerTool(Name = "duplicate_section_with_content"), Description(
+        "Insert a copy of section `index` (list_sections order) and everything in its span — clips, automation — right after it, "
+        + "with the same name (an automatic name stays automatic); the rest of the song moves later by its length. "
+        + "One undo step. Returns the sections.")]
+    public Task<Section[]> DuplicateSectionWithContent(int index) => Mutate(() =>
+    {
+        if (!E.DuplicateSectionWithContent(index)) throw new InvalidOperationException(Refusal(index, "be duplicated with its content"));
+        return Listed();
+    });
+
+    [McpServerTool(Name = "delete_section_with_content"), Description(
+        "Remove section `index` (list_sections order) and everything in its span — clips (cut at its edges), automation — and "
+        + "move the rest of the song earlier by its length to close the gap. One undo step. Returns the remaining sections.")]
+    public Task<Section[]> DeleteSectionWithContent(int index) => Mutate(() =>
+    {
+        if (!E.DeleteSectionWithContent(index)) throw new InvalidOperationException(Refusal(index, "be deleted with its content"));
         return Listed();
     });
 }

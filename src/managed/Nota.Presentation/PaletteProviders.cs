@@ -37,27 +37,27 @@ public sealed class TrackPaletteProvider(IAudioEngine engine) : IPaletteProvider
         {
             if (!engine.TryGetTrackInfo(i, out var ti)) continue;
             string name = engine.GetTrackName(ti.Id);
-            if (string.IsNullOrWhiteSpace(name)) name = Loc.F("Track {0}", ti.Id);
+            if (string.IsNullOrWhiteSpace(name)) name = Loc.F("common.track_n", ti.Id);
             string type, alias;
-            if (ti.IsGroup) { type = Loc.T("Group"); alias = "group folder"; }
-            else if (ti.IsReturn) { type = Loc.T("Return"); alias = "return send bus aux"; }
+            if (ti.IsGroup) { type = Loc.T("common.group"); alias = "group folder"; }
+            else if (ti.IsReturn) { type = Loc.T("common.return"); alias = "return send bus aux"; }
             else if (ti.IsInstrument)
             {
                 string inst = engine.DeviceName(ti.Id, -1);
-                type = inst.Length > 0 ? Loc.F("MIDI · {0}", inst) : "MIDI";
+                type = inst.Length > 0 ? Loc.F("palette_providers.midi_caps", inst) : "MIDI";
                 alias = "midi instrument";
             }
-            else { type = Loc.T("Audio"); alias = "audio"; }
+            else { type = Loc.T("common.audio"); alias = "audio"; }
             list.Add(new PaletteItem
             {
-                Kind = PaletteKind.Track, Id = "t:" + ti.Id, Name = name, Sub = type, Tag = Loc.T("Track"),
+                Kind = PaletteKind.Track, Id = "t:" + ti.Id, Name = name, Sub = type, Tag = Loc.T("common.track"),
                 Aliases = alias.Split(' '), Payload = ti.Id,
             });
         }
         if (engine.MasterTrackId > 0)
             list.Add(new PaletteItem
             {
-                Kind = PaletteKind.Track, Id = "t:" + engine.MasterTrackId, Name = Loc.T("Master"), Sub = Loc.T("Master"), Tag = Loc.T("Track"),
+                Kind = PaletteKind.Track, Id = "t:" + engine.MasterTrackId, Name = Loc.T("common.master"), Sub = Loc.T("common.master"), Tag = Loc.T("common.track"),
                 Aliases = ["master", "main", "output"], Payload = engine.MasterTrackId,
             });
         return list;
@@ -114,9 +114,9 @@ public sealed class DevicePaletteProvider(BrowserViewModel browser) : IPalettePr
 
     internal static string TypeLabel(PaletteDeviceRole r) => r switch
     {
-        PaletteDeviceRole.Instrument => Loc.T("Instrument"),
-        PaletteDeviceRole.MidiEffect => Loc.T("MIDI FX"),
-        _ => Loc.T("Audio FX"),
+        PaletteDeviceRole.Instrument => Loc.T("common.instrument"),
+        PaletteDeviceRole.MidiEffect => Loc.T("palette_providers.midi_fx_caps"),
+        _ => Loc.T("palette_providers.audio_fx"),
     };
 }
 
@@ -137,7 +137,7 @@ public sealed class PresetPaletteProvider(BrowserViewModel browser) : IPalettePr
                 foreach (var c in dev.Children)
                 {
                     if (c.Kind == BrowserItemKind.Folder) foreach (var p in c.Children) list.Add(Item(p, dev.Name, c.Name, role, desc));
-                    else if (c.Kind == BrowserItemKind.Preset) list.Add(Item(c, dev.Name, DeviceInsertService.IsKit(c) ? Loc.T("Kits") : "", role, desc));
+                    else if (c.Kind == BrowserItemKind.Preset) list.Add(Item(c, dev.Name, DeviceInsertService.IsKit(c) ? Loc.T("palette_providers.kits") : "", role, desc));
                 }
             }
         // User presets: category folder → device folder → preset.
@@ -168,7 +168,7 @@ public sealed class PresetPaletteProvider(BrowserViewModel browser) : IPalettePr
         if (user) sub += " · user";
         return new PaletteItem
         {
-            Kind = PaletteKind.Preset, Id = "p:" + p.Path, Name = p.Name, Sub = sub, Tag = Loc.T("Preset"), Role = role,
+            Kind = PaletteKind.Preset, Id = "p:" + p.Path, Name = p.Name, Sub = sub, Tag = Loc.T("palette_providers.preset"), Role = role,
             PresetOrigin = origin, Descriptor = PresetDescriptors.For(deviceDesc, folder, p.Name),
             OwnDescriptor = PresetDescriptors.Own(folder, p.Name),
             Device = device, Folder = folder, Payload = p, CanPreview = !kit && !user,
@@ -183,7 +183,7 @@ public sealed class ModularPaletteProvider : IPaletteProvider
 
     public IReadOnlyList<PaletteItem> Build() => ModularCatalog.All.Select(n => new PaletteItem
     {
-        Kind = PaletteKind.Modular, Id = "m:" + n.Kind, Name = n.Name, Sub = Loc.F("Modular · {0}", n.Sub), Tag = Loc.T("Modular"),
+        Kind = PaletteKind.Modular, Id = "m:" + n.Kind, Name = n.Name, Sub = Loc.F("palette_providers.modular", n.Sub), Tag = Loc.T("common.modular"),
         Role = PaletteDeviceRole.Modular, Descriptor = n.Descriptor, Payload = n.Kind,
     }).ToList();
 }

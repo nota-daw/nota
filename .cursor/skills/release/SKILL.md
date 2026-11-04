@@ -272,6 +272,11 @@ already has `develop` as a parent.
    after the tag), show the diff and fix it at the source. Don't edit the draft by hand to
    make it match. The user reviews the draft and publishes it themselves, then posts
    `../media/news/X.Y.Z.{en,ru}.md` with `X.Y.Z.png` to the channels.
+5. Interface languages (spec 077): nota-translations pulls each release's English reference
+   on its own once a day. So that the language list knows this version straight away, start
+   its publish run now: `gh workflow run publish.yml --repo nota-daw/nota-translations`, then
+   check that `reference/X.Y.Z.json` is on its `published` branch
+   (`gh api repos/nota-daw/nota-translations/contents/reference/X.Y.Z.json?ref=published -q .name`).
 
 ---
 

@@ -19,7 +19,7 @@ public sealed class AboutWindow : NotaWindow
     public AboutWindow()
     {
         var build = App.Services.GetRequiredService<EngineBuildInfo>();
-        Title = Loc.T("About Nota");
+        Title = Loc.T("common.about_nota");
         Width = 380;
         Height = 348;   // + title-bar band
         CanResize = false;
@@ -56,18 +56,18 @@ public sealed class AboutWindow : NotaWindow
         };
         brand.Children.Add(new TextBlock
         {
-            Text = Loc.T("Nota"), FontSize = 26, FontWeight = FontWeight.SemiBold,
+            Text = Loc.T("common.nota"), FontSize = 26, FontWeight = FontWeight.SemiBold,
             Foreground = Brush("Brush.TextPrimary"),
         });
         brand.Children.Add(new TextBlock
         {
             Classes = { "Caption" },
-            Text = Loc.F("Version {0}", AppInfo.Version),
+            Text = Loc.F("common.version", AppInfo.Version),
         });
         brand.Children.Add(new TextBlock
         {
             Classes = { "Caption" },
-            Text = Loc.F("Engine {0}", build.Version),
+            Text = Loc.F("about.engine", build.Version),
         });
         Grid.SetColumn(brand, 1);
         header.Children.Add(brand);
@@ -75,24 +75,24 @@ public sealed class AboutWindow : NotaWindow
         panel.Children.Add(new TextBlock
         {
             Classes = { "Caption" },
-            Text = Loc.T("Desktop DAW · AGPLv3"),
+            Text = Loc.T("about.desktop_daw_agplv3"),
         });
         panel.Children.Add(new TextBlock
         {
             Classes = { "Caption" },
             Margin = new Thickness(0, 8, 0, 0),
-            Text = Loc.T("© 2026 Egor Khindikaynen (Ambertape)"),
+            Text = Loc.T("about.2026_egor_khindikaynen_ambertape"),
         });
         panel.Children.Add(new TextBlock
         {
             Classes = { "Caption" },
-            Text = Loc.T("Free software under the GNU AGPLv3."),
+            Text = Loc.T("about.free_software_under_the_gnu"),
         });
         panel.Children.Add(new TextBlock
         {
             Classes = { "Caption" },
             TextWrapping = TextWrapping.Wrap,
-            Text = Loc.T("Includes third-party software (JUCE, Avalonia, miniaudio, RtMidi, dr_libs, Signalsmith, HIIR). See LICENSES/THIRD-PARTY-NOTICES.md for copyright and attribution notices."),
+            Text = Loc.T("about.includes_third_party_software_juce"),
         });
         SetBody(panel);
     }

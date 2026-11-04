@@ -34,10 +34,10 @@ public sealed partial class MixerView
         if (ti.IsInstrument) io = MidiIoRow(id, compact: true);
         else
         {
-            string from = isReturn ? Loc.T("Return in") : ti.IsGroup ? Loc.T("Group in") : Loc.T("In 1");
-            string to = isReturn ? Loc.T("→ Master")
-                      : ti.IsGroup ? "→ " + (ti.GroupId >= 0 ? TrackNames.Of(_engine, ti.GroupId) : Loc.T("Master"))
-                      : Loc.T("Monitor in");
+            string from = isReturn ? Loc.T("mixer.return_in") : ti.IsGroup ? Loc.T("mixer.group_in") : Loc.T("mixer.in_1");
+            string to = isReturn ? Loc.T("mixer.master")
+                      : ti.IsGroup ? "→ " + (ti.GroupId >= 0 ? TrackNames.Of(_engine, ti.GroupId) : Loc.T("common.master"))
+                      : Loc.T("mixer.monitor_in");
             io = CompactIoRow(from + " " + to);
         }
         io.IsVisible = IoShown;
@@ -64,8 +64,8 @@ public sealed partial class MixerView
     private Border CompactMasterStrip()
     {
         var col = new StackPanel();
-        col.Children.Add(Header(Loc.T("Master"), NotaPalette.Master, MasterBg));
-        var io = CompactIoRow(Loc.T("Sum bus") + " " + Loc.T("→ Output"));
+        col.Children.Add(Header(Loc.T("common.master"), NotaPalette.Master, MasterBg));
+        var io = CompactIoRow(Loc.T("mixer.sum_bus") + " " + Loc.T("mixer.output"));
         io.IsVisible = IoShown;
         _ioSections.Add(io);
         col.Children.Add(io);
@@ -113,7 +113,7 @@ public sealed partial class MixerView
                 var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center };
                 int b = bus;
                 SendControl.Attach(f, _engine, id, b);   // undoable, writes automation (specs/072)
-                ValueEntry.Attach(f, f.EntryField(Loc.F("Send {0}", (char)('A' + b)), NotaNum.Pct));
+                ValueEntry.Attach(f, f.EntryField(Loc.F("common.send", (char)('A' + b)), NotaNum.Pct));
                 _sendFaders.Add((id, b, f));
                 bar = f;
             }
@@ -141,12 +141,12 @@ public sealed partial class MixerView
             MidiLearn.Bind(bar, MidiTarget.TrackPan(id), "Track Pan");
         }
         bar.GestureEnd += undo.End;
-        ValueEntry.Attach(bar, bar.EntryField(Loc.T("Pan")));
+        ValueEntry.Attach(bar, bar.EntryField(Loc.T("common.pan")));
 
         var row = new DockPanel { VerticalAlignment = VerticalAlignment.Center, LastChildFill = true };
         if (isGroup)
         {
-            var bal = Tag("BAL", 7, 0.84, 11, Loc.T("Groups keep a unity-centre balance so grouping stays level-transparent"));
+            var bal = Tag("BAL", 7, 0.84, 11, Loc.T("mixer.groups_keep_a_unity_centre"));
             bal.IsVisible = _engine.PanLaw == PanLaw.Stereo;
             bal.Margin = new Thickness(3, 0, 0, 0);
             _balBadges.Add(bal);
@@ -162,7 +162,7 @@ public sealed partial class MixerView
     {
         var fader = new MeterFader(vol) { HorizontalAlignment = HorizontalAlignment.Center };
         var dbNum = DbField(vol);
-        ToolTip.SetTip(dbNum, Loc.T("Set the gain — drag, or double-click to type"));
+        ToolTip.SetTip(dbNum, Loc.T("mixer.set_the_gain_drag_or"));
         void SetVolume(double v) { if (id < 0) SetMasterVolume?.Invoke((float)v); else _engine.SetTrackVolume(id, (float)v); }
         if (id < 0) { _masterMeterFader = fader; _masterDb = dbNum; }
         else { var sync = SyncOf(id); sync.MeterFader = fader; sync.Db = dbNum; }
@@ -180,7 +180,7 @@ public sealed partial class MixerView
         fader.GestureEnd += undo.End;
         dbNum.GestureEnd += undo.End;
         MidiLearn.Bind(fader, id > 0 ? MidiTarget.TrackVolume(id) : MidiTarget.MasterVolume, id > 0 ? "Track Volume" : "Master Volume");
-        ValueEntry.Attach(fader, fader.EntryField(Loc.T("Volume"), v => NotaNum.GainDb(v, signed: true), 1.0));
+        ValueEntry.Attach(fader, fader.EntryField(Loc.T("common.volume"), v => NotaNum.GainDb(v, signed: true), 1.0));
         _meters.Add((id, fader, fader.Push));
         db = dbNum;
 
@@ -201,6 +201,8 @@ public sealed partial class MixerView
         stack.Children.Add(Wide(mute));
         stack.Children.Add(Wide(solo));
         if (!isReturn) stack.Children.Add(Wide(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm)));
+        if (ti.IsGroup) { stack.Children.Add(Wide(LinkKey(id, out var linkSync))); sync.Link = linkSync; }   // group Link (specs/076)
+        else sync.Link = null;
         return new Border { Height = ButtonsH, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0), Child = stack };
     }
 

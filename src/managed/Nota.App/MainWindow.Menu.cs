@@ -40,7 +40,7 @@ public partial class MainWindow
 
     private void OnStub(object? sender, EventArgs e)
     {
-        if (_vm is not null) _vm.StatusText = Loc.T("Not implemented yet.");
+        if (_vm is not null) _vm.StatusText = Loc.T("main.menu.not_implemented_yet");
     }
 
     // --- undo / redo (M6-6) ------------------------------------------------
@@ -49,16 +49,16 @@ public partial class MainWindow
     {
         if (_vm is null) return;
         _editorRoll?.EndVelocityWheel();   // the burst is the step about to be undone
-        if (Engine.Undo()) { RefreshAfterUndoRedo(); _vm.StatusText = Loc.T("Undo"); }
-        else _vm.StatusText = Loc.T("Nothing to undo.");
+        if (Engine.Undo()) { RefreshAfterUndoRedo(); _vm.StatusText = Loc.T("common.undo"); }
+        else _vm.StatusText = Loc.T("main.menu.nothing_to_undo");
     }
 
     private void OnMenuRedo(object? sender, EventArgs e)
     {
         if (_vm is null) return;
         _editorRoll?.EndVelocityWheel();
-        if (Engine.Redo()) { RefreshAfterUndoRedo(); _vm.StatusText = Loc.T("Redo"); }
-        else _vm.StatusText = Loc.T("Nothing to redo.");
+        if (Engine.Redo()) { RefreshAfterUndoRedo(); _vm.StatusText = Loc.T("main.redo"); }
+        else _vm.StatusText = Loc.T("main.menu.nothing_to_redo");
     }
 
     // Undo/redo swaps the whole graph snapshot, so refresh every view that reads it.
@@ -91,7 +91,7 @@ public partial class MainWindow
     private void OnMenuInsertScene(object? sender, EventArgs e)
     {
         if (_vm is null || _session is null) return;
-        if (!_session.IsVisible) { _vm.StatusText = Loc.T("Scenes live in the Session view."); return; }
+        if (!_session.IsVisible) { _vm.StatusText = Loc.T("main.menu.scenes_live_in_the_session"); return; }
         _session.InsertSceneAtSelection();
     }
     private void OnMenuExport(object? sender, EventArgs e) => _ = DoExportAsync();
@@ -104,34 +104,34 @@ public partial class MainWindow
         // it duplicates the selected arrangement clip.
         if (_editorRoll is { GridFocused: true } roll && roll.DuplicateSelection())
         {
-            _vm.StatusText = Loc.T("Duplicated notes");
+            _vm.StatusText = Loc.T("main.menu.duplicated_notes");
             return;
         }
         // Track headers focused: duplicate the selected tracks.
-        if (_trackHeadersFocused && Timeline.DuplicateSelectedTracks()) { _vm.StatusText = Loc.T("Duplicated track(s)"); return; }
+        if (_trackHeadersFocused && Timeline.DuplicateSelectedTracks()) { _vm.StatusText = Loc.T("main.duplicated_track_s"); return; }
         // In automation mode a selected range duplicates the envelope slice (chains on repeat).
-        if (Timeline.AutomationMode && Timeline.DuplicateAutoSelection()) { _vm.StatusText = Loc.T("Duplicated automation"); return; }
+        if (Timeline.AutomationMode && Timeline.DuplicateAutoSelection()) { _vm.StatusText = Loc.T("main.menu.duplicated_automation"); return; }
         // A time-range selection duplicates the covered slice (chains on repeat) before clips.
-        if (Timeline.DuplicateTimeSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("Duplicated range"); return; }
-        if (Timeline.DuplicateSelectedClip()) { _session?.Refresh(); _vm.StatusText = Loc.T("Duplicated clip(s)"); }
-        else _vm.StatusText = Loc.T("Select a clip first.");
+        if (Timeline.DuplicateTimeSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.duplicated_range"); return; }
+        if (Timeline.DuplicateSelectedClip()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.duplicated_clip_s"); }
+        else _vm.StatusText = Loc.T("main.menu.select_a_clip_first");
     }
 
     // ⌘⇧D Duplicate Time / ⌘⇧I Insert Silence: whole-arrangement time ops on the time selection.
     private void OnMenuDuplicateTime(object? sender, EventArgs e)
     {
         if (_vm is null) return;
-        if (!Timeline.HasTimeSelection) { _vm.StatusText = Loc.T("Select a time range first."); return; }
-        if (Timeline.DuplicateTimeInsert()) { _session?.Refresh(); _vm.StatusText = Loc.T("Duplicated time"); }
-        else _vm.StatusText = Loc.T("Nothing to duplicate in the selected range.");
+        if (!Timeline.HasTimeSelection) { _vm.StatusText = Loc.T("main.menu.select_a_time_range_first"); return; }
+        if (Timeline.DuplicateTimeInsert()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.duplicated_time"); }
+        else _vm.StatusText = Loc.T("main.menu.nothing_to_duplicate_in_the");
     }
 
     private void OnMenuInsertSilence(object? sender, EventArgs e)
     {
         if (_vm is null) return;
-        if (!Timeline.HasTimeSelection) { _vm.StatusText = Loc.T("Select a time range first."); return; }
-        if (Timeline.InsertSilenceAtTimeSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("Inserted silence"); }
-        else _vm.StatusText = Loc.T("Nothing after the selection to move.");
+        if (!Timeline.HasTimeSelection) { _vm.StatusText = Loc.T("main.menu.select_a_time_range_first"); return; }
+        if (Timeline.InsertSilenceAtTimeSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.inserted_silence"); }
+        else _vm.StatusText = Loc.T("main.menu.nothing_after_the_selection_to");
     }
 
     private void OnMenuSplit(object? sender, EventArgs e)
@@ -140,17 +140,17 @@ public partial class MainWindow
         _editorRoll?.SettlePlacement();   // lands in the clips as they are numbered now, before the split re-indexes them
         // In the piano roll Cmd+E has no note meaning; only split arrangement clips.
         // A time-range selection wins: split every covered track at the range edges.
-        if (Timeline.SplitTimeSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("Split at selection"); return; }
-        if (Timeline.SplitSelectedAtPlayhead()) { _session?.Refresh(); _vm.StatusText = Loc.T("Split clip(s) at playhead"); }
-        else _vm.StatusText = Loc.T("Select a range, or a clip the playhead crosses.");
+        if (Timeline.SplitTimeSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.split_at_selection"); return; }
+        if (Timeline.SplitSelectedAtPlayhead()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.split_clip_s_at_playhead"); }
+        else _vm.StatusText = Loc.T("main.menu.select_a_range_or_a");
     }
 
     private void OnMenuConsolidate(object? sender, EventArgs e)
     {
         if (_vm is null) return;
         // A time-range selection wins; otherwise the span of the selected clips.
-        if (Timeline.ConsolidateSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("Consolidated"); }
-        else _vm.StatusText = Loc.T("Select a range or clips to consolidate.");
+        if (Timeline.ConsolidateSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.consolidated"); }
+        else _vm.StatusText = Loc.T("main.menu.select_a_range_or_clips");
     }
 
     // The piano roll currently on screen, or null. Edit-menu clipboard commands target it
@@ -162,27 +162,27 @@ public partial class MainWindow
     {
         if (_vm is null) return;
         if (SessionFocused && _session!.CopySelection()) return;
-        if (_trackHeadersFocused && Timeline.CopySelectedTracks()) { _vm.StatusText = Loc.T("Copied track(s)"); return; }
-        if (ActiveRoll() is { } roll && roll.CopySelection()) { _vm.StatusText = Loc.T("Copied notes"); return; }
-        if (Timeline.CopyTimeSelection()) { _vm.StatusText = Loc.T("Copied range"); return; }
-        if (Timeline.CopySelectedClip()) _vm.StatusText = Loc.T("Copied clip");
+        if (_trackHeadersFocused && Timeline.CopySelectedTracks()) { _vm.StatusText = Loc.T("main.copied_track_s"); return; }
+        if (ActiveRoll() is { } roll && roll.CopySelection()) { _vm.StatusText = Loc.T("main.menu.copied_notes"); return; }
+        if (Timeline.CopyTimeSelection()) { _vm.StatusText = Loc.T("main.copied_range"); return; }
+        if (Timeline.CopySelectedClip()) _vm.StatusText = Loc.T("main.menu.copied_clip");
     }
     private void OnMenuCut(object? sender, EventArgs e)
     {
         if (_vm is null) return;
         if (SessionFocused && _session!.CutSelection()) return;
-        if (_trackHeadersFocused && Timeline.CutSelectedTracks()) { _vm.StatusText = Loc.T("Cut track(s)"); return; }
-        if (ActiveRoll() is { } roll && roll.CutSelection()) { _vm.StatusText = Loc.T("Cut notes"); return; }
-        if (Timeline.CutTimeSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("Cut range"); return; }
-        if (Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = Loc.T("Cut clip"); }
+        if (_trackHeadersFocused && Timeline.CutSelectedTracks()) { _vm.StatusText = Loc.T("main.cut_track_s"); return; }
+        if (ActiveRoll() is { } roll && roll.CutSelection()) { _vm.StatusText = Loc.T("main.menu.cut_notes"); return; }
+        if (Timeline.CutTimeSelection()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.cut_range"); return; }
+        if (Timeline.CutSelectedClip()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.cut_clip"); }
     }
     private void OnMenuPaste(object? sender, EventArgs e)
     {
         if (_vm is null) return;
         if (SessionFocused && _session!.PasteSelection()) return;
-        if (_trackHeadersFocused && Timeline.PasteTracks()) { _vm.StatusText = Loc.T("Pasted track(s)"); return; }
-        if (ActiveRoll() is { } roll && roll.PasteClipboard()) { _vm.StatusText = Loc.T("Pasted notes"); return; }
-        if (Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = Loc.T("Pasted clip"); }
+        if (_trackHeadersFocused && Timeline.PasteTracks()) { _vm.StatusText = Loc.T("main.pasted_track_s"); return; }
+        if (ActiveRoll() is { } roll && roll.PasteClipboard()) { _vm.StatusText = Loc.T("main.menu.pasted_notes"); return; }
+        if (Timeline.PasteClipboard()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.menu.pasted_clip"); }
     }
     // ⌘⇧C: the Arrangement's selected clips go to session slots, the Session view's selected
     // slot / scene goes onto the timeline at the playhead — whichever view is on screen.
@@ -191,18 +191,18 @@ public partial class MainWindow
         if (_vm is null) return;
         if (_session?.IsVisible == true)
         {
-            if (!_session.CopySelectionToArrangement()) _vm.StatusText = Loc.T("Select a clip or a scene to copy to the arrangement.");
+            if (!_session.CopySelectionToArrangement()) _vm.StatusText = Loc.T("main.menu.select_a_clip_or_a");
         }
         else if (Timeline.IsVisible && Timeline.CopySelectionToSession() < 0)
-            _vm.StatusText = Loc.T("Select clips to copy to the session.");
+            _vm.StatusText = Loc.T("main.menu.select_clips_to_copy_to");
     }
     private void OnMenuDeleteSel(object? sender, EventArgs e)
     {
         if (_vm is null) return;
         if (SessionFocused && _session!.DeleteSelection()) return;
-        if (_trackHeadersFocused && Timeline.DeleteSelectedTracks()) { _vm.StatusText = Loc.T("Deleted track(s)"); return; }
-        if (ActiveRoll() is { } roll && roll.DeleteSelection()) { _vm.StatusText = Loc.T("Deleted notes"); return; }
-        if (Timeline.DeleteSelectedClips()) { _session?.Refresh(); _vm.StatusText = Loc.T("Deleted clip(s)"); }
+        if (_trackHeadersFocused && Timeline.DeleteSelectedTracks()) { _vm.StatusText = Loc.T("main.deleted_track_s"); return; }
+        if (ActiveRoll() is { } roll && roll.DeleteSelection()) { _vm.StatusText = Loc.T("main.menu.deleted_notes"); return; }
+        if (Timeline.DeleteSelectedClips()) { _session?.Refresh(); _vm.StatusText = Loc.T("main.deleted_clip_s"); }
     }
     private void OnMenuToggleBrowser(object? sender, EventArgs e)
     {
@@ -225,7 +225,7 @@ public partial class MainWindow
     private void OnMenuToggleOverview(object? sender, EventArgs e)
     {
         Timeline.ShowOverview = !Timeline.ShowOverview;
-        if (_vm is not null) _vm.StatusText = Timeline.ShowOverview ? Loc.T("Overview strip shown") : Loc.T("Overview strip hidden");
+        if (_vm is not null) _vm.StatusText = Timeline.ShowOverview ? Loc.T("main.menu.overview_strip_shown") : Loc.T("main.menu.overview_strip_hidden");
     }
     private void OnMenuToggleSections(object? sender, EventArgs e)
     {
@@ -233,7 +233,7 @@ public partial class MainWindow
         if (_vm is null) return;
         _vm.Settings.Current.ArrangementShowSections = Timeline.ShowSections;
         _vm.Settings.Save();
-        _vm.StatusText = Timeline.ShowSections ? Loc.T("Sections lane shown") : Loc.T("Sections lane hidden");
+        _vm.StatusText = Timeline.ShowSections ? Loc.T("main.menu.sections_lane_shown") : Loc.T("main.menu.sections_lane_hidden");
     }
     // Follow: mirrors the transport bar's Follow button — one state, two surfaces.
     private void OnMenuToggleFollow(object? sender, EventArgs e)
@@ -257,9 +257,9 @@ public partial class MainWindow
         if (_vm is not null)
             _vm.StatusText = Timeline.ClipLabels switch
             {
-                ClipLabelMode.Every => Loc.T("Clip names: every clip"),
-                ClipLabelMode.RunStart => Loc.T("Clip names: first of a run"),
-                _ => Loc.T("Clip names: none"),
+                ClipLabelMode.Every => Loc.T("main.menu.clip_names_every_clip"),
+                ClipLabelMode.RunStart => Loc.T("main.menu.clip_names_first_of_a"),
+                _ => Loc.T("main.menu.clip_names_none"),
             };
     }
     private void OnMenuPlayStop(object? sender, EventArgs e) => _vm?.Transport.PlayStopCommand.Execute(null);
@@ -274,7 +274,7 @@ public partial class MainWindow
             && !(t.LoopOn && Engine.LoopStart == r.Start && Engine.LoopEnd == r.End))
         {
             Timeline.SetLoopRegion(r.Start, r.End);
-            _vm.StatusText = Loc.T("Loop set to selection");
+            _vm.StatusText = Loc.T("main.menu.loop_set_to_selection");
             return;
         }
         t.LoopOn = !t.LoopOn;

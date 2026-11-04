@@ -99,7 +99,7 @@ public sealed partial class MixerView : UserControl
         public DragNumber? Db;
         public PanKnob? Pan;
         public PanBar? PanBar;           // compact strips
-        public Action<bool>? Mute, Solo, Arm;
+        public Action<bool>? Mute, Solo, Arm, Link;   // Link: a group's Link key (specs/076)
     }
     private readonly Dictionary<int, StripSync> _syncs = new();
     private StripSync SyncOf(int id) => _syncs.TryGetValue(id, out var s) ? s : _syncs[id] = new StripSync();
@@ -191,6 +191,29 @@ public sealed partial class MixerView : UserControl
     /// <summary>Raised after <see cref="Refresh"/> rebuilds the strips, so a host window can
     /// fit its width to them.</summary>
     public event Action? StripsChanged;
+
+    /// <summary>Raised after a group strip's Link key changed the group's Link (specs/076).</summary>
+    public event Action? GroupLinkChanged;
+
+    // A group strip's Link key: the chain-link chip of the Arrangement's group header.
+    private Border LinkKey(int id, out Action<bool> sync)
+    {
+        bool on = _engine.GetTrackEditLink(id);
+        var glyph = new Glyph(GlyphKind.ChainLink, 10);
+        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = glyph, Cursor = new Cursor(StandardCursorType.Hand) };
+        ToolTip.SetTip(b, ArrangementView.LinkTip);
+        ArrangementView.PaintLinkChip(b, glyph, on);
+        b.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            if (!_engine.SetTrackEditLink(id, !on)) return;
+            on = !on; ArrangementView.PaintLinkChip(b, glyph, on);
+            GroupLinkChanged?.Invoke();
+        };
+        sync = v => { if (v == on) return; on = v; ArrangementView.PaintLinkChip(b, glyph, on); };
+        return b;
+    }
 
     /// <summary>Raised when <see cref="MinContentHeight"/> changed, so a host can update its
     /// own minimum.</summary>
@@ -526,6 +549,7 @@ public sealed partial class MixerView : UserControl
             s.Mute?.Invoke(ti.Muted != 0);
             s.Solo?.Invoke(ti.Soloed != 0);
             s.Arm?.Invoke(ti.Armed != 0);
+            if (ti.IsGroup) s.Link?.Invoke(_engine.GetTrackEditLink(ti.Id));
         }
     }
 
@@ -539,10 +563,10 @@ public sealed partial class MixerView : UserControl
 
         col.Children.Add(Header(TrackNames.Of(_engine, ti), color, Card, ti.IsGroup ? entry : null));
 
-        string io1 = isReturn ? Loc.T("Return in") : ti.IsGroup ? Loc.T("Group in") : ti.IsInstrument ? Loc.T("MIDI in") : Loc.T("In 1");
-        string io2 = isReturn ? Loc.T("→ Master")
-                   : ti.IsGroup ? "→ " + (ti.GroupId >= 0 ? TrackNames.Of(_engine, ti.GroupId) : Loc.T("Master"))
-                   : ti.IsInstrument ? Loc.T("Monitor auto") : Loc.T("Monitor in");
+        string io1 = isReturn ? Loc.T("mixer.return_in") : ti.IsGroup ? Loc.T("mixer.group_in") : ti.IsInstrument ? Loc.T("mixer.midi_in") : Loc.T("mixer.in_1");
+        string io2 = isReturn ? Loc.T("mixer.master")
+                   : ti.IsGroup ? "→ " + (ti.GroupId >= 0 ? TrackNames.Of(_engine, ti.GroupId) : Loc.T("common.master"))
+                   : ti.IsInstrument ? Loc.T("mixer.monitor_auto") : Loc.T("mixer.monitor_in");
         // Instrument tracks get a live "MIDI To" selector in place of the static I/O text.
         var ioRow = ti.IsInstrument ? MidiIoRow(id) : IoRow(io1, io2);
         ioRow.IsVisible = IoShown;
@@ -573,8 +597,8 @@ public sealed partial class MixerView : UserControl
     private Border MasterStrip()
     {
         var col = new StackPanel();
-        col.Children.Add(Header(Loc.T("Master"), NotaPalette.Master, MasterBg));
-        var ioRow = IoRow(Loc.T("Sum bus"), Loc.T("→ Output"));
+        col.Children.Add(Header(Loc.T("common.master"), NotaPalette.Master, MasterBg));
+        var ioRow = IoRow(Loc.T("mixer.sum_bus"), Loc.T("mixer.output"));
         ioRow.IsVisible = IoShown;
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
@@ -599,14 +623,14 @@ public sealed partial class MixerView : UserControl
 
     private Control Footer()
     {
-        var sendsToggle = SectionToggle(Loc.T("Sends"), () => _sendsVisible, () => _sendsAuto, () => _sendsPinned,
+        var sendsToggle = SectionToggle(Loc.T("common.sends"), () => _sendsVisible, () => _sendsAuto, () => _sendsPinned,
             (on, pinned) => { _sendsVisible = on; _sendsPinned = pinned; FitHeight(); }, out _paintSendsToggle);
         var ioToggle = SectionToggle("I/O", () => _ioVisible, () => _ioAuto, () => _ioPinned,
             (on, pinned) => { _ioVisible = on; _ioPinned = pinned; FitHeight(); }, out _paintIoToggle);
         var left = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new TextBlock { Text = Loc.T("Show"), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle, CompactToggle() },
+            Children = { new TextBlock { Text = Loc.T("common.show"), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle, CompactToggle() },
         };
 
         var divider = new Border { Width = 1, Height = 20, Background = BorderDef, VerticalAlignment = VerticalAlignment.Center };
@@ -641,7 +665,7 @@ public sealed partial class MixerView : UserControl
             b.Background = lit ? Brass : NotaPalette.SurfaceRaised;
             b.BorderBrush = lit || hiddenByHeight ? Brass : NotaPalette.Seam;
             t.Foreground = lit ? OnAccent : hiddenByHeight ? TextTertiary : TextSecondary;
-            ToolTip.SetTip(b, hiddenByHeight ? Loc.T("Hidden: not enough height · click to show anyway") : null);
+            ToolTip.SetTip(b, hiddenByHeight ? Loc.T("mixer.hidden_not_enough_height_click") : null);
         }
         b.PointerPressed += (_, e) =>
         {
@@ -659,9 +683,9 @@ public sealed partial class MixerView : UserControl
     // Compact strips (specs/070): a two-state key painted like the section toggles.
     private Border CompactToggle()
     {
-        var t = new TextBlock { Text = Loc.T("Compact"), FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var t = new TextBlock { Text = Loc.T("common.compact"), FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var b = new Border { Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
-        ToolTip.SetTip(b, Loc.T("Show compact strips: more tracks on screen"));
+        ToolTip.SetTip(b, Loc.T("mixer.show_compact_strips_more_tracks"));
         void Paint()
         {
             b.Background = _compact ? Brass : NotaPalette.SurfaceRaised;
@@ -729,8 +753,8 @@ public sealed partial class MixerView : UserControl
     // badge for projects made before the law existed (they keep Balance until switched).
     private Control PanLawGroup()
     {
-        var label = new TextBlock { Text = Loc.T("Pan law"), FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        var seg = ClipEditorKit.Segments(new[] { Loc.T("Stereo"), Loc.T("Balance") }, _engine.PanLaw == PanLaw.Stereo ? 0 : 1, i =>
+        var label = new TextBlock { Text = Loc.T("mixer.pan_law"), FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var seg = ClipEditorKit.Segments(new[] { Loc.T("mixer.stereo"), Loc.T("mixer.balance") }, _engine.PanLaw == PanLaw.Stereo ? 0 : 1, i =>
         {
             var law = i == 0 ? PanLaw.Stereo : PanLaw.Balance;
             if (_engine.PanLaw != law) _engine.SetPanLaw(law);   // one undo step
@@ -740,11 +764,11 @@ public sealed partial class MixerView : UserControl
         _setLawSegment = set;
         if (seg.Child is Panel buttons)
         {
-            string[] tips = { Loc.T("Panning moves the whole stereo image; nothing is dropped"), Loc.T("Panning attenuates the opposite channel (legacy behaviour)") };
+            string[] tips = { Loc.T("mixer.panning_moves_the_whole_stereo"), Loc.T("mixer.panning_attenuates_the_opposite_channel") };
             for (int i = 0; i < buttons.Children.Count && i < tips.Length; i++) ToolTip.SetTip(buttons.Children[i], tips[i]);
         }
         _lawHint = new TextBlock { FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        _olderBadge = Tag(Loc.T("Older project"), 9, 0, 18, Loc.T("Projects saved before stereo pan law open with Balance so existing mixes do not change"));
+        _olderBadge = Tag(Loc.T("mixer.older_project"), 9, 0, 18, Loc.T("mixer.projects_saved_before_stereo_pan"));
         return new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center,
@@ -764,8 +788,8 @@ public sealed partial class MixerView : UserControl
         bool stereo = law == PanLaw.Stereo;
         _setLawSegment?.Invoke(stereo ? 0 : 1);
         if (_lawHint is not null)
-            _lawHint.Text = stereo ? Loc.T("Pan moves the whole image of stereo tracks and returns")
-                                   : Loc.T("Pan attenuates the opposite channel, as in earlier versions");
+            _lawHint.Text = stereo ? Loc.T("mixer.pan_moves_the_whole_image")
+                                   : Loc.T("mixer.pan_attenuates_the_opposite_channel");
         if (_olderBadge is not null) _olderBadge.IsVisible = older && !stereo;
         foreach (var b in _balBadges) b.IsVisible = stereo;
     }
@@ -823,9 +847,9 @@ public sealed partial class MixerView : UserControl
             DockPanel.SetDock(fold, Dock.Left);
             line.Children.Add(fold);
             var dots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
-            group.SoloDot = Dot(NotaPalette.Solo, Loc.T("A hidden track is soloed"));
-            group.ArmDot = Dot(NotaPalette.Record, Loc.T("A hidden track is armed"));
-            group.ClipDot = Dot(NotaPalette.Danger, Loc.T("A hidden track clipped · click to clear"));
+            group.SoloDot = Dot(NotaPalette.Solo, Loc.T("mixer.a_hidden_track_is_soloed"));
+            group.ArmDot = Dot(NotaPalette.Record, Loc.T("mixer.a_hidden_track_is_armed"));
+            group.ClipDot = Dot(NotaPalette.Danger, Loc.T("mixer.a_hidden_track_clipped_click"));
             group.ClipDot.PointerPressed += (_, e) => { e.Handled = true; _clipLatched.Remove(group.Id); group.ClipDot.IsVisible = false; };
             dots.Children.Add(group.SoloDot); dots.Children.Add(group.ArmDot); dots.Children.Add(group.ClipDot);
             DockPanel.SetDock(dots, Dock.Right);
@@ -853,7 +877,7 @@ public sealed partial class MixerView : UserControl
         group.PaintFold = folded =>
         {
             glyph.Kind = folded ? GlyphKind.ChevronRight : GlyphKind.ChevronDown;
-            string tip = folded ? Loc.F("Unfold group {0}", name) : Loc.F("Fold group {0}", name);
+            string tip = folded ? Loc.F("mixer.unfold_group", name) : Loc.F("mixer.fold_group", name);
             ToolTip.SetTip(key, tip);
             Avalonia.Automation.AutomationProperties.SetName(key, tip);
         };
@@ -898,7 +922,7 @@ public sealed partial class MixerView : UserControl
             cb.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, Padding = new Thickness(5, 1), MinHeight = 0 });
             sources.Add(src);
         }
-        Add(Loc.T("None"), -1);
+        Add(Loc.T("common.none"), -1);
         int n = _engine.TrackCount;
         for (int i = 0; i < n; i++)
             if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsInstrument && ti.Id != id)
@@ -914,7 +938,7 @@ public sealed partial class MixerView : UserControl
         if (compact)   // one line: the selector alone, its label in the tooltip (specs/070)
         {
             cb.Height = 14;
-            ToolTip.SetTip(cb, Loc.T("MIDI in"));
+            ToolTip.SetTip(cb, Loc.T("mixer.midi_in"));
             return new Border { Height = IoH, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(4, 2), Child = cb };
         }
         return new Border
@@ -925,7 +949,7 @@ public sealed partial class MixerView : UserControl
                 Spacing = 2,
                 Children =
                 {
-                    new TextBlock { Text = Loc.T("MIDI in"), FontSize = 8, Foreground = TextTertiary },
+                    new TextBlock { Text = Loc.T("mixer.midi_in"), FontSize = 8, Foreground = TextTertiary },
                     cb,
                 },
             },
@@ -945,7 +969,7 @@ public sealed partial class MixerView : UserControl
                 var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center };
                 int b = bus;
                 SendControl.Attach(f, _engine, id, b);   // undoable, writes automation (specs/072)
-                ValueEntry.Attach(f, f.EntryField(Loc.F("Send {0}", (char)('A' + b)), NotaNum.Pct));
+                ValueEntry.Attach(f, f.EntryField(Loc.F("common.send", (char)('A' + b)), NotaNum.Pct));
                 _sendFaders.Add((id, b, f));
                 Grid.SetColumn(f, 1); grid.Children.Add(f);
             }
@@ -969,7 +993,7 @@ public sealed partial class MixerView : UserControl
         knob.GestureBegin += undo.Begin;
         Action<double> setPan = p => _engine.SetTrackPan(id, (float)p);
         knob.PanChanged += p => undo.Change(p, setPan);
-        ValueEntry.Attach(knob, knob.EntryField(Loc.T("Pan"), NotaNum.Pan));
+        ValueEntry.Attach(knob, knob.EntryField(Loc.T("common.pan"), NotaNum.Pan));
         if (id > 0)   // M9-C: record pan moves (master pan isn't an automation target)
         {
             knob.GestureBegin += () => _engine.BeginAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
@@ -977,10 +1001,10 @@ public sealed partial class MixerView : UserControl
             MidiLearn.Bind(knob, MidiTarget.TrackPan(id), "Track Pan");
         }
         knob.GestureEnd += undo.End;
-        Control label = Mono(Loc.T("Pan"), TextTertiary);
+        Control label = Mono(Loc.T("common.pan"), TextTertiary);
         if (isGroup)   // groups keep their unity-centre balance whatever the project law (specs/006)
         {
-            var bal = Tag("BAL", 7, 0.84, 11, Loc.T("Groups keep a unity-centre balance so grouping stays level-transparent"));
+            var bal = Tag("BAL", 7, 0.84, 11, Loc.T("mixer.groups_keep_a_unity_centre"));
             bal.IsVisible = _engine.PanLaw == PanLaw.Stereo;
             _balBadges.Add(bal);
             label = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { label, bal } };
@@ -1008,7 +1032,7 @@ public sealed partial class MixerView : UserControl
     {
         var fader = new VFader(vol, color);
         var dbNum = DbField(vol);
-        ToolTip.SetTip(dbNum, Loc.T("Set the gain — drag, or double-click to type"));
+        ToolTip.SetTip(dbNum, Loc.T("mixer.set_the_gain_drag_or"));
         void SetVolume(double v) { if (id < 0) SetMasterVolume?.Invoke((float)v); else _engine.SetTrackVolume(id, (float)v); }
         if (id < 0) { _masterFader = fader; _masterDb = dbNum; }
         else { var sync = SyncOf(id); sync.Fader = fader; sync.Db = dbNum; }
@@ -1028,7 +1052,7 @@ public sealed partial class MixerView : UserControl
         fader.GestureEnd += undo.End;
         dbNum.GestureEnd += undo.End;
         MidiLearn.Bind(fader, id > 0 ? MidiTarget.TrackVolume(id) : MidiTarget.MasterVolume, id > 0 ? "Track Volume" : "Master Volume");
-        ValueEntry.Attach(fader, fader.EntryField(Loc.T("Volume"), v => NotaNum.GainDb(v, signed: true), 1.0));
+        ValueEntry.Attach(fader, fader.EntryField(Loc.T("common.volume"), v => NotaNum.GainDb(v, signed: true), 1.0));
         db = dbNum;
 
         meter = new MeterBar();   // the almanac stereo meter: 11 + 5 + 11
@@ -1070,11 +1094,13 @@ public sealed partial class MixerView : UserControl
         row.Children.Add(mute);
         row.Children.Add(solo);
         if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm));
+        if (ti.IsGroup) { row.Children.Add(LinkKey(id, out var linkSync)); sync.Link = linkSync; }   // group Link (specs/076)
+        else sync.Link = null;
         return new Border { Height = 28, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0), Child = row };
     }
 
     // Record-arm: neutral with a red disc at rest, solid record red with a pale disc when armed.
-    private Border ArmToggle(bool initial, Action<bool, bool> set, out Action<bool> sync)   // (armed, ⌘/Ctrl held) — #332
+    private Border ArmToggle(bool initial, Action<bool, KeyModifiers> set, out Action<bool> sync)   // (armed, modifiers) — #332, specs/076
     {
         bool on = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
@@ -1086,7 +1112,7 @@ public sealed partial class MixerView : UserControl
             b.BorderBrush = on ? NotaPalette.Record : NotaPalette.Seam;
             disc.Foreground = on ? NotaPalette.RecordInk : NotaPalette.Record;
         }
-        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on, TrackArming.IsAdditive(e.KeyModifiers)); Paint(); };
+        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on, e.KeyModifiers); Paint(); };
         sync = v => { if (v == on) return; on = v; Paint(); };
         Paint();
         return b;

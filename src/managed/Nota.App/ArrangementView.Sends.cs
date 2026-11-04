@@ -101,7 +101,7 @@ public sealed partial class ArrangementView
         return "";
     }
     private static string SendLevelText(double v) => v <= 0.005 ? "–" : NotaNum.Str(v * 100, "0");
-    private static string SendTip(int bus, string name, double v) => Loc.F("Send {0} · {1}", SendLetter(bus), name) + " · " + NotaNum.Pct(v);
+    private static string SendTip(int bus, string name, double v) => Loc.F("arrangement.send", SendLetter(bus), name) + " · " + NotaNum.Pct(v);
 
     /// <summary>The send row for a track card: one inline knob per return. <paramref name="contentW"/>
     /// is the width the card's controls have; cells drop their letter and level below it.</summary>
@@ -136,7 +136,7 @@ public sealed partial class ArrangementView
                 if (shown is not null) shown.Text = SendLevelText(v);
                 ToolTip.SetTip(cell, SendTip(b, name, v));
             });
-            ValueEntry.Attach(knob, Loc.F("Send {0}", SendLetter(bus)), value);
+            ValueEntry.Attach(knob, Loc.F("common.send", SendLetter(bus)), value);
             _sendKnobs.Add((t.Id, bus, knob, value, cell, name));
             Grid.SetColumn(cell, i);
             row.Children.Add(cell);
@@ -161,14 +161,14 @@ public sealed partial class ArrangementView
     // The "Sends" key at the right end of the header column's top strip: on = a solid accent key.
     private Border BuildSendsToggle()
     {
-        var text = new TextBlock { Text = Loc.T("Sends"), FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var text = new TextBlock { Text = Loc.T("common.sends"), FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         var key = new Border
         {
             Height = 18, Padding = new Thickness(7, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1),
             VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = text,
             IsVisible = false,
         };
-        ToolTip.SetTip(key, Loc.T("Show sends in track headers"));
+        ToolTip.SetTip(key, Loc.T("arrangement.sends.show_sends_in_track_headers"));
         key.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(key).Properties.IsLeftButtonPressed) return;

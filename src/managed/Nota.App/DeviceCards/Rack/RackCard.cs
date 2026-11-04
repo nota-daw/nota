@@ -151,11 +151,11 @@ internal sealed partial class RackCardView
     private string RcCentreSummary()
     {
         int n = _ra.ChainCount();
-        string chains = Loc.Plural(n, "{0} chain", "{0} chains");
+        string chains = Loc.Plural("device.rack.chains", n);
         return _rs.Centre switch
         {
-            RackCentreTab.Zones => _rp.KeyZones ? Loc.T("Keys C−1–G9 · vel 0–127") : "Select 0–127",
-            RackCentreTab.Macros => Loc.F("{0} of 8 mapped", RcMappedMacros()),
+            RackCentreTab.Zones => _rp.KeyZones ? Loc.T("device.rack.keys_c_1_g9_vel") : "Select 0–127",
+            RackCentreTab.Macros => Loc.F("device.rack.of_8_mapped", RcMappedMacros()),
             _ => _rp.Modes.Length > 0 ? $"{chains} · {RcModeWord()}" : chains,
         };
     }
@@ -222,7 +222,7 @@ internal sealed partial class RackCardView
         if (_rp.TakesInstrument) { n = _ra.ChainInstrumentName(c); if (n.Length > 0) return n; }
         if (_rp.Kind == RackKind.MidiEffect && _ra.ChainMidiCount(c) > 0) return _ra.ChainMidiName(c, 0);
         if (_rp.Kind == RackKind.AudioEffect && _ra.ChainDeviceCount(c) > 0) return _ra.ChainDeviceName(c, 0);
-        return Loc.F("Chain {0}", c + 1);
+        return Loc.F("device.rack.chain", c + 1);
     }
 
     /// <summary>Whether a chain sounds: not muted, and soloed when any chain is.</summary>

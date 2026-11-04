@@ -245,8 +245,8 @@ internal sealed class PrismDeviceBody : IDeviceBody
         readouts.Add(() => { amtTxt.Text = Pct(P(Amount)); outTxt.Text = DbShort((P(Output) - 0.5) * 48); });
         var globTitle = Caps("GLOBAL"); globTitle.HorizontalAlignment = HorizontalAlignment.Center;
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
-        faders.Children.Add(Fader(Amount, "AMOUNT", Loc.T("Amount — scales every band's compression and expansion (0\u2009% = none). Double-click: 100\u2009%")));
-        faders.Children.Add(Col(Fader(Output, "OUT", Loc.T("Output gain ±24\u2009dB — double-click: 0\u2009dB")), 1));
+        faders.Children.Add(Fader(Amount, "AMOUNT", Loc.T("device.prism.amount_scales_every_bands_compression")));
+        faders.Children.Add(Col(Fader(Output, "OUT", Loc.T("device.prism.output_gain_24_db_double")), 1));
         var globCol = new RuleSection { Width = 56, Padding = new Thickness(0, 5, 0, 4),
             Child = new DockPanel { Children = { Docked(globTitle, Dock.Top), Docked(outTxt, Dock.Bottom), Docked(amtTxt, Dock.Bottom), faders } } };
         DockPanel.SetDock(globCol, Dock.Left);
@@ -261,14 +261,14 @@ internal sealed class PrismDeviceBody : IDeviceBody
             spec.DragStarted += h => Begin(h == 0 ? XoverLow : XoverHigh);
             spec.DragEnded += h => End(h == 0 ? XoverLow : XoverHigh);
             spec.BandClicked += SelectBand;
-            ValueEntry.AttachHandles(spec, [PF(XoverLow, Loc.T("Low / mid crossover"), v => HzF(XHz(v)))], [PF(XoverHigh, Loc.T("Mid / high crossover"), v => HzF(XHz(v)))]);
-            ToolTip.SetTip(spec, MenuKit.Keys(Loc.T("Input spectrum (fill) and output (line). Drag a crossover line to move it; ⌥-click to type, double-click resets. Click a band to select it.")));
+            ValueEntry.AttachHandles(spec, [PF(XoverLow, Loc.T("device.prism.low_mid_crossover"), v => HzF(XHz(v)))], [PF(XoverHigh, Loc.T("device.prism.mid_high_crossover"), v => HzF(XHz(v)))]);
+            ToolTip.SetTip(spec, MenuKit.Keys(Loc.T("device.prism.input_spectrum_fill_and_output")));
             readouts.Add(() => { spec.Set(P(XoverLow), P(XoverHigh), BandCount(), band, Sc(S_SampleRate)); spec.Tick(); });
 
             const string cols = "50,*,*,40,40";
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions(cols), Height = 11 };
-            var hA = Caps(Loc.T("ABOVE — COMPRESS"), DimC); hA.HorizontalAlignment = HorizontalAlignment.Center;
-            var hB = Caps(Loc.T("BELOW — EXPAND"), DimC); hB.HorizontalAlignment = HorizontalAlignment.Center;
+            var hA = Caps(Loc.T("device.prism.above_compress_caps"), DimC); hA.HorizontalAlignment = HorizontalAlignment.Center;
+            var hB = Caps(Loc.T("device.prism.below_expand_caps"), DimC); hB.HorizontalAlignment = HorizontalAlignment.Center;
             var hG = Caps("GAIN", DimC); hG.HorizontalAlignment = HorizontalAlignment.Right;
             var hR = Acr("GR", DimC); hR.HorizontalAlignment = HorizontalAlignment.Right;
             head.Children.Add(Caps("BAND", DimC)); head.Children.Add(Col(hA, 1)); head.Children.Add(Col(hB, 2)); head.Children.Add(Col(hG, 3)); head.Children.Add(Col(hR, 4));
@@ -281,7 +281,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 var above = Bar(BP(bb, AboveThresh), v => Inv($"{ThrA(v):0;−0} · {RatioAShort(P(BP(bb, AboveRatio)))}"), () => PrismInk.Band[bb], null, 52,
                                 () => band == bb ? PrismInk.BandLit[bb] : TxtC);
                 above.Margin = new Thickness(0, 0, 8, 0);
-                ToolTip.SetTip(above, Loc.T("Compression threshold · ratio (set the ratio in Band detail)"));
+                ToolTip.SetTip(above, Loc.T("device.prism.compression_threshold_ratio_set_the"));
                 g.Children.Add(Col(above, 1));
                 bool BelowOff() => !On(BP(bb, BelowOn));
                 var below = Bar(BP(bb, BelowThresh), v => BelowOff() ? "off" : Inv($"{ThrB(v):0;−0} · {RatioBShort(P(BP(bb, BelowRatio)))}"), () => PrismInk.Band[bb], BelowOff, 52);
@@ -290,10 +290,10 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 var belowVal = (TextBlock)((Grid)below).Children[1];
                 belowVal.Cursor = new Cursor(StandardCursorType.Hand);
                 belowVal.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(belowVal).Properties.IsLeftButtonPressed) return; SetP(BP(bb, BelowOn), BelowOff() ? 1f : 0f); e.Handled = true; };
-                ToolTip.SetTip(below, Loc.T("Expansion / upward-compression threshold · ratio — click the readout to switch it on or off"));
+                ToolTip.SetTip(below, Loc.T("device.prism.expansion_upward_compression_threshold_ratio"));
                 g.Children.Add(Col(below, 2));
                 var gain = DragVal(BP(bb, Gain), v => DbShort((v - 0.5) * 48), () => Math.Abs(P(BP(bb, Gain)) - 0.5f) < 0.001f ? Txt2 : TxtC);
-                ToolTip.SetTip(gain, Loc.T("Band gain ±24\u2009dB — drag up / down, double-click resets"));
+                ToolTip.SetTip(gain, Loc.T("device.prism.band_gain_24_db_drag"));
                 g.Children.Add(Col(gain, 3));
                 var grTrack = new Border { Width = 32, Height = 4, CornerRadius = NotaRadius.Clip, Background = Inset, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, ClipToBounds = true };
                 var grFill = new Border { Background = PrismInk.Band[bb], HorizontalAlignment = HorizontalAlignment.Right };
@@ -337,7 +337,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 int t = BP(b, h == 1 ? AboveThresh : BelowThresh), r = BP(b, h == 1 ? AboveRatio : BelowRatio);
                 SetP(t, Def(t)); SetP(r, Def(r));
             };
-            ToolTip.SetTip(tr, MenuKit.Keys(Loc.T("Drag a dot: ← → threshold, ↑ ↓ ratio (down = more). The bright dot is compression above, the grey one expansion below. Double-click a dot resets it. · ⌥-click to type")));
+            ToolTip.SetTip(tr, MenuKit.Keys(Loc.T("device.prism.drag_a_dot_threshold_ratio")));
             readouts.Add(() =>
             {
                 if (!tr.IsEffectivelyVisible) return;
@@ -353,7 +353,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 Child = new DockPanel { Children = { Docked(trCap, Dock.Top), Docked(kneeRow, Dock.Bottom), new Border { Margin = new Thickness(0, 4, 0, 0), Child = tr } } } };
 
             // ABOVE — compression
-            var aCap = Caps(Loc.T("ABOVE — COMPRESSION"), PrismInk.BandLit[b]);
+            var aCap = Caps(Loc.T("device.prism.above_compression_caps"), PrismInk.BandLit[b]);
             var aGr = Mono("", 7, Txt2); aGr.HorizontalAlignment = HorizontalAlignment.Right;
             readouts.Add(() => { double gr = Sc(S_Gr0 + b); aGr.Text = gr > 0.05 ? Inv($"GR −{gr:0.0}\u2009dB") : "GR 0.0\u2009dB"; });
             var aHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 11 };
@@ -367,8 +367,8 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var aSec = new DockPanel { Children = { Docked(aHead, Dock.Top), aKnobs } };
 
             // BELOW — expansion / upward compression
-            var bCap = Caps(Loc.T("BELOW — EXPANSION"));
-            readouts.Add(() => { bool up = RatioB(P(BP(b, BelowRatio))) < 0.99; bCap.Text = up ? Loc.T("Below — upward compression") : Loc.T("Below — expansion"); bCap.Foreground = On(BP(b, BelowOn)) ? Txt2 : MutedC; });
+            var bCap = Caps(Loc.T("device.prism.below_expansion_caps"));
+            readouts.Add(() => { bool up = RatioB(P(BP(b, BelowRatio))) < 0.99; bCap.Text = up ? Loc.T("device.prism.below_upward_compression") : Loc.T("device.prism.below_expansion"); bCap.Foreground = On(BP(b, BelowOn)) ? Txt2 : MutedC; });
             var bToggle = Toggle(BP(b, BelowOn), "", () => On(BP(b, BelowOn)) ? "on" : "off");
             var bHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), Height = 11 };
             bHead.Children.Add(bCap); bHead.Children.Add(Col(bToggle, 1));
@@ -379,7 +379,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             bKnobs.Children.Add(K(BP(b, BelowRelease), "RELEASE", RelF, 36, 52, Mauve));
             bKnobs.Children.Add(K(BP(b, Floor), "FLOOR", _ => FloorF(b), 36, 52, Mauve));
             readouts.Add(() => Inactive.Set(bKnobs, !On(BP(b, BelowOn)), interactive: true));
-            ToolTip.SetTip(bKnobs, Loc.T("Ratio above 1 : 1 expands (quiet parts get quieter); below 1 : 1 (↑) compresses upward (quiet parts are lifted). Floor limits either to ± that many dB."));
+            ToolTip.SetTip(bKnobs, Loc.T("device.prism.ratio_above_1_1_expands"));
             var bSec = Divider(new DockPanel { Children = { Docked(bHead, Dock.Top), bKnobs } }, 4);
 
             var right = new Grid { RowDefinitions = new RowDefinitions("*,*"), Margin = new Thickness(7, 5, 7, 3) };
@@ -412,7 +412,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 int m = engine.DeviceLayerWave(track, di, 3 + band * 2, tDet, TraceLen);
                 trace.Set(tIn, tDet, Math.Min(n, m), band, ThrA(P(BP(band, AboveThresh))), On(BP(band, BelowOn)), ThrB(P(BP(band, BelowThresh))));
             });
-            ToolTip.SetTip(trace, Loc.T("The selected band's input peaks (grey) and what its compressor's detector makes of them (the last ~1.5\u2009s), against the threshold."));
+            ToolTip.SetTip(trace, Loc.T("device.prism.the_selected_bands_input_peaks"));
             const string cols = "50,*,*,40";
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions(cols), Height = 11 };
             var hA = Caps("ATTACK", DimC); hA.HorizontalAlignment = HorizontalAlignment.Center;
@@ -430,7 +430,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 var rel = Bar(BP(bb, Release), RelF, () => PrismInk.Band[bb], null, 38, Lit); rel.Margin = new Thickness(0, 0, 8, 0);
                 g.Children.Add(Col(atk, 1)); g.Children.Add(Col(rel, 2));
                 var auto = Toggle(BP(bb, AutoRelease), ""); auto.HorizontalAlignment = HorizontalAlignment.Right;
-                ToolTip.SetTip(auto, Loc.T("Auto release — short peaks recover fast, sustained compression recovers slowly"));
+                ToolTip.SetTip(auto, Loc.T("device.prism.auto_release_short_peaks_recover"));
                 g.Children.Add(Col(auto, 3));
                 rows.Children.Add(BandRow(bb, g, 18));
             }
@@ -501,7 +501,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                 soloCells[i] = c; soloRow.Children.Add(c);
             }
             Learn(soloRow, Solo);
-            ToolTip.SetTip(soloRow, Loc.T("Solo a band — hear only that band (click again to clear)"));
+            ToolTip.SetTip(soloRow, Loc.T("device.prism.solo_a_band_hear_only"));
             readouts.Add(HiSolo); HiSolo();
             var soloGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6 };
             soloGrid.Children.Add(Caps("SOLO")); soloGrid.Children.Add(Col(soloRow, 1)); soloGrid.Children.Add(Col(soloTxt, 2));
@@ -528,13 +528,13 @@ internal sealed class PrismDeviceBody : IDeviceBody
             readouts.Add(() =>
             {
                 int src = scOk ? engine.DeviceSidechainSource(track, di) : -1;
-                scName.Text = !scOk ? Loc.T("n/a in a rack") : src < 0 ? Loc.T("None — own input") : SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di));
+                scName.Text = !scOk ? Loc.T("device.prism.n_a_in_a_rack") : src < 0 ? Loc.T("device.prism.none_own_input") : SidechainSourcePicker.Name(engine, engine.DeviceSidechainKey(track, di));
                 scName.Foreground = src >= 0 ? TxtC : Txt2;
             });
             var scBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0),
                 Cursor = new Cursor(StandardCursorType.Hand), IsEnabled = scOk,
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(5, 0, 0, 0) }, Dock.Right), scName } } };
-            ToolTip.SetTip(scBox, Loc.T("Sidechain — key every band's detector from another track (split into the same bands)"));
+            ToolTip.SetTip(scBox, Loc.T("device.prism.sidechain_key_every_bands_detector"));
             scBox.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(scBox).Properties.IsLeftButtonPressed || !scOk) return;
@@ -547,7 +547,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                     mi.Click += (_, _) => pick();
                     fly.Items.Add(mi);
                 }
-                Item(Loc.T("None — own input"), engine.DeviceSidechainSource(track, di) < 0, () => { engine.SetDeviceSidechainSource(track, di, -1); Changed(); });
+                Item(Loc.T("device.prism.none_own_input"), engine.DeviceSidechainSource(track, di) < 0, () => { engine.SetDeviceSidechainSource(track, di, -1); Changed(); });
                 fly.Items.Add(new Separator());
                 foreach (var row in SidechainSourcePicker.MenuRows(engine, track, di, Changed)) fly.Items.Add(SidechainSourcePicker.MenuItemFor(row));
                 fly.ShowAt(scBox);
@@ -556,9 +556,9 @@ internal sealed class PrismDeviceBody : IDeviceBody
             var scRow = new Grid { ColumnDefinitions = new ColumnDefinitions("50,*"), VerticalAlignment = VerticalAlignment.Center };
             scRow.Children.Add(Caps("SIDECHAIN")); scRow.Children.Add(Col(scBox, 1));
             var listen = Toggle(ScListen, "Listen");
-            ToolTip.SetTip(listen, Loc.T("Listen — hear the detector's key signal (the sidechain, or the input), per solo band"));
+            ToolTip.SetTip(listen, Loc.T("device.prism.listen_hear_the_detectors_key"));
             var mk = Toggle(AutoMakeup, "Auto makeup");
-            ToolTip.SetTip(mk, Loc.T("Auto makeup — each band gets back about half of its compression at 0\u2009dBFS"));
+            ToolTip.SetTip(mk, Loc.T("device.prism.auto_makeup_each_band_gets"));
             var toggles = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
             toggles.Children.Add(listen); toggles.Children.Add(Col(mk, 1));
             var mid = new StackPanel { Spacing = 5, Children = {
@@ -574,7 +574,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             });
             var clipRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 6 };
             var clipSeg = Seg(SoftClip, new[] { "Off", "On" });
-            ToolTip.SetTip(clipSeg, Loc.T("Soft clip — a smooth ceiling at −0.3\u2009dBFS after the output gain"));
+            ToolTip.SetTip(clipSeg, Loc.T("device.prism.soft_clip_a_smooth_ceiling"));
             clipRow.Children.Add(Caps("SOFT CLIP")); clipRow.Children.Add(Col(clipSeg, 1)); clipRow.Children.Add(Col(clipTxt, 2));
             var midB = Divider(mid); midB.Margin = new Thickness(0, 4, 0, 0);
             return new DockPanel { LastChildFill = false, Margin = new Thickness(8, 5, 8, 5), Children = {
@@ -591,7 +591,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         Control ModeExtras()
         {
             var seg = Seg(BandsP, new[] { "3", "2", "1" }, () => { if (!BandActive(band)) SelectBand(1); foreach (var a in readouts) a(); });
-            ToolTip.SetTip(seg, Loc.T("Bands — 3: Low / Mid / High · 2: Low + Mid (Mid runs to 20\u2009kHz) · 1: Mid, full band"));
+            ToolTip.SetTip(seg, Loc.T("device.prism.bands_3_low_mid_high"));
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { Caps("MODE"), seg } };
         }
         Control BandChips()
@@ -622,7 +622,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         Control DetectExtras()
         {
             var seg = Seg(Detect, new[] { "Peak", "RMS" });
-            ToolTip.SetTip(seg, Loc.T("Detector — Peak follows every transient; RMS (10\u2009ms) follows loudness, smoother"));
+            ToolTip.SetTip(seg, Loc.T("device.prism.detector_peak_follows_every_transient"));
             return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, Children = { Caps("DETECT"), seg } };
         }
         var extrasBodies = new Control?[3];
@@ -651,7 +651,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
         {
             int nb = BandCount();
             int solo = Sel(Solo, 4) - 1;
-            if (On(ScListen)) return Loc.T("Listening to the detector key") + (solo >= 0 ? Inv($" · {PrismInk.Names[solo]} band") : "");
+            if (On(ScListen)) return Loc.T("device.prism.listening_to_the_detector_key") + (solo >= 0 ? Inv($" · {PrismInk.Names[solo]} band") : "");
             switch (centreTab)
             {
                 case 1:
@@ -669,7 +669,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
                     return Inv($"{(On(Detect) ? "RMS" : "Peak")} detector · {(autos.Count > 0 ? "auto release on " + string.Join(", ", autos) : "fixed release")} · {sc}");
                 }
                 default:
-                    string xo = nb == 3 ? Loc.F("crossovers {0} / {1}", HzF(XHz(P(XoverLow))), HzF(XHz(P(XoverHigh)))) : nb == 2 ? Inv($"crossover {HzF(XHz(P(XoverLow)))}") : "full band";
+                    string xo = nb == 3 ? Loc.F("device.prism.crossovers", HzF(XHz(P(XoverLow))), HzF(XHz(P(XoverHigh)))) : nb == 2 ? Inv($"crossover {HzF(XHz(P(XoverLow)))}") : "full band";
                     return Inv($"{nb} {(nb == 1 ? "band" : "bands")} · {xo} · amount {P(Amount) * 100:0} %{(solo >= 0 && BandActive(solo) ? " · " + PrismInk.Names[solo] + " solo" : "")}");
             }
         }
@@ -680,7 +680,7 @@ internal sealed class PrismDeviceBody : IDeviceBody
             double sr = Sc(S_SampleRate), lat = Sc(S_Latency);
             string la = lat > 0 && sr > 0 ? Inv($"lookahead {lat * 1000 / sr:0.#}\u2009ms") : "no lookahead";
             string sc = Sc(S_ScActive) > 0.5 ? " · SC" : "";
-            statusRight.Text = sr > 0 ? Loc.F("{0:0.#}\u2009kHz · {1}{2} · CPU {3:0}\u2009%", sr / 1000, la, sc, Sc(S_Cpu) * 100) : "";
+            statusRight.Text = sr > 0 ? Loc.F("device.prism.khz_cpu", sr / 1000, la, sc, Sc(S_Cpu) * 100) : "";
         });
         var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
         statusGrid.Children.Add(statusLeft); statusGrid.Children.Add(Col(statusRight, 1));
