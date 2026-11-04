@@ -833,29 +833,42 @@ bool Engine::undo() {
 // specs/069. Message thread, before the restored graph is published. A shared track object
 // already holds the live levels, so it is left alone (the audio thread may be reading it).
 void Engine::keepLiveSends(Graph& restored, const Graph& live) const {
-    std::map<int32_t, int32_t> liveBus, oldBus;
-    auto take = [](std::map<int32_t, int32_t>& m, const Graph& g) {
-        for (const auto& t : g.tracks)
-            if (t && t->type() == TrackType::Return && t->returnIndex() >= 0 && t->returnIndex() < kMaxReturns)
-                m.emplace(t->id(), t->returnIndex());
+    // No allocations: this runs on every undo/redo (perf-gate edit-warp-split).
+    const auto busOf = [](const std::shared_ptr<Track>& t) {
+        return t && t->type() == TrackType::Return && t->returnIndex() >= 0 && t->returnIndex() < kMaxReturns
+                   ? t->returnIndex()
+                   : -1;
     };
-    take(liveBus, live);
-    take(oldBus, restored);
+    // The track with `id` in `g`: track lists rarely reorder, so try the same index first.
+    const auto findById = [](const Graph& g, size_t hint, int32_t id) -> const Track* {
+        if (hint < g.tracks.size() && g.tracks[hint] && g.tracks[hint]->id() == id) return g.tracks[hint].get();
+        for (const auto& t : g.tracks)
+            if (t && t->id() == id) return t.get();
+        return nullptr;
+    };
+
     // A return edit remaps buses. Copying a live slot onto the restored graph would put
     // that level on a different return. The snapshot already has the levels for its buses.
-    if (liveBus != oldBus) return;
+    // Same buses = the same (return id, bus) pairs on both sides; ids are unique.
+    size_t liveReturns = 0, oldReturns = 0;
+    for (const auto& t : restored.tracks)
+        if (busOf(t) >= 0) ++oldReturns;
+    for (size_t i = 0; i < live.tracks.size(); ++i) {
+        const int32_t bus = busOf(live.tracks[i]);
+        if (bus < 0) continue;
+        ++liveReturns;
+        const Track* old = findById(restored, i, live.tracks[i]->id());
+        if (!old || old->type() != TrackType::Return || old->returnIndex() != bus) return;
+    }
+    if (liveReturns != oldReturns) return;
 
-    std::map<int32_t, const Track*> liveById;
-    for (const auto& t : live.tracks)
-        if (t) liveById.emplace(t->id(), t.get());
-
-    for (auto& t : restored.tracks) {
+    for (size_t i = 0; i < restored.tracks.size(); ++i) {
+        auto& t = restored.tracks[i];
         if (!t || t->type() == TrackType::Return) continue;
-        auto it = liveById.find(t->id());
-        if (it == liveById.end() || it->second == t.get()) continue;
-        const Track& src = *it->second;
+        const Track* src = findById(live, i, t->id());
+        if (!src || src == t.get()) continue;
         for (int b = 0; b < kMaxReturns; ++b)
-            if (t->send(b) != src.send(b)) t->setSend(b, src.send(b));
+            if (t->send(b) != src->send(b)) t->setSend(b, src->send(b));
     }
 }
 
