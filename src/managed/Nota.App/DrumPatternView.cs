@@ -56,6 +56,7 @@ public sealed class DrumPatternView : UserControl
 
     private int _res = _resPersist;
     private int _steps, _winStart, _win;
+    private int _builtBpb;   // the bar length the ruler and bar shading were built with
     private int _selRow = -1;
     private int _paint;                    // 0 = idle, 1 = painting hits in, 2 = painting them out
     private bool _dragging;                // a paint / velocity gesture owns the grid
@@ -107,7 +108,7 @@ public sealed class DrumPatternView : UserControl
     {
         if (_dragging) return;   // mid drag: our own writes are already on screen
         var pads = ScanPads();
-        if (StepCount() != _steps || !SamePads(pads)) { Rebuild(); return; }
+        if (StepCount() != _steps || !SamePads(pads) || _builtBpb != BeatsPerBar) { Rebuild(); return; }   // a new meter redraws the bar marks
         ReadNotes();
         MapCells();
         StyleAll();
@@ -230,6 +231,7 @@ public sealed class DrumPatternView : UserControl
     {
         _pads = ScanPads();
         _steps = StepCount();
+        _builtBpb = BeatsPerBar;
         int pages = Math.Max(1, (_steps + MaxCells - 1) / MaxCells);
         _winStart = Math.Clamp(_winStart / MaxCells, 0, pages - 1) * MaxCells;
         _win = Math.Max(1, Math.Min(MaxCells, _steps - _winStart));

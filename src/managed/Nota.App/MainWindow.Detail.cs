@@ -861,8 +861,10 @@ public partial class MainWindow
     // them.
     private void ApplyMeter(int numerator)
     {
+        int was = Meter.BeatsPerBar;
         Meter.Set(numerator);
         int bpb = Meter.BeatsPerBar;
+        if (bpb != was) _session?.Refresh();   // its slot lengths and inspector fields count bars
         if (Timeline.BeatsPerBar != bpb) Timeline.BeatsPerBar = bpb;
         _patternView?.Reload();
         _audioEditor?.Reload();
