@@ -15,7 +15,7 @@ public sealed partial class NotaEngine
     public void AddSessionMidiClip(int trackId, int scene, double lengthBeats = 4.0)
     { ThrowIfDisposed(); Check(NativeMethods.SessionAddMidiClip(_handle, trackId, scene, lengthBeats)); }
 
-    /// <summary>Slot state: 0 empty, 1 filled, 2 queued, 3 playing, 4 recording.</summary>
+    /// <summary>Slot state: 0 empty, 1 filled, 2 queued, 3 playing, 4 recording, 5 record pending (specs/078).</summary>
     public int SessionSlotState(int trackId, int scene)
     { ThrowIfDisposed(); return NativeMethods.SessionSlotState(_handle, trackId, scene); }
 

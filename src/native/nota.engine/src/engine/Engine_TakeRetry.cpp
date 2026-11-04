@@ -1,0 +1,270 @@
+// SPDX-License-Identifier: AGPL-3.0-only
+// Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
+//
+// Discard and retry a take (#185, specs/078). A take attempt remembers, before it writes
+// anything, the tracks it may write and the undo/redo state; a retry puts those tracks back
+// with no history step of its own and records again — the Arrangement from where the
+// transport was started, a Session slot from the next launch quantum while the rest of the
+// Session plays on. The audio thread learns of the new take through a TakeRestart command
+// queued behind the transport moves, so nothing from before the restart reaches it.
+
+#include "Engine.h"
+
+#include <algorithm>
+#include <cmath>
+
+namespace nota {
+
+void Engine::openTakeAttempt(bool session) {
+    if (!retryingTake_) syncTakeEpoch();
+    takeAttempt_ = TakeAttempt{};
+    takeAttempt_.active = true;
+    takeAttempt_.session = session;
+    takeAttempt_.undoBase = undoStack_.size();
+    takeAttempt_.redoSaved = redoStack_;
+}
+
+void Engine::noteTakeTrack(int32_t trackId) {
+    if (!takeAttempt_.active || !authoring_) return;
+    for (const auto& b : takeAttempt_.baseTracks)
+        if (b.first == trackId) return; // first write wins: that is the pre-take state
+    if (auto t = findTrackAuthoring(trackId)) takeAttempt_.baseTracks.emplace_back(trackId, std::move(t));
+}
+
+// A track left the take with its part kept (disarmed while recording). Its pre-take state no
+// longer applies, and the checkpoints the take made so far now hold a kept recording, so they
+// become ordinary history: a later retry restores only what is still recording.
+void Engine::keepTakeTrack(int32_t trackId) {
+    auto& b = takeAttempt_.baseTracks;
+    b.erase(std::remove_if(b.begin(), b.end(), [&](const auto& p) { return p.first == trackId; }), b.end());
+    for (size_t i = std::min(takeAttempt_.undoBase, undoStack_.size()); i < undoStack_.size(); ++i)
+        if (undoStack_[i].take) {
+            undoStack_[i].take = false;
+            undoStack_[i].wasTake = true; // a retry drops it again if it ends up changing nothing
+        }
+    takeAttempt_.redoSaved.clear(); // a kept recording is an edit: the old redo branch is gone
+}
+
+// Every take that starts without a retry puts the audio thread on the current take epoch and
+// cancels a Session retry still waiting for its slot — one stopped before it relaunched would
+// otherwise leave the next take's events on an epoch poll() drops.
+void Engine::syncTakeEpoch() {
+    Command c;
+    c.type = CommandType::TakeRestart;
+    c.i0 = static_cast<int32_t>(takeEpoch_);
+    c.i1 = 4; // epoch only: no restart, the gate as it is
+    commands_.push(c);
+}
+
+void Engine::closeTakeAttempt() {
+    takeAttempt_ = TakeAttempt{};
+    retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
+}
+
+void Engine::discardTake() {
+    if (!takeAttempt_.active) return;
+    TakeAttempt a = std::move(takeAttempt_);
+    takeAttempt_ = TakeAttempt{};
+
+    // Stop capturing: automation writes end (their lanes come back with the tracks below),
+    // the audio capture is dropped unmaterialised, and the MIDI fold forgets the take.
+    finishAllWrites();
+    recording_.store(false, std::memory_order_relaxed);
+    abortAudioRecording();
+    {
+        RecordedNote n;
+        while (recorded_.pop(n)) {}
+        RecordedExpr x;
+        while (recordedExpr_.pop(x)) {}
+    }
+    resetCtlFold();
+    pendingExpr_.clear();
+    takeNotes_.clear();
+    appliedReplaceUpTo_ = 0;
+    replaceUpTo_.store(0, std::memory_order_relaxed);
+    ++takeEpoch_; // whatever the audio thread still queues for the old take is dropped by poll()
+    recordTrackId_ = 0;
+    recordClipIndex_ = -1;
+    recordTrackRt_.store(-1, std::memory_order_relaxed);
+    recordSlotPlayer_.store(nullptr, std::memory_order_release);
+    recordSessionScene_ = -1;
+    recordSessionTrackId_ = 0;
+    recordSessionAudio_ = false;
+    recordSessionGrowing_ = false;
+    sessionCountIn_ = false;
+    retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
+
+    // Put the tracks back as they were before the take wrote them — in the graph that plays and
+    // in every checkpoint the user's own edits pushed meanwhile, so undoing one of those later
+    // doesn't bring the take back. A Session take restores only its slot, so edits to the
+    // track's other slots stay.
+    auto baseOf = [&](int32_t id) -> std::shared_ptr<Track> {
+        for (const auto& b : a.baseTracks)
+            if (b.first == id) return b.second;
+        return nullptr;
+    };
+    auto restoreTrack = [&](const std::shared_ptr<Track>& cur) -> std::shared_ptr<Track> {
+        auto base = cur ? baseOf(cur->id()) : nullptr;
+        if (!base) return cur;
+        if (!a.session || cur->id() != a.sessionTrackId) return base;
+        auto nt = cloneTrack(*cur);
+        const int32_t sc = a.sessionScene;
+        if (sc < 0) return nt;
+        if (static_cast<int32_t>(nt->sessionSlots.size()) <= sc) nt->sessionSlots.resize(sc + 1);
+        nt->sessionSlots[sc] =
+            sc < static_cast<int32_t>(base->sessionSlots.size()) ? base->sessionSlots[sc] : SessionSlot{};
+        return nt;
+    };
+    auto restoreGraph = [&](const Graph& src) {
+        auto g = std::make_shared<Graph>();
+        inheritGraphLevel(*g, src);
+        g->tracks.reserve(src.tracks.size());
+        for (const auto& t : src.tracks) g->tracks.push_back(restoreTrack(t));
+        g->masterTrack = restoreTrack(src.masterTrack);
+        return g;
+    };
+    if (authoring_ && !a.baseTracks.empty()) {
+        publishRaw(restoreGraph(*authoring_));
+        placeTakesForTempo();
+        recomputePdc();
+        reapplyRackMacros();
+        reapplyCcRoutes();
+    }
+
+    // No history of its own: the take's checkpoints go (a value change merged into one stays,
+    // without the graph — that is the user's hand, not the take). The user's checkpoints made
+    // meanwhile stay, without the take in them; with none, the redo branch comes back.
+    const size_t base = std::min(a.undoBase, undoStack_.size());
+    std::vector<UndoEntry> kept;
+    bool userEdits = false;
+    for (size_t i = base; i < undoStack_.size(); ++i) {
+        UndoEntry e = std::move(undoStack_[i]);
+        if (e.take) {
+            if (e.mix.empty()) continue;
+            e.graph = nullptr;
+            e.take = false;
+        } else if (e.graph && !a.baseTracks.empty()) {
+            e.graph = restoreGraph(*e.graph);
+        }
+        userEdits = true;
+        kept.push_back(std::move(e));
+    }
+    // A checkpoint the take made before part of it was kept (wasTake) may now step between two
+    // identical states — its content was the part just discarded: an Undo that changes nothing.
+    // Drop those (track-only edits, so comparing the tracks is enough).
+    auto sameTracks = [](const Graph& x, const Graph& y) {
+        if (x.masterTrack != y.masterTrack || x.tracks.size() != y.tracks.size()) return false;
+        for (size_t k = 0; k < x.tracks.size(); ++k)
+            if (x.tracks[k] != y.tracks[k]) return false;
+        return true;
+    };
+    std::shared_ptr<Graph> next = authoring_;
+    for (size_t k = kept.size(); k-- > 0;) {
+        if (!kept[k].graph) continue;
+        if (kept[k].wasTake && kept[k].mix.empty() && next && sameTracks(*kept[k].graph, *next)) {
+            kept.erase(kept.begin() + static_cast<std::ptrdiff_t>(k));
+            continue;
+        }
+        next = kept[k].graph;
+    }
+    userEdits = !kept.empty();
+    undoStack_.resize(base);
+    for (auto& e : kept) undoStack_.push_back(std::move(e));
+    if (!userEdits) redoStack_ = std::move(a.redoSaved);
+}
+
+int32_t Engine::retryTake() {
+    if (!takeAttempt_.active) return 0;
+    // The take already ended (its track was disarmed, say): it was kept — nothing to retry.
+    if (!isRecording()) {
+        closeTakeAttempt();
+        return 0;
+    }
+
+    // waitScene >= 0: a Session MIDI take — the audio thread adopts the new epoch only when
+    // that slot has relaunched, so nothing played while it waits enters the take.
+    auto pushTakeRestart = [&](bool openGate, int32_t waitScene) {
+        Command c;
+        c.type = CommandType::TakeRestart;
+        c.i0 = static_cast<int32_t>(takeEpoch_);
+        c.i1 = (openGate ? 1 : 0) | (waitScene >= 0 ? 2 : 0);
+        c.d0 = waitScene;
+        commands_.push(c);
+    };
+    // Shut the capture, then move the capture epoch: a producer that sees the new epoch also
+    // sees the gate shut, until the restart command opens it behind the transport moves.
+    auto fenceCapture = [&]() {
+        captureGate_.store(false, std::memory_order_relaxed);
+        captureEpoch_.store(takeEpoch_, std::memory_order_release);
+    };
+    struct Retrying {
+        Engine& e;
+        explicit Retrying(Engine& en) : e(en) { e.retryingTake_ = true; }
+        ~Retrying() { e.retryingTake_ = false; }
+    };
+
+    if (takeAttempt_.session) {
+        const int32_t tid = takeAttempt_.sessionTrackId, sc = takeAttempt_.sessionScene;
+        // Still counting in from stop: nothing was recorded — start the count-in over, as Stop
+        // and a fresh Record into the slot would.
+        if (sessionCountIn_ && uiCountIn_.load(std::memory_order_relaxed) > 0.0) {
+            sessionCountIn_ = false;
+            countInLaunchScene_.store(-1, std::memory_order_release);
+            cancelSessionCountIn();
+            recordSessionSlot(tid, sc);
+            return isRecording() ? 2 : -1;
+        }
+        const bool audio = recordSessionAudio_;
+        discardTake();
+        fenceCapture();
+        // The take records again from the next launch quantum (now when launching is
+        // unquantized); until then the slot shows it is waiting (slot state 5). The slot
+        // relaunches whatever its launch mode (a Toggle slot would stop instead).
+        const double q = launchQuant();
+        const double pos = transport_.uiPositionBeats();
+        const double at = q > 0.0 ? std::ceil(pos / q - 1e-9) * q : pos;
+        {
+            Retrying r(*this);
+            forceSlotLaunch_ = true;
+            recordSessionSlot(tid, sc);
+            forceSlotLaunch_ = false;
+        }
+        pushTakeRestart(true, audio ? -1 : sc);
+        if (!isRecording()) {
+            captureGate_.store(true, std::memory_order_relaxed);
+            return -1;
+        }
+        if (at > pos) retryStartBeat_ = at;
+        return 2;
+    }
+
+    // Arrangement: back to where the transport was started for this take — its start when
+    // the take rolled the transport, else where Play was pressed (the punch-in's run-up).
+    const bool countedIn = takeAttempt_.countedIn;
+    const bool startedTransport = recordStartedTransport_;
+    const double restart = startedTransport ? recordReturnBeat_ : transport_.uiAnchorBeats();
+    discardTake();
+    fenceCapture(); // nothing until the playhead is back
+    if (countedIn) {
+        transportStop(); // count in again from stop, as the take did
+        seekBeats(restart);
+        pushTakeRestart(countInBars() <= 0, -1); // else the count-in's end opens the gate
+    } else {
+        seekBeats(restart); // keep rolling: the run-up plays again
+        pushTakeRestart(true, -1);
+    }
+    bool ok;
+    {
+        Retrying r(*this);
+        ok = startArrangementTake(!countedIn, restart, countedIn);
+    }
+    recordStartedTransport_ = startedTransport;
+    recordReturnBeat_ = restart;
+    if (!ok) {
+        captureGate_.store(true, std::memory_order_relaxed);
+        return -1;
+    }
+    return 1;
+}
+
+} // namespace nota

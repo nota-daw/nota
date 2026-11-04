@@ -53,23 +53,23 @@ public sealed class ClipPropsView : UserControl
         _gridText.Text = roll.Grids.Quantize.Label;
 
         // CLIP — clips always loop in this model; the switch waits for a per-clip loop.
-        var loop = SwitchRow(Loc.T("Loop"), () => true, () => { }, out _, _loopText);
+        var loop = SwitchRow(Loc.T("common.loop"), () => true, () => { }, out _, _loopText);
         loop.IsEnabled = false;
-        ToolTip.SetTip(loop, Loc.T("Clips always loop"));
-        var pair = Pair(Labeled(Loc.T("Start"), Field(_startText)), Labeled(Loc.T("Length"), Field(_lengthText)));
-        var clip = mode is null ? Section(Loc.T("Clip"), pair, loop) : Section(Loc.T("Clip"), mode, pair, loop);
+        ToolTip.SetTip(loop, Loc.T("clip_props.clips_always_loop"));
+        var pair = Pair(Labeled(Loc.T("common.start"), Field(_startText)), Labeled(Loc.T("common.length"), Field(_lengthText)));
+        var clip = mode is null ? Section(Loc.T("common.clip"), pair, loop) : Section(Loc.T("common.clip"), mode, pair, loop);
 
         // QUANTIZE — its own step (not the snap grid, which follows the zoom), one-tap
         // Quantize at the strength below.
-        var grid = Section(Loc.T("Quantize"),
+        var grid = Section(Loc.T("common.quantize"),
             Pair(Dropdown(_gridText, a => ShowMenu(a, Array.ConvertAll(QuantizeSteps, q => q.Label),
                     Array.IndexOf(QuantizeSteps, _roll.Grids.Quantize), i =>
                 {
                     _roll.Grids.SetQuantize(QuantizeSteps[i]);
                     _gridText.Text = QuantizeSteps[i].Label;
                 })),
-                ClipEditorKit.Button(Loc.T("Quantize"), () => _roll.Quantize(_strength))),
-            SliderRow(Loc.T("Strength"), 64, () => _strength, v => _strength = v,
+                ClipEditorKit.Button(Loc.T("common.quantize"), () => _roll.Quantize(_strength))),
+            SliderRow(Loc.T("clip_props.strength"), 64, () => _strength, v => _strength = v,
                 () => string.Format(NotaNum.Culture, "{0:0}\u2009%", _strength * 100), out _, reset: () => _strength = 0.8, valueW: 34));
 
         // TRANSPOSE — − value +; the value turns Brass Light while it is off zero.
@@ -80,7 +80,7 @@ public sealed class ClipPropsView : UserControl
         Grid.SetColumn(tField, 1); tRow.Children.Add(tField);
         var plus = GlyphButton(GlyphKind.Plus, () => Transpose(1));
         Grid.SetColumn(plus, 2); tRow.Children.Add(plus);
-        var transpose = Section(Loc.T("Transpose"), tRow);
+        var transpose = Section(Loc.T("clip_props.transpose"), tRow);
 
         // SELECTION — a card of read-outs, or one empty-state line in the same frame.
         _selCard = Card(_selRows);
@@ -90,14 +90,14 @@ public sealed class ClipPropsView : UserControl
             Height = 104, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Control,
             Child = new TextBlock
             {
-                Text = Loc.T("No notes selected"), FontSize = NotaType.Body, Foreground = NotaPalette.TextTertiary,
+                Text = Loc.T("clip_props.no_notes_selected"), FontSize = NotaType.Body, Foreground = NotaPalette.TextTertiary,
                 HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
             },
         };
-        var selection = Section(SectionTitle(Loc.T("Selection"), _selCount), 8, _selCard, _selEmpty);
+        var selection = Section(SectionTitle(Loc.T("clip_props.selection"), _selCount), 8, _selCard, _selEmpty);
 
         Content = Inspector(Sections(clip, grid, transpose, selection),
-            Hint(Loc.T("Double-click — add or delete · edge — length · Shift — add to selection")), out var flow);
+            Hint(Loc.T("clip_props.double_click_add_or_delete")), out var flow);
         Flow = flow;
 
         PaintTranspose();
@@ -113,7 +113,7 @@ public sealed class ClipPropsView : UserControl
     {
         double len = _roll.ActiveLengthBeats;   // the active clip's own length, several clips open or one
         _lengthText.Text = Duration(len);
-        _loopText.Text = string.Format(NotaNum.Culture, "{0:0.##} {1}", len, Math.Abs(len - 1) < 1e-9 ? Loc.T("beat") : Loc.T("beats"));
+        _loopText.Text = string.Format(NotaNum.Culture, "{0:0.##} {1}", len, Math.Abs(len - 1) < 1e-9 ? Loc.T("clip_props.beat") : Loc.T("clip_props.beats"));
         PaintSelection();
     }
 
@@ -140,18 +140,18 @@ public sealed class ClipPropsView : UserControl
         if (sel.Count == 1)
         {
             var n = sel[0];
-            Row(Loc.T("Pitch"), PianoRollView.NoteName(n.Pitch));
-            Row(Loc.T("Start"), Position(n.StartBeat));
-            Row(Loc.T("Length"), string.Format(NotaNum.Culture, "{0:0.##}/16", n.LengthBeats * 4));
-            Row(Loc.T("Velocity"), Vel(n.Velocity).ToString(NotaNum.Culture), last: true);
+            Row(Loc.T("common.pitch"), PianoRollView.NoteName(n.Pitch));
+            Row(Loc.T("common.start"), Position(n.StartBeat));
+            Row(Loc.T("common.length"), string.Format(NotaNum.Culture, "{0:0.##}/16", n.LengthBeats * 4));
+            Row(Loc.T("common.velocity"), Vel(n.Velocity).ToString(NotaNum.Culture), last: true);
         }
         else if (sel.Count > 1)
         {
             int lo = sel.Min(n => n.Pitch), hi = sel.Max(n => n.Pitch);
             int vLo = sel.Min(n => Vel(n.Velocity)), vHi = sel.Max(n => Vel(n.Velocity));
-            Row(Loc.T("Notes"), sel.Count.ToString(NotaNum.Culture));
-            Row(Loc.T("Range"), lo == hi ? PianoRollView.NoteName(lo) : $"{PianoRollView.NoteName(lo)}–{PianoRollView.NoteName(hi)}");
-            Row(Loc.T("Velocity"), vLo == vHi ? vLo.ToString(NotaNum.Culture) : $"{vLo}–{vHi}", last: true);
+            Row(Loc.T("clip_props.notes"), sel.Count.ToString(NotaNum.Culture));
+            Row(Loc.T("common.range"), lo == hi ? PianoRollView.NoteName(lo) : $"{PianoRollView.NoteName(lo)}–{PianoRollView.NoteName(hi)}");
+            Row(Loc.T("common.velocity"), vLo == vHi ? vLo.ToString(NotaNum.Culture) : $"{vLo}–{vHi}", last: true);
         }
 
         void Row(string key, string value, bool last = false)

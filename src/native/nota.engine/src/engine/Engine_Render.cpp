@@ -243,6 +243,33 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         inst.offSettled.store(true, std::memory_order_relaxed);
     }
 }
+
+// Something on the track that holds sound after its input stops: a device that runs, or a
+// plug-in delay compensation line that is delaying (#449).
+bool hasLiveDevice(const Track& t) {
+    if (t.pdc && !t.pdc->isIdle()) return true;
+    for (const auto& d : t.devices)
+        if (d && !d->bypassed()) return true;
+    return false;
+}
+
+// How settled a track's chain is once its output has gone quiet (#449): every live device
+// reports idle (Settled); some are hosted plug-ins, whose state the host can't see, and the
+// rest are idle (Opaque); or a built-in device still holds sound or never reports idle (Busy).
+enum class ChainRest : uint8_t { Settled, Opaque, Busy };
+ChainRest chainRest(const Track& t) {
+    if (t.pdc && !t.pdc->isIdle()) return ChainRest::Busy;
+    ChainRest r = ChainRest::Settled;
+    for (const auto& d : t.devices) {
+        if (!d || d->bypassed() || d->isIdle()) continue;
+        // Only a hosted plug-in itself is opaque (builtinKind < 0); a rack that holds one is
+        // built-in and still busy while its own delays hold sound. Audio-thread safe.
+        if (d->builtinKind() >= 0) return ChainRest::Busy;
+        r = ChainRest::Opaque;
+    }
+    return r;
+}
+
 } // namespace
 
 void Engine::noteExprEvents(
@@ -416,12 +443,14 @@ void Engine::poll() {
     const int32_t replaceUpTo = replaceUpTo_.load(std::memory_order_acquire);
     RecordedNote rn;
     std::vector<RecordedNote> batch;
-    while (recorded_.pop(rn)) batch.push_back(rn);
+    while (recorded_.pop(rn))
+        if (rn.epoch == takeEpoch_) batch.push_back(rn); // a discarded take's late notes go (specs/078)
     // Expression after the notes: a note's points were all queued before its note-off was.
     collectRecordedExpr();
     {
         RecordedCtl x;
-        while (recordedCtl_.pop(x)) ctlBatch_.push_back(x);
+        while (recordedCtl_.pop(x))
+            if (x.epoch == takeEpoch_) ctlBatch_.push_back(x);
     } // controllers (specs/020)
     const bool ctlWork = !ctlBatch_.empty() || ctlStopPending_;
     const bool replacePending = replaceUpTo > appliedReplaceUpTo_ && recordSessionScene_ < 0;
@@ -553,6 +582,7 @@ void Engine::poll() {
 void Engine::collectRecordedExpr() {
     RecordedExpr x;
     while (recordedExpr_.pop(x)) {
+        if (x.epoch != takeEpoch_) continue; // a discarded take's (specs/078)
         auto& curve = pendingExpr_[{x.pitch, x.startBeat}].dim[x.dim];
         if (!curve.empty() && x.beat <= curve.back().beat) curve.back().value = x.value; // same instant
         else
@@ -742,7 +772,8 @@ void Engine::commitCtlRun(MidiClip& clip, int32_t ctl, double slotLen, bool fina
 void Engine::flushCtlTake() {
     {
         RecordedCtl x;
-        while (recordedCtl_.pop(x)) ctlBatch_.push_back(x);
+        while (recordedCtl_.pop(x))
+            if (x.epoch == takeEpoch_) ctlBatch_.push_back(x);
     }
     ctlStopPending_ = true;
     ctlStopAt_ = transport_.uiPositionBeats();
@@ -911,6 +942,20 @@ void Engine::drainCommands() {
             transport_.seekBeats(c.d0);
             seekedThisBlock_ = true;
             break;
+        case CommandType::TakeRestart: // specs/078: the blocks from here belong to the retried take
+            if ((c.i1 & 4) != 0) { // a take started normally: the current epoch, nothing waits
+                rtTakeEpoch_ = static_cast<uint32_t>(c.i0);
+                rtWaitScene_ = -1;
+            } else if ((c.i1 & 2) != 0) { // a Session MIDI take: from when its slot relaunches
+                rtPendingEpoch_ = static_cast<uint32_t>(c.i0);
+                rtWaitScene_ = static_cast<int32_t>(c.d0);
+            } else {
+                rtTakeEpoch_ = static_cast<uint32_t>(c.i0);
+                rtTakeRestart_ = true;
+                rtWaitScene_ = -1;
+            }
+            if ((c.i1 & 1) != 0) captureGate_.store(true, std::memory_order_release);
+            break;
         case CommandType::None: break;
         }
     }
@@ -967,9 +1012,23 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     // Track-addressed notes (Nota Remote) are recorded only when they play the take's
     // track; ordinary live input records onto it whatever it is.
     const int32_t recTrack = recordTrackRt_.load(std::memory_order_relaxed);
-    const bool takeStarted = rec && !prevRecording_;
+    // A retried Session MIDI take begins when its slot has relaunched: until then what is
+    // played carries the old epoch and stays out (specs/078).
+    if (rtWaitScene_ >= 0 && slot && slot->pending.load(std::memory_order_relaxed) != rtWaitScene_ &&
+        slot->playing.load(std::memory_order_relaxed) == rtWaitScene_) {
+        rtTakeEpoch_ = rtPendingEpoch_;
+        rtTakeRestart_ = true;
+        rtWaitScene_ = -1;
+    }
+    // A retry (TakeRestart) starts a fresh take even when this thread never saw recording off.
+    const bool restarted = rtTakeRestart_;
+    rtTakeRestart_ = false;
+    const bool takeStarted = rec && (!prevRecording_ || restarted);
     routedSeedPending_ = takeStarted && !slot; // routed notes held now join the take (captureRoutedNotes)
-    if (rec != prevRecording_)
+    // A retried take restarts from a playhead that jumped back: keys still held join it at its
+    // start, not at a press beat from the take that was thrown away.
+    routedSeedFromNow_ = restarted;
+    if (rec != prevRecording_ || restarted)
         for (int i = 0; i < 128; ++i) {
             pendingActive_[i] = false;
             recRoutedActive_[i] = false;
@@ -1040,7 +1099,7 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
                 double len = nowBeat - pendingStart_[e.pitch];
                 if (slot && len < 0.0) len += slotLen; // wrapped past the loop end
                 RecordedNote rn{e.pitch, pendingStart_[e.pitch], len, pendingVel_[e.pitch], recordPass_};
-                recorded_.push(rn);
+                pushRecorded(rn);
                 pendingActive_[e.pitch] = false;
             }
         }
@@ -1055,7 +1114,7 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             if (!liveDown_[p] || pendingActive_[p] || (livePressTrack_[p] >= 0 && livePressTrack_[p] != recTrack))
                 continue;
             pendingActive_[p] = true;
-            pendingStart_[p] = (slot || std::isnan(livePressBeat_[p])) ? nowBeat : livePressBeat_[p];
+            pendingStart_[p] = (slot || restarted || std::isnan(livePressBeat_[p])) ? nowBeat : livePressBeat_[p];
             pendingVel_[p] = livePressVel_[p];
         }
     if (rec && timed && liveExprCount_ > 0) captureLiveExpr(nowBeat, slot ? slotLen : 0.0);
@@ -1067,14 +1126,14 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
         const double seedAt = slot ? nowBeat : blockStartBeat;
         for (int32_t c = 0; c < kCtlCount; ++c) {
             const float v = liveCtl_[c].load(std::memory_order_relaxed);
-            if (v != kCtlRest && !ctlIsReserved(c)) recordedCtl_.push(RecordedCtl{c, seedAt, v, recordPass_});
+            if (v != kCtlRest && !ctlIsReserved(c)) pushRecordedCtl(RecordedCtl{c, seedAt, v, recordPass_});
         }
     }
     if (rec && timed)
         for (int i = 0; i < liveExprCount_; ++i) {
             const MidiEvent& e = liveExpr_[i];
             if (e.expr < kCtlDimBase || (e.trackId >= 0 && e.trackId != recTrack)) continue;
-            recordedCtl_.push(RecordedCtl{e.expr - kCtlDimBase, nowBeat, e.velocity, recordPass_});
+            pushRecordedCtl(RecordedCtl{e.expr - kCtlDimBase, nowBeat, e.velocity, recordPass_});
         }
 }
 
@@ -1090,7 +1149,7 @@ void Engine::captureLiveExpr(double nowBeat, double slotLen) {
         if (!pendingActive_[e.pitch] || (e.trackId >= 0 && e.trackId != recTrack)) continue;
         double off = nowBeat - pendingStart_[e.pitch];
         if (slotLen > 0.0 && off < 0.0) off += slotLen; // a Session take wrapped past its loop end
-        recordedExpr_.push(
+        pushRecordedExpr(
             RecordedExpr{e.pitch, pendingStart_[e.pitch], e.expr, static_cast<float>(std::max(0.0, off)), e.velocity});
     }
 }
@@ -1128,7 +1187,7 @@ void Engine::captureRoutedNotes(const MidiEv* evs, int n, double blockStart, dou
             recRoutedVel_[p] = evs[k].vel;
             if (!recordSlotPlayer_.load(std::memory_order_relaxed)) triggerPassReplace();
         } else if (recRoutedActive_[p]) {
-            recorded_.push(RecordedNote{
+            pushRecorded(RecordedNote{
                 p, recRoutedStart_[p], std::max(0.0, beat - recRoutedStart_[p]), recRoutedVel_[p], recordPass_});
             recRoutedActive_[p] = false;
         }
@@ -1143,7 +1202,7 @@ void Engine::captureRoutedNotes(const MidiEv* evs, int n, double blockStart, dou
             for (int p = 0; p < 128; ++p) {
                 if (!routedDown_[p] || recRoutedActive_[p]) continue;
                 recRoutedActive_[p] = true;
-                recRoutedStart_[p] = std::isnan(routedPressBeat_[p]) ? now : routedPressBeat_[p];
+                recRoutedStart_[p] = (routedSeedFromNow_ || std::isnan(routedPressBeat_[p])) ? now : routedPressBeat_[p];
                 recRoutedVel_[p] = routedPressVel_[p];
             }
     }
@@ -1418,7 +1477,7 @@ void Engine::renderInstrumentRaw(
                     for (int k = 0; k < rs_->blockExprN[j]; ++k) {
                         const ExprEv& x = rs_->blockExpr[j][k];
                         if (x.dim < kCtlDimBase) continue;
-                        recordedCtl_.push(RecordedCtl{x.dim - kCtlDimBase,
+                        pushRecordedCtl(RecordedCtl{x.dim - kCtlDimBase,
                             (blockStart + x.off) / spb + countInClockOffset(), x.value, recordPass_});
                     }
             }
@@ -1739,7 +1798,7 @@ void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
     constexpr double kMinHead = 1.0 / 64.0;
     auto split = [&](int32_t pitch, double& start, float vel) {
         const double head = loopEndBeat - start;
-        if (head >= kMinHead) recorded_.push(RecordedNote{pitch, start, head, vel, recordPass_});
+        if (head >= kMinHead) pushRecorded(RecordedNote{pitch, start, head, vel, recordPass_});
         start = loopStartBeat;
     };
     for (int p = 0; p < 128; ++p)
@@ -1747,7 +1806,7 @@ void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
     for (int p = 0; p < 128; ++p)
         if (recRoutedActive_[p]) split(p, recRoutedStart_[p], recRoutedVel_[p]);
     // Controllers being replaced over a range stop at the pass end (specs/020).
-    recordedCtl_.push(RecordedCtl{-1, loopEndBeat, 0.0f, recordPass_});
+    pushRecordedCtl(RecordedCtl{-1, loopEndBeat, 0.0f, recordPass_});
     // A new pass of the take: the continuations above belong to it (they don't trigger a
     // replace — only a fresh note does), and it takes the loop record mode set right now.
     ++recordPass_;
@@ -2012,6 +2071,7 @@ void Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, in
         if (t.instrument) t.instrument->setPartTaps(nullptr, 0);
         break;
     case LeafPath::AudioClips: renderAudioClipsRaw(t.clips, dst, frames, blockStart, spb); break;
+    case LeafPath::Tail: std::fill_n(dst, frames * 2, 0.0f); break; // the chain alone rings on
     case LeafPath::Skip: break; // unreachable (pre-pass filters Skip out)
     }
 }
@@ -2142,7 +2202,12 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
         // Internal resampling (record from another track/send/master): tap the source's
         // post-fader output into the input ring while a take is rolling.
-        const int32_t recSrc = countInActive_ ? 0 : internalRecordSource_.load(std::memory_order_relaxed);
+        // Shut while counting in, and while a retried take waits for its TakeRestart (specs/078).
+        const uint32_t capEp = captureEpoch_.load(std::memory_order_acquire); // before the gate
+        const int32_t recSrc = (countInActive_ || !captureGate_.load(std::memory_order_acquire))
+                                   ? 0
+                                   : internalRecordSource_.load(std::memory_order_relaxed);
+        if (recSrc != 0) markCaptureEpoch(rtCaptureEpoch_, capEp);
 
         // Live input monitoring: this segment's hardware input (shared by every track
         // monitoring it), and the set of tracks whose output some monitoring track hears —
@@ -2308,6 +2373,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     t.sessionPlayer->localBeats += frames / spb;
                     sessionPostRender(t, frames / spb);
                 }
+                t.tailQuiet() = -1; // muted: its tail is gone, not saved for the unmute
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
@@ -2340,11 +2406,14 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 w.path = LeafPath::Instrument;
             } else if (playing && arrangementActive) {
                 w.path = LeafPath::AudioClips;
+            } else if (t.tailQuiet() >= 0 && hasLiveDevice(t)) {
+                w.path = LeafPath::Tail; // its effects ring out on silence (#449)
             } else {
+                t.tailQuiet() = -1;
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
-            } // stopped / session-only audio track: nothing to do
+            } // stopped / session-only audio track, its tail played out: nothing to do
 
             // Destination: this leaf's parent group's submix bus, else the master mix.
             const int destSlot = slotOf(t.groupId());
@@ -2489,6 +2558,24 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     simd_audio::addStereoScaled(routeBusPreNext_[preSlot].data(), pre, 1.0f, 1.0f, frames);
             }
             if (!parallelDsp) processLeafDevices(t, scratch_.data(), w, g, frames, blockStart, spb, playing, ti);
+
+            // 2b') Effect tails (#449): a block an audio track plays (re)starts its tail; on
+            //      the tail path the chain's output is watched until it has been quiet long
+            //      enough, and the track goes back to costing nothing.
+            if (w.path == LeafPath::Tail) {
+                int64_t& quiet = t.tailQuiet();
+                if (simd_audio::peakAbs(post, frames * 2) > kTailFloor) quiet = 0;
+                else quiet += frames;
+                if (quiet > 0) {
+                    const double sr = transport_.sampleRate();
+                    const ChainRest rest = chainRest(t);
+                    if (rest == ChainRest::Settled ||
+                        (rest == ChainRest::Opaque && quiet >= static_cast<int64_t>(kTailQuietSeconds * sr)) ||
+                        quiet >= static_cast<int64_t>(kTailMaxQuietSeconds * sr))
+                        quiet = -1;
+                }
+            } else if (w.path == LeafPath::AudioClips || w.path == LeafPath::SessionAudio || w.path == LeafPath::Monitor)
+                t.tailQuiet() = 0;
 
             // 2c) Freeze capture (M7): stash this track's post-device, pre-fader signal
             //     into the freeze buffer. Sequential from a seek(0) render, so the write

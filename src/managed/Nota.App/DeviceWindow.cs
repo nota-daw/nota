@@ -226,7 +226,7 @@ internal sealed class DeviceWindow : NotaWindow
             var seg = DeviceCardKit.Segments(new[] { "S", "L" }, () => size.Mini ? 0 : 1,
                 i => { if ((i == 0) != size.Mini) { size.SetMini(i == 0); Dispatcher.UIThread.Post(Refill); } },
                 out _, padX: 0, minSegWidth: 16, fontSize: 9);
-            ToolTip.SetTip(seg, Loc.T("Size: S (260 × 260) / L (700 × 260)"));
+            ToolTip.SetTip(seg, Loc.T("device.size_s_260_260_l"));
             yield return seg;
         }
         if (_bypass is { } byp)
@@ -257,7 +257,7 @@ internal sealed class DeviceWindow : NotaWindow
             Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Rule,
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(8),
             IsHitTestVisible = false, IsVisible = false,
-            Child = Caps(MonoText(9, NotaPalette.TextSecondary), Loc.T("Bypassed")),
+            Child = Caps(MonoText(9, NotaPalette.TextSecondary), Loc.T("device.bypassed")),
         };
         _bypassTag = tag;
         return new Border
@@ -295,7 +295,7 @@ internal sealed class DeviceWindow : NotaWindow
         if (_switch is { } sw)
         {
             sw.IsOn = !on;
-            if (sw.Parent is Control host) ToolTip.SetTip(host, on ? Loc.T("Bypassed — click to enable") : Loc.T("Active — click to bypass"));
+            if (sw.Parent is Control host) ToolTip.SetTip(host, on ? Loc.T("device.bypassed_click_to_enable") : Loc.T("device.active_click_to_bypass"));
         }
         if (_bypassTag is { } tag) tag.IsVisible = on;
         if (_bodyHost is not { } body || (fresh && !on)) return;

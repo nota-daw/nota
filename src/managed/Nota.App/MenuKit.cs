@@ -28,9 +28,9 @@ internal static partial class MenuKit
     /// wording (pairs with <c>MainWindow.RevealInFileManager</c>). Menus use this instead of
     /// hard-coding "Finder".</summary>
     public static string RevealLabel =>
-        OperatingSystem.IsMacOS() ? Loc.T("Reveal in Finder")
-        : OperatingSystem.IsWindows() ? Loc.T("Show in Explorer")
-        : Loc.T("Show in file manager");
+        OperatingSystem.IsMacOS() ? Loc.T("menu.reveal_in_finder")
+        : OperatingSystem.IsWindows() ? Loc.T("menu.show_in_explorer")
+        : Loc.T("menu.show_in_file_manager");
 
     private static KeyModifiers Primary => OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
 
@@ -113,10 +113,10 @@ internal static partial class MenuKit
     public static IEnumerable<MenuItem> ClipboardGroup(Action? copy, Action? cut, Action? paste,
                                                        Action? duplicate, bool canPaste = true)
     {
-        if (copy is not null) yield return Item(Loc.T("Copy"), GlyphKind.Copy, copy, CopyKey);
-        if (cut is not null) yield return Item(Loc.T("Cut"), GlyphKind.Cut, cut, CutKey);
-        if (paste is not null) yield return Item(Loc.T("Paste"), GlyphKind.Paste, paste, PasteKey, canPaste);
-        if (duplicate is not null) yield return Item(Loc.T("Duplicate"), GlyphKind.Duplicate, duplicate, DuplicateKey);
+        if (copy is not null) yield return Item(Loc.T("common.copy"), GlyphKind.Copy, copy, CopyKey);
+        if (cut is not null) yield return Item(Loc.T("common.cut"), GlyphKind.Cut, cut, CutKey);
+        if (paste is not null) yield return Item(Loc.T("common.paste"), GlyphKind.Paste, paste, PasteKey, canPaste);
+        if (duplicate is not null) yield return Item(Loc.T("common.duplicate"), GlyphKind.Duplicate, duplicate, DuplicateKey);
     }
 
     /// <summary>Adds groups to a menu with a rule between non-empty ones, so callers can pass

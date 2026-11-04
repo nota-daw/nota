@@ -24,7 +24,7 @@ public sealed partial class PreferencesWindow
         var settings = App.Services.GetRequiredService<ISettingsService>();
         var updates = AppUpdates.Shared;
 
-        var auto = SwitchRow(Loc.T("Check for updates automatically"), settings.Current.CheckForUpdates, on =>
+        var auto = SwitchRow(Loc.T("preferences.updates.check_for_updates_automatically"), settings.Current.CheckForUpdates, on =>
         {
             settings.Current.CheckForUpdates = on;
             settings.Save();
@@ -33,8 +33,8 @@ public sealed partial class PreferencesWindow
 
         var status = new TextBlock { FontSize = 12, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
         var detail = Caption("");
-        var check = Btn(Loc.T("Check now"));
-        var act = Btn(Loc.T("Update"));
+        var check = Btn(Loc.T("preferences.updates.check_now"));
+        var act = Btn(Loc.T("common.update"));
         act.Classes.Add("primary");
         check.Click += async (_, _) => await updates.CheckAsync();
         act.Click += (_, _) =>
@@ -47,24 +47,24 @@ public sealed partial class PreferencesWindow
         {
             var r = updates.Release;
             check.IsEnabled = !updates.Checking && updates.State is not (AppUpdates.Stage.Downloading or AppUpdates.Stage.Ready);
-            check.Content = updates.Checking ? Loc.T("Checking…") : Loc.T("Check now");
+            check.Content = updates.Checking ? Loc.T("preferences.updates.checking") : Loc.T("preferences.updates.check_now");
             act.IsVisible = r is not null && updates.State != AppUpdates.Stage.Ready;
             (status.Text, detail.Text) = updates.State switch
             {
-                AppUpdates.Stage.Available => (Loc.F("Nota {0} is available — you have {1}.", r!.Version, AppInfo.Version),
-                    updates.CanInstall ? Loc.T("Update downloads it here; it installs when you restart or quit Nota.") : Loc.T("Download opens the release page.")),
-                AppUpdates.Stage.Downloading => (Loc.F("Downloading Nota {0}…", r!.Version), Percent()),
-                AppUpdates.Stage.Ready => (Loc.F("Nota {0} is ready to install.", r!.Version), Loc.T("It installs the next time you quit Nota, or click Restart to update in the status bar.")),
-                AppUpdates.Stage.Failed => (Loc.T("The update didn't download."), updates.Error ?? ""),
-                _ when updates.LastCheckFailed => (Loc.F("You have Nota {0}.", AppInfo.Version), Loc.T("Couldn't reach GitHub to check for a newer version. Check your internet connection and try again.")),
-                _ when updates.LastChecked is { } at => (Loc.F("Nota {0} is the latest version.", AppInfo.Version), Loc.F("Last checked {0}.", When(at))),
-                _ => (Loc.F("You have Nota {0}.", AppInfo.Version), Loc.T("Not checked yet.")),
+                AppUpdates.Stage.Available => (Loc.F("preferences.updates.nota_is_available_you_have", r!.Version, AppInfo.Version),
+                    updates.CanInstall ? Loc.T("preferences.updates.update_downloads_it_here_it") : Loc.T("preferences.updates.download_opens_the_release_page")),
+                AppUpdates.Stage.Downloading => (Loc.F("common.downloading_nota", r!.Version), Percent()),
+                AppUpdates.Stage.Ready => (Loc.F("preferences.updates.nota_is_ready_to_install", r!.Version), Loc.T("preferences.updates.it_installs_the_next_time")),
+                AppUpdates.Stage.Failed => (Loc.T("preferences.updates.the_update_didnt_download"), updates.Error ?? ""),
+                _ when updates.LastCheckFailed => (Loc.F("preferences.updates.you_have_nota", AppInfo.Version), Loc.T("preferences.updates.couldnt_reach_github_to_check")),
+                _ when updates.LastChecked is { } at => (Loc.F("preferences.updates.nota_is_the_latest_version", AppInfo.Version), Loc.F("preferences.updates.last_checked", When(at))),
+                _ => (Loc.F("preferences.updates.you_have_nota", AppInfo.Version), Loc.T("preferences.updates.not_checked_yet")),
             };
             act.Content = updates.State switch
             {
-                AppUpdates.Stage.Downloading => Loc.T("Cancel"),
-                AppUpdates.Stage.Failed => Loc.T("Try again"),
-                _ => updates.CanInstall ? Loc.T("Update") : Loc.T("Download"),
+                AppUpdates.Stage.Downloading => Loc.T("common.cancel"),
+                AppUpdates.Stage.Failed => Loc.T("common.try_again"),
+                _ => updates.CanInstall ? Loc.T("common.update") : Loc.T("common.download"),
             };
             act.Classes.Set("primary", updates.State != AppUpdates.Stage.Downloading);
             detail.IsVisible = detail.Text!.Length > 0;
@@ -83,12 +83,12 @@ public sealed partial class PreferencesWindow
             new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { check, act } },
         };
         if (!updates.CanInstallInPlace)
-            rows.Add(Caption(Loc.T("This copy of Nota can't replace itself (a development build, or one run straight from the disk image), so a new version opens its release page to download."), muted: true));
+            rows.Add(Caption(Loc.T("preferences.updates.this_copy_of_nota_cant"), muted: true));
 
         return Sections(
-            Section(Loc.T("Automatic updates"), 10, auto,
-                Caption(Loc.T("On launch and once a day, Nota asks GitHub whether a newer version is out and tells you in the status bar. Nothing is downloaded until you click Update."))),
-            Section(Loc.T("This version"), 10, rows.ToArray()));
+            Section(Loc.T("preferences.updates.automatic_updates"), 10, auto,
+                Caption(Loc.T("preferences.updates.on_launch_and_once_a"))),
+            Section(Loc.T("preferences.updates.this_version"), 10, rows.ToArray()));
     }
 
     // "today at 14:02", "yesterday at 09:15", or the date.

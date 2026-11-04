@@ -249,7 +249,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             return seg;
         }
         Control SourceSeg() => Seg(KeySrc, new[] { "Auto", "Manual", "MIDI" },
-            Loc.T("Key source — Auto follows the key you sing, Manual uses the key and scale you set, MIDI takes the target from another track's notes (MIDI tab)"),
+            Loc.T("device.auto_shift.key_source_auto_follows_the"),
             iv => SetP(KeySrc, iv / 2f), Src);
 
         // A latching chip: lit when `lit()`, a click runs `click`. `fill` = a full-width button.
@@ -283,7 +283,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         }
         Border ToggleLatch(int p, string text, string tip) => Latch(p, () => On(p), () => SetP(p, On(p) ? 0f : 1f), () => text, tip);
         Border LearnLatch() => Latch(-1, () => Sc(S_Learning) > 0.5, Learn, () => "Learn",
-            Loc.T("Learn — listen to what is sung, then click again to set the key and scale that fit it best"), blink: () => Sc(S_Learning) > 0.5);
+            Loc.T("device.auto_shift.learn_listen_to_what_is"), blink: () => Sc(S_Learning) > 0.5);
 
         // A dropdown box: [text ▾], opens a menu of items.
         Border Drop(Func<string> text, Func<bool> lit, Action<MenuFlyout> fill, string tip, double minW = 0, bool stretch = false, int learnP = -1)
@@ -328,7 +328,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         Control KeyDrop(bool lit) => Drop(() => Keys[KeyOf()], () => lit, fly =>
         {
             for (int k = 0; k < 12; k++) { int kv = k; fly.Items.Add(Item(Keys[k], KeyOf() == k, () => { SetKey(kv); RefreshAll(); })); }
-        }, Loc.T("Key — the tonic; the scale's notes are counted from it"), 0, false, Key);
+        }, Loc.T("device.auto_shift.key_the_tonic_the_scales"), 0, false, Key);
         Control ScaleDrop() => Drop(ScaleName, () => false, fly =>
         {
             for (int s = 0; s < Scales.Length; s++) { int sv = s; fly.Items.Add(Item(Scales[s], !On(Custom) && ScaleOf() == s, () => { SetScale(sv); RefreshAll(); })); }
@@ -339,13 +339,13 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 fly.Items.Add(Item(m.Name, On(Custom) && CustomMask() == Rot(m.Mask, KeyOf()), () => { SetCustom(Rot(m.Mask, KeyOf())); RefreshAll(); }));
             }
             fly.Items.Add(new Separator());
-            fly.Items.Add(Item(Loc.T("Custom — edit on the Scale tab"), On(Custom), () => { SetCustom(ActiveMask()); RefreshAll(); }));
-        }, Loc.T("Scale — the notes the voice is pulled to"), 62, false, Scale);
+            fly.Items.Add(Item(Loc.T("device.auto_shift.custom_edit_on_the_scale"), On(Custom), () => { SetCustom(ActiveMask()); RefreshAll(); }));
+        }, Loc.T("device.auto_shift.scale_the_notes_the_voice"), 62, false, Scale);
 
         // The MIDI source: [name ▾] lists the instrument tracks. Picking one switches Key Source to MIDI.
         Control FromDrop() => Drop(MidiSrcName, () => MidiSrc() >= 0 && MidiOn(), fly =>
         {
-            fly.Items.Add(Item(Loc.T("None"), MidiSrc() < 0, () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); RefreshAll(); }));
+            fly.Items.Add(Item(Loc.T("common.none"), MidiSrc() < 0, () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); RefreshAll(); }));
             for (int i = 0; i < engine.TrackCount; i++)
                 if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track && ti.IsInstrument)
                 {
@@ -357,7 +357,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                         ctx.NotifyChanged(); RefreshAll();
                     }));
                 }
-        }, Loc.T("From — the instrument track whose notes set the target (its MIDI clips and effects, even when muted)"), 74, false, KeySrc);
+        }, Loc.T("device.auto_shift.from_the_instrument_track_whose"), 74, false, KeySrc);
 
         Control VoiceDrop() => Drop(VoiceName, () => false, fly =>
         {
@@ -367,7 +367,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 fly.Items.Add(Item(NotaNum.F($"{vv.Name}  ({Note(vv.Lo)}…{Note(vv.Hi)})"), LowNote() == vv.Lo && HighNote() == vv.Hi, () =>
                 { SetP(DetLow, (vv.Lo - 24) / 72f); SetP(DetHigh, (vv.Hi - 24) / 72f); RefreshAll(); }));
             }
-        }, Loc.T("Source — sets the detection range for a voice type or an instrument"), 0, true);
+        }, Loc.T("device.auto_shift.source_sets_the_detection_range"), 0, true);
 
         // Slider row: caps label · track · mono value.
         Control SliderRow(string label, int p, Func<double, string> fmt, bool bipolar = false, bool modulation = false, IBrush? valueInk = null)
@@ -427,8 +427,8 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         var corrPill = new AsPill { Ink = Teal, Bipolar = true, VerticalAlignment = VerticalAlignment.Stretch };
         var inLbl = Caps("IN"); inLbl.HorizontalAlignment = HorizontalAlignment.Center;
         var corrLbl = Caps("CORR"); corrLbl.HorizontalAlignment = HorizontalAlignment.Center;
-        ToolTip.SetTip(inPill, Loc.T("The detected pitch, low to high across the detection range (Detect tab)"));
-        ToolTip.SetTip(corrPill, Loc.T("The correction now — up or down from the centre, full height = 2 semitones"));
+        ToolTip.SetTip(inPill, Loc.T("device.auto_shift.the_detected_pitch_low_to"));
+        ToolTip.SetTip(corrPill, Loc.T("device.auto_shift.the_correction_now_up_or"));
         var pitchNote = Mono("—", 9, AccentBright); pitchNote.HorizontalAlignment = HorizontalAlignment.Center; pitchNote.FontWeight = FontWeight.Medium;
         var pitchCents = Mono("", 7, TextPrimary); pitchCents.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
@@ -460,14 +460,14 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         Control TraceTab()
         {
             trace = new AsTraceView();
-            ToolTip.SetTip(trace, Loc.T("The detected pitch (teal dots) and the corrected output (neutral ink) over the last two seconds, on the scale's note lanes; the target lane is lit"));
+            ToolTip.SetTip(trace, Loc.T("device.auto_shift.the_detected_pitch_teal_dots"));
             var head = HeadRow(Row(6, Caps("KEY"), KeyDrop(false), ScaleDrop(), SourceSeg(), LearnLatch()), RightInfo(() => TargetNote() >= 0 ? "target " + TargetText() : ""));
             var knobs = KnobRow(new[]
             {
-                K(Amount, "AMOUNT", PctF, tip: Loc.T("Amount — how far the voice is pulled to the target note")),
-                K(Speed, "SPEED", v => MsF(Exp(v, 2, 300)), tip: Loc.T("Speed — how fast the retune glides (2 ms = hard tune)")),
-                K(Range, "RANGE", v => NotaNum.F($"±{1 + v * 11:0} st"), tip: Loc.T("Range — the largest correction; a note further off than this is only pulled this far")),
-                K(Human, "HUMAN", PctF, Teal, Loc.T("Human — keeps vibrato and slow drift around the corrected note (0 = flat)")),
+                K(Amount, "AMOUNT", PctF, tip: Loc.T("device.auto_shift.amount_how_far_the_voice_2")),
+                K(Speed, "SPEED", v => MsF(Exp(v, 2, 300)), tip: Loc.T("device.auto_shift.speed_how_fast_the_retune")),
+                K(Range, "RANGE", v => NotaNum.F($"±{1 + v * 11:0} st"), tip: Loc.T("device.auto_shift.range_the_largest_correction_a")),
+                K(Human, "HUMAN", PctF, Teal, Loc.T("device.auto_shift.human_keeps_vibrato_and_slow")),
             },
             () => Voiced() ? NotaNum.F($"input {InputText()} → target {TargetText()}") : "no pitch",
             () => (P(Amount) >= 0.95f && SpeedMs() < 12 ? "hard correction" : P(Amount) < 0.4f ? "light correction" : "natural correction")
@@ -483,10 +483,10 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         {
             histView = new AsHistView();
             histView.NoteClicked += ToggleNote;
-            ToolTip.SetTip(histView, Loc.T("How long each note was sung (the last ~16 bars) over the scale's notes — neutral in the scale, teal outside it. Click a column to add or remove its note"));
+            ToolTip.SetTip(histView, Loc.T("device.auto_shift.how_long_each_note_was"));
             LearnBind(histView, Custom);
             var scaleSeg = Seg(Scale, new[] { "Chrom", "Major", "Minor", "Pent", "Custom" },
-                Loc.T("Scale — Chromatic, Major, Minor, Pentatonic (major or minor — click again to swap) or Custom (the notes below)"),
+                Loc.T("device.auto_shift.scale_chromatic_major_minor_pentatonic"),
                 iv =>
                 {
                     if (iv == 4) SetCustom(ActiveMask());
@@ -549,23 +549,23 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
         Control MidiTab()
         {
             midiView = new AsTraceView();
-            ToolTip.SetTip(midiView, Loc.T("The source track's notes (neutral blocks, accent while sounding) and the voice (teal) over the last two seconds — with Key Source MIDI the voice is pulled to the notes"));
+            ToolTip.SetTip(midiView, Loc.T("device.auto_shift.the_source_tracks_notes_neutral"));
             var head = HeadRow(Row(6, Caps("FROM"), FromDrop(),
-                    Seg(MidiMode, new[] { "Note", "Scale" }, Loc.T("Note — the voice goes to the last held note; Scale — the held notes form the scale")),
-                    ToggleLatch(MidiLatch, "Latch", Loc.T("Latch — keep the last target between notes (off = no correction while no note is held)")),
-                    ToggleLatch(MidiOct, "Oct lock", Loc.T("Oct lock — the note's own octave (off = whichever octave of it is nearest the voice)"))),
-                RightInfo(() => MidiOn() ? NotaNum.F($"{Sc(S_MidiHeld):0} {(Math.Round(Sc(S_MidiHeld)) == 1 ? "note" : "notes")}") : Loc.T("Key Source is not MIDI")));
+                    Seg(MidiMode, new[] { "Note", "Scale" }, Loc.T("device.auto_shift.note_the_voice_goes_to")),
+                    ToggleLatch(MidiLatch, "Latch", Loc.T("device.auto_shift.latch_keep_the_last_target")),
+                    ToggleLatch(MidiOct, "Oct lock", Loc.T("device.auto_shift.oct_lock_the_notes_own"))),
+                RightInfo(() => MidiOn() ? NotaNum.F($"{Sc(S_MidiHeld):0} {(Math.Round(Sc(S_MidiHeld)) == 1 ? "note" : "notes")}") : Loc.T("device.auto_shift.key_source_is_not_midi")));
             var knobs = KnobRow(new[]
             {
-                K(Amount, "AMOUNT", PctF, tip: Loc.T("Amount — how far the voice is pulled to the note")),
-                K(MidiGlide, "GLIDE", v => MsF(Exp(v, 5, 800)), tip: Loc.T("Glide — how long the target bends from one note to the next (Pitch bend from MIDI)")),
-                K(Speed, "SPEED", v => MsF(Exp(v, 2, 300)), tip: Loc.T("Speed — how fast the voice follows the target")),
-                K(MidiBendRange, "BEND", v => NotaNum.F($"±{v * 6:0.#} st"), Teal, Loc.T("Bend — the widest move between notes that bends over Glide; wider leaps jump")),
+                K(Amount, "AMOUNT", PctF, tip: Loc.T("device.auto_shift.amount_how_far_the_voice")),
+                K(MidiGlide, "GLIDE", v => MsF(Exp(v, 5, 800)), tip: Loc.T("device.auto_shift.glide_how_long_the_target")),
+                K(Speed, "SPEED", v => MsF(Exp(v, 2, 300)), tip: Loc.T("device.auto_shift.speed_how_fast_the_voice")),
+                K(MidiBendRange, "BEND", v => NotaNum.F($"±{v * 6:0.#} st"), Teal, Loc.T("device.auto_shift.bend_the_widest_move_between")),
             },
             () => !MidiOn() ? "set Key Source to MIDI to follow the notes"
-                : Sc(S_MidiNote) < 0 ? (MidiSrc() < 0 ? Loc.T("pick a track in FROM") : Loc.T("no note held"))
+                : Sc(S_MidiNote) < 0 ? (MidiSrc() < 0 ? Loc.T("device.auto_shift.pick_a_track_in_from") : Loc.T("device.auto_shift.no_note_held"))
                 : Voiced() ? NotaNum.F($"input {InputText()} → clip note {TargetText()}") : NotaNum.F($"clip note {Note((int)Sc(S_MidiNote))}"),
-            () => On(MidiLatch) ? Loc.T("latch holds the target between notes") : Loc.T("no correction between notes"));
+            () => On(MidiLatch) ? Loc.T("device.auto_shift.latch_holds_the_target_between") : Loc.T("device.auto_shift.no_correction_between_notes"));
             return TabBody(head, midiView, knobs);
         }
 
@@ -630,9 +630,9 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 return ("NOTE", false, v ? Success : BorderStrong, false,
                     v ? NotaNum.F($"{Note(DetNote())} · {Sc(S_Hz):0.0} Hz") : Sc(S_Sibilant) > 0.5 ? (On(SkipSib) ? "sibilant · passed" : "sibilant") : "no pitch",
                     v ? NotaNum.F($"correction {CentsF(Sc(S_CorrCents))} · conf {Sc(S_Conf) * 100:0} %") : NotaNum.F($"in {Sc(S_InDb):0} dB"));
-            }, Loc.T("What the detector hears now and the correction applied — or, with Key Source MIDI, the note the voice is pulled to"));
-            var follow = Toggle(Follow, Loc.T("Follow Scale device"), Loc.T("Follow — copy the key and scale of a Nota Scale MIDI effect (this track, the MIDI source, or the first one found)"));
-            var bend = Toggle(MidiBend, Loc.T("Pitch bend from MIDI"), Loc.T("Pitch bend from MIDI — moves between notes bend over Glide when they are within Bend; off = the target steps"));
+            }, Loc.T("device.auto_shift.what_the_detector_hears_now"));
+            var follow = Toggle(Follow, Loc.T("device.auto_shift.follow_scale_device"), Loc.T("device.auto_shift.follow_copy_the_key_and_2"));
+            var bend = Toggle(MidiBend, Loc.T("device.auto_shift.pitch_bend_from_midi"), Loc.T("device.auto_shift.pitch_bend_from_midi_moves"));
             readouts.Add(() => { follow.IsVisible = !MidiOn(); bend.IsVisible = MidiOn(); });
             return Spread(
                 SliderRow("SHIFT", Shift, ShiftF, bipolar: true),
@@ -641,7 +641,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = SliderRow("MIX", Mix, PctF) },
                 noteBox,
                 new StackPanel { Spacing = 5, Children = {
-                    Toggle(Formant, "Preserve formants", Loc.T("Preserve formants — the vowel colour stays put while the pitch moves (off = it moves with the pitch, like a tape speed-up)")),
+                    Toggle(Formant, "Preserve formants", Loc.T("device.auto_shift.preserve_formants_the_vowel_colour")),
                     new Panel { Children = { follow, bend } } } });
         }
 
@@ -651,12 +651,12 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             {
                 bool learning = Sc(S_Learning) > 0.5;
                 if (Sc(S_LearnKey) < 0)
-                    return ("LEARN", learning, learning ? Brass : BorderStrong, learning, learning ? "listening…" : "—", Loc.T("sing a few bars"));
+                    return ("LEARN", learning, learning ? Brass : BorderStrong, learning, learning ? "listening…" : "—", Loc.T("device.auto_shift.sing_a_few_bars"));
                 string Ks(int k, double s) => $"{Keys[Math.Clamp(k, 0, 11)]} {(s > 1.5 ? "Minor" : "Major")}";
                 return ("LEARN", learning, learning ? Brass : Success, learning,
                     NotaNum.F($"{Ks((int)Sc(S_LearnKey), Sc(S_LearnScale))} · {Sc(S_LearnMatch) * 100:0} %"),
                     NotaNum.F($"next {Ks((int)Sc(S_Learn2Key), Sc(S_Learn2Scale))} · {Sc(S_Learn2Match) * 100:0} %"));
-            }, Loc.T("The key that fits what was sung (Krumhansl profiles over the last ~16 bars), and the runner-up. Learn sets it; Auto follows it"));
+            }, Loc.T("device.auto_shift.the_key_that_fits_what"));
             return Spread(
                 LabelRow("SOURCE", VoiceDrop()),
                 SliderRow("LOW", DetLow, NoteF, modulation: true),
@@ -664,8 +664,8 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 0), Child = SliderRow("SENS", DetSens, PctF) },
                 learnBox,
                 new StackPanel { Spacing = 5, Children = {
-                    Toggle(Follow, Loc.T("Follow Scale device"), Loc.T("Follow — copy the key and scale of a Nota Scale MIDI effect")),
-                    Toggle(SkipSib, "Skip sibilants", Loc.T("Skip sibilants — s, sh, t and breath pass unshifted, so they don't turn metallic")) } });
+                    Toggle(Follow, Loc.T("device.auto_shift.follow_scale_device"), Loc.T("device.auto_shift.follow_copy_the_key_and")),
+                    Toggle(SkipSib, "Skip sibilants", Loc.T("device.auto_shift.skip_sibilants_s_sh_t")) } });
         }
 
         // ======================================================================

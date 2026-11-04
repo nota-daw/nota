@@ -689,13 +689,14 @@ std::shared_ptr<Track> Engine::cloneTrack(const Track& t) const {
     nt->ccRoutesDirty = true;          // Arp CC routes (specs/044): rebuilt when published
     nt->nextModId = t.nextModId;
     nt->sessionPlayer = t.sessionPlayer; // shared — playback state persists (M5-2)
-    nt->liveHeld = t.liveHeld;           // shared — held live notes persist (#366)
+    nt->liveHeld = t.liveHeld;           // shared — held live notes (#366) and effect tail (#449) persist
     nt->setFrozen(t.frozen());           // M7: freeze state + buffer (shared by pointer)
     nt->frozenBuf = t.frozenBuf;
     nt->frozenSpb = t.frozenSpb;
     nt->name = t.name; // UI metadata
     nt->colorIndex = t.colorIndex;
     nt->pianoFold = t.pianoFold;
+    nt->editLink = t.editLink;
     return nt;
 }
 
@@ -770,11 +771,14 @@ void Engine::pushUndo() {
                 return;
             }
     }
-    undoStack_.push_back({authoring_, {}}); // authoring_ is immutable after publish
+    // authoring_ is immutable after publish. A take's own checkpoint is marked so a retry can
+    // take it out without touching the user's edits made meanwhile (specs/078).
+    undoStack_.push_back({authoring_, {}, takePushing_ && takeAttempt_.active});
     ++undoPushCount_;
     if (undoStack_.size() > kMaxUndoDepth) {
         undoStack_.erase(undoStack_.begin());
         if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_; // keep the group's anchor
+        if (takeAttempt_.active && takeAttempt_.undoBase > 0) --takeAttempt_.undoBase; // specs/078
     }
     redoStack_.clear(); // a new edit invalidates the redo branch
 }
@@ -790,7 +794,10 @@ void Engine::endUndoGroup() {
     if (undoStack_.size() > undoGroupBase_ + 1) {
         auto first = undoStack_.begin() + static_cast<std::ptrdiff_t>(undoGroupBase_);
         for (auto it = first + 1; it != undoStack_.end(); ++it) {
-            if (!first->graph) first->graph = it->graph;
+            if (!first->graph) {
+                first->graph = it->graph;
+                first->take = it->take; // a take's checkpoint stays the take's (specs/078)
+            }
             mergeMix(first->mix, it->mix);
         }
         undoStack_.erase(first + 1, undoStack_.end());
@@ -1081,7 +1088,10 @@ void Engine::endMixGesture(int32_t handle) {
         const size_t base = std::min(g.stackSizeAtBegin, undoStack_.size() - 1);
         auto first = undoStack_.begin() + static_cast<std::ptrdiff_t>(base);
         for (auto it = first + 1; it != undoStack_.end(); ++it) {
-            if (!first->graph) first->graph = it->graph;
+            if (!first->graph) {
+                first->graph = it->graph;
+                first->take = it->take; // a take's checkpoint stays the take's (specs/078)
+            }
             mergeMix(first->mix, it->mix);
         }
         undoStack_.erase(first + 1, undoStack_.end());

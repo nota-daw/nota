@@ -166,7 +166,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             Begin("position"); SetP("position", engine.InstrumentParamDefault(track, pi)); End("position");
             Refresh();
         };
-        ToolTip.SetTip(wave, MenuKit.Keys(Loc.T("Drag to move the read position · ⌥-click to type it · double-click to reset")));
+        ToolTip.SetTip(wave, MenuKit.Keys(Loc.T("device.grain.drag_to_move_the_read")));
         // ⌥-click types the read position (specs/035); double-click keeps its own reset.
         if (I("position") is var gpi and >= 0)
             ValueEntry.AttachAll(wave, ValueEntry.InstrumentParam(engine, track, gpi, "position", "Position", v => Pct((float)v), Refresh) with { Default = null });
@@ -317,11 +317,11 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
             box.PointerWheelChanged += (wt, e) => { if (WheelInput.Step(e, wt) is not { } s) return; e.Handled = true; if (s != 0) SetRoot(rootNote + s); };
             // Double-click: the note the file name names, else C4.
             box.DoubleTapped += (_, e) => { SetRoot(SamplerModel.DetectRoot(sampleName) is var d and >= 0 ? d : 60); e.Handled = true; };
-            ToolTip.SetTip(box, Loc.T("The root — the key that plays the sample as recorded. Scroll to step it · double-click takes it from the file name (C4 if none)"));
+            ToolTip.SetTip(box, Loc.T("device.grain.the_root_the_key_that"));
             var stepper = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 4,
-                Children = { Step(GlyphKind.Minus, -1, Loc.T("Root a semitone down")), box, Step(GlyphKind.Plus, +1, Loc.T("Root a semitone up")) },
+                Children = { Step(GlyphKind.Minus, -1, Loc.T("device.grain.root_a_semitone_down")), box, Step(GlyphKind.Plus, +1, Loc.T("device.grain.root_a_semitone_up")) },
             };
             var cap = Cap("ROOT"); cap.HorizontalAlignment = HorizontalAlignment.Center;
             return new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0), Children = { cap, stepper } };
@@ -409,7 +409,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         var modeChips = Chips("scanmode", ModeNames, "Scan Mode");
         modeChips.HorizontalAlignment = HorizontalAlignment.Right;
         modeChips.Margin = new Thickness(0, 0, 6, 0);
-        ToolTip.SetTip(modeChips, Loc.T("Scan moves through the file · Freeze holds Position · Key moves it with the note"));
+        ToolTip.SetTip(modeChips, Loc.T("device.grain.scan_moves_through_the_file"));
         var readCap = Cap("READ"); readCap.Margin = new Thickness(8, 0, 0, 0);
         var readHead = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
         readHead.Children.Add(readCap);
@@ -450,7 +450,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         var outRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), VerticalAlignment = VerticalAlignment.Stretch };
         var volCell = PKnob("volume", "VOLUME", "Volume", Pct, NotaSize.KnobMain, 50);
         var mixCell = PKnob("drywet", "DRY/WET", "Dry/Wet", Pct, NotaSize.KnobRegular, 46);
-        ToolTip.SetTip(mixCell, Loc.T("Blend the sample itself (dry) with the grain cloud (wet)"));
+        ToolTip.SetTip(mixCell, Loc.T("device.grain.blend_the_sample_itself_dry"));
         outRow.Children.Add(volCell);
         Grid.SetColumn(mixCell, 1); outRow.Children.Add(mixCell);
         Grid.SetColumn(meterBlock, 2); outRow.Children.Add(meterBlock);
@@ -484,7 +484,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         {
             0 => $"{ModeWord()} · {ShapeWords[Sel("grainshape", 4)]} · {Size(G("grainsize"))} · {Density(G("density"))}",
             1 => $"{ModeWord()} · root {SamplerModel.NoteName(rootNote)} · {Coarse(G("coarse"))} · {Fine(G("fine"))}",
-            2 => Loc.F("{0} · position · pitch · pan", ModeWord()),
+            2 => Loc.F("device.grain.position_pitch_pan", ModeWord()),
             3 => $"{ModeWord()} · {FilterNames[Sel("filtype", 3)]} · {Hz(G("filfreq"))}",
             _ => $"{ModeWord()} · a · d · s · r",
         };
@@ -492,7 +492,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         {
             0 => $"Window {ShapeWords[Sel("grainshape", 4)]} · size {Size(G("grainsize"))} · density {Density(G("density"))} · spread {Pct(G("spread"))} · {Read()}{Mix()}",
             1 => Math.Abs(G("coarse") - 0.5f) < 0.001f && Math.Abs(G("fine") - 0.5f) < 0.0026f
-                ? Loc.F("Root {0} plays the sample as recorded · coarse 0 · fine 0", SamplerModel.NoteName(rootNote))
+                ? Loc.F("device.grain.root_plays_the_sample_as", SamplerModel.NoteName(rootNote))
                 : $"Root {SamplerModel.NoteName(rootNote)} · coarse {Coarse(G("coarse"))} · fine {Fine(G("fine"))} — every grain transposed by it",
             2 => $"Variation: position {Pct(G("posrand"))} · pitch {PitchJitter(G("pitchrand"))} · pan {Pct(G("panrand"))} — per grain",
             3 => $"Filter {FilterNames[Sel("filtype", 3)]} · {Hz(G("filfreq"))} · reso {Pct(G("filreso"))} — after the grain cloud",
@@ -502,7 +502,7 @@ internal sealed class GrainInstrumentCard : IInstrumentCard
         {
             string sample = sampleId == 0 ? "DEFAULT" : "SAMPLE";
             string rate = sampleKHz > 0 ? " · " + NotaNum.Unit(sampleKHz, "0.#", "kHz") : "";
-            return Loc.F("{0} {1}{2} · {3} VOICES · {4} GRAINS", sample, NotaNum.Time(sampleSec), rate, voices, grains);
+            return Loc.F("device.grain.voices_grains_caps", sample, NotaNum.Time(sampleSec), rate, voices, grains);
         }
         var statusBar = new Grid { Height = StatusH, ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 10 };
         statusBar.Children.Add(status);

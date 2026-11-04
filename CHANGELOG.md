@@ -23,6 +23,24 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Discard and retry take** (#185): ⌘. (Ctrl+. on Windows and Linux) — also in the
+  Transport menu, the command palette and over MCP (`retry_take`) — throws away the take
+  being recorded and records it again in one press. In the Arrangement the playhead goes back
+  to where the transport was started — the take's start, counting in again if it did, or
+  where Play was pressed when you punched in, so the run-up plays again. In the Session view
+  only the recording slot's take goes: the other clips keep playing, and the slot shows it is
+  waiting until it records again from the next launch quantum. Nothing of the discarded take
+  stays — not its audio, loop passes, notes, controllers or automation, and not an undo step.
+- **Preview a translation**: **Load file…** in Settings → Appearance → Language runs Nota in a
+  language file from your disk after a restart and lists the entries it cannot use;
+  `NOTA_UI_LANGUAGE=/path/to/file.json` does the same for one run.
+- **Link a group's tracks** (#184): the Link key (a chain link) on a group's header, its
+  Mixer strip and its menu ties the tracks in the group together — for a dry and an amped
+  guitar recorded side by side, say. Arming one arms them all; clicking a clip selects the
+  clips at the same place on the other tracks too; moving, trimming, fading, splitting,
+  duplicating, copying, cutting or deleting it does the same to them, as one undo step; a
+  time range drawn on one track spans the whole group. ⌥-click (Alt-click) a clip or an arm
+  to act on one track. Saved with the project; MCP `set_group_link` / `get_group_link`.
 - **Rearrange the song by its sections** (#192): drag a section in the Sections lane and it
   moves with everything in it — audio and MIDI clips (cut at its edges), automation on every
   track and the master, take lanes — to the boundary marked while you drag; the sections in
@@ -84,6 +102,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   also clicked the stem. A note already at the default is left alone and a locked reference
   clip's notes are never touched. Grabbing a stem by its cap no longer makes it jump to the pixel
   you pressed: it moves from where it is.
+- **Multiple MIDI controller lanes** (#422): **+ lane** below the left sidebar entries
+  adds a CC lane. Each lane has an in-lane dropdown showing its controller name and
+  CC number, with **×** beside it to hide the lane without deleting MIDI data.
+  A **127 / 64 / 0** scale lines up with the curve on the left of each CC lane.
+  Extra lanes scroll vertically and share the notes' horizontal zoom and position.
+  Stacked clips scroll in their own strip when needed to keep notes accessible.
+- **Resizable piano-roll lanes** (#422): drag the divider above Velocity or any CC
+  lane to resize it independently. Heights are remembered when editors reopen and
+  Nota restarts; re-add the corresponding lane/controller to restore its height.
 - **French interface and a Language setting**: Preferences → Appearance → **Language** lists
   English and Français (each in its own name). The choice is saved and applies after a restart;
   the row says so and offers a **Restart** button (the usual unsaved-changes prompt comes first).
@@ -179,6 +206,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the same way.
 
 ### Changed
+- **Interface languages are downloaded** (#476): Nota now ships in English, and every other
+  language comes from the new [nota-translations](https://github.com/nota-daw/nota-translations)
+  repository. **Settings → Appearance → Language** lists the languages there with how complete
+  each is for your version; choosing one downloads it (checked against its published checksum)
+  and it applies after the usual restart. Installed languages work offline, an **Update**
+  appears when a better translation is published, and **Remove** takes one away. If you used
+  French before this version, Nota fetches it in the background on first start and offers the
+  restart in the status bar (with update checks off, the Language row offers the download
+  instead). Translators can fix or add a language with a pull request there, no build needed.
 - **Dragging a section now moves its content too** (#192). To move only the section marker,
   as before, hold ⌥ (Alt on Windows and Linux) while dragging; resizing a section's edges
   still never touches the music.
@@ -220,6 +256,29 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Drawing a controller no longer changes the rest of the curve** (#169): a stroke in the
+  piano-roll controller lane replaces only the stretch you draw. A shaped curve on either side
+  keeps its bend, and points recorded while the button is down are not replaced by the older
+  copy from when the drag began.
+- **Open an SFZ by dropping it on Nota Mosaic** (#349): drop an `.sfz` file, or the folder of
+  an SFZ library (such as the Salamander Grand Piano), on a Mosaic card and its zones load, with
+  the import report. Before, only installed sample packs could bring an SFZ in, so a library
+  you downloaded yourself couldn't be opened. Controllers an SFZ starts with `set_hdcc` (0–1)
+  now count too, so Salamander's string resonance and hammer noise release layers come along.
+- **Effects on an audio track ring out after Stop** (#449): a reverb or delay placed on an
+  audio track used to fall silent the instant the transport stopped, while the same reverb on
+  a return track rang on. The track's effects now keep playing on silence until their output
+  has died away (3 seconds under −100 dB), then the track costs nothing again. Plug-ins on it
+  also get stopped blocks now, so one that acts on Stop (PitchNet finishing a capture) does.
+- **Duplicating a track keeps its plug-ins** (#454): Duplicate track, a copied and pasted
+  plug-in effect and a copied rack now bring their VST3 plug-ins along, with every setting.
+  The copy used to come back without them, because a running plug-in describes itself by the
+  file inside its bundle, which can't be loaded again; the copy now loads the plug-in the way
+  the browser does.
+- **Plug-ins that cap their block size load** (#447): sfizz and other plug-ins with a maximum
+  block size stopped Nota when added, because every plug-in was prepared for 16384-sample
+  blocks. Plug-ins are now prepared for at most 4096; a longer block (an export, a large audio
+  buffer) is played to them in pieces, each with its own notes and transport position.
 - **Take lanes no longer dip, cut on the old tempo, or highlight a moved clip** (#187):
   where two sections of one loop recording meet, playback stays at full level instead of
   fading out and back in, including after flatten when one of those sections stays its own
@@ -262,6 +321,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Windows playback cursor**: the Arrangement playhead now follows display frames,
   interpolating the engine's rendered blocks instead of jumping on the UI polling timer.
   Editing positions and audio timing remain tied to the engine transport.
+- **Docked MIDI clip editors** reserve enough height for notes and all five lane
+  tabs, including when restoring a small saved panel. The window minimum accounts
+  for both panels when the Mixer is also docked (#422).
+- **Resizing the primary piano-roll lane** keeps all five tabs reachable, including
+  after restoring a saved height. Extra CC lanes retain their smaller minimum (#422).
+- **CC lanes added to a folded Drum Rack** use the wider pad-name gutter immediately,
+  keeping their curves and pointer edits aligned with the notes (#422).
 - **An armed audio track meters its input with monitoring off** (nota-daw/nota#352): arm a
   track and its meter shows the level coming in (hardware input, or the source track it
   records from) before and during a take, without hearing it. The meter reads the input
