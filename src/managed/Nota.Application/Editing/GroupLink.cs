@@ -63,6 +63,15 @@ public sealed class GroupLink
         get { foreach (var m in _members.Values) if (m.Count > 1) return true; return false; }
     }
 
+    /// <summary>True when both tie the same tracks to the same link roots.</summary>
+    public bool SameSets(GroupLink other)
+    {
+        if (_rootOf.Count != other._rootOf.Count) return false;
+        foreach (var (t, r) in _rootOf)
+            if (!other._rootOf.TryGetValue(t, out var o) || o != r) return false;
+        return true;
+    }
+
     /// <summary>The track's link root group id, or -1 when it isn't linked.</summary>
     public int RootOf(int trackId) => _rootOf.TryGetValue(trackId, out var r) ? r : -1;
 

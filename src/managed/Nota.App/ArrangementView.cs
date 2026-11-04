@@ -1029,7 +1029,14 @@ public sealed partial class ArrangementView : UserControl
     /// take's row. Owned and updated by the window on its recording tick.</summary>
     internal RecordPreview? RecordPreview { get; set; }
 
-    public void Refresh(bool rebuildHeaders = true) => Refresh(rebuildHeaders, movedOnly: false);
+    public void Refresh(bool rebuildHeaders = true)
+    {
+        var linkBefore = _linkSeen;
+        Refresh(rebuildHeaders, movedOnly: false);
+        // A Link turned on or off anywhere (header, Mixer, Session, undo, MCP): the selected
+        // clips' partners follow the new link sets (specs/076).
+        if (rebuildHeaders && _sel.Count > 0 && linkBefore is not null && !linkBefore.SameSets(Link)) ReconcileLinkedSelection();
+    }
 
     /// <summary>After an edit that only moved, cut or removed clips (a section rearrange,
     /// specs/073): reload clip and automation data without rebuilding the track headers — the
@@ -1355,7 +1362,13 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null) return;
         var placed = _engine.LastPlacedClips();
-        if (placed.Length > 0) { SetSelection(placed); RelinkSelection(); }
+        if (placed.Length > 0)
+        {
+            bool bypass = _linkBypass;   // an edit on a clip picked alone keeps it alone
+            SetSelection(placed);
+            _linkBypass = bypass;
+            RelinkSelection();
+        }
     }
 
     // Tell the window the primary track changed under a clip selection (devices / clip tab follow).
@@ -1697,11 +1710,12 @@ public sealed partial class ArrangementView : UserControl
         SelClipIndex = clipIndex;
         if (trackId > 0) FocusTrackId = trackId;
         _sel.Clear();
-        _selLinked.Clear();
+        ClearLinkState();
         if (trackId > 0 && clipIndex >= 0)
         {
             _sel.Add((trackId, clipIndex));
             if (linked) AddMatches(trackId, clipIndex);
+            else _linkBypass = Link.IsLinked(trackId);   // ⌥-click: the edits that follow stay on this track
         }
         // Selecting into or out of a group changes that row's height, so the rows below it
         // move: re-lay them before the headers repaint their selection.
@@ -1763,7 +1777,7 @@ public sealed partial class ArrangementView : UserControl
         {
             _sel.Add((trackId, clipIndex));
             _selLinked.Remove((trackId, clipIndex));
-            AddMatches(trackId, clipIndex);
+            if (!_linkBypass) AddMatches(trackId, clipIndex);
             SelTrackId = trackId; SelClipIndex = clipIndex; FocusTrackId = trackId;   // the just-clicked clip is the primary
         }
         UpdateHeaderSelection();
@@ -1811,7 +1825,7 @@ public sealed partial class ArrangementView : UserControl
         _timeSelRowLo = Math.Max(0, Math.Min(rowA, rowB));
         _timeSelRowHi = Math.Min(Math.Max(0, _tracks.Count - 1), Math.Max(rowA, rowB));
         WidenRangeToLinkSets();
-        if (_sel.Count > 0) { _sel.Clear(); _selLinked.Clear(); SelClipIndex = -1; UpdateHeaderSelection(); }
+        if (_sel.Count > 0) { _sel.Clear(); ClearLinkState(); SelClipIndex = -1; UpdateHeaderSelection(); }
         if (HasTimeSelection) BounceSource = (TimeSelectionTrackIds(), _timeSelStart, _timeSelEnd);
         Redraw();
     }
@@ -2007,7 +2021,7 @@ public sealed partial class ArrangementView : UserControl
         double bhi = Math.Max(anchor.StartBeat + anchor.LengthBeats, target.StartBeat + target.LengthBeats);
         ClearTimeSelection();
         _sel.Clear();
-        _selLinked.Clear();
+        ClearLinkState();
         for (int r = rlo; r <= rhi && r < _tracks.Count; r++)
             foreach (var c in _tracks[r].Clips)
                 if (c.StartBeat < bhi - 1e-6 && c.StartBeat + c.LengthBeats > blo + 1e-6)
@@ -2025,7 +2039,7 @@ public sealed partial class ArrangementView : UserControl
         double at = Math.Max(0, _playheadBeats);
         // One undo step; on a linked group the other tracks are cut at the playhead too, whatever
         // clip they have there (specs/076).
-        bool any = SplitLinkedAt(_sel.ToList(), at);
+        bool any = SplitLinkedAt(_sel.ToList(), at, linked: !_linkBypass);
         if (any) { Select(-1, -1); Refresh(); ClipsSplit?.Invoke(); }
         return any;
     }
@@ -2046,7 +2060,7 @@ public sealed partial class ArrangementView : UserControl
     {
         if (HasTimeSelection) ClearTimeSelection();
         _sel.Clear();
-        _selLinked.Clear();
+        ClearLinkState();
         foreach (var c in clips) _sel.Add(c);
         if (_sel.Count > 0) { var f = _sel.First(); SelTrackId = f.track; SelClipIndex = f.clip; FocusTrackId = f.track; }
         else { SelTrackId = -1; SelClipIndex = -1; }
@@ -2126,7 +2140,7 @@ public sealed partial class ArrangementView : UserControl
                 any |= _engine.TryDeleteClip(track, clip);
         });
         _sel.Clear();
-        _selLinked.Clear();
+        ClearLinkState();
         SelTrackId = -1; SelClipIndex = -1;
         Refresh();
         return any;   // false when the selection was entirely stale — don't claim a delete

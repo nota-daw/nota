@@ -28,9 +28,39 @@ public sealed partial class ArrangementView
     // the partners a trim or a fade on the picked clip passes on to. Read through LinkedSel.
     private readonly HashSet<(int track, int clip)> _selLinked = new();
 
-    // Rebuilt lazily after every Refresh (a toggle, a regroup and undo all refresh).
-    private GroupLink? _link;
-    private GroupLink Link => _link ??= _engine is { } e ? TrackArm.Links(e) : GroupLink.None;
+    // Rebuilt lazily after every Refresh (a toggle, a regroup and undo all refresh). _linkSeen
+    // keeps the last one built, so a Refresh can tell when the link sets changed.
+    private GroupLink? _link, _linkSeen;
+    private GroupLink Link => _link ??= _linkSeen = _engine is { } e ? TrackArm.Links(e) : GroupLink.None;
+
+    // The selection was picked with ⌥ (one track alone): split and the other linked edits keep to it
+    // until the selection changes again.
+    private bool _linkBypass;
+
+    private void ClearLinkState() { _selLinked.Clear(); _linkBypass = false; }
+
+    /// <summary>True when the clip selection was picked alone with ⌥ on a linked track.</summary>
+    internal bool LinkBypassed => _linkBypass;
+
+    // The link sets changed under a selection: drop the partners that no longer pair with a picked
+    // clip (only those — other groups keep theirs), and add the new ones unless the selection was
+    // picked alone.
+    private void ReconcileLinkedSelection()
+    {
+        var picked = _sel.Where(c => !_selLinked.Contains(c)).ToList();
+        var pickedSet = new HashSet<(int track, int clip)>(picked);
+        var want = new HashSet<(int track, int clip)>();
+        foreach (var p in picked)
+            foreach (var m in MatchesOf(p.track, p.clip))
+                if (!pickedSet.Contains(m)) want.Add(m);
+        foreach (var c in _selLinked.ToList())
+            if (!want.Contains(c)) { _selLinked.Remove(c); _sel.Remove(c); }
+        if (!_linkBypass)
+            foreach (var m in want)
+                if (_sel.Add(m)) _selLinked.Add(m);
+        UpdateHeaderSelection();
+        Redraw();
+    }
 
     /// <summary>True when the clip is in the selection because the link added it.</summary>
     internal bool IsLinkedPartner(int trackId, int clipIndex)
@@ -143,14 +173,10 @@ public sealed partial class ArrangementView
     /// <summary>Turns a group's Link on or off (one undo step) and says so.</summary>
     internal void SetGroupLink(int groupId, bool on)
     {
-        if (_engine is not { } eng || !eng.SetTrackEditLink(groupId, on)) return;
+        if (_engine is null) return;
+        _ = Link;   // what the selection was linked by, so Refresh can reconcile it with the new sets
+        if (!_engine.SetTrackEditLink(groupId, on)) return;
         Refresh();
-        // The selection follows at once: turning Link on adds the selected clips' partners,
-        // turning it off drops the ones the link had added.
-        if (on) foreach (var c in _sel.ToList()) AddMatches(c.track, c.clip);
-        else { foreach (var c in _selLinked) _sel.Remove(c); _selLinked.Clear(); }
-        UpdateHeaderSelection();
-        Redraw();
         if (on) StatusMessage?.Invoke(Loc.T("The group's tracks are linked"));
     }
 
