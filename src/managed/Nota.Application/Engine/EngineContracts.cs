@@ -11,6 +11,19 @@ using System.Runtime.InteropServices;
 
 namespace Nota.Application;
 
+/// <summary>What <see cref="IAudioEngine.RetryTake"/> did (specs/078).</summary>
+public enum RetryTakeResult
+{
+    /// <summary>Recording could not start again after the take was discarded (see RecordStartStatus).</summary>
+    Failed = -1,
+    /// <summary>Nothing was recording: nothing changed.</summary>
+    None = 0,
+    /// <summary>An Arrangement take was discarded and records again.</summary>
+    Arrangement = 1,
+    /// <summary>A Session slot take was discarded and records again from the next launch quantum.</summary>
+    Session = 2,
+}
+
 /// <summary>A MIDI note, blittable and laid out to match the native NotaNoteData
 /// struct. Times are in beats, relative to the containing clip's start.</summary>
 [StructLayout(LayoutKind.Sequential)]

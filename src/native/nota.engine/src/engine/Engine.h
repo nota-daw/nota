@@ -31,6 +31,8 @@
 #include <array>
 #include <atomic>
 #include <functional>
+#include <cmath>
+#include <limits>
 #include <list>
 #include <memory>
 #include <map>
@@ -661,6 +663,8 @@ class Engine {
     // Piano roll Fold (specs/045): a per-track view flag, saved with the project.
     bool setTrackPianoFold(int32_t trackId, bool on);
     int32_t trackPianoFold(int32_t trackId) const; // 1 / 0, -1 unknown track
+    bool setTrackEditLink(int32_t trackId, bool on); // group tracks only (specs/076); undoable
+    int32_t trackEditLink(int32_t trackId) const;    // 1 / 0, -1 unknown track
 
     // Track clipboard (copy/cut/paste). copyTracks stores fully independent clones of the
     // expanded set (a group brings its children); pasteTracks inserts fresh copies (new ids +
@@ -1292,6 +1296,10 @@ class Engine {
     // (for clicking rack/drum pads). -1 = none. Lock-free.
     void setAuditionTrack(int32_t trackId) { auditionTrackId_.store(trackId, std::memory_order_relaxed); }
     void setRecording(bool on);
+    // Discard the take in progress and record it again (#185, specs/078). Returns 0 nothing
+    // was recording, 1 Arrangement take retried, 2 Session slot take retried, -1 discarded but
+    // recording could not start again. Message thread.
+    int32_t retryTake();
     bool isRecording() const { return recording_.load(std::memory_order_relaxed) || audioRecording_; }
     // Why the last setRecording(true) did (not) start: 0 ok, 1 no armed track, 2 audio input failed.
     int32_t recordStartStatus() const { return recordStartStatus_; }
@@ -1910,6 +1918,86 @@ class Engine {
     bool recordStartedTransport_ = false;
     double recordReturnBeat_ = 0.0;
 
+    // Discard and retry (specs/078). One record press — or one retry — until the take stops:
+    // the tracks as they were before it wrote them and the undo/redo state, so a discard puts
+    // them back with no history of its own. Message thread.
+    struct TakeAttempt {
+        bool active = false;
+        bool session = false;   // a Session slot take (else Arrangement)
+        bool countedIn = false; // the Arrangement take counted in from stop
+        std::vector<std::pair<int32_t, std::shared_ptr<Track>>> baseTracks; // first write wins
+        size_t undoBase = 0;              // undoStack_ size when the take began
+        std::vector<UndoEntry> redoSaved; // redoStack_ when the take began
+        int32_t sessionTrackId = 0, sessionScene = -1;
+    };
+    TakeAttempt takeAttempt_;
+    bool takePushing_ = false;   // the take itself is checkpointing (its clip, its first lane write)
+    struct TakePushScope {       // marks the checkpoints pushed in this scope as the take's own
+        Engine& e;
+        bool was;
+        explicit TakePushScope(Engine& en) : e(en), was(en.takePushing_) { e.takePushing_ = true; }
+        ~TakePushScope() { e.takePushing_ = was; }
+    };
+    bool forceSlotLaunch_ = false; // a retried Session take relaunches its slot whatever its launch mode
+    bool retryingTake_ = false;    // the restart of a retried take is starting the capture
+    // Capture epoch (specs/078): a producer of capture frames (input thread, internal tap) puts
+    // a marker frame (NaN, NaN) in the ring the first time it pushes after the epoch changed;
+    // after a retry the drain drops everything before that marker — frames an in-flight block
+    // or callback wrote for the take that was thrown away.
+    std::atomic<uint32_t> captureEpoch_{0};
+    uint32_t hwCaptureEpoch_ = 0; // input thread's last marked epoch
+    uint32_t rtCaptureEpoch_ = 0; // audio thread's (internal resampling)
+    bool awaitCaptureMarker_ = false;
+    static bool isCaptureMarker(const InputFrame& f) { return std::isnan(f.l) && std::isnan(f.r); }
+    // Producer side: mark the first push of a new capture epoch. RT-safe (one atomic load).
+    // Load the epoch before the capture gate: a retry shuts the gate before it moves the epoch,
+    // so a producer that sees the new epoch also sees the gate shut until the restart opens it.
+    void markCaptureEpoch(uint32_t& last, uint32_t ep) {
+        if (ep == last) return;
+        last = ep;
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        inputQueue_.push(InputFrame{nan, nan});
+    }
+    // Session MIDI retry: the audio thread adopts the new take epoch only once the slot has
+    // actually relaunched, so nothing played while it waits (shown pending) enters the take.
+    uint32_t rtPendingEpoch_ = 0;
+    int32_t rtWaitScene_ = -1;
+    // Session audio retry: the capture frame where the boundary was crossed (-1 = not yet).
+    int64_t retryKeepFrom_ = -1;
+    void openTakeAttempt(bool session);
+    void noteTakeTrack(int32_t trackId); // a track the take is about to write (no-op when idle)
+    void closeTakeAttempt();
+    void keepTakeTrack(int32_t trackId); // that track's part of the take is kept; the rest may still be retried
+    void syncTakeEpoch();                // a take starts normally: the audio thread takes the current epoch
+    void discardTake();                  // drop what the take wrote; no undo step
+    void abortAudioRecording();          // stop capturing without materialising
+    // Explicit start for a retried take: the transport UI mirror lags the commands just
+    // queued, so the restart says where it starts and whether the clock is rolling.
+    bool startArrangementTake(bool wasPlaying, double playhead, bool retryCountIn);
+    double takeStartOverride_ = std::numeric_limits<double>::quiet_NaN(); // startAudioRecording
+    int takePlayingOverride_ = -1;                                         // -1 = read the transport
+    double takePlayhead() const;
+    bool takeTransportPlaying() const;
+    // Take epoch: the message thread's current attempt, and the audio thread's copy (set by
+    // the TakeRestart command). Recorded events carry the audio thread's; poll() drops stale ones.
+    uint32_t takeEpoch_ = 0;
+    uint32_t rtTakeEpoch_ = 0;
+    bool rtTakeRestart_ = false; // audio thread: a TakeRestart arrived, the next drain restarts the take
+    void pushRecorded(RecordedNote n) {
+        n.epoch = rtTakeEpoch_;
+        recorded_.push(n);
+    }
+    void pushRecordedCtl(RecordedCtl x) {
+        x.epoch = rtTakeEpoch_;
+        recordedCtl_.push(x);
+    }
+    void pushRecordedExpr(RecordedExpr x) {
+        x.epoch = rtTakeEpoch_;
+        recordedExpr_.push(x);
+    }
+    // A Session audio retry starts on the launch quantum: capture before this beat is trimmed.
+    double retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
+
     // automation write/record state (M9-C, message thread only)
     std::atomic<bool> autoRecord_{false}; // transport record engaged -> gestures write
     struct ActiveWrite {
@@ -2024,6 +2112,7 @@ class Engine {
     double routedPressBeat_[128] = {};
     float routedPressVel_[128] = {};
     int32_t routedOwner_ = -1;
+    bool routedSeedFromNow_ = false; // the take was retried: held routed notes start now (specs/078)
     bool routedSeedPending_ = false; // a take just started: seed after this block's routed events
     void trackRoutedDown(int32_t ownerId, const MidiEv* evs, int n, double blockStart, double spb, bool timed);
     // Capture clock: during a count-in the transport holds still, so notes are timed back
@@ -2176,7 +2265,15 @@ class Engine {
     std::vector<float> mixTmp_;
     // Parallel Pass 1 : per-leaf work items, sized on the message
     // thread (no audio-thread allocation).
-    enum class LeafPath : uint8_t { Skip, Frozen, Monitor, SessionInst, SessionAudio, Instrument, AudioClips };
+    enum class LeafPath : uint8_t { Skip, Frozen, Monitor, SessionInst, SessionAudio, Instrument, AudioClips, Tail };
+    // A stopped audio track's effects ring out (#449, LeafPath::Tail) while its output is over
+    // kTailFloor (-100 dBFS) or a device still holds sound. Built-in devices say when they have
+    // settled (Device::isIdle, which counts a delay's time in flight); a hosted plug-in can't,
+    // so for it the output has to stay quiet kTailQuietSeconds; and a device that never reports
+    // idle (an LFO's clock) lets the track go after kTailMaxQuietSeconds of quiet.
+    static constexpr double kTailQuietSeconds = 3.0;
+    static constexpr double kTailMaxQuietSeconds = 30.0;
+    static constexpr float kTailFloor = 1.0e-5f;
     struct LeafWork {
         Track* t = nullptr;
         bool audible = false, capturing = false, feeding = false, toMix = false;

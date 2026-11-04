@@ -259,8 +259,8 @@ internal sealed class ValveDeviceBody : IDeviceBody
             };
             return box;
         }
-        Control ModelDrop() => Drop(Model, Models, Loc.T("Model — the amp's voicing: how hard the preamp drives, how many stages clip, how tight the low end is and which cabinet it matches. Scroll to step."));
-        Control CabDrop() => Drop(CabType, Cabs, Loc.T("Cabinet — Match follows the model; the others bring their own low resonance and presence peak. Scroll to step."));
+        Control ModelDrop() => Drop(Model, Models, Loc.T("device.valve.model_the_amps_voicing_how"));
+        Control CabDrop() => Drop(CabType, Cabs, Loc.T("device.valve.cabinet_match_follows_the_model_2"));
 
         static Grid HeadRow(Control left, Control right)
         {
@@ -309,8 +309,8 @@ internal sealed class ValveDeviceBody : IDeviceBody
             stageTitle.Foreground = Sc(S_InPk) > 0.01 ? AccentBright : TextTertiary;   // lit while signal passes
         });
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(StageFader(Gain, "GAIN", NotaPalette.VizInk, Loc.T("Gain — how hard the signal hits the preamp. Double-click resets.")));
-        faders.Children.Add(Col(StageFader(Output, "OUT", Teal, Loc.T("Output — the master level after the cabinet, ±12 dB. Double-click resets.")), 1));
+        faders.Children.Add(StageFader(Gain, "GAIN", NotaPalette.VizInk, Loc.T("device.valve.gain_how_hard_the_signal")));
+        faders.Children.Add(Col(StageFader(Output, "OUT", Teal, Loc.T("device.valve.output_the_master_level_after")), 1));
         var stageCol = new RuleSection
         {
             Width = 56, Padding = new Thickness(0, 5, 0, 4),
@@ -331,7 +331,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
             toneView.DragH += v => Raw(MidFreq, (float)v);
             toneView.GestureBegin += () => { Begin(Middle); Begin(MidFreq); };
             toneView.GestureEnd += () => { End(Middle); End(MidFreq); };
-            ToolTip.SetTip(toneView, Loc.T("The tone stack before the cabinet — the pre-distortion tightness of the model, Bright, Bass / Middle / Treble / Presence and Deep; dashed is the stack flat. Drag sideways for the middle's frequency, up or down for the middle."));
+            ToolTip.SetTip(toneView, Loc.T("device.valve.the_tone_stack_before_the"));
             Learn(toneView, Middle);
 
             var thd = Mono("", 7, TextTertiary);
@@ -365,15 +365,15 @@ internal sealed class ValveDeviceBody : IDeviceBody
             cabView.DragV += v => Raw(MicDistance, (float)(1 - v));
             cabView.GestureBegin += () => { Begin(Axis); Begin(MicDistance); };
             cabView.GestureEnd += () => { End(Axis); End(MicDistance); };
-            ToolTip.SetTip(cabView, Loc.T("The cabinet as the mic hears it, with the low / high cuts — dashed is the same cab and mic on axis at the cap, 5 cm away. Drag sideways to move the mic off axis, up to bring it closer."));
+            ToolTip.SetTip(cabView, Loc.T("device.valve.the_cabinet_as_the_mic"));
             Learn(cabView, Axis);
 
             var loss = Mono("", 7, TextSecondary);
             readouts.Add(() => loss.Text = On(CabOn) ? NotaNum.F($"{Sc(S_CabLossDb):+0.0;−0.0;0.0} dB @ 4 k") : "cabinet off");
             var mics = IndexChips(Mic, Mics);
-            ToolTip.SetTip(mics, Loc.T("Mic — Dynamic: the classic close mic; Condenser: brighter, less proximity bass; Ribbon: dark, the most proximity bass"));
+            ToolTip.SetTip(mics, Loc.T("device.valve.mic_dynamic_the_classic_close"));
             var pos = Seg(MicPosition, new[] { "Cap", "Edge" });
-            ToolTip.SetTip(pos, Loc.T("Mic position — at the cone's cap (bright) or its edge (darker)"));
+            ToolTip.SetTip(pos, Loc.T("device.valve.mic_position_at_the_cones"));
             var head = HeadRow(Row(6, Caps("CAB"), CabDrop(), mics, pos), loss);
             var knobs = KnobRow(new[]
             {
@@ -398,12 +398,12 @@ internal sealed class ValveDeviceBody : IDeviceBody
             harm.DragV += v => RawN(Gain, v);
             harm.GestureBegin += () => Begin(Gain);
             harm.GestureEnd += () => End(Gain);
-            ToolTip.SetTip(harm, Loc.T("The harmonics the preamp adds at the input's level (the fundamental at the top). Drag up or down for the gain."));
+            ToolTip.SetTip(harm, Loc.T("device.valve.the_harmonics_the_preamp_adds"));
             Learn(harm, Gain);
 
             var peak = Mono("", 7, TextSecondary);
             readouts.Add(() => peak.Text = DbfsF(Sc(S_OutPk)));
-            var even = ToggleLatch(EvenOnly, () => "Even only", Loc.T("Even only — the preamp adds even harmonics only: warmth without the fizz of the odd ones"));
+            var even = ToggleLatch(EvenOnly, () => "Even only", Loc.T("device.valve.even_only_the_preamp_adds"));
             var head = HeadRow(Row(6, Caps("MODEL"), ModelDrop(), new Border { Width = 4 }, Acr("OS"), Seg(OS, OsNames), even), peak);
             var knobs = KnobRow(new[]
             {
@@ -471,7 +471,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
         Control CabinetTab()
         {
             var cabs = IndexChips(CabType, CabShort, h: 15, padX: 3);
-            ToolTip.SetTip(cabs, Loc.T("Cabinet — Match follows the model; 1×12 open, 2×12 combo, 4×12 closed, 1×15 bass"));
+            ToolTip.SetTip(cabs, Loc.T("device.valve.cabinet_match_follows_the_model"));
             var mics = IndexChips(Mic, Mics, h: 15, padX: 6);
             return Spread(
                 LabelRow("CAB", cabs, 26),
@@ -482,7 +482,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
                     () => centreTab == 1 ? NotaNum.F($"{Cabs[Idx(CabType)]} · {Mics[Idx(Mic)]}") : NotaNum.F($"{ModelName()} · gain {Ten(P(Gain))}"),
                     () => centreTab == 1
                         ? (On(CabOn) ? NotaNum.F($"{DistF(P(MicDistance))} · {AxisText()} · {(On(MicPosition) ? "edge" : "cap")}") : "cabinet off")
-                        : (On(CabOn) ? (Idx(CabType) == 0 ? Loc.T("cab by model · ") : CabShort[Idx(CabType)] + " · ") + NotaNum.F($"{Mics[Idx(Mic)].ToLowerInvariant()} {AxisText()}") : "no cabinet"),
+                        : (On(CabOn) ? (Idx(CabType) == 0 ? Loc.T("device.valve.cab_by_model") : CabShort[Idx(CabType)] + " · ") + NotaNum.F($"{Mics[Idx(Mic)].ToLowerInvariant()} {AxisText()}") : "no cabinet"),
                     () => centreTab == 1 && On(CabOn)),
                 new StackPanel { Spacing = 5, Children = {
                     Toggle(CabOn, "Cabinet sim"),
@@ -514,12 +514,12 @@ internal sealed class ValveDeviceBody : IDeviceBody
                 SliderRow("GATE", Gate, GateF, modulation: true),
                 SliderRow("OUTPUT", Output, OutDb, bipolar: true) } };
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
-            btns.Children.Add(ToggleLatch(Bright, () => "Bright", Loc.T("Bright — a treble lift before the preamp, strongest at low gain (the bright cap on a volume pot)"), fill: true));
-            btns.Children.Add(Col(ToggleLatch(Deep, () => "Deep", Loc.T("Deep — a low resonance boost after the tone stack, for a fuller, tighter bottom"), fill: true), 1));
+            btns.Children.Add(ToggleLatch(Bright, () => "Bright", Loc.T("device.valve.bright_a_treble_lift_before"), fill: true));
+            btns.Children.Add(Col(ToggleLatch(Deep, () => "Deep", Loc.T("device.valve.deep_a_low_resonance_boost"), fill: true), 1));
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
                 Docked(new Border { Margin = new Thickness(0, 7, 0, 0), Child = sliders }, Dock.Top),
-                Docked(new StackPanel { Spacing = 5, Children = { Toggle(AutoComp, "Auto-compensation", () => On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0} dB") : "Auto-compensation"), Toggle(EvenOnly, Loc.T("Even harmonics only")) } }, Dock.Bottom),
+                Docked(new StackPanel { Spacing = 5, Children = { Toggle(AutoComp, "Auto-compensation", () => On(AutoComp) ? NotaNum.F($"Auto-comp {Sc(S_CompDb):+0.0;−0.0;0.0} dB") : "Auto-compensation"), Toggle(EvenOnly, Loc.T("device.valve.even_harmonics_only")) } }, Dock.Bottom),
                 Docked(new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 5, 0, 5), Child = btns }, Dock.Bottom) } };
             return new Border { Padding = new Thickness(8, 6), Child = body };
         }

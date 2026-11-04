@@ -127,11 +127,11 @@ public sealed partial class ArrangementView
         {
             var flyout = new MenuFlyout();
             bool has = _o._loopE > _o._loopS;
-            var toggle = new MenuItem { Header = _o._loopActive ? Loc.T("Turn loop off") : Loc.T("Turn loop on"), Icon = MenuKit.Icon(GlyphKind.Cycle), InputGesture = MenuKit.LoopKey };
+            var toggle = new MenuItem { Header = _o._loopActive ? Loc.T("arrangement.controls.turn_loop_off") : Loc.T("arrangement.controls.turn_loop_on"), Icon = MenuKit.Icon(GlyphKind.Cycle), InputGesture = MenuKit.LoopKey };
             toggle.Click += (_, _) => _o.SetLoopOn(!_o._loopActive);
-            var sel = new MenuItem { Header = Loc.T("Loop selection"), Icon = MenuKit.Icon(GlyphKind.Select), IsEnabled = _o.SelectionLoopRange() is not null };
+            var sel = new MenuItem { Header = Loc.T("arrangement.loop_selection"), Icon = MenuKit.Icon(GlyphKind.Select), IsEnabled = _o.SelectionLoopRange() is not null };
             sel.Click += (_, _) => { if (_o.SelectionLoopRange() is { } r) _o.SetLoopRegion(r.Start, r.End); };
-            var clear = MenuKit.Danger(Loc.T("Clear loop region"), GlyphKind.Trash, () => _o.ClearLoopRegion(), enabled: has);
+            var clear = MenuKit.Danger(Loc.T("arrangement.controls.clear_loop_region"), GlyphKind.Trash, () => _o.ClearLoopRegion(), enabled: has);
             flyout.Items.Add(toggle);
             flyout.Items.Add(sel);
             flyout.Items.Add(new Separator());
@@ -449,7 +449,7 @@ public sealed partial class ArrangementView
                 var pts = _o._masterAuto;
                 if (pts.Count == 0)
                 {
-                    var hint = new FormattedText(Loc.T("click to add master volume points"), CultureInfo.InvariantCulture,
+                    var hint = new FormattedText(Loc.T("arrangement.controls.click_to_add_master_volume"), CultureInfo.InvariantCulture,
                         FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
                     ctx.DrawText(hint, new Point(12, my + (mh - hint.Height) / 2));
                 }

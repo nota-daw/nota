@@ -35,14 +35,14 @@ public static class ModelCatalog
 
     public static readonly IReadOnlyList<CatalogModel> Models =
     [
-        new(new StoreModel(AiModels.Stems, "htdemucs", Loc.T("Separate Stems"),
-                Loc.T("Splits a mix into drums, bass, vocals and everything else, each on its own track."),
+        new(new StoreModel(AiModels.Stems, "htdemucs", Loc.T("model_store.model_catalog.separate_stems"),
+                Loc.T("model_store.model_catalog.splits_a_mix_into_drums"),
                 "Meta AI (Demucs v4)", "MIT", "https://github.com/facebookresearch/demucs",
                 174264717, 174264717),
             new ModelAsset("https://github.com/nota-daw/nota-models/releases/download/htdemucs-v1/htdemucs.onnx",
                 "04c2b1a149788d048f710a6140446a72f7b4bab3171bc42189176a64ed609c78", 174264717, "file", [], "htdemucs.onnx")),
-        new(new StoreModel(AiModels.Transcription, "basic-pitch", Loc.T("Convert to MIDI"),
-                Loc.T("Hears every note in a recording, chords included, for Convert Melody and Convert Harmony."),
+        new(new StoreModel(AiModels.Transcription, "basic-pitch", Loc.T("model_store.model_catalog.convert_to_midi"),
+                Loc.T("model_store.model_catalog.hears_every_note_in_a"),
                 "Spotify", "Apache-2.0", "https://github.com/spotify/basic-pitch",
                 230444, 230444),
             new ModelAsset("https://raw.githubusercontent.com/spotify/basic-pitch/v0.4.0/basic_pitch/saved_models/icassp_2022/nmp.onnx",
@@ -78,8 +78,8 @@ public static class ModelCatalog
         bool win = rid.StartsWith("win", StringComparison.Ordinal);
         string dir = $"onnxruntime-{rid}-{OrtVersion}/";
         string file = $"onnxruntime-{rid}-{OrtVersion}" + (win ? ".zip" : ".tgz");
-        return new(new StoreModel(AiModels.Runtime, "ONNX Runtime", Loc.T("AI runtime"),
-                Loc.T("The library Nota's AI models run on. Installed with the first model."),
+        return new(new StoreModel(AiModels.Runtime, "ONNX Runtime", Loc.T("model_store.model_catalog.ai_runtime"),
+                Loc.T("model_store.model_catalog.the_library_notas_ai_models"),
                 "Microsoft", "MIT", "https://github.com/microsoft/onnxruntime",
                 r.Size, r.LibSize + 340_000),
             new ModelAsset(OrtRelease + file, r.Sha, r.Size, win ? "zip" : "tar",

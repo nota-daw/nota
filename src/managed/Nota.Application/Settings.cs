@@ -186,6 +186,8 @@ public sealed class Settings
     /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
     /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
     public bool PianoRollAudition { get; set; } = true;
+    /// <summary>Logical lane heights keyed by velocity, MPE dimension or MIDI controller.</summary>
+    public Dictionary<string, double> PianoRollLaneHeights { get; set; } = new();
     /// <summary>Shift + wheel over a note in the piano roll (specs/063): false — wheel up raises
     /// the velocity; true — wheel up lowers it.</summary>
     public bool PianoRollVelocityWheelReversed { get; set; }

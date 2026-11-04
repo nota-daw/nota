@@ -46,7 +46,7 @@ internal sealed class MeterFader : Control
         Width = NaturalWidth;
         MinHeight = 40;
         Cursor = new Cursor(StandardCursorType.SizeNorthSouth);
-        ToolTip.SetTip(this, Loc.T("Drag to set the volume · click to clear the peak hold"));
+        ToolTip.SetTip(this, Loc.T("control.meter_fader.drag_to_set_the_volume"));
     }
 
     /// <summary>Sets the value without raising ValueChanged (external sync, the dB field).</summary>

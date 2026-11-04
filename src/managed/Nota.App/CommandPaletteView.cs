@@ -72,7 +72,7 @@ internal sealed class CommandPaletteView : UserControl
 
         _input = new TextBox
         {
-            Classes = { "search" }, FontSize = 14, PlaceholderText = Loc.T("Search actions, tracks, devices, presets…"),
+            Classes = { "search" }, FontSize = 14, PlaceholderText = Loc.T("command_palette.search_actions_tracks_devices_presets"),
             VerticalAlignment = VerticalAlignment.Center, AcceptsReturn = false, AcceptsTab = false,
             Foreground = NotaPalette.TextPrimary,
         };
@@ -201,15 +201,15 @@ internal sealed class CommandPaletteView : UserControl
         _sel = Math.Clamp(_sel, 0, Math.Max(0, _results.Items.Count - 1));
         BuildChips(_results.Query);
         BuildRows();
-        _count.Text = _results.Query.IsEmpty ? "" : _results.Items.Count == 1 ? Loc.T("1 result") : Loc.F("{0} results", _results.Items.Count);
+        _count.Text = _results.Query.IsEmpty ? "" : _results.Items.Count == 1 ? Loc.T("command_palette.1_result") : Loc.F("command_palette.results", _results.Items.Count);
         _layoutRow.IsVisible = _results.LayoutHint.Length > 0;
         if (_layoutRow.IsVisible)
         {
             _layoutText.Inlines = new InlineCollection
             {
-                new Run(Loc.T("Showing results for ")),
+                new Run(Loc.T("command_palette.showing_results_for")),
                 new Run(_results.LayoutHint) { FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextPrimary },
-                new Run(Loc.T(" · typed in the other keyboard layout")),
+                new Run(Loc.T("command_palette.typed_in_the_other_keyboard")),
             };
         }
         _status.Text = _index.Status;
@@ -246,7 +246,7 @@ internal sealed class CommandPaletteView : UserControl
 
     private IEnumerable<(string Label, string Prefix)> ChipList()
     {
-        yield return (Loc.T("All"), "");
+        yield return (Loc.T("command_palette.all"), "");
         foreach (var (p, k, label) in ParsedQuery.Prefixes)
             if (k != PaletteKind.Modular || _ctx.Origin == PaletteOrigin.Modular) yield return (label, p.ToString());
     }
@@ -269,7 +269,7 @@ internal sealed class CommandPaletteView : UserControl
         {
             _list.Children.Add(new TextBlock
             {
-                Text = Loc.T("Nothing matches. Try a role (reverb, comp), a character (warm, dark) or a source (vocals, drums)."),
+                Text = Loc.T("command_palette.nothing_matches_try_a_role"),
                 FontSize = 12, Foreground = NotaPalette.TextMuted, Margin = new Thickness(14, 18), TextWrapping = TextWrapping.Wrap,
             });
             return;
@@ -415,16 +415,16 @@ internal sealed class CommandPaletteView : UserControl
         var hints = new List<(string Caps, string Label)>();
         switch (cur.Kind)
         {
-            case PaletteKind.Action: hints.Add(("↵", Loc.T("run"))); break;
-            case PaletteKind.Track: hints.Add(("↵", Loc.T("select"))); hints.Add(("⌘↵", Loc.T("open in Devices"))); break;
-            case PaletteKind.Modular: hints.Add(("↵", Loc.T("add to canvas"))); hints.Add(("⇧↵", Loc.T("add & stay"))); break;
+            case PaletteKind.Action: hints.Add(("↵", Loc.T("command_palette.run"))); break;
+            case PaletteKind.Track: hints.Add(("↵", Loc.T("command_palette.select"))); hints.Add(("⌘↵", Loc.T("command_palette.open_in_devices"))); break;
+            case PaletteKind.Modular: hints.Add(("↵", Loc.T("command_palette.add_to_canvas"))); hints.Add(("⇧↵", Loc.T("command_palette.add_stay"))); break;
             default:
-                if (cur.Role == PaletteDeviceRole.Instrument) { hints.Add(("↵", Loc.T("load"))); hints.Add(("⌘↵", Loc.T("new track"))); }
-                else { hints.Add(("↵", Loc.T("insert"))); hints.Add(("⌥↵", Loc.T("replace"))); }
-                hints.Add(("⇧↵", Loc.T("add & stay")));
+                if (cur.Role == PaletteDeviceRole.Instrument) { hints.Add(("↵", Loc.T("command_palette.load"))); hints.Add(("⌘↵", Loc.T("command_palette.new_track"))); }
+                else { hints.Add(("↵", Loc.T("command_palette.insert"))); hints.Add(("⌥↵", Loc.T("command_palette.replace"))); }
+                hints.Add(("⇧↵", Loc.T("command_palette.add_stay")));
                 break;
         }
-        hints.Add(("Tab", Loc.T("filter")));
+        hints.Add(("Tab", Loc.T("command_palette.filter")));
         foreach (var (caps, label) in hints)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
@@ -550,7 +550,7 @@ internal sealed class PaletteToast : Border
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                new TextBlock { Text = Loc.T("Undo"), FontSize = 11, Foreground = NotaPalette.Accent, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = Loc.T("common.undo"), FontSize = 11, Foreground = NotaPalette.Accent, VerticalAlignment = VerticalAlignment.Center },
                 new TextBlock { Text = MenuKit.Keys("⌘Z"), FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center },
             },
         };

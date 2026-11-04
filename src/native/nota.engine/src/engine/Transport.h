@@ -88,6 +88,8 @@ class Transport {
     // Atomic mirror for the UI (poll these; never touch the private fields).
     double uiPositionBeats() const { return uiBeats_.load(std::memory_order_relaxed); }
     bool uiIsPlaying() const { return uiPlaying_.load(std::memory_order_relaxed); }
+    // Where Stop rewinds to / Play launched from (the insert marker), in beats.
+    double uiAnchorBeats() const { return uiAnchorBeats_.load(std::memory_order_relaxed); }
 
     // Publish once per completed block; readers may skip a frame, never delay audio.
     void publishPresentation(double startSamples, int32_t playingFrames, int32_t leadingFrames, int32_t windowFrames);
@@ -108,6 +110,7 @@ class Transport {
 
     std::atomic<double> uiBeats_{0.0};
     std::atomic<bool> uiPlaying_{false};
+    std::atomic<double> uiAnchorBeats_{0.0};
 
     // Atomic payloads avoid data races even when a reader overlaps the writer.
     // A bounded version check rejects mixed blocks. Release/acquire on each field

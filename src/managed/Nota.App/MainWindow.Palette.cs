@@ -118,7 +118,7 @@ public partial class MainWindow
     }
 
     private Availability ActionAvailability(string id, PaletteContext ctx)
-        => _commands.Get(id) is { } c ? c.CanExecute(ctx) : Availability.No(Loc.T("Not available"));
+        => _commands.Get(id) is { } c ? c.CanExecute(ctx) : Availability.No(Loc.T("main.palette.not_available"));
 
     // ---- context (CP-2, CP-3) ---------------------------------------------------------------
 
@@ -165,7 +165,7 @@ public partial class MainWindow
         }
         else track = -1;
 
-        string trackName = track <= 0 ? "" : type == PaletteTrackType.Master ? Loc.T("Master") : Engine.GetTrackName(track);
+        string trackName = track <= 0 ? "" : type == PaletteTrackType.Master ? Loc.T("common.master") : Engine.GetTrackName(track);
         var insert = origin == PaletteOrigin.Devices && _deviceChain is { } dc && dc.TrackId == track ? dc.CurrentInsertPoint() : InsertPoint.None;
         return new PaletteContext
         {
@@ -201,12 +201,12 @@ public partial class MainWindow
                 return null;
 
             case PaletteKind.Track when item.Payload is int t:
-                if ((mode & ApplyMode.NewTrack) != 0 || Insertion.IsMaster(t)) { ShowDevices(t); _vm.StatusText = Loc.F("Opened {0} in Devices", item.Name); }
+                if ((mode & ApplyMode.NewTrack) != 0 || Insertion.IsMaster(t)) { ShowDevices(t); _vm.StatusText = Loc.F("main.palette.opened_in_devices", item.Name); }
                 else
                 {
                     Timeline.Select(t, -1);
                     if (_modular?.IsVisible == true) _modular.Show(t);
-                    _vm.StatusText = Loc.F("Selected {0}", item.Name);
+                    _vm.StatusText = Loc.F("main.palette.selected", item.Name);
                 }
                 return null;
 
@@ -215,9 +215,9 @@ public partial class MainWindow
                 if (_modular is null || ctx.TrackId <= 0) return null;
                 if (_modular.TrackId != ctx.TrackId) _modular.Show(ctx.TrackId);
                 int modId = _modular.AddModulatorAt(kind);
-                if (modId < 0) { _vm.StatusText = Loc.F("Couldn't add {0}.", item.Name); return null; }
+                if (modId < 0) { _vm.StatusText = Loc.F("main.palette.couldnt_add", item.Name); return null; }
                 Timeline.Refresh();
-                string msg = Loc.F("{0} added to the {1} canvas — connect it to a parameter", item.Name, ctx.TrackName);
+                string msg = Loc.F("main.palette.added_to_the_canvas_connect", item.Name, ctx.TrackName);
                 _vm.StatusText = msg;
                 _paletteToast.Show(msg, () => _commands.Run("edit.undo"));
                 return ctx;

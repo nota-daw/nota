@@ -1,0 +1,7 @@
+{
+  "formatVersion": 1,
+  "code": "xx",
+  "name": "Xxxx",
+  "notes": "Test fixture for spec 077: the text-keyed format of spec 068, no longer read.",
+  "strings": { "Save": "Xsave" }
+}

@@ -488,6 +488,14 @@ public sealed partial class NotaEngine
     public bool GetTrackPianoFold(int trackId)
     { ThrowIfDisposed(); return NativeMethods.TrackGetPianoFold(_handle, trackId) == 1; }
 
+    /// <summary>Sets a group's Link (specs/076); one undo step, false for a non-group track.</summary>
+    public bool SetTrackEditLink(int trackId, bool on)
+    { ThrowIfDisposed(); return NativeMethods.TrackSetEditLink(_handle, trackId, on ? 1 : 0) == NativeMethods.NotaResult.Ok; }
+
+    /// <summary>Whether a group's Link is on (false for an unknown or non-group track).</summary>
+    public bool GetTrackEditLink(int trackId)
+    { ThrowIfDisposed(); return NativeMethods.TrackGetEditLink(_handle, trackId) == 1; }
+
     /// <summary>Copies a whole track (incl. devices/clips/automation) to the clipboard.</summary>
     public bool CopyTrack(int trackId)
     { ThrowIfDisposed(); return NativeMethods.TrackCopy(_handle, trackId) == NativeMethods.NotaResult.Ok; }

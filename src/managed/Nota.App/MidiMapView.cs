@@ -25,7 +25,7 @@ public sealed partial class MidiMapView : UserControl
 
         var header = new TextBlock
         {
-            Text = Loc.T("MIDI mappings"), FontSize = 10, Margin = new Avalonia.Thickness(12, 12, 12, 2),
+            Text = Loc.T("midi_map.midi_mappings"), FontSize = 10, Margin = new Avalonia.Thickness(12, 12, 12, 2),
             Foreground = NotaPalette.TextTertiary,
         };
         var body = new StackPanel { Margin = new Avalonia.Thickness(8, 4), Children = { _rows } };
@@ -40,7 +40,7 @@ public sealed partial class MidiMapView : UserControl
         {
             _rows.Children.Add(new TextBlock
             {
-                Text = Loc.T("No mappings yet.\n\nClick MIDI (top-right), then click any highlighted\ncontrol and move a knob or fader on your controller —\nor press a button or move a stick on a gamepad."),
+                Text = Loc.T("midi_map.no_mappings_yet_click_midi"),
                 FontSize = 11, TextWrapping = TextWrapping.Wrap, LineHeight = 16,
                 Margin = new Avalonia.Thickness(6, 10), Foreground = NotaPalette.TextTertiary,
             });
@@ -57,16 +57,16 @@ public sealed partial class MidiMapView : UserControl
         var name = m.DisplayName;
         switch (m.Target.Kind)
         {
-            case MidiTargetKind.TransportPlay: return name == "Play" ? Loc.T("Play") : name;
-            case MidiTargetKind.TransportStop: return name == "Stop" ? Loc.T("Stop") : name;
-            case MidiTargetKind.TransportRecord: return name == "Record" ? Loc.T("Record") : name;
-            case MidiTargetKind.MasterVolume: return name == "Master Volume" ? Loc.T("Master Volume") : name;
-            case MidiTargetKind.TrackVolume: return name == "Track Volume" ? Loc.T("Track Volume") : name;
-            case MidiTargetKind.TrackPan: return name == "Track Pan" ? Loc.T("Track Pan") : name;
-            case MidiTargetKind.TrackMute: return name == "Mute" ? Loc.T("Mute") : name;
-            case MidiTargetKind.TrackSolo: return name == "Solo" ? Loc.T("Solo") : name;
+            case MidiTargetKind.TransportPlay: return name == "Play" ? Loc.T("midi_map.play") : name;
+            case MidiTargetKind.TransportStop: return name == "Stop" ? Loc.T("common.stop") : name;
+            case MidiTargetKind.TransportRecord: return name == "Record" ? Loc.T("common.record") : name;
+            case MidiTargetKind.MasterVolume: return name == "Master Volume" ? Loc.T("midi_map.master_volume") : name;
+            case MidiTargetKind.TrackVolume: return name == "Track Volume" ? Loc.T("midi_map.track_volume") : name;
+            case MidiTargetKind.TrackPan: return name == "Track Pan" ? Loc.T("midi_map.track_pan") : name;
+            case MidiTargetKind.TrackMute: return name == "Mute" ? Loc.T("common.mute") : name;
+            case MidiTargetKind.TrackSolo: return name == "Solo" ? Loc.T("common.solo") : name;
             case MidiTargetKind.PluginParam when MacroLabel().Match(name) is { Success: true } g:
-                return Loc.F("Macro {0} · {1}", g.Groups[1].Value, g.Groups[2].Value);   // a rack macro
+                return Loc.F("common.macro", g.Groups[1].Value, g.Groups[2].Value);   // a rack macro
             default: return name;
         }
     }
@@ -119,7 +119,7 @@ public sealed partial class MidiMapView : UserControl
         // Range + invert only make sense for continuous (non-button) targets.
         if (!m.Target.IsButton)
         {
-            var inv = new CheckBox { Content = Loc.T("Invert"), FontSize = 10, IsChecked = m.Invert, VerticalAlignment = VerticalAlignment.Center, Foreground = NotaPalette.TextSecondary };
+            var inv = new CheckBox { Content = Loc.T("midi_map.invert"), FontSize = 10, IsChecked = m.Invert, VerticalAlignment = VerticalAlignment.Center, Foreground = NotaPalette.TextSecondary };
             inv.IsCheckedChanged += (_, _) => m.Invert = inv.IsChecked == true;
             Grid.SetColumn(inv, 1);
             srcRow.Children.Add(inv);
@@ -129,8 +129,8 @@ public sealed partial class MidiMapView : UserControl
                 Orientation = Orientation.Horizontal, Spacing = 16,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            range.Children.Add(RangeField(Loc.T("Min"), m.RangeMin, v => m.RangeMin = v));
-            range.Children.Add(RangeField(Loc.T("Max"), m.RangeMax, v => m.RangeMax = v));
+            range.Children.Add(RangeField(Loc.T("common.min"), m.RangeMin, v => m.RangeMin = v));
+            range.Children.Add(RangeField(Loc.T("midi_map.max"), m.RangeMax, v => m.RangeMax = v));
             body.Children.Add(range);
         }
 

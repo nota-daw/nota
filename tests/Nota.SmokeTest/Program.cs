@@ -89,6 +89,8 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLanguage()) Check(ok, label);
     Console.WriteLine("-- localization: source --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLocalization()) Check(ok, label);
+    Console.WriteLine("-- localization: downloadable languages --");
+    foreach (var (ok, label) in Nota.SmokeTest.LanguageCatalogTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: labels --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLabels()) Check(ok, label);
     Console.WriteLine("-- design: icons --");
@@ -130,6 +132,12 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     eng.Stop();
     Console.WriteLine(f == 0 ? "AUDIOCHECK PASSED" : $"AUDIOCHECK FAILED ({f})");
     return f == 0 ? 0 : 1;
+}
+
+if (args.Length >= 1 && args[0] == "--midi-lane-heights")
+{
+    foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
 }
 
 // Design and localization checks alone, without the engine tests: `--localization`.
@@ -316,6 +324,14 @@ if (args.Length >= 1 && args[0] == "--tap")
     Console.WriteLine("-- tap tempo --");
     foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Controller-stroke shaping alone: `--controller-stroke`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--controller-stroke")
+{
+    Console.WriteLine("-- controller stroke --");
+    foreach (var (ok, label) in ControllerStrokeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CONTROLLER STROKE PASSED" : $"CONTROLLER STROKE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Piano-roll velocity wheel alone: `--velocity-wheel`. Also part of the full run.
@@ -548,6 +564,22 @@ if (args.Length >= 1 && args[0] == "--instrument-chain")
     Console.WriteLine(failures == 0 ? "INSTRUMENT CHAIN PASSED" : $"INSTRUMENT CHAIN FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Audio-track effect tails after Stop (#449) alone: `--audio-tails`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--audio-tails")
+{
+    Console.WriteLine("-- audio-track tails after Stop --");
+    foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AUDIO TAILS PASSED" : $"AUDIO TAILS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Opt-in (needs a VST3 built and scanned): `--hosted-plugin <vst3 folder> <nota-scanworker>`.
+if (args.Length >= 3 && args[0] == "--hosted-plugin")
+{
+    Console.WriteLine("-- hosted plug-ins: copies + long blocks --");
+    foreach (var (ok, label) in HostedPluginTests.Run(args[1], args[2])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "HOSTED PLUGIN PASSED" : $"HOSTED PLUGIN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Drum Rack one-shot pads, pad audition, warp off/on alone: `--pad-warp`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--pad-warp")
 {
@@ -716,6 +748,22 @@ if (args.Length >= 1 && args[0] == "--session-input")
     Console.WriteLine("-- session launch + record input --");
     foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Group Link alone (fast iteration): `--group-link`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--group-link")
+{
+    Console.WriteLine("-- group link --");
+    foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "GROUP LINK PASSED" : $"GROUP LINK FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Discard and retry a take alone (fast iteration): `--retry-take`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--retry-take")
+{
+    Console.WriteLine("-- retry take --");
+    foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "RETRY TAKE PASSED" : $"RETRY TAKE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
@@ -15419,6 +15467,8 @@ Console.WriteLine("-- mpe: per-note expression --");
 foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
 Console.WriteLine("-- live midi recording --");
 foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
+Console.WriteLine("-- retry take --");
+foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
 Console.WriteLine("-- midi controllers --");
 foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
 Console.WriteLine("-- sustain pedal --");
@@ -15431,6 +15481,8 @@ Console.WriteLine("-- take lanes --");
 foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
 Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
+Console.WriteLine("-- group link --");
+foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
@@ -15456,8 +15508,13 @@ foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 Console.WriteLine("-- transport display --");
 foreach (var (ok, label) in TransportDisplayTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- MIDI lane heights --");
+foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- velocity wheel --");
 foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
+Console.WriteLine("-- controller stroke --");
+foreach (var (ok, label) in ControllerStrokeTests.Run()) Check(ok, label);
 Console.WriteLine("-- velocity reset --");
 foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
 Console.WriteLine("-- bend lane range --");
@@ -15550,6 +15607,8 @@ Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device copy + rack undo --");
 foreach (var (ok, label) in DeviceCopyTests.Run()) Check(ok, label);
+Console.WriteLine("-- audio-track tails after Stop --");
+foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument chain --");
 foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
 foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);

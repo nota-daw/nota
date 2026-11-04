@@ -1,0 +1,8 @@
+{
+  "formatVersion": 2,
+  "code": "xx",
+  "name": "Xxxx",
+  "plural": "one_is_42",
+  "notes": "Test fixture for spec 077: a plural rule this build does not know.",
+  "strings": { "test.save": "Xsave" }
+}

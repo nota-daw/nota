@@ -46,8 +46,8 @@ public sealed class ParsedQuery
 
     public static readonly (char Prefix, PaletteKind Kind, string Label)[] Prefixes =
     {
-        ('>', PaletteKind.Action, Loc.T("Actions")), ('@', PaletteKind.Track, Loc.T("Tracks")), ('+', PaletteKind.Device, Loc.T("Devices")),
-        ('#', PaletteKind.Preset, Loc.T("Presets")), ('~', PaletteKind.Modular, Loc.T("Modular")),
+        ('>', PaletteKind.Action, Loc.T("palette.search.actions")), ('@', PaletteKind.Track, Loc.T("palette.search.tracks")), ('+', PaletteKind.Device, Loc.T("palette.search.devices")),
+        ('#', PaletteKind.Preset, Loc.T("palette.search.presets")), ('~', PaletteKind.Modular, Loc.T("common.modular")),
     };
 
     public static ParsedQuery Parse(string raw)
@@ -282,8 +282,8 @@ public sealed class PaletteSearch
 
     public static string GroupLabel(PaletteKind k) => k switch
     {
-        PaletteKind.Action => Loc.T("Actions"), PaletteKind.Track => Loc.T("Tracks"), PaletteKind.Device => Loc.T("Devices"),
-        PaletteKind.Preset => Loc.T("Presets"), _ => Loc.T("Modular"),
+        PaletteKind.Action => Loc.T("palette.search.actions"), PaletteKind.Track => Loc.T("palette.search.tracks"), PaletteKind.Device => Loc.T("palette.search.devices"),
+        PaletteKind.Preset => Loc.T("palette.search.presets"), _ => Loc.T("common.modular"),
     };
 
     // CP-8: an unavailable action is shown only when the query names it.
@@ -368,14 +368,14 @@ public sealed class PaletteSearch
             var recent = (_usage?.Recent ?? []).Select(_index.Find).Where(Ok).Select(it => it!).ToList();
             if (recent.Count > 0)
             {
-                res.Rows.Add(new PaletteRow(Loc.T("Recent"), default));
+                res.Rows.Add(new PaletteRow(Loc.T("common.recent"), default));
                 foreach (var it in recent) { AddItem(res, Make(it)); seen.Add(it.Id); }
             }
             var sug = (suggested ?? []).Select(_index.Find).Where(it => Ok(it) && !seen.Contains(it!.Id)).Select(it => it!)
                 .Where(it => it.Kind != PaletteKind.Action || availability is null || availability(it).Ok).ToList();
             if (sug.Count > 0)
             {
-                res.Rows.Add(new PaletteRow(Loc.F("Suggested · {0}", OriginLabel(ctx.Origin)), default));
+                res.Rows.Add(new PaletteRow(Loc.F("palette.search.suggested", OriginLabel(ctx.Origin)), default));
                 foreach (var it in sug) AddItem(res, Make(it));
             }
             return;
@@ -391,8 +391,8 @@ public sealed class PaletteSearch
 
     public static string OriginLabel(PaletteOrigin o) => o switch
     {
-        PaletteOrigin.PianoRoll => Loc.T("Piano roll"),
-        PaletteOrigin.DeviceWindow => Loc.T("Device window"),
+        PaletteOrigin.PianoRoll => Loc.T("common.piano_roll"),
+        PaletteOrigin.DeviceWindow => Loc.T("palette.search.device_window"),
         _ => o.ToString(),
     };
 }

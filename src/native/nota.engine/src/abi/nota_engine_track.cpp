@@ -693,6 +693,13 @@ NotaResult nota_track_set_piano_fold(NotaEngine* e, int32_t track_id, int32_t on
 int32_t nota_track_get_piano_fold(NotaEngine* e, int32_t track_id) {
     return e ? CENG(e)->trackPianoFold(track_id) : -1;
 }
+NotaResult nota_track_set_edit_link(NotaEngine* e, int32_t track_id, int32_t on) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->setTrackEditLink(track_id, on != 0) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
+int32_t nota_track_get_edit_link(NotaEngine* e, int32_t track_id) {
+    return e ? CENG(e)->trackEditLink(track_id) : -1;
+}
 NotaResult nota_track_copy(NotaEngine* e, int32_t track_id) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->copyTrack(track_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;

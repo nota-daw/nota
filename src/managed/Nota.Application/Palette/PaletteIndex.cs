@@ -81,7 +81,7 @@ public sealed class PaletteIndex
 
     /// <summary>The footer status: the progress while indexing, else the item count.</summary>
     public string Status => IsIndexing
-        ? Loc.F("indexing {0}… {1} %", _progressLabel, (int)Math.Round(_progress * 100))
-        : Count == 1 ? Loc.T("1 item")
-        : Loc.F("{0} items", Count.ToString("#,0", System.Globalization.CultureInfo.InvariantCulture).Replace(",", "\u2009"));
+        ? Loc.F("palette.index.indexing", _progressLabel, (int)Math.Round(_progress * 100))
+        : Count == 1 ? Loc.T("palette.index.1_item")
+        : Loc.F("palette.index.items", Count.ToString("#,0", System.Globalization.CultureInfo.InvariantCulture).Replace(",", "\u2009"));
 }

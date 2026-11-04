@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Loc.T for XAML (spec 068): Header="{app:T 'Save as…'}". The English text is the key, as in
-// code; a text the language lacks stays English. Windows load their XAML after the language is
-// installed, so this is right for everything under a Window. App.axaml loads earlier, in
-// Initialize(), so its few texts are set from code in App.InstallLanguage instead.
+// Loc.T for XAML (spec 068, keyed since spec 077): Header="{app:T 'main.save_as'}". The argument
+// is a key of the English reference, as in code; a text the language lacks stays English.
+// Windows load their XAML after the language is installed, so this is right for everything under
+// a Window. App.axaml loads earlier, in Initialize(), so its few texts are set from code in
+// App.TranslateAppMenu instead.
 
 using System;
 using Avalonia.Markup.Xaml;
@@ -14,13 +15,10 @@ namespace Nota.App;
 
 public sealed class TExtension : MarkupExtension
 {
-    public TExtension(string text) => Text = text;
+    public TExtension(string key) => Key = key;
 
-    /// <summary>The English text, which is also the lookup key.</summary>
-    public string Text { get; }
+    /// <summary>The key of the text in the English reference (en.json).</summary>
+    public string Key { get; }
 
-    /// <summary>Separates two meanings of the same English word (see Loc.T).</summary>
-    public string? Context { get; set; }
-
-    public override object ProvideValue(IServiceProvider serviceProvider) => Loc.T(Text, Context);
+    public override object ProvideValue(IServiceProvider serviceProvider) => Loc.T(Key);
 }
