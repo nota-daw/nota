@@ -152,6 +152,7 @@ public sealed partial class NotaEngine : IAudioEngine
     public void SetAuditionTrack(int trackId) { ThrowIfDisposed(); NativeMethods.SetAuditionTrack(_handle, trackId); }
     public void SetRecording(bool enabled) { ThrowIfDisposed(); Check(NativeMethods.SetRecording(_handle, enabled ? 1 : 0)); }
     public bool IsRecording { get { ThrowIfDisposed(); return NativeMethods.IsRecording(_handle) != 0; } }
+    public RetryTakeResult RetryTake() { ThrowIfDisposed(); return (RetryTakeResult)NativeMethods.RetryTake(_handle); }
     /// <summary>Why the last SetRecording(true) did (not) start: 0 ok, 1 no armed track, 2 audio input failed.</summary>
     public int RecordStartStatus { get { ThrowIfDisposed(); return NativeMethods.RecordStartStatus(_handle); } }
     /// <summary>Track id of the in-progress audio take (0 when not capturing), for drawing a growing clip.</summary>

@@ -40,6 +40,7 @@ TransportInfo Transport::transportInfo(double blockStartSamples) const {
 void Transport::publish() {
     uiBeats_.store(positionBeats(), std::memory_order_relaxed);
     uiPlaying_.store(playing_, std::memory_order_relaxed);
+    uiAnchorBeats_.store(startAnchorSamples_ / samplesPerBeat(), std::memory_order_relaxed);
 }
 
 static int64_t presentationNow() {

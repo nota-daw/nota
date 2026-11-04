@@ -83,6 +83,7 @@ public static class CommandCatalog
         C("transport.playPause", Loc.T("commands.play_pause"), Loc.T("common.transport"), Shortcut.Shift("Space"), "resume continue hold"),
         C("transport.stop", Loc.T("common.stop"), Loc.T("common.transport"), Shortcut.None("Return"), "halt"),
         C("transport.record", Loc.T("common.record"), Loc.T("common.transport"), Shortcut.Cmd('R'), "arm capture"),
+        C("transport.retryTake", Loc.T("commands.discard_and_retry_take"), Loc.T("common.transport"), Shortcut.Cmd('.'), "undo restart retry discard take again redo record over punch"),
         C("transport.armOnSelect", Loc.T("commands.auto_arm_selected_track"), Loc.T("common.transport"), "", "arm on select follow selection record keyboard"),
         C("transport.loop", Loc.T("commands.toggle_loop"), Loc.T("common.transport"), Shortcut.Cmd('L'), "cycle repeat"),
         C("transport.metronome", Loc.T("common.metronome"), Loc.T("common.transport"), Shortcut.Cmd('M'), "click"),

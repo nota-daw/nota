@@ -1420,6 +1420,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⇧Space", Loc.T("preferences.play_pause_the_playhead_stays")),
             ("Return", Loc.T("preferences.stop_again_back_to_the")),
             ("⌘R", Loc.T("common.record")),
+            ("⌘.", Loc.T("preferences.discard_the_take_and_record")),
             ("⌘M", Loc.T("common.metronome")),
             ("⌘L", Loc.T("preferences.loop_on_off_loop_the")),
             (Loc.T("preferences.double_click_loop_brace"), Loc.T("preferences.loop_on_off_in_the")),

@@ -95,6 +95,8 @@ public interface IAudioEngine : IDisposable
     int AddScene();
     /// <summary>Removes a scene row (always keeps at least one). False if it couldn't.</summary>
     bool RemoveScene(int scene);
+    /// <summary>0 empty, 1 filled, 2 queued, 3 playing, 4 recording, 5 record pending (the take
+    /// starts capturing on the next launch quantum, specs/078).</summary>
     int SessionSlotState(int trackId, int scene);
     double SessionSlotLength(int trackId, int scene);
     void SetSessionSlotLength(int trackId, int scene, double lengthBeats);
@@ -1071,6 +1073,11 @@ public interface IAudioEngine : IDisposable
     void SetAuditionTrack(int trackId);
     void SetRecording(bool enabled);
     bool IsRecording { get; }
+    /// <summary>Discard the take in progress and record it again (#185, specs/078): nothing of
+    /// it stays, not even an undo step. The Arrangement goes back to where the transport was
+    /// started and counts in again if the take did; a Session slot records again from the next
+    /// launch quantum while everything else keeps playing.</summary>
+    RetryTakeResult RetryTake();
     int RecordStartStatus { get; }
     /// <summary>Track id of the in-progress audio take (0 when not capturing).</summary>
     int AudioRecordTrackId { get; }

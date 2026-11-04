@@ -925,6 +925,18 @@ NOTA_API void       nota_engine_set_audition_track(NotaEngine* engine, int32_t t
  * the armed instrument track are recorded into a clip. */
 NOTA_API NotaResult nota_engine_set_recording(NotaEngine* engine, int32_t enabled);
 NOTA_API int32_t    nota_engine_is_recording(const NotaEngine* engine);
+/* Discard the take in progress and record it again (#185, specs/078). Drops everything the
+ * take wrote — audio, loop passes, MIDI notes/controllers/expression, a clip it created,
+ * automation written while recording — with no undo or redo step, then:
+ *  - Arrangement: returns to where the transport was started for the take (its start when
+ *    the take started the transport, else the Play position) and records again, counting in
+ *    again when the take did;
+ *  - Session slot: leaves other clips and the transport running and records into the same
+ *    slot again from the next launch quantum (immediately when quantize is off).
+ * Returns 0 nothing was recording (no change), 1 Arrangement take retried, 2 Session slot
+ * take retried, -1 discarded but recording could not start again (see
+ * nota_engine_record_start_status). Message thread. */
+NOTA_API int32_t    nota_engine_retry_take(NotaEngine* engine);
 /* Why the last set_recording(1) did (not) start: 0 ok, 1 no armed track, 2 audio input failed. */
 NOTA_API int32_t    nota_engine_record_start_status(const NotaEngine* engine);
 /* Live audio-capture geometry for drawing a growing take: the armed track id
@@ -1218,7 +1230,8 @@ NOTA_API NotaResult nota_session_set_slot_length(NotaEngine* engine, int32_t tra
 /* Audio-slot playback gain (linear). Get returns 1.0 when the slot isn't an audio take. */
 NOTA_API float      nota_session_slot_gain(const NotaEngine* engine, int32_t track_id, int32_t scene);
 NOTA_API NotaResult nota_session_set_slot_gain(NotaEngine* engine, int32_t track_id, int32_t scene, float gain);
-/* Slot state: 0 empty, 1 filled, 2 queued, 3 playing, 4 recording. */
+/* Slot state: 0 empty, 1 filled, 2 queued, 3 playing, 4 recording,
+ * 5 record pending (the slot's take starts capturing on the next launch quantum). */
 NOTA_API int32_t nota_session_slot_state(const NotaEngine* engine, int32_t track_id, int32_t scene);
 /* Quantized launch/stop (M5-2). Launch of an empty slot stops the track. */
 NOTA_API NotaResult nota_session_set_launch_quant(NotaEngine* engine, double beats);

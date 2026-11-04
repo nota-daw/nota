@@ -720,6 +720,14 @@ if (args.Length >= 1 && args[0] == "--group-link")
     Console.WriteLine(failures == 0 ? "GROUP LINK PASSED" : $"GROUP LINK FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Discard and retry a take alone (fast iteration): `--retry-take`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--retry-take")
+{
+    Console.WriteLine("-- retry take --");
+    foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "RETRY TAKE PASSED" : $"RETRY TAKE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--live-record")
 {
@@ -15417,6 +15425,8 @@ Console.WriteLine("-- mpe: per-note expression --");
 foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
 Console.WriteLine("-- live midi recording --");
 foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
+Console.WriteLine("-- retry take --");
+foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
 Console.WriteLine("-- midi controllers --");
 foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
 Console.WriteLine("-- sustain pedal --");
