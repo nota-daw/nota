@@ -217,6 +217,14 @@ class Track {
     // isn't sent again every block. Audio thread only.
     bool sessionSilentReleased = false;
 
+    // Effects on an audio track ring out after the track stops sounding (#449): -1 when there
+    // is no tail to play, else how long (frames) the chain's output has been silent. Set to 0
+    // by every block the track plays; the chain then runs on silence until its devices have
+    // settled (see Engine::kTailQuietSeconds). Audio thread only; shared by every version of
+    // the track (edits, undo), so an edit while a tail rings doesn't cut it. Kept in LiveHeld
+    // (below) so a clone shares one allocation rather than making a second.
+    int64_t& tailQuiet() { return liveHeld->tailQuiet; }
+
     // The untargeted live notes (keyboard, MIDI) the track was given and not yet the note-off
     // of, and whether it was disarmed with them down (#366): released on its next render.
     // Shared by every version of the track (edits, undo) and with no other track, so it
@@ -224,6 +232,7 @@ class Track {
     struct LiveHeld {
         uint64_t bits[2] = {0, 0};
         bool release = false;
+        int64_t tailQuiet = -1; // see tailQuiet() above
     };
     std::shared_ptr<LiveHeld> liveHeld = std::make_shared<LiveHeld>();
 

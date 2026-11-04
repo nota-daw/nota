@@ -542,7 +542,14 @@ if (args.Length >= 1 && args[0] == "--instrument-chain")
     Console.WriteLine(failures == 0 ? "INSTRUMENT CHAIN PASSED" : $"INSTRUMENT CHAIN FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
-// Drum Rack one-shot pads, pad audition, warp off/on alone: `--pad-warp`. Also part of the full run.
+// Audio-track effect tails after Stop (#449) alone: `--audio-tails`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--audio-tails")
+{
+    Console.WriteLine("-- audio-track tails after Stop --");
+    foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AUDIO TAILS PASSED" : $"AUDIO TAILS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Opt-in (needs a VST3 built and scanned): `--hosted-plugin <vst3 folder> <nota-scanworker>`.
 if (args.Length >= 3 && args[0] == "--hosted-plugin")
 {
@@ -551,7 +558,7 @@ if (args.Length >= 3 && args[0] == "--hosted-plugin")
     Console.WriteLine(failures == 0 ? "HOSTED PLUGIN PASSED" : $"HOSTED PLUGIN FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
-
+// Drum Rack one-shot pads, pad audition, warp off/on alone: `--pad-warp`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--pad-warp")
 {
     Console.WriteLine("-- pads + warp toggle --");
@@ -15569,6 +15576,8 @@ Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device copy + rack undo --");
 foreach (var (ok, label) in DeviceCopyTests.Run()) Check(ok, label);
+Console.WriteLine("-- audio-track tails after Stop --");
+foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument chain --");
 foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
 foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);

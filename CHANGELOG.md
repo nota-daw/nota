@@ -247,6 +247,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Effects on an audio track ring out after Stop** (#449): a reverb or delay placed on an
+  audio track used to fall silent the instant the transport stopped, while the same reverb on
+  a return track rang on. The track's effects now keep playing on silence until their output
+  has died away (3 seconds under −100 dB), then the track costs nothing again. Plug-ins on it
+  also get stopped blocks now, so one that acts on Stop (PitchNet finishing a capture) does.
 - **Duplicating a track keeps its plug-ins** (#454): Duplicate track, a copied and pasted
   plug-in effect and a copied rack now bring their VST3 plug-ins along, with every setting.
   The copy used to come back without them, because a running plug-in describes itself by the
