@@ -21,7 +21,7 @@ namespace Nota.App;
 public sealed partial class PreferencesWindow
 {
     private const int DownloadsIndex = 5;
-    private static readonly string[] DownloadSources = { Loc.T("Plug-ins"), Loc.T("Sample packs"), Loc.T("AI models") };
+    private static readonly string[] DownloadSources = { Loc.T("preferences.plug_ins"), Loc.T("preferences.downloads.sample_packs"), Loc.T("preferences.downloads.ai_models") };
     private int _downloadSource;   // 0 = plug-ins, 1 = sample packs, 2 = AI models; kept for the window's life
 
     private Control DownloadsPane(Control header)

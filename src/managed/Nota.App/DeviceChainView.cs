@@ -207,7 +207,7 @@ public sealed partial class DeviceChainView : UserControl
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)
-        if (_trackId <= 0) { _row.Children.Add(Hint(Loc.T("Select a track"))); return; }
+        if (_trackId <= 0) { _row.Children.Add(Hint(Loc.T("device_chain.select_a_track"))); return; }
 
         // MIDI effects sit before the instrument (they shape the note stream).
         int midiCount = _engine.TrackMidiEffectCount(_trackId);
@@ -243,7 +243,7 @@ public sealed partial class DeviceChainView : UserControl
         {                // that would overflow its fixed width and skew hit-testing).
             body = new RackCardView(NewCardContext()).BuildEffectRackBody(index); width = 700; fullBleed = true;
             int chains = _engine.RackDevChainCount(_trackId, index);
-            tag = Loc.Plural(chains, "Rack · {0} chain", "Rack · {0} chains");
+            tag = Loc.Plural("device_chain.rack_chains", chains);
         }
         else
         {
@@ -305,12 +305,12 @@ public sealed partial class DeviceChainView : UserControl
                 float v = _engine.GetTrackSend(_trackId, b);
                 if (Math.Abs(v - knob.Value) > 1e-3) { knob.Value = v; value.Text = Pct(v); }
             });
-            knobs.Children.Add(KnobCell(Loc.F("Send {0}", letter), knob, value));
+            knobs.Children.Add(KnobCell(Loc.F("common.send", letter), knob, value));
             shown++;
         }
-        Control body = shown > 0 ? knobs : new TextBlock { Text = Loc.T("No return tracks"), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        Control body = shown > 0 ? knobs : new TextBlock { Text = Loc.T("device_chain.no_return_tracks"), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var spec = new ShellSpec(
-            Name: Loc.T("Sends"), Subtitle: "", DeviceIndex: -2, Count: 0, Bypassed: false, Bypassable: false,
+            Name: Loc.T("common.sends"), Subtitle: "", DeviceIndex: -2, Count: 0, Bypassed: false, Bypassable: false,
             CanMove: false, CanDelete: false, PresetKind: -1, IsInstrument: false, Width: shown > 2 ? 200 : 140,
             Kind: ChainKind.Effect, Compact: true, Utility: true);
         return BuildCardShell(spec, new Border { Padding = new Thickness(10), Child = body });
@@ -344,7 +344,7 @@ public sealed partial class DeviceChainView : UserControl
             AddDeviceRequested?.Invoke();
             e.Handled = true;
         };
-        ToolTip.SetTip(card, Loc.T("Add an audio effect: search the browser, or drop a device here"));
+        ToolTip.SetTip(card, Loc.T("device_chain.add_an_audio_effect_search"));
         return card;
     }
 

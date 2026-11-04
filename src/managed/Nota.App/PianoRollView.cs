@@ -155,6 +155,10 @@ public sealed partial class PianoRollView : UserControl
     private static readonly Dictionary<(int, int), ViewState> s_view = new();
     private (int, int) _clipKey = (int.MinValue, int.MinValue);
     private (int, int) _loadedKey = (int.MinValue, int.MinValue);   // the clip Load last showed
+    // The active clip the controller lane last loaded. Separate from _clipKey: a multi-clip
+    // editor clears that key (view state is not per clip), and recording still reloads the
+    // same active clip.
+    private (int Track, int Clip) _ctlClip = (int.MinValue, int.MinValue);
     private double? _pendingVOffset;   // absolute vertical offset to apply once the body is laid out
     private bool _pendingCenter;       // instead: centre on the clip's notes once laid out
     private bool _restoringView;       // suppress view-saves while we programmatically restore
@@ -423,6 +427,10 @@ public sealed partial class PianoRollView : UserControl
         _vel = new VelocityLane(this) { ClipToBounds = true };
         _expr = new ExpressionLane(this) { ClipToBounds = true };
         _ctlLane = new ControllerLane(this) { ClipToBounds = true, Focusable = true };
+        _primaryControllerBody = ControllerLaneBody(_ctlLane, SelectController,
+            () => SetLaneMode(LaneMode.Velocity), () => _laneMode == LaneMode.Controller,
+            out _primaryControllerPicker);
+        _primaryControllerScale = new ControllerValueScale(_ctlLane) { Width = 18, IsVisible = false };
         _velHost = new Border { BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 0, 0), Child = _vel };
 
         // Body: keys pinned left, grid fills; both scroll vertically together.
@@ -456,8 +464,9 @@ public sealed partial class PianoRollView : UserControl
         var stripRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*") };
         _keyColumns.Add(stripRow.ColumnDefinitions[0]);
         stripRow.Children.Add(new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 0, 1, 1) });
-        Avalonia.Controls.Grid.SetColumn(_strip, 1);
-        stripRow.Children.Add(_strip);
+        _clipStripScroll.Content = _strip;
+        Avalonia.Controls.Grid.SetColumn(_clipStripScroll, 1);
+        stripRow.Children.Add(_clipStripScroll);
         stripRow.Bind(IsVisibleProperty, _strip.GetObservable(IsVisibleProperty));
 
         var velRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{KeysW},*"), Height = VelH };
@@ -465,7 +474,15 @@ public sealed partial class PianoRollView : UserControl
         _laneRow = velRow;
         // The lane's gutter picks what it edits: velocity, or a recorded-MPE dimension.
         var velLabelHost = new Border { Background = KeysBg, BorderBrush = Divider, BorderThickness = new Thickness(0, 1, 1, 0) };
-        velLabelHost.Child = _laneTabs = new LaneTabs(this);
+        var sidebar = new Grid { RowDefinitions = new RowDefinitions($"*,{AddLaneH}"),
+            ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        sidebar.Children.Add(_laneTabs = new LaneTabs(this));
+        var addLane = AddControllerLaneButton();
+        Avalonia.Controls.Grid.SetRow(addLane, 1); sidebar.Children.Add(addLane);
+        Avalonia.Controls.Grid.SetColumn(_primaryControllerScale, 1);
+        Avalonia.Controls.Grid.SetRowSpan(_primaryControllerScale, 2);
+        sidebar.Children.Add(_primaryControllerScale);
+        velLabelHost.Child = sidebar;
         velRow.Children.Add(velLabelHost);
         Avalonia.Controls.Grid.SetColumn(_velHost, 1);
         velRow.Children.Add(_velHost);
@@ -479,7 +496,7 @@ public sealed partial class PianoRollView : UserControl
         Avalonia.Controls.Grid.SetColumn(_hScroll, 1);
         scrollRow.Children.Add(_hScroll);
 
-        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto") };
+        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,*,Auto,Auto,Auto") };
         root.Children.Add(rulerRow);
         Avalonia.Controls.Grid.SetRow(stripRow, 1);
         root.Children.Add(stripRow);
@@ -489,9 +506,13 @@ public sealed partial class PianoRollView : UserControl
         Avalonia.Controls.Grid.SetRow(_overlayHost, 2);
         _overlayHost.Margin = new Thickness(KeysW, 0, 0, 0);
         root.Children.Add(_overlayHost);
-        Avalonia.Controls.Grid.SetRow(velRow, 3);
-        root.Children.Add(velRow);
-        Avalonia.Controls.Grid.SetRow(scrollRow, 4);
+        var primaryLane = ResizableLane(velRow, () => PrimaryLaneKey);
+        Avalonia.Controls.Grid.SetRow(primaryLane, 3);
+        root.Children.Add(primaryLane);
+        var controllerRows = ControllerLaneRows();
+        Avalonia.Controls.Grid.SetRow(controllerRows, 4);
+        root.Children.Add(controllerRows);
+        Avalonia.Controls.Grid.SetRow(scrollRow, 5);
         root.Children.Add(scrollRow);
         Content = root;
 
@@ -766,6 +787,8 @@ public sealed partial class PianoRollView : UserControl
         if (!_set.SetActive(slot)) return;
         _trackBrush = slot < _slotBrushes.Count ? _slotBrushes[slot] : _trackBrush;
         DropControllerCache();
+        _ctlClip = (_set.ActiveClip.TrackId, _set.ActiveClip.ClipIndex);
+        _ctlLane.ResetGesture();
         Invalidate();
         ActiveClipChanged?.Invoke();
         Changed?.Invoke();
@@ -802,6 +825,13 @@ public sealed partial class PianoRollView : UserControl
         // commits first, then loads.
         List<(int Pitch, double Start, float Velocity)>? burstVel = null;
         bool sameClip = _clipKey.Item1 != int.MinValue && _clipKey == _loadedKey;
+        // _clipKey is cleared for every multi-clip reload, so it cannot say whether the
+        // controller's clip is the same one. The lane edits the active clip; match that.
+        bool sameController = _set.IsMulti
+            ? _ctlClip.Track != int.MinValue
+              && _set.ActiveClip.TrackId == _ctlClip.Track
+              && _set.ActiveClip.ClipIndex == _ctlClip.Clip
+            : sameClip;
         if (!_velWheelBurst || !sameClip)
         {
             EndVelocityWheel();   // a Session slot commits it before the notes are replaced
@@ -813,6 +843,8 @@ public sealed partial class PianoRollView : UserControl
                 burstVel.Add((_notes[i].Pitch, _notes[i].StartBeat, _notes[i].Velocity));
         }
         DropControllerCache();
+        _ctlLane.OnClipReloaded(sameController);
+        _ctlClip = (_set.ActiveClip.TrackId, _set.ActiveClip.ClipIndex);
         ReplaceAll(notes, owners);
         if (burstVel is not null)
         {
@@ -893,17 +925,17 @@ public sealed partial class PianoRollView : UserControl
     {
         get
         {
-            if (_selection.Count == 0) return Loc.T("No selection");
+            if (_selection.Count == 0) return Loc.T("piano_roll.no_selection");
             if (_selection.Count == 1)
             {
                 int i = _selection.First();
                 if (i >= 0 && i < _notes.Count)
                 {
                     var n = _notes[i];
-                    return Loc.F("1 note · {0} · vel {1}", NoteName(n.Pitch), (int)Math.Round(n.Velocity * 127));
+                    return Loc.F("piano_roll.1_note_vel", NoteName(n.Pitch), (int)Math.Round(n.Velocity * 127));
                 }
             }
-            return Loc.F("{0} notes", _selection.Count);
+            return Loc.F("piano_roll.notes", _selection.Count);
         }
     }
 
@@ -1639,7 +1671,7 @@ public sealed partial class PianoRollView : UserControl
         _gridControl.InvalidateVisual();
         _vel.InvalidateVisual();
         _expr.InvalidateVisual();
-        _ctlLane.InvalidateVisual();
+        InvalidateControllerLanes();
         NotifyGrid();
     }
 
@@ -1724,7 +1756,7 @@ public sealed partial class PianoRollView : UserControl
         SetPlayhead(b, true);   // immediate feedback; the transport tick keeps it in sync
     }
 
-    private static readonly string SlotSeekTip = Loc.T("A Session slot plays on its own loop clock — launch it to play from the start");
+    private static readonly string SlotSeekTip = Loc.T("piano_roll.a_session_slot_plays_on");
     private static readonly Cursor HandCursorShared = new(StandardCursorType.Hand);
     private static readonly Cursor LineCursor = new(StandardCursorType.SizeWestEast);
     private static readonly Cursor NoCursor = new(StandardCursorType.No);
@@ -2947,7 +2979,7 @@ public sealed partial class PianoRollView : UserControl
         private void ShowResetMenu(int hit)
         {
             var flyout = new MenuFlyout();
-            flyout.Items.Add(MenuKit.Item(Loc.T("Reset velocity"), click: () =>
+            flyout.Items.Add(MenuKit.Item(Loc.T("piano_roll.reset_velocity"), click: () =>
             {
                 _o.EndVelocityWheel();   // its own step, apart from anything just before it
                 Snapshot();

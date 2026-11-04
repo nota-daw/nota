@@ -21,7 +21,7 @@ namespace Nota.App;
 
 internal sealed class SnapChip
 {
-    private static string Shortcuts => Loc.T("⌘1 ⌘2 narrow / widen · ⌘3 triplets · ⌘4 snap · ⌘5 auto");
+    private static string Shortcuts => Loc.T("snap_chip.1_2_narrow_widen_3");
 
     private readonly Button _button;
     private readonly TextBlock _value;
@@ -81,7 +81,7 @@ internal sealed class SnapChip
             foreach (bool t in new[] { false, true })
             {
                 string label = GridStep.Of(i, t).Label;
-                if (_caption is null) label = Loc.F("Auto · {0}", label);
+                if (_caption is null) label = Loc.F("snap_chip.auto", label);
                 var ft = new FormattedText(label, NotaNum.Culture,
                     FlowDirection.LeftToRight, face, _value.FontSize, null);
                 widest = Math.Max(widest, ft.WidthIncludingTrailingWhitespace);
@@ -100,16 +100,16 @@ internal sealed class SnapChip
         _shown = key;
 
         _value.Text = text;
-        if (_caption is not null) _caption.Text = s.Adaptive ? Loc.T("Auto grid") : Loc.T("Grid");
+        if (_caption is not null) _caption.Text = s.Adaptive ? Loc.T("snap_chip.auto_grid") : Loc.T("common.grid");
         _value.TextDecorations = r.SnapOn ? null : TextDecorations.Strikethrough;
         _value.Foreground = !r.SnapOn ? NotaPalette.TextDisabled
             : r.FinerThanVisible ? NotaPalette.TextSecondary
             : NotaPalette.TextPrimary;
-        string tip = !r.SnapOn ? Loc.T("Snap off — items move freely (⌘4)")
-            : r.FinerThanVisible ? Loc.F("{0} — finer than the visible grid · zoom in to see it", r.Snap.Label)
-            : s.Adaptive ? Loc.F("Snap grid · Auto follows the zoom ({0})", s.Density)
-            : Loc.F("Snap grid · fixed {0}", r.Snap.Label);
-        ToolTip.SetTip(_button, MenuKit.Keys(Loc.F("{0}\n{1} · hold ⌥ to drag freely", tip, Shortcuts)));
+        string tip = !r.SnapOn ? Loc.T("snap_chip.snap_off_items_move_freely")
+            : r.FinerThanVisible ? Loc.F("snap_chip.finer_than_the_visible_grid", r.Snap.Label)
+            : s.Adaptive ? Loc.F("snap_chip.snap_grid_auto_follows_the", s.Density)
+            : Loc.F("snap_chip.snap_grid_fixed", r.Snap.Label);
+        ToolTip.SetTip(_button, MenuKit.Keys(Loc.F("snap_chip.hold_to_drag_freely", tip, Shortcuts)));
     }
 
     private void OpenMenu()
@@ -125,7 +125,7 @@ internal sealed class SnapChip
         }
 
         foreach (var d in new[] { GridDensity.Narrow, GridDensity.Medium, GridDensity.Wide })
-            Item(Loc.F("Auto · {0}", d), s.Adaptive && s.Density == d, g => SnapGrid.PickAdaptive(g, d));
+            Item(Loc.F("snap_chip.auto", d), s.Adaptive && s.Density == d, g => SnapGrid.PickAdaptive(g, d));
         f.Items.Add(new Separator());
         for (int i = 0; i < GridStep.Count; i++)
         {
@@ -133,8 +133,8 @@ internal sealed class SnapChip
             Item(GridStep.Of(i, s.Triplets).Label, !s.Adaptive && s.FixedIndex == i, g => SnapGrid.PickFixed(g, idx));
         }
         f.Items.Add(new Separator());
-        Item(Loc.T("Triplets"), s.Triplets, SnapGrid.ToggleTriplets, MenuKit.Cmd(Key.D3));
-        Item(Loc.T("Snap to grid"), s.SnapOn, SnapGrid.ToggleSnap, MenuKit.Cmd(Key.D4));
+        Item(Loc.T("snap_chip.triplets"), s.Triplets, SnapGrid.ToggleTriplets, MenuKit.Cmd(Key.D3));
+        Item(Loc.T("snap_chip.snap_to_grid"), s.SnapOn, SnapGrid.ToggleSnap, MenuKit.Cmd(Key.D4));
         f.ShowAt(_button);
     }
 }

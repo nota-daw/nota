@@ -28,7 +28,7 @@ public partial class MainWindow
             {
                 if (file.Items[i] is not NativeMenuItem item || Commands.GetId(item) != "file.open") continue;
                 _recentMenu = new NativeMenu();
-                file.Items.Insert(i + 1, new NativeMenuItem(Loc.T("Open recent")) { Menu = _recentMenu });
+                file.Items.Insert(i + 1, new NativeMenuItem(Loc.T("main.recent_menu.open_recent")) { Menu = _recentMenu });
                 RefreshRecentMenu();
                 return;
             }
@@ -50,6 +50,6 @@ public partial class MainWindow
             _recentMenu.Items.Add(item);
         }
         if (recent.Count == 0)
-            _recentMenu.Items.Add(new NativeMenuItem(Loc.T("No recent projects")) { IsEnabled = false });
+            _recentMenu.Items.Add(new NativeMenuItem(Loc.T("main.recent_menu.no_recent_projects")) { IsEnabled = false });
     }
 }

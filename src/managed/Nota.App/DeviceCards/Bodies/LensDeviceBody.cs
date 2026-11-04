@@ -112,7 +112,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         static double KeyDb(double v) => -24 + 48 * Math.Clamp(v, 0, 1);
         bool scOk = engine.DeviceAcceptsSidechain(track, di);
         int KeySrc() => scOk ? engine.DeviceSidechainSource(track, di) : -1;
-        string SrcName(int id) { string n = TrackNames.Of(engine, id); return n == "—" ? Loc.T("None") : n; }
+        string SrcName(int id) { string n = TrackNames.Of(engine, id); return n == "—" ? Loc.T("common.none") : n; }
 
         static string Ms(double sec) => sec >= 1 ? Inv($"{sec:0.00} s") : sec >= 0.001 ? Inv($"{sec * 1000:0.00} ms") : Inv($"{sec * 1e6:0} µs");
         static string Sec(double s) => s >= 1 ? Inv($"{s:0.0} s") : Inv($"{s * 1000:0} ms");
@@ -267,9 +267,9 @@ internal sealed class LensDeviceBody : IDeviceBody
                 Children = { Seg(TrigModeP, new[] { "Auto", "Normal", "Single" }), Seg(TrigEdgeP, new[] { "↑", "↓" }) },
             };
             var span = Seg(SpanP, SpanNames);
-            ToolTip.SetTip(span, Loc.T("Span — how much of the song the scope shows, from a quarter beat to four bars"));
+            ToolTip.SetTip(span, Loc.T("device.lens.span_how_much_of_the"));
             var sync = Toggle(SyncP, "Sync");
-            ToolTip.SetTip(sync, Loc.T("Sync — line the scope up with the song's beats and bars"));
+            ToolTip.SetTip(sync, Loc.T("device.lens.sync_line_the_scope_up"));
             var caps = Caps("TRIG");
             readouts.Add(() =>
             {
@@ -289,7 +289,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             var trigK = K(TrigLevelP, "Trig Lvl", v => Inv($"{(v - 0.5) * 2:+0.00;−0.00;0.00}"), 34, 48, TealC);
             var holdK = K(HoldoffP, "Holdoff", v => Inv($"{v * 200:0} ms"), 34, 48, TealC);
             var keyK = K(KeyGainP, "Key Gain", v => Inv($"{KeyDb(v):+0.#;−0.#;0} dB"), 34, 48, TealC);
-            ToolTip.SetTip(keyK, Loc.T("Key gain — scales only the key's trace, for the eye (the sound is untouched)"));
+            ToolTip.SetTip(keyK, Loc.T("device.lens.key_gain_scales_only_the"));
             readouts.Add(() =>
             {
                 bool on = On(SyncP);
@@ -312,22 +312,22 @@ internal sealed class LensDeviceBody : IDeviceBody
                     wfNote.Ctl));
 
         // ---- right panel --------------------------------------------------------------
-        var cursorBox = ReadBox("CURSOR", "—", Loc.T("move over the graph"));
+        var cursorBox = ReadBox("CURSOR", "—", Loc.T("device.lens.move_over_the_graph"));
         var captureBox = ReadBox("CAPTURE");
         var measureBox = ReadBox("A → B");
-        var wfCursorBox = ReadBox("CURSOR", "—", Loc.T("move over the graph"));
+        var wfCursorBox = ReadBox("CURSOR", "—", Loc.T("device.lens.move_over_the_graph"));
 
         spectrum.CursorMoved += () =>
         {
             double hz = spectrum.CursorHz;
-            if (hz <= 0) { cursorBox.A.Text = "—"; cursorBox.B.Text = Loc.T("move over the graph"); return; }
+            if (hz <= 0) { cursorBox.A.Text = "—"; cursorBox.B.Text = Loc.T("device.lens.move_over_the_graph"); return; }
             cursorBox.A.Text = Inv($"{Hz(hz)} · {LensInk.Note(hz)}");
-            cursorBox.B.Text = Loc.F("{0:0.0} dB · bin {1:0}", spectrum.CursorDb, (Sc(M_BinHz) > 0 ? hz / Sc(M_BinHz) : 0));
+            cursorBox.B.Text = Loc.F("device.lens.db_bin", spectrum.CursorDb, (Sc(M_BinHz) > 0 ? hz / Sc(M_BinHz) : 0));
         };
         waterfall.CursorMoved += () =>
         {
             double hz = waterfall.CursorHz;
-            if (hz <= 0) { wfCursorBox.A.Text = "—"; wfCursorBox.B.Text = Loc.T("move over the graph"); return; }
+            if (hz <= 0) { wfCursorBox.A.Text = "—"; wfCursorBox.B.Text = Loc.T("device.lens.move_over_the_graph"); return; }
             wfCursorBox.A.Text = Inv($"{Hz(hz)} · {LensInk.Note(hz)}");
             wfCursorBox.B.Text = Inv($"−{waterfall.CursorAgeSec:0.0} s");
         };
@@ -346,7 +346,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             Row("RATE", RateP, v => Inv($"{10 + v * 50:0} fps")),
             cursorBox.Box,
             Toggle(PeakHoldP, "Peak hold"),
-            Toggle(MidSideP, Loc.T("Mid / Side")));
+            Toggle(MidSideP, Loc.T("device.lens.mid_side")));
 
         // The sidechain key (specs/050): None, or any other track's post-FX audio.
         Control KeyRow()
@@ -355,7 +355,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             readouts.Add(() =>
             {
                 int src = KeySrc();
-                name.Text = !scOk ? Loc.T("n/a in a rack") : src < 0 ? "no key" : SrcName(src);
+                name.Text = !scOk ? Loc.T("device.lens.n_a_in_a_rack") : src < 0 ? "no key" : SrcName(src);
                 name.Foreground = src >= 0 ? TxtC : Txt2;
             });
             var box = new Border
@@ -364,7 +364,7 @@ internal sealed class LensDeviceBody : IDeviceBody
                 Cursor = new Cursor(StandardCursorType.Hand), IsEnabled = scOk,
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(5, 0, 0, 0) }, Dock.Right), name } },
             };
-            ToolTip.SetTip(box, Loc.T("Key — draw another track's audio over this one, in teal"));
+            ToolTip.SetTip(box, Loc.T("device.lens.key_draw_another_tracks_audio"));
             box.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(box).Properties.IsLeftButtonPressed || !scOk) return;
@@ -376,7 +376,7 @@ internal sealed class LensDeviceBody : IDeviceBody
                     mi.Click += (_, _) => { engine.SetDeviceSidechainSource(track, di, id); ctx.NotifyChanged(); foreach (var a in readouts) a(); };
                     fly.Items.Add(mi);
                 }
-                Item(Loc.T("None"), -1);
+                Item(Loc.T("common.none"), -1);
                 fly.Items.Add(new Separator());
                 for (int i = 0; i < engine.TrackCount; i++)
                     if (engine.TryGetTrackInfo(i, out var ti) && ti.Id != track) Item(SrcName(ti.Id), ti.Id);
@@ -386,7 +386,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             var show = Switch("", () => On(KeyShowP), () => SetP(KeyShowP, On(KeyShowP) ? 0f : 1f), out var showSync);
             readouts.Add(showSync);
             Learn(show, KeyShowP);
-            ToolTip.SetTip(show, Loc.T("Show the key's trace"));
+            ToolTip.SetTip(show, Loc.T("device.lens.show_the_keys_trace"));
             show.Margin = new Thickness(5, 0, 0, 0);
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*,Auto"), VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(Caps("KEY")); g.Children.Add(Col(box, 1)); g.Children.Add(Col(show, 2));
@@ -419,11 +419,11 @@ internal sealed class LensDeviceBody : IDeviceBody
                 Orientation = Orientation.Horizontal, Spacing = 5,
                 Children =
                 {
-                    new Border { Width = 82, Child = Button("Re-arm", Loc.T("Arm the next Single capture"), () => { engine.DeviceAction(track, di, A_Rearm, 0, 0f); foreach (var a in readouts) a(); }) },
-                    new Border { Width = 82, Child = Button(Loc.T("Export WAV"), Loc.T("Write the captured scope window to a WAV file"), ExportWav) },
+                    new Border { Width = 82, Child = Button("Re-arm", Loc.T("device.lens.arm_the_next_single_capture"), () => { engine.DeviceAction(track, di, A_Rearm, 0, 0f); foreach (var a in readouts) a(); }) },
+                    new Border { Width = 82, Child = Button(Loc.T("device.lens.export_wav"), Loc.T("device.lens.write_the_captured_scope_window"), ExportWav) },
                 },
             },
-            Toggle(CursorSnapP, Loc.T("Snap to peaks")),
+            Toggle(CursorSnapP, Loc.T("device.lens.snap_to_peaks")),
             Toggle(CursorsP, "Cursors"));
 
         Control WaterfallAnalyze() => Stack(
@@ -440,7 +440,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             Row("TOP", ScaleTopP, v => Inv($"{24 - v * 60:0} dB")),
             Row("RANGE", ScaleRangeP, v => Inv($"{30 + v * 90:0} dB")),
             Row("RATE", RateP, v => Inv($"{10 + v * 50:0} fps")),
-            Toggle(MidSideP, Loc.T("Mid / Side")),
+            Toggle(MidSideP, Loc.T("device.lens.mid_side")),
             Toggle(LogFreqP, "Log frequency"),
             Toggle(NoteGridP, "Note grid"),
             Toggle(PeakHoldP, "Peak hold"));
@@ -529,7 +529,7 @@ internal sealed class LensDeviceBody : IDeviceBody
         var freezeToggle = Switch("Freeze", () => On(FreezeP), () => SetP(FreezeP, On(FreezeP) ? 0f : 1f), out var freezeSync);
         readouts.Add(freezeSync);
         Learn(freezeToggle, FreezeP);
-        ToolTip.SetTip(freezeToggle, Loc.T("Freeze — stop capturing and hold what is on screen"));
+        ToolTip.SetTip(freezeToggle, Loc.T("device.lens.freeze_stop_capturing_and_hold"));
 
         var headNote = Mono("", 7, MutedC);
         var extras = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { freezeToggle, headNote } };
@@ -542,7 +542,7 @@ internal sealed class LensDeviceBody : IDeviceBody
                 Background = Brushes.Transparent, Padding = new Thickness(3), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
                 Child = new Glyph(GlyphKind.PopOut, 10) { Foreground = MutedC },
             };
-            ToolTip.SetTip(pop, Loc.T("Open Lens in its own window"));
+            ToolTip.SetTip(pop, Loc.T("device.lens.open_lens_in_its_own"));
             pop.PointerReleased += (_, e) => { LensWindow.Open(ctx, di, pop); e.Handled = true; };
             pop.PointerPressed += (_, e) => e.Handled = true;
             extras.Children.Add(pop);
@@ -639,7 +639,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             if (n <= 0) return;
             var file = await top.PickSaveFileAsync(new FilePickerSaveOptions
             {
-                Title = Loc.T("Export the Lens capture to WAV"),
+                Title = Loc.T("device.lens.export_the_lens_capture_to"),
                 DefaultExtension = "wav",
                 SuggestedFileName = "Nota Lens capture.wav",
                 FileTypeChoices = new[] { new FilePickerFileType("WAV audio") { Patterns = new[] { "*.wav" } } },
@@ -743,18 +743,18 @@ internal sealed class LensDeviceBody : IDeviceBody
                 ? (data.Held ? "Held" : data.SyncOn ? (synced ? "Sync" : "Free") : data.TrigOk ? "Trig’d" : "Free")
                 : centreTab == 2 ? Inv($"{LensData.WfBins} bins") : Inv($"FFT {fftN}");
 
-            specInfo.Text = Loc.F("window {0:0} ms · slope {1:0.0} dB/oct", Sc(M_FftMs), P(TiltP) * 9);
+            specInfo.Text = Loc.F("device.lens.window_ms_slope_db_oct", Sc(M_FftMs), P(TiltP) * 9);
             scopeInfo.Text = data.SyncOn
                 ? Inv($"{LensScopeView.SpanName(data.Sync[LensData.S_SpanBeats], data.Sync[LensData.S_BeatsPerBar])} · {data.Sync[LensData.S_Bpm]:0.#} BPM{(synced ? "" : " · stopped")}")
-                : Loc.F("level {0:0.00} · holdoff {1:0} ms", (P(TrigLevelP) - 0.5) * 2, P(HoldoffP) * 200);
+                : Loc.F("device.lens.level_holdoff_ms", (P(TrigLevelP) - 0.5) * 2, P(HoldoffP) * 200);
             wfInfo.Text = Inv($"floor {-120 + P(WfFloorP) * 80:0} dB · {(On(LogFreqP) ? "log" : "linear")} freq");
 
             specNote.A.Text = Inv($"peak {Sc(M_PeakDb):0.0} dB @ {Hz(Sc(M_PeakHz))}");
-            specNote.B.Text = Loc.F("crest {0:0.0} dB · LUFS {1:0.0}", Sc(M_CrestDb), Sc(M_Lufs));
-            scopeNote.A.Text = Sc(M_PeriodMs) > 0 ? Loc.F("period {0:0.000} ms · {1:0.0} Hz", Sc(M_PeriodMs), Sc(M_FreqHz)) : "period —";
-            scopeNote.B.Text = Loc.F("Vpp {0:0.000} · RMS {1:0.000}", Sc(M_Vpp), Sc(M_Vrms));
-            wfNote.A.Text = Loc.F("row {0:0} ms · {1} bins", WfSpan() / LensData.WfRows * 1000, LensData.WfBins);
-            wfNote.B.Text = Loc.F("peak {0} · {1:0.0} dB", Hz(Sc(M_PeakHz)), Sc(M_PeakDb));
+            specNote.B.Text = Loc.F("device.lens.crest_db_lufs", Sc(M_CrestDb), Sc(M_Lufs));
+            scopeNote.A.Text = Sc(M_PeriodMs) > 0 ? Loc.F("device.lens.period_ms_hz", Sc(M_PeriodMs), Sc(M_FreqHz)) : "period —";
+            scopeNote.B.Text = Loc.F("device.lens.vpp_rms", Sc(M_Vpp), Sc(M_Vrms));
+            wfNote.A.Text = Loc.F("device.lens.row_ms_bins", WfSpan() / LensData.WfRows * 1000, LensData.WfBins);
+            wfNote.B.Text = Loc.F("device.lens.peak_db", Hz(Sc(M_PeakHz)), Sc(M_PeakDb));
 
             captureBox.A.Text = data.Held ? "held" : data.TrigOk ? "stable" : "free-run";
             captureBox.B.Text = Inv($"holdoff {P(HoldoffP) * 200:0} ms · edge {(On(TrigEdgeP) ? "↓" : "↑")}");
@@ -767,7 +767,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             {
                 1 when data.SyncOn => Inv($"Scope · sync {LensScopeView.SpanName(data.Sync[LensData.S_SpanBeats], data.Sync[LensData.S_BeatsPerBar])} · {VoltDiv():0.00}/div{(data.KeyOn ? " · key " + data.KeyName : "")}"),
                 1 => Inv($"Scope · {Ms(TimeDiv())}/div · {VoltDiv():0.00}/div · trig {(On(TrigEdgeP) ? "↓" : "↑")} {(P(TrigLevelP) - 0.5) * 2:0.00} {new[] { "auto", "normal", "single" }[Sel(TrigModeP, 3)]}{(On(PersistP) ? Inv($" · persist {Sec(PersistS())}") : "")}"),
-                2 => Loc.F("Waterfall · {0} bins · {1} · overlap {2:0.#} % · window {3:0} s · floor {4:0} dB", LensData.WfBins, winName, Overlaps[Sel(WfOverlapP, 4)], WfSpan(), -120 + P(WfFloorP) * 80),
+                2 => Loc.F("device.lens.waterfall_bins_overlap_window_s", LensData.WfBins, winName, Overlaps[Sel(WfOverlapP, 4)], WfSpan(), -120 + P(WfFloorP) * 80),
                 _ => Inv($"Spectrum · FFT {fftN} · {winName} · avg {Avg()} · slope {P(TiltP) * 9:0.0} dB/oct{(On(MidSideP) ? " · Mid/Side" : "")}"),
             };
             statusLeft.Foreground = On(FreezeP) ? AmberLit : Txt2;

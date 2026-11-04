@@ -53,7 +53,7 @@ public partial class MainWindow
             _session?.Refresh();
             if (landed > 0) Timeline.Select(landed, -1);
         }
-        catch (Exception ex) { _vm.StatusText = Loc.F("Drop failed: {0}", ex.Message); }
+        catch (Exception ex) { _vm.StatusText = Loc.F("main.dnd.drop_failed", ex.Message); }
     }
 
     private void OnSessionDrop(BrowserItem item, int trackId, int scene, bool instrumentTrack)
@@ -65,16 +65,16 @@ public partial class MainWindow
             // A column header or the empty grid has no slot for a clip.
             if (scene < 0 && item.Kind is BrowserItemKind.Sample or BrowserItemKind.MidiFile)
             {
-                _vm.StatusText = Loc.T("Drop samples and MIDI files onto a slot.");
+                _vm.StatusText = Loc.T("main.dnd.drop_samples_and_midi_files");
                 return;
             }
             switch (item.Kind)
             {
                 case BrowserItemKind.Sample:
-                    if (instrumentTrack) { _vm.StatusText = Loc.T("Drop samples onto audio slots."); break; }
+                    if (instrumentTrack) { _vm.StatusText = Loc.T("main.dnd.drop_samples_onto_audio_slots"); break; }
                     if (Engine.AddSessionAudioFile(trackId, scene, item.Path))
                     {
-                        _vm.StatusText = Loc.F("Added {0} to slot", item.Name);
+                        _vm.StatusText = Loc.F("main.added_to_slot", item.Name);
                         landed = true;
                     }
                     break;
@@ -85,7 +85,7 @@ public partial class MainWindow
                 case BrowserItemKind.BuiltinEffect:
                 case BrowserItemKind.PluginEffect:
                 case BrowserItemKind.BuiltinMidiEffect:
-                    if (trackId <= 0) { _vm.StatusText = Loc.T("Drop effects onto a column."); break; }
+                    if (trackId <= 0) { _vm.StatusText = Loc.T("main.dnd.drop_effects_onto_a_column"); break; }
                     var r = Insertion.RouteToTrack(item, trackId); // a session column is a track
                     ApplyInsertResult(r);
                     landed = r.Ok;
@@ -104,7 +104,7 @@ public partial class MainWindow
                     if (ir.ToRackCard)   // an instrument preset on an Instrument Rack: a new chain, from its card
                     {
                         ShowDevices(ir.TrackId);
-                        if (_deviceChain?.DropOnInstrumentRack(item) != true) _vm.StatusText = Loc.F("Couldn't add {0} to the rack.", item.Name);
+                        if (_deviceChain?.DropOnInstrumentRack(item) != true) _vm.StatusText = Loc.F("main.dnd.couldnt_add_to_the_rack", item.Name);
                     }
                     else ApplyInsertResult(ir, revealDevices: !ir.CreatedTrack);
                     if (ir.Ok && ir.TrackId > 0) { trackId = ir.TrackId; landed = true; }
@@ -121,7 +121,7 @@ public partial class MainWindow
                 if (Timeline.SelectedTrackId != trackId) Timeline.Select(trackId, -1);
             }
         }
-        catch (Exception ex) { _vm.StatusText = Loc.F("Drop failed: {0}", ex.Message); }
+        catch (Exception ex) { _vm.StatusText = Loc.F("main.dnd.drop_failed", ex.Message); }
     }
 
     // A browser item dropped on the Devices panel of the shown track. An effect lands in
@@ -148,7 +148,7 @@ public partial class MainWindow
     private void DropBrowserItem(BrowserItem item, int t)
     {
         if (_vm is null) return;
-        if (t <= 0) { _vm.StatusText = Loc.T("Select a track first."); return; }
+        if (t <= 0) { _vm.StatusText = Loc.T("common.select_a_track_first"); return; }
         ApplyInsertResult(Insertion.Insert(item, new InsertTarget(t)));
     }
 

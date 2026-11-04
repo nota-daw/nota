@@ -30,7 +30,7 @@ internal sealed class TrackInspectorView : UserControl
 {
     private static readonly (string Label, double Height)[] Heights =
     {
-        (Loc.T("Compact"), ArrangementView.CompactRowHeight), (Loc.T("Standard"), ArrangementView.StandardRowHeight), (Loc.T("Large"), ArrangementView.LargeRowHeight),
+        (Loc.T("common.compact"), ArrangementView.CompactRowHeight), (Loc.T("track_inspector.standard"), ArrangementView.StandardRowHeight), (Loc.T("track_inspector.large"), ArrangementView.LargeRowHeight),
     };
 
     private readonly IAudioEngine _engine;
@@ -142,7 +142,7 @@ internal sealed class TrackInspectorView : UserControl
         {
             Content = new TextBlock
             {
-                Text = Loc.T("No track selected"), FontSize = 11, Foreground = NotaPalette.TextTertiary,
+                Text = Loc.T("track_inspector.no_track_selected"), FontSize = 11, Foreground = NotaPalette.TextTertiary,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
             };
             return;
@@ -154,9 +154,9 @@ internal sealed class TrackInspectorView : UserControl
 
     private void BuildMaster(StackPanel s)
     {
-        string name = _engine.GetTrackName(_trackId) is { Length: > 0 } m ? m : Loc.T("Master");
+        string name = _engine.GetTrackName(_trackId) is { Length: > 0 } m ? m : Loc.T("common.master");
         s.Children.Add(Title(NotaPalette.Master, name, "MASTER"));
-        s.Children.Add(Note(Loc.T("Every track ends up here. Its devices are in the Devices panel.")));
+        s.Children.Add(Note(Loc.T("track_inspector.every_track_ends_up_here")));
     }
 
     private void BuildTrack(StackPanel s, NotaTrackInfo ti)
@@ -164,38 +164,38 @@ internal sealed class TrackInspectorView : UserControl
         int id = ti.Id;
         bool audio = IsAudio(ti);
         bool frozen = (audio || ti.IsInstrument) && _engine.IsTrackFrozen(id);
-        string kind = ti.IsReturn ? Loc.T("Return") : ti.IsGroup ? Loc.T("Group") : ti.IsInstrument ? Loc.T("MIDI track") : Loc.T("Audio track");
+        string kind = ti.IsReturn ? Loc.T("common.return") : ti.IsGroup ? Loc.T("common.group") : ti.IsInstrument ? Loc.T("track_inspector.midi_track") : Loc.T("track_inspector.audio_track");
         s.Children.Add(Title(ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, id)), TrackNames.Of(_engine, ti),
             NotaText.Label(frozen ? kind + " · frozen" : kind)));
 
-        s.Children.Add(Section(Loc.T("Name"), NameBox(ti)));
+        s.Children.Add(Section(Loc.T("track_inspector.name"), NameBox(ti)));
 
         var state = new UniformGrid { Rows = 1, Columns = 3, ColumnSpacing = 6 };
-        state.Children.Add(Toggle(Loc.T("Mute"), ti.Muted != 0, NotaPalette.Mute, Loc.T("Mute the track"),
+        state.Children.Add(Toggle(Loc.T("common.mute"), ti.Muted != 0, NotaPalette.Mute, Loc.T("track_inspector.mute_the_track"),
             (on, _) => { _engine.SetTrackMute(id, on); Edited(); }));
         if (!ti.IsReturn)
-            state.Children.Add(Toggle(Loc.T("Solo"), ti.Soloed != 0, NotaPalette.Solo, Loc.T("Solo the track"),
+            state.Children.Add(Toggle(Loc.T("common.solo"), ti.Soloed != 0, NotaPalette.Solo, Loc.T("track_inspector.solo_the_track"),
                 (on, _) => { _engine.SetTrackSolo(id, on); Edited(); }));
         if (audio || ti.IsInstrument)
-            state.Children.Add(Toggle(Loc.T("Arm"), ti.Armed != 0, NotaPalette.Record, TrackArming.Tip,
-                (on, mods) => { TrackArming.Set(_engine, id, on, TrackArming.IsAdditive(mods)); Edited(); }));
+            state.Children.Add(Toggle(Loc.T("track_inspector.arm"), ti.Armed != 0, NotaPalette.Record, TrackArming.Tip,
+                (on, mods) => { TrackArming.Set(_engine, id, on, mods); Edited(); }));
         s.Children.Add(state);
 
-        if (audio) s.Children.Add(Section(Loc.T("Input"), InputRows(id)));
-        if (ti.IsInstrument) s.Children.Add(Section(Loc.T("Input"), MidiFromRow(id)));
+        if (audio) s.Children.Add(Section(Loc.T("common.input"), InputRows(id)));
+        if (ti.IsInstrument) s.Children.Add(Section(Loc.T("common.input"), MidiFromRow(id)));
 
-        s.Children.Add(Section(Loc.T("Color"), Swatches(id)));
+        s.Children.Add(Section(Loc.T("track_inspector.color"), Swatches(id)));
 
         if (!ti.IsReturn)
         {
             double h = _timeline.TrackRowHeight(id);
             int chosen = Array.FindIndex(Heights, p => Math.Abs(p.Height - h) < 0.5);
-            s.Children.Add(Section(Loc.T("Height"), SessionView.Segmented(Heights.Select(p => p.Label).ToList(), chosen,
+            s.Children.Add(Section(Loc.T("track_inspector.height"), SessionView.Segmented(Heights.Select(p => p.Label).ToList(), chosen,
                 i => { _timeline.SetTrackHeights(new[] { id }, Heights[i].Height); Rebuild(); })));
         }
 
         var freeze = _freezeEntries(id);
-        if (freeze.Count > 0) s.Children.Add(Section(Loc.T("Freeze"), FreezeButtons(freeze)));
+        if (freeze.Count > 0) s.Children.Add(Section(Loc.T("common.freeze"), FreezeButtons(freeze)));
     }
 
     // Enter or leaving the box renames; Esc puts the name back. An empty name returns the
@@ -237,30 +237,30 @@ internal sealed class TrackInspectorView : UserControl
         int sel = choices.FindIndex(c => c.Pick.Matches(cur));
         string label = sel >= 0 ? choices[sel].Label : RecordInputPick.Hardware[0].Label;
         var rows = new StackPanel { Spacing = 8 };
-        rows.Children.Add(SessionView.Row(Loc.T("Record input"), SessionView.Chip(label, false, a =>
+        rows.Children.Add(SessionView.Row(Loc.T("common.record_input"), SessionView.Chip(label, false, a =>
             SessionView.Pick(a, choices.Select(c => (c.Pick, c.Label)), p => p.Matches(cur),
                 p => { p.ApplyTo(_engine, id); Edited(); }))));
 
         // Master can't be monitored (it would feed back), as on the header's monitor chip.
         bool canMonitor = cur.Source != -1;
         bool monitor = _engine.GetTrackMonitor(id);
-        var chip = SessionView.Chip(monitor ? "On" : Loc.T("Off"), monitor, _ => { _engine.SetTrackMonitor(id, !monitor); Edited(); });
+        var chip = SessionView.Chip(monitor ? "On" : Loc.T("common.off"), monitor, _ => { _engine.SetTrackMonitor(id, !monitor); Edited(); });
         chip.IsEnabled = canMonitor;
-        ToolTip.SetTip(chip, canMonitor ? Loc.T("Hear the input live through this track") : Loc.T("Master can't be monitored (it would feed back)"));
-        rows.Children.Add(SessionView.Row(Loc.T("Monitor input"), chip));
+        ToolTip.SetTip(chip, canMonitor ? Loc.T("track_inspector.hear_the_input_live_through") : Loc.T("track_inspector.master_cant_be_monitored_it"));
+        rows.Children.Add(SessionView.Row(Loc.T("track_inspector.monitor_input"), chip));
         return rows;
     }
 
     private Control MidiFromRow(int id)
     {
         int cur = _engine.GetTrackMidiSource(id);
-        var choices = new List<(int Id, string Name)> { (-1, Loc.T("None")) };
+        var choices = new List<(int Id, string Name)> { (-1, Loc.T("common.none")) };
         choices.AddRange(_timeline.MidiSourceChoices(id));
-        string label = choices.FirstOrDefault(c => c.Id == cur).Name ?? Loc.T("None");
+        string label = choices.FirstOrDefault(c => c.Id == cur).Name ?? Loc.T("common.none");
         var chip = SessionView.Chip(label, false, a =>
             SessionView.Pick(a, choices.Select(c => (c.Id, c.Name)), v => v == cur, v => { _engine.SetTrackMidiSource(id, v); Edited(); }));
-        ToolTip.SetTip(chip, Loc.T("Play another instrument track's MIDI through this track's instrument"));
-        return SessionView.Row(Loc.T("MIDI from"), chip);
+        ToolTip.SetTip(chip, Loc.T("track_inspector.play_another_instrument_tracks_midi"));
+        return SessionView.Row(Loc.T("track_inspector.midi_from"), chip);
     }
 
     // The track palette — each base in its normal, light and dark shade — and Auto, the
@@ -276,8 +276,8 @@ internal sealed class TrackInspectorView : UserControl
                 int idx = b * shades + shade;
                 grid.Children.Add(Swatch(ArrangementView.TrackBrush(idx), idx == current, () => _timeline.SetTrackColours(new[] { id }, idx)));
             }
-        var auto = SessionView.Chip(Loc.T("Auto"), current == -1, _ => _timeline.SetTrackColours(new[] { id }, -1));
-        ToolTip.SetTip(auto, Loc.T("The colour the track's position gives it"));
+        var auto = SessionView.Chip(Loc.T("common.auto"), current == -1, _ => _timeline.SetTrackColours(new[] { id }, -1));
+        ToolTip.SetTip(auto, Loc.T("track_inspector.the_colour_the_tracks_position"));
         auto.HorizontalAlignment = HorizontalAlignment.Left;
         return new StackPanel { Spacing = 6, Children = { grid, auto } };
     }

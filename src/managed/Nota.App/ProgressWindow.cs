@@ -69,11 +69,11 @@ public sealed class ProgressWindow : NotaWindow
         body.Children.Add(_bar);
         if (cancel is not null)
         {
-            var stop = new Button { Content = Loc.T("Cancel"), Classes = { "ghost" }, HorizontalAlignment = HorizontalAlignment.Right };
+            var stop = new Button { Content = Loc.T("common.cancel"), Classes = { "ghost" }, HorizontalAlignment = HorizontalAlignment.Right };
             stop.Click += (_, _) =>
             {
                 stop.IsEnabled = false;
-                _label.Text = Loc.T("Cancelling…");
+                _label.Text = Loc.T("progress.cancelling");
                 cancel.Cancel();
             };
             body.Children.Add(stop);

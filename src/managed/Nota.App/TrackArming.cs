@@ -19,10 +19,15 @@ internal static class TrackArming
     public static event Action? OthersChanged;
 
     /// <summary>Arms or disarms a track, exclusively unless <paramref name="additive"/> (see TrackArm).</summary>
-    public static void Set(IAudioEngine engine, int trackId, bool on, bool additive)
+    public static void Set(IAudioEngine engine, int trackId, bool on, bool additive, bool linked = true)
     {
-        if (TrackArm.Set(engine, trackId, on, additive)) OthersChanged?.Invoke();
+        if (TrackArm.Set(engine, trackId, on, additive, linked)) OthersChanged?.Invoke();
     }
+
+    /// <summary>An arm click with its modifiers: ⌘ / Ctrl adds to the armed set, ⌥ / Alt arms
+    /// one track of a linked group alone (specs/076).</summary>
+    public static void Set(IAudioEngine engine, int trackId, bool on, Avalonia.Input.KeyModifiers mods)
+        => Set(engine, trackId, on, IsAdditive(mods), linked: !IsBypass(mods));
 
     private static int _followed = -1;
 
@@ -44,9 +49,12 @@ internal static class TrackArming
     public static void ForgetSelection() => _followed = -1;
 
     /// <summary>The arm buttons' tooltip, with the platform's modifier spelled out.</summary>
-    public static string Tip => MenuKit.Keys(Loc.T("Arm for recording · ⌘-click to arm several tracks"));
+    public static string Tip => MenuKit.Keys(Loc.T("track_arming.arm_for_recording_click_to"));
 
     /// <summary>⌘ on macOS, Ctrl elsewhere: the "add to the armed set" modifier.</summary>
     public static bool IsAdditive(Avalonia.Input.KeyModifiers m)
         => (m & (OperatingSystem.IsMacOS() ? Avalonia.Input.KeyModifiers.Meta : Avalonia.Input.KeyModifiers.Control)) != 0;
+
+    /// <summary>⌥ (Alt): act on one track of a linked group, bypassing the link (specs/076).</summary>
+    public static bool IsBypass(Avalonia.Input.KeyModifiers m) => (m & Avalonia.Input.KeyModifiers.Alt) != 0;
 }

@@ -95,7 +95,7 @@ public sealed partial class ArrangementView
         return "";
     }
     private static string SendLevelText(double v) => v <= 0.005 ? "–" : NotaNum.Str(v * 100, "0");
-    private static string SendTip(int bus, string name, double v) => Loc.F("Send {0} · {1}", SendLetter(bus), name) + " · " + NotaNum.Pct(v);
+    private static string SendTip(int bus, string name, double v) => Loc.F("arrangement.send", SendLetter(bus), name) + " · " + NotaNum.Pct(v);
 
     /// <summary>The send row for a track card: one inline knob per return. <paramref name="contentW"/>
     /// is the width the card's controls have; cells drop their letter and level below it.</summary>
@@ -130,7 +130,7 @@ public sealed partial class ArrangementView
                 if (shown is not null) shown.Text = SendLevelText(v);
                 ToolTip.SetTip(cell, SendTip(b, name, v));
             });
-            ValueEntry.Attach(knob, Loc.F("Send {0}", SendLetter(bus)), value);
+            ValueEntry.Attach(knob, Loc.F("common.send", SendLetter(bus)), value);
             _sendKnobs.Add((t.Id, bus, knob, value, cell, name));
             Grid.SetColumn(cell, i);
             row.Children.Add(cell);

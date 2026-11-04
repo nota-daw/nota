@@ -101,6 +101,11 @@ on a pool of render threads, export and freeze use every core, and an idle engin
   loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
   pattern going across the seam.
 - **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).
+- **Discard and retry take** (⌘. / Ctrl+., Transport menu, palette, MCP `retry_take`): drops
+  the take being recorded — audio, loop passes, notes, controllers, automation, with no undo
+  step — and records again. The Arrangement goes back to where the transport was started
+  (the take's start with the count-in again, or the Play position for a punch-in); a Session
+  slot records again from the next launch quantum, shown as waiting, while other clips play on.
 - **Transport shortcuts** (Space play/stop, Enter stop, R/M/A, clip copy-paste, typing
   notes, undo/redo) work in detached windows too.
 
@@ -235,6 +240,15 @@ docks as a panel under any of the three, or floats in its own window — see
 
 - **Track types**: Audio, MIDI/Instrument, Return, Master, **Group** (nestable submixes —
   ⌘/Ctrl+G to group, ⌘/Ctrl+Shift+G to ungroup).
+- **Linked groups** — a group's **Link** key (a chain link on its header, its Mixer and
+  Session strip, and **Link tracks** in its menu) ties the tracks below it together, nested
+  groups included. Arming one arms them all; clicking a clip also selects the clips with the
+  same start and end on the other tracks, and moving, trimming, fading, splitting,
+  duplicating, copying, cutting or deleting it acts on them too, as one undo step (a clip
+  moved to another track takes its partners along in time only); a time range on one track
+  spans the group. ⌥-click (Alt-click) a clip or an arm to act on one track. Linked tracks
+  show a chain link before their name. Saved with the project; MCP `set_group_link` /
+  `get_group_link`.
 - **Adding a track**: the `+ Instrument` / `+ Audio` / `+ Return` buttons above the
   arrangement, or the context menu — right-click the empty space below the tracks, or use
   `Add track ▸` in a track's own menu (the new track goes right after that track, or inside
@@ -470,8 +484,14 @@ docks as a panel under any of the three, or floats in its own window — see
   Operator, Pentad, Consort). The sustain pedal holds released keys on every melodic built-in
   (Keys and Mosaic model their own damper; drums ignore it); a re-struck held key restarts.
   MCP `get_clip_controllers` / `set_clip_controller`.
+  - **Multiple controller lanes in the piano roll** — **+ lane** below the sidebar entries
+    adds independent CC lanes. Each lane has a controller-name/CC-number dropdown and
+    adjacent **×** to hide it while preserving data, plus a **127 / 64 / 0** value scale.
+    Extra lanes scroll vertically and share the notes' horizontal zoom and position.
+    Stacked clips scroll in their strip to keep notes visible. Drag the divider above Velocity
+    or a CC lane to resize it; heights return across editor reopening and restarts.
   - **Controller lane in the piano roll** — the fifth tab of the lane under the notes edits
-    any controller: click the active tab for a picker (the clip's controllers first, then
+    any controller: use its in-lane dropdown (the clip's controllers first, then
     Sustain, Mod wheel, Pitch wheel, Channel pressure, Expression, Breath and **Other CC**).
     Pedals (CC64–69) are on/off blocks — drag to draw, move or resize one on the grid (⌘ free),
     double-click or Delete removes it; other controllers are a curve — drag to draw (⌥ for a
@@ -1405,14 +1425,22 @@ audio effects after it keep running and keep their settings; saved with the proj
   when you select a track or clip** (off by default: a double-click opens it). Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
-- **Language** (Appearance): the interface language — **English** (default) or **Français**,
-  each shown in its own name in a drop-down. The choice is saved; it applies after a restart,
-  and the row beside the list says so, with a **Restart** button that closes Nota by its usual
-  path (unsaved changes first) and starts it again. Menus, panels, dialogs, tooltips, status
-  and error messages and the command palette follow the language; device and parameter names,
-  and anything you typed, stay as they are. Another language is one JSON file in
-  `src/managed/Nota.App/Languages/`; a text it does not cover shows in English. On macOS the system's own text (application menu, open and save panels) follows the language from the next start. The Remote
-  phone page, MCP tool descriptions and logs are not translated.
+- **Language** (Appearance): the interface language. Nota ships in **English**; every other
+  language is downloaded from [nota-translations](https://github.com/nota-daw/nota-translations).
+  The drop-down lists English, the installed languages and those available for download, each
+  in its own name with how complete it is for this version; choosing one downloads it
+  (checked against its published size and checksum) and keeps it for offline use. **Update**
+  appears when a newer translation is published, **Remove** deletes one, and **Load file…**
+  runs Nota in a language file from disk, listing the entries it cannot use. The choice applies
+  after a restart, and the row says so, with a **Restart** button that closes Nota by its usual
+  path (unsaved changes first). A stored language that is not installed yet is fetched in the
+  background at start and the status bar offers the restart; with update checks off, Nota asks
+  the network only when you click. Menus, panels, dialogs, tooltips, status and error messages
+  and the command palette follow the language; device and parameter names, and anything you
+  typed, stay as they are; a text a language lacks shows in English. `NOTA_UI_LANGUAGE` (a
+  code or a language file's path) sets the language for one run. On macOS the system's own
+  text (application menu, open and save panels) follows the language from the next start. The
+  Remote phone page, MCP tool descriptions and logs are not translated.
 - **Shortcuts**: the shortcut list.
 - Settings, logs and autosaves live in `~/Library/Application Support/Nota/` (macOS) and
   `%APPDATA%\Nota` (Windows).
@@ -1428,13 +1456,14 @@ appears in the UI immediately.
 
 Coverage:
 - **Transport**: play/stop, tempo, time signature, loop, metronome, loop record mode
-  (`set_loop_record_mode`; `get_transport` reports it).
+  (`set_loop_record_mode`; `get_transport` reports it), discard and retry the take being
+  recorded (`retry_take`).
 - **Project**: `get_overview` (a full snapshot); the arrangement's sections
   (`list_sections`, `set_sections`) and rearranging the song by them (`move_section`,
   `duplicate_section_with_content`, `delete_section_with_content`); version history — `list_versions` (with what
   each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
   star). Deleting versions stays with the user.
-- **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
+- **Tracks**: add and remove, volume/pan/mute/solo, groups and their Link, sends.
 - **Instruments**: add by kind, read and write parameters (by index or by stable id), turn
   on or off (`set_device_bypass` with device index -1; `get_overview` shows it), replace with
   another built-in or an empty rack (`set_track_instrument`); read / shape Nota Keys in

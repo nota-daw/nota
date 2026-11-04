@@ -96,7 +96,7 @@ public partial class MainWindow
     {
         Child = new TextBlock
         {
-            Text = Loc.T("Select a clip in the arrangement to edit it here"),
+            Text = Loc.T("main.detail_window.select_a_clip_in_the"),
             FontSize = 12,
             Foreground = NotaPalette.TextTertiary,
             HorizontalAlignment = HorizontalAlignment.Center,
