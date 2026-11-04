@@ -44,6 +44,16 @@ internal static class GroupMembershipTests
         yield return (!Order(e).Contains(g), "groups: Ungroup dissolves the group");
         yield return (e.Undo() && Order(e).Contains(g) && e.TrackDeviceCount(g) == fx && Info(e, inner).GroupId == g,
             "groups: undoing an Ungroup brings the group back with its devices");
+
+        // Members need not be adjacent: grouping p and q around an ungrouped x leaves engine
+        // order [h, p, x, q]. p must land right after the group's rows, before x.
+        using var e2 = new NotaEngine();
+        int p = e2.AddAudioTrack(), x = e2.AddAudioTrack(), q = e2.AddAudioTrack();
+        int h = e2.CreateGroup(new[] { p, q });
+        yield return (Order(e2).SequenceEqual(new[] { h, p, x, q }), "groups: (members around an ungrouped track)");
+        yield return (TrackGroups.LeaveGroup(e2, p) && Info(e2, p).GroupId == -1
+            && Order(e2).IndexOf(p) > Order(e2).IndexOf(h) && Order(e2).IndexOf(p) < Order(e2).IndexOf(x),
+            "groups: with non-adjacent members the track still lands right after the group, before the next track");
     }
 
     private static NotaTrackInfo Info(NotaEngine e, int id)
