@@ -15,6 +15,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Nota.App;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Presentation;
 
 internal static class Program
@@ -86,7 +87,7 @@ internal static class Program
                     window.UpdateLayout();
                 }
                 Drag(primary,50);Drag(Row(0),45);Drag(Row(1),85);
-                Require(primary.Height==122 && Row(0).Height==157 && Row(1).Height==197,
+                Require(primary.Height==142 && Row(0).Height==157 && Row(1).Height==197,
                     "actual pointer drags resize Velocity and two CC lanes independently");
                 var second=Lane(1);
                 second.GetType().GetProperty("Controller",Hidden)!.SetValue(second,Ctl(0));
@@ -99,7 +100,7 @@ internal static class Program
                 var reopenedAdd=reopened.GetVisualDescendants().OfType<Button>().Single(b=>b.Name=="AddControllerLane");
                 reopenedAdd.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));reopenedAdd.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));reopenedWindow.UpdateLayout();
                 var restored=(IList)Get(reopened,"_controllerLanes")!;
-                Require(((Grid)Get(reopened,"_laneRow")!).Height==122
+                Require(((Grid)Get(reopened,"_laneRow")!).Height==142
                     && ((Grid)restored[0]!.GetType().GetProperty("Row")!.GetValue(restored[0])!).Height==157
                     && ((Grid)restored[1]!.GetType().GetProperty("Row")!.GetValue(restored[1])!).Height==197,
                     "editor reopening restores Velocity and corresponding CC lane heights");
@@ -142,7 +143,16 @@ internal static class Program
                 Require(commits==1,"view, theme and zoom operations never write controller data");
                 CheckFoldedLanes(root, Require);
                 CheckPrimaryLaneTabs(root, settings, Require);
+                CheckInlineControls(root, Require);
                 CheckDockedNotes(root, (MainWindow)lifetime.MainWindow!, Require);
+                var preferences=new PreferencesWindow(new SettingsViewModel(settings));
+                typeof(PreferencesWindow).GetField("_shortcutFilter",Hidden)!.SetValue(preferences,"controller");
+                Call(preferences,"Select",8);preferences.Show();preferences.UpdateLayout();
+                Require(preferences.GetVisualDescendants().OfType<TextBlock>()
+                    .Any(t=>t.Text=="Click a lane's controller dropdown"),"Shortcuts pane describes the in-lane controller dropdown");
+                using(var bitmap=new RenderTargetBitmap(new PixelSize(880,640)))
+                {bitmap.Render(preferences);bitmap.Save(Path.Combine(root,"controller-shortcuts.png"));}
+                preferences.Close();
                 File.WriteAllText(Path.Combine(root,"cc-results.json"),JsonSerializer.Serialize(checks,new JsonSerializerOptions{WriteIndented=true}));
                 window.Close();
                 // Drain theme-change work before disposing the real app's engine.
@@ -217,6 +227,14 @@ internal static class Program
         require(ReferenceEquals(window.InputHitTest(notePoint),grid),"note grid receives pointer hits in the minimum docked editor");
         Click(grid,notePoint);
         require(roll.SelectionIndices.Contains(0),"a note can be selected in the minimum docked editor");
+        var stacked=Enumerable.Range(0,12).Select(i=>new OpenClip(i,0,0,8)).ToArray();
+        roll.SetClips(new ClipSet(stacked,0,0),stacked.Select(c=>new ClipNotes(c.TrackId,0,[new NotaNote(60,2,1,.8f)])).ToArray(),_=>Brushes.Gray);
+        Pump();
+        var stripScroll=(ScrollViewer)Get(roll,"_clipStripScroll")!;
+        require(body.Viewport.Height>=48 && stripScroll.Extent.Height>stripScroll.Viewport.Height,
+            "real minimum docked host retains notes with twelve stacked clips and extra CC lanes");
+        roll.SetActiveClip(11);Pump();
+        require(body.Viewport.Height>=48,"changing the active stacked clip keeps docked notes visible");
         Call(window,"DockMixer");window.UpdateLayout();
         frame=new DispatcherFrame();DispatcherTimer.RunOnce(()=>frame.Continue=false,TimeSpan.FromMilliseconds(200));Dispatcher.UIThread.PushFrame(frame);window.UpdateLayout();
         var panel=window.FindControl<Border>("DetailPanel")!;
@@ -290,7 +308,7 @@ internal static class Program
             require(Get(roll,"_laneMode")!.ToString()==expected,$"pointer click selects {expected} after shrinking primary lane");
         }
         ClickTab(4,"Controller");ClickTab(0,"Velocity");ClickTab(1,"Bend");ClickTab(2,"Pressure");ClickTab(3,"Slide");
-        require(row.Height==72,"all primary modes retain a 72-pixel minimum");
+        require(row.Height==92,"all primary modes retain room for five tabs and the add action");
         Call(roll,"AddControllerLane");window.UpdateLayout();
         var lanes=(IList)Get(roll,"_controllerLanes")!;
         require(((Grid)lanes[0]!.GetType().GetProperty("Row")!.GetValue(lanes[0])!).Height==48,
@@ -298,11 +316,135 @@ internal static class Program
         window.Close();
         roll=NewRoll(new Nota.Infrastructure.SettingsService());
         window=new Window {Content=roll,Width=1000,Height=300};window.Show();window.UpdateLayout();
-        require(((Grid)Get(roll,"_laneRow")!).Height==72,"reopened short editor clamps saved 48-pixel primary height to 72");
+        require(((Grid)Get(roll,"_laneRow")!).Height==92,"reopened short editor fits five tabs and the add action above a saved 48-pixel height");
         ClickTab(4,"Controller");
         require(((ScrollViewer)Get(roll,"_bodyScroll")!).Viewport.Height>=40,"short editor keeps note viewport with reachable primary tabs");
         require(commits==0,"shrinking and switching primary tabs never commit controller data");
         window.Close();settings.Current.PianoRollLaneHeights=previous;settings.Save();
+    }
+
+    static void CheckInlineControls(string root, Action<bool,string> require)
+    {
+        int commits=0;
+        var data=new Dictionary<int,AutomationPoint[]> { [1]=[new(0,.2f),new(6,.8f)], [11]=[new(2,.4f)] };
+        var roll=new PianoRollView { ControllersInClip=()=>data.Keys.ToArray(),
+            GetController=id=>data.GetValueOrDefault(id,[]), SetController=(id,p)=>{data[id]=p;commits++;} };
+        roll.SetNotes([new NotaNote(60,2,1,.8f)],8);
+        var window=new Window {Content=roll,Width=1000,Height=720};window.Show();window.UpdateLayout();
+        void Layout()
+        {
+            window.UpdateLayout();var frame=new DispatcherFrame();
+            DispatcherTimer.RunOnce(()=>frame.Continue=false,TimeSpan.FromMilliseconds(30));
+            Dispatcher.UIThread.PushFrame(frame);window.UpdateLayout();
+        }
+        Button ButtonIn(Control parent,string name)=>parent.GetVisualDescendants().OfType<Button>().Single(b=>b.Name==name);
+        void Click(Button button)=>button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var add=ButtonIn(roll,"AddControllerLane");
+        var tabs=(Control)Get(roll,"_laneTabs")!;
+        require(add.TranslatePoint(default,roll)!.Value.Y>=tabs.TranslatePoint(default,roll)!.Value.Y+tabs.Bounds.Height,
+            "compact add action sits below the primary sidebar entries");
+        require(!roll.GetVisualDescendants().OfType<TextBlock>().Any(t=>t.Text=="CC lanes"),
+            "full-width CC lanes toolbar is absent");
+        Click(add);Click(add);Layout();
+        var lanes=(IList)Get(roll,"_controllerLanes")!;
+        Grid Row(int i)=>(Grid)lanes[i]!.GetType().GetProperty("Row")!.GetValue(lanes[i])!;
+        Control Lane(int i)=>(Control)lanes[i]!.GetType().GetProperty("Lane")!.GetValue(lanes[i])!;
+        int Controller(Control lane)=>(int)lane.GetType().GetProperty("ControllerId",Hidden)!.GetValue(lane)!;
+        var picker=ButtonIn(Row(0),"ControllerPicker");
+        var close=ButtonIn(Row(0),"RemoveControllerLane");
+        require(ToolTip.GetTip(picker)?.ToString()=="Mod wheel · CC 1",
+            "in-lane dropdown displays controller name and CC number");
+        require(picker.TranslatePoint(default,window)!.Value.Y<Lane(0).TranslatePoint(default,window)!.Value.Y
+            && close.TranslatePoint(default,window)!.Value.X>=picker.TranslatePoint(default,window)!.Value.X+picker.Bounds.Width,
+            "picker and adjacent close button occupy a header above the editable graph");
+        var point=picker.TranslatePoint(new Point(8,8),window)!.Value;
+        var hit=window.InputHitTest(point) as Visual;
+        require(hit is not null && (ReferenceEquals(hit,picker)||picker.IsVisualAncestorOf(hit)),
+            "dropdown receives pointer hits without hitting the graph");
+        Click(picker);Layout();
+        var menu=(MenuFlyout)FlyoutBase.GetAttachedFlyout(picker)!;
+        MenuItem Item(MenuFlyout flyout,string text)=>flyout.Items.OfType<MenuItem>().First(i=>i.Header?.ToString()==text);
+        Item(menu,"Expression · CC 11").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));menu.Hide();Layout();
+        require(Controller(Lane(0))==11 && Controller(Lane(1))==11 && commits==0,
+            "real dropdown selection changes only its lane and allows independent duplicate views");
+        require(ToolTip.GetTip(picker)?.ToString()=="Expression · CC 11",
+            "dropdown caption follows the selected controller");
+        window.Width=180;Layout();
+        var closePoint=close.TranslatePoint(new Point(close.Bounds.Width/2,10),window)!.Value;
+        hit=window.InputHitTest(closePoint) as Visual;
+        require(closePoint.X<window.Bounds.Width && hit is not null
+            && (ReferenceEquals(hit,close)||close.IsVisualAncestorOf(hit)),
+            "narrow lane keeps its close button reachable beside a shortened controller caption");
+        window.Width=1000;Layout();
+        Click(picker);Layout();menu=(MenuFlyout)FlyoutBase.GetAttachedFlyout(picker)!;
+        var stale=Item(menu,"Mod wheel · CC 1");
+        roll.SetNotes([new NotaNote(60,2,1,.8f)],8);
+        stale.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));menu.Hide();Layout();
+        require(Controller(Lane(0))==11,"dropdown opened before clip reload cannot apply stale selection");
+        Click(picker);Layout();menu=(MenuFlyout)FlyoutBase.GetAttachedFlyout(picker)!;
+        stale=Item(menu,"Mod wheel · CC 1");
+        var removed=Lane(0);Click(close);
+        stale.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));menu.Hide();Layout();
+        require(lanes.Count==1 && Controller(removed)==11 && commits==0 && data[1].Length==2,
+            "close hides only its lane and ignores the removed lane's pending dropdown callback");
+
+        Call(roll,"SelectController",1);Layout();
+        var primary=(Control)Get(roll,"_ctlLane")!;
+        var primaryPicker=ButtonIn((Control)Get(roll,"_primaryControllerBody")!,"ControllerPicker");
+        require(primaryPicker.IsVisible && ((Control)Get(roll,"_primaryControllerScale")!).IsVisible,
+            "primary controller lane has the same header and value scale");
+        Click(primaryPicker);Layout();menu=(MenuFlyout)FlyoutBase.GetAttachedFlyout(primaryPicker)!;
+        Item(menu,"Expression · CC 11").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));menu.Hide();Layout();
+        require(Controller(primary)==11 && Controller(Lane(0))==11,
+            "primary dropdown preserves independently selected extra lanes");
+        Click(ButtonIn((Control)Get(roll,"_primaryControllerBody")!,"RemoveControllerLane"));Layout();
+        require(Get(roll,"_laneMode")!.ToString()=="Velocity" && commits==0,
+            "primary close returns to Velocity without deleting controller data");
+
+        void CheckScale(Control lane,Control scale,string label)
+        {
+            double top=(double)Call(lane,"ValueToY",1f)!;
+            double mid=(double)Call(lane,"ValueToY",64f/127)!;
+            double bottom=(double)Call(lane,"ValueToY",0f)!;
+            require(!scale.IsHitTestVisible && top<mid && mid<bottom
+                && Math.Abs((float)Call(lane,"YToValue",mid)!-64f/127)<.00001
+                && lane.TranslatePoint(new Point(0,bottom),scale)!.Value.Y<scale.Bounds.Height,
+                label+" scale aligns endpoints and MIDI 64 with graph pointer mapping");
+        }
+        Call(roll,"ResizeLane","extra:1:cc:11",48.0);Layout();
+        var scale=Row(0).GetVisualDescendants().Single(c=>c.Name=="ControllerValueScale");
+        CheckScale(Lane(0),(Control)scale,"minimum-height extra lane");
+        Call(roll,"ResizeLane","extra:1:cc:11",197.0);Layout();
+        CheckScale(Lane(0),(Control)scale,"resized extra lane");
+        Call(roll,"SelectController",1);Layout();
+        CheckScale(primary,(Control)Get(roll,"_primaryControllerScale")!,"primary lane");
+        Call(roll,"ZoomAt",2.0,2.0);Call(roll,"SetScrollBeats",1.0);Layout();
+        var grid=(Control)Get(roll,"_gridControl")!;
+        require(Math.Abs(Lane(0).TranslatePoint(default,window)!.Value.X-grid.TranslatePoint(default,window)!.Value.X)<.01,
+            "header and scale preserve shared note/controller beat origin through zoom and scroll");
+
+        var clips=Enumerable.Range(0,12).Select(i=>new OpenClip(i,0,0,8)).ToArray();
+        var notes=clips.Select(c=>new ClipNotes(c.TrackId,0,[new NotaNote(60,2,1,.8f)])).ToArray();
+        roll.SetClips(new ClipSet(clips,0,0),notes,_=>Brushes.Gray);
+        window.Height=300;Layout();
+        var strip=(Control)Get(roll,"_strip")!;
+        var stripScroll=(ScrollViewer)Get(roll,"_clipStripScroll")!;
+        var body=(ScrollViewer)Get(roll,"_bodyScroll")!;
+        require(strip.Height==216 && stripScroll.Viewport.Height<strip.Height && body.Viewport.Height>=48,
+            "twelve stacked clips scroll in their strip while a short editor retains usable notes");
+        stripScroll.Offset=new Vector(0,stripScroll.Extent.Height);Layout();
+        require(stripScroll.Offset.Y>0,"last stacked clip remains reachable by scrolling");
+        point=add.TranslatePoint(new Point(add.Bounds.Width/2,10),window)!.Value;
+        hit=window.InputHitTest(point) as Visual;
+        require(hit is not null && (ReferenceEquals(hit,add)||add.IsVisualAncestorOf(hit)),
+            "sidebar add action remains clickable with stacked clips in a short editor");
+        int count=lanes.Count;Click(add);Layout();
+        require(lanes.Count==count+1 && body.Viewport.Height>=48,"adding a lane with stacked clips preserves the note viewport");
+        roll.SetActiveClip(11);Layout();
+        require(commits==0 && lanes.Count==count+1,"switching stacked active clips preserves lane views and MIDI");
+        using(var bitmap=new RenderTargetBitmap(new PixelSize(1000,300)))
+        {bitmap.Render(window);bitmap.Save(Path.Combine(root,"stacked-inline-cc.png"));}
+        window.Close();
     }
 
     static void CheckFoldedLanes(string root, Action<bool,string> require)

@@ -53,9 +53,12 @@ public sealed partial class PianoRollView
     internal void SetLaneMode(LaneMode m)
     {
         if (m == _laneMode) return;
+        _ctlLane.ResetGesture();
         _laneMode = m;
         if (m == LaneMode.Controller && _laneCtl < 0) _laneCtl = DefaultController();
-        _velHost.Child = m switch { LaneMode.Velocity => _vel, LaneMode.Controller => _ctlLane, _ => _expr };
+        UpdateControllerPicker(_primaryControllerPicker, _laneCtl < 0 ? MidiController.Sustain : _laneCtl);
+        _primaryControllerScale.IsVisible = m == LaneMode.Controller;
+        _velHost.Child = m switch { LaneMode.Velocity => _vel, LaneMode.Controller => _primaryControllerBody, _ => _expr };
         FitControllerLanes();
         Invalidate();
         _laneTabs.InvalidateVisual();
@@ -133,7 +136,7 @@ public sealed partial class PianoRollView
         return c[^1].Value;
     }
 
-    // ---- the gutter: VEL · BEND · PRES · SLIDE · <controller> ----------------------------------
+    // ---- the gutter: velocity, expression and controller modes ------------------------------
 
     private sealed class LaneTabs : Control
     {
@@ -141,23 +144,12 @@ public sealed partial class PianoRollView
             { (LaneMode.Velocity, Loc.T("Vel")), (LaneMode.Bend, Loc.T("Bend")), (LaneMode.Pressure, Loc.T("Pres")), (LaneMode.Slide, Loc.T("Slide")), (LaneMode.Controller, "") };
         // Five rows fit the velocity lane's 72 px.
         private const double Top = 4, RowStep = 13;
-        private const double ChevronW = 7;
         private static readonly Typeface TabFace = new(NotaFonts.Mono.FontFamily, FontStyle.Normal, FontWeight.Bold);
         private readonly PianoRollView _o;
         private int _hover = -1;
         public LaneTabs(PianoRollView o) { _o = o; Cursor = new Cursor(StandardCursorType.Hand); }
 
         private FormattedText Text(string s, IBrush ink) => new(s, NotaNum.Culture, FlowDirection.LeftToRight, TabFace, 9, ink);
-
-        // The controller tab names the controller when it fits beside the picker chevron.
-        private FormattedText ControllerLabel(IBrush ink)
-        {
-            int ctl = _o._laneCtl >= 0 ? _o._laneCtl : _o.DefaultController();
-            var ft = Text(MidiController.ShortName(ctl), ink);
-            if (ft.Width <= Bounds.Width - ChevronW - 6) return ft;
-            ft = Text(ctl < 128 ? $"CC{ctl}" : "CC", ink);
-            return ft.Width <= Bounds.Width - ChevronW - 6 ? ft : Text("CC", ink);
-        }
 
         public override void Render(DrawingContext ctx)
         {
@@ -167,16 +159,10 @@ public sealed partial class PianoRollView
                 bool on = Tabs[i].Mode == _o._laneMode;
                 var ink = on ? TabActive : i == _hover ? KeyLabelHot : LabelText;
                 bool ctl = Tabs[i].Mode == LaneMode.Controller;
-                var ft = ctl ? ControllerLabel(ink) : Text(Tabs[i].Label, ink);
+                var ft = Text(ctl ? "CC" : Tabs[i].Label, ink);
                 double y = Top + i * RowStep;
-                double x = (Bounds.Width - ft.Width - (ctl ? ChevronW : 0)) / 2;
+                double x = (Bounds.Width - ft.Width) / 2;
                 ctx.DrawText(ft, new Point(x, y));
-                if (ctl)
-                {
-                    // The caret marks that the tab opens the controller picker.
-                    double cx = x + ft.Width + 2;
-                    Glyph.Draw(ctx, GlyphKind.CaretDown, new Rect(cx, y + (ft.Height - 6) / 2, 6, 6), ink);
-                }
                 if (on) ctx.FillRectangle(TabActive, new Rect(0, y + 1, 2, ft.Height - 2));
             }
         }
@@ -191,8 +177,7 @@ public sealed partial class PianoRollView
         {
             int i = RowAt(e.GetPosition(this));
             if (i < 0 || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
-            if (Tabs[i].Mode == LaneMode.Controller && _o._laneMode == LaneMode.Controller) _o.ShowControllerPicker(this);
-            else _o.SetLaneMode(Tabs[i].Mode);
+            _o.SetLaneMode(Tabs[i].Mode);
             e.Handled = true;
         }
 

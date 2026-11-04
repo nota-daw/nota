@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
@@ -94,9 +95,11 @@ public sealed partial class PianoRollView
     {
         _laneCtl = ctl;
         _ctlLane.ResetGesture();
+        UpdateControllerPicker(_primaryControllerPicker, ctl);
         if (_laneMode != LaneMode.Controller) SetLaneMode(LaneMode.Controller);
         FitControllerLanes();
         _ctlLane.InvalidateVisual();
+        _primaryControllerScale.InvalidateVisual();
         _laneTabs.InvalidateVisual();
     }
 
@@ -116,7 +119,7 @@ public sealed partial class PianoRollView
         foreach (int c in data) f.Items.Add(Item(c, ControllerLabel(c)));
         if (data.Length > 0) f.Items.Add(new Separator());
         foreach (int c in CommonControllers)
-            if (Array.IndexOf(data, c) < 0) f.Items.Add(Item(c, MidiController.Name(c)));
+            if (Array.IndexOf(data, c) < 0) f.Items.Add(Item(c, ControllerLabel(c)));
         f.Items.Add(new Separator());
         var other = new MenuItem { Header = Loc.T("Other CC") };
         for (int g = 0; g < 128; g += 16)
@@ -132,6 +135,7 @@ public sealed partial class PianoRollView
             other.Items.Add(grp);
         }
         f.Items.Add(other);
+        FlyoutBase.SetAttachedFlyout(anchor, f);
         f.ShowAt(anchor);
     }
 
@@ -152,6 +156,7 @@ public sealed partial class PianoRollView
         private static readonly IPen BlockEdgeHot = new Pen(NotaPalette.Accent, 1.5);
 
         private int Ctl => Controller ?? (_o._laneCtl < 0 ? MidiController.Sustain : _o._laneCtl);
+        internal int ControllerId => Ctl;
         private bool IsSwitch => MidiController.IsSwitch(Ctl);
         private bool Editable => _o.SetController is not null;
 
@@ -193,7 +198,7 @@ public sealed partial class PianoRollView
             => _free ? local : _o._set.ToLocal(_o._set.Active, _o.SnapBeat(Ed(local)));
         private double MinBlock => _free ? 1.0 / 32 : Math.Max(1.0 / 32, _o.SnapStep);
 
-        private double ValueToY(float v)
+        internal double ValueToY(float v)
         {
             var (lo, hi) = MidiController.Range(Ctl);
             double h = Bounds.Height;
@@ -392,8 +397,6 @@ public sealed partial class PianoRollView
 
             _o.DrawOutsideClip(ctx, w, h);
 
-            var name = new FormattedText(ControllerLabel(Ctl), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
-            ctx.DrawText(name, new Point(4, 3));
             if (c.Count == 0 && Editable && _drag == Drag.None)
             {
                 var hint = new FormattedText(IsSwitch ? Loc.T("Drag to draw a block") : Loc.T("Drag to draw"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);

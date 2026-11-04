@@ -21,6 +21,12 @@ namespace Nota.App;
 
 public sealed partial class PianoRollView
 {
+    private readonly ScrollViewer _clipStripScroll = new()
+    {
+        HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+        VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+    };
+
     private sealed class ClipStrip : Control
     {
         public const double RowH = 18;
@@ -52,6 +58,7 @@ public sealed partial class PianoRollView
             }
             _rows = Math.Max(1, rowEnds.Count);
             Height = _rows * RowH;
+            _o.FitControllerLanes();
             InvalidateVisual();
         }
 

@@ -3,15 +3,17 @@
 
 # User manual handoff
 
-The sibling nota-docs checkout is absent. Update the piano-roll/controller page and
-its RU twin, regenerate shortcuts and retake lane screenshots when it is available.
-No external documentation build is claimed.
+The local EN/RU piano-roll pages were updated for the in-lane redesign. A paired
+patch is included in `specs/083-inline-cc-controls/manual.patch` for submission to
+the separate nota-docs repository; this PR only updates the existing app branch.
+Validation status is recorded in that feature's validation report.
 
 ## English
 
-Use **+** below the piano roll to add controller lanes. Choose a controller separately
-for each lane and edit it with the usual CC tools. **−** hides a lane and preserves
-its MIDI data. Extra lanes scroll vertically and share the notes' horizontal position
+Use **+ lane** beneath the left sidebar entries to add controller lanes. Each lane's
+dropdown shows the controller name and CC number. The adjacent **×** hides the lane
+and preserves its MIDI data. The **127 / 64 / 0** scale follows the graph on the left.
+Extra lanes scroll vertically and share the notes' horizontal position
 and zoom. Drag the divider above Velocity or a CC lane to resize it. Heights are
 remembered when you reopen/restart and re-add the corresponding lane/controller.
 The docked MIDI Clip panel stops shrinking while notes and all five lane tabs are
@@ -20,9 +22,10 @@ both panels; hiding the Mixer releases that extra minimum.
 
 ## Русский
 
-Кнопка **+** под пианороллом добавляет дорожки MIDI-контроллеров. Для каждой дорожки
-можно выбрать свой контроллер и редактировать его обычными инструментами CC.
-Кнопка **−** скрывает дорожку, сохраняя MIDI-данные. Дополнительные дорожки
+Кнопка **+ lane** под списком слева добавляет дорожки MIDI-контроллеров. Внутри каждой
+дорожки есть список с именем контроллера и номером CC. Кнопка **×** рядом скрывает
+дорожку, сохраняя MIDI-данные. Слева от графика расположена шкала **127 / 64 / 0**.
+Дополнительные дорожки
 прокручиваются по вертикали и используют горизонтальную позицию и масштаб нот.
 Перетащите разделитель над Velocity или дорожкой CC, чтобы изменить её высоту.
 Высота сохраняется после повторного открытия и перезапуска, когда вы снова добавляете

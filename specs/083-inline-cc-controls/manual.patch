@@ -1,0 +1,91 @@
+diff --git a/src/content/docs/editing/piano-roll.mdx b/src/content/docs/editing/piano-roll.mdx
+index 3382706..eb62505 100644
+--- a/src/content/docs/editing/piano-roll.mdx
++++ b/src/content/docs/editing/piano-roll.mdx
+@@ -10,6 +10,7 @@ sources:
+   - src/managed/Nota.App/PianoRollView.cs
+   - src/managed/Nota.App/PianoRollView.Expression.cs
+   - src/managed/Nota.App/PianoRollView.Controllers.cs
++  - src/managed/Nota.App/PianoRollView.ControllerLanes.cs
+   - src/managed/Nota.App/PianoRollView.Fold.cs
+   - src/managed/Nota.Presentation/PianoRowMap.cs
+   - src/managed/Nota.App/ClipEditorView.cs
+@@ -130,18 +131,26 @@ size of a step are in [Settings ▸ Shortcuts](../../preferences/shortcuts/#velo
+ 
+ ## Controllers
+ 
+-The fifth tab in the lane's labels edits one MIDI controller over the whole clip — the sustain
+-pedal, the mod wheel, any CC. The tab shows the controller's short name and a small arrow. Click it to
+-show the lane; click it again to pick another controller:
++The **CC** tab shows a MIDI controller over the whole clip — the sustain pedal, mod wheel,
++or any CC. Use the dropdown inside the lane to select its controller. The dropdown shows
++the controller name and CC number, and offers:
+ 
+ - the controllers the clip already holds data for come first, marked with an icon;
+ - then **Sustain**, **Mod wheel**, **Pitch wheel**, **Channel pressure**, **Expression** and
+   **Breath**;
+ - **Other CC** lists every remaining controller number, in groups of 16.
+ 
+-The first time you open the tab it shows the first controller the clip has data for, or Sustain
+-if there is none. The lane names the controller in its top-left corner, and reads out the value
+-under the pointer on the right.
++The first time you open the tab it shows the first controller with data, or Sustain if there
++is none. **+ lane** below the sidebar entries adds independent controller lanes. Each has
++its own dropdown and an adjacent **×** to hide it without deleting its MIDI. Closing the
++primary controller lane returns it to Velocity.
++
++The **127 / 64 / 0** scale on the left aligns with the graph; the pitch wheel uses a signed
++scale. The value under the pointer appears on the right. The controls sit above the graph,
++so clicking them does not draw automation. Extra lanes scroll vertically and share the notes'
++horizontal zoom and position. Drag a lane's upper divider to resize it. Heights return when
++you reopen the editor or restart Nota and re-add the corresponding lane and controller.
++With many overlapping clips, scroll their strip to reach every clip while keeping notes visible.
+ 
+ **Pedals** — Sustain and the other on/off controllers (CC 64–69) — are drawn as blocks: the pedal
+ is down wherever a block is.
+diff --git a/src/content/docs/ru/editing/piano-roll.mdx b/src/content/docs/ru/editing/piano-roll.mdx
+index 5bb1dc9..3cd91d3 100644
+--- a/src/content/docs/ru/editing/piano-roll.mdx
++++ b/src/content/docs/ru/editing/piano-roll.mdx
+@@ -10,6 +10,7 @@ sources:
+   - src/managed/Nota.App/PianoRollView.cs
+   - src/managed/Nota.App/PianoRollView.Expression.cs
+   - src/managed/Nota.App/PianoRollView.Controllers.cs
++  - src/managed/Nota.App/PianoRollView.ControllerLanes.cs
+   - src/managed/Nota.App/PianoRollView.Fold.cs
+   - src/managed/Nota.Presentation/PianoRowMap.cs
+   - src/managed/Nota.App/ClipEditorView.cs
+@@ -131,18 +132,27 @@ Velocity можно менять и прямо на сетке: наведите
+ 
+ ## Контроллеры
+ 
+-Пятая вкладка среди подписей дорожки правит один MIDI-контроллер на всём клипе: педаль
+-sustain, mod wheel, любой CC. На вкладке — короткое имя контроллера и маленькая стрелка. Нажмите,
+-чтобы показать дорожку; нажмите ещё раз, чтобы выбрать другой контроллер:
++Вкладка **CC** показывает MIDI-контроллер на всём клипе: педаль sustain, mod wheel
++или любой CC. Выберите контроллер в списке внутри дорожки. В нём видны имя и номер CC;
++варианты сгруппированы так:
+ 
+ - сначала идут контроллеры, для которых в клипе уже есть данные, — они помечены значком;
+ - затем **Sustain**, **Mod wheel**, **Pitch wheel**, **Channel pressure**, **Expression** и
+   **Breath**;
+ - **Other CC** — все остальные номера контроллеров, группами по 16.
+ 
+-Когда вы открываете вкладку впервые, она показывает первый контроллер с данными в клипе, а если
+-данных нет — Sustain. В левом верхнем углу дорожки написано имя контроллера, справа — значение под
+-указателем.
++При первом открытии вкладка показывает первый контроллер с данными, а если их нет — Sustain.
++Кнопка **+ lane** под списком слева добавляет независимые дорожки контроллеров. В каждой
++есть свой список и кнопка **×** рядом: она скрывает дорожку, сохраняя MIDI-данные.
++Закрытие основной дорожки контроллера возвращает панель к Velocity.
++
++Слева от графика расположена шкала **127 / 64 / 0**; у pitch wheel шкала знаковая.
++Значение под указателем видно справа. Элементы управления находятся над графиком,
++поэтому нажатие на них не рисует автоматизацию. Дополнительные дорожки прокручиваются
++по вертикали и используют горизонтальную позицию и масштаб нот. Потяните верхний
++разделитель дорожки, чтобы изменить её высоту. Высота сохраняется после открытия редактора
++и перезапуска Nota: добавьте ту же дорожку с тем же контроллером, чтобы восстановить её.
++Если клипы перекрываются, прокручивайте их полосу: все клипы остаются доступны, а ноты — видны.
+ 
+ **Педали** — Sustain и другие контроллеры «вкл/выкл» (CC 64–69) — рисуются блоками: педаль нажата
+ там, где есть блок.

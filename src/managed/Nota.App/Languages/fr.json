@@ -6,7 +6,6 @@
   "strings": {
     "Add controller lane": "Ajouter une piste de contrôleur",
     "Hide controller lane (keep its data)": "Masquer la piste de contrôleur (conserver ses données)",
-    "CC lanes": "Pistes CC",
     "Drag to resize lane": "Faire glisser pour redimensionner la piste",
     "Drag a lane divider": "Faire glisser un séparateur de piste",
     "Resize that velocity or controller lane · height is remembered": "Redimensionner cette piste de vélocité ou de contrôleur · la hauteur est mémorisée",
@@ -580,7 +579,6 @@
     "Add a point · on a point, delete it · right-click to clear the curve": "Ajouter un point · sur un point, le supprimer · clic droit pour effacer la courbe",
     "Double-click in an MPE lane": "Double-clic dans un couloir MPE",
     "Click the controller tab": "Clic sur l’onglet de contrôleur",
-    "Show a MIDI controller under the notes · click it again to pick another CC, the pitch wheel or channel pressure": "Afficher un contrôleur MIDI sous les notes · cliquer à nouveau pour choisir un autre CC, la molette de hauteur ou la pression de canal",
     "Drag in the Sustain lane": "Glisser dans le couloir Sustain",
     "Draw a pedal block on the grid · ⌘ off the grid · drag an edge to resize, the body to move · double-click or Delete removes it": "Dessiner un bloc de pédale sur la grille · ⌘ hors de la grille · glisser un bord pour redimensionner, le corps pour déplacer · double-clic ou Delete le supprime",
     "Drag in a controller lane": "Glisser dans un couloir de contrôleur",
@@ -3660,6 +3658,12 @@
       "other": "Supprimer {0} versions…"
     },
     "Delete versions": "Supprimer les versions",
+    "lane": "piste",
+    "Show the primary MIDI controller lane": "Afficher la piste principale de contrôleur MIDI",
+    "Click a lane's controller dropdown": "Cliquer sur la liste de contrôleurs d’une piste",
+    "Choose a CC, the pitch wheel or channel pressure for that lane": "Choisir un CC, le pitch bend ou la pression de canal pour cette piste",
+    "Controller lane buttons": "Boutons des pistes de contrôleur",
+    "Add a lane from the sidebar · hide it with the adjacent close button without deleting MIDI data": "Ajouter une piste depuis la barre latérale · la masquer avec le bouton de fermeture adjacent sans supprimer les données MIDI",
     "Delete {0} versions? Audio that only they use is deleted from the project folder too. This can't be undone.": {
       "one": "Supprimer {0} version ? L’audio qu’elle seule utilise est aussi supprimé du dossier du projet. Cette action est irréversible.",
       "other": "Supprimer {0} versions ? L’audio que seules elles utilisent est aussi supprimé du dossier du projet. Cette action est irréversible."
