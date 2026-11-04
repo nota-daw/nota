@@ -56,7 +56,8 @@ public sealed class DrumPatternView : UserControl
 
     private int _res = _resPersist;
     private int _steps, _winStart, _win;
-    private int _builtBpb;   // the bar length the ruler and bar shading were built with
+    private int _builtBpb;
+    private int _heldNote = -1;   // the pad name cell being auditioned, so a rebuild can release it   // the bar length the ruler and bar shading were built with
     private int _selRow = -1;
     private int _paint;                    // 0 = idle, 1 = painting hits in, 2 = painting them out
     private bool _dragging;                // a paint / velocity gesture owns the grid
@@ -227,8 +228,18 @@ public sealed class DrumPatternView : UserControl
 
     // ---- build ------------------------------------------------------------
 
+    // A held pad's cell is thrown away by a rebuild (a new meter, pads or length) before its
+    // release arrives, so the rebuild lets the note go itself.
+    private void ReleaseHeld()
+    {
+        if (_heldNote < 0) return;
+        _e.TrackNoteOff(TrackId, _heldNote);
+        _heldNote = -1;
+    }
+
     private void Rebuild()
     {
+        ReleaseHeld();
         _pads = ScanPads();
         _steps = StepCount();
         _builtBpb = BeatsPerBar;
@@ -399,10 +410,13 @@ public sealed class DrumPatternView : UserControl
         {
             e.Handled = true;
             SelectRow(r);
+            ReleaseHeld();
             _e.TrackNoteOn(TrackId, pad.Note, 1.0f);   // audition this rack only, as the pad grid does (#307)
+            _heldNote = pad.Note;
             e.Pointer.Capture(cell);
         };
-        cell.PointerReleased += (_, e) => { _e.TrackNoteOff(TrackId, pad.Note); e.Pointer.Capture(null); };
+        cell.PointerReleased += (_, e) => { ReleaseHeld(); e.Pointer.Capture(null); };
+        cell.PointerCaptureLost += (_, _) => ReleaseHeld();
         _nameCells[r] = cell;
         _nameLabels[r] = name;
         return cell;
