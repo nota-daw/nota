@@ -31,6 +31,163 @@ internal static class RetryTakeTests
         foreach (var r in SessionMidi()) yield return r;
         foreach (var r in SessionAudio()) yield return r;
         foreach (var r in SessionCountIn()) yield return r;
+        foreach (var r in AutomationOnAnotherTrack()) yield return r;
+        foreach (var r in EditsMadeMeanwhile()) yield return r;
+        foreach (var r in DisarmedTakeIsKept()) yield return r;
+        foreach (var r in SessionHeldIntoRelaunch()) yield return r;
+        foreach (var r in SessionToggleSlot()) yield return r;
+        foreach (var r in SessionAudioTempoChange()) yield return r;
+    }
+
+    // Review of #486. A lane written on a track the take doesn't record goes with the take too.
+    private static IEnumerable<(bool, string)> AutomationOnAnotherTrack()
+    {
+        using var e = Armed(out int t);
+        int o = e.AddInstrumentTrack();
+        int lanes = e.AutomationLaneCount(o);
+        e.SetCountIn(0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.5);
+        e.BeginAutomationWrite(o, AutomationTarget.Volume, -1, -1, "");
+        Beats(e, 0.5);
+        e.EndAutomationWrite(o, AutomationTarget.Volume, -1, -1, "");
+        bool wrote = e.AutomationLaneCount(o) > lanes;
+        e.RetryTake();
+        Beats(e, 0.01);
+        yield return (wrote && e.AutomationLaneCount(o) == lanes,
+            $"retry automation elsewhere: another track's lane written in the take goes too ({lanes} → {e.AutomationLaneCount(o)})");
+        e.SetRecording(false);
+        e.StopTransport();
+    }
+
+    // An edit made during the take keeps its undo step, and undoing it doesn't bring the take back.
+    private static IEnumerable<(bool, string)> EditsMadeMeanwhile()
+    {
+        using var e = Armed(out int t);
+        int o = e.AddInstrumentTrack();
+        e.SetCountIn(0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.5);
+        Tap(e, 60, 0.5);
+        e.AddMidiClip(o, 8, 4);                 // the user's own edit, mid-take
+        e.RetryTake();
+        Beats(e, 0.5);
+        Tap(e, 62, 0.5);
+        e.SetRecording(false);
+        e.Poll();
+        e.StopTransport();
+        bool kept = Clips(e, o).Count == 1;
+        e.Undo();                               // the kept take
+        bool takeGone = Notes(e, t).Count == 0 && Clips(e, o).Count == 1;
+        e.Undo();                               // the edit made during the discarded take
+        bool editGone = Clips(e, o).Count == 0 && Notes(e, t).All(n => n.Note.Pitch != 60);
+        yield return (kept && takeGone && editGone,
+            $"retry: an edit made meanwhile keeps its undo step, without the discarded take in it (kept {kept}, take undone {takeGone}, edit undone {editGone})");
+    }
+
+    // Disarming the track ends (and keeps) its take: a retry afterwards has nothing to discard.
+    private static IEnumerable<(bool, string)> DisarmedTakeIsKept()
+    {
+        using var e = Armed(out int t);
+        e.SetCountIn(0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.5);
+        Tap(e, 60, 0.5);
+        e.SetTrackArmed(t, false);
+        e.Poll();
+        var r = e.RetryTake();
+        yield return (r == RetryTakeResult.None && Notes(e, t).Any(n => n.Note.Pitch == 60),
+            $"retry after disarm: the kept take stays ({r})");
+        e.SetRecording(false);
+        e.StopTransport();
+    }
+
+    // A key pressed while the retried slot waits and released after it relaunched: the new
+    // take holds it from the relaunch — no note wrapped round the open-ended slot.
+    private static IEnumerable<(bool, string)> SessionHeldIntoRelaunch()
+    {
+        using var e = Armed(out int t);
+        e.SetLaunchQuant(4.0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.Play();
+        Beats(e, 0.5);
+        e.RecordSessionSlot(t, 0);
+        Beats(e, 4.0);                          // recording from beat 4
+        Tap(e, 60, 0.5);
+        e.RetryTake();                          // waits for beat 8
+        Beats(e, 1.0);
+        e.SendController(1, 0.7f);              // played while pending: not part of the take
+        e.NoteOn(64, 0.8f);
+        Beats(e, 2.5);                          // past the relaunch at 8
+        e.NoteOff(64);
+        Beats(e, 0.1);
+        e.StopSessionRecord();
+        Beats(e, 0.05);
+        var notes = e.GetSessionNotes(t, 0);
+        var n64 = notes.Where(n => n.Pitch == 64).ToList();
+        yield return (notes.All(n => n.Pitch != 60) && n64.Count == 1 && n64[0].StartBeat < 0.1 && n64[0].LengthBeats < 1.0,
+            $"retry session held key: starts with the relaunched take ({string.Join(",", notes.Select(n => $"{n.Pitch}@{n.StartBeat:F2}+{n.LengthBeats:F2}"))})");
+        e.StopAllSession();
+        e.StopTransport();
+    }
+
+    // A Toggle slot relaunches for the retried take instead of stopping.
+    private static IEnumerable<(bool, string)> SessionToggleSlot()
+    {
+        using var e = Armed(out int t);
+        e.AddSessionMidiClip(t, 0, 4);
+        e.TryGetSessionClipProps(t, 0, out var p);
+        p.LaunchMode = 2;                        // Toggle
+        e.SetSessionClipProps(t, 0, p);
+        e.SetLaunchQuant(4.0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.Play();
+        Beats(e, 0.5);
+        e.RecordSessionSlot(t, 0);
+        Beats(e, 4.0);
+        e.RetryTake();
+        Beats(e, 4.0);                           // past the relaunch at 8
+        yield return (e.SessionPlayingSlot(t) == 0 && e.SessionSlotState(t, 0) == 4,
+            $"retry toggle slot: relaunches and records (playing {e.SessionPlayingSlot(t)}, state {e.SessionSlotState(t, 0)})");
+        e.StopSessionRecord();
+        e.StopAllSession();
+        e.StopTransport();
+    }
+
+    // A tempo change after the boundary doesn't move where the retried audio take begins.
+    private static IEnumerable<(bool, string)> SessionAudioTempoChange()
+    {
+        using var e = Resampling(out int rec);
+        e.SetCountIn(0);
+        e.SetLaunchQuant(4.0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.Play();
+        Beats(e, 0.5);
+        e.RecordSessionSlot(rec, 0);
+        Beats(e, 0.5);
+        e.RetryTake();                           // boundary at 4
+        Beats(e, 4.0);                           // ~1 beat past it at 120 BPM: 24000 frames
+        e.SetBpm(60);
+        Beats(e, 0.01);
+        var b = new float[Chunk * 2];
+        for (int done = 0; done < 48000; done += Chunk) { e.RenderOffline(b, Chunk, Sr); e.Poll(); }   // 1 s more
+        e.StopSessionRecord();
+        Beats(e, 0.01);
+        int idx = e.SessionSlotToArrangement(rec, 0, 32.0);
+        long frames = idx >= 0 && e.TryGetAudioClipInfo(rec, idx, out var ci) && e.TryGetSampleInfo(ci.SampleId, out var si) ? si.Frames : -1;
+        yield return (Math.Abs(frames - 72000) < 2500,
+            $"retry session audio + tempo change: keeps what followed the boundary ({frames} frames, ~72000 expected)");
+        e.StopAllSession();
+        e.StopTransport();
     }
 
     // A retry during a Session count-in starts the count-in over; nothing was recorded yet.

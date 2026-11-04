@@ -36,6 +36,12 @@ exactly (the take never was).
 - *Restore the whole pre-take graph* — throws away edits made on other tracks during the take.
 - *Wrap every take in an undo group* — changes the undo shape of ordinary takes; not needed.
 
+Review of #486: the take's own checkpoints (its clip, its first lane write) are marked
+(`UndoEntry::take`, via `TakePushScope`). A discard drops only those; checkpoints the user
+pushed meanwhile stay, with the take's tracks put back in their saved graphs, so undoing them
+later doesn't bring the take back. A track gets into the attempt before its first automation
+write, armed or not.
+
 Undo-depth trimming: `pushUndo` erases the oldest entry past `kMaxUndoDepth`; the take's base
 index is decremented with it (as `undoGroupBase_` already is).
 
@@ -51,6 +57,13 @@ stamps `RecordedNote` / `RecordedCtl` / `RecordedExpr` with the epoch it read fo
 new take by the existing "held across Record" logic (#56), from the new take's first moment.
 
 **Rationale**: lock-free, no allocation on the audio thread (AR-6), one relaxed load per block.
+
+Audio capture frames get the same fence (review of #486): each producer (input thread,
+internal-resampling tap) pushes a marker frame the first time it writes after the capture epoch
+moved, and loads the epoch before the capture gate; a retried take drops everything drained
+before that marker. A Session MIDI retry adopts the new take epoch on the audio thread only
+when its slot has relaunched, so notes and controllers played while it waits stay out and keys
+held across the relaunch start with it.
 
 **Alternatives**: draining the queues at discard time only — races with the block in flight.
 
@@ -82,8 +95,9 @@ internal start path, not by changing `setRecording`'s public behaviour.
   player and the transport alone.
 - Restart: MIDI → the existing `recordSessionSlot` path (launches on the next quantum; immediate
   when quantize is off). Audio → capture starts now, and a *retry start beat* is set to the next
-  launch-quantum boundary; `stopAudioRecording()` trims the captured frames before it (source
-  offset), so the take starts on the grid. No audio-thread change.
+  launch-quantum boundary; the drain notes the capture frame where the
+  playhead crossed it (at the tempo of that moment) and `stopAudioRecording()` trims what came
+  before, so the take starts on the grid.
 - New slot state **5 = record pending**: `recording_` for this slot but MIDI player not yet
   playing it, or audio playhead before the retry start beat. Callers that test `!= 0` / `>= 2`
   keep working (5 is "active, not empty").

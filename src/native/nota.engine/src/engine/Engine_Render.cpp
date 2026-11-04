@@ -431,8 +431,6 @@ void Engine::poll() {
 
     // Session-slot recording (M5-4): notes are already loop-local; append into the slot.
     if (recordSessionScene_ >= 0 && recordSessionTrackId_ > 0) {
-        // A retried take (specs/078) records from its launch quantum: notes ended before it go.
-        if (!std::isnan(retryStartBeat_) && transport_.uiPositionBeats() < retryStartBeat_) batch.clear();
         if (batch.empty() && !ctlWork) return;
         auto st = findTrackAuthoring(recordSessionTrackId_);
         if (!st || recordSessionScene_ >= static_cast<int32_t>(st->sessionSlots.size())) return;
@@ -918,9 +916,15 @@ void Engine::drainCommands() {
             seekedThisBlock_ = true;
             break;
         case CommandType::TakeRestart: // specs/078: the blocks from here belong to the retried take
-            rtTakeEpoch_ = static_cast<uint32_t>(c.i0);
-            rtTakeRestart_ = true;
-            if (c.i1 != 0) captureGate_.store(true, std::memory_order_relaxed);
+            if ((c.i1 & 2) != 0) { // a Session MIDI take: from when its slot relaunches
+                rtPendingEpoch_ = static_cast<uint32_t>(c.i0);
+                rtWaitScene_ = static_cast<int32_t>(c.d0);
+            } else {
+                rtTakeEpoch_ = static_cast<uint32_t>(c.i0);
+                rtTakeRestart_ = true;
+                rtWaitScene_ = -1;
+            }
+            if ((c.i1 & 1) != 0) captureGate_.store(true, std::memory_order_release);
             break;
         case CommandType::None: break;
         }
@@ -978,6 +982,14 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     // Track-addressed notes (Nota Remote) are recorded only when they play the take's
     // track; ordinary live input records onto it whatever it is.
     const int32_t recTrack = recordTrackRt_.load(std::memory_order_relaxed);
+    // A retried Session MIDI take begins when its slot has relaunched: until then what is
+    // played carries the old epoch and stays out (specs/078).
+    if (rtWaitScene_ >= 0 && slot && slot->pending.load(std::memory_order_relaxed) != rtWaitScene_ &&
+        slot->playing.load(std::memory_order_relaxed) == rtWaitScene_) {
+        rtTakeEpoch_ = rtPendingEpoch_;
+        rtTakeRestart_ = true;
+        rtWaitScene_ = -1;
+    }
     // A retry (TakeRestart) starts a fresh take even when this thread never saw recording off.
     const bool restarted = rtTakeRestart_;
     rtTakeRestart_ = false;
@@ -2159,9 +2171,11 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
         // Internal resampling (record from another track/send/master): tap the source's
         // post-fader output into the input ring while a take is rolling.
         // Shut while counting in, and while a retried take waits for its TakeRestart (specs/078).
-        const int32_t recSrc = (countInActive_ || !captureGate_.load(std::memory_order_relaxed))
+        const uint32_t capEp = captureEpoch_.load(std::memory_order_acquire); // before the gate
+        const int32_t recSrc = (countInActive_ || !captureGate_.load(std::memory_order_acquire))
                                    ? 0
                                    : internalRecordSource_.load(std::memory_order_relaxed);
+        if (recSrc != 0) markCaptureEpoch(rtCaptureEpoch_, capEp);
 
         // Live input monitoring: this segment's hardware input (shared by every track
         // monitoring it), and the set of tracks whose output some monitoring track hears —

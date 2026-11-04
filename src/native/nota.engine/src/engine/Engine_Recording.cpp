@@ -31,6 +31,8 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     }
     // Disarming a track that's currently recording finalizes its take (the audio clip is
     // materialised / MIDI capture stops), so toggling its REC button stops the recording.
+    const bool endsTake = (audioRecording_ && trackId == audioRecordTrackId_) ||
+                          (recording_.load(std::memory_order_relaxed) && trackId == recordTrackId_);
     if (audioRecording_ && trackId == audioRecordTrackId_) stopAudioRecording();
     if (recording_.load(std::memory_order_relaxed) && trackId == recordTrackId_) {
         flushCtlTake(); // the take's controllers still in flight (specs/020)
@@ -39,6 +41,8 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
         recordClipIndex_ = -1;
         recording_.store(false, std::memory_order_relaxed);
     }
+    // Its take is kept, so there is nothing to retry any more (specs/078).
+    if (endsTake && takeAttempt_.active && !takeAttempt_.session) closeTakeAttempt();
 }
 void Engine::setTrackRecordInput(int32_t trackId, int32_t source) {
     auto t = findTrackAuthoring(trackId);
@@ -91,7 +95,9 @@ bool Engine::ensureAudioInput() {
             if (n > inputBlockFrames_.load(std::memory_order_relaxed))
                 inputBlockFrames_.store(n, std::memory_order_relaxed);
             // The gate is shut while a count-in clicks: the take starts when the transport rolls.
-            if (hwRecordTap_.load(std::memory_order_relaxed) && captureGate_.load(std::memory_order_relaxed)) {
+            const uint32_t capEp = captureEpoch_.load(std::memory_order_acquire); // before the gate (specs/078)
+            if (hwRecordTap_.load(std::memory_order_relaxed) && captureGate_.load(std::memory_order_acquire)) {
+                markCaptureEpoch(hwCaptureEpoch_, capEp);
                 int64_t dropped = 0;
                 for (int32_t i = 0; i < n; ++i)
                     if (!inputQueue_.push(InputFrame{s[i * 2], s[i * 2 + 1]})) ++dropped;
@@ -424,6 +430,7 @@ bool Engine::startArrangementTake(bool wasPlaying, double playhead, bool retryCo
             c.lengthBeats = 4.0;
             nt->midiClips.push_back(c);
             idx = static_cast<int32_t>(nt->midiClips.size()) - 1;
+            TakePushScope takePush(*this); // the take's own clip (specs/078)
             republishWithTrack(recordTrackId_, nt);
         }
         recordClipIndex_ = idx;
@@ -532,9 +539,16 @@ void Engine::drainInputQueue() {
     captureScratch_.clear();
     InputFrame f;
     while (inputQueue_.pop(f)) {
+        if (isCaptureMarker(f)) { // the producer's first frames of a new capture epoch follow
+            if (awaitCaptureMarker_) captureScratch_.clear();
+            awaitCaptureMarker_ = false;
+            continue;
+        }
+        if (awaitCaptureMarker_) continue; // written for the take a retry threw away (specs/078)
         captureScratch_.push_back(f.l);
         captureScratch_.push_back(f.r);
     }
+    if (awaitCaptureMarker_) inputDroppedFrames_.store(0, std::memory_order_relaxed);
     Track::foldInputChannels(captureScratch_.data(), captureScratch_.size() / 2, captureChannels_);
     // Frames the audio thread had to drop while this drain was stalled (ring full).
     // They are the newest samples — the ones that couldn't fit after the popped batch —
@@ -569,6 +583,17 @@ void Engine::drainInputQueue() {
     if (audioCaptureBuf_.size() < need) audioCaptureBuf_.resize(need, 0.0f);
     std::copy_n(captureScratch_.data(), frames * 2, audioCaptureBuf_.data() + base * 2);
     captureWritePos_ = base + frames;
+    // A retried Session audio take (specs/078) keeps what follows its launch boundary: note the
+    // capture frame where it was crossed now, at the tempo it was crossed at.
+    if (recordSessionAudio_ && !std::isnan(retryStartBeat_) && retryKeepFrom_ < 0) {
+        const double pos = transport_.uiPositionBeats();
+        if (pos >= retryStartBeat_) {
+            const double devSR = transport_.sampleRate();
+            const double fpb = transport_.samplesPerBeat() * (devSR > 0.0 ? audioRecordSampleRate_ / devSR : 1.0);
+            const int64_t past = static_cast<int64_t>(std::llround((pos - retryStartBeat_) * fpb));
+            retryKeepFrom_ = std::max<int64_t>(0, static_cast<int64_t>(captureWritePos_) - past);
+        }
+    }
 }
 
 bool Engine::startAudioRecording(int32_t trackId) {
@@ -578,6 +603,8 @@ bool Engine::startAudioRecording(int32_t trackId) {
     captureWritePos_ = 0;
     captureLoop_ = false;
     inputDroppedFrames_.store(0, std::memory_order_relaxed); // fresh drop accounting per take
+    awaitCaptureMarker_ = retryingTake_; // a retried take keeps nothing from before its marker
+    retryKeepFrom_ = -1;
     audioRecordTrackId_ = trackId;
     audioRecordStartBeat_ = takePlayhead();
 
@@ -692,15 +719,15 @@ void Engine::stopAudioRecording() {
 
     // A Session audio retry (specs/078) captured from the retry on; the take starts on the launch
     // quantum after it, so what came before that boundary goes.
+    // The boundary frame was noted as the capture crossed it (drainInputQueue); stopped before
+    // that, nothing of the retried take is kept.
     if (recordSessionAudio_ && !std::isnan(retryStartBeat_)) {
-        const double devSR = transport_.sampleRate();
-        const double fpb = transport_.samplesPerBeat() * (devSR > 0.0 ? audioRecordSampleRate_ / devSR : 1.0);
-        const double lead = std::max(0.0, retryStartBeat_ - audioRecordStartBeat_);
         const size_t have = audioCaptureBuf_.size() / 2;
-        const size_t drop = std::min(have, static_cast<size_t>(std::llround(lead * fpb)));
+        const size_t drop = retryKeepFrom_ < 0 ? have : std::min(have, static_cast<size_t>(retryKeepFrom_));
         audioCaptureBuf_.erase(audioCaptureBuf_.begin(), audioCaptureBuf_.begin() + static_cast<std::ptrdiff_t>(drop * 2));
     }
     retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
+    retryKeepFrom_ = -1;
     if (audioCaptureBuf_.empty()) { // stopped before the retried take's boundary: nothing to keep
         recordSessionAudio_ = false;
         return;

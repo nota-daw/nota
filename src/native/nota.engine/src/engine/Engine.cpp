@@ -758,7 +758,9 @@ void Engine::pushUndo() {
                 return;
             }
     }
-    undoStack_.push_back({authoring_, {}}); // authoring_ is immutable after publish
+    // authoring_ is immutable after publish. A take's own checkpoint is marked so a retry can
+    // take it out without touching the user's edits made meanwhile (specs/078).
+    undoStack_.push_back({authoring_, {}, takePushing_ && takeAttempt_.active});
     ++undoPushCount_;
     if (undoStack_.size() > kMaxUndoDepth) {
         undoStack_.erase(undoStack_.begin());
@@ -779,7 +781,10 @@ void Engine::endUndoGroup() {
     if (undoStack_.size() > undoGroupBase_ + 1) {
         auto first = undoStack_.begin() + static_cast<std::ptrdiff_t>(undoGroupBase_);
         for (auto it = first + 1; it != undoStack_.end(); ++it) {
-            if (!first->graph) first->graph = it->graph;
+            if (!first->graph) {
+                first->graph = it->graph;
+                first->take = it->take; // a take's checkpoint stays the take's (specs/078)
+            }
             mergeMix(first->mix, it->mix);
         }
         undoStack_.erase(first + 1, undoStack_.end());
@@ -1070,7 +1075,10 @@ void Engine::endMixGesture(int32_t handle) {
         const size_t base = std::min(g.stackSizeAtBegin, undoStack_.size() - 1);
         auto first = undoStack_.begin() + static_cast<std::ptrdiff_t>(base);
         for (auto it = first + 1; it != undoStack_.end(); ++it) {
-            if (!first->graph) first->graph = it->graph;
+            if (!first->graph) {
+                first->graph = it->graph;
+                first->take = it->take; // a take's checkpoint stays the take's (specs/078)
+            }
             mergeMix(first->mix, it->mix);
         }
         undoStack_.erase(first + 1, undoStack_.end());

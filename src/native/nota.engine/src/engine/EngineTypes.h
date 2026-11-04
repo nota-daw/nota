@@ -125,6 +125,7 @@ struct MixChange {
 struct UndoEntry {
     std::shared_ptr<Graph> graph; // the state to restore; null for a mix-only step
     std::vector<MixChange> mix;   // empty for a structural step; one change per target
+    bool take = false;            // a take's own checkpoint (specs/078): a retry drops its graph
 };
 using ControlEventQueue = SpscRingBuffer<ControlEvent, 1024>;
 

@@ -138,3 +138,13 @@ coverage of engine behaviour. Tests live in `tests/Nota.SmokeTest/RetryTakeTests
 
 - [X] T034 Restart a Session take's count-in from its first click when retried during it, in `src/native/nota.engine/src/engine/Engine_TakeRetry.cpp`, per Edge Cases: command during the count-in (partial)
 - [X] T035 Release the Record button when recording ended outside the UI (MCP `retry_take` failed) by following the engine in `TransportViewModel.Tick` (`src/managed/Nota.Presentation/ViewModels/TransportViewModel.cs`), per FR-009 / FR-010 (partial)
+
+## Phase 9: Review of PR #486
+
+- [X] T036 Remember a track before its first automation write in the take (`beginAutomationWrite`), so a retry drops lanes written on tracks the take doesn't record, per FR-002 (T012 had been marked done without it)
+- [X] T037 Mark the take's own checkpoints (`UndoEntry::take`); a discard drops only those and removes the take from the user's checkpoints made meanwhile, so their undo steps survive, per FR-003 / FR-011
+- [X] T038 Close the take attempt when disarming ends the take, and return None when nothing records, so a retry never deletes a kept take, per FR-010
+- [X] T039 Session MIDI retry: the audio thread adopts the new take epoch only when the slot has relaunched (held keys reseeded there), per FR-012 / FR-013
+- [X] T040 Session retry relaunches the slot whatever its launch mode (Toggle), per FR-012
+- [X] T041 Capture epoch marker frames in the input ring: a retried audio take drops what an in-flight block wrote for the discarded one, per FR-002
+- [X] T042 Session audio retry notes the boundary frame when the capture crosses it (tempo changes after it don't move the trim), per FR-012

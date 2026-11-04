@@ -175,7 +175,8 @@ void Engine::launchSlotImpl(Track& t, int32_t scene, float velocity, bool fromSc
         return;
     }
     const SessionSlot& s = t.sessionSlots[scene];
-    if (!fromScene && s.launchMode == LaunchMode::Toggle && sp.playing.load(std::memory_order_relaxed) == scene &&
+    if (!fromScene && !forceSlotLaunch_ && s.launchMode == LaunchMode::Toggle &&
+        sp.playing.load(std::memory_order_relaxed) == scene &&
         sp.pending.load(std::memory_order_relaxed) == SessionPlayer::kNone) {
         sp.requestStop();
         return;
@@ -332,7 +333,10 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
     recordSessionGrowing_ = false;
     if (!hasClip) {
         recordSessionGrowing_ = sessionRecordLen_ <= 0.0;
-        addSessionMidiClip(trackId, scene, recordSessionGrowing_ ? kGrowingTakeBeats : sessionRecordLen_);
+        {
+            TakePushScope takePush(*this); // the take's own clip (specs/078)
+            addSessionMidiClip(trackId, scene, recordSessionGrowing_ ? kGrowingTakeBeats : sessionRecordLen_);
+        }
         t = findTrackAuthoring(trackId);
         if (!t) return;
         sessionCountInFresh_ = true;

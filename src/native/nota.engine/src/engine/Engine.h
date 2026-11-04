@@ -31,6 +31,7 @@
 #include <array>
 #include <atomic>
 #include <functional>
+#include <cmath>
 #include <limits>
 #include <list>
 #include <memory>
@@ -1919,6 +1920,39 @@ class Engine {
         int32_t sessionTrackId = 0, sessionScene = -1;
     };
     TakeAttempt takeAttempt_;
+    bool takePushing_ = false;   // the take itself is checkpointing (its clip, its first lane write)
+    struct TakePushScope {       // marks the checkpoints pushed in this scope as the take's own
+        Engine& e;
+        bool was;
+        explicit TakePushScope(Engine& en) : e(en), was(en.takePushing_) { e.takePushing_ = true; }
+        ~TakePushScope() { e.takePushing_ = was; }
+    };
+    bool forceSlotLaunch_ = false; // a retried Session take relaunches its slot whatever its launch mode
+    bool retryingTake_ = false;    // the restart of a retried take is starting the capture
+    // Capture epoch (specs/078): a producer of capture frames (input thread, internal tap) puts
+    // a marker frame (NaN, NaN) in the ring the first time it pushes after the epoch changed;
+    // after a retry the drain drops everything before that marker — frames an in-flight block
+    // or callback wrote for the take that was thrown away.
+    std::atomic<uint32_t> captureEpoch_{0};
+    uint32_t hwCaptureEpoch_ = 0; // input thread's last marked epoch
+    uint32_t rtCaptureEpoch_ = 0; // audio thread's (internal resampling)
+    bool awaitCaptureMarker_ = false;
+    static bool isCaptureMarker(const InputFrame& f) { return std::isnan(f.l) && std::isnan(f.r); }
+    // Producer side: mark the first push of a new capture epoch. RT-safe (one atomic load).
+    // Load the epoch before the capture gate: a retry shuts the gate before it moves the epoch,
+    // so a producer that sees the new epoch also sees the gate shut until the restart opens it.
+    void markCaptureEpoch(uint32_t& last, uint32_t ep) {
+        if (ep == last) return;
+        last = ep;
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        inputQueue_.push(InputFrame{nan, nan});
+    }
+    // Session MIDI retry: the audio thread adopts the new take epoch only once the slot has
+    // actually relaunched, so nothing played while it waits (shown pending) enters the take.
+    uint32_t rtPendingEpoch_ = 0;
+    int32_t rtWaitScene_ = -1;
+    // Session audio retry: the capture frame where the boundary was crossed (-1 = not yet).
+    int64_t retryKeepFrom_ = -1;
     void openTakeAttempt(bool session);
     void noteTakeTrack(int32_t trackId); // a track the take is about to write (no-op when idle)
     void closeTakeAttempt();

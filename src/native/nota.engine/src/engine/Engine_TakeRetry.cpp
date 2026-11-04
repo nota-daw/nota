@@ -68,58 +68,94 @@ void Engine::discardTake() {
     sessionCountIn_ = false;
     retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
 
-    // Put the tracks back as they were before the take wrote them. A Session take restores
-    // only its slot, so edits to the track's other slots made meanwhile stay.
-    if (authoring_ && !a.baseTracks.empty()) {
+    // Put the tracks back as they were before the take wrote them — in the graph that plays and
+    // in every checkpoint the user's own edits pushed meanwhile, so undoing one of those later
+    // doesn't bring the take back. A Session take restores only its slot, so edits to the
+    // track's other slots stay.
+    auto baseOf = [&](int32_t id) -> std::shared_ptr<Track> {
+        for (const auto& b : a.baseTracks)
+            if (b.first == id) return b.second;
+        return nullptr;
+    };
+    auto restoreTrack = [&](const std::shared_ptr<Track>& cur) -> std::shared_ptr<Track> {
+        auto base = cur ? baseOf(cur->id()) : nullptr;
+        if (!base) return cur;
+        if (!a.session || cur->id() != a.sessionTrackId) return base;
+        auto nt = cloneTrack(*cur);
+        const int32_t sc = a.sessionScene;
+        if (sc < 0) return nt;
+        if (static_cast<int32_t>(nt->sessionSlots.size()) <= sc) nt->sessionSlots.resize(sc + 1);
+        nt->sessionSlots[sc] =
+            sc < static_cast<int32_t>(base->sessionSlots.size()) ? base->sessionSlots[sc] : SessionSlot{};
+        return nt;
+    };
+    auto restoreGraph = [&](const Graph& src) {
         auto g = std::make_shared<Graph>();
-        inheritGraphLevel(*g, *authoring_);
-        g->tracks.reserve(authoring_->tracks.size());
-        auto baseOf = [&](int32_t id) -> std::shared_ptr<Track> {
-            for (const auto& b : a.baseTracks)
-                if (b.first == id) return b.second;
-            return nullptr;
-        };
-        auto restore = [&](const std::shared_ptr<Track>& cur) -> std::shared_ptr<Track> {
-            auto base = cur ? baseOf(cur->id()) : nullptr;
-            if (!base) return cur;
-            if (!a.session || cur->id() != a.sessionTrackId) return base;
-            auto nt = cloneTrack(*cur);
-            const int32_t sc = a.sessionScene;
-            if (sc < 0) return nt;
-            if (static_cast<int32_t>(nt->sessionSlots.size()) <= sc) nt->sessionSlots.resize(sc + 1);
-            nt->sessionSlots[sc] =
-                sc < static_cast<int32_t>(base->sessionSlots.size()) ? base->sessionSlots[sc] : SessionSlot{};
-            return nt;
-        };
-        for (const auto& t : authoring_->tracks) g->tracks.push_back(restore(t));
-        g->masterTrack = restore(authoring_->masterTrack);
-        publishRaw(std::move(g));
+        inheritGraphLevel(*g, src);
+        g->tracks.reserve(src.tracks.size());
+        for (const auto& t : src.tracks) g->tracks.push_back(restoreTrack(t));
+        g->masterTrack = restoreTrack(src.masterTrack);
+        return g;
+    };
+    if (authoring_ && !a.baseTracks.empty()) {
+        publishRaw(restoreGraph(*authoring_));
         placeTakesForTempo();
         recomputePdc();
         reapplyRackMacros();
         reapplyCcRoutes();
     }
 
-    // No history of its own: the take's checkpoints go (mix-only value steps made meanwhile
-    // stay — they describe the user's hand, not the take), and the redo branch comes back.
+    // No history of its own: the take's checkpoints go (a value change merged into one stays,
+    // without the graph — that is the user's hand, not the take). The user's checkpoints made
+    // meanwhile stay, without the take in them; with none, the redo branch comes back.
     const size_t base = std::min(a.undoBase, undoStack_.size());
     std::vector<UndoEntry> kept;
-    for (size_t i = base; i < undoStack_.size(); ++i)
-        if (!undoStack_[i].graph) kept.push_back(std::move(undoStack_[i]));
+    bool userEdits = false;
+    for (size_t i = base; i < undoStack_.size(); ++i) {
+        UndoEntry e = std::move(undoStack_[i]);
+        if (e.take) {
+            if (e.mix.empty()) continue;
+            e.graph = nullptr;
+            e.take = false;
+        } else if (e.graph && !a.baseTracks.empty()) {
+            e.graph = restoreGraph(*e.graph);
+        }
+        userEdits = true;
+        kept.push_back(std::move(e));
+    }
     undoStack_.resize(base);
     for (auto& e : kept) undoStack_.push_back(std::move(e));
-    if (kept.empty()) redoStack_ = std::move(a.redoSaved);
+    if (!userEdits) redoStack_ = std::move(a.redoSaved);
 }
 
 int32_t Engine::retryTake() {
     if (!takeAttempt_.active) return 0;
+    // The take already ended (its track was disarmed, say): it was kept — nothing to retry.
+    if (!isRecording()) {
+        closeTakeAttempt();
+        return 0;
+    }
 
-    auto pushTakeRestart = [&](bool openGate) {
+    // waitScene >= 0: a Session MIDI take — the audio thread adopts the new epoch only when
+    // that slot has relaunched, so nothing played while it waits enters the take.
+    auto pushTakeRestart = [&](bool openGate, int32_t waitScene) {
         Command c;
         c.type = CommandType::TakeRestart;
         c.i0 = static_cast<int32_t>(takeEpoch_);
-        c.i1 = openGate ? 1 : 0;
+        c.i1 = (openGate ? 1 : 0) | (waitScene >= 0 ? 2 : 0);
+        c.d0 = waitScene;
         commands_.push(c);
+    };
+    // Shut the capture, then move the capture epoch: a producer that sees the new epoch also
+    // sees the gate shut, until the restart command opens it behind the transport moves.
+    auto fenceCapture = [&]() {
+        captureGate_.store(false, std::memory_order_relaxed);
+        captureEpoch_.store(takeEpoch_, std::memory_order_release);
+    };
+    struct Retrying {
+        Engine& e;
+        explicit Retrying(Engine& en) : e(en) { e.retryingTake_ = true; }
+        ~Retrying() { e.retryingTake_ = false; }
     };
 
     if (takeAttempt_.session) {
@@ -133,15 +169,26 @@ int32_t Engine::retryTake() {
             recordSessionSlot(tid, sc);
             return isRecording() ? 2 : -1;
         }
+        const bool audio = recordSessionAudio_;
         discardTake();
-        pushTakeRestart(true);
+        fenceCapture();
         // The take records again from the next launch quantum (now when launching is
-        // unquantized); until then the slot shows it is waiting (slot state 5).
+        // unquantized); until then the slot shows it is waiting (slot state 5). The slot
+        // relaunches whatever its launch mode (a Toggle slot would stop instead).
         const double q = launchQuant();
         const double pos = transport_.uiPositionBeats();
         const double at = q > 0.0 ? std::ceil(pos / q - 1e-9) * q : pos;
-        recordSessionSlot(tid, sc);
-        if (!isRecording()) return -1;
+        {
+            Retrying r(*this);
+            forceSlotLaunch_ = true;
+            recordSessionSlot(tid, sc);
+            forceSlotLaunch_ = false;
+        }
+        pushTakeRestart(true, audio ? -1 : sc);
+        if (!isRecording()) {
+            captureGate_.store(true, std::memory_order_relaxed);
+            return -1;
+        }
         if (at > pos) retryStartBeat_ = at;
         return 2;
     }
@@ -152,16 +199,20 @@ int32_t Engine::retryTake() {
     const bool startedTransport = recordStartedTransport_;
     const double restart = startedTransport ? recordReturnBeat_ : transport_.uiAnchorBeats();
     discardTake();
-    captureGate_.store(false, std::memory_order_relaxed); // nothing until the playhead is back
+    fenceCapture(); // nothing until the playhead is back
     if (countedIn) {
         transportStop(); // count in again from stop, as the take did
         seekBeats(restart);
-        pushTakeRestart(countInBars() <= 0); // else the count-in's end opens the gate
+        pushTakeRestart(countInBars() <= 0, -1); // else the count-in's end opens the gate
     } else {
         seekBeats(restart); // keep rolling: the run-up plays again
-        pushTakeRestart(true);
+        pushTakeRestart(true, -1);
     }
-    const bool ok = startArrangementTake(!countedIn, restart, countedIn);
+    bool ok;
+    {
+        Retrying r(*this);
+        ok = startArrangementTake(!countedIn, restart, countedIn);
+    }
     recordStartedTransport_ = startedTransport;
     recordReturnBeat_ = restart;
     if (!ok) {
