@@ -23,6 +23,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Preview a translation**: **Load file…** in Settings → Appearance → Language runs Nota in a
+  language file from your disk after a restart and lists the entries it cannot use;
+  `NOTA_UI_LANGUAGE=/path/to/file.json` does the same for one run.
 - **Link a group's tracks** (#184): the Link key (a chain link) on a group's header, its
   Mixer strip and its menu ties the tracks in the group together — for a dry and an amped
   guitar recorded side by side, say. Arming one arms them all; clicking a clip selects the
@@ -186,6 +189,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the same way.
 
 ### Changed
+- **Interface languages are downloaded** (#476): Nota now ships in English, and every other
+  language comes from the new [nota-translations](https://github.com/nota-daw/nota-translations)
+  repository. **Settings → Appearance → Language** lists the languages there with how complete
+  each is for your version; choosing one downloads it (checked against its published checksum)
+  and it applies after the usual restart. Installed languages work offline, an **Update**
+  appears when a better translation is published, and **Remove** takes one away. If you used
+  French before this version, Nota fetches it in the background on first start and offers the
+  restart in the status bar (with update checks off, the Language row offers the download
+  instead). Translators can fix or add a language with a pull request there, no build needed.
 - **Dragging a section now moves its content too** (#192). To move only the section marker,
   as before, hold ⌥ (Alt on Windows and Linux) while dragging; resizing a section's edges
   still never touches the music.

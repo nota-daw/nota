@@ -25,6 +25,8 @@ public partial class MainWindow
     private ProgressBar _upBar = null!;
     private Button _upClose = null!;
     private Border _upOpen = null!;
+    private StackPanel _upPanel = null!, _langPanel = null!;
+    private TextBlock _langText = null!;
 
     private void BuildUpdateIndicator()
     {
@@ -68,18 +70,22 @@ public partial class MainWindow
             else updates.Dismiss();
         };
 
-        UpdateHost.Children.Add(new StackPanel
+        _upPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 14, 0),
             Children = { open, _upBar, _upDetail, _upClose },
-        });
+        };
+        BuildLanguageNotice();
+        UpdateHost.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { _langPanel, _upPanel } });
 
         updates.Changed += UpdateUpdateIndicator;
         updates.ProgressChanged += UpdateUpdateIndicator;
+        LanguageDownloads.Shared.Changed += UpdateUpdateIndicator;
         Closed += (_, _) =>
         {
             updates.Changed -= UpdateUpdateIndicator;
             updates.ProgressChanged -= UpdateUpdateIndicator;
+            LanguageDownloads.Shared.Changed -= UpdateUpdateIndicator;
         };
         UpdateUpdateIndicator();
     }
@@ -87,8 +93,14 @@ public partial class MainWindow
     private void UpdateUpdateIndicator()
     {
         var u = AppUpdates.Shared;
-        UpdateHost.IsVisible = u.Release is { } && u.State != AppUpdates.Stage.None && !u.Dismissed;
-        if (!UpdateHost.IsVisible) return;
+        var lang = LanguageDownloads.Shared;
+        _langPanel.IsVisible = lang.Ready is { } && !lang.Dismissed;
+        if (lang.Ready is { } ready)
+            _langText.Text = AppRestart.CanRelaunch ? Loc.F("main.updates.language_is_ready_restart", ready.Name)
+                : Loc.F("main.updates.language_is_ready_next_start", ready.Name);
+        _upPanel.IsVisible = u.Release is { } && u.State != AppUpdates.Stage.None && !u.Dismissed;
+        UpdateHost.IsVisible = _upPanel.IsVisible || _langPanel.IsVisible;
+        if (!_upPanel.IsVisible) return;
         var version = u.Release!.Version;
         bool busy = u.State == AppUpdates.Stage.Downloading;
         var p = u.Progress;
@@ -114,6 +126,42 @@ public partial class MainWindow
         _upDetail.IsVisible = _upDetail.Text.Length > 0;
         ToolTip.SetTip(_upClose, busy ? Loc.T("main.cancel_the_download")
             : u.State == AppUpdates.Stage.Ready ? Loc.T("main.updates.hide_it_still_installs_when") : Loc.T("main.not_now"));
+    }
+
+    // A language Nota downloaded on its own at start (the stored one was not installed, spec 077
+    // story 5) is ready: the same quiet notice, with a restart on click.
+    private void BuildLanguageNotice()
+    {
+        var dot = new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center };
+        dot.BindResource(Shape.FillProperty, "Brush.Accent");
+        _langText = new TextBlock { Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
+        var open = new Border
+        {
+            Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { dot, _langText } },
+        };
+        open.PointerEntered += (_, _) => _langText.TextDecorations = AppRestart.CanRelaunch ? TextDecorations.Underline : null;
+        open.PointerExited += (_, _) => _langText.TextDecorations = null;
+        open.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(open).Properties.IsLeftButtonPressed || !AppRestart.CanRelaunch) return;
+            e.Handled = true;
+            AppRestart.Request();   // the usual close: it asks about unsaved changes
+            Close();
+        };
+        var close = new Button
+        {
+            Classes = { "ghost" }, Width = 18, Height = 18, Padding = new Thickness(0), MinHeight = 0, MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center, Content = new Glyph(GlyphKind.Close, 8),
+        };
+        close.BindResource(Button.ForegroundProperty, "Brush.TextTertiary");
+        ToolTip.SetTip(close, Loc.T("main.not_now"));
+        close.Click += (_, _) => LanguageDownloads.Shared.Dismiss();
+        _langPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 14, 0), IsVisible = false,
+            Children = { open, close },
+        };
     }
 
     // Available / failed: what to do about it.

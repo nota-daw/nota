@@ -134,12 +134,14 @@ per-code rules in the app (today) — breaks "add a language without an app rele
 README.md               translator guide
 LICENSE                 AGPL-3.0-only text
 languages/<code>.json   one file per language (formatVersion 2), never English
-reference/<ver>.json    en.json of Nota release <ver>; reference/develop.json = develop head
-index.json              generated — what the app reads
 tools/validate.py       the checks (stdlib Python)
 tools/sync_references.py
 .github/workflows/check.yml      PRs: validate every language against every reference
-.github/workflows/publish.yml    push to main / schedule / dispatch: sync references, regenerate index.json, commit
+.github/workflows/publish.yml    push to main / schedule / dispatch: sync references, regenerate index.json, commit both to `published`
+
+(branch published)
+reference/<ver>.json    en.json of Nota release <ver>; reference/develop.json = develop head
+index.json              generated — what the app reads
 ```
 
 - **References are pulled, not pushed**: `publish.yml` lists `nota` tags `v*` and the
@@ -147,8 +149,9 @@ tools/sync_references.py
   at each one lacking a reference (daily schedule + `workflow_dispatch`). No cross-repository
   secret. The nota release workflow is unchanged; the `release` skill gains a step "run
   publish in nota-translations" for an immediate sync.
-- `publish.yml` commits to `main` as `github-actions[bot]`: the ruleset `main: PR, squash`
-  gets the GitHub Actions integration as a bypass actor.
+- `publish.yml` commits generated files to a separate `published` branch as
+  `github-actions[bot]`; `main` keeps its ruleset (`main: PR, squash`) with no bypass for
+  automation (decided 2026-11-04 instead of a GitHub Actions bypass).
 - `develop.json` lets translators work on keys before they ship; the app uses it only in dev
   builds (version `0.0.0-dev`).
 
@@ -156,7 +159,7 @@ tools/sync_references.py
 
 **Decision**: `LanguageCatalog` (Infrastructure, next to `ModelStore`):
 
-- Reads `https://raw.githubusercontent.com/nota-daw/nota-translations/main/index.json`
+- Reads `https://raw.githubusercontent.com/nota-daw/nota-translations/published/index.json`
   (`NOTA_LANGUAGES_URL` overrides the base, for tests and staging).
 - Each language entry pins `commit`, `path`, `size`, `sha256`; the file URL is
   `…/nota-translations/<commit>/<path>`, so the hash always matches what is fetched (no race

@@ -95,18 +95,18 @@ R12), and the constitution makes it the PR gate.
 
 **Independent test**: quickstart § PR 2.
 
-- [ ] T025 [P] [US2] Add `nota-translations/LICENSE` (full AGPL-3.0 text, same as nota's `LICENSE`)
-- [ ] T026 [P] [US2] Write `nota-translations/README.md`: what the repo is, file shape (link to a copy of the contract in `nota-translations/FORMAT.md`), keys and the English reference (`reference/<version>.json`, `develop.json`), plurals and rule ids, placeholders, coverage, how to open a PR, how to preview a file in Nota (Load file…), licence
-- [ ] T027 [P] [US2] Copy `specs/077-key-based-localization/contracts/language-file.md` and `contracts/index.md` into `nota-translations/FORMAT.md` (translator-facing wording, same rules)
-- [ ] T028 [US2] Write `nota-translations/tools/validate.py` (stdlib; SPDX header): implements `contracts/language-file.md` exactly as `TranslationTable` (T003–T005): parse, key regex, plural rule ids, shape/placeholder checks against each `reference/*.json`, unknown key = error when in no reference / warning when only in older ones, coverage per key-set hash; `--fixtures tools/fixtures` mode compares against `verdicts.json`; exit non-zero with `languages/<code>.json: <key> — <problem>` lines
-- [ ] T029 [P] [US2] Copy the fixtures and `verdicts.json` from `tests/Nota.SmokeTest/Fixtures/Languages/` (T009) into `nota-translations/tools/fixtures/`
-- [ ] T030 [US2] Write `nota-translations/tools/sync_references.py` (stdlib): list `nota-daw/nota` tags `v*` and the `develop` head via the public GitHub API, fetch `src/managed/Nota.Application/Localization/en.json` at each tag lacking `reference/<version>.json` (skip tags whose file is missing or format < 2), always refresh `reference/develop.json`
-- [ ] T031 [US2] Add index generation to `nota-translations/tools/validate.py` (`--write-index`): `index.json` per `contracts/index.md` — `formatVersion: 1`, `generated`, `references` (version → key-set hash), per valid language `code`, `name`, `version` (previous index version + 1 when the file's sha256 changed, else kept), `commit` (the `HEAD` being indexed), `path`, `size`, `sha256`, `coverage` per hash
-- [ ] T032 [US2] Add `nota-translations/.github/workflows/check.yml`: on pull_request → `python3 tools/validate.py --fixtures tools/fixtures` and `python3 tools/validate.py languages/*.json`; job name `check`
-- [ ] T033 [US2] Add `nota-translations/.github/workflows/publish.yml`: on push to `main`, daily schedule, `workflow_dispatch` → sync references, validate, write index, commit `reference/` + `index.json` as `github-actions[bot]` only if changed; the commit's own SHA is not the indexed one, so index `commit` = the content commit before the bot commit (document in the workflow)
-- [ ] T034 [US2] Move French: `git mv`-equivalent import of `src/managed/Nota.App/Languages/fr.json` (v2, from PR 1) into `nota-translations/languages/fr.json`, with the commit message crediting its translators from `git log --format='%an' -- src/managed/Nota.App/Languages/fr.json` in nota (FR-012)
-- [ ] T035 [US2] Repository settings via `gh api`: add the GitHub Actions integration (id 15368) as a bypass actor to ruleset `main: PR, squash` (id 26514643); after the first green `check` run, add `check` as a required status check
-- [ ] T036 [US2] Push the initial content (README, LICENSE, FORMAT, tools, workflows, `languages/fr.json`) as the first commit on `main` (sets the default branch), run `gh workflow run publish.yml`, confirm `reference/develop.json` and `index.json` land; then open a test PR breaking a placeholder → `check` fails naming the key; close it
+- [X] T025 [P] [US2] Add `nota-translations/LICENSE` (full AGPL-3.0 text, same as nota's `LICENSE`)
+- [X] T026 [P] [US2] Write `nota-translations/README.md`: what the repo is, file shape (link to a copy of the contract in `nota-translations/FORMAT.md`), keys and the English reference (`reference/<version>.json`, `develop.json`), plurals and rule ids, placeholders, coverage, how to open a PR, how to preview a file in Nota (Load file…), licence
+- [X] T027 [P] [US2] Copy `specs/077-key-based-localization/contracts/language-file.md` and `contracts/index.md` into `nota-translations/FORMAT.md` (translator-facing wording, same rules)
+- [X] T028 [US2] Write `nota-translations/tools/validate.py` (stdlib; SPDX header): implements `contracts/language-file.md` exactly as `TranslationTable` (T003–T005): parse, key regex, plural rule ids, shape/placeholder checks against each `reference/*.json`, unknown key = error when in no reference / warning when only in older ones, coverage per key-set hash; `--fixtures tools/fixtures` mode compares against `verdicts.json`; exit non-zero with `languages/<code>.json: <key> — <problem>` lines
+- [X] T029 [P] [US2] Copy the fixtures and `verdicts.json` from `tests/Nota.SmokeTest/Fixtures/Languages/` (T009) into `nota-translations/tools/fixtures/`
+- [X] T030 [US2] Write `nota-translations/tools/sync_references.py` (stdlib): list `nota-daw/nota` tags `v*` and the `develop` head via the public GitHub API, fetch `src/managed/Nota.Application/Localization/en.json` at each tag lacking `reference/<version>.json` (skip tags whose file is missing or format < 2), always refresh `reference/develop.json`
+- [X] T031 [US2] Add index generation to `nota-translations/tools/validate.py` (`--write-index`): `index.json` per `contracts/index.md` — `formatVersion: 1`, `generated`, `references` (version → key-set hash), per valid language `code`, `name`, `version` (previous index version + 1 when the file's sha256 changed, else kept), `commit` (the `HEAD` being indexed), `path`, `size`, `sha256`, `coverage` per hash
+- [X] T032 [US2] Add `nota-translations/.github/workflows/check.yml`: on pull_request → `python3 tools/validate.py --fixtures tools/fixtures` and `python3 tools/validate.py languages/*.json`; job name `check`
+- [X] T033 [US2] Add `nota-translations/.github/workflows/publish.yml`: on push to `main`, daily schedule, `workflow_dispatch` → sync references, validate, write index, commit `reference/` + `index.json` to the `published` branch as `github-actions[bot]` only if changed; index `commit` = main's HEAD, which holds the language files
+- [X] T034 [US2] Move French: `git mv`-equivalent import of `src/managed/Nota.App/Languages/fr.json` (v2, from PR 1) into `nota-translations/languages/fr.json`, with the commit message crediting its translators from `git log --format='%an' -- src/managed/Nota.App/Languages/fr.json` in nota (FR-012)
+- [X] T035 [US2] Repository settings: after the first green `check` run, add `check` as a required status check on ruleset `main: PR, squash` (id 26514643); generated files go to the `published` branch, so no bypass is added
+- [X] T036 [US2] Push the initial content (README, LICENSE, FORMAT, tools, workflows, `languages/fr.json`) as the first commit on `main` (sets the default branch), run `gh workflow run publish.yml`, confirm `reference/develop.json` and `index.json` land; then open a test PR breaking a placeholder → `check` fails naming the key; close it
 
 **Checkpoint (PR 2)**: quickstart § PR 2 passes.
 
@@ -118,15 +118,15 @@ R12), and the constitution makes it the PR gate.
 
 **Independent test**: quickstart § PR 3 steps 1–4, 7–8.
 
-- [ ] T037 [P] [US3] Create `src/managed/Nota.Infrastructure/Languages/InstalledLanguages.cs`: root `<data>/languages` (from `NotaPaths`); per code `<code>.json` + `<code>.meta.json` `{ "source": "repository" | "local", "path"?, "version"?, "commit"?, "sha256"?, "installed" }`; `List()`, `Load(code)` (repository → file, local → stored path), `InstallFrom(stagingFile, meta)` with atomic move, `Remove(code)`, cleanup of leftover `.staging-<code>.json` on start
-- [ ] T038 [US3] Create `src/managed/Nota.Infrastructure/Languages/LanguageCatalog.cs`: fetch `<base>/main/index.json` (`<base>` = `https://raw.githubusercontent.com/nota-daw/nota-translations`, `NOTA_LANGUAGES_URL` overrides) once per run (cached); ignore an index with a higher `formatVersion` major ("update Nota to see more languages"); fit by own key-set hash, else the newest reference with version ≤ the app's (contracts/index.md § App behaviour); `DownloadAsync(entry)` via `RegistryClient.DownloadAsync(<base>/<commit>/<path>, size, sha256, staging, …)`, then parse + validate before `InstalledLanguages.InstallFrom`; any failure leaves the installed copy
-- [ ] T039 [US3] Register `LanguageCatalog` and `InstalledLanguages` in the app's service setup (where `ModelStore` is registered) and expose `UpdateAvailable(code)` comparing installed `version` with the index
-- [ ] T040 [US3] Update `src/managed/Nota.App/Languages/NotaLanguages.cs`: offered languages = embedded English + `InstalledLanguages.List()`; `Find(code)` loads installed files through `TranslationTable.Parse` + `ValidateAgainst(english)` (problems logged); no network on this path
-- [ ] T041 [US3] Rebuild `src/managed/Nota.App/PreferencesWindow.Language.cs` per `contracts/language-row.md`: combo items English / installed (`· 97%` muted, or `· local file`) / separator / available (`· 82%` + download glyph); picking an available one downloads with inline `Downloading…` progress, then the existing restart note; failure `Couldn't download <Name> — <reason>` and the combo returns to the running language; `Update available` + **Update**; **Remove**; `More languages are available online` when the index is unreachable; follows `DESIGN.md` (Studio) — every new text via `Loc.T` with new keys in `en.json`
-- [ ] T042 [US3] Network policy (research R10) in `PreferencesWindow.Language.cs` and the launch path: fetch the index when the row is shown, and at launch with the daily update check only when `Settings.CheckForUpdates` is on; when off, show **Show available languages** (fetch on click) and never request on Nota's own initiative
-- [ ] T043 [US3] Remove `src/managed/Nota.App/Languages/fr.json` and its embedding: `src/managed/Nota.App/Nota.App.csproj` embeds no language file (remove the `Languages\*.json` item and its comment at line ~56)
-- [ ] T044 [US3] Smoke: create `tests/Nota.SmokeTest/LanguageCatalogTests.cs` with an in-process `HttpMessageHandler` serving a fixture index + files (`tests/Nota.SmokeTest/Fixtures/Languages/index/`): list + fit + coverage, install, checksum mismatch keeps the old copy, higher index `formatVersion` ignored, offline → installed only, update offered when `version` grows, remove, `CheckForUpdates` off → zero requests at start; wire into `tests/Nota.SmokeTest/Program.cs`
-- [ ] T045 [US3] Smoke: in `DesignTokenCheck.RunLocalization` drop the embedded-French coverage checks (French is validated in nota-translations) and add "the app embeds only `en.json`" (SC-008); switch `tests/Nota.SmokeTest/LanguageProjectTests.cs` from `fr.json` to the `xx.json` fixture
+- [X] T037 [P] [US3] Create `src/managed/Nota.Infrastructure/Languages/InstalledLanguages.cs`: root `<data>/languages` (from `NotaPaths`); per code `<code>.json` + `<code>.meta.json` `{ "source": "repository" | "local", "path"?, "version"?, "commit"?, "sha256"?, "installed" }`; `List()`, `Load(code)` (repository → file, local → stored path), `InstallFrom(stagingFile, meta)` with atomic move, `Remove(code)`, cleanup of leftover `.staging-<code>.json` on start
+- [X] T038 [US3] Create `src/managed/Nota.Infrastructure/Languages/LanguageCatalog.cs`: fetch `<base>/published/index.json` (`<base>` = `https://raw.githubusercontent.com/nota-daw/nota-translations`, `NOTA_LANGUAGES_URL` overrides) once per run (cached); ignore an index with a higher `formatVersion` major ("update Nota to see more languages"); fit by own key-set hash, else the newest reference with version ≤ the app's (contracts/index.md § App behaviour); `DownloadAsync(entry)` via `RegistryClient.DownloadAsync(<base>/<commit>/<path>, size, sha256, staging, …)`, then parse + validate before `InstalledLanguages.InstallFrom`; any failure leaves the installed copy
+- [X] T039 [US3] Register `LanguageCatalog` and `InstalledLanguages` in the app's service setup (where `ModelStore` is registered) and expose `UpdateAvailable(code)` comparing installed `version` with the index
+- [X] T040 [US3] Update `src/managed/Nota.App/Languages/NotaLanguages.cs`: offered languages = embedded English + `InstalledLanguages.List()`; `Find(code)` loads installed files through `TranslationTable.Parse` + `ValidateAgainst(english)` (problems logged); no network on this path
+- [X] T041 [US3] Rebuild `src/managed/Nota.App/PreferencesWindow.Language.cs` per `contracts/language-row.md`: combo items English / installed (`· 97%` muted, or `· local file`) / separator / available (`· 82%` + download glyph); picking an available one downloads with inline `Downloading…` progress, then the existing restart note; failure `Couldn't download <Name> — <reason>` and the combo returns to the running language; `Update available` + **Update**; **Remove**; `More languages are available online` when the index is unreachable; follows `DESIGN.md` (Studio) — every new text via `Loc.T` with new keys in `en.json`
+- [X] T042 [US3] Network policy (research R10) in `PreferencesWindow.Language.cs` and the launch path: fetch the index when the row is shown, and at launch with the daily update check only when `Settings.CheckForUpdates` is on; when off, show **Show available languages** (fetch on click) and never request on Nota's own initiative
+- [X] T043 [US3] Remove `src/managed/Nota.App/Languages/fr.json` and its embedding: `src/managed/Nota.App/Nota.App.csproj` embeds no language file (remove the `Languages\*.json` item and its comment at line ~56)
+- [X] T044 [US3] Smoke: create `tests/Nota.SmokeTest/LanguageCatalogTests.cs` with an in-process `HttpMessageHandler` serving a fixture index + files (`tests/Nota.SmokeTest/Fixtures/Languages/index/`): list + fit + coverage, install, checksum mismatch keeps the old copy, higher index `formatVersion` ignored, offline → installed only, update offered when `version` grows, remove, `CheckForUpdates` off → zero requests at start; wire into `tests/Nota.SmokeTest/Program.cs`
+- [X] T045 [US3] Smoke: in `DesignTokenCheck.RunLocalization` drop the embedded-French coverage checks (French is validated in nota-translations) and add "the app embeds only `en.json`" (SC-008); switch `tests/Nota.SmokeTest/LanguageProjectTests.cs` from `fr.json` to the `xx.json` fixture
 
 **Checkpoint**: quickstart § PR 3 steps 1–4, 7–8 pass.
 
@@ -140,9 +140,9 @@ R12), and the constitution makes it the PR gate.
 
 *P1 but placed after US3: it is built on the catalog and installed store from US3.*
 
-- [ ] T046 [US5] In `src/managed/Nota.App/App.axaml.cs` after the main window is shown: if `Settings.Language` ≠ `en`, has no valid installed file and `CheckForUpdates` is on, download it in the background through `LanguageCatalog` (start-up never waits); on success raise a "language ready" state shared with the Language row
-- [ ] T047 [US5] Show the "<Name> is ready" + **Restart** notice once per run in the status bar in `src/managed/Nota.App/MainWindow.Updates.cs` (same pattern as the app update notice), and in the Language row; offline / checks off → row text `<Name> will be downloaded when Nota is online` or **Download <Name>** (contracts/language-row.md)
-- [ ] T048 [US5] Smoke in `tests/Nota.SmokeTest/LanguageCatalogTests.cs`: stored `fr`, empty `languages/` → English this run, background install, ready state set; handler offline → English, stored choice kept, no install
+- [X] T046 [US5] In `src/managed/Nota.App/App.axaml.cs` after the main window is shown: if `Settings.Language` ≠ `en`, has no valid installed file and `CheckForUpdates` is on, download it in the background through `LanguageCatalog` (start-up never waits); on success raise a "language ready" state shared with the Language row
+- [X] T047 [US5] Show the "<Name> is ready" + **Restart** notice once per run in the status bar in `src/managed/Nota.App/MainWindow.Updates.cs` (same pattern as the app update notice), and in the Language row; offline / checks off → row text `<Name> will be downloaded when Nota is online` or **Download <Name>** (contracts/language-row.md)
+- [X] T048 [US5] Smoke in `tests/Nota.SmokeTest/LanguageCatalogTests.cs`: stored `fr`, empty `languages/` → English this run, background install, ready state set; handler offline → English, stored choice kept, no install
 
 ---
 
@@ -152,27 +152,27 @@ R12), and the constitution makes it the PR gate.
 
 **Independent test**: quickstart § PR 3 step 6.
 
-- [ ] T049 [US4] Add **Load file…** to `src/managed/Nota.App/PreferencesWindow.Language.cs`: file picker for `.json`, parse + validate against English, store `source: local` + path through `InstalledLanguages`, select it, restart note; list up to 10 `key — problem` lines then `…and N more (see the log)`; a local language is never replaced by a download
-- [ ] T050 [US4] `NOTA_UI_LANGUAGE` accepts a path to a language file as well as a code (this run only, never saved) in `App.axaml.cs` `InstallLanguage`; update its doc comment
-- [ ] T051 [US4] Smoke in `tests/Nota.SmokeTest/LanguageCatalogTests.cs`: local `xx-broken.json` → loads, valid entries translated, broken ones English, problems match `verdicts.json`; missing local path at start → English + problem
+- [X] T049 [US4] Add **Load file…** to `src/managed/Nota.App/PreferencesWindow.Language.cs`: file picker for `.json`, parse + validate against English, store `source: local` + path through `InstalledLanguages`, select it, restart note; list up to 10 `key — problem` lines then `…and N more (see the log)`; a local language is never replaced by a download
+- [X] T050 [US4] `NOTA_UI_LANGUAGE` accepts a path to a language file as well as a code (this run only, never saved) in `App.axaml.cs` `InstallLanguage`; update its doc comment
+- [X] T051 [US4] Smoke in `tests/Nota.SmokeTest/LanguageCatalogTests.cs`: local `xx-broken.json` → loads, valid entries translated, broken ones English, problems match `verdicts.json`; missing local path at start → English + problem
 
 ---
 
 ## Phase 8: Polish & Cross-Cutting
 
-- [ ] T052 Delete `scripts/loc-migrate.py` and the `keymap.tsv` ignore line in `.gitignore` (research R4)
-- [ ] T053 [P] Finalise `CONTRIBUTING.md` § Translating Nota: translations live in `nota-daw/nota-translations`; adding a text in the app = `en.json` only
-- [ ] T054 [P] Add the "sync references" step (`gh workflow run publish.yml --repo nota-daw/nota-translations` after the tag build) to `.claude/skills/release/SKILL.md`, then run `scripts/sync-agent-skills.sh`
-- [ ] T055 [P] Fixture parity: confirm `tests/Nota.SmokeTest/Fixtures/Languages/verdicts.json` and `nota-translations/tools/fixtures/verdicts.json` are identical and both checks agree (R11)
-- [ ] T056 Run every step of `specs/077-key-based-localization/quickstart.md` and note results in the PR descriptions
+- [X] T052 Delete `scripts/loc-migrate.py` and the `keymap.tsv` ignore line in `.gitignore` (research R4)
+- [X] T053 [P] Finalise `CONTRIBUTING.md` § Translating Nota: translations live in `nota-daw/nota-translations`; adding a text in the app = `en.json` only
+- [X] T054 [P] Add the "sync references" step (`gh workflow run publish.yml --repo nota-daw/nota-translations` after the tag build) to `.claude/skills/release/SKILL.md`, then run `scripts/sync-agent-skills.sh`
+- [X] T055 [P] Fixture parity: confirm `tests/Nota.SmokeTest/Fixtures/Languages/verdicts.json` and `nota-translations/tools/fixtures/verdicts.json` are identical and both checks agree (R11)
+- [X] T056 Run every step of `specs/077-key-based-localization/quickstart.md` and note results in the PR descriptions
 
 ### Nota closing tasks *(PR gates — run for each nota PR)*
 
 - [X] T057 Run `scripts/build.sh` (and `scripts/build-linux.sh` / `scripts/build-win.ps1` via CI) until native + managed + smoke test are green
 - [X] T058 AGPL-3.0-only SPDX two-line header on every new source file (`scripts/loc-migrate.py`, `LanguageCatalog.cs`, `InstalledLanguages.cs`, `LanguageCatalogTests.cs`, nota-translations `tools/*.py`)
 - [X] T059 New dependency: none → N/A
-- [ ] T060 `CHANGELOG.md` `[Unreleased]`: PR 1 → none (no user-visible change; mention in the PR); PR 3 → Changed "Languages other than English are downloaded from Preferences → Language and kept up to date; the app ships with English only" + Added "Load a language file to preview a translation"
-- [ ] T061 FEATURES.md via the `nota-features` skill and the user manual via `nota-docs` (EN + RU page on choosing, updating and previewing a language; shots harness uses `NOTA_UI_LANGUAGE=<path>` for French); `nota-docs/scripts/shortcuts.mjs` reads `PreferencesWindow.ShortcutGroups` by literal text — make it resolve `Loc.T("key")` through `src/managed/Nota.Application/Localization/en.json` (needed as soon as PR 1 is on `develop`); shortcuts: N/A
+- [X] T060 `CHANGELOG.md` `[Unreleased]`: PR 1 → none (no user-visible change; mention in the PR); PR 3 → Changed "Languages other than English are downloaded from Preferences → Language and kept up to date; the app ships with English only" + Added "Load a language file to preview a translation"
+- [X] T061 FEATURES.md via the `nota-features` skill and the user manual via `nota-docs` (EN + RU page on choosing, updating and previewing a language; shots harness uses `NOTA_UI_LANGUAGE=<path>` for French); `nota-docs/scripts/shortcuts.mjs` reads `PreferencesWindow.ShortcutGroups` by literal text — make it resolve `Loc.T("key")` through `src/managed/Nota.Application/Localization/en.json` (needed as soon as PR 1 is on `develop`); shortcuts: N/A
 - [X] T062 Engine behaviour change: none → N/A
 
 ---
@@ -224,3 +224,11 @@ Task: "Copy fixtures into nota-translations/tools/fixtures/"
 2. **PR 2 (US2)**: repository and checks; no app change, safe to merge any time after PR 1.
 3. **PR 3 (US3 + US5 + US4)**: downloads, then the upgrade path, then local preview; merge
    only with PR 2 live, and ship PR 2's content and PR 3 in the same release.
+
+## Phase 9: Convergence
+
+- [X] T063 Offer a **Download <Name>** button in the Language row when the stored language is not installed and Nota may not check on its own, in `src/managed/Nota.App/PreferencesWindow.Language.cs` per FR-021 (partial)
+- [X] T064 Separate installed from available languages in the Language combo in `src/managed/Nota.App/PreferencesWindow.Language.cs` per contracts/language-row.md (partial)
+- [X] T065 Fetch the language list in the background at start when the running language came from the repository and update checks are on, so **Update** is offered without a fetch on opening Settings, in `src/managed/Nota.App/LanguageDownloads.cs` per plan: research R10 (partial)
+- [X] T066 Run the quickstart steps for PR 3 and note the results in the pull request per T056 (partial)
+

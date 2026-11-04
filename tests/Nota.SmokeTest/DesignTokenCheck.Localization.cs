@@ -185,19 +185,7 @@ internal static partial class DesignTokenCheck
             Loc.EnglishError is null ? $"the embedded English reference is valid ({real.Count} keys, key set {real.KeySetHash()})" : "the embedded English reference: " + Loc.EnglishError);
         var onDisk = TranslationTable.Parse(File.ReadAllText(Path.Combine(root, "src/managed/Nota.Application/Localization/en.json")), out _);
         yield return (onDisk is not null && onDisk.KeySetHash() == real.KeySetHash(), "the embedded English is the en.json in the source");
-        var dir = Path.Combine(root, "src/managed/Nota.App/Languages");
-        var files = Directory.EnumerateFiles(dir, "*.json").OrderBy(f => f, StringComparer.Ordinal).ToArray();
-        foreach (var file in files)
-        {
-            var id = Path.GetFileNameWithoutExtension(file)!;
-            var table = TranslationTable.Parse(File.ReadAllText(file), out var error);
-            yield return (table is not null && table.Code == id && id != "en",
-                table is null ? $"{id}.json: {error}" : $"{id}.json: valid ({table.Name}, {table.Count} texts, rule {table.PluralRule})");
-        }
-        var names = files.Select(f => TranslationTable.Parse(File.ReadAllText(f), out _)).Where(t => t is not null)
-            .ToDictionary(t => t!.Code, t => t!.Name);
-        yield return (real.Name == "English" && names.GetValueOrDefault("fr") == "Français",
-            "the picker offers English and Français, each by its own name");
+        yield return (real.Name == "English", "English is offered by its own name");
 
         Loc.ResetForTests();
         Loc.Install(null, "en");   // as the app leaves it: English installed
@@ -349,22 +337,15 @@ internal static partial class DesignTokenCheck
             shape.Count == 0 ? "each key is used the way en.json shapes it (counted, formatted or plain)"
                 : "key used against its shape: " + string.Join("; ", shape.Take(6)));
 
-        // -- French, still embedded until the languages move to nota-translations (spec 077 PR 3) --
-        var frPath = Path.Combine(root, "src/managed/Nota.App/Languages/fr.json");
-        var fr = TranslationTable.Parse(File.ReadAllText(frPath), out var frError);
-        yield return (fr is not null, fr is null ? "fr.json: " + frError : "fr.json parsed");
-        if (fr is null) yield break;
-        var (frProblems, frCoverage) = fr.ValidateAgainst(en);
-        var frMissing = en.Keys.Where(k => !fr.TryGet(k, out _)).Order(StringComparer.Ordinal).ToList();
-        // NOTA_LOC_DUMP_MISSING=<file> writes the keys French still lacks (key, English, counted?, file) as JSON.
+        // -- Nota ships English only: every other language comes from nota-translations (spec 077) --
+        var embedded = Directory.EnumerateFiles(Path.Combine(root, "src/managed/Nota.App/Languages"), "*.json").Select(Path.GetFileName).ToList();
+        var appProject = File.ReadAllText(Path.Combine(root, "src/managed/Nota.App/Nota.App.csproj"));
+        yield return (embedded.Count == 0 && !appProject.Contains("Languages\\"),
+            embedded.Count == 0 ? "the app embeds no translation: English is the only built-in language (SC-008)"
+                : "translation files in the app (they belong in nota-translations): " + string.Join(", ", embedded));
+        // NOTA_LOC_DUMP_MISSING=<file> writes every key with its English (for translators) as JSON.
         if (Environment.GetEnvironmentVariable("NOTA_LOC_DUMP_MISSING") is { Length: > 0 } dump)
-            File.WriteAllText(dump, JsonSerializer.Serialize(frMissing.Select(k => new { key = k, english = en.TryGet(k, out var t) ? t.Other : "", plural = t.IsPlural, file = used.GetValueOrDefault(k).Path })));
-        yield return (frMissing.Count == 0,
-            frMissing.Count == 0 ? $"French covers all {en.Count} keys ({frCoverage} %)"
-                : $"{frMissing.Count} keys have no French: {string.Join(", ", frMissing.Take(8))}");
-        yield return (frProblems.Count == 0,
-            frProblems.Count == 0 ? "every French entry is a key of en.json with its shape and placeholders"
-                : "French entries that cannot be used: " + string.Join("; ", frProblems.Take(6).Select(p => $"{p.Key} — {p.Problem}")));
+            File.WriteAllText(dump, JsonSerializer.Serialize(en.Keys.Order(StringComparer.Ordinal).Select(k => new { key = k, english = en.TryGet(k, out var t) ? t.Other : "", plural = t.IsPlural, file = used.GetValueOrDefault(k).Path })));
 
         // -- the language is a view setting: it follows only the stored choice, and writes nothing --
         var osLanguage = new List<string>();
@@ -385,7 +366,8 @@ internal static partial class DesignTokenCheck
             persistedText.Count == 0 ? "no project, preset or settings writer uses Loc (the language never changes saved work)"
                 : "translated text in code that is saved: " + string.Join(", ", persistedText));
         // macOS shows its own text (Hide, Quit, the open panels) in a language the Info.plist lists.
-        var shipped = Directory.EnumerateFiles(Path.Combine(root, "src/managed/Nota.App/Languages"), "*.json").Select(f => Path.GetFileNameWithoutExtension(f)!).ToList();
+        // English, plus the languages nota-translations offers today: macOS follows only listed ones.
+        var shipped = new List<string> { "en", "fr" };
         var unlisted = new List<string>();
         foreach (var script in new[] { "scripts/bundle-mac.sh", "scripts/package-dmg.sh" })
         {
@@ -393,7 +375,7 @@ internal static partial class DesignTokenCheck
             foreach (var code in shipped.Where(c => !plist.Contains($"<string>{c}</string>"))) unlisted.Add($"{script}: {code}");
         }
         yield return (unlisted.Count == 0,
-            unlisted.Count == 0 ? "the macOS Info.plist lists every shipped language (CFBundleLocalizations)"
+            unlisted.Count == 0 ? "the macOS Info.plist lists English and the published languages (CFBundleLocalizations)"
                 : "language missing from CFBundleLocalizations: " + string.Join(", ", unlisted));
         var appStart = File.ReadAllText(Path.Combine(root, "src/managed/Nota.App/App.axaml.cs"));
         int installAt = appStart.IndexOf("private static void InstallLanguage", StringComparison.Ordinal);

@@ -100,6 +100,9 @@ public partial class MainWindow
         // Look for a newer release now and once a day (unless Settings → Updates says not to);
         // the start screen and the status bar show what it finds.
         AppUpdates.Shared.Start();
+        // The stored interface language is not installed (Nota used to ship French): fetch it in
+        // the background, under the same rule, and offer the restart when it is in (spec 077).
+        LanguageDownloads.Shared.StartupCheck(App.Services.GetRequiredService<ILogSink>());
 
         // What's New shows once per new app version, ahead of the launcher.
         await ShowWhatsNewIfNeeded();
