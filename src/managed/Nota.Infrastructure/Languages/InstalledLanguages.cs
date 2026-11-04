@@ -46,8 +46,12 @@ public sealed class InstalledLanguages
     {
         Root = root;
         Directory.CreateDirectory(root);
-        foreach (var f in Directory.EnumerateFiles(root, ".staging-*"))
-            try { File.Delete(f); } catch { /* next start */ }
+        try
+        {
+            foreach (var f in Directory.EnumerateFiles(root, ".staging-*").Concat(Directory.EnumerateFiles(root, "*.bak")))
+                try { File.Delete(f); } catch { /* next start */ }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { /* an unreadable folder: List says so */ }
     }
 
     public string Root { get; }
@@ -57,7 +61,10 @@ public sealed class InstalledLanguages
     public IReadOnlyList<InstalledLanguage> List()
     {
         var list = new List<InstalledLanguage>();
-        foreach (var metaFile in Directory.EnumerateFiles(Root, "*.meta.json").Order(StringComparer.Ordinal))
+        IEnumerable<string> metas;
+        try { metas = Directory.EnumerateFiles(Root, "*.meta.json").Order(StringComparer.Ordinal).ToList(); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return list; }
+        foreach (var metaFile in metas)
         {
             var code = System.IO.Path.GetFileName(metaFile)[..^".meta.json".Length];
             if (Read(code) is { } l) list.Add(l);
@@ -73,14 +80,14 @@ public sealed class InstalledLanguages
         if (!File.Exists(metaFile)) return null;
         InstalledLanguageMeta? meta;
         try { meta = JsonSerializer.Deserialize<InstalledLanguageMeta>(File.ReadAllText(metaFile), Json); }
-        catch (Exception e) when (e is JsonException or IOException) { meta = null; }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException) { meta = null; }
         if (meta is null) return new InstalledLanguage(code, new InstalledLanguageMeta(InstalledLanguageMeta.Repository), null, "its record is unreadable");
         var file = meta.IsLocal ? meta.Path : FilePath(code);
         if (string.IsNullOrEmpty(file) || !File.Exists(file))
             return new InstalledLanguage(code, meta, null, meta.IsLocal ? $"the file {meta.Path} is missing" : "the language file is missing");
         string text;
         try { text = File.ReadAllText(file); }
-        catch (IOException e) { return new InstalledLanguage(code, meta, null, e.Message); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return new InstalledLanguage(code, meta, null, e.Message); }
         var table = TranslationTable.Parse(text, out var error);
         if (table is not null && table.Code != code) return new InstalledLanguage(code, meta, null, $"the file is for '{table.Code}', not '{code}'");
         return new InstalledLanguage(code, meta, table, error);
@@ -89,12 +96,41 @@ public sealed class InstalledLanguages
     /// <summary>A file for a staging download of <paramref name="code"/>.</summary>
     public string StagingPath(string code) => System.IO.Path.Combine(Root, $".staging-{code}.json");
 
-    /// <summary>Moves a checked download into place and records where it came from.</summary>
+    /// <summary>Moves a checked download into place and records where it came from. If either
+    /// write fails, the language as it was — file and record — is put back and the error thrown.</summary>
     public void InstallFrom(string staging, string code, InstalledLanguageMeta meta)
     {
         if (!IsSafeCode(code)) throw new ArgumentException($"not a language code: {code}");
-        File.Move(staging, FilePath(code), overwrite: true);
-        WriteMeta(code, meta with { Source = InstalledLanguageMeta.Repository, Path = null, Installed = DateTime.UtcNow });
+        string file = FilePath(code), metaFile = MetaPath(code);
+        string fileBak = file + ".bak", metaBak = metaFile + ".bak";
+        bool hadFile = File.Exists(file), hadMeta = File.Exists(metaFile);
+        if (hadFile) File.Copy(file, fileBak, overwrite: true);
+        if (hadMeta) File.Copy(metaFile, metaBak, overwrite: true);
+        try
+        {
+            File.Move(staging, file, overwrite: true);
+            WriteMeta(code, meta with { Source = InstalledLanguageMeta.Repository, Path = null, Installed = DateTime.UtcNow });
+        }
+        catch
+        {
+            Restore(file, fileBak, hadFile);
+            Restore(metaFile, metaBak, hadMeta);
+            throw;
+        }
+        finally
+        {
+            foreach (var b in new[] { fileBak, metaBak }) try { File.Delete(b); } catch { /* next start */ }
+        }
+    }
+
+    private static void Restore(string path, string backup, bool had)
+    {
+        try
+        {
+            if (had) File.Copy(backup, path, overwrite: true);
+            else if (File.Exists(path)) File.Delete(path);
+        }
+        catch { /* best effort: the error being thrown says what failed */ }
     }
 
     /// <summary>Remembers a translator's file by its path; it is read in place at each start
@@ -102,8 +138,13 @@ public sealed class InstalledLanguages
     public void InstallLocal(string path, string code)
     {
         if (!IsSafeCode(code)) throw new ArgumentException($"not a language code: {code}");
-        try { File.Delete(FilePath(code)); } catch { /* none */ }
-        WriteMeta(code, new InstalledLanguageMeta(InstalledLanguageMeta.Local, System.IO.Path.GetFullPath(path), Installed: DateTime.UtcNow));
+        var full = System.IO.Path.GetFullPath(path);
+        // The record first: if it cannot be written, the installed language is untouched.
+        WriteMeta(code, new InstalledLanguageMeta(InstalledLanguageMeta.Local, full, Installed: DateTime.UtcNow));
+        // A downloaded copy is no longer used — unless it is the very file being loaded.
+        var downloaded = FilePath(code);
+        if (!string.Equals(System.IO.Path.GetFullPath(downloaded), full, OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase))
+            try { File.Delete(downloaded); } catch { /* unused either way */ }
     }
 
     /// <summary>Forgets a language. A running one keeps working until the restart (its table is

@@ -12,6 +12,7 @@
 // checks off it asks only when the user clicks. Starting never waits for any of it.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -50,7 +51,17 @@ internal sealed class LanguageDownloads
     /// <summary>The status bar notice was dismissed for this run.</summary>
     public bool Dismissed { get; private set; }
 
+    /// <summary>Languages downloaded this run: a running one that was updated reads its new
+    /// version only after a restart, which the row and the status bar say.</summary>
+    public IReadOnlySet<string> UpdatedThisRun => _updated;
+    private readonly HashSet<string> _updated = new(StringComparer.Ordinal);
+
+    /// <summary>Something other than download progress changed (the list, a download began or
+    /// ended): listeners may re-read what is installed.</summary>
     public event Action? Changed;
+
+    /// <summary>Only the progress of the running download moved.</summary>
+    public event Action? ProgressChanged;
 
     private static ISettingsService Settings => App.Services.GetRequiredService<ISettingsService>();
     private static LanguageCatalog Catalog => App.Services.GetRequiredService<LanguageCatalog>();
@@ -106,11 +117,12 @@ internal sealed class LanguageDownloads
         Failed = null;
         _download = new CancellationTokenSource();
         Raise();
-        var progress = new Progress<StoreProgress>(p => { Progress = p.Fraction; Raise(); });
+        var progress = new Progress<StoreProgress>(p => { Progress = p.Fraction; RaiseProgress(); });
         try
         {
             await Task.Run(() => Catalog.DownloadAsync(language, progress, _download.Token));
             Downloading = null;
+            _updated.Add(language.Code);
             NoteReady(language.Code, language.Name);
             Raise();
             return true;
@@ -131,8 +143,13 @@ internal sealed class LanguageDownloads
     /// <summary>After an install or a removal: whether a restart now changes the language.</summary>
     public void NoteReady(string code, string name)
     {
-        Ready = Settings.Current.Language == code && Loc.Language != code ? new LanguageInfo(code, name) : null;
+        Ready = IsPendingRestart(code) ? new LanguageInfo(code, name) : null;
     }
+
+    /// <summary>Whether a restart changes what is shown for the stored language: it is not the
+    /// running one, or it is and a newer version of it was installed this run.</summary>
+    public bool IsPendingRestart(string code)
+        => Settings.Current.Language == code && (Loc.Language != code || _updated.Contains(code));
 
     public void ClearReady() { Ready = null; Raise(); }
 
@@ -144,14 +161,17 @@ internal sealed class LanguageDownloads
         var stored = Settings.Current.Language?.Trim().ToLowerInvariant() ?? "";
         // A language from the repository is running: learn about a newer translation in the
         // background, so Settings offers Update straight away (research R10).
-        if (Loc.Language != UiLanguage.Default && Loc.Language == stored && MayCheck
-            && Installed.Read(stored) is { Table: not null, Meta.IsLocal: false })
+        if (stored.Length == 0 || stored == UiLanguage.Default || !InstalledLanguages.IsSafeCode(stored)) return;
+        var mine = Installed.Read(stored);
+        // A translator's own file is never replaced by a download, even when it does not load
+        // today (moved, mid-edit): the row says what is wrong with it.
+        if (mine is { Meta.IsLocal: true }) return;
+        if (Loc.Language == stored)
         {
-            _ = FetchAsync();
+            if (MayCheck && mine is { Table: not null }) _ = FetchAsync();
             return;
         }
-        if (stored.Length == 0 || stored == UiLanguage.Default || Loc.Language == stored || !InstalledLanguages.IsSafeCode(stored)) return;
-        if (Installed.Read(stored) is { Table: not null }) return;   // installed, only not running (e.g. NOTA_UI_LANGUAGE)
+        if (mine is { Table: not null }) return;   // installed, only not running (e.g. NOTA_UI_LANGUAGE)
         if (!MayCheck) { LoadCached(); return; }
         _ = Run();
 
@@ -167,6 +187,12 @@ internal sealed class LanguageDownloads
             if (await DownloadAsync(language)) log.Info($"Interface language {stored} installed; applies after a restart");
             else log.Warn($"Interface language {stored} could not be downloaded: {Failed?.Message}");
         }
+    }
+
+    private void RaiseProgress()
+    {
+        if (Dispatcher.UIThread.CheckAccess()) ProgressChanged?.Invoke();
+        else Dispatcher.UIThread.Post(() => ProgressChanged?.Invoke());
     }
 
     private void Raise()

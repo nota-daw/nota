@@ -111,12 +111,15 @@ public sealed class LanguageCatalog
         var raw = JsonSerializer.Deserialize<RawIndex>(json, Json) ?? throw new JsonException("empty language list");
         if (raw.FormatVersion > IndexFormat)
             throw new StoreException(Loc.T("language_catalog.update_nota_to_see_more_languages"));
+        // A malformed entry (null, missing fields, an unsafe code) is left out, never thrown.
         var langs = (raw.Languages ?? new())
-            .Where(l => l.Code is { } c && InstalledLanguages.IsSafeCode(c) && l.Name is { Length: > 0 } && l.Commit is { } && l.Path is { } && l.Sha256 is { })
-            .Select(l => new CatalogLanguage(l.Code!, l.Name!, l.Version, l.Commit!, l.Path!, l.Size, l.Sha256!,
+            .Where(l => l is { Code: { } c, Name.Length: > 0, Commit: not null, Path: not null, Sha256: not null } && InstalledLanguages.IsSafeCode(c))
+            .Select(l => new CatalogLanguage(l!.Code!, l.Name!, l.Version, l.Commit!, l.Path!, l.Size, l.Sha256!,
                 l.Coverage ?? new Dictionary<string, int>()))
             .OrderBy(l => l.Code, StringComparer.Ordinal).ToList();
-        return new LanguageIndex(raw.References ?? new Dictionary<string, string>(), langs);
+        var references = (raw.References ?? new Dictionary<string, string>())
+            .Where(r => r.Value is { Length: > 0 }).ToDictionary(r => r.Key, r => r.Value!);
+        return new LanguageIndex(references, langs);
     }
 
     private static Version? VersionOf(string s)
@@ -133,8 +136,8 @@ public sealed class LanguageCatalog
     private sealed class RawIndex
     {
         public int FormatVersion { get; set; }
-        public Dictionary<string, string>? References { get; set; }
-        public List<RawLanguage>? Languages { get; set; }
+        public Dictionary<string, string?>? References { get; set; }
+        public List<RawLanguage?>? Languages { get; set; }
     }
 
     private sealed class RawLanguage

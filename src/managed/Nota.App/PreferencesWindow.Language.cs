@@ -96,7 +96,10 @@ public sealed partial class PreferencesWindow
                 var offered = index?.Languages.FirstOrDefault(o => o.Code == l.Code);
                 string detail = l.Table is null ? Loc.T("preferences.language.unreadable")
                     : l.Meta.IsLocal ? Loc.T("preferences.language.local_file")
-                    : index is not null && offered is not null && LanguageDownloads.CoverageOf(index, offered) is { } c ? NotaNum.Unit(c, "0", "%")
+                    // The published coverage describes the published file: use it only when that
+                    // is the file installed, else measure the installed one.
+                    : index is not null && offered is not null && offered.Sha256 == l.Meta.Sha256
+                      && LanguageDownloads.CoverageOf(index, offered) is { } c ? NotaNum.Unit(c, "0", "%")
                     : NotaNum.Unit(l.Table.ValidateAgainst(Loc.English).Coverage, "0", "%");
                 list.Add(new(l.Code, l.Table?.Name ?? l.Code, LanguageKind.Installed, detail, l, offered));
             }
@@ -146,11 +149,13 @@ public sealed partial class PreferencesWindow
 
             var chosen = items[combo.SelectedIndex];
             bool storedInstalled = at >= 0;
-            note.IsVisible = storedInstalled && stored != Loc.Language;
+            note.IsVisible = storedInstalled && (stored != Loc.Language || downloads.UpdatedThisRun.Contains(stored));
+            // One choice at a time: while a language downloads, the list and Load file… wait.
+            combo.IsEnabled = load.IsEnabled = downloads.Downloading is null;
             update.IsVisible = chosen.Kind == LanguageKind.Installed && chosen.Installed is { } inst && chosen.Offered is { } off
                                && LanguageCatalog.UpdateAvailable(inst, off) && downloads.Downloading is null;
             remove.IsVisible = chosen.Kind == LanguageKind.Installed && downloads.Downloading is null;
-            show.IsVisible = downloads.Index is null && !LanguageDownloads.MayCheck && downloads.IndexError is null && storedInstalled;
+            show.IsVisible = downloads.Index is null && !LanguageDownloads.MayCheck && storedInstalled;
             // The stored language is not installed (Nota used to ship French) and Nota does not go
             // online on its own: one click fetches the list and the language (FR-021).
             fetchStored.IsVisible = !storedInstalled && stored != UiLanguage.Default && !LanguageDownloads.MayCheck && downloads.Downloading is null;
@@ -173,10 +178,17 @@ public sealed partial class PreferencesWindow
                     : Loc.F("preferences.language.is_not_installed", NameOf(stored));
             else if (chosen.Installed is { Table: null } broken)
                 status.Text = Loc.F("preferences.language.cannot_be_used", broken.Error ?? "");
-            else if (downloads.Index is null && downloads.IndexError is not null)
-                status.Text = Loc.T("preferences.language.more_languages_online");
+            else if (downloads.Index is null && downloads.IndexError is { } why)
+                status.Text = Loc.F("preferences.language.couldnt_get_the_list", why);
             else status.Text = "";
             status.IsVisible = status.Text.Length > 0;
+        }
+
+        // Download progress moves only the bar: nothing is re-read for it.
+        void Progress()
+        {
+            progress.IsIndeterminate = downloads.Progress < 0;
+            if (downloads.Progress >= 0) progress.Value = downloads.Progress;
         }
 
         string NameOf(string code)
@@ -185,7 +197,10 @@ public sealed partial class PreferencesWindow
 
         async void Download(CatalogLanguage language, bool choose)
         {
-            if (await downloads.DownloadAsync(language) && choose) Save(language.Code);
+            // Saved only if nothing else was chosen meanwhile (the list is locked, but a remove
+            // or a change from another window may still land).
+            var before = Stored();
+            if (await downloads.DownloadAsync(language) && choose && Stored() == before) Save(language.Code);
             downloads.NoteReady(language.Code, language.Name);
             Refresh();
         }
@@ -259,6 +274,9 @@ public sealed partial class PreferencesWindow
             Save(table.Code);
             downloads.NoteReady(table.Code, table.Name);
             var (found, coverage) = table.ValidateAgainst(Loc.English);
+            var log = App.Services.GetRequiredService<ILogSink>();
+            log.Info($"Interface language file {path}: {table.Code}, covers {coverage}% of the English keys, {found.Count} entries show English");
+            foreach (var p in found) log.Warn($"Interface language file {path}: {p.Key} — {p.Problem}");
             var lines = new List<string> { Loc.F("preferences.language.loaded_file", table.Name, NotaNum.Unit(coverage, "0", "%"), found.Count) };
             lines.AddRange(found.Take(10).Select(p => $"{p.Key} — {p.Problem}"));
             if (found.Count > 10) lines.Add(Loc.F("preferences.language.and_more_see_the_log", found.Count - 10));
@@ -268,8 +286,6 @@ public sealed partial class PreferencesWindow
             Refresh();
         };
 
-        downloads.Changed += Refresh;
-        Closed += (_, _) => downloads.Changed -= Refresh;
 
         // The list: the cache at once, the network when Nota may ask on its own.
         downloads.LoadCached();
@@ -284,7 +300,12 @@ public sealed partial class PreferencesWindow
             c.Margin = new Avalonia.Thickness(0, 2, 10, 2);
             line.Children.Add(c);
         }
-        return new StackPanel { Spacing = 6, Children = { line, problems } };
+        // Listen only while the row is on screen: Settings builds a new row each time the page is
+        // shown, and a hidden one must not keep re-reading the installed languages.
+        var panel = new StackPanel { Spacing = 6, Children = { line, problems } };
+        panel.AttachedToVisualTree += (_, _) => { downloads.Changed += Refresh; downloads.ProgressChanged += Progress; };
+        panel.DetachedFromVisualTree += (_, _) => { downloads.Changed -= Refresh; downloads.ProgressChanged -= Progress; };
+        return panel;
     }
 
     // A language's own name before the list is in ("fr" → "Français"), from the OS's culture data.

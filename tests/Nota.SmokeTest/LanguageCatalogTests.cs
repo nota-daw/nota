@@ -138,6 +138,46 @@ internal static class LanguageCatalogTests
         try { LanguageCatalog.Parse(Index(hash, 3, xx, formatVersion: 2)); } catch (StoreException) { newerFormat = true; }
         yield return (newerFormat, "a list of a newer format asks to update Nota instead of guessing");
 
+        // Review of #485: a malformed entry is skipped, not thrown.
+        var withNull = Index(hash, 3, xx).Replace("\"languages\": [", "\"languages\": [ null, { \"code\": \"zz\" },");
+        var parsedNull = LanguageCatalog.Parse(withNull);
+        yield return (parsedNull.Languages.Count == 1 && parsedNull.Languages[0].Code == "xx", "null and incomplete entries in the list are skipped");
+
+        // A failed install puts the language back as it was (file and record).
+        var fileBefore = File.ReadAllText(Path.Combine(dir, "xx.json"));
+        var metaPath = Path.Combine(dir, "xx.meta.json");
+        var metaBefore = File.ReadAllText(metaPath);
+        var staging = installed.StagingPath("xx");
+        File.WriteAllText(staging, "{\"formatVersion\":2,\"code\":\"xx\",\"name\":\"New\",\"plural\":\"one_is_1\"}");
+        File.Delete(metaPath);
+        Directory.CreateDirectory(metaPath);   // the record cannot be written
+        bool installFailed = false;
+        try { installed.InstallFrom(staging, "xx", new InstalledLanguageMeta(InstalledLanguageMeta.Repository, Version: 9)); }
+        catch (Exception) { installFailed = true; }
+        Directory.Delete(metaPath, true);
+        File.WriteAllText(metaPath, metaBefore);
+        yield return (installFailed && File.ReadAllText(Path.Combine(dir, "xx.json")) == fileBefore,
+            "a failed install leaves the installed file as it was");
+
+        // Loading the installed file itself through Load file… keeps it.
+        installed.InstallLocal(Path.Combine(dir, "xx.json"), "xx");
+        yield return (installed.Read("xx") is { Meta.IsLocal: true, Table: not null }, "loading the installed file as a local file keeps it readable");
+
+        // A file that cannot be read (permissions) is reported, not thrown.
+        if (!OperatingSystem.IsWindows())
+        {
+            var locked = Path.Combine(dir, "locked.json");
+            File.WriteAllBytes(locked, xx);
+            installed.InstallLocal(locked, "xx");
+            File.SetUnixFileMode(locked, UnixFileMode.None);
+            InstalledLanguage? lockedRead = null;
+            bool threwLocked = false;
+            try { lockedRead = installed.Read("xx"); } catch (Exception) { threwLocked = true; }
+            File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+            yield return (!threwLocked && lockedRead is { Table: null, Error: not null } || !threwLocked && lockedRead is { Table: not null },
+                "a language file without read permission is reported, not thrown");
+        }
+
         // Remove: the files go; the code is no longer installed.
         installed.Remove("xx");
         yield return (installed.Read("xx") is null && installed.List().Count == 0, "removing a language deletes it");
