@@ -43,7 +43,7 @@ public sealed class ExportWindow : NotaWindow
     private static readonly int[] Rates = { 44100, 48000, 96000 };
     private static readonly string[] RateLabels = { "44 100", "48 000", "96 000" };
     private static readonly int[] Bitrates = { 320, 256, 192, 128 };   // MP3 CBR, best first
-    private const int BeatsPerBar = 4;
+    private static int BeatsPerBar => Meter.BeatsPerBar;   // the project's bars (#405)
 
     private readonly double _bpm;
     private double _startBeats, _rangeBeats;   // the range: where it starts and how long it is

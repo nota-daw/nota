@@ -28,7 +28,7 @@ namespace Nota.App;
 
 public sealed class DrumPatternView : UserControl
 {
-    private const int BeatsPerBar = 4;     // as everywhere else in the app (transport, props rails)
+    private static int BeatsPerBar => Meter.BeatsPerBar;   // the project's bars, as everywhere else (#405)
     private const int MaxCells = 64;       // steps drawn at once; a longer clip pages in windows
     private const double NameW = 156;
     private const double RowH = 20;
