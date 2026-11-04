@@ -27,6 +27,6 @@ find_library(NOTA_ENGINE_LIB nota_engine PATHS "${NOTA_ENGINE_BUILD_DIR}" NO_DEF
 foreach(tool nota_perf nota_idle_cpu)
   add_executable(${tool} ${tool}.cpp)
   target_include_directories(${tool} PRIVATE "${NOTA_ENGINE_DIR}/include")
-  target_link_libraries(${tool} PRIVATE "${NOTA_ENGINE_LIB}")
+  target_link_libraries(${tool} PRIVATE "${NOTA_ENGINE_LIB}" ${CMAKE_DL_LIBS})
   set_target_properties(${tool} PROPERTIES BUILD_RPATH "${NOTA_ENGINE_BUILD_DIR}")
 endforeach()

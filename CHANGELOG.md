@@ -41,6 +41,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   duplicating, copying, cutting or deleting it does the same to them, as one undo step; a
   time range drawn on one track spans the whole group. ⌥-click (Alt-click) a clip or an arm
   to act on one track. Saved with the project; MCP `set_group_link` / `get_group_link`.
+- **A short fade when an audio clip is split** (#286): the cut gets a 4 ms fade-out on the
+  left piece and a fade-in on the right, so it does not click. The fades are the clip's
+  corner handles — drag them to make the fade longer or shorter. Settings → Appearance →
+  **Fade audio clips when splitting** turns the automatic fade off (it is on by default).
+  **Fade at splits** in the command palette and on an audio clip's menu writes the same fade
+  onto a join you already have, and does not shorten one you have dragged longer. No shortcut.
+  MIDI clips are left alone. The fade is part of the split's one undo step.
 - **Rearrange the song by its sections** (#192): drag a section in the Sections lane and it
   moves with everything in it — audio and MIDI clips (cut at its edges), automation on every
   track and the master, take lanes — to the boundary marked while you drag; the sections in

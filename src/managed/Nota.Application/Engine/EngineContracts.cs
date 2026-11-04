@@ -129,9 +129,11 @@ public struct NotaTakeInfo
 }
 
 /// <summary>Audio-clip ADSR amplitude shape in played time (clip-local beats). Matches native
-/// NotaClipAdsr. Attack ramps 0→1 from the clip start, decay falls to <see cref="Sustain"/>,
-/// release fades to 0 over the clip's last <see cref="ReleaseBeats"/>. <see cref="Identity"/>
-/// (the default for every clip) plays the sample at its full length and level.</summary>
+/// NotaClipAdsr. Attack ramps 0→1 from the clip start when a decay follows, and straight to
+/// <see cref="Sustain"/> when decay is 0, so a split that cleared the decay does not click.
+/// Decay falls to <see cref="Sustain"/>, release fades to 0 over the clip's last
+/// <see cref="ReleaseBeats"/>. <see cref="Identity"/> (the default for every clip) plays the
+/// sample at its full length and level.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct ClipAdsr
 {
@@ -149,9 +151,11 @@ public struct ClipAdsr
     /// long — the same shape the engine renders (see Track.h ClipAdsr::gainAt).</summary>
     public readonly double GainAt(double t, double len)
     {
-        double g = t < AttackBeats ? t / AttackBeats
-                 : t < AttackBeats + DecayBeats ? 1 - (1 - Sustain) * ((t - AttackBeats) / DecayBeats)
-                 : Sustain;
+        double g = DecayBeats <= 0
+            ? AttackBeats > 0 && t < AttackBeats ? Sustain * (t / AttackBeats) : Sustain
+            : t < AttackBeats ? (AttackBeats > 0 ? t / AttackBeats : 0)
+            : t < AttackBeats + DecayBeats ? 1 - (1 - Sustain) * ((t - AttackBeats) / DecayBeats)
+            : Sustain;
         if (ReleaseBeats > 0 && t > len - ReleaseBeats) g *= Math.Max(0, (len - t) / ReleaseBeats);
         return Math.Clamp(g, 0, 1);
     }

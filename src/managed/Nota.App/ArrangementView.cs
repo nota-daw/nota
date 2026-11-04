@@ -2056,6 +2056,44 @@ public sealed partial class ArrangementView : UserControl
         return any;
     }
 
+    /// <summary>Fade at splits: a short fade on both sides of every join where two audio clips
+    /// touch and at least one of them is selected. One undo step. False when nothing changed.</summary>
+    public bool FadeSelectedSplits()
+    {
+        if (_engine is null || _sel.Count == 0) return false;
+        var tracks = new int[_sel.Count];
+        var clips = new int[_sel.Count];
+        int i = 0;
+        foreach (var s in _sel)
+        {
+            tracks[i] = s.track;
+            clips[i] = s.clip;
+            i++;
+        }
+        if (!_engine.FadeSplits(tracks, clips)) return false;
+        Refresh();
+        // The open audio editor caches the ADSR it loaded. Both sides of each join have to
+        // reload, including a neighbour that was not selected, or the next edit writes the
+        // pre-fade shape back over the fade.
+        const double join = 1e-4;
+        foreach (var track in _tracks)
+        {
+            var ordered = track.Clips.OrderBy(c => c.StartBeat).ToList();
+            for (int j = 0; j + 1 < ordered.Count; j++)
+            {
+                var left = ordered[j];
+                var right = ordered[j + 1];
+                if (left.IsMidi || right.IsMidi) continue;
+                if (!_sel.Contains((track.Id, left.ClipIndex)) && !_sel.Contains((track.Id, right.ClipIndex)))
+                    continue;
+                if (Math.Abs(left.StartBeat + left.LengthBeats - right.StartBeat) > join) continue;
+                RaiseClipGeometryChanged(track.Id, left.ClipIndex);
+                RaiseClipGeometryChanged(track.Id, right.ClipIndex);
+            }
+        }
+        return true;
+    }
+
     /// <summary>Cmd+A — select every clip in the arrangement. False when there are none,
     /// so the key falls through.</summary>
     public bool SelectAllClips()

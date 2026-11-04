@@ -1358,12 +1358,22 @@ public sealed partial class PreferencesWindow : NotaWindow
             settings.Save();
         });
 
+        var splitFades = SwitchRow(Loc.T("preferences.fade_audio_clips_when_splitting"), settings?.Current.SplitFades ?? true, on =>
+        {
+            if (settings is null) return;
+            settings.Current.SplitFades = on;
+            settings.Save();
+            _main.Engine.SplitFades = on;
+        });
+
         return Sections(
             Section("UI", 10,
                 TopRow(Loc.T("preferences.colour_theme"), ThemePicker()),
                 Row("", Caption(Loc.T("preferences.themes_change_colours_only_follow"))),
                 Row(Loc.T("preferences.waveform"), WaveformPicker()),
                 Row("", Caption(Loc.T("preferences.how_audio_clips_draw_on"))),
+                Row("", splitFades),
+                Row("", Caption(Loc.T("preferences.splitting_an_audio_clip_adds"))),
                 Row(Loc.T("preferences.track_headers"), HeaderSidePicker()),
                 Row("", Caption(Loc.T("preferences.which_side_of_the_arrangement"))),
                 Row(Loc.T("preferences.interface_scale"), ScalePicker()),

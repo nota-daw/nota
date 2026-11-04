@@ -409,12 +409,14 @@ public partial class MainWindow : Window
             vm.Settings.Save();
         };
         Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+        vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
         ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         InitSnapGrid();
         // Settings → Appearance can switch the waveform style and the header side while the arrangement is open.
         vm.Settings.Changed += () =>
         {
             Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+            vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
             ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         };
         Browser.SetViewModel(vm.Browser);

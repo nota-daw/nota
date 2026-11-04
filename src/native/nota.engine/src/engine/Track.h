@@ -30,9 +30,11 @@ namespace nota {
 
 // Per-clip ADSR amplitude shape for audio clips, in PLAYED time (clip-local beats, so it
 // follows trims/reverse the way the ear hears the clip). Attack ramps 0→1 from the clip
-// start, decay falls 1→sustain, sustain holds, and release fades to 0 over the last
-// `release` beats before the clip end. The release multiplies the ADS stage, so on a clip
-// shorter than A+D+R the stages overlap smoothly instead of jumping. The default
+// start when a decay follows, and straight to the sustain level when decay is 0, so a
+// split that cleared the decay does not click. Decay falls 1→sustain, sustain holds, and
+// release fades to 0 over the last `release` beats before the clip end. The release
+// multiplies the ADS stage, so on a clip shorter than A+D+R the stages overlap smoothly
+// instead of jumping. The default
 // (0, 0, 1, 0) is the identity: the sample plays its full length at full level.
 struct ClipAdsr {
     double attack = 0.0;  // beats

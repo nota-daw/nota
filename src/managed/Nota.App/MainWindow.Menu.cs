@@ -134,6 +134,13 @@ public partial class MainWindow
         else _vm.StatusText = Loc.T("main.menu.nothing_after_the_selection_to");
     }
 
+    private void OnMenuFadeSplits(object? sender, EventArgs e)
+    {
+        if (_vm is null) return;
+        if (Timeline.FadeSelectedSplits()) _vm.StatusText = Loc.T("main.menu.faded_the_splits");
+        else _vm.StatusText = Loc.T("main.menu.select_audio_clips_that");
+    }
+
     private void OnMenuSplit(object? sender, EventArgs e)
     {
         if (_vm is null) return;
