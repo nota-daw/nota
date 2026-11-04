@@ -86,6 +86,7 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     void audioProcessorChanged(juce::AudioProcessor*, const juce::AudioProcessorListener::ChangeDetails&) override {}
 
     void prepare(double sr);
+    void renderPiece(float* out, int32_t frames, juce::MidiBuffer& midi); // frames <= maxBlock_
 
     NotaPlayHead playHead_; // declared first: outlives plugin_ (which points at it)
     std::unique_ptr<juce::AudioPluginInstance> plugin_;
@@ -93,8 +94,9 @@ class PluginInstrument : public nota::Instrument, private juce::AudioProcessorLi
     std::vector<float> spare_; // the channels past storage_ (see pluginChannelPtrs)
     int chanFloor_ = 0;        // pluginChannelPtrs floor (see minProcessChannels)
     juce::MidiBuffer pending_;
+    juce::MidiBuffer piece_;  // one piece's events when a block is split (#447)
     WorkgroupLink workgroup_; // the device workgroup for the plug-in's own threads (#436)
-    int maxBlock_;
+    int maxBlock_; // what the plug-in was prepared for: at most kPluginMaxBlock (#447)
     bool stereoOut_ = true;                                  // main output bus has a channel 1 (see prepare)
     std::string name_;                                       // cached plugin name for displayName()
     std::atomic<int32_t> lastTouched_{-1};                   // "Learn" (M9-B3)

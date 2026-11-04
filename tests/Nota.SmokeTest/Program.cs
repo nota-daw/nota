@@ -543,6 +543,15 @@ if (args.Length >= 1 && args[0] == "--instrument-chain")
     return failures == 0 ? 0 : 1;
 }
 // Drum Rack one-shot pads, pad audition, warp off/on alone: `--pad-warp`. Also part of the full run.
+// Opt-in (needs a VST3 built and scanned): `--hosted-plugin <vst3 folder> <nota-scanworker>`.
+if (args.Length >= 3 && args[0] == "--hosted-plugin")
+{
+    Console.WriteLine("-- hosted plug-ins: copies + long blocks --");
+    foreach (var (ok, label) in HostedPluginTests.Run(args[1], args[2])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "HOSTED PLUGIN PASSED" : $"HOSTED PLUGIN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 if (args.Length >= 1 && args[0] == "--pad-warp")
 {
     Console.WriteLine("-- pads + warp toggle --");
