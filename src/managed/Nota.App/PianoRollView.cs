@@ -155,6 +155,10 @@ public sealed partial class PianoRollView : UserControl
     private static readonly Dictionary<(int, int), ViewState> s_view = new();
     private (int, int) _clipKey = (int.MinValue, int.MinValue);
     private (int, int) _loadedKey = (int.MinValue, int.MinValue);   // the clip Load last showed
+    // The active clip the controller lane last loaded. Separate from _clipKey: a multi-clip
+    // editor clears that key (view state is not per clip), and recording still reloads the
+    // same active clip.
+    private (int Track, int Clip) _ctlClip = (int.MinValue, int.MinValue);
     private double? _pendingVOffset;   // absolute vertical offset to apply once the body is laid out
     private bool _pendingCenter;       // instead: centre on the clip's notes once laid out
     private bool _restoringView;       // suppress view-saves while we programmatically restore
@@ -783,6 +787,8 @@ public sealed partial class PianoRollView : UserControl
         if (!_set.SetActive(slot)) return;
         _trackBrush = slot < _slotBrushes.Count ? _slotBrushes[slot] : _trackBrush;
         DropControllerCache();
+        _ctlClip = (_set.ActiveClip.TrackId, _set.ActiveClip.ClipIndex);
+        _ctlLane.ResetGesture();
         Invalidate();
         ActiveClipChanged?.Invoke();
         Changed?.Invoke();
@@ -819,6 +825,13 @@ public sealed partial class PianoRollView : UserControl
         // commits first, then loads.
         List<(int Pitch, double Start, float Velocity)>? burstVel = null;
         bool sameClip = _clipKey.Item1 != int.MinValue && _clipKey == _loadedKey;
+        // _clipKey is cleared for every multi-clip reload, so it cannot say whether the
+        // controller's clip is the same one. The lane edits the active clip; match that.
+        bool sameController = _set.IsMulti
+            ? _ctlClip.Track != int.MinValue
+              && _set.ActiveClip.TrackId == _ctlClip.Track
+              && _set.ActiveClip.ClipIndex == _ctlClip.Clip
+            : sameClip;
         if (!_velWheelBurst || !sameClip)
         {
             EndVelocityWheel();   // a Session slot commits it before the notes are replaced
@@ -830,6 +843,8 @@ public sealed partial class PianoRollView : UserControl
                 burstVel.Add((_notes[i].Pitch, _notes[i].StartBeat, _notes[i].Velocity));
         }
         DropControllerCache();
+        _ctlLane.OnClipReloaded(sameController);
+        _ctlClip = (_set.ActiveClip.TrackId, _set.ActiveClip.ClipIndex);
         ReplaceAll(notes, owners);
         if (burstVel is not null)
         {

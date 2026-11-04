@@ -22,6 +22,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Application.Localization;
 
 namespace Nota.App;
@@ -187,6 +188,22 @@ public sealed partial class PianoRollView
             InvalidateVisual();
         }
 
+        // A reload (recording, undo) drops the curve cache. A draw in progress is painted onto
+        // the curve just read, so releasing later does not write the older copy back over
+        // points recorded during the drag. Any other gesture is cancelled: its point index
+        // or block no longer matches that curve. A different clip drops the gesture entirely.
+        internal void OnClipReloaded(bool sameClip)
+        {
+            if (sameClip && _drag == Drag.Draw && _stroke.Count > 0)
+            {
+                _orig = _o.ControllerPoints(Ctl).ToList();
+                ApplyStroke(StrokeSamples());
+                InvalidateVisual();
+                return;
+            }
+            if (_drag != Drag.None) ResetGesture();
+        }
+
         private IReadOnlyList<AutomationPoint> Cur => (IReadOnlyList<AutomationPoint>?)_work ?? _o.ControllerPoints(Ctl);
 
         // ---- time and value ----
@@ -328,22 +345,13 @@ public sealed partial class PianoRollView
             return hit;
         }
 
-        // The stroke replaces the curve over the stretch it covers; outside it the curve keeps its
-        // values (pinned at the stroke's edges); with nothing after it, the drawn value holds.
+        // The stroke replaces the curve over the stretch it covers. ControllerStroke keeps the
+        // value on either side (the right-hand piece stays shaped, it does not fall straight);
+        // with nothing after the stroke, the drawn value holds.
         private void ApplyStroke(List<(double Beat, float Value)> samples)
         {
             if (samples.Count == 0) return;
-            samples.Sort((a, b) => a.Beat.CompareTo(b.Beat));
-            double a = samples[0].Beat, b = samples[^1].Beat;
-            var outp = _orig.Where(q => q.Beat < a - Eps).ToList();
-            if (outp.Count > 0) outp.Add(new AutomationPoint(a - Eps, ValueAt(_orig, a - Eps, false)));
-            foreach (var (sb, sv) in samples) outp.Add(new AutomationPoint(sb, sv));
-            if (_orig.Any(q => q.Beat > b + Eps))
-            {
-                outp.Add(new AutomationPoint(b + Eps, ValueAt(_orig, b + Eps, false)));
-                outp.AddRange(_orig.Where(q => q.Beat > b + Eps));
-            }
-            _work = Normalize(outp);
+            _work = Normalize(ControllerStroke.Apply(_orig, samples));
         }
 
         private List<(double Beat, float Value)> StrokeSamples()
@@ -636,11 +644,18 @@ public sealed partial class PianoRollView
             if (was == Drag.Draw)
             {
                 var samples = StrokeSamples().OrderBy(s => s.Beat).ToList();
+                // The curve may have gained points while the button was down (a recording
+                // reload). Read it again and paint the stroke onto that, not onto the copy
+                // from pointer-down.
+                _o.DropControllerCache();
+                _orig = _o.ControllerPoints(Ctl).ToList();
                 // A click without a drag is not a stroke. Committing it would write a point
                 // that the second press of a double-click then deletes.
                 if (samples.Count < 2)
                     _work = _orig.ToList();
-                else if (!_straight)
+                else if (_straight)
+                    ApplyStroke(samples);
+                else
                 {
                     // Thin to what the eye can tell apart: a pixel and a half of the lane's scale.
                     float tol = Math.Abs(YToValue(Bounds.Height / 2) - YToValue(Bounds.Height / 2 + 1.5));

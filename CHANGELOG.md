@@ -256,6 +256,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Drawing a controller no longer changes the rest of the curve** (#169): a stroke in the
+  piano-roll controller lane replaces only the stretch you draw. A shaped curve on either side
+  keeps its bend, and points recorded while the button is down are not replaced by the older
+  copy from when the drag began.
 - **Open an SFZ by dropping it on Nota Mosaic** (#349): drop an `.sfz` file, or the folder of
   an SFZ library (such as the Salamander Grand Piano), on a Mosaic card and its zones load, with
   the import report. Before, only installed sample packs could bring an SFZ in, so a library

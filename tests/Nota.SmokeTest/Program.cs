@@ -326,6 +326,14 @@ if (args.Length >= 1 && args[0] == "--tap")
     Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Controller-stroke shaping alone: `--controller-stroke`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--controller-stroke")
+{
+    Console.WriteLine("-- controller stroke --");
+    foreach (var (ok, label) in ControllerStrokeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CONTROLLER STROKE PASSED" : $"CONTROLLER STROKE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Piano-roll velocity wheel alone: `--velocity-wheel`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--velocity-wheel")
 {
@@ -15493,6 +15501,8 @@ foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- velocity wheel --");
 foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
+Console.WriteLine("-- controller stroke --");
+foreach (var (ok, label) in ControllerStrokeTests.Run()) Check(ok, label);
 Console.WriteLine("-- velocity reset --");
 foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
 Console.WriteLine("-- bend lane range --");
