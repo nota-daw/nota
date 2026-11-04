@@ -233,7 +233,7 @@ public sealed class PreviewPlayer : UserControl
         _renderHint.Tick += (_, _) =>
         {
             _renderHint.Stop();
-            if (_plan is not null && _job is { Prefetch: false } && _job.Plan.Key == _plan.Key) _wave.Hint = "rendering…";
+            if (_plan is not null && _job is { Prefetch: false } && _job.Plan.Key == _plan.Key) _wave.Hint = Loc.T("preview_player.rendering");
         };
 
         SetLoop(false, persist: false);

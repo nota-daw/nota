@@ -953,7 +953,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             3 => $"LFO 1 {ShapeNames[Sel("lfo1shape", 4)]} {(SyncDiv(G("lfo1sync")) > 0 ? SyncText(G("lfo1sync")) : SlowHz(ExpMap(G("lfo1rate"), 0.05, 20)))} {LfoDest(2)} · "
                + $"LFO 2 {ShapeNames[Sel("lfo2shape", 4)]} {(SyncDiv(G("lfo2sync")) > 0 ? SyncText(G("lfo2sync")) : SlowHz(ExpMap(G("lfo2rate"), 0.05, 20)))} {LfoDest(3)} · "
                + $"vibrato {(G("vibamt") <= 1e-3f ? "off" : VibDepth(G("vibamt")) + (G("vibwheel") >= 0.5f ? " by wheel" : ""))}",
-            4 => RouteCount() == 0 ? "no routes — drag a cell to make one" : Plural(RouteCount(), "route", "routes") + " in the matrix",
+            4 => RouteCount() == 0 ? Loc.T("device.volt.no_routes_drag_a_cell") : Loc.Plural("device.volt.routes_in_the_matrix", RouteCount()),
             _ => Loc.F("device.volt.8_slots_assigned", MacroAssigned()),
         };
         string Meta()

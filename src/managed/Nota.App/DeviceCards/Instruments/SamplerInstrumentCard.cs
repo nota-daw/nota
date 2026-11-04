@@ -214,7 +214,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             int l = LoopSel();
             return l switch
             {
-                0 => "no loop",
+                0 => Loc.T("device.sampler.no_loop"),
                 _ => $"{SamplerModel.LoopNames[l].ToLowerInvariant()} {NotaNum.Str(G("loopstart") * durSec, "0.00")} – {NotaNum.Unit(G("loopend") * durSec, "0.00", "s")}",
             };
         }
@@ -381,7 +381,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         string FiltTl()
         {
             int t = Sel("filtertype", 4);
-            if (t == 0) return "off · the sample passes untouched";
+            if (t == 0) return Loc.T("device.sampler.off_the_sample_passes_untouched");
             return $"{SamplerModel.FilterNames[t]} 12\u2009dB/oct · {NotaNum.Hz(SamplerModel.CutoffHz(G("cutoff")))} · reso {NotaNum.Pct(G("resonance"))}";
         }
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
@@ -503,7 +503,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         string EnvWord()
         {
             double a = SamplerModel.AttackSec(G("attack")), s = G("sustain"), rel = SamplerModel.ReleaseSec(G("release"));
-            if (s < 0.05) return "a pluck — it decays to silence while held";
+            if (s < 0.05) return Loc.T("device.sampler.a_pluck_it_decays_to");
             if (a < 0.01 && s > 0.89 && rel < 0.05) return Loc.T("device.sampler.almost_a_gate_the_sample");
             if (a > 0.3) return Loc.T("device.sampler.a_slow_swell");
             if (rel > 1.0) return Loc.T("device.sampler.a_long_tail_after_release");
@@ -518,7 +518,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
                 {
                     string name = sampleName.Length > 0 ? sampleName + " · " : "";
                     int l = LoopSel();
-                    string loop = l == 0 ? "loop off, crossfade not applied"
+                    string loop = l == 0 ? Loc.T("device.sampler.loop_off_crossfade_not_applied")
                         : l == 1 ? $"{LoopWord()} · crossfade {NotaNum.Time(SamplerModel.CrossfadeSec(G("loopxfade")))}"
                         : Loc.F("device.sampler.no_crossfade", LoopWord());
                     string gain = Math.Abs(SamplerModel.GainDb(G("gain"))) > 0.05 ? $" · gain {NotaNum.Db(SamplerModel.GainDb(G("gain")), signed: true)}" : "";

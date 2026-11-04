@@ -255,7 +255,7 @@ internal sealed class CrSpectrumView : ShDragView
         }
         else
         {
-            var ft = NotaGraph.AxisText("no signal", NotaPalette.TextTertiary, 8);
+            var ft = NotaGraph.AxisText(Loc.T("common.no_signal"), NotaPalette.TextTertiary, 8);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, (top + bot - ft.Height) / 2));
         }
 

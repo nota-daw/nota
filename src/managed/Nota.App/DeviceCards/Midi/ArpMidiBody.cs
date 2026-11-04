@@ -149,7 +149,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             }
             int len = Math.Max(1, grid.CurrentSequence().Count);
             if (shortForm) return $"{(grid.Position >= 0 ? grid.Position + 1 : 1)}/{grid.StepCount}";
-            if (grid.Chord.Count == 0) return "preview · play a chord";
+            if (grid.Chord.Count == 0) return Loc.T("device.arp.preview_play_a_chord");
             return Loc.F("device.arp.notes_oct_cycle_steps", grid.Chord.Count, Math.Clamp(GI(GOctaves), 1, 8), len);
         }
 

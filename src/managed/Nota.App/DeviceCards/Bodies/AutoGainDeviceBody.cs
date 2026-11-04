@@ -457,7 +457,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             else if (silent) foot = Loc.T("device.auto_gain.input_silent_the_measurement_and");
             else if (manual && Math.Abs(delta) >= 1) { foot = Loc.F("device.auto_gain.output_lu_from_the_target", Sgn(delta), Sgn(matchG)); footInk = NotaPalette.Warning; }
             else if (tpClamp) { foot = $"True-peak limits the gain to the {NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0}")}\u2009dBTP ceiling"; footInk = NotaPalette.Warning; }
-            else if (clamp > 0 && !manual) { foot = NotaNum.F($"Needs more than {maxG:0} dB: raise Max gain or Trim"); footInk = NotaPalette.Warning; }
+            else if (clamp > 0 && !manual) { foot = Loc.F("device.auto_gain.needs_more_than_db_raise", maxG); footInk = NotaPalette.Warning; }
             else
             {
                 foot = (locked ? "On target" : "Catching up") + " · " + ScaleLong[si] + " · window " + WindowF(P(WindowP));

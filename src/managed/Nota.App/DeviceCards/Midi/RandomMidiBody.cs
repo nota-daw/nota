@@ -180,7 +180,7 @@ internal sealed class RandomMidiBody : IMidiDeviceBody
             var legend = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Height = 10, Margin = new Thickness(22, 3, 0, 0), Children =
             {
                 LegendItem(new Rectangle { Width = 9, Height = 5, Stroke = Muted, StrokeThickness = 1, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 2, 1 }, RadiusX = 1, RadiusY = 1 }, "input"),
-                LegendItem(new Border { Width = 9, Height = 5, Background = NotaPalette.VizInk, CornerRadius = NotaRadius.Bar }, "output · brightness = velocity"),
+                LegendItem(new Border { Width = 9, Height = 5, Background = NotaPalette.VizInk, CornerRadius = NotaRadius.Bar }, Loc.T("device.random.output_brightness_velocity")),
                 LegendItem(Mono("×", Muted, 8), "skip"),
             } };
             var outBody = new DockPanel { Margin = new Thickness(8, 5, 8, 4), Children = { WithDock(legend, Dock.Bottom), viz } };

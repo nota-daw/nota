@@ -556,7 +556,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         string StatusText()
         {
             if (On(ScListen))
-                return NotaNum.F($"Listen: only the key is heard · {SourceName()} {(engine.DeviceSidechainTapPre(track, di) ? "pre" : "post")} · HP {HpF(P(ScHP))} · LP {LpF(P(ScLP))}");
+                return Loc.F("device.compressor.listen_only_the_key_is", SourceName(), engine.DeviceSidechainTapPre(track, di) ? "pre" : "post", HpF(P(ScHP)), LpF(P(ScLP)));
             string range = P(Range) >= 47.5 ? "" : NotaNum.F($" · range {RangeF(P(Range))}");
             string ext = ExtActive() ? NotaNum.F($" · key {SourceName()}") : "";
             return NotaNum.F($"{Chars[Sel(Character, 5)]} · thresh {Db(P(Threshold))} · {RatioF(P(Ratio))} · knee {P(Knee):0.0} · {MsShort(P(Attack))} / {MsShort(P(Release))} ms · mix {PctF(P(Mix))}{range}{ext}");
