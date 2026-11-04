@@ -710,6 +710,14 @@ if (args.Length >= 1 && args[0] == "--session-input")
     Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Group Link alone (fast iteration): `--group-link`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--group-link")
+{
+    Console.WriteLine("-- group link --");
+    foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "GROUP LINK PASSED" : $"GROUP LINK FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--live-record")
 {
@@ -15419,6 +15427,8 @@ Console.WriteLine("-- take lanes --");
 foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
 Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
+Console.WriteLine("-- group link --");
+foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");

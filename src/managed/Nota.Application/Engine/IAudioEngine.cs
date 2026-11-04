@@ -322,6 +322,10 @@ public interface IAudioEngine : IDisposable
     /// <summary>Sets/gets a track's piano roll Fold (specs/045): a view flag saved with the project.</summary>
     void SetTrackPianoFold(int trackId, bool on);
     bool GetTrackPianoFold(int trackId);
+    /// <summary>Group Link (specs/076): links a group's tracks for arming and clip edits. One undo
+    /// step; false for a track that is not a group.</summary>
+    bool SetTrackEditLink(int trackId, bool on);
+    bool GetTrackEditLink(int trackId);
     /// <summary>Copies a whole track to the clipboard; pastes it as a new track (-1 on fail).</summary>
     bool CopyTrack(int trackId);
     int PasteTrack();

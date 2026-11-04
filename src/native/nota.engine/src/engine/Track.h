@@ -345,6 +345,8 @@ class Track {
     std::string name;
     int32_t colorIndex = -1;
     bool pianoFold = false; // piano roll Fold (specs/045): the editor shows the folded rows
+    bool editLink = false;  // group Link (specs/076): the app links the group's tracks for arming
+                            // and clip edits; group tracks only, never read by the audio thread
 
     // Stable across snapshots (voice/DSP state must survive structural edits).
     std::shared_ptr<Instrument> instrument;               // instrument tracks

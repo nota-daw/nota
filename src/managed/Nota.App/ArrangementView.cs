@@ -1066,6 +1066,7 @@ public sealed partial class ArrangementView : UserControl
         if (rebuildHeaders) ReloadSections();   // sections live in the engine's project (specs/016)
         _tracks.Clear();
         _returns.Clear();
+        _link = null;   // group Link sets (specs/076): rebuilt on next use
         var takePeaks = new Dictionary<(int, int, long), (float[], int)>();
         if (_engine is { } eng)
         {
@@ -1093,6 +1094,7 @@ public sealed partial class ArrangementView : UserControl
                     Name = IsProcessingTrack(ti.Id) ? Loc.T("Processing…") : TrackNames.Of(eng, ti),
                     Volume = ti.Volume,
                     Pan = ti.Pan,
+                    EditLink = ti.IsGroup && eng.GetTrackEditLink(ti.Id),   // group Link (specs/076)
                 };
                 if (_automationMode)
                 {
@@ -1353,7 +1355,7 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null) return;
         var placed = _engine.LastPlacedClips();
-        if (placed.Length > 0) SetSelection(placed);
+        if (placed.Length > 0) { SetSelection(placed); RelinkSelection(); }
     }
 
     // Tell the window the primary track changed under a clip selection (devices / clip tab follow).
@@ -1683,7 +1685,10 @@ public sealed partial class ArrangementView : UserControl
         TrackSelected?.Invoke(trackId);
     }
 
-    internal void Select(int trackId, int clipIndex, bool keepTrackSet = false)
+    /// <summary>Selects one clip (or just a track, clipIndex -1). On a linked group's track the
+    /// clips at the same place on the group's other tracks come along (specs/076) unless
+    /// <paramref name="linked"/> is false (⌥-click).</summary>
+    internal void Select(int trackId, int clipIndex, bool keepTrackSet = false, bool linked = true)
     {
         if (HasTimeSelection) ClearTimeSelection();   // clip- and time-selection are exclusive (1.2.5)
         if (!keepTrackSet) _selTracks.Clear();        // any other selection resets the header multi-selection
@@ -1692,7 +1697,12 @@ public sealed partial class ArrangementView : UserControl
         SelClipIndex = clipIndex;
         if (trackId > 0) FocusTrackId = trackId;
         _sel.Clear();
-        if (trackId > 0 && clipIndex >= 0) _sel.Add((trackId, clipIndex));
+        _selLinked.Clear();
+        if (trackId > 0 && clipIndex >= 0)
+        {
+            _sel.Add((trackId, clipIndex));
+            if (linked) AddMatches(trackId, clipIndex);
+        }
         // Selecting into or out of a group changes that row's height, so the rows below it
         // move: re-lay them before the headers repaint their selection.
         if (prev != trackId && (IsGroupTrack(prev) || IsGroupTrack(trackId))) RelayoutRows();
@@ -1738,6 +1748,10 @@ public sealed partial class ArrangementView : UserControl
         if (HasAutoSelection) ClearAutoSelection();
         if (_sel.Remove((trackId, clipIndex)))
         {
+            // Its partners leave with it — those the link added, not ones picked by hand.
+            _selLinked.Remove((trackId, clipIndex));
+            foreach (var m in MatchesOf(trackId, clipIndex))
+                if (_selLinked.Remove(m)) _sel.Remove(m);
             // Removed: keep the primary stable unless we just removed it.
             if (SelTrackId == trackId && SelClipIndex == clipIndex)
             {
@@ -1748,6 +1762,8 @@ public sealed partial class ArrangementView : UserControl
         else
         {
             _sel.Add((trackId, clipIndex));
+            _selLinked.Remove((trackId, clipIndex));
+            AddMatches(trackId, clipIndex);
             SelTrackId = trackId; SelClipIndex = clipIndex; FocusTrackId = trackId;   // the just-clicked clip is the primary
         }
         UpdateHeaderSelection();
@@ -1794,7 +1810,8 @@ public sealed partial class ArrangementView : UserControl
         _timeSelEnd = Math.Max(a, b);
         _timeSelRowLo = Math.Max(0, Math.Min(rowA, rowB));
         _timeSelRowHi = Math.Min(Math.Max(0, _tracks.Count - 1), Math.Max(rowA, rowB));
-        if (_sel.Count > 0) { _sel.Clear(); SelClipIndex = -1; UpdateHeaderSelection(); }
+        WidenRangeToLinkSets();
+        if (_sel.Count > 0) { _sel.Clear(); _selLinked.Clear(); SelClipIndex = -1; UpdateHeaderSelection(); }
         if (HasTimeSelection) BounceSource = (TimeSelectionTrackIds(), _timeSelStart, _timeSelEnd);
         Redraw();
     }
@@ -1845,7 +1862,7 @@ public sealed partial class ArrangementView : UserControl
         var ids = new List<int>();
         for (int r = _timeSelRowLo; r <= _timeSelRowHi && r >= 0 && r < _tracks.Count; r++)
             if (!_tracks[r].IsReturn) ids.Add(_tracks[r].Id);
-        return ids.ToArray();
+        return LinkTracks(ids);   // a range on a linked group's track spans the whole group (specs/076)
     }
 
 
@@ -1990,6 +2007,7 @@ public sealed partial class ArrangementView : UserControl
         double bhi = Math.Max(anchor.StartBeat + anchor.LengthBeats, target.StartBeat + target.LengthBeats);
         ClearTimeSelection();
         _sel.Clear();
+        _selLinked.Clear();
         for (int r = rlo; r <= rhi && r < _tracks.Count; r++)
             foreach (var c in _tracks[r].Clips)
                 if (c.StartBeat < bhi - 1e-6 && c.StartBeat + c.LengthBeats > blo + 1e-6)
@@ -2005,16 +2023,9 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null || _sel.Count == 0) return false;
         double at = Math.Max(0, _playheadBeats);
-        bool any = false;
-        // Descending clip index per track: SplitClip inserts a new clip, so splitting a
-        // higher index first never invalidates a lower one we still need to visit.
-        foreach (var (track, clip) in _sel.OrderByDescending(c => c.clip).ToList())
-        {
-            var vm = FindClipVM(track, clip);
-            if (vm is null) continue;
-            if (at > vm.StartBeat + 1e-6 && at < vm.StartBeat + vm.LengthBeats - 1e-6)
-            { _engine.SplitClip(track, clip, at); any = true; }
-        }
+        // One undo step; on a linked group the other tracks are cut at the playhead too, whatever
+        // clip they have there (specs/076).
+        bool any = SplitLinkedAt(_sel.ToList(), at);
         if (any) { Select(-1, -1); Refresh(); ClipsSplit?.Invoke(); }
         return any;
     }
@@ -2035,6 +2046,7 @@ public sealed partial class ArrangementView : UserControl
     {
         if (HasTimeSelection) ClearTimeSelection();
         _sel.Clear();
+        _selLinked.Clear();
         foreach (var c in clips) _sel.Add(c);
         if (_sel.Count > 0) { var f = _sel.First(); SelTrackId = f.track; SelClipIndex = f.clip; FocusTrackId = f.track; }
         else { SelTrackId = -1; SelClipIndex = -1; }
@@ -2108,9 +2120,13 @@ public sealed partial class ArrangementView : UserControl
         // (it survives edits and isn't cleared in automation mode), so tolerate an index
         // the engine rejects rather than throwing out of the keystroke handler.
         bool any = false;
-        foreach (var (track, clip) in _sel.OrderByDescending(c => c.clip))
-            any |= _engine.TryDeleteClip(track, clip);
+        OneUndoStep(() =>   // a linked delete is one step (specs/076)
+        {
+            foreach (var (track, clip) in _sel.OrderByDescending(c => c.clip))
+                any |= _engine.TryDeleteClip(track, clip);
+        });
         _sel.Clear();
+        _selLinked.Clear();
         SelTrackId = -1; SelClipIndex = -1;
         Refresh();
         return any;   // false when the selection was entirely stale — don't claim a delete
@@ -2198,6 +2214,7 @@ public sealed partial class ArrangementView : UserControl
             {
                 ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }),
                 ChipToggle("S", t.Soloed, NotaPalette.Solo, v => { t.Soloed = v; _engine?.SetTrackSolo(t.Id, v); }),
+                LinkToggle(t),
             },
         };
 
@@ -2293,9 +2310,18 @@ public sealed partial class ArrangementView : UserControl
             Grid.SetColumn(badge, 0);
             nameRow.Children.Add(badge);
         }
-        Grid.SetColumn(name, 1);
+        Control nameCell = name;
+        if (LinkMemberMark(t) is { } mark)   // linked with its group (specs/076)
+        {
+            var dock = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(mark, Dock.Left);
+            dock.Children.Add(mark);
+            dock.Children.Add(name);
+            nameCell = dock;
+        }
+        Grid.SetColumn(nameCell, 1);
         Grid.SetColumn(typeTag, 2);
-        nameRow.Children.Add(name);
+        nameRow.Children.Add(nameCell);
         nameRow.Children.Add(typeTag);
 
         // M / S / ● (record-arm) and, on audio tracks, the monitor chip — 18×16 chips held
@@ -2309,6 +2335,7 @@ public sealed partial class ArrangementView : UserControl
         // without re-reading the engine, and a stale VM put the old state back (#255).
         btnRow.Children.Add(ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }));
         btnRow.Children.Add(ChipToggle("S", t.Soloed, NotaPalette.Solo, v => { t.Soloed = v; _engine?.SetTrackSolo(t.Id, v); }));
+        if (t.IsGroup) btnRow.Children.Add(LinkToggle(t));   // group Link (specs/076)
         // Record-arm applies to instrument (MIDI capture) + audio (input capture) tracks;
         // return and group tracks have no input, so they get no arm chip.
         if (!t.IsReturn && !t.IsGroup)
@@ -2686,6 +2713,8 @@ public sealed partial class ArrangementView : UserControl
         int ungroupId = GroupToUngroupFor(trackId);
         if (ungroupId > 0)
             create.Add(MenuKit.Item(Loc.T("Ungroup"), GlyphKind.Ungroup, () => UngroupGroup(ungroupId), MenuKit.UngroupKey));
+        if (vm is { IsGroup: true } gvm)   // group Link (specs/076)
+            create.Add(MenuKit.SwitchItem(Loc.T("Link tracks"), GlyphKind.ChainLink, gvm.EditLink, () => SetGroupLink(gvm.Id, !gvm.EditLink)));
 
         // Clipboard + lifecycle go through the same set commands as the keys (a group carries
         // its children); paste lands right after this track.
@@ -2889,8 +2918,8 @@ public sealed partial class ArrangementView : UserControl
     // toggle's own colour — mute amber, solo blue, arm red — with
     // derived ink. Record-arm: at rest a neutral key with a red disc; armed, solid red with a
     // white disc.
-    // onChanged(armed, additive): additive = ⌘/Ctrl held, arm without disarming the others (#332).
-    private Control ArmToggle(bool initial, Action<bool, bool> onChanged)
+    // onChanged(armed, modifiers): ⌘/Ctrl arms without disarming the others (#332), ⌥ bypasses a group Link (specs/076).
+    private Control ArmToggle(bool initial, Action<bool, KeyModifiers> onChanged)
     {
         bool state = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
@@ -2906,7 +2935,7 @@ public sealed partial class ArrangementView : UserControl
         chip.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
-            e.Handled = true; state = !state; Paint(); onChanged(state, TrackArming.IsAdditive(e.KeyModifiers));
+            e.Handled = true; state = !state; Paint(); onChanged(state, e.KeyModifiers);
         };
         return chip;
     }

@@ -178,7 +178,7 @@ internal sealed class TrackInspectorView : UserControl
                 (on, _) => { _engine.SetTrackSolo(id, on); Edited(); }));
         if (audio || ti.IsInstrument)
             state.Children.Add(Toggle(Loc.T("Arm"), ti.Armed != 0, NotaPalette.Record, TrackArming.Tip,
-                (on, mods) => { TrackArming.Set(_engine, id, on, TrackArming.IsAdditive(mods)); Edited(); }));
+                (on, mods) => { TrackArming.Set(_engine, id, on, mods); Edited(); }));
         s.Children.Add(state);
 
         if (audio) s.Children.Add(Section(Loc.T("Input"), InputRows(id)));

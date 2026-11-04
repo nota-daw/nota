@@ -39,7 +39,9 @@ public partial class ArrangementView
     public bool MoveSelectedClipsToTrack(int dir)
     {
         if (_engine is null || _sel.Count == 0) return false;
-        var block = SelectedClipStarts().Select(b => (b.track, b.clip, b.start, row: RowOfTrack(b.track))).ToList();
+        // A group Link's partners (specs/076) stay on their own tracks: only the picked clips move.
+        var block = SelectedClipStarts().Where(b => !IsLinkedPartner(b.track, b.clip))
+            .Select(b => (b.track, b.clip, b.start, row: RowOfTrack(b.track))).ToList();
         if (block.Count == 0) return false;
         if (block.Any(b => b.row < 0))
         {

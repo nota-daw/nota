@@ -142,6 +142,7 @@ public sealed partial class ArrangementView
         private int _pendingTrackId, _pendingClipIndex;
         private double _pendingGrabBeat;
         private bool _pendingWasSelected;      // grabbed clip already in the multi-selection
+        private KeyModifiers _pendingMods;     // the press's modifiers: ⌥-click bypasses a group Link (specs/076)
         private Point _lastPos;                // last pointer position (drag-tooltip anchor)
 
         // Clip-edge resize hover: which edge (if any) a resize would grab, so it's
@@ -154,6 +155,12 @@ public sealed partial class ArrangementView
 
         // Group move (drag a clip that's part of the multi-selection → move all).
         private List<(int track, int clip, ClipVM vm, double origStart, int origRow)>? _groupMove;
+        // The group-move clips a group Link added (specs/076): they follow the time shift but stay
+        // on their own tracks, and a drop onto new tracks leaves them be.
+        private readonly HashSet<(int track, int clip)> _groupPartners = new();
+        private bool IsPartner((int track, int clip, ClipVM vm, double origStart, int origRow) m) => _groupPartners.Contains((m.track, m.clip));
+        // Trim / resize of a linked clip: its selected partners, previewed with it (specs/076).
+        private List<(int track, int clip, ClipVM vm)> _trimPartners = new();
         private double _grabOrigStart;   // grabbed clip's original start (delta reference)
         private int _grabRow;            // grabbed clip's row (vertical delta reference)
         private int _moveRowDelta;       // rows to shift the group (instrument→instrument only)
@@ -281,7 +288,8 @@ public sealed partial class ArrangementView
                     CommitAdsr(ah.track.Id, ah.clip, ClipAdsrKit.Reset(ah.handle, ah.clip.Adsr.Fit(ah.clip.LengthBeats)));
                     return;
                 }
-                _o.Select(ah.track.Id, ah.clip.ClipIndex);
+                bool alone = _o.IsSelected(ah.track.Id, ah.clip.ClipIndex) && _o.SelectionCount == 1;   // picked alone (⌥-click)
+                _o.Select(ah.track.Id, ah.clip.ClipIndex, linked: !alone && !ArrangementView.IsLinkBypass(e.KeyModifiers));
                 _adsrDrag = ah.handle;
                 _adsrClip = ah.clip;
                 _adsrTrackId = ah.track.Id;
@@ -342,6 +350,7 @@ public sealed partial class ArrangementView
             _pendingClipIndex = hh.clip.ClipIndex;
             _pendingGrabBeat = beat;
             _pendingWasSelected = _o.IsSelected(hh.track.Id, hh.clip.ClipIndex);
+            _pendingMods = e.KeyModifiers;
             _pressArgs = e;
             _dragOutTried = false;
             e.Pointer.Capture(this);
@@ -356,13 +365,17 @@ public sealed partial class ArrangementView
             _grabOrigStart = grabbedStart;
             _moveRowDelta = 0;
             _groupMove = new List<(int, int, ClipVM, double, int)>();
+            _groupPartners.Clear();
             for (int r = 0; r < _o._tracks.Count; r++)
             {
                 var t = _o._tracks[r];
                 if (t.Id == grabTrackId) _grabRow = r;
                 foreach (var c in t.Clips)
                     if (_o.IsSelected(t.Id, c.ClipIndex))
+                    {
                         _groupMove.Add((t.Id, c.ClipIndex, c, c.StartBeat, r));
+                        if (t.Id != grabTrackId && _o.IsLinkedPartner(t.Id, c.ClipIndex)) _groupPartners.Add((t.Id, c.ClipIndex));
+                    }
             }
             // Magnetic-snap targets: every other clip's edges + markers (exclude the group).
             _snapTargets = _o.SnapTargets(new HashSet<(int, int)>(_groupMove.Select(m => (m.track, m.clip))));
@@ -375,6 +388,7 @@ public sealed partial class ArrangementView
             if (delta == 0 || _groupMove is null) return 0;
             foreach (var m in _groupMove)
             {
+                if (IsPartner(m)) continue;   // a linked partner keeps its own track
                 int tr = m.origRow + delta;
                 if (tr < 0 || tr >= _o._tracks.Count) return 0;
                 if (_o._tracks[tr].IsInstrument != _o._tracks[m.origRow].IsInstrument) return 0;
@@ -457,7 +471,13 @@ public sealed partial class ArrangementView
                 }
                 else
                 {
-                    _o.Select(_pendingTrackId, _pendingClipIndex);   // trims act on a single clip
+                    // A trim acts on its clip — and on a linked group, on the clips paired with it (specs/076).
+                    // A clip picked alone (⌥-click) stays alone.
+                    bool alone = _pendingWasSelected && _o.SelectionCount == 1;
+                    _o.Select(_pendingTrackId, _pendingClipIndex, linked: !alone);
+                    _trimPartners = _o.SelectedPartnersOf(_pendingTrackId, _pendingClipIndex)
+                        .Select(p => (p.track, p.clip, vm: _o.FindClipVM(p.track, p.clip)))
+                        .Where(p => p.vm is not null).Select(p => (p.track, p.clip, p.vm!)).ToList();
                     _drag = _pendingMode;
                     _dragTrackId = _pendingTrackId; _dragClipIndex = _pendingClipIndex;
                     _dragClip = _pendingClip; _origStart = _pendingClip!.StartBeat; _origLen = _pendingClip.LengthBeats;
@@ -517,11 +537,13 @@ public sealed partial class ArrangementView
                 case Drag.TrimR:
                     double newEnd = _o.SnapMagnetic(_origStart + _origLen + d, mods, _snapTargets);
                     _dragClip.LengthBeats = Math.Max(0.25, newEnd - _dragClip.StartBeat);
+                    foreach (var p in _trimPartners) { p.vm.StartBeat = _dragClip.StartBeat; p.vm.LengthBeats = _dragClip.LengthBeats; }
                     break;
                 case Drag.TrimL:
                     double ns = Math.Clamp(_o.SnapMagnetic(_origStart + d, mods, _snapTargets), 0, _origStart + _origLen - 0.25);
                     _dragClip.StartBeat = ns;
                     _dragClip.LengthBeats = (_origStart + _origLen) - ns;
+                    foreach (var p in _trimPartners) { p.vm.StartBeat = _dragClip.StartBeat; p.vm.LengthBeats = _dragClip.LengthBeats; }
                     break;
             }
             InvalidateVisual();
@@ -584,6 +606,9 @@ public sealed partial class ArrangementView
                     _o.RememberNarrowed(_pendingTrackId, _pendingClipIndex, _pendingWasSelected);
                     _o.Select(_pendingTrackId, _pendingClipIndex);
                 }
+                // ⌥-click: this clip alone, without the clips a group Link pairs it with (specs/076).
+                if (ArrangementView.IsLinkBypass(_pendingMods) && _o.SelectionCount > 1)
+                    _o.Select(_pendingTrackId, _pendingClipIndex, linked: false);
                 // Also drop the playhead where the user clicked (same as clicking empty lane) —
                 // but not during playback: scrubbing off the grid is disruptive, use the ruler.
                 if (_o._engine is not { IsPlaying: true })
@@ -638,7 +663,7 @@ public sealed partial class ArrangementView
 
             if (_drag == Drag.Move && _groupMove is not null && _newTrackSources is { } sources)
             {
-                var clips = _groupMove.Select(m => (m.track, m.clip, m.vm.StartBeat)).ToList();
+                var clips = _groupMove.Where(m => !IsPartner(m)).Select(m => (m.track, m.clip, m.vm.StartBeat)).ToList();
                 SetNewTrackRows(false);
                 _groupMove = null; _drag = Drag.None; _moveRowDelta = 0;
                 e.Pointer.Capture(null);
@@ -661,7 +686,7 @@ public sealed partial class ArrangementView
                     var moves = _groupMove.Select(m =>
                     {
                         int destRow = m.origRow + rowDelta;
-                        int destTrack = (rowDelta != 0 && destRow >= 0 && destRow < _o._tracks.Count)
+                        int destTrack = (rowDelta != 0 && !IsPartner(m) && destRow >= 0 && destRow < _o._tracks.Count)
                             ? _o._tracks[destRow].Id : m.track;
                         return (m.track, m.clip, destTrack, m.vm.StartBeat);
                     }).ToArray();
@@ -691,14 +716,21 @@ public sealed partial class ArrangementView
             {
                 // Audio clips resize the grid-relative way: warped clips (or unwarped clips
                 // dragged past their source) stretch, otherwise trim — the engine picks.
-                // MIDI clips trim as before.
-                if (_dragClip.IsMidi)
-                    eng.TrimClip(_dragTrackId, _dragClipIndex, _dragClip.StartBeat, _dragClip.LengthBeats);
-                else
-                    eng.ResizeAudioClip(_dragTrackId, _dragClipIndex, _dragClip.StartBeat, _dragClip.LengthBeats);
-                // An editor open on this clip still holds the pre-drag geometry.
-                _o.RaiseClipGeometryChanged(_dragTrackId, _dragClipIndex);
+                // MIDI clips trim as before. A linked clip's partners get the same edges, all
+                // in one undo step (specs/076).
+                var targets = new List<(int track, int clip, bool midi)> { (_dragTrackId, _dragClipIndex, _dragClip.IsMidi) };
+                foreach (var p in _trimPartners) targets.Add((p.track, p.clip, p.vm.IsMidi));
+                double start = _dragClip.StartBeat, len = _dragClip.LengthBeats;
+                _o.OneUndoStep(() =>
+                {
+                    foreach (var (track, clip, midi) in targets)
+                        if (midi) eng.TrimClip(track, clip, start, len);
+                        else eng.ResizeAudioClip(track, clip, start, len);
+                });
+                // An editor open on these clips still holds the pre-drag geometry.
+                foreach (var (track, clip, _) in targets) _o.RaiseClipGeometryChanged(track, clip);
             }
+            _trimPartners = new();
             _drag = Drag.None;
             _dragClip = null;
             _rpPeaks = null;   // drop the resize-preview peaks
@@ -721,6 +753,7 @@ public sealed partial class ArrangementView
                           || _takeSwipe is not null;
             if (!active) return false;
             _pending = false; _drag = Drag.None; _groupMove = null; _moveRowDelta = 0; _dragClip = null; _rpPeaks = null;
+            _trimPartners = new(); _groupPartners.Clear();
             _takeSwipe = null; _takeMoved = false;   // an abandoned take swipe never comps
             _marqueeArmed = false; _rangeActive = false; _marquee = null; _shiftClipTrack = -1; _shiftClipIndex = -1;
             _auto.Cancel();
@@ -799,8 +832,16 @@ public sealed partial class ArrangementView
         private void CommitAdsr(int trackId, ClipVM clip, ClipAdsr adsr)
         {
             if (_o._engine is not { } eng) return;
-            eng.SetClipAdsr(trackId, clip.ClipIndex, adsr);
+            // A linked clip's selected audio partners take the same shape, as one step (specs/076).
+            var partners = _o.SelectedPartnersOf(trackId, clip.ClipIndex)
+                .Where(p => eng.TryGetClipInfo(p.track, p.clip, out var ci) && !ci.IsMidi).ToList();
+            _o.OneUndoStep(() =>
+            {
+                eng.SetClipAdsr(trackId, clip.ClipIndex, adsr);
+                foreach (var p in partners) eng.SetClipAdsr(p.track, p.clip, adsr);
+            });
             _o.RaiseClipGeometryChanged(trackId, clip.ClipIndex);
+            foreach (var p in partners) _o.RaiseClipGeometryChanged(p.track, p.clip);
             _o.Refresh();
         }
 
@@ -963,7 +1004,7 @@ public sealed partial class ArrangementView
 
             var edits = new List<Control>
             {
-                MenuKit.Item(Loc.T("Split here"), GlyphKind.Split, () => { _o._engine?.SplitClip(trackId, idx, at); _o.Refresh(); _o.ClipsSplit?.Invoke(); }, MenuKit.SplitKey),
+                MenuKit.Item(Loc.T("Split here"), GlyphKind.Split, () => { if (_o.SplitLinkedAt(new[] { (trackId, idx) }, at)) { _o.Refresh(); _o.ClipsSplit?.Invoke(); } }, MenuKit.SplitKey),
             };
             // Reverse (audio only): non-destructive, so the label reflects the clicked clip.
             if (!clip.IsMidi && _o._engine is { } rev && rev.TryGetAudioClipInfo(trackId, idx, out var rai))
@@ -1182,6 +1223,7 @@ public sealed partial class ArrangementView
                 using (ctx.PushOpacity(0.5))
                     foreach (var m in _groupMove)
                     {
+                        if (IsPartner(m)) continue;   // drawn in place on its own lane
                         int destRow = m.origRow + _moveRowDelta;
                         if (destRow < 0 || destRow >= _o._tracks.Count) continue;
                         var dest = _o._tracks[destRow];
@@ -1390,6 +1432,7 @@ public sealed partial class ArrangementView
 
         private bool IsDraggingCrossTrack(int track, int clip)
             => _groupMove is not null && (_moveRowDelta != 0 || _newTrackSources is not null)
+               && !_groupPartners.Contains((track, clip))
                && _groupMove.Any(m => m.track == track && m.clip == clip);
 
         // Shows or drops the new-track ghost rows below the lanes (#301), growing the lanes
@@ -1397,7 +1440,7 @@ public sealed partial class ArrangementView
         private void SetNewTrackRows(bool on)
         {
             List<int>? sources = on && _groupMove is not null
-                ? _groupMove.OrderBy(m => m.origRow).Select(m => m.track).Distinct().ToList()
+                ? _groupMove.Where(m => !IsPartner(m)).OrderBy(m => m.origRow).Select(m => m.track).Distinct().ToList()
                 : null;
             if (sources is { Count: 0 }) sources = null;
             if ((sources?.Count ?? 0) == (_newTrackSources?.Count ?? 0)) { _newTrackSources = sources; return; }
@@ -1423,6 +1466,7 @@ public sealed partial class ArrangementView
             using (ctx.PushOpacity(0.5))
                 foreach (var m in _groupMove!)
                 {
+                    if (IsPartner(m)) continue;
                     int k = sources.IndexOf(m.track);
                     var src = _o._tracks.FirstOrDefault(t => t.Id == m.track);
                     if (k < 0 || src is null) continue;

@@ -492,6 +492,7 @@ public partial class MainWindow : Window
             },
         };
         _mixer.MinContentHeightChanged += OnMixerMinHeightChanged;
+        _mixer.GroupLinkChanged += () => { Timeline.Refresh(); _session?.Refresh(); };   // a group's Link key (specs/076)
 
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.

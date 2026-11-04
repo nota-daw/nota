@@ -201,6 +201,8 @@ public sealed partial class MixerView
         stack.Children.Add(Wide(mute));
         stack.Children.Add(Wide(solo));
         if (!isReturn) stack.Children.Add(Wide(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm)));
+        if (ti.IsGroup) { stack.Children.Add(Wide(LinkKey(id, out var linkSync))); sync.Link = linkSync; }   // group Link (specs/076)
+        else sync.Link = null;
         return new Border { Height = ButtonsH, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0), Child = stack };
     }
 

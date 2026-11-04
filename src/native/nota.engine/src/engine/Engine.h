@@ -653,6 +653,8 @@ class Engine {
     // Piano roll Fold (specs/045): a per-track view flag, saved with the project.
     bool setTrackPianoFold(int32_t trackId, bool on);
     int32_t trackPianoFold(int32_t trackId) const; // 1 / 0, -1 unknown track
+    bool setTrackEditLink(int32_t trackId, bool on); // group tracks only (specs/076); undoable
+    int32_t trackEditLink(int32_t trackId) const;    // 1 / 0, -1 unknown track
 
     // Track clipboard (copy/cut/paste). copyTracks stores fully independent clones of the
     // expanded set (a group brings its children); pasteTracks inserts fresh copies (new ids +
