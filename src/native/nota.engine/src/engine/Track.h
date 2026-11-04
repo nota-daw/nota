@@ -99,7 +99,8 @@ struct AudioClip {
     int32_t takeId = 0;
     // Edge fades (~3 ms) at the played ends. Take sections of one recording that meet turn
     // the shared edge off, so the comp does not dip to silence there. Derived when the
-    // track is published (settleTakeJoins); not stored in the project.
+    // track is published (settleTakeJoins); a join whose takes are gone (flatten) is kept
+    // while the clips meet, so the project saves it (nota_clip_joined_edges).
     bool fadeHead = true;
     bool fadeTail = true;
 

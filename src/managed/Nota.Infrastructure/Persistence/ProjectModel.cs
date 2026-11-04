@@ -400,6 +400,9 @@ public sealed class AudioClipDto
     public bool Reversed { get; set; }         // plays back-to-front (v19); default false
     public ClipAdsrDto? Adsr { get; set; }     // ADSR amplitude shape (v20); null = identity
     public int? TakeId { get; set; }           // the AudioTakeDto.Id this comp section came from (v29)
+    // Ends that play at full level where take sections meet: 1 head, 2 tail (v29, optional;
+    // absent = both fade). A flatten keeps such a join after its takes are gone.
+    public int? JoinedEdges { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

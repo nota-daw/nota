@@ -1183,6 +1183,12 @@ public interface IAudioEngine : IDisposable
     int RestoreTake(int trackId, string path, int number, int group, double originBeat, double sourceOffsetFrames, long lengthFrames);
     /// <summary>Project load (no undo entry): tag a restored clip as a section of a restored take.</summary>
     void SetClipTakeId(int trackId, int clipIndex, int takeId);
+    /// <summary>The ends of an arrangement audio clip that play at full level (1 head, 2 tail):
+    /// a take join, or one a flatten kept. 0 = both ends fade.</summary>
+    int ClipJoinedEdges(int trackId, int clipIndex);
+    /// <summary>Project load (no undo entry): the saved <see cref="ClipJoinedEdges"/> of the track's
+    /// first clips. A join is kept only where both clips still meet.</summary>
+    void RestoreJoinedEdges(int trackId, int[] edges);
     bool TryGetSampleInfo(long sampleId, out NotaSampleInfo info);
     float[] ReadSample(long sampleId);
     bool TryGetSamplerInfo(int trackId, out NotaSamplerInfo info);

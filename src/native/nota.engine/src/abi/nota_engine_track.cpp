@@ -868,6 +868,13 @@ NotaResult nota_clip_set_take_id(NotaEngine* e, int32_t track_id, int32_t clip_i
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->setClipTakeId(track_id, clip_index, take_id) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
 }
+int32_t nota_clip_joined_edges(const NotaEngine* e, int32_t track_id, int32_t clip_index) {
+    return e ? CENG(e)->clipJoinedEdges(track_id, clip_index) : 0;
+}
+NotaResult nota_track_restore_joined_edges(NotaEngine* e, int32_t track_id, const int32_t* edges, int32_t count) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->restoreJoinedEdges(track_id, edges, count) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 int32_t nota_take_record_test(NotaEngine* e, int32_t track_id, const float* interleaved_stereo, int32_t frames,
     double start_beat) {
     return (e && ENG(e)->takeRecordTest(track_id, interleaved_stereo, frames, start_beat)) ? 1 : 0;

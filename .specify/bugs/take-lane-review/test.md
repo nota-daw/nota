@@ -37,9 +37,10 @@ EXIT:0
 
 The mixer applies a constant pan-law gain (~0.707), so the join is compared with a full-level frame of the same clip rather than the raw sample. Frame 0 is still silence.
 
+Second review round: `TakeLaneTests` adds the reopen of a flattened join, a deactivated half, and undo/redo across comp + flatten (macOS, `scripts/build.sh`).
+
 ## Residual Risks
 
-- In-memory snapshots published before this change keep both edge fades.
 - The highlight check is a screenshot, not a smoke assertion: `Nota.SmokeTest` does not reference `Nota.App`.
 - Scanner self-test and `--scan-scale` were not re-run.
 

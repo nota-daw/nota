@@ -124,7 +124,7 @@ void Engine::discardTake() {
         return g;
     };
     if (authoring_ && !a.baseTracks.empty()) {
-        publishRaw(restoreGraph(*authoring_));
+        publishRaw(restoreGraph(*authoring_), true);
         placeTakesForTempo();
         recomputePdc();
         reapplyRackMacros();

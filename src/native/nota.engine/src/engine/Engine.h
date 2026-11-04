@@ -1331,6 +1331,13 @@ class Engine {
     int32_t restoreTake(int32_t trackId, const std::string& path, int32_t number, int32_t group, double originBeat,
                         double sourceOffsetFrames, int64_t lengthFrames); // project load, no undo entry
     bool setClipTakeId(int32_t trackId, int32_t clipIndex, int32_t takeId); // project load, no undo entry
+    // The ends of an arrangement audio clip that play without the edge fade (bit 1 head, bit 2
+    // tail): a take join, or one a flatten kept. Saved with the project, because a join whose
+    // takes are gone cannot be derived again.
+    int32_t clipJoinedEdges(int32_t trackId, int32_t clipIndex) const;
+    // Project load, no undo entry: the saved clipJoinedEdges of the track's first `count`
+    // clips. A join comes back only where both clips still meet (settleTakeJoins).
+    bool restoreJoinedEdges(int32_t trackId, const int32_t* edges, int32_t count);
     // A loop take through the real capture path (ring -> drain -> stop), no device.
     bool takeRecordTest(int32_t trackId, const float* interleavedStereo, int32_t frames, double startBeat);
 
@@ -1505,7 +1512,10 @@ class Engine {
     std::shared_ptr<SampleBuffer> findSampleById(int64_t sampleId) const; // M7-6b
     static std::shared_ptr<SampleBuffer> chainSampleById(const RackCore* rack, int64_t sampleId, int depth);
     void publish(std::shared_ptr<Graph> g);                               // checkpoints (undo), then publishRaw
-    void publishRaw(std::shared_ptr<Graph> g);                            // swap live/authoring only, no undo entry
+    // Swap live/authoring only, no undo entry. `restored`: the graph holds tracks published
+    // before (undo, redo, a take retry) that a render may still be reading, so a track whose
+    // take-join fades must change is cloned rather than written in place.
+    void publishRaw(std::shared_ptr<Graph> g, bool restored = false);
     void configureClipWarp(AudioClip& c, double spb, double devSR); // build the clip's warp cache (unless deferred)
     const AudioClip* warpBuildTargetClip() const;             // in-progress build target, revalidated (null = abandon)
     void reconfigureAllWarpStreams();                         // rebuild warp caches for the current tempo + device SR
@@ -1609,11 +1619,14 @@ class Engine {
     // Re-place every take and the unwarped comp sections still where their take put them on
     // authoringBpm_'s mapping (after a tempo change or an undo/redo). No undo entry.
     void placeTakesForTempo();
-    // Turn off the shared edge fade where unwarped take sections of one group meet, and
-    // keep a join that already played full-level when those clips still meet (flatten and
-    // delete clear the take id). Message thread. publishRaw runs it on tracks the new
-    // graph does not share with the one still playing.
-    void settleTakeJoins(Track& nt);
+    // The edges that play without a fade, per clip (bit 1 head, bit 2 tail): where unwarped
+    // take sections of one group meet, and where a join that already played full-level still
+    // meets (flatten and delete clear the take id). Both clips must be active. O(n log n).
+    std::vector<uint8_t> takeJoinEdges(const Track& t) const;
+    // Write takeJoinEdges into the clips' fade flags; true if any changed. Message thread,
+    // on a track no render can see yet (publishRaw decides which).
+    bool settleTakeJoins(Track& nt) const;
+    bool takeJoinsSettled(const Track& t) const;
 
     // Clip clipboard (copy/cut/paste). Holds a clone of the copied clip; kind -1 empty.
     int32_t clipboardKind_ = -1; // -1 none, 0 audio, 1 midi

@@ -34,6 +34,12 @@ public sealed partial class NotaEngine
     public void SetClipTakeId(int trackId, int clipIndex, int takeId)
     { ThrowIfDisposed(); NativeMethods.ClipSetTakeId(_handle, trackId, clipIndex, takeId); }
 
+    public int ClipJoinedEdges(int trackId, int clipIndex)
+    { ThrowIfDisposed(); return NativeMethods.ClipJoinedEdges(_handle, trackId, clipIndex); }
+
+    public void RestoreJoinedEdges(int trackId, int[] edges)
+    { ThrowIfDisposed(); NativeMethods.TrackRestoreJoinedEdges(_handle, trackId, edges, edges.Length); }
+
     /// <summary>Smoke-test hook: record interleaved stereo into an audio track as a take started at
     /// <paramref name="startBeat"/> under the current loop, through the real capture path, no device.</summary>
     public bool TakeRecordTest(int trackId, float[] interleavedStereo, int frames, double startBeat)

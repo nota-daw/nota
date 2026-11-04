@@ -29,6 +29,8 @@ internal static class TakeLaneTests
         foreach (var r in RecordBeforeBlock()) yield return r;
         foreach (var r in FlattenKeepsSeparateJoin()) yield return r;
         foreach (var r in MoveToTrackFadesExposedEdge()) yield return r;
+        foreach (var r in DeactivatedSideFades()) yield return r;
+        foreach (var r in UndoKeepsJoins()) yield return r;
         foreach (var r in NoTakes()) yield return r;
         foreach (var r in SaveReopen()) yield return r;
     }
@@ -393,6 +395,76 @@ internal static class TakeLaneTests
         yield return (e.FlattenTakes(track) && e.TakeCount(track) == 0, "flatten with one section left reversed");
         int bad = RenderMismatch(Render(e), before);
         yield return (bad < 0, $"flatten keeps the full-level join (first mismatch {bad})");
+
+        // The takes are gone, so only the saved project knows that join plays full-level.
+        string dir = Path.Combine(Path.GetTempPath(), "nota-smoke-join-" + Guid.NewGuid().ToString("N") + ".nota");
+        try
+        {
+            var w = new List<string>();
+            ProjectService.Save(ProjectService.Capture(e, new TransportState(120.0, 1.0, false, false), w), dir, e);
+            using var d = new NotaEngine();
+            d.RenderOffline(new float[256 * 2], 256, Sr);
+            var warnings = ProjectService.Apply(ProjectService.Load(dir), d, dir);
+            bad = RenderMismatch(Render(d), before);
+            yield return (w.Count == 0 && warnings.Count == 0 && bad < 0,
+                $"the flattened join reopens full-level (first mismatch {bad}, {w.Count}+{warnings.Count} warnings)");
+        }
+        finally
+        {
+            try { Directory.Delete(dir, true); } catch { }
+        }
+    }
+
+    // A silent section joins nothing: the one that still plays fades where they met.
+    private static IEnumerable<(bool, string)> DeactivatedSideFades()
+    {
+        using var e = Rig(out int track);
+        if (!Record(e, track, RecFrames, 1.0))
+        {
+            yield return (false, "deactivate fade: recording failed");
+            yield break;
+        }
+        var before = Render(e);
+        int left = ClipAt(e, track, 0.0);
+        if (left < 0)
+        {
+            yield return (false, "deactivate fade: no section at beat 0");
+            yield break;
+        }
+        e.SetClipActive(track, left, false);
+        var after = Render(e);
+        bool faded = Math.Abs(before[30000]) > 0.05 && Math.Abs(after[30000]) < 1e-3
+                     && Math.Abs(after[30200] - before[30200]) < 1e-3 && Math.Abs(after[100]) < 1e-6;
+        yield return (faded,
+            $"deactivating one half of a join fades the other half's shared edge ({after[30000]:G4})");
+        e.SetClipActive(track, left, true);
+        int bad = RenderMismatch(Render(e), before);
+        yield return (bad < 0, $"reactivating it joins full-level again (first mismatch {bad})");
+    }
+
+    // Undo restores tracks a render may still be reading; their joins come back as they played.
+    private static IEnumerable<(bool, string)> UndoKeepsJoins()
+    {
+        using var e = Rig(out int track);
+        if (!Record(e, track, RecFrames, 1.0))
+        {
+            yield return (false, "undo joins: recording failed");
+            yield break;
+        }
+        var before = Render(e);
+        var takes = Takes(e, track);
+        bool edited = e.CompTake(track, takes[0].Id, 1.5, 2.5);
+        var comp = Render(e);
+        edited &= e.FlattenTakes(track);
+        var flat = Render(e);
+        int bad = RenderMismatch(flat, comp);
+        yield return (edited && bad < 0, $"comp then flatten plays the same (first mismatch {bad})");
+        bool undone = e.Undo() && e.Undo();
+        bad = RenderMismatch(Render(e), before);
+        yield return (undone && bad < 0, $"undo twice plays the recording's joins full-level (first mismatch {bad})");
+        bool redone = e.Redo() && e.Redo() && e.TakeCount(track) == 0;
+        bad = RenderMismatch(Render(e), flat);
+        yield return (redone && bad < 0, $"redo twice brings the flatten back as it played (first mismatch {bad})");
     }
 
     // The half that stays, and the half that moved, both get their edge fade back.
