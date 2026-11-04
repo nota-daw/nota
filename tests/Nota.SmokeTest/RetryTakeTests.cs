@@ -39,6 +39,38 @@ internal static class RetryTakeTests
         foreach (var r in SessionAudioTempoChange()) yield return r;
         foreach (var r in DisarmOneOfTwo()) yield return r;
         foreach (var r in StoppedWhilePending()) yield return r;
+        foreach (var r in NoEmptyUndoAfterPartialKeep()) yield return r;
+    }
+
+    // Audio and MIDI into empty tracks, audio disarmed (kept), MIDI retried and kept: two undo
+    // steps, each one undoing a recording — no step left that changes nothing.
+    private static IEnumerable<(bool, string)> NoEmptyUndoAfterPartialKeep()
+    {
+        using var e = Resampling(out int rec);
+        int t = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(t, 0);
+        e.SetTrackArmed(t, true);
+        e.SetCountIn(0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.ClearUndoHistory();
+        e.SetRecording(true);
+        Beats(e, 0.5);
+        Tap(e, 60, 0.5);
+        e.SetTrackArmed(rec, false);            // the audio take is kept
+        e.Poll();
+        e.RetryTake();
+        Beats(e, 0.5);
+        Tap(e, 64, 0.5);
+        e.SetRecording(false);
+        e.Poll();
+        e.StopTransport();
+        bool u1 = e.Undo();
+        bool midiGone = Notes(e, t).Count == 0 && AudioClips(e, rec) == 1;
+        bool u2 = e.Undo();
+        bool audioGone = AudioClips(e, rec) == 0;
+        yield return (u1 && midiGone && u2 && audioGone && !e.CanUndo,
+            $"retry after a partial keep: two undo steps, none empty (midi undone {midiGone}, audio undone {audioGone}, more {e.CanUndo})");
     }
 
     // Recording audio and MIDI together, one track disarmed: its take is kept, the other can

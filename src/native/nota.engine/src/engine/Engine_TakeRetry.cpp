@@ -38,7 +38,10 @@ void Engine::keepTakeTrack(int32_t trackId) {
     auto& b = takeAttempt_.baseTracks;
     b.erase(std::remove_if(b.begin(), b.end(), [&](const auto& p) { return p.first == trackId; }), b.end());
     for (size_t i = std::min(takeAttempt_.undoBase, undoStack_.size()); i < undoStack_.size(); ++i)
-        undoStack_[i].take = false;
+        if (undoStack_[i].take) {
+            undoStack_[i].take = false;
+            undoStack_[i].wasTake = true; // a retry drops it again if it ends up changing nothing
+        }
     takeAttempt_.redoSaved.clear(); // a kept recording is an edit: the old redo branch is gone
 }
 
@@ -146,6 +149,25 @@ void Engine::discardTake() {
         userEdits = true;
         kept.push_back(std::move(e));
     }
+    // A checkpoint the take made before part of it was kept (wasTake) may now step between two
+    // identical states — its content was the part just discarded: an Undo that changes nothing.
+    // Drop those (track-only edits, so comparing the tracks is enough).
+    auto sameTracks = [](const Graph& x, const Graph& y) {
+        if (x.masterTrack != y.masterTrack || x.tracks.size() != y.tracks.size()) return false;
+        for (size_t k = 0; k < x.tracks.size(); ++k)
+            if (x.tracks[k] != y.tracks[k]) return false;
+        return true;
+    };
+    std::shared_ptr<Graph> next = authoring_;
+    for (size_t k = kept.size(); k-- > 0;) {
+        if (!kept[k].graph) continue;
+        if (kept[k].wasTake && kept[k].mix.empty() && next && sameTracks(*kept[k].graph, *next)) {
+            kept.erase(kept.begin() + static_cast<std::ptrdiff_t>(k));
+            continue;
+        }
+        next = kept[k].graph;
+    }
+    userEdits = !kept.empty();
     undoStack_.resize(base);
     for (auto& e : kept) undoStack_.push_back(std::move(e));
     if (!userEdits) redoStack_ = std::move(a.redoSaved);

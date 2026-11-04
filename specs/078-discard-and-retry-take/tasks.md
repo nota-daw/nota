@@ -150,3 +150,4 @@ coverage of engine behaviour. Tests live in `tests/Nota.SmokeTest/RetryTakeTests
 - [X] T042 Session audio retry notes the boundary frame when the capture crosses it (tempo changes after it don't move the trim), per FR-012
 - [X] T043 Disarming one of two recording tracks keeps its part and leaves the attempt for the capture still running (`keepTakeTrack`), per FR-010 / FR-014
 - [X] T044 Every take started without a retry syncs the audio thread's take epoch and cancels a Session retry still waiting for its slot (`syncTakeEpoch`), per FR-007
+- [X] T045 A retry after a partial keep drops the former take checkpoints that end up changing nothing (no empty Undo), per FR-003
