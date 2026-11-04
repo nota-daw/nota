@@ -123,9 +123,37 @@ public sealed class TranslationTable
 
     public static bool IsKey(string key) => key.Length <= MaxKeyLength && KeyPattern.IsMatch(key);
 
-    /// <summary>The placeholder indices a text uses ({0}, {1:0.0} …); {{ }} are literal braces.</summary>
+    /// <summary>The placeholder indices a text uses ({0}, {1:0.0} …); {{ }} are literal braces. An
+    /// index too large for an int reads as -1, so it never matches the English set.</summary>
     public static HashSet<int> Placeholders(string text)
-        => PlaceholderPattern.Matches(text.Replace("{{", "").Replace("}}", "")).Select(m => int.Parse(m.Groups[1].Value)).ToHashSet();
+        => PlaceholderPattern.Matches(text.Replace("{{", "").Replace("}}", ""))
+            .Select(m => int.TryParse(m.Groups[1].Value, out var i) ? i : -1).ToHashSet();
+
+    /// <summary>Why a pattern cannot be formatted (a stray brace, "{0,abc}", an index past
+    /// <see cref="MaxPlaceholder"/>), or null if it can. Formatting is tried with numbers, as
+    /// Loc.F and Loc.Plural pass them.</summary>
+    public static string? PatternProblem(string pattern)
+    {
+        var used = Placeholders(pattern);
+        if (used.Any(i => i is < 0 or > MaxPlaceholder)) return $"a placeholder index outside 0–{MaxPlaceholder}";
+        var args = Enumerable.Repeat<object?>(0, used.Count == 0 ? 0 : used.Max() + 1).ToArray();
+        try { _ = string.Format(System.Globalization.CultureInfo.InvariantCulture, pattern, args); return null; }
+        catch (FormatException) { return "the text cannot be formatted (check its braces and placeholders)"; }
+    }
+
+    /// <summary>The highest placeholder index a text may use.</summary>
+    public const int MaxPlaceholder = 9;
+
+    /// <summary>The entries of this table that can stand for their English reference entry
+    /// (<see cref="EntryProblem"/> is null), worked out once: Loc keeps this for the run so a
+    /// lookup is a dictionary read, never a re-check.</summary>
+    public IReadOnlyDictionary<string, Translation> UsableAgainst(TranslationTable reference)
+    {
+        var usable = new Dictionary<string, Translation>(StringComparer.Ordinal);
+        foreach (var (key, t) in _strings)
+            if (reference.TryGet(key, out var r) && EntryProblem(t, r) is null) usable[key] = t;
+        return usable;
+    }
 
     /// <summary>This language checked against the English reference: the entries that cannot be
     /// used (unknown key, text where the reference counts or the other way round, placeholders
@@ -150,6 +178,8 @@ public sealed class TranslationTable
     {
         if (t.IsPlural != reference.IsPlural)
             return reference.IsPlural ? "the English text is counted: give \"one\" and \"other\"" : "the English text is not counted: give a plain text";
+        if (PatternProblem(t.Other) is { } other) return other;
+        if (t.One is not null && PatternProblem(t.One) is { } one) return "singular form: " + one;
         var want = Placeholders(reference.Other);
         if (!Placeholders(t.Other).SetEquals(want))
             return $"placeholders {{{string.Join(",", Placeholders(t.Other).Order())}}} differ from the English {{{string.Join(",", want.Order())}}}";

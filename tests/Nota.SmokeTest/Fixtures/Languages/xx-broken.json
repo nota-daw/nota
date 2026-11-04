@@ -13,6 +13,8 @@
     "test.unknown": "Xunknown",
     "test.tracks": { "one": "{0} piste", "other": "{0} pistes" },
     "test.clips": { "other": "{0} clips FR" },
-    "test.brace": "Accolade {{x}} {0}"
+    "test.brace": "Accolade {{x}} {0}",
+    "test.number": "{0,abc}",
+    "test.bars": { "one": "{99999999999999999999} mesure", "other": "{0} mesures" }
   }
 }

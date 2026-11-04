@@ -207,7 +207,9 @@ internal static partial class DesignTokenCheck
 
     private const string LocLit = @"""(?:[^""\\\n]|\\.)*""";
     // The keyed calls (spec 077): Loc.T("key"), Loc.F("key", …), Loc.Plural("key", n).
-    private static readonly Regex LocKeyed = new($@"\bLoc\.(?<k>T|F|Plural)\(\s*(?<t>{LocLit})");
+    // The key must be the whole argument: ")" after a T key, "," (or ")") after an F or Plural
+    // key — so Loc.T("common.cancel" + suffix) is a computed key, not "common.cancel".
+    private static readonly Regex LocKeyed = new($@"\bLoc\.(?<k>T|F|Plural)\(\s*(?<t>{LocLit})\s*(?<end>[,)])");
     private static readonly Regex LocAnyCall = new(@"\bLoc\.(?:T|F|Plural)\(");
     // The XAML form: Header="{app:T 'main.save_as'}" (quotes optional).
     private static readonly Regex LocXaml = new(@"\{app:T\s+(?:'(?<t>[^']*)'|(?<t>[^\s'},]+))\s*\}");
@@ -232,16 +234,7 @@ internal static partial class DesignTokenCheck
             if (rel.StartsWith("Nota.Application/Localization/") || rel == "Nota.App/TExtension.cs") continue;   // the API itself
             var text = string.Join('\n', File.ReadLines(f).Select(CodeOf));
             if (!text.Contains("Loc.")) continue;
-            int LineOf(int index) { int n = 1; for (int i = 0; i < index; i++) if (text[i] == '\n') n++; return n; }
-            var literal = new HashSet<int>();
-            foreach (Match m in LocKeyed.Matches(text))
-            {
-                literal.Add(m.Index);
-                keys.Add(new LocKey(Unescape(m.Groups["t"].Value[1..^1]), m.Groups["k"].Value[0], rel, LineOf(m.Index),
-                    FormatOpen.IsMatch(text[Math.Max(0, m.Index - 200)..m.Index])));
-            }
-            foreach (Match m in LocAnyCall.Matches(text))
-                if (!literal.Contains(m.Index)) bad.Add(new Hit(rel, LineOf(m.Index), text.Substring(m.Index, Math.Min(60, text.Length - m.Index))));
+            ScanLocCalls(rel, text, keys, bad);
         }
         foreach (var f in SourceFiles(managed, ".axaml"))
         {
@@ -260,6 +253,26 @@ internal static partial class DesignTokenCheck
         return (keys, bad);
     }
 
+    /// <summary>The Loc calls of one C# text (comments already removed): keys named by a plain
+    /// literal that is the whole key argument go to <paramref name="keys"/>, every other Loc call
+    /// to <paramref name="bad"/>.</summary>
+    private static void ScanLocCalls(string rel, string text, List<LocKey> keys, List<Hit> bad)
+    {
+        int LineOf(int index) { int n = 1; for (int i = 0; i < index; i++) if (text[i] == '\n') n++; return n; }
+        var literal = new HashSet<int>();
+        foreach (Match m in LocKeyed.Matches(text))
+        {
+            char kind = m.Groups["k"].Value[0];
+            bool whole = kind == 'T' ? m.Groups["end"].Value == ")" : kind == 'F' || m.Groups["end"].Value == ",";
+            if (!whole) continue;
+            literal.Add(m.Index);
+            keys.Add(new LocKey(Unescape(m.Groups["t"].Value[1..^1]), kind, rel, LineOf(m.Index),
+                FormatOpen.IsMatch(text[Math.Max(0, m.Index - 200)..m.Index])));
+        }
+        foreach (Match m in LocAnyCall.Matches(text))
+            if (!literal.Contains(m.Index)) bad.Add(new Hit(rel, LineOf(m.Index), text.Substring(m.Index, Math.Min(60, text.Length - m.Index))));
+    }
+
     public static IEnumerable<(bool Ok, string Label)> RunLocalization()
     {
         var root = RepoRoot();
@@ -270,6 +283,25 @@ internal static partial class DesignTokenCheck
         yield return (notLiteral.Count == 0,
             notLiteral.Count == 0 ? "every Loc call and {app:T} names its key as a plain literal"
                 : "a Loc call whose key is computed or interpolated can never be checked: " + string.Join(", ", notLiteral.Take(8).Select(h => $"{h.Path}:{h.Line}")));
+
+        // The scanner itself (review of #479): a key is only a key when it is the whole argument.
+        {
+            var k = new List<LocKey>();
+            var b = new List<Hit>();
+            ScanLocCalls("sample.cs", string.Join('\n',
+                "a = Loc.T(\"common.cancel\");",
+                "b = Loc.F(\"main.pdc\", ms);",
+                "c = Loc.Plural(\"main.clips\", n);",
+                "d = Loc.T(\"common.cancel\" + suffix);",
+                "e = Loc.F(\"main.pdc\" + suffix, ms);",
+                "f = Loc.Plural(\"main.clips\");",
+                "g = Loc.T(key);",
+                "h = Loc.T( \"common.close\" );"), k, b);
+            var found = string.Join(",", k.Select(x => x.Kind + ":" + x.Key));
+            var flagged = string.Join(",", b.Select(x => x.Key[..Math.Min(x.Key.Length, 12)]));
+            yield return (found == "T:common.cancel,F:main.pdc,P:main.clips,T:common.close" && b.Count == 4,
+                $"the key scanner takes only whole literal keys and flags the rest (keys {found}; flagged {b.Count}: {flagged})");
+        }
 
         var badKeys = calls.Where(c => !TranslationTable.IsKey(c.Key)).ToList();
         yield return (badKeys.Count == 0,
@@ -282,6 +314,13 @@ internal static partial class DesignTokenCheck
             en is null ? "en.json: " + enError : en.Problems.Count == 0 ? $"en.json parsed ({en.Count} keys)"
                 : "en.json entries that cannot be used: " + string.Join("; ", en.Problems.Take(6).Select(p => $"{p.Key} — {p.Problem}")));
         if (en is null) yield break;
+
+        var unformattable = en.Keys.Order(StringComparer.Ordinal)
+            .Select(k => (k, en.TryGet(k, out var t) ? TranslationTable.PatternProblem(t.Other) ?? (t.One is null ? null : TranslationTable.PatternProblem(t.One)) : null))
+            .Where(x => x.Item2 is not null).ToList();
+        yield return (unformattable.Count == 0,
+            unformattable.Count == 0 ? "every English text formats (braces and placeholders 0–9)"
+                : "English texts that cannot be formatted: " + string.Join("; ", unformattable.Take(6).Select(x => $"{x.k} — {x.Item2}")));
 
         var used = new Dictionary<string, LocKey>(StringComparer.Ordinal);
         foreach (var c in calls) if (!used.ContainsKey(c.Key)) used[c.Key] = c;

@@ -17,6 +17,7 @@
 
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 
@@ -27,11 +28,13 @@ public static class Loc
     /// <summary>The manifest name of the English reference in this assembly.</summary>
     public const string EnglishResource = "Nota.Localization.en.json";
 
-    private sealed record State(string Code, TranslationTable? Table);
+    // Usable: the running language's entries that can stand for their English entry, checked
+    // once at Install, so a lookup — labels are drawn every frame — is a dictionary read.
+    private sealed record State(string Code, TranslationTable? Table, IReadOnlyDictionary<string, Translation>? Usable);
 
     private static readonly Lazy<TranslationTable> _english = new(LoadEnglish);
     private static volatile TranslationTable? _englishForTests;
-    private static volatile State _state = new(UiLanguage.Default, null);
+    private static volatile State _state = new(UiLanguage.Default, null, null);
     private static volatile bool _installed;
     private static volatile bool _usedBeforeInstall;
     private static readonly ConcurrentDictionary<string, byte> _missing = new(StringComparer.Ordinal);
@@ -59,7 +62,8 @@ public static class Loc
     /// built. English passes a null table.</summary>
     public static void Install(TranslationTable? table, string languageCode)
     {
-        _state = new State(languageCode, languageCode == UiLanguage.Default ? null : table);
+        var running = languageCode == UiLanguage.Default ? null : table;
+        _state = new State(languageCode, running, running?.UsableAgainst(English));
         _installed = true;
     }
 
@@ -68,7 +72,7 @@ public static class Loc
     public static void ResetForTests(TranslationTable? english = null)
     {
         _englishForTests = english;
-        _state = new State(UiLanguage.Default, null);
+        _state = new State(UiLanguage.Default, null, null);
         _installed = false;
         _usedBeforeInstall = false;
     }
@@ -80,9 +84,9 @@ public static class Loc
     /// controls word order and agreement. Placeholders are {0}, {1}…; {{ }} are literal braces.</summary>
     public static string F(string key, params object?[] args)
     {
-        var table = Enter();
+        var usable = Enter();
         var english = English.TryGet(key, out var e) ? e.Other : Missing(key);
-        var pattern = Lookup(key, table) is { } t ? t.Other : english;
+        var pattern = Lookup(key, usable) is { } t ? t.Other : english;
         return Format(pattern, english, args);
     }
 
@@ -90,32 +94,29 @@ public static class Loc
     /// language's rule (French counts 0 and 1 as one).</summary>
     public static string Plural(string key, long n)
     {
-        var table = Enter();
+        _ = Enter();
+        var state = _state;   // one read: the table and its usable entries belong together
         if (!English.TryGet(key, out var e)) return Missing(key);
         string english = UiLanguage.Plural(UiLanguage.RuleOneIs1, n) == PluralForm.One ? e.One ?? e.Other : e.Other;
         string pattern = english;
-        if (table is not null && Valid(table, key, e) is { } t)
-            pattern = UiLanguage.Plural(table.PluralRule, n) == PluralForm.One ? t.One ?? t.Other : t.Other;
+        if (state.Table is not null && state.Usable is not null && state.Usable.TryGetValue(key, out var t))
+            pattern = UiLanguage.Plural(state.Table.PluralRule, n) == PluralForm.One ? t.One ?? t.Other : t.Other;
         return Format(pattern, english, new object?[] { n });
     }
 
-    private static TranslationTable? Enter()
+    private static IReadOnlyDictionary<string, Translation>? Enter()
     {
         if (!_installed) _usedBeforeInstall = true;
-        return _state.Table;
+        return _state.Usable;
     }
 
-    // The running language's entry when it can stand for the English one, else the English entry.
-    private static Translation? Lookup(string key, TranslationTable? table)
+    // The running language's entry when it can stand for the English one (a broken entry in a
+    // language file shows English — it never crashes or garbles the UI), else the English entry.
+    private static Translation? Lookup(string key, IReadOnlyDictionary<string, Translation>? usable)
     {
-        if (!English.TryGet(key, out var e)) return null;
-        return table is not null && Valid(table, key, e) is { } t ? t : e;
+        if (usable is not null && usable.TryGetValue(key, out var t)) return t;
+        return English.TryGet(key, out var e) ? e : null;
     }
-
-    // A translation is used only if it has the English entry's shape and placeholders: a broken
-    // entry in a language file shows English, it never crashes or garbles the UI.
-    private static Translation? Valid(TranslationTable table, string key, Translation english)
-        => table.TryGet(key, out var t) && TranslationTable.EntryProblem(t, english) is null ? t : null;
 
     private static string Missing(string key)
     {

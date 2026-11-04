@@ -37,7 +37,7 @@ UTF-8, no BOM, no SPDX header (licence stated by the repository).
 | Keys | Match `^[a-z0-9_]+(\.[a-z0-9_]+)+$`, ≤ 80 chars, unique. |
 | Values | A non-empty string, or a plural object with `other` required; `one` optional (missing → `other`). Unknown categories ignored. An empty string counts as missing (English shown). |
 | Shape | A key that is a plural object in the reference must be one here, and the other way round; mismatch → entry invalid (English shown), reported. |
-| Placeholders | `{0}`, `{1}`… with optional format (`{0:0.0}`). `other` uses exactly the reference's placeholders, any order; `one` may drop but not add. `{{` `}}` literal. |
+| Placeholders | `{0}` … `{9}` with optional format (`{0:0.0}`). `other` uses exactly the reference's placeholders, any order; `one` may drop but not add. `{{` `}}` literal. Every form must format (no stray brace, no `{0,abc}`, no index past 9); one that does not is an invalid entry, not counted in coverage. |
 | Missing key | Run time: English. Coverage: counted missing. |
 | Unknown key (not in the reference checked against) | Run time: ignored. Repository check: error if the key is in **no** reference, warning if only in older ones. |
 | Malformed file | Language skipped, error logged, English kept; Nota always starts. |
