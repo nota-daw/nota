@@ -28,7 +28,7 @@ public partial class ArrangementView
         if (delta == 0) return true;   // already at the song start: the key is still ours
         if (MoveBlock(block.Select(b => (b.track, b.clip, b.track, b.start + delta)).ToArray()) is not { } move) return true;
         Refresh();
-        ReselectPlaced();
+        ReselectPlaced(move);
         ClipsMoved?.Invoke(move);   // open editors follow their clips (index and START read-out)
         return true;
     }
@@ -39,7 +39,9 @@ public partial class ArrangementView
     public bool MoveSelectedClipsToTrack(int dir)
     {
         if (_engine is null || _sel.Count == 0) return false;
-        var block = SelectedClipStarts().Select(b => (b.track, b.clip, b.start, row: RowOfTrack(b.track))).ToList();
+        // A group Link's partners (specs/076) stay on their own tracks: only the picked clips move.
+        var block = SelectedClipStarts().Where(b => !IsLinkedPartner(b.track, b.clip))
+            .Select(b => (b.track, b.clip, b.start, row: RowOfTrack(b.track))).ToList();
         if (block.Count == 0) return false;
         if (block.Any(b => b.row < 0))
         {
@@ -59,7 +61,7 @@ public partial class ArrangementView
         if (_engine.LastMoveKeptDeviceAutomation())
             StatusMessage?.Invoke(Loc.T("Moved across tracks — device automation stayed on the source"));
         Refresh();
-        ReselectPlaced();
+        ReselectPlaced(move);
         ClipsMoved?.Invoke(move);
         if (SelTrackId > 0) RevealTrack(SelTrackId);
         AnnounceSelectedTrack();   // the destination track is now the active one

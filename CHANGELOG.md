@@ -23,6 +23,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Link a group's tracks** (#184): the Link key (a chain link) on a group's header, its
+  Mixer strip and its menu ties the tracks in the group together — for a dry and an amped
+  guitar recorded side by side, say. Arming one arms them all; clicking a clip selects the
+  clips at the same place on the other tracks too; moving, trimming, fading, splitting,
+  duplicating, copying, cutting or deleting it does the same to them, as one undo step; a
+  time range drawn on one track spans the whole group. ⌥-click (Alt-click) a clip or an arm
+  to act on one track. Saved with the project; MCP `set_group_link` / `get_group_link`.
 - **Rearrange the song by its sections** (#192): drag a section in the Sections lane and it
   moves with everything in it — audio and MIDI clips (cut at its edges), automation on every
   track and the master, take lanes — to the boundary marked while you drag; the sections in

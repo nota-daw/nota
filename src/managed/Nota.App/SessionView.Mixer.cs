@@ -11,6 +11,7 @@ using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
@@ -202,6 +203,24 @@ public sealed partial class SessionView
                     }, out var syncArm));
                     follow.Add(t => syncArm(t.Armed != 0));
                 }
+                else if (c.Kind == ColKind.Group)   // a group's Link key (specs/076)
+                {
+                    bool linkOn = _engine.GetTrackEditLink(id);
+                    var glyph = new Glyph(GlyphKind.ChainLink, 10);
+                    var key = new Border { Height = 17, Margin = new Thickness(1, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = glyph, Cursor = new Cursor(StandardCursorType.Hand) };
+                    ToolTip.SetTip(key, ArrangementView.LinkTip);
+                    ArrangementView.PaintLinkChip(key, glyph, linkOn);
+                    key.PointerPressed += (_, e) =>
+                    {
+                        if (!e.GetCurrentPoint(key).Properties.IsLeftButtonPressed) return;
+                        e.Handled = true;
+                        if (!_engine.SetTrackEditLink(id, !linkOn)) return;
+                        linkOn = !linkOn; ArrangementView.PaintLinkChip(key, glyph, linkOn);
+                        ArrangementChanged?.Invoke();   // the Arrangement repaints its headers
+                    };
+                    btns.Children.Add(key);
+                    follow.Add(_ => { bool v = _engine.GetTrackEditLink(id); if (v != linkOn) { linkOn = v; ArrangementView.PaintLinkChip(key, glyph, v); } });
+                }
             }
             root.Children.Add(Section(panRow, FaderRow(vol, db), meters, btns));
         }
@@ -243,7 +262,7 @@ public sealed partial class SessionView
     // M / S / record-arm: a 20px key. Engaged mute fills amber, solo blue, arm the record red
     // with its white disc (DESIGN.md § Controls), each with derived ink.
     // set(on, additive): additive = ⌘/Ctrl held (the arm button arms without disarming the others, #332).
-    private static Control MixToggle(string? label, bool initial, bool arm, Action<bool, bool> set, out Action<bool> sync)
+    private static Control MixToggle(string? label, bool initial, bool arm, Action<bool, KeyModifiers> set, out Action<bool> sync)
     {
         bool on = initial;
         var text = new TextBlock { Text = label ?? "", FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -273,7 +292,7 @@ public sealed partial class SessionView
         {
             if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
             e.Handled = true;
-            on = !on; set(on, TrackArming.IsAdditive(e.KeyModifiers)); Paint();
+            on = !on; set(on, e.KeyModifiers); Paint();
         };
         sync = v => { if (v == on) return; on = v; Paint(); };
         Paint();

@@ -3512,6 +3512,19 @@ int32_t Engine::trackPianoFold(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return t ? (t->pianoFold ? 1 : 0) : -1;
 }
+bool Engine::setTrackEditLink(int32_t trackId, bool on) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || old->type() != TrackType::Group) return false;
+    if (old->editLink == on) return true; // no change, no undo step
+    auto nt = cloneTrack(*old);
+    nt->editLink = on;
+    republishWithTrack(trackId, nt); // changes what edits do: an undo step (unlike pianoFold)
+    return true;
+}
+int32_t Engine::trackEditLink(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t ? (t->editLink ? 1 : 0) : -1;
+}
 
 bool Engine::deleteClip(int32_t trackId, int32_t clipIndex) {
     auto old = findTrackAuthoring(trackId);
@@ -3555,6 +3568,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     nt->name = src.name;
     nt->colorIndex = src.colorIndex;
     nt->pianoFold = src.pianoFold;
+    nt->editLink = src.editLink;
     nt->instrument = cloneInstrument(src);
     if (nt->instrument && src.instrument) nt->instrument->setBypassed(src.instrument->bypassed());
     for (auto& m : src.midiEffects)

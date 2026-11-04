@@ -234,6 +234,15 @@ docks as a panel under any of the three, or floats in its own window — see
 
 - **Track types**: Audio, MIDI/Instrument, Return, Master, **Group** (nestable submixes —
   ⌘/Ctrl+G to group, ⌘/Ctrl+Shift+G to ungroup).
+- **Linked groups** — a group's **Link** key (a chain link on its header, its Mixer and
+  Session strip, and **Link tracks** in its menu) ties the tracks below it together, nested
+  groups included. Arming one arms them all; clicking a clip also selects the clips with the
+  same start and end on the other tracks, and moving, trimming, fading, splitting,
+  duplicating, copying, cutting or deleting it acts on them too, as one undo step (a clip
+  moved to another track takes its partners along in time only); a time range on one track
+  spans the group. ⌥-click (Alt-click) a clip or an arm to act on one track. Linked tracks
+  show a chain link before their name. Saved with the project; MCP `set_group_link` /
+  `get_group_link`.
 - **Adding a track**: the `+ Instrument` / `+ Audio` / `+ Return` buttons above the
   arrangement, or the context menu — right-click the empty space below the tracks, or use
   `Add track ▸` in a track's own menu (the new track goes right after that track, or inside
@@ -1434,7 +1443,7 @@ Coverage:
   `duplicate_section_with_content`, `delete_section_with_content`); version history — `list_versions` (with what
   each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
   star). Deleting versions stays with the user.
-- **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
+- **Tracks**: add and remove, volume/pan/mute/solo, groups and their Link, sends.
 - **Instruments**: add by kind, read and write parameters (by index or by stable id), turn
   on or off (`set_device_bypass` with device index -1; `get_overview` shows it), replace with
   another built-in or an empty rack (`set_track_instrument`); read / shape Nota Keys in

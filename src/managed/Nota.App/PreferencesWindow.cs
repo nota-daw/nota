@@ -1595,6 +1595,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             (Loc.T("Right-click the metronome"), Loc.T("Count-in before Play / Record: off · 1 · 2 · 4 bars")),
             (Loc.T("Drag an audio clip's ADSR handle"), Loc.T("Shape attack · decay + sustain · release (top corners and the dot on hover) · ⌥-click types the stage · double-click resets it")),
             (Loc.T("⇧-click track header"), Loc.T("Add the track to the selection · again to remove it")),
+            (Loc.T("Click a group's Link key"), Loc.T("Link the group's tracks: arming one arms them all, and clip edits act on the clips at the same place on each")),
+            (Loc.T("⌥-click a clip or Arm"), Loc.T("In a linked group: select that clip alone, or arm that track alone")),
             (Loc.T("Right-click track headers"), Loc.T("A multi-selection gets its own menu: colour, height, freeze, group, copy, duplicate, delete")),
             (Loc.T("Drag a track's bottom edge"), Loc.T("Resize the track (header or lane) · snaps to compact / standard / large · a multi-selection resizes together")),
             (Loc.T("Drag a track's bottom edge + ⌥"), Loc.T("Resize every track at once")),

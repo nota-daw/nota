@@ -28,6 +28,7 @@ public sealed partial class ArrangementView
         public bool IsReturn;
         public bool IsGroup;     // a group (submix) track — has children, no clips
         public int GroupId = -1; // parent group track id, or -1 (top-level)
+        public bool EditLink;    // a group's Link (specs/076): its tracks arm and edit together
         public int Depth;        // hierarchy indent level (0 = top-level) for the header/lane row
         public int ColorIndex;   // index into the track palette (returns → 8/9)
         public bool Muted;

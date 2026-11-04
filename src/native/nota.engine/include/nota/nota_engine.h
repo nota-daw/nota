@@ -1490,6 +1490,13 @@ NOTA_API int32_t    nota_track_get_color(NotaEngine* engine, int32_t track_id);
    never reads it. get returns 1 folded, 0 not, -1 for an unknown track. */
 NOTA_API NotaResult nota_track_set_piano_fold(NotaEngine* engine, int32_t track_id, int32_t on);
 NOTA_API int32_t    nota_track_get_piano_fold(NotaEngine* engine, int32_t track_id);
+/* Group Link (specs/076, #184): a group track's "link its tracks for editing and recording"
+ * flag. Saved with the project, copied with the group, and an undo step when changed; the
+ * audio thread never reads it — the app applies the link to arming and clip edits.
+ * set: NOTA_ERR_INVALID_ARG for an unknown track or one that is not a group.
+ * get: 1 linked, 0 not, -1 unknown track (0 for a track that is not a group). */
+NOTA_API NotaResult nota_track_set_edit_link(NotaEngine* engine, int32_t track_id, int32_t on);
+NOTA_API int32_t    nota_track_get_edit_link(NotaEngine* engine, int32_t track_id);
 /* Track clipboard: copy stores independent clones (a group brings its children), paste
  * appends fresh copies (new ids) top-level. copy_many / paste_after are the multi-track forms:
  * paste_after lands the copies after after_track_id inside its group (-1 = top-level at the

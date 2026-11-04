@@ -123,6 +123,7 @@ public sealed class TrackDto
     public int GroupId { get; set; } = -1;     // parent group's doc index, or -1 (top-level)
     public int ColorIndex { get; set; } = -1;  // palette slot; -1 = auto by position
     public bool? PianoFold { get; set; }       // piano roll Fold (specs/045); written only when on
+    public bool? EditLink { get; set; }        // group Link (specs/076); written only when on
     // Record input: 0 hardware, -1 master, or (2 + track-list index) for another track's
     // output (encoded so it survives id reassignment across save/load).
     public int RecordInput { get; set; }

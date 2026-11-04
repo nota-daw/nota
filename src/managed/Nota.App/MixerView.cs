@@ -99,7 +99,7 @@ public sealed partial class MixerView : UserControl
         public DragNumber? Db;
         public PanKnob? Pan;
         public PanBar? PanBar;           // compact strips
-        public Action<bool>? Mute, Solo, Arm;
+        public Action<bool>? Mute, Solo, Arm, Link;   // Link: a group's Link key (specs/076)
     }
     private readonly Dictionary<int, StripSync> _syncs = new();
     private StripSync SyncOf(int id) => _syncs.TryGetValue(id, out var s) ? s : _syncs[id] = new StripSync();
@@ -191,6 +191,29 @@ public sealed partial class MixerView : UserControl
     /// <summary>Raised after <see cref="Refresh"/> rebuilds the strips, so a host window can
     /// fit its width to them.</summary>
     public event Action? StripsChanged;
+
+    /// <summary>Raised after a group strip's Link key changed the group's Link (specs/076).</summary>
+    public event Action? GroupLinkChanged;
+
+    // A group strip's Link key: the chain-link chip of the Arrangement's group header.
+    private Border LinkKey(int id, out Action<bool> sync)
+    {
+        bool on = _engine.GetTrackEditLink(id);
+        var glyph = new Glyph(GlyphKind.ChainLink, 10);
+        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = glyph, Cursor = new Cursor(StandardCursorType.Hand) };
+        ToolTip.SetTip(b, ArrangementView.LinkTip);
+        ArrangementView.PaintLinkChip(b, glyph, on);
+        b.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            if (!_engine.SetTrackEditLink(id, !on)) return;
+            on = !on; ArrangementView.PaintLinkChip(b, glyph, on);
+            GroupLinkChanged?.Invoke();
+        };
+        sync = v => { if (v == on) return; on = v; ArrangementView.PaintLinkChip(b, glyph, on); };
+        return b;
+    }
 
     /// <summary>Raised when <see cref="MinContentHeight"/> changed, so a host can update its
     /// own minimum.</summary>
@@ -526,6 +549,7 @@ public sealed partial class MixerView : UserControl
             s.Mute?.Invoke(ti.Muted != 0);
             s.Solo?.Invoke(ti.Soloed != 0);
             s.Arm?.Invoke(ti.Armed != 0);
+            if (ti.IsGroup) s.Link?.Invoke(_engine.GetTrackEditLink(ti.Id));
         }
     }
 
@@ -1070,11 +1094,13 @@ public sealed partial class MixerView : UserControl
         row.Children.Add(mute);
         row.Children.Add(solo);
         if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm));
+        if (ti.IsGroup) { row.Children.Add(LinkKey(id, out var linkSync)); sync.Link = linkSync; }   // group Link (specs/076)
+        else sync.Link = null;
         return new Border { Height = 28, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0), Child = row };
     }
 
     // Record-arm: neutral with a red disc at rest, solid record red with a pale disc when armed.
-    private Border ArmToggle(bool initial, Action<bool, bool> set, out Action<bool> sync)   // (armed, ⌘/Ctrl held) — #332
+    private Border ArmToggle(bool initial, Action<bool, KeyModifiers> set, out Action<bool> sync)   // (armed, modifiers) — #332, specs/076
     {
         bool on = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
@@ -1086,7 +1112,7 @@ public sealed partial class MixerView : UserControl
             b.BorderBrush = on ? NotaPalette.Record : NotaPalette.Seam;
             disc.Foreground = on ? NotaPalette.RecordInk : NotaPalette.Record;
         }
-        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on, TrackArming.IsAdditive(e.KeyModifiers)); Paint(); };
+        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on, e.KeyModifiers); Paint(); };
         sync = v => { if (v == on) return; on = v; Paint(); };
         Paint();
         return b;
