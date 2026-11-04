@@ -56,8 +56,8 @@ public sealed class DrumPatternView : UserControl
 
     private int _res = _resPersist;
     private int _steps, _winStart, _win;
-    private int _builtBpb;
-    private int _heldNote = -1;   // the pad name cell being auditioned, so a rebuild can release it   // the bar length the ruler and bar shading were built with
+    private int _builtBpb;        // the bar length the ruler and bar shading were built with
+    private int _heldNote = -1;   // the pad name cell being auditioned, so a rebuild can release it
     private int _selRow = -1;
     private int _paint;                    // 0 = idle, 1 = painting hits in, 2 = painting them out
     private bool _dragging;                // a paint / velocity gesture owns the grid
