@@ -258,6 +258,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Reset velocity in the piano roll**: double-clicking the stem of a note already at the default
+  velocity, below its cap, no longer adds an empty undo step, and the right-click **Reset
+  velocity** menu opens at the pointer instead of the middle of the lane.
 - **Drawing a controller no longer changes the rest of the curve** (#169): a stroke in the
   piano-roll controller lane replaces only the stretch you draw. A shaped curve on either side
   keeps its bend, and points recorded while the button is down are not replaced by the older
