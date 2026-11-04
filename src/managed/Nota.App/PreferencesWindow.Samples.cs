@@ -25,7 +25,7 @@ namespace Nota.App;
 
 public sealed partial class PreferencesWindow
 {
-    private static readonly string[] PackFilters = { Loc.T("All"), Loc.T("One-shots"), Loc.T("Instruments"), Loc.T("Installed") };
+    private static readonly string[] PackFilters = { Loc.T("preferences.all"), Loc.T("preferences.samples.one_shots"), Loc.T("common.instruments"), Loc.T("preferences.installed") };
 
     private readonly ISampleStore _samples = App.Services.GetRequiredService<ISampleStore>();
     private IReadOnlyList<StorePack>? _packs;
@@ -45,7 +45,7 @@ public sealed partial class PreferencesWindow
 
     private static string PackKey(string id) => "pack:" + id;
 
-    private static readonly string PacksIntro = Loc.T("Free sample packs from the Nota sample registry, licensed for any music, commercial releases included. Each pack downloads from where its author publishes it, is checked against the registry's checksum and unpacked into your Samples folder.");
+    private static readonly string PacksIntro = Loc.T("preferences.samples.free_sample_packs_from_the");
 
     // The Sample Packs half of Downloads (PreferencesWindow.Downloads.cs).
     private (Control Toolbar, Control Body) PackParts()
@@ -76,10 +76,10 @@ public sealed partial class PreferencesWindow
             segs.Add(b);
             strip.Children.Add(b);
         }
-        var search = new TextBox { PlaceholderText = Loc.T("Search"), Text = _packSearch, Classes = { "search" }, FontSize = 12 };
+        var search = new TextBox { PlaceholderText = Loc.T("preferences.search"), Text = _packSearch, Classes = { "search" }, FontSize = 12 };
         search.TextChanged += (_, _) => { _packSearch = search.Text ?? ""; RenderPackList(); };
-        var refresh = new Button { Content = Loc.T("Refresh"), Classes = { "ghost" }, Height = 30, FontSize = 12, Padding = new Thickness(12, 0), Foreground = TextSecondary };
-        ToolTip.SetTip(refresh, Loc.T("Reload the registry"));
+        var refresh = new Button { Content = Loc.T("preferences.refresh"), Classes = { "ghost" }, Height = 30, FontSize = 12, Padding = new Thickness(12, 0), Foreground = TextSecondary };
+        ToolTip.SetTip(refresh, Loc.T("preferences.reload_the_registry"));
         refresh.Click += (_, _) => { if (!_packLoading) _packLoad = LoadPacksAsync(refresh: true); };
         _packRefresh = refresh;
 
@@ -102,7 +102,7 @@ public sealed partial class PreferencesWindow
             {
                 _packStatus,
                 new StackPanel { Spacing = 6, Children = { _packLoadBar, _packList } },
-                Caption(Loc.F("Installed to {0}", _samples.InstallDir)),
+                Caption(Loc.F("preferences.installed_to", _samples.InstallDir)),
             },
         };
         body.DetachedFromVisualTree += (_, _) =>
@@ -157,7 +157,7 @@ public sealed partial class PreferencesWindow
         if (_packRefresh is not null)
         {
             _packRefresh.IsEnabled = !_packLoading;
-            _packRefresh.Content = _packLoading && _packs is not null ? Loc.T("Refreshing…") : Loc.T("Refresh");
+            _packRefresh.Content = _packLoading && _packs is not null ? Loc.T("preferences.refreshing") : Loc.T("preferences.refresh");
         }
         if (_packLoadBar is not null) _packLoadBar.IsVisible = _packLoading && _packs is not null;
         if (_packs is null)
@@ -182,7 +182,7 @@ public sealed partial class PreferencesWindow
         {
             var empty = new TextBlock
             {
-                Text = _packFilter == 3 && q.Length == 0 ? Loc.T("No sample packs installed from the registry yet.") : Loc.T("Nothing matches."),
+                Text = _packFilter == 3 && q.Length == 0 ? Loc.T("preferences.samples.no_sample_packs_installed_from") : Loc.T("preferences.nothing_matches"),
                 FontSize = 12, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(28),
             };
             _packList.Content = Table(new List<Control> { empty });
@@ -206,7 +206,7 @@ public sealed partial class PreferencesWindow
             Children =
             {
                 new ProgressBar { IsIndeterminate = true, Width = 180, Height = 4, MinWidth = 0 },
-                new TextBlock { Text = Loc.T("Loading the sample registry…"), FontSize = 12, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
+                new TextBlock { Text = Loc.T("preferences.samples.loading_the_sample_registry"), FontSize = 12, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
             },
         },
     });
@@ -231,10 +231,10 @@ public sealed partial class PreferencesWindow
 
     private static string PackKindLabel(string kind) => kind switch
     {
-        "one-shots" => Loc.T("One-shots"),
-        "loops" => Loc.T("Loops"),
-        "multisample" => Loc.T("Instrument"),
-        "mixed" => Loc.T("Mixed"),
+        "one-shots" => Loc.T("preferences.samples.one_shots"),
+        "loops" => Loc.T("preferences.samples.loops"),
+        "multisample" => Loc.T("common.instrument"),
+        "mixed" => Loc.T("preferences.samples.mixed"),
         _ => NotaText.Label(kind.ToUpperInvariant()),
     };
 
@@ -261,7 +261,7 @@ public sealed partial class PreferencesWindow
             },
         };
         if (p.Attribution is { Length: > 0 } credit)
-            text.Children.Add(new TextBlock { Text = Loc.F("Credit: {0}", credit), FontSize = 11, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
+            text.Children.Add(new TextBlock { Text = Loc.F("preferences.samples.credit", credit), FontSize = 11, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
         if (p.Notes is { Length: > 0 } notes)
             text.Children.Add(new TextBlock { Text = notes, FontSize = 11, LineHeight = 16, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap });
 
@@ -269,36 +269,36 @@ public sealed partial class PreferencesWindow
         bool busy = Jobs.BusyId is not null;
         if (Jobs.BusyId == PackKey(p.Id))
         {
-            actions.Children.Add(StoreButton(inst is null ? Loc.T("Installing…") : Loc.T("Working…"), enabled: false, () => { }));
+            actions.Children.Add(StoreButton(inst is null ? Loc.T("preferences.installing") : Loc.T("preferences.working"), enabled: false, () => { }));
         }
         else if (inst is null)
         {
-            actions.Children.Add(StoreButton(Loc.T("Install"), enabled: !busy, () => InstallPack(p)));
+            actions.Children.Add(StoreButton(Loc.T("preferences.install"), enabled: !busy, () => InstallPack(p)));
         }
         else
         {
             if (inst.Version != p.Version)
-                actions.Children.Add(StoreButton(Loc.F("Update to {0}", p.Version), enabled: !busy, () => InstallPack(p)));
+                actions.Children.Add(StoreButton(Loc.F("preferences.update_to", p.Version), enabled: !busy, () => InstallPack(p)));
             else
                 actions.Children.Add(new StackPanel
                 {
                     Orientation = Orientation.Horizontal, Spacing = 6, Height = 26, HorizontalAlignment = HorizontalAlignment.Right,
-                    Children = { Dot(Brass), new TextBlock { Text = Loc.T("Installed"), FontSize = 11, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
+                    Children = { Dot(Brass), new TextBlock { Text = Loc.T("preferences.installed"), FontSize = 11, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
                 });
-            var show = StoreLink(Loc.T("Show"), null, () => { try { MainWindow.RevealInFileManager(inst.Path); } catch { /* no file manager */ } });
-            ToolTip.SetTip(show, Loc.T("Show the pack's folder"));
+            var show = StoreLink(Loc.T("common.show"), null, () => { try { MainWindow.RevealInFileManager(inst.Path); } catch { /* no file manager */ } });
+            ToolTip.SetTip(show, Loc.T("preferences.samples.show_the_packs_folder"));
             actions.Children.Add(show);
-            actions.Children.Add(StoreLink(Loc.T("Remove"), null, busy ? null : () => RemovePack(p, inst)));
+            actions.Children.Add(StoreLink(Loc.T("preferences.remove"), null, busy ? null : () => RemovePack(p, inst)));
         }
         actions.Children.Add(new TextBlock
         {
-            Text = inst is null ? Loc.F("{0} · {1} samples", Megabytes(p.Asset.Size), p.Asset.Files) : Loc.Plural(inst.Files, "{0} sample", "{0} samples"),
+            Text = inst is null ? Loc.F("preferences.samples.samples_n", Megabytes(p.Asset.Size), p.Asset.Files) : Loc.Plural("preferences.samples.samples", inst.Files),
             FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
         });
         if (inst is null)
-            ToolTip.SetTip(actions.Children[^1], Loc.F("{0} download · {1} samples · {2} on disk · {3}", Megabytes(p.Asset.Size), p.Asset.Files, Megabytes(p.Asset.UnpackedSize), string.Join(", ", p.Asset.Formats)));
-        var source = StoreLink(Loc.T("Source"), GlyphKind.PopOut, () => _ = Launcher.LaunchUriAsync(new Uri(p.Source)));
-        ToolTip.SetTip(source, Loc.T("Open the pack's page"));
+            ToolTip.SetTip(actions.Children[^1], Loc.F("preferences.samples.download_samples_on_disk", Megabytes(p.Asset.Size), p.Asset.Files, Megabytes(p.Asset.UnpackedSize), string.Join(", ", p.Asset.Formats)));
+        var source = StoreLink(Loc.T("preferences.source"), GlyphKind.PopOut, () => _ = Launcher.LaunchUriAsync(new Uri(p.Source)));
+        ToolTip.SetTip(source, Loc.T("preferences.samples.open_the_packs_page"));
         actions.Children.Add(source);
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 16, Margin = new Thickness(16, 14, 14, 14) };
@@ -311,7 +311,7 @@ public sealed partial class PreferencesWindow
     private void InstallPack(StorePack p)
     {
         var main = _main;
-        Jobs.Install(PackKey(p.Id), source: 1, p.Name, p.Asset.Size, new StoreProgress(0, Loc.F("Downloading {0}…", p.Name)),
+        Jobs.Install(PackKey(p.Id), source: 1, p.Name, p.Asset.Size, new StoreProgress(0, Loc.F("preferences.downloading", p.Name)),
             (progress, ct) => _samples.InstallAsync(p, progress, ct),
             () =>
             {
@@ -321,23 +321,23 @@ public sealed partial class PreferencesWindow
                 main?.Browser.RebuildSamples();
                 // Its instruments become Nota Mosaic presets (Packs → the pack) in the background.
                 _ = App.Services.GetService<IMosaicPacks>()?.ScanAsync();
-                return Task.FromResult(Loc.F("{0} is installed — find it under Downloaded in the browser's Files tab, where it is being analysed for tempo and key; its instruments appear under Nota Mosaic → Packs.", p.Name));
+                return Task.FromResult(Loc.F("preferences.samples.is_installed_find_it_under", p.Name));
             });
     }
 
     private async void RemovePack(StorePack p, InstalledStorePack inst)
     {
         if (Jobs.Busy) return;
-        var ok = await new ConfirmWindow(Loc.T("Remove sample pack"),
-            Loc.F("Remove {0}? Its folder ({1}) is deleted.", p.Name, inst.Path),
-            Loc.T("Remove"), Loc.T("Cancel")).ShowDialog<bool>(this);
+        var ok = await new ConfirmWindow(Loc.T("preferences.samples.remove_sample_pack"),
+            Loc.F("preferences.samples.remove_its_folder_is_deleted", p.Name, inst.Path),
+            Loc.T("preferences.remove"), Loc.T("common.cancel")).ShowDialog<bool>(this);
         if (!ok) return;
         var main = _main;
-        Jobs.Remove(PackKey(p.Id), source: 1, Loc.F("Removing {0}…", p.Name), async () =>
+        Jobs.Remove(PackKey(p.Id), source: 1, Loc.F("preferences.removing", p.Name), async () =>
         {
             await Task.Run(() => _samples.Uninstall(p.Id));
             main?.Browser.RebuildSamples();
-            return Loc.F("{0} was removed.", p.Name);
+            return Loc.F("preferences.was_removed", p.Name);
         });
     }
 

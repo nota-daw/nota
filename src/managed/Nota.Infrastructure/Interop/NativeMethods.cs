@@ -165,6 +165,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_is_recording")]
     internal static partial int IsRecording(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_retry_take")]
+    internal static partial int RetryTake(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_record_start_status")]
     internal static partial int RecordStartStatus(IntPtr engine);
 

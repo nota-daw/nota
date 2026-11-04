@@ -218,7 +218,7 @@ internal sealed class ReverbTailView : Control, IValueHandles
         }
 
         // ---- labels ------------------------------------------------------------------
-        var title = _freeze ? Text(Loc.T("Tail held · no decay"), NotaPalette.AccentBright) : Text("Decay tail", NotaGraph.TitleInk);
+        var title = _freeze ? Text(Loc.T("device.reverb.tail_held_no_decay"), NotaPalette.AccentBright) : Text("Decay tail", NotaGraph.TitleInk);
         ctx.DrawText(title, new Point(x0 - 3, 3));
         var rt = Text(_freeze ? "RT60 ∞" : NotaNum.F($"RT60 {_rt60:0.00} s"), _freeze ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         ctx.DrawText(rt, new Point(x1 + 3 - rt.Width, 3));

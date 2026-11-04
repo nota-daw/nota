@@ -380,7 +380,7 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                new TextBlock { Text = Loc.T("Zoom"), Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) },
+                new TextBlock { Text = Loc.T("arrangement.zoom"), Classes = { "SectionLabel" }, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 2, 0) },
                 zoomOut, zoomIn,
             },
         };
@@ -845,8 +845,8 @@ public sealed partial class ArrangementView : UserControl
         }
         double len = _loopE - _loopS, bars = len / _beatsPerBar;
         string l = Math.Abs(bars - Math.Round(bars)) < 1e-6
-            ? Loc.Plural((long)Math.Round(bars), "{0} bar", "{0} bars")
-            : Loc.F("{0:0.##} beats", len);
+            ? Loc.Plural("arrangement.bars", (long)Math.Round(bars))
+            : Loc.F("arrangement.beats", len);
         return $"{Pos(_loopS)} – {Pos(_loopE)} · {l}";
     }
 
@@ -1029,7 +1029,14 @@ public sealed partial class ArrangementView : UserControl
     /// take's row. Owned and updated by the window on its recording tick.</summary>
     internal RecordPreview? RecordPreview { get; set; }
 
-    public void Refresh(bool rebuildHeaders = true) => Refresh(rebuildHeaders, movedOnly: false);
+    public void Refresh(bool rebuildHeaders = true)
+    {
+        var linkBefore = _linkSeen;
+        Refresh(rebuildHeaders, movedOnly: false);
+        // A Link turned on or off anywhere (header, Mixer, Session, undo, MCP): the selected
+        // clips' partners follow the new link sets (specs/076).
+        if (rebuildHeaders && _sel.Count > 0 && linkBefore is not null && !linkBefore.SameSets(Link)) ReconcileLinkedSelection();
+    }
 
     /// <summary>After an edit that only moved, cut or removed clips (a section rearrange,
     /// specs/073): reload clip and automation data without rebuilding the track headers — the
@@ -1066,6 +1073,7 @@ public sealed partial class ArrangementView : UserControl
         if (rebuildHeaders) ReloadSections();   // sections live in the engine's project (specs/016)
         _tracks.Clear();
         _returns.Clear();
+        _link = null;   // group Link sets (specs/076): rebuilt on next use
         var takePeaks = new Dictionary<(int, int, long), (float[], int)>();
         if (_engine is { } eng)
         {
@@ -1090,9 +1098,10 @@ public sealed partial class ArrangementView : UserControl
                     LiveRole = FreezeRole?.Invoke(ti.Id) ?? 0,                          // live-freeze (v1.1)
                     Player = PlayerBadge?.Invoke(ti.Id),                                 // Nota Remote
                     // A stored name (set via the header menu) wins; otherwise the derived default.
-                    Name = IsProcessingTrack(ti.Id) ? Loc.T("Processing…") : TrackNames.Of(eng, ti),
+                    Name = IsProcessingTrack(ti.Id) ? Loc.T("arrangement.processing") : TrackNames.Of(eng, ti),
                     Volume = ti.Volume,
                     Pan = ti.Pan,
+                    EditLink = ti.IsGroup && eng.GetTrackEditLink(ti.Id),   // group Link (specs/076)
                 };
                 if (_automationMode)
                 {
@@ -1349,11 +1358,27 @@ public sealed partial class ArrangementView : UserControl
     }
 
     // Re-select exactly the clips the last block paste/duplicate produced.
-    private void ReselectPlaced()
+    // A move passes its map (old clip → new clip), so each clip picked alone with ⌥ stays alone
+    // (specs/076); without one (duplicate, paste) the choice carries over when every clip had it.
+    private void ReselectPlaced(ClipBlockMove? move = null)
     {
         if (_engine is null) return;
         var placed = _engine.LastPlacedClips();
-        if (placed.Length > 0) SetSelection(placed);
+        if (placed.Length > 0)
+        {
+            var aloneBefore = _selAlone.Where(c => _sel.Contains(c)).ToList();
+            bool allAlone = _sel.Count > 0 && _sel.All(c => _selAlone.Contains(c));
+            SetSelection(placed);
+            var placedSet = new HashSet<(int track, int clip)>(placed);
+            if (move is not null)
+            {
+                foreach (var c in aloneBefore)
+                    if (move.Map.TryGetValue((c.track, c.clip), out var to) && to is { } n && placedSet.Contains((n.Track, n.Clip)))
+                        _selAlone.Add((n.Track, n.Clip));
+            }
+            else if (allAlone) foreach (var c in placed) _selAlone.Add(c);
+            RelinkSelection();
+        }
     }
 
     // Tell the window the primary track changed under a clip selection (devices / clip tab follow).
@@ -1426,7 +1451,7 @@ public sealed partial class ArrangementView : UserControl
         if (_engine.PasteClipBlock(at, dest) <= 0)
         {
             if (dest <= 0) return false;
-            StatusMessage?.Invoke(Loc.T("Paste a MIDI clip onto a MIDI track, audio onto audio."));
+            StatusMessage?.Invoke(Loc.T("arrangement.paste_a_midi_clip_onto"));
             return true;
         }
         Refresh();
@@ -1463,7 +1488,7 @@ public sealed partial class ArrangementView : UserControl
         finally { _engine.EndUndoGroup(); }
         if (placed <= 0)
         {
-            StatusMessage?.Invoke(Loc.T("Paste a MIDI clip onto a MIDI track, audio onto audio."));
+            StatusMessage?.Invoke(Loc.T("arrangement.paste_a_midi_clip_onto"));
             return true;
         }
         if (src.Cut) { ClipTransfer.SlotMoved(null); SessionChanged?.Invoke(); }
@@ -1487,8 +1512,8 @@ public sealed partial class ArrangementView : UserControl
         int scene = _engine.ArrangementClipsToSession(sel, startScene);
         if (scene < 0) return -1;
         SessionChanged?.Invoke();
-        StatusMessage?.Invoke(sel.Length == 1 ? Loc.F("Copied clip to session scene {0}", scene + 1)
-                                              : Loc.F("Copied {0} clips to the session from scene {1}", sel.Length, scene + 1));
+        StatusMessage?.Invoke(sel.Length == 1 ? Loc.F("arrangement.copied_clip_to_session_scene", scene + 1)
+                                              : Loc.F("arrangement.copied_clips_to_the_session", sel.Length, scene + 1));
         return scene;
     }
 
@@ -1683,7 +1708,10 @@ public sealed partial class ArrangementView : UserControl
         TrackSelected?.Invoke(trackId);
     }
 
-    internal void Select(int trackId, int clipIndex, bool keepTrackSet = false)
+    /// <summary>Selects one clip (or just a track, clipIndex -1). On a linked group's track the
+    /// clips at the same place on the group's other tracks come along (specs/076) unless
+    /// <paramref name="linked"/> is false (⌥-click).</summary>
+    internal void Select(int trackId, int clipIndex, bool keepTrackSet = false, bool linked = true)
     {
         if (HasTimeSelection) ClearTimeSelection();   // clip- and time-selection are exclusive (1.2.5)
         if (!keepTrackSet) _selTracks.Clear();        // any other selection resets the header multi-selection
@@ -1692,7 +1720,13 @@ public sealed partial class ArrangementView : UserControl
         SelClipIndex = clipIndex;
         if (trackId > 0) FocusTrackId = trackId;
         _sel.Clear();
-        if (trackId > 0 && clipIndex >= 0) _sel.Add((trackId, clipIndex));
+        ClearLinkState();
+        if (trackId > 0 && clipIndex >= 0)
+        {
+            _sel.Add((trackId, clipIndex));
+            if (linked) AddMatches(trackId, clipIndex);
+            else if (Link.IsLinked(trackId)) _selAlone.Add((trackId, clipIndex));   // ⌥-click: the edits that follow stay on this track
+        }
         // Selecting into or out of a group changes that row's height, so the rows below it
         // move: re-lay them before the headers repaint their selection.
         if (prev != trackId && (IsGroupTrack(prev) || IsGroupTrack(trackId))) RelayoutRows();
@@ -1738,6 +1772,11 @@ public sealed partial class ArrangementView : UserControl
         if (HasAutoSelection) ClearAutoSelection();
         if (_sel.Remove((trackId, clipIndex)))
         {
+            // Its partners leave with it — those the link added, not ones picked by hand.
+            _selLinked.Remove((trackId, clipIndex));
+            _selAlone.Remove((trackId, clipIndex));
+            foreach (var m in MatchesOf(trackId, clipIndex))
+                if (_selLinked.Remove(m)) _sel.Remove(m);
             // Removed: keep the primary stable unless we just removed it.
             if (SelTrackId == trackId && SelClipIndex == clipIndex)
             {
@@ -1748,6 +1787,9 @@ public sealed partial class ArrangementView : UserControl
         else
         {
             _sel.Add((trackId, clipIndex));
+            _selLinked.Remove((trackId, clipIndex));
+            _selAlone.Remove((trackId, clipIndex));
+            AddMatches(trackId, clipIndex);
             SelTrackId = trackId; SelClipIndex = clipIndex; FocusTrackId = trackId;   // the just-clicked clip is the primary
         }
         UpdateHeaderSelection();
@@ -1794,7 +1836,8 @@ public sealed partial class ArrangementView : UserControl
         _timeSelEnd = Math.Max(a, b);
         _timeSelRowLo = Math.Max(0, Math.Min(rowA, rowB));
         _timeSelRowHi = Math.Min(Math.Max(0, _tracks.Count - 1), Math.Max(rowA, rowB));
-        if (_sel.Count > 0) { _sel.Clear(); SelClipIndex = -1; UpdateHeaderSelection(); }
+        WidenRangeToLinkSets();
+        if (_sel.Count > 0) { _sel.Clear(); ClearLinkState(); SelClipIndex = -1; UpdateHeaderSelection(); }
         if (HasTimeSelection) BounceSource = (TimeSelectionTrackIds(), _timeSelStart, _timeSelEnd);
         Redraw();
     }
@@ -1845,7 +1888,7 @@ public sealed partial class ArrangementView : UserControl
         var ids = new List<int>();
         for (int r = _timeSelRowLo; r <= _timeSelRowHi && r >= 0 && r < _tracks.Count; r++)
             if (!_tracks[r].IsReturn) ids.Add(_tracks[r].Id);
-        return ids.ToArray();
+        return LinkTracks(ids);   // a range on a linked group's track spans the whole group (specs/076)
     }
 
 
@@ -1990,6 +2033,7 @@ public sealed partial class ArrangementView : UserControl
         double bhi = Math.Max(anchor.StartBeat + anchor.LengthBeats, target.StartBeat + target.LengthBeats);
         ClearTimeSelection();
         _sel.Clear();
+        ClearLinkState();
         for (int r = rlo; r <= rhi && r < _tracks.Count; r++)
             foreach (var c in _tracks[r].Clips)
                 if (c.StartBeat < bhi - 1e-6 && c.StartBeat + c.LengthBeats > blo + 1e-6)
@@ -2005,16 +2049,9 @@ public sealed partial class ArrangementView : UserControl
     {
         if (_engine is null || _sel.Count == 0) return false;
         double at = Math.Max(0, _playheadBeats);
-        bool any = false;
-        // Descending clip index per track: SplitClip inserts a new clip, so splitting a
-        // higher index first never invalidates a lower one we still need to visit.
-        foreach (var (track, clip) in _sel.OrderByDescending(c => c.clip).ToList())
-        {
-            var vm = FindClipVM(track, clip);
-            if (vm is null) continue;
-            if (at > vm.StartBeat + 1e-6 && at < vm.StartBeat + vm.LengthBeats - 1e-6)
-            { _engine.SplitClip(track, clip, at); any = true; }
-        }
+        // One undo step; on a linked group the other tracks are cut at the playhead too, whatever
+        // clip they have there (specs/076).
+        bool any = SplitLinkedAt(_sel.ToList(), at);
         if (any) { Select(-1, -1); Refresh(); ClipsSplit?.Invoke(); }
         return any;
     }
@@ -2035,6 +2072,7 @@ public sealed partial class ArrangementView : UserControl
     {
         if (HasTimeSelection) ClearTimeSelection();
         _sel.Clear();
+        ClearLinkState();
         foreach (var c in clips) _sel.Add(c);
         if (_sel.Count > 0) { var f = _sel.First(); SelTrackId = f.track; SelClipIndex = f.clip; FocusTrackId = f.track; }
         else { SelTrackId = -1; SelClipIndex = -1; }
@@ -2108,9 +2146,13 @@ public sealed partial class ArrangementView : UserControl
         // (it survives edits and isn't cleared in automation mode), so tolerate an index
         // the engine rejects rather than throwing out of the keystroke handler.
         bool any = false;
-        foreach (var (track, clip) in _sel.OrderByDescending(c => c.clip))
-            any |= _engine.TryDeleteClip(track, clip);
+        OneUndoStep(() =>   // a linked delete is one step (specs/076)
+        {
+            foreach (var (track, clip) in _sel.OrderByDescending(c => c.clip))
+                any |= _engine.TryDeleteClip(track, clip);
+        });
         _sel.Clear();
+        ClearLinkState();
         SelTrackId = -1; SelClipIndex = -1;
         Refresh();
         return any;   // false when the selection was entirely stale — don't claim a delete
@@ -2198,6 +2240,7 @@ public sealed partial class ArrangementView : UserControl
             {
                 ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }),
                 ChipToggle("S", t.Soloed, NotaPalette.Solo, v => { t.Soloed = v; _engine?.SetTrackSolo(t.Id, v); }),
+                LinkToggle(t),
             },
         };
 
@@ -2205,7 +2248,7 @@ public sealed partial class ArrangementView : UserControl
         Grid.SetColumn(tri, 0);
         Grid.SetColumn(name, 1);
         Grid.SetColumn(chips, 2);
-        var kind = TypeTag(Loc.T("Group"));
+        var kind = TypeTag(Loc.T("common.group"));
         Grid.SetColumn(kind, 3);
         row.Children.Add(tri);
         row.Children.Add(name);
@@ -2293,9 +2336,18 @@ public sealed partial class ArrangementView : UserControl
             Grid.SetColumn(badge, 0);
             nameRow.Children.Add(badge);
         }
-        Grid.SetColumn(name, 1);
+        Control nameCell = name;
+        if (LinkMemberMark(t) is { } mark)   // linked with its group (specs/076)
+        {
+            var dock = new DockPanel { LastChildFill = true };
+            DockPanel.SetDock(mark, Dock.Left);
+            dock.Children.Add(mark);
+            dock.Children.Add(name);
+            nameCell = dock;
+        }
+        Grid.SetColumn(nameCell, 1);
         Grid.SetColumn(typeTag, 2);
-        nameRow.Children.Add(name);
+        nameRow.Children.Add(nameCell);
         nameRow.Children.Add(typeTag);
 
         // M / S / ● (record-arm) and, on audio tracks, the monitor chip — 18×16 chips held
@@ -2309,6 +2361,7 @@ public sealed partial class ArrangementView : UserControl
         // without re-reading the engine, and a stale VM put the old state back (#255).
         btnRow.Children.Add(ChipToggle("M", t.Muted, NotaPalette.Mute, v => { t.Muted = v; _engine?.SetTrackMute(t.Id, v); }));
         btnRow.Children.Add(ChipToggle("S", t.Soloed, NotaPalette.Solo, v => { t.Soloed = v; _engine?.SetTrackSolo(t.Id, v); }));
+        if (t.IsGroup) btnRow.Children.Add(LinkToggle(t));   // group Link (specs/076)
         // Record-arm applies to instrument (MIDI capture) + audio (input capture) tracks;
         // return and group tracks have no input, so they get no arm chip.
         if (!t.IsReturn && !t.IsGroup)
@@ -2374,7 +2427,7 @@ public sealed partial class ArrangementView : UserControl
         fader.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
         fader.GestureEnd   += () => _engine?.EndAutomationWrite(volTrackId, AutomationTarget.Volume, -1, -1, "");
         fader.GestureEnd   += () => volUndo?.End();
-        ValueEntry.Attach(fader, fader.EntryField(Loc.T("Volume"), VolumeDbText), db);
+        ValueEntry.Attach(fader, fader.EntryField(Loc.T("common.volume"), VolumeDbText), db);
         _volFaders[t.Id] = fader; _volDb[t.Id] = db;
 
         var volCell = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -2391,7 +2444,7 @@ public sealed partial class ArrangementView : UserControl
         pan.GestureBegin += () => _engine?.BeginAutomationWrite(volTrackId, AutomationTarget.Pan, -1, -1, "");
         pan.GestureEnd   += () => _engine?.EndAutomationWrite(volTrackId, AutomationTarget.Pan, -1, -1, "");
         pan.GestureEnd   += () => panUndo?.End();
-        ValueEntry.Attach(pan, pan.EntryField(Loc.T("Pan")));
+        ValueEntry.Attach(pan, pan.EntryField(Loc.T("common.pan")));
         _panBars[t.Id] = pan;
 
         var volRow = new Grid { ColumnDefinitions = new ColumnDefinitions("2*,*"), ColumnSpacing = 6, Margin = new Thickness(0, 6, 0, 0) };
@@ -2582,9 +2635,9 @@ public sealed partial class ArrangementView : UserControl
     {
         MenuItem Item(string full, string brief, NewTrackKind kind)
             => MenuKit.Item(inSubmenu ? brief : full, GlyphKind.Plus, () => AddTrackRequested?.Invoke(kind, anchorTrackId));
-        yield return Item(Loc.T("Add instrument track"), Loc.T("Instrument"), NewTrackKind.Instrument);
-        yield return Item(Loc.T("Add audio track"), Loc.T("Audio"), NewTrackKind.Audio);
-        yield return Item(Loc.T("Add return track"), Loc.T("Return"), NewTrackKind.Return);
+        yield return Item(Loc.T("arrangement.add_instrument_track"), Loc.T("common.instrument"), NewTrackKind.Instrument);
+        yield return Item(Loc.T("arrangement.add_audio_track"), Loc.T("common.audio"), NewTrackKind.Audio);
+        yield return Item(Loc.T("arrangement.add_return_track"), Loc.T("common.return"), NewTrackKind.Return);
     }
 
     // Right-click on the empty space below the tracks: add a track (the main thing to do
@@ -2595,7 +2648,7 @@ public sealed partial class ArrangementView : UserControl
         var flyout = new MenuFlyout();
         foreach (var mi in AddTrackItems()) flyout.Items.Add(mi);
         flyout.Items.Add(new Separator());
-        var paste = new MenuItem { Header = Loc.T("Paste track"), IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
+        var paste = new MenuItem { Header = Loc.T("arrangement.paste_track"), IsEnabled = _engine.HasTrackClipboard(), Icon = MenuKit.Icon(GlyphKind.Paste), InputGesture = MenuKit.PasteKey };
         paste.Click += (_, _) => PasteTracksAfter(-1);
         flyout.Items.Add(paste);
         flyout.ShowAt(anchor, showAtPointer: true);
@@ -2620,7 +2673,7 @@ public sealed partial class ArrangementView : UserControl
         var one = new[] { trackId };
         var vm = _tracks.FirstOrDefault(v => v.Id == trackId);
 
-        var rename = MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId));
+        var rename = MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId));
 
         // Record input ▸ (audio tracks only): hardware, master, or another track's output
         // (internal resampling). The active source is ticked and shown on the item.
@@ -2629,7 +2682,7 @@ public sealed partial class ArrangementView : UserControl
         if (isAudio)
         {
             var cur = RecordInputPick.Of(_engine, trackId);
-            string curName = Loc.T("Ext");
+            string curName = Loc.T("arrangement.ext");
             var choices = new List<MenuItem>();
             void Src(string label, string shortName, RecordInputPick pick)
             {
@@ -2642,12 +2695,12 @@ public sealed partial class ArrangementView : UserControl
             }
             foreach (var (pick, label, shortName) in RecordInputPick.Hardware) Src(label, shortName, pick);
             int fixedCount = RecordInputPick.Hardware.Length + 1;   // the hardware entries + Master
-            Src(Loc.T("Master"), Loc.T("Master"), RecordInputPick.Track(-1));
+            Src(Loc.T("common.master"), Loc.T("common.master"), RecordInputPick.Track(-1));
             foreach (var v in _tracks)
-                if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : Loc.F("Track {0}", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
+                if (v.Id != trackId) { string n = v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
             foreach (var v in _returns)
-            { string n = v.Name.Length > 0 ? v.Name : Loc.F("Return {0}", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
-            recInput = MenuKit.ValueItem(Loc.T("Record input"), GlyphKind.Input, curName);
+            { string n = v.Name.Length > 0 ? v.Name : Loc.F("common.return_n", v.Id); Src(n, n, RecordInputPick.Track(v.Id)); }
+            recInput = MenuKit.ValueItem(Loc.T("common.record_input"), GlyphKind.Input, curName);
             foreach (var c in choices.Take(fixedCount)) recInput.Items.Add(c);
             if (choices.Count > fixedCount) recInput.Items.Add(new Separator());
             foreach (var c in choices.Skip(fixedCount)) recInput.Items.Add(c);
@@ -2659,33 +2712,35 @@ public sealed partial class ArrangementView : UserControl
         if (vm is { IsInstrument: true })
         {
             int curSrc = _engine.GetTrackMidiSource(trackId);
-            string curName = Loc.T("None");
+            string curName = Loc.T("common.none");
             var others = _tracks.Where(v => v.Id != trackId && v.IsInstrument).ToList();
-            foreach (var v in others) if (v.Id == curSrc) curName = v.Name.Length > 0 ? v.Name : Loc.F("Track {0}", v.Id);
-            midiFrom = MenuKit.ValueItem(Loc.T("MIDI from"), GlyphKind.Note, curName);
+            foreach (var v in others) if (v.Id == curSrc) curName = v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id);
+            midiFrom = MenuKit.ValueItem(Loc.T("arrangement.midi_from"), GlyphKind.Note, curName);
             MenuItem Src(string label, int src)
             {
                 var mi = new MenuItem { Header = label, ToggleType = MenuItemToggleType.Radio, IsChecked = curSrc == src };
                 mi.Click += (_, _) => _engine.SetTrackMidiSource(trackId, src);
                 return mi;
             }
-            midiFrom.Items.Add(Src(Loc.T("None"), -1));
+            midiFrom.Items.Add(Src(Loc.T("common.none"), -1));
             if (others.Count > 0) midiFrom.Items.Add(new Separator());
             foreach (var v in others)
-                midiFrom.Items.Add(Src(v.Name.Length > 0 ? v.Name : Loc.F("Track {0}", v.Id), v.Id));
+                midiFrom.Items.Add(Src(v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id), v.Id));
         }
 
         // Group / Ungroup (submix). "Group" folds the multi-selection (or this track) into a
         // new group; "Ungroup" dissolves the group this track is/belongs to.
         var create = new List<Control>();
-        var addTrack = MenuKit.Item(Loc.T("Add track"), GlyphKind.Plus);
+        var addTrack = MenuKit.Item(Loc.T("arrangement.add_track"), GlyphKind.Plus);
         foreach (var mi in AddTrackItems(trackId, inSubmenu: true)) addTrack.Items.Add(mi);
         AddRecentInstruments(addTrack, trackId);
         create.Add(addTrack);
-        create.Add(MenuKit.Item(Loc.T("Group tracks"), GlyphKind.Folder, () => GroupTracks(trackId), MenuKit.GroupKey));
+        create.Add(MenuKit.Item(Loc.T("arrangement.group_tracks"), GlyphKind.Folder, () => GroupTracks(trackId), MenuKit.GroupKey));
         int ungroupId = GroupToUngroupFor(trackId);
         if (ungroupId > 0)
-            create.Add(MenuKit.Item(Loc.T("Ungroup"), GlyphKind.Ungroup, () => UngroupGroup(ungroupId), MenuKit.UngroupKey));
+            create.Add(MenuKit.Item(Loc.T("arrangement.ungroup"), GlyphKind.Ungroup, () => UngroupGroup(ungroupId), MenuKit.UngroupKey));
+        if (vm is { IsGroup: true } gvm)   // group Link (specs/076)
+            create.Add(MenuKit.SwitchItem(Loc.T("arrangement.link_tracks"), GlyphKind.ChainLink, gvm.EditLink, () => SetGroupLink(gvm.Id, !gvm.EditLink)));
 
         // Clipboard + lifecycle go through the same set commands as the keys (a group carries
         // its children); paste lands right after this track.
@@ -2699,7 +2754,7 @@ public sealed partial class ArrangementView : UserControl
             FreezeMenuItems?.Invoke(trackId),
             create,
             clipboard,
-            new Control[] { MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () => DeleteTracks(one), MenuKit.DeleteKey) });
+            new Control[] { MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, () => DeleteTracks(one), MenuKit.DeleteKey) });
         return flyout;
     }
 
@@ -2717,7 +2772,7 @@ public sealed partial class ArrangementView : UserControl
         // "In" pinned left (faded), the source name pinned right, so the name stands out.
         void Add(string value, RecordInputPick src)
         {
-            var inTb = new TextBlock { Text = Loc.T("In"), FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
+            var inTb = new TextBlock { Text = Loc.T("arrangement.in"), FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
             var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(monitor is null ? 6 : 4, 0) };
             // The closed box hoists this content out of its item, where it stops following the
             // theme foreground and keeps whatever it was built with — so on the paper variant
@@ -2733,9 +2788,9 @@ public sealed partial class ArrangementView : UserControl
             sources.Add(src);
         }
         foreach (var (pick, _, shortName) in RecordInputPick.Hardware) Add(shortName, pick);
-        Add(Loc.T("Master"), RecordInputPick.Track(-1));
-        foreach (var v in _tracks) if (v.Id != trackId) Add(v.Name.Length > 0 ? v.Name : Loc.F("Track {0}", v.Id), RecordInputPick.Track(v.Id));
-        foreach (var v in _returns) Add(v.Name.Length > 0 ? v.Name : Loc.F("Return {0}", v.Id), RecordInputPick.Track(v.Id));
+        Add(Loc.T("common.master"), RecordInputPick.Track(-1));
+        foreach (var v in _tracks) if (v.Id != trackId) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id), RecordInputPick.Track(v.Id));
+        foreach (var v in _returns) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.return_n", v.Id), RecordInputPick.Track(v.Id));
         var cur = _engine is null ? RecordInputPick.Hardware[0].Pick : RecordInputPick.Of(_engine, trackId);
         int sel = sources.FindIndex(p => p.Matches(cur));
         cb.SelectedIndex = sel >= 0 ? sel : 0;
@@ -2777,8 +2832,8 @@ public sealed partial class ArrangementView : UserControl
             glyph.Foreground = Brush(state ? "Brush.TextOnAccent" : "Brush.TextSecondary");
             chip.Opacity = usable ? 1.0 : 0.4;
             ToolTip.SetTip(chip, usable
-                ? (state ? Loc.T("Monitoring input — click to stop") : Loc.T("Monitor input: hear it live through this track"))
-                : Loc.T("Master can't be monitored (it would feed back)"));
+                ? (state ? Loc.T("arrangement.monitoring_input_click_to_stop") : Loc.T("arrangement.monitor_input_hear_it_live"))
+                : Loc.T("arrangement.master_cant_be_monitored_it"));
         }
         Paint();
         chip.PointerPressed += (_, e) =>
@@ -2805,7 +2860,7 @@ public sealed partial class ArrangementView : UserControl
         // "In" pinned left (faded), the source name pinned right.
         void Add(string value, int src)
         {
-            var inTb = new TextBlock { Text = Loc.T("In"), FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
+            var inTb = new TextBlock { Text = Loc.T("arrangement.in"), FontSize = 9, Foreground = Brush("Brush.TextDisabled"), VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0) };
             var valTb = new TextBlock { Text = value, FontSize = 9, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(6, 0) };
             // The closed box hoists this content out of its item, where it stops following the
             // theme foreground and keeps whatever it was built with — so on the paper variant
@@ -2817,8 +2872,8 @@ public sealed partial class ArrangementView : UserControl
             cb.Items.Add(new ComboBoxItem { Content = content, Padding = new Thickness(6, 2), MinHeight = 0, HorizontalContentAlignment = HorizontalAlignment.Stretch });
             sources.Add(src);
         }
-        Add(Loc.T("None"), -1);
-        foreach (var v in _tracks) if (v.Id != trackId && v.IsInstrument) Add(v.Name.Length > 0 ? v.Name : Loc.F("Track {0}", v.Id), v.Id);
+        Add(Loc.T("common.none"), -1);
+        foreach (var v in _tracks) if (v.Id != trackId && v.IsInstrument) Add(v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id), v.Id);
         int cur = _engine?.GetTrackMidiSource(trackId) ?? -1;
         int sel = sources.IndexOf(cur);
         cb.SelectedIndex = sel >= 0 ? sel : 0;
@@ -2881,7 +2936,7 @@ public sealed partial class ArrangementView : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { phone, name } },
         };
-        ToolTip.SetTip(pill, Loc.F("Played from a phone: {0}", who));
+        ToolTip.SetTip(pill, Loc.F("arrangement.played_from_a_phone", who));
         return pill;
     }
 
@@ -2889,8 +2944,8 @@ public sealed partial class ArrangementView : UserControl
     // toggle's own colour — mute amber, solo blue, arm red — with
     // derived ink. Record-arm: at rest a neutral key with a red disc; armed, solid red with a
     // white disc.
-    // onChanged(armed, additive): additive = ⌘/Ctrl held, arm without disarming the others (#332).
-    private Control ArmToggle(bool initial, Action<bool, bool> onChanged)
+    // onChanged(armed, modifiers): ⌘/Ctrl arms without disarming the others (#332), ⌥ bypasses a group Link (specs/076).
+    private Control ArmToggle(bool initial, Action<bool, KeyModifiers> onChanged)
     {
         bool state = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
@@ -2906,7 +2961,7 @@ public sealed partial class ArrangementView : UserControl
         chip.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
-            e.Handled = true; state = !state; Paint(); onChanged(state, TrackArming.IsAdditive(e.KeyModifiers));
+            e.Handled = true; state = !state; Paint(); onChanged(state, e.KeyModifiers);
         };
         return chip;
     }
@@ -3021,7 +3076,7 @@ public sealed partial class ArrangementView : UserControl
         }
         // Master row: selectable (opens the master effect chain) via the reserved id.
         int masterId = _engine?.MasterTrackId ?? -1;
-        string masterName = _engine is { } me2 && me2.GetTrackName(masterId) is { Length: > 0 } mn ? mn : Loc.T("Master");
+        string masterName = _engine is { } me2 && me2.GetTrackName(masterId) is { Length: > 0 } mn ? mn : Loc.T("common.master");
         return BuildSlimRow(masterName, -1, masterId, "Brush.SurfaceRaised", GetMasterVolume?.Invoke() ?? 1f, h,
             v => SetMasterVolume?.Invoke((float)v), out _masterRowMeter, out _masterRowFader, out _masterRowDb,
             masterSpine: true);
@@ -3096,7 +3151,7 @@ public sealed partial class ArrangementView : UserControl
         }
         fader.GestureEnd   += () => undo?.End();
         fader.ValueChanged += v => { Change(undo, v, setVolume); dbText.Text = VolumeDbText(v); };
-        ValueEntry.Attach(fader, fader.EntryField(Loc.T("Volume"), VolumeDbText), dbText);
+        ValueEntry.Attach(fader, fader.EntryField(Loc.T("common.volume"), VolumeDbText), dbText);
 
         Control? mute = ret is null ? null
             : ChipToggle("M", ret.Muted, NotaPalette.Mute, v => { ret.Muted = v; _engine?.SetTrackMute(trackId, v); });
@@ -3148,7 +3203,7 @@ public sealed partial class ArrangementView : UserControl
                 pan.GestureBegin += () => _engine?.BeginAutomationWrite(trackId, AutomationTarget.Pan, -1, -1, "");
                 pan.GestureEnd   += () => _engine?.EndAutomationWrite(trackId, AutomationTarget.Pan, -1, -1, "");
                 pan.GestureEnd   += () => panUndo?.End();
-                ValueEntry.Attach(pan, pan.EntryField(Loc.T("Pan")));
+                ValueEntry.Attach(pan, pan.EntryField(Loc.T("common.pan")));
                 _footerPans[trackId] = pan;
                 stack.Children.Add(pan);
             }
@@ -3217,12 +3272,12 @@ public sealed partial class ArrangementView : UserControl
         bool isReturn = _returns.Any(r => r.Id == trackId);
         string name = _engine.GetTrackName(trackId);
         MenuKit.AddGroups(flyout.Items,
-            new Control[] { MenuKit.Header(name.Length > 0 ? name : isReturn ? Loc.T("Return") : Loc.T("Master"),
-                                           TrackBrush(EffectiveColorIndex(_engine, trackId)), isReturn ? Loc.T("Return") : Loc.T("Master")) },
+            new Control[] { MenuKit.Header(name.Length > 0 ? name : isReturn ? Loc.T("common.return") : Loc.T("common.master"),
+                                           TrackBrush(EffectiveColorIndex(_engine, trackId)), isReturn ? Loc.T("common.return") : Loc.T("common.master")) },
             new Control[] { TrackColourRow(new[] { trackId }) },
             new Control[] { FooterHeightRow(isReturn ? _returns.FindIndex(r => r.Id == trackId) : _returns.Count) },
-            new Control[] { MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
-            isReturn ? new Control[] { MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () => DeleteTracks(new[] { trackId }), MenuKit.DeleteKey) } : null);
+            new Control[] { MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => PromptRenameTrack(anchor, trackId)) },
+            isReturn ? new Control[] { MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, () => DeleteTracks(new[] { trackId }), MenuKit.DeleteKey) } : null);
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 

@@ -19,18 +19,18 @@ public static class VersionSummary
         var parts = new List<string>();
         if (c.First)
         {
-            parts.Add(c.TrackCount == 0 ? Loc.T("First save") : Loc.Plural(c.TrackCount, "First save · {0} track", "First save · {0} tracks"));
+            parts.Add(c.TrackCount == 0 ? Loc.T("version_summary.first_save") : Loc.Plural("version_summary.first_save_tracks", c.TrackCount));
             return parts;
         }
-        if (c.TracksAdded.Count > 0) parts.Add(Loc.F("Added {0}", Names(c.TracksAdded)));
-        if (c.TracksRemoved.Count > 0) parts.Add(Loc.F("Removed {0}", Names(c.TracksRemoved)));
+        if (c.TracksAdded.Count > 0) parts.Add(Loc.F("version_summary.added", Names(c.TracksAdded)));
+        if (c.TracksRemoved.Count > 0) parts.Add(Loc.F("version_summary.removed", Names(c.TracksRemoved)));
         foreach (var r in c.TracksRenamed.Take(2)) parts.Add($"{r.From} → {r.To}");
-        if (c.TempoFrom is { } tf && c.TempoTo is { } tt) parts.Add(Loc.F("Tempo {0} → {1}", tempo(tf), tempo(tt)));
+        if (c.TempoFrom is { } tf && c.TempoTo is { } tt) parts.Add(Loc.F("version_summary.tempo", tempo(tf), tempo(tt)));
         if (c.MeterFrom is { } mf && c.MeterTo is { } mt) parts.Add($"{mf} → {mt}");
-        if (c.NewAudio > 0) parts.Add(c.NewAudio == 1 ? Loc.T("New audio") : Loc.F("{0} new audio files", c.NewAudio));
-        if (c.Edited.Count > 0) parts.Add(Loc.F("Edited {0}", Names(c.Edited)));
-        if (c.Sound.Count > 0) parts.Add(Loc.F("Devices on {0}", Names(c.Sound)));
-        if (c.Mix.Count > 0) parts.Add(c.Mix.Count > 2 ? Loc.Plural(c.Mix.Count, "Mix of {0} track", "Mix of {0} tracks") : Loc.F("Mix of {0}", Names(c.Mix)));
+        if (c.NewAudio > 0) parts.Add(c.NewAudio == 1 ? Loc.T("version_summary.new_audio") : Loc.F("version_summary.new_audio_files", c.NewAudio));
+        if (c.Edited.Count > 0) parts.Add(Loc.F("version_summary.edited", Names(c.Edited)));
+        if (c.Sound.Count > 0) parts.Add(Loc.F("version_summary.devices_on", Names(c.Sound)));
+        if (c.Mix.Count > 0) parts.Add(c.Mix.Count > 2 ? Loc.Plural("version_summary.mix_of_tracks", c.Mix.Count) : Loc.F("version_summary.mix_of", Names(c.Mix)));
         foreach (var o in c.Other) parts.Add(char.ToUpperInvariant(o[0]) + o[1..]);
         return parts;
     }

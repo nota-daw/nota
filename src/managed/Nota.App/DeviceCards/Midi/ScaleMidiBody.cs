@@ -82,7 +82,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             void Sync() => tag.Text = KeyTag(p => e.MidiEffectGetParam(t, index, p));
             Sync();
             ctx.AddDeviceRefresher(Sync);
-            ToolTip.SetTip(tag, Loc.T("The key in effect: root and scale"));
+            ToolTip.SetTip(tag, Loc.T("device.scale.the_key_in_effect_root"));
             row.Children.Add(tag); row.Children.Add(MidiCardHeader.LearnButton(ctx));
         }
         row.Children.Add(MidiCardHeader.SizeToggle(ctx, index, PView, () => IsMini(e, t, index)));
@@ -146,7 +146,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
         int li = -1, lo = -1;
         var map = new ScaleNoteMap { Mini = mini };
         map.Toggled += ToggleNote;
-        ToolTip.SetTip(map, Loc.T("Click a note to add it to or take it out of the scale (the scale turns Custom)"));
+        ToolTip.SetTip(map, Loc.T("device.scale.click_a_note_to_add"));
         void Poll()
         {
             int n = engine.MidiEffectScope(track, mi, scope);
@@ -211,7 +211,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
                     if (!ev.GetCurrentPoint(rowB).Properties.IsLeftButtonPressed) return;
                     PickType(last ? Custom : sc); ev.Handled = true;
                 };
-                ToolTip.SetTip(rowB, last ? Loc.T("Custom: your own notes — click the note map to edit") : Loc.F("{0} — {1} notes", ScaleNames[sc], Count(PresetMasks[sc])));
+                ToolTip.SetTip(rowB, last ? Loc.T("device.scale.custom_your_own_notes_click") : Loc.F("device.scale.notes_n", ScaleNames[sc], Count(PresetMasks[sc])));
                 Learn(rowB, PScale, "Scale");
                 readouts.Add(Paint);
                 list.Children.Add(rowB);
@@ -220,7 +220,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
 
             // ---- NOTE MAP ----
             var remapped = Mono("", Cap, 7);
-            readouts.Add(() => remapped.Text = Mask() == 0 ? Loc.T("empty · notes pass") : Loc.F("{0} of 12 remapped", Remapped()));
+            readouts.Add(() => remapped.Text = Mask() == 0 ? Loc.T("device.scale.empty_notes_pass") : Loc.F("device.scale.of_12_remapped", Remapped()));
             var mapIsland = IslandBox(IslandHead(Caps("NOTE MAP"), remapped), new Border { Padding = new Thickness(8, 6), Child = map }, double.NaN);
 
             // ---- FOLD ----
@@ -232,9 +232,9 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
                 Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, HorizontalAlignment = HorizontalAlignment.Center,
                     Children = { ioIn, new TextBlock { Text = "→", FontSize = 10, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center }, ioOut } },
             };
-            ToolTip.SetTip(ioBox, Loc.T("The last note played and what it came out as"));
+            ToolTip.SetTip(ioBox, Loc.T("device.scale.the_last_note_played_and"));
             readouts.Add(() => { ioIn.Text = li >= 0 ? DeviceCardKit.NoteName(li) : "—"; ioOut.Text = lo >= 0 ? DeviceCardKit.NoteName(lo) : "—"; });
-            var io = new StackPanel { Spacing = 3, Children = { Caps(Loc.T("LAST IN → OUT")), ioBox } };
+            var io = new StackPanel { Spacing = 3, Children = { Caps(Loc.T("device.scale.last_in_out_caps")), ioBox } };
 
             var rangeLbl = Caps("RANGE"); rangeLbl.Width = 34;
             var range = new Grid { ColumnDefinitions = new ColumnDefinitions("34,*,*"), ColumnSpacing = 6 };
@@ -244,7 +244,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
 
             var follow = FollowSwitch();
             var learnBtn = LearnButton();
-            var clearBtn = Button("Clear", Clear, Loc.T("Clear the scale down to the root (Custom)"));
+            var clearBtn = Button("Clear", Clear, Loc.T("device.scale.clear_the_scale_down_to"));
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 4 };
             Grid.SetColumn(clearBtn, 1); btns.Children.Add(learnBtn); btns.Children.Add(clearBtn);
 
@@ -263,12 +263,12 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             readouts.Add(() =>
             {
                 int t = (int)Math.Round(G(PTranspose));
-                statusL.Text = Loc.F("{0} {1} · {2} notes · fold {3} · ", Notes[Root()], TypeName(), Count(Mask()), Folds[Fold()].ToLowerInvariant())
+                statusL.Text = Loc.F("device.scale.notes_fold", Notes[Root()], TypeName(), Count(Mask()), Folds[Fold()].ToLowerInvariant())
                              + $"{DeviceCardKit.NoteName(RangeLo())}–{DeviceCardKit.NoteName(RangeHi())}"
                              + (t != 0 ? $" · transpose {(t > 0 ? "+" : "−")}{Math.Abs(t)}" : "")
                              + (G(PFollowKey) >= 0.5f ? " · follow key" : "")
                              + (G(PLearn) >= 0.5f ? " · learning" : "");
-                statusR.Text = Bypassed() ? "bypassed" : Loc.T("MIDI · latency 0 smp");
+                statusR.Text = Bypassed() ? "bypassed" : Loc.T("common.midi_latency_0_smp");
             });
             return Framed(islands, statusL, statusR);
         }
@@ -298,8 +298,8 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             var statusR = Mono("", Sub);
             readouts.Add(() =>
             {
-                statusL.Text = Loc.F("{0} {1} · {2} notes", Notes[Root()], TypeName(), Count(Mask()));
-                statusR.Text = Bypassed() ? "bypassed" : Mask() == 0 ? "empty" : Loc.F("{0} of 12 remapped", Remapped());
+                statusL.Text = Loc.F("device.scale.notes", Notes[Root()], TypeName(), Count(Mask()));
+                statusR.Text = Bypassed() ? "bypassed" : Mask() == 0 ? "empty" : Loc.F("device.scale.of_12_remapped", Remapped());
             });
             return Framed(island, statusL, statusR);
         }
@@ -353,7 +353,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Background = Brushes.Transparent,
                 Children = { Arrow(GlyphKind.ChevronLeft, -1), name, Arrow(GlyphKind.ChevronRight, 1) } };
             row.PointerWheelChanged += (wt, ev) => { if (WheelInput.Step(ev, wt) is not { } s) return; ev.Handled = true; if (s != 0) StepRoot(s); };
-            ToolTip.SetTip(row, Loc.T("Root — click the arrows or scroll"));
+            ToolTip.SetTip(row, Loc.T("device.scale.root_click_the_arrows_or"));
             Learn(row, PRoot, "Root");
             return row;
         }
@@ -363,7 +363,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
             var seg = DeviceCardKit.Segments(Folds, Fold, i => { Set(PFold, i); Refresh(); }, out var sync, fill: true, padX: 2, fontSize: 8);
             seg.Height = h + 4;
             readouts.Add(sync);
-            ToolTip.SetTip(seg, Loc.T("Fold — where an out-of-scale note goes: the nearest scale note (a tie goes up), the one below or the one above"));
+            ToolTip.SetTip(seg, Loc.T("device.scale.fold_where_an_out_of"));
             Learn(seg, PFold, "Fold");
             return seg;
         }
@@ -441,7 +441,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
                 Height = 14, Background = Well, BorderBrush = Bd, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Badge,
                 Child = new DockPanel { Children = { WithDock(dec, Dock.Left), WithDock(inc, Dock.Right), valHit } },
             };
-            ToolTip.SetTip(box, MenuKit.Keys(Loc.F("{0} — ± an octave, drag or scroll the note for semitones, ⌥-click the note to type it, double-click resets. Notes outside the range pass through.", label)));
+            ToolTip.SetTip(box, MenuKit.Keys(Loc.F("device.scale.an_octave_drag_or_scroll", label)));
             ValueEntry.Attach(valHit, new ValueField(label, () => Get() / 127.0, n => DeviceCardKit.NoteName((int)Math.Round(n * 127)),
                 n => Put((int)Math.Round(Math.Clamp(n, 0, 1) * 127)), () => Begin(p), () => End(p), p == PRangeLo ? 0 : 1), val);
             Learn(box, p, label);
@@ -451,7 +451,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
         Control FollowSwitch()
         {
             var sw = new SwitchTrack { Width = SwitchTrack.W, Height = SwitchTrack.H, VerticalAlignment = VerticalAlignment.Center };
-            var lbl = new TextBlock { Text = Loc.T("Follow key · from input"), FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
+            var lbl = new TextBlock { Text = Loc.T("device.scale.follow_key_from_input"), FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Children = { sw, lbl } };
             row.PointerPressed += (_, ev) =>
             {
@@ -459,7 +459,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
                 Set(PFollowKey, G(PFollowKey) >= 0.5f ? 0 : 1); Refresh(); ev.Handled = true;
             };
             readouts.Add(() => { bool on = G(PFollowKey) >= 0.5f; sw.IsOn = on; lbl.Foreground = on ? Txt : Muted; });
-            ToolTip.SetTip(row, Loc.T("Follow key — the root moves to the key that best fits what you play (keeping the scale type)"));
+            ToolTip.SetTip(row, Loc.T("device.scale.follow_key_the_root_moves"));
             Learn(row, PFollowKey, "Follow Key");
             return row;
         }
@@ -480,7 +480,7 @@ internal sealed class ScaleMidiBody : IMidiDeviceBody
         Control LearnButton()
         {
             var b = Button("Learn", () => { Set(PLearn, G(PLearn) >= 0.5f ? 0 : 1); Refresh(); },
-                Loc.T("Learn — play the notes of your scale; they pass through untouched and become the Custom scale. Click again to finish."));
+                Loc.T("device.scale.learn_play_the_notes_of"));
             var tb = (TextBlock)b.Child!;
             readouts.Add(() =>
             {

@@ -17,8 +17,9 @@ internal static class LanguageProjectTests
     {
         var root = RepoRootOrNull();
         if (root is null) { yield return (false, "repo root located"); yield break; }
-        var fr = TranslationTable.Parse(File.ReadAllText(Path.Combine(root, "src/managed/Nota.App/Languages/fr.json")), out var error);
-        if (fr is null) { yield return (false, "fr.json parsed: " + error); yield break; }
+        // Nota ships English only (spec 077): the other language is the test fixture.
+        var fr = TranslationTable.Parse(File.ReadAllText(Path.Combine(root, "tests/Nota.SmokeTest/Fixtures/Languages/xx.json")), out var error);
+        if (fr is null) { yield return (false, "xx.json parsed: " + error); yield break; }
 
         string tmp = Path.GetTempPath();
         string wav = Path.Combine(tmp, "nota_smoke_lang_sine.wav");

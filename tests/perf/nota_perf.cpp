@@ -202,6 +202,9 @@ std::vector<Scenario> scenarios() {
     for (int n : {1, 4, 8, 16, 32}) s.push_back({"mix-" + std::to_string(n), std::to_string(n) + " tracks, all playing"});
     s.push_back({"sparse-32", "32 tracks, 1 in 4 playing"});
     s.push_back({"silent-32", "32 tracks, no clips"});
+    // Stopped after playing: the audio tracks' Reverb + Delay ring out (#449), then must cost
+    // nothing again; this measures the stopped engine once the tails are over.
+    s.push_back({"audio-tails-8", "8 audio tracks with Reverb + Delay, stopped, tails over"});
     s.push_back({"audio-warp-split", "Warped audio clip split in 8, playing"});
     // An edit, not a render: the measured loop splits a warped clip 8 times and undoes it (#299).
     s.push_back({"edit-warp-split", "Split a warped 8 s clip 8x + undo (ms per edit)"});
@@ -259,6 +262,18 @@ bool build(NotaEngine* e, const std::string& id) {
             fillChords6(e, tr, t == 0 ? 0 : 7, 0, 16);
         }
         return true;
+    }
+    if (id == "audio-tails-8") {
+        const std::string wav = warpTestWav();
+        bool ok = true;
+        for (int i = 0; i < 8 && ok; ++i) {
+            const int t = nota_engine_add_audio_track(e);
+            ok = t >= 0 && nota_track_add_audio_clip(e, t, wav.c_str(), 0.0) == 0 &&
+                 nota_track_add_builtin_device(e, t, 2) >= 0 && nota_track_add_builtin_device(e, t, 3) >= 0;
+        }
+        std::error_code ec;
+        std::filesystem::remove(wav, ec);
+        return ok;
     }
     if (id == "audio-warp-split" || id == "edit-warp-split") {
         const int t = warpedClipTrack(e);
@@ -331,6 +346,12 @@ int run(const std::string& id, double seconds) {
     std::vector<float> buf((size_t)kBlock * 2);
     for (int i = 0; i < (int)(0.25 * kSampleRate / kBlock); ++i) // warm-up: voices, caches, pool threads
         nota_engine_render_offline_at(e, buf.data(), kBlock, kSampleRate);
+
+    if (id == "audio-tails-8") { // stop while the clips sound, then let the tails ring out (not measured)
+        nota_transport_stop(e);
+        for (int i = 0; i < (int)(20.0 * kSampleRate / kBlock); ++i)
+            nota_engine_render_offline_at(e, buf.data(), kBlock, kSampleRate);
+    }
 
     const int blocks = std::max(1, (int)(seconds * kSampleRate / kBlock));
     float peak = 0.0f;

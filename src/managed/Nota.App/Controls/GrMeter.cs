@@ -19,7 +19,7 @@ namespace Nota.App;
         private const double MaxDb = 24.0;   // full-scale reduction
         private double _gr, _hold;
 
-        public GrMeter() => ToolTip.SetTip(this, Loc.T("Clear the peak hold"));
+        public GrMeter() => ToolTip.SetTip(this, Loc.T("control.clear_the_peak_hold"));
 
         public double GrDb
         {

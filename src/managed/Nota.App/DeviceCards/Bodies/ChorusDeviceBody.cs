@@ -147,12 +147,12 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         syncSeg.Width = 76;
         readouts.Add(syncSync);
         Learn(syncSeg, Sync);
-        ToolTip.SetTip(syncSeg, Loc.T("Hz runs the LFO free; Sync takes its rate from the tempo and locks it to the bar while the transport plays"));
+        ToolTip.SetTip(syncSeg, Loc.T("common.hz_runs_the_lfo_free"));
 
         var modeSeg = Segments(ChorusMath.Modes, ModeI, i => { SetP(Mode, i / 2.0); RefreshAll(); }, out var modeSync, fill: true, padX: 0);
         readouts.Add(modeSync);
         Learn(modeSeg, Mode);
-        ToolTip.SetTip(modeSeg, Loc.T("Classic — two voices, left and right; Ensemble — three voices 120° apart, a string-machine shimmer; Vibrato — the pitch wobble alone, no dry signal"));
+        ToolTip.SetTip(modeSeg, Loc.T("device.chorus.classic_two_voices_left_and"));
 
         var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
         var bigSub = new TextBlock { FontSize = 8, Foreground = TextSecondary };
@@ -175,18 +175,18 @@ internal sealed class ChorusDeviceBody : IDeviceBody
             big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
         });
         var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
-        ToolTip.SetTip(bigBlock, Loc.T("The LFO rate: in Hz, or the note value it takes from the tempo"));
+        ToolTip.SetTip(bigBlock, Loc.T("common.the_lfo_rate_in_hz"));
 
-        var rateRow = Slider("RATE", Rate, v => HzF(ChorusMath.FreeHz(v)) + " Hz", Loc.T("Rate — the free LFO rate, 0.02 … 8 Hz"), 38, 46);
+        var rateRow = Slider("RATE", Rate, v => HzF(ChorusMath.FreeHz(v)) + " Hz", Loc.T("common.rate_the_free_lfo_rate"), 38, 46);
         var divRow = Slider("RATE", Division, v => ChorusMath.DivNames[ChorusMath.DivIndex(v)],
-            Loc.T("Rate — the note value of one LFO cycle, 4/1 … 1/16 with triplet (T) values"), 38, 46,
+            Loc.T("device.chorus.rate_the_note_value_of"), 38, 46,
             snap: v => ChorusMath.DivNorm(ChorusMath.DivIndex(v)));
         readouts.Add(() => { rateRow.IsVisible = !Synced(); divRow.IsVisible = Synced(); });
         var offsetRow = Slider("OFFSET", Offset, v => Ens() ? "3 × 120°" : NotaNum.F($"{v * 180:0}°"),
-            Loc.T("Offset — the right voice's LFO behind the left: 0° moves both together, 180° opposite. Ensemble spreads its three voices 120° apart on its own"),
+            Loc.T("device.chorus.offset_the_right_voices_lfo"),
             38, 46, modulation: true, snap: v => Math.Round(v * 180) / 180, locked: Ens);
         var hpfRow = Slider("HPF", Hpf, v => ChorusMath.HpHz(v) <= 0 ? "off" : ChorusMath.HzF(ChorusMath.HpHz(v)) + " Hz",
-            Loc.T("HPF — a high-pass on the wet input (20 Hz … 2 kHz), so the lows stay dry and centred; far left is off"), 38, 46,
+            Loc.T("device.chorus.hpf_a_high_pass_on"), 38, 46,
             modulation: true, snap: v => Math.Round(v / 0.005) * 0.005);
 
         var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
@@ -233,7 +233,7 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         var viewSeg = Segments(new[] { "τ", "ct" }, () => Cents() ? 1 : 0, i => { viewCents = i == 1; RefreshAll(); }, out var viewSync, fill: true, padX: 0);
         viewSeg.Width = 52;
         readouts.Add(viewSync);
-        ToolTip.SetTip(viewSeg, Loc.T("τ draws each voice's delay; ct its detune — how far the moving delay bends the pitch"));
+        ToolTip.SetTip(viewSeg, Loc.T("device.chorus.draws_each_voices_delay_ct"));
         var headRight = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Children = { plotRead, viewSeg } };
         var centreHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), VerticalAlignment = VerticalAlignment.Center };
         centreHead.Children.Add(Caps("VOICES"));
@@ -246,11 +246,11 @@ internal sealed class ChorusDeviceBody : IDeviceBody
         plot.Changed += a => { Raw(Amount, Math.Round(a * 100) / 100); RefreshAll(); };
         plot.ResetRequested += () => { Reset(Amount); RefreshAll(); };
         Learn(plot, Amount);
-        ToolTip.SetTip(plot, MenuKit.Keys(Loc.T("Each voice over two LFO cycles — its delay (τ) or its detune (ct) — and where it is now. Drag up / down for Amount; ⌥-click types, double-click resets it.")));
+        ToolTip.SetTip(plot, MenuKit.Keys(Loc.T("device.chorus.each_voice_over_two_lfo")));
         ValueEntry.AttachAll(plot, ValueEntry.DeviceParam(engine, track, di, Amount, "Amount", PctF, RefreshAll));
 
         var field = new ChorusFieldView { Margin = new Thickness(0, 4, 0, 0) };
-        ToolTip.SetTip(field, Loc.T("Where the voices sit in the stereo field (Width) and how far each is detuned right now"));
+        ToolTip.SetTip(field, Loc.T("device.chorus.where_the_voices_sit_in"));
         var centreBody = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(field, Dock.Bottom), plot } };
         var centre = Island(centreHead, centreBody);
         centre.Margin = new Thickness(5, 0);
@@ -266,21 +266,21 @@ internal sealed class ChorusDeviceBody : IDeviceBody
             stateWord.Text = s;
             stateWord.Foreground = s == "resonant" ? TextPrimary : s == "bypass" ? NotaPalette.TextAxis : TextSecondary;
         });
-        ToolTip.SetTip(stateWord, Loc.T("How many voices sing, or that the feedback makes it ring (past 60 %), or that Vibrato plays wet only"));
+        ToolTip.SetTip(stateWord, Loc.T("device.chorus.how_many_voices_sing_or"));
 
         const double LW = 46, VW = 36;
-        var amountRow = Slider("AMOUNT", Amount, v => PctF(v), Loc.T("Amount — how far the LFO swings each voice's delay: more is wider detune"), LW, VW,
+        var amountRow = Slider("AMOUNT", Amount, v => PctF(v), Loc.T("device.chorus.amount_how_far_the_lfo"), LW, VW,
             snap: v => Math.Round(v * 100) / 100);
         var fbRow = Slider("FEEDBACK", Feedback, v => FbF(ChorusMath.Fb(v)),
-            Loc.T("Feedback — the voices fed back into the line, ±90 %: a little thickens, past 60 % it rings metallic like a flanger"), LW, VW,
+            Loc.T("device.chorus.feedback_the_voices_fed_back"), LW, VW,
             modulation: true, bipolar: true, snap: v => ChorusMath.FbNorm(Math.Round(ChorusMath.Fb(v) * 100) / 100));
         var widthRow = Slider("WIDTH", Spread, v => NotaNum.F($"{ChorusMath.WidthPct(v):0} %"),
-            Loc.T("Width — the voices' stereo spread: 0 % mono, 100 % as they are, 200 % lifts the side by +6 dB"), LW, VW,
+            Loc.T("device.chorus.width_the_voices_stereo_spread"), LW, VW,
             modulation: true, snap: v => Math.Round(v * 200) / 200);
         var warmRow = Slider("WARMTH", Warmth, v => PctF(v),
-            Loc.T("Warmth — a bucket-brigade flavour on the delay line: darker (low-pass down to 2.5 kHz) and gently saturated"), LW, VW,
+            Loc.T("device.chorus.warmth_a_bucket_brigade_flavour"), LW, VW,
             snap: v => Math.Round(v * 100) / 100, ink: NotaPalette.RoseBright);
-        var mixRow = Slider("MIX", Mix, v => Vib() ? "wet" : PctF(v), Loc.T("Mix — 0 % dry, 50 % dry and wet equal, 100 % the voices alone. Vibrato is always wet"), LW, VW,
+        var mixRow = Slider("MIX", Mix, v => Vib() ? "wet" : PctF(v), Loc.T("device.chorus.mix_0_dry_50_dry"), LW, VW,
             snap: v => Math.Round(v * 100) / 100, locked: Vib);
 
         Control ReadRow(string label, FlangerBar bar, TextBlock value, string tip)
@@ -304,8 +304,8 @@ internal sealed class ChorusDeviceBody : IDeviceBody
             {
                 Spacing = 4, Children =
                 {
-                    ReadRow("DETUNE", detuneBar, detuneVal, Loc.T("The largest detune the sweep reaches, ± cents (0 … 60 on the bar)")),
-                    ReadRow("DELAY", delayBar, delayVal, Loc.T("The range each voice's delay sweeps, ms (0 … 24 on the bar)")),
+                    ReadRow("DETUNE", detuneBar, detuneVal, Loc.T("device.chorus.the_largest_detune_the_sweep")),
+                    ReadRow("DELAY", delayBar, delayVal, Loc.T("device.chorus.the_range_each_voices_delay")),
                 },
             },
         };
@@ -330,14 +330,14 @@ internal sealed class ChorusDeviceBody : IDeviceBody
             double fb = Fb(), afb = Math.Abs(fb);
             bool warn = false;
             string foot;
-            if (!On()) foot = Loc.T("Chorus bypassed: the signal passes unchanged");
-            else if (!Vib() && P(Mix) < 0.01f) { foot = Loc.T("Mix at zero: only the dry signal is heard"); warn = true; }
-            else if (P(Amount) < 0.01f) foot = Loc.T("Amount at zero: the voices stand still, a static ") + ChorusMath.Ms(ChorusMath.BaseMs[ModeI()]) + " ms delay remains";
+            if (!On()) foot = Loc.T("device.chorus.chorus_bypassed_the_signal_passes");
+            else if (!Vib() && P(Mix) < 0.01f) { foot = Loc.T("common.mix_at_zero_only_the"); warn = true; }
+            else if (P(Amount) < 0.01f) foot = Loc.T("device.chorus.amount_at_zero_the_voices") + ChorusMath.Ms(ChorusMath.BaseMs[ModeI()]) + " ms delay remains";
             else if (afb >= 0.6) { foot = "Feedback " + FbF(fb) + ": a metallic ring creeps in, like a flanger"; warn = true; }
-            else if (Vib()) foot = Loc.T("Vibrato: no dry signal, the pitch swings ±") + ChorusMath.Ct(MaxCt()) + " ct at " + HzF(RateHz()) + " Hz";
-            else if (WidthPct() < 1) foot = Loc.T("Width 0 %: the voices fold to mono, no space");
+            else if (Vib()) foot = Loc.T("device.chorus.vibrato_no_dry_signal_the") + ChorusMath.Ct(MaxCt()) + " ct at " + HzF(RateHz()) + " Hz";
+            else if (WidthPct() < 1) foot = Loc.T("device.chorus.width_0_the_voices_fold");
             else
-                foot = Loc.T("Detune up to ±") + ChorusMath.Ct(MaxCt()) + " ct · τ " + ChorusMath.Ms(TauMin()) + "–" + ChorusMath.Ms(TauMax())
+                foot = Loc.T("device.chorus.detune_up_to") + ChorusMath.Ct(MaxCt()) + " ct · τ " + ChorusMath.Ms(TauMin()) + "–" + ChorusMath.Ms(TauMax())
                     + " ms · " + (Ens() ? "3" : "2") + " voices";
             statusLeft.Text = foot;
             statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;

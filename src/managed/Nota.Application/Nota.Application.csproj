@@ -13,4 +13,10 @@
     <ProjectReference Include="..\Nota.Domain\Nota.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The English reference (spec 077): every interface text by key. Embedded beside Loc so
+         English is there before a language is installed and in every project using Loc. -->
+    <EmbeddedResource Include="Localization\en.json" LogicalName="Nota.Localization.en.json" />
+  </ItemGroup>
+
 </Project>

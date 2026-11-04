@@ -3,6 +3,8 @@
 //
 // The interface language (spec 068): which codes exist, what a stored value means, when a
 // change is still waiting for a restart, and how a language counts ("1 track", "2 tracks").
+// The counting rule is named by the language file itself (spec 077 research R6), so a language
+// downloaded later brings its rule instead of needing one written here per code.
 // Pure — no UI, no I/O — so the smoke test can walk it, like InterfaceScale. A hand-edited or
 // future value never throws: it reads as English.
 
@@ -34,11 +36,20 @@ public static class UiLanguage
     public static bool IsPending(string? stored, string running, IReadOnlyCollection<string> available)
         => !string.Equals(Normalize(stored, available), running, StringComparison.Ordinal);
 
-    /// <summary>Which plural form a whole-number count takes in a language. English: one when
-    /// n is 1. French: one when n is 0 or 1. A language with no rule here counts like English.</summary>
-    public static PluralForm Plural(string code, long n) => code switch
+    /// <summary>English, German …: one when n is 1.</summary>
+    public const string RuleOneIs1 = "one_is_1";
+
+    /// <summary>French …: one when n is 0 or 1.</summary>
+    public const string RuleOneIs0Or1 = "one_is_0_1";
+
+    /// <summary>Whether this build implements a plural rule a language file names.</summary>
+    public static bool IsKnownRule(string? rule) => rule is RuleOneIs1 or RuleOneIs0Or1;
+
+    /// <summary>Which plural form a whole-number count takes under a language file's rule. An
+    /// unknown rule counts like English (a file naming one is rejected when it is read).</summary>
+    public static PluralForm Plural(string rule, long n) => rule switch
     {
-        "fr" => n is 0 or 1 ? PluralForm.One : PluralForm.Other,
+        RuleOneIs0Or1 => n is 0 or 1 ? PluralForm.One : PluralForm.Other,
         _ => n == 1 ? PluralForm.One : PluralForm.Other,
     };
 }

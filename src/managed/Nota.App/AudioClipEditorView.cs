@@ -41,7 +41,7 @@ public sealed class AudioClipEditorView : UserControl
     private readonly TextBlock _warpModeText = new() { FontSize = NotaType.Body };
     private readonly TextBlock _detectedText = Mono("—");
     private readonly TextBlock _markerCount = Meta("");
-    private readonly TextBlock _envTargetText = new() { Text = Loc.T("Volume"), FontSize = NotaType.Body, Foreground = NotaPalette.TextPrimary };
+    private readonly TextBlock _envTargetText = new() { Text = Loc.T("common.volume"), FontSize = NotaType.Body, Foreground = NotaPalette.TextPrimary };
     private readonly TextBlock _hint = Hint("");
     private readonly Border _envTargetDrop;
     private Action _syncGain = () => { }, _syncReverse = () => { }, _syncWarp = () => { };
@@ -71,8 +71,8 @@ public sealed class AudioClipEditorView : UserControl
     private long _srcFrames;   // the whole sample's frames (unwarped detail peaks)
     private bool _envMode;
     private int _envTarget;   // 0 = Volume (0..1), 1 = Pan (-1..1)
-    private static readonly string[] WarpModes = { Loc.T("Beats"), Loc.T("Tones"), Loc.T("Texture"), Loc.T("Complex"), Loc.T("Complex Pro"), "Re-Pitch" };
-    private static readonly string[] EnvTargets = { Loc.T("Volume"), Loc.T("Pan") };
+    private static readonly string[] WarpModes = { Loc.T("audio_clip_editor.beats"), Loc.T("audio_clip_editor.tones"), Loc.T("audio_clip_editor.texture"), Loc.T("audio_clip_editor.complex"), Loc.T("audio_clip_editor.complex_pro"), "Re-Pitch" };
+    private static readonly string[] EnvTargets = { Loc.T("common.volume"), Loc.T("common.pan") };
 
     public AudioClipEditorView(IAudioEngine engine, int trackId, int clipIndex, IBrush clipColor, Action onChanged)
     {
@@ -126,55 +126,55 @@ public sealed class AudioClipEditorView : UserControl
         _wave.AdsrCommitted = SetAdsr;
 
         // CLIP — where it sits, and its length (± one beat).
-        var clip = Section(Loc.T("Clip"),
-            Pair(Labeled(Loc.T("Start"), Field(_startText)), Labeled(Loc.T("Length"), Stepper(_lengthText, () => Resize(-1), () => Resize(1)))));
+        var clip = Section(Loc.T("common.clip"),
+            Pair(Labeled(Loc.T("common.start"), Field(_startText)), Labeled(Loc.T("common.length"), Stepper(_lengthText, () => Resize(-1), () => Resize(1)))));
 
         // PLAYBACK — gain, varispeed pitch, direction.
-        var gain = SliderRow(Loc.T("Gain"), 44, () => _gain / 2.0, v => SetGain(v * 2.0), GainText, out _syncGain,
+        var gain = SliderRow(Loc.T("audio_clip_editor.gain"), 44, () => _gain / 2.0, v => SetGain(v * 2.0), GainText, out _syncGain,
             reset: () => SetGain(1.0), valueW: 44);
         var pitchRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10 };
         pitchRow.Children.Add(new TextBlock
         {
-            Text = Loc.T("Pitch"), Width = 44, FontSize = 9, FontWeight = FontWeight.Medium,
+            Text = Loc.T("common.pitch"), Width = 44, FontSize = 9, FontWeight = FontWeight.Medium,
             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         });
         var pitch = Stepper(_pitchText, () => Pitch(-1), () => Pitch(1), zone: 24);
         Grid.SetColumn(pitch, 1); pitchRow.Children.Add(pitch);
         // Reverse is non-destructive (the file is untouched) and free to toggle, so it
         // doubles as an audition switch; the wave mirrors so it always reads in playing order.
-        var reverse = SwitchRow(Loc.T("Reverse"), () => _reversed, ToggleReverse, out _syncReverse, height: 22);
-        var playback = Section(SectionTitle(Loc.T("Playback")), 10, gain, pitchRow, reverse);
+        var reverse = SwitchRow(Loc.T("common.reverse"), () => _reversed, ToggleReverse, out _syncReverse, height: 22);
+        var playback = Section(SectionTitle(Loc.T("audio_clip_editor.playback")), 10, gain, pitchRow, reverse);
 
         // WARP — on/off and the stretch mode, the two detectors, what they found.
-        var warpSwitch = SwitchRow(Loc.T("Warp"), () => _warpEnabled, ToggleWarp, out _syncWarp);
+        var warpSwitch = SwitchRow(Loc.T("audio_clip_editor.warp"), () => _warpEnabled, ToggleWarp, out _syncWarp);
         var mode = Dropdown(_warpModeText, a => ShowMenu(a, WarpModes, _warpMode, SetWarpMode));
         mode.Width = 104;
         var warpRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };
         warpRow.Children.Add(warpSwitch);
         Grid.SetColumn(mode, 1); warpRow.Children.Add(mode);
-        var detect = ClipEditorKit.Button(Loc.T("Detect tempo"), AutoWarp);
-        ToolTip.SetTip(detect, Loc.T("Detect the file's tempo and conform it to the project"));
-        var transients = ClipEditorKit.Button(Loc.T("To transients"), TransientWarp);
-        ToolTip.SetTip(transients, Loc.T("Pin a marker on every hit so drums lock to the grid"));
-        var warp = Section(SectionTitle(Loc.T("Warp"), _markerCount), 8,
-            warpRow, TempoRow(), Pair(detect, transients), Card(KeyValue(Loc.T("Detected"), _detectedText)));
+        var detect = ClipEditorKit.Button(Loc.T("audio_clip_editor.detect_tempo"), AutoWarp);
+        ToolTip.SetTip(detect, Loc.T("audio_clip_editor.detect_the_files_tempo_and"));
+        var transients = ClipEditorKit.Button(Loc.T("audio_clip_editor.to_transients"), TransientWarp);
+        ToolTip.SetTip(transients, Loc.T("audio_clip_editor.pin_a_marker_on_every"));
+        var warp = Section(SectionTitle(Loc.T("audio_clip_editor.warp"), _markerCount), 8,
+            warpRow, TempoRow(), Pair(detect, transients), Card(KeyValue(Loc.T("audio_clip_editor.detected"), _detectedText)));
 
         // ADSR — the clip's amplitude shape (the ADSR tab swaps the inspector to it). Times
         // run on a square-law slider over the clip length, so short attacks stay fine-grained.
-        var attack = SliderRow(Loc.T("Attack"), 52, () => TimeNorm(_adsr.AttackBeats),
+        var attack = SliderRow(Loc.T("common.attack"), 52, () => TimeNorm(_adsr.AttackBeats),
             v => SetAdsrStage(AdsrHandle.Attack, NormTime(v), _adsr.Sustain), () => AdsrTime(_adsr.AttackBeats), out _syncAttack,
             reset: () => SetAdsr(ClipAdsrKit.Reset(AdsrHandle.Attack, _adsr)), valueW: 52);
-        var decay = SliderRow(Loc.T("Decay"), 52, () => TimeNorm(_adsr.DecayBeats),
+        var decay = SliderRow(Loc.T("common.decay"), 52, () => TimeNorm(_adsr.DecayBeats),
             v => SetAdsrStage(AdsrHandle.DecaySustain, _adsr.AttackBeats + NormTime(v), _adsr.Sustain), () => AdsrTime(_adsr.DecayBeats), out _syncDecay,
             reset: () => { var a = _adsr; a.DecayBeats = 0; SetAdsr(a); }, valueW: 52);
-        var sustain = SliderRow(Loc.T("Sustain"), 52, () => _adsr.Sustain,
+        var sustain = SliderRow(Loc.T("common.sustain"), 52, () => _adsr.Sustain,
             v => SetAdsrStage(AdsrHandle.DecaySustain, _adsr.AttackBeats + _adsr.DecayBeats, v), () => ClipAdsrKit.SustainText(_adsr.Sustain), out _syncSustain,
             reset: () => { var a = _adsr; a.Sustain = 1f; SetAdsr(a); }, valueW: 52);
-        var release = SliderRow(Loc.T("Release"), 52, () => TimeNorm(_adsr.ReleaseBeats),
+        var release = SliderRow(Loc.T("common.release"), 52, () => TimeNorm(_adsr.ReleaseBeats),
             v => SetAdsrStage(AdsrHandle.Release, _lengthBeats - NormTime(v), _adsr.Sustain), () => AdsrTime(_adsr.ReleaseBeats), out _syncRelease,
             reset: () => SetAdsr(ClipAdsrKit.Reset(AdsrHandle.Release, _adsr)), valueW: 52);
-        var resetAll = ClipEditorKit.Button(Loc.T("Reset"), () => SetAdsr(ClipAdsr.Identity));
-        ToolTip.SetTip(resetAll, Loc.T("Play the whole sample at full level"));
+        var resetAll = ClipEditorKit.Button(Loc.T("audio_clip_editor.reset"), () => SetAdsr(ClipAdsr.Identity));
+        ToolTip.SetTip(resetAll, Loc.T("audio_clip_editor.play_the_whole_sample_at"));
         var adsr = Section(SectionTitle("ADSR"), 10, attack, decay, sustain, release, resetAll);
 
         _sampleSections = Sections(clip, playback, warp);
@@ -211,7 +211,7 @@ public sealed class AudioClipEditorView : UserControl
         var grid = new DockPanel { Children = { inspector, col1 } };
 
         // Header: Sample | Envelope | ADSR, the target while editing an envelope, Snap, the format.
-        var tabs = Segments(new[] { Loc.T("Sample"), Loc.T("Envelope"), "ADSR" }, 0, SetMode, out _);
+        var tabs = Segments(new[] { Loc.T("common.sample"), Loc.T("audio_clip_editor.envelope"), "ADSR" }, 0, SetMode, out _);
         _envTargetDrop = Dropdown(_envTargetText, a => ShowMenu(a, EnvTargets, _envTarget, SetEnvTarget));
         _envTargetDrop.IsVisible = false;
         // The clip editors' snap grid (shared with the piano roll): trim brackets, warp markers
@@ -220,7 +220,7 @@ public sealed class AudioClipEditorView : UserControl
         _wave.GridChanged += chip.Refresh;
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { snap, HeaderDivider(), _fileText } };
         var name = engine.GetClipName(trackId, clipIndex);
-        var header = Header(clipColor, string.IsNullOrWhiteSpace(name) ? Loc.F("Audio {0}", trackId) : name, "AUDIO", tabs, _envTargetDrop, right, inspector, _inspectorFlow);
+        var header = Header(clipColor, string.IsNullOrWhiteSpace(name) ? Loc.F("common.audio_n", trackId) : name, "AUDIO", tabs, _envTargetDrop, right, inspector, _inspectorFlow);
         DockPanel.SetDock(header, Dock.Top);
         Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, grid } };
 
@@ -323,7 +323,7 @@ public sealed class AudioClipEditorView : UserControl
             if (ai.SampleId != 0 && _engine.TryGetSampleInfo(ai.SampleId, out var si) && si.SampleRate > 0)
             {
                 double secs = si.Frames / si.SampleRate;
-                string ch = si.Channels == 1 ? Loc.T("Mono") : si.Channels == 2 ? Loc.T("Stereo") : $"{si.Channels} ch";
+                string ch = si.Channels == 1 ? Loc.T("audio_clip_editor.mono") : si.Channels == 2 ? Loc.T("audio_clip_editor.stereo") : $"{si.Channels} ch";
                 _fileText.Text = string.Format(NotaNum.Culture,
                     "{0} · {1:0.0}\u2009kHz · {2:0.00}\u2009s", ch, si.SampleRate / 1000.0, secs);
             }
@@ -372,7 +372,7 @@ public sealed class AudioClipEditorView : UserControl
             }
             else _wave.SetSourceRegion(0, 0, 0);
         }
-        _markerCount.Text = _warpEnabled ? Loc.Plural(markers, "{0} marker", "{0} markers") : Loc.T("off");
+        _markerCount.Text = _warpEnabled ? Loc.Plural("audio_clip_editor.markers", markers) : Loc.T("audio_clip_editor.off");
         _clipBpm = _warpEnabled ? ClipTempo.Bpm(_mkSrc, _mkBeat, _playStart, _playEnd, srcSR) : 0;
         SyncTempo();
 
@@ -404,14 +404,14 @@ public sealed class AudioClipEditorView : UserControl
     }
 
     // ---- warp tempo (#248) -----------------------------------------------------
-    private static readonly string TempoTip = Loc.T("The tempo the audio was recorded at. Nota stretches it to the project tempo. ×2 / ÷2 fix a half- or double-time detection.");
+    private static readonly string TempoTip = Loc.T("audio_clip_editor.the_tempo_the_audio_was");
 
     // "Tempo [ 87.00 BPM ] ÷2 ×2" under the Warp switch: drag the value, double-click to type.
     private Control TempoRow()
     {
         var label = new TextBlock
         {
-            Text = Loc.T("Tempo"), Width = 44, FontSize = 9, FontWeight = FontWeight.Medium,
+            Text = Loc.T("audio_clip_editor.tempo"), Width = 44, FontSize = 9, FontWeight = FontWeight.Medium,
             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };
         _tempo = new DragNumber(120, ClipTempo.MinBpm, ClipTempo.MaxBpm, 0.5, "0.00", fontSize: NotaType.Body)
@@ -444,8 +444,8 @@ public sealed class AudioClipEditorView : UserControl
         _tempoDouble = ClipEditorKit.Button("×2", () => StepTempo(ClipTempo.Double));
         foreach (var b in new[] { _tempoHalf, _tempoDouble }) { b.Padding = new Thickness(0); b.Width = 30; }
         ToolTip.SetTip(label, TempoTip); ToolTip.SetTip(field, TempoTip);
-        ToolTip.SetTip(_tempoHalf, Loc.T("Half the tempo — the clip spans half as many beats"));
-        ToolTip.SetTip(_tempoDouble, Loc.T("Double the tempo — the clip spans twice as many beats"));
+        ToolTip.SetTip(_tempoHalf, Loc.T("audio_clip_editor.half_the_tempo_the_clip"));
+        ToolTip.SetTip(_tempoDouble, Loc.T("audio_clip_editor.double_the_tempo_the_clip"));
         var row = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto,Auto"), ColumnSpacing = 6 };
         row.Children.Add(label);
         Grid.SetColumn(field, 1); row.Children.Add(field);
@@ -652,11 +652,11 @@ public sealed class AudioClipEditorView : UserControl
     {
         _hint.Text = _mode switch
         {
-            1 => Loc.T("Click — point · drag — move · right-click — delete"),
-            2 => Loc.T("Drag a handle · double-click — reset"),
+            1 => Loc.T("audio_clip_editor.click_point_drag_move_right"),
+            2 => Loc.T("audio_clip_editor.drag_a_handle_double_click"),
             // An unwarped clip has no beat grid, so nothing in Sample mode snaps (#269).
-            _ when !_warpEnabled => Loc.T("Snap needs Warp — turn on Warp to see the grid and snap to it"),
-            _ => Loc.T("Double-click the wave — marker · drag — align"),
+            _ when !_warpEnabled => Loc.T("audio_clip_editor.snap_needs_warp_turn_on"),
+            _ => Loc.T("audio_clip_editor.double_click_the_wave_marker"),
         };
     }
 
@@ -730,7 +730,7 @@ public sealed class AudioClipEditorView : UserControl
         private bool _seekDrag;             // a ruler / playhead-line scrub in progress
         private double _lastSeek = double.NaN;
         private const double PlayheadGrabPx = 4;
-        private static readonly string SlotSeekTip = Loc.T("A Session slot plays on its own loop clock — launch it to play from the start");
+        private static readonly string SlotSeekTip = Loc.T("audio_clip_editor.a_session_slot_plays_on");
         public void SetPlacement(double startBeat, double lengthBeats, bool isSlot)
         {
             _placeStart = startBeat; _placeLen = Math.Max(1e-6, lengthBeats); _slot = isSlot;

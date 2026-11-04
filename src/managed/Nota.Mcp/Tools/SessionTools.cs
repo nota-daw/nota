@@ -6,7 +6,7 @@
 // (or the clip's own quantum). Clips carry a name, colour and launch properties (launch mode,
 // legato, loop, follow actions); scenes carry a name, colour, tempo / signature and a scene
 // follow action. Slot state: 0 empty, 1 filled, 2 queued (about to start), 3 playing,
-// 4 recording.
+// 4 recording, 5 record pending (a retried / quantized take waiting for its launch quantum).
 
 using System.ComponentModel;
 using ModelContextProtocol.Server;
@@ -32,7 +32,7 @@ public sealed class SessionTools(IAudioEngine engine, IEngineDispatch dispatch, 
     private static readonly string[] Modes = { "trigger", "gate", "toggle", "repeat" };
     private static readonly string[] Actions = { "none", "stop", "again", "previous", "next", "first", "last", "any", "other", "jump" };
 
-    private static string StateName(int s) => s switch { 4 => "recording", 3 => "playing", 2 => "queued", 1 => "filled", _ => "empty" };
+    private static string StateName(int s) => s switch { 5 => "record pending", 4 => "recording", 3 => "playing", 2 => "queued", 1 => "filled", _ => "empty" };
     private static NotaNote ToEngine(Note n) => new(n.Pitch, n.Start, n.Length, Math.Clamp(n.Velocity, 0f, 1f));
     private static Note FromEngine(NotaNote n) => new(n.Pitch, n.StartBeat, n.LengthBeats, n.Velocity);
 

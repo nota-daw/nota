@@ -59,7 +59,7 @@ public sealed record MidiToolParam(
 
     public string Display(double v) => Kind switch
     {
-        MidiParamKind.Toggle => v >= 0.5 ? Loc.T("On") : Loc.T("Off"),
+        MidiParamKind.Toggle => v >= 0.5 ? Loc.T("midi.tool.on") : Loc.T("common.off"),
         MidiParamKind.Choice => Choices is { Length: > 0 }
             ? Choices[Math.Clamp((int)Math.Round(v), 0, Choices.Length - 1)]
             : "",

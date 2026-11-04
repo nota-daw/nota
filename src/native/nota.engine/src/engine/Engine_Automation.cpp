@@ -411,6 +411,11 @@ void Engine::beginAutomationWrite(
         return;
     }
 
+    // Writing a lane during a take is part of the take (specs/078): remember the track as it was
+    // before, and mark the checkpoints below (a new lane, the pre-write state) as the take's.
+    noteTakeTrack(trackId);
+    TakePushScope takePush(*this);
+
     // Resolve (or create) the target's lane. PluginParam resolves paramIndex by id.
     int32_t laneIndex, resolvedParam = paramIndex;
     if (static_cast<AutomationTarget>(target) == AutomationTarget::PluginParam) {

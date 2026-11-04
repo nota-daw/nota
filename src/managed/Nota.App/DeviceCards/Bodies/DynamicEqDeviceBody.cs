@@ -146,7 +146,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         }
         var chipStrip = new Border { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = chipRow };
         DockPanel.SetDock(chipStrip, Dock.Top);
-        ToolTip.SetTip(curve, Loc.T("Drag a node — frequency and gain · wheel over a node — Q · double-click a node — band on / off · ")
+        ToolTip.SetTip(curve, Loc.T("device.dynamic_eq.drag_a_node_frequency_and")
             + "double-click empty space — a new bell there · right-click a node — type, mode, solo");
         var graphPanel = new RuleSection
         {
@@ -181,7 +181,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             var name = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
             var onSw = Switch("On", () => BandOn(b), () => { SetP(pOn, BandOn(b) ? 0 : 1); RefreshAll(); }, out var onSync);
             Learn(onSw, pOn);
-            ToolTip.SetTip(onSw, Loc.T("Band on — off leaves the band out of the signal (double-click its node does the same)"));
+            ToolTip.SetTip(onSw, Loc.T("device.dynamic_eq.band_on_off_leaves_the"));
             bandReadouts.Add(onSync);
             bandReadouts.Add(() =>
             {
@@ -202,7 +202,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 RefreshAll();
             }, out var typeSync, fill: true, padX: 0);
             Learn(typeSeg, pType);
-            ToolTip.SetTip(typeSeg, Loc.T("Type — high-pass, low shelf, bell, notch, high shelf, low-pass; only shelves and bells take gain and dynamics"));
+            ToolTip.SetTip(typeSeg, Loc.T("device.dynamic_eq.type_high_pass_low_shelf"));
             bandReadouts.Add(typeSync);
 
             // ---- knobs ----
@@ -231,10 +231,10 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             }
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), Children =
             {
-                K(pF, "FREQ", () => DynEq.HzShort(B(b, DynEq.FreqF)) + (B(b, DynEq.FreqF) < 1000 ? " Hz" : ""), Loc.T("Frequency — or drag the node left / right")),
-                Col(K(pG, "GAIN", () => Capable(b) ? DynEq.Db(B(b, DynEq.GainF)) + " dB" : "—", Loc.T("Gain — the static gain; or drag the node up / down"),
+                K(pF, "FREQ", () => DynEq.HzShort(B(b, DynEq.FreqF)) + (B(b, DynEq.FreqF) < 1000 ? " Hz" : ""), Loc.T("device.dynamic_eq.frequency_or_drag_the_node")),
+                Col(K(pG, "GAIN", () => Capable(b) ? DynEq.Db(B(b, DynEq.GainF)) + " dB" : "—", Loc.T("device.dynamic_eq.gain_the_static_gain_or"),
                     inactive: () => !Capable(b)), 1),
-                Col(K(pQ, "Q", () => NotaNum.F($"{B(b, DynEq.QF):0.00}"), Loc.T("Q — the width (the resonance on the cuts); or the wheel over the node"),
+                Col(K(pQ, "Q", () => NotaNum.F($"{B(b, DynEq.QF):0.00}"), Loc.T("device.dynamic_eq.q_the_width_the_resonance"),
                     liveLabel: () => TypeOf(b) is DynEq.LowCut or DynEq.HighCut ? "Reso" : "Q"), 2),
             } };
 
@@ -246,8 +246,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 RefreshAll(); curve.InvalidateVisual();
             }, out var modeSync, padX: 6, dim: () => !Capable(b));
             Learn(modeSeg, pMode);
-            ToolTip.SetTip(modeSeg, Loc.T("Static — a plain EQ band · Duck — acts as the band's level rises above the threshold (a cut by default) · ")
-                + Loc.T("Lift — acts as it falls below it (a boost by default)"));
+            ToolTip.SetTip(modeSeg, Loc.T("device.dynamic_eq.static_a_plain_eq_band")
+                + Loc.T("device.dynamic_eq.lift_acts_as_it_falls"));
             bandReadouts.Add(modeSync);
             var dynLabel = Caps("DYNAMICS");
             bandReadouts.Add(() => dynLabel.Foreground = IsDyn(b) ? TextSecondary : TextTertiary);
@@ -300,7 +300,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             {
                 Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), HorizontalAlignment = HorizontalAlignment.Right,
             };
-            ToolTip.SetTip(flip, Loc.T("Flip — cut ↔ boost (a Duck that boosts is upward expansion, a Lift that cuts is downward expansion)"));
+            ToolTip.SetTip(flip, Loc.T("device.dynamic_eq.flip_cut_boost_a_duck"));
             var flipPanel = new Panel();
             flip.Child = flipPanel;
             flip.PointerPressed += (_, e) =>
@@ -314,10 +314,10 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 Spacing = 5, Children =
                 {
                     SliderRow("THRESH", pThr, () => NotaNum.F($"{B(b, DynEq.ThrF):0} dB"),
-                        Loc.T("Threshold — where the band starts to act; the teal mark is the band's level now"),
+                        Loc.T("device.dynamic_eq.threshold_where_the_band_starts"),
                         marker: () => ToN(pThr, Math.Max(mn[pThr], curve.Level(b)))),
                     SliderRow("RANGE", pRange, () => (Rng() >= 0 ? "↑ " : "↓ ") + NotaNum.F($"{Math.Abs(Rng()):0.0}"),
-                        Loc.T("Range — how far the gain can move at full engagement (6 dB past the threshold); click the arrow to flip cut / boost"),
+                        Loc.T("device.dynamic_eq.range_how_far_the_gain"),
                         getN: () => Math.Abs(Rng()) / 18.0,
                         setN: n =>
                         {
@@ -327,8 +327,8 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                         ink: () => DirInk(b),
                         reset: () => SetP(pRange, ModeOf(b) == DynEq.Lift ? 6 : -6),
                         valueCtl: flip),
-                    SliderRow("ATTACK", pAtk, () => DynEq.Ms(B(b, DynEq.AtkF)), Loc.T("Attack — how fast the band moves toward its range")),
-                    SliderRow("RELEASE", pRel, () => DynEq.Ms(B(b, DynEq.RelF)), Loc.T("Release — how fast it returns to its static gain")),
+                    SliderRow("ATTACK", pAtk, () => DynEq.Ms(B(b, DynEq.AtkF)), Loc.T("device.dynamic_eq.attack_how_fast_the_band")),
+                    SliderRow("RELEASE", pRel, () => DynEq.Ms(B(b, DynEq.RelF)), Loc.T("device.dynamic_eq.release_how_fast_it_returns")),
                 },
             };
 
@@ -354,7 +354,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 RefreshAll();
             }, out var keySync);
             Learn(keySeg, pKey);
-            ToolTip.SetTip(keySeg, Loc.T("Key — Self: the band listens to this track · Ext: to the key track (click Ext again to pick the track)"));
+            ToolTip.SetTip(keySeg, Loc.T("device.dynamic_eq.key_self_the_band_listens"));
             bandReadouts.Add(keySync);
             var soloTb = new TextBlock { Text = "Solo", FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
             var solo = new Border
@@ -368,7 +368,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
                 SetP(DynEq.SoloP, Solo() == b ? 0 : b + 1); RefreshAll(); curve.InvalidateVisual(); e.Handled = true;
             };
             Learn(solo, DynEq.SoloP);
-            ToolTip.SetTip(solo, Loc.T("Solo — hear this band alone"));
+            ToolTip.SetTip(solo, Loc.T("device.dynamic_eq.solo_hear_this_band_alone"));
             bandReadouts.Add(() =>
             {
                 bool on = Solo() == b;
@@ -418,7 +418,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
             return string.Join(" · ", parts);
         }
         var nowRead = Mono("", 8, TextTertiary);
-        ToolTip.SetTip(nowRead, Loc.T("The selected band's dynamic gain right now"));
+        ToolTip.SetTip(nowRead, Loc.T("device.dynamic_eq.the_selected_bands_dynamic_gain"));
         readouts.Add(() =>
         {
             int s = Sel();
@@ -436,7 +436,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         });
         var dynSw = Switch("Dynamic", DynMaster, () => { SetP(DynEq.DynamicsP, DynMaster() ? 0 : 1); RefreshAll(); curve.InvalidateVisual(); }, out var dynSync);
         Learn(dynSw, DynEq.DynamicsP);
-        ToolTip.SetTip(dynSw, Loc.T("Dynamic — off parks every band on its static gain: hear what the dynamics do"));
+        ToolTip.SetTip(dynSw, Loc.T("device.dynamic_eq.dynamic_off_parks_every_band"));
         readouts.Add(dynSync);
 
         // OUT: a mono readout that drags vertically (±18 dB), double-click resets to 0.
@@ -461,7 +461,7 @@ internal sealed class DynamicEqDeviceBody : IDeviceBody
         outBox.PointerReleased += (_, e) => { OutEnd(); e.Pointer.Capture(null); };
         outBox.PointerCaptureLost += (_, _) => OutEnd();
         Learn(outBox, DynEq.OutputP);
-        ToolTip.SetTip(outBox, MenuKit.Keys(Loc.T("Output — drag up / down (Shift for fine), ⌥-click to type, double-click for 0 dB")));
+        ToolTip.SetTip(outBox, MenuKit.Keys(Loc.T("device.dynamic_eq.output_drag_up_down_shift")));
         ValueEntry.Attach(outBox, ValueEntry.DeviceRaw(engine, track, di, DynEq.OutputP, "Output", -18, 18, v => "Out " + DynEq.Db(v) + " dB", RefreshAll), outTb);
         readouts.Add(() =>
         {

@@ -67,7 +67,7 @@ public partial class MainWindow
         if (e.IsPlugin)
         {
             int index = RecentCatalog?.IndexOfId(e.Id) ?? -1;
-            if (index < 0) { _vm.StatusText = Loc.F("{0} is no longer installed.", e.Name); return; }
+            if (index < 0) { _vm.StatusText = Loc.F("main.recent.is_no_longer_installed", e.Name); return; }
             item = new BrowserItem { Name = e.Name, Kind = BrowserItemKind.PluginInstrument, CatalogIndex = index };
         }
         else item = new BrowserItem { Name = e.Name, Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = e.BuiltinKindId };
@@ -80,12 +80,12 @@ public partial class MainWindow
             if (trackId > 0) Timeline.PlaceNewTrack(trackId, anchorTrackId);
         }
         finally { Engine.EndUndoGroup(); }
-        if (trackId <= 0) { _vm.StatusText = Loc.F("Couldn't load {0}.", e.Name); return; }
+        if (trackId <= 0) { _vm.StatusText = Loc.F("common.couldnt_load", e.Name); return; }
         Timeline.Refresh();
         Timeline.RevealTrack(trackId);
         if (anchorTrackId > 0) Timeline.Select(trackId, -1);
         _session?.Refresh();
         if (_modular?.IsVisible == true) _modular.Refresh();
-        _vm.StatusText = Loc.F("Added {0} (track {1})", e.Name, trackId);
+        _vm.StatusText = Loc.F("main.recent.added_track", e.Name, trackId);
     }
 }
