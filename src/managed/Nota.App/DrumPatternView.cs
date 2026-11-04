@@ -268,8 +268,8 @@ public sealed class DrumPatternView : UserControl
                 VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    new TextBlock { Text = Loc.T("No pads loaded"), FontSize = 12, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center },
-                    new TextBlock { Text = Loc.T("Drop samples on the Drum Rack pads in Devices, then step them here."), FontSize = 10, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
+                    new TextBlock { Text = Loc.T("drum_pattern.no_pads_loaded"), FontSize = 12, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center },
+                    new TextBlock { Text = Loc.T("drum_pattern.drop_samples_on_the_drum"), FontSize = 10, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
                 },
             },
         };
@@ -303,15 +303,15 @@ public sealed class DrumPatternView : UserControl
             Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                Cap(Loc.T("Pattern")),
+                Cap(Loc.T("common.pattern")),
                 new TextBlock { Text = _title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center },
-                Mono(Loc.F("{0} · {1}", Loc.Plural(_pads.Count, "{0} pad", "{0} pads"), Loc.Plural(_steps, "{0} step", "{0} steps")), TextTertiary),
-                Mono(Loc.T("click to place · shift-click accents · drag to paint"), NotaPalette.TextDisabled),
+                Mono(Loc.F("common.pattern_n", Loc.Plural("drum_pattern.pads", _pads.Count), Loc.Plural("drum_pattern.steps", _steps)), TextTertiary),
+                Mono(Loc.T("drum_pattern.click_to_place_shift_click"), NotaPalette.TextDisabled),
             },
         };
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, [DockPanel.DockProperty] = Dock.Right };
-        right.Children.Add(Cap(Loc.T("Grid")));
+        right.Children.Add(Cap(Loc.T("common.grid")));
         right.Children.Add(Seg(ResNames, Array.IndexOf(Resolutions, _res), i =>
         {
             _res = _resPersist = Resolutions[i];
@@ -329,10 +329,10 @@ public sealed class DrumPatternView : UserControl
                 int lastBar = (int)Math.Ceiling(Math.Min(_steps, (p + 1) * MaxCells) / barSteps);
                 names[p] = firstBar == lastBar ? $"{firstBar}" : $"{firstBar}–{lastBar}";
             }
-            right.Children.Add(Cap(Loc.T("Bars")));
+            right.Children.Add(Cap(Loc.T("drum_pattern.bars")));
             right.Children.Add(Seg(names, _winStart / MaxCells, p => { _winStart = p * MaxCells; Rebuild(); }));
         }
-        right.Children.Add(Chip(Loc.T("Clear"), ClearPattern));
+        right.Children.Add(Chip(Loc.T("common.clear"), ClearPattern));
 
         var dp = new DockPanel { LastChildFill = false, Margin = new Thickness(12, 0), Children = { left, right } };
         return new Border { Height = 30, Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(0, 0, 0, 1), Child = dp };
@@ -392,7 +392,7 @@ public sealed class DrumPatternView : UserControl
         inner.Children.Add(note);
 
         var cell = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = inner };
-        ToolTip.SetTip(cell, Loc.F("Play {0} · {1} and show its velocity lane", pad.Name, NoteName(pad.Note)));
+        ToolTip.SetTip(cell, Loc.F("drum_pattern.play_and_show_its_velocity", pad.Name, NoteName(pad.Note)));
         cell.PointerPressed += (_, e) =>
         {
             e.Handled = true;
@@ -437,7 +437,7 @@ public sealed class DrumPatternView : UserControl
         var label = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children = { Cap(Loc.T("Velocity")), _velLabel },
+            Children = { Cap(Loc.T("common.velocity")), _velLabel },
         };
         var lane = BeatGrid(VelocityCell);
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{NameW},*"), ColumnSpacing = 8, Height = VelH, Margin = new Thickness(10, 0, 10, 0) };

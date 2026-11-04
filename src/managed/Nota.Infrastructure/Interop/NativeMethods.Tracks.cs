@@ -288,6 +288,12 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_get_piano_fold")]
     internal static partial int TrackGetPianoFold(IntPtr engine, int trackId);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_set_edit_link")]
+    internal static partial NotaResult TrackSetEditLink(IntPtr engine, int trackId, int on);
+
+    [LibraryImport(Lib, EntryPoint = "nota_track_get_edit_link")]
+    internal static partial int TrackGetEditLink(IntPtr engine, int trackId);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_copy")]
     internal static partial NotaResult TrackCopy(IntPtr engine, int trackId);
 

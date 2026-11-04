@@ -77,7 +77,7 @@ public partial class MainWindow : IHistoryHost, Nota.Mcp.IProjectVersionsAccess
         catch (Exception ex) when (ex is ProjectHistoryException or IOException or UnauthorizedAccessException)
         {
             App.Services.GetRequiredService<ILogSink>().Error("Recording a project version failed", ex);
-            return Loc.F(" · version not recorded: {0}", ex.Message);
+            return Loc.F("main.history.version_not_recorded", ex.Message);
         }
     }
 
@@ -86,7 +86,7 @@ public partial class MainWindow : IHistoryHost, Nota.Mcp.IProjectVersionsAccess
     {
         if (_projectPath is not { } dir || !_history.Exists(dir)) { HistoryChanged?.Invoke(); return; }
         long freed = EraseHistory(dir);
-        if (_vm is not null) _vm.StatusText = Loc.F("Version history turned off · {0} freed", NotaNum.Bytes(freed));
+        if (_vm is not null) _vm.StatusText = Loc.F("main.history.version_history_turned_off_freed", NotaNum.Bytes(freed));
     }
 
     private long EraseHistory(string dir)
@@ -118,10 +118,10 @@ public partial class MainWindow : IHistoryHost, Nota.Mcp.IProjectVersionsAccess
         if (_vm is null) return;
         if (!KeepVersionHistory)
         {
-            _vm.StatusText = Loc.T("Version history is turned off in Settings.");
+            _vm.StatusText = Loc.T("main.history.version_history_is_turned_off");
             return;
         }
-        var note = await new TextPromptWindow(Loc.T("Save version"), Loc.T("What changed in this version?"))
+        var note = await new TextPromptWindow(Loc.T("main.history.save_version"), Loc.T("main.history.what_changed_in_this_version"))
             .ShowDialog<string?>(this);
         if (note is null) return;
         await DoSaveAsync(saveAs: false, note);
@@ -132,8 +132,8 @@ public partial class MainWindow : IHistoryHost, Nota.Mcp.IProjectVersionsAccess
     internal async Task<bool> SwitchToVersionAsync(string versionId, bool askAboutChanges = true)
     {
         if (_vm is null || _projectPath is not { } dir) return false;
-        if (askAboutChanges && !await ConfirmLeaveChangesAsync(Loc.T("Switch version"),
-                Loc.T("Save your changes as a new version before switching?"))) return false;
+        if (askAboutChanges && !await ConfirmLeaveChangesAsync(Loc.T("main.history.switch_version"),
+                Loc.T("main.history.save_your_changes_as_a"))) return false;
         try
         {
             _history.Checkout(dir, versionId);
@@ -141,11 +141,11 @@ public partial class MainWindow : IHistoryHost, Nota.Mcp.IProjectVersionsAccess
         catch (Exception ex) when (ex is ProjectHistoryException or IOException or UnauthorizedAccessException)
         {
             App.Services.GetRequiredService<ILogSink>().Error("Switching project version failed", ex);
-            _vm.StatusText = Loc.F("Couldn't switch version: {0}", ex.Message);
+            _vm.StatusText = Loc.F("main.history.couldnt_switch_version", ex.Message);
             return false;
         }
         OpenProject(dir);
-        if (_history.Read(dir).HeadVersion is { } v) _vm.StatusText = Loc.F("Switched to {0}", DescribeVersion(v));
+        if (_history.Read(dir).HeadVersion is { } v) _vm.StatusText = Loc.F("main.history.switched_to", DescribeVersion(v));
         return true;
     }
 
@@ -154,17 +154,17 @@ public partial class MainWindow : IHistoryHost, Nota.Mcp.IProjectVersionsAccess
     internal async Task<bool> OpenVersionAsCopyAsync(string versionId)
     {
         if (_vm is null || _projectPath is not { } src) return false;
-        if (!await ConfirmLeaveChangesAsync(Loc.T("Open version as copy"),
-                Loc.T("Save your changes before opening the copy?"))) return false;
+        if (!await ConfirmLeaveChangesAsync(Loc.T("main.history.open_version_as_copy"),
+                Loc.T("main.history.save_your_changes_before_opening"))) return false;
         var version = _history.Read(src).Versions.FirstOrDefault(v => v.Id == versionId);
         if (version is null) return false;
 
         string suggested = $"{Path.GetFileNameWithoutExtension(src)} ({version.CreatedAt.LocalDateTime:yyyy-MM-dd HH.mm}).nota";
-        var dst = await PickProjectPathAsync(Loc.T("Open version as a new project"), suggested);
+        var dst = await PickProjectPathAsync(Loc.T("main.history.open_version_as_a_new"), suggested);
         if (dst is null) return false;
         if (SamePath(src, dst) || (Directory.Exists(dst) && Directory.EnumerateFileSystemEntries(dst).Any()))
         {
-            _vm.StatusText = Loc.T("Choose a new name for the copy — it can't replace an existing project.");
+            _vm.StatusText = Loc.T("main.history.choose_a_new_name_for");
             return false;
         }
         try
@@ -175,11 +175,11 @@ public partial class MainWindow : IHistoryHost, Nota.Mcp.IProjectVersionsAccess
         catch (Exception ex) when (ex is ProjectHistoryException or IOException or UnauthorizedAccessException)
         {
             App.Services.GetRequiredService<ILogSink>().Error("Opening a project version as a copy failed", ex);
-            _vm.StatusText = Loc.F("Couldn't open the version: {0}", ex.Message);
+            _vm.StatusText = Loc.F("main.history.couldnt_open_the_version", ex.Message);
             return false;
         }
         OpenProject(dst);
-        _vm.StatusText = Loc.F("Opened {0} as {1}", DescribeVersion(version), Path.GetFileName(dst));
+        _vm.StatusText = Loc.F("main.history.opened_as", DescribeVersion(version), Path.GetFileName(dst));
         return true;
     }
 
@@ -201,7 +201,7 @@ public partial class MainWindow : IHistoryHost, Nota.Mcp.IProjectVersionsAccess
     private static string DescribeVersion(ProjectVersion v)
     {
         string when = v.CreatedAt.LocalDateTime.ToString("d MMM, HH:mm", NotaNum.Culture);
-        return v.Label is { Length: > 0 } label ? Loc.F("the version “{0}” ({1})", label, when) : Loc.F("the version of {0}", when);
+        return v.Label is { Length: > 0 } label ? Loc.F("main.history.the_version", label, when) : Loc.F("main.history.the_version_of", when);
     }
 
     private static bool SamePath(string a, string b)

@@ -47,7 +47,7 @@ public sealed partial class DeviceChainView
         if (bypassable)
         {
             var bypass = new SwitchTrack { IsOn = !bypassed, Cursor = new Cursor(StandardCursorType.Hand) };
-            ToolTip.SetTip(bypass, bypassed ? Loc.T("Bypassed — click to enable") : Loc.T("Active — click to bypass"));
+            ToolTip.SetTip(bypass, bypassed ? Loc.T("device_chain.bypassed_click_to_enable") : Loc.T("device_chain.active_click_to_bypass"));
             bypass.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(bypass).Properties.IsLeftButtonPressed) return;
@@ -72,7 +72,7 @@ public sealed partial class DeviceChainView
         };
         DockPanel.SetDock(power, Dock.Top);
         // The Remove control (#110) at the strip's foot; on the instrument it takes the track.
-        var remove = RemoveButton(k == ChainKind.Instrument ? Loc.T("Remove track") : Loc.T("Remove device"), () => RemoveDeviceAt(k, di));
+        var remove = RemoveButton(k == ChainKind.Instrument ? Loc.T("device_chain.remove_track") : Loc.T("device_chain.remove_device"), () => RemoveDeviceAt(k, di));
         DockPanel.SetDock(remove, Dock.Bottom);
         var strip = new Border
         {
@@ -83,7 +83,7 @@ public sealed partial class DeviceChainView
             Cursor = movable ? new Cursor(StandardCursorType.SizeAll) : null,
         };
         strip.BindResource(Border.BoxShadowProperty, "Shadow.Raised");
-        ToolTip.SetTip(strip, Loc.F("{0} — double-click to unfold", name));
+        ToolTip.SetTip(strip, Loc.F("device_chain.fold.double_click_to_unfold", name));
 
         const double RingGap = 3;   // the same focus ring as the full card (BuildCardShell)
         var selRing = new Border
@@ -97,7 +97,7 @@ public sealed partial class DeviceChainView
 
         void Menu(MenuFlyout flyout)
         {
-            flyout.Items.Add(MenuKit.Item(Loc.T("Unfold"), null, () => SetFolded(k, di, false)));
+            flyout.Items.Add(MenuKit.Item(Loc.T("device_chain.fold.unfold"), null, () => SetFolded(k, di, false)));
             flyout.Items.Add(new Separator());
         }
         strip.PointerPressed += (_, e) =>

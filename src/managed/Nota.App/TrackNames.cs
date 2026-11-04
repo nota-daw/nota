@@ -13,14 +13,14 @@ internal static class TrackNames
     {
         string stored = eng.GetTrackName(ti.Id);
         if (stored.Length > 0) return stored;
-        if (ti.IsGroup) return Loc.T("Group");
-        if (ti.IsReturn) return Loc.F("Return {0}", eng.TrackReturnIndex(ti.Id) + 1);
+        if (ti.IsGroup) return Loc.T("common.group");
+        if (ti.IsReturn) return Loc.F("common.return_n", eng.TrackReturnIndex(ti.Id) + 1);
         if (ti.IsInstrument)
         {
             string inst = eng.DeviceName(ti.Id, -1);   // Synth / Sampler / plugin name
-            return string.IsNullOrWhiteSpace(inst) ? Loc.F("Inst {0}", ti.Id) : inst;
+            return string.IsNullOrWhiteSpace(inst) ? Loc.F("track_names.inst", ti.Id) : inst;
         }
-        return Loc.F("Audio {0}", ti.Id);
+        return Loc.F("common.audio_n", ti.Id);
     }
 
     /// <summary>By track id; "—" when no such track exists.</summary>

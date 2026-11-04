@@ -31,6 +31,8 @@
 #include <array>
 #include <atomic>
 #include <functional>
+#include <cmath>
+#include <limits>
 #include <list>
 #include <memory>
 #include <map>
@@ -653,6 +655,8 @@ class Engine {
     // Piano roll Fold (specs/045): a per-track view flag, saved with the project.
     bool setTrackPianoFold(int32_t trackId, bool on);
     int32_t trackPianoFold(int32_t trackId) const; // 1 / 0, -1 unknown track
+    bool setTrackEditLink(int32_t trackId, bool on); // group tracks only (specs/076); undoable
+    int32_t trackEditLink(int32_t trackId) const;    // 1 / 0, -1 unknown track
 
     // Track clipboard (copy/cut/paste). copyTracks stores fully independent clones of the
     // expanded set (a group brings its children); pasteTracks inserts fresh copies (new ids +
@@ -1284,6 +1288,10 @@ class Engine {
     // (for clicking rack/drum pads). -1 = none. Lock-free.
     void setAuditionTrack(int32_t trackId) { auditionTrackId_.store(trackId, std::memory_order_relaxed); }
     void setRecording(bool on);
+    // Discard the take in progress and record it again (#185, specs/078). Returns 0 nothing
+    // was recording, 1 Arrangement take retried, 2 Session slot take retried, -1 discarded but
+    // recording could not start again. Message thread.
+    int32_t retryTake();
     bool isRecording() const { return recording_.load(std::memory_order_relaxed) || audioRecording_; }
     // Why the last setRecording(true) did (not) start: 0 ok, 1 no armed track, 2 audio input failed.
     int32_t recordStartStatus() const { return recordStartStatus_; }
@@ -1374,6 +1382,20 @@ class Engine {
     // Arrangement sections (specs/016): project-level, replaced as a whole. checkpoint =
     // one undo step (an identical list makes none); false = baseline (project load).
     void setSections(std::vector<Section> sections, bool checkpoint);
+    // Section edits that carry the arrangement with them (specs/073). `index` is into the
+    // start-sorted list. Each is one undo step over clips (cut at the edges), automation (every
+    // track, the master track, master volume), take lanes and the sections; the playhead stays.
+    // False — nothing changed — for an index out of range, a section that overlaps another, a
+    // target inside an overlap, or a no-op. moveSection inserts the section at boundary
+    // `toBoundary` (0..count: before section k, or after the last), shifting the sections in
+    // between by its length; duplicate inserts a copy right after it and delete removes it,
+    // both rippling the rest of the song.
+    bool moveSection(int32_t index, int32_t toBoundary);
+    bool duplicateSectionWithContent(int32_t index);
+    bool deleteSectionWithContent(int32_t index);
+    // True when section `index`'s span intersects another section's (with-content edits are
+    // unavailable for it).
+    bool sectionOverlaps(int32_t index) const;
     const std::vector<Section>& sections() const {
         static const std::vector<Section> none;
         return authoring_ ? authoring_->sections : none;
@@ -1492,6 +1514,12 @@ class Engine {
     void republishWithTrack(int32_t trackId, std::shared_ptr<Track> nt);    // checkpoints
     void republishWithTrackRaw(int32_t trackId, std::shared_ptr<Track> nt); // no undo entry
     void pushUndo(); // snapshot authoring_ onto the undo stack, clear redo
+    // specs/073: rebuild the arrangement with [lo,hi) remapped by `regions` (which tile it),
+    // set `sections`, and publish it as one undo step.
+    void remapTimeline(double lo, double hi, const std::vector<TimeRegion>& regions, std::vector<Section> sections);
+    // insertTime's track/lane work into a fresh graph `g` (graph-level fields already
+    // inherited); false when nothing moved.
+    bool insertTimeInto(Graph& g, double at, double len, bool duplicate);
     void reapplyRackMacros(); // after undo/redo: racks drive their shared children again
     void reapplyCcRoutes();             // after undo/redo: Arps take their restored snapshot's targets
     void syncCcRoutes(Graph& g);        // before a publish: routes of fresh tracks from their Arps
@@ -1879,6 +1907,86 @@ class Engine {
     bool recordStartedTransport_ = false;
     double recordReturnBeat_ = 0.0;
 
+    // Discard and retry (specs/078). One record press — or one retry — until the take stops:
+    // the tracks as they were before it wrote them and the undo/redo state, so a discard puts
+    // them back with no history of its own. Message thread.
+    struct TakeAttempt {
+        bool active = false;
+        bool session = false;   // a Session slot take (else Arrangement)
+        bool countedIn = false; // the Arrangement take counted in from stop
+        std::vector<std::pair<int32_t, std::shared_ptr<Track>>> baseTracks; // first write wins
+        size_t undoBase = 0;              // undoStack_ size when the take began
+        std::vector<UndoEntry> redoSaved; // redoStack_ when the take began
+        int32_t sessionTrackId = 0, sessionScene = -1;
+    };
+    TakeAttempt takeAttempt_;
+    bool takePushing_ = false;   // the take itself is checkpointing (its clip, its first lane write)
+    struct TakePushScope {       // marks the checkpoints pushed in this scope as the take's own
+        Engine& e;
+        bool was;
+        explicit TakePushScope(Engine& en) : e(en), was(en.takePushing_) { e.takePushing_ = true; }
+        ~TakePushScope() { e.takePushing_ = was; }
+    };
+    bool forceSlotLaunch_ = false; // a retried Session take relaunches its slot whatever its launch mode
+    bool retryingTake_ = false;    // the restart of a retried take is starting the capture
+    // Capture epoch (specs/078): a producer of capture frames (input thread, internal tap) puts
+    // a marker frame (NaN, NaN) in the ring the first time it pushes after the epoch changed;
+    // after a retry the drain drops everything before that marker — frames an in-flight block
+    // or callback wrote for the take that was thrown away.
+    std::atomic<uint32_t> captureEpoch_{0};
+    uint32_t hwCaptureEpoch_ = 0; // input thread's last marked epoch
+    uint32_t rtCaptureEpoch_ = 0; // audio thread's (internal resampling)
+    bool awaitCaptureMarker_ = false;
+    static bool isCaptureMarker(const InputFrame& f) { return std::isnan(f.l) && std::isnan(f.r); }
+    // Producer side: mark the first push of a new capture epoch. RT-safe (one atomic load).
+    // Load the epoch before the capture gate: a retry shuts the gate before it moves the epoch,
+    // so a producer that sees the new epoch also sees the gate shut until the restart opens it.
+    void markCaptureEpoch(uint32_t& last, uint32_t ep) {
+        if (ep == last) return;
+        last = ep;
+        const float nan = std::numeric_limits<float>::quiet_NaN();
+        inputQueue_.push(InputFrame{nan, nan});
+    }
+    // Session MIDI retry: the audio thread adopts the new take epoch only once the slot has
+    // actually relaunched, so nothing played while it waits (shown pending) enters the take.
+    uint32_t rtPendingEpoch_ = 0;
+    int32_t rtWaitScene_ = -1;
+    // Session audio retry: the capture frame where the boundary was crossed (-1 = not yet).
+    int64_t retryKeepFrom_ = -1;
+    void openTakeAttempt(bool session);
+    void noteTakeTrack(int32_t trackId); // a track the take is about to write (no-op when idle)
+    void closeTakeAttempt();
+    void keepTakeTrack(int32_t trackId); // that track's part of the take is kept; the rest may still be retried
+    void syncTakeEpoch();                // a take starts normally: the audio thread takes the current epoch
+    void discardTake();                  // drop what the take wrote; no undo step
+    void abortAudioRecording();          // stop capturing without materialising
+    // Explicit start for a retried take: the transport UI mirror lags the commands just
+    // queued, so the restart says where it starts and whether the clock is rolling.
+    bool startArrangementTake(bool wasPlaying, double playhead, bool retryCountIn);
+    double takeStartOverride_ = std::numeric_limits<double>::quiet_NaN(); // startAudioRecording
+    int takePlayingOverride_ = -1;                                         // -1 = read the transport
+    double takePlayhead() const;
+    bool takeTransportPlaying() const;
+    // Take epoch: the message thread's current attempt, and the audio thread's copy (set by
+    // the TakeRestart command). Recorded events carry the audio thread's; poll() drops stale ones.
+    uint32_t takeEpoch_ = 0;
+    uint32_t rtTakeEpoch_ = 0;
+    bool rtTakeRestart_ = false; // audio thread: a TakeRestart arrived, the next drain restarts the take
+    void pushRecorded(RecordedNote n) {
+        n.epoch = rtTakeEpoch_;
+        recorded_.push(n);
+    }
+    void pushRecordedCtl(RecordedCtl x) {
+        x.epoch = rtTakeEpoch_;
+        recordedCtl_.push(x);
+    }
+    void pushRecordedExpr(RecordedExpr x) {
+        x.epoch = rtTakeEpoch_;
+        recordedExpr_.push(x);
+    }
+    // A Session audio retry starts on the launch quantum: capture before this beat is trimmed.
+    double retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
+
     // automation write/record state (M9-C, message thread only)
     std::atomic<bool> autoRecord_{false}; // transport record engaged -> gestures write
     struct ActiveWrite {
@@ -1993,6 +2101,7 @@ class Engine {
     double routedPressBeat_[128] = {};
     float routedPressVel_[128] = {};
     int32_t routedOwner_ = -1;
+    bool routedSeedFromNow_ = false; // the take was retried: held routed notes start now (specs/078)
     bool routedSeedPending_ = false; // a take just started: seed after this block's routed events
     void trackRoutedDown(int32_t ownerId, const MidiEv* evs, int n, double blockStart, double spb, bool timed);
     // Capture clock: during a count-in the transport holds still, so notes are timed back

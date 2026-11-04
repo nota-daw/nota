@@ -34,5 +34,5 @@ public sealed class DropoutCounter
     }
 
     /// <summary>"0 dropouts", "1 dropout", "3 dropouts".</summary>
-    public static string Text(int count) => Loc.Plural(count, "{0} dropout", "{0} dropouts");
+    public static string Text(int count) => Loc.Plural("dropout_counter.dropouts", count);
 }

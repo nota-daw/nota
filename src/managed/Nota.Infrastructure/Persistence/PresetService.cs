@@ -207,9 +207,9 @@ public static class PresetService
         {
             case "builtin-effect":
             {
-                if (targetTrackId <= 0) return Loc.T("Select a track first.");
+                if (targetTrackId <= 0) return Loc.T("common.select_a_track_first");
                 int di = engine.AddBuiltinDevice(targetTrackId, doc.BuiltinKind);
-                if (di < 0) return Loc.T("Failed to add device.");
+                if (di < 0) return Loc.T("persistence.preset.failed_to_add_device");
                 if (doc.NamedParams is { Count: > 0 })
                 {
                     int pc = engine.DeviceParamCount(targetTrackId, di);
@@ -226,9 +226,9 @@ public static class PresetService
             }
             case "builtin-midi-effect":
             {
-                if (targetTrackId <= 0) return Loc.T("Select a track first.");
+                if (targetTrackId <= 0) return Loc.T("common.select_a_track_first");
                 int mi = engine.AddMidiEffect(targetTrackId, doc.BuiltinKind);
-                if (mi < 0) return Loc.T("Failed to add MIDI effect.");
+                if (mi < 0) return Loc.T("persistence.preset.failed_to_add_midi_effect");
                 if (doc.NamedParams is { Count: > 0 })
                 {
                     int pc = engine.MidiEffectParamCount(targetTrackId, mi);
@@ -263,7 +263,7 @@ public static class PresetService
                     17 => engine.AddMosaicTrack(),
                     _ => engine.AddInstrumentTrack(),
                 };
-                if (t <= 0) return Loc.T("Failed to add instrument.");
+                if (t <= 0) return Loc.T("persistence.preset.failed_to_add_instrument");
                 if (doc.NamedParams is { Count: > 0 })
                 {
                     int pc = engine.PluginParamCount(t, -1);
@@ -277,25 +277,25 @@ public static class PresetService
             }
             case "plugin-effect":
             {
-                if (targetTrackId <= 0) return Loc.T("Select a track first.");
+                if (targetTrackId <= 0) return Loc.T("common.select_a_track_first");
                 int idx = NotaEngine.PluginIndexOfId(doc.PluginId);
-                if (idx < 0) return Loc.F("Plugin not installed: {0}", doc.PluginId);
+                if (idx < 0) return Loc.F("persistence.preset.plugin_not_installed", doc.PluginId);
                 int di = engine.AddTrackEffectPlugin(targetTrackId, idx);
-                if (di < 0) return Loc.T("Failed to load plugin.");
+                if (di < 0) return Loc.T("persistence.preset.failed_to_load_plugin");
                 ApplyState(engine, targetTrackId, di, doc.StateBase64);
                 return "";
             }
             case "plugin-instrument":
             {
                 int idx = NotaEngine.PluginIndexOfId(doc.PluginId);
-                if (idx < 0) return Loc.F("Plugin not installed: {0}", doc.PluginId);
+                if (idx < 0) return Loc.F("persistence.preset.plugin_not_installed", doc.PluginId);
                 int t = engine.AddPluginInstrumentTrack(idx);
-                if (t <= 0) return Loc.T("Failed to load instrument.");
+                if (t <= 0) return Loc.T("persistence.preset.failed_to_load_instrument");
                 ApplyState(engine, t, -1, doc.StateBase64);
                 return "";
             }
             default:
-                return Loc.T("Unknown preset type.");
+                return Loc.T("persistence.preset.unknown_preset_type");
         }
     }
 
@@ -305,8 +305,8 @@ public static class PresetService
         if (doc.BuiltinKind != 10 || string.IsNullOrEmpty(doc.GrainSource)) return "";
         var src = Grain.GrainSources.ById(doc.GrainSource);
         var path = Grain.GrainSourceLibrary.Ensure(doc.GrainSource);
-        if (src is null || path is null) return Loc.F("Couldn't prepare the sample \"{0}\".", doc.GrainSource);
-        return engine.SetTrackGrainSample(trackId, path, src.Root) ? "" : Loc.F("Couldn't load the sample \"{0}\".", src.Name);
+        if (src is null || path is null) return Loc.F("persistence.preset.couldnt_prepare_the_sample", doc.GrainSource);
+        return engine.SetTrackGrainSample(trackId, path, src.Root) ? "" : Loc.F("persistence.preset.couldnt_load_the_sample", src.Name);
     }
 
     // A Nota Mosaic preset loads its program: a factory multisample (rendered on first use) or
@@ -317,7 +317,7 @@ public static class PresetService
         if (!string.IsNullOrEmpty(doc.MosaicSource))
         {
             var prog = global::Nota.Infrastructure.Mosaic.MosaicSourceLibrary.Program(doc.MosaicSource);
-            if (prog is null) return Loc.F("Couldn't prepare the multisample \"{0}\".", doc.MosaicSource);
+            if (prog is null) return Loc.F("persistence.preset.couldnt_prepare_the_multisample", doc.MosaicSource);
             prog.Name = doc.DisplayName.Length > 0 ? doc.DisplayName : prog.Name;
             engine.MosaicSetProgram(trackId, prog.Serialize());
             return "";
@@ -331,7 +331,7 @@ public static class PresetService
     /// card size, a loaded sample (and the Sampler's / Rhythm's sample regions) like any preset.</summary>
     public static string ResetInPlace(IAudioEngine engine, int trackId, int deviceIndex, bool midiEffect)
     {
-        if (trackId <= 0) return Loc.T("Select a track first.");
+        if (trackId <= 0) return Loc.T("common.select_a_track_first");
         if (deviceIndex < 0)
         {
             string warn = ApplyInPlace(new PresetDocument { Type = "builtin-instrument", NamedParams = new() }, engine, trackId, -1);
@@ -386,7 +386,7 @@ public static class PresetService
     /// params to default first so the patch is clean; effects set the preset's named params.</summary>
     public static string ApplyInPlace(PresetDocument doc, IAudioEngine engine, int trackId, int deviceIndex)
     {
-        if (trackId <= 0) return Loc.T("Select a track first.");
+        if (trackId <= 0) return Loc.T("common.select_a_track_first");
         switch (doc.Type)
         {
             case "builtin-instrument":
@@ -412,7 +412,7 @@ public static class PresetService
             }
             case "builtin-effect":
             {
-                if (deviceIndex < 0) return Loc.T("Not an effect.");
+                if (deviceIndex < 0) return Loc.T("persistence.preset.not_an_effect");
                 int pc = engine.DeviceParamCount(trackId, deviceIndex);
                 if (doc.NamedParams is { Count: > 0 })
                 {
@@ -435,7 +435,7 @@ public static class PresetService
             }
             case "builtin-midi-effect":
             {
-                if (deviceIndex < 0) return Loc.T("Not a MIDI effect.");
+                if (deviceIndex < 0) return Loc.T("persistence.preset.not_a_midi_effect");
                 if (doc.NamedParams is { Count: > 0 })
                 {
                     // Params the preset leaves out go back to their defaults, so switching presets
@@ -462,14 +462,14 @@ public static class PresetService
                 return "";
             }
             case "plugin-effect":
-                if (deviceIndex < 0) return Loc.T("Not an effect.");
+                if (deviceIndex < 0) return Loc.T("persistence.preset.not_an_effect");
                 ApplyState(engine, trackId, deviceIndex, doc.StateBase64);
                 return "";
             case "plugin-instrument":
                 ApplyState(engine, trackId, -1, doc.StateBase64);
                 return "";
             default:
-                return Loc.T("Preset can't be applied in place.");
+                return Loc.T("persistence.preset.preset_cant_be_applied_in");
         }
     }
 

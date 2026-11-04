@@ -63,24 +63,24 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private static readonly (string Group, Page[] Pages)[] Nav =
     {
-        (Loc.T("Devices", "settings"), new[]
+        (Loc.T("preferences.devices_settings"), new[]
         {
-            new Page("Audio", Loc.T("Audio"), Loc.T("Device, sample rate and buffer"), GlyphKind.Levels),
-            new Page("MIDI", "MIDI", Loc.T("Controllers Nota listens to"), GlyphKind.MidiPort),
-            new Page("Gamepads", Loc.T("Gamepads"), Loc.T("Play notes or drive mapped controls"), GlyphKind.Gamepad),
-            new Page("Remote", Loc.T("Remote"), Loc.T("Phones and tablets on this network"), GlyphKind.Phone),
+            new Page("Audio", Loc.T("common.audio"), Loc.T("preferences.device_sample_rate_and_buffer"), GlyphKind.Levels),
+            new Page("MIDI", "MIDI", Loc.T("preferences.controllers_nota_listens_to"), GlyphKind.MidiPort),
+            new Page("Gamepads", Loc.T("preferences.gamepads"), Loc.T("preferences.play_notes_or_drive_mapped"), GlyphKind.Gamepad),
+            new Page("Remote", Loc.T("preferences.remote"), Loc.T("preferences.phones_and_tablets_on_this"), GlyphKind.Phone),
         }),
-        (Loc.T("Plug-ins"), new[]
+        (Loc.T("preferences.plug_ins"), new[]
         {
-            new Page("Plug-ins", Loc.T("Plug-ins"), Loc.T("Where Nota looks for VST3"), GlyphKind.Plug),
-            new Page("Downloads", Loc.T("Downloads"), Loc.T("Plug-ins, sample packs and AI models"), GlyphKind.Downloads),
+            new Page("Plug-ins", Loc.T("preferences.plug_ins"), Loc.T("preferences.where_nota_looks_for_vst3"), GlyphKind.Plug),
+            new Page("Downloads", Loc.T("preferences.downloads"), Loc.T("preferences.plug_ins_sample_packs_and"), GlyphKind.Downloads),
         }),
-        (Loc.T("General"), new[]
+        (Loc.T("preferences.general"), new[]
         {
-            new Page("Library", Loc.T("Library"), Loc.T("Content folders and version history"), GlyphKind.Library),
-            new Page("Appearance", Loc.T("Appearance"), Loc.T("Theme, scale, waveforms and AI control"), GlyphKind.Appearance),
-            new Page("Shortcuts", Loc.T("Shortcuts"), Loc.T("Keyboard reference"), GlyphKind.Shortcuts),
-            new Page("Updates", Loc.T("Updates"), Loc.T("New versions of Nota"), GlyphKind.Update),
+            new Page("Library", Loc.T("preferences.library"), Loc.T("preferences.content_folders_and_version_history"), GlyphKind.Library),
+            new Page("Appearance", Loc.T("preferences.appearance"), Loc.T("preferences.theme_scale_waveforms_and_ai"), GlyphKind.Appearance),
+            new Page("Shortcuts", Loc.T("preferences.shortcuts"), Loc.T("preferences.keyboard_reference"), GlyphKind.Shortcuts),
+            new Page("Updates", Loc.T("preferences.updates"), Loc.T("preferences.new_versions_of_nota"), GlyphKind.Update),
         }),
     };
 
@@ -125,7 +125,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     {
         _ = vm;   // toolbar-side pref retired with the fixed 1b layout
         _main = main;
-        Title = Loc.T("Settings");
+        Title = Loc.T("common.settings");
         Width = 880;
         Height = 640;
         // The widest page (Appearance: two theme cards beside the labels) still fits; the
@@ -293,7 +293,7 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private Control AudioPane()
     {
-        if (_main is null) return Caption(Loc.T("Audio settings are unavailable in this window."));
+        if (_main is null) return Caption(Loc.T("preferences.audio_settings_are_unavailable_in"));
 
         _loading = true;
         var engine = _main.Engine;
@@ -308,12 +308,12 @@ public sealed partial class PreferencesWindow : NotaWindow
         inputCombo.SelectionChanged += (_, _) => { int i = inputCombo.SelectedIndex; if (i >= 0 && i < _inputUids.Count) { engine.SetAudioInputDevice(_inputUids[i]); Apply(); } };
 
         var srCombo = Combo(150);
-        foreach (var sr in SampleRates) srCombo.Items.Add(sr == 0 ? Loc.T("Device default") : NotaNum.Unit(sr, "0", "Hz"));
+        foreach (var sr in SampleRates) srCombo.Items.Add(sr == 0 ? Loc.T("preferences.device_default") : NotaNum.Unit(sr, "0", "Hz"));
         srCombo.SelectedIndex = IndexOf(SampleRates, cfg.SampleRate);
         srCombo.SelectionChanged += (_, _) => { int i = srCombo.SelectedIndex; if (i >= 0) { engine.SetAudioSampleRate(SampleRates[i]); Apply(); } };
 
         var bufCombo = Combo(150);
-        foreach (var b in BufferSizes) bufCombo.Items.Add(b == 0 ? Loc.T("Device default") : b.ToString());
+        foreach (var b in BufferSizes) bufCombo.Items.Add(b == 0 ? Loc.T("preferences.device_default") : b.ToString());
         bufCombo.SelectedIndex = IndexOf(BufferSizes, cfg.BufferFrames);
         bufCombo.SelectionChanged += (_, _) => { int i = bufCombo.SelectedIndex; if (i >= 0) { engine.SetAudioBufferFrames(BufferSizes[i]); Apply(); } };
 
@@ -330,17 +330,17 @@ public sealed partial class PreferencesWindow : NotaWindow
         if (asio)
         {
             AsioRows(device, engine, srCombo);
-            device.Add(Row(Loc.T("Latency"), latency));
+            device.Add(Row(Loc.T("preferences.latency"), latency));
             var asioBody = Sections(
-                Section(Loc.T("Audio device"), 6, device.ToArray()),
-                Section(Loc.T("Test"), 8, TestToneRow(), CpuCheckRow(engine)));
+                Section(Loc.T("preferences.audio_device"), 6, device.ToArray()),
+                Section(Loc.T("preferences.test"), 8, TestToneRow(), CpuCheckRow(engine)));
             _loading = false;
             return asioBody;
         }
         device.AddRange(new[]
         {
-            Row(Loc.T("Output"), outputCombo), Row(Loc.T("Input"), inputCombo),
-            Row(Loc.T("Sample rate"), srCombo), Row(Loc.T("Buffer size"), bufCombo),
+            Row(Loc.T("common.output"), outputCombo), Row(Loc.T("common.input"), inputCombo),
+            Row(Loc.T("preferences.sample_rate"), srCombo), Row(Loc.T("preferences.buffer_size"), bufCombo),
         });
         // WASAPI exclusive (Windows only): lets Nota own the output device for the lowest
         // latency, at the cost of muting other apps. The device then dictates the sample rate /
@@ -348,19 +348,19 @@ public sealed partial class PreferencesWindow : NotaWindow
         // not allowed), the backend falls back to shared mode and the latency line says so.
         if (OperatingSystem.IsWindows())
         {
-            device.Add(Row(Loc.T("Exclusive mode"), SwitchRow(Loc.T("WASAPI exclusive — lowest latency, mutes other apps"), cfg.WasapiExclusive, on =>
+            device.Add(Row(Loc.T("preferences.exclusive_mode"), SwitchRow(Loc.T("preferences.wasapi_exclusive_lowest_latency_mutes"), cfg.WasapiExclusive, on =>
             {
                 if (_loading) return;
                 engine.SetAudioWasapiExclusive(on);
                 Apply();
             })));
-            device.Add(Row("", Caption(Loc.T("The device's native sample rate and buffer size are used instead of the ones above. If it is busy or doesn't allow exclusive access, Nota falls back to shared mode."))));
+            device.Add(Row("", Caption(Loc.T("preferences.the_devices_native_sample_rate"))));
         }
-        device.Add(Row(Loc.T("Latency"), latency));
+        device.Add(Row(Loc.T("preferences.latency"), latency));
 
         var body = Sections(
-            Section(Loc.T("Audio device"), 6, device.ToArray()),
-            Section(Loc.T("Test"), 8, TestToneRow(), CpuCheckRow(engine)));
+            Section(Loc.T("preferences.audio_device"), 6, device.ToArray()),
+            Section(Loc.T("preferences.test"), 8, TestToneRow(), CpuCheckRow(engine)));
         _loading = false;
         return body;
     }
@@ -372,7 +372,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         var drivers = engine.AsioDrivers();
         var combo = Combo(150);
         combo.Items.Add("WASAPI");
-        combo.Items.Add(new ComboBoxItem { Content = Loc.T("ASIO"), IsEnabled = drivers.Count > 0 || asio });
+        combo.Items.Add(new ComboBoxItem { Content = Loc.T("preferences.asio_caps"), IsEnabled = drivers.Count > 0 || asio });
         combo.SelectedIndex = asio ? 1 : 0;
         combo.SelectionChanged += (_, _) =>
         {
@@ -383,11 +383,11 @@ public sealed partial class PreferencesWindow : NotaWindow
             Apply();
             RebuildAudioPane();
         };
-        device.Add(Row(Loc.T("Audio system"), combo));
+        device.Add(Row(Loc.T("preferences.audio_system"), combo));
         if (drivers.Count == 0 && !asio)
             device.Add(Row("", Caption(RuntimeInformation.ProcessArchitecture == Architecture.Arm64
-                ? Loc.T("No ASIO driver found. Few interfaces ship an ARM64 ASIO driver yet — install one from your interface's maker, or a generic one such as FlexASIO.")
-                : Loc.T("No ASIO driver found. Install your interface's driver, or a generic one such as FlexASIO."))));
+                ? Loc.T("preferences.no_asio_driver_found_few")
+                : Loc.T("preferences.no_asio_driver_found_install"))));
     }
 
     // Driver · Output pair · Input pair · Sample rate · Buffer size (read-only) under ASIO.
@@ -406,7 +406,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         // any installed one (even the only one) is a real change that stages and applies it.
         bool missing = saved.Length > 0 && selected < 0;
         int offset = missing ? 1 : 0;
-        if (missing) driverCombo.Items.Add(Loc.T("Saved driver not found"));
+        if (missing) driverCombo.Items.Add(Loc.T("preferences.saved_driver_not_found"));
         foreach (var d in drivers) driverCombo.Items.Add(d.Name);
         driverCombo.SelectedIndex = missing ? 0 : selected >= 0 ? selected : (drivers.Count > 0 ? 0 : -1);
         driverCombo.SelectionChanged += (_, _) =>
@@ -421,7 +421,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         };
         // Running: the driver's own panel (a change there comes back as a reset event). In the
         // WASAPI fallback: try the driver again — it may be free or plugged in now (US4-3).
-        var panel = Btn(running ? Loc.T("Driver settings…") : Loc.T("Try again"));
+        var panel = Btn(running ? Loc.T("preferences.driver_settings") : Loc.T("common.try_again"));
         panel.IsEnabled = running || drivers.Count > 0;
         panel.Click += (_, _) =>
         {
@@ -431,13 +431,13 @@ public sealed partial class PreferencesWindow : NotaWindow
             Apply();
             RebuildAudioPane();
         };
-        device.Add(Row(Loc.T("Driver"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { driverCombo, panel } }));
+        device.Add(Row(Loc.T("preferences.driver"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { driverCombo, panel } }));
 
         if (running)
         {
-            device.Add(Row(Loc.T("Output"), PairCombo(engine, input: false, engine.AsioChannels(false))));
+            device.Add(Row(Loc.T("common.output"), PairCombo(engine, input: false, engine.AsioChannels(false))));
             var ins = engine.AsioChannels(true);
-            device.Add(Row(Loc.T("Input"), ins.Count > 0 ? PairCombo(engine, input: true, ins) : Caption(Loc.T("No inputs on this driver"))));
+            device.Add(Row(Loc.T("common.input"), ins.Count > 0 ? PairCombo(engine, input: true, ins) : Caption(Loc.T("preferences.no_inputs_on_this_driver"))));
         }
 
         // Sample rate is a request: a rate the driver refuses is reverted and explained (FR-007).
@@ -448,7 +448,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         void ShowRefusal()
         {
             double r = _main?.RefusedSampleRate ?? 0;
-            refused.Text = r > 0 ? Loc.F("The driver doesn't support {0}", NotaNum.Unit(r / 1000, "0.#", "kHz")) : "";
+            refused.Text = r > 0 ? Loc.F("preferences.the_driver_doesnt_support", NotaNum.Unit(r / 1000, "0.#", "kHz")) : "";
             refused.IsVisible = r > 0;
         }
         ShowRefusal();
@@ -464,12 +464,12 @@ public sealed partial class PreferencesWindow : NotaWindow
             srCombo.SelectedIndex = 0;
             _loading = false;
         };
-        device.Add(Row(Loc.T("Sample rate"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { srCombo, refused } }));
+        device.Add(Row(Loc.T("preferences.sample_rate"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { srCombo, refused } }));
 
         int buf = engine.NegotiatedBufferFrames;
-        device.Add(Row(Loc.T("Buffer size"), Caption(running && buf > 0
-            ? Loc.F("{0} frames (set in the driver's settings)", buf)
-            : Loc.T("Set in the driver's settings"))));
+        device.Add(Row(Loc.T("preferences.buffer_size"), Caption(running && buf > 0
+            ? Loc.F("preferences.frames_set_in_the_drivers", buf)
+            : Loc.T("preferences.set_in_the_drivers_settings"))));
     }
 
     // Channel pairs of the open driver, labelled from its own names ("Out 1 + 2", "Analog 3 + 4");
@@ -515,18 +515,18 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private Control TestToneRow()
     {
-        var button = Btn(Loc.T("Play test tone"));
+        var button = Btn(Loc.T("preferences.play_test_tone"));
         button.Width = 132;
-        var note = Caption(Loc.F("{0:0}\u2009Hz sine at −14\u2009dBFS, through the master.", TestToneHz));
+        var note = Caption(Loc.F("preferences.hz_sine_at_14_dbfs", TestToneHz));
         button.Click += (_, _) =>
         {
             SetTone(!_toneOn);
             button.Content = _toneOn
-                ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, Children = { new Glyph(GlyphKind.Stop, 8), new TextBlock { Text = Loc.T("Stop tone") } } }
-                : Loc.T("Play test tone");
+                ? new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, Children = { new Glyph(GlyphKind.Stop, 8), new TextBlock { Text = Loc.T("preferences.stop_tone") } } }
+                : Loc.T("preferences.play_test_tone");
             button.Classes.Set("primary", _toneOn);
         };
-        return TestRow(Loc.T("Output check"), button, note);
+        return TestRow(Loc.T("preferences.output_check"), button, note);
     }
 
     private void SetTone(bool on)
@@ -541,19 +541,19 @@ public sealed partial class PreferencesWindow : NotaWindow
     // counts dropouts over the same window, then gives a verdict for the current buffer size.
     private Control CpuCheckRow(IAudioEngine engine)
     {
-        var button = Btn(Loc.T("CPU check"));
+        var button = Btn(Loc.T("preferences.cpu_check"));
         button.Width = 132;
-        var result = Caption(Loc.T("Measures audio-thread load for 5\u2009s — play your project for a real-world figure."));
+        var result = Caption(Loc.T("preferences.measures_audio_thread_load_for"));
         button.Click += (_, _) =>
         {
             if (_cpuTimer is not null) return;
             if (engine.NegotiatedSampleRate <= 0)
             {
-                result.Text = Loc.T("Audio device not running.");
+                result.Text = Loc.T("preferences.audio_device_not_running");
                 result.Foreground = NotaPalette.Danger;
                 return;
             }
-            button.Content = Loc.T("Measuring…");
+            button.Content = Loc.T("preferences.measuring");
             result.Foreground = TextTertiary;
             int ticks = 0, xrunsStart = engine.XrunCount;
             double sum = 0, peak = 0;
@@ -564,24 +564,24 @@ public sealed partial class PreferencesWindow : NotaWindow
                 sum += load; peak = Math.Max(peak, load); ticks++;
                 if (ticks < CpuCheckTicks)
                 {
-                    result.Text = Loc.F("Measuring… {0}\u2009s left · now {1:0}\u2009%", (CpuCheckTicks - ticks + 9) / 10, load * 100);
+                    result.Text = Loc.F("preferences.measuring_s_left_now", (CpuCheckTicks - ticks + 9) / 10, load * 100);
                     return;
                 }
                 StopCpuCheck();
-                button.Content = Loc.T("CPU check");
+                button.Content = Loc.T("preferences.cpu_check");
                 int xruns = Math.Max(0, engine.XrunCount - xrunsStart);
                 var (verdict, brush) = peak > 0.9 || xruns > 0
-                    ? (Loc.T("overloaded — raise the buffer size"), NotaPalette.Danger)
+                    ? (Loc.T("preferences.overloaded_raise_the_buffer_size"), NotaPalette.Danger)
                     : peak > 0.7
-                        ? (Loc.T("close to the limit — consider a larger buffer"), NotaPalette.Warning)
-                        : (Loc.T("plenty of headroom"), TextSecondary);
-                result.Text = Loc.F("Last check: {0:0}\u2009% average, {1:0}\u2009% peak · {2} — {3}.", sum / ticks * 100, peak * 100, Loc.Plural(xruns, "{0} dropout", "{0} dropouts"), verdict);
+                        ? (Loc.T("preferences.close_to_the_limit_consider"), NotaPalette.Warning)
+                        : (Loc.T("preferences.plenty_of_headroom"), TextSecondary);
+                result.Text = Loc.F("preferences.last_check_average_peak", sum / ticks * 100, peak * 100, Loc.Plural("preferences.dropouts", xruns), verdict);
                 result.Foreground = brush;
             };
-            result.Text = Loc.T("Measuring… 5\u2009s left — play your project for a real-world figure.");
+            result.Text = Loc.T("preferences.measuring_5_s_left_play");
             _cpuTimer.Start();
         };
-        return TestRow(Loc.T("Performance"), button, result);
+        return TestRow(Loc.T("preferences.performance"), button, result);
     }
 
     private void StopCpuCheck()
@@ -618,15 +618,15 @@ public sealed partial class PreferencesWindow : NotaWindow
             {
                 string why = eng.AudioFallbackReason;
                 _latencyValue.Text = buf > 0 ? NotaNum.Unit(buf / sr * 1000, "0.0", "ms") : "";
-                _latencyDetail.Text = Loc.F("ASIO unavailable ({0}) → WASAPI", why.Length > 0 ? why : Loc.T("the driver didn't start"));
+                _latencyDetail.Text = Loc.F("preferences.asio_unavailable_wasapi", why.Length > 0 ? why : Loc.T("preferences.the_driver_didnt_start"));
             }
             else
             {
                 int outLat = eng.OutputLatencyFrames > 0 ? eng.OutputLatencyFrames : buf;
                 int inLat = eng.InputLatencyFrames;
-                string roundTrip = inLat > 0 ? Loc.F(" · round trip {0}", NotaNum.Unit((inLat + outLat) / sr * 1000, "0.0", "ms")) : "";
+                string roundTrip = inLat > 0 ? Loc.F("preferences.round_trip", NotaNum.Unit((inLat + outLat) / sr * 1000, "0.0", "ms")) : "";
                 _latencyValue.Text = NotaNum.Unit(outLat / sr * 1000, "0.0", "ms");
-                _latencyDetail.Text = Loc.F("ASIO · {0} frames @ {1}{2}", buf, khz, roundTrip);
+                _latencyDetail.Text = Loc.F("preferences.asio_frames", buf, khz, roundTrip);
             }
             _latencyValue.IsVisible = _latencyValue.Text.Length > 0;
             return;
@@ -636,9 +636,9 @@ public sealed partial class PreferencesWindow : NotaWindow
             : OperatingSystem.IsWindows() && _main.Engine.GetAudioConfig().WasapiExclusive ? " · exclusive" : "";
         string rate = NotaNum.Unit(sr / 1000, "0.#", "kHz");
         (_latencyValue.Text, _latencyDetail.Text) = sr <= 0
-            ? ("", Loc.T("Audio device not running."))
+            ? ("", Loc.T("preferences.audio_device_not_running"))
             : buf > 0
-                ? (NotaNum.Unit(buf / sr * 1000, "0.0", "ms"), Loc.F("{0} frames @ {1}{2}", buf, rate, mode))
+                ? (NotaNum.Unit(buf / sr * 1000, "0.0", "ms"), Loc.F("preferences.frames", buf, rate, mode))
                 : (rate, mode.TrimStart(' ', '·'));
         _latencyValue.IsVisible = _latencyValue.Text.Length > 0;
     }
@@ -647,13 +647,13 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private Control MidiPane()
     {
-        if (_main is null) return Caption(Loc.T("MIDI settings are unavailable in this window."));
+        if (_main is null) return Caption(Loc.T("preferences.midi_settings_are_unavailable_in"));
 
         var engine = _main.Engine;
         var devices = _midiDevices.InputDevices();
         var items = new List<Control> { };
         if (devices.Count == 0)
-            items.Add(EmptyBox(Loc.T("No MIDI inputs detected. Connect a controller and reopen Settings.")));
+            items.Add(EmptyBox(Loc.T("preferences.no_midi_inputs_detected_connect")));
         else
         {
             var rows = new List<Control>();
@@ -682,8 +682,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             }
             items.Add(Table(rows));
         }
-        items.Add(Caption(Loc.T("Switch a controller off to stop Nota listening to it. New devices are on by default.")));
-        return Sections(Section(Loc.T("MIDI inputs"), 8, items.ToArray()), MpeSection(engine));
+        items.Add(Caption(Loc.T("preferences.switch_a_controller_off_to")));
+        return Sections(Section(Loc.T("preferences.midi_inputs"), 8, items.ToArray()), MpeSection(engine));
     }
 
     private static readonly int[] MpeBendRanges = [12, 24, 48, 96];
@@ -694,7 +694,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     {
         var (on, range) = engine.GetMpe();
         var rangeCombo = Combo(150);
-        foreach (var r in MpeBendRanges) rangeCombo.Items.Add(Loc.F("±{0} semitones", r));
+        foreach (var r in MpeBendRanges) rangeCombo.Items.Add(Loc.F("preferences.semitones", r));
         int idx = Array.IndexOf(MpeBendRanges, range);
         rangeCombo.SelectedIndex = idx >= 0 ? idx : Array.IndexOf(MpeBendRanges, 48);
         rangeCombo.IsEnabled = on;
@@ -705,30 +705,30 @@ public sealed partial class PreferencesWindow : NotaWindow
             engine.SetMpe(engine.GetMpe().Enabled, MpeBendRanges[k]);
             _main!.ApplyMidiSettings();
         };
-        var sw = SwitchRow(Loc.T("Per-note expression from MPE controllers"), on, v =>
+        var sw = SwitchRow(Loc.T("preferences.per_note_expression_from_mpe"), on, v =>
         {
             rangeCombo.IsEnabled = v;
             engine.SetMpe(v, engine.GetMpe().BendRange);
             _main!.ApplyMidiSettings();
         });
         return Section("MPE", 8,
-            Row(Loc.T("Expression"), sw),
-            Row(Loc.T("Bend range"), rangeCombo),
-            Row("", Caption(Loc.T("Channels 2–16 each carry one note with its own pitch bend, pressure and slide (CC74). A controller that announces its range overrides this one. Channel 1 plays as an ordinary keyboard, its pitch wheel and aftertouch moving the whole instrument. ") +
-                            Loc.T("Nota Synth, Volt, Aurora, Operator, Pentad and Physical play per-note expression."))));
+            Row(Loc.T("preferences.expression"), sw),
+            Row(Loc.T("preferences.bend_range"), rangeCombo),
+            Row("", Caption(Loc.T("preferences.channels_2_16_each_carry") +
+                            Loc.T("preferences.nota_synth_volt_aurora_operator"))));
     }
 
     // ---- Gamepads -----------------------------------------------------------
 
     private Control GamepadsPane()
     {
-        if (_main is null) return Caption(Loc.T("Gamepad settings are unavailable in this window."));
-        if (!OperatingSystem.IsMacOS()) return Caption(Loc.T("Gamepad input is macOS-only in this build."));
+        if (_main is null) return Caption(Loc.T("preferences.gamepad_settings_are_unavailable_in"));
+        if (!OperatingSystem.IsMacOS()) return Caption(Loc.T("preferences.gamepad_input_is_macos_only"));
 
         // The master switch lives in Settings (not the native engine): the pad thread
         // always runs once started so new pads are still detected, but button edges only
         // reach the engine while this is on.
-        var enable = SwitchRow(Loc.T("Use a connected gamepad for notes and mapped controls"), _main.Settings.Current.GamepadEnabled, on =>
+        var enable = SwitchRow(Loc.T("preferences.use_a_connected_gamepad_for"), _main.Settings.Current.GamepadEnabled, on =>
         {
             _main.Settings.Current.GamepadEnabled = on;
             _main.Settings.Save();
@@ -748,7 +748,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             var pads = _gamepads.Pads();
             if (pads.Count == 0)
             {
-                padHost.Content = EmptyBox(Loc.T("No gamepad detected. Connect one and it appears here."));
+                padHost.Content = EmptyBox(Loc.T("preferences.no_gamepad_detected_connect_one"));
                 return;
             }
             var rows = new List<Control>();
@@ -765,7 +765,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                     Text = pads[i].Name, FontSize = 12, Foreground = TextPrimary,
                     VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
                 };
-                var cap = new TextBlock { Text = Loc.T("Last"), FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+                var cap = new TextBlock { Text = Loc.T("preferences.last"), FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
                 rows.Add(ListRow(40, "Auto,*,Auto,Auto", Dot(Success), name, cap, last));
             }
             padHost.Content = Table(rows);
@@ -807,8 +807,8 @@ public sealed partial class PreferencesWindow : NotaWindow
         var map = new List<Control>();
         foreach (var (input, action) in new[]
                  {
-                     (Loc.T("Face buttons"), "C4  D4  E4  F4"), (Loc.T("Shoulder buttons"), "G4  A4  B4  C5"),
-                     (Loc.T("D-pad up / down"), Loc.T("Octave −1 / +1")), (Loc.T("D-pad left / right"), Loc.T("Velocity − / +")),
+                     (Loc.T("preferences.face_buttons"), "C4  D4  E4  F4"), (Loc.T("preferences.shoulder_buttons"), "G4  A4  B4  C5"),
+                     (Loc.T("preferences.d_pad_up_down"), Loc.T("preferences.octave_1_1")), (Loc.T("preferences.d_pad_left_right"), Loc.T("preferences.velocity")),
                  })
         {
             var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{LabelCol},*") };
@@ -820,11 +820,11 @@ public sealed partial class PreferencesWindow : NotaWindow
         }
 
         return Sections(
-            Section(Loc.T("Gamepad input"), 10, enable, padHost),
-            Section(Loc.T("Layout"), 10,
+            Section(Loc.T("preferences.gamepad_input"), 10, enable, padHost),
+            Section(Loc.T("preferences.layout"), 10,
                 Table(map),
-                Caption(Loc.T("Notes go to the armed (record-enabled) instrument track — enable Record to capture them, or use the audition track to just play."), muted: true),
-                Caption(Loc.T("Any button can be mapped to a control instead: click MIDI in the top-right, click the control, then press the button. A mapped button drives that control and stops playing its note; the rest of the pad keeps the layout above. The sticks and the trigger travel map the same way and are continuous, so they suit a knob or a fader — they play no notes, and do nothing until mapped. Mappings are listed in the browser's MIDI Map tab and travel with the project."))));
+                Caption(Loc.T("preferences.notes_go_to_the_armed"), muted: true),
+                Caption(Loc.T("preferences.any_button_can_be_mapped"))));
     }
 
     // ---- Plug-ins ---------------------------------------------------------
@@ -837,8 +837,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             Background = Sunken, BorderBrush = Divider, BorderThickness = new Thickness(1),
             CornerRadius = NotaRadius.Panel, Padding = new Thickness(4), MinHeight = 132, Child = list,
         };
-        var addBtn = Btn(Loc.T("Add folder…"));
-        var removeBtn = Btn(Loc.T("Remove"));
+        var addBtn = Btn(Loc.T("preferences.add_folder"));
+        var removeBtn = Btn(Loc.T("preferences.remove"));
 
         // Nota's own install folder (Downloads) is always searched — it is re-added at startup,
         // so it is tagged and can't be removed.
@@ -860,7 +860,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                     Text = path, FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = sel ? TextPrimary : TextSecondary,
                     VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
                 });
-                var tag = new TextBlock { Text = IsDefault(path) ? Loc.T("default") : "", FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+                var tag = new TextBlock { Text = IsDefault(path) ? Loc.T("preferences.default") : "", FontSize = 10, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
                 Grid.SetColumn(tag, 1);
                 grid.Children.Add(tag);
                 var row = new Border
@@ -878,7 +878,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         addBtn.Click += async (_, _) =>
         {
             Activate();
-            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions { Title = Loc.T("Add plugin scan folder"), AllowMultiple = false });
+            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions { Title = Loc.T("preferences.add_plugin_scan_folder"), AllowMultiple = false });
             if (folders.Count == 0) return;
             var path = folders[0].TryGetLocalPath();
             if (path is null) return;
@@ -895,42 +895,42 @@ public sealed partial class PreferencesWindow : NotaWindow
         };
 
         var rescanStatus = new TextBlock { FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
-        var rescan = Btn(Loc.T("Rescan plugins"));
+        var rescan = Btn(Loc.T("preferences.rescan_plugins"));
         rescan.Click += async (_, _) =>
         {
-            if (_main is null) { rescanStatus.Text = Loc.T("Plugin scanning is unavailable in this window."); return; }
+            if (_main is null) { rescanStatus.Text = Loc.T("preferences.plugin_scanning_is_unavailable_in"); return; }
             rescan.IsEnabled = false;
-            rescan.Content = Loc.T("Scanning…");
+            rescan.Content = Loc.T("preferences.scanning");
             int folders = _catalog.ScanPathCount;
-            rescanStatus.Text = Loc.Plural(folders, "Searching {0} folder", "Searching {0} folders");
+            rescanStatus.Text = Loc.Plural("preferences.searching_folders", folders);
             try
             {
                 // An explicit Rescan also retries plugins that failed before.
                 var progress = new Progress<PluginScanProgress>(p => rescanStatus.Text = PluginScan.Describe(p));
                 int? n = await PluginScan.RescanAsync(_main, progress, retryFailed: true);
                 int failed = _catalog.FailedCount;
-                rescanStatus.Text = n is not { } c ? Loc.T("Scanner worker not found.")
-                    : Loc.Plural(c, "Found {0:N0} plugin.", "Found {0:N0} plugins.") +
-                      (failed > 0 ? Loc.F(" {0:N0} couldn't be loaded — see plugin-scan.log in Nota's logs folder.", failed) : "");
+                rescanStatus.Text = n is not { } c ? Loc.T("preferences.scanner_worker_not_found")
+                    : Loc.Plural("preferences.found_plugins", c) +
+                      (failed > 0 ? Loc.F("preferences.couldnt_be_loaded_see_plugin", failed) : "");
             }
-            finally { rescan.IsEnabled = true; rescan.Content = Loc.T("Rescan plugins"); }
+            finally { rescan.IsEnabled = true; rescan.Content = Loc.T("preferences.rescan_plugins"); }
         };
 
         var settings = App.Services.GetRequiredService<ISettingsService>();
-        var openOnInsert = SwitchRow(Loc.T("Open plug-in window on insert"), settings.Current.OpenPluginWindowOnInsert, on =>
+        var openOnInsert = SwitchRow(Loc.T("preferences.open_plug_in_window_on"), settings.Current.OpenPluginWindowOnInsert, on =>
         {
             settings.Current.OpenPluginWindowOnInsert = on;
             settings.Save();
         });
 
         return Sections(
-            Section(Loc.T("Plug-in window"), 10, openOnInsert,
-                Caption(Loc.T("Adding a plug-in from the browser, by drag and drop or from the palette opens its editor. Loading a project, undo and paste never do."))),
-            Section(Loc.T("Plugin scan folders"), 10,
+            Section(Loc.T("preferences.plug_in_window"), 10, openOnInsert,
+                Caption(Loc.T("preferences.adding_a_plug_in_from"))),
+            Section(Loc.T("preferences.plugin_scan_folders"), 10,
                 well,
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { addBtn, removeBtn } },
-                Caption(Loc.T("Extra folders are searched for VST3 plugins on the next rescan (AU uses the system registry)."))),
-            Section(Loc.T("Scan"), 10,
+                Caption(Loc.T("preferences.extra_folders_are_searched_for"))),
+            Section(Loc.T("preferences.scan"), 10,
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 14, Children = { rescan, rescanStatus } }));
     }
 
@@ -938,14 +938,14 @@ public sealed partial class PreferencesWindow : NotaWindow
 
     private Control LibraryPane()
     {
-        if (_main is null) return Caption(Loc.T("Content folders are unavailable in this window."));
+        if (_main is null) return Caption(Loc.T("preferences.content_folders_are_unavailable_in"));
         var settings = _main.Settings;
-        return Sections(Section(Loc.T("Content folders"), 10, Table(new List<Control>
+        return Sections(Section(Loc.T("preferences.content_folders"), 10, Table(new List<Control>
         {
-            FolderRow(Loc.T("Samples"),
+            FolderRow(Loc.T("preferences.samples"),
                 () => settings.Current.SamplesFolder, () => settings.ResolvedSamplesFolder(),
                 path => { settings.Current.SamplesFolder = path; settings.Save(); _main.Browser.RebuildSamples(); }),
-            FolderRow(Loc.T("Projects"),
+            FolderRow(Loc.T("preferences.projects"),
                 () => settings.Current.ProjectsFolder, () => settings.ResolvedProjectsFolder(),
                 path => { settings.Current.ProjectsFolder = path; settings.Save(); _main.Browser.RebuildProjects(); }),
         })), VersionHistorySection(_main));
@@ -954,19 +954,19 @@ public sealed partial class PreferencesWindow : NotaWindow
     // On by default. Turning it off erases history, so it asks first — and stays on if not confirmed.
     private Control VersionHistorySection(MainWindowViewModel main)
     {
-        var row = (StackPanel)SwitchRow(Loc.T("Keep a version history of each project"), main.Settings.Current.KeepVersionHistory, _ => { });
+        var row = (StackPanel)SwitchRow(Loc.T("preferences.keep_a_version_history_of"), main.Settings.Current.KeepVersionHistory, _ => { });
         var sw = (ToggleSwitch)row.Children[0];
         sw.Changed += async on =>
         {
             if (on) { main.SetKeepVersionHistory(true); return; }
-            bool ok = await new ConfirmWindow(Loc.T("Turn off version history"),
-                Loc.T("This erases the version history of the open project now, and of any other project the next time you save it. Older versions can't be brought back."),
-                Loc.T("Turn off and erase"), Loc.T("Cancel")).ShowDialog<bool>(this);
+            bool ok = await new ConfirmWindow(Loc.T("preferences.turn_off_version_history"),
+                Loc.T("preferences.this_erases_the_version_history"),
+                Loc.T("preferences.turn_off_and_erase"), Loc.T("common.cancel")).ShowDialog<bool>(this);
             if (ok) main.SetKeepVersionHistory(false);
             else sw.IsOn = true;
         };
-        return Section(Loc.T("Version history"), 10, row,
-            Caption(Loc.T("Every save records a version, listed in the browser's History tab. Versions share their audio, so each one costs only what it adds.")));
+        return Section(Loc.T("preferences.version_history"), 10, row,
+            Caption(Loc.T("preferences.every_save_records_a_version")));
     }
 
     private Control FolderRow(string label, Func<string> get, Func<string> resolved, Action<string> set)
@@ -977,18 +977,18 @@ public sealed partial class PreferencesWindow : NotaWindow
             Text = custom ? get() : resolved(), FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = TextPrimary,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var tag = new TextBlock { Text = custom ? Loc.T("custom") : Loc.T("default"), FontSize = 10, Foreground = TextTertiary };
-        var choose = Btn(Loc.T("Choose…"));
+        var tag = new TextBlock { Text = custom ? Loc.T("preferences.custom") : Loc.T("preferences.default"), FontSize = 10, Foreground = TextTertiary };
+        var choose = Btn(Loc.T("preferences.choose"));
         choose.Click += async (_, _) =>
         {
             Activate();
-            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions { Title = Loc.F("Choose {0} folder", label), AllowMultiple = false });
+            var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions { Title = Loc.F("preferences.choose_folder", label), AllowMultiple = false });
             if (folders.Count == 0) return;
             var p = folders[0].TryGetLocalPath();
             if (p is null) return;
             set(p);
             path.Text = p;
-            tag.Text = Loc.T("custom");
+            tag.Text = Loc.T("preferences.custom");
         };
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("110,*,Auto"), ColumnSpacing = 12, Margin = new Thickness(14, 12) };
         grid.Children.Add(new TextBlock { Text = label, FontSize = 12, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center });
@@ -1017,7 +1017,7 @@ public sealed partial class PreferencesWindow : NotaWindow
 
         var modes = new List<ToggleButton>();
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-        foreach (var label in new[] { Loc.T("Dark"), Loc.T("Light"), Loc.T("Follow system") })
+        foreach (var label in new[] { Loc.T("preferences.dark"), Loc.T("preferences.light"), Loc.T("preferences.follow_system") })
         {
             var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label };
             modes.Add(btn);
@@ -1034,8 +1034,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             for (int i = 0; i < modes.Count; i++) modes[i].IsChecked = i == (int)mode;
             bool follow = mode == AppearanceMode.FollowSystem;
             // The labels change text and ink, never size: the row in use reads one step up.
-            darkLabel.Text = follow ? Loc.T("In dark mode") : Loc.T("Dark");
-            lightLabel.Text = follow ? Loc.T("In light mode") : Loc.T("Light");
+            darkLabel.Text = follow ? Loc.T("preferences.in_dark_mode") : Loc.T("preferences.dark");
+            lightLabel.Text = follow ? Loc.T("preferences.in_light_mode") : Loc.T("preferences.light");
             darkLabel.Foreground = mode != AppearanceMode.Light ? TextSecondary : TextMuted;
             lightLabel.Foreground = mode != AppearanceMode.Dark ? TextSecondary : TextMuted;
             darkCards.SelectedItem = follow ? NotaThemes.Find(c.Dark) : mode == AppearanceMode.Dark ? NotaThemes.Find(c.Single) : null;
@@ -1170,7 +1170,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         var settings = App.Services.GetRequiredService<ISettingsService>();
         var strip = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         var buttons = new List<(int Style, ToggleButton Btn)>();
-        foreach (var (style, label) in new[] { (0, Loc.T("Smooth")), (1, Loc.T("Solid")), (2, Loc.T("Bars")) })
+        foreach (var (style, label) in new[] { (0, Loc.T("preferences.smooth")), (1, Loc.T("preferences.solid")), (2, Loc.T("preferences.bars")) })
         {
             var st = style;
             var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label, IsChecked = settings.Current.ArrangementWaveform == st };
@@ -1201,7 +1201,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             bool right = settings.Current.ArrangementHeadersRight;
             foreach (var (br, bb) in buttons) bb.IsChecked = br == right;
         }
-        foreach (var (right, label) in new[] { (false, Loc.T("Left")), (true, Loc.T("Right")) })
+        foreach (var (right, label) in new[] { (false, Loc.T("preferences.left")), (true, Loc.T("preferences.right")) })
         {
             var r = right;
             var btn = new ToggleButton { Classes = { "seg" }, FontSize = 12, Content = label };
@@ -1277,22 +1277,22 @@ public sealed partial class PreferencesWindow : NotaWindow
             FontSize = 11, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary,
             VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
-        var copyBtn = Btn(Loc.T("Copy config"));
+        var copyBtn = Btn(Loc.T("preferences.copy_config"));
         copyBtn.HorizontalAlignment = HorizontalAlignment.Left;
         var details = new StackPanel
         {
             Spacing = 10,
             Children =
             {
-                Row(Loc.T("Port"), portBox),
-                Row(Loc.T("Status"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { statusDot, status } }),
+                Row(Loc.T("preferences.port"), portBox),
+                Row(Loc.T("preferences.status"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { statusDot, status } }),
                 Row("", new StackPanel
                 {
                     Spacing = 10,
                     Children =
                     {
                         copyBtn,
-                        Caption(Loc.T("Add this config (or the URL) as an MCP server in Claude Desktop / Claude Code. Loopback only; off by default.")),
+                        Caption(Loc.T("preferences.add_this_config_or_the")),
                     },
                 }),
             },
@@ -1302,7 +1302,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         void Refresh()
         {
             bool on = Enabled();
-            status.Text = on ? Loc.F("Listening on http://127.0.0.1:{0}/ (loopback)", settings!.Current.McpPort) : Loc.T("Off");
+            status.Text = on ? Loc.F("preferences.listening_on_http_127_0", settings!.Current.McpPort) : Loc.T("common.off");
             statusDot.Fill = on ? NotaPalette.SuccessDim : BorderStrong;
             portBox.IsEnabled = on;
             portBox.Foreground = on ? TextPrimary : TextDisabled;
@@ -1318,7 +1318,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             _ = mcp?.ApplyAsync();
             Refresh();
         }
-        var enable = SwitchRow(Loc.T("Enable MCP server (let an AI drive Nota)"), Enabled(), ApplyMcp);
+        var enable = SwitchRow(Loc.T("preferences.enable_mcp_server_let_an"), Enabled(), ApplyMcp);
         portBox.LostFocus += (_, _) => ApplyMcp(Enabled());
 
         // Copy a ready client-config JSON (Claude Desktop / Claude Code) with the current port.
@@ -1333,17 +1333,17 @@ public sealed partial class PreferencesWindow : NotaWindow
             var cb = TopLevel.GetTopLevel(this)?.Clipboard;
             if (cb is null) return;
             await cb.SetTextAsync(McpConfigJson());
-            copyBtn.Content = Loc.T("Copied");
+            copyBtn.Content = Loc.T("preferences.copied");
             copied?.Stop();
             copied = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1500) };
-            copied.Tick += (_, _) => { copied!.Stop(); copyBtn.Content = Loc.T("Copy config"); };
+            copied.Tick += (_, _) => { copied!.Stop(); copyBtn.Content = Loc.T("preferences.copy_config"); };
             copied.Start();
         };
         // Inactive.Set walks the visual tree, so the dimming waits until the pane is shown.
         details.AttachedToVisualTree += (_, _) => Refresh();
 
         // Piano-roll key labels: every note for beginners, C-only by default.
-        var labelAll = SwitchRow(Loc.T("Label every note in the piano roll"), settings?.Current.PianoRollLabelAllNotes ?? false, on =>
+        var labelAll = SwitchRow(Loc.T("preferences.label_every_note_in_the"), settings?.Current.PianoRollLabelAllNotes ?? false, on =>
         {
             if (settings is null) return;
             settings.Current.PianoRollLabelAllNotes = on;
@@ -1351,7 +1351,7 @@ public sealed partial class PreferencesWindow : NotaWindow
         });
 
         // Detail panel (#308): a selection opens a closed panel only when this is on.
-        var openOnSelect = SwitchRow(Loc.T("Open the detail panel when you select a track or clip"), settings?.Current.OpenDetailOnSelect ?? false, on =>
+        var openOnSelect = SwitchRow(Loc.T("preferences.open_the_detail_panel_when"), settings?.Current.OpenDetailOnSelect ?? false, on =>
         {
             if (settings is null) return;
             settings.Current.OpenDetailOnSelect = on;
@@ -1360,21 +1360,21 @@ public sealed partial class PreferencesWindow : NotaWindow
 
         return Sections(
             Section("UI", 10,
-                TopRow(Loc.T("Colour theme"), ThemePicker()),
-                Row("", Caption(Loc.T("Themes change colours only. Follow system switches between your dark-mode and light-mode theme with the OS appearance."))),
-                Row(Loc.T("Waveform"), WaveformPicker()),
-                Row("", Caption(Loc.T("How audio clips draw on the arrangement: Smooth outlines the peaks around the RMS level; Solid draws every pixel; Bars spaces the peaks out so the rhythm reads. Solid and Bars also set the browser's preview."))),
-                Row(Loc.T("Track headers"), HeaderSidePicker()),
-                Row("", Caption(Loc.T("Which side of the arrangement the track list sits on. Right starts the timeline at the left edge, next to the browser. Also in the View menu."))),
-                Row(Loc.T("Interface scale"), ScalePicker()),
-                Row("", Caption(Loc.T("Makes the whole interface larger or smaller. Timeline, piano roll and audio editor zoom work on top of it."))),
-                Row(Loc.T("Language"), LanguagePicker()),
-                Row("", Caption(Loc.T("The language of menus, panels and messages. It changes when Nota restarts. Project files and the names you type are never translated.")))),
-            Section(Loc.T("Piano roll"), 10, labelAll,
-                Caption(Loc.T("Shows every note name (C, D, E…) on the piano roll's keys instead of only C. Helpful when learning notes."))),
-            Section(Loc.T("Detail panel"), 10, openOnSelect,
-                Caption(Loc.T("Off: a click only selects, and an open panel follows it. Double-click a track for its devices or a clip to edit it."))),
-            Section(Loc.T("AI control (MCP)"), 12, enable, details));
+                TopRow(Loc.T("preferences.colour_theme"), ThemePicker()),
+                Row("", Caption(Loc.T("preferences.themes_change_colours_only_follow"))),
+                Row(Loc.T("preferences.waveform"), WaveformPicker()),
+                Row("", Caption(Loc.T("preferences.how_audio_clips_draw_on"))),
+                Row(Loc.T("preferences.track_headers"), HeaderSidePicker()),
+                Row("", Caption(Loc.T("preferences.which_side_of_the_arrangement"))),
+                Row(Loc.T("preferences.interface_scale"), ScalePicker()),
+                Row("", Caption(Loc.T("preferences.makes_the_whole_interface_larger"))),
+                Row(Loc.T("preferences.language"), LanguagePicker()),
+                Row("", Caption(Loc.T("preferences.the_language_of_menus_panels")))),
+            Section(Loc.T("common.piano_roll"), 10, labelAll,
+                Caption(Loc.T("preferences.shows_every_note_name_c"))),
+            Section(Loc.T("preferences.detail_panel"), 10, openOnSelect,
+                Caption(Loc.T("preferences.off_a_click_only_selects"))),
+            Section(Loc.T("preferences.ai_control_mcp"), 12, enable, details));
     }
 
     // ---- Shortcuts --------------------------------------------------------
@@ -1387,255 +1387,261 @@ public sealed partial class PreferencesWindow : NotaWindow
     // keys (see IsKeyToken) is drawn as one key-cap per token; a gesture is plain text.
     private static readonly (string Title, (string Key, string Action)[] Rows)[] ShortcutGroups =
     {
-        (Loc.T("File"), new[]
+        (Loc.T("common.file"), new[]
         {
-            ("⌘N   ⌘O", Loc.T("New project / open a project")),
-            ("⌘S   ⌘⇧S", Loc.T("Save (records a version) / save as")),
-            ("⌥⌘S", Loc.T("Save a version with a note")),
-            ("⌘⇧E", Loc.T("Export audio")),
-            ("⌘,", Loc.T("Settings")),
-            ("⌘Q", Loc.T("Quit Nota · asks about unsaved changes first")),
+            ("⌘N   ⌘O", Loc.T("preferences.new_project_open_a_project")),
+            ("⌘S   ⌘⇧S", Loc.T("preferences.save_records_a_version_save")),
+            ("⌥⌘S", Loc.T("preferences.save_a_version_with_a")),
+            ("⌘⇧E", Loc.T("preferences.export_audio")),
+            ("⌘,", Loc.T("common.settings")),
+            ("⌘Q", Loc.T("preferences.quit_nota_asks_about_unsaved")),
         }),
-        (Loc.T("Window"), new[]
+        (Loc.T("preferences.window"), new[]
         {
-            ("F11", Loc.T("Enter / leave full screen — the title bar hides in full screen")),
-            ("⌘⇧F", Loc.T("The clip editor fills the window / back to the split it had")),
-            (Loc.T("Double-click a panel edge"), Loc.T("Reset the detail panel, the Mixer or the browser to its default size")),
+            ("F11", Loc.T("preferences.enter_leave_full_screen_the")),
+            ("⌘⇧F", Loc.T("preferences.the_clip_editor_fills_the")),
+            (Loc.T("preferences.double_click_a_panel_edge"), Loc.T("preferences.reset_the_detail_panel_the")),
         }),
-        (Loc.T("Command palette"), new[]
+        (Loc.T("preferences.command_palette"), new[]
         {
-            ("⌘⇧P", Loc.T("Open / close the command palette — from any window, even while typing")),
-            ("↑ ↓   PgUp PgDn", Loc.T("Move through the results")),
-            ("Return", Loc.T("Apply where the palette was opened (the target shows in the field)")),
-            ("⌘Return", Loc.T("An instrument or instrument preset on a new track · a track: open it in Devices")),
-            ("⌥Return", Loc.T("Replace the selected device instead of inserting after it")),
-            ("⇧Return", Loc.T("Apply and keep the palette open for the next device")),
-            ("Tab   ⇧Tab", Loc.T("Filter: all · actions · tracks · devices · presets")),
-            ("> @ + # ~", Loc.T("Type first to filter: actions, tracks, devices, presets, Modular nodes")),
-            ("Esc", Loc.T("Close and go back where you were")),
+            ("⌘⇧P", Loc.T("preferences.open_close_the_command_palette")),
+            ("↑ ↓   PgUp PgDn", Loc.T("preferences.move_through_the_results")),
+            ("Return", Loc.T("preferences.apply_where_the_palette_was")),
+            ("⌘Return", Loc.T("preferences.an_instrument_or_instrument_preset")),
+            ("⌥Return", Loc.T("preferences.replace_the_selected_device_instead")),
+            ("⇧Return", Loc.T("preferences.apply_and_keep_the_palette")),
+            ("Tab   ⇧Tab", Loc.T("preferences.filter_all_actions_tracks_devices")),
+            ("> @ + # ~", Loc.T("preferences.type_first_to_filter_actions")),
+            ("Esc", Loc.T("preferences.close_and_go_back_where")),
         }),
-        (Loc.T("Transport"), new[]
+        (Loc.T("common.transport"), new[]
         {
-            ("Space", Loc.T("Play / Stop · Stop goes back to where playback started")),
-            ("⇧Space", Loc.T("Play / pause · the playhead stays put and Play carries on from there")),
-            ("Return", Loc.T("Stop (again → back to the start) · in the Session grid it launches the selection")),
-            ("⌘R", Loc.T("Record")),
-            ("⌘M", Loc.T("Metronome")),
-            ("⌘L", Loc.T("Loop on / off · loop the selected clips or time range")),
-            (Loc.T("Double-click loop brace"), Loc.T("Loop on / off in the ruler · the region stays, greyed out while off")),
-            (Loc.T("Drag loop edge · drag loop brace"), Loc.T("Resize that end of the loop region · move the whole region · ⌥ off the grid")),
-            (Loc.T("Right-click ruler"), Loc.T("Loop on / off · loop the selection · clear the loop region")),
-            ("P", Loc.T("Show playhead · scroll the Arrangement to it without moving it · picks up a paused Follow")),
-            ("⌘⇧R", Loc.T("Loop recording: Overdub (every pass adds) / Replace (keep the latest pass)")),
-            (Loc.T("Click the position read-out"), Loc.T("Switch it between bars and time · every ruler follows")),
+            ("Space", Loc.T("preferences.play_stop_stop_goes_back")),
+            ("⇧Space", Loc.T("preferences.play_pause_the_playhead_stays")),
+            ("Return", Loc.T("preferences.stop_again_back_to_the")),
+            ("⌘R", Loc.T("common.record")),
+            ("⌘.", Loc.T("preferences.discard_the_take_and_record")),
+            ("⌘M", Loc.T("common.metronome")),
+            ("⌘L", Loc.T("preferences.loop_on_off_loop_the")),
+            (Loc.T("preferences.double_click_loop_brace"), Loc.T("preferences.loop_on_off_in_the")),
+            (Loc.T("preferences.drag_loop_edge_drag_loop"), Loc.T("preferences.resize_that_end_of_the")),
+            (Loc.T("preferences.right_click_ruler"), Loc.T("preferences.loop_on_off_loop_the_2")),
+            ("P", Loc.T("preferences.show_playhead_scroll_the_arrangement")),
+            ("⌘⇧R", Loc.T("preferences.loop_recording_overdub_every_pass")),
+            (Loc.T("preferences.click_the_position_read_out"), Loc.T("preferences.switch_it_between_bars_and")),
         }),
-        (Loc.T("Arrangement & editing"), new[]
+        (Loc.T("preferences.arrangement_editing"), new[]
         {
-            ("⌘Z   ⌘⇧Z", Loc.T("Undo / redo")),
-            ("⌘A", Loc.T("Select all clips")),
-            ("⌘⇧A", Loc.T("Toggle automation mode")),
-            ("⌘⇧M", Loc.T("Toggle the Mixer view")),
-            ("Tab", Loc.T("Cycle Devices / Pattern / Clip in the detail panel")),
-            ("Esc", Loc.T("Cancel the current gesture / clear the selection · close the patch-bay overlay")),
-            ("⌘G   ⌘⇧G", Loc.T("Group / ungroup selected tracks · on selected devices: group them into a rack / take a rack apart")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("Copy / cut / paste clips, a time range or an automation range · pastes onto the track clicked last")),
-            ("⌘⇧C", Loc.T("Copy the selected clips to Session · the first scene row where they fit")),
-            ("⌘⇧V", Loc.T("Paste the last range as audio rendered through its devices")),
-            ("⌘D", Loc.T("Duplicate the selected clip(s) / range")),
-            ("⌘⇧D", Loc.T("Duplicate time · insert a copy of the time range after it, pushing everything later right")),
-            ("⌘⇧I", Loc.T("Insert silence · push everything from the range start right by its length")),
-            ("⌘E", Loc.T("Split at the playhead · at the range edges")),
-            ("⌘J", Loc.T("Consolidate the selection into one clip per track")),
-            ("0", Loc.T("Deactivate / activate the selected clip(s)")),
-            ("←   →", Loc.T("Nudge the selected clips by the grid step · stops at the song start")),
-            ("⌥←   ⌥→", Loc.T("Nudge the selected clips by a 64th note")),
-            ("⌥↑   ⌥↓", Loc.T("Move the selected clips to the next track that takes them, at the same beats")),
-            (Loc.T("Drag below the last track"), Loc.T("Move the clips to a new track like their own · one per source track")),
-            ("Delete", Loc.T("Delete the selected clip / range")),
+            ("⌘Z   ⌘⇧Z", Loc.T("preferences.undo_redo")),
+            ("⌘A", Loc.T("preferences.select_all_clips")),
+            ("⌘⇧A", Loc.T("preferences.toggle_automation_mode")),
+            ("⌘⇧M", Loc.T("preferences.toggle_the_mixer_view")),
+            ("Tab", Loc.T("preferences.cycle_devices_pattern_clip_in")),
+            ("Esc", Loc.T("preferences.cancel_the_current_gesture_clear")),
+            ("⌘G   ⌘⇧G", Loc.T("preferences.group_ungroup_selected_tracks_on")),
+            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_clips_a")),
+            ("⌘⇧C", Loc.T("preferences.copy_the_selected_clips_to")),
+            ("⌘⇧V", Loc.T("preferences.paste_the_last_range_as")),
+            ("⌘D", Loc.T("preferences.duplicate_the_selected_clip_s")),
+            ("⌘⇧D", Loc.T("preferences.duplicate_time_insert_a_copy")),
+            ("⌘⇧I", Loc.T("preferences.insert_silence_push_everything_from")),
+            ("⌘E", Loc.T("preferences.split_at_the_playhead_at")),
+            ("⌘J", Loc.T("preferences.consolidate_the_selection_into_one")),
+            ("0", Loc.T("preferences.deactivate_activate_the_selected_clip")),
+            ("←   →", Loc.T("preferences.nudge_the_selected_clips_by_2")),
+            ("⌥←   ⌥→", Loc.T("preferences.nudge_the_selected_clips_by")),
+            ("⌥↑   ⌥↓", Loc.T("preferences.move_the_selected_clips_to")),
+            (Loc.T("preferences.drag_below_the_last_track"), Loc.T("preferences.move_the_clips_to_a")),
+            ("Delete", Loc.T("preferences.delete_the_selected_clip_range")),
         }),
-        (Loc.T("Grid (Arrangement or clip editor — whichever you used last)"), new[]
+        (Loc.T("preferences.grid_arrangement_or_clip_editor"), new[]
         {
-            ("⌘1   ⌘2", Loc.T("Narrow / widen the grid · in Auto, change the density")),
-            ("⌘3", Loc.T("Triplet grid on / off")),
-            ("⌘4", Loc.T("Snap to grid on / off")),
-            ("⌘5", Loc.T("Switch between the adaptive (Auto) and a fixed grid")),
-            ("⌥ while dragging", Loc.T("Move freely, ignoring the grid")),
-            (Loc.T("Audio clip editor on ADSR or an unwarped clip"), "⌘1–⌘5 act on the Arrangement · that view follows no grid"),
+            ("⌘1   ⌘2", Loc.T("preferences.narrow_widen_the_grid_in")),
+            ("⌘3", Loc.T("preferences.triplet_grid_on_off")),
+            ("⌘4", Loc.T("preferences.snap_to_grid_on_off")),
+            ("⌘5", Loc.T("preferences.switch_between_the_adaptive_auto")),
+            ("⌥ while dragging", Loc.T("preferences.move_freely_ignoring_the_grid")),
+            (Loc.T("preferences.audio_clip_editor_on_adsr"), "⌘1–⌘5 act on the Arrangement · that view follows no grid"),
         }),
-        (Loc.T("Tracks (after a click in the track headers)"), new[]
+        (Loc.T("preferences.tracks_after_a_click_in"), new[]
         {
-            ("⌘A", Loc.T("Select all tracks")),
-            ("⇧-click   ⌘-click", Loc.T("Select a range of tracks / add or remove one track")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("Copy / cut / paste the selected tracks · paste lands after the last one")),
-            ("⌘D", Loc.T("Duplicate the selected tracks")),
-            ("Delete", Loc.T("Delete the selected tracks · a group goes with its tracks")),
+            ("⌘A", Loc.T("preferences.select_all_tracks")),
+            ("⇧-click   ⌘-click", Loc.T("preferences.select_a_range_of_tracks")),
+            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_the_selected_2")),
+            ("⌘D", Loc.T("preferences.duplicate_the_selected_tracks")),
+            ("Delete", Loc.T("preferences.delete_the_selected_tracks_a")),
         }),
-        (Loc.T("Devices (after a click on a device)"), new[]
+        (Loc.T("preferences.devices_after_a_click_on"), new[]
         {
-            ("⇧-click   ⌘-click", Loc.T("Select a range of devices (MIDI effects, instrument, audio effects) / add or remove one")),
-            ("Esc", Loc.T("Clear the device selection · so does a click on the chain's empty space")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("Copy / cut / paste the selected devices with all their settings · each lands in its section after the selected device · a copied instrument replaces the instrument it is pasted on")),
-            ("⌘D", Loc.T("Duplicate the selected devices · each run right after itself")),
-            ("⌘G", Loc.T("Group the selected devices into a rack · audio effects: Audio Effect Rack · MIDI effects: MIDI Effect Rack · with the instrument: Instrument Rack")),
-            ("⌘⇧G", Loc.T("Take the devices out of a selected one-chain rack")),
-            ("Delete", Loc.T("Delete the selected devices · with the instrument, its track")),
-            (Loc.T("Drag a selected device's header"), Loc.T("Move the selected devices of that section together")),
-            (Loc.T("Drag a device onto a track"), Loc.T("Move it there (out of the panel, onto a track row or Session column) · the instrument replaces that track's and its own track goes")),
-            (Loc.T("⌥-drag a device onto a track"), Loc.T("Copy it there")),
+            ("⇧-click   ⌘-click", Loc.T("preferences.select_a_range_of_devices")),
+            ("Esc", Loc.T("preferences.clear_the_device_selection_so")),
+            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_the_selected")),
+            ("⌘D", Loc.T("preferences.duplicate_the_selected_devices_each")),
+            ("⌘G", Loc.T("preferences.group_the_selected_devices_into")),
+            ("⌘⇧G", Loc.T("preferences.take_the_devices_out_of")),
+            ("Delete", Loc.T("preferences.delete_the_selected_devices_with")),
+            (Loc.T("preferences.drag_a_selected_devices_header"), Loc.T("preferences.move_the_selected_devices_of")),
+            (Loc.T("preferences.drag_a_device_onto_a"), Loc.T("preferences.move_it_there_out_of")),
+            (Loc.T("preferences.drag_a_device_onto_a_2"), Loc.T("preferences.copy_it_there")),
         }),
-        (Loc.T("Racks"), new[]
+        (Loc.T("preferences.racks"), new[]
         {
-            ("Esc", Loc.T("End macro mapping (Map on the rack card)")),
-            (Loc.T("Drag a zone edge"), Loc.T("Set a chain's key, velocity or select range · edges never cross")),
-            (Loc.T("Hover the zones"), Loc.T("See which chains a note would play")),
-            (Loc.T("Double-click a chain or macro name"), Loc.T("Rename it")),
-            (Loc.T("Right-click a macro"), Loc.T("Map it to a parameter or the selector · clear its mappings")),
-            (Loc.T("Drag a device's header"), Loc.T("Move it within its chain · onto another chain's row to move it there")),
-            (Loc.T("Click a device"), Loc.T("Select it for ⌘C ⌘X ⌘V ⌘D and Delete")),
+            ("Esc", Loc.T("preferences.end_macro_mapping_map_on")),
+            (Loc.T("preferences.drag_a_zone_edge"), Loc.T("preferences.set_a_chains_key_velocity")),
+            (Loc.T("preferences.hover_the_zones"), Loc.T("preferences.see_which_chains_a_note")),
+            (Loc.T("preferences.double_click_a_chain_or"), Loc.T("preferences.rename_it")),
+            (Loc.T("preferences.right_click_a_macro"), Loc.T("preferences.map_it_to_a_parameter")),
+            (Loc.T("preferences.drag_a_devices_header"), Loc.T("preferences.move_it_within_its_chain")),
+            (Loc.T("preferences.click_a_device"), Loc.T("preferences.select_it_for_c_x")),
         }),
-        (Loc.T("Modular (after a click on the canvas)"), new[]
+        (Loc.T("preferences.modular_after_a_click_on"), new[]
         {
-            ("F", Loc.T("Fit every node on screen")),
-            ("B", Loc.T("Bypass the selected device")),
-            ("⌘D", Loc.T("Duplicate the selected device with all its settings")),
-            ("Delete", Loc.T("Delete the selected device, modulator or cable · the track's input, instrument and output are fixed")),
-            ("Esc", Loc.T("Show fewer parameters on every opened node")),
+            ("F", Loc.T("preferences.fit_every_node_on_screen")),
+            ("B", Loc.T("preferences.bypass_the_selected_device")),
+            ("⌘D", Loc.T("preferences.duplicate_the_selected_device_with")),
+            ("Delete", Loc.T("preferences.delete_the_selected_device_modulator")),
+            ("Esc", Loc.T("preferences.show_fewer_parameters_on_every")),
         }),
-        (Loc.T("Session (after a click in the grid)"), new[]
+        (Loc.T("preferences.session_after_a_click_in"), new[]
         {
-            ("← → ↑ ↓", Loc.T("Move the selection between slots and scenes")),
-            ("Return", Loc.T("Launch the selected clip or scene")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("Copy / cut / paste a clip · a cut clip moves when pasted · clips copied in the Arrangement paste here")),
-            ("⌘⇧C", Loc.T("Copy the selected clip, group slot or scene to the Arrangement at the playhead")),
-            ("⌘D", Loc.T("Duplicate a clip into the slot below · a scene below itself")),
-            ("⌘I", Loc.T("Insert a scene below the selection")),
-            ("F2", Loc.T("Rename the selected clip or scene")),
-            ("Delete", Loc.T("Delete the selected clip or scene")),
-            (Loc.T("Drag clip"), Loc.T("Move it to another slot · ⌥ copies")),
-            (Loc.T("Drag scene"), Loc.T("Reorder scenes")),
-            (Loc.T("Double-click slot"), Loc.T("Edit the clip · an empty MIDI slot gets a new clip")),
-            (Loc.T("Double-click header"), Loc.T("Rename the track")),
-            (Loc.T("Right-click header or grid"), Loc.T("Add an instrument, audio or return track · rename or delete one")),
+            ("← → ↑ ↓", Loc.T("preferences.move_the_selection_between_slots")),
+            ("Return", Loc.T("preferences.launch_the_selected_clip_or")),
+            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_a_clip")),
+            ("⌘⇧C", Loc.T("preferences.copy_the_selected_clip_group")),
+            ("⌘D", Loc.T("preferences.duplicate_a_clip_into_the")),
+            ("⌘I", Loc.T("preferences.insert_a_scene_below_the")),
+            ("F2", Loc.T("preferences.rename_the_selected_clip_or")),
+            ("Delete", Loc.T("preferences.delete_the_selected_clip_or")),
+            (Loc.T("preferences.drag_clip"), Loc.T("preferences.move_it_to_another_slot")),
+            (Loc.T("preferences.drag_scene"), Loc.T("preferences.reorder_scenes")),
+            (Loc.T("preferences.double_click_slot"), Loc.T("preferences.edit_the_clip_an_empty")),
+            (Loc.T("preferences.double_click_header"), Loc.T("preferences.rename_the_track")),
+            (Loc.T("preferences.right_click_header_or_grid"), Loc.T("preferences.add_an_instrument_audio_or")),
         }),
-        (Loc.T("Piano roll"), new[]
+        (Loc.T("common.piano_roll"), new[]
         {
-            ("← →", Loc.T("Move notes by the grid")),
-            ("↑ ↓", Loc.T("Transpose by a semitone")),
-            ("⇧↑  ⇧↓", Loc.T("Transpose by an octave")),
-            ("⇧←  ⇧→", Loc.T("Shorten / lengthen the notes by the grid")),
-            ("⌥↑  ⌥↓", Loc.T("Velocity +10 / −10 · ⌥⇧ by 1")),
-            (Loc.T("⇧ + wheel over a note"), Loc.T("Change its velocity · the whole selection's when the note is selected · elsewhere scroll sideways")),
-            ("⌘A", Loc.T("Select all notes")),
-            ("⌘D", Loc.T("Duplicate the selection · replaces the notes it lands on")),
-            ("⌘C  ⌘X  ⌘V", Loc.T("Copy / cut / paste notes · paste lands on the originals")),
-            ("Esc", Loc.T("Deselect · moved or pasted notes replace the notes under them")),
-            ("Delete", Loc.T("Delete the selected notes")),
-            (Loc.T("Double-click empty grid"), Loc.T("Add a note with the length and velocity of the last note touched · on a note, delete it")),
-            (Loc.T("Double-click and hold, drag"), Loc.T("Shape the new note: move it · ⇧ set its length · ⌘ drag up / down for velocity")),
-            (Loc.T("Drag note edge"), Loc.T("Change the note's start or end")),
-            (Loc.T("Click · drag the ruler"), Loc.T("Move the playhead there · drag to scrub, snapped to the grid · ⌥ off the grid")),
-            (Loc.T("Drag the playhead line"), Loc.T("Scrub the playhead · on the ruler or over empty grid")),
-            (Loc.T("Drag velocity stem"), Loc.T("Set velocity · selected notes move together · ⇧ adds a note")),
-            (Loc.T("Double-click velocity stem"), Loc.T("Put the note back to the default velocity (0.8) · the whole selection's when the note is selected · undo is one step")),
-            (Loc.T("Right-click velocity stem"), Loc.T("Reset velocity from a menu · same as the double-click")),
-            (Loc.T("Drag in the Bend / Pres / Slide lane"), Loc.T("Draw the selected note's MPE curve · ⌥ draws a straight line · drag a point to move it")),
-            (Loc.T("Double-click in an MPE lane"), Loc.T("Add a point · on a point, delete it · right-click to clear the curve")),
-            (Loc.T("Click the Bend lane's range"), Loc.T("Pick how far the Bend lane reaches: ±2, 12, 24, 48 or 96 semitones · a bend already on the notes can widen it further")),
-            (Loc.T("Click the controller tab"), Loc.T("Show a MIDI controller under the notes · click it again to pick another CC, the pitch wheel or channel pressure")),
-            (Loc.T("Drag in the Sustain lane"), Loc.T("Draw a pedal block on the grid · ⌘ off the grid · drag an edge to resize, the body to move · double-click or Delete removes it")),
-            (Loc.T("Drag in a controller lane"), Loc.T("Draw the controller's curve · ⌥ draws a straight line · drag a point to move it · double-click adds or deletes a point")),
-            (Loc.T("Click a clip in the clip strip"), Loc.T("Make it the active clip (several clips open) · its lock keeps it as a read-only reference")),
-            ("⌘⌥ + wheel", Loc.T("Zoom rows (vertical zoom)")),
-            (Loc.T("Click a key"), Loc.T("Play it on the track's instrument · ⇧-drag glides through the keys · ⌘-click selects every note of that pitch")),
-            (Loc.T("Drag on the keys"), Loc.T("Zoom rows · down taller, up shorter")),
-            ("⌥ + pinch", Loc.T("Zoom rows (trackpad)")),
-            ("⇧F", Loc.T("Fit to notes")),
-            ("⌥⇧F", Loc.T("Fold: only the scale's notes, or a Drum Rack's pads")),
+            ("← →", Loc.T("preferences.move_notes_by_the_grid")),
+            ("↑ ↓", Loc.T("preferences.transpose_by_a_semitone")),
+            ("⇧↑  ⇧↓", Loc.T("preferences.transpose_by_an_octave")),
+            ("⇧←  ⇧→", Loc.T("preferences.shorten_lengthen_the_notes_by")),
+            ("⌥↑  ⌥↓", Loc.T("preferences.velocity_10_10_by_1")),
+            (Loc.T("preferences.wheel_over_a_note"), Loc.T("preferences.change_its_velocity_the_whole")),
+            ("⌘A", Loc.T("preferences.select_all_notes")),
+            ("⌘D", Loc.T("preferences.duplicate_the_selection_replaces_the")),
+            ("⌘C  ⌘X  ⌘V", Loc.T("preferences.copy_cut_paste_notes_paste")),
+            ("Esc", Loc.T("preferences.deselect_moved_or_pasted_notes")),
+            ("Delete", Loc.T("preferences.delete_the_selected_notes")),
+            (Loc.T("preferences.double_click_empty_grid"), Loc.T("preferences.add_a_note_with_the")),
+            (Loc.T("preferences.double_click_and_hold_drag"), Loc.T("preferences.shape_the_new_note_move")),
+            (Loc.T("preferences.drag_note_edge"), Loc.T("preferences.change_the_notes_start_or")),
+            (Loc.T("preferences.click_drag_the_ruler"), Loc.T("preferences.move_the_playhead_there_drag_2")),
+            (Loc.T("preferences.drag_the_playhead_line"), Loc.T("preferences.scrub_the_playhead_on_the")),
+            (Loc.T("preferences.drag_velocity_stem"), Loc.T("preferences.set_velocity_selected_notes_move")),
+            (Loc.T("preferences.double_click_velocity_stem"), Loc.T("preferences.put_the_note_back_to")),
+            (Loc.T("preferences.right_click_velocity_stem"), Loc.T("preferences.reset_velocity_from_a_menu")),
+            (Loc.T("preferences.drag_in_the_bend_pres"), Loc.T("preferences.draw_the_selected_notes_mpe")),
+            (Loc.T("preferences.double_click_in_an_mpe"), Loc.T("preferences.add_a_point_on_a")),
+            (Loc.T("preferences.click_the_bend_lanes_range"), Loc.T("preferences.pick_how_far_the_bend")),
+            (Loc.T("preferences.click_the_controller_tab"), Loc.T("preferences.show_a_midi_controller_under")),
+            (Loc.T("preferences.drag_in_the_sustain_lane"), Loc.T("preferences.draw_a_pedal_block_on")),
+            (Loc.T("preferences.drag_in_a_controller_lane"), Loc.T("preferences.draw_the_controllers_curve_draws")),
+            (Loc.T("preferences.click_a_clip_in_the"), Loc.T("preferences.make_it_the_active_clip")),
+            ("⌘⌥ + wheel", Loc.T("preferences.zoom_rows_vertical_zoom")),
+            (Loc.T("preferences.click_a_key"), Loc.T("preferences.play_it_on_the_tracks")),
+            (Loc.T("preferences.drag_on_the_keys"), Loc.T("preferences.zoom_rows_down_taller_up")),
+            ("⌥ + pinch", Loc.T("preferences.zoom_rows_trackpad")),
+            ("⇧F", Loc.T("preferences.fit_to_notes")),
+            ("⌥⇧F", Loc.T("preferences.fold_only_the_scales_notes")),
         }),
-        (Loc.T("Audio clip editor"), new[]
+        (Loc.T("preferences.audio_clip_editor"), new[]
         {
-            (Loc.T("Click · drag the ruler"), Loc.T("Move the playhead there · drag to scrub · snapped to the grid on a warped clip, ⌥ off it")),
-            (Loc.T("Drag the playhead line"), Loc.T("Scrub the playhead")),
-            (Loc.T("Double-click the wave"), Loc.T("Add a warp marker · on a marker, delete it")),
-            (Loc.T("Drag a warp marker"), Loc.T("Align the audio to the grid · the wave stretches as you drag")),
-            ("Esc", Loc.T("While dragging a warp marker or a segment tempo: put it back")),
-            (Loc.T("Drag · double-click Tempo"), Loc.T("Set the tempo the clip was recorded at · ÷2 / ×2 halve or double it")),
+            (Loc.T("preferences.click_drag_the_ruler"), Loc.T("preferences.move_the_playhead_there_drag")),
+            (Loc.T("preferences.drag_the_playhead_line"), Loc.T("preferences.scrub_the_playhead")),
+            (Loc.T("preferences.double_click_the_wave"), Loc.T("preferences.add_a_warp_marker_on")),
+            (Loc.T("preferences.drag_a_warp_marker"), Loc.T("preferences.align_the_audio_to_the")),
+            ("Esc", Loc.T("preferences.while_dragging_a_warp_marker")),
+            (Loc.T("preferences.drag_double_click_tempo"), Loc.T("preferences.set_the_tempo_the_clip")),
         }),
-        (Loc.T("Play notes (computer keyboard)"), new[]
+        (Loc.T("preferences.play_notes_computer_keyboard"), new[]
         {
-            ("A S D F G H J K", Loc.T("White keys, from C4")),
-            ("W E · T Y U", Loc.T("Black keys (sharps)")),
-            ("Z / X", Loc.T("Shift octave down / up")),
-            ("C / V", Loc.T("Lower / raise velocity")),
+            ("A S D F G H J K", Loc.T("preferences.white_keys_from_c4")),
+            ("W E · T Y U", Loc.T("preferences.black_keys_sharps")),
+            ("Z / X", Loc.T("preferences.shift_octave_down_up")),
+            ("C / V", Loc.T("preferences.lower_raise_velocity")),
         }),
-        (Loc.T("Browser · preview"), new[]
+        (Loc.T("preferences.browser_preview"), new[]
         {
-            ("↑ ↓", Loc.T("Move through samples, presets and devices · with Auto on, each one plays as it is selected")),
-            (Loc.T("Click play button"), Loc.T("Play / stop the selected sample, preset or device")),
-            (Loc.T("Click waveform"), Loc.T("Play from that point")),
-            (Loc.T("Click WAVE / SPEC"), Loc.T("Switch the well between the waveform and a live spectrum")),
-            (Loc.T("Scroll on the track button"), Loc.T("Step through the demo tracks an effect preset is heard through")),
-            ("⌥-click volume", Loc.T("Type the preview volume · double-click resets it to 0\u2009dB")),
+            ("↑ ↓", Loc.T("preferences.move_through_samples_presets_and")),
+            (Loc.T("preferences.click_play_button"), Loc.T("preferences.play_stop_the_selected_sample")),
+            (Loc.T("preferences.click_waveform"), Loc.T("preferences.play_from_that_point")),
+            (Loc.T("preferences.click_wave_spec"), Loc.T("preferences.switch_the_well_between_the")),
+            (Loc.T("preferences.scroll_on_the_track_button"), Loc.T("preferences.step_through_the_demo_tracks")),
+            ("⌥-click volume", Loc.T("preferences.type_the_preview_volume_double")),
         }),
-        (Loc.T("Gamepad (macOS)"), new[]
+        (Loc.T("preferences.gamepad_macos"), new[]
         {
-            (Loc.T("Face buttons"), Loc.T("Play C4 D4 E4 F4")),
-            (Loc.T("Shoulder buttons"), Loc.T("Play G4 A4 B4 C5")),
-            ("D-pad ↑ / ↓", Loc.T("Shift the gamepad octave")),
-            ("D-pad ← / →", Loc.T("Lower / raise velocity")),
-            (Loc.T("Any button"), Loc.T("Mappable through MIDI Learn — a mapped button drives the control instead")),
-            (Loc.T("Sticks · triggers"), Loc.T("Mappable as continuous controls (a knob, a fader); they play no notes")),
+            (Loc.T("preferences.face_buttons"), Loc.T("preferences.play_c4_d4_e4_f4")),
+            (Loc.T("preferences.shoulder_buttons"), Loc.T("preferences.play_g4_a4_b4_c5")),
+            ("D-pad ↑ / ↓", Loc.T("preferences.shift_the_gamepad_octave")),
+            ("D-pad ← / →", Loc.T("preferences.lower_raise_velocity")),
+            (Loc.T("preferences.any_button"), Loc.T("preferences.mappable_through_midi_learn_a")),
+            (Loc.T("preferences.sticks_triggers"), Loc.T("preferences.mappable_as_continuous_controls_a")),
         }),
-        (Loc.T("Mouse"), new[]
+        (Loc.T("preferences.mouse"), new[]
         {
-            (Loc.T("Double-click clip"), Loc.T("Open in the clip editor, opening the detail panel · on one of several selected MIDI clips, open them all together")),
-            (Loc.T("Double-click a track header"), Loc.T("Open its devices in the detail panel · a plug-in's own window is Open editor on its card")),
-            (Loc.T("Double-click a browser instrument"), Loc.T("Swap it onto the selected instrument track · clips and effects stay · no track selected starts one")),
-            ("⌥ + double-click a browser instrument", Loc.T("Always start a new track with it")),
-            (Loc.T("Right-click the metronome"), Loc.T("Count-in before Play / Record: off · 1 · 2 · 4 bars")),
-            (Loc.T("Drag an audio clip's ADSR handle"), Loc.T("Shape attack · decay + sustain · release (top corners and the dot on hover) · ⌥-click types the stage · double-click resets it")),
-            (Loc.T("⇧-click track header"), Loc.T("Add the track to the selection · again to remove it")),
-            (Loc.T("Right-click track headers"), Loc.T("A multi-selection gets its own menu: colour, height, freeze, group, copy, duplicate, delete")),
-            (Loc.T("Drag a track's bottom edge"), Loc.T("Resize the track (header or lane) · snaps to compact / standard / large · a multi-selection resizes together")),
-            (Loc.T("Drag a track's bottom edge + ⌥"), Loc.T("Resize every track at once")),
-            (Loc.T("Double-click a track's bottom edge"), Loc.T("Back to the standard height")),
-            (Loc.T("Drag a return's or the master's bottom edge"), Loc.T("Resize that row (header or lane) · same snaps · double-click goes back to compact")),
-            ("⌘-click / ⇧-click return headers", Loc.T("Select several returns · they resize together")),
-            (Loc.T("⌥-click a height key in the track menu"), Loc.T("Set every track to Compact · Standard · Large")),
-            (Loc.T("Drag the track-list edge"), Loc.T("Widen or narrow the track headers · double-click resets")),
-            (Loc.T("Drag sections lane"), Loc.T("Mark a new section over the dragged bars")),
-            (Loc.T("Click section"), Loc.T("Jump the playhead to its start")),
-            (Loc.T("Double-click section"), Loc.T("Rename it · right-click → Reset to default name for its automatic Section N")),
-            (Loc.T("Return · Esc (renaming a section)"), Loc.T("Keep the name (empty = automatic) · cancel")),
-            (Loc.T("Drag section · its edge"), Loc.T("Move / resize it, snapped to bars")),
-            (Loc.T("Drag overview strip"), Loc.T("Drag sideways to scroll · up / down to zoom out / in")),
-            (Loc.T("Drag overview edge"), Loc.T("Zoom by resizing the viewport window")),
-            (Loc.T("Double-click overview"), Loc.T("Fit the whole project on screen")),
-            (Loc.T("Drag a device header"), Loc.T("Reorder devices (or right-click the header → Move left / right)")),
-            (Loc.T("Right-click a device header"), Loc.T("A / B compare, move, copy, delete, presets, save preset")),
-            (Loc.T("Delete (device selected)"), Loc.T("Remove the selected device — the header no longer carries a close button")),
-            (Loc.T("Drag an audio clip onto an instrument track"), Loc.T("Load its audio into the Sampler, Grain, Drum Rack (next free pad) or Instrument Rack · rest there to open its devices")),
-            (Loc.T("Drag an audio clip out of the Arrangement"), Loc.T("Take it as a sample: drop on a pad, a Grain, a Rhythm voice, a Session slot — the clip stays put")),
-            (Loc.T("Drag clip + ⌥"), Loc.T("Position freely, ignoring the grid for this drag (the magnet in the transport latches the same thing)")),
-            (Loc.T("Wheel over the device chain"), Loc.T("Scroll it sideways · over an EQ band's handle the wheel sets its Q, over a value box it steps the value")),
-            (Loc.T("Drag knob"), Loc.T("Change a device value · hold ⌘ or ⇧ for fine steps")),
-            (Loc.T("Drag slider"), Loc.T("Left / right (or up / down) changes the value · hold ⌘ or ⇧ for fine steps")),
-            (Loc.T("⌥-click a knob, fader or slider"), Loc.T("Type a value (units like k, ms, dB, L / R work) · double-click its value does the same")),
-            (Loc.T("Return · Esc · Tab / ⇧Tab (typing a value)"), Loc.T("Set it · cancel · set it and type the next / previous value on the card")),
-            (Loc.T("⌥-click a graph handle, envelope node or mod-matrix cell"), Loc.T("Type its values — a node with several (frequency · gain · Q, decay · sustain) takes Tab between them")),
-            (Loc.T("Double-click a knob, fader or slider"), Loc.T("Reset the value to its default")),
-            (Loc.T("Double-click a mod-matrix cell"), Loc.T("Clear the route (Volt, Aurora) · pull the cable (Consort)")),
-            (Loc.T("Right-click a knob, fader or slider"), Loc.T("Type value… · Reset to default")),
-            (Loc.T("Drag jack → jack"), Loc.T("Patch a cable in Nota Consort · ⌥-click a jack to pull its cables")),
-            (Loc.T("Click · ⇧ · ⌥ a Rhythm step"), Loc.T("Step on / off · accent · quiet step — drag across to paint, up / down (or scroll) for its velocity")),
-            (Loc.T("Click a Rhythm voice"), Loc.T("Select and play it · drop a file on it to load a sample")),
+            (Loc.T("preferences.double_click_clip"), Loc.T("preferences.open_in_the_clip_editor")),
+            (Loc.T("preferences.double_click_a_track_header"), Loc.T("preferences.open_its_devices_in_the")),
+            (Loc.T("preferences.double_click_a_browser_instrument"), Loc.T("preferences.swap_it_onto_the_selected")),
+            ("⌥ + double-click a browser instrument", Loc.T("preferences.always_start_a_new_track")),
+            (Loc.T("preferences.right_click_the_metronome"), Loc.T("preferences.count_in_before_play_record")),
+            (Loc.T("preferences.drag_an_audio_clips_adsr"), Loc.T("preferences.shape_attack_decay_sustain_release")),
+            (Loc.T("preferences.click_track_header"), Loc.T("preferences.add_the_track_to_the")),
+            (Loc.T("preferences.click_a_groups_link_key"), Loc.T("preferences.link_the_groups_tracks_arming")),
+            (Loc.T("preferences.click_a_clip_or_arm"), Loc.T("preferences.in_a_linked_group_select")),
+            (Loc.T("preferences.right_click_track_headers"), Loc.T("preferences.a_multi_selection_gets_its")),
+            (Loc.T("preferences.drag_a_tracks_bottom_edge"), Loc.T("preferences.resize_the_track_header_or")),
+            (Loc.T("preferences.drag_a_tracks_bottom_edge_2"), Loc.T("preferences.resize_every_track_at_once")),
+            (Loc.T("preferences.double_click_a_tracks_bottom"), Loc.T("preferences.back_to_the_standard_height")),
+            (Loc.T("preferences.drag_a_returns_or_the"), Loc.T("preferences.resize_that_row_header_or")),
+            ("⌘-click / ⇧-click return headers", Loc.T("preferences.select_several_returns_they_resize")),
+            (Loc.T("preferences.click_a_height_key_in"), Loc.T("preferences.set_every_track_to_compact")),
+            (Loc.T("preferences.drag_the_track_list_edge"), Loc.T("preferences.widen_or_narrow_the_track")),
+            (Loc.T("preferences.drag_sections_lane"), Loc.T("preferences.mark_a_new_section_over")),
+            (Loc.T("preferences.click_section"), Loc.T("preferences.jump_the_playhead_to_its")),
+            (Loc.T("preferences.double_click_section"), Loc.T("preferences.rename_it_right_click_reset")),
+            (Loc.T("preferences.return_esc_renaming_a_section"), Loc.T("preferences.keep_the_name_empty_automatic")),
+            (Loc.T("preferences.drag_section"), Loc.T("preferences.rearrange_the_song_it_and")),
+            (Loc.T("preferences.drag_section_2"), Loc.T("preferences.move_only_the_section_marker")),
+            (Loc.T("preferences.drag_section_edge"), Loc.T("preferences.resize_it_snapped_to_bars")),
+            (Loc.T("preferences.right_click_section"), Loc.T("preferences.move_earlier_later_duplicate_or")),
+            (Loc.T("preferences.drag_overview_strip"), Loc.T("preferences.drag_sideways_to_scroll_up")),
+            (Loc.T("preferences.drag_overview_edge"), Loc.T("preferences.zoom_by_resizing_the_viewport")),
+            (Loc.T("preferences.double_click_overview"), Loc.T("preferences.fit_the_whole_project_on")),
+            (Loc.T("preferences.drag_a_device_header"), Loc.T("preferences.reorder_devices_or_right_click")),
+            (Loc.T("preferences.right_click_a_device_header"), Loc.T("preferences.a_b_compare_move_copy")),
+            (Loc.T("preferences.delete_device_selected"), Loc.T("preferences.remove_the_selected_device_the")),
+            (Loc.T("preferences.drag_an_audio_clip_onto"), Loc.T("preferences.load_its_audio_into_the")),
+            (Loc.T("preferences.drag_an_audio_clip_out"), Loc.T("preferences.take_it_as_a_sample")),
+            (Loc.T("preferences.drag_clip_2"), Loc.T("preferences.position_freely_ignoring_the_grid")),
+            (Loc.T("preferences.wheel_over_the_device_chain"), Loc.T("preferences.scroll_it_sideways_over_an")),
+            (Loc.T("preferences.drag_knob"), Loc.T("preferences.change_a_device_value_hold")),
+            (Loc.T("preferences.drag_slider"), Loc.T("preferences.left_right_or_up_down")),
+            (Loc.T("preferences.click_a_knob_fader_or"), Loc.T("preferences.type_a_value_units_like")),
+            (Loc.T("preferences.return_esc_tab_tab_typing"), Loc.T("preferences.set_it_cancel_set_it")),
+            (Loc.T("preferences.click_a_graph_handle_envelope"), Loc.T("preferences.type_its_values_a_node")),
+            (Loc.T("preferences.double_click_a_knob_fader"), Loc.T("preferences.reset_the_value_to_its")),
+            (Loc.T("preferences.double_click_a_mod_matrix"), Loc.T("preferences.clear_the_route_volt_aurora")),
+            (Loc.T("preferences.right_click_a_knob_fader"), Loc.T("preferences.type_value_reset_to_default")),
+            (Loc.T("preferences.drag_jack_jack"), Loc.T("preferences.patch_a_cable_in_nota")),
+            (Loc.T("preferences.click_a_rhythm_step"), Loc.T("preferences.step_on_off_accent_quiet")),
+            (Loc.T("preferences.click_a_rhythm_voice"), Loc.T("preferences.select_and_play_it_drop")),
         }),
     };
 
     private Control ShortcutsPane()
     {
         var groups = new StackPanel { Spacing = 18 };
-        var filter = new TextBox { PlaceholderText = Loc.T("Filter shortcuts"), Text = _shortcutFilter, Classes = { "search" }, FontSize = 12 };
+        var filter = new TextBox { PlaceholderText = Loc.T("preferences.filter_shortcuts"), Text = _shortcutFilter, Classes = { "search" }, FontSize = 12 };
 
         void Render()
         {
@@ -1660,7 +1666,7 @@ public sealed partial class PreferencesWindow : NotaWindow
                 };
                 groups.Children.Add(new StackPanel { Spacing = 6, Children = { head, Table(shown.Select(r => ShortcutRow(r.Key, r.Action)).ToList()) } });
             }
-            if (groups.Children.Count == 0) groups.Children.Add(Caption(Loc.T("Nothing matches.")));
+            if (groups.Children.Count == 0) groups.Children.Add(Caption(Loc.T("preferences.nothing_matches")));
         }
         filter.TextChanged += (_, _) => { _shortcutFilter = filter.Text ?? ""; Render(); };
         Render();
@@ -1675,7 +1681,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     {
         var settings = App.Services.GetService<ISettingsService>();
         var step = Combo(150);
-        foreach (var m in VelocityWheelSteps) step.Items.Add(m == 0 ? Loc.T("Off") : $"{m.ToString("0.##", NotaNum.Culture)}×");
+        foreach (var m in VelocityWheelSteps) step.Items.Add(m == 0 ? Loc.T("common.off") : $"{m.ToString("0.##", NotaNum.Culture)}×");
         int idx = Array.FindIndex(VelocityWheelSteps, m => Math.Abs(m - PianoRollView.VelocityWheelMultiplier) < 1e-6);
         step.SelectedIndex = idx >= 0 ? idx : Array.IndexOf(VelocityWheelSteps, 1.0);
         step.SelectionChanged += (_, _) =>
@@ -1687,17 +1693,17 @@ public sealed partial class PreferencesWindow : NotaWindow
             settings.Current.PianoRollVelocityWheelMultiplier = VelocityWheelSteps[k];
             settings.Save();
         };
-        var reverse = SwitchRow(Loc.T("Wheel up lowers the velocity"), PianoRollView.VelocityWheelReversed, on =>
+        var reverse = SwitchRow(Loc.T("preferences.wheel_up_lowers_the_velocity"), PianoRollView.VelocityWheelReversed, on =>
         {
             PianoRollView.VelocityWheelReversed = on;
             if (settings is null) return;
             settings.Current.PianoRollVelocityWheelReversed = on;
             settings.Save();
         });
-        return Section(Loc.T("Velocity wheel"), 8,
-            Row(Loc.T("Direction"), reverse),
-            Row(Loc.T("Step"), step),
-            Row("", Caption(Loc.T("⇧ + wheel over a note in the piano roll changes its velocity, or the whole selection's when that note is selected: one MIDI step per notch at 1×. Anywhere else ⇧ + wheel scrolls, and Off leaves it scrolling everywhere."))));
+        return Section(Loc.T("preferences.velocity_wheel"), 8,
+            Row(Loc.T("preferences.direction"), reverse),
+            Row(Loc.T("preferences.step"), step),
+            Row("", Caption(Loc.T("preferences.wheel_over_a_note_in"))));
     }
 
     private static readonly HashSet<string> NamedKeys = new(StringComparer.Ordinal) { "Space", "Return", "Delete", "Tab", "Esc", "PgUp", "PgDn", "⌘Return", "⌥Return", "⇧Return", "⇧Tab", "⇧Space" };
@@ -1919,7 +1925,7 @@ public sealed partial class PreferencesWindow : NotaWindow
     private static void FillDeviceCombo(ComboBox combo, List<string> uids, IReadOnlyList<AudioDevice> devices, string savedUid)
     {
         uids.Clear();
-        combo.Items.Add(Loc.T("System default"));
+        combo.Items.Add(Loc.T("preferences.system_default"));
         uids.Add("");
         int selected = 0;
         for (int i = 0; i < devices.Count; i++)

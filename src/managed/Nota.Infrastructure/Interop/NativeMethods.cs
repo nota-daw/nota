@@ -165,6 +165,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_engine_is_recording")]
     internal static partial int IsRecording(IntPtr engine);
 
+    [LibraryImport(Lib, EntryPoint = "nota_engine_retry_take")]
+    internal static partial int RetryTake(IntPtr engine);
+
     [LibraryImport(Lib, EntryPoint = "nota_engine_record_start_status")]
     internal static partial int RecordStartStatus(IntPtr engine);
 
@@ -234,6 +237,18 @@ internal static partial class NativeMethods
 
     [LibraryImport(Lib, EntryPoint = "nota_engine_set_sections")]
     internal static partial NotaResult SetSections(IntPtr engine, [In] NotaSection[] sections, int count, int checkpoint);
+
+    [LibraryImport(Lib, EntryPoint = "nota_section_move")]
+    internal static partial NotaResult SectionMove(IntPtr engine, int index, int toBoundary);
+
+    [LibraryImport(Lib, EntryPoint = "nota_section_duplicate_with_content")]
+    internal static partial NotaResult SectionDuplicateWithContent(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_section_delete_with_content")]
+    internal static partial NotaResult SectionDeleteWithContent(IntPtr engine, int index);
+
+    [LibraryImport(Lib, EntryPoint = "nota_section_overlaps")]
+    internal static partial int SectionOverlaps(IntPtr engine, int index);
 
     [LibraryImport(Lib, EntryPoint = "nota_mix_gesture_begin")]
     internal static partial int MixGestureBegin(IntPtr engine, [In] MixTarget[] targets, int count);

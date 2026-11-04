@@ -29,7 +29,7 @@ public readonly record struct GridStep(int Index, bool Triplet)
     // The rung as the toolbar shows it: note values are numbers, the bar steps are words.
     private static string NameOf(int index) => index switch
     {
-        5 => Loc.T("1 bar"), 6 => Loc.T("2 bars"), 7 => Loc.T("4 bars"),
+        5 => Loc.T("common.1_bar"), 6 => Loc.T("editing.snap_grid.2_bars"), 7 => Loc.T("editing.snap_grid.4_bars"),
         _ => Names[index],
     };
 
@@ -177,7 +177,7 @@ public static class SnapGrid
         => Math.Max(0, (int)Math.Ceiling((bar - Eps) / stepBeats) - 1);
 
     /// <summary>The snap control's text: "Auto · 1/8" in Adaptive mode, "1/8" when Fixed.</summary>
-    public static string Label(GridSetting s, ResolvedGrid r) => s.Adaptive ? Loc.F("Auto · {0}", r.Snap.Label) : r.Snap.Label;
+    public static string Label(GridSetting s, ResolvedGrid r) => s.Adaptive ? Loc.F("editing.snap_grid.auto", r.Snap.Label) : r.Snap.Label;
 
     // ---- transitions (⌘1–⌘5 and the menu) ------------------------------------------------
 

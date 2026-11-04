@@ -90,7 +90,7 @@ public sealed class ExportWindow : NotaWindow
             };
         }
         SetRange(0);
-        Title = Loc.T("Export audio");
+        Title = Loc.T("export.export_audio");
         Width = 560;
         SizeToContent = SizeToContent.Height;
         CanResize = false;
@@ -103,7 +103,7 @@ public sealed class ExportWindow : NotaWindow
 
         // Range. Custom shows a start and an end (bar.beat), checked as you type (#102).
         _rangeReadout = Mono("", TextSecondary);
-        var range = Segmented(new[] { (Loc.T("Loop"), true), (Loc.T("Full song"), true), (Loc.T("Custom"), true) }, 0, i =>
+        var range = Segmented(new[] { (Loc.T("common.loop"), true), (Loc.T("export.full_song"), true), (Loc.T("export.custom"), true) }, 0, i =>
         {
             SetRange(i);
             RefreshRange();
@@ -119,8 +119,8 @@ public sealed class ExportWindow : NotaWindow
             var a = ParsePosition(startBox.Text);
             var b = ParsePosition(endBox.Text);
             _customValid = a is not null && b is not null && b > a;
-            _customError.Text = a is null || b is null ? Loc.T("Not a position: type bar.beat, like 5.1")
-                              : b <= a ? Loc.T("The end must be after the start") : "";
+            _customError.Text = a is null || b is null ? Loc.T("export.not_a_position_type_bar")
+                              : b <= a ? Loc.T("export.the_end_must_be_after") : "";
             if (_customValid) { _customStart = a!.Value; _customEnd = b!.Value; }
             SetRange(2);
             RefreshRange();
@@ -131,7 +131,7 @@ public sealed class ExportWindow : NotaWindow
         // counter shows them, and that the end is where the export stops (#102).
         var unitsHint = new TextBlock
         {
-            Text = Loc.T("Positions are bar.beat.sixteenth, counted from 1 as in the transport: 5 or 5.1 is the start of bar 5, 5.3 its third beat. The export stops at the end position, so 1 to 5 is four bars."),
+            Text = Loc.T("export.positions_are_bar_beat_sixteenth"),
             FontSize = 10, Foreground = TextTertiary, TextWrapping = TextWrapping.Wrap, MaxWidth = 520,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
@@ -143,12 +143,12 @@ public sealed class ExportWindow : NotaWindow
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
-                    Children = { Caption(Loc.T("Start")), startBox, Caption(Loc.T("End")), endBox, _customError },
+                    Children = { Caption(Loc.T("common.start")), startBox, Caption(Loc.T("export.end")), endBox, _customError },
                 },
                 unitsHint,
             },
         };
-        body.Children.Add(Section(Loc.T("Range"), new StackPanel { Spacing = 8, Children = { rangeRow, _customRow } }));
+        body.Children.Add(Section(Loc.T("common.range"), new StackPanel { Spacing = 8, Children = { rangeRow, _customRow } }));
 
         // Format / SR / bit-depth-or-quality. The third column swaps its control
         // (and title) with the format: depth for WAV/FLAC, bitrate for MP3.
@@ -173,19 +173,19 @@ public sealed class ExportWindow : NotaWindow
         depthOrQuality.Children.Add(_depth);
         depthOrQuality.Children.Add(_quality);
         var fmtGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 12 };
-        var f0 = Section(Loc.T("Format"), _format); fmtGrid.Children.Add(f0);
-        var f1 = Section(Loc.T("Sample rate"), _rate); Grid.SetColumn(f1, 1); fmtGrid.Children.Add(f1);
-        var f2 = Section(Loc.T("Bit depth"), depthOrQuality); Grid.SetColumn(f2, 2); fmtGrid.Children.Add(f2);
+        var f0 = Section(Loc.T("export.format"), _format); fmtGrid.Children.Add(f0);
+        var f1 = Section(Loc.T("export.sample_rate"), _rate); Grid.SetColumn(f1, 1); fmtGrid.Children.Add(f1);
+        var f2 = Section(Loc.T("export.bit_depth"), depthOrQuality); Grid.SetColumn(f2, 2); fmtGrid.Children.Add(f2);
         _depthTitle = (TextBlock)((StackPanel)f2).Children[0];
         body.Children.Add(fmtGrid);
         _depth.SelectionChanged += (_, _) => { RefreshEstimate(); _refreshDitherEnabled?.Invoke(); };
         ApplyFormat();   // populates depth items + visibility for the default format
 
         // Options: normalize + dither (working toggles) and a release tail (checkbox).
-        var normalize = WorkingToggle(Loc.T("Normalize −1 dBTP"), () => _normalize, v => { _normalize = v; RefreshEstimate(); });
-        var dither = WorkingToggle(Loc.T("Dither"), () => _dither, v => { _dither = v; },
+        var normalize = WorkingToggle(Loc.T("export.normalize_1_dbtp"), () => _normalize, v => { _normalize = v; RefreshEstimate(); });
+        var dither = WorkingToggle(Loc.T("export.dither"), () => _dither, v => { _dither = v; },
                                    enabled: () => SelectedFormat != ExportFormat.Mp3 && _depth.SelectedIndex == 0,
-                                   hint: Loc.T("16-bit only"));
+                                   hint: Loc.T("export.16_bit_only"));
         body.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 22, Children = { normalize, dither } });
         body.Children.Add(TailCheck());
 
@@ -201,7 +201,7 @@ public sealed class ExportWindow : NotaWindow
             Background = NotaPalette.SurfaceHover, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
             CornerRadius = NotaRadius.Control, Padding = new Thickness(18, 0), Height = 28,
             Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
-            Child = (_exportLabel = new TextBlock { Text = Loc.T("Export WAV"), FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center }),
+            Child = (_exportLabel = new TextBlock { Text = Loc.T("export.export_wav"), FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center }),
         };
         export.BindResource(Border.BoxShadowProperty, "Shadow.Raised");
         export.PointerPressed += (_, _) =>
@@ -217,7 +217,7 @@ public sealed class ExportWindow : NotaWindow
             int kbps = Bitrates[_quality.SelectedIndex < 0 ? 0 : _quality.SelectedIndex];
             Close(new ExportOptions(sr, d, tailBeats, _rangeBeats, _stems, _normalize, dither, fmt, kbps, _startBeats));
         };
-        var cancel = new TextBlock { Text = Loc.T("Cancel"), FontSize = 11, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
+        var cancel = new TextBlock { Text = Loc.T("common.cancel"), FontSize = 11, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand) };
         cancel.PointerPressed += (_, _) => Close(null);
         var footer = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(0, 2, 0, 0) };
         footer.Children.Add(export);
@@ -255,7 +255,7 @@ public sealed class ExportWindow : NotaWindow
         bool mp3 = fmt == ExportFormat.Mp3;
         _depth.IsVisible = !mp3;
         _quality.IsVisible = mp3;
-        _depthTitle.Text = mp3 ? Loc.T("Quality") : Loc.T("Bit depth");
+        _depthTitle.Text = mp3 ? Loc.T("export.quality") : Loc.T("export.bit_depth");
 
         // MP3 tops out at 48 kHz (MPEG-1): grey 96 kHz out, and move an existing
         // 96 kHz selection down to 48 kHz so no invalid pair is reachable.
@@ -270,7 +270,7 @@ public sealed class ExportWindow : NotaWindow
     private void PaintExportLabel()
     {
         if (_exportLabel is null) return;   // during construction, before the footer exists
-        _exportLabel.Text = _stems ? Loc.T("Export stems") : Loc.F("Export {0}", SelectedFormat.ToString().ToUpperInvariant());
+        _exportLabel.Text = _stems ? Loc.T("export.export_stems") : Loc.F("export.export", SelectedFormat.ToString().ToUpperInvariant());
     }
 
     private bool RangeValid => _rangeMode != 2 || _customValid;
@@ -312,7 +312,7 @@ public sealed class ExportWindow : NotaWindow
     private TextBox PositionBox(double beats)
     {
         var box = new TextBox { Text = BarBeatText(beats), Width = 72, FontSize = 11, PlaceholderText = "bar.beat" };
-        ToolTip.SetTip(box, Loc.T("Bar.beat.sixteenth, counted from 1 — e.g. 5.1 or 5.3.2"));
+        ToolTip.SetTip(box, Loc.T("export.bar_beat_sixteenth_counted_from"));
         box.BindResource(TextBox.FontFamilyProperty, "Font.Mono");
         return box;
     }
@@ -336,8 +336,8 @@ public sealed class ExportWindow : NotaWindow
             _ => sec * sr * 2 * bytesPerSample / 1_000_000.0,
         };
         _estimate.Text = _stems
-            ? string.Format(NotaNum.Culture, Loc.T("one file per track · {0:0.0} MB each · offline render"), mb)
-            : string.Format(NotaNum.Culture, Loc.T("≈ 1 file · {0:0.0} MB · offline render"), mb);
+            ? string.Format(NotaNum.Culture, Loc.T("export.one_file_per_track_mb"), mb)
+            : string.Format(NotaNum.Culture, Loc.T("export.1_file_mb_offline_render"), mb);
     }
 
     // ---- helpers ----------------------------------------------------------
@@ -402,7 +402,7 @@ public sealed class ExportWindow : NotaWindow
     // The release-tail option: the shell switch (a themed CheckBox), word to the right.
     private Control TailCheck()
     {
-        var sw = new CheckBox { Content = Loc.T("Add 1-bar release tail"), IsChecked = _tailOn, VerticalAlignment = VerticalAlignment.Center };
+        var sw = new CheckBox { Content = Loc.T("export.add_1_bar_release_tail"), IsChecked = _tailOn, VerticalAlignment = VerticalAlignment.Center };
         sw.IsCheckedChanged += (_, _) => { _tailOn = sw.IsChecked == true; RefreshEstimate(); };
         return sw;
     }
@@ -429,8 +429,8 @@ public sealed class ExportWindow : NotaWindow
             Children =
             {
                 knob,
-                new TextBlock { Text = Loc.T("Export stems"), FontSize = 11, FontWeight = FontWeight.Medium, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center },
-                new TextBlock { Text = Loc.T("· one file per track, post-fader"), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = Loc.T("export.export_stems"), FontSize = 11, FontWeight = FontWeight.Medium, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center },
+                new TextBlock { Text = Loc.T("export.one_file_per_track_post"), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center },
             },
         };
         var headerBar = new Border { Height = 28, Background = NotaPalette.SurfaceInset, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(10, 0), Cursor = new Cursor(StandardCursorType.Hand), Child = header };

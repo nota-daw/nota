@@ -153,7 +153,7 @@ internal sealed class AppUpdates
         State = Stage.Downloading;
         Dismissed = false;
         Error = null;
-        Progress = new StoreProgress(0, Loc.F("Downloading Nota {0}…", release.Version));
+        Progress = new StoreProgress(0, Loc.F("common.downloading_nota", release.Version));
         Changed?.Invoke();
         var progress = new Progress<StoreProgress>(p =>
         {
@@ -171,7 +171,7 @@ internal sealed class AppUpdates
         catch (Exception e)
         {
             App.Services.GetRequiredService<ILogSink>().Error("Update download failed", e);
-            Fail(Loc.F("Couldn't download the update: {0}", e.Message));
+            Fail(Loc.F("app_updates.couldnt_download_the_update", e.Message));
         }
         finally
         {

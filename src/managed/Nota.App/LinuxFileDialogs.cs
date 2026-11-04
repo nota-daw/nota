@@ -77,13 +77,13 @@ internal static class LinuxFileDialogs
             {
                 FileDialogFallback.Verdict.Keep => result,
                 FileDialogFallback.Verdict.Wait => await WaitForDialog(task),
-                _ => await Broken(finished ? Loc.T("the system file dialog answered without showing")
-                                           : Loc.F("the system file dialog didn't open within {0:0} s", ShowTimeout.TotalSeconds)),
+                _ => await Broken(finished ? Loc.T("linux_file_dialogs.the_system_file_dialog_answered")
+                                           : Loc.F("linux_file_dialogs.the_system_file_dialog_didnt", ShowTimeout.TotalSeconds)),
             };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return await Broken(Loc.F("the system file dialog failed: {0}", ex.Message));
+            return await Broken(Loc.F("linux_file_dialogs.the_system_file_dialog_failed", ex.Message));
         }
         finally
         {
@@ -104,7 +104,7 @@ internal static class LinuxFileDialogs
                 else if (activeSince == DateTime.MinValue) activeSince = DateTime.UtcNow;
                 var activeFor = active ? DateTime.UtcNow - activeSince : TimeSpan.Zero;
                 if (FileDialogFallback.WhileWaiting(false, activeFor, ShowTimeout) == FileDialogFallback.Verdict.Fallback)
-                    return await Broken(Loc.F("the system file dialog didn't open within {0:0} s", ShowTimeout.TotalSeconds));
+                    return await Broken(Loc.F("linux_file_dialogs.the_system_file_dialog_didnt", ShowTimeout.TotalSeconds));
             }
         }
 
@@ -112,7 +112,7 @@ internal static class LinuxFileDialogs
         {
             SystemBroken = true;
             App.Services?.GetService<ILogSink>()?.Warn(
-                Loc.F("Using Nota's built-in file dialog: {0}. Check xdg-desktop-portal and its FileChooser backend.", why));
+                Loc.F("linux_file_dialogs.using_notas_built_in_file", why));
             return open(builtin);
         }
     }

@@ -48,6 +48,8 @@ public partial class App : Avalonia.Application
         services.AddSingleton<ISampleAnalyzer, SampleAnalyzer>();
         services.AddSingleton<ISampleIndex, SampleLibraryIndex>();
         services.AddSingleton<IModelStore>(_ => new ModelStore());
+        services.AddSingleton(_ => NotaLanguages.Installed);
+        services.AddSingleton<LanguageCatalog>();
         services.AddSingleton<IAppUpdater>(_ => new AppUpdater(AppInfo.Version));
         services.AddSingleton<IClipAi, ClipAi>();
         services.AddSingleton<IPresetLibrary, PresetLibrary>();
@@ -202,34 +204,54 @@ public partial class App : Avalonia.Application
     }
 
     /// <summary>Installs the interface language for this run. The saved choice, unless
-    /// NOTA_UI_LANGUAGE names one — which holds for this run only and is never saved, for
-    /// screenshots and layout checks. The OS language is deliberately not consulted: English
-    /// is the default everywhere (spec 068). An unknown code reads as English.</summary>
+    /// NOTA_UI_LANGUAGE names one — a code, or the path of a language file (spec 077) — which
+    /// holds for this run only and is never saved, for screenshots, layout checks and
+    /// translators. The OS language is deliberately not consulted: English is the default
+    /// everywhere (spec 068). A language that is not installed reads as English; the stored
+    /// choice is left as written, so it can still be downloaded (LanguageStartup).</summary>
     private static void InstallLanguage(Settings settings, ILogSink log)
     {
-        foreach (var err in NotaLanguages.LoadErrors) log.Error($"Language skipped — {err}", null);
         var wanted = Environment.GetEnvironmentVariable("NOTA_UI_LANGUAGE");
-        var code = UiLanguage.Normalize(string.IsNullOrWhiteSpace(wanted) ? settings.Language : wanted, NotaLanguages.Codes);
+        bool isPath = !string.IsNullOrWhiteSpace(wanted)
+                      && (wanted.EndsWith(".json", StringComparison.OrdinalIgnoreCase) || System.IO.File.Exists(wanted));
+        TranslationTable? fromFile = null;
+        if (isPath)
+        {
+            fromFile = NotaLanguages.FromFile(wanted, out var fileError);
+            if (fromFile is null) log.Error($"Interface language — {wanted}: {fileError}", null);
+        }
+        foreach (var err in NotaLanguages.LoadErrors) log.Error($"Interface language — {err}", null);
+        // A key in no table, not even English, shows as itself: the smoke test rules it out.
+        Loc.MissingKey += key => log.Warn($"Interface text key not found: {key}");
+        string code;
+        TranslationTable? table;
+        if (fromFile is not null) { code = fromFile.Code; table = fromFile; }
+        else
+        {
+            code = UiLanguage.Normalize(isPath || string.IsNullOrWhiteSpace(wanted) ? settings.Language : wanted, NotaLanguages.Codes);
+            table = NotaLanguages.Find(code);
+        }
         // A text asked for before this point was built in English and will not follow the language.
         if (Loc.UsedBeforeInstall) log.Warn("Interface text was built before the language was installed");
-        // English is the default whatever the OS language is: only the stored choice (or the test override above) is read.
-        Loc.Install(NotaLanguages.Find(code), code);
+        // English is the default whatever the OS language is: only the stored choice (or the override above) is read.
+        Loc.Install(table, code);
         // The system's own text (application menu, open panels) follows an explicit choice from the next start.
         if (code != UiLanguage.Default) MacSystemLanguage.Set(code);
-        log.Info($"Interface language · {code}");
+        log.Info($"Interface language · {code}" + (fromFile is not null ? $" (file {wanted})" : ""));
     }
 
     // App.axaml is loaded in Initialize(), before the language is installed, so the macOS
-    // application menu's few texts are set here, once it is. Keyed by their English text.
+    // application menu's few texts are set here, once it is: each item is found by its English
+    // header in App.axaml and given the text of its key.
     private void TranslateAppMenu()
     {
         if (NativeMenu.GetMenu(this) is not { } menu) return;
         foreach (var item in menu.Items.OfType<NativeMenuItem>())
             item.Header = item.Header switch
             {
-                "About Nota" => Loc.T("About Nota"),
-                "Check for updates…" => Loc.T("Check for updates…"),
-                "Settings…" => Loc.T("Settings…"),
+                "About Nota" => Loc.T("common.about_nota"),
+                "Check for updates…" => Loc.T("common.check_for_updates"),
+                "Settings…" => Loc.T("app.settings"),
                 var other => other,
             };
     }

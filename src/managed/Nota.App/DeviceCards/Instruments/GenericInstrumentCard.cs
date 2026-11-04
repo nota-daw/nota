@@ -19,7 +19,7 @@ internal sealed class GenericInstrumentCard : IInstrumentCard
         var engine = ctx.Engine;
         int track = ctx.TrackId;
 
-        var gui = TextButton(Loc.T("Open GUI ↗"));
+        var gui = TextButton(Loc.T("device.generic.open_gui"));
         gui.PointerPressed += (_, _) => { try { engine.OpenPluginEditor(track, -1); } catch { /* no-op */ } };
         var body = new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { gui } };
         return new Border { Padding = new Thickness(10), Child = body };

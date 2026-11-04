@@ -23,6 +23,34 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Discard and retry take** (#185): ⌘. (Ctrl+. on Windows and Linux) — also in the
+  Transport menu, the command palette and over MCP (`retry_take`) — throws away the take
+  being recorded and records it again in one press. In the Arrangement the playhead goes back
+  to where the transport was started — the take's start, counting in again if it did, or
+  where Play was pressed when you punched in, so the run-up plays again. In the Session view
+  only the recording slot's take goes: the other clips keep playing, and the slot shows it is
+  waiting until it records again from the next launch quantum. Nothing of the discarded take
+  stays — not its audio, loop passes, notes, controllers or automation, and not an undo step.
+- **Preview a translation**: **Load file…** in Settings → Appearance → Language runs Nota in a
+  language file from your disk after a restart and lists the entries it cannot use;
+  `NOTA_UI_LANGUAGE=/path/to/file.json` does the same for one run.
+- **Link a group's tracks** (#184): the Link key (a chain link) on a group's header, its
+  Mixer strip and its menu ties the tracks in the group together — for a dry and an amped
+  guitar recorded side by side, say. Arming one arms them all; clicking a clip selects the
+  clips at the same place on the other tracks too; moving, trimming, fading, splitting,
+  duplicating, copying, cutting or deleting it does the same to them, as one undo step; a
+  time range drawn on one track spans the whole group. ⌥-click (Alt-click) a clip or an arm
+  to act on one track. Saved with the project; MCP `set_group_link` / `get_group_link`.
+- **Rearrange the song by its sections** (#192): drag a section in the Sections lane and it
+  moves with everything in it — audio and MIDI clips (cut at its edges), automation on every
+  track and the master, take lanes — to the boundary marked while you drag; the sections in
+  between close up, and the song keeps its length. A ghost follows the pointer, the landing
+  place and the new order show before you let go, and Esc cancels. The section's menu adds
+  **Move earlier** / **Move later**, **Duplicate with content** (a copy goes right after it,
+  pushing the rest later) and **Delete with content** (the rest moves up to close the gap);
+  the command palette has the same four for the section at the playhead, and MCP has
+  `move_section`, `duplicate_section_with_content` and `delete_section_with_content`. Each
+  is one undo step. A section that overlaps another keeps its content where it is.
 - **Every release opens with its own splash art**: the launch screen now shows an abstract
   picture generated from the version number. It is built from piano-roll notes, rhythm
   rings, waveform strata, panels, a Lissajous figure or fader rails, in a few of the
@@ -169,6 +197,18 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the same way.
 
 ### Changed
+- **Interface languages are downloaded** (#476): Nota now ships in English, and every other
+  language comes from the new [nota-translations](https://github.com/nota-daw/nota-translations)
+  repository. **Settings → Appearance → Language** lists the languages there with how complete
+  each is for your version; choosing one downloads it (checked against its published checksum)
+  and it applies after the usual restart. Installed languages work offline, an **Update**
+  appears when a better translation is published, and **Remove** takes one away. If you used
+  French before this version, Nota fetches it in the background on first start and offers the
+  restart in the status bar (with update checks off, the Language row offers the download
+  instead). Translators can fix or add a language with a pull request there, no build needed.
+- **Dragging a section now moves its content too** (#192). To move only the section marker,
+  as before, hold ⌥ (Alt on Windows and Linux) while dragging; resizing a section's edges
+  still never touches the music.
 - **The detail panel opens on double-click, not on every selection** (#308): clicking a
   track, a clip, a mixer strip or a Session slot now only selects it, so the arrangement keeps
   its height on a small screen. While the panel is open it still follows the selection as
@@ -212,6 +252,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   a return track rang on. The track's effects now keep playing on silence until their output
   has died away (3 seconds under −100 dB), then the track costs nothing again. Plug-ins on it
   also get stopped blocks now, so one that acts on Stop (PitchNet finishing a capture) does.
+- **Duplicating a track keeps its plug-ins** (#454): Duplicate track, a copied and pasted
+  plug-in effect and a copied rack now bring their VST3 plug-ins along, with every setting.
+  The copy used to come back without them, because a running plug-in describes itself by the
+  file inside its bundle, which can't be loaded again; the copy now loads the plug-in the way
+  the browser does.
+- **Plug-ins that cap their block size load** (#447): sfizz and other plug-ins with a maximum
+  block size stopped Nota when added, because every plug-in was prepared for 16384-sample
+  blocks. Plug-ins are now prepared for at most 4096; a longer block (an export, a large audio
+  buffer) is played to them in pieces, each with its own notes and transport position.
 - **The loop region is saved with the project** (#455): its start and end, and whether the
   loop is on, come back when you open the project again. A new project starts without one.
 - **The Mixer's volume reaches −∞** (#453): a fader pulled all the way down, a dB value dragged

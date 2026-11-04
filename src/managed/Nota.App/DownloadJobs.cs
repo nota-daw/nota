@@ -81,13 +81,13 @@ internal sealed class DownloadJobs
         catch (OperationCanceledException)
         {
             // Quitting: nothing to show. Otherwise the user pressed Cancel.
-            if (!_app.IsCancellationRequested) result = Loc.F("Installing {0} was cancelled.", name);
+            if (!_app.IsCancellationRequested) result = Loc.F("download_jobs.installing_was_cancelled", name);
         }
         catch (StoreException e) { result = e.Message; sticky = true; }
         catch (Exception e)
         {
             App.Services.GetRequiredService<ILogSink>().Error($"Installing {key} failed", e);
-            result = Loc.F("Installing {0} failed: {1}", name, e.Message);
+            result = Loc.F("download_jobs.installing_failed", name, e.Message);
             sticky = true;
         }
         finally
@@ -129,7 +129,7 @@ internal sealed class DownloadJobs
     {
         if (_job is not { IsCancellationRequested: false } job) return;
         job.Cancel();
-        Progress = Progress with { Message = Loc.T("Cancelling…") };
+        Progress = Progress with { Message = Loc.T("download_jobs.cancelling") };
         ProgressChanged?.Invoke();
         Changed?.Invoke();
     }
