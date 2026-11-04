@@ -158,6 +158,37 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         });
     }
 
+    /// <summary>⌘. (#185, specs/078): throw the take being recorded away and record it again —
+    /// the Arrangement from where the transport was started, a Session slot from the next launch
+    /// quantum. The record button stays down; nothing of the take is left, not even an undo step.</summary>
+    [RelayCommand]
+    private void RetryTake()
+    {
+        switch (_engine.RetryTake())
+        {
+            case RetryTakeResult.Arrangement:
+            case RetryTakeResult.Session:
+                TracksChanged?.Invoke();
+                Message?.Invoke(Loc.T("transport.take_discarded_retrying"));
+                break;
+            case RetryTakeResult.Failed:
+                // The take is gone but recording couldn't start again: pop the button up.
+                if (RecordOn) { _revertingRec = true; RecordOn = false; _revertingRec = false; }
+                _engine.SetRecording(false);
+                TracksChanged?.Invoke();
+                Message?.Invoke(_engine.RecordStartStatus switch
+                {
+                    1 => Loc.T("transport.cant_record_arm_a_track"),
+                    2 => Loc.T("transport.cant_record_no_audio_input"),
+                    _ => Loc.T("transport.recording_didnt_start"),
+                });
+                break;
+            default:
+                Message?.Invoke(Loc.T("transport.no_take_to_discard"));
+                break;
+        }
+    }
+
     [RelayCommand]
     private void PlayStop()
     {
@@ -230,6 +261,8 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         else UpdatePositionText(beats);
         if (IsCountingIn != wasCounting) PositionUnitText = IsCountingIn ? Loc.T("transport.count_in") : ShowTimeDisplay ? Loc.T("transport.time") : Loc.T("transport.bars");
         IsPlaying = _engine.IsPlaying || IsCountingIn;   // the Play button lights from the first click
+        // Recording can end outside the UI (an MCP retry that couldn't restart): let the button go.
+        if (RecordOn && !_engine.IsRecording) { _revertingRec = true; RecordOn = false; _revertingRec = false; }
         PlayLabel = IsPlaying ? "■ Stop" : "▶ Play";
         // The loop record mode can also be set from outside the UI (MCP): follow the engine.
         bool replace = _engine.LoopRecordReplace;

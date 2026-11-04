@@ -31,6 +31,7 @@
 #include <array>
 #include <atomic>
 #include <functional>
+#include <limits>
 #include <list>
 #include <memory>
 #include <map>
@@ -1286,6 +1287,10 @@ class Engine {
     // (for clicking rack/drum pads). -1 = none. Lock-free.
     void setAuditionTrack(int32_t trackId) { auditionTrackId_.store(trackId, std::memory_order_relaxed); }
     void setRecording(bool on);
+    // Discard the take in progress and record it again (#185, specs/078). Returns 0 nothing
+    // was recording, 1 Arrangement take retried, 2 Session slot take retried, -1 discarded but
+    // recording could not start again. Message thread.
+    int32_t retryTake();
     bool isRecording() const { return recording_.load(std::memory_order_relaxed) || audioRecording_; }
     // Why the last setRecording(true) did (not) start: 0 ok, 1 no armed track, 2 audio input failed.
     int32_t recordStartStatus() const { return recordStartStatus_; }
@@ -1901,6 +1906,51 @@ class Engine {
     bool recordStartedTransport_ = false;
     double recordReturnBeat_ = 0.0;
 
+    // Discard and retry (specs/078). One record press — or one retry — until the take stops:
+    // the tracks as they were before it wrote them and the undo/redo state, so a discard puts
+    // them back with no history of its own. Message thread.
+    struct TakeAttempt {
+        bool active = false;
+        bool session = false;   // a Session slot take (else Arrangement)
+        bool countedIn = false; // the Arrangement take counted in from stop
+        std::vector<std::pair<int32_t, std::shared_ptr<Track>>> baseTracks; // first write wins
+        size_t undoBase = 0;              // undoStack_ size when the take began
+        std::vector<UndoEntry> redoSaved; // redoStack_ when the take began
+        int32_t sessionTrackId = 0, sessionScene = -1;
+    };
+    TakeAttempt takeAttempt_;
+    void openTakeAttempt(bool session);
+    void noteTakeTrack(int32_t trackId); // a track the take is about to write (no-op when idle)
+    void closeTakeAttempt();
+    void discardTake();                  // drop what the take wrote; no undo step
+    void abortAudioRecording();          // stop capturing without materialising
+    // Explicit start for a retried take: the transport UI mirror lags the commands just
+    // queued, so the restart says where it starts and whether the clock is rolling.
+    bool startArrangementTake(bool wasPlaying, double playhead, bool retryCountIn);
+    double takeStartOverride_ = std::numeric_limits<double>::quiet_NaN(); // startAudioRecording
+    int takePlayingOverride_ = -1;                                         // -1 = read the transport
+    double takePlayhead() const;
+    bool takeTransportPlaying() const;
+    // Take epoch: the message thread's current attempt, and the audio thread's copy (set by
+    // the TakeRestart command). Recorded events carry the audio thread's; poll() drops stale ones.
+    uint32_t takeEpoch_ = 0;
+    uint32_t rtTakeEpoch_ = 0;
+    bool rtTakeRestart_ = false; // audio thread: a TakeRestart arrived, the next drain restarts the take
+    void pushRecorded(RecordedNote n) {
+        n.epoch = rtTakeEpoch_;
+        recorded_.push(n);
+    }
+    void pushRecordedCtl(RecordedCtl x) {
+        x.epoch = rtTakeEpoch_;
+        recordedCtl_.push(x);
+    }
+    void pushRecordedExpr(RecordedExpr x) {
+        x.epoch = rtTakeEpoch_;
+        recordedExpr_.push(x);
+    }
+    // A Session audio retry starts on the launch quantum: capture before this beat is trimmed.
+    double retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
+
     // automation write/record state (M9-C, message thread only)
     std::atomic<bool> autoRecord_{false}; // transport record engaged -> gestures write
     struct ActiveWrite {
@@ -2015,6 +2065,7 @@ class Engine {
     double routedPressBeat_[128] = {};
     float routedPressVel_[128] = {};
     int32_t routedOwner_ = -1;
+    bool routedSeedFromNow_ = false; // the take was retried: held routed notes start now (specs/078)
     bool routedSeedPending_ = false; // a take just started: seed after this block's routed events
     void trackRoutedDown(int32_t ownerId, const MidiEv* evs, int n, double blockStart, double spb, bool timed);
     // Capture clock: during a count-in the transport holds still, so notes are timed back

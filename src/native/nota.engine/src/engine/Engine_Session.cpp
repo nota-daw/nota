@@ -282,6 +282,11 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
         !transport_.uiIsPlaying() && uiCountIn_.load(std::memory_order_relaxed) <= 0.0 && countInBars() > 0;
     sessionCountIn_ = false;
     sessionCountInFresh_ = false;
+    // Remember the slot as it was, so the take can be discarded and retried (specs/078).
+    openTakeAttempt(true);
+    noteTakeTrack(trackId);
+    takeAttempt_.sessionTrackId = trackId;
+    takeAttempt_.sessionScene = scene;
 
     // Audio track: capture input into the slot (M5-4). Reuses the M4-3 input
     // pipeline; stopSessionRecord() materialises the take into slot.audio.
@@ -311,11 +316,15 @@ void Engine::recordSessionSlot(int32_t trackId, int32_t scene) {
             recordSessionAudio_ = false;
             recordSessionScene_ = -1;
             recordSessionTrackId_ = 0;
+            closeTakeAttempt();
         }
         return;
     }
 
-    if (t->type() != TrackType::Instrument) return;
+    if (t->type() != TrackType::Instrument) {
+        closeTakeAttempt();
+        return;
+    }
     // Make sure the slot holds a clip we can overdub into.
     const bool hasClip = scene < static_cast<int32_t>(t->sessionSlots.size()) && t->sessionSlots[scene].hasClip;
     // An empty slot records a fresh take: with a fixed length it is that long; otherwise it
@@ -399,6 +408,7 @@ void Engine::finalizeSessionRecord(bool relaunch) {
     recordSessionScene_ = -1;
     recordSessionTrackId_ = 0;
     recordSessionAudio_ = false; // also when the take captured nothing (stopAudioRecording left it)
+    closeTakeAttempt();          // the take is kept
 }
 
 // A Session take stopped during its count-in: stop the clicks (the transport never rolled),
@@ -414,6 +424,7 @@ void Engine::cancelSessionCountIn() {
     recordSessionTrackId_ = 0;
     recordSessionAudio_ = false;
     recordSessionGrowing_ = false;
+    closeTakeAttempt();
     arrangementActive_.store(false, std::memory_order_relaxed);
     uiCountIn_.store(0.0, std::memory_order_relaxed);
     Command c;
@@ -590,8 +601,17 @@ bool Engine::setSessionSlotGain(int32_t trackId, int32_t scene, float gain) {
 int32_t Engine::sessionSlotState(int32_t trackId, int32_t scene) const {
     auto t = findTrackAuthoring(trackId);
     if (!t || scene < 0 || scene >= static_cast<int32_t>(t->sessionSlots.size())) return 0;
-    if (recording_.load(std::memory_order_relaxed) && recordSessionTrackId_ == trackId && recordSessionScene_ == scene)
+    if (recording_.load(std::memory_order_relaxed) && recordSessionTrackId_ == trackId && recordSessionScene_ == scene) {
+        // Not capturing yet (specs/078): a retried take before the boundary it records from, or a
+        // MIDI take whose slot waits for a launch quantum (unquantized, it starts next block).
+        if (!std::isnan(retryStartBeat_) && transport_.uiPositionBeats() < retryStartBeat_) return 5;
+        if (auto* sp = recordSlotPlayer_.load(std::memory_order_acquire);
+            !recordSessionAudio_ && launchQuant() > 0.0 && sp && sp->playing.load(std::memory_order_relaxed) != scene &&
+                   sp->pending.load(std::memory_order_relaxed) == scene) {
+            return 5;
+        }
         return 4; // recording
+    }
     if (auto& sp = t->sessionPlayer) {
         if (sp->playing.load(std::memory_order_relaxed) == scene) return 3; // playing
         if (sp->pending.load(std::memory_order_relaxed) == scene) return 2; // queued
@@ -1033,7 +1053,10 @@ bool Engine::sessionRecordTarget(int32_t* trackId, int32_t* scene, double* elaps
     if (!recording_.load(std::memory_order_relaxed) || recordSessionScene_ < 0 || recordSessionTrackId_ <= 0)
         return false;
     double el = 0.0;
-    if (recordSessionAudio_) el = std::max(0.0, transport_.uiPositionBeats() - audioRecordStartBeat_);
+    if (recordSessionAudio_) // a retried take counts from the boundary it records from (specs/078)
+        el = std::max(0.0, transport_.uiPositionBeats() -
+                               (std::isnan(retryStartBeat_) ? audioRecordStartBeat_
+                                                            : std::max(audioRecordStartBeat_, retryStartBeat_)));
     else if (auto* sp = recordSlotPlayer_.load(std::memory_order_acquire))
         if (sp->playing.load(std::memory_order_relaxed) == recordSessionScene_)
             el = sp->playedBeats.load(std::memory_order_relaxed);

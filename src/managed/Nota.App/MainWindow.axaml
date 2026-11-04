@@ -104,6 +104,7 @@
             <NativeMenuItem Header="{app:T 'common.play_stop'}" app:Commands.Id="transport.playStop"/>
             <NativeMenuItem Header="{app:T 'main.play_pause'}" app:Commands.Id="transport.playPause"/>
             <NativeMenuItem Header="{app:T 'common.record'}" app:Commands.Id="transport.record"/>
+            <NativeMenuItem Header="{app:T 'commands.discard_and_retry_take'}" app:Commands.Id="transport.retryTake"/>
             <NativeMenuItem Header="{app:T 'main.auto_arm_selected_track'}" app:Commands.Id="transport.armOnSelect" ToggleType="CheckBox"/>
             <NativeMenuItem Header="{app:T 'common.loop'}" app:Commands.Id="transport.loop"/>
             <NativeMenuItem Header="{app:T 'main.loop_record_overdub_replace'}" app:Commands.Id="transport.loopRecordMode"/>

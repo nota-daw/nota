@@ -38,6 +38,7 @@ struct RecordedNote {
     double lengthBeats;
     float velocity;
     int32_t pass = 0;
+    uint32_t epoch = 0; // take attempt it belongs to (specs/078): stamped by the audio thread
 };
 using RecordedQueue = SpscRingBuffer<RecordedNote, 1024>;
 // A recorded note's expression sample (audio -> message): the note is identified by its pitch
@@ -48,6 +49,7 @@ struct RecordedExpr {
     int32_t dim;
     float beat;
     float value;
+    uint32_t epoch = 0; // take attempt (specs/078)
 };
 using RecordedExprQueue = SpscRingBuffer<RecordedExpr, 1u << 14>;
 // A recorded controller sample (audio -> message): at an absolute beat of the take (a Session
@@ -58,6 +60,7 @@ struct RecordedCtl {
     double beat;
     float value;
     int32_t pass;
+    uint32_t epoch = 0; // take attempt (specs/078)
 };
 using RecordedCtlQueue = SpscRingBuffer<RecordedCtl, 1u << 14>;
 // A clip note's expression at a sample offset of the block (the render pass replays these).

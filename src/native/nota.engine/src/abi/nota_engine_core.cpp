@@ -295,6 +295,9 @@ NotaResult nota_engine_set_recording(NotaEngine* e, int32_t enabled) {
 int32_t nota_engine_is_recording(const NotaEngine* e) {
     return (e && CENG(e)->isRecording()) ? 1 : 0;
 }
+int32_t nota_engine_retry_take(NotaEngine* e) {
+    return e ? ENG(e)->retryTake() : 0;
+}
 int32_t nota_engine_record_start_status(const NotaEngine* e) {
     return e ? CENG(e)->recordStartStatus() : 0;
 }

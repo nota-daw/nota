@@ -108,6 +108,7 @@ public partial class MainWindow
         B("transport.playPause", () => _vm?.Transport.PlayPauseCommand.Execute(null));
         B("transport.stop", () => _vm?.Transport.StopCommand.Execute(null));
         B("transport.record", () => OnMenuRecord(this, e));
+        B("transport.retryTake", () => { _vm?.Transport.RetryTakeCommand.Execute(null); _session?.Refresh(); });
         B("transport.armOnSelect", ToggleArmOnSelect);
         B("transport.loop", () => OnMenuLoop(this, e));
         B("transport.metronome", () => OnMenuMetronome(this, e));

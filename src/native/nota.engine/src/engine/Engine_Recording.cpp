@@ -355,6 +355,7 @@ void Engine::setRecording(bool on) {
         }
         recording_.store(false, std::memory_order_relaxed);
         stopAudioRecording(); // materialise if an audio take was rolling
+        if (!takeAttempt_.session) closeTakeAttempt(); // the take is kept: nothing to put back
         // If the take started the transport, stop it and rewind to where the
         // take began so re-recording lands in the same place (no drift).
         if (recordStartedTransport_) {
@@ -364,11 +365,16 @@ void Engine::setRecording(bool on) {
         }
         return;
     }
+    startArrangementTake(transport_.uiIsPlaying(), transport_.uiPositionBeats(), false);
+}
+
+// The take start behind setRecording(true). A retry (specs/078) passes where the take starts
+// and whether the clock rolls — the transport mirror still shows the take it just dropped —
+// and retryCountIn counts in again right away (the stop it queued hasn't landed yet).
+bool Engine::startArrangementTake(bool wasPlaying, double playhead, bool retryCountIn) {
     // Record every armed track together: the first armed audio track captures audio
     // (hardware or internal), the first armed instrument track captures MIDI. Both run
     // at once, so arming an instrument + an audio track and hitting REC records both.
-    const bool wasPlaying = transport_.uiIsPlaying();
-    const double playhead = transport_.uiPositionBeats();
     std::shared_ptr<Track> audioT, instT;
     for (auto& t : authoring_->tracks) {
         if (!t->armed()) continue;
@@ -381,14 +387,23 @@ void Engine::setRecording(bool on) {
     if (!audioT && !instT) {
         recording_.store(false, std::memory_order_relaxed);
         recordStartStatus_ = 1;
-        return;
+        return false;
     }
 
     // A take started from stop gets the count-in (if one is set); the capture taps stay
     // gated until it runs out, so the clicks-only pre-roll isn't recorded.
     recordCountIn_ = !wasPlaying && !recordSessionAudio_ && countInBars() > 0;
+    // Remember what the take may write before it writes anything (the MIDI clip below).
+    openTakeAttempt(false);
+    takeAttempt_.countedIn = recordCountIn_;
+    if (audioT) noteTakeTrack(audioT->id());
+    if (instT) noteTakeTrack(instT->id());
+    takeStartOverride_ = playhead;
+    takePlayingOverride_ = wasPlaying ? 1 : 0;
     bool audioOk = true;
     if (audioT) audioOk = startAudioRecording(audioT->id());
+    takeStartOverride_ = std::numeric_limits<double>::quiet_NaN();
+    takePlayingOverride_ = -1;
 
     if (instT) {
         recordTrackId_ = instT->id();
@@ -427,12 +442,26 @@ void Engine::setRecording(bool on) {
         recordStartedTransport_ = !wasPlaying;
     }
     if (!wasPlaying) { // roll so the take advances (idempotent if already rolling)
-        if (recordCountIn_) transportPlayCountIn();
+        if (recordCountIn_ && retryCountIn) {
+            arrangementActive_.store(true, std::memory_order_relaxed);
+            startCountIn(countInBars());
+        } else if (recordCountIn_)
+            transportPlayCountIn();
         else
             transportPlay();
     }
     recordCountIn_ = false;
     recordStartStatus_ = (audioT && !audioOk && !instT) ? 2 : 0;
+    if (!isRecording()) closeTakeAttempt(); // nothing started: nothing to retry
+    return isRecording();
+}
+
+double Engine::takePlayhead() const {
+    return std::isnan(takeStartOverride_) ? transport_.uiPositionBeats() : takeStartOverride_;
+}
+
+bool Engine::takeTransportPlaying() const {
+    return takePlayingOverride_ < 0 ? transport_.uiIsPlaying() : takePlayingOverride_ != 0;
 }
 
 // Decide the capture layout at take start: loop punch if the transport loop is on
@@ -550,7 +579,7 @@ bool Engine::startAudioRecording(int32_t trackId) {
     captureLoop_ = false;
     inputDroppedFrames_.store(0, std::memory_order_relaxed); // fresh drop accounting per take
     audioRecordTrackId_ = trackId;
-    audioRecordStartBeat_ = transport_.uiPositionBeats();
+    audioRecordStartBeat_ = takePlayhead();
 
     // Internal resampling: capture another track / send / master output instead of the
     // hardware input. The audio thread feeds the ring from mixGraph; no device is opened.
@@ -566,9 +595,9 @@ bool Engine::startAudioRecording(int32_t trackId) {
         audioRecording_ = true;
         if (!recordSessionAudio_) {
             recordReturnBeat_ = audioRecordStartBeat_;
-            recordStartedTransport_ = !transport_.uiIsPlaying();
+            recordStartedTransport_ = !takeTransportPlaying();
         }
-        if (!transport_.uiIsPlaying() && !recordCountIn_) transportPlay();
+        if (!takeTransportPlaying() && !recordCountIn_) transportPlay();
         return true;
     }
 
@@ -590,10 +619,29 @@ bool Engine::startAudioRecording(int32_t trackId) {
     // their own transport via launchSlot, so don't arm the rewind for them.
     if (!recordSessionAudio_) {
         recordReturnBeat_ = audioRecordStartBeat_;
-        recordStartedTransport_ = !transport_.uiIsPlaying();
+        recordStartedTransport_ = !takeTransportPlaying();
     }
-    if (!transport_.uiIsPlaying() && !recordCountIn_) transportPlay(); // else setRecording counts in
+    if (!takeTransportPlaying() && !recordCountIn_) transportPlay(); // else setRecording counts in
     return true;
+}
+
+// Stop capturing and throw the capture away (a discarded take, specs/078): the taps go quiet,
+// whatever the input or mix thread already queued is drained and dropped with the rest.
+void Engine::abortAudioRecording() {
+    if (!audioRecording_) return;
+    audioRecording_ = false;
+    internalRecordSource_.store(0, std::memory_order_relaxed);
+    hwRecordTap_.store(false, std::memory_order_relaxed);
+    releaseAudioInputIfIdle();
+    drainInputQueue();
+    audioCaptureBuf_.clear();
+    captureScratch_.clear();
+    capturePasses_.clear();
+    captureWritePos_ = 0;
+    captureLoop_ = false;
+    captureWrapped_ = false;
+    audioRecordTrackId_ = 0;
+    retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
 }
 
 void Engine::stopAudioRecording() {
@@ -639,6 +687,22 @@ void Engine::stopAudioRecording() {
         auto nt = cloneTrack(*old);
         materialiseLoopTakes(*nt, passes, loopFrames, loopStartBeat, sr);
         republishWithTrack(trackId, nt);
+        return;
+    }
+
+    // A Session audio retry (specs/078) captured from the retry on; the take starts on the launch
+    // quantum after it, so what came before that boundary goes.
+    if (recordSessionAudio_ && !std::isnan(retryStartBeat_)) {
+        const double devSR = transport_.sampleRate();
+        const double fpb = transport_.samplesPerBeat() * (devSR > 0.0 ? audioRecordSampleRate_ / devSR : 1.0);
+        const double lead = std::max(0.0, retryStartBeat_ - audioRecordStartBeat_);
+        const size_t have = audioCaptureBuf_.size() / 2;
+        const size_t drop = std::min(have, static_cast<size_t>(std::llround(lead * fpb)));
+        audioCaptureBuf_.erase(audioCaptureBuf_.begin(), audioCaptureBuf_.begin() + static_cast<std::ptrdiff_t>(drop * 2));
+    }
+    retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
+    if (audioCaptureBuf_.empty()) { // stopped before the retried take's boundary: nothing to keep
+        recordSessionAudio_ = false;
         return;
     }
 

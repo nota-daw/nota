@@ -101,6 +101,11 @@ on a pool of render threads, export and freeze use every core, and an idle engin
   loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
   pattern going across the seam.
 - **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).
+- **Discard and retry take** (⌘. / Ctrl+., Transport menu, palette, MCP `retry_take`): drops
+  the take being recorded — audio, loop passes, notes, controllers, automation, with no undo
+  step — and records again. The Arrangement goes back to where the transport was started
+  (the take's start with the count-in again, or the Play position for a punch-in); a Session
+  slot records again from the next launch quantum, shown as waiting, while other clips play on.
 - **Transport shortcuts** (Space play/stop, Enter stop, R/M/A, clip copy-paste, typing
   notes, undo/redo) work in detached windows too.
 
@@ -1445,7 +1450,8 @@ appears in the UI immediately.
 
 Coverage:
 - **Transport**: play/stop, tempo, time signature, loop, metronome, loop record mode
-  (`set_loop_record_mode`; `get_transport` reports it).
+  (`set_loop_record_mode`; `get_transport` reports it), discard and retry the take being
+  recorded (`retry_take`).
 - **Project**: `get_overview` (a full snapshot); the arrangement's sections
   (`list_sections`, `set_sections`) and rearranging the song by them (`move_section`,
   `duplicate_section_with_content`, `delete_section_with_content`); version history — `list_versions` (with what

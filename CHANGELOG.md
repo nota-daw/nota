@@ -23,6 +23,14 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 ## [Unreleased]
 
 ### Added
+- **Discard and retry take** (#185): ⌘. (Ctrl+. on Windows and Linux) — also in the
+  Transport menu, the command palette and over MCP (`retry_take`) — throws away the take
+  being recorded and records it again in one press. In the Arrangement the playhead goes back
+  to where the transport was started — the take's start, counting in again if it did, or
+  where Play was pressed when you punched in, so the run-up plays again. In the Session view
+  only the recording slot's take goes: the other clips keep playing, and the slot shows it is
+  waiting until it records again from the next launch quantum. Nothing of the discarded take
+  stays — not its audio, loop passes, notes, controllers or automation, and not an undo step.
 - **Preview a translation**: **Load file…** in Settings → Appearance → Language runs Nota in a
   language file from your disk after a restart and lists the entries it cannot use;
   `NOTA_UI_LANGUAGE=/path/to/file.json` does the same for one run.

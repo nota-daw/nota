@@ -763,6 +763,7 @@ void Engine::pushUndo() {
     if (undoStack_.size() > kMaxUndoDepth) {
         undoStack_.erase(undoStack_.begin());
         if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_; // keep the group's anchor
+        if (takeAttempt_.active && takeAttempt_.undoBase > 0) --takeAttempt_.undoBase; // specs/078
     }
     redoStack_.clear(); // a new edit invalidates the redo branch
 }
