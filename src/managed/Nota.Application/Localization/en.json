@@ -122,7 +122,6 @@
     "arrangement.sections.sections": "Sections",
     "arrangement.sections.select_section": "Select section",
     "arrangement.send": "Send {0} · {1}",
-    "arrangement.sends.show_sends_in_track_headers": "Show sends in track headers",
     "arrangement.takes.delete_take": "Delete take",
     "arrangement.takes.flatten_takes": "Flatten takes",
     "arrangement.takes.hide_takes": "Hide takes",

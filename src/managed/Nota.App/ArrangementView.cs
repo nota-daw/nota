@@ -384,17 +384,9 @@ public sealed partial class ArrangementView : UserControl
                 zoomOut, zoomIn,
             },
         };
-        // The Sends key (specs/072) at the strip's far end; hidden while there are no returns.
-        var sendsKey = BuildSendsToggle();
-        DockPanel.SetDock(sendsKey, Dock.Right);
-        var zoomBar = new DockPanel
-        {
-            Width = HeaderW, LastChildFill = true,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
-            Children = { sendsKey, zoomKeys },
-        };
-        sendsKey.Margin = new Thickness(0, 0, 16, 0);
+        zoomKeys.Width = HeaderW;
+        zoomKeys.Margin = new Thickness(8, 0, 0, 0);
+        var zoomBar = zoomKeys;
         _headerColumnParts.Add(zoomBar);
         var topLeft = HeaderPanel(zoomBar);
         var topGrid = new Grid { Height = RulerH };
@@ -2224,7 +2216,6 @@ public sealed partial class ArrangementView : UserControl
         _cardTiers.Clear();
         _cardSends.Clear();
         _sendKnobs.Clear();
-        PaintSendsToggle();
         for (int i = 0; i < _tracks.Count; i++)
         {
             var card = BuildHeaderCard(_tracks[i]);
@@ -2330,7 +2321,7 @@ public sealed partial class ArrangementView : UserControl
         double rowH = TrackRowHeight(t);
         var tier = TierFor(rowH);
         _cardTiers[t.Id] = tier;
-        bool sends = ShowSendsOn(t, tier, rowH);   // specs/072: the send row under volume / pan
+        bool sends = ShowSendsOn(t, tier, rowH);   // specs/069: send knobs on a Large row
         _cardSends[t.Id] = sends;
         _sendKnobs.RemoveAll(k => k.trackId == t.Id);
 

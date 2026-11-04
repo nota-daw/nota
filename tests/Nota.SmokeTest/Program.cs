@@ -433,7 +433,7 @@ if (args.Length >= 1 && args[0] == "--linux-desktop")
     return failures == 0 ? 0 : 1;
 }
 
-// Sends as undoable, automatable mix values alone: `--sends` (specs/072). Also part of the full run.
+// Sends stay out of undo and automation: `--sends` (specs/069). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--sends")
 {
     Console.WriteLine("-- sends --");
