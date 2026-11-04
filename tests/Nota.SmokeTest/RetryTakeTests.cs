@@ -37,6 +37,64 @@ internal static class RetryTakeTests
         foreach (var r in SessionHeldIntoRelaunch()) yield return r;
         foreach (var r in SessionToggleSlot()) yield return r;
         foreach (var r in SessionAudioTempoChange()) yield return r;
+        foreach (var r in DisarmOneOfTwo()) yield return r;
+        foreach (var r in StoppedWhilePending()) yield return r;
+    }
+
+    // Recording audio and MIDI together, one track disarmed: its take is kept, the other can
+    // still be retried.
+    private static IEnumerable<(bool, string)> DisarmOneOfTwo()
+    {
+        using var e = Resampling(out int rec);
+        int t = e.AddInstrumentTrack();
+        e.SetTrackBuiltinInstrument(t, 0);
+        e.SetTrackArmed(t, true);
+        e.SetCountIn(0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.5);
+        Tap(e, 60, 0.5);
+        e.SetTrackArmed(rec, false);            // the audio take ends here and is kept
+        e.Poll();
+        int audio = AudioClips(e, rec);
+        var r = e.RetryTake();
+        Beats(e, 0.01);
+        yield return (audio == 1 && r == RetryTakeResult.Arrangement && AudioClips(e, rec) == 1 && Notes(e, t).Count == 0,
+            $"retry after disarming one of two: the kept audio stays, the MIDI is retried ({r}, audio clips {AudioClips(e, rec)}, notes {Notes(e, t).Count})");
+        e.SetRecording(false);
+        e.StopTransport();
+    }
+
+    // A Session MIDI retry stopped before its slot relaunched: the next ordinary take records.
+    private static IEnumerable<(bool, string)> StoppedWhilePending()
+    {
+        using var e = Armed(out int t);
+        e.SetLaunchQuant(4.0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.Play();
+        Beats(e, 0.5);
+        e.RecordSessionSlot(t, 0);
+        Beats(e, 4.0);
+        e.RetryTake();                           // waits for beat 8
+        Beats(e, 0.5);
+        e.StopSessionRecord();
+        e.StopAllSession();
+        e.StopTransport();
+        e.BackToArrangement();
+        Beats(e, 0.05);
+        e.SetCountIn(0);
+        e.Seek(16.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.5);
+        Tap(e, 67, 0.5);
+        e.SetRecording(false);
+        e.Poll();
+        yield return (Notes(e, t).Any(n => n.Note.Pitch == 67),
+            $"retry session stopped while pending: the next Arrangement take still records ({string.Join(",", Notes(e, t).Select(n => n.Note.Pitch))})");
+        e.StopTransport();
     }
 
     // Review of #486. A lane written on a track the take doesn't record goes with the take too.

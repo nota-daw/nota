@@ -916,7 +916,10 @@ void Engine::drainCommands() {
             seekedThisBlock_ = true;
             break;
         case CommandType::TakeRestart: // specs/078: the blocks from here belong to the retried take
-            if ((c.i1 & 2) != 0) { // a Session MIDI take: from when its slot relaunches
+            if ((c.i1 & 4) != 0) { // a take started normally: the current epoch, nothing waits
+                rtTakeEpoch_ = static_cast<uint32_t>(c.i0);
+                rtWaitScene_ = -1;
+            } else if ((c.i1 & 2) != 0) { // a Session MIDI take: from when its slot relaunches
                 rtPendingEpoch_ = static_cast<uint32_t>(c.i0);
                 rtWaitScene_ = static_cast<int32_t>(c.d0);
             } else {

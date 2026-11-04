@@ -16,6 +16,7 @@
 namespace nota {
 
 void Engine::openTakeAttempt(bool session) {
+    if (!retryingTake_) syncTakeEpoch();
     takeAttempt_ = TakeAttempt{};
     takeAttempt_.active = true;
     takeAttempt_.session = session;
@@ -28,6 +29,28 @@ void Engine::noteTakeTrack(int32_t trackId) {
     for (const auto& b : takeAttempt_.baseTracks)
         if (b.first == trackId) return; // first write wins: that is the pre-take state
     if (auto t = findTrackAuthoring(trackId)) takeAttempt_.baseTracks.emplace_back(trackId, std::move(t));
+}
+
+// A track left the take with its part kept (disarmed while recording). Its pre-take state no
+// longer applies, and the checkpoints the take made so far now hold a kept recording, so they
+// become ordinary history: a later retry restores only what is still recording.
+void Engine::keepTakeTrack(int32_t trackId) {
+    auto& b = takeAttempt_.baseTracks;
+    b.erase(std::remove_if(b.begin(), b.end(), [&](const auto& p) { return p.first == trackId; }), b.end());
+    for (size_t i = std::min(takeAttempt_.undoBase, undoStack_.size()); i < undoStack_.size(); ++i)
+        undoStack_[i].take = false;
+    takeAttempt_.redoSaved.clear(); // a kept recording is an edit: the old redo branch is gone
+}
+
+// Every take that starts without a retry puts the audio thread on the current take epoch and
+// cancels a Session retry still waiting for its slot — one stopped before it relaunched would
+// otherwise leave the next take's events on an epoch poll() drops.
+void Engine::syncTakeEpoch() {
+    Command c;
+    c.type = CommandType::TakeRestart;
+    c.i0 = static_cast<int32_t>(takeEpoch_);
+    c.i1 = 4; // epoch only: no restart, the gate as it is
+    commands_.push(c);
 }
 
 void Engine::closeTakeAttempt() {

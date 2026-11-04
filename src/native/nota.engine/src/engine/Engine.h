@@ -1956,6 +1956,8 @@ class Engine {
     void openTakeAttempt(bool session);
     void noteTakeTrack(int32_t trackId); // a track the take is about to write (no-op when idle)
     void closeTakeAttempt();
+    void keepTakeTrack(int32_t trackId); // that track's part of the take is kept; the rest may still be retried
+    void syncTakeEpoch();                // a take starts normally: the audio thread takes the current epoch
     void discardTake();                  // drop what the take wrote; no undo step
     void abortAudioRecording();          // stop capturing without materialising
     // Explicit start for a retried take: the transport UI mirror lags the commands just

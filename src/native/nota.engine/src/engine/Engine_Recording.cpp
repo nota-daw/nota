@@ -41,8 +41,12 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
         recordClipIndex_ = -1;
         recording_.store(false, std::memory_order_relaxed);
     }
-    // Its take is kept, so there is nothing to retry any more (specs/078).
-    if (endsTake && takeAttempt_.active && !takeAttempt_.session) closeTakeAttempt();
+    // Its take is kept (specs/078): with nothing else recording the attempt ends; otherwise a
+    // retry goes on covering the capture still running, without this track.
+    if (endsTake && takeAttempt_.active && !takeAttempt_.session) {
+        if (!isRecording()) closeTakeAttempt();
+        else keepTakeTrack(trackId);
+    }
 }
 void Engine::setTrackRecordInput(int32_t trackId, int32_t source) {
     auto t = findTrackAuthoring(trackId);
