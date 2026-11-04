@@ -293,7 +293,7 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             else if (P(Mix) < 0.01f) { foot = Loc.T("common.mix_at_zero_only_the"); warn = true; }
             else if (afb >= 0.85)
             {
-                foot = "Feedback " + FbF(fb) + Loc.F("device.phaser.peaks_up_to_db_the", PhaserMath.PeakDb(P(Mix), fb));
+                foot = Loc.F("device.phaser.feedback_peaks_up_to_db_the", FbF(fb), PhaserMath.PeakDb(P(Mix), fb));
                 warn = true;
             }
             else if (P(Depth) < 0.01f) foot = Loc.T("device.phaser.depth_at_zero_the_notches");

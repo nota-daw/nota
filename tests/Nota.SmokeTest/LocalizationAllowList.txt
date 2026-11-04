@@ -726,7 +726,6 @@ Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	COMB RESPONSE	# data: device pa
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	DELAY LINE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Delay	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Feedback	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Feedback 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Hz · free	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	LFO	# data: acronym
 Nota.App/DeviceCards/Bodies/FlangerDeviceBody.cs	Modulation	# data: device parameter, port and value names and live readouts of their values (FR-004)
@@ -812,7 +811,6 @@ Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	 notches	# data: device paramete
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	ALL-PASS RESPONSE	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Center	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Feedback	# data: device parameter, port and value names and live readouts of their values (FR-004)
-Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Feedback 	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Hz · free	# data: device parameter, port and value names and live readouts of their values (FR-004)
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	LFO	# data: acronym
 Nota.App/DeviceCards/Bodies/PhaserDeviceBody.cs	Modulation	# data: device parameter, port and value names and live readouts of their values (FR-004)
