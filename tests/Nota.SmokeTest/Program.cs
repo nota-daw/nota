@@ -134,6 +134,12 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     return f == 0 ? 0 : 1;
 }
 
+if (args.Length >= 1 && args[0] == "--midi-lane-heights")
+{
+    foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+
 // Design and localization checks alone, without the engine tests: `--localization`.
 // NOTA_LOC_WRITE_BASELINE=1 rewrites LocalizationAllowList.txt; NOTA_LOC_STRICT=1 fails on any
 // text French lacks.
@@ -318,6 +324,14 @@ if (args.Length >= 1 && args[0] == "--tap")
     Console.WriteLine("-- tap tempo --");
     foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Controller-stroke shaping alone: `--controller-stroke`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--controller-stroke")
+{
+    Console.WriteLine("-- controller stroke --");
+    foreach (var (ok, label) in ControllerStrokeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CONTROLLER STROKE PASSED" : $"CONTROLLER STROKE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Piano-roll velocity wheel alone: `--velocity-wheel`. Also part of the full run.
@@ -15482,8 +15496,13 @@ foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 Console.WriteLine("-- transport display --");
 foreach (var (ok, label) in TransportDisplayTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- MIDI lane heights --");
+foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- velocity wheel --");
 foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
+Console.WriteLine("-- controller stroke --");
+foreach (var (ok, label) in ControllerStrokeTests.Run()) Check(ok, label);
 Console.WriteLine("-- velocity reset --");
 foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
 Console.WriteLine("-- bend lane range --");

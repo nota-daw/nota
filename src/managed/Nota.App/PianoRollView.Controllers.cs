@@ -18,9 +18,11 @@ using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Editing;
 using Nota.Application.Localization;
 
 namespace Nota.App;
@@ -40,13 +42,20 @@ public sealed partial class PianoRollView
     private int _laneCtl = -1;   // −1 until the lane is first shown
     private readonly Dictionary<int, AutomationPoint[]> _ctlCache = new();
     private int[]? _ctlInClip;
+    private int _controllerCacheGeneration;
 
     private static readonly int[] CommonControllers =
         { MidiController.Sustain, MidiController.ModWheel, MidiController.PitchWheel, MidiController.ChannelPressure, 11, 2 };
 
     // Every reload (undo, recording, another clip) and active-clip change re-reads the engine.
-    private void DropControllerCache()
+    private void DropControllerCache(bool cancelGestures = true)
     {
+        if (cancelGestures)
+        {
+            ++_controllerCacheGeneration;
+            _ctlLane.ResetGesture();
+            foreach (var item in _controllerLanes) item.Lane.ResetGesture();
+        }
         _ctlCache.Clear();
         _ctlInClip = null;
     }
@@ -71,8 +80,8 @@ public sealed partial class PianoRollView
     {
         if (SetController is null) return;
         SetController(ctl, pts.ToArray());
-        DropControllerCache();
-        _ctlLane.InvalidateVisual();
+        DropControllerCache(cancelGestures: false);
+        InvalidateControllerLanes();
         _laneTabs.InvalidateVisual();
     }
 
@@ -87,14 +96,17 @@ public sealed partial class PianoRollView
     {
         _laneCtl = ctl;
         _ctlLane.ResetGesture();
+        UpdateControllerPicker(_primaryControllerPicker, ctl);
         if (_laneMode != LaneMode.Controller) SetLaneMode(LaneMode.Controller);
+        FitControllerLanes();
         _ctlLane.InvalidateVisual();
+        _primaryControllerScale.InvalidateVisual();
         _laneTabs.InvalidateVisual();
     }
 
     /// <summary>The controller picker: what the clip holds first (marked), the common
     /// controllers, then every other CC in groups of 16.</summary>
-    internal void ShowControllerPicker(Control anchor)
+    internal void ShowControllerPicker(Control anchor, Action<int>? select = null)
     {
         var f = new MenuFlyout();
         var data = ControllersWithData();
@@ -102,13 +114,13 @@ public sealed partial class PianoRollView
         {
             var it = new MenuItem { Header = header };
             if (Array.IndexOf(data, ctl) >= 0) it.Icon = MenuKit.Icon(GlyphKind.Automation);
-            it.Click += (_, _) => SelectController(ctl);
+            it.Click += (_, _) => (select ?? SelectController)(ctl);
             return it;
         }
         foreach (int c in data) f.Items.Add(Item(c, ControllerLabel(c)));
         if (data.Length > 0) f.Items.Add(new Separator());
         foreach (int c in CommonControllers)
-            if (Array.IndexOf(data, c) < 0) f.Items.Add(Item(c, MidiController.Name(c)));
+            if (Array.IndexOf(data, c) < 0) f.Items.Add(Item(c, ControllerLabel(c)));
         f.Items.Add(new Separator());
         var other = new MenuItem { Header = Loc.T("piano_roll.controllers.other_cc") };
         for (int g = 0; g < 128; g += 16)
@@ -124,6 +136,7 @@ public sealed partial class PianoRollView
             other.Items.Add(grp);
         }
         f.Items.Add(other);
+        FlyoutBase.SetAttachedFlyout(anchor, f);
         f.ShowAt(anchor);
     }
 
@@ -133,6 +146,7 @@ public sealed partial class PianoRollView
     {
         private readonly PianoRollView _o;
         public ControllerLane(PianoRollView o) { _o = o; }
+        internal int? Controller { get; set; }
 
         private const double Pad = 6, EdgePx = 5, PointPx = 7;
         private const double Eps = 1.0 / 1024;   // beats: where a drawn stretch meets the old curve
@@ -142,7 +156,8 @@ public sealed partial class PianoRollView
         private static readonly IPen BlockEdge = new Pen(NotaPalette.VizInk, 1.5);
         private static readonly IPen BlockEdgeHot = new Pen(NotaPalette.Accent, 1.5);
 
-        private int Ctl => _o._laneCtl < 0 ? MidiController.Sustain : _o._laneCtl;
+        private int Ctl => Controller ?? (_o._laneCtl < 0 ? MidiController.Sustain : _o._laneCtl);
+        internal int ControllerId => Ctl;
         private bool IsSwitch => MidiController.IsSwitch(Ctl);
         private bool Editable => _o.SetController is not null;
 
@@ -158,12 +173,35 @@ public sealed partial class PianoRollView
         private static readonly Cursor ResizeCursor = new(StandardCursorType.SizeWestEast);
         private static readonly Cursor MoveCursor = new(StandardCursorType.SizeAll);
         private int _hoverBlock = -1, _selBlock = -1;
+        private IPointer? _capturedPointer;
+        private int _gestureGeneration;
         private double _hoverBeat = double.NaN;
 
         internal void ResetGesture()
         {
+            ++_gestureGeneration;
             _drag = Drag.None; _work = null; _stroke.Clear();
             _pt = _hoverPt = _hoverBlock = _selBlock = -1;
+            var pointer = _capturedPointer;
+            _capturedPointer = null;
+            if (pointer?.Captured == this) pointer.Capture(null);
+            InvalidateVisual();
+        }
+
+        // A reload (recording, undo) drops the curve cache. A draw in progress is painted onto
+        // the curve just read, so releasing later does not write the older copy back over
+        // points recorded during the drag. Any other gesture is cancelled: its point index
+        // or block no longer matches that curve. A different clip drops the gesture entirely.
+        internal void OnClipReloaded(bool sameClip)
+        {
+            if (sameClip && _drag == Drag.Draw && _stroke.Count > 0)
+            {
+                _orig = _o.ControllerPoints(Ctl).ToList();
+                ApplyStroke(StrokeSamples());
+                InvalidateVisual();
+                return;
+            }
+            if (_drag != Drag.None) ResetGesture();
         }
 
         private IReadOnlyList<AutomationPoint> Cur => (IReadOnlyList<AutomationPoint>?)_work ?? _o.ControllerPoints(Ctl);
@@ -177,7 +215,7 @@ public sealed partial class PianoRollView
             => _free ? local : _o._set.ToLocal(_o._set.Active, _o.SnapBeat(Ed(local)));
         private double MinBlock => _free ? 1.0 / 32 : Math.Max(1.0 / 32, _o.SnapStep);
 
-        private double ValueToY(float v)
+        internal double ValueToY(float v)
         {
             var (lo, hi) = MidiController.Range(Ctl);
             double h = Bounds.Height;
@@ -307,22 +345,13 @@ public sealed partial class PianoRollView
             return hit;
         }
 
-        // The stroke replaces the curve over the stretch it covers; outside it the curve keeps its
-        // values (pinned at the stroke's edges); with nothing after it, the drawn value holds.
+        // The stroke replaces the curve over the stretch it covers. ControllerStroke keeps the
+        // value on either side (the right-hand piece stays shaped, it does not fall straight);
+        // with nothing after the stroke, the drawn value holds.
         private void ApplyStroke(List<(double Beat, float Value)> samples)
         {
             if (samples.Count == 0) return;
-            samples.Sort((a, b) => a.Beat.CompareTo(b.Beat));
-            double a = samples[0].Beat, b = samples[^1].Beat;
-            var outp = _orig.Where(q => q.Beat < a - Eps).ToList();
-            if (outp.Count > 0) outp.Add(new AutomationPoint(a - Eps, ValueAt(_orig, a - Eps, false)));
-            foreach (var (sb, sv) in samples) outp.Add(new AutomationPoint(sb, sv));
-            if (_orig.Any(q => q.Beat > b + Eps))
-            {
-                outp.Add(new AutomationPoint(b + Eps, ValueAt(_orig, b + Eps, false)));
-                outp.AddRange(_orig.Where(q => q.Beat > b + Eps));
-            }
-            _work = Normalize(outp);
+            _work = Normalize(ControllerStroke.Apply(_orig, samples));
         }
 
         private List<(double Beat, float Value)> StrokeSamples()
@@ -376,8 +405,6 @@ public sealed partial class PianoRollView
 
             _o.DrawOutsideClip(ctx, w, h);
 
-            var name = new FormattedText(ControllerLabel(Ctl), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
-            ctx.DrawText(name, new Point(4, 3));
             if (c.Count == 0 && Editable && _drag == Drag.None)
             {
                 var hint = new FormattedText(IsSwitch ? Loc.T("piano_roll.controllers.drag_to_draw_a_block") : Loc.T("piano_roll.controllers.drag_to_draw"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, 9, LabelText);
@@ -513,6 +540,7 @@ public sealed partial class PianoRollView
                     ApplyStroke(StrokeSamples());
                 }
             }
+            _capturedPointer = e.Pointer;
             e.Pointer.Capture(this);
             InvalidateVisual();
             e.Handled = true;
@@ -616,11 +644,18 @@ public sealed partial class PianoRollView
             if (was == Drag.Draw)
             {
                 var samples = StrokeSamples().OrderBy(s => s.Beat).ToList();
+                // The curve may have gained points while the button was down (a recording
+                // reload). Read it again and paint the stroke onto that, not onto the copy
+                // from pointer-down.
+                _o.DropControllerCache();
+                _orig = _o.ControllerPoints(Ctl).ToList();
                 // A click without a drag is not a stroke. Committing it would write a point
                 // that the second press of a double-click then deletes.
                 if (samples.Count < 2)
                     _work = _orig.ToList();
-                else if (!_straight)
+                else if (_straight)
+                    ApplyStroke(samples);
+                else
                 {
                     // Thin to what the eye can tell apart: a pixel and a half of the lane's scale.
                     float tol = Math.Abs(YToValue(Bounds.Height / 2) - YToValue(Bounds.Height / 2 + 1.5));
@@ -637,6 +672,7 @@ public sealed partial class PianoRollView
 
         protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
         {
+            _capturedPointer = null;
             if (_drag != Drag.None) { _drag = Drag.None; _work = null; _stroke.Clear(); InvalidateVisual(); }
             base.OnPointerCaptureLost(e);
         }
@@ -667,8 +703,11 @@ public sealed partial class PianoRollView
         private void ShowClearMenu()
         {
             int ctl = Ctl;
+            int generation = _o._controllerCacheGeneration, gesture = _gestureGeneration;
             ClipEditorKit.ShowMenu(this, new[] { Loc.F("piano_roll.clear", MidiController.Name(ctl)) }, -1, _ =>
             {
+                if (generation != _o._controllerCacheGeneration || gesture != _gestureGeneration
+                    || TopLevel.GetTopLevel(this) is null) return;
                 _selBlock = -1;
                 _o.StoreController(ctl, new List<AutomationPoint>());
             });

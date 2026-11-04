@@ -2477,7 +2477,7 @@ Nota.Application/Instruments/MosaicModel.cs	$"Poly {Poly(g("	# data: device para
 Nota.Application/Instruments/MosaicModel.cs	$"{(bytes / 1073741824.0).ToString("	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	(velocity layers with a shared gain/tune and a round-robin). Every zone covering the key, the velocity and the 	# data: instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	Choke	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
-Nota.Application/Instruments/MosaicModel.cs	Empty · drop samples or a folder, or pick a preset	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
+Nota.Application/Instruments/MosaicModel.cs	Empty · drop samples, a folder or an SFZ, or pick a preset	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	Fwd	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	Mono	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
 Nota.Application/Instruments/MosaicModel.cs	Nota Mosaic plays a multisample: zones (a sample on a key × velocity rectangle, with its root) in groups 	# data: device parameter and value names, scale names (FR-004); instrument tool text for MCP
