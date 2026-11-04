@@ -728,7 +728,7 @@ public sealed partial class ArrangementView
                 if (moved)
                 {
                     _o.Refresh();   // also restores the preview if the engine rejected the move
-                    if (committed) _o.ReselectPlaced();   // a move can change clip indices
+                    if (committed) _o.ReselectPlaced(move);   // a move can change clip indices; ⌥-picks stay alone
                     if (move is not null) _o.RaiseClipsMoved(move);   // so can open editors' clips
                     if (committed && rowDelta != 0) _o.AnnounceSelectedTrack();   // the destination track is now the active one
                 }

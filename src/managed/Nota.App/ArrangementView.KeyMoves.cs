@@ -28,7 +28,7 @@ public partial class ArrangementView
         if (delta == 0) return true;   // already at the song start: the key is still ours
         if (MoveBlock(block.Select(b => (b.track, b.clip, b.track, b.start + delta)).ToArray()) is not { } move) return true;
         Refresh();
-        ReselectPlaced();
+        ReselectPlaced(move);
         ClipsMoved?.Invoke(move);   // open editors follow their clips (index and START read-out)
         return true;
     }
@@ -61,7 +61,7 @@ public partial class ArrangementView
         if (_engine.LastMoveKeptDeviceAutomation())
             StatusMessage?.Invoke(Loc.T("Moved across tracks — device automation stayed on the source"));
         Refresh();
-        ReselectPlaced();
+        ReselectPlaced(move);
         ClipsMoved?.Invoke(move);
         if (SelTrackId > 0) RevealTrack(SelTrackId);
         AnnounceSelectedTrack();   // the destination track is now the active one

@@ -1358,16 +1358,25 @@ public sealed partial class ArrangementView : UserControl
     }
 
     // Re-select exactly the clips the last block paste/duplicate produced.
-    private void ReselectPlaced()
+    // A move passes its map (old clip → new clip), so each clip picked alone with ⌥ stays alone
+    // (specs/076); without one (duplicate, paste) the choice carries over when every clip had it.
+    private void ReselectPlaced(ClipBlockMove? move = null)
     {
         if (_engine is null) return;
         var placed = _engine.LastPlacedClips();
         if (placed.Length > 0)
         {
-            // An edit on clips picked alone keeps them alone (indices move, so it is all or nothing).
+            var aloneBefore = _selAlone.Where(c => _sel.Contains(c)).ToList();
             bool allAlone = _sel.Count > 0 && _sel.All(c => _selAlone.Contains(c));
             SetSelection(placed);
-            if (allAlone) foreach (var c in placed) _selAlone.Add(c);
+            var placedSet = new HashSet<(int track, int clip)>(placed);
+            if (move is not null)
+            {
+                foreach (var c in aloneBefore)
+                    if (move.Map.TryGetValue((c.track, c.clip), out var to) && to is { } n && placedSet.Contains((n.Track, n.Clip)))
+                        _selAlone.Add((n.Track, n.Clip));
+            }
+            else if (allAlone) foreach (var c in placed) _selAlone.Add(c);
             RelinkSelection();
         }
     }
