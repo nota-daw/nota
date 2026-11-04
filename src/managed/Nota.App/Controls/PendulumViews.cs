@@ -143,7 +143,7 @@ internal sealed class PendulumLanesView : Control
         // Axis: what x means.
         double ay = h - axisH - 1;
         var lo = PendulumInk.Mono("low", NotaPalette.TextAxis);
-        var mid = PendulumInk.Mono(degrees > 0 ? $"x = pitch · {degrees} notes held" : "x = pitch · hold a chord", NotaPalette.TextAxis);
+        var mid = PendulumInk.Mono(degrees > 0 ? Loc.Plural("device.pendulum.x_pitch_notes_held", degrees) : Loc.T("device.pendulum.x_pitch_hold_a_chord"), NotaPalette.TextAxis);
         var hi = PendulumInk.Mono("high", NotaPalette.TextAxis);
         ctx.DrawText(lo, new Point(laneX0, ay));
         ctx.DrawText(mid, new Point(laneX0 + (laneW - mid.Width) / 2, ay));

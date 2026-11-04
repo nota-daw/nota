@@ -261,7 +261,7 @@ internal sealed class RhythmSampleView : Control, IValueHandles
         NotaGraph.Title(ctx, new Rect(0, 0, w, h), "Sample");
         if (!_has)
         {
-            var t = RhythmInk.Mono("double-click or drop a file", NotaPalette.TextTertiary);
+            var t = RhythmInk.Mono(Loc.T("device.rhythm.double_click_or_drop_a"), NotaPalette.TextTertiary);
             ctx.DrawText(t, new Point((w - t.Width) / 2, mid - t.Height / 2));
             return;
         }

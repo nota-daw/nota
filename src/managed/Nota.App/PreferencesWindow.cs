@@ -632,8 +632,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             return;
         }
         string mode = OperatingSystem.IsWindows() && _main.Engine.AudioExclusiveFallback
-            ? " · exclusive refused → shared"
-            : OperatingSystem.IsWindows() && _main.Engine.GetAudioConfig().WasapiExclusive ? " · exclusive" : "";
+            ? " · " + Loc.T("preferences.exclusive_refused_shared")
+            : OperatingSystem.IsWindows() && _main.Engine.GetAudioConfig().WasapiExclusive ? " · " + Loc.T("preferences.exclusive") : "";
         string rate = NotaNum.Unit(sr / 1000, "0.#", "kHz");
         (_latencyValue.Text, _latencyDetail.Text) = sr <= 0
             ? ("", Loc.T("preferences.audio_device_not_running"))
@@ -1460,8 +1460,8 @@ public sealed partial class PreferencesWindow : NotaWindow
             ("⌘3", Loc.T("preferences.triplet_grid_on_off")),
             ("⌘4", Loc.T("preferences.snap_to_grid_on_off")),
             ("⌘5", Loc.T("preferences.switch_between_the_adaptive_auto")),
-            ("⌥ while dragging", Loc.T("preferences.move_freely_ignoring_the_grid")),
-            (Loc.T("preferences.audio_clip_editor_on_adsr"), "⌘1–⌘5 act on the Arrangement · that view follows no grid"),
+            (Loc.T("preferences.alt_while_dragging"), Loc.T("preferences.move_freely_ignoring_the_grid")),
+            (Loc.T("preferences.audio_clip_editor_on_adsr"), Loc.T("preferences.cmd_1_5_act_on_the_arrangement")),
         }),
         (Loc.T("preferences.tracks_after_a_click_in"), new[]
         {
@@ -1546,7 +1546,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             (Loc.T("preferences.drag_in_the_sustain_lane"), Loc.T("preferences.draw_a_pedal_block_on")),
             (Loc.T("preferences.drag_in_a_controller_lane"), Loc.T("preferences.draw_the_controllers_curve_draws")),
             (Loc.T("preferences.click_a_clip_in_the"), Loc.T("preferences.make_it_the_active_clip")),
-            ("⌘⌥ + wheel", Loc.T("preferences.zoom_rows_vertical_zoom")),
+            (Loc.T("preferences.cmd_alt_wheel"), Loc.T("preferences.zoom_rows_vertical_zoom")),
             (Loc.T("preferences.click_a_key"), Loc.T("preferences.play_it_on_the_tracks")),
             (Loc.T("preferences.drag_on_the_keys"), Loc.T("preferences.zoom_rows_down_taller_up")),
             ("⌥ + pinch", Loc.T("preferences.zoom_rows_trackpad")),
@@ -1576,7 +1576,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             (Loc.T("preferences.click_waveform"), Loc.T("preferences.play_from_that_point")),
             (Loc.T("preferences.click_wave_spec"), Loc.T("preferences.switch_the_well_between_the")),
             (Loc.T("preferences.scroll_on_the_track_button"), Loc.T("preferences.step_through_the_demo_tracks")),
-            ("⌥-click volume", Loc.T("preferences.type_the_preview_volume_double")),
+            (Loc.T("preferences.alt_click_volume"), Loc.T("preferences.type_the_preview_volume_double")),
         }),
         (Loc.T("preferences.gamepad_macos"), new[]
         {
@@ -1592,7 +1592,7 @@ public sealed partial class PreferencesWindow : NotaWindow
             (Loc.T("preferences.double_click_clip"), Loc.T("preferences.open_in_the_clip_editor")),
             (Loc.T("preferences.double_click_a_track_header"), Loc.T("preferences.open_its_devices_in_the")),
             (Loc.T("preferences.double_click_a_browser_instrument"), Loc.T("preferences.swap_it_onto_the_selected")),
-            ("⌥ + double-click a browser instrument", Loc.T("preferences.always_start_a_new_track")),
+            (Loc.T("preferences.alt_double_click_a_browser"), Loc.T("preferences.always_start_a_new_track")),
             (Loc.T("preferences.right_click_the_metronome"), Loc.T("preferences.count_in_before_play_record")),
             (Loc.T("preferences.drag_an_audio_clips_adsr"), Loc.T("preferences.shape_attack_decay_sustain_release")),
             (Loc.T("preferences.click_track_header"), Loc.T("preferences.add_the_track_to_the")),

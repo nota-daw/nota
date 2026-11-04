@@ -450,7 +450,7 @@ internal sealed class SamplerEnvView : Control, IValueHandles
         }
 
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopLeft, _tl, NotaPalette.TextTertiary);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopRight, "note held", NotaPalette.TextAxis);
+        SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopRight, Loc.T("device.sampler.note_held"), NotaPalette.TextAxis);
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomLeft, "0", NotaPalette.TextAxis);
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomRight, _br, NotaPalette.TextAxis);
     }

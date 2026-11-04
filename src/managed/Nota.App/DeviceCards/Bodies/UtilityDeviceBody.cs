@@ -118,7 +118,7 @@ internal sealed class UtilityDeviceBody : IDeviceBody
         string CorrWords()
         {
             double c = Sc(S_Corr);
-            if (Sc(S_OutPk) < 1e-4) return "no signal";
+            if (Sc(S_OutPk) < 1e-4) return Loc.T("common.no_signal");
             if (c < 0) return Loc.T("device.utility.out_of_phase_mono_risk");
             if (c < 0.3) return "wide — check in mono";
             return P(Width_) > 100.5 ? "wider, still in phase" : "in phase";

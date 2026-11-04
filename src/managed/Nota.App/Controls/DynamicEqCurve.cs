@@ -547,7 +547,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
             NotaPalette.TextPrimary, 7);
         IBrush dynInk = r >= 0 ? NotaPalette.RoseBright : NotaPalette.TealBright;
         string c = dyn ? (r >= 0 ? "↑ " : "↓ ") + DynEq.Db(_gr[b]) + " dB of " + DynEq.Db(r)
-            : !g ? "no dynamics" : BandMode(b) != DynEq.Static && !DynMaster ? "dynamics off" : "static";
+            : !g ? Loc.T("device.dynamic_eq.no_dynamics") : BandMode(b) != DynEq.Static && !DynMaster ? "dynamics off" : "static";
         var l3 = Text(c, dyn ? dynInk : NotaPalette.TextTertiary, 7);
         double histH = dyn ? 12 : 0;
         double tw = Math.Max(a.Width, Math.Max(l2.Width, l3.Width)) + 12, th = a.Height + l2.Height + l3.Height + 6 + histH;

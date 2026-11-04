@@ -247,6 +247,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Texts that still read in English in another language** (#484): about a hundred interface
+  texts written as plain strings now go through the language files — units and fragments next
+  to a number ("4 beats", "· frozen", "Hide sends", "below −60 dBFS"), the Mosaic window, the
+  hints and Freeze lines on device cards, status words ("no signal", "measuring…", "no
+  loop") and four rows of Settings → Shortcuts. Readouts that spell parameter names and values
+  ("release 120 · auto", "latency 0 smp") stay in English. The check that watches for raw
+  text now also catches short lower-case captions and statuses that trail off.
 - **Effects on an audio track ring out after Stop** (#449): a reverb or delay placed on an
   audio track used to fall silent the instant the transport stopped, while the same reverb on
   a return track rang on. The track's effects now keep playing on silence until their output

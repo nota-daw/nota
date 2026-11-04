@@ -86,7 +86,7 @@ public sealed class MosaicCreateWindow : NotaWindow
         var legend = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center,
-            Children = { LegendItem("stretched", NotaPalette.TextTertiary), LegendItem(Loc.T("mosaic_create.next_to_gap"), NotaPalette.Danger), LegendItem("low confidence", NotaPalette.Warning) },
+            Children = { LegendItem(Loc.T("mosaic_create.stretched"), NotaPalette.TextTertiary), LegendItem(Loc.T("mosaic_create.next_to_gap"), NotaPalette.Danger), LegendItem(Loc.T("mosaic_create.low_confidence"), NotaPalette.Warning) },
         };
         var instHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 8, Margin = new Thickness(0, 0, 0, 4) };
         instHead.Children.Add(_instTitle);
@@ -208,7 +208,7 @@ public sealed class MosaicCreateWindow : NotaWindow
             Orientation = Orientation.Horizontal, Spacing = 3,
             Children = { Step("−", () => { _opt.EdgeStretch = Math.Max(0, _opt.EdgeStretch - 1); Remap(); }), Mono($"±{_opt.EdgeStretch} st", TextPrimary, 9), Step("+", () => { _opt.EdgeStretch = Math.Min(48, _opt.EdgeStretch + 1); Remap(); }) },
         };
-        var layerText = inst0 is null || inst0.Layers.Count <= 1 ? "one layer"
+        var layerText = inst0 is null || inst0.Layers.Count <= 1 ? Loc.T("mosaic_create.one_layer")
             : string.Join(" · ", inst0.Layers.Select(l => { var f = inst0.Used.First(x => !x.Release && x.Layer == l); return $"{l} {f.VelLo}–{f.VelHi}"; }));
         int rel = inst0?.Used.Count(f => f.Release) ?? 0;
         var rrSeg = Segments(new[] { Loc.T("mosaic_create.seq"), Loc.T("mosaic_create.rnd"), Loc.T("mosaic_create.no_repeat") }, () => _opt.RrMode, iv => { _opt.RrMode = iv; }, out _, fill: true, fontSize: 8);

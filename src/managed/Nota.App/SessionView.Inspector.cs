@@ -337,7 +337,7 @@ public sealed partial class SessionView
     private static string QuantLabel(double beats)
     {
         foreach (var (b, label) in QuantSteps) if (Math.Abs(b - beats) < 1e-6) return label;
-        return NotaNum.Str(beats, "0.##") + " beats";
+        return BeatsText(beats);
     }
 
     // ---- scene --------------------------------------------------------------------------

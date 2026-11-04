@@ -92,10 +92,10 @@ internal sealed class ValveDeviceBody : IDeviceBody
         static string LowCutF(double v) => v <= 0.005 ? "off" : HzF(Exp(v, 20, 300));
         static string HighCutF(double v) => v >= 0.995 ? "off" : HzF(Exp(v, 2000, 20000));
         string ModelName() => Models[Idx(Model)];
-        string OsText() => Sel(OS, 4) == 0 ? "no oversampling" : NotaNum.F($"{OsNames[Sel(OS, 4)]} OS");
+        string OsText() => Sel(OS, 4) == 0 ? Loc.T("device.valve.no_oversampling") : NotaNum.F($"{OsNames[Sel(OS, 4)]} OS");
         string AliasText() => Sc(S_AliasDb) <= -119 ? "aliasing < −120 dB" : NotaNum.F($"aliasing {Sc(S_AliasDb):0} dB");
         string AxisText() => P(Axis) <= 0.005f ? "on-axis" : NotaNum.F($"{P(Axis) * 100:0} % off-axis");
-        string CabLine() => On(CabOn) ? NotaNum.F($"{CabShort[Idx(CabType)]} · {Mics[Idx(Mic)].ToLowerInvariant()} {AxisText()}") : "no cabinet";
+        string CabLine() => On(CabOn) ? NotaNum.F($"{CabShort[Idx(CabType)]} · {Mics[Idx(Mic)].ToLowerInvariant()} {AxisText()}") : Loc.T("device.valve.no_cabinet");
         double H(int k) => Sc(S_H1 + k - 1);   // harmonic k, dB re the fundamental
         string Dominant()
         {
@@ -482,7 +482,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
                     () => centreTab == 1 ? NotaNum.F($"{Cabs[Idx(CabType)]} · {Mics[Idx(Mic)]}") : NotaNum.F($"{ModelName()} · gain {Ten(P(Gain))}"),
                     () => centreTab == 1
                         ? (On(CabOn) ? NotaNum.F($"{DistF(P(MicDistance))} · {AxisText()} · {(On(MicPosition) ? "edge" : "cap")}") : "cabinet off")
-                        : (On(CabOn) ? (Idx(CabType) == 0 ? Loc.T("device.valve.cab_by_model") : CabShort[Idx(CabType)] + " · ") + NotaNum.F($"{Mics[Idx(Mic)].ToLowerInvariant()} {AxisText()}") : "no cabinet"),
+                        : (On(CabOn) ? (Idx(CabType) == 0 ? Loc.T("device.valve.cab_by_model") : CabShort[Idx(CabType)] + " · ") + NotaNum.F($"{Mics[Idx(Mic)].ToLowerInvariant()} {AxisText()}") : Loc.T("device.valve.no_cabinet")),
                     () => centreTab == 1 && On(CabOn)),
                 new StackPanel { Spacing = 5, Children = {
                     Toggle(CabOn, "Cabinet sim"),
@@ -539,7 +539,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
             {
                 1 => On(CabOn) ? NotaNum.F($"{Cabs[Idx(CabType)].ToLowerInvariant()} · {MicNames[Idx(Mic)]} · {AxisText()}") : "cabinet off",
                 2 => NotaNum.F($"{m} · {(Sel(OS, 4) == 0 ? "no OS" : OsNames[Sel(OS, 4)] + " OS")} · 2nd…7th"),
-                _ => NotaNum.F($"tone stack before the cab · {m}"),
+                _ => Loc.F("device.valve.tone_stack_before_the_cab", m),
             };
         });
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => CabTab(), 2 => HarmTab(), _ => AmpTab() };
@@ -562,7 +562,7 @@ internal sealed class ValveDeviceBody : IDeviceBody
             switch (centreTab)
             {
                 case 1:
-                    parts.Add(On(CabOn) ? CabShort[Idx(CabType)] : "no cab");
+                    parts.Add(On(CabOn) ? CabShort[Idx(CabType)] : Loc.T("device.valve.no_cab"));
                     if (On(CabOn))
                     {
                         parts.Add(NotaNum.F($"{Mics[Idx(Mic)]} {DistF(P(MicDistance))}"));

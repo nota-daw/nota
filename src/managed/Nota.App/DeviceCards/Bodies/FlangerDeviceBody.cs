@@ -309,7 +309,7 @@ internal sealed class FlangerDeviceBody : IDeviceBody
             else if (P(Mix) < 0.01f) { foot = Loc.T("common.mix_at_zero_only_the"); warn = true; }
             else if (afb >= 0.85)
             {
-                foot = "Feedback " + FbF(fb) + NotaNum.F($": peaks up to +{FlangerMath.PeakDb(P(Mix), fb):0.0} dB, the comb rings");
+                foot = "Feedback " + FbF(fb) + Loc.F("device.flanger.peaks_up_to_db_the", FlangerMath.PeakDb(P(Mix), fb));
                 warn = true;
             }
             else if (P(Depth) < 0.01f) foot = Loc.T("device.flanger.depth_at_zero_the_comb");

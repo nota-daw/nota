@@ -387,7 +387,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
             Background = NotaPalette.AccentSubtle, Padding = new Thickness(7, 2), VerticalAlignment = VerticalAlignment.Center,
             Child = Mono("", AccentBright, 9),
         };
-        readouts.Add(() => ((TextBlock)zoneChip.Child!).Text = Zsel() is { } z ? ZoneChip(z) : "no zone");
+        readouts.Add(() => ((TextBlock)zoneChip.Child!).Text = Zsel() is { } z ? ZoneChip(z) : Loc.T("device.mosaic.no_zone"));
         var zKeys = ReadField("Keys", () => Zsel() is { } z ? Keys(z) : "—");
         var zVel = ReadField("Vel", () => Zsel() is { } z ? $"{z.VelLo}–{z.VelHi}" : "—");
         var zXf = ReadField("Xf vel", () => Zsel() is { } z && z.XVelInHi > z.XVelInLo ? NotaNum.Str(z.XVelInHi - z.XVelInLo, "0") : "—");
@@ -559,7 +559,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 double dur = wsr > 0 ? wframes / wsr : 0;
                 wave.Set(s, e, ls, le, z.LoopMode, z.Crossfade,
                     wframes > 1 ? $"{prog.FileName(z.File)} · {NotaNum.Unit(wsr / 1000, "0.#", "k")} · {NotaNum.Unit(dur, "0.00", "s")} · root {MosaicNames.NoteName(z.Root)}" : prog.FileName(z.File),
-                    z.LoopMode == 0 ? "no loop" : $"{MosaicModel.LoopNames[z.LoopMode].ToLowerInvariant()} {NotaNum.Str(ls * dur, "0.00")} – {NotaNum.Unit(le * dur, "0.00", "s")}");
+                    z.LoopMode == 0 ? Loc.T("device.mosaic.no_loop") : $"{MosaicModel.LoopNames[z.LoopMode].ToLowerInvariant()} {NotaNum.Str(ls * dur, "0.00")} – {NotaNum.Unit(le * dur, "0.00", "s")}");
             }
         });
         var loopSeg = Segments(MosaicModel.LoopNames, () => Zsel()?.LoopMode ?? 0, iv => { if (Zsel() is { } z) { z.LoopMode = iv; Commit(); } Refresh(); }, out var loopSync, padX: 7, fontSize: 8);
@@ -762,7 +762,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         string FiltTl()
         {
             int t = Sel("filtertype", 4);
-            if (t == 0) return "off · the samples pass untouched";
+            if (t == 0) return Loc.T("device.mosaic.off_the_samples_pass_untouched");
             return $"{MosaicModel.FilterNames[t]} 12 dB/oct · {NotaNum.Hz(MosaicModel.CutoffHz(G("cutoff")))} · reso {NotaNum.Pct(G("resonance"))}";
         }
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
@@ -1202,7 +1202,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 {
                     string rel = G("relon") >= 0.5f ? $"release {NotaNum.Db(MosaicModel.RelVolDb(G("relvol")), signed: true)}" : "release off";
                     var rrg = prog.Groups.FirstOrDefault(g => g.SeqLen > 1);
-                    string rr = rrg is null ? "no round-robin" : $"rr {rrg.SeqLen} {MosaicProgram.RrNames[rrg.RrMode].ToLowerInvariant()}";
+                    string rr = rrg is null ? Loc.T("device.mosaic.no_round_robin") : $"rr {rrg.SeqLen} {MosaicProgram.RrNames[rrg.RrMode].ToLowerInvariant()}";
                     return Loc.F("device.mosaic.groups", prog.Groups.Count, rr, rel);
                 }
                 case 4: return $"Env {EnvTl()} · vel {NotaNum.Pct(G("velamount"))} · curve {VelCurveWord()}";

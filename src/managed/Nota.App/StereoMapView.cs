@@ -356,7 +356,7 @@ public sealed class StereoMapView : Control, IValueEntryHost
             rows.Add((Loc.T("stereo_map.balance"), Signed(it.M.Balance, 2), NotaPalette.TextSecondary));
             rows.Add((Loc.T("stereo_map.width"), it.M.Width.ToString("0.00", NotaNum.Culture), NotaPalette.TextSecondary));
             rows.Add((Loc.T("stereo_map.correlation"), Signed(it.M.Correlation, 2), it.M.Correlation < PhaseAlarm ? NotaPalette.Danger : NotaPalette.TextSecondary));
-            rows.Add((Loc.T("stereo_map.level"), it.M.Silent ? "below −60 dBFS" : Signed(it.M.LevelDb, 1) + NotaNum.Thin + "dBFS", NotaPalette.TextSecondary));
+            rows.Add((Loc.T("stereo_map.level"), it.M.Silent ? Loc.T("stereo_map.below_60_dbfs") : Signed(it.M.LevelDb, 1) + NotaNum.Thin + "dBFS", NotaPalette.TextSecondary));
         }
         var notes = new List<(string title, string body, IBrush ink)>();
         if (it.Has && !it.M.Silent && !it.Muted && !it.Master && Math.Abs(it.M.Balance - it.Pan) > OffPanNote)

@@ -475,7 +475,7 @@ public sealed partial class ArrangementView
             }
             else
             {
-                var ft = new FormattedText("master volume", CultureInfo.InvariantCulture,
+                var ft = new FormattedText(Loc.T("arrangement.controls.master_volume"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
                 ctx.DrawText(ft, new Point(12, my + (mh - ft.Height) / 2));
             }
