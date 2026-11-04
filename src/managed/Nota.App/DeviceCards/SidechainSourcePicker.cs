@@ -171,7 +171,7 @@ internal sealed class SidechainSourcePicker
                     frozen ? Loc.T("device.sidechain.frozen_its_parts_dont_play") : ok ? null : NoRoute));
             }
             if (parts && cur.Source == ti.Id && cur.Part == SidechainKey.Missing)
-                list.Add(new Entry(cur, "missing part", true, false, Loc.T("device.sidechain.the_keyed_part_was_deleted")));
+                list.Add(new Entry(cur, Loc.T("device.sidechain.missing_part"), true, false, Loc.T("device.sidechain.the_keyed_part_was_deleted")));
         }
         return list;
     }

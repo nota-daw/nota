@@ -158,8 +158,8 @@ public sealed partial class SessionView
             if (!sectionsWell.IsVisible)
             {
                 Add((_showIO ? Loc.T("session.toolbar.hide") : Loc.T("common.show")) + " I/O", () => { _showIO = !_showIO; Refresh(); });
-                Add((_showSends ? Loc.T("session.toolbar.hide") : Loc.T("common.show")) + " sends", () => { _showSends = !_showSends; Refresh(); });
-                Add((_showMixer ? Loc.T("session.toolbar.hide") : Loc.T("common.show")) + " mixer", () => { _showMixer = !_showMixer; Refresh(); });
+                Add(_showSends ? Loc.T("session.toolbar.hide_sends") : Loc.T("session.toolbar.show_sends"), () => { _showSends = !_showSends; Refresh(); });
+                Add(_showMixer ? Loc.T("session.toolbar.hide_mixer") : Loc.T("session.toolbar.show_mixer"), () => { _showMixer = !_showMixer; Refresh(); });
             }
             if (!follow.IsVisible) Add(_engine.SessionFollow ? Loc.T("session.toolbar.turn_follow_off") : Loc.T("session.toolbar.turn_follow_on"), () => { _engine.SessionFollow = !_engine.SessionFollow; SyncToolbar(); RebuildInspector(); });
             f.ShowAt(more);
@@ -218,7 +218,7 @@ public sealed partial class SessionView
     public void SyncToolbar()
     {
         double q = _engine.LaunchQuant;
-        string ql = q > 0 ? NotaNum.Str(q, "0.##") + " beats" : Loc.T("common.none");
+        string ql = q > 0 ? BeatsText(q) : Loc.T("common.none");
         foreach (var (beats, label) in QuantSteps) if (Math.Abs(beats - q) < 1e-6) ql = label;
         if (_quantLabel is not null) _quantLabel.Text = ql;
 

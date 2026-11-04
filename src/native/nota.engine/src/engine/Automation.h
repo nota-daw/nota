@@ -16,13 +16,14 @@
 
 namespace nota {
 
-// Send (specs/072): a track's send level into return bus `deviceIndex` (0..kMaxReturns-1).
+// Send stays 5 so a stored lane does not land on another target. It is not automated
+// (specs/069): addAutomationLane rejects it and applyAutomation does not play it.
 enum class AutomationTarget : int32_t { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5 };
 
-// The track's own mix values — volume, pan and the sends. Not tied to a device, so their lanes
+// The track's own mix values — volume and pan. Not tied to a device, so their lanes
 // follow clips to any track (a device lane's index is only meaningful on its own chain).
 inline bool isMixTarget(AutomationTarget t) {
-    return t == AutomationTarget::Volume || t == AutomationTarget::Pan || t == AutomationTarget::Send;
+    return t == AutomationTarget::Volume || t == AutomationTarget::Pan;
 }
 
 // `curve` (M9-D) shapes the segment FROM this point TO the next: 0 = linear,

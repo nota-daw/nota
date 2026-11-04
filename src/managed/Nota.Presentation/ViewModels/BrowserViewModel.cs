@@ -335,7 +335,7 @@ public sealed partial class BrowserViewModel : ObservableObject
         // Factory drum kits hang under the Drum Rack and Nota Rhythm alongside their presets —
         // a kit is what a "preset" means for those two, and both share the one set of kits.
         if (_kits is not null)
-            foreach (var (kind, prefix, what) in new[] { (4, "kit:", "pads"), (12, "rhythmkit:", "pads, 8 on the voices") })
+            foreach (var (kind, prefix, rhythm) in new[] { (4, "kit:", false), (12, "rhythmkit:", true) })
             {
                 var dev = _instrTree.Find(d => d.Kind == BrowserItemKind.BuiltinInstrument && d.BuiltinKind == kind);
                 if (dev is null) continue;
@@ -345,7 +345,7 @@ public sealed partial class BrowserViewModel : ObservableObject
                         Name = kit.Name,
                         Kind = BrowserItemKind.Preset,
                         Sub = "kit",
-                        Tip = $"{kit.Blurb} · {kit.PadCount} {what}",
+                        Tip = rhythm ? Loc.F("browser.pads_8_on_the_voices", kit.Blurb, kit.PadCount) : Loc.F("browser.pads", kit.Blurb, kit.PadCount),
                         Path = prefix + kit.Id,
                         Depth = 1,
                     });

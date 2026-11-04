@@ -845,6 +845,7 @@ bool Engine::undo() {
         // Restore without a new checkpoint; the restored chains may add or drop a latent
         // device (a removed look-ahead coming back, #109), so compensation follows them.
         if (e.graph) {
+            if (authoring_) keepLiveSends(*e.graph, *authoring_);
             publishRaw(std::move(e.graph), true);
             placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
@@ -856,6 +857,48 @@ bool Engine::undo() {
         if (applied) return true;
     }
     return false;
+}
+
+// specs/069. Message thread, before the restored graph is published. A shared track object
+// already holds the live levels, so it is left alone (the audio thread may be reading it).
+void Engine::keepLiveSends(Graph& restored, const Graph& live) const {
+    // No allocations: this runs on every undo/redo (perf-gate edit-warp-split).
+    const auto busOf = [](const std::shared_ptr<Track>& t) {
+        return t && t->type() == TrackType::Return && t->returnIndex() >= 0 && t->returnIndex() < kMaxReturns
+                   ? t->returnIndex()
+                   : -1;
+    };
+    // The track with `id` in `g`: track lists rarely reorder, so try the same index first.
+    const auto findById = [](const Graph& g, size_t hint, int32_t id) -> const Track* {
+        if (hint < g.tracks.size() && g.tracks[hint] && g.tracks[hint]->id() == id) return g.tracks[hint].get();
+        for (const auto& t : g.tracks)
+            if (t && t->id() == id) return t.get();
+        return nullptr;
+    };
+
+    // A return edit remaps buses. Copying a live slot onto the restored graph would put
+    // that level on a different return. The snapshot already has the levels for its buses.
+    // Same buses = the same (return id, bus) pairs on both sides; ids are unique.
+    size_t liveReturns = 0, oldReturns = 0;
+    for (const auto& t : restored.tracks)
+        if (busOf(t) >= 0) ++oldReturns;
+    for (size_t i = 0; i < live.tracks.size(); ++i) {
+        const int32_t bus = busOf(live.tracks[i]);
+        if (bus < 0) continue;
+        ++liveReturns;
+        const Track* old = findById(restored, i, live.tracks[i]->id());
+        if (!old || old->type() != TrackType::Return || old->returnIndex() != bus) return;
+    }
+    if (liveReturns != oldReturns) return;
+
+    for (size_t i = 0; i < restored.tracks.size(); ++i) {
+        auto& t = restored.tracks[i];
+        if (!t || t->type() == TrackType::Return) continue;
+        const Track* src = findById(live, i, t->id());
+        if (!src || src == t.get()) continue;
+        for (int b = 0; b < kMaxReturns; ++b)
+            if (t->send(b) != src->send(b)) t->setSend(b, src->send(b));
+    }
 }
 
 // The restored racks drive their mapped targets again: the children they share with the
@@ -881,6 +924,7 @@ bool Engine::redo() {
         bool applied = false;
         undoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
         if (e.graph) {
+            if (authoring_) keepLiveSends(*e.graph, *authoring_);
             publishRaw(std::move(e.graph), true);
             placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
@@ -949,11 +993,7 @@ bool Engine::mixValue(const MixTarget& t, float& v) const {
     }
     auto tr = findTrackAuthoring(t.trackId);
     if (!tr) return false;
-    if (t.kind == MixKind::TrackSend) { // specs/072: a bus that can't exist has no value
-        if (t.deviceIndex < 0 || t.deviceIndex >= kMaxReturns) return false;
-        v = tr->send(t.deviceIndex);
-        return true;
-    }
+    if (t.kind == MixKind::TrackSend) return false; // specs/069: a send is not an undo step
     v = t.kind == MixKind::TrackVolume ? tr->volume() : tr->pan();
     return true;
 }
@@ -985,11 +1025,7 @@ bool Engine::applyMix(const MixChange& c, bool after) {
     }
     auto tr = findTrackAuthoring(c.trackId);
     if (!tr) return false; // the track is gone: skip quietly
-    if (c.kind == MixKind::TrackSend) {
-        if (c.deviceIndex < 0 || c.deviceIndex >= kMaxReturns) return false;
-        tr->setSend(c.deviceIndex, v);
-        return true;
-    }
+    if (c.kind == MixKind::TrackSend) return false; // specs/069: nothing to restore
     if (c.kind == MixKind::TrackVolume) tr->setVolume(v);
     else
         tr->setPan(v);

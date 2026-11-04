@@ -1034,6 +1034,14 @@ public sealed partial class ArrangementView
             {
                 MenuKit.Item(Loc.T("arrangement.lane_control.split_here"), GlyphKind.Split, () => { if (_o.SplitLinkedAt(new[] { (trackId, idx) }, at)) { _o.Refresh(); _o.ClipsSplit?.Invoke(); } }, MenuKit.SplitKey),
             };
+            if (!clip.IsMidi)
+                edits.Add(MenuKit.Item(Loc.T("arrangement.lane_control.fade_at_splits"), GlyphKind.Split, () =>
+                {
+                    EnsureSelected();
+                    _o.StatusMessage?.Invoke(_o.FadeSelectedSplits()
+                        ? Loc.T("arrangement.lane_control.faded_the_splits")
+                        : Loc.T("arrangement.lane_control.select_audio_clips_that"));
+                }));
             // Reverse (audio only): non-destructive, so the label reflects the clicked clip.
             if (!clip.IsMidi && _o._engine is { } rev && rev.TryGetAudioClipInfo(trackId, idx, out var rai))
                 edits.Add(MenuKit.Item(rai.Reversed != 0 ? "Un-reverse" : Loc.T("common.reverse"), GlyphKind.Reverse,

@@ -947,7 +947,7 @@ internal sealed class ConsortInstrumentCard : IInstrumentCard
                     chip.PointerPressed += (_, e) => { selectCentre(4); e.Handled = true; };
                     chipsHost.Children.Add(chip);
                 }
-                if (cs.Count == 0) chipsHost.Children.Add(MonoText("no cables — the normals run the voice", 8, DimC));
+                if (cs.Count == 0) chipsHost.Children.Add(MonoText(Loc.T("device.consort.no_cables_the_normals_run"), 8, DimC));
             }
             countTxt.Text = Loc.Plural("device.consort.cables", cs.Count);
             bool onPatch = vs.Centre == 4;

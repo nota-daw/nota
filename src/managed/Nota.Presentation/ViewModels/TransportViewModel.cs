@@ -136,7 +136,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         // Stopping materialises the captured audio into a clip — refresh so the take
         // appears (otherwise the last live frame lingers and the take seems to vanish).
         if (!value) { TracksChanged?.Invoke(); Message?.Invoke(""); return; }
-        if (_engine.IsRecording) { Message?.Invoke("● Recording…"); return; }
+        if (_engine.IsRecording) { Message?.Invoke(Loc.T("transport.recording")); return; }
 
         // Failed only because nothing is armed? Auto-arm the record target and
         // retry, so pressing Record just works without a separate arm click.
@@ -145,7 +145,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
             _engine.SetTrackArmed(tid, true);
             TracksChanged?.Invoke();
             _engine.SetRecording(true);
-            if (_engine.IsRecording) { Message?.Invoke("● Recording…"); return; }
+            if (_engine.IsRecording) { Message?.Invoke(Loc.T("transport.recording")); return; }
         }
 
         // Couldn't start — pop the button back up and explain why.

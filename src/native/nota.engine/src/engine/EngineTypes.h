@@ -90,11 +90,12 @@ struct ControlEvent {
     int32_t value;
 };
 
-// Value undo (specs/009, specs/016): volume / pan / sends / master volume live in atomics outside the
+// Value undo (specs/009, specs/016): volume / pan / master volume live in atomics outside the
 // graph, and device parameters live in Device objects that cloned tracks share — restoring
 // an older graph restores neither. Their undo steps carry values instead of a snapshot. They
 // share one history with the structural snapshots (UndoEntry), which keeps the order of all
-// edits. Parameter kinds address (track, device index, parameter index): DeviceParam an audio
+// edits. Send levels live in the same atomics and are not an undo step (specs/069). Parameter
+// kinds address (track, device index, parameter index): DeviceParam an audio
 // effect, MidiDeviceParam a MIDI effect, PluginParam a normalized hosted-plugin / built-in
 // instrument parameter (deviceIndex -1 = the instrument).
 enum class MixKind : int32_t {
@@ -106,7 +107,7 @@ enum class MixKind : int32_t {
     PluginParam = 5,
     PresetTag = 6,  // a device's preset tag (specs/048): deviceIndex as above, paramIndex = the surface
     DeviceNotes = 7, // an EQ-8's band labels and notes (specs/049): the value indexes Engine::noteStates_
-    TrackSend = 8    // a track's send level (specs/072): deviceIndex = the return bus
+    TrackSend = 8    // rejected (specs/069): a send level is not an undo step. deviceIndex would be the bus.
 };
 struct MixTarget {
     MixKind kind;

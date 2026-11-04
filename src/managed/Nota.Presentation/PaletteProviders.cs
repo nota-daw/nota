@@ -165,7 +165,7 @@ public sealed class PresetPaletteProvider(BrowserViewModel browser) : IPalettePr
         bool kit = DeviceInsertService.IsKit(p);
         var origin = user ? PresetOrigin.User : kit ? PresetOrigin.Kit : PresetOrigin.Factory;
         string sub = folder.Length > 0 ? $"{device} · {folder}" : device;
-        if (user) sub += " · user";
+        if (user) sub += " · " + Loc.T("palette_providers.user_preset_origin");
         return new PaletteItem
         {
             Kind = PaletteKind.Preset, Id = "p:" + p.Path, Name = p.Name, Sub = sub, Tag = Loc.T("palette_providers.preset"), Role = role,

@@ -41,6 +41,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   duplicating, copying, cutting or deleting it does the same to them, as one undo step; a
   time range drawn on one track spans the whole group. ⌥-click (Alt-click) a clip or an arm
   to act on one track. Saved with the project; MCP `set_group_link` / `get_group_link`.
+- **A short fade when an audio clip is split** (#286): the cut gets a 4 ms fade-out on the
+  left piece and a fade-in on the right, so it does not click. The fades are the clip's
+  corner handles — drag them to make the fade longer or shorter. Settings → Appearance →
+  **Fade audio clips when splitting** turns the automatic fade off (it is on by default).
+  **Fade at splits** in the command palette and on an audio clip's menu writes the same fade
+  onto a join you already have, and does not shorten one you have dragged longer. No shortcut.
+  MIDI clips are left alone. The fade is part of the split's one undo step.
 - **Rearrange the song by its sections** (#192): drag a section in the Sections lane and it
   moves with everything in it — audio and MIDI clips (cut at its edges), automation on every
   track and the master, take lanes — to the boundary marked while you drag; the sections in
@@ -66,16 +73,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   controller or Nota Remote first. The lane still widens by itself when a bend on the notes
   needs more than the range picked (a step that would clip one is disabled in the menu), and
   each clip keeps its pick for the session, like its scroll and zoom.
-- **Send levels in the Arrangement's track headers** (#143): a track row tall enough for
-  them — a large row, or a standard one from 88 px — shows a small knob per return track
-  (A, B, …) under volume and pan, with the level beside it; hover names the return,
-  double-click turns the send off and ⌥-click types a value. A **Sends** key at the top of
-  the header column hides or shows them on every track (saved with the project).
-- **Sends are undoable and automatable**: a send change made anywhere — the track header,
-  the Mixer, the Session mixer, the Sends card or the MCP `set_send` tool — is one undo step.
-  The automation lane's target menu lists **Send A · Reverb**-style entries after Pan; draw a
-  send's envelope, or record it by moving a send control with automation record on, as with
-  volume. Deleting a return removes the send automation to it, and later returns keep theirs.
+- **Send levels in the Arrangement's track headers** (#143): a track at the Large height
+  (128 px) or taller shows a small knob per return track (A, B, …) under volume and pan,
+  with the level beside it; hover names the return, double-click turns the send off and
+  ⌥-click types a value. Shorter rows leave the sends in the Mixer. A send move is not an
+  undo step, and a send is not an automation target.
 - **Delete several versions at once** (#228): in the History tab, ⌘-click (Ctrl-click on
   Windows and Linux) adds a version to the selection and Shift-click selects a run. With
   more than one selected, the footer shows how many and when they were saved, and its
@@ -265,6 +267,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   the import report. Before, only installed sample packs could bring an SFZ in, so a library
   you downloaded yourself couldn't be opened. Controllers an SFZ starts with `set_hdcc` (0–1)
   now count too, so Salamander's string resonance and hammer noise release layers come along.
+- **Texts that still read in English in another language** (#484): about a hundred interface
+  texts written as plain strings now go through the language files — units and fragments next
+  to a number ("4 beats", "· frozen", "Hide sends", "below −60 dBFS"), the Mosaic window, the
+  hints and Freeze lines on device cards, status words ("no signal", "measuring…", "no
+  loop") and four rows of Settings → Shortcuts. Readouts that spell parameter names and values
+  ("release 120 · auto", "latency 0 smp") stay in English. The check that watches for raw
+  text now also catches short lower-case captions and statuses that trail off.
 - **Effects on an audio track ring out after Stop** (#449): a reverb or delay placed on an
   audio track used to fall silent the instant the transport stopped, while the same reverb on
   a return track rang on. The track's effects now keep playing on silence until their output

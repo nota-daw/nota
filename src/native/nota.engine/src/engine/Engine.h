@@ -575,6 +575,14 @@ class Engine {
     // splitClipsAtRange cuts every listed track's clips at both `start` and `end` (keeping
     // all content) so the covered slice becomes its own clip(s). One undo step; no ripple.
     bool splitClipsAtRange(const std::vector<int32_t>& trackIds, double start, double end);
+    // Writes the short split fade onto every join where two audio clips abut and at least
+    // one of them is selected. Raises a shorter edge up to the default length; never
+    // shortens a longer one. One undo step. False when nothing changed (MIDI, a gap, or
+    // the fades are already at least that long). Runs even when split fades are off.
+    bool fadeTouchingSplits(const std::vector<std::pair<int32_t, int32_t>>& sel);
+    // Automatic fade on splitClip / splitClipsAtRange. Default on. An app preference.
+    void setSplitFades(bool on) { splitFades_ = on; }
+    bool splitFades() const { return splitFades_; }
     // consolidateRange (Consolidate, ⌘J) replaces every listed track's content in
     // [start,end) with ONE clip spanning the range; the parts of clips outside it survive.
     // MIDI merges the covered notes (tails cut by a clip end stay cut, velocity envelopes
@@ -1531,6 +1539,11 @@ class Engine {
     // inherited); false when nothing moved.
     bool insertTimeInto(Graph& g, double at, double len, bool duplicate);
     void reapplyRackMacros(); // after undo/redo: racks drive their shared children again
+    // specs/069: a structural snapshot freezes send levels, and a send is not its own undo
+    // step. When the returns still sit on the same buses, copy the live levels onto the
+    // restored tracks. When a return was added, removed or moved, keep the snapshot's
+    // levels — those buses belong to that edit.
+    void keepLiveSends(Graph& restored, const Graph& live) const;
     void reapplyCcRoutes();             // after undo/redo: Arps take their restored snapshot's targets
     void syncCcRoutes(Graph& g);        // before a publish: routes of fresh tracks from their Arps
     void republishCcRoutes(int32_t trackId); // after a live CC target change: publish its route
@@ -1715,6 +1728,9 @@ class Engine {
 
     // Automation-follows-clips state (req 8.3).
     bool automationLock_ = false;
+    // Short ADSR fade written at an audio split (issue #286). Authoring thread only.
+    bool splitFades_ = true;
+    double splitFadeBeats() const;
     bool lastMoveKeptDeviceAuto_ = false;
 
     // Audio preview / audition (M7-4a): the message thread publishes a decoded

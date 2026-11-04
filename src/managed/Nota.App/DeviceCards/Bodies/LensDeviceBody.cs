@@ -355,7 +355,7 @@ internal sealed class LensDeviceBody : IDeviceBody
             readouts.Add(() =>
             {
                 int src = KeySrc();
-                name.Text = !scOk ? Loc.T("device.lens.n_a_in_a_rack") : src < 0 ? "no key" : SrcName(src);
+                name.Text = !scOk ? Loc.T("device.lens.n_a_in_a_rack") : src < 0 ? Loc.T("device.lens.no_key") : SrcName(src);
                 name.Foreground = src >= 0 ? TxtC : Txt2;
             });
             var box = new Border

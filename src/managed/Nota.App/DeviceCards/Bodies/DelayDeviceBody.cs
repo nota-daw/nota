@@ -518,7 +518,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         string StatusText()
         {
             if (On(Freeze))
-                return NotaNum.F($"Freeze: loop held, input muted · filter {LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}");
+                return Loc.F("device.delay.freeze_loop_held_input_muted", LowCutF(P(LowCut)), HighCutF(P(HighCut)));
             string time = On(SyncMode)
                 ? NotaNum.F($"Sync {DivNames[Sel(DivL, 8)]}{(On(LinkLR) ? "" : NotaNum.F($" / {DivNames[Sel(DivR, 8)]}"))}")
                 : NotaNum.F($"ms · L {MsL():0} / R {(On(LinkLR) ? MsL() : MsR()):0}");
@@ -535,7 +535,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
             statusLeft.Foreground = On(Freeze) ? AccentBright : TextSecondary;
             double sr = Sc(S_SampleRate), diff = Sc(S_DiffuseSmp);
             string comp = P(Diffuse) <= 0.001f || diff < 1 ? "" : On(LatencyComp)
-                ? NotaNum.F($" · diffuser −{diff:0}\u2009smp compensated")
+                ? Loc.F("device.delay.diffuser_smp_compensated", diff)
                 : NotaNum.F($" · diffuser +{diff:0}\u2009smp");
             statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp{comp} · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
         });

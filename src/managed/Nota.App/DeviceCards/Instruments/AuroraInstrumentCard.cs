@@ -523,7 +523,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 double a = Math.Abs(G($"mtx{s}_2") - 0.5) * 2;
                 if (a > mag) { mag = a; best = s; }
             }
-            posMod.Text = best < 0 ? "no modulation" : SrcNames[best].ToLowerInvariant() + " → pos";
+            posMod.Text = best < 0 ? Loc.T("device.aurora.no_modulation") : SrcNames[best].ToLowerInvariant() + " → pos";
             posMod.Foreground = best < 0 ? TextDisabled : Teal;
         });
         var tableOverlay = new StackPanel
@@ -1198,7 +1198,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             2 => $"Env 1 → amp {AdsrSum("attack", "decay", "sustain", "release")} · Env 2 {EnvDest(1)}",
             3 => $"LFO 1 {ShapeNames[Sel("lfo1shape", 4)]} {(SyncDiv(G("lfo1sync")) > 0 ? SyncText(G("lfo1sync")) : SlowHz(ExpMap(G("lfo1rate"), 0.05, 20)))} {LfoDest(2)} · "
                + $"LFO 2 {ShapeNames[Sel("lfo2shape", 4)]} {(SyncDiv(G("lfo2sync")) > 0 ? SyncText(G("lfo2sync")) : SlowHz(ExpMap(G("lfo2rate"), 0.05, 20)))} {LfoDest(3)}",
-            4 => RouteCount() == 0 ? "no routes — drag a cell to make one" : Plural(RouteCount(), "route", "routes") + " in the matrix",
+            4 => RouteCount() == 0 ? Loc.T("device.aurora.no_routes_drag_a_cell") : Loc.Plural("device.aurora.routes_in_the_matrix", RouteCount()),
             _ => $"Drive {(G("fxdriveon") >= 0.5f ? DriveModes[Sel("fxdrivemode", 3)].ToLowerInvariant() + " " + Pct(G("fxdrive")) : "off")} · "
                + $"chorus {(G("fxchoruson") >= 0.5f ? ChorusVoices[Sel("fxchorusvoices", 3)] + " " + Pct(G("fxchorus")) : "off")} · "
                + $"reverb {(G("fxreverbon") >= 0.5f ? ReverbModes[Sel("fxreverbmode", 3)].ToLowerInvariant() + " " + Pct(G("fxreverb")) : "off")}",

@@ -470,7 +470,7 @@ internal sealed class PhysicalInstrumentCard : IInstrumentCard
             var parts = new List<string>();
             if (G("malletvol") > 0.001f) parts.Add($"mallet {Pct(G("malletvol"))}");
             if (G("noisevol") > 0.001f) parts.Add($"noise {Pct(G("noisevol"))}");
-            return parts.Count == 0 ? "no exciter" : string.Join(" → ", parts);
+            return parts.Count == 0 ? Loc.T("device.physical.no_exciter") : string.Join(" → ", parts);
         }
         string StructWord() => !R2On() ? "res 1 only" : Serial() ? "1→2" : "1+2";
         string BankOf() => bank == 0 ? "r1" : "r2";

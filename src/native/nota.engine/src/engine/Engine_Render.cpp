@@ -1695,15 +1695,61 @@ void Engine::mixAudioClip(
         const int64_t cacheBase = std::llround(ovStart) - startF; // 0-based into the cache
         const float* csamp = wc.data();
         const float g = clip.gain * extraGain;
-        for (int32_t j = 0; j < segLen; ++j) {
-            // Reverse reads the same cache back-to-front: the window is already the
-            // played length, so mirroring the index is exact (no resample).
-            const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
-            if (ci < 0 || ci >= wc.frames) continue;
-            float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
-            if (hasEnv) applyEnv(ovStart + j, l, r);
-            dst[(dstOff + j) * 2] += l * g;
-            dst[(dstOff + j) * 2 + 1] += r * g;
+        // A split fade is a few milliseconds of attack or release with the sustain left at
+        // full level, so the body is unity. It is its own loop, with no envelope test and no
+        // helper call: folding the test into the sample loop cost audio-warp-split +11%, and
+        // a body loop that reloaded its pointers cost another +3.6%. The extra sample on
+        // each edge covers a rounding step; a body sample it pulls in has sustain gain 1.
+        // Every other clip takes the original loop below, unchanged.
+        if (hasAdsr && clip.adsr.sustain >= 1.0f && !hasVol && !hasPan) {
+            int32_t head = 0, tail = segLen;
+            if (clip.adsr.attack > 0.0) {
+                const double n = startSamples + clip.adsr.attack * spb + 1.0 - ovStart; // j < n
+                // Clamp in double before the narrowing cast. The span only covers this
+                // block; a long attack must not overflow int32 on the way there.
+                const double c = std::clamp(std::ceil(n), 0.0, static_cast<double>(segLen));
+                head = static_cast<int32_t>(c);
+            }
+            if (clip.adsr.release > 0.0) {
+                const double n = startSamples + clipDeviceLen - clip.adsr.release * spb - 1.0 - ovStart; // j > n
+                const double c = std::clamp(std::floor(n) + 1.0, 0.0, static_cast<double>(segLen));
+                tail = static_cast<int32_t>(c);
+            }
+            if (head > tail) head = tail = segLen; // edges overlap: the whole block fades
+            for (int32_t j = 0; j < head; ++j) {
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                applyEnv(ovStart + j, l, r);
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
+            }
+            for (int32_t j = head; j < tail; ++j) {
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                const float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
+            }
+            for (int32_t j = tail; j < segLen; ++j) {
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                applyEnv(ovStart + j, l, r);
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
+            }
+        } else {
+            for (int32_t j = 0; j < segLen; ++j) {
+                // Reverse reads the same cache back-to-front: the window is already the
+                // played length, so mirroring the index is exact (no resample).
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                if (hasEnv) applyEnv(ovStart + j, l, r);
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
+            }
         }
         return;
     }

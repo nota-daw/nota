@@ -433,7 +433,7 @@ if (args.Length >= 1 && args[0] == "--linux-desktop")
     return failures == 0 ? 0 : 1;
 }
 
-// Sends as undoable, automatable mix values alone: `--sends` (specs/072). Also part of the full run.
+// Sends stay out of undo and automation: `--sends` (specs/069). Also part of the full run.
 if (args.Length >= 1 && args[0] == "--sends")
 {
     Console.WriteLine("-- sends --");
@@ -504,6 +504,14 @@ if (args.Length >= 1 && args[0] == "--device-undo")
     Console.WriteLine("-- device remove undo --");
     foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "DEVICE UNDO PASSED" : $"DEVICE UNDO FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Audio split fades alone: `--split-fades`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--split-fades")
+{
+    Console.WriteLine("-- split fades --");
+    foreach (var (ok, label) in SplitFadeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SPLIT FADES PASSED" : $"SPLIT FADES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Warped clip split / range cut alone: `--warp-split`. Also part of the full run.
@@ -1714,12 +1722,16 @@ Console.WriteLine("-- clip ADSR --");
     Check(ae.GetClipAdsr(at, ac).IsIdentity, "ADSR: redo re-applies");
     ae.Undo();
 
-    // Split: the left piece keeps attack/decay (no release at the cut), the right keeps the release.
+    // Split: the left piece keeps attack/decay. Those two stages already fill the left piece,
+    // so the automatic cut fade has no room and the release stays 0. The right piece keeps
+    // the release and gains a short fade-in at the cut.
     Check(ae.SplitClip(at, ac, 2.0) == ac + 1, "ADSR: split");
     var la = ae.GetClipAdsr(at, ac); var ra = ae.GetClipAdsr(at, ac + 1);
-    Check(la.AttackBeats > 0.99 && la.DecayBeats > 0.99 && la.ReleaseBeats == 0, "ADSR split: left keeps attack + decay, drops release");
-    Check(ra.AttackBeats == 0 && ra.DecayBeats == 0 && ra.ReleaseBeats > 0.99 && Math.Abs(ra.Sustain - 0.5f) < 1e-6,
-          "ADSR split: right keeps sustain + release, drops attack/decay");
+    Check(la.AttackBeats > 0.99 && la.DecayBeats > 0.99 && la.ReleaseBeats == 0,
+          "ADSR split: left keeps attack + decay; the cut fade has no room beside them");
+    Check(ra.AttackBeats > 0 && ra.AttackBeats < 0.05 && ra.DecayBeats == 0 && ra.ReleaseBeats > 0.99
+          && Math.Abs(ra.Sustain - 0.5f) < 1e-6,
+          "ADSR split: right keeps sustain + release and gains a short fade-in");
     ae.Undo();
 
     // Warped clips shape the stretched output the same way.
@@ -15613,6 +15625,8 @@ foreach (var (ok, label) in PadAndWarpTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- stereo map --");
 foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);
+Console.WriteLine("-- split fades --");
+foreach (var (ok, label) in SplitFadeTests.Run()) Check(ok, label);
 Console.WriteLine("-- warp split --");
 foreach (var (ok, label) in WarpSplitTests.Run()) Check(ok, label);
 

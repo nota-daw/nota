@@ -358,7 +358,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         {
             var d = new List<string>();
             if (On("pmfreqa")) d.Add("Freq A"); if (On("pmpwa")) d.Add("PW A"); if (On("pmfilter")) d.Add("Filter");
-            return d.Count == 0 ? "no dest" : string.Join(" + ", d);
+            return d.Count == 0 ? Loc.T("device.pentad.no_dest") : string.Join(" + ", d);
         }
         int ActiveRoutes()
         {

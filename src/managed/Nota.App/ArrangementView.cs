@@ -384,17 +384,9 @@ public sealed partial class ArrangementView : UserControl
                 zoomOut, zoomIn,
             },
         };
-        // The Sends key (specs/072) at the strip's far end; hidden while there are no returns.
-        var sendsKey = BuildSendsToggle();
-        DockPanel.SetDock(sendsKey, Dock.Right);
-        var zoomBar = new DockPanel
-        {
-            Width = HeaderW, LastChildFill = true,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(8, 0, 0, 0),
-            Children = { sendsKey, zoomKeys },
-        };
-        sendsKey.Margin = new Thickness(0, 0, 16, 0);
+        zoomKeys.Width = HeaderW;
+        zoomKeys.Margin = new Thickness(8, 0, 0, 0);
+        var zoomBar = zoomKeys;
         _headerColumnParts.Add(zoomBar);
         var topLeft = HeaderPanel(zoomBar);
         var topGrid = new Grid { Height = RulerH };
@@ -2057,6 +2049,44 @@ public sealed partial class ArrangementView : UserControl
         return any;
     }
 
+    /// <summary>Fade at splits: a short fade on both sides of every join where two audio clips
+    /// touch and at least one of them is selected. One undo step. False when nothing changed.</summary>
+    public bool FadeSelectedSplits()
+    {
+        if (_engine is null || _sel.Count == 0) return false;
+        var tracks = new int[_sel.Count];
+        var clips = new int[_sel.Count];
+        int i = 0;
+        foreach (var s in _sel)
+        {
+            tracks[i] = s.track;
+            clips[i] = s.clip;
+            i++;
+        }
+        if (!_engine.FadeSplits(tracks, clips)) return false;
+        Refresh();
+        // The open audio editor caches the ADSR it loaded. Both sides of each join have to
+        // reload, including a neighbour that was not selected, or the next edit writes the
+        // pre-fade shape back over the fade.
+        const double join = 1e-4;
+        foreach (var track in _tracks)
+        {
+            var ordered = track.Clips.OrderBy(c => c.StartBeat).ToList();
+            for (int j = 0; j + 1 < ordered.Count; j++)
+            {
+                var left = ordered[j];
+                var right = ordered[j + 1];
+                if (left.IsMidi || right.IsMidi) continue;
+                if (!_sel.Contains((track.Id, left.ClipIndex)) && !_sel.Contains((track.Id, right.ClipIndex)))
+                    continue;
+                if (Math.Abs(left.StartBeat + left.LengthBeats - right.StartBeat) > join) continue;
+                RaiseClipGeometryChanged(track.Id, left.ClipIndex);
+                RaiseClipGeometryChanged(track.Id, right.ClipIndex);
+            }
+        }
+        return true;
+    }
+
     /// <summary>Cmd+A — select every clip in the arrangement. False when there are none,
     /// so the key falls through.</summary>
     public bool SelectAllClips()
@@ -2187,7 +2217,6 @@ public sealed partial class ArrangementView : UserControl
         _cardTiers.Clear();
         _cardSends.Clear();
         _sendKnobs.Clear();
-        PaintSendsToggle();
         for (int i = 0; i < _tracks.Count; i++)
         {
             var card = BuildHeaderCard(_tracks[i]);
@@ -2293,7 +2322,7 @@ public sealed partial class ArrangementView : UserControl
         double rowH = TrackRowHeight(t);
         var tier = TierFor(rowH);
         _cardTiers[t.Id] = tier;
-        bool sends = ShowSendsOn(t, tier, rowH);   // specs/072: the send row under volume / pan
+        bool sends = ShowSendsOn(t, tier, rowH);   // specs/069: send knobs on a Large row
         _cardSends[t.Id] = sends;
         _sendKnobs.RemoveAll(k => k.trackId == t.Id);
 

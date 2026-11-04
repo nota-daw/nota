@@ -528,6 +528,12 @@ int32_t nota_clip_get_warp_markers(
 int32_t nota_clip_split(NotaEngine* e, int32_t track_id, int32_t clip_index, double at_beat) {
     return e ? ENG(e)->splitClip(track_id, clip_index, at_beat) : -1;
 }
+void nota_engine_set_split_fades(NotaEngine* e, int32_t on) {
+    if (e) ENG(e)->setSplitFades(on != 0);
+}
+int32_t nota_engine_split_fades(const NotaEngine* e) {
+    return (e && CENG(e)->splitFades()) ? 1 : 0;
+}
 int32_t nota_clip_duplicate(NotaEngine* e, int32_t track_id, int32_t clip_index) {
     return e ? ENG(e)->duplicateClip(track_id, clip_index) : -1;
 }
@@ -562,6 +568,10 @@ std::vector<std::pair<int32_t, int32_t>> makeSel(const int32_t* track_ids, const
 }
 } // namespace
 
+NotaResult nota_clips_fade_splits(NotaEngine* e, const int32_t* track_ids, const int32_t* clip_indices, int32_t n) {
+    if (!e) return NOTA_ERR_INVALID_ARG;
+    return ENG(e)->fadeTouchingSplits(makeSel(track_ids, clip_indices, n)) ? NOTA_OK : NOTA_ERR_INVALID_ARG;
+}
 NotaResult nota_clips_block_copy(NotaEngine* e, const int32_t* track_ids, const int32_t* clip_indices, int32_t n) {
     if (!e) return NOTA_ERR_INVALID_ARG;
     return ENG(e)->copyClipBlock(makeSel(track_ids, clip_indices, n)) ? NOTA_OK : NOTA_ERR_INVALID_ARG;

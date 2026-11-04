@@ -83,7 +83,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
         static string FlutRateF(double v) => HzF(Exp(v, 2, 20));
         static string HissHpF(double v) => HzF(Exp(v, 20, 2000));
         string ModeName() => Modes[Sel(Mode, 6)];
-        string OsText() => Sel(OS, 4) == 0 ? "no oversampling" : NotaNum.F($"{OsNames[Sel(OS, 4)]} OS");
+        string OsText() => Sel(OS, 4) == 0 ? Loc.T("device.vintage.no_oversampling") : NotaNum.F($"{OsNames[Sel(OS, 4)]} OS");
         double WowHz() => Sc(S_WowHz) > 0 ? Sc(S_WowHz) : Exp(P(WowRate), 0.1, 4);
         double FlutHz() => Sc(S_FlutHz) > 0 ? Sc(S_FlutHz) : Exp(P(FlutterRate), 2, 20);
         double H(int k) => Sc(S_H1 + k - 1);   // harmonic k, dB re the fundamental
@@ -95,7 +95,7 @@ internal sealed class VintageDeviceBody : IDeviceBody
             return even > odd * 1.5 ? "even dominant" : odd > even * 1.5 ? "odd dominant" : "even + odd";
         }
         static string Ordinal(int k) => k switch { 2 => "2nd", 3 => "3rd", _ => NotaNum.F($"{k}th") };
-        string Loudest() { int best = 2; for (int k = 3; k <= 7; k++) if (H(k) > H(best)) best = k; return H(best) > -100 ? Ordinal(best) + " harmonic" : "no harmonics"; }
+        string Loudest() { int best = 2; for (int k = 3; k <= 7; k++) if (H(k) > H(best)) best = k; return H(best) > -100 ? Ordinal(best) + " harmonic" : Loc.T("device.vintage.no_harmonics"); }
         string StageName() => Sel(OutputStage, 3) switch { 1 => "tube stage", 2 => "analog stage", _ => "" };
 
         // ---- small builders ---------------------------------------------------------

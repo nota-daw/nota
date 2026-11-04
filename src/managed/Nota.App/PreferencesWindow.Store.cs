@@ -205,7 +205,7 @@ public sealed partial class PreferencesWindow
     });
 
     private static string CurrentOsName =>
-        OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsWindows() ? Loc.T("preferences.store.windows") : OperatingSystem.IsLinux() ? Loc.T("preferences.store.linux") : "this computer";
+        OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsWindows() ? Loc.T("preferences.store.windows") : OperatingSystem.IsLinux() ? Loc.T("preferences.store.linux") : Loc.T("preferences.store.this_computer");
 
     private void RenderStoreList()
     {

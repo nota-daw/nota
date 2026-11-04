@@ -469,7 +469,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 K(Range, "RANGE", v => NotaNum.F($"±{1 + v * 11:0} st"), tip: Loc.T("device.auto_shift.range_the_largest_correction_a")),
                 K(Human, "HUMAN", PctF, Teal, Loc.T("device.auto_shift.human_keeps_vibrato_and_slow")),
             },
-            () => Voiced() ? NotaNum.F($"input {InputText()} → target {TargetText()}") : "no pitch",
+            () => Voiced() ? NotaNum.F($"input {InputText()} → target {TargetText()}") : Loc.T("device.auto_shift.no_pitch"),
             () => (P(Amount) >= 0.95f && SpeedMs() < 12 ? "hard correction" : P(Amount) < 0.4f ? "light correction" : "natural correction")
                   + (P(Human) < 0.05f ? " · vibrato cut" : NotaNum.F($" · vibrato kept {P(Human) * 100:0} %")));
             return TabBody(head, trace, knobs);
@@ -508,7 +508,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 var b = new Border { Height = 22, CornerRadius = NotaRadius.Badge, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
                 b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; ToggleNote(pc); e.Handled = true; };
                 LearnBind(b, NoteC + i);
-                ToolTip.SetTip(b, NotaNum.F($"{Keys[i]} — click to add it to the scale or take it out (makes the scale Custom)"));
+                ToolTip.SetTip(b, Loc.F("device.auto_shift.click_to_add_it_to", Keys[i]));
                 chips[i] = b; chipTx[i] = tb;
                 chipGrid.Children.Add(Col(b, i));
             }
@@ -528,7 +528,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             var capL = Mono("", 7, TextTertiary); var capR = Mono("", 7, TextTertiary);
             readouts.Add(() =>
             {
-                capL.Text = NotaNum.F($"tonic {Keys[KeyOf()]} · click a note to add or remove it");
+                capL.Text = Loc.F("device.auto_shift.tonic_click_a_note_to", Keys[KeyOf()]);
                 int mask = ActiveMask(), best = -1; double bv = 0.08;
                 for (int i = 0; i < 12; i++) if ((mask >> i & 1) == 0 && Sc(PcAt + i) > bv) { bv = Sc(PcAt + i); best = i; }
                 if (best < 0) { capR.Text = ""; return; }
@@ -562,7 +562,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                 K(Speed, "SPEED", v => MsF(Exp(v, 2, 300)), tip: Loc.T("device.auto_shift.speed_how_fast_the_voice")),
                 K(MidiBendRange, "BEND", v => NotaNum.F($"±{v * 6:0.#} st"), Teal, Loc.T("device.auto_shift.bend_the_widest_move_between")),
             },
-            () => !MidiOn() ? "set Key Source to MIDI to follow the notes"
+            () => !MidiOn() ? Loc.T("device.auto_shift.set_key_source_to_midi")
                 : Sc(S_MidiNote) < 0 ? (MidiSrc() < 0 ? Loc.T("device.auto_shift.pick_a_track_in_from") : Loc.T("device.auto_shift.no_note_held"))
                 : Voiced() ? NotaNum.F($"input {InputText()} → clip note {TargetText()}") : NotaNum.F($"clip note {Note((int)Sc(S_MidiNote))}"),
             () => On(MidiLatch) ? Loc.T("device.auto_shift.latch_holds_the_target_between") : Loc.T("device.auto_shift.no_correction_between_notes"));
@@ -623,12 +623,12 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
                     int mn = (int)Sc(S_MidiNote);
                     bool live = mn >= 0;
                     return ("MIDI TARGET", true, live ? Brass : BorderStrong, live && Sc(S_MidiHeld) > 0,
-                        live ? NotaNum.F($"{Note(mn)} · vel {Sc(S_MidiVel):0}") : MidiSrc() < 0 ? "no source" : "no note",
+                        live ? NotaNum.F($"{Note(mn)} · vel {Sc(S_MidiVel):0}") : MidiSrc() < 0 ? Loc.T("device.auto_shift.no_source") : Loc.T("device.auto_shift.no_note"),
                         live && Voiced() ? NotaNum.F($"leads {CentsF(Sc(S_CorrCents))} · glide {MsF(GlideMs())}") : NotaNum.F($"from {MidiSrcName()}"));
                 }
                 bool v = Voiced();
                 return ("NOTE", false, v ? Success : BorderStrong, false,
-                    v ? NotaNum.F($"{Note(DetNote())} · {Sc(S_Hz):0.0} Hz") : Sc(S_Sibilant) > 0.5 ? (On(SkipSib) ? "sibilant · passed" : "sibilant") : "no pitch",
+                    v ? NotaNum.F($"{Note(DetNote())} · {Sc(S_Hz):0.0} Hz") : Sc(S_Sibilant) > 0.5 ? (On(SkipSib) ? "sibilant · passed" : "sibilant") : Loc.T("device.auto_shift.no_pitch"),
                     v ? NotaNum.F($"correction {CentsF(Sc(S_CorrCents))} · conf {Sc(S_Conf) * 100:0} %") : NotaNum.F($"in {Sc(S_InDb):0} dB"));
             }, Loc.T("device.auto_shift.what_the_detector_hears_now"));
             var follow = Toggle(Follow, Loc.T("device.auto_shift.follow_scale_device"), Loc.T("device.auto_shift.follow_copy_the_key_and_2"));
@@ -651,7 +651,7 @@ internal sealed class AutoShiftDeviceBody : IDeviceBody
             {
                 bool learning = Sc(S_Learning) > 0.5;
                 if (Sc(S_LearnKey) < 0)
-                    return ("LEARN", learning, learning ? Brass : BorderStrong, learning, learning ? "listening…" : "—", Loc.T("device.auto_shift.sing_a_few_bars"));
+                    return ("LEARN", learning, learning ? Brass : BorderStrong, learning, learning ? Loc.T("device.auto_shift.listening") : "—", Loc.T("device.auto_shift.sing_a_few_bars"));
                 string Ks(int k, double s) => $"{Keys[Math.Clamp(k, 0, 11)]} {(s > 1.5 ? "Minor" : "Major")}";
                 return ("LEARN", learning, learning ? Brass : Success, learning,
                     NotaNum.F($"{Ks((int)Sc(S_LearnKey), Sc(S_LearnScale))} · {Sc(S_LearnMatch) * 100:0} %"),

@@ -133,7 +133,7 @@ internal sealed class UtFieldView : VtWindowBase
         }
         if (!_valid)
         {
-            var ns = NotaGraph.AxisText("no signal");
+            var ns = NotaGraph.AxisText(Loc.T("common.no_signal"));
             ctx.DrawText(ns, new Point(cx + 6, (top + bot) / 2 - ns.Height / 2));
         }
         else
