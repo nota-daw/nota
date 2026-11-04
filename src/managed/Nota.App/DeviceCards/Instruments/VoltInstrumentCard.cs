@@ -596,7 +596,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             LfoCell(PKnob("vibamt", "DEPTH", "Vibrato Depth", VibDepth, 28, 46, Teal), 2, 3);
             var note = new TextBlock
             {
-                Text = Loc.T("vibrato always rides the pitch"), FontSize = NotaType.Axis, Foreground = TextDisabled,
+                Text = Loc.T("device.volt.vibrato_always_rides_the_pitch"), FontSize = NotaType.Axis, Foreground = TextDisabled,
                 VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap,
             };
             Grid.SetRow(note, 2); Grid.SetColumn(note, 4); Grid.SetColumnSpan(note, 2); lfoGrid.Children.Add(note);
@@ -620,7 +620,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         }
         var modHint = new TextBlock
         {
-            Text = MenuKit.Keys(Loc.T("drag a cell — up adds, down subtracts · ⌥-click types · double-click clears")), FontSize = NotaType.Axis,
+            Text = MenuKit.Keys(Loc.T("device.volt.drag_a_cell_up_adds")), FontSize = NotaType.Axis,
             Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center,
         };
         var modGrid = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 3 };
@@ -650,7 +650,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
                 FontSize = NotaType.Axis, Foreground = Teal, HorizontalAlignment = HorizontalAlignment.Center,
                 Cursor = new Cursor(StandardCursorType.Hand),
             };
-            ToolTip.SetTip(dest, Loc.T("Click for the next target, right-click for the previous"));
+            ToolTip.SetTip(dest, Loc.T("device.volt.click_for_the_next_target"));
             void Step(int dir)
             {
                 int n = MacroDests.Length;
@@ -693,7 +693,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             {
                 bool on = MacroOn(mv);
                 int d = MacroDest(mv);
-                name.Text = on ? Loc.F("Macro {0} · {1}", mv + 1, MacroWords[d]) : $"Macro {mv + 1}";
+                name.Text = on ? Loc.F("common.macro", mv + 1, MacroWords[d]) : $"Macro {mv + 1}";
                 name.Foreground = on ? NotaPalette.TextStrong : TextDisabled;
                 dest.Text = on ? "→ " + MacroDests[d] : "unassigned";
                 dest.Foreground = on ? Teal : TextDisabled;
@@ -709,9 +709,9 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
         var bodies = new Control[] { oscBody, filtBody, envBody, lfoBody, modBody, macroBody };
         var tabCells = new Border[TabNames.Length];
         var tabTexts = new TextBlock[TabNames.Length];
-        var clearAll = TextButton(Loc.T("Clear all"));
+        var clearAll = TextButton(Loc.T("common.clear_all"));
         clearAll.Margin = new Thickness(0, 0, 6, 0);
-        ToolTip.SetTip(clearAll, Loc.T("Zero every route in the matrix"));
+        ToolTip.SetTip(clearAll, Loc.T("device.volt.zero_every_route_in_the"));
         clearAll.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(clearAll).Properties.IsLeftButtonPressed) return;
@@ -938,7 +938,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
             2 => "amp · filter",
             3 => $"{(SyncDiv(G("lfo1sync")) > 0 ? SyncText(G("lfo1sync")) : "free")} · {(SyncDiv(G("lfo2sync")) > 0 ? SyncText(G("lfo2sync")) : "free")} · vibrato {(G("vibamt") <= 1e-3f ? "off" : "on")}",
             4 => Plural(RouteCount(), "route", "routes"),
-            _ => Loc.F("8 slots · {0} assigned", MacroAssigned()),
+            _ => Loc.F("device.volt.8_slots_assigned", MacroAssigned()),
         };
         string Summary() => tab switch
         {
@@ -954,7 +954,7 @@ internal sealed class VoltInstrumentCard : IInstrumentCard
                + $"LFO 2 {ShapeNames[Sel("lfo2shape", 4)]} {(SyncDiv(G("lfo2sync")) > 0 ? SyncText(G("lfo2sync")) : SlowHz(ExpMap(G("lfo2rate"), 0.05, 20)))} {LfoDest(3)} · "
                + $"vibrato {(G("vibamt") <= 1e-3f ? "off" : VibDepth(G("vibamt")) + (G("vibwheel") >= 0.5f ? " by wheel" : ""))}",
             4 => RouteCount() == 0 ? "no routes — drag a cell to make one" : Plural(RouteCount(), "route", "routes") + " in the matrix",
-            _ => Loc.F("8 slots · {0} assigned", MacroAssigned()),
+            _ => Loc.F("device.volt.8_slots_assigned", MacroAssigned()),
         };
         string Meta()
         {

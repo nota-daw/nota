@@ -97,10 +97,10 @@ internal static class VelocityModel
     internal static string DriveHint(Func<int, float> g)
     {
         int mode = Mode(g); double d = Drive(g);
-        if (mode == 2) return Loc.T("every note at this velocity");
+        if (mode == 2) return Loc.T("device.velocity.every_note_at_this_velocity");
         if (Math.Abs(d - 1) < 0.005) return "linear";
-        return mode == 0 ? (d > 1 ? Loc.T("soft notes louder") : Loc.T("soft notes quieter"))
-                         : (d > 1 ? Loc.T("stretched to the edges") : Loc.T("squeezed to the middle"));
+        return mode == 0 ? (d > 1 ? Loc.T("device.velocity.soft_notes_louder") : Loc.T("device.velocity.soft_notes_quieter"))
+                         : (d > 1 ? Loc.T("device.velocity.stretched_to_the_edges") : Loc.T("device.velocity.squeezed_to_the_middle"));
     }
 }
 
@@ -239,9 +239,9 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
                 };
                 ToolTip.SetTip(rowB, m switch
                 {
-                    0 => Loc.T("Curve — bend the response: Drive above 1 lifts soft notes, below 1 pushes them down"),
-                    1 => Loc.T("Compand — the same around the middle: above 1 stretches to the edges, below 1 squeezes to the middle"),
-                    _ => Loc.T("Fixed — every note comes out at one velocity"),
+                    0 => Loc.T("device.velocity.curve_bend_the_response_drive"),
+                    1 => Loc.T("device.velocity.compand_the_same_around_the"),
+                    _ => Loc.T("device.velocity.fixed_every_note_comes_out"),
                 });
                 Learn(rowB, PMode, "Mode");
                 readouts.Add(Paint);
@@ -255,7 +255,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             dTrack.Changed += n => { DriveSet(n); Refresh(); };
             dTrack.GestureBegin += () => { dGesture = DriveParam(); Begin(dGesture); };
             dTrack.GestureEnd += () => { if (dGesture >= 0) End(dGesture); dGesture = -1; };
-            ToolTip.SetTip(dTrack, Loc.T("Drag up / down, Shift for fine, double-click resets"));
+            ToolTip.SetTip(dTrack, Loc.T("device.velocity.drag_up_down_shift_for"));
             Learn(dTrack, PDrive, "Drive");
             ValueEntry.Attach(dValue, DriveNorm, DriveSet, () => VelocityModel.DriveText(G),
                 () => { dGesture = DriveParam(); Begin(dGesture); }, () => { End(dGesture); dGesture = -1; }, Refresh, control: dTrack);
@@ -274,7 +274,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
 
             // ---- TRANSFER ----
             var viz = new VelocityTransferViz { Full = true };
-            ToolTip.SetTip(viz, Loc.T("Input velocity across, output up. Dashed — the Out range; the band — where Random can put a note; dots — the last notes played"));
+            ToolTip.SetTip(viz, Loc.T("device.velocity.input_velocity_across_output_up"));
             var plotInfo = Mono("", Sub, 7);
             readouts.Add(() =>
             {
@@ -300,7 +300,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
             range.GestureBegin += h => Begin(h == 0 ? POutLo : POutHi);
             range.GestureEnd += h => End(h == 0 ? POutLo : POutHi);
             range.Changed += (h, n) => { if (h == 0) SetLo(1 + n * 126); else SetHi(1 + n * 126); Refresh(); };
-            ToolTip.SetTip(range, MenuKit.Keys(Loc.T("Out range — drag a handle, ⌥-click to type it, double-click resets to 1–127")));
+            ToolTip.SetTip(range, MenuKit.Keys(Loc.T("device.velocity.out_range_drag_a_handle")));
             {
                 string Vel(double n) => ((int)Math.Round(1 + Math.Clamp(n, 0, 1) * 126)).ToString(NotaNum.Culture);
                 ValueEntry.AttachHandles(range,
@@ -327,17 +327,17 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
                 if (!ev.GetCurrentPoint(rndRow).Properties.IsLeftButtonPressed) return;
                 Set1(PRandomOn, VelocityModel.RandomOn(G) ? 0 : 1); Refresh(); ev.Handled = true;
             };
-            ToolTip.SetTip(rndRow, Loc.T("Random — spread each note's velocity (the amount is kept while it is off)"));
+            ToolTip.SetTip(rndRow, Loc.T("device.velocity.random_spread_each_notes_velocity"));
             Learn(rndRow, PRandomOn, "Random On");
             var rndTrack = new SliderTrack { Height = 11, Reset = () => { Set1(PRandom, Def(PRandom)); Refresh(); } };
             rndTrack.Changed += n => { S(PRandom, Math.Round(n * VelocityModel.RandomSpan) / VelocityModel.RandomSpan); Refresh(); };
             rndTrack.GestureBegin += () => Begin(PRandom);
             rndTrack.GestureEnd += () => End(PRandom);
-            ToolTip.SetTip(rndTrack, Loc.T("Random amount, ±0–64 velocity — drag up / down, double-click resets"));
+            ToolTip.SetTip(rndTrack, Loc.T("device.velocity.random_amount_0_64_velocity"));
             Learn(rndTrack, PRandom, "Random");
             var dirSeg = DeviceCardKit.Segments(Dirs, () => VelocityModel.Dir(G), i => { Set1(PRandomDir, i); Refresh(); }, out var dirSync,
                 fill: true, padX: 2, fontSize: 8);
-            ToolTip.SetTip(dirSeg, Loc.T("Random both ways, only up, or only down"));
+            ToolTip.SetTip(dirSeg, Loc.T("device.velocity.random_both_ways_only_up"));
             Learn(dirSeg, PRandomDir, "Random Dir");
             readouts.Add(() =>
             {
@@ -354,7 +354,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
                 Child = new StackPanel { Spacing = 5, Children = { rndRow, rndTrack, dirSeg } } };
 
             var hist = new VelocityHistoryViz();
-            ToolTip.SetTip(hist, Loc.T("The last 12 notes: outline — velocity in, fill — velocity out"));
+            ToolTip.SetTip(hist, Loc.T("device.velocity.the_last_12_notes_outline"));
             readouts.Add(() => hist.Set(notes, count, Bypassed()));
             var histBox = new StackPanel { Spacing = 3, Children = { Caps("LAST 12 NOTES"), hist } };
 
@@ -375,7 +375,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
                 var (lo, hi) = VelocityModel.Range(G);
                 string rnd = VelocityModel.RandomOn(G) ? $"{VelocityModel.RandomText(G)} {Dirs[VelocityModel.Dir(G)].ToLowerInvariant()}" : "off";
                 statusL.Text = $"{Modes[Mode()]} · {(IsFixed() ? "value " + VelocityModel.Fixed(G) : $"drive {VelocityModel.Drive(G):0.00}")} · random {rnd} · out {lo}–{hi}";
-                statusR.Text = Bypassed() ? "bypassed" : Last() is { } l ? Loc.F("last {0} → {1}", l.In, l.Out) : "MIDI";
+                statusR.Text = Bypassed() ? "bypassed" : Last() is { } l ? Loc.F("device.velocity.last", l.In, l.Out) : "MIDI";
             });
             return Framed(islands, statusL, statusR);
         }
@@ -395,13 +395,13 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
                 int d = ev.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 2 : 1;
                 Set1(PMode, (Mode() + d) % 3); Refresh(); ev.Handled = true;
             };
-            ToolTip.SetTip(modeChip, Loc.T("Velocity mode: Curve / Compand / Fixed — click for the next, Shift-click for the previous"));
+            ToolTip.SetTip(modeChip, Loc.T("device.velocity.velocity_mode_curve_compand_fixed"));
             Learn(modeChip, PMode, "Mode");
             var hint = Mono("", Cap, 7); hint.HorizontalAlignment = HorizontalAlignment.Right;
             var head = new DockPanel { Height = 14, Children = { WithDock(modeChip, Dock.Left), hint } };
 
             var viz = new VelocityTransferViz { Full = false };
-            ToolTip.SetTip(viz, Loc.T("Input across, output up · dashed — the Out range · band — Random · dots — the last notes"));
+            ToolTip.SetTip(viz, Loc.T("device.velocity.input_across_output_up_dashed"));
             var lastIO = Mono("", Sub, 7);
             lastIO.HorizontalAlignment = HorizontalAlignment.Right; lastIO.VerticalAlignment = VerticalAlignment.Top; lastIO.Margin = new Thickness(0, 3, 5, 0);
             lastIO.IsHitTestVisible = false;
@@ -445,7 +445,7 @@ internal sealed class VelocityMidiBody : IMidiDeviceBody
                 End(PRandomOn); End(PRandomDir);
                 Refresh(); ev.Handled = true;
             };
-            ToolTip.SetTip(statusL, Loc.T("Random: both ways → up → down → off — click to step, Shift-click back"));
+            ToolTip.SetTip(statusL, Loc.T("device.velocity.random_both_ways_up_down"));
             Learn(statusL, PRandomDir, "Random Dir");
             var statusR = Mono("", Sub);
             readouts.Add(() =>

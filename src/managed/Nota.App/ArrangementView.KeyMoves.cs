@@ -47,19 +47,19 @@ public partial class ArrangementView
         {
             // Rows are what ⌥↑/⌥↓ step through, and a folded group's children have none: moving
             // only the shown clips would split the block, so the whole move is refused.
-            StatusMessage?.Invoke(Loc.T("Unfold the group to move these clips across tracks"));
+            StatusMessage?.Invoke(Loc.T("arrangement.key_moves.unfold_the_group_to_move"));
             return true;
         }
         int shift = ArrangementMoves.RowShift(block.Select(b => b.row).Distinct().ToList(), _tracks.Count, dir, TakesClipsFrom);
         if (shift == 0)
         {
-            StatusMessage?.Invoke(dir < 0 ? Loc.T("No track above takes these clips") : Loc.T("No track below takes these clips"));
+            StatusMessage?.Invoke(dir < 0 ? Loc.T("arrangement.key_moves.no_track_above_takes_these") : Loc.T("arrangement.key_moves.no_track_below_takes_these"));
             return true;
         }
         var moves = block.Select(b => (b.track, b.clip, _tracks[b.row + shift].Id, b.start)).ToArray();
         if (MoveBlock(moves) is not { } move) return true;
         if (_engine.LastMoveKeptDeviceAutomation())
-            StatusMessage?.Invoke(Loc.T("Moved across tracks — device automation stayed on the source"));
+            StatusMessage?.Invoke(Loc.T("arrangement.moved_across_tracks_device_automation"));
         Refresh();
         ReselectPlaced(move);
         ClipsMoved?.Invoke(move);

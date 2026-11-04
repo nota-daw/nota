@@ -21,8 +21,8 @@ public sealed partial class SessionView
     // Launch quantum steps (beats, label). 0 = launch at once.
     internal static readonly (double Beats, string Label)[] QuantSteps =
     {
-        (0.0, Loc.T("None")), (0.25, "1/16"), (0.5, "1/8"), (1.0, "1/4"), (2.0, "1/2"),
-        (4.0, Loc.T("1 Bar")), (8.0, Loc.T("2 Bars")), (16.0, Loc.T("4 Bars")), (32.0, Loc.T("8 Bars")),
+        (0.0, Loc.T("common.none")), (0.25, "1/16"), (0.5, "1/8"), (1.0, "1/4"), (2.0, "1/2"),
+        (4.0, Loc.T("session.toolbar.1_bar")), (8.0, Loc.T("session.toolbar.2_bars")), (16.0, Loc.T("session.toolbar.4_bars")), (32.0, Loc.T("session.toolbar.8_bars")),
     };
     private static readonly int[] FixedBars = { 0, 1, 2, 4, 8 };
 
@@ -44,19 +44,19 @@ public sealed partial class SessionView
     private Control BuildToolbar()
     {
         _recDot = new Glyph(GlyphKind.Record, 8);
-        _recText = new TextBlock { Text = Loc.T("Session rec"), FontSize = 11, FontWeight = FontWeight.SemiBold };
+        _recText = new TextBlock { Text = Loc.T("session.toolbar.session_rec"), FontSize = 11, FontWeight = FontWeight.SemiBold };
         _recBtn = new Button
         {
             Height = NotaSize.Shell, Padding = new Thickness(10, 0),
             Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, Children = { _recDot, _recText } },
         };
-        ToolTip.SetTip(_recBtn, Loc.T("Record into the armed track at the selected scene · click again to keep the take"));
+        ToolTip.SetTip(_recBtn, Loc.T("session.toolbar.record_into_the_armed_track"));
         _recBtn.Click += (_, _) => SessionRec();
 
-        var fixedLabel = Caps(Loc.T("Fixed"));
+        var fixedLabel = Caps(Loc.T("session.toolbar.fixed"));
         _fixedSeg = new Border();
         var fixedRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { fixedLabel, _fixedSeg } };
-        ToolTip.SetTip(fixedRow, Loc.T("Fixed record length in bars — the take stops by itself"));
+        ToolTip.SetTip(fixedRow, Loc.T("session.toolbar.fixed_record_length_in_bars"));
 
         _quantLabel = new TextBlock { FontSize = 10, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         _quantLabel.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
@@ -66,10 +66,10 @@ public sealed partial class SessionView
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 8,
-                Children = { Caps(Loc.T("Quant")), _quantLabel, new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.TextDisabled } },
+                Children = { Caps(Loc.T("session.toolbar.quant")), _quantLabel, new Glyph(GlyphKind.ChevronDown, 7) { Foreground = NotaPalette.TextDisabled } },
             },
         };
-        ToolTip.SetTip(quant, Loc.T("Launch quantize: when clips and scenes start"));
+        ToolTip.SetTip(quant, Loc.T("session.toolbar.launch_quantize_when_clips_and"));
         quant.Click += (_, _) =>
         {
             var f = new MenuFlyout();
@@ -84,17 +84,17 @@ public sealed partial class SessionView
         };
 
         _followSwitch = new SwitchTrack { VerticalAlignment = VerticalAlignment.Center };
-        _followText = new TextBlock { Text = Loc.T("Follow"), FontSize = 11, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
+        _followText = new TextBlock { Text = Loc.T("session.toolbar.follow"), FontSize = 11, FontWeight = FontWeight.Medium, VerticalAlignment = VerticalAlignment.Center };
         var follow = new Button
         {
             Height = NotaSize.Shell, Padding = new Thickness(9, 0),
             Content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, Children = { _followSwitch, _followText } },
         };
-        ToolTip.SetTip(follow, Loc.T("Follow actions on or off for every clip and scene"));
+        ToolTip.SetTip(follow, Loc.T("session.toolbar.follow_actions_on_or_off"));
         follow.Click += (_, _) => { _engine.SessionFollow = !_engine.SessionFollow; SyncToolbar(); RebuildInspector(); };
 
-        var capture = new Button { Content = Loc.T("Capture scene"), Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 11 };
-        ToolTip.SetTip(capture, Loc.T("Copy the clips playing now into a new scene"));
+        var capture = new Button { Content = Loc.T("session.toolbar.capture_scene"), Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 11 };
+        ToolTip.SetTip(capture, Loc.T("session.toolbar.copy_the_clips_playing_now"));
         capture.Click += (_, _) => CaptureScene();
 
         // Section toggles: each shows or hides one mixer section under the grid.
@@ -107,8 +107,8 @@ public sealed partial class SessionView
             sections.Children.Add(tb);
         }
         Section("I/O", () => _showIO, v => _showIO = v);
-        Section(Loc.T("Sends"), () => _showSends, v => _showSends = v);
-        Section(Loc.T("Mixer"), () => _showMixer, v => _showMixer = v);
+        Section(Loc.T("common.sends"), () => _showSends, v => _showSends = v);
+        Section(Loc.T("common.mixer"), () => _showMixer, v => _showMixer = v);
         var sectionsWell = new Border { Classes = { "segmented" }, Padding = new Thickness(2), Child = sections };
 
         _posText = new TextBlock { FontSize = 12, Foreground = NotaPalette.TextPrimary, MinWidth = 56, VerticalAlignment = VerticalAlignment.Center };
@@ -117,8 +117,8 @@ public sealed partial class SessionView
         _tempoText.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
         var readout = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(8, 0), Children = { _posText, _tempoText } };
 
-        _backBtn = new Button { Content = Loc.T("Back to Arrangement"), Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 11 };
-        ToolTip.SetTip(_backBtn, Loc.T("Stop session clips and hand every track back to the Arrangement"));
+        _backBtn = new Button { Content = Loc.T("session.toolbar.back_to_arrangement"), Height = NotaSize.Shell, Padding = new Thickness(10, 0), FontSize = 11 };
+        ToolTip.SetTip(_backBtn, Loc.T("session.toolbar.stop_session_clips_and_hand"));
         _backBtn.Click += (_, _) => { _engine.BackToArrangement(); UpdateStates(); };
 
         var stopAll = new Button
@@ -127,10 +127,10 @@ public sealed partial class SessionView
             Content = new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 7,
-                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = Loc.T("Stop all"), FontSize = 11, FontWeight = FontWeight.SemiBold } },
+                Children = { new Glyph(GlyphKind.Stop, 7), new TextBlock { Text = Loc.T("session.toolbar.stop_all"), FontSize = 11, FontWeight = FontWeight.SemiBold } },
             },
         };
-        ToolTip.SetTip(stopAll, Loc.T("Stop every session clip"));
+        ToolTip.SetTip(stopAll, Loc.T("session.stop_every_session_clip"));
         stopAll.Click += (_, _) => { _engine.StopAllSession(); UpdateStates(); };
 
         // The inspector column can be folded away to give the grid its width back (critique F2).
@@ -139,8 +139,8 @@ public sealed partial class SessionView
             Content = new Glyph(GlyphKind.Sidebar, 16), Width = NotaSize.Shell + 6, Height = NotaSize.Shell, Padding = new Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Center, VerticalContentAlignment = VerticalAlignment.Center, IsChecked = InspectorOpen,
         };
-        ToolTip.SetTip(_inspectorToggle, Loc.T("Inspector — show or hide it"));
-        Avalonia.Automation.AutomationProperties.SetName(_inspectorToggle, Loc.T("Inspector"));
+        ToolTip.SetTip(_inspectorToggle, Loc.T("session.toolbar.inspector_show_or_hide_it"));
+        Avalonia.Automation.AutomationProperties.SetName(_inspectorToggle, Loc.T("session.toolbar.inspector"));
         _inspectorToggle.Click += (_, _) => SetInspectorOpen(_inspectorToggle.IsChecked == true);
 
         // Overflow: when the bar is too narrow, the least-used controls fold into "⋯" one by one
@@ -148,20 +148,20 @@ public sealed partial class SessionView
         // Every control stays reachable — the menu offers whatever is hidden.
         const double MoreW = 32;
         var more = new Button { Content = "⋯", Width = MoreW, Height = NotaSize.Shell, Padding = new Thickness(0), FontSize = 12, HorizontalContentAlignment = HorizontalAlignment.Center, IsVisible = false };
-        ToolTip.SetTip(more, Loc.T("More session controls"));
+        ToolTip.SetTip(more, Loc.T("session.toolbar.more_session_controls"));
         more.Click += (_, _) =>
         {
             var f = new MenuFlyout();
             void Add(string header, Action act) { var mi = new MenuItem { Header = header }; mi.Click += (_, _) => act(); f.Items.Add(mi); }
-            if (!_backBtn!.IsVisible) Add(Loc.T("Back to Arrangement"), () => { _engine.BackToArrangement(); UpdateStates(); });
-            if (!capture.IsVisible) Add(Loc.T("Capture scene"), CaptureScene);
+            if (!_backBtn!.IsVisible) Add(Loc.T("session.toolbar.back_to_arrangement"), () => { _engine.BackToArrangement(); UpdateStates(); });
+            if (!capture.IsVisible) Add(Loc.T("session.toolbar.capture_scene"), CaptureScene);
             if (!sectionsWell.IsVisible)
             {
-                Add((_showIO ? Loc.T("Hide") : Loc.T("Show")) + " I/O", () => { _showIO = !_showIO; Refresh(); });
-                Add((_showSends ? Loc.T("Hide") : Loc.T("Show")) + " sends", () => { _showSends = !_showSends; Refresh(); });
-                Add((_showMixer ? Loc.T("Hide") : Loc.T("Show")) + " mixer", () => { _showMixer = !_showMixer; Refresh(); });
+                Add((_showIO ? Loc.T("session.toolbar.hide") : Loc.T("common.show")) + " I/O", () => { _showIO = !_showIO; Refresh(); });
+                Add((_showSends ? Loc.T("session.toolbar.hide") : Loc.T("common.show")) + " sends", () => { _showSends = !_showSends; Refresh(); });
+                Add((_showMixer ? Loc.T("session.toolbar.hide") : Loc.T("common.show")) + " mixer", () => { _showMixer = !_showMixer; Refresh(); });
             }
-            if (!follow.IsVisible) Add(_engine.SessionFollow ? Loc.T("Turn follow off") : Loc.T("Turn follow on"), () => { _engine.SessionFollow = !_engine.SessionFollow; SyncToolbar(); RebuildInspector(); });
+            if (!follow.IsVisible) Add(_engine.SessionFollow ? Loc.T("session.toolbar.turn_follow_off") : Loc.T("session.toolbar.turn_follow_on"), () => { _engine.SessionFollow = !_engine.SessionFollow; SyncToolbar(); RebuildInspector(); });
             f.ShowAt(more);
         };
 
@@ -210,7 +210,7 @@ public sealed partial class SessionView
         if (_engine.TryGetSessionRecordTarget(out _, out _, out _)) { _engine.StopSessionRecord(); Refresh(); return; }
         int scene = _sel.Scene;
         int id = _engine.RecordSessionScene(scene);
-        if (id == 0) { Say(Loc.T("Arm a track with an empty slot in this scene to record.")); return; }
+        if (id == 0) { Say(Loc.T("session.toolbar.arm_a_track_with_an")); return; }
         Refresh();
     }
 
@@ -218,7 +218,7 @@ public sealed partial class SessionView
     public void SyncToolbar()
     {
         double q = _engine.LaunchQuant;
-        string ql = q > 0 ? NotaNum.Str(q, "0.##") + " beats" : Loc.T("None");
+        string ql = q > 0 ? NotaNum.Str(q, "0.##") + " beats" : Loc.T("common.none");
         foreach (var (beats, label) in QuantSteps) if (Math.Abs(beats - q) < 1e-6) ql = label;
         if (_quantLabel is not null) _quantLabel.Text = ql;
 
@@ -230,7 +230,7 @@ public sealed partial class SessionView
         {
             double len = _engine.SessionRecordLength;
             int sel = Array.FindIndex(FixedBars, b => Math.Abs(b * 4 - len) < 1e-6);
-            var seg = Segmented(Array.ConvertAll(FixedBars, b => b == 0 ? Loc.T("Off") : b.ToString(NotaNum.Culture)), sel < 0 ? 0 : sel,
+            var seg = Segmented(Array.ConvertAll(FixedBars, b => b == 0 ? Loc.T("common.off") : b.ToString(NotaNum.Culture)), sel < 0 ? 0 : sel,
                 i => _engine.SessionRecordLength = FixedBars[i] * 4.0, mono: true);
             _fixedSeg.Child = seg;
         }

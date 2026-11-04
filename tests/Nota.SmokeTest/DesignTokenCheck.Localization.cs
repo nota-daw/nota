@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// The interface language (spec 068), checked in two parts.
+// The interface language (spec 068, keyed since spec 077), checked in two parts.
 //
-//   RunLanguage      the pure layer as data: the language-file contract, lookup and fallback,
-//                    plurals, invariant number format, the settings default and the real
-//                    Languages/*.json files.
-//   RunLocalization  the source against the translation: every Loc.T / F / FC / Plural key in
-//                    src/managed has a French entry (a missing one fails the build), none is
-//                    orphaned, placeholders match; and a shrink-only ratchet on interface text still written as a raw literal
+//   RunLanguage      the pure layer as data: the language-file contract on the shared fixtures
+//                    (Fixtures/Languages/verdicts.json), the key-set hash, lookup and fallback,
+//                    plural rules, invariant number format, the settings default and the real
+//                    en.json and Languages/*.json files.
+//   RunLocalization  the source against the English reference (spec 077): every Loc.T / F /
+//                    Plural and {app:T} key in src/managed is a well-formed key of en.json, every
+//                    en.json key is used, each is used the way it is shaped; French covers every
+//                    key validly; and a shrink-only ratchet on interface text still written as a raw literal
 //                    (LocalizationAllowList.txt), the same technique as the label ratchet of
 //                    spec 012. Wrapping a literal in Loc.T takes it off the list; a new raw
 //                    literal fails until it is wrapped or listed as data.
@@ -34,15 +36,15 @@ internal static partial class DesignTokenCheck
     {
         var available = new[] { "en", "fr" };
 
-        // Plural rules (data-model § Available languages).
-        yield return (UiLanguage.Plural("en", 1) == PluralForm.One && UiLanguage.Plural("en", 0) == PluralForm.Other
-                      && UiLanguage.Plural("en", 2) == PluralForm.Other,
-            "English: 1 is one; 0 and 2 are other");
-        yield return (UiLanguage.Plural("fr", 0) == PluralForm.One && UiLanguage.Plural("fr", 1) == PluralForm.One
-                      && UiLanguage.Plural("fr", 2) == PluralForm.Other,
-            "French: 0 and 1 are one; 2 is other");
-        yield return (UiLanguage.Plural("xx", 1) == PluralForm.One && UiLanguage.Plural("xx", 0) == PluralForm.Other,
-            "a language with no rule counts like English");
+        // Plural rules, named by the language file (spec 077 research R6).
+        yield return (UiLanguage.Plural(UiLanguage.RuleOneIs1, 1) == PluralForm.One && UiLanguage.Plural(UiLanguage.RuleOneIs1, 0) == PluralForm.Other
+                      && UiLanguage.Plural(UiLanguage.RuleOneIs1, 2) == PluralForm.Other,
+            "one_is_1 (English): 1 is one; 0 and 2 are other");
+        yield return (UiLanguage.Plural(UiLanguage.RuleOneIs0Or1, 0) == PluralForm.One && UiLanguage.Plural(UiLanguage.RuleOneIs0Or1, 1) == PluralForm.One
+                      && UiLanguage.Plural(UiLanguage.RuleOneIs0Or1, 2) == PluralForm.Other,
+            "one_is_0_1 (French): 0 and 1 are one; 2 is other");
+        yield return (UiLanguage.IsKnownRule("one_is_1") && UiLanguage.IsKnownRule("one_is_0_1") && !UiLanguage.IsKnownRule("one_is_42") && !UiLanguage.IsKnownRule(null),
+            "only the plural rules this build implements are known");
 
         // Stored value → running language.
         yield return (UiLanguage.Normalize(null, available) == "en" && UiLanguage.Normalize("", available) == "en"
@@ -73,61 +75,89 @@ internal static partial class DesignTokenCheck
         yield return (UiLanguage.Normalize(edited.Language, available) == "en" && edited.Language == "zz" && edited.InterfaceScale == 125,
             "an unknown stored language runs as English and is not rewritten by reading it");
 
-        // The language-file contract (contracts/translation-file.md).
-        const string frJson = """
-            { "formatVersion": 1, "code": "fr", "name": "Français", "strings": {
-                "Save": "Enregistrer",
-                "Open|menu": "Ouvrir",
-                "Open|clip": "Ouvrir le clip",
-                "Blank": "",
-                "Bad {0}": "Mauvais {",
-                "{0} tracks": { "one": "{0} piste", "other": "{0} pistes" },
-                "{0} clips": { "other": "{0} clips FR" },
-                "Brace {0}": "Accolade {{x}} {0}"
-            } }
-            """;
-        var fr = TranslationTable.Parse(frJson, out var frError);
-        yield return (fr is not null && fr.Code == "fr" && fr.Name == "Français" && fr.Count == 8,
-            fr is null ? "a language file parses: " + frError : "a language file parses (8 texts)");
-        if (fr is null) yield break;
+        // The language-file contract (spec 077 contracts/language-file.md), on the shared fixtures.
+        var root = RepoRoot();
+        if (root is null) { yield return (false, "repo root located"); yield break; }
+        var fixtures = Path.Combine(root, "tests/Nota.SmokeTest/Fixtures/Languages");
+        TranslationTable? Fixture(string name, out string? error) => TranslationTable.Parse(File.ReadAllText(Path.Combine(fixtures, name)), out error);
+        var english = Fixture("en-ref.json", out var enError);
+        yield return (english is not null && english.Count == 12 && english.PluralRule == UiLanguage.RuleOneIs1,
+            english is null ? "the fixture reference parses: " + enError : "the fixture reference parses (12 keys, English counting)");
+        if (english is null) yield break;
+
+        using (var verdicts = JsonDocument.Parse(File.ReadAllText(Path.Combine(fixtures, "verdicts.json"))))
+            foreach (var v in verdicts.RootElement.GetProperty("files").EnumerateObject())
+            {
+                var table = Fixture(v.Name, out var error);
+                bool loads = v.Value.GetProperty("loads").GetBoolean();
+                if (!loads) { yield return (table is null && error is not null, $"{v.Name}: rejected with a reason ({error ?? "accepted!"})"); continue; }
+                if (table is null) { yield return (false, $"{v.Name}: should load: {error}"); continue; }
+                var (problems, coverage) = table.ValidateAgainst(english);
+                var got = problems.Select(p => p.Key).Distinct().Order(StringComparer.Ordinal).ToList();
+                var want = v.Value.GetProperty("problems").EnumerateArray().Select(e => e.GetString()!).Order(StringComparer.Ordinal).ToList();
+                int wantCoverage = v.Value.GetProperty("coverage").GetInt32();
+                yield return (got.SequenceEqual(want) && coverage == wantCoverage,
+                    $"{v.Name}: problems [{string.Join(", ", got)}], coverage {coverage} % (verdicts.json: [{string.Join(", ", want)}], {wantCoverage} %)");
+            }
 
         string? e1, e2, e3, e4, e5, e6;
-        yield return (TranslationTable.Parse("{\"formatVersion\":2,\"code\":\"xx\",\"name\":\"X\"}", out e1) is null && e1 is not null,
-            "a newer formatVersion is left out with a reason, not thrown");
-        yield return (TranslationTable.Parse("{ not json", out e2) is null && e2 is not null, "malformed JSON is left out with a reason, not thrown");
-        yield return (TranslationTable.Parse("{\"formatVersion\":1,\"code\":\"xx\",\"name\":\"X\",\"strings\":{\"A\":\"1\",\"A\":\"2\"}}", out e3) is null && e3 is not null,
+        yield return (TranslationTable.Parse("{ not json", out e1) is null && e1 is not null, "malformed JSON is left out with a reason, not thrown");
+        yield return (TranslationTable.Parse("{\"formatVersion\":2,\"code\":\"xx\",\"name\":\"X\",\"plural\":\"one_is_1\",\"strings\":{\"a.b\":\"1\",\"a.b\":\"2\"}}", out e2) is null && e2 is not null,
             "a duplicate key is an error");
-        yield return (TranslationTable.Parse("{\"formatVersion\":1,\"code\":\"xx\",\"name\":\"X\",\"strings\":{\"A\":5}}", out e4) is null && e4 is not null,
-            "a text that is neither a string nor a plural object is an error");
-        yield return (TranslationTable.Parse("{\"formatVersion\":1,\"code\":\"FR\",\"name\":\"X\"}", out e5) is null
-                      && TranslationTable.Parse("{\"formatVersion\":1,\"code\":\"xx\"}", out e6) is null,
+        yield return (TranslationTable.Parse("{\"formatVersion\":2,\"code\":\"FR\",\"name\":\"X\",\"plural\":\"one_is_1\"}", out e3) is null
+                      && TranslationTable.Parse("{\"formatVersion\":2,\"code\":\"xx\",\"plural\":\"one_is_1\"}", out e4) is null,
             "an upper-case code or a missing name is an error");
+        yield return (TranslationTable.Parse("{\"formatVersion\":2,\"code\":\"xx\",\"name\":\"X\"}", out e5) is null && e5 is not null
+                      && TranslationTable.Parse("{\"formatVersion\":2,\"code\":\"en\",\"name\":\"English\"}", out e6) is not null,
+            "a translation must name its plural rule; English counts as one_is_1 without one");
+        yield return (TranslationTable.IsKey("main.save_as") && TranslationTable.IsKey("device.eq8.band_2") && !TranslationTable.IsKey("Save")
+                      && !TranslationTable.IsKey("main") && !TranslationTable.IsKey("main.Save") && !TranslationTable.IsKey("main..save")
+                      && !TranslationTable.IsKey("a." + new string('b', 80)),
+            "keys are lower-case dot-separated segments, at least two, up to 80 characters");
 
-        // Lookup and fallback, with French running.
-        Loc.ResetForTests();
+        // The key-set hash: the identity of a Nota version's keys (contract § Key-set hash).
+        string Reference(string strings) => $"{{\"formatVersion\":2,\"code\":\"en\",\"name\":\"English\",\"strings\":{{{strings}}}}}";
+        string Hash(string strings) => TranslationTable.Parse(Reference(strings), out _)!.KeySetHash();
+        var h = Hash("\"a.b\":\"Save {0}\",\"a.c\":{\"one\":\"{0} x\",\"other\":\"{0} xs\"}");
+        yield return (h.Length == 16 && h == Hash("\"a.c\":{\"one\":\"{0} y\",\"other\":\"{0} ys\"},\"a.b\":\"Keep {0} safe\""),
+            "the key-set hash ignores wording and order");
+        yield return (h != Hash("\"a.b\":\"Save {0}\"") && h != Hash("\"a.b\":\"Save {0} {1}\",\"a.c\":{\"one\":\"{0} x\",\"other\":\"{0} xs\"}")
+                      && h != Hash("\"a.b\":\"Save {0}\",\"a.c\":\"{0} xs\""),
+            "the key-set hash changes with a removed key, new placeholders or a text that stops being counted");
+
+        // Lookup and fallback, on the fixture reference.
+        var xx = Fixture("xx.json", out _)!;
+        var broken = Fixture("xx-broken.json", out _)!;
+        Loc.ResetForTests(english);
         yield return (!Loc.UsedBeforeInstall, "nothing has been asked for yet");
-        _ = Loc.T("anything");
-        yield return (Loc.UsedBeforeInstall, "a text asked for before Install is flagged");
-        Loc.ResetForTests();
+        yield return (Loc.T("test.save") == "Save" && Loc.UsedBeforeInstall, "before Install a text is English, and flagged");
+        Loc.ResetForTests(english);
         Loc.Install(null, "en");
-        _ = Loc.T("anything");
-        yield return (!Loc.UsedBeforeInstall && Loc.Language == "en", "after Install nothing is flagged");
+        yield return (Loc.T("test.save") == "Save" && !Loc.UsedBeforeInstall && Loc.Language == "en", "after Install nothing is flagged");
+        yield return (Loc.Plural("test.tracks", 1) == "1 track" && Loc.Plural("test.tracks", 0) == "0 tracks" && Loc.F("test.delete_clips", 3) == "Delete 3 clips?",
+            "English running: counted and formatted texts read as the reference has them");
+        string? missing = null;
+        void OnMissing(string k) => missing = k;
+        Loc.MissingKey += OnMissing;
+        var shown = Loc.T("test.not_in_any_table");
+        Loc.MissingKey -= OnMissing;
+        yield return (shown == "test.not_in_any_table" && missing == "test.not_in_any_table", "a key in no table shows itself and is reported");
 
-        Loc.Install(fr, "fr");
-        yield return (Loc.Language == "fr", "French is running");
-        yield return (Loc.T("Save") == "Enregistrer", "a translated text is returned");
-        yield return (Loc.T("Never translated") == "Never translated", "a missing text is its English original");
-        yield return (Loc.T("Open", "menu") == "Ouvrir" && Loc.T("Open", "clip") == "Ouvrir le clip", "a context picks the meaning");
-        yield return (Loc.T("Open") == "Open" && Loc.T("Close", "menu") == "Close", "no context leaks into the shown text");
-        yield return (Loc.T("Blank") == "Blank", "an empty translation is never shown blank");
-        yield return (Loc.Plural(0, "{0} track", "{0} tracks") == "0 piste" && Loc.Plural(1, "{0} track", "{0} tracks") == "1 piste"
-                      && Loc.Plural(2, "{0} track", "{0} tracks") == "2 pistes",
-            "French counts 0 and 1 as one");
-        yield return (Loc.Plural(1, "{0} clip", "{0} clips") == "1 clips FR", "a counted text with no singular form uses its other form");
-        yield return (Loc.Plural(1, "{0} take", "{0} takes") == "1 take" && Loc.Plural(0, "{0} take", "{0} takes") == "0 takes",
-            "a counted text with no entry falls back to English and its rule");
-        yield return (Loc.F("Bad {0}", 1) == "Bad 1", "a broken pattern in a language file falls back to English, not an exception");
-        yield return (Loc.F("Brace {0}", 7) == "Accolade {x} 7", "{{ }} are literal braces");
+        Loc.Install(xx, "xx");
+        yield return (Loc.Language == "xx" && Loc.T("test.save") == "Xsave", "a translated text is returned");
+        yield return (Loc.T("test.open_menu") == "Xopen" && Loc.T("test.open_clip") == "Xopen clip", "two meanings of one English word are two keys");
+        yield return (Loc.T("test.blank") == "Blank" && Loc.F("test.delete_clips", 3) == "Delete 3 clips?", "a text the language lacks is English");
+        yield return (Loc.Plural("test.tracks", 1) == "1 xtrack" && Loc.Plural("test.tracks", 0) == "0 xtracks", "a one_is_1 language counts like English");
+        yield return (Loc.Plural("test.takes", 1) == "1 take" && Loc.Plural("test.takes", 0) == "0 takes", "a counted text the language lacks falls back to English and its rule");
+
+        Loc.Install(broken, "xx");
+        yield return (Loc.Plural("test.tracks", 0) == "0 piste" && Loc.Plural("test.tracks", 1) == "1 piste" && Loc.Plural("test.tracks", 2) == "2 pistes",
+            "a one_is_0_1 language counts 0 and 1 as one");
+        yield return (Loc.Plural("test.clips", 1) == "1 clips FR", "a counted text with no singular form uses its other form");
+        yield return (Loc.F("test.bad", 1) == "Bad 1" && Loc.F("test.delete_clips", 2) == "Delete 2 clips?",
+            "an entry with the wrong placeholders shows English, not an exception");
+        yield return (Loc.T("test.save") == "Save" && Loc.T("test.blank") == "Blank", "an entry of the wrong shape, or empty, shows English");
+        yield return (Loc.F("test.brace", 7) == "Accolade {x} 7", "{{ }} are literal braces");
 
         // Numbers follow the thread culture, as the interpolated strings they replace did; the
         // language never changes that culture.
@@ -136,54 +166,37 @@ internal static partial class DesignTokenCheck
         try
         {
             CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
-            notation = Loc.F("{0}", 1.5) + "|" + Loc.Plural(2, "{0} bar", "{0} bars");
+            notation = Loc.F("test.number", 1.5) + "|" + Loc.Plural("test.bars", 2);
         }
         catch (CultureNotFoundException) { notation = "1,5|2 bars"; }
         finally { CultureInfo.CurrentCulture = before; }
         yield return (notation == "1,5|2 bars", "numbers format with the thread culture, which the language leaves alone");
-        Loc.Install(fr, "fr");
+        Loc.Install(xx, "xx");
         yield return (before.Name == CultureInfo.CurrentCulture.Name, "installing a language leaves the thread culture alone");
 
-        // English running: every call is its own text.
-        Loc.Install(fr, "en");
-        yield return (Loc.T("Save") == "Save" && Loc.T("Open", "menu") == "Open" && Loc.Plural(1, "{0} track", "{0} tracks") == "1 track",
-            "English running: wrapping a text never changes it");
-        yield return (Loc.Plural(2, "{0} track", "{0} tracks") == "2 tracks" && Loc.F("Delete {0} clips?", 3) == "Delete 3 clips?",
-            "English running: counted and formatted texts read as written");
+        // English running ignores any table passed in.
+        Loc.Install(xx, "en");
+        yield return (Loc.T("test.save") == "Save" && Loc.Plural("test.tracks", 1) == "1 track", "English running: a table passed in is not used");
 
-        // A language the app does not ship, from a fixture: any file in the format works (spec 068 US5).
-        var fixtureRoot = RepoRoot();
-        if (fixtureRoot is not null)
-        {
-            var xx = TranslationTable.Parse(File.ReadAllText(Path.Combine(fixtureRoot, "tests/Nota.SmokeTest/Fixtures/Languages/xx.json")), out var xxError);
-            yield return (xx is not null && xx.Code == "xx" && xx.Name == "Xxxx", xx is null ? "the fixture language parses: " + xxError : "the fixture language parses");
-            if (xx is not null)
-            {
-                Loc.Install(xx, "xx");
-                yield return (Loc.T("Save") == "Xsave" && Loc.T("Open", "menu") == "Xopen" && Loc.T("Open", "clip") == "Xopen clip",
-                    "a new language translates its texts, contexts included");
-                yield return (Loc.T("Never written") == "Never written" && Loc.F("Delete {0} clips?", 3) == "Delete 3 clips?",
-                    "a text the new language does not cover shows in English");
-                yield return (Loc.Plural(1, "{0} track", "{0} tracks") == "1 xtrack" && Loc.Plural(0, "{0} track", "{0} tracks") == "0 xtracks",
-                    "a language with no plural rule counts like English");
-            }
-        }
-        Loc.Install(fr, "en");
-
-        // The real language files, from disk.
-        var root = RepoRoot();
-        if (root is null) { yield return (false, "repo root located"); yield break; }
+        // The real English reference and language files, from disk.
+        Loc.ResetForTests();
+        var real = Loc.English;
+        yield return (Loc.EnglishError is null && real.Count > 1000 && real.Code == "en" && real.Problems.Count == 0,
+            Loc.EnglishError is null ? $"the embedded English reference is valid ({real.Count} keys, key set {real.KeySetHash()})" : "the embedded English reference: " + Loc.EnglishError);
+        var onDisk = TranslationTable.Parse(File.ReadAllText(Path.Combine(root, "src/managed/Nota.Application/Localization/en.json")), out _);
+        yield return (onDisk is not null && onDisk.KeySetHash() == real.KeySetHash(), "the embedded English is the en.json in the source");
         var dir = Path.Combine(root, "src/managed/Nota.App/Languages");
         var files = Directory.EnumerateFiles(dir, "*.json").OrderBy(f => f, StringComparer.Ordinal).ToArray();
         foreach (var file in files)
         {
             var id = Path.GetFileNameWithoutExtension(file)!;
             var table = TranslationTable.Parse(File.ReadAllText(file), out var error);
-            yield return (table is not null && table.Code == id, table is null ? $"{id}.json: {error}" : $"{id}.json: valid ({table.Name}, {table.Count} texts)");
+            yield return (table is not null && table.Code == id && id != "en",
+                table is null ? $"{id}.json: {error}" : $"{id}.json: valid ({table.Name}, {table.Count} texts, rule {table.PluralRule})");
         }
         var names = files.Select(f => TranslationTable.Parse(File.ReadAllText(f), out _)).Where(t => t is not null)
             .ToDictionary(t => t!.Code, t => t!.Name);
-        yield return (names.GetValueOrDefault("en") == "English" && names.GetValueOrDefault("fr") == "Français",
+        yield return (real.Name == "English" && names.GetValueOrDefault("fr") == "Français",
             "the picker offers English and Français, each by its own name");
 
         Loc.ResetForTests();
@@ -193,23 +206,22 @@ internal static partial class DesignTokenCheck
     // ---- The source against the translation ------------------------------------------------
 
     private const string LocLit = @"""(?:[^""\\\n]|\\.)*""";
-    private static readonly Regex LocT = new($@"\bLoc\.T\(\s*(?<t>{LocLit})(?:\s*,\s*(?:context:\s*)?(?<c>{LocLit}))?");
-    private static readonly Regex LocF = new($@"\bLoc\.F\(\s*(?<t>{LocLit})");
-    private static readonly Regex LocFC = new($@"\bLoc\.FC\(\s*(?<c>{LocLit})\s*,\s*(?<t>{LocLit})");
-    private static readonly Regex LocPlural = new($@"\bLoc\.Plural\([^""]*?,\s*(?<one>{LocLit})\s*,\s*(?<t>{LocLit})(?:\s*,\s*(?:context:\s*)?(?<c>{LocLit}))?");
-    private static readonly Regex LocInterpolated = new(@"\bLoc\.(?:T|F)\(\s*[$@]+""|\bLoc\.FC\(\s*""[^""]*""\s*,\s*[$@]+""");
-    private static readonly Regex LocPlaceholder = new(@"\{(\d+)(?:[,:][^{}]*)?\}");
-    // The XAML form: Header="{app:T 'Save as…'}" or {app:T File}, optionally with ", Context=menu".
-    private static readonly Regex LocXaml = new(@"\{app:T\s+(?:'(?<t>(?:[^'\\]|\\.)*)'|(?<t>[^\s'},][^},]*?))\s*(?:,\s*Context=(?<c>[^}\s]+))?\s*\}");
+    // The keyed calls (spec 077): Loc.T("key"), Loc.F("key", …), Loc.Plural("key", n).
+    private static readonly Regex LocKeyed = new($@"\bLoc\.(?<k>T|F|Plural)\(\s*(?<t>{LocLit})");
+    private static readonly Regex LocAnyCall = new(@"\bLoc\.(?:T|F|Plural)\(");
+    // The XAML form: Header="{app:T 'main.save_as'}" (quotes optional).
+    private static readonly Regex LocXaml = new(@"\{app:T\s+(?:'(?<t>[^']*)'|(?<t>[^\s'},]+))\s*\}");
+    private static readonly Regex LocXamlAny = new(@"\{app:T\b");
 
-    private static HashSet<int> Placeholders(string s)
-        => LocPlaceholder.Matches(s.Replace("{{", "").Replace("}}", "")).Select(m => int.Parse(m.Groups[1].Value)).ToHashSet();
+    // FormatArg: the call is the pattern of a string.Format(culture, Loc.T(key), …) — a text with
+    // placeholders formatted in a culture of the caller's choosing (NotaNum.Culture), not Loc.F's.
+    private readonly record struct LocKey(string Key, char Kind, string Path, int Line, bool FormatArg = false);
+    private static readonly Regex FormatOpen = new(@"\bstring\.Format\([^;()]*,\s*$");
 
-    private readonly record struct LocKey(string Key, bool Plural, string Path, int Line);
-
-    /// <summary>Every Loc.T / F / FC / Plural call in src/managed with a literal text, plus the
-    /// calls whose text is interpolated (which can never be translated).</summary>
-    private static (List<LocKey> Keys, List<Hit> Interpolated) LocCalls(string root)
+    /// <summary>Every Loc.T / F / Plural call in src/managed and every {app:T …} in XAML, with its
+    /// key, plus the calls whose key is not a plain literal (interpolated or computed), which the
+    /// source cannot be checked against.</summary>
+    private static (List<LocKey> Keys, List<Hit> NotLiteral) LocCalls(string root)
     {
         var managed = Path.Combine(root, "src/managed");
         var keys = new List<LocKey>();
@@ -217,28 +229,33 @@ internal static partial class DesignTokenCheck
         foreach (var f in SourceFiles(managed, ".cs"))
         {
             var rel = RelManaged(root, f);
-            if (rel.StartsWith("Nota.Application/Localization/")) continue;   // its own examples
+            if (rel.StartsWith("Nota.Application/Localization/") || rel == "Nota.App/TExtension.cs") continue;   // the API itself
             var text = string.Join('\n', File.ReadLines(f).Select(CodeOf));
             if (!text.Contains("Loc.")) continue;
             int LineOf(int index) { int n = 1; for (int i = 0; i < index; i++) if (text[i] == '\n') n++; return n; }
-            string Key(Match m) => TranslationTable.KeyOf(Unescape(m.Groups["t"].Value[1..^1]),
-                m.Groups["c"].Success ? Unescape(m.Groups["c"].Value[1..^1]) : null);
-            foreach (Match m in LocT.Matches(text)) keys.Add(new LocKey(Key(m), false, rel, LineOf(m.Index)));
-            foreach (Match m in LocF.Matches(text)) keys.Add(new LocKey(Key(m), false, rel, LineOf(m.Index)));
-            foreach (Match m in LocFC.Matches(text)) keys.Add(new LocKey(Key(m), false, rel, LineOf(m.Index)));
-            foreach (Match m in LocPlural.Matches(text)) keys.Add(new LocKey(Key(m), true, rel, LineOf(m.Index)));
-            foreach (Match m in LocInterpolated.Matches(text)) bad.Add(new Hit(rel, LineOf(m.Index), m.Value));
+            var literal = new HashSet<int>();
+            foreach (Match m in LocKeyed.Matches(text))
+            {
+                literal.Add(m.Index);
+                keys.Add(new LocKey(Unescape(m.Groups["t"].Value[1..^1]), m.Groups["k"].Value[0], rel, LineOf(m.Index),
+                    FormatOpen.IsMatch(text[Math.Max(0, m.Index - 200)..m.Index])));
+            }
+            foreach (Match m in LocAnyCall.Matches(text))
+                if (!literal.Contains(m.Index)) bad.Add(new Hit(rel, LineOf(m.Index), text.Substring(m.Index, Math.Min(60, text.Length - m.Index))));
         }
         foreach (var f in SourceFiles(managed, ".axaml"))
         {
             var rel = RelManaged(root, f);
             var text = BlankXmlComments(File.ReadAllText(f));
+            int LineOf(int index) { int n = 1; for (int i = 0; i < index; i++) if (text[i] == '\n') n++; return n; }
+            var literal = new HashSet<int>();
             foreach (Match m in LocXaml.Matches(text))
             {
-                int line = 1; for (int i = 0; i < m.Index; i++) if (text[i] == '\n') line++;
-                keys.Add(new LocKey(TranslationTable.KeyOf(WebUtility.HtmlDecode(m.Groups["t"].Value).Replace("\\'", "'"),
-                    m.Groups["c"].Success ? m.Groups["c"].Value : null), false, rel, line));
+                literal.Add(m.Index);
+                keys.Add(new LocKey(WebUtility.HtmlDecode(m.Groups["t"].Value), 'T', rel, LineOf(m.Index)));
             }
+            foreach (Match m in LocXamlAny.Matches(text))
+                if (!literal.Contains(m.Index)) bad.Add(new Hit(rel, LineOf(m.Index), text.Substring(m.Index, Math.Min(60, text.Length - m.Index))));
         }
         return (keys, bad);
     }
@@ -248,51 +265,67 @@ internal static partial class DesignTokenCheck
         var root = RepoRoot();
         if (root is null) { yield return (false, "repo root located"); yield break; }
 
-        // -- coverage: source keys ↔ the French file --
-        var (calls, interpolated) = LocCalls(root);
-        yield return (interpolated.Count == 0,
-            interpolated.Count == 0 ? "no Loc call passes an interpolated string (build the pattern with {0} and Loc.F)"
-                : "interpolated text in a Loc call can never be translated: " + string.Join(", ", interpolated.Take(8).Select(h => $"{h.Path}:{h.Line}")));
+        // -- the source against the English reference (spec 077 FR-006) --
+        var (calls, notLiteral) = LocCalls(root);
+        yield return (notLiteral.Count == 0,
+            notLiteral.Count == 0 ? "every Loc call and {app:T} names its key as a plain literal"
+                : "a Loc call whose key is computed or interpolated can never be checked: " + string.Join(", ", notLiteral.Take(8).Select(h => $"{h.Path}:{h.Line}")));
+
+        var badKeys = calls.Where(c => !TranslationTable.IsKey(c.Key)).ToList();
+        yield return (badKeys.Count == 0,
+            badKeys.Count == 0 ? $"all {calls.Count} Loc calls use well-formed keys (area.segment…, lower-case)"
+                : "not a key (an English text, or a malformed key): " + string.Join(", ", badKeys.Take(8).Select(c => $"\"{c.Key}\" at {c.Path}:{c.Line}")));
+
+        var enPath = Path.Combine(root, "src/managed/Nota.Application/Localization/en.json");
+        var en = TranslationTable.Parse(File.ReadAllText(enPath), out var enError);
+        yield return (en is not null && en.Problems.Count == 0,
+            en is null ? "en.json: " + enError : en.Problems.Count == 0 ? $"en.json parsed ({en.Count} keys)"
+                : "en.json entries that cannot be used: " + string.Join("; ", en.Problems.Take(6).Select(p => $"{p.Key} — {p.Problem}")));
+        if (en is null) yield break;
 
         var used = new Dictionary<string, LocKey>(StringComparer.Ordinal);
         foreach (var c in calls) if (!used.ContainsKey(c.Key)) used[c.Key] = c;
+        var missing = calls.Where(c => !en.TryGet(c.Key, out _)).ToList();
+        yield return (missing.Count == 0,
+            missing.Count == 0 ? $"every key used in the source is in en.json ({used.Count} keys)"
+                : $"{missing.Count} keys used in the source are not in en.json (add them): " + string.Join(", ", missing.Take(8).Select(c => $"\"{c.Key}\" at {c.Path}:{c.Line}")));
+        var unused = en.Keys.Where(k => !used.ContainsKey(k)).Order(StringComparer.Ordinal).ToList();
+        yield return (unused.Count == 0,
+            unused.Count == 0 ? "every key in en.json is used by the source"
+                : $"en.json keys nothing uses (delete them): {string.Join(", ", unused.Take(8))}" + (unused.Count > 8 ? $" (+{unused.Count - 8} more)" : ""));
 
+        // Every call, not one per key: a text counted in one place and plain in another is a bug.
+        var shape = new List<string>();
+        foreach (var c in calls)
+        {
+            if (!en.TryGet(c.Key, out var e)) continue;
+            if ((c.Kind == 'P') != e.IsPlural)
+                shape.Add($"\"{c.Key}\" at {c.Path}:{c.Line} ({(c.Kind == 'P' ? "Loc.Plural, but en.json has a plain text" : "a plain text call, but en.json counts it")})");
+            else if (c.Kind == 'T' && !c.FormatArg && TranslationTable.Placeholders(e.Other).Count > 0)
+                shape.Add($"\"{c.Key}\" at {c.Path}:{c.Line} (Loc.T of a text with placeholders — use Loc.F)");
+            else if (c.Kind == 'P' && !TranslationTable.Placeholders(e.Other).IsSubsetOf(new HashSet<int> { 0 }))
+                shape.Add($"\"{c.Key}\" at {c.Path}:{c.Line} (a counted text has only {{0}}, the count)");
+        }
+        yield return (shape.Count == 0,
+            shape.Count == 0 ? "each key is used the way en.json shapes it (counted, formatted or plain)"
+                : "key used against its shape: " + string.Join("; ", shape.Take(6)));
+
+        // -- French, still embedded until the languages move to nota-translations (spec 077 PR 3) --
         var frPath = Path.Combine(root, "src/managed/Nota.App/Languages/fr.json");
         var fr = TranslationTable.Parse(File.ReadAllText(frPath), out var frError);
         yield return (fr is not null, fr is null ? "fr.json: " + frError : "fr.json parsed");
         if (fr is null) yield break;
-
-        var frKeys = fr.Keys.ToHashSet(StringComparer.Ordinal);
-        var missing = used.Keys.Where(k => !frKeys.Contains(k)).OrderBy(k => k, StringComparer.Ordinal).ToList();
-        // NOTA_LOC_DUMP_MISSING=<file> writes the texts French still lacks (key, counted?, file) as JSON.
+        var (frProblems, frCoverage) = fr.ValidateAgainst(en);
+        var frMissing = en.Keys.Where(k => !fr.TryGet(k, out _)).Order(StringComparer.Ordinal).ToList();
+        // NOTA_LOC_DUMP_MISSING=<file> writes the keys French still lacks (key, English, counted?, file) as JSON.
         if (Environment.GetEnvironmentVariable("NOTA_LOC_DUMP_MISSING") is { Length: > 0 } dump)
-            File.WriteAllText(dump, JsonSerializer.Serialize(missing.Select(k => new { key = k, plural = used[k].Plural, file = used[k].Path, line = used[k].Line })));
-        yield return (missing.Count == 0,
-            missing.Count == 0 ? $"French covers all {used.Count} interface texts in Loc calls"
-                : $"{missing.Count} texts have no French: {string.Join(", ", missing.Take(8).Select(k => $"\"{k}\""))}");
-
-        var orphans = frKeys.Where(k => !used.ContainsKey(k)).OrderBy(k => k, StringComparer.Ordinal).ToList();
-        yield return (orphans.Count == 0,
-            orphans.Count == 0 ? "every French text is used by a Loc call"
-                : $"French texts no Loc call uses (renamed or removed in the source — fix or delete them): {string.Join(", ", orphans.Take(8).Select(k => $"\"{k}\""))}"
-                  + (orphans.Count > 8 ? $" (+{orphans.Count - 8} more)" : ""));
-
-        var parity = new List<string>();
-        foreach (var key in fr.Keys.OrderBy(k => k, StringComparer.Ordinal))
-        {
-            fr.TryGet(key, out var t);
-            var want = Placeholders(key);
-            if (!Placeholders(t.Other).SetEquals(want)) parity.Add($"\"{key}\" (other form has {{{string.Join(",", Placeholders(t.Other).Order())}}}, key has {{{string.Join(",", want.Order())}}})");
-            // The singular form may drop the number ("Une piste") but may not invent a placeholder.
-            else if (t.One is not null && !Placeholders(t.One).IsSubsetOf(want)) parity.Add($"\"{key}\" (singular form has a placeholder the key lacks)");
-        }
-        // Every call, not one per key: a text counted in one place and plain in another is a bug in the plain one.
-        foreach (var c in calls)
-            if (fr.TryGet(c.Key, out var ct) && c.Plural != (ct.One is not null))
-                parity.Add($"\"{c.Key}\" at {c.Path}:{c.Line} ({(c.Plural ? "counted in the source but has no singular form" : "plain in the source but has a singular form")})");
-        yield return (parity.Count == 0,
-            parity.Count == 0 ? "French placeholders match their English and counted texts have both forms"
-                : "French placeholder or plural mismatch: " + string.Join("; ", parity.Take(6)));
+            File.WriteAllText(dump, JsonSerializer.Serialize(frMissing.Select(k => new { key = k, english = en.TryGet(k, out var t) ? t.Other : "", plural = t.IsPlural, file = used.GetValueOrDefault(k).Path })));
+        yield return (frMissing.Count == 0,
+            frMissing.Count == 0 ? $"French covers all {en.Count} keys ({frCoverage} %)"
+                : $"{frMissing.Count} keys have no French: {string.Join(", ", frMissing.Take(8))}");
+        yield return (frProblems.Count == 0,
+            frProblems.Count == 0 ? "every French entry is a key of en.json with its shape and placeholders"
+                : "French entries that cannot be used: " + string.Join("; ", frProblems.Take(6).Select(p => $"{p.Key} — {p.Problem}")));
 
         // -- the language is a view setting: it follows only the stored choice, and writes nothing --
         var osLanguage = new List<string>();

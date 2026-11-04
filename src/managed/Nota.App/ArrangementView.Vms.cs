@@ -51,7 +51,7 @@ public sealed partial class ArrangementView
         // these the chain index and slot of the child the lane drives; -1 = track level.
         public int AutoChain = -1, AutoSlot = -1;
         public int AutoLane = -1;   // the nested lane itself: rack edits move its (chain, slot)
-        public string AutoLabel = Loc.T("Vol");
+        public string AutoLabel = Loc.T("arrangement.vol");
         public List<AutoPt> AutoPoints = new();
         // Group lane summary (M-groups): descendant clips aggregated for the lane preview —
         // a stacked mini-clip per child sub-lane when collapsed, a thin span strip when

@@ -165,7 +165,7 @@ public sealed partial class PianoRollView
     private sealed class LaneTabs : Control
     {
         private static readonly (LaneMode Mode, string Label)[] Tabs =
-            { (LaneMode.Velocity, Loc.T("Vel")), (LaneMode.Bend, Loc.T("Bend")), (LaneMode.Pressure, Loc.T("Pres")), (LaneMode.Slide, Loc.T("Slide")), (LaneMode.Controller, "") };
+            { (LaneMode.Velocity, Loc.T("piano_roll.expression.vel")), (LaneMode.Bend, Loc.T("piano_roll.expression.bend")), (LaneMode.Pressure, Loc.T("piano_roll.expression.pres")), (LaneMode.Slide, Loc.T("piano_roll.expression.slide")), (LaneMode.Controller, "") };
         // Five rows fit the velocity lane's 72 px.
         private const double Top = 4, RowStep = 13;
         private const double ChevronW = 7;
@@ -613,8 +613,8 @@ public sealed partial class PianoRollView
 
         private void ShowClearMenu()
         {
-            string lane = Dim switch { NoteExpressionDim.Bend => Loc.T("Bend"), NoteExpressionDim.Pressure => Loc.T("Pressure"), _ => Loc.T("Slide") };
-            var items = new[] { Loc.F("Clear {0}", lane), Loc.T("Clear All Expression") };
+            string lane = Dim switch { NoteExpressionDim.Bend => Loc.T("piano_roll.expression.bend"), NoteExpressionDim.Pressure => Loc.T("piano_roll.expression.pressure"), _ => Loc.T("piano_roll.expression.slide") };
+            var items = new[] { Loc.F("piano_roll.clear", lane), Loc.T("piano_roll.expression.clear_all_expression") };
             ClipEditorKit.ShowMenu(this, items, -1, k =>
             {
                 bool changed = false;

@@ -60,7 +60,7 @@ public sealed partial class ArrangementView
     {
         var label = new TextBlock
         {
-            Text = Loc.T("Sections"), Classes = { "SectionLabel" },
+            Text = Loc.T("arrangement.sections.sections"), Classes = { "SectionLabel" },
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(8, 0, 0, 0),
@@ -169,12 +169,12 @@ public sealed partial class ArrangementView
         string automaticName = SectionNames.Automatic(SectionIndex(s));
         var box = new TextBox { Text = automatic ? "" : s.Name, PlaceholderText = automaticName, Width = 180, FontSize = 12 };
         var caption = new TextBlock { Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
-        void Caption() => caption.Text = SectionNames.IsAutomatic(box.Text) ? Loc.T("Automatic name") : Loc.T("Custom name");
+        void Caption() => caption.Text = SectionNames.IsAutomatic(box.Text) ? Loc.T("arrangement.sections.automatic_name") : Loc.T("arrangement.sections.custom_name");
         Caption();
         box.TextChanged += (_, _) => Caption();
 
-        var reset = new Button { Content = Loc.T("Reset to default"), Classes = { "ghost" }, FontSize = 11, Height = 22, Padding = new Thickness(6, 0), IsEnabled = !automatic };
-        ToolTip.SetTip(reset, Loc.F("Back to the automatic name ({0}), which follows the section's position", automaticName));
+        var reset = new Button { Content = Loc.T("arrangement.sections.reset_to_default"), Classes = { "ghost" }, FontSize = 11, Height = 22, Padding = new Thickness(6, 0), IsEnabled = !automatic };
+        ToolTip.SetTip(reset, Loc.F("arrangement.sections.back_to_the_automatic_name", automaticName));
         var footer = new DockPanel { Margin = new Thickness(0, 6, 0, 0) };
         DockPanel.SetDock(reset, Dock.Right);
         footer.Children.Add(reset);
@@ -209,11 +209,11 @@ public sealed partial class ArrangementView
     public string ResetSectionNameAtPlayhead()
     {
         var s = SectionList.LastOrDefault(x => x.StartBeat <= _playheadBeats && _playheadBeats < x.StartBeat + x.LengthBeats);
-        if (s is null) return Loc.T("No section at the playhead");
-        if (SectionNames.IsAutomatic(s.Name)) return Loc.F("{0} already has its automatic name", SectionDisplayName(s));
+        if (s is null) return Loc.T("arrangement.sections.no_section_at_the_playhead");
+        if (SectionNames.IsAutomatic(s.Name)) return Loc.F("arrangement.sections.already_has_its_automatic_name", SectionDisplayName(s));
         string was = s.Name, now = SectionNames.Automatic(SectionIndex(s));
         ResetSectionName(s);
-        return Loc.F("\u201C{0}\u201D is {1} again", was, now);
+        return Loc.F("arrangement.sections.is_again", was, now);
     }
 
     // ---- edits that carry the arrangement (specs/073) ---------------------
@@ -225,7 +225,7 @@ public sealed partial class ArrangementView
     private bool SectionOverlapsAt(int index) => _engine is { } eng && index >= 0 && eng.SectionOverlaps(index);
 
     private string OverlapNote(ArrangementSection s)
-        => Loc.F("{0} overlaps another section \u2014 separate them to move its content with it", SectionDisplayName(s));
+        => Loc.F("arrangement.sections.overlaps_another_section_separate_them", SectionDisplayName(s));
 
     // Run an edit that carries content with a section. Afterwards a time selection no longer
     // covers the music it did, and cuts and removals re-index the clips, so a clip selection
@@ -264,32 +264,32 @@ public sealed partial class ArrangementView
     /// and all. Returns what happened, for the status bar.</summary>
     public string MoveSectionAtPlayhead(bool later)
     {
-        if (SectionAtPlayhead() is not { } s) return Loc.T("No section at the playhead");
+        if (SectionAtPlayhead() is not { } s) return Loc.T("arrangement.sections.no_section_at_the_playhead");
         int i = SectionIndex(s);
         string name = SectionDisplayName(s);
         if (SectionOverlapsAt(i)) return OverlapNote(s);
-        if (later && i >= _sections.Count - 1) return Loc.F("{0} is already the last section", name);
-        if (!later && i == 0) return Loc.F("{0} is already the first section", name);
-        if (!MoveSectionWithContent(i, later ? i + 2 : i - 1)) return Loc.F("Couldn't move {0} there", name);
-        return later ? Loc.F("Moved {0} later", name) : Loc.F("Moved {0} earlier", name);
+        if (later && i >= _sections.Count - 1) return Loc.F("arrangement.sections.is_already_the_last_section", name);
+        if (!later && i == 0) return Loc.F("arrangement.sections.is_already_the_first_section", name);
+        if (!MoveSectionWithContent(i, later ? i + 2 : i - 1)) return Loc.F("arrangement.sections.couldnt_move_there", name);
+        return later ? Loc.F("arrangement.sections.moved_later", name) : Loc.F("arrangement.sections.moved_earlier", name);
     }
 
     /// <summary>Command palette: duplicate the section under the playhead with its content.</summary>
     public string DuplicateSectionWithContentAtPlayhead()
     {
-        if (SectionAtPlayhead() is not { } s) return Loc.T("No section at the playhead");
+        if (SectionAtPlayhead() is not { } s) return Loc.T("arrangement.sections.no_section_at_the_playhead");
         if (SectionOverlapsAt(SectionIndex(s))) return OverlapNote(s);
         string name = SectionDisplayName(s);
-        return DuplicateSectionWithContent(s) ? Loc.F("Duplicated {0} with its content", name) : Loc.F("Couldn't duplicate {0}", name);
+        return DuplicateSectionWithContent(s) ? Loc.F("arrangement.sections.duplicated_with_its_content", name) : Loc.F("arrangement.sections.couldnt_duplicate", name);
     }
 
     /// <summary>Command palette: delete the section under the playhead with its content.</summary>
     public string DeleteSectionWithContentAtPlayhead()
     {
-        if (SectionAtPlayhead() is not { } s) return Loc.T("No section at the playhead");
+        if (SectionAtPlayhead() is not { } s) return Loc.T("arrangement.sections.no_section_at_the_playhead");
         if (SectionOverlapsAt(SectionIndex(s))) return OverlapNote(s);
         string name = SectionDisplayName(s);
-        return DeleteSectionWithContent(s) ? Loc.F("Deleted {0} with its content", name) : Loc.F("Couldn't delete {0}", name);
+        return DeleteSectionWithContent(s) ? Loc.F("arrangement.sections.deleted_with_its_content", name) : Loc.F("arrangement.sections.couldnt_delete", name);
     }
 
     /// <summary>Esc / lost focus: abandon a drag in the Sections lane. True when one was active.</summary>
@@ -568,7 +568,7 @@ public sealed partial class ArrangementView
             if (s is not null)
             {
                 int bars = (int)Math.Round(s.LengthBeats / Math.Max(1, _o._beatsPerBar));
-                var dup = MenuKit.Item(Loc.T("Duplicate"), GlyphKind.Duplicate, () =>
+                var dup = MenuKit.Item(Loc.T("common.duplicate"), GlyphKind.Duplicate, () =>
                 {
                     if (_o.Live(s) is null) return;
                     var copy = _o.AddSection(s.StartBeat + s.LengthBeats, s.LengthBeats);
@@ -577,42 +577,42 @@ public sealed partial class ArrangementView
                 });
                 int idx = _o.SectionIndex(s), n = _o._sections.Count;
                 bool free = !_o.SectionOverlapsAt(idx);   // overlapping spans keep their content where it is
-                var earlier = MenuKit.Item(Loc.T("Move earlier"), GlyphKind.ChevronLeft,
+                var earlier = MenuKit.Item(Loc.T("arrangement.sections.move_earlier"), GlyphKind.ChevronLeft,
                     () => { if (_o.Live(s) is { } l) _o.MoveSectionWithContent(_o.SectionIndex(l), _o.SectionIndex(l) - 1); },
                     enabled: free && idx > 0);
-                var later = MenuKit.Item(Loc.T("Move later"), GlyphKind.ChevronRight,
+                var later = MenuKit.Item(Loc.T("arrangement.sections.move_later"), GlyphKind.ChevronRight,
                     () => { if (_o.Live(s) is { } l) _o.MoveSectionWithContent(_o.SectionIndex(l), _o.SectionIndex(l) + 2); },
                     enabled: free && idx < n - 1);
-                var dupContent = MenuKit.Item(Loc.T("Duplicate with content"), GlyphKind.Duplicate,
+                var dupContent = MenuKit.Item(Loc.T("arrangement.sections.duplicate_with_content"), GlyphKind.Duplicate,
                     () => _o.DuplicateSectionWithContent(s), enabled: free);
                 MenuKit.AddGroups(flyout.Items,
-                    new Control[] { MenuKit.Header(_o.SectionDisplayName(s), null, Loc.Plural(bars, "Section · {0} bar", "Section · {0} bars")) },
+                    new Control[] { MenuKit.Header(_o.SectionDisplayName(s), null, Loc.Plural("arrangement.sections.section_bars", bars)) },
                     new Control[]
                     {
-                        MenuKit.Item(Loc.T("Rename…"), GlyphKind.Edit, () => _o.RenameSection(this, s)),
-                        MenuKit.Item(Loc.T("Reset to default name"), GlyphKind.Cycle, () => _o.ResetSectionName(s), enabled: !SectionNames.IsAutomatic(s.Name)),
+                        MenuKit.Item(Loc.T("common.rename"), GlyphKind.Edit, () => _o.RenameSection(this, s)),
+                        MenuKit.Item(Loc.T("arrangement.sections.reset_to_default_name"), GlyphKind.Cycle, () => _o.ResetSectionName(s), enabled: !SectionNames.IsAutomatic(s.Name)),
                     },
                     new Control[]
                     {
-                        MenuKit.Item(Loc.T("Loop section"), GlyphKind.Cycle, () => _o.SetLoopRegion(s.StartBeat, s.StartBeat + s.LengthBeats)),   // raises LoopChanged itself
-                        MenuKit.Item(Loc.T("Select section"), GlyphKind.Select, () => _o.SelectSectionRange(s)),
+                        MenuKit.Item(Loc.T("arrangement.sections.loop_section"), GlyphKind.Cycle, () => _o.SetLoopRegion(s.StartBeat, s.StartBeat + s.LengthBeats)),   // raises LoopChanged itself
+                        MenuKit.Item(Loc.T("arrangement.sections.select_section"), GlyphKind.Select, () => _o.SelectSectionRange(s)),
                     },
                     new Control[] { earlier, later },
                     new Control[] { dup, dupContent },
                     new Control[]
                     {
-                        MenuKit.Danger(Loc.T("Delete"), GlyphKind.Trash, () => _o.RemoveSection(s)),
-                        MenuKit.Danger(Loc.T("Delete with content"), GlyphKind.Trash, () => _o.DeleteSectionWithContent(s), enabled: free),
+                        MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, () => _o.RemoveSection(s)),
+                        MenuKit.Danger(Loc.T("arrangement.sections.delete_with_content"), GlyphKind.Trash, () => _o.DeleteSectionWithContent(s), enabled: free),
                     });
             }
             else
             {
-                flyout.Items.Add(MenuKit.Item(Loc.T("Add section here"), GlyphKind.Plus,
+                flyout.Items.Add(MenuKit.Item(Loc.T("arrangement.sections.add_section_here"), GlyphKind.Plus,
                     () => { _o.AddSection(_o.SnapBar(beat), _o._beatsPerBar * 8); _o.SectionsEdited(); }));
                 if (_o._sections.Count > 0)
                 {
                     flyout.Items.Add(new Separator());
-                    flyout.Items.Add(MenuKit.Danger(Loc.T("Delete all sections"), GlyphKind.Trash,
+                    flyout.Items.Add(MenuKit.Danger(Loc.T("arrangement.sections.delete_all_sections"), GlyphKind.Trash,
                         () => { _o._sections.Clear(); _o.SectionsEdited(); }));
                 }
             }
@@ -640,7 +640,7 @@ public sealed partial class ArrangementView
             IReadOnlyList<ArrangementSection> list = _mode == Mode.Reorder ? _o.SectionList : _o._sections;
             if (list.Count == 0 && _mode != Mode.Draft)
             {
-                var hint = new FormattedText(Loc.T("drag here to mark a section"), CultureInfo.InvariantCulture,
+                var hint = new FormattedText(Loc.T("arrangement.sections.drag_here_to_mark_a"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, HintInk);
                 ctx.DrawText(hint, new Point(8, (h - hint.Height) / 2));
             }

@@ -116,7 +116,7 @@ public sealed class RemoteService
         catch (Exception e)
         {
             Error = e is IOException || e.InnerException is System.Net.Sockets.SocketException
-                ? Loc.F("Port {0} is in use by another app. Pick another port.", s.RemotePort)
+                ? Loc.F("remote.port_is_in_use_by", s.RemotePort)
                 : e.Message;
             _log.Error($"Nota Remote: {e.Message}");
         }

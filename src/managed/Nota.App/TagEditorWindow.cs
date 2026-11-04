@@ -38,7 +38,7 @@ public sealed class TagEditorWindow : NotaWindow
         _lib = library;
         _assignKey = assignToKey;
 
-        Title = Loc.T("Edit tags");
+        Title = Loc.T("tag_editor.edit_tags");
         Width = 440;
         SizeToContent = SizeToContent.Height;
         CanResize = false;
@@ -47,10 +47,10 @@ public sealed class TagEditorWindow : NotaWindow
 
         _rows = new StackPanel { Spacing = 8 };
 
-        var add = new Button { Content = Loc.T("Add tag"), Classes = { "ghost" } };
+        var add = new Button { Content = Loc.T("tag_editor.add_tag"), Classes = { "ghost" } };
         add.Click += (_, _) => { CreateTag(); RebuildRows(); };
 
-        var close = new Button { Content = Loc.T("Close"), Classes = { "primary" } };
+        var close = new Button { Content = Loc.T("common.close"), Classes = { "primary" } };
         close.Click += (_, _) => Close();
 
         SetBody(new StackPanel
@@ -59,7 +59,7 @@ public sealed class TagEditorWindow : NotaWindow
             Spacing = 14,
             Children =
             {
-                new TextBlock { Text = Loc.T("Tags — title & colour"), Classes = { "Caption" } },
+                new TextBlock { Text = Loc.T("tag_editor.tags_title_colour"), Classes = { "Caption" } },
                 new ScrollViewer { MaxHeight = 360, Content = _rows },
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { add } },
                 new StackPanel
@@ -77,7 +77,7 @@ public sealed class TagEditorWindow : NotaWindow
 
     private void CreateTag()
     {
-        var tag = _lib.CreateTag(Loc.T("New tag"), Palette[0]);
+        var tag = _lib.CreateTag(Loc.T("tag_editor.new_tag"), Palette[0]);
         if (_assignKey is not null) _lib.AssignTag(_assignKey, tag.Id, true);
     }
 
@@ -86,7 +86,7 @@ public sealed class TagEditorWindow : NotaWindow
         _rows.Children.Clear();
         foreach (var tag in _lib.Tags) _rows.Children.Add(BuildRow(tag));
         if (_lib.Tags.Count == 0)
-            _rows.Children.Add(new TextBlock { Text = Loc.T("No tags yet — add one below."), Foreground = NotaPalette.TextTertiary, FontSize = 11 });
+            _rows.Children.Add(new TextBlock { Text = Loc.T("tag_editor.no_tags_yet_add_one"), Foreground = NotaPalette.TextTertiary, FontSize = 11 });
     }
 
     private Control BuildRow(BrowserTag tag)

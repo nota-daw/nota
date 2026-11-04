@@ -99,7 +99,7 @@ internal sealed class FluxReactScope : Control
         NotaGraph.Axis(ctx, plot, NotaGraph.Corner.TopRight, "env · transients · tilt", _live ? NotaPalette.TealBright : NotaPalette.TextAxis);
         if (!_live)
         {
-            var none = new FormattedText(Loc.T("no source assigned"), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans,
+            var none = new FormattedText(Loc.T("device.flux_react.no_source_assigned"), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, NotaFonts.Sans,
                 NotaType.KnobLabel, NotaPalette.TextDisabled);
             ctx.DrawText(none, new Point((plot.Width - none.Width) / 2, h - 8 - none.Height));
         }

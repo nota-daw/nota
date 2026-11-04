@@ -1,0 +1,18 @@
+{
+  "formatVersion": 2,
+  "code": "xx",
+  "name": "Xxxx broken",
+  "plural": "one_is_0_1",
+  "notes": "Test fixture for spec 077: a language that loads, with entries that cannot be used (see verdicts.json).",
+  "strings": {
+    "Not A Key": "x",
+    "test.blank": "",
+    "test.bad": "Mauvais {1}",
+    "test.delete_clips": "Mauvais {",
+    "test.save": { "one": "Xsave one", "other": "Xsave" },
+    "test.unknown": "Xunknown",
+    "test.tracks": { "one": "{0} piste", "other": "{0} pistes" },
+    "test.clips": { "other": "{0} clips FR" },
+    "test.brace": "Accolade {{x}} {0}"
+  }
+}

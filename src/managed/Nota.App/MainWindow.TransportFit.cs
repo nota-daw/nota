@@ -59,7 +59,7 @@ public partial class MainWindow
     {
         string shown = CpuText.Text ?? "";
         CpuText.MinWidth = 0;
-        CpuText.Text = Loc.F("DSP {0}%", 100);
+        CpuText.Text = Loc.F("main.dsp_caps", 100);
         CpuText.Measure(Avalonia.Size.Infinity);
         double widest = CpuText.DesiredSize.Width;
         CpuText.Text = shown;
@@ -94,7 +94,7 @@ public partial class MainWindow
         }
 
         // The name leaves the bar for the caption, so the open project stays on screen.
-        DocTitleText.Text = ProjectNameText.IsVisible ? Loc.T("Nota") : ProjectDisplayName();
+        DocTitleText.Text = ProjectNameText.IsVisible ? Loc.T("common.nota") : ProjectDisplayName();
         TransportGrid.InvalidateMeasure();
     }
 
