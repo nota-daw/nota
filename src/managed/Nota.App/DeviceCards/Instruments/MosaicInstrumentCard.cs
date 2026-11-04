@@ -351,7 +351,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
 
         // ======================= the zone map (Zones tab, and S) =================================
         var map = new MosaicZoneMap { Mini = mini, Interactive = !mini };
-        string EmptyText() => mini ? "Empty" : Loc.T("device.mosaic.drop_samples_or_a_folder");
+        string EmptyText() => mini ? "Empty" : Loc.T("device.mosaic.drop_samples_a_folder_or_sfz");
         void SetMap() => map.Set(prog.Zones, ui.ReleaseView, ui.Zone, EmptyText());
         SetMap();
         map.Selected += i => { ui.Zone = i; if (i >= 0 && i < prog.Zones.Count) ui.Group = prog.Zones[i].Group; Refresh(); };
@@ -1181,7 +1181,7 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         {
             if (AllMissing() && prog.Zones.Count > 0) return Loc.T("device.mosaic.samples_unavailable_notes_muted");
             if (Loading()) return Loc.F("device.mosaic.loading_notes_muted", NotaNum.Bytes(status.RamBytes), NotaNum.Bytes(RamEstimate()));
-            if (prog.IsEmpty) return Loc.T("device.mosaic.empty_drop_samples_or_a");
+            if (prog.IsEmpty) return Loc.T("device.mosaic.empty_drop_samples_a_folder_or_sfz");
             string name = prog.Name.Length > 0 ? prog.Name + " · " : "";
             switch (tab)
             {
@@ -1297,7 +1297,8 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
         {
             var title = new TextBlock { FontSize = 12, FontWeight = FontWeight.SemiBold, Foreground = AccentBright, HorizontalAlignment = HorizontalAlignment.Center };
             var line = new TextBlock { FontSize = 8.5, Foreground = TextPrimary, HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center };
-            var hint = new TextBlock { FontSize = 7.5, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Text = Loc.T("device.mosaic.opens_the_mapping_preview_a") };
+            string multiHint = Loc.T("device.mosaic.opens_the_mapping_preview_a");
+            var hint = new TextBlock { FontSize = 7.5, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Text = multiHint };
             var dash = new Rectangle
             {
                 Stroke = AccentBright, StrokeThickness = 1.2, StrokeDashArray = new Avalonia.Collections.AvaloniaList<double> { 4, 3 },
@@ -1308,18 +1309,44 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 Margin = new Thickness(5), IsVisible = false, IsHitTestVisible = false,
                 Children = { dash, new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { title, line, hint } } },
             };
-            box.Tag = (Action<string, string>)((t, l) => { title.Text = t; line.Text = l; });
+            box.Tag = (Action<string, string, string?>)((t, l, h) => { title.Text = t; line.Text = l; hint.Text = h ?? multiHint; });
             return box;
+        }
+
+        // An SFZ dropped on the card (#349): its zones become the program, the report shows
+        // what it couldn't take, and its controllers' articulations are offered.
+        void LoadSfz(string sfz)
+        {
+            var packs = App.Services?.GetService(typeof(IMosaicPacks)) as IMosaicPacks;
+            SfzResult res;
+            try { res = SfzImporter.Import(sfz, null, packs is null ? null : packs.ToRef); }
+            catch (Exception ex) { ctx.Status(Loc.F("device.mosaic.couldnt_read_sfz", Path.GetFileName(sfz), ex.Message)); return; }
+            if (res.Program.Zones.Count == 0)
+            {
+                ctx.Status(Loc.F("device.mosaic.sfz_has_no_playable_zones", Path.GetFileName(sfz), res.Report.Summary()));
+                return;
+            }
+            res.Program.SourceRef = packs?.ToRef(sfz) ?? sfz;
+            prog = res.Program;
+            ui.Zone = 0;
+            SetImportReport(track, res.Report);
+            Commit(rebuild: true);
+            // Its envelope, bend range and filter, as an installed pack's SFZ preset sets them.
+            // After the commit, so they land on the new instrument it published: undo brings
+            // back the old one with its own settings.
+            foreach (var (id, v) in SfzImporter.ParamsFrom(res.Report)) SetP(id, v);
         }
 
         void HookDrop(Control target, Control overlay)
         {
             DragDrop.SetAllowDrop(target, true);
-            void Show(bool on, string t = "", string l = "")
+            void Show(bool on, string t = "", string l = "", string? h = null)
             {
                 overlay.IsVisible = on;
-                if (on && overlay.Tag is Action<string, string> set) set(t, l);
+                if (on && overlay.Tag is Action<string, string, string?> set) set(t, l, h);
             }
+            // Whether a drag carries an SFZ (#349) is checked without reading any file; which
+            // program a folder holds is worked out once, on the drop.
             DragDrop.AddDragOverHandler(target, (_, e) =>
             {
                 var item = BrowserView.CurrentDrag;
@@ -1334,6 +1361,11 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 else
                 {
                     var paths = folder ? new List<string> { item!.Path } : DroppedPaths(e);
+                    if (SfzImporter.HasSfz(paths))
+                    {
+                        Show(true, Loc.T("device.mosaic.release_to_load_the_sfz"), Path.GetFileName(paths[0].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)), Loc.T("device.mosaic.its_zones_replace_the_instruments"));
+                        return;
+                    }
                     var audio = ExpandAudio(paths);
                     if (audio.Count == 1) Show(true, Loc.T("device.mosaic.release_to_load_the_sample"), Path.GetFileName(audio[0]));
                     else
@@ -1354,6 +1386,12 @@ internal sealed class MosaicInstrumentCard : IInstrumentCard
                 else if (item is { Kind: BrowserItemKind.Folder } && Directory.Exists(item.Path)) paths = new List<string> { item.Path };
                 else if (item is null) paths = DroppedPaths(e);
                 else return;
+                if (SfzImporter.ProgramIn(paths) is { } sfz)
+                {
+                    e.Handled = true;
+                    LoadSfz(sfz);
+                    return;
+                }
                 var audio = ExpandAudio(paths);
                 if (audio.Count == 0) return;
                 e.Handled = true;
