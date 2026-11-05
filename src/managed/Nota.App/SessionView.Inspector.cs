@@ -30,13 +30,15 @@ public sealed partial class SessionView
         (SessionFollowAction.Any, Loc.T("session.inspector.any")), (SessionFollowAction.Other, Loc.T("common.other")), (SessionFollowAction.Stop, Loc.T("common.stop")),
         (SessionFollowAction.Jump, Loc.T("session.inspector.jump")),
     };
-    private static readonly (double Beats, string Label)[] LengthSteps =
+    // The bar choices count the project's bars (#405), so "1 bar" in 3/4 is three beats.
+    private static double Bars(double n) => n * Meter.BeatsPerBar;
+    private static (double Beats, string Label)[] LengthSteps => new[]
     {
-        (1, Loc.T("session.inspector.1_beat")), (2, Loc.T("session.inspector.2_beats")), (4, Loc.T("common.1_bar")), (8, Loc.T("session.inspector.2_bars")), (16, Loc.T("session.inspector.4_bars")), (32, Loc.T("session.inspector.8_bars")), (64, Loc.T("session.inspector.16_bars")),
+        (1.0, Loc.T("session.inspector.1_beat")), (2, Loc.T("session.inspector.2_beats")), (Bars(1), Loc.T("common.1_bar")), (Bars(2), Loc.T("session.inspector.2_bars")), (Bars(4), Loc.T("session.inspector.4_bars")), (Bars(8), Loc.T("session.inspector.8_bars")), (Bars(16), Loc.T("session.inspector.16_bars")),
     };
-    private static readonly (double Beats, string Label)[] FollowTimes =
+    private static (double Beats, string Label)[] FollowTimes => new[]
     {
-        (0, Loc.T("session.inspector.one_pass")), (1, Loc.T("session.inspector.1_beat")), (2, Loc.T("session.inspector.2_beats")), (4, Loc.T("common.1_bar")), (8, Loc.T("session.inspector.2_bars")), (16, Loc.T("session.inspector.4_bars")), (32, Loc.T("session.inspector.8_bars")), (64, Loc.T("session.inspector.16_bars")),
+        (0.0, Loc.T("session.inspector.one_pass")), (1, Loc.T("session.inspector.1_beat")), (2, Loc.T("session.inspector.2_beats")), (Bars(1), Loc.T("common.1_bar")), (Bars(2), Loc.T("session.inspector.2_bars")), (Bars(4), Loc.T("session.inspector.4_bars")), (Bars(8), Loc.T("session.inspector.8_bars")), (Bars(16), Loc.T("session.inspector.16_bars")),
     };
     private static readonly (int Num, int Den)[] Signatures = { (0, 0), (2, 4), (3, 4), (4, 4), (5, 4), (6, 8), (7, 8), (12, 8) };
 
@@ -390,7 +392,7 @@ public sealed partial class SessionView
         var rows = new StackPanel { Spacing = 8 };
         string follow = p.Follow != 0 ? Loc.F("session.inspector.next_n", FormatLength(p.FollowBeats)) : Loc.T("common.off");
         var followItems = new List<(double, string)> { (0, Loc.T("common.off")) };
-        foreach (double bars in new[] { 1.0, 2, 4, 8, 16, 32 }) followItems.Add((bars * 4, Loc.F("session.inspector.next_after", FormatLength(bars * 4))));
+        foreach (double bars in new[] { 1.0, 2, 4, 8, 16, 32 }) followItems.Add((Bars(bars), Loc.F("session.inspector.next_after", FormatLength(Bars(bars)))));
         rows.Children.Add(Row(Loc.T("session.inspector.follow_action"), Chip(follow, p.Follow != 0, a => Pick(a, followItems,
             b => p.Follow == 0 ? b == 0 : Math.Abs(b - p.FollowBeats) < 1e-6,
             b => Set(x => { x.Follow = b > 0 ? 1 : 0; if (b > 0) x.FollowBeats = b; return x; })))));

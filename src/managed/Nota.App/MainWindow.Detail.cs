@@ -855,6 +855,24 @@ public partial class MainWindow
         ShowDetail(250, honorPersist: true);
     }
 
+    // The time signature's numerator changed (typed, a project load, a launched scene): every
+    // view that counts bars re-counts (#405). The roll takes its bar length as a property; the
+    // audio editor, the step grid and the readouts read Meter as they draw, so a reload repaints
+    // them.
+    private void ApplyMeter(int numerator)
+    {
+        int was = Meter.BeatsPerBar;
+        Meter.Set(numerator);
+        int bpb = Meter.BeatsPerBar;
+        if (bpb != was) _session?.Refresh();   // its slot lengths and inspector fields count bars
+        if (Timeline.BeatsPerBar != bpb) Timeline.BeatsPerBar = bpb;
+        _patternView?.Reload();
+        _audioEditor?.Reload();
+        if (_editorRoll is not { } roll) return;
+        roll.BeatsPerBar = bpb;
+        _clipEditor?.RecountBars(roll.ActiveClip.StartBeat);   // its Start / Length read-outs
+    }
+
     // A clip was trimmed / stretched / moved in the arrangement. Both clip editors snapshot the
     // clip's geometry when they're built, so push the new start+length into whichever one is
     // open on that clip — otherwise the editor keeps drawing the pre-drag length until it's

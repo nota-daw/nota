@@ -43,7 +43,9 @@ public sealed class ExportWindow : NotaWindow
     private static readonly int[] Rates = { 44100, 48000, 96000 };
     private static readonly string[] RateLabels = { "44 100", "48 000", "96 000" };
     private static readonly int[] Bitrates = { 320, 256, 192, 128 };   // MP3 CBR, best first
-    private const int BeatsPerBar = 4;
+    // The project's bars (#405), read once: the range boxes keep their text while the dialog is
+    // open, so a scene changing the signature meanwhile must not re-read them in another meter.
+    private readonly int _bpb = Meter.BeatsPerBar;
 
     private readonly double _bpm;
     private double _startBeats, _rangeBeats;   // the range: where it starts and how long it is
@@ -212,7 +214,7 @@ public sealed class ExportWindow : NotaWindow
             // MP3 has no bit-depth target; Pcm24 keeps Depth well-formed for the request.
             var d = fmt == ExportFormat.Mp3 ? WavBitDepth.Pcm24
                   : _depth.SelectedIndex switch { 0 => WavBitDepth.Pcm16, 2 => WavBitDepth.Float32, _ => WavBitDepth.Pcm24 };
-            double tailBeats = _tailOn ? BeatsPerBar : 0.0;
+            double tailBeats = _tailOn ? _bpb : 0.0;
             bool dither = _dither && d == WavBitDepth.Pcm16;   // only meaningful for 16-bit targets
             int kbps = Bitrates[_quality.SelectedIndex < 0 ? 0 : _quality.SelectedIndex];
             Close(new ExportOptions(sr, d, tailBeats, _rangeBeats, _stems, _normalize, dither, fmt, kbps, _startBeats));
@@ -287,10 +289,10 @@ public sealed class ExportWindow : NotaWindow
     }
 
     // bar.beat.sixteenth, 1-based, as the readout shows a position.
-    private static string BarBeatText(double beats)
+    private string BarBeatText(double beats)
     {
-        int bar = (int)Math.Floor(beats / BeatsPerBar) + 1;
-        double inBar = beats - (bar - 1) * BeatsPerBar;
+        int bar = (int)Math.Floor(beats / _bpb) + 1;
+        double inBar = beats - (bar - 1) * _bpb;
         int beat = (int)Math.Floor(inBar) + 1;
         int six = (int)Math.Floor((inBar - (beat - 1)) * 4 + 1e-9) + 1;
         return string.Format(NotaNum.Culture, "{0}.{1}.{2}", bar, beat, six);
@@ -298,15 +300,15 @@ public sealed class ExportWindow : NotaWindow
 
     /// <summary>Reads a typed position — "5", "5.2" or "5.2.3" (bar, beat, sixteenth, all
     /// 1-based) — as beats from the song start; null when it isn't one.</summary>
-    internal static double? ParsePosition(string? text)
+    internal double? ParsePosition(string? text)
     {
         var parts = (text ?? "").Trim().Split('.');
         if (parts.Length > 3) return null;
         var n = new[] { 1, 1, 1 };
         for (int i = 0; i < parts.Length; i++)
             if (!int.TryParse(parts[i], NumberStyles.None, CultureInfo.InvariantCulture, out n[i]) || n[i] < 1) return null;
-        if (n[1] > BeatsPerBar || n[2] > 4) return null;
-        return (n[0] - 1) * BeatsPerBar + (n[1] - 1) + (n[2] - 1) / 4.0;
+        if (n[1] > _bpb || n[2] > 4) return null;
+        return (n[0] - 1) * _bpb + (n[1] - 1) + (n[2] - 1) / 4.0;
     }
 
     private TextBox PositionBox(double beats)
@@ -323,7 +325,7 @@ public sealed class ExportWindow : NotaWindow
     private void RefreshEstimate()
     {
         if (_estimate is null) return;
-        double tail = _tailOn ? BeatsPerBar : 0;
+        double tail = _tailOn ? _bpb : 0;
         double sec = _bpm > 0 ? (Math.Max(0, _rangeBeats) + tail) * 60.0 / _bpm : 0;
         int sr = Rates[_rate.SelectedIndex < 0 ? 1 : _rate.SelectedIndex];
         int bytesPerSample = _depth.SelectedIndex switch { 0 => 2, 2 => 4, _ => 3 };
