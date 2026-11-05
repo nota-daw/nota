@@ -101,7 +101,10 @@ public partial class App : Avalonia.Application
         // nothing flashes one theme on the way to another. Old Dark / Light / System
         // settings resolve onto the Studio themes (Appearance.Resolve).
         foreach (var err in NotaThemes.LoadErrors) log.Error($"Colour theme skipped — {err}", null);
-        NotaThemeService.Set(Appearance.Resolve(Services.GetRequiredService<ISettingsService>().Current, NotaThemeService.KnownThemes));
+        // The accent (spec 084) is resolved with it, so the first frame already wears it too.
+        var startSettings = Services.GetRequiredService<ISettingsService>().Current;
+        NotaThemeService.Set(Appearance.Resolve(startSettings, NotaThemeService.KnownThemes));
+        NotaThemeService.SetAccent(Accent.Resolve(startSettings));
         // Interface scale (spec 027), likewise before the first window: windows and every
         // popup they open take it from here.
         NotaUiScale.InitPopups();

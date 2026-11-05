@@ -22,6 +22,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Added
+- **Choose the accent colour** (#311): Settings → Appearance → Accent replaces the orange of
+  everything live or chosen — the playhead, the loop, selection, toggles that are on, the
+  play key, menu hover — with one of seven presets (Orange, Lime, Aqua, Sky, Violet,
+  Magenta, Pink) or your own colour, picked in a colour picker with a hex field. The accent
+  applies at once, in every theme, tuned to each so it stays readable; a colour that would
+  be confused with the record red, mute, solo or the meter green, or a grey, is explained
+  and not applied. Nota Remote follows. Orange looks exactly as before.
+
 ### Fixed
 - **Nota Remote on iPhone and iPad launches several clips at once** (#512): touching two or
   more clips on the Scenes screen together launched none of them, or only one — iOS Safari
