@@ -17,6 +17,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Nota.Application.Palette;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -117,7 +118,7 @@ public partial class MainWindow
     }
 
     private Availability ActionAvailability(string id, PaletteContext ctx)
-        => _commands.Get(id) is { } c ? c.CanExecute(ctx) : Availability.No("Not available");
+        => _commands.Get(id) is { } c ? c.CanExecute(ctx) : Availability.No(Loc.T("main.palette.not_available"));
 
     // ---- context (CP-2, CP-3) ---------------------------------------------------------------
 
@@ -137,6 +138,7 @@ public partial class MainWindow
             track = origin == PaletteOrigin.PianoRoll ? EditedTrack() : _deviceChain?.TrackId ?? -1;
         }
         else if (source is DeviceWindow devw) { origin = PaletteOrigin.DeviceWindow; track = devw.ContextTrackId > 0 ? devw.ContextTrackId : _deviceChain?.TrackId ?? -1; }
+        else if (_mixerDocked && (Within(MixerPanel) || _mixerWasLastFocused)) { origin = PaletteOrigin.Mixer; track = Timeline.SelectedTrackId; }   // docked Mixer (specs/054)
         else if (DetailPanel.IsVisible && (Within(DetailPanel) || _detailWasLastFocused))
         {
             origin = DetailBody.Content is ClipEditorView or DrumPatternView ? PaletteOrigin.PianoRoll : PaletteOrigin.Devices;
@@ -163,7 +165,7 @@ public partial class MainWindow
         }
         else track = -1;
 
-        string trackName = track <= 0 ? "" : type == PaletteTrackType.Master ? "Master" : Engine.GetTrackName(track);
+        string trackName = track <= 0 ? "" : type == PaletteTrackType.Master ? Loc.T("common.master") : Engine.GetTrackName(track);
         var insert = origin == PaletteOrigin.Devices && _deviceChain is { } dc && dc.TrackId == track ? dc.CurrentInsertPoint() : InsertPoint.None;
         return new PaletteContext
         {
@@ -199,12 +201,12 @@ public partial class MainWindow
                 return null;
 
             case PaletteKind.Track when item.Payload is int t:
-                if ((mode & ApplyMode.NewTrack) != 0 || Insertion.IsMaster(t)) { ShowDevices(t); _vm.StatusText = $"Opened {item.Name} in Devices"; }
+                if ((mode & ApplyMode.NewTrack) != 0 || Insertion.IsMaster(t)) { ShowDevices(t); _vm.StatusText = Loc.F("main.palette.opened_in_devices", item.Name); }
                 else
                 {
                     Timeline.Select(t, -1);
                     if (_modular?.IsVisible == true) _modular.Show(t);
-                    _vm.StatusText = $"Selected {item.Name}";
+                    _vm.StatusText = Loc.F("main.palette.selected", item.Name);
                 }
                 return null;
 
@@ -213,9 +215,9 @@ public partial class MainWindow
                 if (_modular is null || ctx.TrackId <= 0) return null;
                 if (_modular.TrackId != ctx.TrackId) _modular.Show(ctx.TrackId);
                 int modId = _modular.AddModulatorAt(kind);
-                if (modId < 0) { _vm.StatusText = $"Couldn't add {item.Name}."; return null; }
+                if (modId < 0) { _vm.StatusText = Loc.F("main.palette.couldnt_add", item.Name); return null; }
                 Timeline.Refresh();
-                string msg = $"{item.Name} added to the {ctx.TrackName} canvas — connect it to a parameter";
+                string msg = Loc.F("main.palette.added_to_the_canvas_connect", item.Name, ctx.TrackName);
                 _vm.StatusText = msg;
                 _paletteToast.Show(msg, () => _commands.Run("edit.undo"));
                 return ctx;

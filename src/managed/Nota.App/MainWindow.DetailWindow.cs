@@ -13,6 +13,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -73,7 +74,7 @@ public partial class MainWindow
         // Hide the docked panel — state is preserved, it just lives in the window now.
         DetailPanel.IsVisible = false;
         DetailSplitter.IsVisible = false;
-        var row = BodyGrid.RowDefinitions[2];
+        var row = _detailRow;
         row.MinHeight = 0;
         row.Height = new GridLength(0);
 
@@ -95,7 +96,7 @@ public partial class MainWindow
     {
         Child = new TextBlock
         {
-            Text = "Select a clip in the arrangement to edit it here",
+            Text = Loc.T("main.detail_window.select_a_clip_in_the"),
             FontSize = 12,
             Foreground = NotaPalette.TextTertiary,
             HorizontalAlignment = HorizontalAlignment.Center,

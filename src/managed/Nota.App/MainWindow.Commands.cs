@@ -17,6 +17,7 @@ using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Application.Palette;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -32,6 +33,9 @@ public partial class MainWindow
         var r = _commands;
         r.ContextProvider = () => SnapshotContext(null);
         void B(string id, Action run, Func<PaletteContext, Availability>? can = null) => r.Bind(id, (_, _) => run(), can);
+        // Section edits with content (specs/073) report in the status bar; the Session view's
+        // clip lists may have changed with them.
+        void SectionStatus(string status) { if (_vm is not null) _vm.StatusText = status; _session?.Refresh(); }
         var e = new RoutedEventArgs();
         static Availability Need(bool ok, string why) => ok ? Availability.Yes : Availability.No(why);
 
@@ -46,13 +50,14 @@ public partial class MainWindow
         B("file.exit", Close);   // the close button's path: unsaved changes still ask first (#316)
 
         // ---- Edit
-        B("edit.undo", () => OnMenuUndo(this, e), _ => Need(_vm?.Engine.CanUndo == true, "Nothing to undo"));
+        B("edit.undo", () => OnMenuUndo(this, e), _ => Need(_vm?.Engine.CanUndo == true, Loc.T("main.commands.nothing_to_undo")));
         B("edit.redo", () => OnMenuRedo(this, e));
         B("edit.duplicate", () => OnMenuDuplicate(this, e));
-        B("edit.split", () => OnMenuSplit(this, e), c => Need(c.SelectedClips > 0 || c.HasTimeSelection, "Select a clip or a range first"));
-        B("edit.consolidate", () => OnMenuConsolidate(this, e), c => Need(c.SelectedClips > 0 || c.HasTimeSelection, "Select clips or a range first"));
-        B("edit.duplicateTime", () => OnMenuDuplicateTime(this, e), c => Need(c.HasTimeSelection, "Select a time range first"));
-        B("edit.insertSilence", () => OnMenuInsertSilence(this, e), c => Need(c.HasTimeSelection, "Select a time range first"));
+        B("edit.split", () => OnMenuSplit(this, e), c => Need(c.SelectedClips > 0 || c.HasTimeSelection, Loc.T("main.commands.select_a_clip_or_a")));
+        B("edit.fadeSplits", () => OnMenuFadeSplits(this, e), c => Need(c.SelectedClips > 0, Loc.T("main.commands.select_audio_clips_that")));
+        B("edit.consolidate", () => OnMenuConsolidate(this, e), c => Need(c.SelectedClips > 0 || c.HasTimeSelection, Loc.T("main.commands.select_clips_or_a_range")));
+        B("edit.duplicateTime", () => OnMenuDuplicateTime(this, e), c => Need(c.HasTimeSelection, Loc.T("main.commands.select_a_time_range_first")));
+        B("edit.insertSilence", () => OnMenuInsertSilence(this, e), c => Need(c.HasTimeSelection, Loc.T("main.commands.select_a_time_range_first")));
         B("edit.lockEnvelopes", ToggleLockEnvelopes);
         B("edit.cut", () => OnMenuCut(this, e));
         B("edit.copy", () => OnMenuCopy(this, e));
@@ -61,25 +66,34 @@ public partial class MainWindow
         B("edit.copyToOtherView", () => OnMenuCopyToOtherView(this, e));
         B("edit.delete", () => OnMenuDeleteSel(this, e));
         B("edit.selectAll", () => Timeline.SelectAllClips());
-        B("edit.toggleClipActive", () => { if (Timeline.ToggleSelectedClipsActive()) { _session?.Refresh(); if (_vm is not null) _vm.StatusText = "Toggled clip(s)"; } },
-            c => Need(c.SelectedClips > 0, "Select a clip first"));
+        B("edit.toggleClipActive", () => { if (Timeline.ToggleSelectedClipsActive()) { _session?.Refresh(); if (_vm is not null) _vm.StatusText = Loc.T("main.toggled_clip_s"); } },
+            c => Need(c.SelectedClips > 0, Loc.T("main.commands.select_a_clip_first")));
 
         // ---- View
         B("view.arrangement", () => SetView(MainView.Arrangement));
         B("view.session", () => SetView(MainView.Session));
         B("view.modular", () => SetView(MainView.Modular));
-        B("view.mixer", ToggleMixerWindow);
+        B("view.mixer", ToggleMixer);
+        B("view.mixerFloat", () => SetMixerFloating(!MixerFloating));
         B("view.connectPhone", ShowConnectPhone);
         B("view.toggleBrowser", () => OnMenuToggleBrowser(this, e));
         B("view.toggleDetail", () => OnMenuToggleClip(this, e));
+        B("view.maximizeDetail", ToggleDetailMaximized,
+            _ => Need(_detailMaximized || CanMaximizeDetail, Loc.T("main.open_a_clip_in_the")));
         B("view.showDevices", () => { int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack(); if (t > 0) ShowDevices(t); },
-            c => Need(c.HasTrack, "Select a track first"));
+            c => Need(c.HasTrack, Loc.T("main.commands.select_a_track_first")));
         B("view.popOutDetail", () => OnToggleDetailWindow(this, e));
         B("view.toggleOverview", () => OnMenuToggleOverview(this, e));
         B("view.toggleSections", () => OnMenuToggleSections(this, e));
+        B("edit.resetSectionName", () => { string status = Timeline.ResetSectionNameAtPlayhead(); if (_vm is not null) _vm.StatusText = status; });
+        B("edit.moveSectionEarlier", () => SectionStatus(Timeline.MoveSectionAtPlayhead(later: false)));
+        B("edit.moveSectionLater", () => SectionStatus(Timeline.MoveSectionAtPlayhead(later: true)));
+        B("edit.duplicateSectionWithContent", () => SectionStatus(Timeline.DuplicateSectionWithContentAtPlayhead()));
+        B("edit.deleteSectionWithContent", () => SectionStatus(Timeline.DeleteSectionWithContentAtPlayhead()));
         B("view.follow", () => OnMenuToggleFollow(this, e));
         B("view.showPlayhead", ShowPlayhead);
         B("view.clipNames", () => OnMenuCycleClipNames(this, e));
+        B("view.headersRight", ToggleHeadersRight);
         B("view.automation", () =>
         {
             AutomationToggle.IsChecked = !(AutomationToggle.IsChecked == true);
@@ -95,6 +109,7 @@ public partial class MainWindow
         B("transport.playPause", () => _vm?.Transport.PlayPauseCommand.Execute(null));
         B("transport.stop", () => _vm?.Transport.StopCommand.Execute(null));
         B("transport.record", () => OnMenuRecord(this, e));
+        B("transport.retryTake", () => { _vm?.Transport.RetryTakeCommand.Execute(null); _session?.Refresh(); });
         B("transport.armOnSelect", ToggleArmOnSelect);
         B("transport.loop", () => OnMenuLoop(this, e));
         B("transport.metronome", () => OnMenuMetronome(this, e));
@@ -105,19 +120,19 @@ public partial class MainWindow
         B("track.newInstrument", () => AddTrack(NewTrackKind.Instrument));
         B("track.newAudio", () => AddTrack(NewTrackKind.Audio));
         B("track.newReturn", () => OnAddReturnClicked(this, e));
-        B("track.group", () => { if (Timeline.GroupSelection() && _vm is not null) _vm.StatusText = "Grouped tracks"; },
-            c => Need(c.SelectedTrackCount > 0, "Select tracks first"));
-        B("track.ungroup", () => { if (Timeline.UngroupSelection() && _vm is not null) _vm.StatusText = "Ungrouped"; });
+        B("track.group", () => { if (Timeline.GroupSelection() && _vm is not null) _vm.StatusText = Loc.T("main.commands.grouped_tracks"); },
+            c => Need(c.SelectedTrackCount > 0, Loc.T("main.commands.select_tracks_first")));
+        B("track.ungroup", () => { if (Timeline.UngroupSelection() && _vm is not null) _vm.StatusText = Loc.T("main.commands.ungrouped"); });
         r.Bind("track.freeze", (c, m) => { if (c.TrackId > 0) _ = ToggleFreezeAsync(c.TrackId); },
-            c => Need(c.HasTrack && IsFreezable(c.TrackId), c.HasTrack ? "This track can't be frozen" : "Select a track first"));
+            c => Need(c.HasTrack && IsFreezable(c.TrackId), c.HasTrack ? Loc.T("main.commands.this_track_cant_be_frozen") : Loc.T("main.commands.select_a_track_first")));
 
         // ---- Session
-        B("session.launchScene", () => _session?.LaunchSelectedScene(), c => Need(c.View == "Session", "Open the Session view first"));
+        B("session.launchScene", () => _session?.LaunchSelectedScene(), c => Need(c.View == "Session", Loc.T("main.commands.open_the_session_view_first")));
         B("session.stopAll", () => _session?.StopAll());
-        B("session.insertScene", () => OnMenuInsertScene(this, e), c => Need(c.View == "Session", "Scenes live in the Session view"));
+        B("session.insertScene", () => OnMenuInsertScene(this, e), c => Need(c.View == "Session", Loc.T("main.commands.scenes_live_in_the_session")));
 
         // ---- Piano roll: the clip open in the editor
-        Availability Roll(PaletteContext c) => Need(c.HasOpenMidiClip, "Open a MIDI clip first");
+        Availability Roll(PaletteContext c) => Need(c.HasOpenMidiClip, Loc.T("main.commands.open_a_midi_clip_first"));
         // ---- Grid: the editor used last (piano roll or arrangement), status line names it
         void G(string id, Func<GridSetting, GridSetting> step) => B(id, () => StepGrid(step));
         G("grid.narrower", SnapGrid.Narrower);
@@ -126,15 +141,16 @@ public partial class MainWindow
         G("grid.snap", SnapGrid.ToggleSnap);
         G("grid.adaptive", SnapGrid.ToggleAdaptive);
 
-        B("roll.quantize", () => { if (_editorRoll is { } roll) { roll.Quantize(1.0); if (_vm is not null) _vm.StatusText = "Quantized notes"; } }, Roll);
+        B("roll.quantize", () => { if (_editorRoll is { } roll) { roll.Quantize(1.0); if (_vm is not null) _vm.StatusText = Loc.T("main.commands.quantized_notes"); } }, Roll);
         B("roll.octaveUp", () => _editorRoll?.TransposeBy(12), Roll);
         B("roll.octaveDown", () => _editorRoll?.TransposeBy(-12), Roll);
         B("roll.fitNotes", () => _editorRoll?.FitToNotes(), Roll);
         B("roll.fold", () => { if (_editorRoll is { } r) r.SetFold(!r.Folded, user: true); }, Roll);
         B("roll.editSelected", () => EditSelectedClips(),
-            _ => Need(Timeline.SelectedMidiClips().Count >= 2, "Select two or more MIDI clips"));
+            _ => Need(Timeline.SelectedMidiClips().Count >= 2, Loc.T("main.commands.select_two_or_more_midi")));
+        B("roll.trackMode", () => SetClipTrackMode(!ClipTrackMode));
         B("roll.removeOutOfScale", () => _editorRoll?.RemoveOutOfScaleNotes(),
-            c => Need(c.HasOpenMidiClip && _editorRoll?.HasOutOfScaleNotes == true, "No notes outside the scale"));
+            c => Need(c.HasOpenMidiClip && _editorRoll?.HasOutOfScaleNotes == true, Loc.T("main.commands.no_notes_outside_the_scale")));
 
         // ---- Settings
         B("prefs.open", ShowPreferences);
@@ -193,8 +209,8 @@ public partial class MainWindow
         bool locked = !_vm.Engine.AutomationLock;
         _vm.Engine.SetAutomationLock(locked);
         if (MenuItemFor("edit.lockEnvelopes") is { } mi) mi.IsChecked = locked;
-        _vm.StatusText = locked ? "Envelopes locked — clip moves keep automation in place"
-                                : "Envelopes follow clips";
+        _vm.StatusText = locked ? Loc.T("main.commands.envelopes_locked_clip_moves_keep")
+                                : Loc.T("main.commands.envelopes_follow_clips");
     }
 
     // Transport ▸ Auto-arm selected track (#332): arm-on-select, a saved preference, off by default.
@@ -205,13 +221,30 @@ public partial class MainWindow
         SetArmOnSelect(on);
         _vm.Settings.Current.ArmOnSelect = on;
         _vm.Settings.Save();
-        _vm.StatusText = on ? "Selecting an instrument track arms it" : "Selecting a track leaves the arms alone";
+        _vm.StatusText = on ? Loc.T("main.commands.selecting_an_instrument_track_arms") : Loc.T("main.commands.selecting_a_track_leaves_the");
     }
 
     private void SetArmOnSelect(bool on)
     {
         TrackArming.ArmOnSelect = on;
         if (MenuItemFor("transport.armOnSelect") is { } mi) mi.IsChecked = on;
+    }
+
+    // View ▸ Track headers on the right (#72): a saved preference, shared with Settings →
+    // Appearance; Settings.Changed moves the column (ApplyHeadersRight).
+    private void ToggleHeadersRight()
+    {
+        if (_vm is null) return;
+        bool on = !Timeline.HeadersOnRight;
+        _vm.Settings.Current.ArrangementHeadersRight = on;
+        _vm.Settings.Save();
+        _vm.StatusText = on ? Loc.T("main.track_headers_on_the_right") : Loc.T("main.commands.track_headers_on_the_left");
+    }
+
+    private void ApplyHeadersRight(bool on)
+    {
+        Timeline.HeadersOnRight = on;
+        if (MenuItemFor("view.headersRight") is { } mi) mi.IsChecked = on;
     }
 
     // The grid shortcuts act on the clip editor (piano roll or audio — they share one setting)
@@ -241,7 +274,7 @@ public partial class MainWindow
         var r = kind == EditorKind.Arrangement ? Timeline.SnapGridState
             : _audioEditor is { IsEffectivelyVisible: true, GridInert: false } audio ? audio.SnapGridState
             : _editorRoll?.SnapGridState ?? Timeline.SnapGridState;
-        string label = r.SnapOn ? SnapGrid.Label(grids.Get(kind), r) : "Snap off";
-        if (_vm is not null) _vm.StatusText = $"{(kind == EditorKind.PianoRoll ? "Clip editor" : "Arrangement")} grid: {label}";
+        string label = r.SnapOn ? SnapGrid.Label(grids.Get(kind), r) : Loc.T("main.commands.snap_off");
+        if (_vm is not null) _vm.StatusText = kind == EditorKind.PianoRoll ? Loc.F("main.commands.clip_editor_grid", label) : Loc.F("main.commands.arrangement_grid", label);
     }
 }

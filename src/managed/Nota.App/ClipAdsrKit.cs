@@ -3,11 +3,12 @@
 //
 // Audio-clip ADSR handles, shared by the arrangement lane and the audio clip editor so the
 // two read and behave the same. Three handles, in played time over the clip:
-//   Attack  — a square on the top edge at A (drag sideways);
+//   Attack  — a square at the end of the attack, on the level it reaches (drag sideways);
 //   D · S   — a dot at (A+D, sustain) (drag both ways: decay time + sustain level);
 //   Release — a square on the sustain line at len−R (drag sideways).
-// At the identity (0, 0, 1, 0) the attack square and the D·S dot share the top-left corner:
-// the first move decides — sideways grabs the attack, up/down grabs the sustain.
+// When decay is 0 the attack ends on the sustain line, so the square and the D·S dot
+// share that point (the top-left corner at the identity). The first move decides —
+// sideways grabs the attack, up/down grabs the sustain.
 // Double-click on a handle resets its stage; ⌥-click types its values (specs/035).
 
 using System;
@@ -15,6 +16,7 @@ using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -34,7 +36,8 @@ internal static class ClipAdsrKit
     public const double HitPx = 6;
     private const double Square = 7, Dot = 4;
 
-    public static Point AttackPt(in AdsrFrame f, ClipAdsr a) => new(f.X(a.AttackBeats), f.Top);
+    public static Point AttackPt(in AdsrFrame f, ClipAdsr a)
+        => new(f.X(a.AttackBeats), f.Y(a.DecayBeats > 0 ? 1 : a.Sustain));
     public static Point DecayPt(in AdsrFrame f, ClipAdsr a) => new(f.X(a.AttackBeats + a.DecayBeats), f.Y(a.Sustain));
     public static Point ReleasePt(in AdsrFrame f, ClipAdsr a) => new(f.X(f.Len - a.ReleaseBeats), f.Y(a.Sustain));
 
@@ -146,9 +149,9 @@ internal static class ClipAdsrKit
         string T(double beats) => NotaNum.Time(beats * 60.0 / Math.Max(1, bpm));
         return h switch
         {
-            AdsrHandle.Attack => "Attack " + T(a.AttackBeats),
-            AdsrHandle.DecaySustain => "Decay " + T(a.DecayBeats) + " · Sustain " + SustainText(a.Sustain),
-            AdsrHandle.Release => "Release " + T(a.ReleaseBeats),
+            AdsrHandle.Attack => Loc.F("clip_adsr.attack", T(a.AttackBeats)),
+            AdsrHandle.DecaySustain => Loc.F("clip_adsr.decay_sustain", T(a.DecayBeats), SustainText(a.Sustain)),
+            AdsrHandle.Release => Loc.F("clip_adsr.release", T(a.ReleaseBeats)),
             _ => "",
         };
     }
@@ -172,20 +175,20 @@ internal static class ClipAdsrKit
         switch (h)
         {
             case AdsrHandle.Attack:
-                list.Add(Time("Attack", a => a.DecayBeats + a.ReleaseBeats, a => a.AttackBeats, (a, b) => { a.AttackBeats = b; return a; }, AdsrHandle.Attack));
+                list.Add(Time(Loc.T("common.attack"), a => a.DecayBeats + a.ReleaseBeats, a => a.AttackBeats, (a, b) => { a.AttackBeats = b; return a; }, AdsrHandle.Attack));
                 break;
             case AdsrHandle.DecaySustain:
-                list.Add(Time("Decay", a => a.AttackBeats + a.ReleaseBeats, a => a.DecayBeats, (a, b) => { a.DecayBeats = b; return a; }, AdsrHandle.DecaySustain));
-                list.Add(new ValueField("Sustain", () => A().Sustain, SustainText, n => { var a = A(); a.Sustain = (float)n; commit(a); }));
+                list.Add(Time(Loc.T("common.decay"), a => a.AttackBeats + a.ReleaseBeats, a => a.DecayBeats, (a, b) => { a.DecayBeats = b; return a; }, AdsrHandle.DecaySustain));
+                list.Add(new ValueField(Loc.T("common.sustain"), () => A().Sustain, SustainText, n => { var a = A(); a.Sustain = (float)n; commit(a); }));
                 break;
             case AdsrHandle.AttackOrSustain:   // the shared corner: attack, decay and sustain; one combined reset
-                list.Add(Time("Attack", a => a.DecayBeats + a.ReleaseBeats, a => a.AttackBeats, (a, b) => { a.AttackBeats = b; return a; }, AdsrHandle.AttackOrSustain));
-                list.Add(Time("Decay", a => a.AttackBeats + a.ReleaseBeats, a => a.DecayBeats, (a, b) => { a.DecayBeats = b; return a; }, AdsrHandle.DecaySustain)
+                list.Add(Time(Loc.T("common.attack"), a => a.DecayBeats + a.ReleaseBeats, a => a.AttackBeats, (a, b) => { a.AttackBeats = b; return a; }, AdsrHandle.AttackOrSustain));
+                list.Add(Time(Loc.T("common.decay"), a => a.AttackBeats + a.ReleaseBeats, a => a.DecayBeats, (a, b) => { a.DecayBeats = b; return a; }, AdsrHandle.DecaySustain)
                     with { Reset = null });
-                list.Add(new ValueField("Sustain", () => A().Sustain, SustainText, n => { var a = A(); a.Sustain = (float)n; commit(a); }));
+                list.Add(new ValueField(Loc.T("common.sustain"), () => A().Sustain, SustainText, n => { var a = A(); a.Sustain = (float)n; commit(a); }));
                 break;
             case AdsrHandle.Release:
-                list.Add(Time("Release", a => a.AttackBeats + a.DecayBeats, a => a.ReleaseBeats, (a, b) => { a.ReleaseBeats = b; return a; }, AdsrHandle.Release));
+                list.Add(Time(Loc.T("common.release"), a => a.AttackBeats + a.DecayBeats, a => a.ReleaseBeats, (a, b) => { a.ReleaseBeats = b; return a; }, AdsrHandle.Release));
                 break;
         }
         return list;

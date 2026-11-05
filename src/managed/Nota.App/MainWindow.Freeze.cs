@@ -18,6 +18,7 @@ using Avalonia.Interactivity;
 using Avalonia.Media;
 using Nota.Application;
 using Nota.Infrastructure;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -53,7 +54,7 @@ public partial class MainWindow
         if (!freezable) return;
 
         bool frozen = Engine.IsTrackFrozen(trackId);
-        FreezeLabel.Text = frozen ? "Frozen" : "Freeze";
+        FreezeLabel.Text = frozen ? Loc.T("main.freeze.frozen") : Loc.T("common.freeze");
         IBrush idle = NotaPalette.TextSecondary;
         FreezeIcon.Foreground = frozen ? IceBrush : idle;
         FreezeLabel.Foreground = frozen ? IceBrush : idle;
@@ -76,7 +77,7 @@ public partial class MainWindow
     {
         if (_freezeMenuBuilt) return;
         _freezeMenuBuilt = true;
-        _flattenItem = MenuKit.Danger("Flatten to audio track", GlyphKind.Flatten,
+        _flattenItem = MenuKit.Danger(Loc.T("main.freeze.flatten_to_audio_track"), GlyphKind.Flatten,
             () => { if (_freezeTrackId > 0) _ = FlattenTrackAsync(_freezeTrackId); });
         var menu = new ContextMenu();
         menu.Items.Add(_flattenItem);
@@ -102,7 +103,7 @@ public partial class MainWindow
     {
         if (_vm is null) return;
         double endBeats = ProjectEndBeats();
-        if (endBeats <= 0.0) { _vm.StatusText = "Nothing to freeze — the arrangement is empty."; return; }
+        if (endBeats <= 0.0) { _vm.StatusText = Loc.T("main.nothing_to_freeze_the_arrangement"); return; }
 
         // Freeze takes over the engine (backend stopped) exactly like an export bounce, so
         // suspend the UI clock and show the modal progress dialog while it renders.
@@ -110,15 +111,15 @@ public partial class MainWindow
         try
         {
             bool ok = false;
-            await RunBlockingAsync("Freeze", "Freezing track…", async prog =>
+            await RunBlockingAsync(Loc.T("common.freeze"), Loc.T("main.freeze.freezing_track"), async prog =>
             {
-                var frac = new Progress<double>(f => prog.Report(ProgressReport.At(f, $"Freezing track… {f * 100:0}\u2009%")));
+                var frac = new Progress<double>(f => prog.Report(ProgressReport.At(f, Loc.F("main.freeze.freezing_track_n", f * 100))));
                 ok = await Task.Run(() => _freezer.Freeze(Engine, trackId, endBeats,
                     _vm.Transport.LoopOn, _vm.Transport.MetronomeOn, frac));
             });
-            _vm.StatusText = ok ? "Track frozen — its devices are idle until you unfreeze." : "Couldn't freeze this track.";
+            _vm.StatusText = ok ? Loc.T("main.freeze.track_frozen_its_devices_are") : Loc.T("main.couldnt_freeze_this_track");
         }
-        catch (Exception ex) { _vm.StatusText = $"Freeze failed: {ex.Message}"; }
+        catch (Exception ex) { _vm.StatusText = Loc.F("main.freeze.freeze_failed", ex.Message); }
         finally { _vm.SuspendEnginePolling = false; }
 
         AfterFreezeChange();
@@ -127,7 +128,7 @@ public partial class MainWindow
     private void UnfreezeTrack(int trackId)
     {
         Engine.UnfreezeTrack(trackId);
-        if (_vm is not null) _vm.StatusText = "Track unfrozen.";
+        if (_vm is not null) _vm.StatusText = Loc.T("main.freeze.track_unfrozen");
         AfterFreezeChange();
     }
 
@@ -147,46 +148,52 @@ public partial class MainWindow
     // switching it on live-freezes the track, switching it off unfreezes the link (wakes the
     // source). While linked, Edit (or Done / Discard mid-session) and Flatten follow; a track
     // frozen in place offers Unfreeze / Flatten instead. Each command first selects its track
-    // so the device panel and header buttons follow.
-    private IReadOnlyList<Control> BuildTrackFreezeMenu(int trackId)
+    // so the device panel and header buttons follow. The track inspector (specs/060) shows the
+    // same entries as buttons.
+    private IReadOnlyList<FreezeEntry> TrackFreezeEntries(int trackId)
     {
-        var items = new List<Control>();
+        var items = new List<FreezeEntry>();
         if ((LinkForSource(trackId) ?? LinkForFrozen(trackId)) is { } link)
         {
             int src = link.SourceId;
-            items.Add(MenuKit.SwitchItem("Live freeze", GlyphKind.ChainLink, true, () => UnfreezeLink(src)));
+            items.Add(new(Loc.T("main.live_freeze"), GlyphKind.ChainLink, () => UnfreezeLink(src), Switch: true));
             if (link.State == LinkState.Editing)
             {
-                items.Add(MenuKit.Item("Done — re-freeze", GlyphKind.Check,
+                items.Add(new(Loc.T("main.freeze.done_re_freeze"), GlyphKind.Check,
                     () => { Timeline.Select(trackId, -1); _ = CommitEditSessionAsync(src); }));
-                items.Add(MenuKit.Danger("Discard edits", GlyphKind.Cross,
-                    () => { Timeline.Select(trackId, -1); DiscardEditSession(src); }));
+                items.Add(new(Loc.T("main.freeze.discard_edits"), GlyphKind.Cross,
+                    () => { Timeline.Select(trackId, -1); DiscardEditSession(src); }, Danger: true));
             }
             else
                 // Editing changes the source's notes/devices, so land on the source track.
-                items.Add(MenuKit.Item("Edit source", GlyphKind.Edit,
+                items.Add(new(Loc.T("main.freeze.edit_source"), GlyphKind.Edit,
                     () => { Timeline.Select(src, -1); BeginEditSession(src); }));
-            items.Add(MenuKit.Danger("Flatten (remove source)", GlyphKind.Flatten, () => FlattenLinkAsync(src)));
+            items.Add(new(Loc.T("main.flatten_remove_source"), GlyphKind.Flatten, () => FlattenLinkAsync(src), Danger: true));
             return items;
         }
 
         if (!IsFreezable(trackId)) return items;
         if (Engine.IsTrackFrozen(trackId))
         {
-            items.Add(MenuKit.Item("Unfreeze track", GlyphKind.Freeze,
+            items.Add(new(Loc.T("main.freeze.unfreeze_track"), GlyphKind.Freeze,
                 () => { Timeline.Select(trackId, -1); UnfreezeTrack(trackId); }));
-            items.Add(MenuKit.Danger("Flatten to audio track", GlyphKind.Flatten,
-                () => { Timeline.Select(trackId, -1); _ = FlattenTrackAsync(trackId); }));
+            items.Add(new(Loc.T("main.freeze.flatten_to_audio_track"), GlyphKind.Flatten,
+                () => { Timeline.Select(trackId, -1); _ = FlattenTrackAsync(trackId); }, Danger: true));
         }
         else
         {
-            items.Add(MenuKit.Item("Freeze track", GlyphKind.Freeze,
+            items.Add(new(Loc.T("main.freeze.freeze_track"), GlyphKind.Freeze,
                 () => { Timeline.Select(trackId, -1); _ = FreezeTrackAsync(trackId); }));
-            items.Add(MenuKit.SwitchItem("Live freeze", GlyphKind.ChainLink, false,
-                () => { Timeline.Select(trackId, -1); _ = LiveFreezeAsync(trackId); }));
+            items.Add(new(Loc.T("main.live_freeze"), GlyphKind.ChainLink,
+                () => { Timeline.Select(trackId, -1); _ = LiveFreezeAsync(trackId); }, Switch: false));
         }
         return items;
     }
+
+    private IReadOnlyList<Control> BuildTrackFreezeMenu(int trackId)
+        => TrackFreezeEntries(trackId).Select(e => (Control)(e.Switch is { } on ? MenuKit.SwitchItem(e.Label, e.Icon, on, e.Run)
+                                                            : e.Danger ? MenuKit.Danger(e.Label, e.Icon, e.Run)
+                                                            : MenuKit.Item(e.Label, e.Icon, e.Run))).ToList();
 
     // Freeze entries for the multi-track menu: freeze the live tracks / unfreeze the frozen
     // ones among the selection. Live-freeze pairs are per-track, so they're left to each
@@ -198,10 +205,10 @@ public partial class MainWindow
         var live = plain.Where(id => !Engine.IsTrackFrozen(id)).ToList();
         var frozen = plain.Where(id => Engine.IsTrackFrozen(id)).ToList();
         if (live.Count > 0)
-            items.Add(MenuKit.Item(live.Count == 1 ? "Freeze track" : $"Freeze {live.Count} tracks", GlyphKind.Freeze,
+            items.Add(MenuKit.Item(live.Count == 1 ? Loc.T("main.freeze.freeze_track") : Loc.F("main.freeze.freeze_tracks", live.Count), GlyphKind.Freeze,
                 () => _ = FreezeTracksAsync(live)));
         if (frozen.Count > 0)
-            items.Add(MenuKit.Item(frozen.Count == 1 ? "Unfreeze track" : $"Unfreeze {frozen.Count} tracks", GlyphKind.Freeze,
+            items.Add(MenuKit.Item(frozen.Count == 1 ? Loc.T("main.freeze.unfreeze_track") : Loc.F("main.freeze.unfreeze_tracks", frozen.Count), GlyphKind.Freeze,
                 () => UnfreezeTracks(frozen)));
         return items;
     }
@@ -211,13 +218,13 @@ public partial class MainWindow
     {
         if (_vm is null || trackIds.Count == 0) return;
         double endBeats = ProjectEndBeats();
-        if (endBeats <= 0.0) { _vm.StatusText = "Nothing to freeze — the arrangement is empty."; return; }
+        if (endBeats <= 0.0) { _vm.StatusText = Loc.T("main.nothing_to_freeze_the_arrangement"); return; }
 
         _vm.SuspendEnginePolling = true;
         int done = 0;
         try
         {
-            await RunBlockingAsync("Freeze", "Freezing tracks…", async prog =>
+            await RunBlockingAsync(Loc.T("common.freeze"), Loc.T("main.freeze.freezing_tracks"), async prog =>
             {
                 for (int i = 0; i < trackIds.Count; i++)
                 {
@@ -225,7 +232,7 @@ public partial class MainWindow
                     var frac = new Progress<double>(f =>
                     {
                         double all = (k + f) / trackIds.Count;
-                        prog.Report(ProgressReport.At(all, $"Freezing track {k + 1} of {trackIds.Count}… {all * 100:0}\u2009%"));
+                        prog.Report(ProgressReport.At(all, Loc.F("main.freeze.freezing_track_of", k + 1, trackIds.Count, all * 100)));
                     });
                     if (await Task.Run(() => _freezer.Freeze(Engine, trackIds[k], endBeats,
                             _vm.Transport.LoopOn, _vm.Transport.MetronomeOn, frac)))
@@ -233,10 +240,10 @@ public partial class MainWindow
                 }
             });
             _vm.StatusText = done == trackIds.Count
-                ? $"{done} tracks frozen — their devices are idle until you unfreeze."
-                : $"Froze {done} of {trackIds.Count} tracks.";
+                ? Loc.F("main.freeze.tracks_frozen_their_devices_are", done)
+                : Loc.F("main.freeze.froze_of_tracks", done, trackIds.Count);
         }
-        catch (Exception ex) { _vm.StatusText = $"Freeze failed: {ex.Message}"; }
+        catch (Exception ex) { _vm.StatusText = Loc.F("main.freeze.freeze_failed", ex.Message); }
         finally { _vm.SuspendEnginePolling = false; }
 
         AfterFreezeChange();
@@ -245,7 +252,7 @@ public partial class MainWindow
     private void UnfreezeTracks(IReadOnlyList<int> trackIds)
     {
         foreach (var id in trackIds) Engine.UnfreezeTrack(id);
-        if (_vm is not null) _vm.StatusText = trackIds.Count == 1 ? "Track unfrozen." : $"{trackIds.Count} tracks unfrozen.";
+        if (_vm is not null) _vm.StatusText = trackIds.Count == 1 ? Loc.T("main.freeze.track_unfrozen") : Loc.F("main.freeze.tracks_unfrozen", trackIds.Count);
         AfterFreezeChange();
     }
 
@@ -258,11 +265,11 @@ public partial class MainWindow
     private async Task FlattenTrackAsync(int trackId)
     {
         if (_vm is null || !IsFreezable(trackId)) return;
-        if (!Engine.IsTrackFrozen(trackId)) { _vm.StatusText = "Freeze the track first, then Flatten."; return; }
+        if (!Engine.IsTrackFrozen(trackId)) { _vm.StatusText = Loc.T("main.freeze.freeze_the_track_first_then"); return; }
 
-        bool ok = await new ConfirmWindow("Flatten track",
-            "Flatten replaces this track's instrument, MIDI and devices with a single audio clip of the frozen sound. " +
-            "This can't be undone. Continue?", "Flatten", "Cancel").ShowDialog<bool>(this);
+        bool ok = await new ConfirmWindow(Loc.T("main.flatten_track"),
+            Loc.T("main.freeze.flatten_replaces_this_tracks_instrument") +
+            Loc.T("main.freeze.this_cant_be_undone_continue"), Loc.T("main.flatten"), Loc.T("common.cancel")).ShowDialog<bool>(this);
         if (!ok) return;
 
         try
@@ -270,9 +277,9 @@ public partial class MainWindow
             int newId = FlattenFrozenTrack(trackId);
             Timeline.Refresh();
             if (newId > 0) Timeline.Select(newId, -1);   // selecting rebuilds the device panel
-            _vm.StatusText = "Track flattened to audio.";
+            _vm.StatusText = Loc.T("main.freeze.track_flattened_to_audio");
         }
-        catch (Exception ex) { _vm.StatusText = $"Flatten failed: {ex.Message}"; }
+        catch (Exception ex) { _vm.StatusText = Loc.F("main.freeze.flatten_failed", ex.Message); }
     }
 
     // Bounce the frozen buffer to a WAV, drop it onto a fresh audio track that inherits the
@@ -329,3 +336,7 @@ public partial class MainWindow
         return tmp;
     }
 }
+
+/// <summary>One freeze command for a track: a plain or destructive action, or a switch
+/// (<paramref name="Switch"/> = its current state) whose click flips it.</summary>
+internal readonly record struct FreezeEntry(string Label, GlyphKind Icon, Action Run, bool Danger = false, bool? Switch = null);

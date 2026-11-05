@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
-// Mixer (mockup 1f): a dedicated strip mixer as a third Detail mode. One strip
-// per track (+ returns + master): name with a 2px colour top, I/O rows, A/B
-// sends, a pan knob, a 190px vertical fader with a stereo meter, a dB read-out
-// and M/S/Arm. All strips ride the existing engine ops (vol/pan/mute/solo/send/
-// meter); meters are pushed each UI tick by MainWindow. Crossfader is M7+. The footer
+// Mixer (mockup 1f): one strip per track (+ returns + master): name with a 2px colour
+// top, I/O rows, A/B sends, a pan knob, a vertical fader with a stereo meter, a dB
+// read-out and M/S/Arm. All strips ride the existing engine ops (vol/pan/mute/solo/send/
+// meter); meters are pushed each UI tick by MainWindow, which hosts this one instance
+// docked under the main view or in the Mixer window (specs/054). Strips fit the height
+// they get (I/O, then sends hide, then the fader shortens). Crossfader is M7+. The footer
 // also shows and switches the project pan law (specs/006).
+//
+// Groups (specs/070): strips follow the Arrangement's hierarchy — a group strip, then its
+// members — under a named, tinted band per group (GroupBandsLayer). A group folds from the
+// triangle on its strip; the fold state is the Arrangement's (GroupFold), so folding hides the
+// subtree in both views, and only toggles visibility here. The Mixer follows the selected
+// track with an outline. Compact strips (MixerView.Compact.cs) are the same strips at 72 px.
 
 using System;
 using System.Collections.Generic;
@@ -19,13 +26,14 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using Nota.Application.Editing;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
 /// <summary>The Mixer window's two views (specs/008).</summary>
 public enum MixerViewMode { Strips, StereoMap }
 
-public sealed class MixerView : UserControl
+public sealed partial class MixerView : UserControl
 {
     private static readonly IBrush Card = NotaPalette.SurfaceCard;
     private static readonly IBrush MasterBg = NotaPalette.SurfaceCard;   // every strip is the panel tone
@@ -43,18 +51,64 @@ public sealed class MixerView : UserControl
 
     private readonly IAudioEngine _engine;
     private readonly StackPanel _row = new() { Orientation = Orientation.Horizontal, Spacing = 2, Margin = new Thickness(10) };
-    private readonly List<(int trackId, MeterBar meter)> _meters = new();
+    private readonly GroupBandsLayer _bands = new();
+    // Meters fed each UI tick: the control (to skip hidden strips) and its Push.
+    private readonly List<(int trackId, Control ctl, Action<NotaMeter> push)> _meters = new();
     private readonly List<(int trackId, int bus, MiniFader fader)> _sendFaders = new();
     // Sends / I/O sections are collapsible across every strip (mockup 1f header
     // toggles); we keep the section borders so a toggle can hide them all at once.
     private readonly List<Control> _sendSections = new();
     private readonly List<Control> _ioSections = new();
     private bool _sendsVisible = true, _ioVisible = true;
+
+    // Height-adaptive strips (specs/054): the strips fit the height they get, docked or in the
+    // window. As it shrinks, I/O rows hide first, then sends, then the fader shortens to
+    // FaderMin; below that the host can't get smaller (MinContentHeight). A footer toggle can
+    // pin an auto-hidden section back on — the strip row then scrolls vertically.
+    // Section heights per layout (specs/070): the height fitting is the same for both.
+    private sealed record StripMetrics(double Width, double Header, double Io, double Sends, double Pan,
+        double FaderMin, double FaderComfort, double FaderMax, double FaderPad, double Buttons);
+    private static readonly StripMetrics Regular = new(154, 24, 34, 42, 38, 72, 120, 190, 16, 28);
+    private static readonly StripMetrics CompactMetrics = new(72, 24, 18, 24, 22, 72, 120, 220, 8, 66);
+    private StripMetrics M => _compact ? CompactMetrics : Regular;
+    private double FaderMax => M.FaderMax;
+    private double FaderMin => M.FaderMin;
+    private double FaderComfort => M.FaderComfort;   // a section hides only if the fader would get shorter
+    private double HeaderH => M.Header;
+    private double IoH => M.Io;
+    private double SendsH => M.Sends;
+    private double PanH => M.Pan;
+    private double ButtonsH => M.Buttons;
+    private double FaderPad => M.FaderPad;
+    private const double RowPad = 20, StripBorder = 2, FooterH = 44;
+    private bool _compact;
+    private readonly List<Control> _faderGrids = new();
+    private double _faderH = Regular.FaderMax;
+    private double _dbH = 18;   // the dB read-out's height, measured once built
+    private bool _ioAuto, _sendsAuto;        // hidden for lack of height
+    private bool _ioPinned, _sendsPinned;    // shown anyway by the user
+    private Action? _paintIoToggle, _paintSendsToggle;
+
+    // Each strip's controls that follow the engine, so a change made elsewhere — track
+    // headers, Session's mixer sections, automation, undo, a MIDI controller — shows here
+    // too. The docked Mixer sits right next to those (specs/054).
+    private sealed class StripSync
+    {
+        public VFader? Fader;
+        public MeterFader? MeterFader;   // compact strips
+        public DragNumber? Db;
+        public PanKnob? Pan;
+        public PanBar? PanBar;           // compact strips
+        public Action<bool>? Mute, Solo, Arm, Link;   // Link: a group's Link key (specs/076)
+    }
+    private readonly Dictionary<int, StripSync> _syncs = new();
+    private StripSync SyncOf(int id) => _syncs.TryGetValue(id, out var s) ? s : _syncs[id] = new StripSync();
     // The master volume lives in TransportViewModel.MasterVolume (saved with the project, shown
     // in the MST module and the arrangement's Master row); the master strip goes through these.
     public Func<float>? GetMasterVolume { get; set; }
     public Action<float>? SetMasterVolume { get; set; }
     private VFader? _masterFader;
+    private MeterFader? _masterMeterFader;
     private DragNumber? _masterDb;
     // Project pan law (specs/006): the footer's Pan law control, its hint, the Older project
     // badge and a BAL badge on every group strip — all re-synced from the engine, so undo/redo
@@ -78,10 +132,92 @@ public sealed class MixerView : UserControl
     public Action<StereoMapView>? MapCreated { get; set; }
 
     private int _builtTrackCount = -1;
+    private int _builtShape;   // group membership, names and colours the strips were built for
+
+    // One built strip in display order: its place in the group forest and the bits folding,
+    // bands and the selection outline touch (specs/070).
+    private sealed class StripEntry
+    {
+        public int Id, Depth, Parent, ColorIndex;
+        public bool IsGroup;
+        public string Name = "";
+        public Border Strip = null!;
+        public Border Outline = null!;
+        public Action<bool>? PaintFold;             // group strips: the triangle
+        public Control? SoloDot, ArmDot, ClipDot;   // group strips: hidden-member state, when folded
+        public int[] HiddenIds = Array.Empty<int>();       // a group's descendants (ids)
+        public int[] HiddenIndices = Array.Empty<int>();   // … and their engine indices
+    }
+    private readonly List<StripEntry> _strips = new();
+    private readonly Dictionary<int, StripEntry> _stripById = new();
+    private int _maxDepth;
+    private int _selectedId = -1;
+    // Hidden-track clip warnings by group id: a rebuild (Compact, a rename, a regroup) makes new
+    // StripEntries but must not drop a warning; only unfolding, the dot or a new project clears it.
+    private readonly HashSet<int> _clipLatched = new();
+
+    /// <summary>The fold state shared with the Arrangement (specs/070).</summary>
+    internal GroupFold? Fold
+    {
+        get => _fold;
+        set
+        {
+            if (ReferenceEquals(_fold, value)) return;
+            if (_fold is not null) _fold.Changed -= ApplyFold;
+            _fold = value;
+            if (_fold is not null) _fold.Changed += ApplyFold;
+            ApplyFold();
+        }
+    }
+    private GroupFold? _fold;
+
+    /// <summary>Compact strips (specs/070). Switching rebuilds the strips.</summary>
+    public bool Compact
+    {
+        get => _compact;
+        set
+        {
+            if (_compact == value) return;
+            _compact = value;
+            _paintCompactToggle?.Invoke();
+            Refresh();
+            MinContentHeightChanged?.Invoke();
+        }
+    }
+    /// <summary>Raised when the user flips the footer's Compact toggle.</summary>
+    public event Action<bool>? CompactChanged;
+    private Action? _paintCompactToggle;
 
     /// <summary>Raised after <see cref="Refresh"/> rebuilds the strips, so a host window can
     /// fit its width to them.</summary>
     public event Action? StripsChanged;
+
+    /// <summary>Raised after a group strip's Link key changed the group's Link (specs/076).</summary>
+    public event Action? GroupLinkChanged;
+
+    // A group strip's Link key: the chain-link chip of the Arrangement's group header.
+    private Border LinkKey(int id, out Action<bool> sync)
+    {
+        bool on = _engine.GetTrackEditLink(id);
+        var glyph = new Glyph(GlyphKind.ChainLink, 10);
+        var b = new Border { Width = 20, Height = 17, CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Child = glyph, Cursor = new Cursor(StandardCursorType.Hand) };
+        ToolTip.SetTip(b, ArrangementView.LinkTip);
+        ArrangementView.PaintLinkChip(b, glyph, on);
+        b.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            if (!_engine.SetTrackEditLink(id, !on)) return;
+            on = !on; ArrangementView.PaintLinkChip(b, glyph, on);
+            GroupLinkChanged?.Invoke();
+        };
+        sync = v => { if (v == on) return; on = v; ArrangementView.PaintLinkChip(b, glyph, on); };
+        return b;
+    }
+
+    /// <summary>Raised when <see cref="MinContentHeight"/> changed, so a host can update its
+    /// own minimum.</summary>
+    public event Action? MinContentHeightChanged;
 
     /// <summary>The width the strip row wants (all strips + master + margin), unclipped.</summary>
     public double StripsWidth
@@ -89,16 +225,34 @@ public sealed class MixerView : UserControl
         get { _row.Measure(Size.Infinity); return _row.DesiredSize.Width; }
     }
 
+    // A strip's always-shown part (header, pan, dB, M/S/Arm) without the fader, plus the group
+    // bars above the strips, which always stay (specs/070).
+    private double CoreH => BandsH + HeaderH + PanH + FaderPad + _dbH + ButtonsH + StripBorder;
+    private double BandsH => _maxDepth * GroupBandsLayer.BarH;
+
+    /// <summary>The smallest height (design units) at which a strip's core still fits — header,
+    /// pan, a FaderMin fader, dB, M/S/Arm — plus the footer. Hosts don't go below it.</summary>
+    public double MinContentHeight => CoreH + FaderMin + RowPad + FooterH + MapPad;
+
+    /// <summary>The height at which every strip shows in full (I/O, sends, the full fader).</summary>
+    public double NaturalContentHeight => CoreH + FaderMax + IoH + SendsH + RowPad + FooterH + MapPad;
+
+    // The Stereo Map layout's grid margin (8 above and below the strip column).
+    private const double MapMargin = 8;
+    private double MapPad => _view == MixerViewMode.StereoMap ? 2 * MapMargin : 0;
+
     public MixerView(IAudioEngine engine)
     {
         ValueEntry.SetScope(this, true);   // Tab in a value box walks the values shown here
         _engine = engine;
         _stripsScroller = new ScrollViewer
         {
-            Content = _row,
+            Content = new Panel { Children = { _bands, _row } },
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
+        _stripsScroller.SizeChanged += (_, e) => { if (e.HeightChanged) FitHeight(); };
+        _row.LayoutUpdated += (_, _) => _bands.InvalidateVisual();   // bands follow the strips' bounds
         var dock = new DockPanel();
         var footer = Footer();
         DockPanel.SetDock(footer, Dock.Bottom);
@@ -111,7 +265,7 @@ public sealed class MixerView : UserControl
     public MixerViewMode View
     {
         get => _view;
-        set { if (_view == value) return; _view = value; ApplyView(); }
+        set { if (_view == value) return; _view = value; ApplyView(); MinContentHeightChanged?.Invoke(); }
     }
 
     private void ApplyView()
@@ -130,7 +284,7 @@ public sealed class MixerView : UserControl
         }
         if (Map is null) { Map = new StereoMapView(_engine) { MinWidth = 520 }; MapCreated?.Invoke(Map); }
         _stripsScroller.MaxWidth = 440;
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = new Thickness(8) };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8, Margin = new Thickness(MapMargin) };
         grid.Children.Add(Map);
         Grid.SetColumn(_stripsScroller, 1);
         grid.Children.Add(_stripsScroller);
@@ -144,37 +298,219 @@ public sealed class MixerView : UserControl
         _sendFaders.Clear();
         _sendSections.Clear();
         _ioSections.Clear();
+        _faderGrids.Clear();
+        _syncs.Clear();
         _balBadges.Clear();
+        _strips.Clear();
+        _stripById.Clear();
+        _masterFader = null; _masterMeterFader = null;
         int returns = _engine.ReturnTrackCount;
+        int n = _engine.TrackCount;
+        // As in the arrangement: the tracks in its hierarchical order (each group, then its
+        // members — specs/070), then the returns, then the master.
+        var rows = ArrangementView.HierarchyOrder(_engine);
+        _maxDepth = 0;
+        foreach (var r in rows)
+            if (_engine.TryGetTrackInfo(r.Index, out var gi) && gi.IsGroup) _maxDepth = Math.Max(_maxDepth, r.Depth + 1);
+        foreach (var r in rows)
+        {
+            if (!_engine.TryGetTrackInfo(r.Index, out var ti)) continue;
+            AddStrip(ti, r.Depth, r.ParentGroupId, returns);
+        }
+        foreach (int i in ArrangementView.DisplayOrder(_engine))
+            if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsReturn) AddStrip(ti, 0, -1, returns);
+        _row.Children.Add(_compact ? CompactMasterStrip() : MasterStrip());
+        CollectDescendants(rows);
+        _clipLatched.RemoveWhere(id => !_stripById.TryGetValue(id, out var g) || !g.IsGroup);   // a group that is gone
+        _row.Margin = new Thickness(10, 10 + BandsH, 10, 10);
+        _bands.Top = 10;
+        _shownLaw = null;   // the strips are new: repaint the law state onto them
+        SyncPanLaw();
+        _builtTrackCount = n;
+        _builtShape = Shape();
+        _builtNames = GroupNames();
+        MeasureDb();
+        ApplyFold();
+        FitHeight();
+        MinContentHeightChanged?.Invoke();   // the bar rows may have changed
+        StripsChanged?.Invoke();
+    }
+
+    private void AddStrip(NotaTrackInfo ti, int depth, int parent, int returns)
+    {
+        int colorIdx = ArrangementView.EffectiveColorIndex(_engine, ti.Id);
+        var c = ArrangementView.TrackBrush(colorIdx);
+        var e = new StripEntry { Id = ti.Id, Depth = depth, Parent = parent, IsGroup = ti.IsGroup, ColorIndex = colorIdx, Name = TrackNames.Of(_engine, ti) };
+        var body = _compact ? CompactStrip(ti, c, returns, e) : Strip(ti, c, returns, e);
+        // The selection outline sits over the strip's content, so selecting never resizes it.
+        e.Outline = new Border { BorderBrush = NotaPalette.Accent, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Panel, IsHitTestVisible = false, IsVisible = false };
+        var inner = (Control)body.Child!;
+        body.Child = null;   // detach before re-parenting
+        body.Child = new Panel { Children = { inner, e.Outline } };
+        e.Strip = body;
+        _strips.Add(e);
+        _stripById[e.Id] = e;
+        _row.Children.Add(body);
+    }
+
+    // Each group's descendants (ids and engine indices), for the hidden count and the folded
+    // group's solo / arm / clip dots. Built once per Refresh, so the tick allocates nothing.
+    private void CollectDescendants(IReadOnlyList<ArrangementView.HierarchyRow> rows)
+    {
+        foreach (var e in _strips)
+        {
+            if (!e.IsGroup) continue;
+            var ids = new List<int>(); var idx = new List<int>();
+            foreach (var r in rows)
+                if (IsDescendant(r.Id, e.Id)) { ids.Add(r.Id); idx.Add(r.Index); }
+            e.HiddenIds = ids.ToArray();
+            e.HiddenIndices = idx.ToArray();
+        }
+    }
+
+    private bool IsDescendant(int id, int groupId)
+    {
+        for (int guard = 0; guard < 32 && _stripById.TryGetValue(id, out var e); guard++)
+        {
+            if (e.Parent == groupId) return true;
+            if (e.Parent < 0) return false;
+            id = e.Parent;
+        }
+        return false;
+    }
+
+    // A strip is hidden when any group above it is folded.
+    private bool HiddenByFold(StripEntry e)
+    {
+        if (_fold is null) return false;
+        int p = e.Parent;
+        for (int guard = 0; guard < 32 && p >= 0; guard++)
+        {
+            if (_fold.IsFolded(p)) return true;
+            p = _stripById.TryGetValue(p, out var pe) ? pe.Parent : -1;
+        }
+        return false;
+    }
+
+    /// <summary>Shows / hides strips for the fold state and repaints the bands — no rebuild
+    /// (specs/070 R4).</summary>
+    private void ApplyFold()
+    {
+        foreach (var e in _strips)
+        {
+            e.Strip.IsVisible = !HiddenByFold(e);
+            bool folded = e.IsGroup && _fold?.IsFolded(e.Id) == true;
+            e.PaintFold?.Invoke(folded);
+            if (!folded) _clipLatched.Remove(e.Id);
+        }
+        var bands = new List<GroupBandsLayer.Band>();
+        for (int i = 0; i < _strips.Count; i++)
+        {
+            var g = _strips[i];
+            if (!g.IsGroup || !g.Strip.IsVisible) continue;
+            var last = g;
+            for (int j = i + 1; j < _strips.Count && IsDescendant(_strips[j].Id, g.Id); j++)
+                if (_strips[j].Strip.IsVisible) last = _strips[j];
+            int hidden = _fold?.IsFolded(g.Id) == true ? g.HiddenIds.Length : 0;
+            bands.Add(new GroupBandsLayer.Band(g.Name, g.ColorIndex, g.Depth, g.Strip, last.Strip, hidden));
+        }
+        _bands.SetBands(bands);
+        FollowSelection(_selectedId, bringIntoView: false);
+        UpdateHiddenState();
+        StripsChanged?.Invoke();   // the strip row's width changed
+    }
+
+    /// <summary>Outlines the selected track's strip and brings it into view; a track hidden by
+    /// folding outlines its outermost folded group instead. Never unfolds (specs/070).</summary>
+    public void FollowSelection(int trackId) => FollowSelection(trackId, bringIntoView: true);
+
+    private void FollowSelection(int trackId, bool bringIntoView)
+    {
+        _selectedId = trackId;
+        StripEntry? target = null;
+        if (_stripById.TryGetValue(trackId, out var e))
+        {
+            target = e;
+            for (int p = e.Parent, guard = 0; p >= 0 && guard < 32 && _stripById.TryGetValue(p, out var pe); p = pe.Parent, guard++)
+                if (_fold?.IsFolded(p) == true) target = pe;   // keeps climbing: the outermost wins
+        }
+        foreach (var s in _strips) s.Outline.IsVisible = ReferenceEquals(s, target);
+        if (bringIntoView) target?.Strip.BringIntoView();
+    }
+
+    // Group membership, names and colours: a change rebuilds the strips so the bands follow
+    // moves into / out of groups, renames, recolours and undo (FR-004). Names cross the C ABI
+    // as new strings, so they are read every NameEvery ticks rather than on each one.
+    private const int NameEvery = 15;
+    private int _shapeTick, _builtNames;
+    private int Shape()
+    {
+        var h = new HashCode();
         int n = _engine.TrackCount;
         for (int i = 0; i < n; i++)
         {
             if (!_engine.TryGetTrackInfo(i, out var ti)) continue;
-            var c = ArrangementView.TrackBrush(ArrangementView.EffectiveColorIndex(_engine, ti.Id));
-            _row.Children.Add(Strip(ti, c, returns));
+            h.Add(ti.Id); h.Add(ti.GroupId); h.Add(ti.IsGroup);
+            h.Add(_engine.GetTrackColorIndex(ti.Id));
         }
-        _row.Children.Add(MasterStrip());
-        _shownLaw = null;   // the strips are new: repaint the law state onto them
-        SyncPanLaw();
-        _builtTrackCount = n;
-        StripsChanged?.Invoke();
+        return h.ToHashCode();
+    }
+
+    private int GroupNames()
+    {
+        var h = new HashCode();
+        foreach (var e in _strips) if (e.IsGroup) h.Add(TrackNames.Of(_engine, e.Id));
+        return h.ToHashCode();
+    }
+
+    private bool ShapeChanged()
+    {
+        if (Shape() != _builtShape) return true;
+        if (++_shapeTick < NameEvery) return false;
+        _shapeTick = 0;
+        return GroupNames() != _builtNames;
+    }
+
+    // A folded group's dots: a hidden member is soloed, armed, or peaked at 0 dBFS since the fold.
+    private void UpdateHiddenState()
+    {
+        foreach (var g in _strips)
+        {
+            if (g.SoloDot is null) continue;
+            bool folded = _fold?.IsFolded(g.Id) == true;
+            bool solo = false, arm = false;
+            if (folded)
+            {
+                foreach (int idx in g.HiddenIndices)
+                    if (_engine.TryGetTrackInfo(idx, out var ti)) { solo |= ti.Soloed != 0; arm |= ti.Armed != 0; }
+                if (!_clipLatched.Contains(g.Id))
+                    foreach (int id in g.HiddenIds)
+                        if (_engine.TryGetTrackMeter(id, out var m) && (m.PeakL >= 1f || m.PeakR >= 1f)) { _clipLatched.Add(g.Id); break; }
+            }
+            g.SoloDot.IsVisible = solo;
+            g.ArmDot!.IsVisible = arm;
+            g.ClipDot!.IsVisible = folded && _clipLatched.Contains(g.Id);
+        }
     }
 
     /// <summary>Pushes fresh meter readings to every strip (called at the UI clock).</summary>
     public void UpdateMeters()
     {
-        // A track added or removed while the mixer is open gets (or loses) its strip.
-        if (_builtTrackCount >= 0 && _engine.TrackCount != _builtTrackCount) Refresh();
-        foreach (var (id, meter) in _meters)
+        // A track added or removed while the mixer is open gets (or loses) its strip; a track
+        // moved into or out of a group, or a group renamed or recoloured, moves its band.
+        if (_builtTrackCount >= 0 && (_engine.TrackCount != _builtTrackCount || ShapeChanged())) Refresh();
+        foreach (var (id, ctl, push) in _meters)
         {
-            if (id < 0) meter.Push(_engine.MasterMeter());
-            else if (_engine.TryGetTrackMeter(id, out var m)) meter.Push(m);
+            if (!ctl.IsEffectivelyVisible) continue;   // a folded strip reads nothing
+            if (id < 0) push(_engine.MasterMeter());
+            else if (_engine.TryGetTrackMeter(id, out var m)) push(m);
         }
         // Follow master volume changes made elsewhere (MST, Master row, Remote, project load).
-        if (GetMasterVolume is { } get && _masterFader is { Dragging: false } f && _masterDb is { } db)
+        if (GetMasterVolume is { } get && _masterDb is { } db)
         {
             double v = get();
-            if (Math.Abs(f.Value - v) > 1e-3) { f.SetValueExternal(v); db.Value = LinToDb(v); }
+            if (_masterFader is { Dragging: false } f && Math.Abs(f.Value - v) > 1e-3) { f.SetValueExternal(v); db.Value = LinToDb(v); }
+            if (_masterMeterFader is { Dragging: false } mf && Math.Abs(mf.Value - v) > 1e-3) { mf.SetValueExternal(v); db.Value = LinToDb(v); }
         }
         // Sends follow the Devices panel's Sends card, the Session mixer and automation (#138).
         foreach (var (id, bus, send) in _sendFaders)
@@ -183,40 +519,71 @@ public sealed class MixerView : UserControl
             double v = _engine.GetTrackSend(id, bus);
             if (Math.Abs(send.Value - v) > 1e-3) send.Value = v;
         }
+        FollowStrips();
+        UpdateHiddenState();
         SyncPanLaw();   // undo/redo or a load elsewhere may have changed it
+    }
+
+    // Volume, pan and M/S/Arm follow the engine (see StripSync); a control being dragged is
+    // left to the hand on it.
+    private void FollowStrips()
+    {
+        int n = _engine.TrackCount;
+        for (int i = 0; i < n; i++)
+        {
+            if (!_engine.TryGetTrackInfo(i, out var ti) || !_syncs.TryGetValue(ti.Id, out var s)) continue;
+            // A strip hidden by folding catches up on the first tick after it is shown again.
+            if (_stripById.TryGetValue(ti.Id, out var entry) && !entry.Strip.IsVisible) continue;
+            if (s.Fader is { Dragging: false } f && Math.Abs(f.Value - ti.Volume) > 1e-3)
+            {
+                f.SetValueExternal(ti.Volume);
+                if (s.Db is { } db) db.Value = LinToDb(ti.Volume);
+            }
+            if (s.MeterFader is { Dragging: false } mf && Math.Abs(mf.Value - ti.Volume) > 1e-3)
+            {
+                mf.SetValueExternal(ti.Volume);
+                if (s.Db is { } db) db.Value = LinToDb(ti.Volume);
+            }
+            if (s.Pan is { Dragging: false } k && Math.Abs(k.Pan - ti.Pan) > 1e-3) k.SetPanExternal(ti.Pan);
+            if (s.PanBar is { Dragging: false } pb && Math.Abs(pb.Pan - ti.Pan) > 1e-3) pb.Pan = ti.Pan;
+            s.Mute?.Invoke(ti.Muted != 0);
+            s.Solo?.Invoke(ti.Soloed != 0);
+            s.Arm?.Invoke(ti.Armed != 0);
+            if (ti.IsGroup) s.Link?.Invoke(_engine.GetTrackEditLink(ti.Id));
+        }
     }
 
     // ---- strips -----------------------------------------------------------
 
-    private Control Strip(NotaTrackInfo ti, IBrush color, int returns)
+    private Border Strip(NotaTrackInfo ti, IBrush color, int returns, StripEntry entry)
     {
         int id = ti.Id;
         bool isReturn = ti.IsReturn;
         var col = new StackPanel();
 
-        col.Children.Add(Header(TrackNames.Of(_engine, ti), color, Card));
+        col.Children.Add(Header(TrackNames.Of(_engine, ti), color, Card, ti.IsGroup ? entry : null));
 
-        string io1 = isReturn ? "Return in" : ti.IsGroup ? "Group in" : ti.IsInstrument ? "MIDI in" : "In 1";
-        string io2 = isReturn ? "→ Master"
-                   : ti.IsGroup ? "→ " + (ti.GroupId >= 0 ? TrackNames.Of(_engine, ti.GroupId) : "Master")
-                   : ti.IsInstrument ? "Monitor auto" : "Monitor in";
+        string io1 = isReturn ? Loc.T("mixer.return_in") : ti.IsGroup ? Loc.T("mixer.group_in") : ti.IsInstrument ? Loc.T("mixer.midi_in") : Loc.T("mixer.in_1");
+        string io2 = isReturn ? Loc.T("mixer.master")
+                   : ti.IsGroup ? "→ " + (ti.GroupId >= 0 ? TrackNames.Of(_engine, ti.GroupId) : Loc.T("common.master"))
+                   : ti.IsInstrument ? Loc.T("mixer.monitor_auto") : Loc.T("mixer.monitor_in");
         // Instrument tracks get a live "MIDI To" selector in place of the static I/O text.
         var ioRow = ti.IsInstrument ? MidiIoRow(id) : IoRow(io1, io2);
-        ioRow.IsVisible = _ioVisible;
+        ioRow.IsVisible = IoShown;
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
 
         if (!isReturn)
         {
             var sends = SendsRow(id, returns);
-            sends.IsVisible = _sendsVisible;
+            sends.IsVisible = SendsShown;
             _sendSections.Add(sends);
             col.Children.Add(sends);
         }
 
         col.Children.Add(PanRow(id, ti.Pan, ti.IsGroup));
         col.Children.Add(FaderRow(id, ti.Volume, color, out var db, out var meter));
-        _meters.Add((id, meter));
+        _meters.Add((id, meter, meter.Push));
         col.Children.Add(db);
         col.Children.Add(ButtonsRow(id, ti, isReturn));
 
@@ -227,18 +594,18 @@ public sealed class MixerView : UserControl
         };
     }
 
-    private Control MasterStrip()
+    private Border MasterStrip()
     {
         var col = new StackPanel();
-        col.Children.Add(Header("Master", NotaPalette.Master, MasterBg));
-        var ioRow = IoRow("Sum bus", "→ Output");
-        ioRow.IsVisible = _ioVisible;
+        col.Children.Add(Header(Loc.T("common.master"), NotaPalette.Master, MasterBg));
+        var ioRow = IoRow(Loc.T("mixer.sum_bus"), Loc.T("mixer.output"));
+        ioRow.IsVisible = IoShown;
         _ioSections.Add(ioRow);
         col.Children.Add(ioRow);
 
         Control db;
         var faderRow = FaderRow(-1, GetMasterVolume?.Invoke() ?? 1f, NotaPalette.Master, out db, out var meter);
-        _meters.Add((-1, meter));
+        _meters.Add((-1, meter, meter.Push));
         col.Children.Add(faderRow);
         col.Children.Add(db);
         // Master has no sends / pan / arm; keep the strip visually aligned with a
@@ -256,12 +623,14 @@ public sealed class MixerView : UserControl
 
     private Control Footer()
     {
-        var sendsToggle = SectionToggle("Sends", _sendsVisible, on => { _sendsVisible = on; foreach (var s in _sendSections) s.IsVisible = on; });
-        var ioToggle = SectionToggle("I/O", _ioVisible, on => { _ioVisible = on; foreach (var s in _ioSections) s.IsVisible = on; });
+        var sendsToggle = SectionToggle(Loc.T("common.sends"), () => _sendsVisible, () => _sendsAuto, () => _sendsPinned,
+            (on, pinned) => { _sendsVisible = on; _sendsPinned = pinned; FitHeight(); }, out _paintSendsToggle);
+        var ioToggle = SectionToggle("I/O", () => _ioVisible, () => _ioAuto, () => _ioPinned,
+            (on, pinned) => { _ioVisible = on; _ioPinned = pinned; FitHeight(); }, out _paintIoToggle);
         var left = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children = { new TextBlock { Text = "Show", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle },
+            Children = { new TextBlock { Text = Loc.T("common.show"), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center }, sendsToggle, ioToggle, CompactToggle() },
         };
 
         var divider = new Border { Width = 1, Height = 20, Background = BorderDef, VerticalAlignment = VerticalAlignment.Center };
@@ -279,24 +648,113 @@ public sealed class MixerView : UserControl
         return new Border { Height = 44, Background = MasterBg, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(12, 0), Child = grid };
     }
 
-    private Border SectionToggle(string label, bool initial, Action<bool> set)
+    // A footer section toggle. On = "show when it fits"; when the section is hidden for lack of
+    // height it shows muted, and a click pins it on anyway (the strips then scroll); a click on
+    // a shown or pinned section turns it off.
+    private Border SectionToggle(string label, Func<bool> on, Func<bool> auto, Func<bool> pinned,
+        Action<bool, bool> set, out Action paint)
     {
-        bool on = initial;
         var t = new TextBlock { Text = label, FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var b = new Border { Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
-        // Toggled on: a solid accent key with derived ink; off: a raised key.
-        void Paint() { b.Background = on ? Brass : NotaPalette.SurfaceRaised; b.BorderBrush = on ? Brass : NotaPalette.Seam; t.Foreground = on ? OnAccent : TextSecondary; }
-        b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
+        // Shown: a solid accent key with derived ink; auto-hidden: a raised key with an accent
+        // rim; off: a raised key.
+        void Paint()
+        {
+            bool hiddenByHeight = on() && auto() && !pinned();
+            bool lit = on() && !hiddenByHeight;
+            b.Background = lit ? Brass : NotaPalette.SurfaceRaised;
+            b.BorderBrush = lit || hiddenByHeight ? Brass : NotaPalette.Seam;
+            t.Foreground = lit ? OnAccent : hiddenByHeight ? TextTertiary : TextSecondary;
+            ToolTip.SetTip(b, hiddenByHeight ? Loc.T("mixer.hidden_not_enough_height_click") : null);
+        }
+        b.PointerPressed += (_, e) =>
+        {
+            e.Handled = true;
+            if (on() && auto() && !pinned()) set(true, true);
+            else if (on()) set(false, false);
+            else set(true, false);
+            Paint();
+        };
+        paint = Paint;
         Paint();
         return b;
+    }
+
+    // Compact strips (specs/070): a two-state key painted like the section toggles.
+    private Border CompactToggle()
+    {
+        var t = new TextBlock { Text = Loc.T("common.compact"), FontSize = 10, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var b = new Border { Height = 22, Padding = new Thickness(8, 0), CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), VerticalAlignment = VerticalAlignment.Center, Cursor = new Cursor(StandardCursorType.Hand), Child = t };
+        ToolTip.SetTip(b, Loc.T("mixer.show_compact_strips_more_tracks"));
+        void Paint()
+        {
+            b.Background = _compact ? Brass : NotaPalette.SurfaceRaised;
+            b.BorderBrush = _compact ? Brass : NotaPalette.Seam;
+            t.Foreground = _compact ? OnAccent : TextSecondary;
+        }
+        b.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return;
+            e.Handled = true;
+            Compact = !_compact;
+            CompactChanged?.Invoke(_compact);
+        };
+        _paintCompactToggle = Paint;
+        Paint();
+        return b;
+    }
+
+    private bool IoShown => _ioVisible && (!_ioAuto || _ioPinned);
+    private bool SendsShown => _sendsVisible && (!_sendsAuto || _sendsPinned);
+
+    // The dB read-out's height comes from its font; measure it once there is one, so
+    // MinContentHeight matches what is drawn.
+    private void MeasureDb()
+    {
+        if (_masterDb is null) return;
+        _masterDb.Measure(Size.Infinity);
+        double h = Math.Ceiling(_masterDb.DesiredSize.Height);
+        if (h <= 0 || Math.Abs(h - _dbH) < 0.5) return;
+        _dbH = h;
+        MinContentHeightChanged?.Invoke();
+    }
+
+    // Fit the strips to the strip area's height: while the fader would drop below FaderComfort,
+    // I/O hides first, then sends; the fader takes the rest between FaderMin and FaderMax. Only toggles visibility / height — no rebuild.
+    private void FitHeight()
+    {
+        // Not laid out yet: show everything the toggles allow; the first size pass refits.
+        double h = _stripsScroller.Bounds.Height;
+        double avail = h > 0 ? h - RowPad - CoreH : double.PositiveInfinity;
+        double sends = _sendsVisible ? SendsH : 0, io = _ioVisible ? IoH : 0;
+        double pinnedIo = _ioVisible && _ioPinned ? IoH : 0;
+        bool ioFits = avail >= FaderComfort + sends + io;
+        bool sendsFits = avail - pinnedIo >= FaderComfort + sends;
+        _ioAuto = _ioVisible && !ioFits;
+        _sendsAuto = _sendsVisible && !sendsFits;
+        double used = (IoShown ? IoH : 0) + (SendsShown ? SendsH : 0);
+        double fader = Math.Clamp(Math.Floor(avail - used), FaderMin, FaderMax);
+
+        foreach (var s in _ioSections) s.IsVisible = IoShown;
+        foreach (var s in _sendSections) s.IsVisible = SendsShown;
+        if (Math.Abs(fader - _faderH) >= 0.5)
+        {
+            _faderH = fader;
+            foreach (var g in _faderGrids) g.Height = fader;
+        }
+        // A pinned section may not fit: let the strip row scroll then.
+        _stripsScroller.VerticalScrollBarVisibility = (_ioPinned && _ioAuto) || (_sendsPinned && _sendsAuto)
+            ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+        _paintIoToggle?.Invoke();
+        _paintSendsToggle?.Invoke();
     }
 
     // Pan law: the project's pan law as shell segments, a one-line hint, and the Older project
     // badge for projects made before the law existed (they keep Balance until switched).
     private Control PanLawGroup()
     {
-        var label = new TextBlock { Text = "Pan law", FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        var seg = ClipEditorKit.Segments(new[] { "Stereo", "Balance" }, _engine.PanLaw == PanLaw.Stereo ? 0 : 1, i =>
+        var label = new TextBlock { Text = Loc.T("mixer.pan_law"), FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        var seg = ClipEditorKit.Segments(new[] { Loc.T("mixer.stereo"), Loc.T("mixer.balance") }, _engine.PanLaw == PanLaw.Stereo ? 0 : 1, i =>
         {
             var law = i == 0 ? PanLaw.Stereo : PanLaw.Balance;
             if (_engine.PanLaw != law) _engine.SetPanLaw(law);   // one undo step
@@ -306,11 +764,11 @@ public sealed class MixerView : UserControl
         _setLawSegment = set;
         if (seg.Child is Panel buttons)
         {
-            string[] tips = { "Panning moves the whole stereo image; nothing is dropped", "Panning attenuates the opposite channel (legacy behaviour)" };
+            string[] tips = { Loc.T("mixer.panning_moves_the_whole_stereo"), Loc.T("mixer.panning_attenuates_the_opposite_channel") };
             for (int i = 0; i < buttons.Children.Count && i < tips.Length; i++) ToolTip.SetTip(buttons.Children[i], tips[i]);
         }
         _lawHint = new TextBlock { FontSize = 11, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-        _olderBadge = Tag("Older project", 9, 0, 18, "Projects saved before stereo pan law open with Balance so existing mixes do not change");
+        _olderBadge = Tag(Loc.T("mixer.older_project"), 9, 0, 18, Loc.T("mixer.projects_saved_before_stereo_pan"));
         return new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 10, VerticalAlignment = VerticalAlignment.Center,
@@ -330,8 +788,8 @@ public sealed class MixerView : UserControl
         bool stereo = law == PanLaw.Stereo;
         _setLawSegment?.Invoke(stereo ? 0 : 1);
         if (_lawHint is not null)
-            _lawHint.Text = stereo ? "Pan moves the whole image of stereo tracks and returns"
-                                   : "Pan attenuates the opposite channel, as in earlier versions";
+            _lawHint.Text = stereo ? Loc.T("mixer.pan_moves_the_whole_image")
+                                   : Loc.T("mixer.pan_attenuates_the_opposite_channel");
         if (_olderBadge is not null) _olderBadge.IsVisible = older && !stereo;
         foreach (var b in _balBadges) b.IsVisible = stereo;
     }
@@ -373,15 +831,66 @@ public sealed class MixerView : UserControl
         };
     }
 
-    private Control Header(string name, IBrush topColor, IBrush bg)
+    private Control Header(string name, IBrush topColor, IBrush bg, StripEntry? group = null)
     {
-        // The strip header: a 3px bar in the track colour on top (muted grey for master).
+        // The strip header: a 3px bar in the track colour on top (muted grey for master). A group
+        // strip leads with its fold triangle and, folded, ends with its hidden members' state.
         var grid = new Grid { RowDefinitions = new RowDefinitions("3,*") };
         grid.Children.Add(new Border { Background = topColor, Height = 3, VerticalAlignment = VerticalAlignment.Top });
-        var label = new TextBlock { Text = name, FontSize = 10, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(7, 0, 7, 0), TextTrimming = TextTrimming.CharacterEllipsis };
-        Grid.SetRow(label, 1);
-        grid.Children.Add(label);
+        double fs = _compact ? 9 : 10, pad = _compact ? 4 : 7;
+        var label = new TextBlock { Text = name, FontSize = fs, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        ToolTip.SetTip(label, name);
+        var line = new DockPanel { Margin = new Thickness(pad, 0, pad, 0), LastChildFill = true };
+        if (group is not null)
+        {
+            var fold = FoldKey(group, name);
+            DockPanel.SetDock(fold, Dock.Left);
+            line.Children.Add(fold);
+            var dots = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(3, 0, 0, 0) };
+            group.SoloDot = Dot(NotaPalette.Solo, Loc.T("mixer.a_hidden_track_is_soloed"));
+            group.ArmDot = Dot(NotaPalette.Record, Loc.T("mixer.a_hidden_track_is_armed"));
+            group.ClipDot = Dot(NotaPalette.Danger, Loc.T("mixer.a_hidden_track_clipped_click"));
+            group.ClipDot.PointerPressed += (_, e) => { e.Handled = true; _clipLatched.Remove(group.Id); group.ClipDot.IsVisible = false; };
+            dots.Children.Add(group.SoloDot); dots.Children.Add(group.ArmDot); dots.Children.Add(group.ClipDot);
+            DockPanel.SetDock(dots, Dock.Right);
+            line.Children.Add(dots);
+        }
+        line.Children.Add(label);
+        Grid.SetRow(line, 1);
+        grid.Children.Add(line);
         return new Border { Height = 24, Background = bg, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = grid };
+    }
+
+    // A group's fold triangle: the Arrangement's disclosure glyph; click, Space or Enter folds the
+    // group in both views (GroupFold). View state — no undo step.
+    private Control FoldKey(StripEntry group, string name)
+    {
+        var glyph = new Glyph(GlyphKind.ChevronDown, 8) { Foreground = TextSecondary };
+        var key = new Border
+        {
+            Width = 12, Height = 14, Margin = new Thickness(0, 0, 3, 0), Background = Brushes.Transparent, Focusable = true,
+            Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = glyph,
+        };
+        void Toggle() { if (_fold is { } f) f.Toggle(group.Id); }
+        key.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(key).Properties.IsLeftButtonPressed) return; e.Handled = true; Toggle(); };
+        key.KeyDown += (_, e) => { if (e.Key is Key.Space or Key.Enter) { e.Handled = true; Toggle(); } };
+        group.PaintFold = folded =>
+        {
+            glyph.Kind = folded ? GlyphKind.ChevronRight : GlyphKind.ChevronDown;
+            string tip = folded ? Loc.F("mixer.unfold_group", name) : Loc.F("mixer.fold_group", name);
+            ToolTip.SetTip(key, tip);
+            Avalonia.Automation.AutomationProperties.SetName(key, tip);
+        };
+        group.PaintFold(false);
+        return key;
+    }
+
+    private static Border Dot(IBrush fill, string tip)
+    {
+        const double size = 6;
+        var d = new Border { Width = size, Height = size, CornerRadius = new CornerRadius(size / 2), Background = fill, VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
+        ToolTip.SetTip(d, tip);
+        return d;
     }
 
     private Control IoRow(string io1, string io2) => new Border
@@ -400,7 +909,7 @@ public sealed class MixerView : UserControl
 
     // Instrument-track I/O row: a "MIDI In" selector (None, or another instrument track whose
     // MIDI this one receives) over the label. Writes/reads via the engine.
-    private Control MidiIoRow(int id)
+    private Control MidiIoRow(int id, bool compact = false)
     {
         var cb = new ComboBox
         {
@@ -413,7 +922,7 @@ public sealed class MixerView : UserControl
             cb.Items.Add(new ComboBoxItem { Content = new TextBlock { Text = label, FontSize = 8, TextTrimming = TextTrimming.CharacterEllipsis }, Padding = new Thickness(5, 1), MinHeight = 0 });
             sources.Add(src);
         }
-        Add("None", -1);
+        Add(Loc.T("common.none"), -1);
         int n = _engine.TrackCount;
         for (int i = 0; i < n; i++)
             if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsInstrument && ti.Id != id)
@@ -426,6 +935,12 @@ public sealed class MixerView : UserControl
             if (cb.SelectedIndex >= 0 && cb.SelectedIndex < sources.Count)
                 _engine.SetTrackMidiSource(id, sources[cb.SelectedIndex]);
         };
+        if (compact)   // one line: the selector alone, its label in the tooltip (specs/070)
+        {
+            cb.Height = 14;
+            ToolTip.SetTip(cb, Loc.T("mixer.midi_in"));
+            return new Border { Height = IoH, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(4, 2), Child = cb };
+        }
         return new Border
         {
             Height = 34, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 0, 0, 1), Padding = new Thickness(7, 4),
@@ -434,7 +949,7 @@ public sealed class MixerView : UserControl
                 Spacing = 2,
                 Children =
                 {
-                    new TextBlock { Text = "MIDI in", FontSize = 8, Foreground = TextTertiary },
+                    new TextBlock { Text = Loc.T("mixer.midi_in"), FontSize = 8, Foreground = TextTertiary },
                     cb,
                 },
             },
@@ -453,8 +968,8 @@ public sealed class MixerView : UserControl
             {
                 var f = new MiniFader(_engine.GetTrackSend(id, bus), 1.0) { VerticalAlignment = VerticalAlignment.Center };
                 int b = bus;
-                f.ValueChanged += v => _engine.SetTrackSend(id, b, (float)v);
-                ValueEntry.Attach(f, f.EntryField($"Send {(char)('A' + b)}", NotaNum.Pct));
+                SendControl.Attach(f, _engine, id, b);   // undoable, writes automation (specs/072)
+                ValueEntry.Attach(f, f.EntryField(Loc.F("common.send", (char)('A' + b)), NotaNum.Pct));
                 _sendFaders.Add((id, b, f));
                 Grid.SetColumn(f, 1); grid.Children.Add(f);
             }
@@ -471,13 +986,14 @@ public sealed class MixerView : UserControl
     private Control PanRow(int id, float pan, bool isGroup = false)
     {
         var knob = new PanKnob(pan);
+        if (id > 0) SyncOf(id).Pan = knob;
         // One undo step per gesture (specs/009); opened before the automation write so a
         // recorded lane and the value undo together, closed after it.
         var undo = new MixGesture(_engine, MixTarget.Pan(id));
         knob.GestureBegin += undo.Begin;
         Action<double> setPan = p => _engine.SetTrackPan(id, (float)p);
         knob.PanChanged += p => undo.Change(p, setPan);
-        ValueEntry.Attach(knob, knob.EntryField("Pan", NotaNum.Pan));
+        ValueEntry.Attach(knob, knob.EntryField(Loc.T("common.pan"), NotaNum.Pan));
         if (id > 0)   // M9-C: record pan moves (master pan isn't an automation target)
         {
             knob.GestureBegin += () => _engine.BeginAutomationWrite(id, AutomationTarget.Pan, -1, -1, "");
@@ -485,10 +1001,10 @@ public sealed class MixerView : UserControl
             MidiLearn.Bind(knob, MidiTarget.TrackPan(id), "Track Pan");
         }
         knob.GestureEnd += undo.End;
-        Control label = Mono("Pan", TextTertiary);
+        Control label = Mono(Loc.T("common.pan"), TextTertiary);
         if (isGroup)   // groups keep their unity-centre balance whatever the project law (specs/006)
         {
-            var bal = Tag("BAL", 7, 0.84, 11, "Groups keep a unity-centre balance so grouping stays level-transparent");
+            var bal = Tag("BAL", 7, 0.84, 11, Loc.T("mixer.groups_keep_a_unity_centre"));
             bal.IsVisible = _engine.PanLaw == PanLaw.Stereo;
             _balBadges.Add(bal);
             label = new StackPanel { Spacing = 2, VerticalAlignment = VerticalAlignment.Center, Children = { label, bal } };
@@ -502,20 +1018,24 @@ public sealed class MixerView : UserControl
     // two-way sync with the fader.
     private const double MaxLin = 1.5;
     private static readonly double MaxDb = AudioMath.LinToDb(MaxLin);
+    // The field's floor is silence: the fader's bottom, a drag to it or a typed "-inf" all read
+    // "−∞" (#453), and anything quieter than −60 dB reads −∞ too, as the track headers do.
     private const double MinDb = -60.0;
-    private static double LinToDb(double v) => v <= 1e-4 ? MinDb : Math.Clamp(AudioMath.LinToDb(v), MinDb, MaxDb);
+    private static double LinToDb(double v) => v <= 1e-3 ? MinDb : Math.Clamp(AudioMath.LinToDb(v), MinDb, MaxDb);
     private static double DbToLin(double db) => db <= MinDb + 1e-6 ? 0.0 : Math.Clamp(AudioMath.DbToLin(db), 0, MaxLin);
+    private static DragNumber DbField(float vol) => new(LinToDb(vol), MinDb, MaxDb, 0.3, "+0.0;−0.0;0.0", 8)
+    {
+        Width = 52, HorizontalAlignment = HorizontalAlignment.Center, FloorText = "−∞",
+    };
 
     private Control FaderRow(int id, float vol, IBrush color, out Control db, out MeterBar meter)
     {
         var fader = new VFader(vol, color);
-        var dbNum = new DragNumber(LinToDb(vol), MinDb, MaxDb, 0.3, "+0.0;−0.0;0.0", 8)
-        {
-            Width = 52, HorizontalAlignment = HorizontalAlignment.Center,
-        };
-        ToolTip.SetTip(dbNum, "Set the gain — drag, or double-click to type");
+        var dbNum = DbField(vol);
+        ToolTip.SetTip(dbNum, Loc.T("mixer.set_the_gain_drag_or"));
         void SetVolume(double v) { if (id < 0) SetMasterVolume?.Invoke((float)v); else _engine.SetTrackVolume(id, (float)v); }
         if (id < 0) { _masterFader = fader; _masterDb = dbNum; }
+        else { var sync = SyncOf(id); sync.Fader = fader; sync.Db = dbNum; }
         // One undo step per drag of the fader or the dB number, and per reset / typed value
         // (specs/009). Opened before the automation write, closed after it.
         var undo = new MixGesture(_engine, id < 0 ? MixTarget.Master : MixTarget.Volume(id));
@@ -532,7 +1052,7 @@ public sealed class MixerView : UserControl
         fader.GestureEnd += undo.End;
         dbNum.GestureEnd += undo.End;
         MidiLearn.Bind(fader, id > 0 ? MidiTarget.TrackVolume(id) : MidiTarget.MasterVolume, id > 0 ? "Track Volume" : "Master Volume");
-        ValueEntry.Attach(fader, fader.EntryField("Volume", v => NotaNum.GainDb(v, signed: true), 1.0));
+        ValueEntry.Attach(fader, fader.EntryField(Loc.T("common.volume"), v => NotaNum.GainDb(v, signed: true), 1.0));
         db = dbNum;
 
         meter = new MeterBar();   // the almanac stereo meter: 11 + 5 + 11
@@ -546,7 +1066,7 @@ public sealed class MixerView : UserControl
             scaleGrid.Children.Add(t);
         }
 
-        var grid = new Grid { Height = 190, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(7, 8) };
+        var grid = new Grid { Height = _faderH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(7, 8) };
         grid.Children.Add(scaleGrid);
         Grid.SetColumn(fader, 1); grid.Children.Add(fader);
         // Channels lettered under the meter (almanac § level meters), one letter per 11px column.
@@ -559,24 +1079,28 @@ public sealed class MixerView : UserControl
         DockPanel.SetDock(letters, Dock.Bottom);
         var meterCol = new DockPanel { Margin = new Thickness(4, 0, 0, 0), Children = { letters, meter } };
         Grid.SetColumn(meterCol, 2); grid.Children.Add(meterCol);
+        _faderGrids.Add(grid);
         return grid;
     }
 
     private Control ButtonsRow(int id, NotaTrackInfo ti, bool isReturn)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        var mute = Toggle("M", false, ti.Muted != 0, v => _engine.SetTrackMute(id, v));
-        var solo = Toggle("S", false, ti.Soloed != 0, v => _engine.SetTrackSolo(id, v));
+        var sync = SyncOf(id);
+        var mute = Toggle("M", false, ti.Muted != 0, v => _engine.SetTrackMute(id, v), out sync.Mute);
+        var solo = Toggle("S", false, ti.Soloed != 0, v => _engine.SetTrackSolo(id, v), out sync.Solo);
         MidiLearn.Bind(mute, MidiTarget.TrackMute(id), "Mute");
         MidiLearn.Bind(solo, MidiTarget.TrackSolo(id), "Solo");
         row.Children.Add(mute);
         row.Children.Add(solo);
-        if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive)));
+        if (!isReturn) row.Children.Add(ArmToggle(ti.Armed != 0, (v, additive) => TrackArming.Set(_engine, id, v, additive), out sync.Arm));
+        if (ti.IsGroup) { row.Children.Add(LinkKey(id, out var linkSync)); sync.Link = linkSync; }   // group Link (specs/076)
+        else sync.Link = null;
         return new Border { Height = 28, BorderBrush = BorderInner, BorderThickness = new Thickness(0, 1, 0, 0), Child = row };
     }
 
     // Record-arm: neutral with a red disc at rest, solid record red with a pale disc when armed.
-    private Border ArmToggle(bool initial, Action<bool, bool> set)   // (armed, ⌘/Ctrl held) — #332
+    private Border ArmToggle(bool initial, Action<bool, KeyModifiers> set, out Action<bool> sync)   // (armed, modifiers) — #332, specs/076
     {
         bool on = initial;
         var disc = new Glyph(GlyphKind.Record, 7);
@@ -588,12 +1112,13 @@ public sealed class MixerView : UserControl
             b.BorderBrush = on ? NotaPalette.Record : NotaPalette.Seam;
             disc.Foreground = on ? NotaPalette.RecordInk : NotaPalette.Record;
         }
-        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on, TrackArming.IsAdditive(e.KeyModifiers)); Paint(); };
+        b.PointerPressed += (_, e) => { if (!e.GetCurrentPoint(b).Properties.IsLeftButtonPressed) return; e.Handled = true; on = !on; set(on, e.KeyModifiers); Paint(); };
+        sync = v => { if (v == on) return; on = v; Paint(); };
         Paint();
         return b;
     }
 
-    private Border Toggle(string label, bool danger, bool initial, Action<bool> set)
+    private Border Toggle(string label, bool danger, bool initial, Action<bool> set, out Action<bool> sync)
     {
         bool on = initial;
         var t = new TextBlock { Text = label, FontSize = 9, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
@@ -607,6 +1132,7 @@ public sealed class MixerView : UserControl
             t.Foreground = on ? NotaPalette.InkOn(fill) : TextSecondary;
         }
         b.PointerPressed += (_, e) => { e.Handled = true; on = !on; set(on); Paint(); };
+        sync = v => { if (v == on) return; on = v; Paint(); };
         Paint();
         return b;
     }

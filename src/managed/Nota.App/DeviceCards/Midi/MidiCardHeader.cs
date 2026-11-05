@@ -11,6 +11,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -20,7 +21,7 @@ internal static class MidiCardHeader
     {
         var tb = new TextBlock { Text = "MIDI learn", FontSize = 8, VerticalAlignment = VerticalAlignment.Center };
         var learn = new Border { Height = 16, CornerRadius = NotaRadius.Badge, Padding = new Thickness(6, 0), BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = tb };
-        ToolTip.SetTip(learn, "Map a hardware control: arm, touch a control on the card, move a knob or key");
+        ToolTip.SetTip(learn, Loc.T("device.midi.map_a_hardware_control_arm"));
         void Sync()
         {
             bool on = TopLevel.GetTopLevel(learn) is MainWindow w && w.MidiLearnArmed;
@@ -49,7 +50,7 @@ internal static class MidiCardHeader
     {
         var size = DeviceCardKit.Segments(new[] { "S", "L" }, () => isMini() ? 0 : 1,
             i => { setMini(i == 0); ctx.RequestRebuild(); }, out _, padX: 0, minSegWidth: 16, fontSize: 8);
-        ToolTip.SetTip(size, "Card size: S (mini) / L (full)");
+        ToolTip.SetTip(size, Loc.T("device.midi.card_size_s_mini_l"));
         return size;
     }
 }

@@ -179,6 +179,13 @@ HSL lightness (hue kept) that passes the bar:
    a picture of the plug-in's own window under `NotaPalette.PluginPreviewWash`, a vertical
    wash of the card's own `SurfaceCard` (specs/046). It lives in `Theme/` like every
    token; views still draw no gradients of their own.
+   A second exception: the launch splash's release art (`Theme/SplashArt/`, specs/074),
+   generated from the version number so every release opens with a picture of its own.
+   It may use gradients between theme tokens (including fades to transparent) and strokes
+   heavier than 1px. It still draws only theme tokens: track colours as the work,
+   neutral greys for its structure, and one accent mark that reads as live (a playhead,
+   the current step). It has no glow, blur or shadow, and the text beside it stays on the
+   plain ground behind a 1px seam.
 7. **Small, nearly square corners.** 2 for inner keys, rows, clips and menu items; 3 for
    controls, cards, graph windows and popovers; 4 only for modals. 0 for docked panels; 1
    for bars inside a plot.
@@ -680,7 +687,12 @@ Every region is **docked**: radius 0, no gutter, separated by 1 px seams (the wi
   only when an unrecognised plug-in lands there. "Category chips" in ⋮ hides the row. The
   categories live in `DeviceCategories.cs`.
 - **Mixer strips** are panel-tone columns on seams, each with a 3 px top bar in the track
-  colour (muted grey for master).
+  colour (muted grey for master). They follow the Arrangement's hierarchy — a group strip,
+  then its members — under one 14 px bar per nesting level with the group's name on a wash
+  of its colour and a fainter wash behind its strips; a group folds from the triangle on its
+  strip, the hidden count in its bar (specs/070). Compact strips are 72 wide: one-line I/O,
+  send and pan bars, a wide meter that is the fader (a triangle at the volume's dB on the
+  meter's scale), M / S / Arm at full width.
 - **Arrangement** (geometry unchanged): track rows 64 (the header carries every control),
   group rows 26 (open to 64 while selected), header column 228, default zoom 28 px per
   beat. Every y ↔ row conversion goes through `ArrangementView.RowTop` / `RowAtY`. A
@@ -701,7 +713,10 @@ Every region is **docked**: radius 0, no gutter, separated by 1 px seams (the wi
 - **Clip editor** (MIDI and audio share one frame, `ClipEditorKit`): header 38 whose first
   232 is the clip cell (3 px track-colour bar, name, mono kind badge), modes as shell
   segments after it; inspector 232 on the left, sections split by rules and ending in one
-  Ink 5 hint line; the canvas sits in the well. MIDI: keys 48, rows 12, a beats-only
+  Ink 5 hint line; the canvas sits in the well. The inspector and the tools panel take a
+  second column of the same width (464 / 544 in all) when one column would scroll and the
+  canvas keeps 480; sections stay whole and in order, the clip cell follows the inspector's
+  width, and only past two columns does a panel scroll. MIDI: keys 48, rows 12, a beats-only
   ruler 24 with the loop as a 3 px accent strip, notes in the track colour quieter by
   velocity, selected notes accent, scale rows a neutral lift; the tools panel is 272 and
   Apply is its primary action. Audio: a ruler 24, a 22 px warp-marker strip, and
@@ -805,7 +820,7 @@ sections) and fails the build on:
 | `Run` | `NotaTheme.axaml` holds no colour; every referenced `Brush.*` key is published (`KeyMap`); every `Shadow.*` key is built from the theme |
 | `RunThemes` | Every theme file: shape, id, kind, exactly the token catalogue, valid opaque colours (shadows may be translucent), and every readability pairing (§ Readability bar); `BuiltInOrder` lists exactly the files |
 | `RunAppearance` | Old settings migrate (Dark / Light / System); unknown and wrong-kind ids fall back; storing keeps the legacy setting in step |
-| `RunGeometry` | XAML ↔ `NotaGeometry` values; no undefined `Radius`/`Control`/`Space` keys; no `CornerRadius` literals, drop shadows or gradients in views; `Rectangle` `RadiusX` / `RadiusY` literals on the 0/1/2/3/4 scale (`RadiusAllowList.txt`) |
+| `RunGeometry` | XAML ↔ `NotaGeometry` values; no undefined `Radius`/`Control`/`Space` keys; no `CornerRadius` literals, drop shadows or gradients in views; gradients inside `Theme/` only in `NotaPalette.cs` and `Theme/SplashArt/`; `Rectangle` `RadiusX` / `RadiusY` literals on the 0/1/2/3/4 scale (`RadiusAllowList.txt`) |
 | `RunType` | Fonts bundled and matched; no font names in views; nothing under 7 px |
 | `RunControls` | No unicode icons typed as text; Knob / Switch / Slider sizes |
 | `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter ballistics; meter 11/5; playhead 1 px without glow |
@@ -859,6 +874,9 @@ Places where a screen's needs override a general rule, kept on purpose:
 - **Hero readouts** larger than the device scale — Strata bar number, Shutter Open/Shut,
   Auto Shift note, Level value.
 - **Filter chips 20**, not 24 — the browser's chip row is dense.
+- **Compact mixer meters are 18 px a channel**, 3 apart, against the 11 / 5 meter rule
+  (specs/070, #386): the wide meter is what keeps a 72 px compact strip readable, and it is
+  also the strip's fader. Zones, the hold mark and the −60…+6 scale are unchanged.
 
 ## Known drift
 

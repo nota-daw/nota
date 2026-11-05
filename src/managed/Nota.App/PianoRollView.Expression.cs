@@ -8,7 +8,9 @@
 //                           stretch you drew over — on every selected note under the pointer;
 //   drag a point            moves it (in time between its neighbours, and in value);
 //   double-click            adds a point, or deletes the one under the pointer;
-//   right-click             Clear <lane> / Clear All Expression on the selected notes.
+//   right-click             Clear <lane> / Clear All Expression on the selected notes;
+//   click the ±N st label   (Bend) picks the lane's range, so a big bend can be drawn from
+//                           scratch — the lane still widens to fit a bigger bend already there.
 // A click on a note's span with nothing selected there selects it (the highest under the
 // pointer; ⇧ adds). Curves are immutable in the engine's store, so an edit stores a new curve
 // and repoints the note (one undo step per gesture, like the velocity lane).
@@ -21,6 +23,8 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Editing;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -30,7 +34,7 @@ public sealed partial class PianoRollView
     /// host; without it the MPE lanes are view-only.</summary>
     public Func<NotaExprPoint[], int>? CreateExpression { get; set; }
 
-    internal enum LaneMode { Velocity, Bend, Pressure, Slide }
+    internal enum LaneMode { Velocity, Bend, Pressure, Slide, Controller }
 
     private const double ExprH = 112;   // the MPE lanes are taller: a curve needs the room
     private readonly ExpressionLane _expr;
@@ -49,12 +53,40 @@ public sealed partial class PianoRollView
 
     internal LaneMode Lane => _laneMode;
 
+    // The Bend lane's picked range is remembered per clip for the session, like its scroll and
+    // zoom (s_view): the roll is rebuilt for every clip it opens. A multi-clip view has no clip
+    // identity and keeps its pick for as long as it is open. A clip index is not a lasting
+    // identity (a moved clip goes to the end of its track), so a pick also holds the clip's
+    // start and applies only while the clip at that index still starts there: a pick is then
+    // lost by a moved clip rather than handed to the clip that took its index.
+    private static readonly Dictionary<(int, int), (double Start, double Range)> s_bendPick = new();
+    private double _bendPick = BendLaneRange.Default;
+
+    /// <summary>Forgets every clip's picked Bend range: a load or new project reuses track ids,
+    /// so another project's clip must not inherit a pick.</summary>
+    internal static void ForgetBendPicks() => s_bendPick.Clear();
+
+    private double BendPick
+    {
+        get => _clipKey.Item1 != int.MinValue && s_bendPick.TryGetValue(_clipKey, out var p)
+               && Math.Abs(p.Start - _set.ActiveClip.StartBeat) < 1e-9 ? p.Range : _bendPick;
+        set
+        {
+            _bendPick = value;
+            if (_clipKey.Item1 != int.MinValue) s_bendPick[_clipKey] = (_set.ActiveClip.StartBeat, value);
+        }
+    }
+
     internal void SetLaneMode(LaneMode m)
     {
         if (m == _laneMode) return;
+        _ctlLane.ResetGesture();
         _laneMode = m;
-        _velHost.Child = m == LaneMode.Velocity ? _vel : _expr;
-        _laneRow.Height = m == LaneMode.Velocity ? VelH : ExprH;
+        if (m == LaneMode.Controller && _laneCtl < 0) _laneCtl = DefaultController();
+        UpdateControllerPicker(_primaryControllerPicker, _laneCtl < 0 ? MidiController.Sustain : _laneCtl);
+        _primaryControllerScale.IsVisible = m == LaneMode.Controller;
+        _velHost.Child = m switch { LaneMode.Velocity => _vel, LaneMode.Controller => _primaryControllerBody, _ => _expr };
+        FitControllerLanes();
         Invalidate();
         _laneTabs.InvalidateVisual();
     }
@@ -131,16 +163,20 @@ public sealed partial class PianoRollView
         return c[^1].Value;
     }
 
-    // ---- the gutter: VEL · BEND · PRES · SLIDE -----------------------------------------------
+    // ---- the gutter: velocity, expression and controller modes ------------------------------
 
     private sealed class LaneTabs : Control
     {
         private static readonly (LaneMode Mode, string Label)[] Tabs =
-            { (LaneMode.Velocity, "Vel"), (LaneMode.Bend, "Bend"), (LaneMode.Pressure, "Pres"), (LaneMode.Slide, "Slide") };
-        private const double Top = 6, RowStep = 15;
+            { (LaneMode.Velocity, Loc.T("piano_roll.expression.vel")), (LaneMode.Bend, Loc.T("piano_roll.expression.bend")), (LaneMode.Pressure, Loc.T("piano_roll.expression.pres")), (LaneMode.Slide, Loc.T("piano_roll.expression.slide")), (LaneMode.Controller, "") };
+        // Five rows fit the velocity lane's 72 px.
+        private const double Top = 4, RowStep = 13;
+        private static readonly Typeface TabFace = new(NotaFonts.Mono.FontFamily, FontStyle.Normal, FontWeight.Bold);
         private readonly PianoRollView _o;
         private int _hover = -1;
         public LaneTabs(PianoRollView o) { _o = o; Cursor = new Cursor(StandardCursorType.Hand); }
+
+        private FormattedText Text(string s, IBrush ink) => new(s, NotaNum.Culture, FlowDirection.LeftToRight, TabFace, 9, ink);
 
         public override void Render(DrawingContext ctx)
         {
@@ -149,10 +185,11 @@ public sealed partial class PianoRollView
             {
                 bool on = Tabs[i].Mode == _o._laneMode;
                 var ink = on ? TabActive : i == _hover ? KeyLabelHot : LabelText;
-                var ft = new FormattedText(Tabs[i].Label, NotaNum.Culture, FlowDirection.LeftToRight,
-                    new Typeface(NotaFonts.Mono.FontFamily, FontStyle.Normal, FontWeight.Bold), 9, ink);
+                bool ctl = Tabs[i].Mode == LaneMode.Controller;
+                var ft = Text(ctl ? "CC" : Tabs[i].Label, ink);
                 double y = Top + i * RowStep;
-                ctx.DrawText(ft, new Point((Bounds.Width - ft.Width) / 2, y));
+                double x = (Bounds.Width - ft.Width) / 2;
+                ctx.DrawText(ft, new Point(x, y));
                 if (on) ctx.FillRectangle(TabActive, new Rect(0, y + 1, 2, ft.Height - 2));
             }
         }
@@ -199,7 +236,10 @@ public sealed partial class PianoRollView
         private bool _straight;
         private int _ptNote = -1, _ptIdx = -1;
         private (int Note, int Idx) _hoverPt = (-1, -1);
-        private double _range = 2;   // bend lane: ± semitones shown
+        private double _range = BendLaneRange.Default;    // bend lane: ± semitones shown
+        private double _largestBend;                       // |bend| the notes reach, for the menu
+        private Rect _rangeRect;                           // the ±N st label, a button
+        private bool _rangeHot;
 
         private NoteExpressionDim Dim => DimOf(_o._laneMode);
         private const double Pad = 6;
@@ -231,15 +271,35 @@ public sealed partial class PianoRollView
             return (float)Math.Clamp((h - Pad - y) / (h - 2 * Pad), 0, 1);
         }
 
-        // The bend scale follows what is there: ±2, 12, 24, 48 or 96 semitones.
+        // The bend scale follows what is there — ±2, 12, 24, 48 or 96 semitones — but never
+        // shows less than the range picked from the label.
         private void UpdateRange()
         {
             if (Dim != NoteExpressionDim.Bend || _drag != Drag.None) return;
             double m = 0;
             for (int i = 0; i < _o._notes.Count; i++)
                 foreach (var (_, v) in Curve(i)) m = Math.Max(m, Math.Abs(v));
-            _range = new[] { 2.0, 12, 24, 48, 96 }.FirstOrDefault(r => m <= r + 1e-3, 96);
+            _largestBend = m;
+            _range = BendLaneRange.Shown(_o.BendPick, m);
         }
+
+        // The range menu under the label: every step, the shown one checked; a step too narrow
+        // for a bend already on the notes is disabled rather than clipping it.
+        private void ShowRangeMenu()
+        {
+            var f = new MenuFlyout();
+            foreach (double r in BendLaneRange.Steps)
+            {
+                var it = MenuKit.Item(RangeLabel(r), enabled: BendLaneRange.Fits(r, _largestBend));
+                it.ToggleType = MenuItemToggleType.Radio;
+                it.IsChecked = r == _range;
+                it.Click += (_, _) => { _o.BendPick = r; InvalidateVisual(); };
+                f.Items.Add(it);
+            }
+            f.ShowAt(this, showAtPointer: true);
+        }
+
+        private static string RangeLabel(double r) => "±" + NotaNum.Unit(r, "0", "st");
 
         public override void Render(DrawingContext ctx)
         {
@@ -302,9 +362,14 @@ public sealed partial class PianoRollView
 
             if (Dim == NoteExpressionDim.Bend)
             {
-                var ft = new FormattedText("±" + NotaNum.Unit(_range, "0", "st"), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, LabelText);
+                // The range label doubles as a button; the caret says it opens a menu.
+                var ink = _rangeHot ? KeyLabelHot : LabelText;
+                var ft = new FormattedText(RangeLabel(_range), NotaNum.Culture, FlowDirection.LeftToRight, Mono, 9, ink);
                 ctx.DrawText(ft, new Point(4, 3));
+                Glyph.Draw(ctx, GlyphKind.CaretDown, new Rect(4 + ft.Width + 2, 3 + (ft.Height - 6) / 2, 6, 6), ink);
+                _rangeRect = new Rect(0, 0, 4 + ft.Width + 2 + 6 + 4, 3 + ft.Height + 2);
             }
+            else _rangeRect = default;
             _o.DrawOutsideClip(ctx, w, h);
         }
 
@@ -369,6 +434,13 @@ public sealed partial class PianoRollView
             double beat = _o.XToBeat(p.X);
             bool shift = (e.KeyModifiers & KeyModifiers.Shift) != 0;
 
+            // The range label: a point sitting under it stays grabbable.
+            if (pt.Properties.IsLeftButtonPressed && _rangeRect.Contains(p) && PointAt(p).Note < 0)
+            {
+                ShowRangeMenu();
+                e.Handled = true;
+                return;
+            }
             if (pt.Properties.IsRightButtonPressed)
             {
                 if (TargetsAt(beat, shift).Count == 0 && _o._selection.Count == 0) return;
@@ -444,12 +516,20 @@ public sealed partial class PianoRollView
                 return;
             }
             var hv = PointAt(p);
-            if (hv != _hoverPt) { _hoverPt = hv; InvalidateVisual(); }
+            bool rangeHot = hv.Note < 0 && _rangeRect.Contains(p);
+            if (hv != _hoverPt || rangeHot != _rangeHot)
+            {
+                _hoverPt = hv; _rangeHot = rangeHot;
+                Cursor = rangeHot ? HandCursorShared : null;
+                InvalidateVisual();
+            }
         }
 
         protected override void OnPointerExited(PointerEventArgs e)
         {
-            if (_hoverPt.Note >= 0) { _hoverPt = (-1, -1); InvalidateVisual(); }
+            if (_hoverPt.Note < 0 && !_rangeHot) return;
+            _hoverPt = (-1, -1); _rangeHot = false; Cursor = null;
+            InvalidateVisual();
         }
 
         protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -518,8 +598,8 @@ public sealed partial class PianoRollView
 
         private void ShowClearMenu()
         {
-            string lane = Dim switch { NoteExpressionDim.Bend => "Bend", NoteExpressionDim.Pressure => "Pressure", _ => "Slide" };
-            var items = new[] { $"Clear {lane}", "Clear All Expression" };
+            string lane = Dim switch { NoteExpressionDim.Bend => Loc.T("piano_roll.expression.bend"), NoteExpressionDim.Pressure => Loc.T("piano_roll.expression.pressure"), _ => Loc.T("piano_roll.expression.slide") };
+            var items = new[] { Loc.F("piano_roll.clear", lane), Loc.T("piano_roll.expression.clear_all_expression") };
             ClipEditorKit.ShowMenu(this, items, -1, k =>
             {
                 bool changed = false;

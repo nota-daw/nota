@@ -22,6 +22,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -260,7 +261,7 @@ internal sealed class RhythmSampleView : Control, IValueHandles
         NotaGraph.Title(ctx, new Rect(0, 0, w, h), "Sample");
         if (!_has)
         {
-            var t = RhythmInk.Mono("double-click or drop a file", NotaPalette.TextTertiary);
+            var t = RhythmInk.Mono(Loc.T("device.rhythm.double_click_or_drop_a"), NotaPalette.TextTertiary);
             ctx.DrawText(t, new Point((w - t.Width) / 2, mid - t.Height / 2));
             return;
         }
@@ -315,7 +316,7 @@ internal sealed class RhythmStepStrip : Control
     public RhythmStepStrip()
     {
         Cursor = new Cursor(StandardCursorType.Hand);
-        ToolTip.SetTip(this, "Click: step on / off · Shift-click: accent · Alt-click: quiet step\nDrag across to paint · drag up / down or scroll to set the velocity · right-click for more");
+        ToolTip.SetTip(this, Loc.T("device.rhythm.click_step_on_off_shift"));
     }
 
     public void SetHead(int head) { if (head != _head) { _head = head; InvalidateVisual(); } }

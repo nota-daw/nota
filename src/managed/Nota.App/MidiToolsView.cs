@@ -22,14 +22,15 @@ using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Application.Midi;
 using static Nota.App.ClipEditorKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
 public sealed class MidiToolsView : UserControl
 {
-    public const double RailWidth = ToolsW;
-
     private readonly PianoRollView _roll;
+
+    public ColumnFlow Flow { get; }
     private readonly Dictionary<string, MidiToolSettings> _settings = new(StringComparer.Ordinal);
 
     private readonly StackPanel _toolList = new();
@@ -58,12 +59,11 @@ public sealed class MidiToolsView : UserControl
     public MidiToolsView(PianoRollView roll)
     {
         _roll = roll;
-        Width = RailWidth;
         Background = NotaPalette.Panel;
         BorderBrush = NotaPalette.BorderDefault;
         BorderThickness = new Thickness(1, 0, 0, 0);
 
-        var kinds = Segments(new[] { "Generate", "Transform" }, 0, i =>
+        var kinds = Segments(new[] { Loc.T("midi_tools.generate"), Loc.T("midi_tools.transform") }, 0, i =>
         {
             var kind = i == 0 ? MidiToolKind.Generate : MidiToolKind.Transform;
             if (_kind == kind) return;
@@ -76,9 +76,9 @@ public sealed class MidiToolsView : UserControl
         var seedBox = Field(new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8,
-            Children = { CapsLabel("Seed"), _seedText },
+            Children = { CapsLabel(Loc.T("midi_tools.seed")), _seedText },
         });
-        var reroll = ClipEditorKit.Button("Reroll", () =>
+        var reroll = ClipEditorKit.Button(Loc.T("midi_tools.reroll"), () =>
         {
             _seed = Random.Shared.Next(1, 9999);
             _seedText.Text = _seed.ToString(NotaNum.Culture);
@@ -90,14 +90,14 @@ public sealed class MidiToolsView : UserControl
         Grid.SetColumn(reroll, 1); seedRow.Children.Add(reroll);
         var parameters = Section(title, 9, _paramList, seedRow);
 
-        var output = Section(SectionTitle("Output", _scopeText), 8,
-            Segments(new[] { "Replace", "Add" }, 0, i =>
+        var output = Section(SectionTitle(Loc.T("common.output"), _scopeText), 8,
+            Segments(new[] { Loc.T("midi_tools.replace"), Loc.T("midi_tools.add") }, 0, i =>
             {
                 _blend = i == 0 ? MidiToolBlend.Replace : MidiToolBlend.Add;
                 Preview();
             }, out _, fill: true));
 
-        _applyButton = new Button { Content = "Apply", Height = 30, FontSize = NotaType.Name, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Stretch, Classes = { "primary" } };
+        _applyButton = new Button { Content = Loc.T("midi_tools.apply"), Height = 30, FontSize = NotaType.Name, FontWeight = FontWeight.SemiBold, HorizontalAlignment = HorizontalAlignment.Stretch, Classes = { "primary" } };
         _applyButton.Click += (_, _) => Apply();
         _resultText.HorizontalAlignment = HorizontalAlignment.Center;
         var foot = new StackPanel
@@ -106,28 +106,19 @@ public sealed class MidiToolsView : UserControl
             Children =
             {
                 _resultText, _applyButton,
-                Pair(ClipEditorKit.Button("Revert", Revert), ClipEditorKit.Button("Defaults", ResetTool)),
+                Pair(ClipEditorKit.Button(Loc.T("midi_tools.revert"), Revert), ClipEditorKit.Button(Loc.T("midi_tools.defaults"), ResetTool)),
             },
         };
-        DockPanel.SetDock(foot, Dock.Bottom);
-        foot.Margin = new Thickness(0, 10, 8, 0);
+        foot.Margin = new Thickness(14, 10, 14, 12);
 
-        // The scroll content keeps 8px clear on the right for the overlay scrollbar.
-        var top = new StackPanel { Spacing = 10, Margin = new Thickness(0, 0, 8, 0), Children = { kinds, _toolList, Rule(), parameters, Rule(), output } };
-        Content = new DockPanel
+        // The right padding keeps 8px clear of the overlay scrollbar. Like the inspector, the
+        // panel takes a second column when one would scroll (specs/055).
+        var tools = new StackPanel { Spacing = 10, Children = { kinds, _toolList } };
+        Flow = new ColumnFlow(new SectionColumns(10, tools, parameters, output), foot, new Thickness(14, 12, 14, 0), ToolsW - 1)
         {
-            Margin = new Thickness(14, 12, 6, 12),
-            Children =
-            {
-                foot,
-                new ScrollViewer
-                {
-                    Content = top,
-                    HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
-                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                },
-            },
+            Reserve = MinCanvasW,
         };
+        Content = Flow;
 
         RebuildToolList();
         RebuildParams();
@@ -171,8 +162,8 @@ public sealed class MidiToolsView : UserControl
             _work.Add((clips[set.Active], new HashSet<int>(), set.ActiveClip.LengthBeats));
         int scoped = _work.Sum(w => w.Scope.Count);
         _scopeText.Text = scoped > 0
-            ? $"{scoped} selected"
-            : $"clip · {SourceCount}";
+            ? Loc.F("midi_tools.selected", scoped)
+            : Loc.F("midi_tools.clip", SourceCount);
     }
 
     private MidiToolContext Context(double lengthBeats) => new()
@@ -215,7 +206,7 @@ public sealed class MidiToolsView : UserControl
         // Deliberately no re-preview: the applied result is the new source, so running the
         // tool again here would show it applied twice before the user asked for anything.
         // The next knob move (or Reroll) arms a fresh preview from the new source.
-        _resultText.Text = $"{SourceCount} notes · applied";
+        _resultText.Text = Loc.F("midi_tools.notes_applied", SourceCount);
         _resultText.Foreground = NotaPalette.TextMuted;
         PaintApply();
     }
@@ -241,13 +232,13 @@ public sealed class MidiToolsView : UserControl
     private void PaintResult(int? resultCount)
     {
         if (resultCount is not int count)
-            _resultText.Text = _tool is null ? "Pick a tool" : "—";
+            _resultText.Text = _tool is null ? Loc.T("midi_tools.pick_a_tool") : "—";
         else
         {
             int delta = count - SourceCount;
             _resultText.Text = _blend == MidiToolBlend.Add
-                ? $"{delta:+0;−0;\u00b10} notes"
-                : $"{count} notes, was {SourceCount}";
+                ? Loc.F("midi_tools.notes", delta)
+                : Loc.F("midi_tools.notes_was", count, SourceCount);
         }
         _resultText.Foreground = NotaPalette.TextMuted;
         PaintApply();
@@ -320,10 +311,10 @@ public sealed class MidiToolsView : UserControl
     private void RebuildParams()
     {
         _paramList.Children.Clear();
-        _paramTitle.Text = _tool is null ? "Parameters" : _tool.Name;
+        _paramTitle.Text = _tool is null ? Loc.T("midi_tools.parameters") : _tool.Name;
         if (_tool is null)
         {
-            _paramList.Children.Add(new TextBlock { Text = "Pick a tool to see its parameters", FontSize = NotaType.Body, Foreground = NotaPalette.TextTertiary });
+            _paramList.Children.Add(new TextBlock { Text = Loc.T("midi_tools.pick_a_tool_to_see"), FontSize = NotaType.Body, Foreground = NotaPalette.TextTertiary });
             return;
         }
         var settings = SettingsFor(_tool);

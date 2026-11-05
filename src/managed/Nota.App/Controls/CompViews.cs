@@ -16,6 +16,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -570,7 +571,7 @@ internal sealed class CompKeyView : Control, IValueHandles
         NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.VizInk, NotaGraph.Mark.Line), ("key filter", NotaPalette.TealBright, NotaGraph.Mark.Dashed));
         if (!_has)
         {
-            var ft = CompDraw.Text("no key signal", NotaPalette.TextTertiary, 8);
+            var ft = CompDraw.Text(Loc.T("device.comp.no_key_signal"), NotaPalette.TextTertiary, 8);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, (top + bot - ft.Height) / 2));
         }
     }

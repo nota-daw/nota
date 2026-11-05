@@ -14,6 +14,7 @@ using System.Linq;
 using Nota.Application;
 using Nota.Infrastructure;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 

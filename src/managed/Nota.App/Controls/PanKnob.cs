@@ -25,6 +25,11 @@ internal sealed class PanKnob : Control
 
     public PanKnob(double pan) { _pan = Math.Clamp(pan, -1, 1); Width = 26; Height = 26; }
 
+    /// <summary>The pan (−1..1) and whether a drag is under way — so an external sync
+    /// can follow the engine without fighting the user's hand.</summary>
+    public double Pan => _pan;
+    public bool Dragging => _drag;
+
     /// <summary>The knob as a typeable value; <paramref name="fmt"/> is its read-out at a pan
     /// (−1..1). Double-click centres it.</summary>
     internal ValueField EntryField(string name, Func<double, string> fmt)

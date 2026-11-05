@@ -39,3 +39,12 @@ body:
       description: >-
         Sketches, screenshots, links. Accepted ideas get a short specification in
         specs/ before implementation begins.
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Want to build it yourself?
+      description: >-
+        Please wait until a core contributor adds the `approved` label before you
+        start — pull requests without an approved issue are closed unreviewed.
+      options:
+        - label: I'd like to implement this once it is approved

@@ -18,6 +18,7 @@ using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -25,7 +26,7 @@ public sealed class WhatsNewWindow : NotaWindow
 {
     public WhatsNewWindow(IReadOnlyList<ChangelogEntry> entries)
     {
-        Title = "What's new in Nota";
+        Title = Loc.T("whats_new.whats_new_in_nota");
         Width = 460;
         Height = 556;   // + title-bar band
         CanResize = false;
@@ -43,7 +44,7 @@ public sealed class WhatsNewWindow : NotaWindow
             stack.Children.Add(new TextBlock
             {
                 Classes = { "Caption" },
-                Text = "No release notes available.",
+                Text = Loc.T("whats_new.no_release_notes_available"),
             });
 
         var scroll = new ScrollViewer
@@ -56,7 +57,7 @@ public sealed class WhatsNewWindow : NotaWindow
         var header = new StackPanel { Margin = new Thickness(28, 24, 28, 4), Spacing = 2 };
         header.Children.Add(new TextBlock
         {
-            Text = "What's new",
+            Text = Loc.T("common.whats_new"),
             FontSize = 24,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brush("Brush.TextPrimary"),
@@ -64,12 +65,12 @@ public sealed class WhatsNewWindow : NotaWindow
         header.Children.Add(new TextBlock
         {
             Classes = { "Caption" },
-            Text = $"Nota {AppInfo.Version}",
+            Text = Loc.F("whats_new.nota", AppInfo.Version),
         });
 
         var ok = new Button
         {
-            Content = "Got it",
+            Content = Loc.T("whats_new.got_it"),
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(28, 8, 28, 24),
             Classes = { "primary" },
@@ -94,7 +95,7 @@ public sealed class WhatsNewWindow : NotaWindow
         var title = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
         title.Children.Add(new TextBlock
         {
-            Text = "Version " + entry.Version,
+            Text = Loc.F("common.version", entry.Version),
             FontSize = 15,
             FontWeight = FontWeight.SemiBold,
             Foreground = Brush("Brush.TextHeading"),
@@ -128,7 +129,7 @@ public sealed class WhatsNewWindow : NotaWindow
                     Background = Brush("Brush.BorderDefault"),
                     Margin = new Thickness(0, 10, 0, 2),
                 });
-                panel.Children.Add(FeatureTitle("All changes"));
+                panel.Children.Add(FeatureTitle(Loc.T("whats_new.all_changes")));
             }
             panel.Children.Add(feature
                 ? FeatureTitle(section.Title)

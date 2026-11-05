@@ -33,6 +33,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -126,7 +127,7 @@ public sealed class PreviewPlayer : UserControl
         _playGlyph = new Glyph(GlyphKind.Play, 11);
         _stopGlyph = new Glyph(GlyphKind.Stop, 8) { Foreground = NotaPalette.TextOnAccent, IsVisible = false };
         _playBtn = Chip(new Panel { Children = { _playGlyph, _stopGlyph } }, 28, 28, 5);
-        ToolTip.SetTip(_playBtn, "Play / stop");
+        ToolTip.SetTip(_playBtn, Loc.T("common.play_stop"));
         _playBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { Toggle(); e.Handled = true; } };
 
         _timeNow = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, VerticalAlignment = VerticalAlignment.Center };
@@ -159,18 +160,18 @@ public sealed class PreviewPlayer : UserControl
 
         _loopIcon = new Glyph(GlyphKind.Loop, 12);
         _loopBtn = Chip(_loopIcon, 22, 22, 4);
-        ToolTip.SetTip(_loopBtn, "Loop");
+        ToolTip.SetTip(_loopBtn, Loc.T("common.loop"));
         _loopBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { SetLoop(!_loop, persist: true); e.Handled = true; } };
 
         _autoDot = new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center };
-        _autoText = new TextBlock { Text = "Auto", FontSize = 10, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        _autoText = new TextBlock { Text = Loc.T("common.auto"), FontSize = 10, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         _autoBtn = Chip(new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
             Children = { _autoDot, _autoText },
         }, double.NaN, 22, 4);
         _autoBtn.Padding = new Thickness(7, 0);
-        ToolTip.SetTip(_autoBtn, "Auto-audition: play on select");
+        ToolTip.SetTip(_autoBtn, Loc.T("preview_player.auto_audition_play_on_select"));
         _autoBtn.PointerPressed += (_, e) => { if (IsLeft(e)) { SetAuto(!_auto, persist: true); e.Handled = true; } };
 
         var speaker = new Glyph(GlyphKind.Speaker, 12) { Foreground = NotaPalette.TextMuted };
@@ -232,7 +233,7 @@ public sealed class PreviewPlayer : UserControl
         _renderHint.Tick += (_, _) =>
         {
             _renderHint.Stop();
-            if (_plan is not null && _job is { Prefetch: false } && _job.Plan.Key == _plan.Key) _wave.Hint = "rendering…";
+            if (_plan is not null && _job is { Prefetch: false } && _job.Plan.Key == _plan.Key) _wave.Hint = Loc.T("preview_player.rendering");
         };
 
         SetLoop(false, persist: false);
@@ -259,7 +260,7 @@ public sealed class PreviewPlayer : UserControl
         _fxTrack = track == AuditionTrackIds.Sample || audition.Tracks.Any(t => t.Id == track) ? track : AuditionTrackIds.Auto;
         SetSpectrum(settings.Current.BrowserPreviewSpectrum, persist: false);
         // The Appearance → Waveform choice draws the well too, and follows it live (#107).
-        void ApplyWaveform() => _wave.Style = (WaveformStyle)Math.Clamp(settings.Current.ArrangementWaveform, 0, 1);
+        void ApplyWaveform() => _wave.Style = (WaveformStyle)Math.Clamp(settings.Current.ArrangementWaveform, 0, 2);
         ApplyWaveform();
         settings.Changed += ApplyWaveform;
     }
@@ -393,12 +394,12 @@ public sealed class PreviewPlayer : UserControl
             _playing = true;
             _pos = from;
             _poll.Start();
-            StatusChanged?.Invoke($"Previewing {_item.Name}");
+            StatusChanged?.Invoke(Loc.F("preview_player.previewing", _item.Name));
         }
         catch (Exception ex)
         {
             _playing = false;
-            StatusChanged?.Invoke($"Preview failed: {ex.Message}");
+            StatusChanged?.Invoke(Loc.F("preview_player.preview_failed", ex.Message));
         }
         Refresh();
     }
@@ -449,7 +450,7 @@ public sealed class PreviewPlayer : UserControl
         _autoBtn.BorderBrush = on ? NotaPalette.Accent : NotaPalette.Seam;
         _autoDot.Fill = on ? NotaPalette.TextOnAccent : NotaPalette.BorderStrong;
         _autoText.Foreground = on ? NotaPalette.TextOnAccent : NotaPalette.TextMuted;
-        ToolTip.SetTip(_autoBtn, _filesContext ? "Auto-audition: play a sample on select" : "Auto-audition: play a preset or device on select");
+        ToolTip.SetTip(_autoBtn, _filesContext ? Loc.T("preview_player.auto_audition_play_a_sample") : Loc.T("preview_player.auto_audition_play_a_preset"));
         if (persist && _settings is not null)
         {
             if (_filesContext) _settings.Current.BrowserPreviewAuto = on;
@@ -483,8 +484,8 @@ public sealed class PreviewPlayer : UserControl
         try { _engine?.SetPreviewGain((float)(v * v)); } catch { }
         _volWaves.Kind = v <= 0.001 ? GlyphKind.SpeakerMute : v < 0.5 ? GlyphKind.SpeakerLow : GlyphKind.SpeakerHigh;
         var db = NotaNum.Db(v <= 0.001 ? double.NegativeInfinity : 40 * Math.Log10(v));
-        ToolTip.SetTip(_volumeBox, $"Preview volume {db} · ⌥-click to type · double-click for 0{NotaNum.Thin}dB");
-        ToolTip.SetTip(_volumePop, $"Preview volume {db} · ⌥-click to type · double-click for 0{NotaNum.Thin}dB");
+        ToolTip.SetTip(_volumeBox, Loc.F("preview_player.preview_volume_click_to_type", db, NotaNum.Thin));
+        ToolTip.SetTip(_volumePop, Loc.F("preview_player.preview_volume_click_to_type", db, NotaNum.Thin));
         if (persist && _settings is not null) { _settings.Current.BrowserPreviewVolume = v; _settings.Save(); }
     }
 
@@ -515,7 +516,7 @@ public sealed class PreviewPlayer : UserControl
             mi.Click += (_, _) => SetTrack(id);
             flyout.Items.Add(mi);
         }
-        Add(autoName.Length > 0 ? $"Auto ({autoName})" : "Auto", AuditionTrackIds.Auto, "Picked for this effect: drums for dynamics, keys for time and modulation, a full mix for tone");
+        Add(autoName.Length > 0 ? Loc.F("preview_player.auto", autoName) : Loc.T("common.auto"), AuditionTrackIds.Auto, Loc.T("preview_player.picked_for_this_effect_drums"));
         string group = "";
         foreach (var t in _audition.Tracks)
         {
@@ -528,7 +529,7 @@ public sealed class PreviewPlayer : UserControl
             Add(t.Name, t.Id, t.Blurb);
         }
         flyout.Items.Add(new Separator());
-        Add(_samplePath is null ? "Sample — pick one in Files" : $"Sample — {System.IO.Path.GetFileNameWithoutExtension(_samplePath)}",
+        Add(_samplePath is null ? Loc.T("preview_player.sample_pick_one_in_files") : Loc.F("preview_player.sample", System.IO.Path.GetFileNameWithoutExtension(_samplePath)),
             AuditionTrackIds.Sample, enabled: _samplePath is not null);
         flyout.ShowAt(_sourceBtn);
     }
@@ -575,8 +576,8 @@ public sealed class PreviewPlayer : UserControl
         _sourceBtn.IsVisible = _plan is { IsEffect: true };
         if (_plan is { IsEffect: true } plan)
         {
-            _sourceText.Text = plan.TrackId == AuditionTrackIds.Sample ? "Sample" : plan.TrackName;
-            ToolTip.SetTip(_sourceBtn, $"Heard through {plan.TrackName}{(_fxTrack == AuditionTrackIds.Auto ? " (auto for this effect)" : "")} — click to pick a track, scroll to step through them");
+            _sourceText.Text = plan.TrackId == AuditionTrackIds.Sample ? Loc.T("common.sample") : plan.TrackName;
+            ToolTip.SetTip(_sourceBtn, Loc.F("preview_player.heard_through_click_to_pick", plan.TrackName + (_fxTrack == AuditionTrackIds.Auto ? Loc.T("preview_player.auto_for_this_effect") : "")));
         }
         Adapt();
     }
@@ -610,7 +611,7 @@ public sealed class PreviewPlayer : UserControl
         const double gap = 6, minMiddle = 8;
         double now = TextW(_timeNow.Text ?? "", NotaFonts.Mono, 10);
         double total = 3 + TextW(_timeTotal.Text ?? "", NotaFonts.Mono, 10);
-        double autoFull = 2 + 7 + 6 + 5 + TextW("Auto", NotaFonts.SansSemiBold, 10) + 7, autoDot = 22;
+        double autoFull = 2 + 7 + 6 + 5 + TextW(Loc.T("common.auto"), NotaFonts.SansSemiBold, 10) + 7, autoDot = 22;
         double volFull = 12 + 5 + 46, volIcon = 22, loop = 22 + gap;
         double source = _sourceBtn.IsVisible ? 2 + 14 + 5 + 6 + TextW(_sourceText.Text ?? "", NotaFonts.SansSemiBold, 10) + gap : 0;
 
@@ -704,9 +705,9 @@ public sealed class PreviewPlayer : UserControl
         {
             if (!job.Cancelled && current)
             {
-                _wave.Hint = "no sound to preview";
+                _wave.Hint = Loc.T("preview_player.no_sound_to_preview");
                 _playWhenReady = null;
-                StatusChanged?.Invoke($"Preview failed: {_item?.Name}");
+                StatusChanged?.Invoke(Loc.F("preview_player.preview_failed", _item?.Name));
                 Refresh();
             }
             if (!current || job.Cancelled) Prefetch();
@@ -861,7 +862,7 @@ public sealed class PreviewPlayer : UserControl
                         br.ReadBytes(8);
                         format = br.ReadUInt16();
                     }
-                    return format == 3 ? $"{bits}-bit float" : $"{bits}-bit";
+                    return format == 3 ? Loc.F("preview_player.bit_float", bits) : $"{bits}-bit";
                 }
                 fs.Position += size + (size & 1);
             }
@@ -920,7 +921,7 @@ public sealed class PreviewWaveform : Control
 
     public void SetPeaks(float[]? peaks) { _peaks = peaks; InvalidateVisual(); }
 
-    /// <summary>Bars (spaced strokes) or Solid (one column per pixel), as Appearance → Waveform sets.</summary>
+    /// <summary>Solid (one column per pixel) or spaced strokes for the other styles, as Appearance → Waveform sets.</summary>
     public WaveformStyle Style
     {
         get => _style;
@@ -1038,7 +1039,7 @@ public sealed class PreviewWaveform : Control
                 }
                 ctx.DrawGeometry(null, NotaGraph.PrimaryPen, geo);
             }
-            else hint ??= _peaks is null ? null : "play to see the spectrum";
+            else hint ??= _peaks is null ? null : Loc.T("preview_player.play_to_see_the_spectrum");
             if (started && _duration > 0)
                 ctx.FillRectangle(NotaPalette.Accent, new Rect(InsetX, h - 3, innerW * p, 1.5));
         }
@@ -1097,8 +1098,8 @@ public sealed class PreviewWaveform : Control
         }
 
         // WAVE · SPEC, the active one in brass, top-right.
-        var wave = NotaGraph.AxisText("Wave", _spectrum ? NotaPalette.TextTertiary : NotaPalette.Accent, 7);
-        var spec = NotaGraph.AxisText("Spec", _spectrum ? NotaPalette.Accent : NotaPalette.TextTertiary, 7);
+        var wave = NotaGraph.AxisText(Loc.T("preview_player.wave"), _spectrum ? NotaPalette.TextTertiary : NotaPalette.Accent, 7);
+        var spec = NotaGraph.AxisText(Loc.T("preview_player.spec"), _spectrum ? NotaPalette.Accent : NotaPalette.TextTertiary, 7);
         double lw = wave.Width + 5 + spec.Width, lx = w - lw - 5, ly = 3;
         _toggleRect = new Rect(lx - 4, 0, lw + 9, ly + wave.Height + 3);
         ctx.FillRectangle(NotaPalette.BgSunken, new Rect(lx - 2, ly - 1, lw + 4, wave.Height + 2), 2);
@@ -1133,7 +1134,7 @@ public sealed class PreviewVolume : Control
     public PreviewVolume()
     {
         Cursor = new Cursor(StandardCursorType.SizeWestEast);
-        ValueEntry.Attach(this, new ValueField("Preview volume", () => _value, n => NotaNum.GainDb(n),
+        ValueEntry.Attach(this, new ValueField(Loc.T("preview_player.preview_volume"), () => _value, n => NotaNum.GainDb(n),
             n => { Value = n; ValueChanged?.Invoke(_value, true); }, Default: 1));
     }
 

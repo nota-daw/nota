@@ -22,12 +22,13 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
 public sealed class DrumPatternView : UserControl
 {
-    private const int BeatsPerBar = 4;     // as everywhere else in the app (transport, props rails)
+    private static int BeatsPerBar => Meter.BeatsPerBar;   // the project's bars, as everywhere else (#405)
     private const int MaxCells = 64;       // steps drawn at once; a longer clip pages in windows
     private const double NameW = 156;
     private const double RowH = 20;
@@ -55,6 +56,8 @@ public sealed class DrumPatternView : UserControl
 
     private int _res = _resPersist;
     private int _steps, _winStart, _win;
+    private int _builtBpb;        // the bar length the ruler and bar shading were built with
+    private int _heldNote = -1;   // the pad name cell being auditioned, so a rebuild can release it
     private int _selRow = -1;
     private int _paint;                    // 0 = idle, 1 = painting hits in, 2 = painting them out
     private bool _dragging;                // a paint / velocity gesture owns the grid
@@ -106,7 +109,7 @@ public sealed class DrumPatternView : UserControl
     {
         if (_dragging) return;   // mid drag: our own writes are already on screen
         var pads = ScanPads();
-        if (StepCount() != _steps || !SamePads(pads)) { Rebuild(); return; }
+        if (StepCount() != _steps || !SamePads(pads) || _builtBpb != BeatsPerBar) { Rebuild(); return; }   // a new meter redraws the bar marks
         ReadNotes();
         MapCells();
         StyleAll();
@@ -225,10 +228,21 @@ public sealed class DrumPatternView : UserControl
 
     // ---- build ------------------------------------------------------------
 
+    // A held pad's cell is thrown away by a rebuild (a new meter, pads or length) before its
+    // release arrives, so the rebuild lets the note go itself.
+    private void ReleaseHeld()
+    {
+        if (_heldNote < 0) return;
+        _e.TrackNoteOff(TrackId, _heldNote);
+        _heldNote = -1;
+    }
+
     private void Rebuild()
     {
+        ReleaseHeld();
         _pads = ScanPads();
         _steps = StepCount();
+        _builtBpb = BeatsPerBar;
         int pages = Math.Max(1, (_steps + MaxCells - 1) / MaxCells);
         _winStart = Math.Clamp(_winStart / MaxCells, 0, pages - 1) * MaxCells;
         _win = Math.Max(1, Math.Min(MaxCells, _steps - _winStart));
@@ -267,8 +281,8 @@ public sealed class DrumPatternView : UserControl
                 VerticalAlignment = VerticalAlignment.Center,
                 Children =
                 {
-                    new TextBlock { Text = "No pads loaded", FontSize = 12, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center },
-                    new TextBlock { Text = "Drop samples on the Drum Rack pads in Devices, then step them here.", FontSize = 10, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
+                    new TextBlock { Text = Loc.T("drum_pattern.no_pads_loaded"), FontSize = 12, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center },
+                    new TextBlock { Text = Loc.T("drum_pattern.drop_samples_on_the_drum"), FontSize = 10, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
                 },
             },
         };
@@ -302,15 +316,15 @@ public sealed class DrumPatternView : UserControl
             Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                Cap("Pattern"),
+                Cap(Loc.T("common.pattern")),
                 new TextBlock { Text = _title, FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center },
-                Mono($"{_pads.Count} pad{(_pads.Count == 1 ? "" : "s")} · {_steps} steps", TextTertiary),
-                Mono("click to place · shift-click accents · drag to paint", NotaPalette.TextDisabled),
+                Mono(Loc.F("common.pattern_n", Loc.Plural("drum_pattern.pads", _pads.Count), Loc.Plural("drum_pattern.steps", _steps)), TextTertiary),
+                Mono(Loc.T("drum_pattern.click_to_place_shift_click"), NotaPalette.TextDisabled),
             },
         };
 
         var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, [DockPanel.DockProperty] = Dock.Right };
-        right.Children.Add(Cap("Grid"));
+        right.Children.Add(Cap(Loc.T("common.grid")));
         right.Children.Add(Seg(ResNames, Array.IndexOf(Resolutions, _res), i =>
         {
             _res = _resPersist = Resolutions[i];
@@ -328,10 +342,10 @@ public sealed class DrumPatternView : UserControl
                 int lastBar = (int)Math.Ceiling(Math.Min(_steps, (p + 1) * MaxCells) / barSteps);
                 names[p] = firstBar == lastBar ? $"{firstBar}" : $"{firstBar}–{lastBar}";
             }
-            right.Children.Add(Cap("Bars"));
+            right.Children.Add(Cap(Loc.T("drum_pattern.bars")));
             right.Children.Add(Seg(names, _winStart / MaxCells, p => { _winStart = p * MaxCells; Rebuild(); }));
         }
-        right.Children.Add(Chip("Clear", ClearPattern));
+        right.Children.Add(Chip(Loc.T("common.clear"), ClearPattern));
 
         var dp = new DockPanel { LastChildFill = false, Margin = new Thickness(12, 0), Children = { left, right } };
         return new Border { Height = 30, Background = NotaPalette.SurfaceCard, BorderBrush = NotaPalette.BorderDefault, BorderThickness = new Thickness(0, 0, 0, 1), Child = dp };
@@ -391,15 +405,18 @@ public sealed class DrumPatternView : UserControl
         inner.Children.Add(note);
 
         var cell = new Border { CornerRadius = NotaRadius.Control, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), Child = inner };
-        ToolTip.SetTip(cell, $"Play {pad.Name} · {NoteName(pad.Note)} and show its velocity lane");
+        ToolTip.SetTip(cell, Loc.F("drum_pattern.play_and_show_its_velocity", pad.Name, NoteName(pad.Note)));
         cell.PointerPressed += (_, e) =>
         {
             e.Handled = true;
             SelectRow(r);
+            ReleaseHeld();
             _e.TrackNoteOn(TrackId, pad.Note, 1.0f);   // audition this rack only, as the pad grid does (#307)
+            _heldNote = pad.Note;
             e.Pointer.Capture(cell);
         };
-        cell.PointerReleased += (_, e) => { _e.TrackNoteOff(TrackId, pad.Note); e.Pointer.Capture(null); };
+        cell.PointerReleased += (_, e) => { ReleaseHeld(); e.Pointer.Capture(null); };
+        cell.PointerCaptureLost += (_, _) => ReleaseHeld();
         _nameCells[r] = cell;
         _nameLabels[r] = name;
         return cell;
@@ -436,7 +453,7 @@ public sealed class DrumPatternView : UserControl
         var label = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center,
-            Children = { Cap("Velocity"), _velLabel },
+            Children = { Cap(Loc.T("common.velocity")), _velLabel },
         };
         var lane = BeatGrid(VelocityCell);
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions($"{NameW},*"), ColumnSpacing = 8, Height = VelH, Margin = new Thickness(10, 0, 10, 0) };

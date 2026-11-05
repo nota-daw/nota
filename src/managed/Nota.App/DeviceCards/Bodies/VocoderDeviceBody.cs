@@ -29,6 +29,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -161,16 +162,16 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         {
             Text = "This track", FontSize = NotaType.RowLabel, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center,
         };
-        ToolTip.SetTip(modWhat, "The modulator is the sound of the track the vocoder sits on — the voice");
-        var modGain = Slider("Gain", ModGain, v => DbF((v - 0.5) * 48), "Mod gain — trims the voice before the bands hear it, ±24 dB",
+        ToolTip.SetTip(modWhat, Loc.T("device.vocoder.the_modulator_is_the_sound"));
+        var modGain = Slider("Gain", ModGain, v => DbF((v - 0.5) * 48), Loc.T("device.vocoder.mod_gain_trims_the_voice"),
             bipolar: true);
-        var keyMeter = Meter("Key", out var keyRow, "The voice's level after Mod gain");
+        var keyMeter = Meter("Key", out var keyRow, Loc.T("device.vocoder.the_voices_level_after_mod"));
 
         var carSeg = Segments(new[] { "Saw", "Noise", "Track" }, CarrierI,
             i => { SetP(Carrier, i / 2.0); RefreshAll(); }, out var carSync, fill: true, padX: 0);
         readouts.Add(carSync);
         Learn(carSeg, Carrier);
-        ToolTip.SetTip(carSeg, "Carrier — what the voice shapes: an internal saw (at Pitch), noise, or another track picked below");
+        ToolTip.SetTip(carSeg, Loc.T("device.vocoder.carrier_what_the_voice_shapes"));
 
         // The tracks a carrier may come from: every other track and return, but not this track
         // nor any group it sits in (their signal holds this vocoder's output — a loop).
@@ -240,20 +241,20 @@ internal sealed class VocoderDeviceBody : IDeviceBody
             fly.ShowAt(picker);
             e.Handled = true;
         };
-        ToolTip.SetTip(picker, "Carrier track — the track the voice shapes when Carrier is Track; this track and its groups are not offered");
+        ToolTip.SetTip(picker, Loc.T("device.vocoder.carrier_track_the_track_the"));
 
         var tap = Segments(new[] { "Pre", "Post" }, () => engine.DeviceSidechainTapPre(track, di) ? 0 : 1,
             i => { engine.SetDeviceSidechainTapPre(track, di, i == 0); ctx.NotifyChanged(); }, out var tapSync, padX: 3, fontSize: 8,
             dim: () => CarrierI() != 2 || !HasTrack());
         readouts.Add(tapSync);
-        ToolTip.SetTip(tap, "Where the carrier track is tapped: before its effects and fader, or after. Pre keeps feeding while the track is muted");
+        ToolTip.SetTip(tap, Loc.T("device.vocoder.where_the_carrier_track_is"));
         var trackRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 4 };
         trackRow.Children.Add(picker);
         trackRow.Children.Add(Col(tap, 1));
 
-        var tilt = Slider("Tilt", Tilt, v => DbF((v - 0.5) * 24), "Tilt — brightens (or darkens) the saw or the carrier track around 1 kHz before the bands, ±12 dB",
+        var tilt = Slider("Tilt", Tilt, v => DbF((v - 0.5) * 24), Loc.T("device.vocoder.tilt_brightens_or_darkens_the"),
             dim: () => CarrierI() == 1, bipolar: true);
-        var pitch = Slider("Pitch", Pitch, v => NoteName(PitchOf(v) + 12), "Pitch — the internal saw's note, C0 … C7",
+        var pitch = Slider("Pitch", Pitch, v => NoteName(PitchOf(v) + 12), Loc.T("device.vocoder.pitch_the_internal_saws_note"),
             dim: () => CarrierI() != 0, steps: 85);
 
         var modHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -295,18 +296,18 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         };
         graph.ResetRequested += edge => { Reset(edge == 0 ? Low : High); RefreshAll(); };
         Learn(graph, Low);
-        ToolTip.SetTip(graph, MenuKit.Keys("The modulator's level in each band (bars) and the carrier's (teal). Drag an edge to move Low or High; ⌥-click an edge to type it, double-click resets it."));
+        ToolTip.SetTip(graph, MenuKit.Keys(Loc.T("device.vocoder.the_modulators_level_in_each")));
         ValueEntry.AttachHandles(graph, [ValueEntry.DeviceParam(engine, track, di, Low, "Low", v => HzF(LowHz(v)), RefreshAll)],
             [ValueEntry.DeviceParam(engine, track, di, High, "High", v => HzF(HighHz(v)), RefreshAll)]);
 
         var knobs = new UniformGrid { Rows = 1, Columns = 7, Margin = new Thickness(0, 4, 0, 0) };
-        knobs.Children.Add(K(Bands, "Bands", v => BandsOf(v).ToString(NotaNum.Culture), "Bands — how many bands, 8 … 32: fewer is more robotic, more is clearer", steps: 25));
-        knobs.Children.Add(K(Low, "Low", v => HzF(LowHz(v)), "Low — the lowest band's edge, 20 Hz … 1 kHz"));
-        knobs.Children.Add(K(High, "High", v => HzF(HighHz(v)), "High — the highest band's edge, 2 … 20 kHz"));
-        knobs.Children.Add(K(Q, "Q", v => NotaNum.F($"{1 + v * 9:0.0}"), "Q — how narrow each band is, 1 … 10"));
-        knobs.Children.Add(K(Formant, "Formant", v => StF(SemisOf(v)), "Formant — moves the carrier's bands against the modulator's, ±12 st: up sounds smaller, down larger", steps: 25));
-        knobs.Children.Add(K(Attack, "Attack", v => MsF(ExpMap(v, 0.5, 100)), "Attack — how fast a band opens, 0.5 … 100 ms"));
-        knobs.Children.Add(K(Release, "Release", v => MsF(ExpMap(v, 5, 1000)), "Release — how fast a band closes, 5 … 1000 ms"));
+        knobs.Children.Add(K(Bands, "Bands", v => BandsOf(v).ToString(NotaNum.Culture), Loc.T("device.vocoder.bands_how_many_bands_8"), steps: 25));
+        knobs.Children.Add(K(Low, "Low", v => HzF(LowHz(v)), Loc.T("device.vocoder.low_the_lowest_bands_edge")));
+        knobs.Children.Add(K(High, "High", v => HzF(HighHz(v)), Loc.T("device.vocoder.high_the_highest_bands_edge")));
+        knobs.Children.Add(K(Q, "Q", v => NotaNum.F($"{1 + v * 9:0.0}"), Loc.T("device.vocoder.q_how_narrow_each_band")));
+        knobs.Children.Add(K(Formant, "Formant", v => StF(SemisOf(v)), Loc.T("device.vocoder.formant_moves_the_carriers_bands"), steps: 25));
+        knobs.Children.Add(K(Attack, "Attack", v => MsF(ExpMap(v, 0.5, 100)), Loc.T("device.vocoder.attack_how_fast_a_band")));
+        knobs.Children.Add(K(Release, "Release", v => MsF(ExpMap(v, 5, 1000)), Loc.T("device.vocoder.release_how_fast_a_band")));
 
         var centreBody = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(head, Dock.Top);
@@ -320,14 +321,14 @@ internal sealed class VocoderDeviceBody : IDeviceBody
         // ======================================================================
         // RIGHT — Output: Unvoiced · Mix · Gain · Hold · the output meter
         // ======================================================================
-        var unv = Slider("Unvoiced", Unvoiced, v => NotaNum.F($"{v * 100:0} %"), "Unvoiced — adds noise where the modulator hisses, so consonants stay clear");
-        var mix = Slider("Mix", Mix, v => NotaNum.F($"{v * 100:0} %"), "Mix — the carrier as it came in against the vocoded sound");
-        var gain = Slider("Gain", Gain, v => DbF((v - 0.5) * 24), "Gain — the output level, ±12 dB", bipolar: true);
+        var unv = Slider("Unvoiced", Unvoiced, v => NotaNum.F($"{v * 100:0} %"), Loc.T("device.vocoder.unvoiced_adds_noise_where_the"));
+        var mix = Slider("Mix", Mix, v => NotaNum.F($"{v * 100:0} %"), Loc.T("device.vocoder.mix_the_carrier_as_it"));
+        var gain = Slider("Gain", Gain, v => DbF((v - 0.5) * 24), Loc.T("device.vocoder.gain_the_output_level_12"), bipolar: true);
         var hold = Switch("Hold", () => P(Hold) >= 0.5f, () => { SetP(Hold, P(Hold) >= 0.5f ? 0 : 1); RefreshAll(); }, out var holdSync);
         readouts.Add(holdSync);
         Learn(hold, Hold);
-        ToolTip.SetTip(hold, "Hold — freezes every band where it is; the carrier keeps sounding through it");
-        var outMeter = Meter("Out", out var outRow, "The vocoder's output level");
+        ToolTip.SetTip(hold, Loc.T("device.vocoder.hold_freezes_every_band_where"));
+        var outMeter = Meter("Out", out var outRow, Loc.T("device.vocoder.the_vocoders_output_level"));
 
         var outBody = new Grid { RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,*,Auto"), RowSpacing = 6 };
         outBody.Children.Add(Title("Output"));

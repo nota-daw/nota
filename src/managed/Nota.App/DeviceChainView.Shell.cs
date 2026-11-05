@@ -21,6 +21,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -211,7 +212,7 @@ public sealed partial class DeviceChainView
             {
                 int v = _engine.InstrumentVoiceCount(_trackId);
                 string voices = s.VoiceLabel?.Invoke(_engine, _trackId, v)
-                    ?? (_engine.PluginParamGet(_trackId, -1, IndexOfId("mono")) > 0.5f ? "Mono" : $"{Math.Max(0, v)}/16");
+                    ?? (_engine.PluginParamGet(_trackId, -1, IndexOfId("mono")) > 0.5f ? Loc.T("device_chain.shell.mono") : $"{Math.Max(0, v)}/16");
                 badge.Text = type.Length > 0 ? $"{type} · {voices}" : voices;
             });
         }
@@ -225,8 +226,8 @@ public sealed partial class DeviceChainView
         {
             var bypass = new SwitchTrack { IsOn = !s.Bypassed, Cursor = new Cursor(StandardCursorType.Hand) };
             ToolTip.SetTip(bypass, s.IsInstrument
-                ? (s.Bypassed ? "Off — click to turn the instrument on" : "On — click to turn the instrument off")
-                : (s.Bypassed ? "Bypassed — click to enable" : "Active — click to bypass"));
+                ? (s.Bypassed ? Loc.T("device_chain.shell.off_click_to_turn_the") : Loc.T("device_chain.shell.on_click_to_turn_the"))
+                : (s.Bypassed ? Loc.T("device_chain.bypassed_click_to_enable") : Loc.T("device_chain.active_click_to_bypass")));
             bypass.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(bypass).Properties.IsLeftButtonPressed) return;
@@ -249,7 +250,7 @@ public sealed partial class DeviceChainView
         if (!s.Utility && s.CanDelete)
         {
             right.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-            var remove = RemoveButton(s.IsInstrument ? "Remove track" : "Remove device", () => RemoveDeviceAt(s.Kind, di));
+            var remove = RemoveButton(s.IsInstrument ? Loc.T("device_chain.remove_track") : Loc.T("device_chain.remove_device"), () => RemoveDeviceAt(s.Kind, di));
             remove.Margin = new Thickness(-4, 0, -6, 0);   // tucked against the card's right inset
             Grid.SetColumn(remove, 2); right.Children.Add(remove);
         }
@@ -269,8 +270,8 @@ public sealed partial class DeviceChainView
             Cursor = s.CanMove && SelectableKind(s.Kind) ? new Cursor(StandardCursorType.SizeAll) : null,
         };
         headerBar.BindResource(Border.BoxShadowProperty, "Shadow.Raised");   // the raised strip's top bevel
-        if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? "Drag to reorder · double-click to fold · right-click for A/B, move and delete"
-            : s.IsInstrument ? "Click to select · double-click to fold · right-click to replace, copy or move" : "Double-click to fold · right-click for more");
+        if (!s.Utility) ToolTip.SetTip(headerBar, s.CanMove ? Loc.T("device_chain.shell.drag_to_reorder_double_click")
+            : s.IsInstrument ? Loc.T("device_chain.shell.click_to_select_double_click") : Loc.T("device_chain.shell.double_click_to_fold_right"));
 
         // Factory presets for this device (or the card's own list), and applying one in place.
         List<(string Id, string Name)> presets;
@@ -397,13 +398,13 @@ public sealed partial class DeviceChainView
         {
             if (presets.Count > 0)
             {
-                var menu = new MenuItem { Header = $"Preset: {(string.IsNullOrEmpty(extra.Preset) ? "Init" : extra.Preset)}", Icon = MenuKit.Icon(GlyphKind.List) };
-                var prev = new MenuItem { Header = "Previous preset", Icon = MenuKit.Icon(GlyphKind.ChevronLeft) }; prev.Click += (_, _) => StepPreset(-1);
-                var next = new MenuItem { Header = "Next preset", Icon = MenuKit.Icon(GlyphKind.ChevronRight) }; next.Click += (_, _) => StepPreset(+1);
+                var menu = new MenuItem { Header = Loc.F("device_chain.shell.preset", string.IsNullOrEmpty(extra.Preset) ? Loc.T("device_chain.shell.init") : extra.Preset), Icon = MenuKit.Icon(GlyphKind.List) };
+                var prev = new MenuItem { Header = Loc.T("device_chain.shell.previous_preset"), Icon = MenuKit.Icon(GlyphKind.ChevronLeft) }; prev.Click += (_, _) => StepPreset(-1);
+                var next = new MenuItem { Header = Loc.T("device_chain.shell.next_preset"), Icon = MenuKit.Icon(GlyphKind.ChevronRight) }; next.Click += (_, _) => StepPreset(+1);
                 menu.Items.Add(prev); menu.Items.Add(next); menu.Items.Add(new Separator());
                 if (resetToInit != null)
                 {
-                    var init = new MenuItem { Header = "Init", ToggleType = MenuItemToggleType.Radio, IsChecked = atInit };
+                    var init = new MenuItem { Header = Loc.T("device_chain.shell.init"), ToggleType = MenuItemToggleType.Radio, IsChecked = atInit };
                     init.Click += (_, _) => ApplyInit();
                     menu.Items.Add(init); menu.Items.Add(new Separator());
                 }
@@ -419,7 +420,7 @@ public sealed partial class DeviceChainView
             // A / B compare of two full-parameter snapshots.
             float[] Capture() => CaptureParams(s.Kind, di);
             if (extra.A == null) { extra.A = Capture(); extra.B = (float[])extra.A.Clone(); extra.Active = 0; }
-            var ab = new MenuItem { Header = $"Compare: {(extra.Active == 0 ? "A" : "B")}", Icon = MenuKit.Icon(GlyphKind.Compare) };
+            var ab = new MenuItem { Header = Loc.F("device_chain.shell.compare", extra.Active == 0 ? "A" : "B"), Icon = MenuKit.Icon(GlyphKind.Compare) };
             void Switch(int slot)
             {
                 if (slot == extra.Active) return;
@@ -430,18 +431,18 @@ public sealed partial class DeviceChainView
             }
             var toA = new MenuItem { Header = "A", ToggleType = MenuItemToggleType.Radio, IsChecked = extra.Active == 0 }; toA.Click += (_, _) => Switch(0);
             var toB = new MenuItem { Header = "B", ToggleType = MenuItemToggleType.Radio, IsChecked = extra.Active == 1 }; toB.Click += (_, _) => Switch(1);
-            var copy = new MenuItem { Header = extra.Active == 0 ? "Copy A to B" : "Copy B to A", Icon = MenuKit.Icon(GlyphKind.Copy) };
+            var copy = new MenuItem { Header = extra.Active == 0 ? Loc.T("device_chain.shell.copy_a_to_b") : Loc.T("device_chain.shell.copy_b_to_a"), Icon = MenuKit.Icon(GlyphKind.Copy) };
             copy.Click += (_, _) => { var c = Capture(); if (extra.Active == 0) extra.B = (float[])c.Clone(); else extra.A = (float[])c.Clone(); };
             ab.Items.Add(toA); ab.Items.Add(toB); ab.Items.Add(new Separator()); ab.Items.Add(copy);
             flyout.Items.Add(ab);
             if (s.CanMove)
             {
-                var left = new MenuItem { Header = "Move left", IsEnabled = di > 0, Icon = MenuKit.Icon(GlyphKind.StepLeft) }; left.Click += (_, _) => Move(di - 1);
-                var rightMi = new MenuItem { Header = "Move right", IsEnabled = di < s.Count - 1, Icon = MenuKit.Icon(GlyphKind.StepRight) }; rightMi.Click += (_, _) => Move(di + 1);
+                var left = new MenuItem { Header = Loc.T("device_chain.shell.move_left"), IsEnabled = di > 0, Icon = MenuKit.Icon(GlyphKind.StepLeft) }; left.Click += (_, _) => Move(di - 1);
+                var rightMi = new MenuItem { Header = Loc.T("device_chain.shell.move_right"), IsEnabled = di < s.Count - 1, Icon = MenuKit.Icon(GlyphKind.StepRight) }; rightMi.Click += (_, _) => Move(di + 1);
                 flyout.Items.Add(left); flyout.Items.Add(rightMi);
             }
             // This device's page in the user manual (a plug-in gets the plug-ins page).
-            var docs = new MenuItem { Header = "Documentation" };
+            var docs = new MenuItem { Header = Loc.T("common.documentation") };
             docs.Click += (_, _) =>
             {
                 int kind = s.Kind switch
@@ -453,7 +454,7 @@ public sealed partial class DeviceChainView
                 NotaDocs.Open(headerBar, NotaDocs.DevicePage(s.Kind, kind));
             };
             flyout.Items.Add(docs);
-            var fold = new MenuItem { Header = "Fold" };   // the header's double-click, findable
+            var fold = new MenuItem { Header = Loc.T("device_chain.shell.fold") };   // the header's double-click, findable
             fold.Click += (_, _) => SetFolded(s.Kind, di, true);
             flyout.Items.Add(fold);
             flyout.Items.Add(new Separator());

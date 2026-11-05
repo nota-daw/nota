@@ -22,6 +22,7 @@ using Avalonia.Media;
 using Nota.Application;
 using Nota.Presentation;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -206,7 +207,7 @@ public sealed partial class DeviceChainView : UserControl
         _instLiveViz = null; _instFaders.Clear();   // rebuilt only when a built-in instrument card is shown
         _deviceLiveRefreshers.Clear();               // compressor GR meter/curve
         _rackParamRefreshers.Clear();                // rack chain param faders (macro live-follow)
-        if (_trackId <= 0) { _row.Children.Add(Hint("Select a track")); return; }
+        if (_trackId <= 0) { _row.Children.Add(Hint(Loc.T("device_chain.select_a_track"))); return; }
 
         // MIDI effects sit before the instrument (they shape the note stream).
         int midiCount = _engine.TrackMidiEffectCount(_trackId);
@@ -242,7 +243,7 @@ public sealed partial class DeviceChainView : UserControl
         {                // that would overflow its fixed width and skew hit-testing).
             body = new RackCardView(NewCardContext()).BuildEffectRackBody(index); width = 700; fullBleed = true;
             int chains = _engine.RackDevChainCount(_trackId, index);
-            tag = $"Rack · {chains} chain{(chains == 1 ? "" : "s")}";
+            tag = Loc.Plural("device_chain.rack_chains", chains);
         }
         else
         {
@@ -296,7 +297,7 @@ public sealed partial class DeviceChainView : UserControl
             value.BindResource(TextBlock.FontFamilyProperty, "Font.Mono");
             var knob = new Knob(_engine.GetTrackSend(_trackId, bus), 1.0) { Accent = true, Default = 0, Format = v => Pct((float)v) };
             int b = bus;
-            knob.ValueChanged += v => { _engine.SetTrackSend(_trackId, b, (float)v); value.Text = Pct((float)v); };
+            SendControl.Attach(knob, _engine, _trackId, b, v => value.Text = Pct((float)v));   // undoable, writes automation (specs/072)
             // Follow the Session / Mixer send faders and automation (#138).
             _deviceLiveRefreshers.Add(() =>
             {
@@ -304,12 +305,12 @@ public sealed partial class DeviceChainView : UserControl
                 float v = _engine.GetTrackSend(_trackId, b);
                 if (Math.Abs(v - knob.Value) > 1e-3) { knob.Value = v; value.Text = Pct(v); }
             });
-            knobs.Children.Add(KnobCell($"Send {letter}", knob, value));
+            knobs.Children.Add(KnobCell(Loc.F("common.send", letter), knob, value));
             shown++;
         }
-        Control body = shown > 0 ? knobs : new TextBlock { Text = "No return tracks", FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+        Control body = shown > 0 ? knobs : new TextBlock { Text = Loc.T("device_chain.no_return_tracks"), FontSize = 9, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var spec = new ShellSpec(
-            Name: "Sends", Subtitle: "", DeviceIndex: -2, Count: 0, Bypassed: false, Bypassable: false,
+            Name: Loc.T("common.sends"), Subtitle: "", DeviceIndex: -2, Count: 0, Bypassed: false, Bypassable: false,
             CanMove: false, CanDelete: false, PresetKind: -1, IsInstrument: false, Width: shown > 2 ? 200 : 140,
             Kind: ChainKind.Effect, Compact: true, Utility: true);
         return BuildCardShell(spec, new Border { Padding = new Thickness(10), Child = body });
@@ -343,7 +344,7 @@ public sealed partial class DeviceChainView : UserControl
             AddDeviceRequested?.Invoke();
             e.Handled = true;
         };
-        ToolTip.SetTip(card, "Add an audio effect: search the browser, or drop a device here");
+        ToolTip.SetTip(card, Loc.T("device_chain.add_an_audio_effect_search"));
         return card;
     }
 

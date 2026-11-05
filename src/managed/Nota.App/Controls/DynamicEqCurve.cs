@@ -25,6 +25,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -364,7 +365,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
         }
         fly.Items.Add(new Separator());
         int curM = BandMode(b);
-        string[] modeWords = { "Static", "Duck — acts above the threshold", "Lift — acts below the threshold" };
+        string[] modeWords = { "Static", Loc.T("device.dynamic_eq.duck_acts_above_the_threshold"), Loc.T("device.dynamic_eq.lift_acts_below_the_threshold") };
         for (int m = 0; m < 3; m++)
         {
             int mm = m;
@@ -373,7 +374,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
             fly.Items.Add(mi);
         }
         fly.Items.Add(new Separator());
-        var on = new MenuItem { Header = "Band on", ToggleType = MenuItemToggleType.CheckBox, IsChecked = BandOn(b) };
+        var on = new MenuItem { Header = Loc.T("device.dynamic_eq.band_on"), ToggleType = MenuItemToggleType.CheckBox, IsChecked = BandOn(b) };
         on.Click += (_, _) => { Gesture(DynEq.P(b, DynEq.On), () => SetP(b, DynEq.On, BandOn(b) ? 0 : 1)); Edited?.Invoke(); InvalidateVisual(); };
         fly.Items.Add(on);
         var solo = new MenuItem { Header = "Solo", ToggleType = MenuItemToggleType.CheckBox, IsChecked = SoloBand == b };
@@ -385,7 +386,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
         };
         fly.Items.Add(solo);
         fly.Items.Add(new Separator());
-        fly.Items.Add(MenuKit.Item("Type value…", GlyphKind.Edit, () => ValueEntry.Open(this, BandFields(b)[0])));
+        fly.Items.Add(MenuKit.Item(Loc.T("common.type_value"), GlyphKind.Edit, () => ValueEntry.Open(this, BandFields(b)[0])));
         fly.ShowAt(this, showAtPointer: true);
     }
 
@@ -546,7 +547,7 @@ public sealed class DynamicEqCurve : Control, IValueEntryHost
             NotaPalette.TextPrimary, 7);
         IBrush dynInk = r >= 0 ? NotaPalette.RoseBright : NotaPalette.TealBright;
         string c = dyn ? (r >= 0 ? "↑ " : "↓ ") + DynEq.Db(_gr[b]) + " dB of " + DynEq.Db(r)
-            : !g ? "no dynamics" : BandMode(b) != DynEq.Static && !DynMaster ? "dynamics off" : "static";
+            : !g ? Loc.T("device.dynamic_eq.no_dynamics") : BandMode(b) != DynEq.Static && !DynMaster ? "dynamics off" : "static";
         var l3 = Text(c, dyn ? dynInk : NotaPalette.TextTertiary, 7);
         double histH = dyn ? 12 : 0;
         double tw = Math.Max(a.Width, Math.Max(l2.Width, l3.Width)) + 12, th = a.Height + l2.Height + l3.Height + 6 + histH;

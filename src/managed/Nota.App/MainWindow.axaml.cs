@@ -21,6 +21,7 @@ using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Presentation;
 using System.Runtime.InteropServices;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -52,6 +53,7 @@ public partial class MainWindow : Window
 
     // Bottom detail panel (Devices chain / Clip piano roll / Mixer).
     private DeviceChainView? _deviceChain;
+    private TrackInspectorView? _trackInspector;
     private ClipEditorView? _clipEditor;
     private AudioClipEditorView? _audioEditor;
     private MixerView? _mixer;
@@ -77,6 +79,7 @@ public partial class MainWindow : Window
     // True while the detail panel (Devices/Clip) was the last area the user interacted
     // with — Tab then toggles between the two tabs.
     private bool _detailWasLastFocused;
+    private bool _mixerWasLastFocused;   // the docked Mixer was the last area clicked (specs/054)
     private bool _trackHeadersFocused;
     private bool _tempoRefreshPosted;
 
@@ -85,7 +88,9 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        InitBottomPanels();    // BodyGrid rows for the docked Mixer + Detail panels (specs/054)
         InitMenuShortcuts();   // Ctrl instead of Win on Windows / Linux, and bound there
+        InitRecentMenu();      // File → Open recent (#443)
         UpdateWindowTitle();   // "Nota — Untitled" until a project is opened/saved
         // Custom frameless title bar (Phase 2): extend the client area under the
         // decorations on macOS/Windows (traffic lights / caption buttons overlay it).
@@ -202,6 +207,8 @@ public partial class MainWindow : Window
         Timeline.FreezeMenuItems = BuildTrackFreezeMenu;   // track context menu: Freeze / Live Freeze
         Timeline.FreezeTracksMenuItems = BuildTracksFreezeMenu;   // multi-track menu: Freeze / Unfreeze all
         Timeline.RefreshStarting = PruneFreezeLinks;       // drop links to deleted / undone tracks
+        _trackInspector = new TrackInspectorView(vm.Engine, Timeline, TrackFreezeEntries, () => vm.SuspendEnginePolling);   // browser's Track inspector tab (specs/060)
+        Browser.SetTrackInspector(_trackInspector);
         Timeline.MidiClipActivated += OpenClipEditor;
         Timeline.EditSelectedClipsRequested += () => EditSelectedClips();
         Timeline.ClipSelectionChanged += FollowClipSelection;
@@ -215,8 +222,8 @@ public partial class MainWindow : Window
         Timeline.CanTranscribe = () => Ai.CanTranscribe;
         Timeline.TranscriptionModelRequested += async () =>
         {
-            if (await EnsureModelAsync(AiModels.Transcription, "Convert to MIDI") && _vm is not null)
-                _vm.StatusText = "Convert Melody and Convert Harmony now use the AI model.";
+            if (await EnsureModelAsync(AiModels.Transcription, Loc.T("main.convert_to_midi")) && _vm is not null)
+                _vm.StatusText = Loc.T("main.convert_melody_and_convert_harmony");
         };
         // Arrangement context menus add tracks through the toolbar's own path, so the two
         // routes seed, refresh and report identically; the menu's row places the new track.
@@ -238,7 +245,7 @@ public partial class MainWindow : Window
         Action<double> setMaster = v => vm.Transport.MasterVolume = v;
         masterVol.ValueChanged += v => masterUndo.Change(v, setMaster);
         // Double-click the fader or its dB number to type the master gain, ⌥-click for 0 dB.
-        ValueEntry.Attach(masterVol, masterVol.EntryField("Master volume", v => NotaNum.GainDb(v)), MasterDb);
+        ValueEntry.Attach(masterVol, masterVol.EntryField(Loc.T("main.master_volume"), v => NotaNum.GainDb(v)), MasterDb);
         MasterVolHost.Children.Add(masterVol);
         MidiLearn.Bind(masterVol, MidiTarget.MasterVolume, "Master Volume");
 
@@ -274,13 +281,18 @@ public partial class MainWindow : Window
             // mid-drag, where the fader is the one driving.
             else if (e.PropertyName == nameof(vm.Transport.MasterVolume) && !masterVol.Dragging)
                 masterVol.Value = vm.Transport.MasterVolume;
-            else if (e.PropertyName == nameof(vm.Transport.TimeSigNumerator)) tsNum.Value = vm.Transport.TimeSigNumerator;
+            else if (e.PropertyName == nameof(vm.Transport.TimeSigNumerator))
+            {
+                tsNum.Value = vm.Transport.TimeSigNumerator;
+                ApplyMeter(vm.Transport.TimeSigNumerator);   // bar lines and bar numbers follow (#405)
+            }
             else if (e.PropertyName == nameof(vm.Transport.TimeSigDenominator)) tsDen.Value = vm.Transport.TimeSigDenominator;
             else if (e.PropertyName == nameof(vm.Transport.KeyCode)) ShowProjectKey();
             // Every ruler reads in the read-out's unit, bars or time (#275).
             else if (e.PropertyName == nameof(vm.Transport.ShowTimeDisplay)) RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
         };
         RulerDisplay.Set(vm.Transport.ShowTimeDisplay);
+        ApplyMeter(vm.Transport.TimeSigNumerator);
 
         var cpuGreen = (IBrush?)NotaPalette.Success;
         var cpuAmber = (IBrush?)NotaPalette.Warning;
@@ -290,12 +302,13 @@ public partial class MainWindow : Window
         {
             _learn?.Tick();          // apply incoming MIDI mappings / capture a learn message
             SyncSceneTempo();        // a launched scene set tempo / signature
+            EnsurePlayheadFrames();
             // Nothing of the window can be seen: keep servicing MIDI and scenes, skip the
             // meters, playheads and live knobs — they'd redraw ~30×/s for nobody (#55).
             if (WindowState == WindowState.Minimized
                 && _detailWindow is not { IsVisible: true, WindowState: not WindowState.Minimized }) return;
             LearnOverlay.Refresh();  // keep highlights over rebuilt cards while armed
-            Timeline.SetPlayhead(beats);
+            Timeline.SetPlayhead(beats, preserveDisplay: _playheadFrameOwner is not null);
             _masterMeter?.Push(vm.Engine.MasterMeter());
             Timeline.UpdateMeters();                                   // per-track headers (M6-2)
             Timeline.RefreshAutomationLive();                          // show writes live (M9-C)
@@ -307,7 +320,7 @@ public partial class MainWindow : Window
             // Detail contents update wherever they're shown — docked panel or the floating
             // Devices/Clip window — so key off IsEffectivelyVisible, not the docked panel.
             if (_deviceChain is { IsEffectivelyVisible: true }) _deviceChain.RefreshSynthLive(); // synth graphs follow automation
-            if (_audioEditor is { IsEffectivelyVisible: true })
+            if (_audioEditor is { IsEffectivelyVisible: true } && _playheadFrameOwner is null)
                 _audioEditor.OnPlayhead(beats, vm.Engine.IsPlaying);       // live clip playback cursor
             // Piano-roll playback cursor: map the global beat to clip-local time for the
             // open arrangement MIDI clip, shown stopped too, where play will start (#50); a
@@ -317,7 +330,8 @@ public partial class MainWindow : Window
                 if (_editorTrackId > 0)
                 {
                     // Editor beats count from the open clips' origin (the clip's start for one).
-                    if (Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
+                    if (_playheadFrameOwner is null
+                        && Engine.TryGetClipInfo(_editorTrackId, _editorClipIndex, out var pci) && pci.IsMidi)
                         _editorRoll.SetPlayhead(beats - _editorRoll.Origin, true);
                 }
                 else if (_sessionSlotTrack > 0 && _sessionSlotScene >= 0)
@@ -339,7 +353,7 @@ public partial class MainWindow : Window
                 cpuShown = pct;
                 CpuFill.Width = pct * 0.52;
                 CpuFill.Background = pct > 90 ? cpuRed : pct > 70 ? cpuAmber : cpuGreen;
-                CpuText.Text = "DSP " + pct + "%";
+                CpuText.Text = Loc.F("main.dsp_caps", pct);
             }
             _cpuTipTick?.Invoke();
             SyncMidiDot();
@@ -383,6 +397,11 @@ public partial class MainWindow : Window
         PianoRollView.AuditionEnabled = vm.Settings.Current.PianoRollAudition;
         PianoRollView.AuditionToggled -= OnAuditionToggled;
         PianoRollView.AuditionToggled += OnAuditionToggled;
+        PianoRollView.VelocityWheelReversed = vm.Settings.Current.PianoRollVelocityWheelReversed;
+        PianoRollView.VelocityWheelMultiplier = Nota.Application.Editing.VelocityWheel.ClampMultiplier(vm.Settings.Current.PianoRollVelocityWheelMultiplier);
+        // The piano roll's key labels (every note, not just C) persist the same way.
+        PianoRollView.SetLabelAllNotes(vm.Settings.Current.PianoRollLabelAllNotes);
+        vm.Settings.Changed += () => PianoRollView.SetLabelAllNotes(vm.Settings.Current.PianoRollLabelAllNotes);
         vm.Transport.CountInBars = Math.Clamp(vm.Settings.Current.CountInBars, 0, 4);
         vm.Transport.LoopRecordReplace = vm.Settings.Current.LoopRecordReplace;
         SetArmOnSelect(vm.Settings.Current.ArmOnSelect);
@@ -394,10 +413,17 @@ public partial class MainWindow : Window
             vm.Settings.Current.LoopRecordReplace = vm.Transport.LoopRecordReplace;
             vm.Settings.Save();
         };
-        Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
+        Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+        vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
+        ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
         InitSnapGrid();
-        // Settings → Appearance can switch the waveform style while the arrangement is open.
-        vm.Settings.Changed += () => Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 1);
+        // Settings → Appearance can switch the waveform style and the header side while the arrangement is open.
+        vm.Settings.Changed += () =>
+        {
+            Timeline.Waveform = (WaveformStyle)Math.Clamp(vm.Settings.Current.ArrangementWaveform, 0, 2);
+            vm.Engine.SplitFades = vm.Settings.Current.SplitFades;
+            ApplyHeadersRight(vm.Settings.Current.ArrangementHeadersRight);
+        };
         Browser.SetViewModel(vm.Browser);
         InitPalette();   // the command palette (⌘⇧P) indexes the library and the registry
         Browser.ProjectTempo = () => (double)vm.Transport.Bpm;   // the Files filter's "project" shortcuts
@@ -427,7 +453,9 @@ public partial class MainWindow : Window
         _deviceChain.AddDeviceRequested += Browser.FocusEffectSearch;   // the chain's "+" (#97)
         HookDeviceMoves();   // Replace… / Delete track on the instrument, Move to track (specs/043)
         Timeline.TrackSelected += OnTrackSelected;
+        Timeline.TrackDevicesRequested += id => ShowDevices(id);   // header double-click (#308)
         Timeline.ClipGeometryChanged += OnClipGeometryChanged;   // clip trimmed/moved → follow it in the open editor
+        Timeline.ClipsSplit += SyncTrackModeClips;   // a split re-indexes the track's later clips
         Timeline.ClipsMoved += OnClipsMoved;   // a block move can re-index the open editor's clips
         Timeline.StatusMessage += msg => { if (_vm is not null) _vm.StatusText = msg; };   // automation-follow hints etc.
 
@@ -451,13 +479,12 @@ public partial class MainWindow : Window
             else AddTrack(kind, anchor);
         };
         HookRecentInstruments();   // "Add track ▸ Recent" in both views' menus
-        // Selecting a slot selects its track everywhere: devices below, arrangement header.
-        _session.SlotSelected += (trackId, _) => Timeline.Select(trackId, -1);
+        _session.SlotSelected += OnSessionSlotSelected;
         Timeline.SessionChanged += () => _session?.Refresh();          // M5-6
         MainContent.Children.Add(_session);
 
-        // Mixer lives in its own window (View → Mixer), not as a main-view tab — created here
-        // once and hosted in the window when opened (see MainWindow.Mixer.cs).
+        // The Mixer is created here once and hosted docked under the main view or in its own
+        // window while shown (see MainWindow.Mixer.cs, specs/054).
         _mixer = new MixerView(vm.Engine)
         {
             IsVisible = false,
@@ -471,6 +498,8 @@ public partial class MainWindow : Window
                 map.SelectTrack = id => Timeline.SelectTrackFromOutside(id);
             },
         };
+        _mixer.MinContentHeightChanged += OnMixerMinHeightChanged;
+        _mixer.GroupLinkChanged += () => { Timeline.Refresh(); _session?.Refresh(); };   // a group's Link key (specs/076)
 
         // Modular: signal-graph view of the selected track (mockup 1a). Follows track
         // selection like the Detail device chain does.
@@ -480,6 +509,7 @@ public partial class MainWindow : Window
         _modular.TrackActivated += OnTrackSelected;   // Global-view island → select that track
         _modular.ItemDropped += OnModularDrop;        // browser drag onto the modular canvas
         MainContent.Children.Add(_modular);
+        WireMixerGroups();   // fold state, selection and compact strips (specs/070)
 
         vm.AutosaveRequested += OnAutosaveTick;
         vm.VersionHistoryTurnedOff += OnVersionHistoryTurnedOff;
@@ -487,6 +517,10 @@ public partial class MainWindow : Window
         InitRemote();    // Nota Remote: phones as controllers (ticked on the same clock)
         Closing += OnMainWindowClosing;   // clean-shutdown marker (M7-7)
         Opened += OnOpenedRecoveryCheck;  // offer recovery snapshot (M7-7)
+        // macOS's application menu is set again whenever a window is activated; its Hide / Quit items
+        // are English until retitled (MacAppMenu), so do it just after Avalonia has.
+        Activated += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(MacAppMenu.Translate, Avalonia.Threading.DispatcherPriority.Background);
+        Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(MacAppMenu.Translate, Avalonia.Threading.DispatcherPriority.Background);
 
         // Losing window focus mid-drag (alt-tab) cancels the gesture with no model change
         // (req 2.11). We use Deactivated rather than PointerCaptureLost because the latter fires
@@ -498,6 +532,8 @@ public partial class MainWindow : Window
         // window menu — File/Edit/View/… — intermittently never installs and only the
         // "Nota" app menu appears. Force activation once shown so it always lands.
         Opened += (_, _) => Activate();
+        // Bring the Mixer back docked / in its window / hidden as the user left it (specs/054).
+        Opened += (_, _) => RestoreMixer();
 
         // Remember the detail panel's height once the user drags the splitter — but only
         // on the Clip tab. The Devices tab keeps its natural card-fitting height, so its
@@ -508,7 +544,7 @@ public partial class MainWindow : Window
         DetailSplitter.DragCompleted += (_, _) =>
         {
             bool clipActive = DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView;
-            double h = BodyGrid.RowDefinitions[2].ActualHeight;
+            double h = _detailRow.ActualHeight;
             if (clipActive && DetailPanel.IsVisible && h > 120) _detailHeight = h;
         };
 
@@ -518,7 +554,11 @@ public partial class MainWindow : Window
         AddHandler(PointerPressedEvent, (_, e) =>
         {
             if (e.Source is Visual v)
+            {
                 _detailWasLastFocused = DetailPanel.IsVisible && v.GetSelfAndVisualAncestors().Contains(DetailPanel);
+                // Likewise the docked Mixer, so the palette opens with its context (specs/054).
+                _mixerWasLastFocused = _mixerDocked && v.GetSelfAndVisualAncestors().Contains(MixerPanel);
+            }
             // Likewise the track-header column: while it has focus, Cmd+A/C/X/V/D and Delete act on tracks.
             _trackHeadersFocused = Timeline.IsVisible && Timeline.IsInTrackHeaders(e);
         }, RoutingStrategies.Tunnel, handledEventsToo: true);
@@ -537,8 +577,15 @@ public partial class MainWindow : Window
         // Status bar: the installed version opens its release notes (#127).
         VersionText.Text = $"v{AppInfo.Version}";
         VersionButton.Click += (_, _) => ShowWhatsNew();
+        SetUpAudioFormatButton();
+        DropoutButton.Click += (_, _) => vm.ResetDropouts();   // count again from zero (#271)
 
-        Closed += (_, _) => vm.Dispose();
+        Closed += (_, _) =>
+        {
+            _playheadFramesClosed = true;
+            StopPlayheadFrames();
+            vm.Dispose();
+        };
         SetUpCpuTip(vm.Engine);
 
         // MCP server: MCP tool edits redraw the arrangement + device panel; start the server if
@@ -580,7 +627,7 @@ public partial class MainWindow : Window
                 Engine.AddMidiEffect(t, 0);               // Arpeggiator (MIDI FX)
                 Engine.AddBuiltinDevice(t, 16);           // Nota EQ-3
                 Engine.AddBuiltinDevice(t, 3);            // Nota Delay
-                Engine.SetTrackName(t, "Bass");
+                Engine.SetTrackName(t, Loc.T("main.bass"));
                 int mod = Engine.ModulatorAdd(t, 0);      // LFO
                 Engine.ModulatorSet(t, mod, 1, 1f);       // tempo sync
                 Engine.CvLinkAdd(t, mod, 0, 0);           // LFO → EQ-3 param 0
@@ -597,8 +644,8 @@ public partial class MainWindow : Window
                 int scope = Engine.ModulatorAdd(t, 6);    // Scope (monitors the LFO)
                 Engine.ModulatorSet(t, scope, 10, mod);   // input = LFO
                 // A couple more tracks so the Global view has several islands.
-                int dr = Engine.AddInstrumentTrack(); Engine.SetTrackBuiltinInstrument(dr, 1); Engine.AddBuiltinDevice(dr, 0); Engine.SetTrackName(dr, "Drums");
-                int pad = Engine.AddInstrumentTrack(); Engine.SetTrackBuiltinInstrument(pad, 5); Engine.AddBuiltinDevice(pad, 2); Engine.AddBuiltinDevice(pad, 7); Engine.SetTrackName(pad, "Pad");
+                int dr = Engine.AddInstrumentTrack(); Engine.SetTrackBuiltinInstrument(dr, 1); Engine.AddBuiltinDevice(dr, 0); Engine.SetTrackName(dr, Loc.T("main.drums"));
+                int pad = Engine.AddInstrumentTrack(); Engine.SetTrackBuiltinInstrument(pad, 5); Engine.AddBuiltinDevice(pad, 2); Engine.AddBuiltinDevice(pad, 7); Engine.SetTrackName(pad, Loc.T("main.pad"));
                 Engine.CvLinkAddTo(t, mod, pad, 1, 0);    // Bass LFO → Pad's Auto Filter (cross-track CV)
                 Timeline.Refresh();
                 SetView(MainView.Modular);
@@ -645,21 +692,21 @@ public partial class MainWindow : Window
         _session?.Refresh();
         if (_modular?.IsVisible == true) _modular.Refresh();   // new track shows in the graph/sidebar
         _vm.StatusText = kind == NewTrackKind.Instrument
-            ? $"Instrument track {trackId} (synth)"
-            : $"Audio track {trackId} — arm it and hit Rec to record input";
+            ? Loc.F("main.instrument_track_synth", trackId)
+            : Loc.F("main.audio_track_arm_it_and", trackId);
     }
 
     private void OnAddReturnClicked(object? sender, RoutedEventArgs e)
     {
         if (_vm is null) return;
         int trackId = Engine.AddReturnTrack();
-        if (trackId <= 0) { _vm.StatusText = "All return buses are in use."; return; }
+        if (trackId <= 0) { _vm.StatusText = Loc.T("main.all_return_buses_are_in"); return; }
         Timeline.Refresh();
         if (DetailBody.Content == _deviceChain) _deviceChain?.Refresh(); // new bus -> Sends section
         _session?.Refresh();   // mini-mixer send controls follow the return count
         if (_modular?.IsVisible == true) _modular.Refresh();
         int bus = Engine.TrackReturnIndex(trackId);
-        _vm.StatusText = $"Return {bus + 1} added — add an effect, then dial up track sends";
+        _vm.StatusText = Loc.F("main.return_added_add_an_effect", bus + 1);
     }
 
     // --- Session view (M5) --------------------------------------------------
@@ -673,6 +720,7 @@ public partial class MainWindow : Window
     private void SetView(MainView view)
     {
         if (_session is null || _modular is null) return;
+        SetDetailMaximized(false);   // a view picked is a view to see
         bool session = view == MainView.Session, modular = view == MainView.Modular;
         Timeline.IsVisible = view == MainView.Arrangement;
         _session.IsVisible = session;
@@ -694,10 +742,10 @@ public partial class MainWindow : Window
     private void OnPickProjectKey(object? sender, RoutedEventArgs e)
     {
         if (_vm is null) return;
-        KeyPicker.Show(KeyChip, _vm.Transport.Key, "No key", k =>
+        KeyPicker.Show(KeyChip, _vm.Transport.Key, Loc.T("main.no_key"), k =>
         {
             _vm.Transport.KeyCode = k?.Code ?? -1;
-            _vm.StatusText = k is { } key ? $"Project key: {key.Long}" : "No project key";
+            _vm.StatusText = k is { } key ? Loc.F("main.project_key", key.Long) : Loc.T("main.no_project_key");
         });
     }
 
@@ -753,9 +801,9 @@ public partial class MainWindow : Window
             string proc = cpu.CorePercent() is { } core
                 ? NotaNum.Unit(ProcessCpuScale.ToDisplay(core, cpu.LogicalCpus, wholeMachine), "0", "%")
                   + " " + ProcessCpuScale.Unit(wholeMachine)
-                : "measuring…";
-            string tip = $"DSP load: {NotaNum.Unit(dsp, "0", "%")} of the audio buffer time — dropouts start near 100\u2009%\n"
-                + $"Nota process CPU: {proc} (audio, interface, plugins)";
+                : Loc.T("main.measuring");
+            string tip = Loc.F("main.dsp_load_of_the_audio", NotaNum.Unit(dsp, "0", "%")) + "\n"
+                + Loc.F("main.nota_process_cpu_audio_interface", proc);
             if (tip != shown) ToolTip.SetTip(CpuMeter, shown = tip);   // re-set only when it changed (#66)
         };
         _cpuTipTick();
@@ -776,7 +824,7 @@ public partial class MainWindow : Window
         if (bpm is { } b)
         {
             _vm.Transport.Bpm = (decimal)b;
-            _vm.StatusText = $"Tempo: {NotaNum.Bpm(b)} BPM (tapped)";
+            _vm.StatusText = Loc.F("main.tempo_bpm_tapped", NotaNum.Bpm(b));
         }
         ShowTapDots(_tap.Count);
         _tapIdle ??= new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
@@ -843,7 +891,7 @@ public partial class MainWindow : Window
         _followMenuItem ??= MenuItemFor("view.follow");
         if (_followMenuItem is not null) _followMenuItem.IsChecked = on;
         if (on) Timeline.RecenterOnPlayhead();   // jump to the cursor now
-        if (_vm is not null) _vm.StatusText = on ? "Following the playhead" : "Follow playhead off";
+        if (_vm is not null) _vm.StatusText = on ? Loc.T("main.following_the_playhead") : Loc.T("main.follow_playhead_off");
     }
 
     private NativeMenuItem? _followMenuItem;
@@ -853,7 +901,7 @@ public partial class MainWindow : Window
         if (_vm is null) return;
         _vm.Settings.Current.PianoRollAudition = PianoRollView.AuditionEnabled;
         _vm.Settings.Save();
-        _vm.StatusText = PianoRollView.AuditionEnabled ? "Note audition on" : "Note audition off";
+        _vm.StatusText = PianoRollView.AuditionEnabled ? Loc.T("main.note_audition_on") : Loc.T("main.note_audition_off");
     }
 
     // Show playhead (#105, P / View menu / the ruler's off-screen arrow): a one-shot scroll
@@ -862,7 +910,7 @@ public partial class MainWindow : Window
     {
         bool resumed = Timeline.FollowPlayhead && Timeline.FollowSuspended;
         Timeline.RevealPlayhead();
-        if (_vm is not null && resumed) _vm.StatusText = "Following the playhead";
+        if (_vm is not null && resumed) _vm.StatusText = Loc.T("main.following_the_playhead");
     }
 
     // Follow pauses when the lanes are scrolled away during playback (#105); the Follow
@@ -881,9 +929,9 @@ public partial class MainWindow : Window
         bool paused = Timeline.FollowSuspended;
         FollowBtn.Classes.Set("paused", paused);
         ToolTip.SetTip(FollowBtn, paused
-            ? "Follow is paused while you look elsewhere · P or a click here picks it up again"
-            : "Scroll the arrangement to keep the playhead in view");
-        if (paused && _vm is not null) _vm.StatusText = "Follow paused · press P to go back to the playhead";
+            ? Loc.T("main.follow_is_paused_while_you")
+            : Loc.T("main.scroll_the_arrangement_to_keep"));
+        if (paused && _vm is not null) _vm.StatusText = Loc.T("main.follow_paused_press_p_to");
     }
 
     private static NativeMenuItem? FindMenuItem(NativeMenu? menu, string header)
@@ -905,7 +953,7 @@ public partial class MainWindow : Window
         bool on = SnapToggle.IsChecked == true;
         var grids = EditorGrids.Shared;
         grids.Set(EditorKind.Arrangement, grids.Get(EditorKind.Arrangement) with { SnapOn = on });
-        if (_vm is not null) _vm.StatusText = on ? "Snap on" : "Snap off — clips position freely";
+        if (_vm is not null) _vm.StatusText = on ? Loc.T("main.snap_on") : Loc.T("main.snap_off_clips_position_freely");
     }
 
     // The toolbar GRID cell and the magnet follow the arrangement's grid wherever it changes

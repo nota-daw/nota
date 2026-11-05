@@ -7,6 +7,7 @@
 
 #import <AudioToolbox/AudioToolbox.h>
 #import <CoreAudio/CoreAudio.h>
+#include <os/workgroup.h>
 
 #include <vector>
 
@@ -16,6 +17,7 @@ struct CoreAudioBackend::Impl {
     AudioUnit outputUnit = nullptr;
     RenderCallback render;                      // copied from the backend on start()
     AudioDeviceID device = kAudioObjectUnknown; // for the overload listener (M7-8)
+    void* workgroup = nullptr;                  // os_workgroup_t of the device's IO thread (retained)
 };
 
 // CoreAudio fires this (off the RT thread) when the device drops a buffer /
@@ -215,6 +217,17 @@ bool CoreAudioBackend::start(RenderCallback render, const BackendConfig& cfg) {
         return false;
     }
 
+    // The IO thread's workgroup, for plug-ins with real-time threads of their own (#436).
+    if (@available(macOS 11.0, *)) {
+        if (dev != kAudioObjectUnknown) {
+            AudioObjectPropertyAddress a{kAudioDevicePropertyIOThreadOSWorkgroup, kAudioObjectPropertyScopeGlobal,
+                kAudioObjectPropertyElementMain};
+            os_workgroup_t wg = nullptr;
+            UInt32 sz = sizeof(wg);
+            if (AudioObjectGetPropertyData(dev, &a, 0, nullptr, &sz, &wg) == noErr && wg) impl_->workgroup = wg;
+        }
+    }
+
     running_ = true;
     return true;
 }
@@ -230,7 +243,15 @@ void CoreAudioBackend::stop() {
         AudioComponentInstanceDispose(impl_->outputUnit);
         impl_->outputUnit = nullptr;
     }
+    if (impl_->workgroup) { // the IO thread is gone with the unit
+        if (@available(macOS 11.0, *)) os_release(static_cast<os_workgroup_t>(impl_->workgroup));
+        impl_->workgroup = nullptr;
+    }
     running_ = false;
+}
+
+void* CoreAudioBackend::ioWorkgroup() const {
+    return impl_->workgroup;
 }
 
 } // namespace nota

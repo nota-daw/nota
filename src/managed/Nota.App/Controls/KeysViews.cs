@@ -23,6 +23,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -241,7 +242,7 @@ internal sealed class KeysPickupView : Control, IMidiLearnRegions, IValueEntryHo
         }
         Pickup(0.2, "Up", pos != 2);
         Pickup(0.34, "Lo", pos != 0);
-        ctx.DrawText(Mono("String · 2 pickups", NotaPalette.TextTertiary), new Point(6, 4));
+        ctx.DrawText(Mono(Loc.T("device.keys.string_2_pickups"), NotaPalette.TextTertiary), new Point(6, 4));
         var read = Mono(KeysModel.PickupPositions[pos], NotaPalette.TextPrimary);
         if (Mini) ctx.DrawText(read, new Point(frame.Right - 6 - read.Width, 4));
         else ctx.DrawText(read, new Point(6, 15));

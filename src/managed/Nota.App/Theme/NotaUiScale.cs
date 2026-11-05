@@ -107,6 +107,17 @@ internal static class NotaUiScale
         control.DetachedFromVisualTree += (_, _) => Changed -= OnChanged;
     }
 
+    /// <summary>Change a window's minimum height in design units after construction — e.g. when
+    /// its content's minimum changes (the Mixer, specs/054). Before the first show it is just
+    /// <c>MinHeight</c>; once shown it is scaled and applied like the constructor's minimum.</summary>
+    public static void SetDesignMinHeight(Window window, double height)
+    {
+        if (!Windows.TryGetValue(window, out var entry) || !entry.Opened) { window.MinHeight = height; return; }
+        entry.DesignMin = new Size(entry.DesignMin.Width, height);
+        SetMinimum(window, entry);
+        if (window.IsVisible) KeepOnScreen(window);
+    }
+
     private static void OnOpening(Window window, Entry entry)
     {
         double s = Factor;

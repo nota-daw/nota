@@ -16,6 +16,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -26,7 +27,7 @@ public sealed partial class PreferencesWindow
 
     private static string ModelKey(string id) => "model:" + id;
 
-    private const string ModelsIntro = "AI models that run on this computer: the audio you give them never leaves it. Each downloads once from where its authors publish it and is checked against the checksum Nota pins for it.";
+    private static readonly string ModelsIntro = Loc.T("preferences.models.ai_models_that_run_on");
 
     // The AI Models third of Downloads (PreferencesWindow.Downloads.cs). No toolbar: the list is short.
     private (Control? Toolbar, Control Body) ModelParts()
@@ -46,7 +47,7 @@ public sealed partial class PreferencesWindow
         if (_models.Runtime is { } rt) rows.Add(ModelRow(rt, runtime: true));
         else rows.Add(new TextBlock
         {
-            Text = "ONNX Runtime has no build for this computer, so the models can't run here.",
+            Text = Loc.T("preferences.models.onnx_runtime_has_no_build"),
             FontSize = 12, Foreground = TextTertiary, Margin = new Thickness(16, 14),
         });
         _modelList.Content = Table(rows);
@@ -76,20 +77,20 @@ public sealed partial class PreferencesWindow
         var actions = new StackPanel { Spacing = 8, MinWidth = 96, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top };
         bool busy = Jobs.BusyId is not null;
         if (Jobs.BusyId == ModelKey(m.Id))
-            actions.Children.Add(StoreButton(installed ? "Removing…" : "Installing…", enabled: false, () => { }));
+            actions.Children.Add(StoreButton(installed ? Loc.T("preferences.models.removing") : Loc.T("preferences.installing"), enabled: false, () => { }));
         else if (installed)
         {
             actions.Children.Add(new StackPanel
             {
                 Orientation = Orientation.Horizontal, Spacing = 6, Height = 26, HorizontalAlignment = HorizontalAlignment.Right,
-                Children = { Dot(Brass), new TextBlock { Text = "Installed", FontSize = 11, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
+                Children = { Dot(Brass), new TextBlock { Text = Loc.T("preferences.installed"), FontSize = 11, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
             });
-            if (!runtime) actions.Children.Add(StoreLink("Remove", null, busy ? null : () => RemoveModel(m)));
+            if (!runtime) actions.Children.Add(StoreLink(Loc.T("preferences.remove"), null, busy ? null : () => RemoveModel(m)));
         }
         else if (!runtime)
-            actions.Children.Add(StoreButton("Install", enabled: !busy && _models.Runtime is not null, () => InstallModel(m)));
+            actions.Children.Add(StoreButton(Loc.T("preferences.install"), enabled: !busy && _models.Runtime is not null, () => InstallModel(m)));
         else
-            actions.Children.Add(new TextBlock { Text = "Comes with a model", FontSize = 11, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right, Height = 26 });
+            actions.Children.Add(new TextBlock { Text = Loc.T("preferences.models.comes_with_a_model"), FontSize = 11, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right, Height = 26 });
 
         long download = runtime || installed || _models.Runtime is null ? m.Size : _models.DownloadSize(m.Id);
         var size = new TextBlock
@@ -97,12 +98,12 @@ public sealed partial class PreferencesWindow
             Text = installed ? Megabytes(m.UnpackedSize) : Megabytes(download),
             FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
         };
-        ToolTip.SetTip(size, installed ? "On disk"
-            : download > m.Size ? $"{Megabytes(m.Size)} model + {Megabytes(download - m.Size)} AI runtime, downloaded once"
-            : "Download");
+        ToolTip.SetTip(size, installed ? Loc.T("preferences.models.on_disk")
+            : download > m.Size ? Loc.F("preferences.models.model_ai_runtime_downloaded_once", Megabytes(m.Size), Megabytes(download - m.Size))
+            : Loc.T("common.download"));
         actions.Children.Add(size);
-        var source = StoreLink("Source", GlyphKind.PopOut, () => _ = Launcher.LaunchUriAsync(new Uri(m.Source)));
-        ToolTip.SetTip(source, "Open the model's project page");
+        var source = StoreLink(Loc.T("preferences.source"), GlyphKind.PopOut, () => _ = Launcher.LaunchUriAsync(new Uri(m.Source)));
+        ToolTip.SetTip(source, Loc.T("preferences.models.open_the_models_project_page"));
         actions.Children.Add(source);
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 16, Margin = new Thickness(16, 14, 14, 14) };
@@ -116,25 +117,25 @@ public sealed partial class PreferencesWindow
     {
         // Size 0: the model and the runtime download one after the other, each reporting its own
         // fraction, so a byte count would mix two files.
-        Jobs.Install(ModelKey(m.Id), source: 2, m.Name, 0, new StoreProgress(0, $"Downloading {m.Name}…"),
+        Jobs.Install(ModelKey(m.Id), source: 2, m.Name, 0, new StoreProgress(0, Loc.F("preferences.downloading", m.Name)),
             (progress, ct) => _models.InstallAsync(m.Id, progress, ct),
             () => Task.FromResult(m.Id == AiModels.Stems
-                ? $"{m.Name} is installed — right-click an audio clip and choose Separate Stems."
-                : $"{m.Name} is installed — Convert Melody and Convert Harmony now use it."));
+                ? Loc.F("preferences.models.is_installed_right_click_an", m.Name)
+                : Loc.F("preferences.models.is_installed_convert_melody_and", m.Name)));
     }
 
     private async void RemoveModel(StoreModel m)
     {
         if (Jobs.Busy) return;
         bool last = _models.Models.Count(x => _models.IsInstalled(x.Id)) == 1;
-        var ok = await new ConfirmWindow("Remove AI model",
-            $"Remove {m.Name}? {m.Feature} will offer to download it again." + (last ? " The AI runtime goes too." : ""),
-            "Remove", "Cancel").ShowDialog<bool>(this);
+        var ok = await new ConfirmWindow(Loc.T("preferences.models.remove_ai_model"),
+            Loc.F("preferences.models.remove_will_offer_to_download", m.Name, m.Feature) + (last ? Loc.T("preferences.models.the_ai_runtime_goes_too") : ""),
+            Loc.T("preferences.remove"), Loc.T("common.cancel")).ShowDialog<bool>(this);
         if (!ok) return;
-        Jobs.Remove(ModelKey(m.Id), source: 2, $"Removing {m.Name}…", async () =>
+        Jobs.Remove(ModelKey(m.Id), source: 2, Loc.F("preferences.removing", m.Name), async () =>
         {
             await Task.Run(() => _models.Uninstall(m.Id));
-            return $"{m.Name} was removed.";
+            return Loc.F("preferences.was_removed", m.Name);
         });
     }
 }

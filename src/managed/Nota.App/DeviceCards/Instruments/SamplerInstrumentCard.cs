@@ -33,6 +33,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -213,16 +214,16 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             int l = LoopSel();
             return l switch
             {
-                0 => "no loop",
+                0 => Loc.T("device.sampler.no_loop"),
                 _ => $"{SamplerModel.LoopNames[l].ToLowerInvariant()} {NotaNum.Str(G("loopstart") * durSec, "0.00")} – {NotaNum.Unit(G("loopend") * durSec, "0.00", "s")}",
             };
         }
 
         // ================= Sample tab =================
         var wave = new SamplerWaveView();
-        wave.SetEmpty("Drop a sample here");
+        wave.SetEmpty(Loc.T("device.sampler.drop_a_sample_here"));
         if (hasSample) wave.SetPeaks(SamplerModel.Peaks(raw, ch, 1200), durSec);
-        ToolTip.SetTip(wave, hasSample ? MenuKit.Keys("Drag Start / End (and the loop markers when looping) · ⌥-click a marker to type it · double-click to reset it") : "Drag a sample from the Files tab or the browser");
+        ToolTip.SetTip(wave, hasSample ? MenuKit.Keys(Loc.T("device.sampler.drag_start_end_and_the")) : Loc.T("device.sampler.drag_a_sample_from_the"));
         wave.DragBegin += hnd => Begin(SamplerWaveView.HandleId(hnd));
         wave.DragEnd += hnd => End(SamplerWaveView.HandleId(hnd));
         wave.Moved += (hnd, f) => { SetP(SamplerWaveView.HandleId(hnd), f); Refresh(); };
@@ -252,10 +253,10 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             var (lm, rev) = SamplerModel.LoopValues(iv);
             Write("loopmode", lm); Write("reverse", rev);
         }, padX: 7, learnId: "loopmode");
-        ToolTip.SetTip(loopSeg, "Off plays once · Fwd loops · Ping bounces · Rev loops backwards");
-        var xfadeKnob = PKnob("loopxfade", "CROSSFADE", v => NotaNum.Time(SamplerModel.CrossfadeSec(v)), tip: "Blends the loop's end into its start (forward loops)");
+        ToolTip.SetTip(loopSeg, Loc.T("device.sampler.off_plays_once_fwd_loops"));
+        var xfadeKnob = PKnob("loopxfade", "CROSSFADE", v => NotaNum.Time(SamplerModel.CrossfadeSec(v)), tip: Loc.T("device.sampler.blends_the_loops_end_into"));
         DimWhen(xfadeKnob, () => LoopSel() != 1);
-        var gainKnob = PKnob("gain", "GAIN", v => NotaNum.Db(SamplerModel.GainDb(v), signed: true), tip: "The sample's level before the envelope");
+        var gainKnob = PKnob("gain", "GAIN", v => NotaNum.Db(SamplerModel.GainDb(v), signed: true), tip: Loc.T("device.sampler.the_samples_level_before_the"));
         void SnapAll()
         {
             foreach (var id in new[] { "start", "end", "loopstart", "loopend" }) Write(id, SamplerModel.SnapZero(raw, ch, frames, G(id)));
@@ -267,15 +268,15 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             if (G("loopstart") < t.Start) Write("loopstart", t.Start);
             if (G("loopend") > t.End) Write("loopend", t.End);
         }
-        var snapBtn = Button("Snap to zero", SnapAll, "Move Start, End and the loop to the nearest zero crossing — no clicks", enabled: () => hasSample);
-        var trimBtn = Button("Trim silence", Trim, "Move Start and End to where the sound begins and fades out (−48\u2009dB)", enabled: () => hasSample);
+        var snapBtn = Button(Loc.T("device.sampler.snap_to_zero"), SnapAll, Loc.T("device.sampler.move_start_end_and_the"), enabled: () => hasSample);
+        var trimBtn = Button(Loc.T("device.sampler.trim_silence"), Trim, Loc.T("device.sampler.move_start_and_end_to"), enabled: () => hasSample);
         snapBtn.HorizontalAlignment = HorizontalAlignment.Stretch; trimBtn.HorizontalAlignment = HorizontalAlignment.Stretch;
         var sampleBtns = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center, Children = { snapBtn, trimBtn } };
         var sampleRow = Row(14, (Labeled("LOOP", loopSeg), "Auto"), (xfadeKnob, "Auto"), (gainKnob, "Auto"), (new Panel(), "*"), (sampleBtns, "Auto"));
 
         // ================= Pitch tab =================
         var keys = new SamplerKeysView();
-        ToolTip.SetTip(keys, "Click a key to make it the root — the key that plays the sample as recorded");
+        ToolTip.SetTip(keys, Loc.T("device.sampler.click_a_key_to_make"));
         keys.RootPicked += k => { rootv = k; acc.SetRoot(k); Refresh(); };
         int NaturalKey()
         {
@@ -285,7 +286,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             double off = SamplerModel.TransposeSt(G("transpose")) + SamplerModel.DetuneCents(G("detune")) / 100.0;
             return (int)Math.Round(rootv - off / tr);
         }
-        readouts.Add(() => keys.Set(rootv, NaturalKey(), snap.Live ? snap.Note : -1, G("pitchtrack"), "the key sets the playback speed"));
+        readouts.Add(() => keys.Set(rootv, NaturalKey(), snap.Live ? snap.Note : -1, G("pitchtrack"), Loc.T("device.sampler.the_key_sets_the_playback")));
         var rootText = Mono(SamplerModel.NoteName(rootv), TextPrimary, 9);
         rootText.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() => rootText.Text = SamplerModel.NoteName(rootv));
@@ -316,24 +317,24 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             e.Handled = true; if (s == 0) return;
             rootv = Math.Clamp(rootv + s, 0, 127); acc.SetRoot(rootv); Refresh();
         };
-        ToolTip.SetTip(rootBox, "The root note — scroll to step it");
-        var rootStepper = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { StepBtn(GlyphKind.Minus, -1, "Root a semitone down"), rootBox, StepBtn(GlyphKind.Plus, +1, "Root a semitone up") } };
+        ToolTip.SetTip(rootBox, Loc.T("device.sampler.the_root_note_scroll_to"));
+        var rootStepper = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Children = { StepBtn(GlyphKind.Minus, -1, Loc.T("device.sampler.root_a_semitone_down")), rootBox, StepBtn(GlyphKind.Plus, +1, Loc.T("device.sampler.root_a_semitone_up")) } };
         int detected = SamplerModel.DetectRoot(sampleName);
-        var detectBtn = Button("Detect from file name", () => { if (detected >= 0) { rootv = detected; acc.SetRoot(detected); } },
-            detected >= 0 ? $"\"{sampleName}\" names {SamplerModel.NoteName(detected)} — make it the root"
-                : sampleName.Length > 0 ? $"\"{sampleName}\" names no note (e.g. C4, F#3, Eb2)" : "The sample's file name isn't known",
+        var detectBtn = Button(Loc.T("device.sampler.detect_from_file_name"), () => { if (detected >= 0) { rootv = detected; acc.SetRoot(detected); } },
+            detected >= 0 ? Loc.F("device.sampler.names_make_it_the_root", sampleName, SamplerModel.NoteName(detected))
+                : sampleName.Length > 0 ? $"\"{sampleName}\" names no note (e.g. C4, F#3, Eb2)" : Loc.T("device.sampler.the_samples_file_name_isnt"),
             on: () => detected >= 0 && detected == rootv, enabled: () => detected >= 0);
         var pitchRow = Row(16,
-            (PKnob("transpose", "TRANSPOSE", St, tip: "Shift every note, ±24 semitones"), "Auto"),
-            (PKnob("detune", "DETUNE", Cents, arc: Teal, tip: "Fine tune, ±50 cents"), "Auto"),
-            (PKnob("pitchtrack", "KEYTRACK", v => NotaNum.Pct(v), tip: "How far the key moves the pitch — 100\u2009% chromatic, 0\u2009% every key plays the root"), "Auto"),
+            (PKnob("transpose", "TRANSPOSE", St, tip: Loc.T("device.sampler.shift_every_note_24_semitones")), "Auto"),
+            (PKnob("detune", "DETUNE", Cents, arc: Teal, tip: Loc.T("device.sampler.fine_tune_50_cents")), "Auto"),
+            (PKnob("pitchtrack", "KEYTRACK", v => NotaNum.Pct(v), tip: Loc.T("device.sampler.how_far_the_key_moves")), "Auto"),
             (Labeled("ROOT", rootStepper), "Auto"),
             (new Panel(), "*"),
             (detectBtn, "Auto"));
 
         // ================= Env tab =================
         var env = new SamplerEnvView();
-        ToolTip.SetTip(env, MenuKit.Keys("Drag the nodes: attack, decay and sustain (up / down), release · Shift for fine steps · ⌥-click to type · double-click resets"));
+        ToolTip.SetTip(env, MenuKit.Keys(Loc.T("device.sampler.drag_the_nodes_attack_decay")));
         env.DragBegin += Begin;
         env.DragEnd += End;
         env.Changed += (id, v) => { SetP(id, v); Refresh(); };
@@ -353,7 +354,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         var velWord = Mono("", TextSecondary, 8);
         readouts.Add(() => velWord.Text = G("velamount") > 0.005f ? NotaNum.Pct(G("velamount")) : "off");
         var velBlock = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { Cap("VEL → VOL"), velSwitch, velWord } };
-        ToolTip.SetTip(velBlock, "Velocity sets the level — the amount is the rail's VEL → VOL");
+        ToolTip.SetTip(velBlock, Loc.T("device.sampler.velocity_sets_the_level_the"));
         var envRow = Row(16,
             (PKnob("attack", "ATTACK", v => NotaNum.Time(SamplerModel.AttackSec(v))), "Auto"),
             (PKnob("decay", "DECAY", v => NotaNum.Time(SamplerModel.DecaySec(v))), "Auto"),
@@ -364,7 +365,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
 
         // ================= Filter tab =================
         var filt = new SamplerFilterView();
-        ToolTip.SetTip(filt, MenuKit.Keys("Drag: left / right for the cutoff, up / down for the resonance · Shift for fine steps · ⌥-click to type · double-click resets"));
+        ToolTip.SetTip(filt, MenuKit.Keys(Loc.T("device.sampler.drag_left_right_for_the")));
         filt.DragBegin += () => { Begin("cutoff"); Begin("resonance"); };
         filt.DragEnd += () => { End("cutoff"); End("resonance"); };
         filt.Changed += (id, v) => { SetP(id, v); Refresh(); };
@@ -380,18 +381,18 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         string FiltTl()
         {
             int t = Sel("filtertype", 4);
-            if (t == 0) return "off · the sample passes untouched";
+            if (t == 0) return Loc.T("device.sampler.off_the_sample_passes_untouched");
             return $"{SamplerModel.FilterNames[t]} 12\u2009dB/oct · {NotaNum.Hz(SamplerModel.CutoffHz(G("cutoff")))} · reso {NotaNum.Pct(G("resonance"))}";
         }
         readouts.Add(() => filt.Set(Sel("filtertype", 4), G("cutoff"), G("resonance"), snap.Live ? snap.CutoffHz : -1, FiltTl()));
         var typeSeg = ParamChips("filtertype", SamplerModel.FilterNames, padX: 7);
-        ToolTip.SetTip(typeSeg, "Off · low-pass · high-pass · band-pass (12\u2009dB/oct)");
+        ToolTip.SetTip(typeSeg, Loc.T("device.sampler.off_low_pass_high_pass"));
         var cutKnob = PKnob("cutoff", "CUTOFF", v => NotaNum.Hz(SamplerModel.CutoffHz(v)), NotaSize.KnobMain, 58, emphasised: true);
         var resoKnob = PKnob("resonance", "RESO", v => NotaNum.Pct(v));
-        var ktKnob = PKnob("keytrack", "KEYTRACK", v => NotaNum.Pct(v), arc: Teal, tip: "The cutoff follows the key, 0 … 100\u2009%");
+        var ktKnob = PKnob("keytrack", "KEYTRACK", v => NotaNum.Pct(v), arc: Teal, tip: Loc.T("device.sampler.the_cutoff_follows_the_key"));
         var envBtn = Button("Env → Cutoff", () => Write("envcutoff", G("envcutoff") >= 0.5f ? 0 : 1),
-            "Let the amp envelope open (or close) the filter — the depth is ENV", on: () => G("envcutoff") >= 0.5f, learnId: "envcutoff");
-        var envAmt = PKnob("envamount", "ENV", Oct, arc: Teal, tip: "How far the envelope moves the cutoff, ±6 octaves");
+            Loc.T("device.sampler.let_the_amp_envelope_open"), on: () => G("envcutoff") >= 0.5f, learnId: "envcutoff");
+        var envAmt = PKnob("envamount", "ENV", Oct, arc: Teal, tip: Loc.T("device.sampler.how_far_the_envelope_moves"));
         var filterBody = new[] { cutKnob, resoKnob, ktKnob };
         foreach (var c in filterBody) DimWhen(c, () => Sel("filtertype", 4) == 0);
         DimWhen(envAmt, () => Sel("filtertype", 4) == 0 || G("envcutoff") < 0.5f);
@@ -444,7 +445,7 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
 
         // ---- the rail · voices and output -----------------------------------------------
         var voiceSeg = ParamChips("voicemode", SamplerModel.VoiceNames, padX: 5);
-        ToolTip.SetTip(voiceSeg, "Poly: 16 voices · Mono: one at a time (legato with Glide) · Choke: a new note cuts the ringing ones");
+        ToolTip.SetTip(voiceSeg, Loc.T("device.sampler.poly_16_voices_mono_one"));
         var railHead = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,*"), Margin = new Thickness(8, 0) };
         var railCap = Cap("VOICES");
         railHead.Children.Add(railCap);
@@ -456,13 +457,13 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
             Spacing = 6,
             Children =
             {
-                Slider("VOLUME", "volume", () => DbLin(G("volume")), tip: "The voices' level"),
+                Slider("VOLUME", "volume", () => DbLin(G("volume")), tip: Loc.T("device.sampler.the_voices_level")),
                 Slider("PAN", "pan", () => PanText(G("pan")), bipolar: true),
-                Slider("GLIDE", "glide", () => GlideText(G("glide")), tip: "Slide from the last note — in Mono, legato: no retrigger"),
+                Slider("GLIDE", "glide", () => GlideText(G("glide")), tip: Loc.T("device.sampler.slide_from_the_last_note")),
             },
         };
-        var outKnob = PKnob("output", "OUTPUT", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: "The level after everything");
-        var velKnob = PKnob("velamount", "VEL → VOL", v => NotaNum.Pct(v), cellW: 50, arc: Teal, tip: "How much velocity sets the level");
+        var outKnob = PKnob("output", "OUTPUT", v => NotaNum.Pct(v), NotaSize.KnobMain, 50, tip: Loc.T("device.sampler.the_level_after_everything"));
+        var velKnob = PKnob("velamount", "VEL → VOL", v => NotaNum.Pct(v), cellW: 50, arc: Teal, tip: Loc.T("device.sampler.how_much_velocity_sets_the"));
 
         Control meterBlock;
         if (acc.TryMeter(out _))
@@ -502,42 +503,42 @@ internal sealed class SamplerInstrumentCard : IInstrumentCard
         string EnvWord()
         {
             double a = SamplerModel.AttackSec(G("attack")), s = G("sustain"), rel = SamplerModel.ReleaseSec(G("release"));
-            if (s < 0.05) return "a pluck — it decays to silence while held";
-            if (a < 0.01 && s > 0.89 && rel < 0.05) return "almost a gate — the sample is heard whole";
-            if (a > 0.3) return "a slow swell";
-            if (rel > 1.0) return "a long tail after release";
-            return "held at the sustain level";
+            if (s < 0.05) return Loc.T("device.sampler.a_pluck_it_decays_to");
+            if (a < 0.01 && s > 0.89 && rel < 0.05) return Loc.T("device.sampler.almost_a_gate_the_sample");
+            if (a > 0.3) return Loc.T("device.sampler.a_slow_swell");
+            if (rel > 1.0) return Loc.T("device.sampler.a_long_tail_after_release");
+            return Loc.T("device.sampler.held_at_the_sustain_level");
         }
         string Summary()
         {
-            if (!hasSample) return "No sample · drop one from the Files tab or the browser";
+            if (!hasSample) return Loc.T("device.sampler.no_sample_drop_one_from");
             switch (tab)
             {
                 case 0:
                 {
                     string name = sampleName.Length > 0 ? sampleName + " · " : "";
                     int l = LoopSel();
-                    string loop = l == 0 ? "loop off, crossfade not applied"
+                    string loop = l == 0 ? Loc.T("device.sampler.loop_off_crossfade_not_applied")
                         : l == 1 ? $"{LoopWord()} · crossfade {NotaNum.Time(SamplerModel.CrossfadeSec(G("loopxfade")))}"
-                        : $"{LoopWord()} · no crossfade";
+                        : Loc.F("device.sampler.no_crossfade", LoopWord());
                     string gain = Math.Abs(SamplerModel.GainDb(G("gain"))) > 0.05 ? $" · gain {NotaNum.Db(SamplerModel.GainDb(G("gain")), signed: true)}" : "";
                     return $"{name}{WindowText()} · {loop}{gain}";
                 }
                 case 1:
                 {
                     int nat = NaturalKey();
-                    string tail = nat == rootv ? "the sample plays at its own pitch on the root"
-                        : nat < 0 ? "every key plays the same pitch"
-                        : $"{SamplerModel.NoteName(nat)} plays the sample at its own pitch";
+                    string tail = nat == rootv ? Loc.T("device.sampler.the_sample_plays_at_its")
+                        : nat < 0 ? Loc.T("device.sampler.every_key_plays_the_same")
+                        : Loc.F("device.sampler.plays_the_sample_at_its", SamplerModel.NoteName(nat));
                     return $"Root {SamplerModel.NoteName(rootv)} · transpose {St(G("transpose"))} · detune {Cents(G("detune"))} · keytrack {NotaNum.Pct(G("pitchtrack"))} — {tail}";
                 }
                 case 2:
-                    return $"Env {EnvTl()} — {EnvWord()}"
+                    return Loc.F("device.sampler.env", EnvTl(), EnvWord())
                         + (G("velamount") > 0.005f ? $" · velocity {NotaNum.Pct(G("velamount"))}" : " · velocity off");
                 default:
                 {
                     int t = Sel("filtertype", 4);
-                    if (t == 0) return "Filter off — the sample passes untouched";
+                    if (t == 0) return Loc.T("device.sampler.filter_off_the_sample_passes");
                     string kt = G("keytrack") > 0.005f ? $"keytrack {NotaNum.Pct(G("keytrack"))}" : "keytrack off";
                     string ev = G("envcutoff") >= 0.5f ? $" · env {Oct(G("envamount"))}" : "";
                     string live = snap.Live && snap.CutoffHz > 0 ? $" · now {NotaNum.Hz(snap.CutoffHz)}" : "";

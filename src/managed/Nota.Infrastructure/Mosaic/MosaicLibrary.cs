@@ -17,6 +17,7 @@
 using System.Text.Json;
 using Nota.Application.Mosaic;
 using Nota.Infrastructure.Kits;
+using Nota.Application.Localization;
 
 namespace Nota.Infrastructure.Mosaic;
 
@@ -195,7 +196,7 @@ public sealed class MosaicPackLibrary : IMosaicPacks
     public string ApplyInPlace(IAudioEngine engine, string path, int trackId)
     {
         try { return PresetService.ApplyInPlace(PresetService.Load(path), engine, trackId, -1); }
-        catch (Exception e) { return $"Couldn't load the preset: {e.Message}"; }
+        catch (Exception e) { return Loc.F("mosaic.library.couldnt_load_the_preset", e.Message); }
     }
 
     public MosaicProgram? Read(string path)
@@ -272,7 +273,7 @@ public sealed class MosaicPackLibrary : IMosaicPacks
     public List<(string Name, MosaicProgram Program, Dictionary<string, float> Params)> Generate(string packPath, string packId, string packName)
     {
         var made = new List<(string, MosaicProgram, Dictionary<string, float>)>();
-        var sfz = TopLevelSfz(packPath);
+        var sfz = SfzImporter.TopLevel(packPath);
         foreach (var path in sfz)
         {
             SfzResult res;
@@ -282,7 +283,7 @@ public sealed class MosaicPackLibrary : IMosaicPacks
             string name = sfz.Count == 1 || stem.Equals("main", StringComparison.OrdinalIgnoreCase) || stem.Equals(packName, StringComparison.OrdinalIgnoreCase)
                 ? packName : MultisampleMapper.Pretty(stem.Replace(' ', '_'));
             res.Program.Name = name; res.Program.SourceRef = ToRef(path); res.Program.PackId = packId; res.Program.PackName = packName;
-            made.Add((name, res.Program, ParamsFrom(res.Report)));
+            made.Add((name, res.Program, SfzImporter.ParamsFrom(res.Report)));
         }
         if (made.Count > 0) return made;
 
@@ -296,41 +297,6 @@ public sealed class MosaicPackLibrary : IMosaicPacks
             made.Add((name, p, new Dictionary<string, float>()));
         }
         return made;
-    }
-
-    // The SFZ files no other SFZ in the pack #includes (an instrument, not a fragment of one).
-    private static List<string> TopLevelSfz(string root)
-    {
-        List<string> all;
-        try { all = Directory.EnumerateFiles(root, "*.sfz", SearchOption.AllDirectories).OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList(); }
-        catch { return new List<string>(); }
-        var included = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var rx = new System.Text.RegularExpressions.Regex("#include\\s+\"([^\"]+)\"");
-        foreach (var f in all)
-        {
-            string text;
-            try { text = File.ReadAllText(f); } catch { continue; }
-            foreach (System.Text.RegularExpressions.Match m in rx.Matches(text))
-                included.Add(Path.GetFileName(m.Groups[1].Value.Replace('\\', '/')));
-        }
-        return all.Where(f => !included.Contains(Path.GetFileName(f))).ToList();
-    }
-
-    // The envelope / bend / filter the SFZ names, as Mosaic params.
-    private static Dictionary<string, float> ParamsFrom(SfzImportReport r)
-    {
-        var d = new Dictionary<string, float>();
-        if (r.Attack is { } a) d["attack"] = MosaicModel.AttackNorm(a);
-        if (r.Decay is { } dc) d["decay"] = MosaicModel.DecayNorm(dc);
-        if (r.Sustain is { } s) d["sustain"] = (float)s;
-        if (r.Release is { } rel) d["release"] = MosaicModel.DecayNorm(rel);
-        if (r.BendSemis is { } b) d["bendrange"] = (float)Math.Clamp(b / 24.0, 0, 1);
-        if (r.CutoffHz is { } c && c < 18000)
-        {
-            d["filtertype"] = 1f / 3f;
-            d["cutoff"] = (float)Math.Clamp(Math.Log(Math.Max(20, c) / 20.0) / Math.Log(1000.0), 0, 1);
-        }
-        return d;
     }
 
     private static string Sanitize(string name)
