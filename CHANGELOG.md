@@ -55,6 +55,16 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 - **Preset audition plays a preset's own state**: a Nota Twin preset with a sequence is heard
   playing its pattern.
 
+### Fixed
+- **Nota Remote on iPhone and iPad launches several clips at once** (#512): touching two or
+  more clips on the Scenes screen together launched none of them, or only one — iOS Safari
+  only sends a tap for a single finger. Every clip, scene and Stop button now takes its own
+  finger, and a drag that scrolls the grid still launches nothing.
+- **Nota Remote no longer causes audio dropouts on macOS** (#511): while a phone or browser
+  tab was connected, or the Remote popup was open, the sound dropped out about every
+  10 seconds. Nota started a system helper on that interval to find USB network links; it now
+  reads them directly and only again when the network changes.
+
 ## [0.59.1] — 2026-11-05
 
 ### Added

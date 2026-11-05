@@ -54,6 +54,7 @@ public sealed class RemoteService
     private void OnNetworkChanged()
     {
         _linksAt = DateTime.MinValue;   // the USB map may have changed with the addresses
+        RemoteLinks.Invalidate();
         _networkRetry?.Dispose();
         _networkRetry = new System.Threading.Timer(_ => { RaiseChanged(); _networkRetry?.Dispose(); _networkRetry = null; },
             null, 800, -1);
