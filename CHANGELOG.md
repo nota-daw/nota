@@ -258,6 +258,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Reset velocity in the piano roll**: double-clicking the stem of a note already at the default
+  velocity, below its cap, no longer adds an empty undo step, and the right-click **Reset
+  velocity** menu opens at the pointer instead of the middle of the lane.
 - **Bars follow the time signature** (#405): in 3/4, 5/4 or 7/4 the arrangement's bar lines
   and bar numbers, the clip editors' grids and rulers, the step grid, the transport's position
   readout, the clip and Session readouts and Export's range fields count the time signature's
