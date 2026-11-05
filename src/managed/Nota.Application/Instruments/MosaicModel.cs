@@ -100,7 +100,7 @@ public static class MosaicModel
     /// <summary>"Osiris Piano · 30 roots × 4 velocity layers · release 30".</summary>
     public static string Summary(MosaicProgram p, Func<string, float> g)
     {
-        if (p.IsEmpty) return "Empty · drop samples or a folder, or pick a preset";
+        if (p.IsEmpty) return "Empty · drop samples, a folder or an SFZ, or pick a preset";
         string voices = VoiceNames[Index(g("voicemode"), 3)] == "Poly" ? $"Poly {Poly(g("polyphony"))}" : VoiceNames[Index(g("voicemode"), 3)];
         return $"{(p.Name.Length > 0 ? p.Name + " · " : "")}{p.Summary()} · {voices}";
     }

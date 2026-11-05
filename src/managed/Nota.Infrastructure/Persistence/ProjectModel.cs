@@ -97,6 +97,10 @@ public sealed class TransportDto
     public double MasterVolume { get; set; } = 1.0;
     public bool MetronomeOn { get; set; }
     public bool LoopOn { get; set; }
+    /// <summary>The loop region in beats (#455); null in files from before it was saved, and
+    /// when no region is set — loading those leaves the region as it is.</summary>
+    public double? LoopStart { get; set; }
+    public double? LoopEnd { get; set; }
     public int TimeSigNumerator { get; set; } = 4;
     public int TimeSigDenominator { get; set; } = 4;
     /// <summary>The project key ("Am", "Eb"); null = none set. Loops dropped in can be
@@ -119,6 +123,7 @@ public sealed class TrackDto
     public int GroupId { get; set; } = -1;     // parent group's doc index, or -1 (top-level)
     public int ColorIndex { get; set; } = -1;  // palette slot; -1 = auto by position
     public bool? PianoFold { get; set; }       // piano roll Fold (specs/045); written only when on
+    public bool? EditLink { get; set; }        // group Link (specs/076); written only when on
     // Record input: 0 hardware, -1 master, or (2 + track-list index) for another track's
     // output (encoded so it survives id reassignment across save/load).
     public int RecordInput { get; set; }
@@ -134,6 +139,7 @@ public sealed class TrackDto
     public List<DeviceDto> Devices { get; set; } = new();
     public List<MidiClipDto> MidiClips { get; set; } = new();
     public List<AudioClipDto> AudioClips { get; set; } = new();
+    public List<AudioTakeDto>? Takes { get; set; }   // loop-recording take lanes (v29, specs/067)
     public List<SessionSlotDto> SessionSlots { get; set; } = new();
     /// <summary>Empty slots whose stop button was removed (scene launch leaves the track playing).</summary>
     public List<int>? SessionNoStop { get; set; }
@@ -393,6 +399,25 @@ public sealed class AudioClipDto
     public double WarpPlayEnd { get; set; }    // warped clip trim window end (0 = full, v11)
     public bool Reversed { get; set; }         // plays back-to-front (v19); default false
     public ClipAdsrDto? Adsr { get; set; }     // ADSR amplitude shape (v20); null = identity
+    public int? TakeId { get; set; }           // the AudioTakeDto.Id this comp section came from (v29)
+    // Ends that play at full level where take sections meet: 1 head, 2 tail (v29, optional;
+    // absent = both fade). A flatten keeps such a join after its takes are gone.
+    public int? JoinedEdges { get; set; }
+
+    [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
+}
+
+/// <summary>One pass of an Arrangement loop recording (v29, specs/067). `Id` is file-local:
+/// it only links comp sections (<see cref="AudioClipDto.TakeId"/>) to their take.</summary>
+public sealed class AudioTakeDto
+{
+    public int Id { get; set; }
+    public int Number { get; set; }            // "Take N" as shown on the lane
+    public int Group { get; set; }             // takes of one recording share a group
+    public string Sample { get; set; } = "";
+    public double OriginBeat { get; set; }     // beat of the sample's frame 0
+    public double SourceOffsetFrames { get; set; }
+    public long LengthFrames { get; set; }
 
     [JsonExtensionData] public Dictionary<string, JsonElement>? Extra { get; set; }
 }

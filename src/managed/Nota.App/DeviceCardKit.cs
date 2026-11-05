@@ -14,6 +14,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -253,7 +254,7 @@ internal static class DeviceCardKit
         }
         repaint = Paint;
         track.Changed += v => { setNorm(v); val.Text = text(); };
-        string name = label.Length > 0 ? label : "Value";
+        string name = label.Length > 0 ? label : Loc.T("device.card.value");
         Action? rowReset = reset is null ? null : () => { reset(); Paint(); };
         var field = textAt is null
             ? ValueEntry.Probing(name, norm, setNorm, text, begin, end, Paint, rowReset)
@@ -327,7 +328,7 @@ internal static class DeviceCardKit
     {
         Background = NotaPalette.Well, CornerRadius = NotaRadius.Cell,
         Padding = new Thickness(4, 0), VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock { Text = "Bypassed", FontSize = NotaType.RowLabel, Foreground = TextTertiary },
+        Child = new TextBlock { Text = Loc.T("device.card.bypassed"), FontSize = NotaType.RowLabel, Foreground = TextTertiary },
     };
 
     // A caption above a control (centered, sentence case, secondary ink).
@@ -355,7 +356,7 @@ internal static class DeviceCardKit
         double H = height;   // 22: a card header and the device window's title bar
         var label = new TextBlock
         {
-            Text = string.IsNullOrEmpty(current) ? "Init" : current, FontSize = NotaType.DeviceValue,
+            Text = string.IsNullOrEmpty(current) ? Loc.T("device.card.init") : current, FontSize = NotaType.DeviceValue,
             Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var chevron = new Glyph(GlyphKind.ChevronDown, 7) { Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
@@ -368,7 +369,7 @@ internal static class DeviceCardKit
             Child = new DockPanel { Children = { chevron, label } },
         };
         name.BindResource(Border.BoxShadowProperty, "Shadow.Lifted");
-        ToolTip.SetTip(name, "Choose a preset");
+        ToolTip.SetTip(name, Loc.T("device.card.choose_a_preset"));
         // A sound parameter moved away from the loaded preset (specs/048): "Name *", read live.
         if (modified != null && !string.IsNullOrEmpty(current))
         {
@@ -379,7 +380,7 @@ internal static class DeviceCardKit
                 if (m == shown) return;
                 shown = m;
                 label.Text = m ? current + " *" : current;
-                ToolTip.SetTip(name, m ? $"Changed since you loaded {current} · choose a preset" : "Choose a preset");
+                ToolTip.SetTip(name, m ? Loc.F("device.card.changed_since_you_loaded_choose", current) : Loc.T("device.card.choose_a_preset"));
             }
             Mark();
             addLive?.Invoke(Mark);
@@ -391,7 +392,7 @@ internal static class DeviceCardKit
             var flyout = new MenuFlyout();
             if (init != null)
             {
-                var mi = new MenuItem { Header = "Init", ToggleType = MenuItemToggleType.Radio, IsChecked = cur < 0 && string.IsNullOrEmpty(current) };
+                var mi = new MenuItem { Header = Loc.T("device.card.init"), ToggleType = MenuItemToggleType.Radio, IsChecked = cur < 0 && string.IsNullOrEmpty(current) };
                 mi.Click += (_, _) => init();
                 flyout.Items.Add(mi);
                 flyout.Items.Add(new Separator());
@@ -411,7 +412,7 @@ internal static class DeviceCardKit
             var g = new Glyph(dir < 0 ? GlyphKind.ChevronLeft : GlyphKind.ChevronRight, 8)
                 { Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             var b = new Border { Width = 18, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = g };
-            ToolTip.SetTip(b, dir < 0 ? "Previous preset" : "Next preset");
+            ToolTip.SetTip(b, dir < 0 ? Loc.T("device.card.previous_preset") : Loc.T("device.card.next_preset"));
             b.PointerEntered += (_, _) => g.Foreground = TextPrimary;
             b.PointerExited += (_, _) => g.Foreground = TextTertiary;
             b.PointerPressed += (_, e) =>

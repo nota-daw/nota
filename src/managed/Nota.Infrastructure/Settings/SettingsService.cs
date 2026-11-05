@@ -40,15 +40,13 @@ public sealed class SettingsService : ISettingsService
         Changed?.Invoke();
     }
 
-    private static string Home => NotaPaths.Home;
-
     public string ResolvedSamplesFolder()
         => EnsureDir(string.IsNullOrWhiteSpace(Current.SamplesFolder)
-            ? Path.Combine(Home, "Music", "Nota Samples") : Current.SamplesFolder);
+            ? Path.Combine(UserDirs.GetMusicDir(), "Nota Samples") : Current.SamplesFolder);
 
     public string ResolvedProjectsFolder()
         => EnsureDir(string.IsNullOrWhiteSpace(Current.ProjectsFolder)
-            ? Path.Combine(Home, "Documents", "Nota Projects") : Current.ProjectsFolder);
+            ? Path.Combine(UserDirs.GetDocumentsDir(), "Nota Projects") : Current.ProjectsFolder);
 
     public string PresetsFolder() => NotaPaths.SubDir("presets");
 

@@ -38,6 +38,12 @@ public sealed class TrackTools(IAudioEngine engine, IEngineDispatch dispatch, IA
     [McpServerTool(Name = "get_piano_fold"), Description("Whether a track's piano roll is folded.")]
     public Task<bool> GetPianoFold(int trackId) => Read(() => E.GetTrackPianoFold(trackId));
 
+    [McpServerTool(Name = "set_group_link"), Description("Link a group's tracks for editing and recording (Link): arming one arms them all, and clips selected or edited in the Arrangement take the clips at the same position on the other tracks along. One undo step. MCP edits are not linked; they act on the clips they name. Returns false when the track is not a group.")]
+    public Task<bool> SetGroupLink([Description("Group track id")] int trackId, bool on) => Mutate(() => E.SetTrackEditLink(trackId, on));
+
+    [McpServerTool(Name = "get_group_link"), Description("Whether a group's Link is on.")]
+    public Task<bool> GetGroupLink([Description("Group track id")] int trackId) => Read(() => E.GetTrackEditLink(trackId));
+
     [McpServerTool(Name = "set_track_volume"), Description("Set a track's fader level (0..1 linear).")]
     public Task SetTrackVolume(int trackId, [Description("Linear gain 0..1")] float volume)
         => Mutate(() => MixEdit.Step(E, () => E.SetTrackVolume(trackId, Math.Clamp(volume, 0f, 1f)), MixTarget.Volume(trackId)));   // one undo step
@@ -67,6 +73,6 @@ public sealed class TrackTools(IAudioEngine engine, IEngineDispatch dispatch, IA
     [McpServerTool(Name = "set_track_group"), Description("Move a track into a group (groupId = -1 for top level).")]
     public Task SetTrackGroup(int trackId, int groupId) => Mutate(() => E.SetTrackGroup(trackId, groupId));
 
-    [McpServerTool(Name = "set_send"), Description("Set a track's post-fader send level (0..1) to a return bus (0-based).")]
-    public Task SetSend(int trackId, int returnBus, [Description("0..1")] float level) => Mutate(() => E.SetTrackSend(trackId, returnBus, Math.Clamp(level, 0f, 1f)));
+    [McpServerTool(Name = "set_send"), Description("Set a track's post-fader send level (0..1) to a return bus (0-based). Not an undo step.")]
+    public Task SetSend(int trackId, int returnBus, [Description("0..1")] float level) => Mutate(() => E.SetTrackSend(trackId, returnBus, Math.Clamp(level, 0f, 1f)));   // a live level, not an undo step (specs/069)
 }

@@ -9,24 +9,25 @@
 namespace Nota.Application.Midi;
 
 using U = MidiToolUtil;
+using Nota.Application.Localization;
 
 public static class MidiGenerators
 {
     // -------------------------------------------------------------------- Rhythm
 
     public static MidiTool Rhythm { get; } = new(
-        "rhythm", "Rhythm", MidiToolKind.Generate,
-        "Lays down a pattern that leans on the strong beats, as densely as you ask.",
+        "rhythm", Loc.T("midi.generators.rhythm"), MidiToolKind.Generate,
+        Loc.T("midi.generators.lays_down_a_pattern_that"),
         new[]
         {
-            MidiToolParam.Rate("rate", "Rate"),
-            MidiToolParam.Int("steps", "Pattern", 1, 32, 16, " st"),
-            MidiToolParam.Percent("density", "Density", 0.5),
-            MidiToolParam.Percent("variation", "Variation", 0.15),
-            MidiToolParam.Note("pitch", "Pitch", 36),
-            MidiToolParam.Float("gate", "Gate", 0.05, 2.0, 0.5, "×"),
-            MidiToolParam.Percent("accent", "Accent", 0.45),
-            MidiToolParam.Percent("velocity", "Velocity", 0.85),
+            MidiToolParam.Rate("rate", Loc.T("midi.rate")),
+            MidiToolParam.Int("steps", Loc.T("common.pattern"), 1, 32, 16, " st"),
+            MidiToolParam.Percent("density", Loc.T("midi.generators.density"), 0.5),
+            MidiToolParam.Percent("variation", Loc.T("midi.generators.variation"), 0.15),
+            MidiToolParam.Note("pitch", Loc.T("common.pitch"), 36),
+            MidiToolParam.Float("gate", Loc.T("common.gate"), 0.05, 2.0, 0.5, "×"),
+            MidiToolParam.Percent("accent", Loc.T("midi.accent"), 0.45),
+            MidiToolParam.Percent("velocity", Loc.T("common.velocity"), 0.85),
         },
         RunRhythm);
 
@@ -87,16 +88,16 @@ public static class MidiGenerators
     // ---------------------------------------------------------------------- Seed
 
     public static MidiTool Seed { get; } = new(
-        "seed", "Seed", MidiToolKind.Generate,
-        "Learns the clip's intervals and rhythm, then writes a new take in the same voice.",
+        "seed", Loc.T("midi.generators.seed"), MidiToolKind.Generate,
+        Loc.T("midi.generators.learns_the_clips_intervals_and"),
         new[]
         {
-            MidiToolParam.Percent("pitchvar", "Pitch Var", 0.5),
-            MidiToolParam.Percent("rhythmvar", "Rhythm Var", 0.4),
-            MidiToolParam.Float("density", "Density", 0.25, 2.5, 1.0, "×"),
-            MidiToolParam.Int("range", "Range", 0, 24, 12, " st"),
-            MidiToolParam.Toggle("scale", "In Scale", true),
-            MidiToolParam.Percent("velocity", "Vel Var", 0.2),
+            MidiToolParam.Percent("pitchvar", Loc.T("midi.generators.pitch_var"), 0.5),
+            MidiToolParam.Percent("rhythmvar", Loc.T("midi.generators.rhythm_var"), 0.4),
+            MidiToolParam.Float("density", Loc.T("midi.generators.density"), 0.25, 2.5, 1.0, "×"),
+            MidiToolParam.Int("range", Loc.T("common.range"), 0, 24, 12, " st"),
+            MidiToolParam.Toggle("scale", Loc.T("midi.in_scale"), true),
+            MidiToolParam.Percent("velocity", Loc.T("midi.generators.vel_var"), 0.2),
         },
         RunSeed);
 
@@ -168,20 +169,20 @@ public static class MidiGenerators
 
     // -------------------------------------------------------------------- Stacks
 
-    private static readonly string[] StackIntervals = { "3rds", "4ths", "5ths", "Octaves", "Cluster" };
-    private static readonly string[] StackVoicings = { "Close", "Open", "Drop 2", "Spread", "Power" };
+    private static readonly string[] StackIntervals = { "3rds", "4ths", "5ths", Loc.T("midi.octaves"), Loc.T("midi.generators.cluster") };
+    private static readonly string[] StackVoicings = { Loc.T("common.close"), Loc.T("common.open"), Loc.T("midi.generators.drop_2"), Loc.T("midi.generators.spread"), Loc.T("midi.generators.power") };
 
     public static MidiTool Stacks { get; } = new(
-        "stacks", "Stacks", MidiToolKind.Generate,
-        "Grows every note into a chord, voiced the way you would play it.",
+        "stacks", Loc.T("midi.generators.stacks"), MidiToolKind.Generate,
+        Loc.T("midi.generators.grows_every_note_into_a"),
         new[]
         {
-            MidiToolParam.Int("voices", "Voices", 1, 5, 2),
-            MidiToolParam.Choice("interval", "Interval", StackIntervals, 0),
-            MidiToolParam.Choice("voicing", "Voicing", StackVoicings, 0),
-            MidiToolParam.Int("spread", "Spread", 0, 3, 0, " oct"),
-            MidiToolParam.Float("falloff", "Vel Falloff", 0, 1, 0.15, "×"),
-            MidiToolParam.Toggle("scale", "In Scale", true),
+            MidiToolParam.Int("voices", Loc.T("midi.generators.voices"), 1, 5, 2),
+            MidiToolParam.Choice("interval", Loc.T("midi.interval"), StackIntervals, 0),
+            MidiToolParam.Choice("voicing", Loc.T("midi.generators.voicing"), StackVoicings, 0),
+            MidiToolParam.Int("spread", Loc.T("midi.generators.spread"), 0, 3, 0, " oct"),
+            MidiToolParam.Float("falloff", Loc.T("midi.generators.vel_falloff"), 0, 1, 0.15, "×"),
+            MidiToolParam.Toggle("scale", Loc.T("midi.in_scale"), true),
         },
         RunStacks);
 
@@ -245,19 +246,19 @@ public static class MidiGenerators
     // ----------------------------------------------------------------- Euclidean
 
     public static MidiTool Euclidean { get; } = new(
-        "euclidean", "Euclidean", MidiToolKind.Generate,
-        "Spreads a number of hits as evenly as a number of steps allows.",
+        "euclidean", Loc.T("midi.generators.euclidean"), MidiToolKind.Generate,
+        Loc.T("midi.generators.spreads_a_number_of_hits"),
         new[]
         {
-            MidiToolParam.Int("steps", "Steps", 1, 32, 16),
-            MidiToolParam.Int("pulses", "Pulses", 0, 32, 5),
-            MidiToolParam.Int("rotation", "Rotate", -31, 31, 0),
-            MidiToolParam.Rate("rate", "Rate"),
-            MidiToolParam.Note("pitch", "Pitch", 36),
-            MidiToolParam.Float("gate", "Gate", 0.05, 2.0, 0.5, "×"),
-            MidiToolParam.Percent("velocity", "Velocity", 0.85),
-            MidiToolParam.Int("accents", "Accents", 0, 32, 0),
-            MidiToolParam.Percent("accentvel", "Accent Vel", 1.0),
+            MidiToolParam.Int("steps", Loc.T("midi.steps"), 1, 32, 16),
+            MidiToolParam.Int("pulses", Loc.T("midi.generators.pulses"), 0, 32, 5),
+            MidiToolParam.Int("rotation", Loc.T("midi.rotate"), -31, 31, 0),
+            MidiToolParam.Rate("rate", Loc.T("midi.rate")),
+            MidiToolParam.Note("pitch", Loc.T("common.pitch"), 36),
+            MidiToolParam.Float("gate", Loc.T("common.gate"), 0.05, 2.0, 0.5, "×"),
+            MidiToolParam.Percent("velocity", Loc.T("common.velocity"), 0.85),
+            MidiToolParam.Int("accents", Loc.T("midi.generators.accents"), 0, 32, 0),
+            MidiToolParam.Percent("accentvel", Loc.T("midi.generators.accent_vel"), 1.0),
         },
         RunEuclidean);
 
@@ -291,22 +292,22 @@ public static class MidiGenerators
     // ------------------------------------------------------------- Melodic Steps
 
     private static readonly string[] Contours =
-        { "Up", "Down", "Arch", "Valley", "Zigzag", "Random Walk", "Random" };
+        { Loc.T("midi.up"), Loc.T("midi.down"), Loc.T("midi.generators.arch"), Loc.T("midi.generators.valley"), Loc.T("midi.generators.zigzag"), Loc.T("midi.generators.random_walk"), Loc.T("midi.random") };
 
     public static MidiTool MelodicSteps { get; } = new(
-        "melodicsteps", "Melodic Steps", MidiToolKind.Generate,
-        "A step sequencer in scale degrees — pick a contour and a span, get a line.",
+        "melodicsteps", Loc.T("midi.generators.melodic_steps"), MidiToolKind.Generate,
+        Loc.T("midi.generators.a_step_sequencer_in_scale"),
         new[]
         {
-            MidiToolParam.Int("steps", "Steps", 1, 32, 8),
-            MidiToolParam.Rate("rate", "Rate", 3),
-            MidiToolParam.Choice("contour", "Contour", Contours, 2),
-            MidiToolParam.Int("range", "Range", 1, 21, 7, " deg"),
-            MidiToolParam.Note("root", "Root", 60),
-            MidiToolParam.Percent("density", "Density", 0.85),
-            MidiToolParam.Float("gate", "Gate", 0.05, 2.0, 0.9, "×"),
-            MidiToolParam.Percent("velocity", "Velocity", 0.8),
-            MidiToolParam.Percent("velvar", "Vel Var", 0.15),
+            MidiToolParam.Int("steps", Loc.T("midi.steps"), 1, 32, 8),
+            MidiToolParam.Rate("rate", Loc.T("midi.rate"), 3),
+            MidiToolParam.Choice("contour", Loc.T("midi.generators.contour"), Contours, 2),
+            MidiToolParam.Int("range", Loc.T("common.range"), 1, 21, 7, " deg"),
+            MidiToolParam.Note("root", Loc.T("midi.generators.root"), 60),
+            MidiToolParam.Percent("density", Loc.T("midi.generators.density"), 0.85),
+            MidiToolParam.Float("gate", Loc.T("common.gate"), 0.05, 2.0, 0.9, "×"),
+            MidiToolParam.Percent("velocity", Loc.T("common.velocity"), 0.8),
+            MidiToolParam.Percent("velvar", Loc.T("midi.generators.vel_var"), 0.15),
         },
         RunMelodicSteps);
 
@@ -356,23 +357,23 @@ public static class MidiGenerators
     // --------------------------------------------------------------------- Shape
 
     private static readonly string[] Shapes =
-        { "Ramp Up", "Ramp Down", "Sine", "Triangle", "Exponential", "Logarithmic", "S-Curve", "Square", "Random Walk" };
+        { Loc.T("midi.ramp_up"), Loc.T("midi.ramp_down"), Loc.T("midi.sine"), Loc.T("midi.triangle"), Loc.T("midi.generators.exponential"), Loc.T("midi.generators.logarithmic"), Loc.T("midi.s_curve"), Loc.T("midi.generators.square"), Loc.T("midi.generators.random_walk") };
 
     public static MidiTool Shape { get; } = new(
-        "shape", "Shape", MidiToolKind.Generate,
-        "Traces a curve across the clip and drops a note wherever it passes a step.",
+        "shape", Loc.T("midi.shape"), MidiToolKind.Generate,
+        Loc.T("midi.generators.traces_a_curve_across_the"),
         new[]
         {
-            MidiToolParam.Choice("shape", "Shape", Shapes, 2),
-            MidiToolParam.Rate("rate", "Rate", 4),
-            MidiToolParam.Int("range", "Range", 1, 36, 12, " st"),
-            MidiToolParam.Note("root", "Root", 60),
-            MidiToolParam.Float("cycles", "Cycles", 0.25, 8, 1, "×"),
-            MidiToolParam.Float("phase", "Phase", 0, 1, 0, ""),
-            MidiToolParam.Float("gate", "Gate", 0.05, 2.0, 0.9, "×"),
-            MidiToolParam.Percent("velocity", "Velocity", 0.8),
-            MidiToolParam.Toggle("velfollow", "Vel Follows", false),
-            MidiToolParam.Toggle("scale", "In Scale", true),
+            MidiToolParam.Choice("shape", Loc.T("midi.shape"), Shapes, 2),
+            MidiToolParam.Rate("rate", Loc.T("midi.rate"), 4),
+            MidiToolParam.Int("range", Loc.T("common.range"), 1, 36, 12, " st"),
+            MidiToolParam.Note("root", Loc.T("midi.generators.root"), 60),
+            MidiToolParam.Float("cycles", Loc.T("midi.cycles"), 0.25, 8, 1, "×"),
+            MidiToolParam.Float("phase", Loc.T("midi.phase"), 0, 1, 0, ""),
+            MidiToolParam.Float("gate", Loc.T("common.gate"), 0.05, 2.0, 0.9, "×"),
+            MidiToolParam.Percent("velocity", Loc.T("common.velocity"), 0.8),
+            MidiToolParam.Toggle("velfollow", Loc.T("midi.generators.vel_follows"), false),
+            MidiToolParam.Toggle("scale", Loc.T("midi.in_scale"), true),
         },
         RunShape);
 

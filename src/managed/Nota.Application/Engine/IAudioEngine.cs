@@ -44,6 +44,8 @@ public interface IAudioEngine : IDisposable
     void SetMetronome(bool enabled);
     void Seek(double beat);
     double PositionBeats { get; }
+    /// <summary>Display-only rendered-block snapshot. False before rendering or during publication.</summary>
+    bool TryGetTransportSnapshot(out NotaTransportSnapshot snapshot);
     bool IsPlaying { get; }
     /// <summary>Loop region mirror (for UI display + toggling).</summary>
     bool LoopEnabled { get; }
@@ -93,6 +95,8 @@ public interface IAudioEngine : IDisposable
     int AddScene();
     /// <summary>Removes a scene row (always keeps at least one). False if it couldn't.</summary>
     bool RemoveScene(int scene);
+    /// <summary>0 empty, 1 filled, 2 queued, 3 playing, 4 recording, 5 record pending (the take
+    /// starts capturing on the next launch quantum, specs/078).</summary>
     int SessionSlotState(int trackId, int scene);
     double SessionSlotLength(int trackId, int scene);
     void SetSessionSlotLength(int trackId, int scene, double lengthBeats);
@@ -257,6 +261,14 @@ public interface IAudioEngine : IDisposable
     /// <summary>Splits the given tracks' clips at both [start] and [end] (keeping all content) so
     /// the covered slice becomes its own clip(s). One undo step, no ripple. False = nothing changed.</summary>
     bool SplitClipsInRange(int[] trackIds, double start, double end);
+    /// <summary>When true (the default), splitting an audio clip writes a short fade at the cut
+    /// — release on the left piece, attack on the right — so the corner handles show it and
+    /// the user can drag them. MIDI splits are unchanged. An app preference, not project data.</summary>
+    bool SplitFades { get; set; }
+    /// <summary>Raises that short fade on both sides of every join where two audio clips abut
+    /// and at least one of the listed clips is in the pair. Does not shorten a longer fade.
+    /// One undo step. False when nothing changed. Runs even when <see cref="SplitFades"/> is off.</summary>
+    bool FadeSplits(int[] trackIds, int[] clipIndices);
     /// <summary>Consolidate: replaces each given track's content in [start,end) with ONE clip
     /// spanning the range — MIDI notes merged, audio clips rendered (gain/pitch/warp/fades/clip
     /// envelopes baked) into a new sample. Parts of clips outside the range survive. One undo
@@ -320,6 +332,10 @@ public interface IAudioEngine : IDisposable
     /// <summary>Sets/gets a track's piano roll Fold (specs/045): a view flag saved with the project.</summary>
     void SetTrackPianoFold(int trackId, bool on);
     bool GetTrackPianoFold(int trackId);
+    /// <summary>Group Link (specs/076): links a group's tracks for arming and clip edits. One undo
+    /// step; false for a track that is not a group.</summary>
+    bool SetTrackEditLink(int trackId, bool on);
+    bool GetTrackEditLink(int trackId);
     /// <summary>Copies a whole track to the clipboard; pastes it as a new track (-1 on fail).</summary>
     bool CopyTrack(int trackId);
     int PasteTrack();
@@ -368,15 +384,16 @@ public interface IAudioEngine : IDisposable
     /// <summary>Restores a frozen track's audio blob and marks it frozen.</summary>
     void SetFreezeState(int trackId, byte[] data);
 
-    int GetClipPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints);
+    // Each peaks call also fills outRms (one RMS level per bucket, the waveform's body) when given.
+    int GetClipPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints, float[]? outRms = null);
     /// <summary>Peaks over the whole sample (ignores the trimmed region) for the clip editor's Start/End brackets.</summary>
-    int GetClipSourcePeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints);
+    int GetClipSourcePeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints, float[]? outRms = null);
     /// <summary>Peaks over the full warped material (ignores the trim window) for the warped-clip Start/End brackets.</summary>
-    int GetClipWarpFullPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints);
+    int GetClipWarpFullPeaks(int trackId, int clipIndex, float[] outMinMax, int maxPoints, float[]? outRms = null);
     /// <summary>Peaks over warped beats [beat0, beat1] of the full material, file order (≤ 8192 points) — the zoomed clip editor's detail.</summary>
-    int GetClipWarpPeaksRange(int trackId, int clipIndex, double beat0, double beat1, float[] outMinMax, int maxPoints);
+    int GetClipWarpPeaksRange(int trackId, int clipIndex, double beat0, double beat1, float[] outMinMax, int maxPoints, float[]? outRms = null);
     /// <summary>Peaks over source frames [frame0, frame1) of the whole sample (≤ 8192 points) — the zoomed clip editor's detail.</summary>
-    int GetClipSourcePeaksRange(int trackId, int clipIndex, double frame0, double frame1, float[] outMinMax, int maxPoints);
+    int GetClipSourcePeaksRange(int trackId, int clipIndex, double frame0, double frame1, float[] outMinMax, int maxPoints, float[]? outRms = null);
 
     // --- Instrument tracks, MIDI clips & notes -----------------------------
     int AddInstrumentTrack();
@@ -1064,6 +1081,11 @@ public interface IAudioEngine : IDisposable
     void SetAuditionTrack(int trackId);
     void SetRecording(bool enabled);
     bool IsRecording { get; }
+    /// <summary>Discard the take in progress and record it again (#185, specs/078): nothing of
+    /// it stays, not even an undo step. The Arrangement goes back to where the transport was
+    /// started and counts in again if the take did; a Session slot records again from the next
+    /// launch quantum while everything else keeps playing.</summary>
+    RetryTakeResult RetryTake();
     int RecordStartStatus { get; }
     /// <summary>Track id of the in-progress audio take (0 when not capturing).</summary>
     int AudioRecordTrackId { get; }
@@ -1107,6 +1129,19 @@ public interface IAudioEngine : IDisposable
     /// <summary>Replaces the sections (sorted; zero-length dropped). <paramref name="checkpoint"/>
     /// = one undo step (an identical list makes none); false = baseline (project load).</summary>
     void SetSections(IReadOnlyList<SectionInfo> sections, bool checkpoint = true);
+    /// <summary>Moves section <paramref name="index"/> (start order) with everything in its span
+    /// to boundary <paramref name="toBoundary"/> (0..Count: before section k, or after the last);
+    /// the sections in between shift by its length (specs/073). One undo step; false — nothing
+    /// changed — when out of range, overlapping, landing inside an overlap, or a no-op.</summary>
+    bool MoveSection(int index, int toBoundary);
+    /// <summary>Inserts a copy of the section and everything in its span right after it, moving
+    /// the rest of the song later (specs/073). One undo step; false as for <see cref="MoveSection"/>.</summary>
+    bool DuplicateSectionWithContent(int index);
+    /// <summary>Removes the section and everything in its span, moving the rest of the song
+    /// earlier (specs/073). One undo step; false as for <see cref="MoveSection"/>.</summary>
+    bool DeleteSectionWithContent(int index);
+    /// <summary>True when the section overlaps another: the with-content edits are unavailable.</summary>
+    bool SectionOverlaps(int index);
 
     // --- Value undo (specs/009, specs/016) -------------------------------
     /// <summary>Starts a gesture on volume / pan / master volume / device parameters: their
@@ -1137,6 +1172,31 @@ public interface IAudioEngine : IDisposable
     // --- Audio persistence (M7-6b) -----------------------------------------
     bool TryGetAudioClipInfo(int trackId, int clipIndex, out NotaAudioClipInfo info);
     int AddAudioClipEx(int trackId, string path, double startBeat, double sourceOffsetFrames, long lengthFrames, float gain);
+
+    // --- Take lanes (specs/067) --------------------------------------------
+    /// <summary>The takes on an audio track, in recording order.</summary>
+    int TakeCount(int trackId);
+    bool TryGetTakeInfo(int trackId, int index, out NotaTakeInfo info);
+    /// <summary>Min/max peaks over the take's recorded range; buckets written.</summary>
+    int GetTakePeaks(int trackId, int index, float[] outMinMax, int maxPoints);
+    /// <summary>The take plays over [startBeat, endBeat) (clamped to it). One undo step; false if nothing changed.</summary>
+    bool CompTake(int trackId, int takeId, double startBeat, double endBeat);
+    /// <summary>Removes a take; what plays is unchanged. One undo step.</summary>
+    bool DeleteTake(int trackId, int takeId);
+    /// <summary>Each recording's comp becomes one clip and its takes go. One undo step.</summary>
+    bool FlattenTakes(int trackId);
+    /// <summary>The take an arrangement audio clip plays a section of; 0 = none.</summary>
+    int ClipTakeId(int trackId, int clipIndex);
+    /// <summary>Project load (no undo entry): a take from a file; its new id, or -1.</summary>
+    int RestoreTake(int trackId, string path, int number, int group, double originBeat, double sourceOffsetFrames, long lengthFrames);
+    /// <summary>Project load (no undo entry): tag a restored clip as a section of a restored take.</summary>
+    void SetClipTakeId(int trackId, int clipIndex, int takeId);
+    /// <summary>The ends of an arrangement audio clip that play at full level (1 head, 2 tail):
+    /// a take join, or one a flatten kept. 0 = both ends fade.</summary>
+    int ClipJoinedEdges(int trackId, int clipIndex);
+    /// <summary>Project load (no undo entry): the saved <see cref="ClipJoinedEdges"/> of the track's
+    /// first clips. A join is kept only where both clips still meet.</summary>
+    void RestoreJoinedEdges(int trackId, int[] edges);
     bool TryGetSampleInfo(long sampleId, out NotaSampleInfo info);
     float[] ReadSample(long sampleId);
     bool TryGetSamplerInfo(int trackId, out NotaSamplerInfo info);

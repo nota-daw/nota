@@ -9,6 +9,7 @@ using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.Presentation;
 
@@ -16,7 +17,8 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
 {
     private readonly IAudioEngine _engine = engine;
 
-    private const int BeatsPerBar = 4;
+    // A bar is the time signature's numerator in beats, as the metronome counts it (#405).
+    private int BeatsPerBar => Math.Max(1, TimeSigNumerator);
 
     [ObservableProperty] private string _positionText = "1.1.00";
     [ObservableProperty] private string _playLabel = "▶ Play";
@@ -45,7 +47,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     [ObservableProperty] private bool _recordOn;
     /// <summary>Which clock the position readout is showing, printed under it so the
     /// number is never ambiguous (transport console, mockup 1b).</summary>
-    [ObservableProperty] private string _positionUnitText = "bars";
+    [ObservableProperty] private string _positionUnitText = Loc.T("transport.bars");
 
     private bool _revertingRec;
 
@@ -80,7 +82,12 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         _sentBpmAt = Environment.TickCount64;
         _engine.SetBpm((double)value);
     }
-    partial void OnTimeSigNumeratorChanged(int value) => _engine.SetTimeSignature(value, TimeSigDenominator);
+    partial void OnTimeSigNumeratorChanged(int value)
+    {
+        _engine.SetTimeSignature(value, TimeSigDenominator);
+        if (!IsCountingIn) UpdatePositionText(_lastBeats);   // the readouts re-count at once
+        SyncLoop();
+    }
     partial void OnTimeSigDenominatorChanged(int value) => _engine.SetTimeSignature(TimeSigNumerator, value);
     partial void OnMasterVolumeChanged(double value)
     {
@@ -120,8 +127,8 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         LoopRangeText = FormatRange(s, e);
     }
 
-    private static string FormatRange(double startBeat, double endBeat) => $"{BarBeat(startBeat)}–{BarBeat(endBeat)}";   // closed: plain numbers
-    private static string BarBeat(double beat)
+    private string FormatRange(double startBeat, double endBeat) => $"{BarBeat(startBeat)}–{BarBeat(endBeat)}";   // closed: plain numbers
+    private string BarBeat(double beat)
     {
         int bar = (int)(beat / BeatsPerBar) + 1;
         int b = (int)(beat % BeatsPerBar) + 1;
@@ -135,7 +142,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         // Stopping materialises the captured audio into a clip — refresh so the take
         // appears (otherwise the last live frame lingers and the take seems to vanish).
         if (!value) { TracksChanged?.Invoke(); Message?.Invoke(""); return; }
-        if (_engine.IsRecording) { Message?.Invoke("● Recording…"); return; }
+        if (_engine.IsRecording) { Message?.Invoke(Loc.T("transport.recording")); return; }
 
         // Failed only because nothing is armed? Auto-arm the record target and
         // retry, so pressing Record just works without a separate arm click.
@@ -144,17 +151,48 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
             _engine.SetTrackArmed(tid, true);
             TracksChanged?.Invoke();
             _engine.SetRecording(true);
-            if (_engine.IsRecording) { Message?.Invoke("● Recording…"); return; }
+            if (_engine.IsRecording) { Message?.Invoke(Loc.T("transport.recording")); return; }
         }
 
         // Couldn't start — pop the button back up and explain why.
         _revertingRec = true; RecordOn = false; _revertingRec = false;
         Message?.Invoke(_engine.RecordStartStatus switch
         {
-            1 => "Can't record: arm a track first (click Arm on a track header).",
-            2 => "Can't record: no audio input — grant microphone access (needs a bundled app).",
-            _ => "Recording didn't start.",
+            1 => Loc.T("transport.cant_record_arm_a_track"),
+            2 => Loc.T("transport.cant_record_no_audio_input"),
+            _ => Loc.T("transport.recording_didnt_start"),
         });
+    }
+
+    /// <summary>⌘. (#185, specs/078): throw the take being recorded away and record it again —
+    /// the Arrangement from where the transport was started, a Session slot from the next launch
+    /// quantum. The record button stays down; nothing of the take is left, not even an undo step.</summary>
+    [RelayCommand]
+    private void RetryTake()
+    {
+        switch (_engine.RetryTake())
+        {
+            case RetryTakeResult.Arrangement:
+            case RetryTakeResult.Session:
+                TracksChanged?.Invoke();
+                Message?.Invoke(Loc.T("transport.take_discarded_retrying"));
+                break;
+            case RetryTakeResult.Failed:
+                // The take is gone but recording couldn't start again: pop the button up.
+                if (RecordOn) { _revertingRec = true; RecordOn = false; _revertingRec = false; }
+                _engine.SetRecording(false);
+                TracksChanged?.Invoke();
+                Message?.Invoke(_engine.RecordStartStatus switch
+                {
+                    1 => Loc.T("transport.cant_record_arm_a_track"),
+                    2 => Loc.T("transport.cant_record_no_audio_input"),
+                    _ => Loc.T("transport.recording_didnt_start"),
+                });
+                break;
+            default:
+                Message?.Invoke(Loc.T("transport.no_take_to_discard"));
+                break;
+        }
     }
 
     [RelayCommand]
@@ -179,7 +217,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
             double here = _engine.PositionBeats;
             StopAll();
             if (!counting) _engine.Seek(here);   // a count-in hasn't moved anything yet
-            Message?.Invoke("Paused · Play carries on from here");
+            Message?.Invoke(Loc.T("transport.paused_play_carries_on_from"));
         }
         else _engine.PlayWithCountIn();
     }
@@ -213,7 +251,7 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
     {
         ShowTimeDisplay = !ShowTimeDisplay;
         if (IsCountingIn) return;         // the readout is showing the count-in; Tick restores it
-        PositionUnitText = ShowTimeDisplay ? "time" : "bars";
+        PositionUnitText = ShowTimeDisplay ? Loc.T("transport.time") : Loc.T("transport.bars");
         UpdatePositionText(_lastBeats);   // reflect immediately, don't wait for the next tick
     }
 
@@ -227,8 +265,10 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         IsCountingIn = countIn > 0;
         if (IsCountingIn) PositionText = CountInText(countIn);
         else UpdatePositionText(beats);
-        if (IsCountingIn != wasCounting) PositionUnitText = IsCountingIn ? "count-in" : ShowTimeDisplay ? "time" : "bars";
+        if (IsCountingIn != wasCounting) PositionUnitText = IsCountingIn ? Loc.T("transport.count_in") : ShowTimeDisplay ? Loc.T("transport.time") : Loc.T("transport.bars");
         IsPlaying = _engine.IsPlaying || IsCountingIn;   // the Play button lights from the first click
+        // Recording can end outside the UI (an MCP retry that couldn't restart): let the button go.
+        if (RecordOn && !_engine.IsRecording) { _revertingRec = true; RecordOn = false; _revertingRec = false; }
         PlayLabel = IsPlaying ? "■ Stop" : "▶ Play";
         // The loop record mode can also be set from outside the UI (MCP): follow the engine.
         bool replace = _engine.LoopRecordReplace;

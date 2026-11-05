@@ -21,6 +21,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -45,7 +46,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
     // proxy); mirrors chamber::irSpec in Chamber.h — the engine list wins when present.
     private static readonly (string Name, string Cat, string Len)[] IrFallback =
     {
-        ("Concert Hall · Wide", "HALL", "2.6"), ("Stone Vault", "HALL", "4.4"), ("Cathedral", "HALL", "7.5"), ("Scoring Stage", "HALL", "2.3"),
+        (Loc.T("device.chamber.concert_hall_wide"), "HALL", "2.6"), ("Stone Vault", "HALL", "4.4"), ("Cathedral", "HALL", "7.5"), ("Scoring Stage", "HALL", "2.3"),
         ("Wood Chamber", "ROOM", "1.6"), ("Live Room", "ROOM", "1.0"), ("Drum Room", "ROOM", "0.8"), ("Tiled Bathroom", "ROOM", "1.3"),
         ("Vocal Plate", "PLATE", "2.8"), ("Bright Plate", "PLATE", "2.0"), ("Spring Tank", "SPRING", "2.6"), ("Car Park", "SPACE", "3.6"),
         ("Stairwell", "SPACE", "3.2"), ("Forest Clearing", "OUTDOOR", "2.0"), ("Gated Room", "FX", "0.7"), ("Metal Tank", "FX", "3.4"),
@@ -274,7 +275,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             readouts.Add(() => f.Set(P(p)));
             MidiLearn.Bind(f, MidiTarget.DeviceParam(track, di, p), engine.DeviceParamName(track, di, p));
             ValueEntry.Attach(f, CF(p, split ? "Blend" : "Dry/wet", split ? v => NotaNum.F($"{v * 100:0}\u2009% algorithm") : Pct));
-            ToolTip.SetTip(f, split ? "Blend — convolution (shaded grey, top) ⇄ algorithm (bottom). Double-click: 50 / 50" : "Dry/Wet — double-click resets");
+            ToolTip.SetTip(f, split ? Loc.T("device.chamber.blend_convolution_slate_top_algorithm") : Loc.T("device.chamber.dry_wet_double_click_resets"));
             var lb = Caps(label); lb.HorizontalAlignment = HorizontalAlignment.Center;
             if (!split) readouts.Add(() => lb.Foreground = P(DryWet) > 0.995f || On(WetOnly) ? TxtC : MutedC);
             return new DockPanel { Children = { Docked(lb, Dock.Bottom), f } };
@@ -306,13 +307,13 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             var irInfo = Mono("", 7, MutedC);
             var irBox = new Border { Height = 16, Background = Inset, BorderBrush = Border2, BorderThickness = new Thickness(1), CornerRadius = NotaRadius.Cell, Padding = new Thickness(6, 0), Cursor = new Cursor(StandardCursorType.Hand),
                 Child = new DockPanel { Children = { Docked(new Glyph(GlyphKind.ChevronDown, 8) { Foreground = MutedC, Margin = new Thickness(6, 0, 0, 0) }, Dock.Right), Docked(irInfo, Dock.Right), irName } } };
-            ToolTip.SetTip(irBox, "Impulse response — built-in rooms, or your own file (drop it on the waveform)");
+            ToolTip.SetTip(irBox, Loc.T("device.chamber.impulse_response_built_in_rooms"));
             MidiLearn.Bind(irBox, MidiTarget.DeviceParam(track, di, IrSelect), "IR");
             readouts.Add(() =>
             {
                 int ir = Sel(IrSelect, IrCount);
                 string user = ir == IrCount - 1 ? engine.DeviceText(track, di, 2) : "";
-                irName.Text = ir < irList.Count ? irList[ir].Name : user.Length > 0 ? user : "User IR — none loaded";
+                irName.Text = ir < irList.Count ? irList[ir].Name : user.Length > 0 ? user : Loc.T("device.chamber.user_ir_none_loaded_2");
                 double s = IrSecs(), sr = Sc(S_IrRate); int ch = (int)Sc(S_IrChannels);
                 irInfo.Text = s > 0 ? NotaNum.F($"{s:0.0}\u2009s · {sr / 1000:0.#}\u2009kHz · {(ch >= 4 ? "4-ch" : ch == 2 ? "stereo" : "mono")}  ") : "";
             });
@@ -339,11 +340,11 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                 }
                 fly.Items.Add(new Separator());
                 string userName = engine.DeviceText(track, di, 2);
-                var um = new MenuItem { Header = userName.Length > 0 ? NotaNum.F($"User · {userName}") : "User IR (none loaded)", IsEnabled = userName.Length > 0 };
+                var um = new MenuItem { Header = userName.Length > 0 ? NotaNum.F($"User · {userName}") : Loc.T("device.chamber.user_ir_none_loaded"), IsEnabled = userName.Length > 0 };
                 um.ToggleType = MenuItemToggleType.Radio; um.IsChecked = cur == IrCount - 1;
                 um.Click += (_, _) => SetP(IrSelect, 1f);
                 fly.Items.Add(um);
-                var load = new MenuItem { Header = "Load impulse response…" };
+                var load = new MenuItem { Header = Loc.T("device.chamber.load_impulse_response") };
                 load.Click += (_, _) => PickIr(irBox);
                 fly.Items.Add(load);
                 fly.ShowAt(irBox);
@@ -354,7 +355,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             irRow.Children.Add(Col(GlyphBtn(GlyphKind.ChevronLeft, () => StepIr(-1), "Previous IR"), 1));
             irRow.Children.Add(Col(irBox, 2));
             irRow.Children.Add(Col(GlyphBtn(GlyphKind.ChevronRight, () => StepIr(1), "Next IR"), 3));
-            irRow.Children.Add(Col(Btn("Load…", () => PickIr(irRow), "Load an impulse response (WAV / FLAC / MP3 — mono, stereo or 4-ch true stereo)"), 4));
+            irRow.Children.Add(Col(Btn(Loc.T("device.chamber.load"), () => PickIr(irRow), Loc.T("device.chamber.load_an_impulse_response_wav")), 4));
 
             // IR view: trims drive IR Start / IR Decay.
             irView.TrimChanged += (s, e) => { Raw(IrStart, (float)s); Raw(IrDecay, (float)e); };
@@ -362,7 +363,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             irView.DragEnded += h => End(h == 1 ? IrStart : IrDecay);
             ValueEntry.AttachHandles(irView, [CF(IrStart, "IR start", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v))],
                 [CF(IrDecay, "IR decay", v => IrSecs() > 0 ? Secs(v * IrSecs()) : Pct(v))]);
-            ToolTip.SetTip(irView, MenuKit.Keys("Drag the trim lines to trim the IR (Start · Decay); ⌥-click to type, double-click resets. Drop an audio file here to load it."));
+            ToolTip.SetTip(irView, MenuKit.Keys(Loc.T("device.chamber.drag_the_trim_lines_to")));
             readouts.Add(() =>
             {
                 string sig = NotaNum.F($"{Sel(IrSelect, IrCount)}|{Sc(S_IrSeconds):0.000}|{Sc(S_IrChannels)}|{Sc(S_UserIr)}");
@@ -370,7 +371,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                 int ir = Sel(IrSelect, IrCount);
                 bool noUser = ir == IrCount - 1 && Sc(S_UserIr) < 0.5;
                 irView.Set(IrSecs(), P(IrStart), P(IrDecay), 0.5 * P(IrAttack) * P(IrAttack), On(IrReverse), Sc(S_Building) > 0.5,
-                           noUser ? "Drop an impulse response here (WAV / FLAC / MP3) or click Load…" : null);
+                           noUser ? Loc.T("device.chamber.drop_an_impulse_response_here") : null);
                 FetchPreviews();
                 irView.SetResult(resEnv, Sc(S_ResultSeconds), PreSec(ConvPredelay, ConvSync));
             });
@@ -420,7 +421,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             graph.DragEnded += b => End(b == 0 ? AlgoLowDecay : b == 1 ? AlgoDecay : AlgoHighDecay);
             ValueEntry.AttachHandles(graph, [CF(AlgoLowDecay, "Low decay", v => Secs(RtMid() * Math.Pow(16, v - 0.5)))],
                 [CF(AlgoDecay, "Decay", v => Secs(Exp(v, 0.2, 20)))], [CF(AlgoHighDecay, "High decay", v => Secs(RtMid() * Math.Pow(16, v - 0.5)))]);
-            ToolTip.SetTip(graph, MenuKit.Keys("Drag a marker to set that band's RT60 (mid = Decay; low / high follow it as ratios). The Damping knob sets the high crossover. · ⌥-click to type"));
+            ToolTip.SetTip(graph, MenuKit.Keys(Loc.T("device.chamber.drag_a_marker_to_set")));
             readouts.Add(() =>
             {
                 FetchPreviews();
@@ -459,7 +460,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             eq.DragEnded += h => { if (h == 0) { End(EqLowCut); End(EqLowGain); } else { End(EqHighCut); End(EqHighShelf); } };
             ValueEntry.AttachHandles(eq, [CF(EqLowCut, "Low cut", LowCutF), CF(EqLowGain, "Low shelf", GainF)],
                 [CF(EqHighCut, "High cut", HighCutF), CF(EqHighShelf, "High shelf", GainF)]);
-            ToolTip.SetTip(eq, MenuKit.Keys("Left handle: low cut (X) + low shelf (Y) · right handle: high cut (X) + high shelf (Y) · ⌥-click to type"));
+            ToolTip.SetTip(eq, MenuKit.Keys(Loc.T("device.chamber.left_handle_low_cut_x")));
             readouts.Add(() => eq.Set(P(EqLowCut), P(EqLowGain), P(EqHighShelf), P(EqHighCut)));
             var eqKnobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*,*"), Height = 50 };
             eqKnobs.Children.Add(K(EqLowCut, "LOW-CUT", LowCutF, 30, 48));
@@ -481,12 +482,12 @@ internal sealed class ChamberDeviceBody : IDeviceBody
 
             // Shimmer
             bool ShimDim() => Sel(AlgoMode, 4) != 3;
-            var shimCap = Caps("SHIMMER · PITCH SHIFT");
-            readouts.Add(() => { shimCap.Text = ShimDim() ? "Shimmer · shimmer mode only" : "Shimmer · pitch shift"; shimCap.Foreground = ShimDim() ? DimC : MutedC; });
+            var shimCap = Caps(Loc.T("device.chamber.shimmer_pitch_shift_caps"));
+            readouts.Add(() => { shimCap.Text = ShimDim() ? Loc.T("device.chamber.shimmer_shimmer_mode_only") : Loc.T("device.chamber.shimmer_pitch_shift"); shimCap.Foreground = ShimDim() ? DimC : MutedC; });
             var interval = Row(5, Caps("INTERVAL"), Seg(ShimmerPitch, new[] { "−12", "+7", "+12" }));
             var shimGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 6 };
             shimGrid.Children.Add(K(ShimmerAmount, "AMOUNT", v => Pct(v), 28, 44, ChamberInk.Mauve));
-            shimGrid.Children.Add(Col(new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { interval, Toggle(ShimmerFeedback, "Feed shimmer back", ShimDim) } }, 1));
+            shimGrid.Children.Add(Col(new StackPanel { Spacing = 4, VerticalAlignment = VerticalAlignment.Center, Children = { interval, Toggle(ShimmerFeedback, Loc.T("device.chamber.feed_shimmer_back"), ShimDim) } }, 1));
             var shim = Divider(new StackPanel { Spacing = 2, Children = { shimCap, shimGrid } }, 4);
             shim.Margin = new Thickness(0, 3, 0, 0);
 
@@ -515,24 +516,24 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                 g.Children.Add(Col(Caps(name), 1));
                 var bar = HBar(Blend, () => conv ? 1 - P(Blend) : P(Blend), v => Raw(Blend, (float)(conv ? 1 - v : v)),
                     v => ShortDb(ShareDb(v)), conv ? ChamberInk.Slate : NotaPalette.VizInk, () => !On(onP), 26);
-                ToolTip.SetTip(bar, conv ? "Convolution share of the blend (drags Blend)" : "Algorithm share of the blend (drags Blend)");
+                ToolTip.SetTip(bar, conv ? Loc.T("device.chamber.convolution_share_of_the_blend") : Loc.T("device.chamber.algorithm_share_of_the_blend"));
                 g.Children.Add(Col(bar, 2));
                 return g;
             }
             var route = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), VerticalAlignment = VerticalAlignment.Center };
             route.Children.Add(Caps("ROUTE"));
             var rseg = Seg(Routing, new[] { "Parallel", "Serial" });
-            ToolTip.SetTip(rseg, "Parallel: both engines hear the input · Serial: the convolution feeds the algorithm");
+            ToolTip.SetTip(rseg, Loc.T("device.chamber.parallel_both_engines_hear_the"));
             route.Children.Add(Col(rseg, 1));
             var dry = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), VerticalAlignment = VerticalAlignment.Center };
             dry.Children.Add(Caps("DRY"));
             dry.Children.Add(Col(HBar(DryLevel, () => P(DryLevel), v => Raw(DryLevel, (float)v), v => ShortDb(DryDb(v)), NotaPalette.BorderStrong, () => On(WetOnly), 26), 1));
             var duck = SliderRow("DUCKING", DuckAmount, v => NotaNum.F($"{v * 24:0.0}"));
             var rel = SliderRow("RELEASE", DuckRelease, v => NotaNum.F($"{Exp(v, 20, 2000):0}"));
-            ToolTip.SetTip(duck, "Ducking — the wet dips (up to 24\u2009dB) while the input plays");
+            ToolTip.SetTip(duck, Loc.T("device.chamber.ducking_the_wet_dips_up"));
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            btns.Children.Add(Latch(Freeze, "Freeze", "Freeze — hold the algorithm tail forever; the input is muted"));
-            btns.Children.Add(Col(Latch(FreezeIn, "Hold in", "Hold in — keep feeding the input into the frozen tail (layering)"), 1));
+            btns.Children.Add(Latch(Freeze, "Freeze", Loc.T("device.chamber.freeze_hold_the_algorithm_tail")));
+            btns.Children.Add(Col(Latch(FreezeIn, "Hold in", Loc.T("device.chamber.hold_in_keep_feeding_the")), 1));
             var wetBar = new PentadLevelBar { Height = 4, VerticalAlignment = VerticalAlignment.Center };
             var wetDb = Mono("", 8, TxtC);
             readouts.Add(() =>
@@ -568,16 +569,16 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             var qual = new Grid { ColumnDefinitions = new ColumnDefinitions("48,*"), VerticalAlignment = VerticalAlignment.Center };
             qual.Children.Add(Caps("QUALITY"));
             var qseg = Seg(Quality, new[] { "Eco", "Mid", "High" });
-            ToolTip.SetTip(qseg, "Eco: IR up to 3 s · Mid: 6 s · High: 10 s + cubic-interpolated algorithm modulation");
+            ToolTip.SetTip(qseg, Loc.T("device.chamber.eco_ir_up_to_3"));
             qual.Children.Add(Col(qseg, 1));
             var mid = new StackPanel { Spacing = 6, Children = {
                 SliderRow("WIDTH", WidthP, v => NotaNum.F($"{v * 200:0}"), 48),
                 SliderRow("Mono f", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0}"), 48),
                 qual } };
-            var wetOnly = Toggle(WetOnly, "Wet only (send)");
-            ToolTip.SetTip(wetOnly, "Wet only — 100\u2009% wet, no dry: for a return / send track");
+            var wetOnly = Toggle(WetOnly, Loc.T("common.wet_only_send"));
+            ToolTip.SetTip(wetOnly, Loc.T("device.chamber.wet_only_100_wet_no"));
             var zl = Toggle(ZeroLatency, "Zero latency");
-            ToolTip.SetTip(zl, "On: exact convolution timing at 0\u2009ms predelay (FIR head, more CPU). Off: lighter — the first block arrives late and is absorbed into the predelay.");
+            ToolTip.SetTip(zl, Loc.T("device.chamber.on_exact_convolution_timing_at"));
             var bottom = new StackPanel { Spacing = 5, Children = { wetOnly, zl } };
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(top, Dock.Top),
@@ -607,7 +608,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                     extras.Text = On(Freeze) ? "Freeze active" : On(Routing) && On(ConvOn) ? "fed by convolution" : "";
                     extras.Foreground = On(Freeze) ? AmberLit : MutedC; break;
                 default:
-                    extras.Text = Sel(EqPosition, 3) switch { 0 => "at the input, before both engines", 2 => "at the output, dry + wet", _ => "on the tail, before Dry/Wet" };
+                    extras.Text = Sel(EqPosition, 3) switch { 0 => Loc.T("device.chamber.at_the_input_before_both"), 2 => Loc.T("device.chamber.at_the_output_dry_wet"), _ => Loc.T("device.chamber.on_the_tail_before_dry") };
                     extras.Foreground = MutedC; break;
             }
         });
@@ -632,7 +633,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             {
                 case 1:
                     string mode = Modes[Sel(AlgoMode, 4)];
-                    if (On(Freeze)) return On(FreezeIn) ? NotaNum.F($"Freeze + hold in: the tail layers the input · {mode}") : NotaNum.F($"Freeze: tail held, input muted · {mode} {Secs(RtMid())}");
+                    if (On(Freeze)) return On(FreezeIn) ? Loc.F("device.chamber.freeze_hold_in_the_tail", mode) : Loc.F("device.chamber.freeze_tail_held_input_muted", mode, Secs(RtMid()));
                     return NotaNum.F($"{mode} · decay {Secs(RtMid())} · size {Exp(P(AlgoSize), 0.4, 2.5) * 100:0}\u2009% · predelay {Pre(AlgoPredelay, AlgoSync)}{(On(Routing) ? " · serial" : "")}");
                 case 2:
                     string eqS = NotaNum.F($"tail EQ {LowCutF(P(EqLowCut))} — {HighCutF(P(EqHighCut))}");
@@ -640,7 +641,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
                     return NotaNum.F($"{(On(WetOnly) ? "Wet only · " : "")}{eqS}{shimS}");
                 default:
                     int ir = Sel(IrSelect, IrCount);
-                    string name = ir < irList.Count ? irList[ir].Name : engine.DeviceText(track, di, 2) is { Length: > 0 } u ? u : "no user IR";
+                    string name = ir < irList.Count ? irList[ir].Name : engine.DeviceText(track, di, 2) is { Length: > 0 } u ? u : Loc.T("device.chamber.no_user_ir");
                     return NotaNum.F($"{name} · {blend} · predelay {Pre(ConvPredelay, ConvSync)}");
             }
         }
@@ -649,7 +650,7 @@ internal sealed class ChamberDeviceBody : IDeviceBody
             statusLeft.Text = StatusText();
             statusLeft.Foreground = centreTab == 1 && On(Freeze) ? AmberLit : Txt2;
             double sr = Sc(S_SampleRate), lat = Sc(S_Latency);
-            string latS = lat > 0 ? NotaNum.F($"conv +{lat:0}\u2009smp (in predelay)") : "latency 0\u2009smp";
+            string latS = lat > 0 ? Loc.F("device.chamber.conv_smp_in_predelay", lat) : "latency 0\u2009smp";
             statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#}\u2009kHz · {latS} · CPU {Sc(S_Cpu) * 100:0}\u2009%") : "";
         });
         var statusGrid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 8 };

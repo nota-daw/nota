@@ -23,8 +23,14 @@
 #include <windows.h>
 #elif defined(__APPLE__)
 #include <mach/mach.h>
+#include <mach/mach_time.h>
+#include <mach/thread_policy.h>
+#include <os/workgroup.h>
 #include <pthread.h>
 #include <sys/sysctl.h>
+
+#include <mutex>
+#include <vector>
 #else
 #include <pthread.h>
 #include <time.h>
@@ -96,6 +102,70 @@ void AudioThreadPool::park(uint64_t seen) {
     sleepers_.fetch_sub(1, std::memory_order_relaxed);
 }
 
+void AudioThreadPool::setWorkgroup(void* osWorkgroup, double periodNs) {
+#if defined(__APPLE__)
+    if (osWorkgroup != nullptr) {
+        // Workers leave the old workgroup only when they next wake, so every one handed in
+        // stays retained (one per device start).
+        static std::mutex mx;
+        static std::vector<void*> kept;
+        const std::lock_guard<std::mutex> lock(mx);
+        if (std::find(kept.begin(), kept.end(), osWorkgroup) == kept.end()) {
+            if (__builtin_available(macOS 11.0, *)) os_retain(static_cast<os_workgroup_t>(osWorkgroup));
+            kept.push_back(osWorkgroup);
+        }
+    }
+    workgroupPeriodNs_.store(periodNs, std::memory_order_relaxed);
+    workgroup_.store(osWorkgroup, std::memory_order_relaxed);
+    workgroupGen_.fetch_add(1, std::memory_order_release);
+    // Parked workers follow on their next job; nothing to wake them for.
+#else
+    (void)osWorkgroup;
+    (void)periodNs;
+#endif
+}
+
+// Worker thread: catch up with setWorkgroup. `joined` is the workgroup this thread is in
+// (null for none) and `token` its join token (os_workgroup_join_token_s storage).
+void AudioThreadPool::followWorkgroup(uint32_t& seenGen, void*& joined, void* token) {
+#if defined(__APPLE__)
+    const uint32_t gen = workgroupGen_.load(std::memory_order_acquire);
+    if (gen == seenGen) return;
+    seenGen = gen;
+    if (__builtin_available(macOS 11.0, *)) {
+        auto* tok = static_cast<os_workgroup_join_token_s*>(token);
+        if (joined) {
+            os_workgroup_leave(static_cast<os_workgroup_t>(joined), tok);
+            joined = nullptr;
+        }
+        void* wg = workgroup_.load(std::memory_order_relaxed);
+        const double periodNs = workgroupPeriodNs_.load(std::memory_order_relaxed);
+        if (wg == nullptr || !(periodNs > 0.0)) { // no device: back to an ordinary thread
+            thread_standard_policy_data_t std{};
+            thread_policy_set(pthread_mach_thread_np(pthread_self()), THREAD_STANDARD_POLICY, (thread_policy_t)&std,
+                THREAD_STANDARD_POLICY_COUNT);
+            return;
+        }
+        // A real-time thread for the device's period first: an audio workgroup takes those.
+        mach_timebase_info_data_t tb;
+        mach_timebase_info(&tb);
+        const double toAbs = (double)tb.denom / (double)tb.numer;
+        thread_time_constraint_policy_data_t pol;
+        pol.period = (uint32_t)(periodNs * toAbs);
+        pol.computation = (uint32_t)(periodNs * 0.5 * toAbs);
+        pol.constraint = (uint32_t)(periodNs * toAbs);
+        pol.preemptible = 1;
+        thread_policy_set(pthread_mach_thread_np(pthread_self()), THREAD_TIME_CONSTRAINT_POLICY,
+            (thread_policy_t)&pol, THREAD_TIME_CONSTRAINT_POLICY_COUNT);
+        if (os_workgroup_join(static_cast<os_workgroup_t>(wg), tok) == 0) joined = wg;
+    }
+#else
+    (void)seenGen;
+    (void)joined;
+    (void)token;
+#endif
+}
+
 void AudioThreadPool::workerLoop(int id) {
     // Pause-spins before parking, plus the linger dispatch() picked from the
     // gap between jobs. With a live device the next job is a buffer period
@@ -107,6 +177,24 @@ void AudioThreadPool::workerLoop(int id) {
     uint64_t seen = 0;
     int spins = 0;
     Clock::time_point idleSince{};
+    uint32_t wgSeen = 0;
+    void* wgJoined = nullptr;
+#if defined(__APPLE__)
+    os_workgroup_join_token_s wgToken{};
+#else
+    int wgToken = 0;
+#endif
+    struct LeaveOnExit { // a joined thread must leave before it ends
+        void*& wg;
+        void* token;
+        ~LeaveOnExit() {
+#if defined(__APPLE__)
+            if (wg)
+                if (__builtin_available(macOS 11.0, *))
+                    os_workgroup_leave(static_cast<os_workgroup_t>(wg), static_cast<os_workgroup_join_token_s*>(token));
+#endif
+        }
+    } leaveOnExit{wgJoined, &wgToken};
     for (;;) {
         const uint64_t e = epoch_.load(std::memory_order_acquire);
         if (e == seen) { // idle: brief pause-spin, then park on the futex word
@@ -127,6 +215,7 @@ void AudioThreadPool::workerLoop(int id) {
         }
         seen = e;
         if (stop_.load(std::memory_order_relaxed)) return;
+        followWorkgroup(wgSeen, wgJoined, &wgToken); // one relaxed load unless the device changed
         // Same check-then-CAS claim loop as the caller (see header
         // comment): overshoot probes never consume, so a lagging probe
         // can never eat the next job's head tickets.

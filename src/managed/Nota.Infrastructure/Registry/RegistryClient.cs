@@ -8,6 +8,7 @@
 
 using System.Security.Cryptography;
 using System.Text.Json;
+using Nota.Application.Localization;
 
 namespace Nota.Infrastructure;
 
@@ -53,7 +54,7 @@ internal sealed class RegistryClient
                                   || e is JsonException)
         {
             if (!File.Exists(_cachePath))
-                throw new StoreException($"Couldn't reach the {_what}. Check your internet connection.", e);
+                throw new StoreException(Loc.F("registry.client.couldnt_reach_the_check_your", _what), e);
             return await File.ReadAllTextAsync(_cachePath, ct).ConfigureAwait(false);
         }
     }
@@ -88,7 +89,7 @@ internal sealed class RegistryClient
                 {
                     total += n;
                     if (total > size)
-                        throw new StoreException($"The download of {name} is larger than the registry says — not installing it.");
+                        throw new StoreException(Loc.F("registry.client.the_download_of_is_larger", name));
                     sha.AppendData(buf, 0, n);
                     await dst.WriteAsync(buf.AsMemory(0, n), ct).ConfigureAwait(false);
                     progress?.Report(new StoreProgress((double)total / size, label));
@@ -97,12 +98,12 @@ internal sealed class RegistryClient
         }
         catch (HttpRequestException e)
         {
-            throw new StoreException($"Couldn't download {name}: {e.Message}", e);
+            throw new StoreException(Loc.F("registry.client.couldnt_download", name, e.Message), e);
         }
 
         var digest = Convert.ToHexStringLower(sha.GetHashAndReset());
         if (total != size || digest != sha256)
-            throw new StoreException($"The download of {name} doesn't match the registry's checksum — not installing it.");
+            throw new StoreException(Loc.F("registry.client.the_download_of_doesnt_match", name));
     }
 
     /// <summary>A manifest-relative path ("a/b.vst3") under root; refuses paths that escape it.</summary>
@@ -111,7 +112,7 @@ internal sealed class RegistryClient
         var full = Path.GetFullPath(Path.Combine(root, rel.Replace('/', Path.DirectorySeparatorChar)));
         var prefix = Path.GetFullPath(root) + Path.DirectorySeparatorChar;
         if (!full.StartsWith(prefix, StringComparison.Ordinal))
-            throw new StoreException($"Unsafe path in the registry entry: {rel}");
+            throw new StoreException(Loc.F("registry.client.unsafe_path_in_the_registry", rel));
         return full;
     }
 

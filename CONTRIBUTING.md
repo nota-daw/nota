@@ -11,6 +11,25 @@ Start with [`ARCHITECTURE.md`](ARCHITECTURE.md). Nota is a real-time audio appli
 and a change that looks harmless in most codebases (allocating in a callback, taking a
 lock, logging from the wrong thread) will produce audible dropouts here.
 
+## Start with an approved issue
+
+**Every change needs an issue that a core contributor has approved — before you write
+code, a spec, or a prompt for an agent.** This includes typos and one-line fixes.
+Pull requests without one are closed unreviewed, however good the work is.
+
+1. Find an existing issue or [open one](https://github.com/nota-daw/nota/issues/new/choose):
+   what you want to change and why. For a bug, the report itself is enough.
+2. Wait for a core contributor (see [`.github/CODEOWNERS`](.github/CODEOWNERS)) to add
+   the **`approved`** label. They may ask questions, narrow the scope or decline —
+   that is the point: it costs a comment, not a weekend of your time and tokens.
+3. Comment that you are taking it, so two people don't build the same thing.
+4. Build exactly what the issue agreed. If the scope needs to change along the way, say
+   so in the issue first.
+5. Link it from the pull request: `Closes #N` (or `Refs #N`).
+
+Issues labelled `good first issue` or `help wanted` are already approved. Release pull
+requests cut by core contributors are the one exception.
+
 ## Licensing your contribution
 
 Nota is licensed under `AGPL-3.0-only` (see [`LICENSES/`](LICENSES/)).
@@ -84,8 +103,62 @@ Two things govern agents working here: the project constitution at
 `.specify/memory/constitution.md` (principles distilled from this document and
 [`ARCHITECTURE.md`](ARCHITECTURE.md)), and this document — which remains canonical for
 humans. You don't need an AI agent to contribute: writing `spec.md` and `plan.md` by
-hand from the templates in `.specify/templates/` is equally welcome. Typos, small fixes
-and doc edits don't need a spec — just open the pull request.
+hand from the templates in `.specify/templates/` is equally welcome.
+
+The project skills (`nota-design`, `nota-docs`, `nota-features`, `nota-instrument`,
+`nota-pr`, `nota-shortcuts`, `release`) are written once in `.claude/skills/` and copied
+into the directories the other agents read (`.agents/skills/`, `.github/skills/`,
+`.cursor/skills/`, `.gemini/skills/`). Edit the source, then run
+`scripts/sync-agent-skills.sh`; CI fails if a copy is out of date. Typos, small fixes
+and doc edits don't need a spec — but they still need an approved issue (see
+[Start with an approved issue](#start-with-an-approved-issue)).
+
+**If you work with an AI agent**, the agent instructions in [`AGENTS.md`](AGENTS.md) and
+[`CLAUDE.md`](CLAUDE.md) tell it to check for an approved issue before it does anything.
+Give it the issue number up front; don't override that check.
+
+## Translating Nota
+
+The desktop app's interface is translated through one mechanism (specs
+[068](specs/068-ui-language/) and [077](specs/077-key-based-localization/)): every text is asked
+for by a **key**, and its English lives in one file, the English reference
+`src/managed/Nota.Application/Localization/en.json`. Nota ships English only. Every other
+language lives in [nota-daw/nota-translations](https://github.com/nota-daw/nota-translations) —
+translating, fixing a translation and adding a language happen there, with its own README —
+and Nota downloads it from **Settings → Appearance → Language**.
+
+- **Every new user-visible text goes through `Loc`, by key.** Add the key and its English to
+  `en.json`, then write `Loc.T("preferences.language.restart")` for a text,
+  `Loc.F("arrangement.delete_clips", n)` for a text with values (`"Delete {0} clips?"` — the whole
+  sentence, never a piece of it) and `Loc.Plural("arrangement.clips", n)` for a counted text
+  (`{ "one": "{0} clip", "other": "{0} clips" }` in `en.json`); in XAML write
+  `{app:T 'main.save_as'}`. The key is always a plain literal.
+- **Keys**: lower-case, dot-separated, area first, then what the text says —
+  `<area>[.<sub-area>].<what>`, segments of `a-z 0-9 _`, up to 80 characters. The area is the
+  window or view the text belongs to (`preferences`, `arrangement`, `main.menu`,
+  `device.reverb`); a text used the same way in three or more areas is `common.<what>`
+  (`common.cancel`). Two meanings of one English word are two keys (`menu.open`, `clip.open`) —
+  there are no contexts.
+- **Changing English**: edit the text in `en.json` only; no call site and no translation
+  changes, and every translation stays attached. If the *meaning* or the placeholders change,
+  make a new key instead and delete the old one, so translators see a new text rather than a
+  stale one. Placeholders are `{0}` … `{9}`, and every text must format.
+- The smoke test fails on a key used in the code that is not in `en.json`, an `en.json` key
+  nothing uses, a key used against its shape (a counted text through `Loc.T`, a pattern with
+  `{0}` through `Loc.T`), an English text that does not format, a translation file inside the
+  app, and a new plain literal that reads as interface text. Text that is not translated on
+  purpose — user content, device and parameter names, proper nouns, units, logs, the Remote web
+  page and MCP — is listed with its reason as `# data:` in
+  `tests/Nota.SmokeTest/LocalizationAllowList.txt`.
+- **New texts reach translators by themselves**: nota-translations pulls `en.json` from
+  `develop` and from every release tag, and checks each language against them. A new key shows
+  in English until a translation for it is merged there — nothing to do in this repository.
+- **Look at it**: `NOTA_UI_LANGUAGE=fr` (an installed language) or
+  `NOTA_UI_LANGUAGE=/path/to/fr.json` (any language file) starts Nota in that language for one
+  run without touching the saved setting; check that nothing is clipped or overlaps at each
+  interface scale. `NOTA_LANGUAGES_URL` points the language list at another copy of
+  nota-translations (a URL, or a local folder with its layout). `NOTA_LOC_WRITE_BASELINE=1`
+  rewrites the allow-list after you wrap or add text.
 
 ## Building
 
@@ -131,6 +204,7 @@ default, say), say why in the PR; a maintainer accepts it by adding the
 ## Pull requests
 
 - Target `develop`.
+- Link the approved issue it implements (`Closes #N`).
 - One logical change per pull request.
 - Match the style of the code around you. Comment headers explain *why* a file exists,
   not what each line does — keep that convention.

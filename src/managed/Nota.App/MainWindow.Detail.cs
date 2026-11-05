@@ -19,6 +19,7 @@ using Avalonia.Threading;
 using Nota.Application;
 using Nota.Application.Editing;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -83,13 +84,13 @@ public partial class MainWindow
 
     private string ChipTrackName(int trackId)
     {
-        if (trackId == Engine.MasterTrackId) return Engine.GetTrackName(trackId) is { Length: > 0 } m ? m : "Master";
+        if (trackId == Engine.MasterTrackId) return Engine.GetTrackName(trackId) is { Length: > 0 } m ? m : Loc.T("common.master");
         string stored = Engine.GetTrackName(trackId);
         if (stored.Length > 0) return stored;
         ChipTrackInfo(trackId, out var ti);
-        return ti.IsReturn ? $"Return {Engine.TrackReturnIndex(trackId) + 1}"
-             : ti.IsGroup ? $"Group {trackId}"
-             : (ti.IsInstrument ? "Inst " : "Audio ") + trackId;
+        return ti.IsReturn ? Loc.F("common.return_n", Engine.TrackReturnIndex(trackId) + 1)
+             : ti.IsGroup ? Loc.F("main.detail.group", trackId)
+             : (ti.IsInstrument ? Loc.T("main.detail.inst") : Loc.T("main.detail.audio")) + trackId;
     }
 
     // "· instrument · MIDI from Inst 1 · PDC 2.7 ms" / "· audio · In Ext · Monitor In · PDC 0.0 ms".
@@ -105,19 +106,19 @@ public partial class MainWindow
             {
                 parts.Add("instrument");
                 int src = Engine.GetTrackMidiSource(trackId);
-                if (src > 0) parts.Add("MIDI from " + ChipTrackName(src));
+                if (src > 0) parts.Add(Loc.T("main.detail.midi_from") + ChipTrackName(src));
             }
             else
             {
                 parts.Add("audio");
                 int src = Engine.GetTrackRecordInput(trackId);
-                parts.Add("In " + (src == 0 ? RecordInputPick.HardwareShort(Engine.GetTrackInputChannels(trackId)) : src == -1 ? "Master" : ChipTrackName(src)));
+                parts.Add(Loc.T("main.detail.in") + (src == 0 ? RecordInputPick.HardwareShort(Engine.GetTrackInputChannels(trackId)) : src == -1 ? Loc.T("common.master") : ChipTrackName(src)));
                 // A Master source stays silent while monitored (it would feed back).
-                if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add("Monitor in");
+                if (src != -1 && Engine.GetTrackMonitor(trackId)) parts.Add(Loc.T("main.detail.monitor_in"));
             }
         }
         double ms = Engine.SampleRate > 0 ? Engine.TrackLatencySamples(trackId) / Engine.SampleRate * 1000.0 : 0;
-        parts.Add(string.Format(NotaNum.Culture, "PDC {0:0.0}\u2009ms", ms));
+        parts.Add(string.Format(NotaNum.Culture, Loc.T("main.detail.pdc_ms"), ms));
         return "· " + string.Join(" · ", parts);
     }
 
@@ -130,11 +131,28 @@ public partial class MainWindow
     // switching back to Clip restores the persisted size. The Devices tab also can't be
     // resized at all (no splitter): its cards have a fixed layout, so extra height is wasted
     // and less clips them.
+    // MIDI needs both headers, the roll's lane controls and a usable note viewport,
+    // including the multi-clip strip and horizontal scrollbar at the smallest size.
+    private double DetailMinimumHeight => DetailBody.Content is ClipEditorView ? 300 : 120;
+
     private void ShowDetail(double height, bool honorPersist, bool resizable = true)
     {
+        // A selection only follows the panel; it opens a closed one only with the
+        // "Open Detail panel on select" preference (#308). Hosts and tabs are already updated,
+        // so the panel shows the current selection when it is opened later.
+        if (_followOnly > 0 && !DetailPanel.IsVisible && !OpenDetailOnSelect) return;
+        _detailDefault = Math.Max(height, DetailMinimumHeight);
+        // Filling the window, a clip tab keeps it; Devices goes back to the split.
+        if (_detailMaximized && resizable)
+        {
+            DetailPanel.IsVisible = true;
+            return;
+        }
+        SetDetailMaximized(false);
+        DetailMaximizeBtn.IsVisible = resizable;
         var row = _detailRow;
-        row.MinHeight = 120;
-        double h = honorPersist && _detailHeight > 120 ? _detailHeight : height;
+        row.MinHeight = DetailMinimumHeight;
+        double h = Math.Max(row.MinHeight, honorPersist && _detailHeight > 120 ? _detailHeight : height);
         row.Height = new GridLength(h);
         DetailSplitter.IsVisible = resizable;
         DetailPanel.IsVisible = true;
@@ -142,23 +160,41 @@ public partial class MainWindow
         FitBottomPanels();   // under a docked Mixer in a short window it may not fit as asked
     }
 
-    private void OnTrackSelected(int trackId)
+    // Inside a FollowOnly scope a selection updates the panel's content but doesn't open it
+    // (see ShowDetail). Explicit "show me" paths — a double-click, the View menu, the tabs,
+    // a browser drop — run outside it and open the panel.
+    private int _followOnly;
+
+    private bool OpenDetailOnSelect => _vm?.Settings.Current.OpenDetailOnSelect == true;
+
+    private void FollowOnly(Action follow)
+    {
+        _followOnly++;
+        try { follow(); }
+        finally { _followOnly--; }
+    }
+
+    private void OnTrackSelected(int trackId) => FollowOnly(() => FollowTrack(trackId));
+
+    private void FollowTrack(int trackId)
     {
         TrackArming.FollowSelection(Engine, trackId);   // arm-on-select (#332)
 
         // Switching to a different track abandons the previously edited clip. Reset the clip
         // editor to empty so a stale editor from the old track doesn't linger — most visible
         // in the popped-out Devices/Clip window, whose top pane isn't touched by ShowDevices.
-        if (_editorTrackId != trackId && _audioEditorTrackId != trackId)
+        bool session = _session?.IsVisible == true;
+        if (_editorTrackId != trackId && _audioEditorTrackId != trackId && !(session && _sessionSlotTrack == trackId))
             ResetClipEditor();
 
         // Selecting a clip in the arrangement also selects its track — including the select
         // that an edge-drag does before it trims. That must not pull a user who is working in
         // the Clip tab over to Devices, so refresh the chain underneath and re-point the Clip
         // tab at the newly selected clip. With no clip to show, Devices takes the panel as before.
+        // In Session the clip is the slot the editor already holds (OnSessionSlotSelected).
         bool keepClipTab = !DetailFloating && DetailPanel.IsVisible
                            && DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView
-                           && SelectedClip(out _, out _, out _);
+                           && (session ? SessionEditorTrack == trackId : SelectedClip(out _, out _, out _));
         bool wasPattern = keepClipTab && DetailBody.Content is DrumPatternView;
 
         ShowDevices(trackId, takeOverPanel: !keepClipTab);
@@ -203,13 +239,60 @@ public partial class MainWindow
         return false;
     }
 
+    // The Session slot selected in the grid, when it holds a clip.
+    private bool SelectedSessionClip(out int trackId, out int scene)
+    {
+        (trackId, scene) = _session?.SelectedSlot ?? (-1, -1);
+        return trackId > 0 && scene >= 0 && Engine.SessionSlotState(trackId, scene) != 0;
+    }
+
+    // The track of the Session slot whose editor the Clip / Pattern tab last showed, or -1.
+    private int SessionEditorTrack =>
+        _lastClipEditor is null ? -1
+        : ReferenceEquals(_lastClipEditor, _audioEditor) ? (SessionAudioEditorOpen ? _audioEditorTrackId : -1)
+        : ReferenceEquals(_lastClipEditor, _clipEditor) && _editorTrackId < 0 ? _sessionSlotTrack
+        : ReferenceEquals(_lastClipEditor, _patternView) && _patternScene >= 0 ? _patternTrackId
+        : -1;
+
+    // A Session MIDI roll keeps _editorTrackId at -1; an arrangement one sets it.
+    private bool SessionMidiEditorOpen(int trackId, int scene)
+        => _clipEditor is not null && _editorTrackId < 0 && _sessionSlotTrack == trackId && _sessionSlotScene == scene;
+
+    private bool SessionAudioEditorOn(int trackId, int scene)
+        => SessionAudioEditorOpen && _audioEditorTrackId == trackId && _audioEditorClipIndex == SessionClip.Index(scene);
+
+    // Selecting a Session slot selects its track everywhere (devices below, the arrangement
+    // header); a slot holding a clip opens it in the Clip tab, and the tab follows the
+    // selection from clip to clip (#334). A Pattern grid stays a Pattern grid on a Drum Rack.
+    private void OnSessionSlotSelected(int trackId, int scene) => FollowOnly(() => FollowSessionSlot(trackId, scene));
+
+    private void FollowSessionSlot(int trackId, int scene)
+    {
+        if (scene >= 0 && Engine.SessionSlotState(trackId, scene) != 0)
+        {
+            bool pattern = !DetailFloating && DetailPanel.IsVisible && DetailBody.Content is DrumPatternView;
+            ShowSessionSlot(trackId, scene);
+            if (Timeline.SelectedTrackId != trackId) Timeline.Select(trackId, -1);
+            if (pattern && DetailPatternBtn.IsEnabled) OnDetailPattern(this, new RoutedEventArgs());
+        }
+        else if (Timeline.SelectedTrackId != trackId)
+            Timeline.Select(trackId, -1);
+    }
+
+    private void ShowSessionSlot(int trackId, int scene)
+    {
+        if (SessionAudioEditorOn(trackId, scene)) ShowAudioClipPanel();
+        else if (SessionMidiEditorOpen(trackId, scene)) ShowClipPanel();
+        else OpenSessionClipEditor(trackId, scene);
+    }
+
     // Enable the Clip tab for the current context: in the arrangement, whenever a
-    // clip is selected; in Session, when a slot editor has been opened. The Pattern tab
-    // rides along on the same target, narrowed to Drum Rack MIDI.
+    // clip is selected; in Session, when a filled slot is selected or a slot editor is open.
+    // The Pattern tab rides along on the same target, narrowed to Drum Rack MIDI.
     internal void SyncClipTab()
     {
         DetailClipBtn.IsEnabled = _session?.IsVisible == true
-            ? _clipEditor is not null || SessionAudioEditorOpen
+            ? _clipEditor is not null || SessionAudioEditorOpen || SelectedSessionClip(out _, out _)
             : SelectedClip(out _, out _, out _);
         DetailPatternBtn.IsEnabled = PatternTarget(out _, out _, out _);
         // Pattern only means something on a Drum Rack track, so elsewhere the tab is hidden
@@ -264,14 +347,14 @@ public partial class MainWindow
         string title;
         if (scene >= 0)
         {
-            title = $"Track {trackId} · Scene {scene + 1}";
+            title = Loc.F("main.detail.track_scene", trackId, scene + 1);
             get = () => Engine.GetSessionNotes(trackId, scene);
             set = notes => { Engine.SetSessionNotes(trackId, scene, notes); _session?.Refresh(); };
             length = () => { double l = Engine.SessionSlotLength(trackId, scene); return l > 0 ? l : 4; };
         }
         else
         {
-            title = $"Track {trackId} clip";
+            title = Loc.F("main.detail.track_clip", trackId);
             get = () => Engine.GetClipNotes(trackId, clipIndex);
             // Same staleness guard as the piano roll: the clip can be deleted, undone or
             // reloaded under an editor that is still on screen.
@@ -318,7 +401,7 @@ public partial class MainWindow
         if (!PatternTarget(out int tid, out int ci, out int scene))
         {
             DetailPatternBtn.IsChecked = false;
-            if (_vm is not null) _vm.StatusText = "Select a MIDI clip on a Drum Rack track to step it.";
+            if (_vm is not null) _vm.StatusText = Loc.T("main.detail.select_a_midi_clip_on");
             return;
         }
         if (_patternView is null || _patternTrackId != tid || _patternClipIndex != ci || _patternScene != scene)
@@ -346,6 +429,7 @@ public partial class MainWindow
     // — a browser drop, Convert, the Devices tab — leave it true.
     private void ShowDevices(int trackId, bool takeOverPanel = true)
     {
+        _trackInspector?.Show(trackId);
         if (_vm is null || _deviceChain is null) return;
         // No track (the selected one was just deleted): empty the chain instead of leaving the
         // dead track's instrument/effect cards on screen — they'd still edit a removed track.
@@ -353,7 +437,7 @@ public partial class MainWindow
         if (trackId <= 0)
         {
             _deviceChain.Show(-1);
-            SetDetailChip(-1, "Devices");
+            SetDetailChip(-1, Loc.T("main.devices"));
             ApplyFrozenChainDim(-1);
             return;
         }
@@ -375,23 +459,109 @@ public partial class MainWindow
 
     // Double-click on a MIDI clip: that clip — or, when it is one of two or more selected MIDI
     // clips, all of them together with it active (specs/029-multi-clip-editing).
+    // In track mode (specs/059) it opens the clip's whole track instead.
     private void OpenClipEditor(int trackId, int clipIndex)
     {
-        var sel = Timeline.SelectedMidiClips();
-        if (sel.Count >= 2 && sel.Contains((trackId, clipIndex))) BuildClipEditor(sel, trackId, clipIndex);
-        else BuildClipEditor(trackId, clipIndex);
+        if (!FocusTrackClip(trackId, clipIndex))
+        {
+            var sel = Timeline.SelectedMidiClips();
+            if (!ClipTrackMode && sel.Count >= 2 && sel.Contains((trackId, clipIndex))) BuildClipEditor(sel, trackId, clipIndex);
+            else BuildClipEditor(trackId, clipIndex);
+        }
         ShowClipPanel();
     }
 
     /// <summary>"Edit selected clips": every selected MIDI clip in one editor, the first in time
-    /// active. False with fewer than two selected.</summary>
+    /// active. False with fewer than two selected. Asking for the selection leaves track mode.</summary>
     internal bool EditSelectedClips()
     {
         var sel = Timeline.SelectedMidiClips();
         if (sel.Count < 2) return false;
+        SetClipTrackMode(false, reopen: false);
         BuildClipEditor(sel, sel[0].TrackId, sel[0].ClipIndex);
         ShowClipPanel();
         return true;
+    }
+
+    // --- track mode (specs/059-clip-editor-track-mode, #49) ------------------------------------
+
+    private bool ClipTrackMode => _vm?.Settings.Current.ClipEditorTrackMode == true;
+
+    /// <summary>The Clip | Track switch: saves the mode and reopens an arrangement clip editor in
+    /// it on the clip it has active (clip mode shows that clip alone).</summary>
+    internal void SetClipTrackMode(bool on, bool reopen = true)
+    {
+        if (_vm is null || ClipTrackMode == on) return;
+        _vm.Settings.Current.ClipEditorTrackMode = on;
+        _vm.Settings.Save();
+        _vm.StatusText = on ? Loc.T("main.detail.clip_editor_every_clip_on") : Loc.T("main.detail.clip_editor_one_clip");
+        if (!reopen || _editorRoll is not { } roll || _clipEditor is null || _editorTrackId <= 0) return;
+        bool shown = ClipEditorShown(_clipEditor);
+        var a = roll.ActiveClip;
+        BuildClipEditor(a.TrackId, a.ClipIndex);
+        if (shown) ShowClipPanel();
+    }
+
+    // The track's MIDI clips in index order.
+    private List<(int TrackId, int ClipIndex)> MidiClipsOf(int trackId)
+    {
+        var list = new List<(int, int)>();
+        if (!ChipTrackInfo(trackId, out var ti)) return list;
+        for (int c = 0; c < ti.ClipCount; c++)
+            if (Engine.TryGetClipInfo(trackId, c, out var ci) && ci.IsMidi) list.Add((trackId, c));
+        return list;
+    }
+
+    /// <summary>A track-mode editor already open on this clip's track makes the clip active and
+    /// brings it into view instead of being rebuilt. False when there is no such editor.</summary>
+    private bool FocusTrackClip(int trackId, int clipIndex)
+    {
+        if (!ClipTrackMode || _editorRoll is not { Clips.TrackMode: true } roll || _clipEditor is null
+            || roll.ActiveClip.TrackId != trackId) return false;
+        SyncTrackClips(roll);   // an arrangement edit may have added or re-indexed clips
+        int slot = roll.Clips.IndexOf(trackId, clipIndex);
+        if (slot < 0) return false;
+        roll.SetActiveClip(slot);
+        roll.RevealClip(slot);
+        return true;
+    }
+
+    /// <summary>Reopens a track-mode editor's clips from the engine when they no longer match the
+    /// track's MIDI clips: one appeared (drawn, pasted, recorded) or an edit re-indexed them (a
+    /// split puts the right half after the left, so the later clips shift). The roll keeps its
+    /// zoom, scroll and note selection; the active clip is the one still at its start beat.
+    /// Whether the roll was reloaded.</summary>
+    private bool SyncTrackClips(PianoRollView roll)
+    {
+        var old = roll.Clips;
+        if (!old.TrackMode) return false;
+        var a = roll.ActiveClip;
+        var now = MidiClipsOf(a.TrackId);
+        if (now.Count == 0 || (now.Count == old.Count && now.All(x => old.IndexOf(x.TrackId, x.ClipIndex) >= 0))) return false;
+        var items = new List<OpenClip>();
+        foreach (var (t, c) in now)
+            if (Engine.TryGetClipInfo(t, c, out var info))
+                items.Add(new OpenClip(t, c, info.StartBeat, info.LengthBeats > 0 ? info.LengthBeats : 4));
+        if (items.Count == 0) return false;
+        var sameStart = items.Where(i => Math.Abs(i.StartBeat - a.StartBeat) < 1e-6).ToList();
+        var active = sameStart.FirstOrDefault(i => i.ClipIndex == a.ClipIndex) ?? sameStart.FirstOrDefault() ?? items[0];
+        var set = new ClipSet(items, a.TrackId, active.ClipIndex, Timeline.BeatsPerBar, trackMode: true);
+        // Reference locks stay on the clips that are still where they were.
+        foreach (var o in old.Clips)
+        {
+            if (!o.IsReference) continue;
+            int slot = set.IndexOf(o.TrackId, o.ClipIndex);
+            if (slot >= 0 && Math.Abs(set.Clips[slot].StartBeat - o.StartBeat) < 1e-6) set.SetReference(slot, true);
+        }
+        roll.SetClips(set, ClipNotesOf(set), TrackBrush);
+        return true;
+    }
+
+    // An arrangement edit that re-indexes the track's clips (a split) while no clip is selected.
+    private void SyncTrackModeClips()
+    {
+        if (_editorRoll is { Clips.TrackMode: true } roll && _clipEditor is not null && _editorTrackId > 0)
+            SyncTrackClips(roll);
     }
 
     /// <summary>A Clip editor with several arrangement clips open.</summary>
@@ -401,13 +571,28 @@ public partial class MainWindow
     // FR-001a): two or more selected MIDI clips open together — the clicked clip active when
     // it is one of them — and narrowing back to one clip returns to the single-clip editor.
     // Selecting a lone clip on another track is already followed through OnTrackSelected.
-    private void FollowClipSelection()
+    private void FollowClipSelection() => FollowOnly(FollowClips);
+
+    private void FollowClips()
     {
         if (_session?.IsVisible == true || _vm is null) return;
         bool shown = DetailFloating
             ? _clipEditor is not null && ReferenceEquals(_lastClipEditor, _clipEditor)
             : DetailPanel.IsVisible && DetailBody.Content is ClipEditorView;
         if (!shown) return;
+        // Track mode follows the clicked clip: its track, with it active.
+        if (ClipTrackMode)
+        {
+            if (!SelectedClip(out int t, out int c, out bool isMidi) || !isMidi)
+            {
+                SyncTrackModeClips();   // e.g. a split cleared the selection: the editor still follows the track
+                return;
+            }
+            if (FocusTrackClip(t, c)) return;
+            BuildClipEditor(t, c);
+            ShowClipPanel();
+            return;
+        }
         var midi = Timeline.SelectedMidiClips();
         if (midi.Count >= 2)
         {
@@ -479,10 +664,13 @@ public partial class MainWindow
         => BuildClipEditor(new[] { (trackId, clipIndex) }, trackId, clipIndex);
 
     // Build the piano-roll editor for a set of arrangement MIDI clips, (activeTrack, activeClip)
-    // active (no panel switch). One clip is the classic single-clip editor.
+    // active (no panel switch). One clip is the classic single-clip editor. In track mode the set
+    // is every MIDI clip of the active clip's track.
     private void BuildClipEditor(IReadOnlyList<(int TrackId, int ClipIndex)> clips, int activeTrack, int activeClip)
     {
         if (_vm is null) return;
+        bool trackMode = ClipTrackMode;
+        if (trackMode && MidiClipsOf(activeTrack) is { Count: > 0 } all) clips = all;
         var open = new List<OpenClip>();
         foreach (var (t, c) in clips)
             if (Engine.TryGetClipInfo(t, c, out var info) && info.IsMidi)
@@ -491,10 +679,11 @@ public partial class MainWindow
         // The editor being replaced lets its pending placement go into its own clips first (it
         // may never have had focus to lose, e.g. after a menu paste).
         _editorRoll?.SettlePlacement();
-        var set = new ClipSet(open, activeTrack, activeClip, Timeline.BeatsPerBar);
+        var set = new ClipSet(open, activeTrack, activeClip, Timeline.BeatsPerBar, trackMode);
         PianoRollView roll = null!;
         roll = new PianoRollView
         {
+            LaneSettings = _vm.Settings,
             BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
             // Each clip whose notes changed, as one undo step. The roll can outlive a clip: the
             // track/clip may have been removed, shifted by a lower-index delete, undone, or
@@ -526,10 +715,20 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            // The controller lane edits the active clip (specs/063); a clip gone since is left alone.
+            ControllersInClip = () => Engine.GetMidiClipControllers(roll.ActiveClip.TrackId, roll.ActiveClip.ClipIndex),
+            GetController = ctl => Engine.GetMidiClipController(roll.ActiveClip.TrackId, roll.ActiveClip.ClipIndex, ctl),
+            SetController = (ctl, pts) =>
+            {
+                var c = roll.ActiveClip;
+                if (!Engine.TryGetClipInfo(c.TrackId, c.ClipIndex, out var info) || !info.IsMidi) { PruneDeadClips(roll); return; }
+                Engine.SetMidiClipController(c.TrackId, c.ClipIndex, ctl, pts);
+                Timeline.Refresh(rebuildHeaders: false);
+            },
             // A note sounds on its own clip's track; the keys column on the active clip's.
             AuditionOn = (pitch, vel) => AuditionNoteOn(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch, vel),
             AuditionOff = pitch => Engine.TrackNoteOff(roll.AuditionTrackId > 0 ? roll.AuditionTrackId : _editorTrackId, pitch),
-            ClipNameOf = (t, c) => Engine.GetClipName(t, c) is { Length: > 0 } n ? n : $"Track {t} clip",
+            ClipNameOf = (t, c) => Engine.GetClipName(t, c) is { Length: > 0 } n ? n : Loc.F("main.detail.track_clip", t),
             Bpm = () => Engine.Bpm,   // the ruler's time display (#275)
             // The ruler moves the transport (#50): editor beat → arrangement beat.
             Seek = local =>
@@ -547,8 +746,9 @@ public partial class MainWindow
         _editorTrackId = set.ActiveClip.TrackId;
         _editorClipIndex = set.ActiveClip.ClipIndex;
         _editorRoll = roll;
-        _clipEditor = new ClipEditorView(roll, $"Track {_editorTrackId} clip", set.ActiveClip.StartBeat, Engine,
-                                         _editorTrackId, _editorClipIndex, set.ActiveClip.LengthBeats);
+        _clipEditor = new ClipEditorView(roll, Loc.F("main.detail.track_clip", _editorTrackId), set.ActiveClip.StartBeat, Engine,
+                                         _editorTrackId, _editorClipIndex, set.ActiveClip.LengthBeats,
+                                         on => SetClipTrackMode(on));
         // The active clip drives the detail chip, the playhead's live check and the envelopes.
         roll.ActiveClipChanged += () =>
         {
@@ -646,13 +846,31 @@ public partial class MainWindow
     {
         _lastClipEditor = _clipEditor;
         SetHost(ClipDetailHost, _clipEditor);
-        SetDetailChip(_editorTrackId);
+        SetDetailChip(EditedTrack());   // a Session roll keeps _editorTrackId at -1
         if (DetailFloating) return;   // floating: top pane only
         DetailClipBtn.IsEnabled = true;
         DetailClipBtn.IsChecked = true;
         DetailDevicesBtn.IsChecked = false;
         DetailPatternBtn.IsChecked = false;
         ShowDetail(250, honorPersist: true);
+    }
+
+    // The time signature's numerator changed (typed, a project load, a launched scene): every
+    // view that counts bars re-counts (#405). The roll takes its bar length as a property; the
+    // audio editor, the step grid and the readouts read Meter as they draw, so a reload repaints
+    // them.
+    private void ApplyMeter(int numerator)
+    {
+        int was = Meter.BeatsPerBar;
+        Meter.Set(numerator);
+        int bpb = Meter.BeatsPerBar;
+        if (bpb != was) _session?.Refresh();   // its slot lengths and inspector fields count bars
+        if (Timeline.BeatsPerBar != bpb) Timeline.BeatsPerBar = bpb;
+        _patternView?.Reload();
+        _audioEditor?.Reload();
+        if (_editorRoll is not { } roll) return;
+        roll.BeatsPerBar = bpb;
+        _clipEditor?.RecountBars(roll.ActiveClip.StartBeat);   // its Start / Length read-outs
     }
 
     // A clip was trimmed / stretched / moved in the arrangement. Both clip editors snapshot the
@@ -667,7 +885,10 @@ public partial class MainWindow
         if (_patternView is not null && _patternTrackId == trackId && _patternClipIndex == clipIndex && _patternScene < 0)
             _patternView.Reload();
 
-        if (_editorRoll is { } roll && _editorTrackId > 0 && roll.Clips.IndexOf(trackId, clipIndex) >= 0)
+        if (_editorRoll is { Clips.TrackMode: true } trackRoll && trackRoll.ActiveClip.TrackId == trackId
+            && trackRoll.Clips.IndexOf(trackId, clipIndex) < 0 && ci.IsMidi)
+            SyncTrackClips(trackRoll);
+        else if (_editorRoll is { } roll && _editorTrackId > 0 && roll.Clips.IndexOf(trackId, clipIndex) >= 0)
         {
             double len = ci.LengthBeats > 0 ? ci.LengthBeats : 4;
             var set = roll.Clips;
@@ -815,6 +1036,7 @@ public partial class MainWindow
         // Every open clip, as the engine now holds it (undo/redo, recording); clips that are
         // gone leave the set, and their lengths/starts are re-read.
         var roll = _editorRoll;
+        SyncTrackClips(roll);   // a track-mode editor takes clips that appeared or were re-indexed (undo, record)
         if (!PruneDeadClips(roll)) return;
         var set = roll.Clips;
         foreach (var c in set.Clips.ToList())
@@ -852,28 +1074,29 @@ public partial class MainWindow
     {
         int t = Timeline.SelectedTrackId > 0 ? Timeline.SelectedTrackId : LastInstrumentTrack();
         if (t > 0) ShowDevices(t);
-        else { DetailDevicesBtn.IsChecked = false; if (_vm is not null) _vm.StatusText = "Select a track first."; }
+        else { DetailDevicesBtn.IsChecked = false; if (_vm is not null) _vm.StatusText = Loc.T("common.select_a_track_first"); }
     }
 
     private void OnDetailClip(object? sender, RoutedEventArgs e)
     {
-        // Session: show the opened slot editor. Arrangement: always target the
-        // currently selected clip, rebuilding if the selection moved tracks.
+        // Session: the selected slot's clip, else the slot editor already open. Arrangement:
+        // always target the currently selected clip, rebuilding if the selection moved tracks.
         if (_session?.IsVisible == true)
         {
-            if (_clipEditor is not null) ShowClipPanel();
+            if (SelectedSessionClip(out int st, out int ss)) ShowSessionSlot(st, ss);
+            else if (_clipEditor is not null) ShowClipPanel();
             else if (SessionAudioEditorOpen) ShowAudioClipPanel();
-            else RejectClipTab("Double-click a slot to edit it.");
+            else RejectClipTab(Loc.T("main.detail.select_a_clip_to_edit"));
             return;
         }
         if (!SelectedClip(out int tid, out int ci, out bool isMidi))
         {
-            RejectClipTab("Select a clip to edit it.");
+            RejectClipTab(Loc.T("main.detail.select_a_clip_to_edit"));
             return;
         }
         if (isMidi)
         {
-            if (_clipEditor is null || _editorTrackId != tid || _editorClipIndex != ci)
+            if (!FocusTrackClip(tid, ci) && (_clipEditor is null || _editorTrackId != tid || _editorClipIndex != ci))
                 BuildClipEditor(tid, ci);
             ShowClipPanel();
         }
@@ -907,10 +1130,12 @@ public partial class MainWindow
     private bool _mixerDocked;      // the Mixer is shown in MixerPanel
     private double _mixerWanted;    // its height before fitting into the window
     private double _detailWanted;   // the Detail panel's, likewise
+    private double _baseWindowMinHeight;
     private double _edgeStartY, _edgeStartH;   // a DetailEdge drag in progress
 
     private void InitBottomPanels()
     {
+        _baseWindowMinHeight = MinHeight;
         var rows = BodyGrid.RowDefinitions;
         _mainRow = rows[0];
         _detailSplitRow = rows[1];
@@ -924,6 +1149,7 @@ public partial class MainWindow
         DetailPanel.PropertyChanged += (_, e) =>
         {
             if (e.Property != IsVisibleProperty) return;
+            if (!DetailPanel.IsVisible) SetDetailMaximized(false);
             FollowDetailVisibility(DetailPanel.IsVisible);
             SyncDetailEdge();
             Dispatcher.UIThread.Post(FitBottomPanels);
@@ -932,6 +1158,69 @@ public partial class MainWindow
         DetailEdge.PointerPressed += OnDetailEdgePressed;
         DetailEdge.PointerMoved += OnDetailEdgeMoved;
         DetailEdge.PointerReleased += OnDetailEdgeReleased;
+        OnDoubleClick(DetailSplitter, ResetDetailHeight);
+        OnDoubleClick(DetailEdge, ResetDetailHeight);
+        OnDoubleClick(MixerSplitter, ResetMixerHeight);
+        OnDoubleClick(BrowserSplitter, ResetBrowserWidth);
+    }
+
+    // Double-click a panel edge: the panel goes back to its default size (#305). Taken in the
+    // tunnel and handled, so the splitter never starts the drag that would record the old size.
+    private static void OnDoubleClick(Control edge, Action reset)
+        => edge.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.ClickCount != 2 || !e.GetCurrentPoint(edge).Properties.IsLeftButtonPressed) return;
+            reset();
+            e.Handled = true;
+        }, RoutingStrategies.Tunnel);
+
+    // The tab's own height (ShowDetail's), forgetting the one the Clip tab remembered.
+    private void ResetDetailHeight()
+    {
+        if (_detailMaximized || !DetailPanel.IsVisible) return;
+        _detailHeight = 0;
+        _detailWanted = _detailDefault;
+        _detailRow.Height = new GridLength(_detailDefault);
+        FitBottomPanels();
+    }
+
+    // --- the clip editor filling the window (#304) --------------------------------------------
+    //
+    // The main view (browser and all) and a docked Mixer fold away and the Detail row takes the
+    // whole body; back, everything returns to the split it had (_detailWanted, _mixerWanted).
+    // Not saved: a new launch opens on the split.
+
+    private bool _detailMaximized;
+    private double _detailDefault = 250;   // the shown tab's default height (ShowDetail)
+
+    private bool CanMaximizeDetail => !DetailFloating && DetailPanel.IsVisible
+                                      && DetailBody.Content is ClipEditorView or AudioClipEditorView or DrumPatternView;
+
+    private void OnDetailMaximize(object? sender, RoutedEventArgs e) => ToggleDetailMaximized();
+
+    private void ToggleDetailMaximized()
+    {
+        if (!_detailMaximized && !CanMaximizeDetail)
+        {
+            if (_vm is not null) _vm.StatusText = DetailFloating ? Loc.T("main.detail.the_clip_editor_is_in") : Loc.T("main.open_a_clip_in_the");
+            return;
+        }
+        SetDetailMaximized(!_detailMaximized);
+    }
+
+    private void SetDetailMaximized(bool on)
+    {
+        if (on == _detailMaximized) return;
+        _detailMaximized = on;
+        BrowserGrid.IsVisible = !on;
+        _mainRow.MinHeight = on ? 0 : 120;
+        _mainRow.Height = on ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        _detailRow.Height = on ? new GridLength(1, GridUnitType.Star) : new GridLength(_detailWanted > 120 ? _detailWanted : _detailDefault);
+        DetailSplitter.IsVisible = !on;
+        DetailMaximizeGlyph.Kind = on ? GlyphKind.Shrink : GlyphKind.Expand;
+        ToolTip.SetTip(DetailMaximizeBtn, MenuKit.Keys(on ? Loc.T("main.detail.back_to_the_split_f") : Loc.T("main.fill_the_window_with_the")));
+        if (MenuItemFor("view.maximizeDetail") is { } mi) mi.IsChecked = on;
+        LayoutBottomPanels();
     }
 
     // Some paths only flip the panel's visibility (View ▸ Toggle detail panel, a closed clip):
@@ -950,8 +1239,8 @@ public partial class MainWindow
             return;
         }
         if (Height(_detailRow) > 0) return;   // ShowDetail sized it already
-        _detailRow.MinHeight = 120;
-        _detailRow.Height = new GridLength(_detailWanted > 120 ? _detailWanted : 240);
+        _detailRow.MinHeight = DetailMinimumHeight;
+        _detailRow.Height = new GridLength(Math.Max(_detailRow.MinHeight, _detailWanted > 120 ? _detailWanted : 240));
         DetailSplitter.IsVisible = _detailSplitterWasVisible;
     }
 
@@ -1001,8 +1290,10 @@ public partial class MainWindow
         rows.Clear();
         rows.Add(_mainRow);
         int detail = 1;
-        if (_mixerDocked)
+        bool mixer = _mixerDocked && !_detailMaximized;
+        if (mixer)
         {
+            _mixerRow.MinHeight = MixerPanelMin;
             rows.Add(_mixerSplitRow);
             rows.Add(_mixerRow);
             Grid.SetRow(MixerSplitter, 1);
@@ -1019,8 +1310,8 @@ public partial class MainWindow
         Grid.SetRow(DetailSplitter, detail);
         Grid.SetRow(DetailPanel, detail + 1);
         Grid.SetRow(DetailEdge, detail);
-        MixerSplitter.IsVisible = _mixerDocked;
-        MixerPanel.IsVisible = _mixerDocked;
+        MixerSplitter.IsVisible = mixer;
+        MixerPanel.IsVisible = mixer;
         SyncDetailEdge();
         FitBottomPanels();
     }
@@ -1031,10 +1322,21 @@ public partial class MainWindow
     // minimum. The Mixer grows back toward the height the user chose; a fit never changes it.
     private void FitBottomPanels()
     {
+        if (_detailMaximized) { SetWindowDesignMinHeight(_baseWindowMinHeight); return; }   // the Detail row is all there is
         double total = BodyGrid.Bounds.Height;
         double mixer = _mixerDocked ? Math.Max(_mixerWanted, _mixerRow.MinHeight) : 0;
         if (total > 0)
         {
+            // The visible panels' minima must fit as a whole. In particular, the MIDI
+            // editor must not be pushed below the window by a docked Mixer.
+            double minimumBody = _mainRow.MinHeight
+                + (DetailPanel.IsVisible ? _detailRow.MinHeight + _detailSplitRow.ActualHeight : 0)
+                + (_mixerDocked ? _mixerRow.MinHeight + _mixerSplitRow.ActualHeight : 0);
+            // BodyGrid and its rows measure in design units, the window's frame in screen units:
+            // bring the frame back to design units and let NotaUiScale scale the minimum, so
+            // it stays right at any interface scale and after the scale changes.
+            double chrome = ClientSize.Height / NotaUiScale.Factor - total;
+            SetWindowDesignMinHeight(Math.Max(_baseWindowMinHeight, chrome + minimumBody));
             double room = total - _mainRow.MinHeight;
             double detail = !DetailPanel.IsVisible ? 0 : _detailWanted > 0 ? Math.Max(_detailWanted, _detailRow.MinHeight) : Height(_detailRow);
             double over = mixer + detail - room;
@@ -1050,6 +1352,17 @@ public partial class MainWindow
         }
         if (_mixerDocked) _mixerRow.Height = new GridLength(Math.Round(mixer));
 
+    }
+
+    // The window's minimum height in design units; applied only when it changes, since the
+    // panels refit on every resize.
+    private double _windowDesignMinHeight = double.NaN;
+    private void SetWindowDesignMinHeight(double height)
+    {
+        height = Math.Round(height);
+        if (height == _windowDesignMinHeight) return;
+        _windowDesignMinHeight = height;
+        NotaUiScale.SetDesignMinHeight(this, height);
     }
 
     private void CloseDetail()
@@ -1086,6 +1399,7 @@ public partial class MainWindow
         _editorRoll?.SettlePlacement();
         var roll = new PianoRollView
         {
+            LaneSettings = _vm.Settings,
             BeatsPerBar = Timeline.BeatsPerBar,   // bar lines and bar steps match the arrangement
             Commit = notes =>
             {
@@ -1098,6 +1412,13 @@ public partial class MainWindow
             PollHeldNotes = buf => Engine.LiveHeldNotes(buf),
             ExpressionOf = id => Engine.GetNoteExpression(id),
             CreateExpression = pts => Engine.CreateNoteExpression(pts),
+            ControllersInClip = () => Engine.GetSessionControllers(trackId, scene),
+            GetController = ctl => Engine.GetSessionController(trackId, scene, ctl),
+            SetController = (ctl, pts) =>
+            {
+                Engine.SetSessionController(trackId, scene, ctl, pts);
+                _session?.Refresh();
+            },
             AuditionOn = (pitch, vel) => AuditionNoteOn(trackId, pitch, vel),
             AuditionOff = pitch => Engine.TrackNoteOff(trackId, pitch),
             IsSessionSlot = true,   // no Seek: the slot plays on its own loop clock
@@ -1112,7 +1433,7 @@ public partial class MainWindow
         _editorRoll = roll;
         _editorTrackId = -1;  // session slot: recording-tick reload N/A
         _editorClipIndex = -1;
-        _clipEditor = new ClipEditorView(roll, $"Track {trackId} · Scene {scene + 1}", 0);
+        _clipEditor = new ClipEditorView(roll, Loc.F("main.detail.track_scene", trackId, scene + 1), 0);
         _lastClipEditor = _clipEditor;
         SetHost(ClipDetailHost, _clipEditor);
         SetDetailChip(trackId);

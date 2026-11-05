@@ -12,10 +12,9 @@ public static class TextSize
 {
     public const int Default = 0;
 
-    /// <summary>The offered steps, smallest first, with their names (the picker's order).</summary>
-    public static IReadOnlyList<(int Step, string Name)> Steps { get; } =
-        new[] { (-1, "Smaller"), (0, "Default"), (1, "Larger"), (2, "Largest") };
+    /// <summary>The offered steps, smallest first (the picker's order).</summary>
+    public static IReadOnlyList<int> Steps { get; } = new[] { -1, 0, 1, 2 };
 
     /// <summary>The stored value if it is offered, else <see cref="Default"/>.</summary>
-    public static int Normalize(int step) => Steps.Any(s => s.Step == step) ? step : Default;
+    public static int Normalize(int step) => Steps.Contains(step) ? step : Default;
 }

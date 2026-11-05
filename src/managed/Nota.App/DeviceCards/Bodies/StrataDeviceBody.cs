@@ -20,6 +20,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Nota.Application;
+using Nota.Application.Localization;
 using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
@@ -86,10 +87,10 @@ internal sealed class StrataDeviceBody : IDeviceBody
         var actCmds = new[] { C_Record, C_Overdub, C_Play, C_Stop };
         var actTips = new[]
         {
-            "Record — start the loop; on the first pass, close it; then record a new layer from the loop's top",
-            "Overdub — record a new layer from the next quantize step (on the first pass: close the loop and record layer 2)",
-            "Play — play every layer (on the first pass: close the loop)",
-            "Stop — stop at the next quantize step and return to the loop's top",
+            Loc.T("device.strata.record_start_the_loop_on"),
+            Loc.T("device.strata.overdub_record_a_new_layer"),
+            Loc.T("device.strata.play_play_every_layer_on"),
+            Loc.T("device.strata.stop_stop_at_the_next"),
         };
         var actBtn = new Border[4]; var actSub = new TextBlock[4]; var actName = new TextBlock[4];
         var actRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, VerticalAlignment = VerticalAlignment.Center };
@@ -110,7 +111,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { barNum, tickRow, ofBars } } } } };
 
         // ---------- layer stack ----------
-        var layerHint = new TextBlock { Text = "Press Record to lay down the first loop", FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var layerHint = new TextBlock { Text = Loc.T("device.strata.press_record_to_lay_down"), FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var layerRows = new Border[MaxLayers]; var waves = new StrataWave[MaxLayers];
         var stateTxts = new TextBlock[MaxLayers]; var muteBtns = new Border[MaxLayers];
         var layerStack = new StackPanel { Spacing = 3 };
@@ -127,7 +128,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             var level = SliderRow("", () => NormOf(Sc(7 + iv * 3)), n => Act(A_LayerGain, iv, (float)(MinDb + n * (MaxDb - MinDb))),
                 () => DbText(Sc(7 + iv * 3)), out var levelSync, reset: () => Act(A_LayerGain, iv, 0f), trackWidth: 52, valueWidth: 34,
                 textAt: n => DbText(MinDb + n * (MaxDb - MinDb)));
-            ToolTip.SetTip(level, $"Layer {i + 1} level");
+            ToolTip.SetTip(level, Loc.F("device.strata.layer_level", i + 1));
             readouts.Add(levelSync);
             var mtxt = new TextBlock { Text = "M", FontSize = 8, FontWeight = FontWeight.Medium, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             muteBtns[i] = new Border { Width = 16, Height = 14, CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = mtxt };
@@ -137,7 +138,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 Act(A_LayerMute, iv, Sc(8 + iv * 3) > 0.5f ? 0f : 1f);
                 e.Handled = true;
             };
-            ToolTip.SetTip(muteBtns[i], $"Mute layer {i + 1}");
+            ToolTip.SetTip(muteBtns[i], Loc.F("device.strata.mute_layer", i + 1));
             var left = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7, VerticalAlignment = VerticalAlignment.Center, Children = { idx, nameTxt } };
             var right = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center, Children = { stateTxts[i], level, muteBtns[i] } };
             var row = new DockPanel { LastChildFill = true, Children = { Docked(left, Dock.Left), Docked(right, Dock.Right), new Border { Margin = new Thickness(8, 0), Child = waves[i] } } };
@@ -145,7 +146,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
             layerStack.Children.Add(layerRows[i]);
         }
         var stackHost = new Grid { Children = { layerStack, layerHint } };
-        var layerHead = new DockPanel { LastChildFill = false, Height = 16, Children = { Docked(Caps("LAYERS"), Dock.Left), Docked(countLbl, Dock.Right) } };
+        var layerHead = new DockPanel { LastChildFill = false, Height = 16, Children = { Docked(Caps(Loc.T("device.strata.layers")), Dock.Left), Docked(countLbl, Dock.Right) } };
         var layers = new RuleSection { Margin = new Thickness(0, 5, 5, 0), Padding = new Thickness(8, 5, 8, 7),
             Child = new DockPanel { LastChildFill = true, Children = { Docked(new Border { Margin = new Thickness(0, 0, 0, 4), Child = layerHead }, Dock.Top), stackHost } } };
         // Rows share the stack's height, so all eight layers fit.
@@ -203,10 +204,10 @@ internal sealed class StrataDeviceBody : IDeviceBody
         string SpeedF(double v) => NotaNum.F($"{v:0.00}×");
 
         bool HasLayers() => (int)Sc(3) > 0;
-        var undo = ActionBtn("Undo", "Undo — drop the last layer (or the one recording now)", () => Act(C_Undo), HasLayers);
+        var undo = ActionBtn("Undo", Loc.T("device.strata.undo_drop_the_last_layer"), () => Act(C_Undo), HasLayers);
         Border? root = null;
-        var export = ActionBtn("Export", "Export — write the loop as you hear it (every unmuted layer at its level) to a WAV file", ExportWav, () => HasLayers() && Sc(S_LoopBpm) > 0);
-        var clear = ActionBtn("Clear", "Clear — remove every layer", () => Act(C_Clear), HasLayers);
+        var export = ActionBtn("Export", Loc.T("device.strata.export_write_the_loop_as"), ExportWav, () => HasLayers() && Sc(S_LoopBpm) > 0);
+        var clear = ActionBtn("Clear", Loc.T("device.strata.clear_remove_every_layer"), () => Act(C_Clear), HasLayers);
         var bottomActions = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 5 };
         Grid.SetColumn(export, 1); Grid.SetColumn(clear, 2);
         bottomActions.Children.Add(undo); bottomActions.Children.Add(export); bottomActions.Children.Add(clear);
@@ -220,15 +221,15 @@ internal sealed class StrataDeviceBody : IDeviceBody
             Child = new DockPanel { LastChildFill = false, Children = {
                 Docked(bottomActions, Dock.Bottom),
                 Docked(new StackPanel { Spacing = 6, Children = {
-                    new Border { Height = 16, Child = Caps("LOOP") },
-                    Row(Feedback, "Feedback", PctF, false),
-                    Row(InputGain, "Input gain", DbText, false),
-                    Row(Speed, "Speed", SpeedF, true),
+                    new Border { Height = 16, Child = Caps(Loc.T("common.loop")) },
+                    Row(Feedback, Loc.T("device.strata.feedback"), PctF, false),
+                    Row(InputGain, Loc.T("device.strata.input_gain"), DbText, false),
+                    Row(Speed, Loc.T("device.strata.speed"), SpeedF, true),
                     qRow,
                     new StackPanel { Spacing = 5, Margin = new Thickness(0, 2, 0, 0), Children = {
-                        Toggle(CountIn, "Count-in 1 bar", "Count-in — the first Record waits one bar before it starts"),
-                        Toggle(SetTempo, "Set tempo from loop", "Set tempo — when the first loop closes, the song tempo changes so the loop is a whole number of bars"),
-                        Toggle(Reverse, "Reverse", "Reverse — play the layers backwards") } } } }, Dock.Top) } } };
+                        Toggle(CountIn, "Count-in 1 bar", Loc.T("device.strata.count_in_the_first_record")),
+                        Toggle(SetTempo, Loc.T("device.strata.set_tempo_from_loop"), Loc.T("device.strata.set_tempo_when_the_first")),
+                        Toggle(Reverse, "Reverse", Loc.T("device.strata.reverse_play_the_layers_backwards")) } } } }, Dock.Top) } } };
         DockPanel.SetDock(rail, Dock.Right);
 
         root = new Border { Background = NotaPalette.SurfaceCard,
@@ -263,10 +264,10 @@ internal sealed class StrataDeviceBody : IDeviceBody
             }
             var file = await top.PickSaveFileAsync(new FilePickerSaveOptions
             {
-                Title = "Export the Strata loop to WAV",
+                Title = Loc.T("device.strata.export_the_strata_loop_to"),
                 DefaultExtension = "wav",
-                SuggestedFileName = "Nota Strata loop.wav",
-                FileTypeChoices = new[] { new FilePickerFileType("WAV audio") { Patterns = new[] { "*.wav" } } },
+                SuggestedFileName = Loc.T("device.strata.nota_strata_loop_wav"),
+                FileTypeChoices = new[] { new FilePickerFileType(Loc.T("device.strata.wav_audio")) { Patterns = new[] { "*.wav" } } },
             });
             string? path = file?.TryGetLocalPath();
             if (path is null) return;
@@ -311,38 +312,38 @@ internal sealed class StrataDeviceBody : IDeviceBody
             bool rolling = mode is M_Rec or M_Over or M_Play;   // the progress is the playhead only while it runs
             for (int i = 0; i < ticks.Count; i++)
                 ticks[i].Background = closed && rolling && i < lit ? Brass : NotaPalette.BorderStrong;
-            ofBars.Text = counting ? "count-in" : firstPass ? "recording the first loop" : closed ? NotaNum.F($"of {loopBars} {(loopBars == 1 ? "bar" : "bars")}") : "";
-            countLbl.Text = closed || firstPass ? NotaNum.F($"{lc} of {MaxLayers} · one cycle shown") : "";
+            ofBars.Text = counting ? Loc.T("device.strata.count_in") : firstPass ? Loc.T("device.strata.recording_the_first_loop") : closed ? Loc.Plural("device.strata.of_bars", loopBars) : "";
+            countLbl.Text = closed || firstPass ? Loc.F("device.strata.of_one_cycle_shown", lc, MaxLayers) : "";
 
             // Captions say what each action does now; one that would do nothing dims.
-            string when = quant switch { 0 => "now", 1 => "next bar", _ => "next beat" };
+            string when = quant switch { 0 => Loc.T("device.strata.now"), 1 => Loc.T("device.strata.next_bar"), _ => Loc.T("device.strata.next_beat") };
             bool full = lc >= MaxLayers, overdubbing = mode == M_Over;
             var subs = new string[4]; var can = new bool[4];
-            if (counting) { subs[0] = subs[1] = subs[2] = ""; subs[3] = "cancel count-in"; can[3] = true; }
+            if (counting) { subs[0] = subs[1] = subs[2] = ""; subs[3] = Loc.T("device.strata.cancel_count_in"); can[3] = true; }
             else if (mode == M_Empty || lc == 0)
             {
-                subs[0] = subs[1] = On(CountIn) ? "after a count-in" : "start the loop"; can[0] = can[1] = true;
+                subs[0] = subs[1] = On(CountIn) ? Loc.T("device.strata.after_a_count_in") : Loc.T("device.strata.start_the_loop"); can[0] = can[1] = true;
                 subs[2] = subs[3] = "";
             }
             else if (firstPass)
             {
-                subs[0] = "close, then play"; subs[1] = "close, add layer 2"; subs[2] = "close, then play"; subs[3] = "close, then stop";
+                subs[0] = Loc.T("device.strata.close_then_play"); subs[1] = Loc.T("device.strata.close_add_layer_2"); subs[2] = Loc.T("device.strata.close_then_play"); subs[3] = Loc.T("device.strata.close_then_stop");
                 can[0] = can[1] = can[2] = can[3] = true;
             }
             else
             {
-                subs[0] = full ? "layers full" : overdubbing ? "recording" : NotaNum.F($"layer {lc + 1}, loop top");
-                subs[1] = full ? "layers full" : overdubbing ? "recording" : NotaNum.F($"layer {lc + 1}, {when}");
+                subs[0] = full ? Loc.T("device.strata.layers_full") : overdubbing ? Loc.T("device.strata.recording") : Loc.F("device.strata.layer_loop_top", lc + 1);
+                subs[1] = full ? Loc.T("device.strata.layers_full") : overdubbing ? Loc.T("device.strata.recording") : Loc.F("device.strata.layer_when", lc + 1, when);
                 can[0] = can[1] = !full && !overdubbing;
-                subs[2] = mode == M_Stop ? "from the top" : "all layers"; can[2] = mode != M_Play;
-                subs[3] = mode == M_Stop ? "stopped" : when == "now" ? "now" : NotaNum.F($"at the {when}"); can[3] = mode != M_Stop;
+                subs[2] = mode == M_Stop ? Loc.T("device.strata.from_the_top") : "all layers"; can[2] = mode != M_Play;
+                subs[3] = mode == M_Stop ? Loc.T("device.strata.stopped_caption") : quant == 0 ? when : Loc.F("device.strata.at_the", when); can[3] = mode != M_Stop;
             }
             int active = counting ? 0 : mode switch { M_Rec => 0, M_Over => 1, M_Play => 2, M_Stop => 3, _ => -1 };
             for (int i = 0; i < 4; i++)
             {
                 bool on = i == active, waiting = pending == actCmds[i];
                 var ink = i == 0 ? NotaPalette.Record : NotaPalette.Accent;
-                actSub[i].Text = waiting ? "waiting…" : subs[i];
+                actSub[i].Text = waiting ? Loc.T("device.strata.waiting") : subs[i];
                 actBtn[i].Background = on ? NotaPalette.Wash(ink, 0x24) : NotaPalette.SurfaceHover;
                 actBtn[i].BorderBrush = on ? ink : waiting ? NotaPalette.BorderBrass : Brushes.Transparent;
                 actName[i].Foreground = on ? (i == 0 ? NotaPalette.Record : AccentBright) : can[i] ? TextPrimary : TextDisabled;
@@ -360,7 +361,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 layerRows[k].IsVisible = vis;
                 if (!vis) continue;
                 bool muted = Sc(8 + k * 3) > 0.5f, rec = recL == k && !counting;
-                stateTxts[k].Text = rec ? "Rec" : muted ? "Muted" : mode == M_Stop ? "Stopped" : "Play";
+                stateTxts[k].Text = rec ? "Rec" : muted ? "Muted" : mode == M_Stop ? Loc.T("device.strata.stopped") : "Play";
                 stateTxts[k].Foreground = rec ? NotaPalette.Record : muted ? TextTertiary : TextSecondary;
                 var mtxt = (TextBlock)muteBtns[k].Child!;
                 muteBtns[k].Background = muted ? NotaPalette.Mute : Brushes.Transparent;   // mute on = the amber mute fill

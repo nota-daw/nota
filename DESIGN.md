@@ -182,6 +182,13 @@ changes.
    stands on a picture of the plug-in's own window under `NotaPalette.PluginPreviewWash`, a
    vertical wash of the card's own `SurfaceCard` (specs/046). It lives in `Theme/` like
    every token; views still draw no gradients of their own.
+   A second exception: the launch splash's release art (`Theme/SplashArt/`, specs/074),
+   generated from the version number so every release opens with a picture of its own.
+   It may use gradients between theme tokens (including fades to transparent) and strokes
+   heavier than 1px. It still draws only theme tokens: track colours as the work,
+   neutral greys for its structure, and one accent mark that reads as live (a playhead,
+   the current step). It has no glow, blur or shadow, and the text beside it stays on the
+   plain ground behind a 1px seam.
 4. **Orange has three jobs.** Solid for what is live, a soft tint with orange text for what
    you picked, orange lines for values inside a device. Nothing else is orange (§ Orange).
 5. **One typeface.** Geist for every word and number, with tabular figures so a value can
@@ -1003,7 +1010,13 @@ Every region is **docked**: corner 0, no gutter, separated by 1 px seams.
 - **Mixer strips** are `Panel` columns on seams, each with a 3 px top bar in the track
   colour (grey for master); sliders and knobs are the flat shell kind, sends with their
   amount written inside the bar. The footer's Sends and I/O toggles are chips (shown is
-  picked: the soft tint), and the A–B crossfader placeholder is a flat slider.
+  picked: the soft tint), and the A–B crossfader placeholder is a flat slider. Strips
+  follow the Arrangement's hierarchy — a group strip, then its members — under one 14 px bar
+  per nesting level with the group's name on a wash of its colour and a fainter wash behind
+  its strips; a group folds from the triangle on its strip, the hidden count in its bar
+  (specs/070). Compact strips are 72 wide: one-line I/O, send and pan bars, a wide meter
+  that is the fader (a triangle at the volume's dB on the meter's scale), M / S / Arm at
+  full width.
 
 ### Device card
 
@@ -1262,7 +1275,7 @@ drift).
 | `RunThemes` | Every theme file: shape, id, kind, exactly the token catalogue, valid colours, opaque except the shadows and the see-through `Well`, `WellTrack`, `KnobTrack`, `DeviceSectionEdge`, `Bevel`; every readability pairing (§ Readability bar); `BuiltInOrder` lists exactly the files; no view names a theme id; the theme preview draws the theme's own colours (`ColorIn`) |
 | `RunAppearance` | Old settings migrate (Dark / Light / System); unknown and wrong-kind ids fall back; picks per mode; storing keeps the legacy setting in step |
 | `RunInterfaceScale` | Scale presets 75 / 100 / 125 / 150 / 200 %; anything else reads as 100 % |
-| `RunGeometry` | `Radius.*` / `Control.*` / `Space.*` in XAML equal `NotaGeometry`; no undefined keys; no `CornerRadius` literals, drop shadows or gradients in views; `Rectangle` `RadiusX` / `RadiusY` literals on the 0 / 2 / 3 / 4 / 5 / 6 / 7 / 9 scale (`RadiusAllowList.txt`) |
+| `RunGeometry` | `Radius.*` / `Control.*` / `Space.*` in XAML equal `NotaGeometry`; no undefined keys; no `CornerRadius` literals, drop shadows or gradients in views; gradients inside `Theme/` only in `NotaPalette.cs` and `Theme/SplashArt/`; `Rectangle` `RadiusX` / `RadiusY` literals on the 0 / 2 / 3 / 4 / 5 / 6 / 7 / 9 scale (`RadiusAllowList.txt`) |
 | `RunType` | `Font.UI` matches `NotaFonts.UiUri`; it is the only font family (no Mono URI); `+tnum` is on (`NotaFonts.Tabular`); the four Geist weights are bundled and no other `.ttf`; the Geist OFL licence ships; no font names or `FontFamily.Default` in views; nothing under 7 px |
 | `RunControls` | No unicode icons typed as text; `Knob` snaps to its sizes (34 / 36 / 44 device, 24 inline, 28 flat); `SwitchTrack` is 18 × 10 with a 7 px knob inset 1.5; `SliderTrack` is a 9 px value bar in a groove with a 3 px line (16 in the shell) |
 | `RunVisualisers` | Graph windows via `NotaGraph`; no fills under curves; no meter or spectrum ballistics; meter channels 3 wide, 1.5 apart, amber from −6 dBFS, red from 0 dBFS; the arrangement playhead 1 px without glow |
@@ -1316,6 +1329,9 @@ Places where a screen's needs override a general rule, kept on purpose:
 - **Hero readouts** larger than the device scale: Strata's bar number, Shutter Open/Shut,
   Auto Shift's note, Level's value.
 - **Zoom 28 px per beat** by default.
+- **Compact mixer meters are 18 px a channel**, 3 apart, against the 11 / 5 meter rule
+  (specs/070, #386): the wide meter is what keeps a 72 px compact strip readable, and it is
+  also the strip's fader. Zones, the hold mark and the −60…+6 scale are unchanged.
 - **Nota Remote keeps its own styling and Geist Mono** for now (§ Nota Remote).
 
 ## Known drift

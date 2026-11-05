@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 
+using Nota.Application.Localization;
+
 namespace Nota.Application;
 
 /// <summary>CPU used by the whole Nota process (all threads: audio, UI, rendering, plugins) over
@@ -30,5 +32,5 @@ public static class ProcessCpuScale
         wholeMachine ? corePercent / Math.Max(1, logicalCpus) : corePercent;
 
     /// <summary>What a displayed figure is a percentage of, for tooltips.</summary>
-    public static string Unit(bool wholeMachine) => wholeMachine ? "of all CPUs" : "of one core";
+    public static string Unit(bool wholeMachine) => wholeMachine ? Loc.T("ports.i_process_cpu.of_all_cpus") : Loc.T("ports.i_process_cpu.of_one_core");
 }

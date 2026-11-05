@@ -1,3 +1,4 @@
+using Nota.Application.Localization;
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
@@ -45,8 +46,8 @@ public sealed class ParsedQuery
 
     public static readonly (char Prefix, PaletteKind Kind, string Label)[] Prefixes =
     {
-        ('>', PaletteKind.Action, "Actions"), ('@', PaletteKind.Track, "Tracks"), ('+', PaletteKind.Device, "Devices"),
-        ('#', PaletteKind.Preset, "Presets"), ('~', PaletteKind.Modular, "Modular"),
+        ('>', PaletteKind.Action, Loc.T("palette.search.actions")), ('@', PaletteKind.Track, Loc.T("palette.search.tracks")), ('+', PaletteKind.Device, Loc.T("palette.search.devices")),
+        ('#', PaletteKind.Preset, Loc.T("palette.search.presets")), ('~', PaletteKind.Modular, Loc.T("common.modular")),
     };
 
     public static ParsedQuery Parse(string raw)
@@ -281,8 +282,8 @@ public sealed class PaletteSearch
 
     public static string GroupLabel(PaletteKind k) => k switch
     {
-        PaletteKind.Action => "Actions", PaletteKind.Track => "Tracks", PaletteKind.Device => "Devices",
-        PaletteKind.Preset => "Presets", _ => "Modular",
+        PaletteKind.Action => Loc.T("palette.search.actions"), PaletteKind.Track => Loc.T("palette.search.tracks"), PaletteKind.Device => Loc.T("palette.search.devices"),
+        PaletteKind.Preset => Loc.T("palette.search.presets"), _ => Loc.T("common.modular"),
     };
 
     // CP-8: an unavailable action is shown only when the query names it.
@@ -367,14 +368,14 @@ public sealed class PaletteSearch
             var recent = (_usage?.Recent ?? []).Select(_index.Find).Where(Ok).Select(it => it!).ToList();
             if (recent.Count > 0)
             {
-                res.Rows.Add(new PaletteRow("Recent", default));
+                res.Rows.Add(new PaletteRow(Loc.T("common.recent"), default));
                 foreach (var it in recent) { AddItem(res, Make(it)); seen.Add(it.Id); }
             }
             var sug = (suggested ?? []).Select(_index.Find).Where(it => Ok(it) && !seen.Contains(it!.Id)).Select(it => it!)
                 .Where(it => it.Kind != PaletteKind.Action || availability is null || availability(it).Ok).ToList();
             if (sug.Count > 0)
             {
-                res.Rows.Add(new PaletteRow("Suggested · " + OriginLabel(ctx.Origin), default));
+                res.Rows.Add(new PaletteRow(Loc.F("palette.search.suggested", OriginLabel(ctx.Origin)), default));
                 foreach (var it in sug) AddItem(res, Make(it));
             }
             return;
@@ -390,8 +391,8 @@ public sealed class PaletteSearch
 
     public static string OriginLabel(PaletteOrigin o) => o switch
     {
-        PaletteOrigin.PianoRoll => "Piano roll",
-        PaletteOrigin.DeviceWindow => "Device window",
+        PaletteOrigin.PianoRoll => Loc.T("common.piano_roll"),
+        PaletteOrigin.DeviceWindow => Loc.T("palette.search.device_window"),
         _ => o.ToString(),
     };
 }

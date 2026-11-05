@@ -7,6 +7,15 @@ this file stays small and the authoritative docs stay authoritative.
 
 ## Core Principles
 
+### 0. Approved Issue First (NON-NEGOTIABLE)
+
+No change starts — no code, no spec, no doc edit — without a GitHub issue that a core
+contributor has approved (the `approved` label, or `good first issue` / `help wanted`).
+Without one, an agent stops and asks the user to open or find an issue and wait. Work
+stays within the scope the issue agreed; the pull request links it. Release pull requests
+cut by core contributors are exempt. See
+[`CONTRIBUTING.md`](../../CONTRIBUTING.md) § Start with an approved issue.
+
 ### I. Real-Time Audio Safety (NON-NEGOTIABLE)
 
 The audio thread never allocates, locks, or does I/O (AR-6); data crosses into it through
@@ -50,7 +59,8 @@ work follows [`DESIGN.md`](../../DESIGN.md) (the Studio design language).
 
 Any non-trivial feature or bugfix goes through the spec-driven workflow —
 specification, plan, and tasks exist and are agreed before implementation. Specs stay
-small and are committed under `specs/`. Typos and trivial fixes skip this.
+small and are committed under `specs/`. Typos and trivial fixes skip this (but not
+principle 0).
 
 ### VIII. Safety Rules Are Never Weakened to Unblock a Feature
 
@@ -74,4 +84,4 @@ This constitution governs AI agents working in this repository;
 above. Amendments require a pull request that updates the source-of-truth doc first,
 then this file, and must not weaken principles I–III.
 
-**Version**: 1.0.1 | **Ratified**: 2026-10-11 | **Last Amended**: 2026-10-13
+**Version**: 1.1.0 | **Ratified**: 2026-10-11 | **Last Amended**: 2026-11-02
