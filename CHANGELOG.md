@@ -22,6 +22,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **Nota Remote no longer causes audio dropouts on macOS** (#511): while a phone or browser
+  tab was connected, or the Remote popup was open, the sound dropped out about every
+  10 seconds. Nota started a system helper on that interval to find USB network links; it now
+  reads them directly and only again when the network changes.
+
 ## [0.59.1] — 2026-11-05
 
 ### Added
