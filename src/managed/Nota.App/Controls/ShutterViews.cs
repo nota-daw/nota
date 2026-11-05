@@ -24,6 +24,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -185,7 +186,7 @@ internal sealed class ShSignalView : ShDragView
         ctx.DrawLine(new Pen(hotT ? NotaPalette.Accent : NotaPalette.VizInk, hotT ? 1.4 : 1, new DashStyle(new double[] { 4, 4 }, 0)), new Point(0, Y(_thr)), new Point(w, Y(_thr)));
         ctx.DrawLine(new Pen(hotR ? NotaPalette.Accent : NotaPalette.BorderStrong, 1, new DashStyle(new double[] { 2, 4 }, 0)), new Point(0, Y(_ret)), new Point(w, Y(_ret)));
 
-        NotaGraph.Title(ctx, frame, _duck ? "Signal and duck" : "Signal and gate");
+        NotaGraph.Title(ctx, frame, _duck ? Loc.T("device.shutter.signal_and_duck") : Loc.T("device.shutter.signal_and_gate"));
         NotaGraph.Legend(ctx, w - 6, 3, ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Area), ("output", NotaPalette.VizInk, NotaGraph.Mark.Line));
         // The Thresh knob shows the level, so the line is named only while it is grabbed.
         if (hotT)
@@ -321,7 +322,7 @@ internal sealed class ShEnvelopeView : ShDragView
         for (int k = 0; k < 3; k++) { var n = Node(k); if (n.X < w - 2) NotaGraph.Node(ctx, n, Active == k); }
         NotaGraph.Node(ctx, Node(HFloor), Active == HFloor, Active == HFloor ? null : NotaPalette.TextTertiary);
 
-        NotaGraph.Title(ctx, frame, _duck ? "Duck envelope" : _retrig ? "Gate envelope · trigger" : "Gate envelope");
+        NotaGraph.Title(ctx, frame, _duck ? "Duck envelope" : _retrig ? Loc.T("device.shutter.gate_envelope_trigger") : "Gate envelope");
         TextR(ctx, "open 0\u2009dB", w - 6, 3, NotaPalette.TextSecondary);
         double fy = _duck ? yf + 2 : yf - 11;
         if (fy > h - 24) fy = yf - 11;
@@ -417,7 +418,7 @@ internal sealed class ShKeyView : ShDragView
             NotaGraph.Node(ctx, new Point(X(_lpHz), Yd(Mag(_lpHz))), Active == HLp);
         }
 
-        NotaGraph.Title(ctx, frame, _on ? "Detector filter" : "Detector · full band");
+        NotaGraph.Title(ctx, frame, _on ? "Detector filter" : Loc.T("device.shutter.detector_full_band"));
         NotaGraph.Legend(ctx, w - 6, 3, ("key", NotaPalette.TextSecondary, NotaGraph.Mark.Line), (_legend, NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         static string Hz(double f) => f >= 1000 ? NotaNum.F($"{f / 1000:0.0}\u2009k") : NotaNum.F($"{f:0}");
         Text(ctx, "20", 4, h - 11);

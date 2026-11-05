@@ -15,6 +15,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -203,13 +204,13 @@ public sealed partial class ArrangementView
         var flyout = new MenuFlyout();
         flyout.FlyoutPresenterClasses.Add("rows");
         MenuKit.AddGroups(flyout.Items,
-            new Control[] { MenuKit.Header($"{ids.Count} tracks", null, "") },
+            new Control[] { MenuKit.Header(Loc.F("arrangement.tracks.tracks", ids.Count), null, "") },
             new Control[] { TrackColourRow(ids), TrackHeightRow(ids) },
             FreezeTracksMenuItems?.Invoke(ids),
-            new Control[] { MenuKit.Item("Group tracks", GlyphKind.Folder, () => GroupTracks(-1), MenuKit.GroupKey) },
+            new Control[] { MenuKit.Item(Loc.T("arrangement.group_tracks"), GlyphKind.Folder, () => GroupTracks(-1), MenuKit.GroupKey) },
             MenuKit.ClipboardGroup(() => CopyTracksToClipboard(ids), () => CutTracks(ids),
                 () => PasteTracksAfter(ids[^1]), () => DuplicateTracks(ids), _engine.HasTrackClipboard()),
-            new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => DeleteTracks(ids), MenuKit.DeleteKey) });
+            new Control[] { MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, () => DeleteTracks(ids), MenuKit.DeleteKey) });
         return flyout;
     }
 
@@ -220,7 +221,7 @@ public sealed partial class ArrangementView
     {
         int pos = _tracks.FindIndex(v => v.Id == trackId);
         var vm = pos >= 0 ? _tracks[pos] : null;
-        string kind = vm is null ? "Track" : vm.IsGroup ? "Group" : vm.IsReturn ? "Return" : vm.IsInstrument ? "Instrument" : "Audio";
+        string kind = vm is null ? Loc.T("common.track") : vm.IsGroup ? Loc.T("common.group") : vm.IsReturn ? Loc.T("common.return") : vm.IsInstrument ? Loc.T("common.instrument") : Loc.T("common.audio");
         return pos >= 0 ? $"{kind} · {pos + 1}" : kind;
     }
 
@@ -230,25 +231,52 @@ public sealed partial class ArrangementView
     {
         var stored = ids.Select(id => _engine!.GetTrackColorIndex(id)).Distinct().ToList();
         int current = stored.Count == 1 ? stored[0] : int.MinValue;
-        return MenuKit.ColourGrid(current, ci =>
-        {
-            if (_engine is null) return;
-            _engine.BeginUndoGroup();
-            try { foreach (var id in ids) _engine.SetTrackColorIndex(id, ci); }
-            finally { _engine.EndUndoGroup(); }
-            Refresh(); SessionChanged?.Invoke();
-        });
+        return MenuKit.ColourGrid(current, ci => SetTrackColours(ids, ci));
     }
+
+    internal void SetTrackColours(IReadOnlyList<int> ids, int colorIndex)
+    {
+        if (_engine is null) return;
+        _engine.BeginUndoGroup();
+        try { foreach (var id in ids) _engine.SetTrackColorIndex(id, colorIndex); }
+        finally { _engine.EndUndoGroup(); }
+        Refresh(); SessionChanged?.Invoke();
+    }
+
+    // ---- the track inspector's view of a track (specs/060) -------------------------------
+
+    /// <summary>Redraws the headers and the Session grid after an edit made outside them.</summary>
+    internal void RefreshAfterTrackEdit() { Refresh(); SessionChanged?.Invoke(); }
+
+    internal double TrackRowHeight(int trackId) => StoredRowHeight(trackId);
+
+    /// <summary>An audio track's record-input choices in picker order (hardware, Master, the
+    /// other tracks, the returns), with their menu labels.</summary>
+    internal List<(RecordInputPick Pick, string Label)> RecordInputChoices(int trackId)
+    {
+        var list = RecordInputPick.Hardware.Select(h => (h.Pick, h.Label)).ToList();
+        list.Add((RecordInputPick.Track(-1), Loc.T("common.master")));
+        foreach (var v in _tracks)
+            if (v.Id != trackId) list.Add((RecordInputPick.Track(v.Id), v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id)));
+        foreach (var v in _returns)
+            list.Add((RecordInputPick.Track(v.Id), v.Name.Length > 0 ? v.Name : Loc.F("common.return_n", v.Id)));
+        return list;
+    }
+
+    /// <summary>The instrument tracks another instrument track can take its MIDI from.</summary>
+    internal List<(int Id, string Name)> MidiSourceChoices(int trackId)
+        => _tracks.Where(v => v.Id != trackId && v.IsInstrument)
+                  .Select(v => (v.Id, v.Name.Length > 0 ? v.Name : Loc.F("common.track_n", v.Id))).ToList();
 
     // Compact / Standard / Large for one or more tracks (the chosen key when they all sit on
     // that preset); Option / Alt applies the height to every track.
     private MenuItem TrackHeightRow(IReadOnlyList<int> ids)
     {
-        (string, double)[] presets = { ("Compact", CompactRowHeight), ("Standard", StandardRowHeight), ("Large", LargeRowHeight) };
+        (string, double)[] presets = { (Loc.T("common.compact"), CompactRowHeight), (Loc.T("arrangement.tracks.standard"), StandardRowHeight), (Loc.T("arrangement.tracks.large"), LargeRowHeight) };
         double? chosen = presets.Select(p => p.Item2)
             .Where(h => ids.Count > 0 && ids.All(id => Math.Abs(StoredRowHeight(id) - h) < 0.5))
             .Select(h => (double?)h).FirstOrDefault();
-        return MenuKit.Segments("Height", presets, chosen, (h, all) =>
+        return MenuKit.Segments(Loc.T("arrangement.tracks.height"), presets, chosen, (h, all) =>
         {
             if (all) SetAllTrackHeights(h); else SetTrackHeights(ids, h);
         });
@@ -258,13 +286,13 @@ public sealed partial class ArrangementView
     // selected returns it belongs to — or the master. Never "all tracks", so Alt/Option is ignored.
     private MenuItem FooterHeightRow(int footerRow)
     {
-        (string, double)[] presets = { ("Compact", CompactRowHeight), ("Standard", StandardRowHeight), ("Large", LargeRowHeight) };
+        (string, double)[] presets = { (Loc.T("common.compact"), CompactRowHeight), (Loc.T("arrangement.tracks.standard"), StandardRowHeight), (Loc.T("arrangement.tracks.large"), LargeRowHeight) };
         var (returns, master) = FooterResizeTargets(footerRow);
         var current = returns.Select(StoredRowHeight).Concat(master ? new[] { _masterHeight } : Array.Empty<double>()).ToList();
         double? chosen = presets.Select(p => p.Item2)
             .Where(h => current.Count > 0 && current.All(c => Math.Abs(c - h) < 0.5))
             .Select(h => (double?)h).FirstOrDefault();
-        return MenuKit.Segments("Height", presets, chosen, (h, _) => SetFooterHeights(returns, master, h));
+        return MenuKit.Segments(Loc.T("arrangement.tracks.height"), presets, chosen, (h, _) => SetFooterHeights(returns, master, h));
     }
 
     // "Recent" instruments under Add track (spec 034 US5): the host (MainWindow) builds the

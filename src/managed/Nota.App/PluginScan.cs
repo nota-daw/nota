@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -63,8 +64,8 @@ internal static class PluginScan
     /// <summary>Status line for a running scan, e.g. "Scanning plugins · 312 of 1,000 · Analytiks".</summary>
     public static string Describe(PluginScanProgress p)
     {
-        if (p.Total == 0) return "Looking for plugins…";
-        var line = $"Scanning plugins · {p.Done:N0} of {p.Total:N0}";
+        if (p.Total == 0) return Loc.T("plugin_scan.looking_for_plugins");
+        var line = Loc.F("plugin_scan.scanning_plugins_of", p.Done, p.Total);
         return p.Current.Length > 0 ? $"{line} · {p.Current}" : line;
     }
 

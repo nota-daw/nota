@@ -10,6 +10,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -19,7 +20,7 @@ public sealed partial class DeviceChainView
     // plug-in instruments. Picking one hands it to the host, which swaps it in place.
     private MenuItem ReplaceInstrumentMenu()
     {
-        var menu = MenuKit.Item("Replace…", GlyphKind.Device);
+        var menu = MenuKit.Item(Loc.T("device_chain.move.replace"), GlyphKind.Device);
         void Add(ItemsControl into, BrowserItem item, GlyphKind glyph)
             => into.Items.Add(MenuKit.Item(item.Name, glyph, () => InstrumentReplaceRequested?.Invoke(item)));
 
@@ -34,7 +35,7 @@ public sealed partial class DeviceChainView
         if (plugins.Count > 0)
         {
             menu.Items.Add(new Separator());
-            var sub = MenuKit.Item("Plug-ins", GlyphKind.Plug);
+            var sub = MenuKit.Item(Loc.T("device_chain.move.plug_ins"), GlyphKind.Plug);
             foreach (var p in plugins) Add(sub, p, GlyphKind.Plug);
             menu.Items.Add(sub);
         }
@@ -109,7 +110,7 @@ public sealed partial class DeviceChainView
     // instrument tracks. The host does the move (one undo step) and asks before a track goes.
     private IEnumerable<Control> MoveToTrackGroup(ChainKind kind, int di)
     {
-        var menu = MenuKit.Item("Move to track", GlyphKind.Track);
+        var menu = MenuKit.Item(Loc.T("device_chain.move.move_to_track"), GlyphKind.Track);
         foreach (var (id, name) in TracksThatTake(_engine, kind, _trackId))
             menu.Items.Add(MenuKit.Item(name, null, () => MoveRequested?.Invoke(new DeviceMoveRequest(_trackId, FamilyOf(kind), di, id, false))));
         menu.IsEnabled = menu.Items.Count > 0;
@@ -120,7 +121,7 @@ public sealed partial class DeviceChainView
     // The host moves them in one undo step, the instrument last (it takes the source track).
     private IEnumerable<Control> MoveSelectionToTrackGroup()
     {
-        var menu = MenuKit.Item("Move to track", GlyphKind.Track);
+        var menu = MenuKit.Item(Loc.T("device_chain.move.move_to_track"), GlyphKind.Track);
         var kind = _sel.HasInstrument || _sel.Indices(DeviceSection.Midi).Any() ? ChainKind.Midi : ChainKind.Effect;
         foreach (var (id, name) in TracksThatTake(_engine, kind, _trackId))
             menu.Items.Add(MenuKit.Item(name, null, () =>
@@ -147,7 +148,7 @@ public sealed partial class DeviceChainView
             if (kind != ChainKind.Effect && !(ti.IsInstrument)) continue;
             list.Add((ti.Id, TrackNames.Of(engine, ti)));   // as the Arrangement names it
         }
-        if (kind == ChainKind.Effect && engine.MasterTrackId != exceptTrackId) list.Add((engine.MasterTrackId, "Master"));
+        if (kind == ChainKind.Effect && engine.MasterTrackId != exceptTrackId) list.Add((engine.MasterTrackId, Loc.T("common.master")));
         return list;
     }
 

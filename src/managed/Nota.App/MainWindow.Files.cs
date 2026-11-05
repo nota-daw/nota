@@ -15,6 +15,7 @@ using Avalonia.Platform.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -31,18 +32,18 @@ public partial class MainWindow
         Activate();
         var files = await this.PickFilesAsync(new FilePickerOpenOptions
         {
-            Title = "Import audio",
+            Title = Loc.T("main.files.import_audio"),
             AllowMultiple = false,
             SuggestedStartLocation = await FolderAsync(_importFolder ?? _vm.Settings.ResolvedSamplesFolder()),
             FileTypeFilter = new[]
             {
-                new FilePickerFileType("Audio") { Patterns = new[] { "*.wav", "*.flac", "*.mp3" } }
+                new FilePickerFileType(Loc.T("common.audio")) { Patterns = new[] { "*.wav", "*.flac", "*.mp3" } }
             }
         });
 
         if (files.Count == 0) return;
         var path = files[0].TryGetLocalPath();
-        if (path is null) { _vm.StatusText = "Unsupported file location."; return; }
+        if (path is null) { _vm.StatusText = Loc.T("main.files.unsupported_file_location"); return; }
         _importFolder = System.IO.Path.GetDirectoryName(path);
 
         await ImportAudioInBackgroundAsync(path, -1, 0.0);
@@ -58,7 +59,7 @@ public partial class MainWindow
         double endBeats = ProjectEndBeats();
         if (endBeats <= 0.0)
         {
-            _vm.StatusText = "Nothing to export — the arrangement is empty.";
+            _vm.StatusText = Loc.T("main.files.nothing_to_export_the_arrangement");
             return;
         }
 
@@ -78,7 +79,7 @@ public partial class MainWindow
         {
             var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions
             {
-                Title = "Export stems to folder", AllowMultiple = false,
+                Title = Loc.T("main.files.export_stems_to_folder"), AllowMultiple = false,
             });
             path = folders.Count > 0 ? folders[0].TryGetLocalPath() : null;
         }
@@ -86,12 +87,12 @@ public partial class MainWindow
         {
             var file = await this.PickSaveFileAsync(new FilePickerSaveOptions
             {
-                Title = $"Export master to {ext.ToUpperInvariant()}",
+                Title = Loc.F("main.files.export_master_to", ext.ToUpperInvariant()),
                 DefaultExtension = ext,
                 SuggestedFileName = $"Nota Export.{ext}",
                 FileTypeChoices = new[]
                 {
-                    new FilePickerFileType($"{ext.ToUpperInvariant()} audio") { Patterns = new[] { $"*.{ext}" } }
+                    new FilePickerFileType(Loc.F("main.files.audio", ext.ToUpperInvariant())) { Patterns = new[] { $"*.{ext}" } }
                 },
             });
             path = file?.TryGetLocalPath();
@@ -110,25 +111,25 @@ public partial class MainWindow
                 RestoreLoop: _vm.Transport.LoopOn, RestoreMetronome: _vm.Transport.MetronomeOn,
                 Normalize: opts.Normalize, Dither: opts.Dither,
                 Format: opts.Format, Mp3BitrateKbps: opts.BitrateKbps, StartBeats: opts.StartBeats);
-            await RunBlockingAsync("Export", opts.Stems ? "Exporting stems…" : "Exporting…", async prog =>
+            await RunBlockingAsync(Loc.T("main.files.export"), opts.Stems ? Loc.T("main.files.exporting_stems") : Loc.T("main.files.exporting"), async prog =>
             {
                 var frac = new Progress<double>(f =>
-                    prog.Report(ProgressReport.At(f, $"Exporting {noun}… {f * 100:0}\u2009%")));
+                    prog.Report(ProgressReport.At(f, Loc.F("main.files.exporting_n", noun, f * 100))));
                 if (opts.Stems)
                 {
                     int count = await Task.Run(() => _exporter.ExportStems(Engine, request, frac));
-                    _vm.StatusText = $"Exported {count} stem{(count == 1 ? "" : "s")} to {System.IO.Path.GetFileName(path)}";
+                    _vm.StatusText = Loc.F("common.pattern_n", Loc.Plural("main.files.exported_stems", count), System.IO.Path.GetFileName(path));
                 }
                 else
                 {
                     await Task.Run(() => _exporter.ExportMaster(Engine, request, frac));
-                    _vm.StatusText = $"Exported {System.IO.Path.GetFileName(path)}";
+                    _vm.StatusText = Loc.F("main.files.exported", System.IO.Path.GetFileName(path));
                 }
             });
         }
         catch (Exception ex)
         {
-            _vm.StatusText = $"Export failed: {ex.Message}";
+            _vm.StatusText = Loc.F("main.files.export_failed", ex.Message);
         }
         finally
         {
@@ -160,7 +161,7 @@ public partial class MainWindow
     /// ("Nota — Untitled" until the bundle is named).</summary>
     private void UpdateWindowTitle()
     {
-        string title = $"Nota — {ProjectDisplayName()}";
+        string title = Loc.F("main.files.nota", ProjectDisplayName());
         Title = title;
         // The frameless header's caption is the project's name; the OS window title keeps the
         // app too, for the Dock and window switcher.
@@ -175,8 +176,8 @@ public partial class MainWindow
     private async Task DoNewAsync()
     {
         if (_vm is null) return;
-        if (!await ConfirmLeaveChangesAsync("New project",
-                "Save your changes before starting a new project?")) return;
+        if (!await ConfirmLeaveChangesAsync(Loc.T("common.new_project"),
+                Loc.T("main.files.save_your_changes_before_starting"))) return;
         _links.Clear();    // no live-freeze links (cleared first: stale ids must not hit the new graph)
         Engine.Reset();
         // Reset transport to defaults (these setters drive the engine + UI).
@@ -184,6 +185,8 @@ public partial class MainWindow
         _vm.Transport.MasterVolume = 1.0;
         _vm.Transport.MetronomeOn = false;
         _vm.Transport.LoopOn = false;
+        Engine.SetLoop(false, 0, 0);   // nor the old project's loop region
+        _vm.Transport.SyncLoop();
         _vm.Transport.TimeSigNumerator = 4;
         _vm.Transport.TimeSigDenominator = 4;
         _vm.Transport.KeyCode = -1;
@@ -196,7 +199,7 @@ public partial class MainWindow
         UpdateWindowTitle();
         MarkProjectClean();
         HistoryChanged?.Invoke();   // a new project has no history yet
-        _vm.StatusText = "New project.";
+        _vm.StatusText = Loc.T("main.files.new_project");
     }
 
     // The file panels start where their files live (#309): projects in the Projects folder from
@@ -221,23 +224,23 @@ public partial class MainWindow
         Activate(); // keep the native panel focused (see DoImportAsync)
         var folders = await this.PickFoldersAsync(new FolderPickerOpenOptions
         {
-            Title = "Open Nota project (.nota folder)",
+            Title = Loc.T("main.files.open_nota_project_nota_folder"),
             AllowMultiple = false,
             SuggestedStartLocation = await FolderAsync(_vm.Settings.ResolvedProjectsFolder()),   // #309
         });
         if (folders.Count == 0) return;
         var dir = folders[0].TryGetLocalPath();
-        if (dir is null) { _vm.StatusText = "Unsupported project location."; return; }
-        if (!await ConfirmLeaveChangesAsync("Open project",
-                "Save your changes before opening another project?")) return;
+        if (dir is null) { _vm.StatusText = Loc.T("main.files.unsupported_project_location"); return; }
+        if (!await ConfirmLeaveChangesAsync(Loc.T("main.files.open_project"),
+                Loc.T("main.files.save_your_changes_before_opening"))) return;
         OpenProject(dir);
     }
 
     // Open another project from the browser, after the unsaved-changes prompt.
     private async Task OpenProjectConfirmedAsync(string dir)
     {
-        if (!await ConfirmLeaveChangesAsync("Open project",
-                "Save your changes before opening another project?")) return;
+        if (!await ConfirmLeaveChangesAsync(Loc.T("main.files.open_project"),
+                Loc.T("main.files.save_your_changes_before_opening"))) return;
         OpenProject(dir);
     }
 
@@ -268,7 +271,9 @@ public partial class MainWindow
             _vm.Transport.Bpm = (decimal)result.Transport.Bpm;
             _vm.Transport.MasterVolume = result.Transport.MasterVolume;
             _vm.Transport.MetronomeOn = result.Transport.MetronomeOn;
-            _vm.Transport.LoopOn = result.Transport.LoopOn;
+            _vm.Transport.SyncLoop();   // the loop (on/off and its region) came with the project (#455)
+            if (result.Transport.LoopOn && !Engine.LoopEnabled)
+                _vm.Transport.LoopOn = true;   // an older file saved no region: Loop on picks its default
             _vm.Transport.TimeSigNumerator = result.Transport.TimeSigNumerator;
             _vm.Transport.TimeSigDenominator = result.Transport.TimeSigDenominator;
             _vm.Transport.KeyCode = result.Transport.Key;
@@ -287,15 +292,15 @@ public partial class MainWindow
             App.Services.GetRequiredService<ILogSink>()
                 .Info($"Opened project '{System.IO.Path.GetFileName(dir)}' · {warnings.Count} warning(s)");
             _vm.StatusText = warnings.Count == 0
-                ? $"Opened {System.IO.Path.GetFileName(dir)}"
-                : $"Opened {System.IO.Path.GetFileName(dir)} — {warnings.Count} item(s) downgraded: {warnings[0]}";
+                ? Loc.F("main.files.opened", System.IO.Path.GetFileName(dir))
+                : Loc.F("main.files.opened_item_s_downgraded", System.IO.Path.GetFileName(dir), warnings.Count, warnings[0]);
             _ = BuildWarpCachesAsync();   // fill the deferred warp caches in the background
             _ = OfferMissingPluginsAsync(dir, result.MissingPlugins);
         }
         catch (Exception ex)
         {
             App.Services.GetRequiredService<ILogSink>().Error("Open project failed", ex);
-            _vm.StatusText = $"Open failed: {ex.Message}";
+            _vm.StatusText = Loc.F("main.files.open_failed", ex.Message);
         }
     }
 
@@ -308,13 +313,13 @@ public partial class MainWindow
         int gen = _warpBuildGen;
         long total = Engine.WarpBuildRemaining;
         if (total <= 0) return;
-        await RunBackgroundAsync("Preparing warped clips…", async prog =>
+        await RunBackgroundAsync(Loc.T("main.files.preparing_warped_clips"), async prog =>
         {
             // The stretch runs on the engine's worker thread; the UI only polls + installs.
             await PollWarpBuildAsync(() => gen == _warpBuildGen, remaining =>   // bail if another project opened
             {
                 double frac = Math.Clamp(1.0 - (double)remaining / total, 0.0, 1.0);
-                prog.Report(ProgressReport.At(frac, $"Preparing warped clips… {frac * 100:0}\u2009%"));
+                prog.Report(ProgressReport.At(frac, Loc.F("main.files.preparing_warped_clips_n", frac * 100)));
             });
         });
     }
@@ -332,7 +337,7 @@ public partial class MainWindow
         string? dir = _projectPath;
         if (saveAs || dir is null)
         {
-            dir = await PickProjectPathAsync("Save Nota project", "Untitled.nota");
+            dir = await PickProjectPathAsync(Loc.T("main.files.save_nota_project"), "Untitled.nota");
             if (dir is null) return false;
         }
 
@@ -357,15 +362,15 @@ public partial class MainWindow
             App.Services.GetRequiredService<ILogSink>()
                 .Info($"Saved project '{System.IO.Path.GetFileName(dir)}' · {warnings.Count} warning(s)");
             _vm.StatusText = (warnings.Count == 0
-                ? $"Saved {System.IO.Path.GetFileName(dir)}"
-                : $"Saved {System.IO.Path.GetFileName(dir)} — {warnings.Count} unsupported item(s) skipped: {warnings[0]}")
+                ? Loc.F("main.files.saved", System.IO.Path.GetFileName(dir))
+                : Loc.F("main.files.saved_unsupported_item_s_skipped", System.IO.Path.GetFileName(dir), warnings.Count, warnings[0]))
                 + historyNote;
             return true;
         }
         catch (Exception ex)
         {
             App.Services.GetRequiredService<ILogSink>().Error("Save project failed", ex);
-            _vm.StatusText = $"Save failed: {ex.Message}";
+            _vm.StatusText = Loc.F("main.files.save_failed", ex.Message);
             return false;
         }
     }
@@ -382,7 +387,7 @@ public partial class MainWindow
             SuggestedFileName = suggestedName,
             FileTypeChoices = new[]
             {
-                new FilePickerFileType("Nota project") { Patterns = new[] { "*.nota" } }
+                new FilePickerFileType(Loc.T("main.files.nota_project")) { Patterns = new[] { "*.nota" } }
             },
         });
         var chosen = file?.TryGetLocalPath();
@@ -427,7 +432,7 @@ public partial class MainWindow
     private string ProjectDisplayName()
         => _projectPath is { Length: > 0 } p
             ? System.IO.Path.GetFileNameWithoutExtension(p.TrimEnd('/', '\\'))
-            : "Untitled";
+            : Loc.T("main.files.untitled");
 
     /// <summary>True if the project changed since it was last created, opened or saved.</summary>
     private bool HasUnsavedChanges()
@@ -452,6 +457,7 @@ public partial class MainWindow
         _modular?.ForgetScopes();          // so do frozen Scope traces and Scope windows
         LensWindow.CloseAll();             // and Lens windows
         TrackArming.ForgetSelection();     // the arm-on-select memory too
+        PianoRollView.ForgetBendPicks();   // and the Bend lane ranges picked per clip
         Timeline.Refresh();
         _session?.Refresh();
         // Popped out, the window stays up: show the new project's chain, not the old one's.

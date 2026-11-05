@@ -11,6 +11,19 @@ using System.Runtime.InteropServices;
 
 namespace Nota.Application;
 
+/// <summary>What <see cref="IAudioEngine.RetryTake"/> did (specs/078).</summary>
+public enum RetryTakeResult
+{
+    /// <summary>Recording could not start again after the take was discarded (see RecordStartStatus).</summary>
+    Failed = -1,
+    /// <summary>Nothing was recording: nothing changed.</summary>
+    None = 0,
+    /// <summary>An Arrangement take was discarded and records again.</summary>
+    Arrangement = 1,
+    /// <summary>A Session slot take was discarded and records again from the next launch quantum.</summary>
+    Session = 2,
+}
+
 /// <summary>A MIDI note, blittable and laid out to match the native NotaNoteData
 /// struct. Times are in beats, relative to the containing clip's start.</summary>
 [StructLayout(LayoutKind.Sequential)]
@@ -97,10 +110,30 @@ public struct NotaAudioClipInfo
     public int Reversed;         // 0/1: plays back-to-front (non-destructive)
 }
 
+/// <summary>One take of an audio loop recording (specs/067). Matches native NotaTakeInfo. Every
+/// take of a recording has a loop-length buffer whose frame 0 sits at <see cref="OriginBeat"/>;
+/// the pass recorded <see cref="StartBeat"/> .. + <see cref="LengthBeats"/> of it.</summary>
+[StructLayout(LayoutKind.Sequential)]
+public struct NotaTakeInfo
+{
+    public int Id;          // comp clips carry it (IAudioEngine.ClipTakeId)
+    public int Number;      // "Take N" on its track
+    public int Group;       // the loop recording it came from
+    public int Reserved;
+    public double OriginBeat;
+    public double StartBeat;
+    public double LengthBeats;
+    public double SourceOffsetFrames;
+    public long LengthFrames;
+    public long SampleId;
+}
+
 /// <summary>Audio-clip ADSR amplitude shape in played time (clip-local beats). Matches native
-/// NotaClipAdsr. Attack ramps 0→1 from the clip start, decay falls to <see cref="Sustain"/>,
-/// release fades to 0 over the clip's last <see cref="ReleaseBeats"/>. <see cref="Identity"/>
-/// (the default for every clip) plays the sample at its full length and level.</summary>
+/// NotaClipAdsr. Attack ramps 0→1 from the clip start when a decay follows, and straight to
+/// <see cref="Sustain"/> when decay is 0, so a split that cleared the decay does not click.
+/// Decay falls to <see cref="Sustain"/>, release fades to 0 over the clip's last
+/// <see cref="ReleaseBeats"/>. <see cref="Identity"/> (the default for every clip) plays the
+/// sample at its full length and level.</summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct ClipAdsr
 {
@@ -118,9 +151,11 @@ public struct ClipAdsr
     /// long — the same shape the engine renders (see Track.h ClipAdsr::gainAt).</summary>
     public readonly double GainAt(double t, double len)
     {
-        double g = t < AttackBeats ? t / AttackBeats
-                 : t < AttackBeats + DecayBeats ? 1 - (1 - Sustain) * ((t - AttackBeats) / DecayBeats)
-                 : Sustain;
+        double g = DecayBeats <= 0
+            ? AttackBeats > 0 && t < AttackBeats ? Sustain * (t / AttackBeats) : Sustain
+            : t < AttackBeats ? (AttackBeats > 0 ? t / AttackBeats : 0)
+            : t < AttackBeats + DecayBeats ? 1 - (1 - Sustain) * ((t - AttackBeats) / DecayBeats)
+            : Sustain;
         if (ReleaseBeats > 0 && t > len - ReleaseBeats) g *= Math.Max(0, (len - t) / ReleaseBeats);
         return Math.Clamp(g, 0, 1);
     }
@@ -266,8 +301,10 @@ public struct NotaMeter
     public readonly float Rms => RmsL > RmsR ? RmsL : RmsR;
 }
 
-/// <summary>What a parameter-automation lane drives (M9). Matches native AutomationTarget.</summary>
-public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4 }
+/// <summary>What a parameter-automation lane drives (M9). Matches native AutomationTarget.
+/// <see cref="Send"/> (specs/072) is a track's send level into the return bus held in the
+/// lane's device index (0..3), values 0..1.</summary>
+public enum AutomationTarget { Volume = 0, Pan = 1, DeviceParam = 2, PluginParam = 3, MidiDeviceParam = 4, Send = 5 }
 
 /// <summary>What a device transfer (specs/043) moves: an audio effect, a MIDI effect or the
 /// track's instrument. Matches nota_track_transfer_device's family.</summary>
@@ -335,7 +372,7 @@ public struct StereoMeasure
 
 /// <summary>What a value gesture targets (specs/009 volume / pan, specs/016 device
 /// parameters). Matches NOTA_MIX_*.</summary>
-public enum MixKind { TrackVolume = 0, TrackPan = 1, MasterVolume = 2, DeviceParam = 3, MidiDeviceParam = 4, PluginParam = 5, PresetTag = 6 }
+public enum MixKind { TrackVolume = 0, TrackPan = 1, MasterVolume = 2, DeviceParam = 3, MidiDeviceParam = 4, PluginParam = 5, PresetTag = 6, TrackSend = 8 }
 
 /// <summary>One value a gesture records for undo; laid out like native NotaMixTarget.
 /// <see cref="TrackId"/> is ignored for the master volume; <see cref="DeviceIndex"/> /
@@ -346,6 +383,8 @@ public readonly record struct MixTarget(MixKind Kind, int TrackId, int DeviceInd
 {
     public static MixTarget Volume(int trackId) => new(MixKind.TrackVolume, trackId);
     public static MixTarget Pan(int trackId) => new(MixKind.TrackPan, trackId);
+    /// <summary>A track's send level into return bus <paramref name="bus"/> (specs/072).</summary>
+    public static MixTarget Send(int trackId, int bus) => new(MixKind.TrackSend, trackId, bus);
     public static MixTarget Master => new(MixKind.MasterVolume, -1);
     /// <summary>A built-in audio effect's parameter (its own min..max range).</summary>
     public static MixTarget DeviceParam(int trackId, int deviceIndex, int paramIndex) => new(MixKind.DeviceParam, trackId, deviceIndex, paramIndex);

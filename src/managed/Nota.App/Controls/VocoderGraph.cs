@@ -15,6 +15,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -147,7 +148,7 @@ internal sealed class VocoderGraph : Control, IValueHandles
         }
         else
         {
-            var ft = NotaGraph.AxisText("Pick a carrier track · until then the sound passes through", NotaPalette.TextTertiary);
+            var ft = NotaGraph.AxisText(Loc.T("device.vocoder.pick_a_carrier_track_until"), NotaPalette.TextTertiary);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, y0 + 14));
         }
 

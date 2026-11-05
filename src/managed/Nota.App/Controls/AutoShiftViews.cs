@@ -18,6 +18,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -271,6 +272,6 @@ internal sealed class AsHistView : Control
             ctx.DrawRectangle(fill, null, new RoundedRect(r, 2, 2, 0, 0));
         }
         NotaGraph.Title(ctx, frame, "Sung notes");
-        NotaGraph.Legend(ctx, w - 5, 2, ("in scale", NotaPalette.VizInk, NotaGraph.Mark.Area), ("out of scale" + _outName, NotaPalette.TextTertiary, NotaGraph.Mark.Area));
+        NotaGraph.Legend(ctx, w - 5, 2, ("in scale", NotaPalette.VizInk, NotaGraph.Mark.Area), (Loc.T("device.auto_shift.out_of_scale") + _outName, NotaPalette.TextTertiary, NotaGraph.Mark.Area));
     }
 }

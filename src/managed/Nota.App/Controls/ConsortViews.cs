@@ -15,6 +15,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -414,7 +415,7 @@ internal sealed class ConsortPitchLane : Control
         double w = Bounds.Width, h = Bounds.Height;
         if (w < 16 || h < Top + 6) return;
         ctx.FillRectangle(Brushes.Transparent, new Rect(0, 0, w, h));
-        var cap = new NotaFormattedText(_arp ? "Pitch · arp (step types shape the rhythm)" : "Pitch · step offsets from the key", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaGraph.AxisSize, NotaPalette.TextTertiary, this);
+        var cap = new NotaFormattedText(_arp ? Loc.T("device.consort.pitch_arp_step_types_shape") : Loc.T("device.consort.pitch_step_offsets_from_the"), CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Sans, NotaGraph.AxisSize, NotaPalette.TextTertiary, this);
         ctx.DrawText(cap, new Point(6, 3));
         double hh = h - Top - 4, cw = w / 16;
         double Y(int p) => Top + (1 - (p + 24) / 48.0) * hh;

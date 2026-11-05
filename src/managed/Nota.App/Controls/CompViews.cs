@@ -15,6 +15,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -490,7 +491,7 @@ internal sealed class CompKeyView : Control, IValueHandles
         if (!_has)
         {
             // Under the filter's pass-band line (which runs high in the window), not on it.
-            var ft = CompDraw.Text("no key signal", NotaPalette.TextTertiary, NotaGraph.AxisSize);
+            var ft = CompDraw.Text(Loc.T("device.comp.no_key_signal"), NotaPalette.TextTertiary, NotaGraph.AxisSize);
             ctx.DrawText(ft, new Point((w - ft.Width) / 2, top + (bot - top) * 0.7 - ft.Height / 2));
         }
     }

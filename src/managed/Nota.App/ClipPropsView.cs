@@ -2,11 +2,11 @@
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
 // The piano roll's settings strip (style guide § Editor settings strip): every setting in one
-// row above the notes, so the notes get the full width — Clip (Start / Length in
-// bars.beats.16ths, the Loop switch and its length), Quantize (its step, Quantize, strength —
-// the snap grid itself is the header chip), Transpose (− value +) and Selection (the selected
-// note's pitch, start, length and velocity, or the count, range and velocity of several,
-// each with its label, on one line).
+// row above the notes, so the notes get the full width — Clip (the Clip | Track switch for
+// arrangement clips, Start / Length in bars.beats.16ths, the Loop switch and its length),
+// Quantize (its step, Quantize, strength — the snap grid itself is the header chip), Transpose
+// (− value +) and Selection (the selected note's pitch, start, length and velocity, or the
+// count, range and velocity of several, each with its label, on one line).
 // Edits drive the PianoRollView; read-outs follow its Changed event.
 
 using System;
@@ -16,6 +16,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Nota.Application.Editing;
 using static Nota.App.ClipEditorKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -35,26 +36,31 @@ public sealed class ClipPropsView : UserControl
     private readonly TextBlock _loopText = Mono("", NotaType.Body, NotaPalette.TextSecondary);
     private readonly TextBlock _transposeText = Mono("");
     private readonly TextBlock _gridText = Mono("");
-    private readonly TextBlock _selText = StripLabel("No notes selected");
+    private readonly TextBlock _selText = StripLabel(Loc.T("clip_props.no_notes_selected"));
     private readonly StackPanel _selFields = new() { Orientation = Avalonia.Layout.Orientation.Horizontal, Spacing = 12 };
     private int _transpose;
     private double _strength = 0.8;
 
-    public ClipPropsView(PianoRollView roll, double startBeat)
+    /// <param name="mode">The Clip | Track switch (specs/059) leading the Clip group; none for
+    /// a Session slot.</param>
+    public ClipPropsView(PianoRollView roll, double startBeat, Control? mode = null)
     {
         _roll = roll;
         _startText.Text = Position(startBeat);
         _gridText.Text = roll.Grids.Quantize.Label;
 
         // Clip — clips always loop in this model; the switch waits for a per-clip loop, so it
-        // shows on, greyed (it can't be turned off yet), with the loop length beside it.
-        var loop = SwitchRow("Loop", () => true, () => { }, out _, _loopText, StripField);
+        // shows on, greyed (it can't be turned off yet), with the loop length beside it. An
+        // arrangement clip leads with its Clip | Track switch (specs/059).
+        var loop = SwitchRow(Loc.T("common.loop"), () => true, () => { }, out _, _loopText, StripField);
         loop.IsEnabled = false;
-        ToolTip.SetTip(loop, "Clips always loop");
-        var clip = StripGroup("Clip",
-            StripLabel("Start"), Sized(StripValue(_startText), 58),
-            StripLabel("Length"), Sized(StripValue(_lengthText), 58),
-            loop);
+        ToolTip.SetTip(loop, Loc.T("clip_props.clips_always_loop"));
+        var clipItems = new System.Collections.Generic.List<Control>();
+        if (mode is not null) clipItems.Add(mode);
+        clipItems.Add(StripLabel(Loc.T("common.start"))); clipItems.Add(Sized(StripValue(_startText), 58));
+        clipItems.Add(StripLabel(Loc.T("common.length"))); clipItems.Add(Sized(StripValue(_lengthText), 58));
+        clipItems.Add(loop);
+        var clip = StripGroup(Loc.T("common.clip"), clipItems.ToArray());
 
         // Quantize — its own step (not the snap grid, which follows the zoom), one-tap
         // Quantize at the strength beside it.
@@ -66,15 +72,15 @@ public sealed class ClipPropsView : UserControl
             }));
         step.Height = StripField;
         step.MinWidth = 64;
-        var qButton = ClipEditorKit.Button("Quantize", () => _roll.Quantize(_strength));
+        var qButton = ClipEditorKit.Button(Loc.T("common.quantize"), () => _roll.Quantize(_strength));
         qButton.Height = StripField;
         qButton.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Left;
         // Strength: the shell slider, its value inside (style guide § Slider: quantize strength).
-        static string Pct(double v) => string.Format(NotaNum.Culture, "{0:0}\u2009%", v * 100);
+        static string Pct(double v) => string.Format(NotaNum.Culture, "{0:0} %", v * 100);
         var strength = new MiniFader(_strength, 1) { Width = 92, Default = 0.8, Text = Pct };
         strength.ValueChanged += v => _strength = v;
-        ValueEntry.Attach(strength, strength.EntryField("Strength", Pct));
-        var grid = StripGroup("Quantize", step, qButton, StripLabel("Strength"), strength);
+        ValueEntry.Attach(strength, strength.EntryField(Loc.T("clip_props.strength"), Pct));
+        var grid = StripGroup(Loc.T("common.quantize"), step, qButton, StripLabel(Loc.T("clip_props.strength")), strength);
 
         // Transpose — − value +; the value is ink 1 while it is off zero.
         _transposeText.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
@@ -82,12 +88,12 @@ public sealed class ClipPropsView : UserControl
         var plus = GlyphButton(GlyphKind.Plus, () => Transpose(1));
         minus.Height = plus.Height = StripField;
         minus.Width = plus.Width = StripField;
-        var transpose = StripGroup("Transpose", minus, Sized(StripValue(_transposeText), 52), plus);
+        var transpose = StripGroup(Loc.T("clip_props.transpose"), minus, Sized(StripValue(_transposeText), 52), plus);
 
         // Selection — labelled read-outs on one line (Pitch / Start / Length / Velocity for one
         // note, Notes / Range / Velocity for several), or "No notes selected". The strip
         // scrolls sideways when the editor is narrow, so nothing is cut off.
-        var selection = StripGroup("Selection", _selText, _selFields);
+        var selection = StripGroup(Loc.T("clip_props.selection"), _selText, _selFields);
 
         Content = Strip(clip, grid, transpose, selection);
 
@@ -111,11 +117,18 @@ public sealed class ClipPropsView : UserControl
     /// left in the arrangement. LENGTH / LOOP follow the roll's own Changed event.</summary>
     public void SetStart(double startBeat) => _startText.Text = Position(startBeat);
 
+    /// <summary>The bar length changed (#405): every bar.beat read-out re-counts.</summary>
+    public void Recount(double startBeat)
+    {
+        SetStart(startBeat);
+        OnRollChanged();
+    }
+
     private void OnRollChanged()
     {
         double len = _roll.ActiveLengthBeats;   // the active clip's own length, several clips open or one
         _lengthText.Text = Duration(len);
-        _loopText.Text = string.Format(NotaNum.Culture, "{0:0.##} {1}", len, Math.Abs(len - 1) < 1e-9 ? "beat" : "beats");
+        _loopText.Text = string.Format(NotaNum.Culture, "{0:0.##} {1}", len, Math.Abs(len - 1) < 1e-9 ? Loc.T("clip_props.beat") : Loc.T("clip_props.beats"));
         PaintSelection();
     }
 
@@ -141,18 +154,18 @@ public sealed class ClipPropsView : UserControl
         if (sel.Count == 1)
         {
             var n = sel[0];
-            Field("Pitch", PianoRollView.NoteName(n.Pitch));
-            Field("Start", Position(n.StartBeat));
-            Field("Length", string.Format(NotaNum.Culture, "{0:0.##}/16", n.LengthBeats * 4));
-            Field("Velocity", Vel(n.Velocity).ToString(NotaNum.Culture));
+            Field(Loc.T("common.pitch"), PianoRollView.NoteName(n.Pitch));
+            Field(Loc.T("common.start"), Position(n.StartBeat));
+            Field(Loc.T("common.length"), string.Format(NotaNum.Culture, "{0:0.##}/16", n.LengthBeats * 4));
+            Field(Loc.T("common.velocity"), Vel(n.Velocity).ToString(NotaNum.Culture));
         }
         else if (sel.Count > 1)
         {
             int lo = sel.Min(n => n.Pitch), hi = sel.Max(n => n.Pitch);
             int vLo = sel.Min(n => Vel(n.Velocity)), vHi = sel.Max(n => Vel(n.Velocity));
-            Field("Notes", sel.Count.ToString(NotaNum.Culture));
-            Field("Range", lo == hi ? PianoRollView.NoteName(lo) : $"{PianoRollView.NoteName(lo)}–{PianoRollView.NoteName(hi)}");
-            Field("Velocity", vLo == vHi ? vLo.ToString(NotaNum.Culture) : $"{vLo}–{vHi}");
+            Field(Loc.T("clip_props.notes"), sel.Count.ToString(NotaNum.Culture));
+            Field(Loc.T("common.range"), lo == hi ? PianoRollView.NoteName(lo) : $"{PianoRollView.NoteName(lo)}–{PianoRollView.NoteName(hi)}");
+            Field(Loc.T("common.velocity"), vLo == vHi ? vLo.ToString(NotaNum.Culture) : $"{vLo}–{vHi}");
         }
 
         // A label in ink 3 and its value in ink 1, as the Clip group's Start / Length.

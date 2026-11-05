@@ -9,6 +9,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using Nota.Application.Localization;
 
 namespace Nota.Application;
 
@@ -21,12 +22,12 @@ public readonly record struct AuroraImportResult(AuroraImportOutcome Outcome, Au
     /// <summary>The one line the card shows; "" for a plain success.</summary>
     public string Message => Outcome switch
     {
-        AuroraImportOutcome.Shortened => "Shortened to 60 s",
-        AuroraImportOutcome.FirstFrames => "First 256 frames",
-        AuroraImportOutcome.Format => "Couldn't read this file — use WAV, FLAC or MP3",
-        AuroraImportOutcome.Unreadable => "Couldn't read this file — use WAV, FLAC or MP3",
-        AuroraImportOutcome.Silent => "This file is silent",
-        AuroraImportOutcome.NotAurora => "This track has no Aurora",
+        AuroraImportOutcome.Shortened => Loc.T("device.aurora.import_shortened_to_60_s"),
+        AuroraImportOutcome.FirstFrames => Loc.T("device.aurora.import_first_256_frames"),
+        AuroraImportOutcome.Format => Loc.T("device.aurora.import_couldnt_read_this_file"),
+        AuroraImportOutcome.Unreadable => Loc.T("device.aurora.import_couldnt_read_this_file"),
+        AuroraImportOutcome.Silent => Loc.T("device.aurora.import_this_file_is_silent"),
+        AuroraImportOutcome.NotAurora => Loc.T("device.aurora.import_this_track_has_no"),
         _ => "",
     };
 }

@@ -22,6 +22,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -134,12 +135,12 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         syncSeg.Width = 76;
         readouts.Add(syncSync);
         Learn(syncSeg, Sync);
-        ToolTip.SetTip(syncSeg, "Hz runs the LFO free; Sync takes its rate from the tempo and locks it to the bar while the transport plays");
+        ToolTip.SetTip(syncSeg, Loc.T("common.hz_runs_the_lfo_free"));
 
         var waveSeg = Segments(OrbitMath.Waves, WaveI, i => { SetP(Waveform, i / 4.0); RefreshAll(); }, out var waveSync, fill: true, padX: 0);
         readouts.Add(waveSync);
         Learn(waveSeg, Waveform);
-        ToolTip.SetTip(waveSeg, "The LFO shape. S&H draws a random step every cycle; the right channel plays the same steps Phase later");
+        ToolTip.SetTip(waveSeg, Loc.T("device.auto_pan.the_lfo_shape_s_h"));
 
         var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
         var bigSub = new TextBlock { FontSize = 8, Foreground = TextSecondary };
@@ -162,14 +163,14 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
         });
         var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
-        ToolTip.SetTip(bigBlock, "The LFO rate: in Hz, or the note value it takes from the tempo");
+        ToolTip.SetTip(bigBlock, Loc.T("common.the_lfo_rate_in_hz"));
 
-        var rateRow = Slider("RATE", Rate, v => HzF(OrbitMath.FreeHz(v)) + "\u2009Hz", "Rate — the free LFO rate, 0.01 … 40\u2009Hz", out _, 38, 46);
+        var rateRow = Slider("RATE", Rate, v => HzF(OrbitMath.FreeHz(v)) + "\u2009Hz", Loc.T("device.auto_pan.rate_the_free_lfo_rate"), out _, 38, 46);
         var divRow = Slider("RATE", Division, v => OrbitMath.DivNames[OrbitMath.DivIndex(v)],
-            "Rate — the note value of one LFO cycle, 4/1 … 1/32 with dotted (D) and triplet (T) values", out _, 38, 46,
+            Loc.T("device.auto_pan.rate_the_note_value_of"), out _, 38, 46,
             snap: v => OrbitMath.DivNorm(OrbitMath.DivIndex(v)));
         readouts.Add(() => { rateRow.IsVisible = !Synced(); divRow.IsVisible = Synced(); });
-        var shapeRow = Slider("SHAPE", Shape, v => PctF(v), "Shape — sharpens Sine, Tri and Saw toward a square; on S&H it is Glide, the slide from one step to the next", out var shapeLbl, 38, 46);
+        var shapeRow = Slider("SHAPE", Shape, v => PctF(v), Loc.T("device.auto_pan.shape_sharpens_sine_tri_and"), out var shapeLbl, 38, 46);
         readouts.Add(() => shapeLbl.Text = WaveI() == 4 ? "Glide" : "Shape");
 
         var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
@@ -196,7 +197,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         graph.Changed += (a, ph) => { Raw(Amount, a); Raw(Phase, ph); RefreshAll(); };
         graph.ResetRequested += () => { Reset(Amount); Reset(Phase); RefreshAll(); };
         Learn(graph, Amount);
-        ToolTip.SetTip(graph, MenuKit.Keys("Both channels' gain over two LFO cycles — L in the bright line, R in the darker grey, Phase later — with the floor the depth reaches. Drag up / down for Amount, left / right for Phase; ⌥-click types, double-click resets both."));
+        ToolTip.SetTip(graph, MenuKit.Keys(Loc.T("device.auto_pan.both_channels_gain_over_two")));
         ValueEntry.AttachAll(graph, ValueEntry.DeviceParam(engine, track, di, Amount, "Amount", PctF, RefreshAll), ValueEntry.DeviceParam(engine, track, di, Phase, "Phase", v => NotaNum.F($"{v * 360:0}°"), RefreshAll));
 
         var panBar = new OrbitPanBar { VerticalAlignment = VerticalAlignment.Center };
@@ -208,9 +209,9 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
         panRow.Children.Add(Col(panBar, 1));
         panRow.Children.Add(Col(rTag, 2));
         panRow.Children.Add(Col(panTxt, 3));
-        ToolTip.SetTip(panRow, "Where the sound sits now between left and right, over the swing the LFO covers");
+        ToolTip.SetTip(panRow, Loc.T("device.auto_pan.where_the_sound_sits_now"));
         var centreBody = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(panRow, Dock.Bottom), graph } };
-        var centre = Island(HeadRow(Caps("GAIN · 2 CYCLES"), legend), centreBody);
+        var centre = Island(HeadRow(Caps(Loc.T("device.auto_pan.gain_2_cycles_caps")), legend), centreBody);
         centre.Margin = new Thickness(5, 0);
 
         // ======================================================================
@@ -224,12 +225,12 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             modeWord.Text = m;
             modeWord.Foreground = m == "auto-pan" ? TextPrimary : m == "tremolo" ? DeviceCardKit.ModInkBright : TextSecondary;
         });
-        ToolTip.SetTip(modeWord, "What the phase makes: tremolo near 0°, auto-pan near 180°, an offset pan between");
+        ToolTip.SetTip(modeWord, Loc.T("device.auto_pan.what_the_phase_makes_tremolo"));
 
-        var amountRow = Slider("AMOUNT", Amount, v => PctF(v), "Amount — the depth: each channel dips to 1 − Amount at the LFO's low point", out _, 44, 36, modulation: true);
-        var phaseRow = Slider("PHASE", Phase, v => NotaNum.F($"{v * 360:0}°"), "Phase — the right LFO against the left: 0° tremolo, 90° a circling pan, 180° auto-pan", out _, 44, 36, modulation: true,
+        var amountRow = Slider("AMOUNT", Amount, v => PctF(v), Loc.T("device.auto_pan.amount_the_depth_each_channel"), out _, 44, 36, modulation: true);
+        var phaseRow = Slider("PHASE", Phase, v => NotaNum.F($"{v * 360:0}°"), Loc.T("device.auto_pan.phase_the_right_lfo_against"), out _, 44, 36, modulation: true,
             snap: v => Math.Round(v * 360) / 360);
-        var mixRow = Slider("MIX", Mix, v => PctF(v), "Mix — the moving signal against the dry one", out _, 44, 36);
+        var mixRow = Slider("MIX", Mix, v => PctF(v), Loc.T("device.auto_pan.mix_the_moving_signal_against"), out _, 44, 36);
 
         Border Snap(string text, double deg)
         {
@@ -251,7 +252,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
                 tb.Foreground = on ? TextPrimary : TextTertiary;
             });
             Learn(b, Phase);
-            ToolTip.SetTip(b, deg == 0 ? "0° — tremolo: both channels together" : deg == 90 ? "90° — a quarter cycle apart: the sound circles" : "180° — auto-pan: one side up while the other is down");
+            ToolTip.SetTip(b, deg == 0 ? Loc.T("device.auto_pan.0_tremolo_both_channels_together") : deg == 90 ? Loc.T("device.auto_pan.90_a_quarter_cycle_apart") : Loc.T("device.auto_pan.180_auto_pan_one_side"));
             return b;
         }
         var snaps = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), ColumnSpacing = 1, Margin = new Thickness(44, 0, 0, 0) };
@@ -273,7 +274,7 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             g.Children.Add(Caps(label, labelInk));
             g.Children.Add(Col(m, 1));
             g.Children.Add(Col(new Border { Margin = new Thickness(6, 0, 0, 0), Child = v }, 2));
-            ToolTip.SetTip(g, "The channel's output peak, −60 … 0\u2009dBFS, and the gain the LFO gives it now, dB");
+            ToolTip.SetTip(g, Loc.T("device.auto_pan.the_channels_output_peak_60"));
             return g;
         }
         var meters = new Border
@@ -309,16 +310,16 @@ internal sealed class AutoPanDeviceBody : IDeviceBody
             double hz = RateHz();
             bool warn = false;
             string foot;
-            if (!On()) foot = "Panner bypassed: the signal passes unchanged";
-            else if (P(Amount) < 0.01f || P(Mix) < 0.01f) { foot = "Amount or Mix at zero: nothing moves"; warn = true; }
-            else if (hz > 8) { foot = "Above 8\u2009Hz the movement reads as a flutter, not as panning"; warn = true; }
-            else if (m == "tremolo") foot = "Phase 0°: L and R move together, the level dips to " + OrbitMath.Db(Floor()) + "\u2009dB";
+            if (!On()) foot = Loc.T("device.auto_pan.panner_bypassed_the_signal_passes");
+            else if (P(Amount) < 0.01f || P(Mix) < 0.01f) { foot = Loc.T("device.auto_pan.amount_or_mix_at_zero"); warn = true; }
+            else if (hz > 8) { foot = Loc.T("device.auto_pan.above_8_hz_the_movement"); warn = true; }
+            else if (m == "tremolo") foot = Loc.T("device.auto_pan.phase_0_l_and_r") + OrbitMath.Db(Floor()) + "\u2009dB";
             else if (m == "auto-pan")
             {
                 double mn = Sc(S_PanMin), mx = Sc(S_PanMax);
                 foot = "Swing " + (mn < -0.02 ? PanF(mn) : "C") + " → " + (mx > 0.02 ? PanF(mx) : "C") + " · period " + Ms(PeriodMs());
             }
-            else foot = NotaNum.F($"Phase {Deg():0}°: the channels are offset, the pan moves unevenly");
+            else foot = Loc.F("device.auto_pan.phase_the_channels_are_offset", Deg());
             statusLeft.Text = foot;
             statusLeft.Foreground = warn ? NotaPalette.Warning : TextSecondary;
             double sr = Sc(S_SampleRate);

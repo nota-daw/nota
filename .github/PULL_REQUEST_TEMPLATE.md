@@ -2,6 +2,8 @@
 
 What this changes and why. One logical change per pull request.
 
+Closes #<!-- the issue a core contributor approved; pull requests without one are closed unreviewed -->
+
 ## Spec
 
 Link the spec-driven artifacts if this is non-trivial work (skip for small fixes):
@@ -11,6 +13,7 @@ Link the spec-driven artifacts if this is non-trivial work (skip for small fixes
 
 ## Checklist
 
+- [ ] Linked issue carries the `approved` label (or `good first issue` / `help wanted`), and this PR stays within its scope
 - [ ] Base branch is `develop` (not `main`)
 - [ ] `scripts/build.sh` (or `scripts/build-linux.sh` / `scripts/build-win.ps1`) passes — it runs the smoke test
 - [ ] Built and tested on: [ ] macOS [ ] Windows [ ] Linux

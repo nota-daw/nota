@@ -345,3 +345,4 @@ Places where the plan proved wrong or too big, and the smaller choice taken inst
   when applied in place, so applying a preset always gives the sound it was saved with.
 
 - **Format renumbered (Oct 31).** develop took format v28 for sidechain parts (specs/050, #381), so the Aurora tables are format **v29**: `CurrentFormatVersion` 28 → 29 with a no-op `Migration(28)`. Where this spec says v28 for the tables, read v29.
+- **Format renumbered again (Nov 5).** develop took format v29 for take lanes (specs/067), so the Aurora tables are format **v30**: `CurrentFormatVersion` 29 → 30 with a no-op `Migration(29)`. Where this spec says v28 or v29 for the tables, read v30.

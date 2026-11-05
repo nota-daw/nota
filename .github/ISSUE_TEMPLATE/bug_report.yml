@@ -7,6 +7,8 @@ body:
       value: |
         Thanks for taking the time to report this — every report gets read.
         Can't get Nota to open at all? See [First launch](https://github.com/nota-daw/nota#first-launch) first.
+        Planning to fix it yourself? Wait for the `approved` label before you start — see
+        [CONTRIBUTING.md](https://github.com/nota-daw/nota/blob/develop/CONTRIBUTING.md#start-with-an-approved-issue).
   - type: textarea
     id: what
     attributes:

@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.58.1** (plus changes in development on `main`). This document describes what is
+**0.59.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -62,7 +62,8 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 - **Version history**: every save records a version inside the project. The browser's
   **History** tab draws them as a branching tree (the current one has an orange dot), each
   described by what it changed ("Added Bass · Tempo 120.00 → 124.00"); switch
-  to any version, open one as a copy, or name, note, star and delete versions; a star button
+  to any version, open one as a copy, or name, note, star and delete versions (⌘/Ctrl-click and
+  Shift-click select several, deleted together from the footer or the context menu); a star button
   in the tab's header lists starred versions only. Saving on top
   of an older version branches. **Save Version with Note…** (⌥⌘S). The tab's menu deletes all
   unnamed versions at once; Settings → Library turns history off (erasing it, after a warning). Versions share their
@@ -70,6 +71,8 @@ on a pool of render threads, export and freeze use every core, and an idle engin
 - **Start window**: the logo follows the theme, recent projects sit in one compact list with
   their dates — click to select, double-click (or the arrow keys and Return) to open. Escape
   or a click outside closes it, keeping the current project.
+- **File → Open recent** lists the start window's recent projects, newest first; picking one
+  asks to save unsaved changes first.
 - **File → Exit** (Ctrl+Q) on Windows and Linux; Quit Nota (⌘Q) in the app menu on macOS.
 - **Quit without saving** dialog names the project and how long its changes have gone
   unsaved; Return saves (right in the dialog, then quits), Escape cancels.
@@ -95,10 +98,15 @@ on a pool of render threads, export and freeze use every core, and an idle engin
   tempo from tapped beats — mean of the last eight gaps, restarts on a pace change or a 3 s pause.
 - **Loop region** (on/off and range; Cmd/Ctrl+L loops the selection; drag an end of the brace
   to resize it, the brace to move it; double-click the brace to switch the loop off and on;
-  right-click the ruler to clear it). Notes held across the
+  right-click the ruler to clear it; saved with the project). Notes held across the
   loop seam keep sounding and release tails ring into the next pass; an arpeggiator keeps its
   pattern going across the seam.
 - **Metronome** and **count-in** before recording, Session slot takes from stop included (notes played on the count-in are recorded).
+- **Discard and retry take** (⌘. / Ctrl+., Transport menu, palette, MCP `retry_take`): drops
+  the take being recorded — audio, loop passes, notes, controllers, automation, with no undo
+  step — and records again. The Arrangement goes back to where the transport was started
+  (the take's start with the count-in again, or the Play position for a punch-in); a Session
+  slot records again from the next launch quantum, shown as waiting, while other clips play on.
 - **Transport shortcuts** (Space play/stop, Enter stop, R/M/A, clip copy-paste, typing
   notes, undo/redo) work in detached windows too.
 
@@ -130,10 +138,28 @@ docks as a panel under any of the three, or floats in its own window — see
   to zoom, double-click to fit the project.
   - **Sections** — a lane between the Overview and the ruler names spans of the song
     (Intro, Verse, Drop). Drag the empty lane to mark one, click it to jump the playhead
-    there, double-click to rename, drag its body or edges to move and resize it (always on
-    whole bars). Its menu loops the section, selects it as a time range across every track,
-    duplicates it or deletes it. Each edit is one undo step. Saved with the project (MCP
-    `list_sections` / `set_sections`); View ▸ Toggle sections hides it.
+    there, double-click to rename, ⌥-drag its body to move the marker alone and drag its
+    edges to resize it (always on whole bars). Its menu loops the section, selects it as a
+    time range across every track, duplicates it or deletes it. Each edit is one undo step.
+    Saved with the project (MCP `list_sections` / `set_sections`); View ▸ Toggle sections
+    hides it.
+  - **Rearranging by sections** — drag a section to another place in the song and
+    everything in it goes along: audio and MIDI clips (cut at its edges), automation on every
+    track and the master, take lanes. It lands on the boundary between sections marked while
+    dragging (a ghost follows the pointer, the others show their new places, Esc cancels);
+    the sections in between close up and the song keeps its length. The section menu's
+    **Move earlier** / **Move later**, **Duplicate with content** (the rest moves later) and
+    **Delete with content** (the rest moves up), and the same four palette commands for the
+    section at the playhead, do it without dragging. One undo step each; a section that
+    overlaps another keeps its content in place. MCP `move_section`,
+    `duplicate_section_with_content`, `delete_section_with_content`.
+  - **Automatic section names** — a new section is named "Section N" for its place in the
+    song, left to right, custom-named sections counted, and renumbers as sections are added,
+    moved or deleted; a custom name never changes on its own. Renaming: Return keeps the name
+    (an empty one goes back to automatic), Esc cancels; the box says whether the name is
+    automatic or custom. **Reset to default** (in the rename box, the section's menu and the
+    command palette's *Reset section name*, for the section at the playhead) brings the
+    automatic name back. Undo / redo restore both the name and its mode.
   - **Resizable tracks and track list** — drag a track's bottom edge (header or lane) to
     set its height, 30–256 px, with a light snap to Compact / Standard / Large; a
     multi-selection resizes together, ⌥-drag resizes every track, double-click resets.
@@ -143,10 +169,20 @@ docks as a panel under any of the three, or floats in its own window — see
     of their own when tall, and at Large the track's send to each return as value bars, two
     per row. Drag the seam between headers and lanes to set the header
     width (160–480 px). Both are saved with the project.
+  - **Sends in the track headers** — a track at the Large height (128 px) or taller shows one
+    small knob per return (A–D) under volume and pan with its level; hover names the
+    return, double-click turns the send off, ⌥-click types a value. The level is the same
+    one the Mixer and the Sends card show, and it is not an undo step. A shorter row has no
+    knobs.
+  - **Track headers left or right** — View ▸ Track headers on the right (or Settings →
+    Appearance → Track headers) moves the header column, the return / master headers and
+    the header strips to the right edge, so the timeline starts at the left; remembered
+    for every project.
   - **Group rows are slim** — a group collapses to a titled bar with its disclosure,
     mute/solo and level, and opens to the full control set when selected, so groups read as
     families rather than as more tracks. A track without a colour of its own takes its
-    group's hue, shaded per sibling.
+    group's hue, shaded per sibling. The disclosure folds the group here and in the Mixer
+    alike; folded groups are saved with the project.
   - **Return and Master rows stay pinned** under the tracks, each with a level meter, a
     volume fader and its dB value (the Master fader is the same master volume as the
     transport's and the Mixer's). They start Compact and resize like tracks — drag the
@@ -205,7 +241,19 @@ docks as a panel under any of the three, or floats in its own window — see
 ## Tracks and mixer
 
 - **Track types**: Audio, MIDI/Instrument, Return, Master, **Group** (nestable submixes —
-  ⌘/Ctrl+G to group, ⌘/Ctrl+Shift+G to ungroup).
+  ⌘/Ctrl+G to group, ⌘/Ctrl+Shift+G to ungroup: on a group it dissolves the group, on a
+  track inside one it takes just that track out, after the group). Dragging a header above
+  the first row or below the last takes the track out of its group; clicking a group's lane
+  selects the group.
+- **Linked groups** — a group's **Link** key (a chain link on its header, its Mixer and
+  Session strip, and **Link tracks** in its menu) ties the tracks below it together, nested
+  groups included. Arming one arms them all; clicking a clip also selects the clips with the
+  same start and end on the other tracks, and moving, trimming, fading, splitting,
+  duplicating, copying, cutting or deleting it acts on them too, as one undo step (a clip
+  moved to another track takes its partners along in time only); a time range on one track
+  spans the group. ⌥-click (Alt-click) a clip or an arm to act on one track. Linked tracks
+  show a chain link before their name. Saved with the project; MCP `set_group_link` /
+  `get_group_link`.
 - **Adding a track**: the `+ Instrument` / `+ Audio` / `+ Return` buttons above the
   arrangement, or the context menu — right-click the empty space below the tracks, or use
   `Add track ▸` in a track's own menu (the new track goes right after that track, or inside
@@ -221,8 +269,9 @@ docks as a panel under any of the three, or floats in its own window — see
   arms that track alone, ⌘-click arms several; **Transport ▸ Auto-arm selected track** (off by
   default) arms the instrument track you select.
   Double-click resets to the default.
-- **Mixer** (**View → Mixer**, ⌘⇧M / Ctrl+Shift+M): a strip per track, then the returns, then
-  the master (I/O, A/B sends, pan, fader with a stereo meter and dB read-out, M / S / Arm), the
+- **Mixer** (**View → Mixer**, ⌘⇧M / Ctrl+Shift+M): a strip per track in the Arrangement's
+  order — each group, then its tracks — then the returns, then the master (I/O, A/B sends,
+  pan, fader with a stereo meter and dB read-out, M / S / Arm), the
   **Strips | Stereo map** switch and the pan law footer. It docks as a resizable panel under
   Arrangement, Session or Modular, above the Devices / Clip panel (either, both or neither),
   or pops out into its own window for a second screen — the panel's pop-out button, the
@@ -230,7 +279,17 @@ docks as a panel under any of the three, or floats in its own window — see
   as its strips and closes with Escape. Whether it is shown, where and how tall come back on
   the next launch. Strips fit the height they get: I/O rows hide first, then sends, then the
   fader shortens; the footer's **Sends** / **I/O** toggles show a hidden section anyway (the
-  strips then scroll). Faders, pan and M / S / Arm follow changes made anywhere else.
+  strips then scroll). Faders, pan and M / S / Arm follow changes made anywhere else. The
+  selected track's strip is outlined and scrolled into view.
+  - **Groups**: a bar with the group's name in its colour spans the group's strips, one bar
+    row per nesting level. The triangle on a group strip folds it — in the Mixer and the
+    Arrangement at once; the bar shows how many strips are hidden (**Drums +3**) and dots on
+    the group strip flag a hidden track that is soloed, armed or clipped. Folding never
+    changes the sound.
+  - **Compact strips** (footer **Compact**, remembered): 72 px strips, about twice as many on
+    screen, with the same controls — one-line I/O, A/B send bars, a pan bar, a wide stereo
+    meter that is also the fader (drag anywhere on it; a triangle marks the volume on the
+    meter's scale), the dB value, and full-width M / S / Arm.
 - **Pan law** (per project, in the Mixer footer: **Pan law** Stereo / Balance): under
   Stereo, panning a stereo track or return moves its whole image — at full pan both
   channels play from one side; under Balance the opposite channel fades out. Mono
@@ -301,11 +360,18 @@ docks as a panel under any of the three, or floats in its own window — see
   transpose, the selection) sit in one strip above the notes, so the notes get the full width.
   - A note drawn takes the length and velocity of the note last touched (clicked, moved,
     resized or velocity-changed); before any note is touched, one grid step at velocity 0.8.
+  - **Shape a note as you place it** (#45): keep the button down after the double-click and
+    drag — the new note moves (pitch and time, on the grid, ⌥ free); hold ⇧ to drag its
+    end and set the length, ⌘ (Ctrl) to drag up / down for velocity. The modifier can change
+    mid-drag.
   - **Note audition** (the speaker switch in the header, on by default): a note sounds while
     it is placed, clicked or dragged, re-sounding at each new pitch. Nothing is auditioned
     while a take is recording.
   - **Playable keys**: click a key to hear it, ⇧-drag to glide, ⌘-click to select every note
     of that pitch; a vertical drag on the keys zooms the rows.
+  - **Key labels**: only C by default; Settings → Appearance → Piano roll labels every note
+    (C, C#, D…) instead — an aid for beginners. Folded rows and Drum Rack pads are always
+    named either way.
   - Click the roll's ruler to put the playhead there, or drag along it to scrub (snapped to
     the grid, ⌥ free); the playhead line itself drags too, on the ruler or over empty grid.
     The roll shows the playhead while stopped, where playback will start, and its ruler
@@ -313,6 +379,9 @@ docks as a panel under any of the three, or floats in its own window — see
     plays on its own loop clock, so its editor counts from the slot's start and doesn't seek.
   - Drag a note's left edge to move its start (the end stays put); stacked notes keep
     separate velocity stems (grab a stem by its cap, ⇧-click to add it to the selection).
+  - **Reset velocity**: double-click a velocity stem, or right-click it → **Reset velocity**, to put
+    the note — or the whole selection, when the note is selected — back to the default velocity
+    (0.8); one undo step. Notes already at the default and a reference clip's notes are left alone.
   - Notes replace the same-pitch notes they land on instead of stacking: moved, stretched,
     drawn or pasted notes cut or remove what they cover once the selection is let go
     (click elsewhere, Esc, another clip, save); until then the part that will go is drawn
@@ -322,6 +391,9 @@ docks as a panel under any of the three, or floats in its own window — see
     the arrows or the mouse.
   - Keyboard: ←/→ move by the grid, ↑/↓ by a semitone (⇧ an octave), ⇧←/⇧→ shorten or
     lengthen by the grid, ⌥↑/⌥↓ change velocity by 10 (⌥⇧ by 1).
+  - ⇧ + wheel over a note changes the velocity of the selection (or of that note when it
+    isn't selected), one step per notch; elsewhere ⇧ + wheel scrolls. Direction and speed
+    (off, 0.25× … 2×) are in **Preferences → Shortcuts**. A run of notches is one undo step.
   - **Remove out of scale** (next to the Scale key and mode) deletes every note outside the
     scale in one undo step.
   - **Fold** (⌥⇧F) hides the rows you don't use. On a melodic track it keeps the scale's
@@ -349,6 +421,12 @@ docks as a panel under any of the three, or floats in its own window — see
     click its lock to keep it as a dimmed, read-only reference. While the Clip tab is
     open it follows the arrangement selection. ⌘D copies that run past a clip's end continue
     into the next open clip; past the last one they are left out.
+  - **Track mode**: the **Clip | Track** switch at the top of the inspector (also *Toggle
+    clip editor track mode* in the command palette) opens every MIDI clip of the track on the
+    arrangement's bars from bar 1, each clip marked in the clip strip, with the same editing
+    as several clips at once. Selecting a clip of the track makes it active and scrolls to it;
+    a clip on another track opens that track; new clips on the track join. The mode is
+    remembered.
 - **Clip tools (generate and transform)**: a **Tools** rail beside the piano roll with
   fifteen tools that write or rewrite notes. Six **generators** — *Rhythm* (a pattern that
   leans on the strong beats), *Seed* (learns the clip's own intervals and rhythm, then
@@ -366,6 +444,10 @@ docks as a panel under any of the three, or floats in its own window — see
   - Everything is **seeded**, so a result is repeatable and "New seed" re-rolls it.
   - Tools that think in pitch follow the roll's **Set Scale** key, so what they write
     stays in key.
+- **Clip editor side panels**: the clip inspector (MIDI and audio) and the Tools rail show
+  their sections in one column while they fit the editor's height and in two side by side when
+  they don't and the editor is wide enough, so the controls stay in view; only past that do
+  they scroll. Sections keep their order and are never split between columns.
 - **Pattern (step sequencer)**: on a Drum Rack track the detail panel gains a **Pattern**
   tab between Devices and Clip — a drum-machine grid with one row per loaded pad. Click a
   step to place a hit, shift-click for an accent, drag across the grid to paint, and use
@@ -408,6 +490,19 @@ docks as a panel under any of the three, or floats in its own window — see
   Operator, Pentad, Consort). The sustain pedal holds released keys on every melodic built-in
   (Keys and Mosaic model their own damper; drums ignore it); a re-struck held key restarts.
   MCP `get_clip_controllers` / `set_clip_controller`.
+  - **Multiple controller lanes in the piano roll** — **+ lane** below the sidebar entries
+    adds independent CC lanes. Each lane has a controller-name/CC-number dropdown and
+    adjacent **×** to hide it while preserving data, plus a **127 / 64 / 0** value scale.
+    Extra lanes scroll vertically and share the notes' horizontal zoom and position.
+    Stacked clips scroll in their strip to keep notes visible. Drag the divider above Velocity
+    or a CC lane to resize it; heights return across editor reopening and restarts.
+  - **Controller lane in the piano roll** — the fifth tab of the lane under the notes edits
+    any controller: use its in-lane dropdown (the clip's controllers first, then
+    Sustain, Mod wheel, Pitch wheel, Channel pressure, Expression, Breath and **Other CC**).
+    Pedals (CC64–69) are on/off blocks — drag to draw, move or resize one on the grid (⌘ free),
+    double-click or Delete removes it; other controllers are a curve — drag to draw (⌥ for a
+    straight line), drag a point, double-click to add or delete one, right-click to clear.
+    Each gesture is one undo step.
 - **MPE (per-note expression)** — an MPE controller's notes each carry their own pitch
   bend, pressure and slide (CC74): channels 2–16 are per-note (lower zone, ±48 semitones by
   default; the controller's MPE Configuration and bend-range messages are honoured), channel 1
@@ -426,7 +521,9 @@ docks as a panel under any of the three, or floats in its own window — see
     span; drag across a selected note to draw its curve (⌥ for a straight line), drag a point
     to move it, double-click to add or delete a point, right-click for **Clear Bend /
     Pressure / Slide** and **Clear All Expression**. The bend lane scales itself (±2, 12, 24,
-    48 or 96 semitones); each gesture is one undo step and plays back straight away.
+    48 or 96 semitones) and its **±N st** label picks the least range it shows, so a big bend
+    can be drawn on a note without one; each gesture is one undo step and plays back straight
+    away.
 - **Nota Remote — a phone as a controller**: **Remote** in the top bar (View → Connect
   Phone…) shows a QR code; the phone opens a PWA with pads, keys in the project's scale with
   chords, an XY pad with tilt, the mixer, macros and the Session grid — over Wi-Fi or a USB
@@ -481,6 +578,14 @@ docks as a panel under any of the three, or floats in its own window — see
 - **Recording** from an input (microphone, line, interface) onto an audio track, with
   monitoring (in/auto/off). The input is **Ext 1** or **Ext 2** (mono, centred) or **Ext 1/2**
   (stereo pair); new tracks take Ext 1. MCP `set_input_channels`.
+- **Take lanes**: an Arrangement audio recording with the loop on keeps every pass. The
+  header shows a disclosure and the take count; open it for one row per take (**Take 1**,
+  **Take 2**, …), folded until you do. What plays is the comp, the track's own row — after
+  recording, the newest pass at every point. Drag across a take to use that section (the
+  snap grid; ⌥ bypasses it). Right-click a lane for **Use whole take**, **Delete take**
+  (what plays stays) or **Flatten takes** (the comp becomes one clip and those takes go).
+  Each is one undo step. Takes are saved with the project. One pass, the loop off, MIDI
+  and Session slots stay a single clip.
 - **Audio clips as samples** — drag an arrangement clip onto a track with a Sampler, Nota
   Grain, Drum Rack (next free pad) or Instrument Rack, or anywhere a sample goes (a pad, a
   Rhythm voice, a Session slot); hovering an instrument track opens its devices. The sample
@@ -489,7 +594,10 @@ docks as a panel under any of the three, or floats in its own window — see
   track) — dropped frames are padded with silence, so there is no cumulative drift.
 - **Import** of audio files by drag and drop: WAV / AIFF / FLAC / MP3.
 - **Audio clip**: start and end, waveform drawing, trimming, split, fade in/out, clip
-  gain. Changing the length shows the material actually being revealed or hidden.
+  gain. Changing the length shows the material actually being revealed or hidden. The
+  waveform (lanes and clip editor) is an anti-aliased peak outline around its RMS body,
+  resolved to device pixels at every zoom; the lanes can draw **Solid** or **Bars** instead
+  (Settings → Appearance → Waveform).
 - **Reverse** (clip editor ▸ DIRECTION, or the clip's context menu): plays the clip
   backwards without touching the file, so it costs nothing to toggle and composes with
   gain, pitch and warp. The arrangement lane and the clip editor both draw it the way it
@@ -503,8 +611,13 @@ docks as a panel under any of the three, or floats in its own window — see
   SUSTAIN / RELEASE sliders. The waveform is drawn shaped the way it sounds. By default the
   sample plays its full length at full level; double-click a handle to reset its stage.
   Editing in either place updates the other, each edit is one undo step, split keeps the
-  attack on the left piece and the release on the right, and the shape is saved with the
-  project.
+  attack on the left piece and the release on the right, and — unless Settings → Appearance →
+  **Fade audio clips when splitting** is off — also writes a 4 ms fade at the cut (release on
+  the left, attack on the right) so the cut does not click. Drag those corner handles to make
+  it longer or shorter. **Fade at splits** (command palette, or an audio clip's menu; no
+  shortcut) writes that fade onto a join where the selected clips already touch, without
+  shortening a longer one, in one undo step. MIDI clips are left alone. The shape is saved
+  with the project.
 - **Separate Stems** (right-click an audio clip): the **htdemucs** AI model (Demucs v4)
   splits the clip into Drums, Bass, Other and Vocals — a group of four audio tracks under the
   clip's track. Each stem clip copies the original's shape exactly (region, warp markers, trim,
@@ -535,7 +648,8 @@ docks as a panel under any of the three, or floats in its own window — see
 ## Automation
 
 - **Automation lanes** on tracks and returns, with curved segments (Alt+drag) and points
-  (double-click to add, double-click a point to remove). A return's lane (Volume, Pan or a
+  (double-click to add, double-click a point to remove). A track lane drives Volume, Pan or a
+  device parameter. A return's lane (Volume, Pan or a
   device on its chain) is edited in its footer row, the master's volume in the Master row.
 - **Automation mode** (⌘⇧A): the first time it opens, each track that already has automation
   shows its first automated parameter.
@@ -1072,9 +1186,15 @@ audio effects after it keep running and keep their settings; saved with the proj
 
 - An **island panel** with an icon rail down its left edge: **Instruments / Audio Effects /
   MIDI Effects**, then **Files** (with folder tree navigation), **Presets** (a tree of
-  category → device → preset), **Projects**, **Map** (MIDI Learn mappings) and **History**
-  (the open project's versions). A hairline
+  category → device → preset), **Projects**, **Map** (MIDI Learn mappings), **History**
+  (the open project's versions) and the **Track inspector**. A hairline
   separates the device tabs from the library tabs, and the active one carries an orange edge.
+- **Track inspector**: the last rail tab shows the track the Devices panel shows — its name
+  (type to rename), Mute / Solo / Arm, record input and input monitoring (audio tracks) or
+  MIDI from (instrument tracks), colour, row height and the freeze commands (Freeze, Live
+  freeze, Unfreeze, Flatten, and Edit source / Done / Discard on a live-freeze link). A
+  return shows its name, Mute and colour; the master its name. Changes made from the
+  header, the track menu or undo show in it straight away.
 - **Category chips**: above each device tab's list, one chip per kind of device — Synths /
   Keys & physical / Drums / Samplers / Racks; EQ & filter / Dynamics / Reverb & delay /
   Modulation / Distortion / Pitch & time / Utility / Racks; Generate / Shape. A click
@@ -1096,9 +1216,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   group by source, favourites first — each remembered across sessions — plus the tag editor.
 - A **status line** counts what the tab is showing (`13 built-in · 4 plug-ins`), and the
   search box counts the matches.
-- **Sample player** under the Files tab: the file's real waveform, drawn as Bars or Solid
-  like the arrangement (Settings → Appearance → Waveform; click to play from a point,
-  hover for the time), Play / Stop, time readout, Loop, Auto (play on select) and a
+- **Sample player** under the Files tab: the file's real waveform, drawn Solid when the
+  arrangement is set to Solid and as Bars otherwise (Settings → Appearance → Waveform;
+  click to play from a point, hover for the time), Play / Stop, time readout, Loop, Auto (play on select) and a
   preview volume fader; ↑ ↓ step through files and Space plays the selected one. It stays
   hidden until you use a list and tightens in a narrow browser. Space in the arrangement
   always drives the project transport.
@@ -1212,6 +1332,12 @@ audio effects after it keep running and keep their settings; saved with the proj
   knob or fader turns orange while you hover or drag it; mute is amber, solo blue,
   record-arm red; labels are in sentence case. Switching applies immediately, across every
   open window — including the custom-drawn arrangement, piano roll, mixer and device cards.
+- **Release splash art** — the launch splash shows an abstract picture generated from the
+  version number: piano-roll notes, rhythm rings, waveform strata, panels, a Lissajous
+  figure or fader rails, in a few of the theme's track colours, with one orange mark that
+  reads as live. The same version always shows the same picture, consecutive releases
+  always differ, and the picture follows the colour theme. The logo, version and progress
+  bar sit beside it on the plain ground.
 - **Right-click menus, one system** — every context menu opens with the object it acts on
   (name, colour, type and position: "Vocals · Audio · 3", "3 tracks", "MIDI clip") and lists
   its commands in one order: properties → settings → actions → create / group → Copy · Cut ·
@@ -1239,6 +1365,16 @@ audio effects after it keep running and keep their settings; saved with the proj
   release's sha256). **Restart now** installs it and relaunches, and **Later** installs it on
   quit. This covers the macOS .app, the Windows installer (run silently) and the Linux
   AppImage. Other copies fall back to a link to the release page.
+- **Sample rate and buffer size in the status bar** ("48 kHz · 256", beside the version). A
+  click opens the buffer menu: Device default or 64–2048 frames, each with its latency, and
+  Audio settings…; picking a size restarts the device and playback carries on. Under ASIO
+  the menu offers Driver settings… instead (the driver owns the buffer); in WASAPI exclusive
+  mode it says the device's own buffer is used.
+- **Audio dropouts in the status bar** ("3 dropouts" in red, left of the sample rate): the
+  dropouts the audio device reported since it started, shown from the first one and hidden
+  while there are none; a click resets the count, and so does a new device, sample rate or
+  buffer size. Core Audio (macOS) and ASIO report dropouts; the PulseAudio / ALSA and WASAPI
+  backends don't yet, so there it never appears.
 - **About** — the app and engine versions, the copyright notice, and a pointer to the
   third-party attribution notices (`LICENSES/THIRD-PARTY-NOTICES.md`).
 - **Settings** — a larger window with a sidebar grouped into Devices, Plug-ins and General
@@ -1248,9 +1384,20 @@ audio effects after it keep running and keep their settings; saved with the proj
   a Nota Rhythm voice): the title bar carries the device, track, preset picker, bypass and
   S / L size switch; a footer shows where the device sits, its live voice count and type.
 - **Edit Tags** — the browser's tag editor.
+- **Detail panel (Devices / Pattern / Clip)** — opens on a double-click: a track header shows
+  its devices, a clip or a filled Session slot opens in the Clip tab; also View → Toggle
+  detail panel and Show devices. A plain click on a track, clip, mixer strip or slot only
+  selects; an open panel follows the selection. A plug-in instrument's own window opens
+  from **Open editor** on its card. Settings → Appearance → **Open the detail panel when
+  you select a track or clip** makes every selection open it.
 - **Devices/Clip panel in its own window** — the ⧉ button in the bottom panel's header
   detaches it (the selected clip's piano roll on top, the device chain below, both at
   once). The content moves across as-is: edits, meters and graphs all keep working live.
+- **Clip editor fills the window** — the expand button in the bottom panel's header (Clip
+  and Pattern tabs), View → Clip editor fills the window or ⌘⇧F / Ctrl+Shift+F folds away
+  the browser, the main view and a docked Mixer; the same again brings back the split.
+- **Panel edges** — drag to resize the browser, the docked Mixer and the bottom panel;
+  double-click an edge to reset that panel to its default size.
 - **Popup rack editors** (full UI / Params).
 - **Typed values** — ⌥-click any knob, fader or slider (or double-click the number next to
   it) and type the value: "−6", "1.5k", "250 ms", "L 30", "1/16". Double-click the control
@@ -1293,9 +1440,32 @@ audio effects after it keep running and keep their settings; saved with the proj
   interface (every window, menu, tooltip and dialog; text stays sharp), applied live and
   remembered; timeline, piano roll and audio editor zoom work on top of it. **Text size** —
   Smaller / Default / Larger / Largest steps every text by −1 to +2 pt without changing the
-  layout (device cards keep theirs), live and remembered. Also
+  layout (device cards keep theirs), live and remembered. **Waveform** —
+  **Smooth** (default), **Solid** or **Bars** for audio clips on the lanes. **Fade audio
+  clips when splitting** — on by default; a split then writes a 4 ms fade at the cut, which
+  the corner handles can drag longer or shorter. **Track
+  headers** — Left / Right side of the arrangement's track list. **Open the detail panel
+  when you select a track or clip** (off by default: a double-click opens it). **Label every
+  note in the piano roll** — the keys column names every note instead of only C (off by
+  default; very short rows keep C only). Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
+- **Language** (Appearance): the interface language. Nota ships in **English**; every other
+  language is downloaded from [nota-translations](https://github.com/nota-daw/nota-translations).
+  The drop-down lists English, the installed languages and those available for download, each
+  in its own name with how complete it is for this version; choosing one downloads it
+  (checked against its published size and checksum) and keeps it for offline use. **Update**
+  appears when a newer translation is published, **Remove** deletes one, and **Load file…**
+  runs Nota in a language file from disk, listing the entries it cannot use. The choice applies
+  after a restart, and the row says so, with a **Restart** button that closes Nota by its usual
+  path (unsaved changes first). A stored language that is not installed yet is fetched in the
+  background at start and the status bar offers the restart; with update checks off, Nota asks
+  the network only when you click. Menus, panels, dialogs, tooltips, status and error messages
+  and the command palette follow the language; device and parameter names, and anything you
+  typed, stay as they are; a text a language lacks shows in English. `NOTA_UI_LANGUAGE` (a
+  code or a language file's path) sets the language for one run. On macOS the system's own
+  text (application menu, open and save panels) follows the language from the next start. The
+  Remote phone page, MCP tool descriptions and logs are not translated.
 - **Shortcuts**: the shortcut list.
 - Settings, logs and autosaves live in `~/Library/Application Support/Nota/` (macOS) and
   `%APPDATA%\Nota` (Windows).
@@ -1311,12 +1481,14 @@ appears in the UI immediately.
 
 Coverage:
 - **Transport**: play/stop, tempo, time signature, loop, metronome, loop record mode
-  (`set_loop_record_mode`; `get_transport` reports it).
+  (`set_loop_record_mode`; `get_transport` reports it), discard and retry the take being
+  recorded (`retry_take`).
 - **Project**: `get_overview` (a full snapshot); the arrangement's sections
-  (`list_sections`, `set_sections`); version history — `list_versions` (with what
+  (`list_sections`, `set_sections`) and rearranging the song by them (`move_section`,
+  `duplicate_section_with_content`, `delete_section_with_content`); version history — `list_versions` (with what
   each changed), `save_version` with a note, `switch_version`, `annotate_version` (name, note,
   star). Deleting versions stays with the user.
-- **Tracks**: add and remove, volume/pan/mute/solo, groups, sends.
+- **Tracks**: add and remove, volume/pan/mute/solo, groups and their Link, sends.
 - **Instruments**: add by kind, read and write parameters (by index or by stable id), turn
   on or off (`set_device_bypass` with device index -1; `get_overview` shows it), replace with
   another built-in or an empty rack (`set_track_instrument`); read / shape Nota Keys in
@@ -1327,7 +1499,8 @@ Coverage:
   device (a Nota Chamber impulse response) and read its resource text (IR names).
 - **MIDI clips and notes**: piano roll — add a clip, read/write/append/clear notes, move
   and split; read and write a clip's controller curves (sustain, wheels, any CC).
-- **Automation**: create a lane, read and write points.
+- **Automation**: create a lane (volume, pan, a device or instrument parameter),
+  read and write points. A send is not a lane target.
 - **MIDI effects** and engine status.
 - **Session**: the clip launcher (grid snapshot with clip and scene properties, create, copy,
   move and clear slots, read and write slot notes, loop length, clip name / colour / launch

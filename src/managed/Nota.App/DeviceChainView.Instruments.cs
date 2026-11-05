@@ -9,6 +9,7 @@ using System;
 using Avalonia.Controls;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -87,7 +88,7 @@ public sealed partial class DeviceChainView
         {
             if (id == "program:") return "";
             if (id.StartsWith("factory:", StringComparison.Ordinal)) return factory.ApplyInPlace(engine, id["factory:".Length..], t, -1);
-            return packs?.ApplyInPlace(engine, id, t) ?? "Presets are unavailable.";
+            return packs?.ApplyInPlace(engine, id, t) ?? Loc.T("device_chain.instruments.presets_are_unavailable");
         }, Init: () => factory.ResetInPlace(engine, t, -1, false));   // every param to default, no program (#165)
     }
 
@@ -97,7 +98,7 @@ public sealed partial class DeviceChainView
         var view = _instrumentRackView = new RackCardView(NewCardContext());
         var body = view.BuildInstrumentRackBody(out int chains);
         var spec = new ShellSpec(
-            Name: _engine.DeviceName(_trackId, -1), Subtitle: $"Rack · {chains} chain{(chains == 1 ? "" : "s")}", DeviceIndex: -1, Count: 1,
+            Name: _engine.DeviceName(_trackId, -1), Subtitle: Loc.Plural("device_chain.rack_chains", chains), DeviceIndex: -1, Count: 1,
             Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: true,
             PresetKind: 3, IsInstrument: true, Width: 700, Kind: ChainKind.Instrument);
         return BuildCardShell(spec, body);
@@ -110,7 +111,7 @@ public sealed partial class DeviceChainView
         var body = new RackCardView(NewCardContext()).BuildDrumRackBody(out int pads);
         var kits = KitPresets();
         var spec = new ShellSpec(
-            Name: _engine.DeviceName(_trackId, -1), Subtitle: $"Drums · {pads} pad{(pads == 1 ? "" : "s")}", DeviceIndex: -1, Count: 1,
+            Name: _engine.DeviceName(_trackId, -1), Subtitle: Loc.Plural("device_chain.instruments.drums_pads", pads), DeviceIndex: -1, Count: 1,
             Bypassed: _engine.DeviceBypassed(_trackId, -1), Bypassable: true, CanMove: false, CanDelete: true,
             PresetKind: 4, IsInstrument: true, Width: 700, Kind: ChainKind.Instrument, Presets: kits);
         return BuildCardShell(spec, body);

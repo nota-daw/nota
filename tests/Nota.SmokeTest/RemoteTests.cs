@@ -56,13 +56,20 @@ internal static class RemoteTests
 
     private static IEnumerable<(bool, string)> Links()
     {
-        var ports = RemoteLinks.ParseHardwarePorts(
-            "Hardware Port: Wi-Fi\nDevice: en0\nEthernet Address: aa\n\n" +
-            "Hardware Port: iPhone USB\nDevice: en7\nEthernet Address: bb\n\n" +
-            "Hardware Port: Thunderbolt Bridge\nDevice: bridge0\nEthernet Address: cc\n\n" +
-            "Hardware Port: USB 10/100/1000 LAN\nDevice: en8\nEthernet Address: dd\n");
-        yield return (ports.Count == 4 && ports["en7"] == "iPhone USB" && ports["en8"].Contains("USB"),
-            "macOS hardware ports parse to their devices (iPhone USB on en7)");
+        if (OperatingSystem.IsMacOS())
+        {
+            var ports = RemoteLinks.HardwarePorts();
+            yield return (ports.Count > 0 && ports.Keys.All(d => d.Length > 0) && ports.Values.All(p => p.Length > 0),
+                $"macOS hardware ports read in-process from SystemConfiguration ({string.Join(", ", ports.Select(kv => kv.Key + "=" + kv.Value))})");
+
+            RemoteLinks.Invalidate();
+            int before = RemoteLinks.PortReads, cleared = RemoteLinks.Invalidations;
+            for (int i = 0; i < 20; i++) { RemoteLinks.All(); RemoteLinks.OnUsbLink(IPAddress.Parse("192.0.2.2")); }
+            // A real network change mid-loop clears the map once more and earns one more read.
+            int reads = RemoteLinks.PortReads - before, changes = RemoteLinks.Invalidations - cleared;
+            yield return (reads >= 1 && reads <= 1 + changes,
+                $"link queries reuse the port map until the network changes (read {reads}× for 40 queries, {changes} network change(s))");
+        }
 
         yield return (RemoteLinks.InSubnet(IPAddress.Parse("192.0.2.2"), IPAddress.Parse("192.0.2.1"), 24),
             "a phone on the USB subnet is recognised (192.0.2.2 in 192.0.2.1/24)");

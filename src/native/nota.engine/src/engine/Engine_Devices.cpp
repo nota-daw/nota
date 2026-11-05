@@ -964,7 +964,10 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
         std::shared_ptr<Device> dev = keepSource ? cloneDevice(*sd) : sd;
         if (!dev) return -3;
         if (dev->sidechainSourceTrackId() == dstId) {
-            if (dev == sd) dev = cloneDevice(*sd);
+            if (dev == sd) {
+                dev = cloneDevice(*sd);
+                if (dev) dev->inheritLineage(sd->lineage()); // the moved device itself, not a copy
+            }
             if (!dev) return -3;
             dev->setSidechainSourceTrackId(-1);
             dev->setSidechainPart(0);
@@ -980,6 +983,7 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
                 if (d < index) continue;
                 auto c = cloneMidiDevice(*m);
                 if (!c) continue;
+                c->inheritLineage(m->lineage()); // the same Arp, retargeted (take retry finds it)
                 if (d == index) {
                     c->setCcDest(-1, -1);
                     flags |= kTransferLinksDropped;
@@ -999,7 +1003,10 @@ int32_t Engine::transferDevice(int32_t srcId, int32_t family, int32_t index, int
         std::shared_ptr<MidiDevice> md = keepSource ? cloneMidiDevice(*sm) : sm;
         if (!md) return -3;
         if (md->ccDestDevice() >= 0) { // its CC target is a device on the old track
-            if (md == sm) md = cloneMidiDevice(*sm);
+            if (md == sm) {
+                md = cloneMidiDevice(*sm);
+                if (md) md->inheritLineage(sm->lineage()); // the moved device itself, not a copy
+            }
             if (!md) return -3;
             md->setCcDest(-1, -1);
             flags |= kTransferLinksDropped;
@@ -1340,6 +1347,7 @@ bool Engine::midiEffectSetState(int32_t t, int32_t i, const uint8_t* data, int32
     auto fresh = cloneMidiDevice(*old->midiEffects[i]);
     if (!fresh) return false;
     fresh->setState(data, size);
+    fresh->inheritLineage(old->midiEffects[i]->lineage()); // the same device to take retry
     // A MIDI Effect Rack's copy plays on with the held-note tables, so it ends what the old one
     // started instead of leaving it hanging.
     if (auto* to = dynamic_cast<MidiRack*>(fresh.get()))
@@ -1655,8 +1663,10 @@ void Engine::recomputeRouting() {
 
 // Every route a consumer asks for, in claim order: track instruments and devices (and keyed
 // children inside their racks, specs/044), then a monitoring audio track's input source.
+// Meter-only keys (an armed audio track that isn't monitoring, #352) come after every audible
+// one, so with the pool full arming a track never takes a route a device or monitor hears.
 template <typename Fn>
-void Engine::forEachRouteKey(Fn&& fn) const {
+void Engine::forEachRouteKey(Fn&& fn, bool meters) const {
     for (auto& t : authoring_->tracks) {
         auto children = [&](const RackCore& r) {
             r.forEachChildDevice([&](Device& c) { fn(c.sidechainSourceTrackId(), c.sidechainPart()); });
@@ -1672,8 +1682,13 @@ void Engine::forEachRouteKey(Fn&& fn) const {
                 if (auto* r = d->asRack()) children(*r);
             }
         // A monitoring audio track hears its source track's post-fader tap.
-        if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0) fn(t->recordInputSource(), uint64_t{0});
+        if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() > 0)
+            fn(t->recordInputSource(), uint64_t{0});
     }
+    if (!meters) return;
+    for (auto& t : authoring_->tracks) // an armed one meters it (#352): last, see above
+        if (t->type() == TrackType::Audio && t->armed() && !t->monitor() && t->recordInputSource() > 0)
+            fn(t->recordInputSource(), uint64_t{0});
 }
 
 // ---- Sidechain sub-sources (specs/050) -------------------------------------------------
@@ -1730,12 +1745,16 @@ int32_t Engine::applySidechainKey(Consumer& c, int32_t src, uint64_t part, bool 
     c.setSidechainPart(part);
     recomputeRouting();
     bool kept = routeSlotFor(src, part) >= 0;
-    bool oldHeld = false; // does anyone still listen to the old key?
-    forEachRouteKey([&](int32_t t, uint64_t p) { oldHeld = oldHeld || (t == oldSrc && p == oldPart); });
+    // Does a device, instrument or monitor still listen to a key? A route only an armed track's
+    // meter reads may go (#352); so may the old key's when this was its only listener.
+    auto heard = [&](int32_t ts, uint64_t ps) {
+        bool h = false;
+        forEachRouteKey([&](int32_t t, uint64_t p) { h = h || (t == ts && p == ps); }, false);
+        return h;
+    };
     for (int32_t s = 0; kept && s < nBefore; ++s) {
         const auto [t, p] = before[s];
-        // The old key's route may go when this was its only listener; every other must stay.
-        if (routeSlotFor(t, p) < 0 && (oldHeld || !(t == oldSrc && p == oldPart))) kept = false;
+        if (routeSlotFor(t, p) < 0 && heard(t, p)) kept = false; // every other route must stay
     }
     if (kept) return 0;
     c.setSidechainSourceTrackId(oldSrc);
