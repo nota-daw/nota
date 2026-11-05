@@ -67,7 +67,7 @@ after a pointer lifted; a keyboard click (`detail === 0`) always acts.
 
 | Check | Command / Action | Result | Notes |
 |-------|------------------|--------|-------|
-| Tap then Enter 100 ms later, Chromium (CDP) | touch tap on Scene 2, focus, Enter | pass | `scene 1` × 2 (before this change: × 1) |
+| Tap then Enter 100 ms later, Chromium (CDP) | touch tap on Scene 2, focus, Enter | pass | `scene 1` × 2 (the previous guard would drop the Enter by its 800 ms window — inferred from the code, not run) |
 | Earlier CDP scenarios, Chromium | staggered / simultaneous / single / slide-off / Enter | pass | 7 runs in a row identical to the first report; one cold first run after a mock restart lost one staggered launch and did not recur |
 | Single tap, iOS Safari (Simulator) | one tap on Drums/Scene 2 | pass | exactly one `launch` — WebKit's tap click carries `detail > 0`, so it is still dropped |
 | Two fingers + scene tap, iOS Safari | two clips together, then Scene 1 | pass | `launch` × 2, then `scene 0` |
