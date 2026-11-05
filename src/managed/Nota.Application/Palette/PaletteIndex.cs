@@ -1,3 +1,4 @@
+using Nota.Application.Localization;
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
@@ -80,6 +81,7 @@ public sealed class PaletteIndex
 
     /// <summary>The footer status: the progress while indexing, else the item count.</summary>
     public string Status => IsIndexing
-        ? $"indexing {_progressLabel}… {(int)Math.Round(_progress * 100)} %"
-        : Count.ToString("#,0", System.Globalization.CultureInfo.InvariantCulture).Replace(",", "\u2009") + (Count == 1 ? " item" : " items");
+        ? Loc.F("palette.index.indexing", _progressLabel, (int)Math.Round(_progress * 100))
+        : Count == 1 ? Loc.T("palette.index.1_item")
+        : Loc.F("palette.index.items", Count.ToString("#,0", System.Globalization.CultureInfo.InvariantCulture).Replace(",", "\u2009"));
 }

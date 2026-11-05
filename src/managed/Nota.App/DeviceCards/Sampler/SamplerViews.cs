@@ -27,6 +27,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -269,7 +270,7 @@ internal sealed class SamplerKeysView : Control
                 ctx.DrawText(t, new Point(rect.X + (rect.Width - t.Width) / 2, rect.Bottom - t.Height - 2));
             }
         }
-        string range = $"range {SamplerModel.NoteName(_lo)} — {SamplerModel.NoteName(_lo + 48)} · root {SamplerModel.NoteName(_root)} · keytrack {NotaNum.Pct(_track)}";
+        string range = Loc.F("device.sampler.range_root_keytrack", SamplerModel.NoteName(_lo), SamplerModel.NoteName(_lo + 48), SamplerModel.NoteName(_root), NotaNum.Pct(_track));
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopLeft, range, NotaPalette.TextTertiary);
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopRight, _hint, NotaPalette.TextAxis);
     }
@@ -449,7 +450,7 @@ internal sealed class SamplerEnvView : Control, IValueHandles
         }
 
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopLeft, _tl, NotaPalette.TextTertiary);
-        SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopRight, "note held", NotaPalette.TextAxis);
+        SamplerInk.Corner(ctx, r, NotaGraph.Corner.TopRight, Loc.T("device.sampler.note_held"), NotaPalette.TextAxis);
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomLeft, "0", NotaPalette.TextAxis);
         SamplerInk.Corner(ctx, r, NotaGraph.Corner.BottomRight, _br, NotaPalette.TextAxis);
     }

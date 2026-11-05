@@ -14,6 +14,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -24,6 +25,8 @@ public partial class MainWindow
     private ProgressBar _upBar = null!;
     private Button _upClose = null!;
     private Border _upOpen = null!;
+    private StackPanel _upPanel = null!, _langPanel = null!;
+    private TextBlock _langText = null!;
 
     private void BuildUpdateIndicator()
     {
@@ -67,18 +70,22 @@ public partial class MainWindow
             else updates.Dismiss();
         };
 
-        UpdateHost.Children.Add(new StackPanel
+        _upPanel = new StackPanel
         {
             Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 14, 0),
             Children = { open, _upBar, _upDetail, _upClose },
-        });
+        };
+        BuildLanguageNotice();
+        UpdateHost.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Children = { _langPanel, _upPanel } });
 
         updates.Changed += UpdateUpdateIndicator;
         updates.ProgressChanged += UpdateUpdateIndicator;
+        LanguageDownloads.Shared.Changed += UpdateUpdateIndicator;
         Closed += (_, _) =>
         {
             updates.Changed -= UpdateUpdateIndicator;
             updates.ProgressChanged -= UpdateUpdateIndicator;
+            LanguageDownloads.Shared.Changed -= UpdateUpdateIndicator;
         };
         UpdateUpdateIndicator();
     }
@@ -86,24 +93,30 @@ public partial class MainWindow
     private void UpdateUpdateIndicator()
     {
         var u = AppUpdates.Shared;
-        UpdateHost.IsVisible = u.Release is { } && u.State != AppUpdates.Stage.None && !u.Dismissed;
-        if (!UpdateHost.IsVisible) return;
+        var lang = LanguageDownloads.Shared;
+        _langPanel.IsVisible = lang.Ready is { } && !lang.Dismissed;
+        if (lang.Ready is { } ready)
+            _langText.Text = AppRestart.CanRelaunch ? Loc.F("main.updates.language_is_ready_restart", ready.Name)
+                : Loc.F("main.updates.language_is_ready_next_start", ready.Name);
+        _upPanel.IsVisible = u.Release is { } && u.State != AppUpdates.Stage.None && !u.Dismissed;
+        UpdateHost.IsVisible = _upPanel.IsVisible || _langPanel.IsVisible;
+        if (!_upPanel.IsVisible) return;
         var version = u.Release!.Version;
         bool busy = u.State == AppUpdates.Stage.Downloading;
         var p = u.Progress;
         _upText.Text = u.State switch
         {
-            AppUpdates.Stage.Downloading => $"Downloading Nota {version}…",
-            AppUpdates.Stage.Ready => $"Restart to update to Nota {version}",
-            AppUpdates.Stage.Failed => "The update didn't download",
-            _ => $"Nota {version} is available",
+            AppUpdates.Stage.Downloading => Loc.F("common.downloading_nota", version),
+            AppUpdates.Stage.Ready => Loc.F("main.updates.restart_to_update_to_nota", version),
+            AppUpdates.Stage.Failed => Loc.T("main.updates.the_update_didnt_download"),
+            _ => Loc.F("main.updates.nota_is_available", version),
         };
         ToolTip.SetTip(_upOpen, u.State switch
         {
             AppUpdates.Stage.Downloading => null,
-            AppUpdates.Stage.Ready => $"Nota {version} is downloaded. Click to restart now — or it installs the next time you quit.",
+            AppUpdates.Stage.Ready => Loc.F("main.updates.nota_is_downloaded_click_to", version),
             AppUpdates.Stage.Failed => u.Error,
-            _ => $"You have {AppInfo.Version}. Click to update or read the release notes.",
+            _ => Loc.F("main.updates.you_have_click_to_update", AppInfo.Version),
         });
         _upDot.IsVisible = !busy;
         _upBar.IsVisible = busy;
@@ -111,8 +124,44 @@ public partial class MainWindow
         if (busy && p.Fraction >= 0) _upBar.Value = p.Fraction;
         _upDetail.Text = busy && p.Fraction >= 0 ? NotaNum.Unit(p.Fraction * 100, "0", "%") : "";
         _upDetail.IsVisible = _upDetail.Text.Length > 0;
-        ToolTip.SetTip(_upClose, busy ? "Cancel the download"
-            : u.State == AppUpdates.Stage.Ready ? "Hide — it still installs when you quit" : "Not now");
+        ToolTip.SetTip(_upClose, busy ? Loc.T("main.cancel_the_download")
+            : u.State == AppUpdates.Stage.Ready ? Loc.T("main.updates.hide_it_still_installs_when") : Loc.T("main.not_now"));
+    }
+
+    // A language Nota downloaded on its own at start (the stored one was not installed, spec 077
+    // story 5) is ready: the same quiet notice, with a restart on click.
+    private void BuildLanguageNotice()
+    {
+        var dot = new Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center };
+        dot.BindResource(Shape.FillProperty, "Brush.Accent");
+        _langText = new TextBlock { Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
+        var open = new Border
+        {
+            Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
+            Child = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { dot, _langText } },
+        };
+        open.PointerEntered += (_, _) => _langText.TextDecorations = AppRestart.CanRelaunch ? TextDecorations.Underline : null;
+        open.PointerExited += (_, _) => _langText.TextDecorations = null;
+        open.PointerPressed += (_, e) =>
+        {
+            if (!e.GetCurrentPoint(open).Properties.IsLeftButtonPressed || !AppRestart.CanRelaunch) return;
+            e.Handled = true;
+            AppRestart.Request();   // the usual close: it asks about unsaved changes
+            Close();
+        };
+        var close = new Button
+        {
+            Classes = { "ghost" }, Width = 18, Height = 18, Padding = new Thickness(0), MinHeight = 0, MinWidth = 0,
+            VerticalAlignment = VerticalAlignment.Center, Content = new Glyph(GlyphKind.Close, 8),
+        };
+        close.BindResource(Button.ForegroundProperty, "Brush.TextTertiary");
+        ToolTip.SetTip(close, Loc.T("main.not_now"));
+        close.Click += (_, _) => LanguageDownloads.Shared.Dismiss();
+        _langPanel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal, Spacing = 8, Margin = new Thickness(0, 0, 14, 0), IsVisible = false,
+            Children = { open, close },
+        };
     }
 
     // Available / failed: what to do about it.
@@ -122,12 +171,12 @@ public partial class MainWindow
         var version = u.Release?.Version ?? "";
         var menu = new ContextMenu();
         menu.Items.Add(MenuKit.Item(
-            u.State == AppUpdates.Stage.Failed ? "Try again"
-                : u.CanInstall ? $"Update to Nota {version}" : $"Download Nota {version}…",
+            u.State == AppUpdates.Stage.Failed ? Loc.T("common.try_again")
+                : u.CanInstall ? Loc.F("main.updates.update_to_nota", version) : Loc.F("main.updates.download_nota", version),
             GlyphKind.Update, () => u.Download(this)));
-        menu.Items.Add(MenuKit.Item("Release notes", GlyphKind.Doc, () => u.OpenReleasePage(this)));
+        menu.Items.Add(MenuKit.Item(Loc.T("main.updates.release_notes"), GlyphKind.Doc, () => u.OpenReleasePage(this)));
         menu.Items.Add(new Separator());
-        menu.Items.Add(MenuKit.Item("Not now", click: u.Dismiss));
+        menu.Items.Add(MenuKit.Item(Loc.T("main.not_now"), click: u.Dismiss));
         return menu;
     }
 
@@ -136,21 +185,21 @@ public partial class MainWindow
     public async Task CheckForUpdatesAsync()
     {
         var u = AppUpdates.Shared;
-        const string checking = "Checking for updates…";
+        var checking = Loc.T("main.updates.checking_for_updates");
         if (_vm is not null) _vm.StatusText = checking;
         bool? found = await u.CheckAsync();
         if (_vm is not null && _vm.StatusText == checking) _vm.StatusText = "";
-        var title = "Check for updates";
+        var title = Loc.T("main.updates.check_for_updates");
 
         if (found is null)
         {
-            await new ConfirmWindow(title, "Couldn't reach GitHub to check for a newer version of Nota. Check your internet connection and try again.",
+            await new ConfirmWindow(title, Loc.T("main.updates.couldnt_reach_github_to_check"),
                 "OK", null).ShowDialog<bool>(this);
             return;
         }
         if (found == false || u.Release is not { } release)
         {
-            await new ConfirmWindow(title, $"You're up to date: Nota {AppInfo.Version} is the latest version.", "OK", null).ShowDialog<bool>(this);
+            await new ConfirmWindow(title, Loc.F("main.updates.youre_up_to_date_nota", AppInfo.Version), "OK", null).ShowDialog<bool>(this);
             return;
         }
 
@@ -160,14 +209,14 @@ public partial class MainWindow
             case AppUpdates.Stage.Downloading:
                 return;   // its progress is in the status bar already
             case AppUpdates.Stage.Ready:
-                if (await new ConfirmWindow(title, $"Nota {release.Version} is ready to install. Restart Nota to finish updating — or it installs the next time you quit.",
-                        "Restart now", "Later").ShowDialog<bool>(this))
+                if (await new ConfirmWindow(title, Loc.F("main.updates.nota_is_ready_to_install", release.Version),
+                        Loc.T("main.updates.restart_now"), Loc.T("main.updates.later")).ShowDialog<bool>(this))
                     u.Restart(Close);
                 return;
             default:
-                var message = $"Nota {release.Version} is out — you have {AppInfo.Version}."
-                    + (u.CanInstall ? " Nota downloads it here and installs it when you restart or quit." : " Download it from the release page.");
-                if (await new ConfirmWindow("Update available", message, u.CanInstall ? "Update" : "Download", "Later").ShowDialog<bool>(this))
+                var message = Loc.F("main.updates.nota_is_out_you_have", release.Version, AppInfo.Version)
+                    + (u.CanInstall ? Loc.T("main.updates.nota_downloads_it_here_and") : Loc.T("main.updates.download_it_from_the_release"));
+                if (await new ConfirmWindow(Loc.T("main.updates.update_available"), message, u.CanInstall ? Loc.T("common.update") : Loc.T("common.download"), Loc.T("main.updates.later")).ShowDialog<bool>(this))
                     u.Download(this);
                 return;
         }

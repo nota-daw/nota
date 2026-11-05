@@ -23,6 +23,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
@@ -226,7 +227,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         thrFader.GestureBegin += () => Begin(Threshold);
         thrFader.GestureEnd += () => End(Threshold);
         MidiLearn.Bind(thrFader, MidiTarget.DeviceParam(track, di, Threshold), "Thresh");
-        ToolTip.SetTip(thrFader, MenuKit.Keys("Threshold — the tick is the key's level right now. ⌥-click types, double-click resets."));
+        ToolTip.SetTip(thrFader, MenuKit.Keys(Loc.T("device.compressor.threshold_the_tick_is_the")));
 
         // The second fader is make-up on Curve / Motion and the key's gain on Sidechain.
         int F2() => centreTab == 2 ? ScGain : Makeup;
@@ -261,7 +262,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             thrVal.Text = Db(P(Threshold));
             f2Val.Text = SDb(P(p2));
             f2Lbl.Text = NotaText.Label(p2 == ScGain ? "SC IN" : "MKP");
-            ToolTip.SetTip(f2, MenuKit.Keys(p2 == ScGain ? "Key gain — drives the detector harder or softer. ⌥-click types, double-click resets." : "Make-up gain. ⌥-click types, double-click resets."));
+            ToolTip.SetTip(f2, MenuKit.Keys(p2 == ScGain ? Loc.T("device.compressor.key_gain_drives_the_detector") : Loc.T("device.compressor.make_up_gain_click_types")));
         });
         ValueEntry.Attach(thrFader, F("Threshold", () => Threshold, Lin, Db), thrVal);
         // The menu names the fader's param of the moment, and resets it to its own default:
@@ -286,11 +287,11 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         // CENTRE — Curve
         // ======================================================================
         var grHist = new CompGrHistoryView();
-        ToolTip.SetTip(grHist, "Gain reduction over the last four seconds; the dashed line is the peak. Click to clear it.");
+        ToolTip.SetTip(grHist, Loc.T("device.compressor.gain_reduction_over_the_last"));
         Control CurveTab()
         {
             var transfer = new CompTransferView();
-            ToolTip.SetTip(transfer, "Drag sideways for the threshold, up / down for the ratio. Double-click resets both. The dot is the key level right now.");
+            ToolTip.SetTip(transfer, Loc.T("device.compressor.drag_sideways_for_the_threshold"));
             transfer.GestureBegin += () => { Begin(Threshold); Begin(Ratio); };
             transfer.GestureEnd += () => { End(Threshold); End(Ratio); };
             transfer.Changed += (thr, ratio) => { Raw(Threshold, thr); Raw(Ratio, ratio); };
@@ -311,7 +312,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         Control MotionTab()
         {
             var motion = new CompMotionView();
-            ToolTip.SetTip(motion, "The reduction (the bright line, hanging from 0 dB) against the input level (the darker grey) — attack is the fall, release the climb back. The dashed line is the threshold.");
+            ToolTip.SetTip(motion, Loc.T("device.compressor.the_reduction_neutral_ink_hanging"));
             readouts.Add(() => motion.Set(envIn, envGr, scN >= kScope + 2 * EnvN ? EnvN : 0, P(Threshold), WindowMs()));
             return new Border { Margin = new Thickness(8, 6), Child = motion };
         }
@@ -328,7 +329,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         var key = new CompKeyView();
         Control SidechainTab()
         {
-            ToolTip.SetTip(key, MenuKit.Keys("The key's spectrum under its filters — drag a handle sideways to move HP / LP, up / down for Q. ⌥-click a handle to type it, double-click to open it."));
+            ToolTip.SetTip(key, MenuKit.Keys(Loc.T("device.compressor.the_keys_spectrum_under_its")));
             int KParam(int h) => h == 0 ? ScHP : h == 1 ? ScLP : ScQ;
             key.GestureBegin += h => Begin(KParam(h));
             key.GestureEnd += h => End(KParam(h));
@@ -416,8 +417,8 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         Control OutputTab()
         {
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            var listen = Latch(ScListen, "Listen", "Listen — hear the filtered key instead of the output, to set HP / LP by ear");
-            var autoGain = Latch(AutoGain, "Auto gain", "Auto gain — make-up that follows the threshold and ratio");
+            var listen = Latch(ScListen, "Listen", Loc.T("device.compressor.listen_hear_the_filtered_key"));
+            var autoGain = Latch(AutoGain, "Auto gain", Loc.T("device.compressor.auto_gain_make_up_that"));
             listen.HorizontalAlignment = HorizontalAlignment.Stretch; autoGain.HorizontalAlignment = HorizontalAlignment.Stretch;
             btns.Children.Add(listen); btns.Children.Add(Col(autoGain, 1));
             var rows = new Control[]
@@ -428,8 +429,8 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 SliderRow("RANGE", Range, RangeF, RangeMap(), teal: true),
                 new Border { BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 4, 0, 0), Child = btns },
                 new StackPanel { Spacing = 5, VerticalAlignment = VerticalAlignment.Center, Children = {
-                    Toggle(External, "External key", "External key — key off the source picked on the Sidechain tab; off, the track keys itself"),
-                    Toggle(StereoLink, "Stereo link", "Stereo link — one reduction for both channels; off, left and right compress on their own") } },
+                    Toggle(External, "External key", Loc.T("device.compressor.external_key_key_off_the")),
+                    Toggle(StereoLink, "Stereo link", Loc.T("device.compressor.stereo_link_one_reduction_for")) } },
             };
             var grid = new Grid { RowDefinitions = new RowDefinitions("Auto,*,*,*,Auto,*"), RowSpacing = 3 };
             for (int r = 0; r < rows.Length; r++) grid.Children.Add(GRow(rows[r], r));
@@ -443,7 +444,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             var charSeg = Segments(Chars, () => Sel(Character, 5), iv => SetP(Character, iv), out var charSync, fill: true, padX: 1, fontSize: 8);
             readouts.Add(charSync);
             MidiLearn.Bind(charSeg, MidiTarget.DeviceParam(track, di, Character), engine.DeviceParamName(track, di, Character));
-            ToolTip.SetTip(charSeg, "Character — the voicing: Clean as set, Glue slower and softer, Punch faster, Opto slow and program-soft, FET very fast");
+            ToolTip.SetTip(charSeg, Loc.T("device.compressor.character_the_voicing_clean_as"));
             return charSeg;
         }
 
@@ -451,7 +452,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         {
             var charSeg = CharSeg();
             var detSeg = Seg(Detection, Detects, fill: true);
-            ToolTip.SetTip(detSeg, "Detector — Peak reacts to every transient, RMS to the body, Auto follows the body and still catches the spikes");
+            ToolTip.SetTip(detSeg, Loc.T("device.compressor.detector_peak_reacts_to_every"));
             return Rows(
                 charSeg,
                 Labelled("DETECT", detSeg),
@@ -461,7 +462,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 Rule(),
                 SliderRow("RANGE", Range, RangeF, RangeMap(), teal: true),
                 GrBox(false),
-                Toggle(AutoGain, "Auto gain", "Auto gain — make-up that follows the threshold and ratio"));
+                Toggle(AutoGain, "Auto gain", Loc.T("device.compressor.auto_gain_make_up_that")));
         }
 
         // The Motion read-outs: the attack / release the detector really runs (after Character
@@ -480,10 +481,10 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             }
             stack.Children.Add(Line("attack · release", () => NotaNum.F($"{MsShort(Sc(S_AtkMs))} / {Ms(Sc(S_RelMs))}")));
             stack.Children.Add(Line("window", () => Ms(WindowMs())));
-            stack.Children.Add(Line("GR peak", () => NotaNum.F($"{Gr(grHist.Peak)} dB")));
+            stack.Children.Add(Line(Loc.T("device.compressor.gr_peak"), () => NotaNum.F($"{Gr(grHist.Peak)} dB")));
             var box = new Border { Background = Sunken, BorderBrush = NotaPalette.GraphBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(NotaRadius.FieldValue), Padding = new Thickness(6, 4), Child = stack };
             box.Tag = AutoRow;
-            ToolTip.SetTip(box, "Attack and release as the detector runs them now (after Character and auto-release), the time window of the Motion graph, and the deepest reduction lately");
+            ToolTip.SetTip(box, Loc.T("device.compressor.attack_and_release_as_the"));
             return box;
         }
 
@@ -495,7 +496,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
             SliderRow("AHEAD", Lookahead, v => v < 0.05 ? "off" : Ms(v), Lin(Lookahead)),
             Rule(),
             MotionBox(),
-            Toggle(AutoRelease, "Auto-release", "Auto-release — a slower second release once the reduction runs deep, so sustained material does not pump"));
+            Toggle(AutoRelease, "Auto-release", Loc.T("device.compressor.auto_release_a_slower_second")));
 
         Control KeyPanel()
         {
@@ -509,14 +510,14 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 if (k.Source >= 0 && !On(External)) SetP(External, 1);
                 ctx.NotifyChanged();
             };
-            ToolTip.SetTip(combo, "Key source — Internal keys off this track; pick another track, or one pad or chain of it, to duck or pump against it");
+            ToolTip.SetTip(combo, Loc.T("device.compressor.key_source_internal_keys_off"));
             var tap = Segments(new[] { "Pre", "Post" }, () => engine.DeviceSidechainTapPre(track, di) ? 0 : 1,
                 i => { engine.SetDeviceSidechainTapPre(track, di, i == 0); ctx.NotifyChanged(); }, out var tapSync, fill: true);
             readouts.Add(tapSync);
-            ToolTip.SetTip(tap, "Where the source is tapped: before its effects and fader, or after — for a pad or chain, before its own effects, or after them and its level");
+            ToolTip.SetTip(tap, Loc.T("device.compressor.where_the_source_is_tapped"));
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            var listen = Latch(ScListen, "Listen", "Listen — hear the filtered key instead of the output, to set HP / LP by ear");
-            var ext = Latch(External, "External", "External key — key off the source above; off, the track keys itself");
+            var listen = Latch(ScListen, "Listen", Loc.T("device.compressor.listen_hear_the_filtered_key"));
+            var ext = Latch(External, Loc.T("device.compressor.external"), Loc.T("device.compressor.external_key_key_off_the_source"));
             listen.HorizontalAlignment = HorizontalAlignment.Stretch; ext.HorizontalAlignment = HorizontalAlignment.Stretch;
             btns.Children.Add(ext); btns.Children.Add(Col(listen, 1));
             return Rows(
@@ -527,7 +528,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                 SliderRow("LP", ScLP, LpF, Log(ScLP)),
                 SliderRow("Q", ScQ, v => NotaNum.F($"{v:0.00}"), Log(ScQ)),
                 Rule(),
-                Toggle(StereoLink, "Stereo link", "Stereo link — one reduction for both channels; off, left and right compress on their own"));
+                Toggle(StereoLink, "Stereo link", Loc.T("device.compressor.stereo_link_one_reduction_for")));
         }
 
         // ======================================================================
@@ -549,13 +550,13 @@ internal sealed class CompressorDeviceBody : IDeviceBody
                     double held = 0;
                     for (int i = Math.Max(0, EnvN - (int)WindowMs()); i < EnvN; i++) held = Math.Max(held, envGr[i]);
                     extras.Text = !double.IsNaN(tr)
-                        ? NotaNum.F($"90 % rise {Ms(tr)} · recovery {(double.IsNaN(rec) ? "–" : Ms(rec))} · {hits} {(hits == 1 ? "hit" : "hits")}")
+                        ? Loc.F("device.compressor.rise_recovery_hits", Ms(tr), double.IsNaN(rec) ? "–" : Ms(rec), Loc.Plural("device.compressor.hits", hits))
                         : held > 1 ? NotaNum.F($"reduction held near −{held:0.0}\u2009dB · no separate hits to time")
-                        : NotaNum.F($"attack {Ms(Sc(S_AtkMs))} · release {Ms(Sc(S_RelMs))} · no reduction to measure");
+                        : Loc.F("device.compressor.attack_release_no_reduction", Ms(Sc(S_AtkMs)), Ms(Sc(S_RelMs)));
                     extras.Foreground = TextTertiary; break;
                 case 2:
                     double kdb = KeyDb(), trig = Hits(EnvN) * (4 * 60000.0 / Bpm()) / EnvN;
-                    extras.Text = On(ScListen) ? "key audible · output muted"
+                    extras.Text = On(ScListen) ? Loc.T("device.compressor.key_audible_output_muted")
                         : kdb <= -99 ? "key silent"
                         : NotaNum.F($"key {Lvl(kdb)} dB{(key.PeakHz > 0 ? NotaNum.F($" · peak {Hz(key.PeakHz)}") : "")} · {trig:0.#} {(Math.Abs(trig - 1) < 0.05 ? "trigger" : "triggers")} / bar");
                     extras.Foreground = On(ScListen) ? AccentBright : TextTertiary; break;
@@ -566,7 +567,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         });
         Control CentreBody(int t) => centreBodies[t] ??= t switch { 1 => MotionTab(), 2 => SidechainTab(), _ => CurveTab() };
         Control PanelBody(int t) => panelBodies[t] ??= t switch { 1 => MotionPanel(), 2 => KeyPanel(), _ => CurvePanel() };
-        string[] panelTitles = { "Dynamics", "Timing", "Key" };
+        string[] panelTitles = { Loc.T("device.compressor.dynamics"), Loc.T("device.compressor.timing"), Loc.T("device.compressor.key") };
         // The right panel's first tab follows the centre tab; Output stays beside it.
         int rightTab = 0;
         TextBlock[] rightLabels = System.Array.Empty<TextBlock>();
@@ -592,7 +593,7 @@ internal sealed class CompressorDeviceBody : IDeviceBody
         string StatusText()
         {
             if (On(ScListen))
-                return NotaNum.F($"Listen: only the key is heard · {SourceName()} {(engine.DeviceSidechainTapPre(track, di) ? "pre" : "post")} · HP {HpF(P(ScHP))} · LP {LpF(P(ScLP))}");
+                return Loc.F("device.compressor.listen_only_the_key_is", SourceName(), engine.DeviceSidechainTapPre(track, di) ? "pre" : "post", HpF(P(ScHP)), LpF(P(ScLP)));
             string range = P(Range) >= 47.5 ? "" : NotaNum.F($" · range {RangeF(P(Range))}");
             string ext = ExtActive() ? NotaNum.F($" · key {SourceName()}") : "";
             return NotaNum.F($"{Chars[Sel(Character, 5)]} · thresh {Db(P(Threshold))} · {RatioF(P(Ratio))} · knee {P(Knee):0.0} · {MsShort(P(Attack))} / {MsShort(P(Release))} ms · mix {PctF(P(Mix))}{range}{ext}");

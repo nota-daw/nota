@@ -15,6 +15,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 using Nota.Application.Samples;
 
 namespace Nota.App;
@@ -56,12 +57,12 @@ internal static class KeyPicker
             {
                 var key = new MusicalKey(t, mode);
                 title.Text = key.Long; title.Foreground = NotaPalette.TextPrimary;
-                relative.Text = key.Relative is { } r ? $"Relative {r.Long}" : "";
+                relative.Text = key.Relative is { } r ? Loc.F("key_picker.relative", r.Long) : "";
             }
             else
             {
                 title.Text = noneLabel; title.Foreground = NotaPalette.TextSecondary;
-                relative.Text = "Pick a note for the key";
+                relative.Text = Loc.T("key_picker.pick_a_note_for_the_key");
             }
         }
         void SetMode(KeyMode m)

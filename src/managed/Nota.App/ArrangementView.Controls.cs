@@ -14,6 +14,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -126,11 +127,11 @@ public sealed partial class ArrangementView
         {
             var flyout = new MenuFlyout();
             bool has = _o._loopE > _o._loopS;
-            var toggle = new MenuItem { Header = _o._loopActive ? "Turn loop off" : "Turn loop on", Icon = MenuKit.Icon(GlyphKind.Cycle), InputGesture = MenuKit.LoopKey };
+            var toggle = new MenuItem { Header = _o._loopActive ? Loc.T("arrangement.controls.turn_loop_off") : Loc.T("arrangement.controls.turn_loop_on"), Icon = MenuKit.Icon(GlyphKind.Cycle), InputGesture = MenuKit.LoopKey };
             toggle.Click += (_, _) => _o.SetLoopOn(!_o._loopActive);
-            var sel = new MenuItem { Header = "Loop selection", Icon = MenuKit.Icon(GlyphKind.Select), IsEnabled = _o.SelectionLoopRange() is not null };
+            var sel = new MenuItem { Header = Loc.T("arrangement.loop_selection"), Icon = MenuKit.Icon(GlyphKind.Select), IsEnabled = _o.SelectionLoopRange() is not null };
             sel.Click += (_, _) => { if (_o.SelectionLoopRange() is { } r) _o.SetLoopRegion(r.Start, r.End); };
-            var clear = MenuKit.Danger("Clear loop region", GlyphKind.Trash, () => _o.ClearLoopRegion(), enabled: has);
+            var clear = MenuKit.Danger(Loc.T("arrangement.controls.clear_loop_region"), GlyphKind.Trash, () => _o.ClearLoopRegion(), enabled: has);
             flyout.Items.Add(toggle);
             flyout.Items.Add(sel);
             flyout.Items.Add(new Separator());
@@ -240,7 +241,7 @@ public sealed partial class ArrangementView
         private void RenderPlayheadAndReadout(DrawingContext ctx, double w, double h)
         {
             // Playhead flag: a 7×5 brass triangle at the top of the ruler.
-            double px = _o.BeatToX(_o._playheadBeats);
+            double px = _o.BeatToX(_o._displayPlayheadBeats);
             if (px >= -5 && px <= w + 5)
             {
                 var tri = new StreamGeometry();
@@ -453,7 +454,7 @@ public sealed partial class ArrangementView
                 var pts = _o._masterAuto;
                 if (pts.Count == 0)
                 {
-                    var hint = new NotaFormattedText("click to add master volume points", CultureInfo.InvariantCulture,
+                    var hint = new NotaFormattedText(Loc.T("arrangement.controls.click_to_add_master_volume"), CultureInfo.InvariantCulture,
                         FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
                     ctx.DrawText(hint, new Point(12, my + (mh - hint.Height) / 2));
                 }
@@ -479,7 +480,7 @@ public sealed partial class ArrangementView
             }
             else
             {
-                var ft = new NotaFormattedText("master volume", CultureInfo.InvariantCulture,
+                var ft = new NotaFormattedText(Loc.T("arrangement.controls.master_volume"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 9, AutomationText);
                 ctx.DrawText(ft, new Point(12, my + (mh - ft.Height) / 2));
             }
@@ -506,7 +507,7 @@ public sealed partial class ArrangementView
             }
 
             // Playhead across the footer lanes: a 1px brass line.
-            double px = _o.BeatToX(_o._playheadBeats);
+            double px = _o.BeatToX(_o._displayPlayheadBeats);
             if (px >= 0 && px <= w)
             {
                 ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, h));

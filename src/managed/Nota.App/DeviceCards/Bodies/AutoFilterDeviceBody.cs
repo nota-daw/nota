@@ -20,6 +20,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
@@ -244,8 +245,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             shapeTitle.Foreground = Assigned() && scN > 0 && Math.Abs(Sc(S_Cut) - P(Freq)) > 0.01 ? AccentBright : TextTertiary;
         });
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 9, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 4) };
-        faders.Children.Add(ShapeFader(Freq, "FRQ", NotaPalette.VizInk, S_Cut, "Cutoff — the base the modulation moves from; the dashed mark is where it is now. Double-click resets, ⌥-click types a value."));
-        faders.Children.Add(Col(ShapeFader(Res, "RES", Teal, S_Res, "Resonance — the peak at the cutoff; the dashed mark is where it is now. Double-click resets, ⌥-click types a value."), 1));
+        faders.Children.Add(ShapeFader(Freq, "FRQ", NotaPalette.VizInk, S_Cut, Loc.T("device.auto_filter.cutoff_the_base_the_modulation")));
+        faders.Children.Add(Col(ShapeFader(Res, "RES", Teal, S_Res, Loc.T("device.auto_filter.resonance_the_peak_at_the")), 1));
         var shapeCol = new RuleSection
         {
             Width = 56, Padding = new Thickness(0, 5, 0, 4),
@@ -265,7 +266,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             curve.GestureEnd += () => { End(Freq); End(Res); };
             curve.CutoffChanged += v => Raw(Freq, (float)v);
             curve.ResChanged += v => Raw(Res, (float)v);
-            ToolTip.SetTip(curve, "Drag sideways for the cutoff, up and down for the resonance. The shaded grey band is how far the envelope and LFO can move the cutoff; the dashed curve is where they have it now.");
+            ToolTip.SetTip(curve, Loc.T("device.auto_filter.drag_sideways_for_the_cutoff"));
             Learn(curve, Freq);
             ValueEntry.AttachAll(curve, F(Freq, "Cutoff", v => Hz(HzOf(v))), F(Res, "Resonance", Pct));
             return new Border { Margin = new Thickness(8, 6), Child = curve };
@@ -285,7 +286,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             envView.DragV += v => Raw(EnvAmt, (float)v);
             envView.GestureBegin += () => Begin(EnvAmt);
             envView.GestureEnd += () => End(EnvAmt);
-            ToolTip.SetTip(envView, "The input's envelope (the darker grey) and the cutoff it drives (the bright line), the base cutoff dashed. Drag up or down for the amount.");
+            ToolTip.SetTip(envView, Loc.T("device.auto_filter.the_inputs_envelope_teal_and"));
             Learn(envView, EnvAmt);
             ValueEntry.AttachAll(envView, F(EnvAmt, "Env amount", Bip));
             return new Border { Margin = new Thickness(8, 6), Child = envView };
@@ -327,7 +328,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             lfoView.DragH += v => Raw(LfoOffset, (float)v);
             lfoView.GestureBegin += () => { Begin(LfoAmt); Begin(LfoOffset); };
             lfoView.GestureEnd += () => { End(LfoAmt); End(LfoOffset); };
-            ToolTip.SetTip(lfoView, "The LFO's movement over the window — raw shape dashed, what the filter follows (after Smooth) in neutral ink, the right channel in the darker grey when stereo is on. Drag up or down for the amount, sideways for the start phase.");
+            ToolTip.SetTip(lfoView, Loc.T("device.auto_filter.the_lfos_movement_over_the"));
             Learn(lfoView, LfoAmt);
             ValueEntry.AttachAll(lfoView, F(LfoAmt, "LFO amount", Pct), F(LfoOffset, "LFO phase", v => Deg(v, 360)));
             return new Border { Margin = new Thickness(8, 6), Child = lfoView };
@@ -371,14 +372,14 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                         b.PointerPressed += (_, e) => { SidechainSourcePicker.SetDeviceKey(engine, track, di, k); ctx.NotifyChanged(); RefreshAll(); fly.Hide(); e.Handled = true; };
                     list.Children.Add(b);
                 }
-                Item("None — this track's input", SidechainKey.None);
+                Item(Loc.T("device.auto_filter.none_this_tracks_input"), SidechainKey.None);
                 foreach (var en in SidechainSourcePicker.Entries(engine, track, Key()))
                     Item(en.Label, en.Key, en.IsPart, en.Enabled, en.Tip);
                 var gain = DeviceCardKit.SliderRow("KEY GAIN", () => (engine.DeviceSidechainGain(track, di) + 24) / 48.0,
                     v => engine.SetDeviceSidechainGain(track, di, (float)(v * 48 - 24)),
                     () => NotaNum.F($"{engine.DeviceSidechainGain(track, di):+0.0;−0.0;0.0} dB"), out _, bipolar: true,
                     reset: () => engine.SetDeviceSidechainGain(track, di, 0), valueWidth: 46);
-                fly.Content = new StackPanel { Width = 200, Spacing = 6, Children = { Caps("SIDECHAIN KEY — ENVELOPE SOURCE", null, 8), list, new Border { Height = 1, Background = BorderDef }, gain } };
+                fly.Content = new StackPanel { Width = 200, Spacing = 6, Children = { Caps(Loc.T("device.auto_filter.sidechain_key_envelope_source_caps"), null, 8), list, new Border { Height = 1, Background = BorderDef }, gain } };
                 fly.ShowAt(host!);
             }
             var sw = Switch("", () => engine.DeviceSidechainSource(track, di) >= 0, () =>
@@ -393,7 +394,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             readouts.Add(sync);
             // a right-click (or a click on the name while on) re-opens the picker
             sw.PointerReleased += (_, e) => { if (e.InitialPressMouseButton == MouseButton.Right) { ShowPicker(); e.Handled = true; } };
-            ToolTip.SetTip(sw, "Sidechain key — the envelope follows another track instead of this one. Switch on to pick the source and the key gain; right-click to change it.");
+            ToolTip.SetTip(sw, Loc.T("device.auto_filter.sidechain_key_the_envelope_follows"));
             return sw;
         }
 
@@ -463,7 +464,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 boxHz.Text = NotaNum.F($"{HzLong(live)} · {NoteOf(live)}");
                 box.BorderBrush = moving ? NotaPalette.BorderBrass : NotaPalette.GraphBorder;
                 boxTitle.Foreground = moving ? AccentBright : TextTertiary;
-                if (!Assigned()) boxSub.Text = "no modulation assigned";
+                if (!Assigned()) boxSub.Text = Loc.T("device.auto_filter.no_modulation_assigned");
                 else
                 {
                     var parts = new List<string> { NotaNum.F($"base {Hz(BaseHz())}") };
@@ -523,8 +524,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 SliderRow("DRY/WET", DryWet, Pct),
                 SliderRow("GAIN", Gain, GainF, bipolar: true) } };
             var btns = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
-            btns.Children.Add(Latch(LfoRetrig, () => "Retrig", "Retrig — restart the LFO on each input onset (−24 dBFS) and when play starts", fill: true));
-            btns.Children.Add(Col(Latch(Circuit, () => "Analog", "Analog — a gentle saturation after the filter, like an analog circuit", fill: true), 1));
+            btns.Children.Add(Latch(LfoRetrig, () => "Retrig", Loc.T("device.auto_filter.retrig_restart_the_lfo_on"), fill: true));
+            btns.Children.Add(Col(Latch(Circuit, () => "Analog", Loc.T("device.auto_filter.analog_a_gentle_saturation_after"), fill: true), 1));
             var tempo = Toggle(LfoSync, "Tempo sync");
             // Stereo phase: on sets 90°, a click on the value steps 45° → 180°.
             var stereo = Switch("", () => P(LfoPhase) > 0.001f, () => SetP(LfoPhase, P(LfoPhase) > 0.001f ? 0f : 0.5f), out var stSync,
@@ -537,7 +538,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 float nx = P(LfoPhase) + 0.25f; if (nx > 1.001f) nx = 0.25f;
                 SetP(LfoPhase, nx); RefreshAll(); e.Handled = true;
             };
-            ToolTip.SetTip(stereo, "Stereo phase — the right channel's LFO runs ahead of the left (90° when switched on; right-click steps 45° … 180°)");
+            ToolTip.SetTip(stereo, Loc.T("device.auto_filter.stereo_phase_the_right_channels"));
 
             var body = new DockPanel { LastChildFill = false, Children = {
                 Docked(box, Dock.Top),
@@ -551,11 +552,11 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         {
             var types = Chips(TypeNames, i => Sel(Type, 4) == i, i => SetP(Type, i / 3f), Type, padX: 5);
             var target = Chips(new[] { "Freq", "Reso", "Both" }, i => Target() == i, i => SetP(ModTarget, i / 2f), ModTarget, padX: 6);
-            ToolTip.SetTip(target, "What the envelope and the LFO move: the cutoff, the resonance or both");
+            ToolTip.SetTip(target, Loc.T("device.auto_filter.what_the_envelope_and_the"));
             var slope = Seg(Slope, new[] { "12", "24" });
-            ToolTip.SetTip(slope, "Slope — 12 or 24 dB per octave");
+            ToolTip.SetTip(slope, Loc.T("device.auto_filter.slope_12_or_24_db"));
             var circuit = Seg(Circuit, new[] { "Clean", "Analog" }, fill: true);
-            ToolTip.SetTip(circuit, "Analog — a gentle saturation after the filter, like an analog circuit");
+            ToolTip.SetTip(circuit, Loc.T("device.auto_filter.analog_a_gentle_saturation_after"));
             return Rows(
                 types,
                 SlopeRow(slope, circuit),
@@ -564,7 +565,7 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 SliderRow("DRY/WET", DryWet, Pct),
                 SliderRow("GAIN", Gain, GainF, bipolar: true, valW: 44),
                 Rule(),
-                Labelled("MOD →", target));
+                Labelled(Loc.T("device.auto_filter.mod_arrow"), target));
         }
 
         Control EnvelopePanel()
@@ -580,8 +581,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             readouts.Add(dirSync);
             Learn(dir, EnvAmt);
             var envSw = Toggle(EnvOn, "Envelope", live: () => engine.DeviceSidechainSource(track, di) >= 0 ? "Envelope on key" : "Envelope");
-            ToolTip.SetTip(envSw, "Envelope follower on / off");
-            var hold = Latch(EnvHold, () => "Hold", "Hold — keep the envelope at its peak for the hold time before it releases (∞ freezes it)", fill: true);
+            ToolTip.SetTip(envSw, Loc.T("device.auto_filter.envelope_follower_on_off"));
+            var hold = Latch(EnvHold, () => Loc.T("device.auto_filter.hold"), Loc.T("device.auto_filter.hold_keep_the_envelope_at"), fill: true);
             var holdRow = new Grid { ColumnDefinitions = new ColumnDefinitions("40,*"), ColumnSpacing = 0, VerticalAlignment = VerticalAlignment.Center };
             var holdTime = DeviceCardKit.SliderRow("", () => P(EnvHoldTime), v => Raw(EnvHoldTime, (float)v), () => HoldF(P(EnvHoldTime)), out var holdSync,
                 begin: () => Begin(EnvHoldTime), end: () => End(EnvHoldTime), reset: () => Reset(EnvHoldTime), dim: () => !On(EnvHold), valueWidth: 34);
@@ -603,12 +604,12 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         Control LfoPanel()
         {
             var lfoSw = Toggle(LfoOn, "LFO");
-            ToolTip.SetTip(lfoSw, "LFO on / off");
+            ToolTip.SetTip(lfoSw, Loc.T("device.auto_filter.lfo_on_off"));
             var sync = Seg(LfoSync, new[] { "Free", "Sync" }, fill: true);
             var waves = Chips(WaveNames, i => Sel(LfoWave, 5) == i, i => SetP(LfoWave, i / 4f), LfoWave, padX: 4);
             // Stereo phase: on sets 90°, a right-click on it steps 45° → 180°.
             var stereo = Switch("", () => P(LfoPhase) > 0.001f, () => SetP(LfoPhase, P(LfoPhase) > 0.001f ? 0f : 0.5f), out var stSync,
-                liveLabel: () => P(LfoPhase) > 0.001f ? NotaNum.F($"Stereo {P(LfoPhase) * 180:0}°") : "Stereo");
+                liveLabel: () => P(LfoPhase) > 0.001f ? NotaNum.F($"Stereo {P(LfoPhase) * 180:0}°") : Loc.T("device.auto_filter.stereo"));
             readouts.Add(stSync);
             Learn(stereo, LfoPhase);
             stereo.PointerReleased += (_, e) =>
@@ -617,9 +618,9 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
                 float nx = P(LfoPhase) + 0.25f; if (nx > 1.001f) nx = 0.25f;
                 SetP(LfoPhase, nx); RefreshAll(); e.Handled = true;
             };
-            ToolTip.SetTip(stereo, "Stereo phase — the right channel's LFO runs ahead of the left (90° when switched on; right-click steps 45° … 180°)");
+            ToolTip.SetTip(stereo, Loc.T("device.auto_filter.stereo_phase_the_right_channels"));
             var retrig = Toggle(LfoRetrig, "Retrig");
-            ToolTip.SetTip(retrig, "Retrig — restart the LFO on each input onset (−24 dBFS) and when play starts");
+            ToolTip.SetTip(retrig, Loc.T("device.auto_filter.retrig_restart_the_lfo_on"));
             return Rows(
                 Pair(lfoSw, sync),
                 waves,
@@ -643,18 +644,18 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
         {
             string Range()
             {
-                if (!Assigned() || !ToFreq()) return "no modulation";
+                if (!Assigned() || !ToFreq()) return Loc.T("device.auto_filter.no_modulation");
                 var (lo, hi) = RangeOct();
                 return NotaNum.F($"range {Hz(Math.Min(18000, BaseHz() * Math.Pow(2, lo)))}…{Hz(Math.Min(18000, BaseHz() * Math.Pow(2, hi)))}");
             }
             // The LFO's reach when it drives the resonance (Mod → Reso / Both).
             string LfoRange()
             {
-                if (!Assigned()) return "no modulation";
+                if (!Assigned()) return Loc.T("device.auto_filter.no_modulation");
                 var parts = new List<string>();
                 if (ToFreq()) parts.Add(Range());
                 if (ToRes() && LfoAssigned()) parts.Add(NotaNum.F($"reso {Pct(P(Res))} ±{Pct(LfoDepth() * 0.5)}"));
-                return parts.Count > 0 ? string.Join(" · ", parts) : "no modulation";
+                return parts.Count > 0 ? string.Join(" · ", parts) : Loc.T("device.auto_filter.no_modulation");
             }
             string EnvReach()
             {
@@ -710,8 +711,8 @@ internal sealed class AutoFilterDeviceBody : IDeviceBody
             var parts = new List<string>();
             switch (centreTab)
             {
-                case 1: parts.Add(filter); parts.Add(baseHz); parts.Add(env.Length > 0 ? env : "envelope not assigned"); break;
-                case 2: parts.Add(lfo.Length > 0 ? lfo : "LFO not assigned"); parts.Add(NotaNum.F($"cutoff {HzLong(LiveHz())}")); if (P(Drive) > 0.004f) parts.Add(NotaNum.F($"drive {Pct(P(Drive))}")); break;
+                case 1: parts.Add(filter); parts.Add(baseHz); parts.Add(env.Length > 0 ? env : Loc.T("device.auto_filter.envelope_not_assigned")); break;
+                case 2: parts.Add(lfo.Length > 0 ? lfo : Loc.T("device.auto_filter.lfo_not_assigned")); parts.Add(NotaNum.F($"cutoff {HzLong(LiveHz())}")); if (P(Drive) > 0.004f) parts.Add(NotaNum.F($"drive {Pct(P(Drive))}")); break;
                 default:
                     parts.Add(filter); parts.Add(baseHz); parts.Add(NotaNum.F($"Q {Q(P(Res)):0.00}"));
                     if (env.Length > 0) parts.Add(NotaNum.F($"ENV {Bip(P(EnvAmt))}"));

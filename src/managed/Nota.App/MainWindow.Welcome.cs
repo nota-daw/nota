@@ -3,7 +3,8 @@
 //
 // Welcome screen plumbing: build the launcher, feed it the recent-projects list, and
 // wire its actions back to the main window. Recent projects are recorded here on every
-// successful open/save (see MainWindow.Files.OpenProject / DoSaveAsync).
+// successful open/save (see MainWindow.Files.OpenProject / DoSaveAsync); File → Open recent
+// shows the same list (MainWindow.RecentMenu).
 
 using System;
 using System.Collections.Generic;
@@ -102,6 +103,7 @@ public partial class MainWindow
             list.Insert(0, dir);
             if (list.Count > MaxRecentProjects) list.RemoveRange(MaxRecentProjects, list.Count - MaxRecentProjects);
             settings.Save();
+            RefreshRecentMenu();   // File → Open recent follows the same list
         }
         catch { /* recent list is best-effort — never disrupt the open/save */ }
     }

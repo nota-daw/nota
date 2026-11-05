@@ -26,6 +26,18 @@ public sealed class TransportTools(IAudioEngine engine, IEngineDispatch dispatch
     [McpServerTool(Name = "stop"), Description("Stop playback (a second stop returns the playhead to the start).")]
     public Task StopTransport() => Mutate(() => E.StopTransport());
 
+    public sealed record RetryTakeOutcome(string Result);
+
+    [McpServerTool(Name = "retry_take"), Description("Discard the take being recorded and record it again, leaving no undo step: an Arrangement take restarts from where the transport was started (counting in again if it did); a Session slot take records again into the same slot from the next launch quantum while other clips keep playing. Result: none (nothing was recording), arrangement, session, or failed (discarded but recording could not restart).")]
+    public Task<RetryTakeOutcome> RetryTake()
+        => Mutate(() => new RetryTakeOutcome(E.RetryTake() switch
+        {
+            RetryTakeResult.Arrangement => "arrangement",
+            RetryTakeResult.Session => "session",
+            RetryTakeResult.Failed => "failed",
+            _ => "none",
+        }));
+
     [McpServerTool(Name = "seek"), Description("Move the playhead to a beat position (0 = bar 1).")]
     public Task Seek([Description("Target position in beats")] double beat) => Mutate(() => E.Seek(Math.Max(0, beat)));
 

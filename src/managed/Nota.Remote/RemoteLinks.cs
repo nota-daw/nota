@@ -6,10 +6,10 @@
 // millisecond latency and no radio to drop — so when one is up it leads the QR. The same
 // server socket serves every interface; this only decides what Nota shows.
 
-using System.Diagnostics;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 
 namespace Nota.Remote;
 
@@ -112,54 +112,98 @@ public static class RemoteLinks
                 || ni.Name.StartsWith("usb", StringComparison.Ordinal)));
     }
 
-    /// <summary>macOS: device (en7) → hardware port ("iPhone USB"). Cached; the helper it
-    /// shells out to is not free and ports appear only when something is plugged in.</summary>
+    /// <summary>macOS: device (en7) → hardware port ("iPhone USB"). Read in-process from
+    /// SystemConfiguration and kept until the network changes — ports appear only when something
+    /// is plugged in, and that always brings an address with it. Never a child process: spawning
+    /// one from this app stalls the whole process long enough to drop out the audio callback.</summary>
     private static Dictionary<string, string> UsbDevices()
     {
         if (!OperatingSystem.IsMacOS()) return new();
         lock (Gate)
         {
-            if (DateTime.UtcNow - _portsAt < TimeSpan.FromSeconds(10)) return _ports;
-            _ports = ListHardwarePorts();
-            _portsAt = DateTime.UtcNow;
+            if (_ports is not null) return _ports;
+            _ports = MacHardwarePorts.Read();
+            PortReads++;
             return _ports;
         }
     }
 
-    private static readonly object Gate = new();
-    private static Dictionary<string, string> _ports = new();
-    private static DateTime _portsAt = DateTime.MinValue;
+    static RemoteLinks()
+    {
+        NetworkChange.NetworkAddressChanged += (_, _) => Invalidate();
+    }
 
-    /// <summary>Parses `networksetup -listallhardwareports`: blocks of "Hardware Port:", then
-    /// "Device:". Public so the smoke test can check it without shelling out.</summary>
-    public static Dictionary<string, string> ParseHardwarePorts(string output)
+    /// <summary>Forget the device → port map; the next query reads it again.</summary>
+    public static void Invalidate()
+    {
+        lock (Gate) { _ports = null; Invalidations++; }
+    }
+
+    /// <summary>The macOS device → hardware-port map, as the USB check sees it. Public for the
+    /// smoke test.</summary>
+    public static IReadOnlyDictionary<string, string> HardwarePorts() => UsbDevices();
+
+    /// <summary>How many times the port map has been read since launch. Public so the smoke test
+    /// can check that link queries reuse it.</summary>
+    public static int PortReads { get; private set; }
+
+    /// <summary>How many times the map has been forgotten (a network change or
+    /// <see cref="Invalidate"/>). Public so the smoke test can allow for a real network change
+    /// landing mid-check.</summary>
+    public static int Invalidations { get; private set; }
+
+    private static readonly object Gate = new();
+    private static Dictionary<string, string>? _ports;
+}
+
+/// <summary>SCNetworkInterfaceCopyAll: the same device/port pairs `networksetup
+/// -listallhardwareports` prints, without leaving the process.</summary>
+internal static class MacHardwarePorts
+{
+    private const string SystemConfiguration = "/System/Library/Frameworks/SystemConfiguration.framework/SystemConfiguration";
+    private const string CoreFoundation = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation";
+    private const uint Utf8 = 0x08000100;   // kCFStringEncodingUTF8
+
+    public static Dictionary<string, string> Read()
     {
         var map = new Dictionary<string, string>(StringComparer.Ordinal);
-        string port = "";
-        foreach (var line in output.Split('\n'))
+        try
         {
-            string l = line.Trim();
-            if (l.StartsWith("Hardware Port:", StringComparison.Ordinal)) port = l["Hardware Port:".Length..].Trim();
-            else if (l.StartsWith("Device:", StringComparison.Ordinal) && port.Length > 0)
+            IntPtr all = SCNetworkInterfaceCopyAll();   // owned: released below
+            if (all == IntPtr.Zero) return map;
+            try
             {
-                map[l["Device:".Length..].Trim()] = port;
-                port = "";
+                long n = CFArrayGetCount(all);
+                for (long i = 0; i < n; i++)
+                {
+                    IntPtr ni = CFArrayGetValueAtIndex(all, i);   // borrowed from the array
+                    string? device = Str(SCNetworkInterfaceGetBSDName(ni));
+                    string? port = Str(SCNetworkInterfaceGetLocalizedDisplayName(ni));
+                    if (!string.IsNullOrEmpty(device) && !string.IsNullOrEmpty(port)) map[device] = port;
+                }
             }
+            finally { CFRelease(all); }
         }
+        catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException) { }
         return map;
     }
 
-    private static Dictionary<string, string> ListHardwarePorts()
+    // A borrowed CFString (a Get, not a Copy) as UTF-8 text.
+    private static string? Str(IntPtr cf)
     {
-        try
-        {
-            using var p = Process.Start(new ProcessStartInfo("/usr/sbin/networksetup", "-listallhardwareports")
-                { RedirectStandardOutput = true, UseShellExecute = false, CreateNoWindow = true });
-            if (p is null) return new();
-            string text = p.StandardOutput.ReadToEnd();
-            p.WaitForExit(2000);
-            return ParseHardwarePorts(text);
-        }
-        catch { return new(); }
+        if (cf == IntPtr.Zero) return null;
+        var buf = new byte[256];
+        if (!CFStringGetCString(cf, buf, buf.Length, Utf8)) return null;
+        int len = Array.IndexOf(buf, (byte)0);
+        return System.Text.Encoding.UTF8.GetString(buf, 0, len < 0 ? buf.Length : len);
     }
+
+    [DllImport(SystemConfiguration)] private static extern IntPtr SCNetworkInterfaceCopyAll();
+    [DllImport(SystemConfiguration)] private static extern IntPtr SCNetworkInterfaceGetBSDName(IntPtr networkInterface);
+    [DllImport(SystemConfiguration)] private static extern IntPtr SCNetworkInterfaceGetLocalizedDisplayName(IntPtr networkInterface);
+    [DllImport(CoreFoundation)] private static extern long CFArrayGetCount(IntPtr array);
+    [DllImport(CoreFoundation)] private static extern IntPtr CFArrayGetValueAtIndex(IntPtr array, long index);
+    [DllImport(CoreFoundation)] [return: MarshalAs(UnmanagedType.U1)]
+    private static extern bool CFStringGetCString(IntPtr str, byte[] buffer, long bufferSize, uint encoding);
+    [DllImport(CoreFoundation)] private static extern void CFRelease(IntPtr cf);
 }

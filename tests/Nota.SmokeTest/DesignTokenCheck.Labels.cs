@@ -43,20 +43,20 @@ internal static partial class DesignTokenCheck
     // C# label contexts. Group lit is the literal with its quotes; b names the builder.
     private static readonly Regex[] CsContexts =
     {
-        new(@"\b(?:Text|Content|Header|Title)\s*=(?!=)\s*(?<lit>""(?:[^""\\\n]|\\.)*"")"),
-        new(@"\b(?:Text|Content|Header|Title)\s*=(?!=)[^;,""{}]*?\?\s*(?<lit>""(?:[^""\\\n]|\\.)*"")\s*:\s*(?<lit>""(?:[^""\\\n]|\\.)*"")"),
-        new(@"\bToolTip\.SetTip\([^,()""]+,\s*(?<lit>""(?:[^""\\\n]|\\.)*"")"),
-        new($@"(?<![\w.]|new\s)(?<b>{Builders})\(\s*(?<lit>""(?:[^""\\\n]|\\.)*"")"),
+        new(@"\b(?:Text|Content|Header|Title)\s*=(?!=)\s*(?:Loc\.(?:T|F)\(\s*)?(?<lit>""(?:[^""\\\n]|\\.)*"")"),
+        new(@"\b(?:Text|Content|Header|Title)\s*=(?!=)[^;,""{}]*?\?\s*(?:Loc\.(?:T|F)\(\s*)?(?<lit>""(?:[^""\\\n]|\\.)*"")\)?\s*:\s*(?:Loc\.(?:T|F)\(\s*)?(?<lit>""(?:[^""\\\n]|\\.)*"")"),
+        new(@"\bToolTip\.SetTip\([^,()""]+,\s*(?:Loc\.(?:T|F)\(\s*)?(?<lit>""(?:[^""\\\n]|\\.)*"")"),
+        new($@"(?<![\w.]|new\s)(?<b>{Builders})\(\s*(?:Loc\.(?:T|F)\(\s*)?(?<lit>""(?:[^""\\\n]|\\.)*"")"),
         // A heading table row, ("DEVICES", new[] { … }) — the Settings sidebar and shortcut groups.
-        new(@"^\s*\(\s*(?<lit>""(?:[^""\\\n]|\\.)*"")\s*,\s*new\s*(?:\w+\s*)?\[\]"),
+        new(@"^\s*\(\s*(?:Loc\.(?:T|F)\(\s*)?(?<lit>""(?:[^""\\\n]|\\.)*"")\)?\s*,\s*new\s*(?:\w+\s*)?\[\]"),
     };
     // Command titles: C("file.new", "New Project", "File", …).
-    private static readonly Regex CatalogTitle = new(@"\bC\(\s*(?:""[^""]*""|\w+)\s*,\s*(?<lit>""(?:[^""\\\n]|\\.)*"")");
+    private static readonly Regex CatalogTitle = new(@"\bC\(\s*(?:""[^""]*""|\w+)\s*,\s*(?:Loc\.(?:T|F)\(\s*)?(?<lit>""(?:[^""\\\n]|\\.)*"")");
     // Palette group headings: new PaletteRow("RECENT", …) and the GroupLabel switch arms.
     private static readonly Regex[] PaletteHeadings =
     {
-        new(@"\bnew PaletteRow\(\s*(?<lit>""(?:[^""\\\n]|\\.)*"")"),
-        new(@"(?:\b\w+\.\w+|\b_)\s*=>\s*(?<lit>""(?:[^""\\\n]|\\.)*"")"),
+        new(@"\bnew PaletteRow\(\s*(?:Loc\.(?:T|F)\(\s*)?(?<lit>""(?:[^""\\\n]|\\.)*"")"),
+        new(@"(?:\b\w+\.\w+|\b_)\s*=>\s*(?:Loc\.(?:T|F)\(\s*)?(?<lit>""(?:[^""\\\n]|\\.)*"")"),
     };
     private static readonly Regex XamlContext = new(@"(?<![\w.:])(?:Header|Text|Content|Title|ToolTip\.Tip)=""(?<v>[^""{][^""]*)""");
 
@@ -106,7 +106,7 @@ internal static partial class DesignTokenCheck
     /// <summary>The label literals in one file: (line, literal as written, its text, whether it
     /// reaches the screen through NotaText.Label).</summary>
     private static IEnumerable<(int Line, string Key, string Text, bool ViaLabel)> LabelLiterals(
-        string file, string rel, Dictionary<string, Dictionary<string, List<bool>>> defs)
+        string file, string rel, Dictionary<string, Dictionary<string, List<bool>>> defs, bool includeWrapped = true)
     {
         if (file.EndsWith(".axaml"))
         {
@@ -138,7 +138,17 @@ internal static partial class DesignTokenCheck
                     foreach (Capture c in m.Groups["lit"].Captures)
                     {
                         if (!seen.Add(c.Index)) continue;
+                        // Loc.T("key") / Loc.F("key") (specs 068, 077): still a label for the style
+                        // rules — checked as the English text of its key — but not a raw literal
+                        // for the localization ratchet, which passes false.
+                        bool wrapped = Regex.IsMatch(code[..c.Index], @"Loc\.(?:T|F)\(\s*$");
+                        if (!includeWrapped && wrapped) continue;
                         var body = c.Value[1..^1];
+                        if (wrapped && Nota.Application.Localization.Loc.English.TryGet(body, out var english))
+                        {
+                            yield return (n, english.Other, english.Other, viaBuilder || InsideLabelCall(code, c.Index));
+                            continue;
+                        }
                         yield return (n, body, Unescape(body), viaBuilder || InsideLabelCall(code, c.Index));
                     }
                 }

@@ -28,4 +28,10 @@ std::shared_ptr<Instrument> createPluginInstrument(int32_t catalogIndex, double 
 // null on failure.
 std::shared_ptr<Device> createPluginEffect(int32_t catalogIndex, double sampleRate, int32_t maxBlock);
 
+// The audio device's IO-thread workgroup (an os_workgroup_t on macOS 11+, null for none),
+// handed to hosted plug-ins that run real-time threads of their own: they join it so the OS
+// schedules those threads against the device's deadline. Set after the device starts, cleared
+// before it stops. Any thread; a no-op off macOS.
+void setPluginAudioWorkgroup(void* osWorkgroup);
+
 } // namespace nota

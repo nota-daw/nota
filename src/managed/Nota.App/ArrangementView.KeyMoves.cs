@@ -9,6 +9,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Nota.Application.Editing;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -27,7 +28,7 @@ public partial class ArrangementView
         if (delta == 0) return true;   // already at the song start: the key is still ours
         if (MoveBlock(block.Select(b => (b.track, b.clip, b.track, b.start + delta)).ToArray()) is not { } move) return true;
         Refresh();
-        ReselectPlaced();
+        ReselectPlaced(move);
         ClipsMoved?.Invoke(move);   // open editors follow their clips (index and START read-out)
         return true;
     }
@@ -38,27 +39,29 @@ public partial class ArrangementView
     public bool MoveSelectedClipsToTrack(int dir)
     {
         if (_engine is null || _sel.Count == 0) return false;
-        var block = SelectedClipStarts().Select(b => (b.track, b.clip, b.start, row: RowOfTrack(b.track))).ToList();
+        // A group Link's partners (specs/076) stay on their own tracks: only the picked clips move.
+        var block = SelectedClipStarts().Where(b => !IsLinkedPartner(b.track, b.clip))
+            .Select(b => (b.track, b.clip, b.start, row: RowOfTrack(b.track))).ToList();
         if (block.Count == 0) return false;
         if (block.Any(b => b.row < 0))
         {
             // Rows are what ⌥↑/⌥↓ step through, and a folded group's children have none: moving
             // only the shown clips would split the block, so the whole move is refused.
-            StatusMessage?.Invoke("Unfold the group to move these clips across tracks");
+            StatusMessage?.Invoke(Loc.T("arrangement.key_moves.unfold_the_group_to_move"));
             return true;
         }
         int shift = ArrangementMoves.RowShift(block.Select(b => b.row).Distinct().ToList(), _tracks.Count, dir, TakesClipsFrom);
         if (shift == 0)
         {
-            StatusMessage?.Invoke(dir < 0 ? "No track above takes these clips" : "No track below takes these clips");
+            StatusMessage?.Invoke(dir < 0 ? Loc.T("arrangement.key_moves.no_track_above_takes_these") : Loc.T("arrangement.key_moves.no_track_below_takes_these"));
             return true;
         }
         var moves = block.Select(b => (b.track, b.clip, _tracks[b.row + shift].Id, b.start)).ToArray();
         if (MoveBlock(moves) is not { } move) return true;
         if (_engine.LastMoveKeptDeviceAutomation())
-            StatusMessage?.Invoke("Moved across tracks — device automation stayed on the source");
+            StatusMessage?.Invoke(Loc.T("arrangement.moved_across_tracks_device_automation"));
         Refresh();
-        ReselectPlaced();
+        ReselectPlaced(move);
         ClipsMoved?.Invoke(move);
         if (SelTrackId > 0) RevealTrack(SelTrackId);
         AnnounceSelectedTrack();   // the destination track is now the active one

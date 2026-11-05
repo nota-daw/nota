@@ -9,10 +9,11 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
-public sealed class MidiMapView : UserControl
+public sealed partial class MidiMapView : UserControl
 {
     private readonly MidiLearnService _learn;
     private readonly StackPanel _rows = new() { Spacing = 6 };
@@ -24,7 +25,7 @@ public sealed class MidiMapView : UserControl
 
         var header = new TextBlock
         {
-            Text = "MIDI mappings", FontSize = 9, Margin = new Avalonia.Thickness(12, 12, 12, 2),
+            Text = Loc.T("midi_map.midi_mappings"), FontSize = 9, Margin = new Avalonia.Thickness(12, 12, 12, 2),
             Foreground = NotaPalette.TextTertiary,
         };
         var body = new StackPanel { Margin = new Avalonia.Thickness(8, 4), Children = { _rows } };
@@ -39,7 +40,7 @@ public sealed class MidiMapView : UserControl
         {
             _rows.Children.Add(new TextBlock
             {
-                Text = "No mappings yet.\n\nClick MIDI (top-right), then click any highlighted\ncontrol and move a knob or fader on your controller —\nor press a button or move a stick on a gamepad.",
+                Text = Loc.T("midi_map.no_mappings_yet_click_midi"),
                 FontSize = 10, TextWrapping = TextWrapping.Wrap, LineHeight = 16,
                 Margin = new Avalonia.Thickness(6, 10), Foreground = NotaPalette.TextTertiary,
             });
@@ -48,11 +49,36 @@ public sealed class MidiMapView : UserControl
         foreach (var m in _learn.Mappings) _rows.Children.Add(Row(m));
     }
 
+    // The name a mapping was learned under is saved in the project in English; it is translated
+    // here, when the row is drawn, so a project reads in whichever language is running. Only the
+    // names Nota itself gives (by target kind): a plug-in or device parameter keeps the name it has.
+    private static string Shown(MidiMapping m)
+    {
+        var name = m.DisplayName;
+        switch (m.Target.Kind)
+        {
+            case MidiTargetKind.TransportPlay: return name == "Play" ? Loc.T("midi_map.play") : name;
+            case MidiTargetKind.TransportStop: return name == "Stop" ? Loc.T("common.stop") : name;
+            case MidiTargetKind.TransportRecord: return name == "Record" ? Loc.T("common.record") : name;
+            case MidiTargetKind.MasterVolume: return name == "Master Volume" ? Loc.T("midi_map.master_volume") : name;
+            case MidiTargetKind.TrackVolume: return name == "Track Volume" ? Loc.T("midi_map.track_volume") : name;
+            case MidiTargetKind.TrackPan: return name == "Track Pan" ? Loc.T("midi_map.track_pan") : name;
+            case MidiTargetKind.TrackMute: return name == "Mute" ? Loc.T("common.mute") : name;
+            case MidiTargetKind.TrackSolo: return name == "Solo" ? Loc.T("common.solo") : name;
+            case MidiTargetKind.PluginParam when MacroLabel().Match(name) is { Success: true } g:
+                return Loc.F("common.macro", g.Groups[1].Value, g.Groups[2].Value);   // a rack macro
+            default: return name;
+        }
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^Macro (\d+) · (.*)$")]
+    private static partial System.Text.RegularExpressions.Regex MacroLabel();
+
     private Control Row(MidiMapping m)
     {
         var name = new TextBlock
         {
-            Text = string.IsNullOrEmpty(m.DisplayName) ? m.Target.Kind.ToString() : m.DisplayName,
+            Text = string.IsNullOrEmpty(m.DisplayName) ? m.Target.Kind.ToString() : Shown(m),
             FontSize = 11, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
@@ -93,7 +119,7 @@ public sealed class MidiMapView : UserControl
         // Range + invert only make sense for continuous (non-button) targets.
         if (!m.Target.IsButton)
         {
-            var inv = new CheckBox { Content = "Invert", FontSize = 9, IsChecked = m.Invert, VerticalAlignment = VerticalAlignment.Center, Foreground = NotaPalette.TextSecondary };
+            var inv = new CheckBox { Content = Loc.T("midi_map.invert"), FontSize = 9, IsChecked = m.Invert, VerticalAlignment = VerticalAlignment.Center, Foreground = NotaPalette.TextSecondary };
             inv.IsCheckedChanged += (_, _) => m.Invert = inv.IsChecked == true;
             Grid.SetColumn(inv, 1);
             srcRow.Children.Add(inv);
@@ -103,8 +129,8 @@ public sealed class MidiMapView : UserControl
                 Orientation = Orientation.Horizontal, Spacing = 16,
                 VerticalAlignment = VerticalAlignment.Center,
             };
-            range.Children.Add(RangeField("Min", m.RangeMin, v => m.RangeMin = v));
-            range.Children.Add(RangeField("Max", m.RangeMax, v => m.RangeMax = v));
+            range.Children.Add(RangeField(Loc.T("common.min"), m.RangeMin, v => m.RangeMin = v));
+            range.Children.Add(RangeField(Loc.T("midi_map.max"), m.RangeMax, v => m.RangeMax = v));
             body.Children.Add(range);
         }
 

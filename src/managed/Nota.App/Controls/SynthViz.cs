@@ -29,6 +29,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -303,7 +304,7 @@ internal sealed class SynthViz : Control, IMidiLearnRegions, IValueEntryHost
         }
         Curve(1.0, new Pen(Ink, NotaGraph.PrimaryWidth, lineJoin: PenLineJoin.Round));
 
-        string left = $"{WaveWords[wave]} · {cycles} cycles · unison {uni}";
+        string left = Loc.F("device.synth.cycles_unison", WaveWords[wave], cycles, uni);
         if (wave == 1) left += $" · pw {(pw * 100).ToString("0", NotaNum.Culture)} %";
         Text(ctx, left, x0 + 1, Pad - 3, TextTertiary);
         string right = uni == 1 && Math.Abs(cents) < 0.5 ? "one shape, no detune"
