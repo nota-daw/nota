@@ -725,7 +725,31 @@ bool Engine::setRenderThreads(int n) {
     return true;
 }
 
-void Engine::publishRaw(std::shared_ptr<Graph> g) {
+void Engine::publishRaw(std::shared_ptr<Graph> g, bool restored) {
+    // Fade flags are derived, not stored. A track this graph shares with the one still
+    // playing is the audio thread's — leave it. Any other one an edit just cloned is
+    // settled in place. A restored track (undo, redo, take retry) was published before and
+    // a render may still be walking it, so it is cloned when its fades would change.
+    // Every take id comes from nextTakeId_; until one does (or a load restores a kept join),
+    // no clip can join, and this runs on every edit, undo and redo (perf-gate edit-warp-split).
+    if (g && authoring_ && (nextTakeId_ > 0 || joinedEdgesRestored_)) {
+        auto shared = [&](const std::shared_ptr<Track>& t) {
+            for (const auto& old : authoring_->tracks)
+                if (old == t) return true;
+            return authoring_->masterTrack && authoring_->masterTrack == t;
+        };
+        auto settle = [&](std::shared_ptr<Track>& t) {
+            if (!t || !mayHaveTakeJoins(*t) || shared(t)) return;
+            if (!restored) {
+                settleTakeJoins(*t);
+            } else if (!takeJoinsSettled(*t)) {
+                t = cloneTrack(*t);
+                settleTakeJoins(*t);
+            }
+        };
+        for (auto& t : g->tracks) settle(t);
+        settle(g->masterTrack);
+    }
     // Ensure every track has a session slot per scene (M5). Only grows freshly
     // added tracks (already-sized tracks are a no-op), so no race with audio.
     for (auto& t : g->tracks)
@@ -824,7 +848,7 @@ bool Engine::undo() {
         // device (a removed look-ahead coming back, #109), so compensation follows them.
         if (e.graph) {
             if (authoring_) keepLiveSends(*e.graph, *authoring_);
-            publishRaw(std::move(e.graph));
+            publishRaw(std::move(e.graph), true);
             placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
             reapplyRackMacros();
@@ -903,7 +927,7 @@ bool Engine::redo() {
         undoStack_.push_back({e.graph ? authoring_ : nullptr, e.mix});
         if (e.graph) {
             if (authoring_) keepLiveSends(*e.graph, *authoring_);
-            publishRaw(std::move(e.graph));
+            publishRaw(std::move(e.graph), true);
             placeTakesForTempo(); // the snapshot may predate a tempo change
             recomputePdc();
             reapplyRackMacros();

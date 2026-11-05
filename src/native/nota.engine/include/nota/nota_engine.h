@@ -1184,6 +1184,14 @@ NOTA_API int32_t    nota_track_restore_take(NotaEngine* engine, int32_t track_id
                                             int32_t number, int32_t group, double origin_beat,
                                             double source_offset_frames, int64_t length_frames);
 NOTA_API NotaResult nota_clip_set_take_id(NotaEngine* engine, int32_t track_id, int32_t clip_index, int32_t take_id);
+/* The ends of an arrangement audio clip that play at full level, with no edge fade: bit 1 the
+ * head, bit 2 the tail. Two sections of one recording that meet join that way, and a flatten
+ * keeps the join after the takes are gone, so a project saves it. 0 = both ends fade. */
+NOTA_API int32_t    nota_clip_joined_edges(const NotaEngine* engine, int32_t track_id, int32_t clip_index);
+/* Project load (no undo entry): the saved nota_clip_joined_edges of the track's first `count`
+ * arrangement audio clips. A join is kept only where both clips still meet. */
+NOTA_API NotaResult nota_track_restore_joined_edges(NotaEngine* engine, int32_t track_id, const int32_t* edges,
+                                                    int32_t count);
 /* Smoke-test hook: record `frames` of interleaved stereo into the audio track as a take
  * started at start_beat — through the capture ring, the drain and stop, under the current
  * loop — without a device. 1 = a take was recorded. */

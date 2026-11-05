@@ -29,6 +29,8 @@ public sealed partial class ArrangementView
         public int Number;
         public double StartBeat;
         public double LengthBeats;
+        public double OriginBeat;
+        public double BeatsPerFrame;
         public float[]? Peaks;
         public int PeakCount;
     }
@@ -67,6 +69,8 @@ public sealed partial class ArrangementView
             tvm.Takes.Add(new TakeVM
             {
                 Id = info.Id, Number = info.Number, StartBeat = info.StartBeat, LengthBeats = info.LengthBeats,
+                OriginBeat = info.OriginBeat,
+                BeatsPerFrame = info.LengthFrames > 0 ? info.LengthBeats / info.LengthFrames : 0,
                 Peaks = p.peaks, PeakCount = p.count,
             });
         }
@@ -262,6 +266,10 @@ public sealed partial class ArrangementView
                     foreach (var c in t.Clips)
                     {
                         if (c.TakeId != take.Id || !c.Active) continue;   // a deactivated section is silent
+                        // A moved clip keeps the take id but no longer plays this part of the lane.
+                        if (!(take.BeatsPerFrame > 0
+                              && Math.Abs(c.StartBeat - (take.OriginBeat + c.SourceOffsetFrames * take.BeatsPerFrame)) < 1e-4))
+                            continue;
                         double cx0 = Math.Max(r.X, _o.BeatToX(c.StartBeat)), cx1 = Math.Min(r.Right, _o.BeatToX(c.StartBeat + c.LengthBeats));
                         if (cx1 <= cx0 || cx1 < 0 || cx0 > w) continue;
                         var used = new Rect(cx0, r.Y, cx1 - cx0, r.Height);

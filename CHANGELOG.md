@@ -309,6 +309,13 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   block size stopped Nota when added, because every plug-in was prepared for 16384-sample
   blocks. Plug-ins are now prepared for at most 4096; a longer block (an export, a large audio
   buffer) is played to them in pieces, each with its own notes and transport position.
+- **Take lanes no longer dip, cut on the old tempo, or highlight a moved clip** (#187):
+  where two sections of one loop recording meet, playback stays at full level instead of
+  fading out and back in, including after flatten when one of those sections stays its own
+  clip. Comping a take, or stopping a recording, after a tempo change uses the new tempo
+  even before the next audio block, so the recording covers the beats it will play and does
+  not cut the neighbours short or long. Moving a comp clip no longer lights the wrong part
+  of its take lane, and moving it onto another track fades the edges that used to meet.
 - **The loop region is saved with the project** (#455): its start and end, and whether the
   loop is on, come back when you open the project again. A new project starts without one.
 - **The Mixer's volume reaches −∞** (#453): a fader pulled all the way down, a dB value dragged

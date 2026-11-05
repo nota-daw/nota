@@ -1537,8 +1537,10 @@ bool raiseSplitEdge(AudioClip& clip, bool fadeIn, bool fadeOut, double fadeBeats
 }
 } // namespace
 
-void Engine::overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne) {
-    audioOverwriteRange(clips, ns, ne, transport_.samplesPerBeat(), transport_.sampleRate());
+void Engine::overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne, double spb) {
+    // The caller measured ns/ne with `spb`. Comp and a loop take use the authoring tempo;
+    // a recording that just stopped uses the same clock as the clip it is about to place.
+    audioOverwriteRange(clips, ns, ne, spb, transport_.sampleRate());
 }
 
 int32_t Engine::pasteAudioFrames(

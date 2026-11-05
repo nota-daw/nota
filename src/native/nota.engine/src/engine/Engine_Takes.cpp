@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace nota {
 
@@ -30,6 +31,14 @@ bool atTakePosition(const AudioClip& c, const AudioTake& k) {
     return std::abs(c.startBeat - (k.originBeat + c.sourceOffsetFrames * k.beatsPerFrame)) < 1e-6;
 }
 
+// Timeline length (beats) of an unwarped clip at `spb` samples per beat. Matches playback.
+double unwarpedLenBeats(const AudioClip& c, double spb, double devSR) {
+    if (!c.sample || spb <= 0.0 || devSR <= 0.0 || c.sample->sourceSampleRate <= 0.0) return 0.0;
+    const double devFrames =
+        static_cast<double>(c.effectiveLength()) * devSR / c.sample->sourceSampleRate / c.pitchRatio();
+    return devFrames / spb;
+}
+
 } // namespace
 
 double Engine::beatsPerSourceFrame(double sampleRate) const {
@@ -37,14 +46,121 @@ double Engine::beatsPerSourceFrame(double sampleRate) const {
     return sr > 0.0 && authoringBpm_ > 0.0 ? authoringBpm_ / 60.0 / sr : 0.0;
 }
 
+double Engine::authoringSamplesPerBeat() const {
+    const double devSR = transport_.sampleRate();
+    if (authoringBpm_ > 0.0 && devSR > 0.0) return devSR * 60.0 / authoringBpm_;
+    return transport_.samplesPerBeat();
+}
+
+std::vector<uint8_t> Engine::takeJoinEdges(const Track& t) const {
+    const double devSR = transport_.sampleRate();
+    const double spb = authoringSamplesPerBeat();
+    constexpr double eps = 1e-6;
+    const size_t n = t.clips.size();
+    std::vector<uint8_t> off(n, 0);
+    if (n < 2) return off;
+
+    // One edge of an unwarped clip: where it sits, which clip, and the take group a take
+    // section belongs to (-1 for none). Silent clips count: a join outlives deactivation.
+    struct Edge {
+        double at;
+        size_t index;
+        int32_t group;
+    };
+    std::vector<int32_t> groupOf(n, -1);
+    if (!t.takes.empty()) {
+        std::vector<std::pair<int32_t, int32_t>> ids; // take id -> group, sorted by id
+        ids.reserve(t.takes.size());
+        for (const auto& k : t.takes) ids.emplace_back(k.id, k.group);
+        std::sort(ids.begin(), ids.end());
+        for (size_t i = 0; i < n; ++i) {
+            const int32_t id = t.clips[i].takeId;
+            if (id == 0) continue;
+            auto it = std::lower_bound(ids.begin(), ids.end(), std::make_pair(id, std::numeric_limits<int32_t>::min()));
+            if (it != ids.end() && it->first == id) groupOf[i] = it->second;
+        }
+    }
+    std::vector<Edge> heads, tails;
+    heads.reserve(n);
+    tails.reserve(n);
+    for (size_t i = 0; i < n; ++i) {
+        const AudioClip& c = t.clips[i];
+        if (!c.sample || c.warpEnabled) continue;
+        heads.push_back({c.startBeat, i, groupOf[i]});
+        tails.push_back({c.startBeat + unwarpedLenBeats(c, spb, devSR), i, groupOf[i]});
+    }
+    std::sort(heads.begin(), heads.end(), [](const Edge& a, const Edge& b) { return a.at < b.at; });
+
+    // Each tail meets the heads that start where it ends. Two sections of one recording
+    // join; so does a pair that already joined and still meets (flatten and delete clear
+    // the take id, the clips that stay keep the join). A join plays at full level only
+    // when both sides play: a silent clip leaves its neighbour's edge to fade.
+    for (const Edge& tl : tails) {
+        auto it = std::lower_bound(heads.begin(), heads.end(), tl.at - eps,
+                                   [](const Edge& h, double v) { return h.at < v; });
+        for (; it != heads.end() && it->at <= tl.at + eps; ++it) {
+            if (it->index == tl.index) continue;
+            const AudioClip& a = t.clips[tl.index];
+            const AudioClip& b = t.clips[it->index];
+            const bool sameTake = tl.group >= 0 && tl.group == it->group;
+            const bool kept = (a.joinedEdges & 2) && (b.joinedEdges & 1);
+            if (!sameTake && !kept) continue;
+            off[tl.index] |= 2;
+            off[it->index] |= 1;
+            if (a.active && b.active) {
+                off[tl.index] |= 8;
+                off[it->index] |= 4;
+            }
+        }
+    }
+    return off;
+}
+
+bool Engine::mayHaveTakeJoins(const Track& t) {
+    for (const auto& c : t.clips)
+        if (c.joinedEdges || !c.fadeHead || !c.fadeTail || (c.takeId != 0 && !c.warpEnabled)) return true;
+    return false;
+}
+
+bool Engine::settleTakeJoins(Track& nt) const {
+    if (!mayHaveTakeJoins(nt)) return false;
+    const auto off = takeJoinEdges(nt);
+    bool changed = false;
+    for (size_t i = 0; i < off.size(); ++i) {
+        AudioClip& c = nt.clips[i];
+        const uint8_t joined = off[i] & 3;
+        const bool head = !(off[i] & 4), tail = !(off[i] & 8);
+        if (c.joinedEdges == joined && c.fadeHead == head && c.fadeTail == tail) continue;
+        c.joinedEdges = joined;
+        c.fadeHead = head;
+        c.fadeTail = tail;
+        changed = true;
+    }
+    return changed;
+}
+
+bool Engine::takeJoinsSettled(const Track& t) const {
+    if (!mayHaveTakeJoins(t)) return true;
+    const auto off = takeJoinEdges(t);
+    for (size_t i = 0; i < off.size(); ++i) {
+        const AudioClip& c = t.clips[i];
+        if (c.joinedEdges != (off[i] & 3) || c.fadeHead != !(off[i] & 4) || c.fadeTail != !(off[i] & 8)) return false;
+    }
+    return true;
+}
+
 void Engine::placeTakesForTempo() {
     if (!authoring_) return;
+    // A join outlives its takes (flatten, delete), and a tempo change moves the ends of the
+    // unwarped clips that kept it: a track with no takes still needs its joins refreshed.
+    const bool joins = nextTakeId_ > 0 || joinedEdgesRestored_;
     auto stale = [&](const Track& t) {
         for (const auto& k : t.takes)
             if (k.sample && k.beatsPerFrame != beatsPerSourceFrame(k.sample->sourceSampleRate)) return true;
-        return false;
+        return joins && mayHaveTakeJoins(t) && !takeJoinsSettled(t);
     };
-    // Runs after every undo/redo: no new graph unless a take is actually off its tempo.
+    // Runs after every undo/redo: no new graph unless a take is off its tempo or a join no
+    // longer matches where the clips end.
     if (std::none_of(authoring_->tracks.begin(), authoring_->tracks.end(),
                      [&](const auto& t) { return stale(*t); }))
         return;
@@ -66,7 +182,7 @@ void Engine::placeTakesForTempo() {
         }
         for (auto& k : nt->takes)
             if (k.sample) k.beatsPerFrame = beatsPerSourceFrame(k.sample->sourceSampleRate);
-        g->tracks.push_back(std::move(nt));
+        g->tracks.push_back(std::move(nt)); // publishRaw settles joins on this clone
         any = true;
     }
     if (any) publishRaw(std::move(g));
@@ -129,7 +245,7 @@ bool Engine::compTake(int32_t trackId, int32_t takeId, double startBeat, double 
 
     auto nt = cloneTrack(*old);
     const double ns = k->originBeat + f0 * bpf, ne = k->originBeat + f1 * bpf;
-    overwriteAudioClipsInRange(nt->clips, ns, ne);
+    overwriteAudioClipsInRange(nt->clips, ns, ne, authoringSamplesPerBeat());
     AudioClip clip;
     clip.sample = k->sample;
     clip.startBeat = ns;
@@ -215,8 +331,9 @@ bool Engine::flattenTakes(int32_t trackId) {
             merged.push_back(&c);
         }
 
-        // Each section keeps the edge fades it played with, so the joins sound as the comp did;
-        // only where the merged clip's own edge falls does its playback fade take over.
+        // Each section keeps the edge fades it played with, so the joins sound as the comp did.
+        // A butt-joined take section has that shared edge off. Only where the merged clip's
+        // own edge falls does its playback fade take over.
         std::vector<float> buf;
         if (hi > lo) buf.assign(static_cast<size_t>(frames) * ch, 0.0f);
         const double devSR = transport_.sampleRate();
@@ -225,7 +342,7 @@ bool Engine::flattenTakes(int32_t trackId) {
             const int64_t off = static_cast<int64_t>(std::round(c->sourceOffsetFrames));
             const int64_t len = c->effectiveLength();
             const double devLen = static_cast<double>(len) * devPerFrame;
-            const bool fadeIn = off != lo, fadeOut = off + len != hi;
+            const bool fadeIn = c->fadeHead && off != lo, fadeOut = c->fadeTail && off + len != hi;
             const float* src = c->sample->samples.data() + off * ch;
             float* dst = buf.data() + off * ch;
             for (int64_t j = 0; j < len; ++j) {
@@ -247,6 +364,15 @@ bool Engine::flattenTakes(int32_t trackId) {
             clip.startBeat = origin + static_cast<double>(lo) * bpf;
             clip.sourceOffsetFrames = static_cast<double>(lo);
             clip.lengthFrames = hi - lo;
+            // A neighbour that could not merge (reversed, moved, pitched) and joined this range
+            // keeps that join. publishRaw would otherwise fade both new edges.
+            const double mergedEnd = clip.startBeat + static_cast<double>(hi - lo) * bpf;
+            for (const auto& kpt : nt->clips) {
+                if (!kpt.sample || kpt.warpEnabled) continue;
+                const double kEnd = kpt.startBeat + unwarpedLenBeats(kpt, authoringSamplesPerBeat(), devSR);
+                if ((kpt.joinedEdges & 2) && std::abs(kEnd - clip.startBeat) < 1e-6) clip.joinedEdges |= 1;
+                if ((kpt.joinedEdges & 1) && std::abs(kpt.startBeat - mergedEnd) < 1e-6) clip.joinedEdges |= 2;
+            }
             nt->clips.push_back(std::move(clip));
         }
         nt->takes.erase(std::remove_if(nt->takes.begin(), nt->takes.end(), [&](const AudioTake& k) { return k.group == g; }),
@@ -298,6 +424,26 @@ bool Engine::setClipTakeId(int32_t trackId, int32_t clipIndex, int32_t takeId) {
                                                      c.sample->sourceSampleRate == k->sample->sourceSampleRate)
         c.sample = k->sample;
     republishWithTrackRaw(trackId, nt);
+    return true;
+}
+
+int32_t Engine::clipJoinedEdges(int32_t trackId, int32_t clipIndex) const {
+    auto t = findTrackAuthoring(trackId);
+    if (!t || clipIndex < 0 || clipIndex >= static_cast<int32_t>(t->clips.size())) return 0;
+    const AudioClip& c = t->clips[clipIndex];
+    return c.joinedEdges;
+}
+
+bool Engine::restoreJoinedEdges(int32_t trackId, const int32_t* edges, int32_t count) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || count < 0 || (count > 0 && !edges)) return false;
+    auto nt = cloneTrack(*old);
+    const size_t n = std::min(nt->clips.size(), static_cast<size_t>(count));
+    for (size_t i = 0; i < n; ++i) {
+        if (edges[i] & 3) joinedEdgesRestored_ = true;
+        nt->clips[i].joinedEdges = static_cast<uint8_t>(edges[i] & 3);
+    }
+    republishWithTrackRaw(trackId, nt); // publishRaw keeps the pairs that still meet
     return true;
 }
 

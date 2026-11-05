@@ -91,6 +91,7 @@ public sealed partial class ArrangementView
         public bool IsMidi;
         public bool Active = true;   // false = deactivated (key 0): stays but silent + greyed
         public int TakeId;           // the take this comp section came from (specs/067), 0 = none
+        public double SourceOffsetFrames; // where in the take that section starts; the lane highlight uses it
         /// <summary>What the audio clip's peaks were drawn from (everything but where it sits), so a
         /// refresh after a clip only moved can keep them (specs/073). Null for MIDI.</summary>
         public PeakSourceKey? PeakSource;
