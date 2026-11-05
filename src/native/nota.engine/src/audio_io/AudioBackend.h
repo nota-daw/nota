@@ -99,6 +99,11 @@ class AudioBackend {
     // True if the last start() asked for a sample rate the device refused and kept its own.
     virtual bool sampleRateRefused() const { return false; }
 
+    // The device's IO-thread workgroup (macOS 11+: an os_workgroup_t, valid until stop()), or
+    // null. Plug-ins that run real-time threads of their own join it, so the OS schedules them
+    // against the device's deadline. Read after start() succeeds.
+    virtual void* ioWorkgroup() const { return nullptr; }
+
     // After a reset-requested event: the rate the user picked in the device's own settings
     // (0 = unchanged). The engine then stops requesting its saved rate, so a reopen keeps it.
     virtual double deviceChangedRate() const { return 0.0; }

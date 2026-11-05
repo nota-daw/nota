@@ -14,8 +14,9 @@ namespace nota {
 namespace hosting {
 
 PluginInstrument::PluginInstrument(std::unique_ptr<juce::AudioPluginInstance> p, double sr, int maxBlock)
-    : plugin_(std::move(p)), maxBlock_(maxBlock) {
+    : plugin_(std::move(p)), maxBlock_(juce::jmin(maxBlock, kPluginMaxBlock)) {
     pending_.ensureSize(8192);
+    piece_.ensureSize(8192);
     if (plugin_) name_ = plugin_->getName().toStdString(); // cache for displayName()
     prepare(sr);
     if (plugin_) plugin_->addListener(this); // "Learn" (M9-B3)
@@ -35,44 +36,66 @@ void PluginInstrument::setSampleRate(double sr) {
 }
 
 void PluginInstrument::noteOn(int32_t pitch, float velocity) {
-    pending_.addEvent(juce::MidiMessage::noteOn(1, pitch, (float)velocity), 0);
+    pending_.addEvent(juce::MidiMessage::noteOn(1, pitch, (float)velocity), eventOffset);
 }
 
 void PluginInstrument::noteOff(int32_t pitch) {
-    pending_.addEvent(juce::MidiMessage::noteOff(1, pitch), 0);
+    pending_.addEvent(juce::MidiMessage::noteOff(1, pitch), eventOffset);
 }
 
 void PluginInstrument::allNotesOff() {
-    pending_.addEvent(juce::MidiMessage::allNotesOff(1), 0);
+    pending_.addEvent(juce::MidiMessage::allNotesOff(1), eventOffset);
 }
 
 void PluginInstrument::noteExpression(int32_t pitch, int32_t dim, float value) {
-    if (pitch >= 0 && dim == 1) pending_.addEvent(juce::MidiMessage::aftertouchChange(1, pitch, u7(value)), 0);
+    if (pitch >= 0 && dim == 1) pending_.addEvent(juce::MidiMessage::aftertouchChange(1, pitch, u7(value)), eventOffset);
 }
 
 void PluginInstrument::controller(int32_t ctl, float value) {
     if (ctl == nota::kCtlPitchWheel)
         pending_.addEvent(
-            juce::MidiMessage::pitchWheel(1, juce::jlimit(0, 16383, (int)std::lround((value + 1.0f) * 8191.5f))), 0);
+            juce::MidiMessage::pitchWheel(1, juce::jlimit(0, 16383, (int)std::lround((value + 1.0f) * 8191.5f))), eventOffset);
     else if (ctl == nota::kCtlChannelPressure)
-        pending_.addEvent(juce::MidiMessage::channelPressureChange(1, u7(value)), 0);
+        pending_.addEvent(juce::MidiMessage::channelPressureChange(1, u7(value)), eventOffset);
     else if (ctl >= 0 && ctl < 128)
-        pending_.addEvent(juce::MidiMessage::controllerEvent(1, ctl, u7(value)), 0);
+        pending_.addEvent(juce::MidiMessage::controllerEvent(1, ctl, u7(value)), eventOffset);
 }
 
 void PluginInstrument::render(float* out, int32_t frames) {
-    if (frames <= 0 || frames > maxBlock_ || plugin_ == nullptr) return;
+    if (frames <= 0 || plugin_ == nullptr) return;
     // Drain computer-keyboard notes from the editor window (message thread) into
     // this block's MIDI buffer — audio thread only touches pending_ here.
     for (GuiNote g; guiNotes_.pop(g);)
         pending_.addEvent(
             g.on ? juce::MidiMessage::noteOn(1, g.pitch, g.velocity) : juce::MidiMessage::noteOff(1, g.pitch), 0);
-    storage_.clear();
+    if (frames <= maxBlock_) {
+        renderPiece(out, frames, pending_);
+    } else {
+        // Longer than the plug-in was prepared for (#447): in pieces, each with its own events
+        // (moved to the piece's start) and the transport where the piece begins.
+        const double sr = plugin_->getSampleRate();
+        for (int32_t off = 0; off < frames; off += maxBlock_) {
+            const int32_t n = juce::jmin(frames - off, maxBlock_);
+            const bool last = off + n >= frames;
+            piece_.clear();
+            for (const auto m : pending_) {
+                const int pos = juce::jmax(0, m.samplePosition);
+                if (pos >= off && (pos < off + n || last)) piece_.addEvent(m.data, m.numBytes, juce::jmin(pos - off, n - 1));
+            }
+            renderPiece(out + (size_t)off * 2, n, piece_);
+            advanceTransport(playHead_.info, n, sr);
+        }
+    }
+    pending_.clear();
+}
+
+void PluginInstrument::renderPiece(float* out, int32_t frames, juce::MidiBuffer& midi) {
+    storage_.clear(0, frames); // only what this block uses: a multi-out plug-in has many channels
     float* ptrs[kMaxChans];
     juce::AudioBuffer<float> block(
         ptrs, pluginChannelPtrs(*plugin_, storage_, spare_.data(), frames, chanFloor_, ptrs), frames);
-    plugin_->processBlock(block, pending_);
-    pending_.clear();
+    workgroup_.update();
+    plugin_->processBlock(block, midi);
     const float* l = block.getReadPointer(0);
     const float* r = stereoOut_ ? block.getReadPointer(1) : l; // channel 1 of a mono main is another bus
     simd_audio::interleaveStereoAdd(out, l, r, frames);
@@ -143,11 +166,8 @@ int32_t PluginInstrument::takePluginGestureEnd() {
 std::shared_ptr<nota::Instrument> PluginInstrument::clone() const {
     if (!plugin_) return nullptr;
     double sr = plugin_->getSampleRate() > 0 ? plugin_->getSampleRate() : 44100.0;
-    auto inst = createInstance(plugin_->getPluginDescription(), sr, maxBlock_);
+    auto inst = cloneInstance(*plugin_, sr, maxBlock_);
     if (!inst) return nullptr;
-    juce::MemoryBlock mb;
-    plugin_->getStateInformation(mb);
-    inst->setStateInformation(mb.getData(), (int)mb.getSize());
     return std::make_shared<PluginInstrument>(std::move(inst), sr, maxBlock_);
 }
 
@@ -171,6 +191,7 @@ void PluginInstrument::prepare(double sr) {
     plugin_->setRateAndBufferSizeDetails(sr, maxBlock_);
     plugin_->prepareToPlay(sr, maxBlock_);
     plugin_->setPlayHead(&playHead_); // DAW transport sync
+    workgroup_.bind(*plugin_);
     // In and out share the buffer, so it spans the wider side.
     storage_.setSize(
         juce::jmax(2, plugin_->getTotalNumInputChannels(), plugin_->getTotalNumOutputChannels()), maxBlock_);

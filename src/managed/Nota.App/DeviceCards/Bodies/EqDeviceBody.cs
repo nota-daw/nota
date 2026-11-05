@@ -22,6 +22,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -115,7 +116,7 @@ internal sealed class EqDeviceBody : IDeviceBody
                 Height = 15, Margin = new Thickness(1, 0), CornerRadius = NotaRadius.Cell, BorderThickness = new Thickness(1), ClipToBounds = true,
                 Cursor = new Cursor(StandardCursorType.Hand), Child = inner,
             };
-            ToolTip.SetTip(chip, NotaNum.F($"Band {b + 1} — click to edit it, double-click to switch it on / off"));
+            ToolTip.SetTip(chip, Loc.F("device.eq.band_click_to_edit_it", b + 1));
             chip.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(chip).Properties.IsLeftButtonPressed) return;
@@ -143,32 +144,32 @@ internal sealed class EqDeviceBody : IDeviceBody
         }
         var chipStrip = new Border { Height = 20, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 0, 0, 1), Child = chipRow };
         DockPanel.SetDock(chipStrip, Dock.Top);
-        curve.DefaultTip = "Drag a node — frequency and gain · wheel over a node — Q · double-click a node — band on / off · "
-            + "double-click empty space — a new bell there · right-click a node — type, slope, channel · click a label — its note";
+        curve.DefaultTip = Loc.T("device.eq.drag_a_node_frequency_and")
+            + Loc.T("device.eq.double_click_empty_space_a");
         ToolTip.SetTip(curve, curve.DefaultTip);
 
         // ANALYZER Pre / Post / Off over the graph's top-left corner.
         var anaSeg = Segments(Eq8.AnalyzerSeg, () => Math.Clamp((int)Math.Round(P(Eq8.AnalyzerP)), 0, 2),
             i => { SetP(Eq8.AnalyzerP, i); RefreshAll(); }, out var anaSync, padX: 4);
         Learn(anaSeg, Eq8.AnalyzerP);
-        ToolTip.SetTip(anaSeg, "Analyzer — Pre: the input spectrum · Post: the output over a dimmer input · Off");
+        ToolTip.SetTip(anaSeg, Loc.T("device.eq.analyzer_pre_the_input_spectrum"));
         readouts.Add(anaSync);
         // Range (dB below 0 dBFS at the graph's bottom) and Peak hold, shown while the analyzer is on.
         bool AnaOn() => Math.Clamp((int)Math.Round(P(Eq8.AnalyzerP)), 0, 2) != Eq8.AnaOff;
         var rangeSeg = Segments(Eq8.RangeSeg, () => Math.Clamp((int)Math.Round(P(Eq8.AnaRangeP)), 0, 2),
             i => { SetP(Eq8.AnaRangeP, i); RefreshAll(); curve.InvalidateVisual(); }, out var rangeSync, padX: 4);
         Learn(rangeSeg, Eq8.AnaRangeP);
-        ToolTip.SetTip(rangeSeg, "Analyzer range — the graph's bottom edge, in dB below 0\u2009dBFS");
+        ToolTip.SetTip(rangeSeg, Loc.T("device.eq.analyzer_range_the_graphs_bottom"));
         bool PeakOn() => P(Eq8.AnaPeakP) >= 0.5f;
         var peakSw = Switch("Peak", PeakOn, () => { SetP(Eq8.AnaPeakP, PeakOn() ? 0 : 1); RefreshAll(); }, out var peakSync);
         Learn(peakSw, Eq8.AnaPeakP);
-        ToolTip.SetTip(peakSw, "Peak hold — a thin line at each frequency's highest level of the last moments");
+        ToolTip.SetTip(peakSw, Loc.T("device.eq.peak_hold_a_thin_line"));
         readouts.Add(() => { rangeSync(); peakSync(); rangeSeg.IsVisible = peakSw.IsVisible = AnaOn() && pc > Eq8.AnaPeakP; });
         bool LabelsOn() => pc <= Eq8.LabelsP || P(Eq8.LabelsP) >= 0.5f;
         var labelsSw = Switch("Labels", LabelsOn, () => { SetP(Eq8.LabelsP, LabelsOn() ? 0 : 1); RefreshAll(); }, out var labelsSync);
         labelsSw.Margin = new Thickness(6, 0, 0, 0);
         Learn(labelsSw, Eq8.LabelsP);
-        ToolTip.SetTip(labelsSw, "Labels — show the bands' labels and note marks in the graph (the chips and the band panel keep them)");
+        ToolTip.SetTip(labelsSw, Loc.T("device.eq.labels_show_the_bands_labels"));
         readouts.Add(() => { labelsSync(); labelsSw.IsVisible = textOk && pc > Eq8.LabelsP; });
         var anaBar = new StackPanel
         {
@@ -216,10 +217,10 @@ internal sealed class EqDeviceBody : IDeviceBody
             var noteBox = new TextBox
             {
                 Text = NoteOf(b), MaxLength = 2000, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, FontSize = 11,
-                Height = 96, Watermark = "What this band is for",
+                Height = 96, Watermark = Loc.T("device.eq.what_this_band_is_for"),
             };
             var head = new TextBlock { Text = NotaNum.F($"BAND {b + 1} · {Eq8.TypeNames[TypeOf(b)]}"), FontSize = NotaType.KnobLabel, FontWeight = FontWeight.Medium, Foreground = TextTertiary };
-            var hint = new TextBlock { Text = (OperatingSystem.IsMacOS() ? "⌘" : "Ctrl+") + "Enter or Esc to close", FontSize = 9, Foreground = TextTertiary };
+            var hint = new TextBlock { Text = (OperatingSystem.IsMacOS() ? "⌘" : "Ctrl+") + Loc.T("device.eq.enter_or_esc_to_close"), FontSize = 9, Foreground = TextTertiary };
             var fly = new Flyout
             {
                 Content = new StackPanel { Width = 230, Spacing = 5, Children = { head, labelBox, noteBox, hint } },
@@ -261,7 +262,7 @@ internal sealed class EqDeviceBody : IDeviceBody
             var name = new TextBlock { FontSize = 9, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 0, 0) };
             var onSw = Switch("On", () => BandOn(b), () => { SetP(pOn, BandOn(b) ? 0 : 1); RefreshAll(); }, out var onSync);
             Learn(onSw, pOn);
-            ToolTip.SetTip(onSw, "Band on — off leaves the band out of the signal (double-click its node does the same)");
+            ToolTip.SetTip(onSw, Loc.T("device.eq.band_on_off_leaves_the"));
             bandReadouts.Add(onSync);
             bandReadouts.Add(() =>
             {
@@ -277,7 +278,7 @@ internal sealed class EqDeviceBody : IDeviceBody
             // ---- type ----
             var typeSeg = Segments(Eq8.TypeSeg, () => TypeOf(b), i => { SetP(pType, i); RefreshAll(); }, out var typeSync, fill: true, padX: 0);
             Learn(typeSeg, pType);
-            ToolTip.SetTip(typeSeg, "Type — high-pass, low shelf, bell, notch, high shelf, low-pass; only shelves and bells take gain");
+            ToolTip.SetTip(typeSeg, Loc.T("device.eq.type_high_pass_low_shelf"));
             bandReadouts.Add(typeSync);
 
             // ---- knobs ----
@@ -306,10 +307,10 @@ internal sealed class EqDeviceBody : IDeviceBody
             }
             var knobs = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*,*"), Children =
             {
-                K(pF, "FREQ", () => Eq8.HzShort(B(b, Eq8.FreqF)) + (B(b, Eq8.FreqF) < 1000 ? " Hz" : ""), "Frequency — or drag the node left / right"),
-                Col(K(pG, "GAIN", () => Capable(b) ? Eq8.Db(B(b, Eq8.GainF)) + " dB" : "—", "Gain — or drag the node up / down (Scale multiplies it)",
+                K(pF, "FREQ", () => Eq8.HzShort(B(b, Eq8.FreqF)) + (B(b, Eq8.FreqF) < 1000 ? " Hz" : ""), Loc.T("device.eq.frequency_or_drag_the_node")),
+                Col(K(pG, "GAIN", () => Capable(b) ? Eq8.Db(B(b, Eq8.GainF)) + " dB" : "—", Loc.T("device.eq.gain_or_drag_the_node"),
                     inactive: () => !Capable(b)), 1),
-                Col(K(pQ, "Q", () => NotaNum.F($"{B(b, Eq8.QF):0.00}"), "Q — the width (the resonance on the cuts); or the wheel over the node",
+                Col(K(pQ, "Q", () => NotaNum.F($"{B(b, Eq8.QF):0.00}"), Loc.T("device.eq.q_the_width_the_resonance"),
                     liveLabel: () => Cut(b) ? "Reso" : "Q"), 2),
             } };
 
@@ -318,7 +319,7 @@ internal sealed class EqDeviceBody : IDeviceBody
             {
                 // AcceptsReturn and FlattenLabel, so a pasted multi-line text arrives whole; Enter commits.
                 Text = LabelOf(b), MaxLength = 24, AcceptsReturn = true, FontSize = 9, MinHeight = 18, Height = 18,
-                Padding = new Thickness(4, 1), VerticalContentAlignment = VerticalAlignment.Center, Watermark = "Name this band",
+                Padding = new Thickness(4, 1), VerticalContentAlignment = VerticalAlignment.Center, Watermark = Loc.T("device.eq.name_this_band"),
             };
             void Unfocus() { curve.Focusable = true; curve.Focus(); }   // hand the keys back to the card
             void CommitLabel() { if ((labelField.Text ?? "") != LabelOf(b)) SetText(b, labelField.Text ?? "", NoteOf(b)); }
@@ -331,14 +332,14 @@ internal sealed class EqDeviceBody : IDeviceBody
                 else if (ke.Key == Avalonia.Input.Key.Escape) { labelField.Text = LabelOf(b); ke.Handled = true; Unfocus(); }
             }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             FlattenLabel(labelField);
-            ToolTip.SetTip(labelField, "Label — a short name shown next to the band's node (up to 24 characters)");
+            ToolTip.SetTip(labelField, Loc.T("device.eq.label_a_short_name_shown"));
             var noteBtn = new Button
             {
                 Content = "Note", FontSize = 8, Height = 18, MinHeight = 18, Padding = new Thickness(6, 0), Margin = new Thickness(4, 0, 0, 0),
                 VerticalContentAlignment = VerticalAlignment.Center,
             };
             noteBtn.Click += (_, _) => { CommitLabel(); OpenNote(b, noteBtn, atPointer: false); };
-            ToolTip.SetTip(noteBtn, "Note — a longer note on what this band is for");
+            ToolTip.SetTip(noteBtn, Loc.T("device.eq.note_a_longer_note_on"));
             bandReadouts.Add(() =>
             {
                 if (!labelField.IsFocused && (labelField.Text ?? "") != LabelOf(b)) labelField.Text = LabelOf(b);
@@ -363,17 +364,17 @@ internal sealed class EqDeviceBody : IDeviceBody
             var slopeSeg = Segments(Eq8.SlopeSeg, () => SlopeOf(b), i => { if (Cut(b)) { SetP(pSlope, i); RefreshAll(); } },
                 out var slopeSync, fill: true, padX: 0, dim: () => !Cut(b));
             Learn(slopeSeg, pSlope);
-            ToolTip.SetTip(slopeSeg, "Slope — how steep the high-pass / low-pass falls: 12, 24 or 48\u2009dB per octave");
+            ToolTip.SetTip(slopeSeg, Loc.T("device.eq.slope_how_steep_the_high"));
             bandReadouts.Add(slopeSync);
             var chanSeg = Segments(Eq8.ChannelSeg, () => ChanOf(b), i => { SetP(pChan, i); RefreshAll(); }, out var chanSync, fill: true, padX: 0);
             Learn(chanSeg, pChan);
-            ToolTip.SetTip(chanSeg, "Channel — St: both channels · Mid: the centre · Side: the edges · L / R: one channel alone");
+            ToolTip.SetTip(chanSeg, Loc.T("device.eq.channel_st_both_channels_mid"));
             bandReadouts.Add(chanSync);
 
             // ---- global: Auto gain, Scale, Output ----
             var autoSw = Switch("Auto gain", AutoOn, () => { SetP(Eq8.AutoGainP, AutoOn() ? 0 : 1); RefreshAll(); }, out var autoSync);
             Learn(autoSw, Eq8.AutoGainP);
-            ToolTip.SetTip(autoSw, "Auto gain — adds the opposite of the shelves' and bells' average level, so edits are judged at the same loudness");
+            ToolTip.SetTip(autoSw, Loc.T("device.eq.auto_gain_adds_the_opposite"));
             bandReadouts.Add(autoSync);
             var globalRow = new Border
             {
@@ -408,8 +409,8 @@ internal sealed class EqDeviceBody : IDeviceBody
                 Spacing = 5, Children =
                 {
                     SliderRow("SCALE", Eq8.ScaleP, () => NotaNum.F($"{P(Eq8.ScaleP):0}\u2009%"),
-                        "Scale — multiplies every shelf and bell gain: 100\u2009% as set, 0\u2009% flat, 200\u2009% twice as much", 100),
-                    SliderRow("OUTPUT", Eq8.OutputP, () => Eq8.Db(P(Eq8.OutputP)) + " dB", "Output — the level after the EQ, ±12\u2009dB", 0),
+                        Loc.T("device.eq.scale_multiplies_every_shelf_and"), 100),
+                    SliderRow("OUTPUT", Eq8.OutputP, () => Eq8.Db(P(Eq8.OutputP)) + " dB", Loc.T("device.eq.output_the_level_after_the"), 0),
                 },
             };
 
@@ -480,7 +481,7 @@ internal sealed class EqDeviceBody : IDeviceBody
         outBox.PointerReleased += (_, e) => { OutEnd(); e.Pointer.Capture(null); };
         outBox.PointerCaptureLost += (_, _) => OutEnd();
         Learn(outBox, Eq8.OutputP);
-        ToolTip.SetTip(outBox, MenuKit.Keys("Output (plus the auto gain in effect) — drag up / down (Shift for fine), ⌥-click to type, double-click for 0\u2009dB"));
+        ToolTip.SetTip(outBox, MenuKit.Keys(Loc.T("device.eq.output_plus_the_auto_gain")));
         ValueEntry.Attach(outBox, ValueEntry.DeviceRaw(engine, track, di, Eq8.OutputP, "Output", -12, 12, v => "Out " + Eq8.Db(v) + " dB", RefreshAll), outTb);
         readouts.Add(() =>
         {

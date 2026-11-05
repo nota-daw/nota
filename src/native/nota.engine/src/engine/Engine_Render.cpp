@@ -14,6 +14,7 @@
 #include "media/WarpStream.h"
 
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <chrono>
 #include <cmath>
@@ -159,7 +160,8 @@ inline void deliverExpr(Instrument& inst, int32_t pitch, int32_t dim, float valu
 
 // Drive an instrument through one block: note events and clip-note expression merged by
 // sample offset (notes first at a shared offset, so a note's opening expression lands on it),
-// rendering the stretches in between. `live` runs once, before the first sample is rendered —
+// rendering the stretches in between (a hosted plug-in: the whole block at once, its events
+// stamped with their offsets — see Instrument::takesTimedEvents). `live` runs once, before the first sample is rendered —
 // after the offset-0 notes, where live input sits — to apply the block's live expression.
 // An instrument switched off (#148) renders its first block off once more, without the block's
 // events, fading what was sounding to silence, then releases every voice and held controller;
@@ -186,25 +188,47 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         inst.render(&dst[cursor * 2], to - cursor);
         cursor = to;
     };
+    // An instrument that takes timed events renders once: each event is stamped with its
+    // offset instead of being rendered up to (#436). The order is the same either way.
+    const bool timed = inst.takesTimedEvents();
+    auto liveAt0 = [&] {
+        if (liveDone) return;
+        inst.eventOffset = 0;
+        live();
+        liveDone = true;
+    };
     int k = 0, x = 0;
     while (k < n || x < xn) {
         const int32_t nOff = k < n ? std::clamp(evs[k].off, 0, frames) : INT32_MAX;
         const int32_t xOff = x < xn ? std::clamp(xev[x].off, 0, frames) : INT32_MAX;
+        const int32_t at = std::min(nOff, xOff);
+        if (timed) {
+            if (at >= frames) break; // after the render, at the next block's start (as segmented)
+            if (at > 0) liveAt0();   // live input sits after the offset-0 notes
+            inst.eventOffset = at;
+        } else {
+            renderTo(at);
+        }
         if (nOff <= xOff) {
-            renderTo(nOff);
             if (evs[k].on) sendNoteOn(inst, evs[k].pitch, evs[k].vel);
             else
                 sendNoteOff(inst, evs[k].pitch);
             ++k;
         } else {
-            renderTo(xOff);
             deliverExpr(inst, xev[x].pitch, xev[x].dim, xev[x].value);
             ++x;
         }
     }
-    if (!liveDone) {
-        live();
-        liveDone = true;
+    liveAt0();
+    if (timed) {
+        inst.eventOffset = 0;
+        inst.render(dst, frames);
+        cursor = frames;
+        for (; k < n; ++k) // end-of-block events: offset 0 of the next render
+            if (evs[k].on) sendNoteOn(inst, evs[k].pitch, evs[k].vel);
+            else
+                sendNoteOff(inst, evs[k].pitch);
+        for (; x < xn; ++x) deliverExpr(inst, xev[x].pitch, xev[x].dim, xev[x].value);
     }
     renderTo(frames);
     if (off) {
@@ -219,6 +243,33 @@ void playEvents(Instrument& inst, float* dst, int32_t frames, const MidiEv* evs,
         inst.offSettled.store(true, std::memory_order_relaxed);
     }
 }
+
+// Something on the track that holds sound after its input stops: a device that runs, or a
+// plug-in delay compensation line that is delaying (#449).
+bool hasLiveDevice(const Track& t) {
+    if (t.pdc && !t.pdc->isIdle()) return true;
+    for (const auto& d : t.devices)
+        if (d && !d->bypassed()) return true;
+    return false;
+}
+
+// How settled a track's chain is once its output has gone quiet (#449): every live device
+// reports idle (Settled); some are hosted plug-ins, whose state the host can't see, and the
+// rest are idle (Opaque); or a built-in device still holds sound or never reports idle (Busy).
+enum class ChainRest : uint8_t { Settled, Opaque, Busy };
+ChainRest chainRest(const Track& t) {
+    if (t.pdc && !t.pdc->isIdle()) return ChainRest::Busy;
+    ChainRest r = ChainRest::Settled;
+    for (const auto& d : t.devices) {
+        if (!d || d->bypassed() || d->isIdle()) continue;
+        // Only a hosted plug-in itself is opaque (builtinKind < 0); a rack that holds one is
+        // built-in and still busy while its own delays hold sound. Audio-thread safe.
+        if (d->builtinKind() >= 0) return ChainRest::Busy;
+        r = ChainRest::Opaque;
+    }
+    return r;
+}
+
 } // namespace
 
 void Engine::noteExprEvents(
@@ -392,12 +443,14 @@ void Engine::poll() {
     const int32_t replaceUpTo = replaceUpTo_.load(std::memory_order_acquire);
     RecordedNote rn;
     std::vector<RecordedNote> batch;
-    while (recorded_.pop(rn)) batch.push_back(rn);
+    while (recorded_.pop(rn))
+        if (rn.epoch == takeEpoch_) batch.push_back(rn); // a discarded take's late notes go (specs/078)
     // Expression after the notes: a note's points were all queued before its note-off was.
     collectRecordedExpr();
     {
         RecordedCtl x;
-        while (recordedCtl_.pop(x)) ctlBatch_.push_back(x);
+        while (recordedCtl_.pop(x))
+            if (x.epoch == takeEpoch_) ctlBatch_.push_back(x);
     } // controllers (specs/020)
     const bool ctlWork = !ctlBatch_.empty() || ctlStopPending_;
     const bool replacePending = replaceUpTo > appliedReplaceUpTo_ && recordSessionScene_ < 0;
@@ -529,6 +582,7 @@ void Engine::poll() {
 void Engine::collectRecordedExpr() {
     RecordedExpr x;
     while (recordedExpr_.pop(x)) {
+        if (x.epoch != takeEpoch_) continue; // a discarded take's (specs/078)
         auto& curve = pendingExpr_[{x.pitch, x.startBeat}].dim[x.dim];
         if (!curve.empty() && x.beat <= curve.back().beat) curve.back().value = x.value; // same instant
         else
@@ -718,7 +772,8 @@ void Engine::commitCtlRun(MidiClip& clip, int32_t ctl, double slotLen, bool fina
 void Engine::flushCtlTake() {
     {
         RecordedCtl x;
-        while (recordedCtl_.pop(x)) ctlBatch_.push_back(x);
+        while (recordedCtl_.pop(x))
+            if (x.epoch == takeEpoch_) ctlBatch_.push_back(x);
     }
     ctlStopPending_ = true;
     ctlStopAt_ = transport_.uiPositionBeats();
@@ -887,6 +942,20 @@ void Engine::drainCommands() {
             transport_.seekBeats(c.d0);
             seekedThisBlock_ = true;
             break;
+        case CommandType::TakeRestart: // specs/078: the blocks from here belong to the retried take
+            if ((c.i1 & 4) != 0) { // a take started normally: the current epoch, nothing waits
+                rtTakeEpoch_ = static_cast<uint32_t>(c.i0);
+                rtWaitScene_ = -1;
+            } else if ((c.i1 & 2) != 0) { // a Session MIDI take: from when its slot relaunches
+                rtPendingEpoch_ = static_cast<uint32_t>(c.i0);
+                rtWaitScene_ = static_cast<int32_t>(c.d0);
+            } else {
+                rtTakeEpoch_ = static_cast<uint32_t>(c.i0);
+                rtTakeRestart_ = true;
+                rtWaitScene_ = -1;
+            }
+            if ((c.i1 & 1) != 0) captureGate_.store(true, std::memory_order_release);
+            break;
         case CommandType::None: break;
         }
     }
@@ -943,9 +1012,23 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
     // Track-addressed notes (Nota Remote) are recorded only when they play the take's
     // track; ordinary live input records onto it whatever it is.
     const int32_t recTrack = recordTrackRt_.load(std::memory_order_relaxed);
-    const bool takeStarted = rec && !prevRecording_;
+    // A retried Session MIDI take begins when its slot has relaunched: until then what is
+    // played carries the old epoch and stays out (specs/078).
+    if (rtWaitScene_ >= 0 && slot && slot->pending.load(std::memory_order_relaxed) != rtWaitScene_ &&
+        slot->playing.load(std::memory_order_relaxed) == rtWaitScene_) {
+        rtTakeEpoch_ = rtPendingEpoch_;
+        rtTakeRestart_ = true;
+        rtWaitScene_ = -1;
+    }
+    // A retry (TakeRestart) starts a fresh take even when this thread never saw recording off.
+    const bool restarted = rtTakeRestart_;
+    rtTakeRestart_ = false;
+    const bool takeStarted = rec && (!prevRecording_ || restarted);
     routedSeedPending_ = takeStarted && !slot; // routed notes held now join the take (captureRoutedNotes)
-    if (rec != prevRecording_)
+    // A retried take restarts from a playhead that jumped back: keys still held join it at its
+    // start, not at a press beat from the take that was thrown away.
+    routedSeedFromNow_ = restarted;
+    if (rec != prevRecording_ || restarted)
         for (int i = 0; i < 128; ++i) {
             pendingActive_[i] = false;
             recRoutedActive_[i] = false;
@@ -1016,7 +1099,7 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
                 double len = nowBeat - pendingStart_[e.pitch];
                 if (slot && len < 0.0) len += slotLen; // wrapped past the loop end
                 RecordedNote rn{e.pitch, pendingStart_[e.pitch], len, pendingVel_[e.pitch], recordPass_};
-                recorded_.push(rn);
+                pushRecorded(rn);
                 pendingActive_[e.pitch] = false;
             }
         }
@@ -1031,7 +1114,7 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
             if (!liveDown_[p] || pendingActive_[p] || (livePressTrack_[p] >= 0 && livePressTrack_[p] != recTrack))
                 continue;
             pendingActive_[p] = true;
-            pendingStart_[p] = (slot || std::isnan(livePressBeat_[p])) ? nowBeat : livePressBeat_[p];
+            pendingStart_[p] = (slot || restarted || std::isnan(livePressBeat_[p])) ? nowBeat : livePressBeat_[p];
             pendingVel_[p] = livePressVel_[p];
         }
     if (rec && timed && liveExprCount_ > 0) captureLiveExpr(nowBeat, slot ? slotLen : 0.0);
@@ -1043,14 +1126,14 @@ void Engine::drainLiveMidi(double blockStartBeat, bool playing) {
         const double seedAt = slot ? nowBeat : blockStartBeat;
         for (int32_t c = 0; c < kCtlCount; ++c) {
             const float v = liveCtl_[c].load(std::memory_order_relaxed);
-            if (v != kCtlRest && !ctlIsReserved(c)) recordedCtl_.push(RecordedCtl{c, seedAt, v, recordPass_});
+            if (v != kCtlRest && !ctlIsReserved(c)) pushRecordedCtl(RecordedCtl{c, seedAt, v, recordPass_});
         }
     }
     if (rec && timed)
         for (int i = 0; i < liveExprCount_; ++i) {
             const MidiEvent& e = liveExpr_[i];
             if (e.expr < kCtlDimBase || (e.trackId >= 0 && e.trackId != recTrack)) continue;
-            recordedCtl_.push(RecordedCtl{e.expr - kCtlDimBase, nowBeat, e.velocity, recordPass_});
+            pushRecordedCtl(RecordedCtl{e.expr - kCtlDimBase, nowBeat, e.velocity, recordPass_});
         }
 }
 
@@ -1066,7 +1149,7 @@ void Engine::captureLiveExpr(double nowBeat, double slotLen) {
         if (!pendingActive_[e.pitch] || (e.trackId >= 0 && e.trackId != recTrack)) continue;
         double off = nowBeat - pendingStart_[e.pitch];
         if (slotLen > 0.0 && off < 0.0) off += slotLen; // a Session take wrapped past its loop end
-        recordedExpr_.push(
+        pushRecordedExpr(
             RecordedExpr{e.pitch, pendingStart_[e.pitch], e.expr, static_cast<float>(std::max(0.0, off)), e.velocity});
     }
 }
@@ -1104,7 +1187,7 @@ void Engine::captureRoutedNotes(const MidiEv* evs, int n, double blockStart, dou
             recRoutedVel_[p] = evs[k].vel;
             if (!recordSlotPlayer_.load(std::memory_order_relaxed)) triggerPassReplace();
         } else if (recRoutedActive_[p]) {
-            recorded_.push(RecordedNote{
+            pushRecorded(RecordedNote{
                 p, recRoutedStart_[p], std::max(0.0, beat - recRoutedStart_[p]), recRoutedVel_[p], recordPass_});
             recRoutedActive_[p] = false;
         }
@@ -1119,7 +1202,7 @@ void Engine::captureRoutedNotes(const MidiEv* evs, int n, double blockStart, dou
             for (int p = 0; p < 128; ++p) {
                 if (!routedDown_[p] || recRoutedActive_[p]) continue;
                 recRoutedActive_[p] = true;
-                recRoutedStart_[p] = std::isnan(routedPressBeat_[p]) ? now : routedPressBeat_[p];
+                recRoutedStart_[p] = (routedSeedFromNow_ || std::isnan(routedPressBeat_[p])) ? now : routedPressBeat_[p];
                 recRoutedVel_[p] = routedPressVel_[p];
             }
     }
@@ -1394,7 +1477,7 @@ void Engine::renderInstrumentRaw(
                     for (int k = 0; k < rs_->blockExprN[j]; ++k) {
                         const ExprEv& x = rs_->blockExpr[j][k];
                         if (x.dim < kCtlDimBase) continue;
-                        recordedCtl_.push(RecordedCtl{x.dim - kCtlDimBase,
+                        pushRecordedCtl(RecordedCtl{x.dim - kCtlDimBase,
                             (blockStart + x.off) / spb + countInClockOffset(), x.value, recordPass_});
                     }
             }
@@ -1612,15 +1695,61 @@ void Engine::mixAudioClip(
         const int64_t cacheBase = std::llround(ovStart) - startF; // 0-based into the cache
         const float* csamp = wc.data();
         const float g = clip.gain * extraGain;
-        for (int32_t j = 0; j < segLen; ++j) {
-            // Reverse reads the same cache back-to-front: the window is already the
-            // played length, so mirroring the index is exact (no resample).
-            const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
-            if (ci < 0 || ci >= wc.frames) continue;
-            float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
-            if (hasEnv) applyEnv(ovStart + j, l, r);
-            dst[(dstOff + j) * 2] += l * g;
-            dst[(dstOff + j) * 2 + 1] += r * g;
+        // A split fade is a few milliseconds of attack or release with the sustain left at
+        // full level, so the body is unity. It is its own loop, with no envelope test and no
+        // helper call: folding the test into the sample loop cost audio-warp-split +11%, and
+        // a body loop that reloaded its pointers cost another +3.6%. The extra sample on
+        // each edge covers a rounding step; a body sample it pulls in has sustain gain 1.
+        // Every other clip takes the original loop below, unchanged.
+        if (hasAdsr && clip.adsr.sustain >= 1.0f && !hasVol && !hasPan) {
+            int32_t head = 0, tail = segLen;
+            if (clip.adsr.attack > 0.0) {
+                const double n = startSamples + clip.adsr.attack * spb + 1.0 - ovStart; // j < n
+                // Clamp in double before the narrowing cast. The span only covers this
+                // block; a long attack must not overflow int32 on the way there.
+                const double c = std::clamp(std::ceil(n), 0.0, static_cast<double>(segLen));
+                head = static_cast<int32_t>(c);
+            }
+            if (clip.adsr.release > 0.0) {
+                const double n = startSamples + clipDeviceLen - clip.adsr.release * spb - 1.0 - ovStart; // j > n
+                const double c = std::clamp(std::floor(n) + 1.0, 0.0, static_cast<double>(segLen));
+                tail = static_cast<int32_t>(c);
+            }
+            if (head > tail) head = tail = segLen; // edges overlap: the whole block fades
+            for (int32_t j = 0; j < head; ++j) {
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                applyEnv(ovStart + j, l, r);
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
+            }
+            for (int32_t j = head; j < tail; ++j) {
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                const float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
+            }
+            for (int32_t j = tail; j < segLen; ++j) {
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                applyEnv(ovStart + j, l, r);
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
+            }
+        } else {
+            for (int32_t j = 0; j < segLen; ++j) {
+                // Reverse reads the same cache back-to-front: the window is already the
+                // played length, so mirroring the index is exact (no resample).
+                const int64_t ci = clip.reversed ? wc.frames - 1 - (cacheBase + j) : cacheBase + j;
+                if (ci < 0 || ci >= wc.frames) continue;
+                float l = csamp[ci * 2], r = csamp[ci * 2 + 1];
+                if (hasEnv) applyEnv(ovStart + j, l, r);
+                dst[(dstOff + j) * 2] += l * g;
+                dst[(dstOff + j) * 2 + 1] += r * g;
+            }
         }
         return;
     }
@@ -1653,17 +1782,10 @@ void Engine::mixAudioClip(
         float l = static_cast<float>(l0 + (l1 - l0) * frac) * clip.gain * extraGain;
         float r = static_cast<float>(r0 + (r1 - r0) * frac) * clip.gain * extraGain;
         // Short edge fade (~3 ms) so a clip that starts/ends mid-waveform doesn't click.
-        const double edge = std::min(3.0 * sr / 1000.0, clipDeviceLen * 0.5);
-        if (edge > 1.0) {
-            const double into = p - startSamples;
-            double eg = 1.0;
-            if (into < edge) eg = into / edge;
-            else if (into > clipDeviceLen - edge)
-                eg = (clipDeviceLen - into) / edge;
-            eg = std::clamp(eg, 0.0, 1.0);
-            l *= (float)eg;
-            r *= (float)eg;
-        }
+        const float eg = static_cast<float>(
+            audioClipEdgeGain(p - startSamples, clipDeviceLen, sr, clip.fadeHead, clip.fadeTail));
+        l *= eg;
+        r *= eg;
         applyEnv(p, l, r);
         dst[i * 2] += l;
         dst[i * 2 + 1] += r;
@@ -1722,7 +1844,7 @@ void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
     constexpr double kMinHead = 1.0 / 64.0;
     auto split = [&](int32_t pitch, double& start, float vel) {
         const double head = loopEndBeat - start;
-        if (head >= kMinHead) recorded_.push(RecordedNote{pitch, start, head, vel, recordPass_});
+        if (head >= kMinHead) pushRecorded(RecordedNote{pitch, start, head, vel, recordPass_});
         start = loopStartBeat;
     };
     for (int p = 0; p < 128; ++p)
@@ -1730,7 +1852,7 @@ void Engine::onLoopWrap(Graph* g, double loopStartBeat, double loopEndBeat) {
     for (int p = 0; p < 128; ++p)
         if (recRoutedActive_[p]) split(p, recRoutedStart_[p], recRoutedVel_[p]);
     // Controllers being replaced over a range stop at the pass end (specs/020).
-    recordedCtl_.push(RecordedCtl{-1, loopEndBeat, 0.0f, recordPass_});
+    pushRecordedCtl(RecordedCtl{-1, loopEndBeat, 0.0f, recordPass_});
     // A new pass of the take: the continuations above belong to it (they don't trigger a
     // replace — only a fresh note does), and it takes the loop record mode set right now.
     ++recordPass_;
@@ -1748,6 +1870,9 @@ void Engine::triggerPassReplace() {
 }
 
 void Engine::processBlock(float* out, int32_t numFrames) {
+    // Every audio-thread read of recordSlotPlayer_ happens inside this block (count-in launch,
+    // live MIDI, capture), so this scope keeps the player it points at alive.
+    const SnapshotHistory<SessionPlayer>::RenderScope recordSlotScope(recordSlotHist_);
     drainCommands();
     for (int32_t i = 0; i < numFrames * 2; ++i) out[i] = 0.0f;
 
@@ -1757,9 +1882,10 @@ void Engine::processBlock(float* out, int32_t numFrames) {
 
     drainLiveMidi(transport_.playheadSamples() / spb, playing);
 
-    Graph* g = liveGraph_.load(std::memory_order_acquire);
-    // This block's scratch, read after the graph: publishRaw publishes the scratch first, so
-    // it always fits the graph seen here. Held until the scope ends the render epoch.
+    // The graph, then this block's scratch: publishRaw publishes the scratch first, so it
+    // always fits the graph seen here. Both held until their scopes end the render epoch.
+    const SnapshotHistory<Graph>::RenderScope graphScope(graphHist_);
+    Graph* g = graphHist_.live();
     const SnapshotHistory<RenderScratch>::RenderScope scratchScope(scratchHist_);
     rs_ = scratchHist_.live();
 
@@ -1809,6 +1935,8 @@ void Engine::processBlock(float* out, int32_t numFrames) {
     int32_t done = 0;
     int32_t loopSeams[16];
     int32_t nLoopSeams = 0; // block offsets where the loop wrapped
+    double presentationStart = transport_.playheadSamples();
+    int32_t presentationFrames = 0, presentationLead = 0;
     while (done < numFrames) {
         if (playing && transport_.isLooping() && transport_.playheadSamples() >= transport_.loopEndSamples() - 0.5) {
             // No voice flush here: clip notes crossing the loop end get note-offs in the next
@@ -1831,6 +1959,10 @@ void Engine::processBlock(float* out, int32_t numFrames) {
             if (left < seg) seg = std::max(1, static_cast<int32_t>(std::lround(left)));
         }
         const double segStart = transport_.playheadSamples();
+        if (playing) {
+            if (presentationFrames == 0) { presentationStart = segStart; presentationLead = done; }
+            presentationFrames += seg;
+        }
         chaseNotes_ = chase;
         if (g && sr > 0.0) mixGraph(g, out + done * 2, seg, segStart, playing, spb);
         chaseNotes_ = chase = seamOffs_ = false;
@@ -1922,6 +2054,8 @@ void Engine::processBlock(float* out, int32_t numFrames) {
         stereoBlockStep(numFrames, transport_.sampleRate()));
     masterPeakL_.store(mpkL, std::memory_order_relaxed);
     masterPeakR_.store(mpkR, std::memory_order_relaxed);
+    transport_.publishPresentation(presentationStart, presentationFrames, presentationLead,
+        deviceBlock_ && backend_ ? std::max(numFrames, backend_->bufferFrames()) : numFrames);
     masterRmsL_.store(numFrames ? static_cast<float>(std::sqrt(msqL / numFrames)) : 0.0f, std::memory_order_relaxed);
     masterRmsR_.store(numFrames ? static_cast<float>(std::sqrt(msqR / numFrames)) : 0.0f, std::memory_order_relaxed);
 }
@@ -1983,6 +2117,7 @@ void Engine::renderLeafDry(Track& t, float* dst, const LeafWork& w, Graph* g, in
         if (t.instrument) t.instrument->setPartTaps(nullptr, 0);
         break;
     case LeafPath::AudioClips: renderAudioClipsRaw(t.clips, dst, frames, blockStart, spb); break;
+    case LeafPath::Tail: std::fill_n(dst, frames * 2, 0.0f); break; // the chain alone rings on
     case LeafPath::Skip: break; // unreachable (pre-pass filters Skip out)
     }
 }
@@ -2113,7 +2248,12 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
 
         // Internal resampling (record from another track/send/master): tap the source's
         // post-fader output into the input ring while a take is rolling.
-        const int32_t recSrc = countInActive_ ? 0 : internalRecordSource_.load(std::memory_order_relaxed);
+        // Shut while counting in, and while a retried take waits for its TakeRestart (specs/078).
+        const uint32_t capEp = captureEpoch_.load(std::memory_order_acquire); // before the gate
+        const int32_t recSrc = (countInActive_ || !captureGate_.load(std::memory_order_acquire))
+                                   ? 0
+                                   : internalRecordSource_.load(std::memory_order_relaxed);
+        if (recSrc != 0) markCaptureEpoch(rtCaptureEpoch_, capEp);
 
         // Live input monitoring: this segment's hardware input (shared by every track
         // monitoring it), and the set of tracks whose output some monitoring track hears —
@@ -2279,6 +2419,7 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                     t.sessionPlayer->localBeats += frames / spb;
                     sessionPostRender(t, frames / spb);
                 }
+                t.tailQuiet() = -1; // muted: its tail is gone, not saved for the unmute
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
@@ -2311,11 +2452,14 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 w.path = LeafPath::Instrument;
             } else if (playing && arrangementActive) {
                 w.path = LeafPath::AudioClips;
+            } else if (t.tailQuiet() >= 0 && hasLiveDevice(t)) {
+                w.path = LeafPath::Tail; // its effects ring out on silence (#449)
             } else {
+                t.tailQuiet() = -1;
                 t.setMeter(0, 0, 0, 0);
                 t.stereoFold(0, 0, 0, frames, stereoA);
                 continue;
-            } // stopped / session-only audio track: nothing to do
+            } // stopped / session-only audio track, its tail played out: nothing to do
 
             // Destination: this leaf's parent group's submix bus, else the master mix.
             const int destSlot = slotOf(t.groupId());
@@ -2461,6 +2605,24 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
             }
             if (!parallelDsp) processLeafDevices(t, scratch_.data(), w, g, frames, blockStart, spb, playing, ti);
 
+            // 2b') Effect tails (#449): a block an audio track plays (re)starts its tail; on
+            //      the tail path the chain's output is watched until it has been quiet long
+            //      enough, and the track goes back to costing nothing.
+            if (w.path == LeafPath::Tail) {
+                int64_t& quiet = t.tailQuiet();
+                if (simd_audio::peakAbs(post, frames * 2) > kTailFloor) quiet = 0;
+                else quiet += frames;
+                if (quiet > 0) {
+                    const double sr = transport_.sampleRate();
+                    const ChainRest rest = chainRest(t);
+                    if (rest == ChainRest::Settled ||
+                        (rest == ChainRest::Opaque && quiet >= static_cast<int64_t>(kTailQuietSeconds * sr)) ||
+                        quiet >= static_cast<int64_t>(kTailMaxQuietSeconds * sr))
+                        quiet = -1;
+                }
+            } else if (w.path == LeafPath::AudioClips || w.path == LeafPath::SessionAudio || w.path == LeafPath::Monitor)
+                t.tailQuiet() = 0;
+
             // 2c) Freeze capture (M7): stash this track's post-device, pre-fader signal
             //     into the freeze buffer. Sequential from a seek(0) render, so the write
             //     cursor tracks the playhead frame.
@@ -2538,6 +2700,40 @@ void Engine::mixGraph(Graph* g, float* out, int32_t frames, double blockStart, b
                 continue;
             }
             t.stereoFold(sqL, sqR, sLR, frames, stereoA);
+            t.setMeter(
+                pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
+        }
+
+        // An armed audio track that isn't monitoring meters its input instead (#352): the
+        // level to set before a take, without hearing it. Pre-fader, like a console's input
+        // meter; a monitoring track already meters what it hears. Nothing here is heard, so
+        // the sources monitoring refuses (they would feed back) meter too: the master (its
+        // previous block's level) and a group the track sits in (its post-fader tap).
+        for (auto& tptr : g->tracks) {
+            Track& t = *tptr;
+            if (t.type() != TrackType::Audio || !t.armed() || (t.frozen() && t.frozenBuf)) continue;
+            if (t.monitor() && t.id() != capTrackId) continue;
+            const int32_t src = t.recordInputSource();
+            if (src == -1) {
+                t.setMeter(masterPeakL_.load(std::memory_order_relaxed), masterPeakR_.load(std::memory_order_relaxed),
+                    masterRmsL_.load(std::memory_order_relaxed), masterRmsR_.load(std::memory_order_relaxed));
+                continue;
+            }
+            const float* in = scratch_.data();
+            if (src > 0 && src != t.id()) {
+                const int32_t slot = routeSlotForTrack(src);
+                if (slot >= 0) in = routeBus_[slot].data();
+                else std::fill_n(scratch_.data(), frames * 2, 0.0f);
+            } else renderMonitorInput(g, t, scratch_.data(), frames);
+            float pkL = 0.0f, pkR = 0.0f;
+            double sqL = 0.0, sqR = 0.0;
+            for (int32_t i = 0; i < frames; ++i) {
+                const float l = in[i * 2], r = in[i * 2 + 1];
+                pkL = std::max(pkL, std::fabs(l));
+                pkR = std::max(pkR, std::fabs(r));
+                sqL += l * (double)l;
+                sqR += r * (double)r;
+            }
             t.setMeter(
                 pkL, pkR, static_cast<float>(std::sqrt(sqL / frames)), static_cast<float>(std::sqrt(sqR / frames)));
         }
@@ -2780,6 +2976,50 @@ void Engine::renderTone(float* out, int32_t numFrames) {
         tonePhase_ += inc;
         if (tonePhase_ >= kTwoPi) tonePhase_ -= kTwoPi;
     }
+}
+
+// #436: an instrument that takes timed events (a hosted plug-in) renders once per block, each
+// event stamped with its offset, in the same order the segmented render delivers them; an
+// instrument that doesn't is still rendered in segments with every event at offset 0.
+bool Engine::timedEventsSelfTest() {
+    struct Probe final : Instrument {
+        bool timed = false;
+        std::vector<int32_t> renders;                // frames per render() call
+        std::vector<std::array<int32_t, 4>> events; // kind (1 on, 0 off, 2 ctl, 3 live), pitch, offset, renders so far
+        bool takesTimedEvents() const override { return timed; }
+        void setSampleRate(double) override {}
+        void noteOn(int32_t p, float) override { events.push_back({1, p, eventOffset, (int32_t)renders.size()}); }
+        void noteOff(int32_t p) override { events.push_back({0, p, eventOffset, (int32_t)renders.size()}); }
+        void allNotesOff() override {}
+        void controller(int32_t ctl, float) override {
+            events.push_back({2, ctl, eventOffset, (int32_t)renders.size()});
+        }
+        void render(float*, int32_t frames) override { renders.push_back(frames); }
+    };
+    constexpr int32_t frames = 64;
+    // Off before on at a shared offset (midiEvLess order); the last note-off sits on the block's end.
+    const MidiEv evs[] = {{0, true, 60, 1.0f}, {10, false, 60, 0.0f}, {10, true, 62, 1.0f}, {frames, false, 62, 0.0f}};
+    const ExprEv xev[] = {{20, -1, kCtlDimBase + 1, 0.5f}};
+    float dst[frames * 2] = {};
+    auto run = [&](Probe& p) {
+        playEvents(p, dst, frames, evs, 4, xev, 1, 0.0, 0.0, false,
+            [&] { p.events.push_back({3, -1, p.eventOffset, (int32_t)p.renders.size()}); });
+    };
+    using E = std::array<int32_t, 4>;
+
+    Probe timed;
+    timed.timed = true;
+    run(timed);
+    const std::vector<E> wantTimed = {
+        {1, 60, 0, 0}, {3, -1, 0, 0}, {0, 60, 10, 0}, {1, 62, 10, 0}, {2, 1, 20, 0}, {0, 62, 0, 1}};
+    if (timed.renders != std::vector<int32_t>{frames} || timed.events != wantTimed || timed.eventOffset != 0)
+        return false;
+
+    Probe seg;
+    run(seg);
+    const std::vector<E> wantSeg = {
+        {1, 60, 0, 0}, {3, -1, 0, 0}, {0, 60, 0, 1}, {1, 62, 0, 1}, {2, 1, 0, 2}, {0, 62, 0, 3}};
+    return seg.renders == std::vector<int32_t>{10, 10, 44} && seg.events == wantSeg;
 }
 
 } // namespace nota

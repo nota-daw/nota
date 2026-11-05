@@ -13,6 +13,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -96,7 +97,7 @@ internal sealed class FluxReactScope : Control
         NotaGraph.Axis(ctx, plot, NotaGraph.Corner.TopRight, "env · transients · tilt", _live ? NotaPalette.TextSecondary : NotaPalette.TextAxis);   // lifts while live
         if (!_live)
         {
-            var none = NotaGraph.AxisText("no source assigned", NotaPalette.TextTertiary);
+            var none = NotaGraph.AxisText(Loc.T("device.flux_react.no_source_assigned"), NotaPalette.TextTertiary);
             ctx.DrawText(none, new Point((plot.Width - none.Width) / 2, h - 8 - none.Height));
         }
 

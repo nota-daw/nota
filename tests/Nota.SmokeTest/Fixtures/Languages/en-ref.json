@@ -1,0 +1,20 @@
+{
+  "formatVersion": 2,
+  "code": "en",
+  "name": "English",
+  "notes": "Test fixture for spec 077: a small English reference the language-layer checks run against.",
+  "strings": {
+    "test.save": "Save",
+    "test.open_menu": "Open",
+    "test.open_clip": "Open clip",
+    "test.blank": "Blank",
+    "test.bad": "Bad {0}",
+    "test.brace": "Brace {0}",
+    "test.delete_clips": "Delete {0} clips?",
+    "test.number": "{0}",
+    "test.tracks": { "one": "{0} track", "other": "{0} tracks" },
+    "test.clips": { "one": "{0} clip", "other": "{0} clips" },
+    "test.takes": { "one": "{0} take", "other": "{0} takes" },
+    "test.bars": { "one": "{0} bar", "other": "{0} bars" }
+  }
+}

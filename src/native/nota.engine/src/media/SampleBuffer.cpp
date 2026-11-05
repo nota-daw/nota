@@ -5,6 +5,8 @@
 
 #include "SampleBuffer.h"
 
+#include <cmath>
+
 namespace nota {
 
 int64_t SampleBuffer::nextId() {
@@ -31,18 +33,21 @@ void SampleBuffer::buildPeakTable() {
 }
 
 void SampleBuffer::updatePeakTable(int64_t f0, int64_t f1) {
-    if (!hasPeakTable()) {
+    if (!hasPeakTable() || !hasRmsTable()) {
         peakTable.assign(static_cast<size_t>(peakBlocks() * 2), 0.0f);
+        rmsTable.assign(static_cast<size_t>(peakBlocks()), 0.0f);
         fillSentinel(0, peakBlocks());
     }
     f0 = std::max<int64_t>(0, f0);
     f1 = std::min(f1, frames);
     if (f1 <= f0) return;
     for (int64_t b = f0 / kPeakBlock; b <= (f1 - 1) / kPeakBlock; ++b) {
+        const int64_t s0 = b * kPeakBlock, s1 = std::min(frames, (b + 1) * kPeakBlock);
         float mn, mx;
-        scanRange(b * kPeakBlock, std::min(frames, (b + 1) * kPeakBlock), mn, mx);
+        scanRange(s0, s1, mn, mx);
         peakTable[b * 2] = mn;
         peakTable[b * 2 + 1] = mx;
+        rmsTable[b] = static_cast<float>(scanSquares(s0, s1) / static_cast<double>(s1 - s0));
     }
 }
 
@@ -50,6 +55,7 @@ void SampleBuffer::fillSentinel(int64_t b0, int64_t b1) {
     for (int64_t b = b0; b < b1; ++b) {
         peakTable[b * 2] = 1.0f;
         peakTable[b * 2 + 1] = -1.0f;
+        if (hasRmsTable()) rmsTable[b] = 0.0f;
     }
 }
 
@@ -79,6 +85,32 @@ void SampleBuffer::peakRange(int64_t f0, int64_t f1, float& mn, float& mx) const
     mn = std::min(mn, a);
     mx = std::max(mx, z);
     if (mn > mx) mn = mx = 0.0f;
+}
+
+float SampleBuffer::rmsRange(int64_t f0, int64_t f1) const {
+    f0 = std::max<int64_t>(0, f0);
+    f1 = std::min(f1, frames);
+    if (f1 <= f0) return 0.0f;
+    double sum;
+    if (f1 - f0 < 4 * kPeakBlock || !hasRmsTable()) {
+        sum = scanSquares(f0, f1);
+    } else {
+        const int64_t b0 = (f0 + kPeakBlock - 1) / kPeakBlock, b1 = f1 / kPeakBlock; // whole blocks
+        sum = scanSquares(f0, b0 * kPeakBlock) + scanSquares(b1 * kPeakBlock, f1);
+        for (int64_t b = b0; b < b1; ++b) sum += static_cast<double>(rmsTable[b]) * kPeakBlock;
+    }
+    return static_cast<float>(std::sqrt(sum / static_cast<double>(f1 - f0)));
+}
+
+double SampleBuffer::scanSquares(int64_t f0, int64_t f1) const {
+    double sum = 0.0;
+    for (int64_t f = f0; f < f1; ++f) {
+        float l, r;
+        readStereo(f, l, r);
+        const double mid = 0.5 * (static_cast<double>(l) + r);
+        sum += mid * mid;
+    }
+    return sum;
 }
 
 void SampleBuffer::scanRange(int64_t f0, int64_t f1, float& mn, float& mx) const {

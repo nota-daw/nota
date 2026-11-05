@@ -4,7 +4,8 @@
 // Detail · Clip for MIDI clips (style guide): a 38px header — the clip cell, Notes |
 // Envelopes and the help hint, then the Scale switch with its key, mode and "Remove out of
 // scale", and the Tools toggle — over the settings strip (ClipPropsView), then the piano roll
-// (PianoRollView) with the 272px clip-tools panel (MidiToolsView) beside it. Envelopes is a mode of the same canvas: the
+// (PianoRollView) with the 272px clip-tools panel (MidiToolsView) beside it, one column or
+// two (specs/055). Envelopes is a mode of the same canvas: the
 // notes dim under a wash and the clip envelope (Velocity / Volume) is drawn over them in
 // brass, on the roll's own beat axis so zoom and scroll carry over. With several clips open
 // (specs/029) the header, inspector and envelopes follow the roll's active clip.
@@ -18,6 +19,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.ClipEditorKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -36,7 +38,8 @@ public sealed class ClipEditorView : UserControl
     private bool _envMode;
 
     public ClipEditorView(PianoRollView roll, string clipName, double startBeat,
-                          IAudioEngine? engine = null, int trackId = -1, int clipIndex = -1, double lengthBeats = 4)
+                          IAudioEngine? engine = null, int trackId = -1, int clipIndex = -1, double lengthBeats = 4,
+                          Action<bool>? setTrackMode = null)
     {
         Roll = roll;
         _engine = engine;
@@ -48,17 +51,17 @@ public sealed class ClipEditorView : UserControl
 
         // Settings strip over roll | clip-tools panel. The tools panel is a toggle rather than
         // a tab because its whole point is watching the roll change while you turn a knob.
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        _props = new ClipPropsView(roll, startBeat);
-        grid.Children.Add(roll);
+        // Docked, the tools panel picks its columns from the width and the roll takes the
+        // rest (specs/055).
+        _props = new ClipPropsView(roll, startBeat, ModeControl(roll, setTrackMode));
         _tools = new MidiToolsView(roll) { IsVisible = false };
-        Grid.SetColumn(_tools, 1);
-        grid.Children.Add(_tools);
+        DockPanel.SetDock(_tools, Dock.Right);
+        var body = new DockPanel { Children = { _tools, roll } };
 
-        _toolsToggle = new ToggleButton { Content = "Tools", Padding = new Thickness(12, 0), Classes = { "chip", "flat" } };
+        _toolsToggle = new ToggleButton { Content = Loc.T("clip_editor.tools"), Padding = new Thickness(12, 0), Classes = { "chip", "flat" } };
         _toolsToggle.Click += (_, _) => SetTools(_toolsToggle.IsChecked == true);
 
-        var tabs = Segments(new[] { "Notes", "Envelopes" }, 0, i => ShowTab(i == 1), out _setTab);
+        var tabs = Segments(new[] { Loc.T("clip_editor.notes"), Loc.T("clip_editor.envelopes") }, 0, i => ShowTab(i == 1), out _setTab);
         if (_envOverlay is null) Inactive.Set(tabs, true);   // session slots carry no clip envelope
         var right = new StackPanel
         {
@@ -68,7 +71,7 @@ public sealed class ClipEditorView : UserControl
         // The gesture hint fills the header's free space: one line when there is room, two in
         // a narrower editor (the header holds two caption lines), trimmed only past that, and
         // always readable in full in its tooltip.
-        const string hintText = "Double-click — add or delete · edge — length · Shift — add to selection";
+        string hintText = Loc.T("clip_props.double_click_add_or_delete");
         var hint = Hint(hintText);
         hint.TextWrapping = TextWrapping.Wrap;
         hint.MaxLines = 2;
@@ -79,7 +82,7 @@ public sealed class ClipEditorView : UserControl
         var header = Header(roll.TrackBrush, HeaderName(clipName), "MIDI", tabs, hint, right, double.NaN, out _nameText, out _colorBar);
         DockPanel.SetDock(header, Dock.Top);
         DockPanel.SetDock(_props, Dock.Top);
-        Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, _props, grid } };
+        Content = new DockPanel { Background = NotaPalette.Gutter, Children = { header, _props, body } };
         roll.ActiveClipChanged += OnActiveClipChanged;
         if (roll.Clips.IsMulti) OnActiveClipChanged();   // envelopes on the active clip's place on the axis
     }
@@ -92,7 +95,18 @@ public sealed class ClipEditorView : UserControl
 
     // "Bass 2 · +2 clips" while several clips are open.
     private string HeaderName(string name)
-        => Roll.Clips.IsMulti ? $"{name} · +{Roll.Clips.Count - 1} {(Roll.Clips.Count == 2 ? "clip" : "clips")}" : name;
+        => Roll.Clips.Count > 1 ? $"{name} · +{Roll.Clips.Count - 1} {(Roll.Clips.Count == 2 ? "clip" : "clips")}" : name;
+
+    // Clip | Track (specs/059), at the top of the inspector: one clip, or every MIDI clip of its
+    // track on the arrangement's timeline. The host rebuilds the editor on a switch. Arrangement
+    // clips only.
+    private static Control? ModeControl(PianoRollView roll, Action<bool>? setTrackMode)
+    {
+        if (setTrackMode is null) return null;
+        var seg = Segments(new[] { Loc.T("common.clip"), Loc.T("common.track") }, roll.Clips.TrackMode ? 1 : 0, i => setTrackMode(i == 1), out _, fill: true);
+        ToolTip.SetTip(seg, Loc.T("clip_editor.clip_the_selected_clip_track"));
+        return seg;
+    }
 
     // Another clip became active: name, colour, start and the envelope target follow it.
     private void OnActiveClipChanged()
@@ -100,7 +114,7 @@ public sealed class ClipEditorView : UserControl
         if (_engine is null) return;
         var a = Roll.ActiveClip;
         if (a.TrackId <= 0) return;
-        _nameText.Text = HeaderName(ClipName(a.TrackId, a.ClipIndex, $"Track {a.TrackId} clip"));
+        _nameText.Text = HeaderName(ClipName(a.TrackId, a.ClipIndex, Loc.F("clip_editor.track_clip", a.TrackId)));
         _colorBar.Background = Roll.TrackBrush;
         _props.SetStart(a.StartBeat);
         _envOverlay = new EnvOverlay(Roll, _engine, a.TrackId, a.ClipIndex, a.LengthBeats)
@@ -120,7 +134,7 @@ public sealed class ClipEditorView : UserControl
             Content = new Glyph(GlyphKind.Speaker, 14), Padding = new Thickness(8, 0), Classes = { "chip", "flat" },
             IsChecked = PianoRollView.AuditionEnabled,
         };
-        ToolTip.SetTip(b, "Hear notes as you place, click or drag them");
+        ToolTip.SetTip(b, Loc.T("clip_editor.hear_notes_as_you_place"));
         b.Click += (_, _) => PianoRollView.SetAuditionEnabled(b.IsChecked == true);
         void Sync() => b.IsChecked = PianoRollView.AuditionEnabled;
         b.AttachedToVisualTree += (_, _) => { Sync(); PianoRollView.AuditionToggled += Sync; };
@@ -131,8 +145,8 @@ public sealed class ClipEditorView : UserControl
     // Fit to notes (⇧F): rows zoom so every note of the clip is in view.
     private static Control FitControl(PianoRollView roll)
     {
-        var b = new Button { Content = "Fit", Padding = new Thickness(10, 0), Classes = { "chip", "flat" } };
-        ToolTip.SetTip(b, "Fit to notes (⇧F)");
+        var b = new Button { Content = Loc.T("clip_editor.fit"), Padding = new Thickness(10, 0), Classes = { "chip", "flat" } };
+        ToolTip.SetTip(b, Loc.T("clip_editor.fit_to_notes_f"));
         b.Click += (_, _) => roll.FitToNotes();
         return b;
     }
@@ -145,6 +159,10 @@ public sealed class ClipEditorView : UserControl
         button.Classes.Add("flat");
         return button;
     }
+
+    /// <summary>The bar length changed (#405): the inspector's Start / Length / selection
+    /// read-outs re-count (the roll redraws itself from its BeatsPerBar).</summary>
+    public void RecountBars(double startBeat) => _props.Recount(startBeat);
 
     /// <summary>Follows a clip that was moved or resized in the arrangement while this editor
     /// stayed on screen. The roll's own length is pushed by <c>PianoRollView.SetNotes</c>
@@ -183,20 +201,20 @@ public sealed class ClipEditorView : UserControl
     {
         _keyText = Mono("");
         _modeText = new TextBlock { FontSize = NotaType.Body };
-        var sw = SwitchRow("Scale", () => Roll.ScaleOn, () => { Roll.SetScale(!Roll.ScaleOn, Roll.ScaleRoot, Roll.ScaleIndex); PaintScale(); }, out _syncScale);
+        var sw = SwitchRow(Loc.T("clip_editor.scale"), () => Roll.ScaleOn, () => { Roll.SetScale(!Roll.ScaleOn, Roll.ScaleRoot, Roll.ScaleIndex); PaintScale(); }, out _syncScale);
         var key = Dropdown(_keyText, a => ShowMenu(a, PianoRollView.KeyNames, Roll.ScaleRoot, i => { Roll.SetScale(true, i, Roll.ScaleIndex); PaintScale(); }));
         var mode = Dropdown(_modeText, a => ShowMenu(a, PianoRollView.ScaleNames, Roll.ScaleIndex, i => { Roll.SetScale(true, Roll.ScaleRoot, i); PaintScale(); }));
         // Deletes the notes the overlay dims; live only while some note is out of scale.
-        _dropOutOfScale = ClipEditorKit.Button("Remove out of scale", () => Roll.RemoveOutOfScaleNotes());
+        _dropOutOfScale = ClipEditorKit.Button(Loc.T("clip_editor.remove_out_of_scale"), () => Roll.RemoveOutOfScaleNotes());
         _dropOutOfScale.Classes.Add("flat");
         _dropOutOfScale.HorizontalAlignment = HorizontalAlignment.Left;
         _dropOutOfScale.VerticalAlignment = VerticalAlignment.Center;
-        ToolTip.SetTip(_dropOutOfScale, "Delete every note outside the scale");
+        ToolTip.SetTip(_dropOutOfScale, Loc.T("clip_editor.delete_every_note_outside_the"));
         Roll.Changed += () => _dropOutOfScale.IsEnabled = Roll.HasOutOfScaleNotes;
         Roll.FoldToggled += _ => PaintScale();   // ⌥⇧F flips it from the keyboard too
         Roll.FoldChanged += PaintFold;           // …and the host switches it with the active clip's track
         // Fold (specs/045): the scale's rows, or a Drum Rack's pads, and nothing else.
-        _fold = SwitchRow("Fold", () => Roll.Folded, () => { Roll.SetFold(!Roll.Folded, user: true); PaintScale(); }, out _syncFold);
+        _fold = SwitchRow(Loc.T("clip_editor.fold"), () => Roll.Folded, () => { Roll.SetFold(!Roll.Folded, user: true); PaintScale(); }, out _syncFold);
         PaintScale();
         return new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { sw, key, mode, _fold, _dropOutOfScale } };
     }
@@ -207,8 +225,8 @@ public sealed class ClipEditorView : UserControl
     private void PaintFold()
     {
         _syncFold();
-        string what = Roll.FoldShowsPads ? "only the pads" : Roll.ScaleOn ? "only the scale's notes" : "only the notes in use";
-        string tip = MenuKit.Keys($"Fold: show {what} (⌥⇧F)");
+        string what = Roll.FoldShowsPads ? Loc.T("clip_editor.only_the_pads") : Roll.ScaleOn ? Loc.T("clip_editor.only_the_scales_notes") : Loc.T("clip_editor.only_the_notes_in_use");
+        string tip = MenuKit.Keys(Loc.F("clip_editor.fold_show_f", what));
         if (Roll.FoldHasNothing) tip += Roll.FoldShowsPads ? "\nThe rack has no pads yet" : "\nSet a scale or add notes to fold";
         ToolTip.SetTip(_fold, tip);
     }
@@ -228,7 +246,7 @@ public sealed class ClipEditorView : UserControl
     // ---- envelope overlay: a wash over the notes, the curve, a target picker ----------
     private sealed class EnvOverlay : UserControl
     {
-        private static readonly string[] Targets = { "Velocity", "Volume" };
+        private static readonly string[] Targets = { Loc.T("common.velocity"), Loc.T("common.volume") };
         private readonly IAudioEngine _engine;
         private readonly int _trackId, _clipIndex;
         private readonly EnvCanvas _canvas;
@@ -254,7 +272,7 @@ public sealed class ClipEditorView : UserControl
                     {
                         new TextBlock
                         {
-                            Text = "Env", FontSize = 8.5, FontWeight = FontWeight.Medium,
+                            Text = Loc.T("clip_editor.env"), FontSize = 8.5, FontWeight = FontWeight.Medium,
                             Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center,
                         },
                         _targetText,
@@ -273,7 +291,7 @@ public sealed class ClipEditorView : UserControl
                     Load();
                 });
             };
-            ToolTip.SetTip(chip, "Click to add a point · drag to move · right-click to delete");
+            ToolTip.SetTip(chip, Loc.T("clip_editor.click_to_add_a_point_2"));
             Content = new Grid
             {
                 Children =
@@ -476,7 +494,7 @@ public sealed class ClipEditorView : UserControl
             if (Background is not null) ctx.FillRectangle(Background, new Rect(0, 0, w, h));
             if (_pts.Count == 0)   // empty state: one Ink 5 line
             {
-                var ft = new NotaFormattedText("Click to add a point", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Body, EmptyInk);
+                var ft = new NotaFormattedText(Loc.T("clip_editor.click_to_add_a_point"), NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.Sans, NotaType.Body, EmptyInk);
                 ctx.DrawText(ft, new Point((w - ft.Width) / 2, (h - ft.Height) / 2));
                 return;
             }

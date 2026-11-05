@@ -28,6 +28,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -184,7 +185,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             End("vecx"); End("vecy");
             Refresh();
         };
-        ToolTip.SetTip(pad, MenuKit.Keys("Drag to blend the four timbres · ⌥-click to type · double-click to reset"));
+        ToolTip.SetTip(pad, MenuKit.Keys(Loc.T("device.flux.drag_to_blend_the_four")));
         if (I("vecx") is var vxi and >= 0) MidiLearn.Bind(pad, MidiTarget.PluginParam(track, -1, vxi), "Vector X");
 
         bool VectorPulled() => live && TargetIdx() == 3;
@@ -199,8 +200,8 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             vecReadout.Text = $"x {Coord(G("vecx"))} · y {Coord(G("vecy"))}";
             vecReadout.Foreground = VectorPulled() ? TextPrimary : TextSecondary;   // lifted to ink 1 while the reaction pulls it
             bool pulled = VectorPulled();
-            vecFoot.Text = pulled ? "dashed — where the reaction pulls"
-                : Ghost() ? "dashed — where motion drifts" : "four timbres · drag the point";
+            vecFoot.Text = pulled ? Loc.T("device.flux.dashed_where_the_reaction_pulls")
+                : Ghost() ? Loc.T("device.flux.dashed_where_motion_drifts") : Loc.T("device.flux.four_timbres_drag_the_point");
             vecFoot.Foreground = pulled ? DeviceCardKit.ModInkBright : TextTertiary;
         });
 
@@ -236,7 +237,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             Padding = new Thickness(6, 0, 5, 0), Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = new DockPanel { Children = { Docked(srcChevron, Dock.Right), srcText } },
         };
-        ToolTip.SetTip(srcField, "Choose the track Flux listens to — or one pad, chain or voice of it");
+        ToolTip.SetTip(srcField, Loc.T("device.flux.choose_the_track_flux_listens"));
         // The source may be one pad / chain / voice of a track (specs/050); React always hears it
         // after its effects (Post).
         string KeyName()
@@ -278,7 +279,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         };
 
         var reactCap = Cap("REACT");
-        var reactSub = Note("the synth listens to a track");
+        var reactSub = Note(Loc.T("device.flux.the_synth_listens_to_a"));
         reactSub.Margin = new Thickness(6, 0, 0, 0);
         var reactHead = new Grid { Height = HeadH, ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), Margin = new Thickness(8, 0) };
         reactHead.Children.Add(reactCap);
@@ -296,14 +297,14 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         var targetStack = new StackPanel
         {
             Spacing = 5, VerticalAlignment = VerticalAlignment.Center,
-            Children = { Cap("Target — what the reaction drives"), targetSeg, targetHint },
+            Children = { Cap(Loc.T("device.flux.target_what_the_reaction_drives")), targetSeg, targetHint },
         };
-        string TargetLine() => !live ? "→ assign a source to turn the reaction on" : TargetIdx() switch
+        string TargetLine() => !live ? Loc.T("device.flux.assign_a_source_to_turn") : TargetIdx() switch
         {
-            0 => "→ the sidechain opens the filter",
-            1 => "→ the sidechain bends the pitch up",
-            2 => "→ the sidechain swells the space",
-            _ => "→ the sidechain drags the vector in rhythm",
+            0 => Loc.T("device.flux.the_sidechain_opens_the_filter"),
+            1 => Loc.T("device.flux.the_sidechain_bends_the_pitch"),
+            2 => Loc.T("device.flux.the_sidechain_swells_the_space"),
+            _ => Loc.T("device.flux.the_sidechain_drags_the_vector"),
         };
         readouts.Add(() =>
         {
@@ -340,7 +341,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         // Click the Motion readout to step its tempo-sync rate.
         motion.Value.Cursor = new Cursor(StandardCursorType.Hand);
         motion.Value.Background = Brushes.Transparent;
-        ToolTip.SetTip(motion.Value, "Click to change the Motion sync rate");
+        ToolTip.SetTip(motion.Value, Loc.T("device.flux.click_to_change_the_motion"));
         motion.Value.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(motion.Value).Properties.IsLeftButtonPressed) return;
@@ -390,7 +391,7 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
         Grid.SetRow(macroFootHost, 2); macroBody.Children.Add(macroFootHost);
 
         var macroGridHost = new Grid { RowDefinitions = new RowDefinitions($"{HeadH},*") };
-        macroGridHost.Children.Add(HeaderStrip(Head(Cap("MACROS"), Note("one knob each"))));
+        macroGridHost.Children.Add(HeaderStrip(Head(Cap("MACROS"), Note(Loc.T("device.flux.one_knob_each")))));
         Grid.SetRow(macroBody, 1); macroGridHost.Children.Add(macroBody);
         var macroPanel = SectionBox(macroGridHost);
         macroPanel.Width = SideW;
@@ -409,11 +410,11 @@ internal sealed class FluxInstrumentCard : IInstrumentCard
             string what = TargetIdx() switch
             {
                 3 => $"vector x {Coord(G("vecx"))} → {Coord(effX)}",
-                0 => $"cutoff +{Pct(react * 0.45f)} of range",
+                0 => Loc.F("device.flux.cutoff_of_range", Pct(react * 0.45f)),
                 1 => NotaNum.Unit(react * 3, "+0.0;−0.0;0", "st"),
                 _ => $"space +{Pct(react * 0.5f)}",
             };
-            string hits = perBar == 1 ? "1 transient per bar" : $"{perBar} transients per bar";
+            string hits = Loc.Plural("device.flux.transients_per_bar", perBar);
             return $"{src} → {Targets[TargetIdx()].ToLowerInvariant()} · listen {Pct(G("listen"))} · {hits} · {what}";
         }
         string Meta() => $"MOTION {RateNames[RateIdx()]} · TUNE {Cents(G("tune"))} · GAIN {Pct(G("gain"))}";

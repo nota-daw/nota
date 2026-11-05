@@ -18,6 +18,7 @@ using Nota.Application;
 using Nota.Infrastructure;
 using Nota.Presentation;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -166,7 +167,7 @@ public sealed partial class DeviceChainView
         }
         finally { _engine.EndUndoGroup(); }
         ClearDeviceSelection();
-        StatusMessage?.Invoke($"Deleted {n} devices");
+        StatusMessage?.Invoke(Loc.F("device_chain.clipboard.deleted_devices", n));
         Rebuild(); Changed?.Invoke();
     }
 
@@ -196,7 +197,7 @@ public sealed partial class DeviceChainView
         // Nothing removed unless the copy landed: a cut device must stay pasteable.
         if (!TryCopySelectedDevice())
         {
-            if (HasDeviceSelection) StatusMessage?.Invoke(_sel.Count > 1 ? "These devices can't be copied, so they weren't cut." : "This device can't be copied, so it wasn't cut.");
+            if (HasDeviceSelection) StatusMessage?.Invoke(_sel.Count > 1 ? Loc.T("device_chain.clipboard.these_devices_cant_be_copied") : Loc.T("device_chain.clipboard.this_device_cant_be_copied"));
             return;
         }
         if (_sel.HasInstrument) TrackDeleteRequested?.Invoke(_trackId, true, _sel.Count);
@@ -245,7 +246,7 @@ public sealed partial class DeviceChainView
             }
         }
         finally { _engine.EndUndoGroup(); }
-        if (failed) StatusMessage?.Invoke("Some devices can't be duplicated");
+        if (failed) StatusMessage?.Invoke(Loc.T("device_chain.clipboard.some_devices_cant_be_duplicated"));
         if (copies.Count > 0) SelectDevices(copies);
         Rebuild(); Changed?.Invoke();
     }
@@ -298,8 +299,8 @@ public sealed partial class DeviceChainView
         int mEnd = MidiCount, fEnd = FxCount;
         int midiAt = PasteAt(DeviceSection.Midi), fxAt = PasteAt(DeviceSection.Audio);
         int n = _engine.PasteDevices(_trackId, midiAt, fxAt, out int skipped);
-        if (n < 0) { StatusMessage?.Invoke(n == -3 ? "Couldn't paste: a device failed to load." : "Nothing to paste."); return; }
-        if (n == 0) { StatusMessage?.Invoke("This track can't take the copied devices."); return; }
+        if (n < 0) { StatusMessage?.Invoke(n == -3 ? Loc.T("device_chain.clipboard.couldnt_paste_a_device_failed") : Loc.T("device_chain.clipboard.nothing_to_paste")); return; }
+        if (n == 0) { StatusMessage?.Invoke(Loc.T("device_chain.clipboard.this_track_cant_take_the")); return; }
         int km = MidiCount - mEnd, kf = FxCount - fEnd;
         int ma = midiAt < 0 ? mEnd : midiAt, fa = fxAt < 0 ? fEnd : fxAt;
         if (km > 0) RemapExtras(ChainKind.Midi, i => i >= ma ? i + km : i);
@@ -311,7 +312,7 @@ public sealed partial class DeviceChainView
         if (instrument) pasted.Add((ChainKind.Instrument, -1));
         for (int i = 0; i < kf; i++) pasted.Add((ChainKind.Effect, fa + i));
         SelectDevices(pasted);
-        StatusMessage?.Invoke(skipped > 0 ? $"Pasted {n} devices, skipped {skipped} this track can't take" : $"Pasted {n} devices");
+        StatusMessage?.Invoke(skipped > 0 ? Loc.F("device_chain.clipboard.pasted_devices_skipped_this_track", n, skipped) : Loc.F("device_chain.clipboard.pasted_devices", n));
         Rebuild(); Changed?.Invoke();
     }
 
@@ -319,14 +320,14 @@ public sealed partial class DeviceChainView
     // instrument card or nothing selected; with only effects selected it would read as "paste here".
     private void PasteInstrument(DeviceClip c)
     {
-        if (HasDeviceSelection && !_sel.HasInstrument) { StatusMessage?.Invoke("Paste an instrument on an instrument card."); return; }
+        if (HasDeviceSelection && !_sel.HasInstrument) { StatusMessage?.Invoke(Loc.T("device_chain.clipboard.paste_an_instrument_on_an")); return; }
         int r = _engine.PasteInstrument(_trackId);
-        if (r == -2) { StatusMessage?.Invoke("Only an instrument track takes an instrument."); return; }
-        if (r < 0) { StatusMessage?.Invoke("Couldn't paste the instrument."); return; }
+        if (r == -2) { StatusMessage?.Invoke(Loc.T("device_chain.clipboard.only_an_instrument_track_takes_2")); return; }
+        if (r < 0) { StatusMessage?.Invoke(Loc.T("device_chain.clipboard.couldnt_paste_the_instrument")); return; }
         ForgetInstrumentState(_trackId);
         var ex = Extra(ChainKind.Instrument, -1); ex.Preset = c.Preset; ex.PresetId = c.PresetId;
         SelectDevices(new[] { (ChainKind.Instrument, -1) });
-        StatusMessage?.Invoke($"Pasted {_engine.DeviceName(_trackId, -1)}");
+        StatusMessage?.Invoke(Loc.F("device_chain.clipboard.pasted", _engine.DeviceName(_trackId, -1)));
         Rebuild(); Changed?.Invoke();
     }
 
@@ -347,19 +348,19 @@ public sealed partial class DeviceChainView
 
     private static string GroupRefusalText(int r) => (GroupRefusal)r switch
     {
-        GroupRefusal.NotContiguous => "Select devices next to each other to group them",
-        GroupRefusal.RackInRun => "A rack can't go inside another rack",
-        GroupRefusal.CantHost => "A plug-in can't go in a MIDI Effect Rack",
-        GroupRefusal.InstrumentCantNest => "An Instrument Rack can't go inside another Instrument Rack",
-        GroupRefusal.NotInstrumentTrack => "Only an instrument track takes MIDI effects and an instrument",
-        _ => "These devices can't be grouped",
+        GroupRefusal.NotContiguous => Loc.T("device_chain.clipboard.select_devices_next_to_each"),
+        GroupRefusal.RackInRun => Loc.T("device_chain.clipboard.a_rack_cant_go_inside"),
+        GroupRefusal.CantHost => Loc.T("device_chain.clipboard.a_plug_in_cant_go"),
+        GroupRefusal.InstrumentCantNest => Loc.T("device_chain.clipboard.an_instrument_rack_cant_go"),
+        GroupRefusal.NotInstrumentTrack => Loc.T("device_chain.clipboard.only_an_instrument_track_takes"),
+        _ => Loc.T("device_chain.clipboard.these_devices_cant_be_grouped"),
     };
 
     private void GroupSelectedDevice()
     {
-        if (!HasDeviceSelection) { StatusMessage?.Invoke("Select devices to put them in a rack"); return; }
+        if (!HasDeviceSelection) { StatusMessage?.Invoke(Loc.T("device_chain.clipboard.select_devices_to_put_them")); return; }
         var shape = SelectionShape;
-        if (!shape.CanGroup) { StatusMessage?.Invoke(shape.Reason ?? "These devices can't be grouped"); return; }
+        if (!shape.CanGroup) { StatusMessage?.Invoke(shape.Reason ?? Loc.T("device_chain.clipboard.these_devices_cant_be_grouped")); return; }
         // The grouped devices' card state (A/B, preset label) rides on the rack's card until
         // ungroup brings it back.
         var wrapped = new List<CardExtra>();
@@ -377,14 +378,14 @@ public sealed partial class DeviceChainView
             {
                 int a = shape.FxFirst, c = shape.FxCount;
                 RemapExtras(ChainKind.Effect, i => i < a ? i : i < a + c ? -1 : i - c + 1);
-                rackKind = ChainKind.Effect; rackIdx = a; rackName = "an Audio Effect Rack";
+                rackKind = ChainKind.Effect; rackIdx = a; rackName = Loc.T("device_chain.clipboard.an_audio_effect_rack");
                 break;
             }
             case GroupShapeKind.MidiRack:
             {
                 int a = shape.MidiFirst, c = shape.MidiCount;
                 RemapExtras(ChainKind.Midi, i => i < a ? i : i < a + c ? -1 : i - c + 1);
-                rackKind = ChainKind.Midi; rackIdx = a; rackName = "a MIDI Effect Rack";
+                rackKind = ChainKind.Midi; rackIdx = a; rackName = Loc.T("device_chain.clipboard.a_midi_effect_rack");
                 break;
             }
             default:
@@ -393,7 +394,7 @@ public sealed partial class DeviceChainView
                 if (shape.MidiCount > 0) RemapExtras(ChainKind.Midi, i => i >= mf ? -1 : i);
                 if (fc > 0) RemapExtras(ChainKind.Effect, i => i < fc ? -1 : i - fc);
                 ForgetInstrumentState(_trackId);
-                rackKind = ChainKind.Instrument; rackIdx = -1; rackName = "an Instrument Rack";
+                rackKind = ChainKind.Instrument; rackIdx = -1; rackName = Loc.T("device_chain.clipboard.an_instrument_rack");
                 break;
             }
         }
@@ -401,7 +402,7 @@ public sealed partial class DeviceChainView
         if (wrapped.Count == 1) rex.Wrapped = wrapped[0];   // ⌘Z / ⌘⇧Z swap the two (ExtraFor)
         else if (wrapped.Count > 1) rex.WrappedMany = wrapped;
         SelectDevices(new[] { (rackKind, rackIdx) });
-        StatusMessage?.Invoke(n == 1 && first.Length > 0 ? $"Put {first} in {rackName}" : $"Put {n} devices in {rackName}");
+        StatusMessage?.Invoke(n == 1 && first.Length > 0 ? Loc.F("device_chain.clipboard.put_in", first, rackName) : Loc.F("device_chain.clipboard.put_devices_in", n, rackName));
         Rebuild(); Changed?.Invoke();
     }
 
@@ -410,8 +411,8 @@ public sealed partial class DeviceChainView
 
     private void UngroupSelectedDevice()
     {
-        if (SingleSelection is not { } s || RackChains(s) == 0) { StatusMessage?.Invoke("Select a rack to take its devices out"); return; }
-        if (RackChains(s) != 1) { StatusMessage?.Invoke("Only a rack with one chain can be ungrouped"); return; }
+        if (SingleSelection is not { } s || RackChains(s) == 0) { StatusMessage?.Invoke(Loc.T("device_chain.clipboard.select_a_rack_to_take")); return; }
+        if (RackChains(s) != 1) { StatusMessage?.Invoke(Loc.T("device_chain.clipboard.only_a_rack_with_one")); return; }
         var k = KindOf(s.Section);
         TrackExtras().TryGetValue(ExtraKey(k, s.Index), out var rex);
         int mBefore = MidiCount, fBefore = FxCount;
@@ -420,10 +421,10 @@ public sealed partial class DeviceChainView
         {
             StatusMessage?.Invoke((UngroupRefusal)n switch
             {
-                UngroupRefusal.SeveralChains => "Only a rack with one chain can be ungrouped",
-                UngroupRefusal.DrumRack => "A Drum Rack can't be ungrouped",
-                UngroupRefusal.NoInstrument => "The rack's chain has no instrument to put back",
-                _ => "This rack can't be ungrouped",
+                UngroupRefusal.SeveralChains => Loc.T("device_chain.clipboard.only_a_rack_with_one"),
+                UngroupRefusal.DrumRack => Loc.T("device_chain.clipboard.a_drum_rack_cant_be"),
+                UngroupRefusal.NoInstrument => Loc.T("device_chain.clipboard.the_racks_chain_has_no"),
+                _ => Loc.T("device_chain.clipboard.this_rack_cant_be_ungrouped"),
             });
             return;
         }
@@ -456,8 +457,8 @@ public sealed partial class DeviceChainView
             TrackExtras()[ExtraKey(rk, ri)] = hit;
         }
         SelectDevices(restored);
-        string msg = n == 1 ? "Took the device out of the rack" : $"Took {n} devices out of the rack";
-        if (dropped != UngroupDropped.None) msg += " — its macros and chain settings were dropped";
+        string msg = n == 1 ? Loc.T("device_chain.clipboard.took_the_device_out_of") : Loc.F("device_chain.clipboard.took_devices_out_of_the", n);
+        if (dropped != UngroupDropped.None) msg += Loc.T("device_chain.clipboard.its_macros_and_chain_settings");
         StatusMessage?.Invoke(msg);
         Rebuild(); Changed?.Invoke();
     }
@@ -503,11 +504,11 @@ public sealed partial class DeviceChainView
         };
         string badge = kind switch
         {
-            ChainKind.Instrument => "Instrument",
-            ChainKind.Midi => $"MIDI effect · {di + 1}",
-            _ => $"Audio effect · {di + 1}",
+            ChainKind.Instrument => Loc.T("common.instrument"),
+            ChainKind.Midi => Loc.F("device_chain.clipboard.midi_effect", di + 1),
+            _ => Loc.F("device_chain.clipboard.audio_effect", di + 1),
         };
-        flyout.Items.Add(MenuKit.Header(name.Length > 0 ? name : "Device", null, badge));
+        flyout.Items.Add(MenuKit.Header(name.Length > 0 ? name : Loc.T("device_chain.clipboard.device"), null, badge));
         flyout.Items.Add(new Separator());
         header?.Invoke(flyout);   // ends with its own separator
         if (kind == ChainKind.Instrument)
@@ -516,32 +517,32 @@ public sealed partial class DeviceChainView
             // its track away — an instrument track never stands without one.
             MenuKit.AddGroups(flyout.Items,
                 new Control[] { ReplaceInstrumentMenu() },
-                new Control[] { MenuKit.Item("Save preset", GlyphKind.Save, () => PresetSaveRequested?.Invoke(-1)) },
+                new Control[] { MenuKit.Item(Loc.T("common.save_preset"), GlyphKind.Save, () => PresetSaveRequested?.Invoke(-1)) },
                 new Control[]
                 {
-                    MenuKit.Item("Copy", GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey),
-                    MenuKit.Item("Cut", GlyphKind.Cut, CutSelectedDevice, MenuKit.CutKey),
-                    MenuKit.Item("Paste", GlyphKind.Paste, PasteDevice, MenuKit.PasteKey, _engine.DeviceClipboardKind() == 3),
+                    MenuKit.Item(Loc.T("common.copy"), GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey),
+                    MenuKit.Item(Loc.T("common.cut"), GlyphKind.Cut, CutSelectedDevice, MenuKit.CutKey),
+                    MenuKit.Item(Loc.T("common.paste"), GlyphKind.Paste, PasteDevice, MenuKit.PasteKey, _engine.DeviceClipboardKind() == 3),
                 },
                 MoveToTrackGroup(kind, di),
                 new Control[] { GroupItem() },
-                new Control[] { MenuKit.Danger("Delete track", GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey) });
+                new Control[] { MenuKit.Danger(Loc.T("device_chain.clipboard.delete_track"), GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey) });
             flyout.ShowAt(anchor, showAtPointer: true);
             return;
         }
         bool selectable = SelectableKind(kind);
         MenuKit.AddGroups(flyout.Items,
-            new Control[] { MenuKit.Item("Save preset", GlyphKind.Save, () => PresetSaveRequested?.Invoke(kind == ChainKind.Midi ? PresetService.MidiEffectBase - di : di)) },
+            new Control[] { MenuKit.Item(Loc.T("common.save_preset"), GlyphKind.Save, () => PresetSaveRequested?.Invoke(kind == ChainKind.Midi ? PresetService.MidiEffectBase - di : di)) },
             new Control[]
             {
-                MenuKit.Item("Copy", GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey, selectable),
-                MenuKit.Item("Cut", GlyphKind.Cut, CutSelectedDevice, MenuKit.CutKey, selectable),
-                MenuKit.Item("Paste", GlyphKind.Paste, PasteDevice, MenuKit.PasteKey, CanPaste),
-                MenuKit.Item("Duplicate", GlyphKind.Duplicate, DuplicateSelectedDevice, MenuKit.DuplicateKey, selectable),
+                MenuKit.Item(Loc.T("common.copy"), GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey, selectable),
+                MenuKit.Item(Loc.T("common.cut"), GlyphKind.Cut, CutSelectedDevice, MenuKit.CutKey, selectable),
+                MenuKit.Item(Loc.T("common.paste"), GlyphKind.Paste, PasteDevice, MenuKit.PasteKey, CanPaste),
+                MenuKit.Item(Loc.T("common.duplicate"), GlyphKind.Duplicate, DuplicateSelectedDevice, MenuKit.DuplicateKey, selectable),
             },
             MoveToTrackGroup(kind, di),
             new Control[] { GroupItem() },
-            new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey, selectable) });
+            new Control[] { MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey, selectable) });
         flyout.ShowAt(anchor, showAtPointer: true);
     }
 
@@ -549,8 +550,8 @@ public sealed partial class DeviceChainView
     private Control GroupItem()
     {
         if (SingleSelection is { } s && RackChains(s) > 0)
-            return MenuKit.Item("Ungroup rack", GlyphKind.Ungroup, UngroupSelectedDevice, MenuKit.UngroupKey, RackChains(s) == 1);
-        return MenuKit.Item("Group into rack", GlyphKind.Folder, GroupSelectedDevice, MenuKit.GroupKey, SelectionShape.CanGroup);
+            return MenuKit.Item(Loc.T("device_chain.clipboard.ungroup_rack"), GlyphKind.Ungroup, UngroupSelectedDevice, MenuKit.UngroupKey, RackChains(s) == 1);
+        return MenuKit.Item(Loc.T("device_chain.clipboard.group_into_rack"), GlyphKind.Folder, GroupSelectedDevice, MenuKit.GroupKey, SelectionShape.CanGroup);
     }
 
     // The menu of several selected devices (specs/044): what it does, it does to all of them.
@@ -558,23 +559,23 @@ public sealed partial class DeviceChainView
     {
         var flyout = new MenuFlyout();
         int n = _sel.Count;
-        flyout.Items.Add(MenuKit.Header($"{n} devices", null, _sel.HasInstrument ? "With the instrument" : "Selected"));
+        flyout.Items.Add(MenuKit.Header(Loc.Plural("device_chain.clipboard.devices", n), null, _sel.HasInstrument ? Loc.T("device_chain.clipboard.with_the_instrument") : Loc.T("device_chain.clipboard.selected")));
         flyout.Items.Add(new Separator());
         MenuKit.AddGroups(flyout.Items,
             new Control[]
             {
-                MenuKit.Item("Copy", GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey),
-                MenuKit.Item("Cut", GlyphKind.Cut, CutSelectedDevice, MenuKit.CutKey),
-                MenuKit.Item("Paste", GlyphKind.Paste, PasteDevice, MenuKit.PasteKey, CanPaste),
-                MenuKit.Item("Duplicate", GlyphKind.Duplicate, DuplicateSelectedDevice, MenuKit.DuplicateKey, HasEffectSelection),
+                MenuKit.Item(Loc.T("common.copy"), GlyphKind.Copy, CopySelectedDevice, MenuKit.CopyKey),
+                MenuKit.Item(Loc.T("common.cut"), GlyphKind.Cut, CutSelectedDevice, MenuKit.CutKey),
+                MenuKit.Item(Loc.T("common.paste"), GlyphKind.Paste, PasteDevice, MenuKit.PasteKey, CanPaste),
+                MenuKit.Item(Loc.T("common.duplicate"), GlyphKind.Duplicate, DuplicateSelectedDevice, MenuKit.DuplicateKey, HasEffectSelection),
             },
             MoveSelectionToTrackGroup(),
             new Control[] { GroupItem() },
             new Control[]
             {
                 _sel.HasInstrument
-                    ? MenuKit.Danger("Delete track", GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey)
-                    : MenuKit.Danger("Delete", GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey),
+                    ? MenuKit.Danger(Loc.T("device_chain.clipboard.delete_track"), GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey)
+                    : MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, DeleteSelectedDevice, MenuKit.DeleteKey),
             });
         flyout.ShowAt(anchor, showAtPointer: true);
     }

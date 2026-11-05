@@ -14,6 +14,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Nota.Application.Palette;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -25,13 +26,18 @@ public partial class MainWindow
     private void InitMenuShortcuts()
     {
         BindCommands();
-        ToolTip.SetTip(AutomationToggle, MenuKit.Keys("Show parameter-automation lanes (⌘⇧A)"));
+        ToolTip.SetTip(AutomationToggle, MenuKit.Keys(Loc.T("main.menu_keys.show_parameter_automation_lanes_a")));
         // The XAML tips name the macOS keys; spell them Ctrl+… on Windows / Linux (#10).
-        foreach (var c in new Control[] { RecordBtn, LoopRecordCell, MetronomeBtn })
+        foreach (var c in new Control[] { RecordBtn, LoopRecordCell, MetronomeBtn, DetailMaximizeBtn })
             if (ToolTip.GetTip(c) is string tip) ToolTip.SetTip(c, MenuKit.Keys(tip));
         if (NativeMenu.GetMenu(this) is not { } menu) return;
         // macOS quits from the app menu (Quit Nota, ⌘Q); File → Exit is for Windows / Linux (#316).
-        if (OperatingSystem.IsMacOS()) RemoveWithSeparatorAbove(menu, "file.exit");
+        // Settings… lives in the app menu there too (Nota → Settings…, ⌘,), so File doesn't repeat it (#444).
+        if (OperatingSystem.IsMacOS())
+        {
+            RemoveWithSeparatorAbove(menu, "file.exit");
+            RemoveWithSeparatorAbove(menu, "prefs.open");
+        }
         Collect(menu);
 
         void Collect(NativeMenu m)
@@ -42,9 +48,7 @@ public partial class MainWindow
                 {
                     _menuItems[id] = item;
                     item.Click += (_, _) => _commands.Run(id);
-                    // Settings… keeps ⌘, on the app menu (App.axaml) on macOS; one key, one item.
-                    bool appMenuOwnsIt = OperatingSystem.IsMacOS() && id == "prefs.open";
-                    if (Commands.CanMenuGesture(cmd.Gesture) && !appMenuOwnsIt && Commands.Parse(cmd.Gesture) is { } g)
+                    if (Commands.CanMenuGesture(cmd.Gesture) && Commands.Parse(cmd.Gesture) is { } g)
                     {
                         item.Gesture = g;
                         if (!OperatingSystem.IsMacOS()) _menuShortcuts.Add(item);

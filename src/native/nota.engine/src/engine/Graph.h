@@ -33,6 +33,15 @@ struct Section {
     bool operator==(const Section&) const = default;
 };
 
+// One span of a whole-arrangement time remap (specs/073): what lies in [start,end) moves by
+// `offset` beats, or is removed when `drop`. The spans of one remap tile a window exactly.
+struct TimeRegion {
+    double start = 0.0;
+    double end = 0.0; // may be +infinity (to the end of the song)
+    double offset = 0.0;
+    bool drop = false;
+};
+
 struct Graph {
     std::vector<std::shared_ptr<Track>> tracks;
     int32_t sceneCount = 8; // Session view rows (M5)

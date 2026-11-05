@@ -12,7 +12,8 @@
 //               Filter — the selected filter's response as a drag pad, with its type,
 //                        slope, cutoff, resonance, env / LFO / key amounts and where each
 //                        source (Osc 1 / Osc 2 / Sub) is sent.
-//               Env    — Env 1 (amp) and Env 2 (free) drawn and draggable.
+//               Env    — Env 1 (amp) and Env 2 (free) drawn and draggable; each stage box
+//                        under a graph has a knob, drags, and types on double-click.
 //               LFO    — both LFOs as a table, each naming where it lands, over a window
 //                        that draws the selected LFO's own shape.
 //               Mod    — the 8 × 7 matrix: drag a cell up for +, down for −.
@@ -39,6 +40,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -293,7 +295,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 bool moved = Math.Abs(G(id) - engine.InstrumentParamDefault(track, pi)) > 1e-4f;
                 cap.Foreground = moved && ink is null ? TextPrimary : TextTertiary;
             });
-            ToolTip.SetTip(cell, learn + " · drag to change, double-click to reset");
+            ToolTip.SetTip(cell, learn + Loc.T("device.aurora.drag_to_change_double_click"));
             MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), learn);
             return cell;
         }
@@ -474,7 +476,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 Pick(Math.Clamp(Sel(id, n) - st, 0, n - 1));
             };
             readouts.Add(() => name.Text = names[Sel(id, n)]);
-            ToolTip.SetTip(box, learn + " · click to pick, scroll to step");
+            ToolTip.SetTip(box, learn + Loc.T("device.aurora.click_to_pick_scroll_to_step"));
             if (I(id) is var pi and >= 0) MidiLearn.Bind(box, MidiTarget.PluginParam(track, -1, pi), learn);
             return box;
         }
@@ -495,13 +497,13 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         Control OscColumn(int o)
         {
             string pre = o == 0 ? "osc1" : "osc2";
-            string nm = o == 0 ? "Osc 1" : "Osc 2";
+            string nm = Loc.F("device.aurora.osc_n", o + 1);
             string tableId = o == 0 ? "table" : "osc2table";
             string posId = o == 0 ? "position" : "osc2position";
 
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto,Auto"), ColumnSpacing = 5, Height = 18 };
-            var tableDrop = Drop(tableId, Banks, nm + " Table", 74);
-            var warpDrop = Drop(pre + "warpmode", WarpModes, nm + " Warp mode", 52);
+            var tableDrop = Drop(tableId, Banks, Loc.F("device.aurora.osc_table", nm), 74);
+            var warpDrop = Drop(pre + "warpmode", WarpModes, Loc.F("device.aurora.osc_warp_mode", nm), 52);
             var headCells = new Control[] { Section(nm), Toggle("", pre + "on", () => G(pre + "on") >= 0.5f ? "on" : "off"), new Panel(), tableDrop, warpDrop };
             for (int i = 0; i < headCells.Length; i++) { Grid.SetColumn(headCells[i], i); head.Children.Add(headCells[i]); }
 
@@ -517,7 +519,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 frameCap.Text = FrameText(G(posId));
                 // Nothing drives Position: say so, greyed, as the single window did.
                 string mod = PosModText();
-                modCap.Text = mod.Length > 0 ? mod : "no modulation";
+                modCap.Text = mod.Length > 0 ? mod : Loc.T("device.aurora.no_modulation");
                 modCap.Foreground = mod.Length > 0 ? Teal : TextDisabled;
             });
             var capRow = new Grid
@@ -538,9 +540,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 PKnob(posId, "Position", nm + " Position", FrameText, 34, 35, Teal),   // what the modulators reach for: the modulation mark
                 PKnob(o == 0 ? "warp" : "osc2warp", "Warp", nm + " Warp", Pct, 34, 35),
                 PKnob(pre + "level", "Level", nm + " Level", Pct, 34, 35),
-                PKnob(pre + "oct", "Oct", nm + " Octave", Oct, 34, 35),
-                PKnob(pre + "semi", "Semi", nm + " Semi", Semi, 34, 35),
-                PKnob(pre + "detune", "Fine", nm + " Fine", Cents, 34, 35),
+                PKnob(pre + "oct", Loc.T("device.aurora.oct"), nm + " Octave", Oct, 34, 35),
+                PKnob(pre + "semi", Loc.T("device.aurora.semi"), nm + " Semi", Semi, 34, 35),
+                PKnob(pre + "detune", Loc.T("device.aurora.fine"), nm + " Fine", Cents, 34, 35),
             };
             for (int i = 0; i < cells.Length; i++)
             {
@@ -692,6 +694,56 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var filtBody = new Border { Padding = new Thickness(7, 5), Child = filtGrid };
 
         // ---- Env tab --------------------------------------------------------------
+        // Each stage box under a graph carries a small knob and a read-out. The knob turns
+        // and double-click resets like any knob; the rest of the box is a drag value too
+        // (vertical drag, Shift for fine), and a double-click anywhere on it types the value.
+        Knob EnvKnob(string id, int pi, string name, Func<float, string> fmt, IBrush? arc)
+        {
+            var knob = new Knob(G(id), 1.0)
+            {
+                Accent = true, Inline = true, ArcColor = arc, Default = engine.InstrumentParamDefault(track, pi),
+                VerticalAlignment = VerticalAlignment.Center, Format = v => fmt((float)v),
+            };
+            knob.ValueChanged += v => { engine.PluginParamSet(track, -1, pi, (float)v); Touch(); };
+            knob.GestureBegin += () => Begin(id);
+            knob.GestureEnd += () => End(id);
+            readouts.Add(() => { if (!knob.Dragging) knob.Value = G(id); ToolTip.SetTip(knob, name + " · " + fmt(G(id))); });
+            return knob;
+        }
+        void EnvBox(Border cell, string id, TextBlock readout, ValueField stageField)
+        {
+            // The box keeps its double-click for typing: no reset there (the knob and the
+            // right-click menu still reset).
+            var field = stageField with { ResetOnDoubleClick = false };
+            ValueEntry.Attach(cell, field, readout);
+            // The automation gesture opens on the first real change, not on the press: a
+            // press alone (the first click of a double-click) must not override automation.
+            bool drag = false, began = false; double lastY = 0, at = 0;
+            cell.PointerPressed += (_, e) =>
+            {
+                if (e.Handled || !e.GetCurrentPoint(cell).Properties.IsLeftButtonPressed) return;
+                e.Handled = true;
+                if (e.ClickCount == 2) { ValueEntry.Open(cell, field); return; }
+                drag = true; began = false; lastY = e.GetPosition(cell).Y; at = G(id);
+                e.Pointer.Capture(cell);
+            };
+            cell.PointerMoved += (_, e) =>
+            {
+                if (!drag) return;
+                // Step by step, so Shift (fine) can come and go mid-drag without a jump.
+                double y = e.GetPosition(cell).Y;
+                at = Math.Clamp(at + (lastY - y) / ((e.KeyModifiers & KeyModifiers.Shift) != 0 ? 600.0 : 120.0), 0, 1);
+                lastY = y;
+                if ((float)at == G(id)) return;
+                if (!began) { began = true; Begin(id); }
+                SetP(id, (float)at); Touch();
+            };
+            void Stop() { drag = false; if (began) { began = false; End(id); } }
+            cell.PointerReleased += (_, e) => { if (!drag) return; Stop(); e.Pointer.Capture(null); };
+            cell.PointerCaptureLost += (_, _) => { if (drag) Stop(); };
+            ToolTip.SetTip(cell, Loc.F("device.aurora.drag_or_turn_to_change", field.Name));
+        }
+
         Control EnvPanel(string title, Func<string> route, VoltEnv view, string[] ids, Func<string> summary)
         {
             view.Target(title, P(ids[0]), P(ids[1]), P(ids[2]), P(ids[3]));
@@ -703,18 +755,30 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             {
                 string id = ids[k];
                 var fk = fmt[k];
+                string name = title + " · " + stage[k];
                 var v = Mono(fk(G(id)), TextPrimary, NotaType.RowLabel);
-                v.HorizontalAlignment = HorizontalAlignment.Center;
                 readouts.Add(() => v.Text = fk(G(id)));
-                if (view.Field(k) is { } vf) ValueEntry.Attach(v, vf);   // double-click the read-out to type
-                var cap = Cap(stage[k]); cap.HorizontalAlignment = HorizontalAlignment.Center;
+                // The knob on top, the stage letter and its value on one line under it: a box
+                // is too narrow to hold a knob beside a full value like "180 ms".
+                v.HorizontalAlignment = HorizontalAlignment.Right;
+                var cap = Cap(stage[k]); cap.HorizontalAlignment = HorizontalAlignment.Left;
+                var box = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 2 };
                 var cell = new Border
                 {
                     Background = NotaPalette.SurfaceRaised, BorderBrush = BorderDef, BorderThickness = new Thickness(1),
                     CornerRadius = NotaRadius.Cell, Padding = new Thickness(2, 1),
-                    Child = new StackPanel { Children = { cap, v } },
+                    Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = box,
                 };
-                if (I(id) is var pi and >= 0) MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), title + " · " + stage[k]);
+                if (I(id) is var pi and >= 0)
+                {
+                    var knob = EnvKnob(id, pi, name, fk, ReferenceEquals(view, env2) ? Teal : null);
+                    knob.HorizontalAlignment = HorizontalAlignment.Center;
+                    Grid.SetColumnSpan(knob, 2); box.Children.Add(knob);
+                    MidiLearn.Bind(cell, MidiTarget.PluginParam(track, -1, pi), name);
+                }
+                Grid.SetRow(cap, 1); box.Children.Add(cap);
+                Grid.SetRow(v, 1); Grid.SetColumn(v, 1); box.Children.Add(v);
+                if (view.Field(k) is { } vf) EnvBox(cell, id, v, vf);
                 Grid.SetColumn(cell, k); cells.Children.Add(cell);
             }
             var sum = Mono("", TextSecondary, NotaType.Axis);
@@ -775,14 +839,14 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         // The shape window follows whichever LFO you last touched — the pick doubles as
         // the label, so the picture is never anonymous.
         int lfoShown = 0;
-        var lfoShapeCap = Cap("SHAPE · LFO 1");
+        var lfoShapeCap = Cap(Loc.T("device.aurora.shape_lfo_1_caps"));
         var lfoShapeSum = Mono("", TextSecondary, NotaType.Axis);
         var lfoPick = Segments(new[] { "1", "2" }, () => lfoShown, iv => { lfoShown = iv; Touch(); }, out var lfoPickSync);
         readouts.Add(lfoPickSync);
         readouts.Add(() =>
         {
             string pre = lfoShown == 0 ? "lfo1" : "lfo2";
-            lfoShapeCap.Text = $"Shape · LFO {lfoShown + 1}";
+            lfoShapeCap.Text = Loc.F("device.aurora.shape_lfo", lfoShown + 1);
             lfoStrip.Set(Sel(pre + "shape", 4), LfoCycles(lfoShown), G(pre + "depth"));
             lfoShapeSum.Text = $"{ShapeNames[Sel(pre + "shape", 4)]} · "
                 + (SyncDiv(G(pre + "sync")) > 0 ? SyncText(G(pre + "sync")) : SlowHz(ExpMap(G(pre + "rate"), 0.05, 20)))
@@ -810,7 +874,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         readouts.Add(matrix.Refresh);
         var modHint = new TextBlock
         {
-            Text = MenuKit.Keys("drag a cell — up adds, down subtracts · ⌥-click types · double-click clears"), FontSize = NotaType.Axis,
+            Text = MenuKit.Keys(Loc.T("device.aurora.drag_a_cell_up_adds")), FontSize = NotaType.Axis,
             Foreground = TextDisabled, VerticalAlignment = VerticalAlignment.Center,
         };
         var modGrid = new Grid { RowDefinitions = new RowDefinitions("*,Auto"), RowSpacing = 1 };
@@ -871,9 +935,9 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var bodies = new Control[] { oscBody, filtBody, envBody, lfoBody, modBody, fxBody };
         var tabCells = new Border[TabNames.Length];
         var tabTexts = new TextBlock[TabNames.Length];
-        var clearAll = TextButton("Clear all");
+        var clearAll = TextButton(Loc.T("common.clear_all"));
         clearAll.Margin = new Thickness(0, 0, 6, 0);
-        ToolTip.SetTip(clearAll, "Zero every route in the matrix");
+        ToolTip.SetTip(clearAll, Loc.T("device.aurora.zero_every_route_in_the"));
         clearAll.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(clearAll).Properties.IsLeftButtonPressed) return;
@@ -1011,7 +1075,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 Cursor = new Cursor(StandardCursorType.Hand), TextTrimming = TextTrimming.CharacterEllipsis,
             };
             var nums = Mono("", TextSecondary, NotaType.Axis);
-            ToolTip.SetTip(dest, "Click for the next target, right-click for the previous");
+            ToolTip.SetTip(dest, Loc.T("device.aurora.click_for_the_next_target"));
             void Step(int dir)
             {
                 int n = MacroDests.Length;
@@ -1076,7 +1140,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
                 pagerText,
             },
         };
-        ToolTip.SetTip(pager, "Click for the next macros, right-click for the previous");
+        ToolTip.SetTip(pager, Loc.T("device.aurora.click_for_the_next_macros"));
         pager.PointerPressed += (_, e) =>
         {
             var pt = e.GetCurrentPoint(pager).Properties;
@@ -1106,7 +1170,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
         var railCount = Mono("", TextTertiary, NotaType.Axis);
         railCount.HorizontalAlignment = HorizontalAlignment.Right;
         railCount.Margin = new Thickness(0, 0, 7, 0);
-        readouts.Add(() => railCount.Text = railTab == 1 ? $"{MacroAssigned()} / 8 in use" : "");
+        readouts.Add(() => railCount.Text = railTab == 1 ? Loc.F("device.aurora.8_in_use", MacroAssigned()) : "");
         var railTabGrid = new Grid { Height = TabH, ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*") };
         showRailTab = () =>
         {
@@ -1182,7 +1246,7 @@ internal sealed class AuroraInstrumentCard : IInstrumentCard
             2 => $"Env 1 → amp {AdsrSum("attack", "decay", "sustain", "release")} · Env 2 {EnvDest(1)}",
             3 => $"LFO 1 {ShapeNames[Sel("lfo1shape", 4)]} {(SyncDiv(G("lfo1sync")) > 0 ? SyncText(G("lfo1sync")) : SlowHz(ExpMap(G("lfo1rate"), 0.05, 20)))} {LfoDest(2)} · "
                + $"LFO 2 {ShapeNames[Sel("lfo2shape", 4)]} {(SyncDiv(G("lfo2sync")) > 0 ? SyncText(G("lfo2sync")) : SlowHz(ExpMap(G("lfo2rate"), 0.05, 20)))} {LfoDest(3)}",
-            4 => RouteCount() == 0 ? "no routes — drag a cell to make one" : Plural(RouteCount(), "route", "routes") + " in the matrix",
+            4 => RouteCount() == 0 ? Loc.T("device.aurora.no_routes_drag_a_cell") : Loc.Plural("device.aurora.routes_in_the_matrix", RouteCount()),
             _ => $"Drive {(G("fxdriveon") >= 0.5f ? DriveModes[Sel("fxdrivemode", 3)].ToLowerInvariant() + " " + Pct(G("fxdrive")) : "off")} · "
                + $"chorus {(G("fxchoruson") >= 0.5f ? ChorusVoices[Sel("fxchorusvoices", 3)] + " " + Pct(G("fxchorus")) : "off")} · "
                + $"reverb {(G("fxreverbon") >= 0.5f ? ReverbModes[Sel("fxreverbmode", 3)].ToLowerInvariant() + " " + Pct(G("fxreverb")) : "off")}",

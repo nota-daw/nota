@@ -7,6 +7,8 @@
 // Everything is deterministic: the only randomness comes from the Seed in the
 // context, so the same settings always give the same notes.
 
+using Nota.Application.Localization;
+
 namespace Nota.Application.Midi;
 
 public enum MidiToolKind
@@ -57,7 +59,7 @@ public sealed record MidiToolParam(
 
     public string Display(double v) => Kind switch
     {
-        MidiParamKind.Toggle => v >= 0.5 ? "On" : "Off",
+        MidiParamKind.Toggle => v >= 0.5 ? Loc.T("midi.tool.on") : Loc.T("common.off"),
         MidiParamKind.Choice => Choices is { Length: > 0 }
             ? Choices[Math.Clamp((int)Math.Round(v), 0, Choices.Length - 1)]
             : "",

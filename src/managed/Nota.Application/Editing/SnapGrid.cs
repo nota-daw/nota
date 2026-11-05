@@ -11,6 +11,7 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
+using Nota.Application.Localization;
 
 namespace Nota.Application.Editing;
 
@@ -24,6 +25,13 @@ public readonly record struct GridStep(int Index, bool Triplet)
 {
     public const int Count = 8, FirstBar = 5;
     private static readonly string[] Names = { "1/32", "1/16", "1/8", "1/4", "1/2", "1 bar", "2 bars", "4 bars" };
+
+    // The rung as the toolbar shows it: note values are numbers, the bar steps are words.
+    private static string NameOf(int index) => index switch
+    {
+        5 => Loc.T("common.1_bar"), 6 => Loc.T("editing.snap_grid.2_bars"), 7 => Loc.T("editing.snap_grid.4_bars"),
+        _ => Names[index],
+    };
 
     /// <summary>A step with the index clamped to the ladder and the triplet flag dropped on bar steps.</summary>
     public static GridStep Of(int index, bool triplet)
@@ -50,7 +58,7 @@ public readonly record struct GridStep(int Index, bool Triplet)
         get
         {
             var s = Normalize();
-            return s.Triplet ? Names[s.Index] + "T" : Names[s.Index];
+            return s.Triplet ? NameOf(s.Index) + "T" : NameOf(s.Index);
         }
     }
 }
@@ -169,7 +177,7 @@ public static class SnapGrid
         => Math.Max(0, (int)Math.Ceiling((bar - Eps) / stepBeats) - 1);
 
     /// <summary>The snap control's text: "Auto · 1/8" in Adaptive mode, "1/8" when Fixed.</summary>
-    public static string Label(GridSetting s, ResolvedGrid r) => s.Adaptive ? "Auto · " + r.Snap.Label : r.Snap.Label;
+    public static string Label(GridSetting s, ResolvedGrid r) => s.Adaptive ? Loc.F("editing.snap_grid.auto", r.Snap.Label) : r.Snap.Label;
 
     // ---- transitions (⌘1–⌘5 and the menu) ------------------------------------------------
 

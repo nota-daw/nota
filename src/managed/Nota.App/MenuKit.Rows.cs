@@ -15,6 +15,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -94,7 +95,7 @@ internal static partial class MenuKit
         {
             Height = 52, MinWidth = 40, Margin = new Thickness(6, 0, 0, 0), CornerRadius = NotaRadius.Field,
             BorderThickness = new Thickness(1), Padding = new Thickness(6, 0), VerticalAlignment = VerticalAlignment.Top,
-            Child = new TextBlock { Text = "Auto", FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
+            Child = new TextBlock { Text = Loc.T("common.auto"), FontSize = NotaType.Caption, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center },
         };
         Grid.SetColumn(auto, bases); Grid.SetRowSpan(auto, shades);
         grid.Children.Add(auto);
@@ -154,7 +155,7 @@ internal static partial class MenuKit
     {
         if (recent is null || recent.Count == 0) return;
         submenu.Items.Add(new Separator());
-        submenu.Items.Add(Caption("Recent"));
+        submenu.Items.Add(Caption(Loc.T("common.recent")));
         foreach (var mi in recent) submenu.Items.Add(mi);
     }
 

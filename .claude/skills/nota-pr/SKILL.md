@@ -1,6 +1,6 @@
 ---
 name: nota-pr
-description: Open a Nota pull request the project's way — branch off develop, commit in the repo's style under the contributor's own git identity, push over HTTPS, and write the description from the PR template. Evidence is part of the PR, attached through the pr-assets branch: a user-visible UI change carries before/after screenshots; a performance change (engine, DSP, threading, render path, CPU/memory) carries a before/after benchmark with charts. Use whenever the user asks to open, create or prepare a PR, or to "push this for review".
+description: Open a Nota pull request the project's way — check it implements an issue a core contributor approved, branch off develop, commit in the repo's style under the contributor's own git identity, push over HTTPS, and write the description from the PR template. Evidence is part of the PR, attached through the pr-assets branch: a user-visible UI change carries before/after screenshots; a performance change (engine, DSP, threading, render path, CPU/memory) carries a before/after benchmark with charts. Use whenever the user asks to open, create or prepare a PR, or to "push this for review".
 user-invocable: true
 ---
 
@@ -10,6 +10,21 @@ A Nota PR is reviewed by reading its description, so the description carries the
 changed, why, and what it looks like or costs before and after. Images and benchmark charts
 never go into `develop` — they live on the orphan **`pr-assets`** branch (see
 `CONTRIBUTING.md` § Images for pull requests) and are embedded by raw URL.
+
+## 0. Check the approved issue
+
+Every PR implements an issue a core contributor approved (`CONTRIBUTING.md` § Start with an
+approved issue). Before branching, find it and check its labels:
+
+```sh
+gh issue view <N> --repo nota-daw/nota --json number,title,labels,state
+```
+
+It must be open and carry `approved` (or `good first issue` / `help wanted`). If there is no
+issue or it isn't approved, **stop** and tell the user: they open the issue (offer to draft its
+text) and wait for the label. Don't open the PR "to discuss" instead. Compare the change with
+what the issue agreed; if it goes further, split it or get the issue's scope extended first.
+Only release PRs cut by core contributors skip this step.
 
 ## 1. Branch and commit
 
@@ -120,5 +135,6 @@ Embed with `https://raw.githubusercontent.com/nota-daw/nota/pr-assets/<folder>/<
   - **Benchmark** — the charts, the `summary.md` tables, the commits measured, the machine, and
     a sentence on how to reproduce (`scripts/bench-engine.sh …`).
   - **Testing** — what was run and what was not.
-  - Link the issue (`Fixes #N` / `Refs #N`) and, for review follow-ups, the PR being followed up.
+  - Link the approved issue (`Closes #N` / `Refs #N`) — required — and, for review follow-ups,
+    the PR being followed up.
 - Base is `develop`. Don't enable auto-merge; don't merge.

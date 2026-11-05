@@ -7,6 +7,7 @@
 // manifest's files / unpackedSize match what Nota puts on disk.
 
 using System.Text.Json;
+using Nota.Application.Localization;
 
 namespace Nota.Infrastructure;
 
@@ -52,7 +53,7 @@ public static class SampleIndex
         var root = doc.RootElement;
         int schema = root.TryGetProperty("schema", out var s) && s.TryGetInt32(out var n) ? n : 0;
         if (schema is < 1 or > SupportedSchema)
-            throw new StoreException("The sample registry needs a newer version of Nota.");
+            throw new StoreException(Loc.T("sample_store.sample_index.the_sample_registry_needs_a"));
 
         var list = new List<StorePack>();
         foreach (var p in root.GetProperty("packs").EnumerateArray())

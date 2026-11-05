@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Nota.Application;
 using Nota.Application.Editing;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -110,7 +111,7 @@ public sealed class MidiLearnService
         if (pressed && _pending is { } p)
         {
             Bind(p, MidiSourceKind.Gamepad, 0, buttonId);
-            LogMidi($"MIDI learn: gamepad {GamepadControls.Name(buttonId)} → bound to '{p.Name}'");
+            LogMidi(string.Format("MIDI learn: gamepad {0} → bound to '{1}'", GamepadControls.Name(buttonId), p.Name));
             _padBoundOnPress = buttonId;
             return true;
         }
@@ -140,7 +141,7 @@ public sealed class MidiLearnService
         if (_pending is { } p && Math.Abs(value127 - GamepadControls.Rest(axisId)) >= AxisLearnThreshold)
         {
             Bind(p, MidiSourceKind.Gamepad, 0, axisId);
-            LogMidi($"MIDI learn: gamepad {GamepadControls.Name(axisId)} → bound to '{p.Name}'");
+            LogMidi(string.Format("MIDI learn: gamepad {0} → bound to '{1}'", GamepadControls.Name(axisId), p.Name));
             return true;
         }
         return Dispatch(MidiSourceKind.Gamepad, 0, axisId, value127) > 0;
@@ -172,7 +173,7 @@ public sealed class MidiLearnService
         if (_pending is { } p)
         {
             Bind(p, MidiSourceKind.Phone, 0, controlId, PhoneScope(controlId, trackId));
-            LogMidi($"MIDI learn: phone {Nota.Remote.PhoneControls.Name(controlId)} → bound to '{p.Name}'");
+            LogMidi(string.Format("MIDI learn: phone {0} → bound to '{1}'", Nota.Remote.PhoneControls.Name(controlId), p.Name));
             return Nota.Remote.PhoneControlResult.Bound;
         }
         var list = PhoneMappings(controlId, trackId);
@@ -268,11 +269,11 @@ public sealed class MidiLearnService
             if (_pending is { } p)
             {
                 Bind(p, kind, channel, number);
-                LogMidi($"MIDI learn: {src} → bound to '{p.Name}'");
+                LogMidi(string.Format("MIDI learn: {0} → bound to '{1}'", src, p.Name));
                 continue;
             }
             int matched = Dispatch(kind, channel, number, value);
-            LogMidi(matched > 0 ? $"MIDI in: {src} → {matched} mapping(s)" : $"MIDI in: {src} (unmapped)");
+            LogMidi(matched > 0 ? string.Format("MIDI in: {0} → {1} mapping(s)", src, matched) : string.Format("MIDI in: {0} (unmapped)", src));
         }
     }
 

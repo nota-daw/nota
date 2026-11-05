@@ -16,6 +16,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -77,7 +78,7 @@ public sealed partial class ModularView
         {
             body = new TextBlock
             {
-                Text = "Watches CV. Drag a modulator's CV out onto this node. For audio, put Lens on the chain.",
+                Text = Loc.T("modular.scope.watches_cv_drag_a_modulators"),
                 FontSize = 10, Foreground = Text3, TextWrapping = TextWrapping.Wrap, TextAlignment = TextAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0),
             };
@@ -102,7 +103,7 @@ public sealed partial class ModularView
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
         };
         var grip = new Border { Height = 9, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.SizeNorthSouth), Child = line };
-        ToolTip.SetTip(grip, "Drag to resize the trace");
+        ToolTip.SetTip(grip, Loc.T("modular.scope.drag_to_resize_the_trace"));
         bool drag = false; double y0 = 0, h0 = 0;
         grip.PointerEntered += (_, _) => line.Background = Text3;
         grip.PointerExited += (_, _) => { if (!drag) line.Background = NotaPalette.Seam; };
@@ -155,9 +156,9 @@ public sealed partial class ModularView
         };
         wKnob.Format = f => Fmt(FromFrac(f));
         wKnob.ValueChanged += f => { float v = FromFrac(f); e.ModulatorSet(t, modId, wField, v); wValue.Text = Fmt(v); };
-        ValueEntry.Attach(wKnob, "Window", wValue);
-        var syncChip = ToggleLabel(sync ? "Sync" : "ms", sync ? "The window is in beats at the tempo. Click for milliseconds"
-                                                             : "The window is in milliseconds. Click to sync it to the beat",
+        ValueEntry.Attach(wKnob, Loc.T("modular.scope.window"), wValue);
+        var syncChip = ToggleLabel(sync ? Loc.T("modular.sync") : "ms", sync ? Loc.T("modular.scope.the_window_is_in_beats")
+                                                             : Loc.T("modular.scope.the_window_is_in_milliseconds"),
             () => { e.ModulatorSet(t, modId, ScopeTrace.FieldSync, sync ? 0f : 1f); Changed?.Invoke(); refresh(); });
         var windowCell = new StackPanel
         {
@@ -173,8 +174,8 @@ public sealed partial class ModularView
         var zKnob = new Knob(ScopeTrace.ZoomIndex(z0) / (double)last, 0) { Accent = true };
         zKnob.Format = f => ScopeTrace.ZoomLabel(ZoomAt(f));
         zKnob.ValueChanged += f => { int z = ZoomAt(f); e.ModulatorSet(t, modId, ScopeTrace.FieldZoom, z); zValue.Text = ScopeTrace.ZoomLabel(z); };
-        ValueEntry.Attach(zKnob, "Zoom", zValue);
-        var zoomCell = KnobCell("Zoom", zKnob, zValue);
+        ValueEntry.Attach(zKnob, Loc.T("modular.scope.zoom"), zValue);
+        var zoomCell = KnobCell(Loc.T("modular.scope.zoom"), zKnob, zValue);
 
         addTick(() =>
         {
@@ -196,12 +197,12 @@ public sealed partial class ModularView
 
         var chips = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 3, Margin = new Thickness(9, 0), VerticalAlignment = VerticalAlignment.Center };
         void SetTrig(bool on) { e.ModulatorSet(t, modId, ScopeTrace.FieldTrigger, on ? 1f : 0f); Changed?.Invoke(); refresh(); }
-        var free = SegChip("Free", !trig, () => SetTrig(false));
-        ToolTip.SetTip(free, "Free running: the newest value is at the right");
-        var rise = SegChip("Rise", trig, () => SetTrig(true));
-        ToolTip.SetTip(rise, "Trigger: start the trace where the input rises through 0, so a repeating shape holds still");
-        var freeze = SegChip("Freeze", frozen, () => { SetScopeFrozen(t, modId, !frozen); refresh(); });
-        ToolTip.SetTip(freeze, frozen ? "Back to the live trace" : "Hold the trace while the input keeps running");
+        var free = SegChip(Loc.T("modular.free"), !trig, () => SetTrig(false));
+        ToolTip.SetTip(free, Loc.T("modular.scope.free_running_the_newest_value"));
+        var rise = SegChip(Loc.T("modular.scope.rise"), trig, () => SetTrig(true));
+        ToolTip.SetTip(rise, Loc.T("modular.scope.trigger_start_the_trace_where"));
+        var freeze = SegChip(Loc.T("common.freeze"), frozen, () => { SetScopeFrozen(t, modId, !frozen); refresh(); });
+        ToolTip.SetTip(freeze, frozen ? Loc.T("modular.scope.back_to_the_live_trace") : Loc.T("modular.scope.hold_the_trace_while_the"));
         freeze.Margin = new Thickness(8, 0, 0, 0);
         chips.Children.Add(free); chips.Children.Add(rise); chips.Children.Add(freeze);
 
@@ -242,7 +243,7 @@ public sealed partial class ModularView
     private void OpenScopeWindow(int t, int modId, Control anchor)
     {
         if (_scopeWindows.TryGetValue((t, modId), out var open)) { open.Activate(); return; }
-        var w = new ScopeWindow(this, _engine, t, modId, $"Scope {modId} · {TrackName(t)}");
+        var w = new ScopeWindow(this, _engine, t, modId, Loc.F("modular.scope.scope", modId, TrackName(t)));
         _scopeWindows[(t, modId)] = w;
         w.Closed += (_, _) => _scopeWindows.Remove((t, modId));
         // After the click has finished (the button opens on release), owned by the window that

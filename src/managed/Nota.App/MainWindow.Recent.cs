@@ -12,6 +12,7 @@ using Avalonia.Controls;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -66,7 +67,7 @@ public partial class MainWindow
         if (e.IsPlugin)
         {
             int index = RecentCatalog?.IndexOfId(e.Id) ?? -1;
-            if (index < 0) { _vm.StatusText = $"{e.Name} is no longer installed."; return; }
+            if (index < 0) { _vm.StatusText = Loc.F("main.recent.is_no_longer_installed", e.Name); return; }
             item = new BrowserItem { Name = e.Name, Kind = BrowserItemKind.PluginInstrument, CatalogIndex = index };
         }
         else item = new BrowserItem { Name = e.Name, Kind = BrowserItemKind.BuiltinInstrument, BuiltinKind = e.BuiltinKindId };
@@ -79,12 +80,12 @@ public partial class MainWindow
             if (trackId > 0) Timeline.PlaceNewTrack(trackId, anchorTrackId);
         }
         finally { Engine.EndUndoGroup(); }
-        if (trackId <= 0) { _vm.StatusText = $"Couldn't load {e.Name}."; return; }
+        if (trackId <= 0) { _vm.StatusText = Loc.F("common.couldnt_load", e.Name); return; }
         Timeline.Refresh();
         Timeline.RevealTrack(trackId);
         if (anchorTrackId > 0) Timeline.Select(trackId, -1);
         _session?.Refresh();
         if (_modular?.IsVisible == true) _modular.Refresh();
-        _vm.StatusText = $"Added {e.Name} (track {trackId})";
+        _vm.StatusText = Loc.F("main.recent.added_track", e.Name, trackId);
     }
 }
