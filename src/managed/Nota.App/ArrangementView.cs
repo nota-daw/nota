@@ -2759,16 +2759,18 @@ public sealed partial class ArrangementView : UserControl
         }
 
         // Group / Ungroup (submix). "Group" folds the multi-selection (or this track) into a
-        // new group; "Ungroup" dissolves the group this track is/belongs to.
+        // new group; on a group "Ungroup" dissolves it, on a member "Remove from group" takes
+        // just this track out (#489).
         var create = new List<Control>();
         var addTrack = MenuKit.Item(Loc.T("arrangement.add_track"), GlyphKind.Plus);
         foreach (var mi in AddTrackItems(trackId, inSubmenu: true)) addTrack.Items.Add(mi);
         AddRecentInstruments(addTrack, trackId);
         create.Add(addTrack);
         create.Add(MenuKit.Item(Loc.T("arrangement.group_tracks"), GlyphKind.Folder, () => GroupTracks(trackId), MenuKit.GroupKey));
-        int ungroupId = GroupToUngroupFor(trackId);
-        if (ungroupId > 0)
-            create.Add(MenuKit.Item(Loc.T("arrangement.ungroup"), GlyphKind.Ungroup, () => UngroupGroup(ungroupId), MenuKit.UngroupKey));
+        if (vm is { IsGroup: true })
+            create.Add(MenuKit.Item(Loc.T("arrangement.ungroup"), GlyphKind.Ungroup, () => UngroupGroup(trackId), MenuKit.UngroupKey));
+        else if (IsInGroup(trackId))
+            create.Add(MenuKit.Item(Loc.T("arrangement.remove_from_group"), GlyphKind.Ungroup, () => RemoveFromGroup(trackId), MenuKit.UngroupKey));
         if (vm is { IsGroup: true } gvm)   // group Link (specs/076)
             create.Add(MenuKit.SwitchItem(Loc.T("arrangement.link_tracks"), GlyphKind.ChainLink, gvm.EditLink, () => SetGroupLink(gvm.Id, !gvm.EditLink)));
 

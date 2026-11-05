@@ -855,6 +855,24 @@ public partial class MainWindow
         ShowDetail(250, honorPersist: true);
     }
 
+    // The time signature's numerator changed (typed, a project load, a launched scene): every
+    // view that counts bars re-counts (#405). The roll takes its bar length as a property; the
+    // audio editor, the step grid and the readouts read Meter as they draw, so a reload repaints
+    // them.
+    private void ApplyMeter(int numerator)
+    {
+        int was = Meter.BeatsPerBar;
+        Meter.Set(numerator);
+        int bpb = Meter.BeatsPerBar;
+        if (bpb != was) _session?.Refresh();   // its slot lengths and inspector fields count bars
+        if (Timeline.BeatsPerBar != bpb) Timeline.BeatsPerBar = bpb;
+        _patternView?.Reload();
+        _audioEditor?.Reload();
+        if (_editorRoll is not { } roll) return;
+        roll.BeatsPerBar = bpb;
+        _clipEditor?.RecountBars(roll.ActiveClip.StartBeat);   // its Start / Length read-outs
+    }
+
     // A clip was trimmed / stretched / moved in the arrangement. Both clip editors snapshot the
     // clip's geometry when they're built, so push the new start+length into whichever one is
     // open on that clip — otherwise the editor keeps drawing the pre-drag length until it's
@@ -1304,7 +1322,7 @@ public partial class MainWindow
     // minimum. The Mixer grows back toward the height the user chose; a fit never changes it.
     private void FitBottomPanels()
     {
-        if (_detailMaximized) { MinHeight = _baseWindowMinHeight; return; }   // the Detail row is all there is
+        if (_detailMaximized) { SetWindowDesignMinHeight(_baseWindowMinHeight); return; }   // the Detail row is all there is
         double total = BodyGrid.Bounds.Height;
         double mixer = _mixerDocked ? Math.Max(_mixerWanted, _mixerRow.MinHeight) : 0;
         if (total > 0)
@@ -1314,7 +1332,11 @@ public partial class MainWindow
             double minimumBody = _mainRow.MinHeight
                 + (DetailPanel.IsVisible ? _detailRow.MinHeight + _detailSplitRow.ActualHeight : 0)
                 + (_mixerDocked ? _mixerRow.MinHeight + _mixerSplitRow.ActualHeight : 0);
-            MinHeight = Math.Max(_baseWindowMinHeight, ClientSize.Height - total + minimumBody);
+            // BodyGrid and its rows measure in design units, the window's frame in screen units:
+            // bring the frame back to design units and let NotaUiScale scale the minimum, so
+            // it stays right at any interface scale and after the scale changes.
+            double chrome = ClientSize.Height / NotaUiScale.Factor - total;
+            SetWindowDesignMinHeight(Math.Max(_baseWindowMinHeight, chrome + minimumBody));
             double room = total - _mainRow.MinHeight;
             double detail = !DetailPanel.IsVisible ? 0 : _detailWanted > 0 ? Math.Max(_detailWanted, _detailRow.MinHeight) : Height(_detailRow);
             double over = mixer + detail - room;
@@ -1330,6 +1352,17 @@ public partial class MainWindow
         }
         if (_mixerDocked) _mixerRow.Height = new GridLength(Math.Round(mixer));
 
+    }
+
+    // The window's minimum height in design units; applied only when it changes, since the
+    // panels refit on every resize.
+    private double _windowDesignMinHeight = double.NaN;
+    private void SetWindowDesignMinHeight(double height)
+    {
+        height = Math.Round(height);
+        if (height == _windowDesignMinHeight) return;
+        _windowDesignMinHeight = height;
+        NotaUiScale.SetDesignMinHeight(this, height);
     }
 
     private void CloseDetail()

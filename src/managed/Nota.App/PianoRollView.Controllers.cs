@@ -647,7 +647,7 @@ public sealed partial class PianoRollView
                 // The curve may have gained points while the button was down (a recording
                 // reload). Read it again and paint the stroke onto that, not onto the copy
                 // from pointer-down.
-                _o.DropControllerCache();
+                _o.DropControllerCache(cancelGestures: false);   // this gesture is the one finishing
                 _orig = _o.ControllerPoints(Ctl).ToList();
                 // A click without a drag is not a stroke. Committing it would write a point
                 // that the second press of a double-click then deletes.

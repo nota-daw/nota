@@ -147,6 +147,10 @@ public sealed class ClipEditorView : UserControl
         return button;
     }
 
+    /// <summary>The bar length changed (#405): the inspector's Start / Length / selection
+    /// read-outs re-count (the roll redraws itself from its BeatsPerBar).</summary>
+    public void RecountBars(double startBeat) => _props.Recount(startBeat);
+
     /// <summary>Follows a clip that was moved or resized in the arrangement while this editor
     /// stayed on screen. The roll's own length is pushed by <c>PianoRollView.SetNotes</c>
     /// (which also refreshes the inspector's LENGTH/LOOP); this carries the pieces that

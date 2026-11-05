@@ -836,16 +836,22 @@ public sealed partial class PianoRollView : UserControl
         {
             EndVelocityWheel();   // a Session slot commits it before the notes are replaced
         }
-        else if (!HasLivePath)
+        else if (VelBurstHolds)
         {
             burstVel = new(_notes.Count);
             for (int i = 0; i < _notes.Count; i++)
                 burstVel.Add((_notes[i].Pitch, _notes[i].StartBeat, _notes[i].Velocity));
         }
-        DropControllerCache();
+        // A reload of the same clip (recording reloads ~60 Hz) keeps a lane's drag going on
+        // the fresh curve; another clip cancels every lane's gesture.
+        DropControllerCache(cancelGestures: !sameController);
         _ctlLane.OnClipReloaded(sameController);
+        foreach (var item in _controllerLanes) item.Lane.OnClipReloaded(sameController);
         _ctlClip = (_set.ActiveClip.TrackId, _set.ActiveClip.ClipIndex);
         ReplaceAll(notes, owners);
+        // What the engine holds is what was just loaded, before a held burst's velocities go
+        // back on top: they were never pushed, so closing the burst must still find them new.
+        if (burstVel is not null) RememberCommitted();
         if (burstVel is not null)
         {
             var used = new bool[burstVel.Count];
@@ -862,11 +868,12 @@ public sealed partial class PianoRollView : UserControl
                     break;
                 }
             }
+            if (_velBurstHeld) KeepHeldBurst();
         }
         _lengthBeats = lengthBeats;
         _selection.Clear();
         _strip.Relayout();
-        RememberCommitted();
+        if (burstVel is null) RememberCommitted();
         _saveAfterApply = false;   // a zoom queued on the previous clip must not save onto this one
 
         // Restore this clip's saved scroll/zoom if we've edited it before; otherwise fit the
@@ -1214,7 +1221,7 @@ public sealed partial class PianoRollView : UserControl
     {
         // Backstop: an edit that did not close the velocity burst first must not leave the
         // timer to commit it again later, nor fold it silently into this edit unannounced.
-        if (_velWheelBurst && !HasLivePath) EndVelocityWheel();
+        if (_velWheelBurst && VelBurstHolds) EndVelocityWheel();
         _previewBackup = null;
         _previewOwners = null;
         notes ??= _notes;
@@ -1470,6 +1477,20 @@ public sealed partial class PianoRollView : UserControl
     private DispatcherTimer? _velWheelTimer;
     private bool _velWheelBurst;
     private int _velWheelNote = -1;
+    // The notes as the open burst found them: closing a held burst that ended where it began
+    // pushes nothing, so it adds no undo step (a wheel up then down, a click then a reset).
+    private NotaNote[]? _velBurstPre;
+    // An arrangement burst that has not seeded its undo step yet: like a Session slot's, it holds
+    // its change and commits it, if any is left, when it closes (the velocity lane's click on a
+    // note at the default, which the double-click's reset may undo again, specs/069).
+    private bool _velBurstHeld;
+    private bool VelBurstHolds => !HasLivePath || _velBurstHeld;
+    // The notes as the held burst left them. An edit that closes the burst from inside its own
+    // commit (an arrow-key move, say) has already changed _notes; the held change commits from
+    // this, as its own step, and the edit then commits on top of it.
+    private NotaNote[]? _velBurstHeldNotes;
+    private int[]? _velBurstHeldOwners;
+    private void KeepHeldBurst() { _velBurstHeldNotes = _notes.ToArray(); _velBurstHeldOwners = _owner.ToArray(); }
 
     /// <summary>Steps the velocity of note <paramref name="hit"/> — or of the whole selection
     /// when it is selected — for a wheel move of <paramref name="notches"/>. False when there
@@ -1489,6 +1510,7 @@ public sealed partial class PianoRollView : UserControl
             {
                 // The burst's undo step: seeded with the notes before it, like a note drag.
                 _velWheelBurst = true;
+                _velBurstPre = _notes.ToArray();
                 if (HasLivePath) CommitNotes(_notes.ToList(), _owner.ToList(), seed: true);
             }
             if (changed)
@@ -1500,7 +1522,8 @@ public sealed partial class PianoRollView : UserControl
                     _notes[i] = n;
                 }
                 _velWheelNote = hit;
-                if (HasLivePath) PushLive(_notes, _owner);
+                if (_velBurstHeld) KeepHeldBurst();   // a held burst keeps the wheel's steps too
+                else if (HasLivePath) PushLive(_notes, _owner);
                 Invalidate(); Changed?.Invoke();
             }
         }
@@ -1530,7 +1553,21 @@ public sealed partial class PianoRollView : UserControl
         _velWheel.Reset();
         if (!_velWheelBurst) return;
         _velWheelBurst = false;
-        if (!HasLivePath) CommitNotes();   // a Session slot: the burst lands as one push
+        bool held = _velBurstHeld;
+        var heldNotes = _velBurstHeldNotes;
+        var heldOwners = _velBurstHeldOwners;
+        _velBurstHeld = false;
+        _velBurstHeldNotes = null;
+        _velBurstHeldOwners = null;
+        var pre = _velBurstPre;
+        _velBurstPre = null;
+        // A held burst or a Session slot's: it lands as one push, unless nothing changed.
+        if (held)
+        {
+            if (heldNotes is not null && heldOwners is not null && (pre is null || !SameNotes(heldNotes, pre)))
+                CommitNotes(heldNotes, heldOwners);
+        }
+        else if (!HasLivePath && (pre is null || !SameNotes(_notes, pre))) CommitNotes();
         Remember(_velWheelNote);
     }
 
@@ -2915,17 +2952,37 @@ public sealed partial class PianoRollView : UserControl
 
         private void Snapshot() { _pre = _o._notes.ToList(); _preOwner = _o._owner.ToList(); }
 
-        private void OpenBurst()
+        // hold: the click on a note at the default opens the burst without seeding it. The
+        // double-click's reset may put the note right back, and a seeded step would stay behind
+        // empty; the held change commits when the burst closes, if any of it is left. A drag
+        // seeds the step there and then, and streams live from then on.
+        private void OpenBurst(bool hold = false)
         {
-            if (_o._velWheelBurst) return;
+            if (_o._velWheelBurst)
+            {
+                if (_o._velBurstHeld && !hold)
+                {
+                    _o._velBurstHeld = false;
+                    _o._velBurstHeldNotes = null;
+                    _o._velBurstHeldOwners = null;
+                    _o.CommitNotes(_pre ?? _o._notes.ToList(), _preOwner ?? _o._owner.ToList(), seed: true);
+                }
+                return;
+            }
             _o._velWheelBurst = true;
-            if (_o.HasLivePath) _o.CommitNotes(_pre ?? _o._notes.ToList(), _preOwner ?? _o._owner.ToList(), seed: true);
+            _o._velBurstPre = (_pre ?? _o._notes).ToArray();
+            if (!_o.HasLivePath) return;
+            if (hold) _o._velBurstHeld = true;
+            else _o.CommitNotes(_pre ?? _o._notes.ToList(), _preOwner ?? _o._owner.ToList(), seed: true);
         }
 
         private void StreamLive()
         {
-            if (_o.HasLivePath && _o._velWheelBurst) _o.PushLive(_o._notes, _o._owner);
+            if (_o._velBurstHeld) _o.KeepHeldBurst();
+            else if (_o.HasLivePath && _o._velWheelBurst) _o.PushLive(_o._notes, _o._owner);
         }
+
+        private bool _pressHold;
 
         // The stem a press landed on, with the selection it makes: a stem outside the selection
         // becomes the selection (a pending placement lets go first, which can shift indices, so
@@ -2953,7 +3010,7 @@ public sealed partial class PianoRollView : UserControl
             foreach (var n in _o._notes) vels.Add(n.Velocity);
             var targets = VelocityReset.Targets(_o._selection, hit, vels, NotOnOffer);
             if (targets.Count == 0) return false;
-            OpenBurst();
+            OpenBurst(hold: _o._velBurstHeld);   // a held burst stays held: it may end where it began
             foreach (int i in targets)
             {
                 var n = _o._notes[i];
@@ -2986,7 +3043,7 @@ public sealed partial class PianoRollView : UserControl
                 ResetVelocity(hit);
                 _o.EndVelocityWheel();
             }, enabled: CanReset(hit)));
-            flyout.ShowAt(this);
+            flyout.ShowAt(this, showAtPointer: true);
         }
 
         protected override void OnPointerPressed(PointerPressedEventArgs e)
@@ -3037,7 +3094,12 @@ public sealed partial class PianoRollView : UserControl
             _grabY = p.Y;
             // A click on one stem away from its cap sets it where you clicked; a group, or a grab on
             // the cap, moves by the drag distance.
-            if (_grabbed.Count == 1 && !_grabCap) Apply(p.Y);
+            if (_grabbed.Count == 1 && !_grabCap)
+            {
+                _pressHold = VelocityReset.IsDefault(_o._notes[hit].Velocity);
+                Apply(p.Y);
+                _pressHold = false;
+            }
             e.Pointer.Capture(this);
             _o.Invalidate(); _o.Changed?.Invoke();
             e.Handled = true;
@@ -3075,7 +3137,7 @@ public sealed partial class PianoRollView : UserControl
                 var n = _o._notes[_velNote];
                 float v = (float)Math.Clamp((Bounds.Height - y) / Usable, 0.02, 1.0);
                 if (v == n.Velocity) return;
-                OpenBurst();
+                OpenBurst(hold: _pressHold);
                 n.Velocity = v;
                 _o._notes[_velNote] = n;
                 StreamLive();
