@@ -22,6 +22,12 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+### Fixed
+- **Nota Remote on iPhone and iPad launches several clips at once** (#512): touching two or
+  more clips on the Scenes screen together launched none of them, or only one — iOS Safari
+  only sends a tap for a single finger. Every clip, scene and Stop button now takes its own
+  finger, and a drag that scrolls the grid still launches nothing.
+
 ## [0.59.1] — 2026-11-05
 
 ### Added

@@ -2,11 +2,12 @@
 <!-- Scenes: the Session grid, tracks across and scenes down, in the project's colours. Tap a clip
      to launch it, a scene name to launch the row, Stop to stop a track. A queued clip blinks
      until the launch point; a playing one shows a play mark and a progress line — readable at
-     arm's length. -->
+     arm's length. Every button takes its own finger (use:tap), so several clips launch at once. -->
 <script lang="ts">
   import { app } from '../lib/app.svelte';
   import type { Form } from '../lib/device.svelte';
   import { look } from '../lib/theme.svelte';
+  import { tap } from '../lib/tap';
 
   let { form }: { form: Form } = $props();
   const s = $derived(app.ses);
@@ -34,7 +35,7 @@
         <div class="th"><span style:background={t?.color}></span><b>{t?.name ?? ''}</b></div>
       {/each}
       {#each Array.from({ length: s.n }, (_, i) => i) as si (si)}
-        <button class="scene" style:height="{rowH}px" onclick={() => guard() && app.send({ t: 'scene', i: si })} aria-label="Launch scene {si + 1}">
+        <button class="scene" style:height="{rowH}px" use:tap={() => guard() && app.send({ t: 'scene', i: si })} aria-label="Launch scene {si + 1}">
           <span class="tri"></span>Scene {si + 1}
         </button>
         {#each cols as c (c.id)}
@@ -44,7 +45,7 @@
             <div class="clip empty" style:height="{rowH}px"></div>
           {:else}
             <button class="clip" class:playing={st === 3} class:queued={st === 2} class:rec={st === 4} style:height="{rowH}px" style:--tc={t?.color} style:--tc-ink={t ? look.inkOn(t.color) : undefined}
-              onclick={() => guard() && app.send({ t: 'launch', id: c.id, i: si })}
+              use:tap={() => guard() && app.send({ t: 'launch', id: c.id, i: si })}
               aria-label="{t?.name} scene {si + 1}: {st === 3 ? 'playing' : st === 2 ? 'queued' : st === 4 ? 'recording' : 'stopped'}">
               <span class="cn">{#if st === 3}<span class="ptri"></span>{/if}<span><span class="mono">{bars(len)[0]}</span> {bars(len)[1]}</span></span>
               <span class="cs">{st === 3 ? 'Playing' : st === 2 ? 'Queued' : st === 4 ? 'Recording' : ''}</span>
@@ -53,9 +54,9 @@
           {/if}
         {/each}
       {/each}
-      <button class="stopall" onclick={() => guard() && app.send({ t: 'stopAll' })}><span class="sq"></span>All</button>
+      <button class="stopall" use:tap={() => guard() && app.send({ t: 'stopAll' })}><span class="sq"></span>All</button>
       {#each cols as c (c.id)}
-        <button class="stop" onclick={() => guard() && app.send({ t: 'stopSlot', id: c.id })} aria-label="Stop {tracks.get(c.id)?.name}"><span class="sq"></span>Stop</button>
+        <button class="stop" use:tap={() => guard() && app.send({ t: 'stopSlot', id: c.id })} aria-label="Stop {tracks.get(c.id)?.name}"><span class="sq"></span>Stop</button>
       {/each}
     </div>
   {/if}
