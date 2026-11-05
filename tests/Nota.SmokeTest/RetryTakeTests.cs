@@ -211,7 +211,8 @@ internal static class RetryTakeTests
     }
 
     // Moving an automated effect mid-take: the pre-take lane comes back aimed at the effect
-    // where it now sits; removing one takes its lane with it.
+    // where it now sits; removing one takes its lane with it, even when a fresh effect of the
+    // same kind is added.
     private static IEnumerable<(bool, string)> DeviceMovedMeanwhile()
     {
         const int Utility = 4, Delay = 3;
@@ -236,11 +237,12 @@ internal static class RetryTakeTests
             .Where(i => i.Target == AutomationTarget.DeviceParam).ToArray();
         yield return (e.AutomationLaneCount(t) == lanes && moved.Length == 1 && moved[0].DeviceIndex == 1 && moved[0].PointCount == 2,
             $"retry after moving an automated effect: its lane follows it (lanes {lanes} → {e.AutomationLaneCount(t)}, device {(moved.Length == 1 ? moved[0].DeviceIndex : -9)})");
-        e.RemoveDevice(t, 1);                    // the Utility goes, mid-take
+        e.RemoveDevice(t, 1);                    // the Utility goes, mid-take,
+        e.AddBuiltinDevice(t, Utility);          // and a fresh one of the same kind comes in
         e.RetryTake();
         Beats(e, 0.01);
         bool gone = Enumerable.Range(0, e.AutomationLaneCount(t)).All(i => e.AutomationLaneInfo(t, i).Target != AutomationTarget.DeviceParam);
-        yield return (gone, "retry after removing an automated effect: its lane goes with it");
+        yield return (gone, "retry after removing an automated effect and adding another of its kind: the lane goes, the new effect gets none");
         e.SetRecording(false);
         e.StopTransport();
     }

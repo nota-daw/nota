@@ -1269,6 +1269,7 @@ bool Engine::midiEffectSetState(int32_t t, int32_t i, const uint8_t* data, int32
     auto fresh = cloneMidiDevice(*old->midiEffects[i]);
     if (!fresh) return false;
     fresh->setState(data, size);
+    fresh->inheritLineage(old->midiEffects[i]->lineage()); // the same device to take retry
     // A MIDI Effect Rack's copy plays on with the held-note tables, so it ends what the old one
     // started instead of leaving it hanging.
     if (auto* to = dynamic_cast<MidiRack*>(fresh.get()))

@@ -13,8 +13,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
-#include <typeinfo>
 
 namespace nota {
 
@@ -64,38 +62,18 @@ void Engine::closeTakeAttempt() {
     retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
 }
 
-// Where each device of `from` sits in `to` (-1: removed). The same object first — devices are
-// shared between track copies, so a moved one is found in its new slot; then a device an edit
-// replaced with a copy (a rack fork, a MIDI effect's loaded state) pairs with the unmatched
-// device of the same type and name next in chain order.
+// Where each device of `from` sits in `to` (-1: removed), by lineage: a moved device is the
+// same object in a new slot, and a copy an edit swapped in (a rack fork, a MIDI effect's loaded
+// state) carries its source's lineage. A fresh device of the same kind is a different device.
 template <class Chain>
 static std::vector<int32_t> deviceMap(const Chain& from, const Chain& to) {
     std::vector<int32_t> map(from.size(), -1);
-    std::vector<bool> taken(to.size(), false);
     for (size_t i = 0; i < from.size(); ++i)
         for (size_t j = 0; j < to.size(); ++j)
-            if (!taken[j] && from[i] && from[i] == to[j]) {
+            if (from[i] && to[j] && from[i]->lineage() == to[j]->lineage()) {
                 map[i] = static_cast<int32_t>(j);
-                taken[j] = true;
                 break;
             }
-    auto same = [](const auto& x, const auto& y) {
-        return x && y && typeid(*x) == typeid(*y) && std::strcmp(x->displayName(), y->displayName()) == 0;
-    };
-    size_t next = 0;
-    for (size_t i = 0; i < from.size(); ++i) {
-        if (map[i] >= 0) {
-            next = std::max(next, static_cast<size_t>(map[i]) + 1);
-            continue;
-        }
-        for (size_t j = next; j < to.size(); ++j)
-            if (!taken[j] && same(from[i], to[j])) {
-                map[i] = static_cast<int32_t>(j);
-                taken[j] = true;
-                next = j + 1;
-                break;
-            }
-    }
     return map;
 }
 
