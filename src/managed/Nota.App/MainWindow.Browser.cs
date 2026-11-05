@@ -19,6 +19,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Infrastructure;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -26,8 +27,17 @@ public partial class MainWindow
 {
     private int _lastInstrumentTrackId;
 
+    private const double BrowserDefaultWidth = 344;   // MainWindow.axaml's column width
+
     // The browser column's width before it was folded to its rail, restored on unfold.
-    private GridLength _browserWidth = new(344);
+    private GridLength _browserWidth = new(BrowserDefaultWidth);
+
+    // Double-clicking the splitter puts the column back at its default width.
+    private void ResetBrowserWidth()
+    {
+        _browserWidth = new GridLength(BrowserDefaultWidth);
+        BrowserGrid.ColumnDefinitions[0].Width = _browserWidth;
+    }
 
     // Folded, the column hugs the rail and the splitter goes away — there's nothing to resize.
     private void OnBrowserCollapsedChanged(bool collapsed)
@@ -113,7 +123,7 @@ public partial class MainWindow
         }
         catch (Exception ex)
         {
-            _vm.StatusText = $"Load failed: {ex.Message}";
+            _vm.StatusText = Loc.F("main.browser.load_failed", ex.Message);
         }
     }
 
@@ -122,7 +132,7 @@ public partial class MainWindow
     {
         if (_vm is null || string.IsNullOrEmpty(item.Path)) return;
         try { RevealInFileManager(item.Path); }
-        catch (Exception ex) { _vm.StatusText = $"Reveal failed: {ex.Message}"; }
+        catch (Exception ex) { _vm.StatusText = Loc.F("main.browser.reveal_failed", ex.Message); }
     }
 
     internal static void RevealInFileManager(string path)
@@ -137,26 +147,26 @@ public partial class MainWindow
     private async void OnBrowserDeleteProject(BrowserItem item)
     {
         if (_vm is null) return;
-        bool ok = await new ConfirmWindow("Delete project",
-            $"Move “{item.Name}” to the Trash?", "Delete", "Cancel").ShowDialog<bool>(this);
+        bool ok = await new ConfirmWindow(Loc.T("main.browser.delete_project"),
+            Loc.F("main.browser.move_to_the_trash", item.Name), Loc.T("common.delete"), Loc.T("common.cancel")).ShowDialog<bool>(this);
         if (!ok) return;
 
         bool done = await Task.Run(() => MoveToTrash(item.Path));
         _vm.Browser.RebuildProjects();
-        _vm.StatusText = done ? $"Moved {item.Name} to Trash" : $"Couldn't delete {item.Name}";
+        _vm.StatusText = done ? Loc.F("main.browser.moved_to_trash", item.Name) : Loc.F("main.browser.couldnt_delete", item.Name);
     }
 
     // Delete a saved preset (#234): confirm, then to the Trash, like a project.
     private async void OnBrowserDeletePreset(BrowserItem item)
     {
         if (_vm is null) return;
-        bool ok = await new ConfirmWindow("Delete preset",
-            $"Move “{item.Name}” to the Trash?", "Delete", "Cancel").ShowDialog<bool>(this);
+        bool ok = await new ConfirmWindow(Loc.T("main.browser.delete_preset"),
+            Loc.F("main.browser.move_to_the_trash", item.Name), Loc.T("common.delete"), Loc.T("common.cancel")).ShowDialog<bool>(this);
         if (!ok) return;
 
         bool done = await Task.Run(() => MoveToTrash(item.Path));
         _vm.Browser.RebuildPresets();
-        _vm.StatusText = done ? $"Moved {item.Name} to Trash" : $"Couldn't delete {item.Name}";
+        _vm.StatusText = done ? Loc.F("main.browser.moved_to_trash", item.Name) : Loc.F("main.browser.couldnt_delete", item.Name);
     }
 
     // Open the user presets folder itself (not its parent with it selected).
@@ -171,7 +181,7 @@ public partial class MainWindow
             else if (OperatingSystem.IsWindows()) Process.Start("explorer.exe", $"\"{dir}\"");
             else Process.Start("xdg-open", new[] { dir });
         }
-        catch (Exception ex) { _vm.StatusText = $"Reveal failed: {ex.Message}"; }
+        catch (Exception ex) { _vm.StatusText = Loc.F("main.browser.reveal_failed", ex.Message); }
     }
 
     private static bool MoveToTrash(string path)
@@ -208,32 +218,32 @@ public partial class MainWindow
     {
         if (_vm is null || _deviceChain is null) return;
         int trackId = _deviceChain.TrackId;
-        if (trackId <= 0) { _vm.StatusText = "Select a track first."; return; }
+        if (trackId <= 0) { _vm.StatusText = Loc.T("common.select_a_track_first"); return; }
 
         string label = deviceIndex <= PresetService.MidiEffectBase
             ? Engine.MidiEffectName(trackId, PresetService.MidiEffectBase - deviceIndex)
             : Engine.DeviceName(trackId, deviceIndex);
-        if (string.IsNullOrEmpty(label)) label = "Instrument";
+        if (string.IsNullOrEmpty(label)) label = Loc.T("common.instrument");
         // The preset it was loaded from is the likelier name to start from (specs/048).
         var (surface, index) = deviceIndex <= PresetService.MidiEffectBase ? (PresetSurface.MidiEffect, PresetService.MidiEffectBase - deviceIndex)
             : deviceIndex < 0 ? (PresetSurface.Instrument, -1) : (PresetSurface.Effect, deviceIndex);
         if (Nota.Application.Editing.PresetEdit.Name(Engine, trackId, surface, index) is { Length: > 0 } loaded) label = loaded;
-        var name = await new TextPromptWindow("Save preset", "Preset name", label).ShowDialog<string?>(this);
+        var name = await new TextPromptWindow(Loc.T("common.save_preset"), Loc.T("main.browser.preset_name"), label).ShowDialog<string?>(this);
         if (string.IsNullOrEmpty(name)) return;
 
         try
         {
             if (!_presets.Save(Engine, trackId, deviceIndex, name, _vm.Settings.PresetsFolder()))
-            { _vm.StatusText = "Nothing to save (built-in synth has no state)."; return; }
+            { _vm.StatusText = Loc.T("main.browser.nothing_to_save_built_in"); return; }
             // The device now holds that preset: its name, no " *".
             Engine.SetDevicePresetTag(trackId, surface, index, "user:" + name, name);
             _deviceChain.Refresh();
             _vm.Browser.RebuildPresets();
-            _vm.StatusText = $"Saved preset {name}";
+            _vm.StatusText = Loc.F("main.browser.saved_preset", name);
         }
         catch (Exception ex)
         {
-            _vm.StatusText = $"Save preset failed: {ex.Message}";
+            _vm.StatusText = Loc.F("main.browser.save_preset_failed", ex.Message);
         }
     }
 
@@ -245,20 +255,20 @@ public partial class MainWindow
         if (trackId <= 0) return;
 
         string label = Engine.RackChainInstrumentName(trackId, chain);
-        if (string.IsNullOrEmpty(label)) label = "Instrument";
-        var name = await new TextPromptWindow("Save preset", "Preset name", label).ShowDialog<string?>(this);
+        if (string.IsNullOrEmpty(label)) label = Loc.T("common.instrument");
+        var name = await new TextPromptWindow(Loc.T("common.save_preset"), Loc.T("main.browser.preset_name"), label).ShowDialog<string?>(this);
         if (string.IsNullOrEmpty(name)) return;
 
         try
         {
             if (!_presets.SaveRackChainInstrument(Engine, trackId, chain, name, _vm.Settings.PresetsFolder()))
-            { _vm.StatusText = "Only plug-in chain instruments can be saved as presets."; return; }
+            { _vm.StatusText = Loc.T("main.browser.only_plug_in_chain_instruments"); return; }
             _vm.Browser.RebuildPresets();
-            _vm.StatusText = $"Saved preset {name}";
+            _vm.StatusText = Loc.F("main.browser.saved_preset", name);
         }
         catch (Exception ex)
         {
-            _vm.StatusText = $"Save preset failed: {ex.Message}";
+            _vm.StatusText = Loc.F("main.browser.save_preset_failed", ex.Message);
         }
     }
 }

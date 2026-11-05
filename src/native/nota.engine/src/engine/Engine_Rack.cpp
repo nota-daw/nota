@@ -193,6 +193,7 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
         r->setBypassed(src->bypassed());
         r->setFolded(src->folded());
         r->setPresetTag(src->presetTag());
+        r->inheritLineage(src->lineage()); // the same device to take retry
         fresh = r.get();
         nt->midiEffects[mi] = std::move(r);
         republishWithTrack(trackId, nt);
@@ -217,6 +218,7 @@ RackCore* Engine::rackForEdit(int32_t trackId, int32_t deviceIndex) {
         r->setSidechainTapPre(src->sidechainTapPre());
         r->setSidechainGainDb(src->sidechainGainDb());
         r->setSidechainMix(src->sidechainMix());
+        r->inheritLineage(src->lineage()); // the same device to take retry
         fresh = r.get();
         nt->devices[deviceIndex] = std::move(r);
     }

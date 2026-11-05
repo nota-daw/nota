@@ -20,6 +20,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -110,18 +111,29 @@ internal static class PluginCard
         Fact(facts, 1, "Latency", $"{ms.ToString("0.0", NotaNum.Culture)}\u2009ms");
 
         // Open editor toggles the plug-in's own window. Its close button only hides the
-        // window behind our back, so the label re-reads the state whenever the pointer comes
-        // back to the card instead of trusting the last click.
-        var open = ActionButton("Open editor", GlyphKind.PopOut, primary: true);
+        // window behind our back (and MCP can open or close it too), so the label re-reads
+        // the state a few times a second on the UI tick instead of trusting the last click.
+        var open = ActionButton(Loc.T("device.plugin.open_editor"), GlyphKind.PopOut, primary: true);
         var openLabel = (TextBlock)((StackPanel)open.Content!).Children[1];
+        bool? shownLast = null;
         void SyncOpen()
         {
             bool shown = EditorOpen(e, t, di);
-            openLabel.Text = shown ? "Close editor" : "Open editor";
-            ToolTip.SetTip(open, shown ? "Close the plug-in's own window" : "Open the plug-in's own window");
+            if (shown == shownLast) return;
+            shownLast = shown;
+            openLabel.Text = shown ? Loc.T("device.plugin.close_editor") : Loc.T("device.plugin.open_editor");
+            ToolTip.SetTip(open, shown ? Loc.T("device.plugin.close_the_plug_ins_own") : Loc.T("device.plugin.open_the_plug_ins_own"));
         }
         SyncOpen();
-        open.PointerEntered += (_, _) => SyncOpen();
+        // By elapsed time, not tick count: the tick's rate depends on where the card is shown.
+        long nextSync = 0;
+        ctx.AddDeviceRefresher(() =>
+        {
+            long now = Environment.TickCount64;
+            if (now < nextSync) return;
+            nextSync = now + 250;   // 4 times a second
+            SyncOpen();
+        });
         open.Click += (_, _) =>
         {
             try
@@ -130,14 +142,14 @@ internal static class PluginCard
                 else
                 {
                     e.OpenPluginEditor(t, di);
-                    if (!EditorOpen(e, t, di)) ctx.Status($"Couldn't open the {info.Name} window.");
+                    if (!EditorOpen(e, t, di)) ctx.Status(Loc.F("device.plugin.couldnt_open_the_window", info.Name));
                 }
             }
-            catch (Exception ex) { ctx.Status($"Couldn't open the {info.Name} window: {ex.Message}"); }
+            catch (Exception ex) { ctx.Status(Loc.F("device.plugin.couldnt_open_the_window_n", info.Name, ex.Message)); }
             SyncOpen();
         };
-        var save = ActionButton("Save preset", GlyphKind.Save, primary: false);
-        ToolTip.SetTip(save, "Save the plug-in's state as a preset");
+        var save = ActionButton(Loc.T("common.save_preset"), GlyphKind.Save, primary: false);
+        ToolTip.SetTip(save, Loc.T("device.plugin.save_the_plug_ins_state"));
         save.Click += (_, _) => ctx.RequestPresetSave(di);
 
         var top = new StackPanel { Spacing = 1, Children = { name, vendor, tags, facts } };
@@ -254,7 +266,7 @@ internal static class PluginCard
             {
                 host.Content = new TextBlock
                 {
-                    Text = total == 0 ? "This plug-in exposes no parameters" : "No parameter matches",
+                    Text = total == 0 ? Loc.T("device.plugin.this_plug_in_exposes_no") : Loc.T("device.plugin.no_parameter_matches"),
                     FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 };
                 return;

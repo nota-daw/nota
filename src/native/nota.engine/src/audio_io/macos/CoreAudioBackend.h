@@ -23,6 +23,7 @@ class CoreAudioBackend final : public AudioBackend {
     int32_t bufferFrames() const override { return bufferFrames_; }
     void setXrunCallback(std::function<void()> cb) override { onXrun_ = std::move(cb); }
     bool isRunning() const override { return running_; }
+    void* ioWorkgroup() const override;
 
     // Opaque to callers; public so the file-local CoreAudio callback can reach it.
     struct Impl;

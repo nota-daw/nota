@@ -1,0 +1,13 @@
+{
+  "formatVersion": 2,
+  "code": "xx",
+  "name": "Xxxx",
+  "plural": "one_is_1",
+  "notes": "Test fixture for specs 068 and 077: a valid language the app does not ship. Not embedded.",
+  "strings": {
+    "test.save": "Xsave",
+    "test.open_menu": "Xopen",
+    "test.open_clip": "Xopen clip",
+    "test.tracks": { "one": "{0} xtrack", "other": "{0} xtracks" }
+  }
+}

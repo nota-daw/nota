@@ -344,7 +344,7 @@ internal static class PaletteTests
             : $"commands without a handler: {string.Join(", ", unbound)}");
 
         var prefs = File.ReadAllText(Path.Combine(app, "PreferencesWindow.cs"));
-        var listed = System.Text.RegularExpressions.Regex.Matches(prefs, "\\(\"([^\"]+)\", \"").Select(m => m.Groups[1].Value)
+        var listed = System.Text.RegularExpressions.Regex.Matches(prefs, "\\(\"([^\"]+)\",\\s*(?:Loc\\.T\\()?\"").Select(m => m.Groups[1].Value)
             .SelectMany(k => k.Split(' ', StringSplitOptions.RemoveEmptyEntries)).Select(Canon).ToHashSet();
         var missing = catalog.Where(c => c.Gesture.Length > 0 && !listed.Contains(Canon(c.Gesture))).Select(c => $"{c.Gesture} ({c.Title})").ToList();
         yield return (missing.Count == 0, missing.Count == 0 ? "every catalog shortcut is listed in Settings → Shortcuts"

@@ -20,6 +20,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -142,7 +143,7 @@ internal sealed class PendulumLanesView : Control
         // Axis: what x means.
         double ay = h - axisH;
         var lo = PendulumInk.Mono("low", NotaPalette.TextAxis);
-        var mid = PendulumInk.Mono(degrees > 0 ? $"x = pitch · {degrees} notes held" : "x = pitch · hold a chord", NotaPalette.TextAxis);
+        var mid = PendulumInk.Mono(degrees > 0 ? Loc.Plural("device.pendulum.x_pitch_notes_held", degrees) : Loc.T("device.pendulum.x_pitch_hold_a_chord"), NotaPalette.TextAxis);
         var hi = PendulumInk.Mono("high", NotaPalette.TextAxis);
         ctx.DrawText(lo, new Point(laneX0, ay));
         ctx.DrawText(mid, new Point(laneX0 + (laneW - mid.Width) / 2, ay));
@@ -178,7 +179,7 @@ internal sealed class PendulumBarView : Control
         const double padX = 8;
         var cap = new NotaFormattedText("Notes", NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansSemiBold, NotaGraph.TitleSize, NotaPalette.TextSecondary, this);
         ctx.DrawText(cap, new Point(padX, 2));
-        var sub = PendulumInk.Mono($"bar · quantize {_quant.ToLowerInvariant()}", NotaPalette.TextAxis);
+        var sub = PendulumInk.Mono(Loc.F("device.pendulum.bar_quantize", _quant.ToLowerInvariant()), NotaPalette.TextAxis);
         ctx.DrawText(sub, new Point(padX + cap.Width + 6, 2 + (cap.Height - sub.Height) / 2));
         int shown = Visible(_s);
         var right = PendulumInk.Mono($"{_sort} · {shown} {(shown == 1 ? "note" : "notes")}", NotaPalette.TextTertiary);

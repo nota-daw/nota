@@ -23,6 +23,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -140,12 +141,12 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         syncSeg.Width = 76;
         readouts.Add(syncSync);
         Learn(syncSeg, Sync);
-        ToolTip.SetTip(syncSeg, "Hz runs the LFO free; Sync takes its rate from the tempo and locks it to the bar while the transport plays");
+        ToolTip.SetTip(syncSeg, Loc.T("common.hz_runs_the_lfo_free"));
 
         var waveSeg = Segments(PhaserMath.Waves, WaveI, i => { SetP(Waveform, i / 2.0); RefreshAll(); }, out var waveSync, fill: true, padX: 0);
         readouts.Add(waveSync);
         Learn(waveSeg, Waveform);
-        ToolTip.SetTip(waveSeg, "The LFO shape that sweeps the stages: Sine glides, Tri sweeps evenly, Saw rises and drops back");
+        ToolTip.SetTip(waveSeg, Loc.T("device.phaser.the_lfo_shape_that_sweeps"));
 
         var big = Mono("", 26, TextPrimary); big.FontWeight = FontWeight.Bold; big.LineHeight = 28;
         var bigSub = new TextBlock { FontSize = 8, Foreground = TextSecondary };
@@ -168,15 +169,15 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             big.Foreground = On() ? TextPrimary : NotaPalette.TextAxis;
         });
         var bigBlock = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center, Children = { big, bigSub, period } };
-        ToolTip.SetTip(bigBlock, "The LFO rate: in Hz, or the note value it takes from the tempo");
+        ToolTip.SetTip(bigBlock, Loc.T("common.the_lfo_rate_in_hz"));
 
-        var rateRow = Slider("RATE", Rate, v => HzF(PhaserMath.FreeHz(v)) + " Hz", "Rate — the free LFO rate, 0.02 … 8 Hz", 38, 46);
+        var rateRow = Slider("RATE", Rate, v => HzF(PhaserMath.FreeHz(v)) + " Hz", Loc.T("common.rate_the_free_lfo_rate"), 38, 46);
         var divRow = Slider("RATE", Division, v => PhaserMath.DivNames[PhaserMath.DivIndex(v)],
-            "Rate — the note value of one LFO cycle, 4/1 … 1/16 with dotted (D) and triplet (T) values", 38, 46,
+            Loc.T("device.phaser.rate_the_note_value_of"), 38, 46,
             snap: v => PhaserMath.DivNorm(PhaserMath.DivIndex(v)));
         readouts.Add(() => { rateRow.IsVisible = !Synced(); divRow.IsVisible = Synced(); });
         var stereoRow = Slider("STEREO", Stereo, v => NotaNum.F($"{v * 180:0}°"),
-            "Stereo — the right LFO against the left: 0° sweeps both together, 90° spreads them, 180° moves them opposite", 38, 46,
+            Loc.T("device.phaser.stereo_the_right_lfo_against"), 38, 46,
             modulation: true, snap: v => Math.Round(v * 180) / 180);
 
         var leftBody = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto,Auto"), RowSpacing = 6, Margin = new Thickness(8, 6) };
@@ -202,11 +203,11 @@ internal sealed class PhaserDeviceBody : IDeviceBody
         response.Changed += (c, f) => { Raw(Center, c); Raw(Feedback, f); RefreshAll(); };
         response.ResetRequested += () => { Reset(Center); Reset(Feedback); RefreshAll(); };
         Learn(response, Center);
-        ToolTip.SetTip(response, MenuKit.Keys("The notches the stages cut into the spectrum, L in the bright line and R in the darker grey, with the corner dashed and each notch ticked on top. Drag left / right to move Center, up / down for Feedback; ⌥-click types, double-click resets both."));
+        ToolTip.SetTip(response, MenuKit.Keys(Loc.T("device.phaser.the_notches_the_stages_cut")));
         ValueEntry.AttachAll(response, ValueEntry.DeviceParam(engine, track, di, Center, "Center", v => PhaserMath.HzF(PhaserMath.CenterHz(v)) + "\u2009Hz", RefreshAll), ValueEntry.DeviceParam(engine, track, di, Feedback, "Feedback", v => FbF(PhaserMath.Fb(v)), RefreshAll));
 
         var sweep = new PhaserSweepView { Margin = new Thickness(0, 4, 0, 0) };
-        ToolTip.SetTip(sweep, "The corner frequency of both channels over two LFO cycles (20 Hz … 20 kHz), and where each is now");
+        ToolTip.SetTip(sweep, Loc.T("device.phaser.the_corner_frequency_of_both"));
         var centreBody = new DockPanel { LastChildFill = true, Margin = new Thickness(5), Children = { Docked(sweep, Dock.Bottom), response } };
         var centre = Island(HeadRow(Caps("ALL-PASS RESPONSE"), legend), centreBody);
         centre.Margin = new Thickness(5, 0);
@@ -222,23 +223,23 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             modeWord.Text = m;
             modeWord.Foreground = m == "resonant" ? TextPrimary : m == "negative" ? DeviceCardKit.ModInkBright : TextSecondary;
         });
-        ToolTip.SetTip(modeWord, "What the feedback makes: positive sharpens the peaks, negative moves and widens the notches, past 85 % the phaser whistles");
+        ToolTip.SetTip(modeWord, Loc.T("device.phaser.what_the_feedback_makes_positive"));
 
         var stageSeg = Segments(PhaserMath.StageCounts.Select(n => n.ToString()).ToArray(), () => PhaserMath.StageIndex(P(Stages)),
             i => { SetP(Stages, i / (double)(PhaserMath.StageCounts.Length - 1)); RefreshAll(); }, out var stageSync, fill: true, padX: 0);
         foreach (var tb in stageSeg.GetLogicalDescendants().OfType<TextBlock>()) tb.BindResource(TextBlock.FontFamilyProperty, "Font.UI");
         readouts.Add(stageSync);
         Learn(stageSeg, Stages);
-        ToolTip.SetTip(stageSeg, "All-pass stages: every two cut one notch — 2 is a gentle swirl, 12 a deep, dense sweep");
+        ToolTip.SetTip(stageSeg, Loc.T("device.phaser.all_pass_stages_every_two"));
 
         var centerRow = Slider("CENTER", Center, v => PhaserMath.HzF(PhaserMath.CenterHz(v)) + " Hz",
-            "Center — the middle of the sweep, 50 Hz … 5 kHz: higher moves the notches up");
+            Loc.T("device.phaser.center_the_middle_of_the"));
         var depthRow = Slider("DEPTH", Depth, v => NotaNum.F($"±{v * PhaserMath.DepthOct:0.0} oct"),
-            "Depth — how far the LFO swings the stages around Center, up to ±3 octaves");
+            Loc.T("device.phaser.depth_how_far_the_lfo"));
         var fbRow = Slider("FEEDBACK", Feedback, v => FbF(PhaserMath.Fb(v)),
-            "Feedback — the chain's output fed back in, ±95 %: positive sharpens the peaks, negative moves and widens the notches", modulation: true, bipolar: true,
+            Loc.T("device.phaser.feedback_the_chains_output_fed"), modulation: true, bipolar: true,
             snap: v => PhaserMath.FbNorm(Math.Round(PhaserMath.Fb(v) * 100) / 100));
-        var mixRow = Slider("MIX", Mix, v => PctF(v), "Mix — 50 % gives the deepest notches; 100 % is the phase-shifted signal alone");
+        var mixRow = Slider("MIX", Mix, v => PctF(v), Loc.T("device.phaser.mix_50_gives_the_deepest"));
 
         double PctAxis(double f) => Math.Clamp(Math.Log(Math.Max(f, 1e-3) / 20) / Math.Log(1000), 0, 1);
         Control ReadRow(string label, FlangerBar bar, TextBlock value, string tip)
@@ -262,8 +263,8 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             {
                 Spacing = 4, Children =
                 {
-                    ReadRow("SWEEP", sweepBar, sweepVal, "The range the corner sweeps (20 Hz … 20 kHz on the bar), and the first notch now"),
-                    ReadRow("NULL", nullBar, nullVal, "How deep the notches cut, dB (0 … −36 on the bar)"),
+                    ReadRow("SWEEP", sweepBar, sweepVal, Loc.T("device.phaser.the_range_the_corner_sweeps")),
+                    ReadRow("NULL", nullBar, nullVal, Loc.T("device.phaser.how_deep_the_notches_cut")),
                 },
             },
         };
@@ -288,14 +289,14 @@ internal sealed class PhaserDeviceBody : IDeviceBody
             double fb = Fb(), afb = Math.Abs(fb);
             bool warn = false;
             string foot;
-            if (!On()) foot = "Phaser bypassed: the signal passes unchanged";
-            else if (P(Mix) < 0.01f) { foot = "Mix at zero: only the dry signal is heard"; warn = true; }
+            if (!On()) foot = Loc.T("device.phaser.phaser_bypassed_the_signal_passes");
+            else if (P(Mix) < 0.01f) { foot = Loc.T("common.mix_at_zero_only_the"); warn = true; }
             else if (afb >= 0.85)
             {
-                foot = "Feedback " + FbF(fb) + NotaNum.F($": peaks up to +{PhaserMath.PeakDb(P(Mix), fb):0.0} dB, the phaser whistles");
+                foot = Loc.F("device.phaser.feedback_peaks_up_to_db_the", FbF(fb), PhaserMath.PeakDb(P(Mix), fb));
                 warn = true;
             }
-            else if (P(Depth) < 0.01f) foot = "Depth at zero: the notches stand still";
+            else if (P(Depth) < 0.01f) foot = Loc.T("device.phaser.depth_at_zero_the_notches");
             else
             {
                 int n = StagesN();

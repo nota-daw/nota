@@ -204,20 +204,20 @@ description: "Task list for recording and automating MIDI CC (#69)"
 
 **Independent Test**: In clips with and without recorded data, switch to Sustain, Mod wheel, Pitch wheel, Channel pressure and CC 74. Draw, move and delete, undo each step, and confirm playback follows (quickstart PR 2).
 
-- [ ] T032 [US2] Extend `LaneMode` in `src/managed/Nota.App/PianoRollView.Expression.cs` (L33) with `Controller`, and add a `_laneCtl` field.
+- [X] T032 [US2] Extend `LaneMode` in `src/managed/Nota.App/PianoRollView.Expression.cs` (L33) with `Controller`, and add a `_laneCtl` field.
   - **Default**: the first ctl with data in the clip, else 64. Remember it per editor session, like `_laneMode`.
   - **Height**: `SetLaneMode(Controller)` swaps in the new lane control at `ExprH`.
   - **Tab**: `LaneTabs` (L134) gains a fifth tab labelled with `MidiController.ShortName(_laneCtl)`, keeping the existing tab styling.
-- [ ] T033 [US2] Add the controller picker to the fifth tab in `src/managed/Nota.App/PianoRollView.Expression.cs`. A click on the active tab or its chevron opens a menu:
+- [X] T033 [US2] Add the controller picker to the fifth tab in `src/managed/Nota.App/PianoRollView.Expression.cs`. A click on the active tab or its chevron opens a menu:
   - first, the ctls with data in this clip, each marked with the automation picker's dot (reuse `AutoDot()` from `ArrangementView.Automation.cs:612`, or lift it into a shared helper in `ClipEditorKit.cs`);
   - then Sustain, Mod wheel, Pitch wheel, Channel pressure, Expression (CC11) and Breath (CC2);
   - then **Other CC ▸** with 0–127 in groups of 16, labelled "CC 7 — Volume", skipping reserved CCs.
 
   Labels are in sentence case.
-- [ ] T034 [US2] Create `src/managed/Nota.App/PianoRollView.Controllers.cs` (SPDX header, `partial class PianoRollView`) with a `ControllerLane` control. It reads the curve through a host delegate `Func<int, NotaAutomationPoint[]>? GetController` and writes through `Action<int, NotaAutomationPoint[]>? SetController`, mirroring `CreateExpression`.
+- [X] T034 [US2] Create `src/managed/Nota.App/PianoRollView.Controllers.cs` (SPDX header, `partial class PianoRollView`) with a `ControllerLane` control. It reads the curve through a host delegate `Func<int, NotaAutomationPoint[]>? GetController` and writes through `Action<int, NotaAutomationPoint[]>? SetController`, mirroring `CreateExpression`.
   - **Time mapping**: the same as the notes over the whole clip. A pickup before the clip start is drawn faintly.
   - **Ink**: neutral (`NotaPalette.VizInk`, `CurvePen`). Only the hovered point or block, and the selection, use the accent.
-- [ ] T035 [US2] Switch controllers (CC64–69) in `PianoRollView.Controllers.cs`:
+- [X] T035 [US2] Switch controllers (CC64–69) in `PianoRollView.Controllers.cs`:
   - **Drawing**: blocks where the value is ≥ 0.5. Fill height shows partial values (clarification 3).
   - **Drag on empty lane**: draws a block that snaps to the grid; ⌘ or Ctrl turns snap off.
   - **Drag an edge**: resizes the block.
@@ -225,7 +225,7 @@ description: "Task list for recording and automating MIDI CC (#69)"
   - **Delete**: double-click, or Delete with the block selected.
   - **Right-click**: *Clear <name>*.
   - A block is serialised as two step points: on at its start, off at its end.
-- [ ] T036 [US2] Continuous controllers in `PianoRollView.Controllers.cs`:
+- [X] T036 [US2] Continuous controllers in `PianoRollView.Controllers.cs`:
   - **Drawing**: a curve with points. The range lines are 0–127 with a midline label. The pitch wheel draws a centre line and ±full travel, and points within 2% of centre snap to 0.
   - **Freehand drag**: replaces the points under the stretch; ⌥ draws a straight line.
   - **Points**: drag a point to move it between its neighbours; double-click adds or deletes a point.
@@ -233,12 +233,12 @@ description: "Task list for recording and automating MIDI CC (#69)"
   - **Hover readout**: the value in the controller's units ("64", "+0.42", "on / off").
 
   Reuse the point-drag and freehand helpers from `PianoRollView.Expression.cs`. If they are private to the MPE lane, lift them into a shared helper.
-- [ ] T037 [US2] Wire the host in `src/managed/Nota.App/ClipEditorView.cs`:
+- [X] T037 [US2] Wire the host in `src/managed/Nota.App/ClipEditorView.cs`:
   - Set `GetController` / `SetController` to `IAudioEngine.GetMidiClipController` / `SetMidiClipController` for arrangement clips, and the `Session*` variants for slots.
   - `SetController` is called once on gesture release (one undo step, FR-013).
   - Refresh the lane after undo and redo and when the take republishes during recording, the same way notes refresh.
 - [ ] T038 [US2] Add a precedence note to the controller lane. When the track has a target-5 automation lane with points for `_laneCtl`, show the one-line note "Track automation overrides this lane" in `PianoRollView.Controllers.cs`. The data comes from `IAudioEngine.AutomationLaneInfo`. It is inert until US3 adds the target; no US3 dependency for compiling, because the enum value is added in T042.
-- [ ] T039 [US2] Visual check following quickstart PR 2. Run the headless Avalonia render, or the env-guarded in-app capture with `NOTA_DATA_DIR`, for Sustain blocks and a CC curve in Studio Dark and Studio Light. Then run the `DesignTokenCheck*` tests in the smoke suite (labels, numbers, radius allow-lists). Fix violations, or add allow-list rows only where the design guide permits.
+- [X] T039 [US2] Visual check following quickstart PR 2. Run the headless Avalonia render, or the env-guarded in-app capture with `NOTA_DATA_DIR`, for Sustain blocks and a CC curve in Studio Dark and Studio Light. Then run the `DesignTokenCheck*` tests in the smoke suite (labels, numbers, radius allow-lists). Fix violations, or add allow-list rows only where the design guide permits.
 
 **Checkpoint**: PR 2 is complete. Controllers are visible and editable.
 

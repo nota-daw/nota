@@ -119,10 +119,11 @@ control ever cut off or overlapping.
 
 **Acceptance Scenarios**:
 
-1. **Given** a track resized below 56 px (compact tier), **Then** its header shows the colour spine, name, type tag (if it fits), mute, solo and (where applicable) record-arm, on one line; the volume/pan row and input selector are hidden; the level meter remains visible.
+1. **Given** a track resized below 56 px (compact tier), **Then** its header shows the colour spine, name, type tag (if it fits), mute, solo and (where applicable) record-arm and input monitor, on one line; the volume/pan row and input selector are hidden; the level meter remains visible.
 2. **Given** a track in the standard tier (56–111 px, e.g. 64 px), **Then** its header shows exactly today's controls.
 3. **Given** a track resized to 112 px or more (large tier), **Then** its header additionally shows controls that do not fit in the standard layout (see FR-011), and existing controls (fader, meter) may use the extra space.
 4. **Given** a hidden control in the compact layout, **When** the user needs it, **Then** it is still reachable from the track's context menu or the mixer (nothing becomes unreachable).
+5. **Given** a track resized across tiers, **Then** its mute / solo / record-arm / monitor buttons stay right-aligned against the meter in every tier, with the input selector to their left (standard) or on its own row (large) (#387).
 
 ---
 
@@ -154,8 +155,8 @@ control ever cut off or overlapping.
 - **FR-007**: Clips, waveforms, MIDI note previews and automation drawn in a track's lane MUST scale to the row's height.
 - **FR-008**: Users MUST be able to change the track-list width by dragging the vertical seam between headers and lanes, with a horizontal-resize cursor; the width applies to every header column (tracks, groups, returns, master, and the toolbar strip above the headers).
 - **FR-009**: Track-list width MUST be limited to a minimum (enough for the compact header: spine, a short name, M/S/arm and the meter, ~160 px) and a maximum (~480 px); the default stays 228 px; double-clicking the seam resets it.
-- **FR-010**: Track headers MUST choose their layout by height: **compact** below 56 px (name + M/S/arm on one line, meter kept), **standard** from 56 px to below 112 px (today's layout), **large** from 112 px (standard plus more); no control may be clipped or overlap at any height or width within the limits. (Thresholds may be tuned in planning if a layout needs a few more pixels, keeping each preset height inside its own tier.)
-- **FR-011**: The large layout MUST add at least a labelled, taller volume fader and dB readout and a wider pan control, and for audio tracks keep the input selector and monitor on their own row rather than squeezed beside M/S/arm. Controls that need new engine capabilities are out of scope.
+- **FR-010**: Track headers MUST choose their layout by height: **compact** below 56 px (name + M/S/arm and, on audio tracks, monitor on one line, meter kept), **standard** from 56 px to below 112 px (today's layout), **large** from 112 px (standard plus more); no control may be clipped or overlap at any height or width within the limits. (Thresholds may be tuned in planning if a layout needs a few more pixels, keeping each preset height inside its own tier.)
+- **FR-011**: The large layout MUST add at least a labelled, taller volume fader and dB readout and a wider pan control, and for audio tracks keep the input selector on its own row rather than squeezed beside M/S/arm. In every tier the M/S/arm/monitor buttons sit right-aligned in the same order (#387). Controls that need new engine capabilities are out of scope.
 - **FR-012**: Each track's height and the track-list width MUST be saved with the project and restored when it is opened; projects without this data MUST open at the defaults.
 - **FR-013**: Resizing MUST NOT be recorded in undo history and MUST NOT mark audio/engine state as changed (it may mark the project as having unsaved changes).
 - **FR-014**: Existing header and lane gestures (reorder drag, select, context menu, clip move/trim, automation editing, drag-and-drop of files/devices onto tracks) MUST keep working; the resize zone is limited to a thin band at the row seam.

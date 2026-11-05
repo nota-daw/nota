@@ -19,6 +19,7 @@ using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -51,12 +52,12 @@ public static class GamepadControls
         if (IsAxis(controlId))
             return Axis(controlId) switch
             {
-                GamepadAxis.LeftX => "Left stick ←→",
-                GamepadAxis.LeftY => "Left stick ↑↓",
-                GamepadAxis.RightX => "Right stick ←→",
-                GamepadAxis.RightY => "Right stick ↑↓",
-                GamepadAxis.LeftTrigger => "Left trigger",
-                _ => "Right trigger",
+                GamepadAxis.LeftX => Loc.T("midi_learn.left_stick"),
+                GamepadAxis.LeftY => Loc.T("midi_learn.left_stick_2"),
+                GamepadAxis.RightX => Loc.T("midi_learn.right_stick"),
+                GamepadAxis.RightY => Loc.T("midi_learn.right_stick_2"),
+                GamepadAxis.LeftTrigger => Loc.T("midi_learn.left_trigger"),
+                _ => Loc.T("midi_learn.right_trigger"),
             };
         return (GamepadButton)controlId switch
         {
@@ -64,7 +65,7 @@ public static class GamepadControls
             GamepadButton.DpadDown => "D-pad ↓",
             GamepadButton.DpadLeft => "D-pad ←",
             GamepadButton.DpadRight => "D-pad →",
-            _ => $"Button {controlId}",
+            _ => Loc.F("midi_learn.button", controlId),
         };
     }
 }
@@ -172,8 +173,8 @@ public sealed class MidiMapping
     public string SourceLabel => SourceKind switch
     {
         MidiSourceKind.Cc => $"CC {Number} · ch{Channel + 1}",
-        MidiSourceKind.Gamepad => $"Pad · {GamepadControls.Name(Number)}",
-        MidiSourceKind.Phone => $"Phone · {Nota.Remote.PhoneControls.Name(Number)}",
-        _ => $"Note {Number} · ch{Channel + 1}",
+        MidiSourceKind.Gamepad => Loc.F("midi_learn.pad", GamepadControls.Name(Number)),
+        MidiSourceKind.Phone => Loc.F("midi_learn.phone", Nota.Remote.PhoneControls.Name(Number)),
+        _ => Loc.F("midi_learn.note_ch", Number, Channel + 1),
     };
 }

@@ -15,6 +15,7 @@ using Avalonia.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -28,7 +29,7 @@ public partial class MainWindow
     {
         _dlText = new TextBlock { Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center, MaxWidth = 360, TextTrimming = TextTrimming.CharacterEllipsis };
         var open = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), Child = _dlText };
-        ToolTip.SetTip(open, "Open Settings → Downloads");
+        ToolTip.SetTip(open, Loc.T("main.downloads.open_settings_downloads"));
         open.PointerEntered += (_, _) => _dlText.TextDecorations = TextDecorations.Underline;
         open.PointerExited += (_, _) => _dlText.TextDecorations = null;
         open.PointerPressed += (_, e) =>
@@ -87,7 +88,7 @@ public partial class MainWindow
         // Past the download stage (unpacking, scanning, removing) there's nothing to cancel.
         _dlCancel.IsVisible = !busy || jobs.Cancellable;
         _dlCancel.IsEnabled = !jobs.Cancelling;
-        ToolTip.SetTip(_dlCancel, busy ? "Cancel the download" : "Dismiss");
+        ToolTip.SetTip(_dlCancel, busy ? Loc.T("main.cancel_the_download") : Loc.T("main.downloads.dismiss"));
     }
 
     /// <summary>Settings → Downloads, on the given source; reuses an open Settings window.</summary>

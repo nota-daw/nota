@@ -19,6 +19,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -89,7 +90,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { barNum, tickRow, ofBars } } } } };
 
         // ---------- layer stack ----------
-        var layerHint = new TextBlock { Text = "Press Record to lay down the first loop", FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        var layerHint = new TextBlock { Text = Loc.T("device.strata.press_record_to_lay_down"), FontSize = 9, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         var layerRows = new Border[MaxLayers]; var waves = new StrataWave[MaxLayers];
         var stateTxts = new TextBlock[MaxLayers]; var dbTxts = new TextBlock[MaxLayers]; var muteBtns = new Border[MaxLayers]; var idxTxts = new TextBlock[MaxLayers];
         var layerStack = new StackPanel { Spacing = 3 };
@@ -192,7 +193,7 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 qRow,
                 new Border { Height = 1, Background = NotaPalette.SurfaceRaised },
                 Toggle(CountIn, "Count-in 1 bar", Teal),
-                Toggle(SetTempo, "Set tempo from loop", Teal),
+                Toggle(SetTempo, Loc.T("device.strata.set_tempo_from_loop"), Teal),
                 Toggle(Reverse, "Reverse", NotaPalette.VizInk),
                 new StackPanel { VerticalAlignment = VerticalAlignment.Bottom, Children = { bottomActions } } } } };
         DockPanel.SetDock(rail, Dock.Right);
@@ -214,17 +215,17 @@ internal sealed class StrataDeviceBody : IDeviceBody
                 barNum.Text = $"{barPos + 1} . {beat + 1}";
             }
             else barNum.Text = "–";
-            ofBars.Text = $"of {(loopBars > 0 ? loopBars : 0)} bars";
+            ofBars.Text = Loc.Plural("device.strata.of_bars", loopBars > 0 ? loopBars : 0);
             int lit = (int)Math.Round(Math.Clamp(phase, 0, 1) * 16);
             bool rolling = mode is M_Rec or M_Over or M_Play;   // the progress is the playhead only while it runs
             for (int i = 0; i < 16; i++) ticks[i].Background = (layers > 0 && i < lit) ? (rolling ? Brass : NotaPalette.VizInk) : Sunken;
-            countLbl.Text = layers > 0 ? $"{layers} of {MaxLayers} · one cycle shown" : "";
+            countLbl.Text = layers > 0 ? Loc.F("device.strata.of_one_cycle_shown", layers, MaxLayers) : "";
 
             // Action captions + active highlight.
             actSub[0].Text = mode == M_Empty || layers == 0 ? "start loop" : "arm next";
-            actSub[1].Text = layers < MaxLayers ? $"onto layer {Math.Min(MaxLayers, layers + 1)}" : "full";
+            actSub[1].Text = layers < MaxLayers ? Loc.F("device.strata.onto_layer", Math.Min(MaxLayers, layers + 1)) : "full";
             actSub[2].Text = "all layers";
-            actSub[3].Text = "at bar end";
+            actSub[3].Text = Loc.T("device.strata.at_bar_end");
             int active = mode switch { M_Rec => 0, M_Over => 1, M_Play => 2, M_Stop => 3, _ => -1 };
             for (int i = 0; i < 4; i++)
             {

@@ -72,6 +72,9 @@ class PluginCatalog {
     // under one lock so the index and the entry can't drift apart mid-scan. False
     // when `index` is out of range.
     bool typeAt(int32_t index, juce::PluginDescription& out) const;
+    // The same for the entry indexOfId(identifier) finds, looked up and copied under one
+    // lock (a scan between the two steps could move the index onto another plug-in).
+    bool typeOfId(const char* identifier, juce::PluginDescription& out) const;
 
     // Persistence (message/background threads only — file I/O, never RT).
     void loadOnce();
@@ -89,6 +92,7 @@ class PluginCatalog {
     PluginCatalog();
     ~PluginCatalog();
     struct Impl;
+    int32_t indexOfIdLocked(const char* identifier) const; // caller holds mutex_
     std::unique_ptr<Impl> impl_;
     mutable std::shared_mutex mutex_;
     bool catalogLoaded_ = false;

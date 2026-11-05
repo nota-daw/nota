@@ -39,6 +39,10 @@ enum class CommandType : uint32_t {
     // A device moved between tracks (specs/043): silence one track's instrument and flush its
     // MIDI effects on the audio thread, which owns their voices. i0 = track id.
     TrackNotesOff,
+    // A take was discarded and records again (specs/078). Queued after the transport moves
+    // that put the playhead back, so every block rendered from here belongs to the new take:
+    // i0 = the new take epoch, i1 = 1 to open the capture gate now (no count-in to wait for).
+    TakeRestart,
 };
 
 struct Command {

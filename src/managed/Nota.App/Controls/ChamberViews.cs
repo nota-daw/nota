@@ -15,6 +15,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -279,7 +280,7 @@ internal sealed class ChamberIrView : Control, IValueHandles
         RenderResult(ctx, w, h, full);
         if (_building)
         {
-            var b = ChamberInk.Text("building…", NotaGraph.AxisSize, NotaPalette.TextTertiary);
+            var b = ChamberInk.Text(Loc.T("device.chamber.building"), NotaGraph.AxisSize, NotaPalette.TextTertiary);
             ctx.DrawText(b, new Point(w - b.Width - 4, h + 2));
         }
         if (_hover) ctx.DrawRectangle(null, new Pen(NotaPalette.AccentBright, 1.5), new Rect(1, 1, w - 2, full - 2), 3, 3);
