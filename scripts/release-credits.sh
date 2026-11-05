@@ -117,9 +117,13 @@ case "$mode" in
     done
 
     # Every "#N" or "nota-daw/nota#N" in the release's commit messages. A number can be an
-    # issue or a pull request; a pull request counts through the issues it closes.
+    # issue or a pull request; a pull request counts through the issues it closes. Each
+    # reference is matched whole (with whatever owner/repo or word stands before the #), so
+    # "other/project#12" or "nota-docs#12" isn't taken for issue 12 here.
     nums="$(git log --format='%B' "${from}..${to}" \
-              | grep -oE "(${repo_owner}/${repo_name})?#[0-9]+" | sed 's/.*#//' | sort -un)" || true
+              | grep -oE "[A-Za-z0-9_./-]*#[0-9]+" \
+              | grep -E "^(${repo_owner}/${repo_name})?#[0-9]+$" \
+              | sed 's/.*#//' | sort -un)" || true
     if [ -z "$nums" ]; then
       echo "warn: no issue references in ${from}..${to}" >&2
       exit 0
