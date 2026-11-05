@@ -1562,16 +1562,16 @@ public sealed partial class ModularView : UserControl
             bool target = _connecting && IsConnectTarget(n);
             ring.IsVisible = n.Selected || n.Hover || target;
             ring.BorderBrush = target ? BrassBright : n.Selected ? NotaPalette.Accent : BorderHover;
-            double th = target ? 2 : 1;
-            ring.BorderThickness = new Thickness(th);
-            ring.Margin = new Thickness(-th);
-            ring.CornerRadius = new CornerRadius(NotaRadius.GroupValue + th);
+            // State changes colour only, never the outline's width (DESIGN.md).
+            ring.BorderThickness = new Thickness(1);
+            ring.Margin = new Thickness(-1);
+            ring.CornerRadius = new CornerRadius(NotaRadius.GroupValue + 1);
             return;
         }
         if (n.View is Border b)
         {
             b.BorderBrush = n.Selected ? n.Stripe : n.Hover ? BorderHover : BorderDef;
-            b.BorderThickness = new Thickness(n.Selected ? 1.5 : 1);
+            b.BorderThickness = new Thickness(1);
         }
     }
 
