@@ -226,7 +226,7 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
         {
             bool two = InstrumentView.Index(proxy, T) >= 0;
             double w = strategy.BodyOnly ? strategy.WidthFor(proxy, T) : 700;
-            return new DeviceWindowPage(BuildChainInstrumentBespoke(ik, sc, tickReg, w), w, CardBodyH, WindowPresets(presets, () => win.Refill()),
+            return new DeviceWindowPage(BuildChainInstrumentBespoke(ik, sc, tickReg, w, () => win.Refill()), w, CardBodyH, WindowPresets(presets, () => win.Refill()),
                 two ? new DeviceWindowSize(InstrumentView.IsMini(proxy, T), m => InstrumentView.SetMini(proxy, T, m)) : null);
         }, status: () => InstrumentStatus(a, sc, proxy, strategy)) { ContextTrackId = T };
         win.ShowFrom(anchor);
@@ -405,14 +405,16 @@ internal sealed partial class RackCardView(DeviceCardContext ctx)
 
     // Host a built-in instrument's own editor for a rack chain: a DispatchProxy redirects
     // the editor's plugin-param calls (track, -1, i) to the chain surface (track, chain, i);
-    // a local tick drives its live graphs + knob follow.
-    private Control BuildChainInstrumentBespoke(int ik, int sc, Action<Action> tickReg, double width = 700)
+    // a local tick drives its live graphs + knob follow. rebuild: what the card's RequestRebuild
+    // does (a Nota Twin's A / B, part and layout switches rebuild it) — the window refills.
+    private Control BuildChainInstrumentBespoke(int ik, int sc, Action<Action> tickReg, double width = 700, Action? rebuild = null)
     {
         var proxy = ChainInstrumentProxy(sc);
         var faders = new System.Collections.Generic.List<(int i, Knob k, TextBlock v, Func<float, string>? fmt)>();
         Action? viz = null;
+        Action requestRebuild = rebuild is null ? () => { } : () => Avalonia.Threading.Dispatcher.UIThread.Post(rebuild);
         var ctx = new DeviceCardContext(proxy, T, tickReg, () => { }, (i, k, v, f) => faders.Add((i, k, v, f)), v => viz = v,
-            _ => { }, () => 0, _ => { }, tickReg, () => { }, () => { }, _ => { }, () => { }, _ctx.Factory);
+            _ => { }, () => 0, _ => { }, tickReg, () => { }, requestRebuild, _ => { }, () => { }, _ctx.Factory);
         var body = _irFactory.Resolve(ik, true).Build(ctx);
         tickReg(() => { viz?.Invoke(); foreach (var f in faders) { if (f.k.Dragging) continue; float v = proxy.PluginParamGet(T, -1, f.i); if (Math.Abs(v - f.k.Value) > 1e-3) { f.k.Value = v; f.v.Text = (f.fmt ?? Pct)(v); } } });
         return new Border { Width = width, Height = CardBodyH, Background = NotaPalette.BgApp, ClipToBounds = true, Child = body };

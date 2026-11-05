@@ -26,6 +26,13 @@ NOTA_API NotaResult nota_track_note_off_velocity(NotaEngine* engine, int32_t tra
 /* Preset audition: the instrument's state blob after its params (a Twin preset's patterns),
  * so a sequenced preset previews its own pattern (SC-011 presets would otherwise be silent). */
 NOTA_API int32_t nota_audition_instrument_state(NotaAudition* rig, const uint8_t* data, int32_t size);
+
+/* Loading a preset onto a Twin already there: the state blob (its patterns), with what it changes
+ * in the instrument's edit state as one undo step, so Undo restores the sequence with the sound.
+ * Track instrument, an Instrument Rack chain's, and a chain of a rack at a device index. */
+NOTA_API int32_t nota_track_instrument_set_state_undoable(NotaEngine* engine, int32_t track_id, const uint8_t* data, int32_t size);
+NOTA_API int32_t nota_rack_chain_instrument_set_state_undoable(NotaEngine* engine, int32_t track_id, int32_t chain, const uint8_t* data, int32_t size);
+NOTA_API int32_t nota_rackdev_chain_instrument_set_state_undoable(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, const uint8_t* data, int32_t size);
 ```
 
 Inside the engine (no ABI):
@@ -39,6 +46,11 @@ Inside the engine (no ABI):
   Twin's built-in effects use it on a silent start, so a second render, a freeze and a render
   at another rate match the first one exactly (SC-008, edge cases). `A_KillTail` /
   `A_ClearLoop` keep their old, narrower meaning.
+- The undo step for an edit-state change (`MixKind::InstrumentEdit`, 9 — develop took 8 for
+  `TrackSend`) also covers a Twin in a rack chain: `deviceIndex` is the rack, `paramIndex` the
+  chain (−1 = the track's own instrument). `nota_rack_chain_instrument_action` records it too.
+- The engine's sustain pedal keeps each held key's release velocity (`Instrument::pedalRelVel`)
+  and sends it with the note-off when the pedal comes up.
 
 ## Reused (no signature change)
 

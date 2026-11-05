@@ -336,21 +336,53 @@ int64_t Engine::mosaicZoneSampleId(int32_t trackId, int32_t zone) const {
 void Engine::instrumentAction(int32_t trackId, int32_t id, int32_t iarg, float farg) {
     auto t = findTrackAuthoring(trackId);
     if (!t || !t->instrument) return;
-    auto before = t->instrument->editState();
-    t->instrument->action(id, iarg, farg);
-    if (before.empty()) return;
-    auto after = t->instrument->editState();
-    if (after == before) return;
-    // One mix-only undo step that swaps the instrument's edit state (as setEqBandText does).
+    instrumentActionUndoable(*t->instrument, trackId, -1, -1, id, iarg, farg);
+}
+
+// The instrument an edit-state undo step addresses: chain >= 0 is chain `chain` of the rack at
+// deviceIndex (MixChange's deviceIndex / paramIndex), -1 the track's own instrument.
+Instrument* Engine::editStateInstrument(int32_t trackId, int32_t deviceIndex, int32_t chain) const {
+    if (chain >= 0) {
+        auto* r = rackCoreAt(trackId, deviceIndex);
+        return r ? r->chainInstrument(chain) : nullptr;
+    }
+    auto t = findTrackAuthoring(trackId);
+    return t ? t->instrument.get() : nullptr;
+}
+
+// A change of an instrument's edit state is one mix-only undo step swapping it (as setEqBandText
+// does); nothing when it didn't change, or the instrument keeps none.
+void Engine::pushInstrumentEdit(int32_t trackId, int32_t deviceIndex, int32_t chain, std::vector<uint8_t> before,
+    std::vector<uint8_t> after) {
+    if (before.empty() || after == before) return;
     noteStates_.push_back(std::move(before));
     noteStates_.push_back(std::move(after));
     const auto at = static_cast<float>(noteStates_.size() - 2);
-    undoStack_.push_back({nullptr, {MixChange{MixKind::InstrumentEdit, trackId, at, at + 1.0f, -1, -1}}});
+    undoStack_.push_back({nullptr, {MixChange{MixKind::InstrumentEdit, trackId, at, at + 1.0f, deviceIndex, chain}}});
     if (undoStack_.size() > kMaxUndoDepth) {
         undoStack_.erase(undoStack_.begin());
         if (undoGroupDepth_ > 0 && undoGroupBase_ > 0) --undoGroupBase_;
     }
     redoStack_.clear();
+}
+
+void Engine::instrumentActionUndoable(Instrument& inst, int32_t trackId, int32_t deviceIndex, int32_t chain,
+    int32_t id, int32_t iarg, float farg) {
+    auto before = inst.editState();
+    inst.action(id, iarg, farg);
+    if (!before.empty()) pushInstrumentEdit(trackId, deviceIndex, chain, std::move(before), inst.editState());
+}
+
+// Loads a state blob into an instrument (a preset's patterns) with what it changes in the edit
+// state as an undo step, so undoing the preset brings the old sequence back with the old sound.
+bool Engine::instrumentSetStateUndoable(int32_t trackId, int32_t deviceIndex, int32_t chain, const uint8_t* data,
+    int32_t size) {
+    Instrument* inst = editStateInstrument(trackId, deviceIndex, chain);
+    if (!inst || !data || size <= 0) return false;
+    auto before = inst->editState();
+    inst->setState(data, size);
+    pushInstrumentEdit(trackId, deviceIndex, chain, std::move(before), inst->editState());
+    return true;
 }
 
 // Nota Rhythm Phase 2: load a one-shot into one drum voice. Clones the instrument (so the

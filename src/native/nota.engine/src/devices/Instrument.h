@@ -115,6 +115,7 @@ class Instrument {
     // atomics because a rack edit forks the rack on the message thread and carries them over.
     std::atomic<bool> pedalDown{false};
     std::atomic<uint64_t> pedalHeld[2] = {0, 0}; // released keys the pedal is holding, one bit per pitch
+    std::atomic<uint8_t> pedalRelVel[128] = {}; // their release velocities (×127, 0 = none sent)
 
     // Add `frames` of interleaved stereo into `out`. Continues current voices.
     virtual void render(float* out, int32_t frames) = 0;

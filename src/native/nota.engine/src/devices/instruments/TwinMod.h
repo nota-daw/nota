@@ -62,8 +62,8 @@ const char* dstName(int index); // "Ladder Cutoff", "Morph", "Pitch"…
 int dstIndexOfSide(int side);   // the destination index of a side param, or 0
 constexpr int kDstMorph = 1, kDstPitch = 2, kDstVibrato = 5;
 
-// The part's routes with a source, a destination and a non-zero depth (≤ kRoutes).
-int liveRoutes(const std::atomic<float>* pn, int part, float morph, LiveRoute* out);
+// The part's routes with a source, a destination and a depth on either side (≤ kRoutes).
+int liveRoutes(const std::atomic<float>* pn, int part, LiveRoute* out);
 
 // The part's morph position, then its sounding PartCtl. spb: samples per beat (0 = no tempo),
 // for the synced LFO rates. off: normalized offsets per side param (the matrix), or null.

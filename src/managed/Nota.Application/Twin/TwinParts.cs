@@ -9,6 +9,7 @@
 // it to Layer, with the current sound as Lower.
 
 using System.Collections.Generic;
+using Nota.Application.Localization;
 
 namespace Nota.Application.Twin;
 
@@ -50,8 +51,8 @@ public static class TwinParts
     /// Single patch switches it to Layer. One undo step; returns "" or a user-facing warning.</summary>
     public static string LoadIntoPart(IAudioEngine engine, int trackId, IReadOnlyDictionary<string, float> preset, string part)
     {
-        if (engine.TrackInstrumentKind(trackId) != TwinSides.Kind) return "Not a Nota Twin.";
-        if (part is not ("lo" or "up")) return "Unknown part.";
+        if (engine.TrackInstrumentKind(trackId) != TwinSides.Kind) return Loc.T("device.twin.not_a_nota_twin");
+        if (part is not ("lo" or "up")) return Loc.T("device.twin.unknown_part");
         var index = Index(engine, trackId);
         string to = part + ".";
         var writes = new List<(int Index, float Value)>();

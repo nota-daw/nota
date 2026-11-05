@@ -566,6 +566,7 @@ internal static class TwinTests
         // ---- Split / Layer (US9) ------------------------------------------------------------------
         foreach (var r in PartChecks()) yield return r;
         foreach (var r in EdgeChecks()) yield return r;
+        foreach (var r in ReviewChecks()) yield return r;
     }
 
     // Lower panned hard left, Upper hard right, so a channel says which part played.
@@ -1107,6 +1108,230 @@ internal static class TwinTests
                     $"SC-009: \"To clip\" writes the pattern as a clip that renders identically (maxdiff {Diff(live, fromClip):G3}, level {d:0.00} dB) and turns the sequencer off");
                 yield return (f.Undo() && G(f, u, "seq.on") > 0.5f, "undoing \"To clip\" removes the clip and turns the sequencer back on");
             }
+        }
+    }
+
+    // ---- fixes from the PR review (#406) -------------------------------------------------------
+    private static IEnumerable<(bool, string)> ReviewChecks()
+    {
+        const int MorphDst = 1; // TwinMatrix's virtual destinations: None, Morph, …
+        int Src(string name) => Array.IndexOf(TwinMatrix.Sources, name);
+
+        // A queued pattern starts on its first step, whatever the length of the one before it;
+        // picking the playing pattern again before the switch cancels it.
+        (List<(int Pat, int Step, int Pend)> Log, NotaEngine E) Patterns(Action<NotaEngine, int, int> atBlock)
+        {
+            var (e, t) = SeqRig(120, Enumerable.Repeat("C4:100:25%", 16).ToArray());
+            TwinPatterns.WritePattern(e, t, 1, Enumerable.Repeat("E4:100:25%", 24).ToArray());
+            P(e, t, "seq.pattern", 0f);
+            var log = new List<(int, int, int)>();
+            var sc = new float[32];
+            var tmp = new float[64 * 2];
+            e.Seek(0); e.Play();
+            for (int b = 0; b < Sr * 3 / 64; b++)
+            {
+                atBlock(e, t, b);
+                e.RenderOffline(tmp, 64, Sr);
+                e.InstrumentScope(t, sc);
+                log.Add(((int)sc[1], (int)sc[0], (int)sc[2]));
+            }
+            return (log, e);
+        }
+        {
+            var (log, e) = Patterns((x, y, b) => { if (b == 10) P(x, y, "seq.pattern", 1 / 7f); });
+            using (e)
+            {
+                int first = log.FindIndex(l => l.Pat == 1);
+                yield return (first > 0 && log[first].Step == 0,
+                    $"a queued pattern of another length starts on its first step (16 → 24 steps: step {(first > 0 ? log[first].Step + 1 : -1)})");
+            }
+        }
+        {
+            // Pattern 2 asked for while step 1 plays, the playing one picked back before step 3.
+            var (log, e) = Patterns((x, y, b) => { if (b == 10) P(x, y, "seq.pattern", 1 / 7f); if (b == 150) P(x, y, "seq.pattern", 0f); });
+            using (e)
+                yield return (log[140].Pend == 1 && log.All(l => l.Pat == 0) && log[^1].Pend == -1,
+                    "picking the playing pattern again cancels the queued one");
+        }
+
+        // The arpeggiator drops the pattern's motion: a motion lane on the cutoff stops overriding the knob.
+        {
+            var (e, t) = SeqRig(120, Enumerable.Repeat("C4:100:90%", 16).ToArray(), (x, y) => { P(x, y, "lo.a.noiselevel", 0f); P(x, y, "lo.a.o1level", 1f); });
+            using (e)
+            {
+                TwinPatterns.Do(e, t, TwinPatterns.Act.MotionTarget, Pi(e, t, "lo.a.ldcut"));
+                for (int k = 0; k < 16; k++) TwinPatterns.Do(e, t, TwinPatterns.Act.MotionSet, k, 0f); // the lane closes the filter
+                P(e, t, "lo.a.ldcut", 1f);
+                var tmp = new float[512 * 2];
+                e.Seek(0); e.Play();
+                for (int b = 0; b < 20; b++) e.RenderOffline(tmp, 512, Sr);
+                P(e, t, "seq.kind", 1f); // to the arpeggiator, a held chord
+                e.TrackNoteOn(t, 60, 0.8f);
+                Roll2(e, Sr / 2);
+                double open = Rms(Roll2(e, Sr / 2));
+                yield return (Db(open) > -40, $"switching to the arpeggiator drops the pattern's motion lane (open cutoff: {Db(open):0} dB)");
+            }
+        }
+        float[] Roll2(NotaEngine e, int frames) { var o = new float[frames * 2]; var tmp = new float[512 * 2]; for (int d = 0; d < frames;) { int m = Math.Min(512, frames - d); e.RenderOffline(tmp, m, Sr); Array.Copy(tmp, 0, o, d * 2, m * 2); d += m; } return o; }
+
+        // A held chord follows Pan (it used to keep its note-on pan).
+        {
+            using var e = new NotaEngine();
+            int t = e.AddTwinTrack();
+            P(e, t, "lo.a.drift", 0f); P(e, t, "lo.a.spread", 0f);
+            Render(e, 512);
+            e.TrackNoteOn(t, 60, 0.8f);
+            var before = Render(e, Sr / 4);
+            P(e, t, "lo.pan", 0f); // hard left
+            Render(e, Sr / 10);
+            var after = Render(e, Sr / 4);
+            double balBefore = Db(Ch(before, 0)) - Db(Ch(before, 1)), balAfter = Db(Ch(after, 0)) - Db(Ch(after, 1));
+            yield return (Math.Abs(balBefore) < 1 && balAfter > 20, $"a held note follows Pan (L − R: {balBefore:0.0} dB, then {balAfter:0} dB)");
+        }
+
+        // Osc 2 Low leaves the keyboard: the same pitch for C3 and C5.
+        {
+            double Hz(int note)
+            {
+                using var e = new NotaEngine();
+                int t = e.AddTwinTrack();
+                foreach (var (id, v) in new[] { ("lo.a.o1level", 0f), ("lo.a.o2level", 1f), ("lo.a.o2lo", 1f), ("lo.a.o2coarse", 1f), ("lo.a.ldcut", 1f), ("lo.a.drift", 0f) })
+                    P(e, t, id, v);
+                Render(e, 512);
+                e.TrackNoteOn(t, note, 0.8f);
+                var st = Render(e, Sr);
+                double best = 0, bestHz = 0;
+                for (double hz = 20; hz < 400; hz += 0.5) { double a = At(st, hz, Sr / 4); if (a > best) { best = a; bestHz = hz; } }
+                return bestHz;
+            }
+            double lo = Hz(48), hi = Hz(72);
+            yield return (lo > 0 && Math.Abs(lo - hi) < 1.5, $"Osc 2 Low ignores the key: C3 and C5 both at {lo:0.0} / {hi:0.0} Hz");
+        }
+
+        // LFO 3's Symmetry and Curve reach the sound (a route from LFO 3 to the cutoff).
+        {
+            double Lfo3(float sym, float curve)
+            {
+                using var e = new NotaEngine();
+                int t = e.AddTwinTrack();
+                foreach (var (id, v) in new[] { ("lo.a.lfo3shape", 0.2f), ("lo.a.lfo3sym", sym), ("lo.a.lfo3curve", curve), ("lo.a.lfo3rate", 0.5f), ("lo.a.ldcut", 0.5f), ("lo.a.drift", 0f) })
+                    P(e, t, id, v);
+                TwinMatrix.Add(e, t, Src("LFO 3"), TwinMatrix.DestinationOfSide("ldcut"), 0.8f, 0.8f);
+                Render(e, 512);
+                e.TrackNoteOn(t, 48, 0.8f);
+                return Rms(Render(e, Sr));
+            }
+            double plain = Lfo3(0.5f, 0.5f), skew = Lfo3(0.95f, 0.5f), bent = Lfo3(0.5f, 1f);
+            yield return (Math.Abs(Db(skew) - Db(plain)) > 0.1 && Math.Abs(Db(bent) - Db(plain)) > 0.1,
+                $"LFO 3's Symmetry and Curve change the sound ({Db(plain):0.00} / {Db(skew):0.00} / {Db(bent):0.00} dB)");
+        }
+
+        // Seq gate is a live source: routed to the oscillator level, it opens the sound while steps play.
+        {
+            double Gated(bool route)
+            {
+                var (e, t) = SeqRig(120, Enumerable.Repeat("C4:100:90%", 16).ToArray(), (x, y) => { P(x, y, "lo.a.noiselevel", 0f); P(x, y, "lo.a.o1level", 0f); });
+                using (e)
+                {
+                    if (route) TwinMatrix.Add(e, t, Src("Seq gate"), TwinMatrix.DestinationOfSide("o1level"), 1f, 1f);
+                    return Rms(Roll(e, 1.0));
+                }
+            }
+            double off = Gated(false), on = Gated(true);
+            yield return (Db(on) - Db(off) > 20, $"the Seq gate source moves its destination ({Db(off):0} dB without the route, {Db(on):0} dB with it)");
+        }
+
+        // A route that lives only on side B starts when a per-note Morph route takes the note to B.
+        {
+            double Note(bool bOnly)
+            {
+                using var e = new NotaEngine();
+                int t = e.AddTwinTrack();
+                P(e, t, "lo.morph", 0f); P(e, t, "lo.a.drift", 0f);
+                TwinMatrix.Add(e, t, Src("Velocity"), MorphDst, 1f, 1f);
+                if (bOnly) TwinMatrix.Add(e, t, Src("Velocity"), TwinMatrix.DestinationOfSide("o1level"), 0f, -1f);
+                Render(e, 512);
+                e.TrackNoteOn(t, 60, 1f);
+                return Rms(Render(e, Sr / 2));
+            }
+            double plain = Note(false), withB = Note(true);
+            yield return (Db(plain) - Db(withB) > 20,
+                $"a side-B-only route acts once the note morphs to B ({Db(plain):0} dB, {Db(withB):0} dB with the B route closing Osc 1)");
+        }
+
+        // Release velocity survives the sustain pedal.
+        {
+            double Pedal(float relVel)
+            {
+                using var e = new NotaEngine();
+                int t = e.AddTwinTrack();
+                P(e, t, "lo.a.aenvr", 0.25f);
+                TwinMatrix.Add(e, t, Src("Release velocity"), TwinMatrix.DestinationOfSide("aenvr"), 1f, 1f);
+                Render(e, 512);
+                e.TrackNoteOn(t, 60, 0.8f);
+                e.SendTrackController(t, 64, 1f);
+                Render(e, Sr / 4);
+                e.TrackNoteOffVelocity(t, 60, relVel);
+                Render(e, Sr / 10);
+                e.SendTrackController(t, 64, 0f);
+                Render(e, Sr / 10);
+                return Rms(Render(e, Sr / 2));
+            }
+            double soft = Pedal(0.05f), hard = Pedal(1f);
+            yield return (Db(hard) - Db(soft) > 6, $"release velocity is kept while the pedal holds the note ({Db(soft):0} / {Db(hard):0} dB)");
+        }
+
+        // A preset's patterns undo with the preset.
+        {
+            using var e = new NotaEngine();
+            int t = e.AddTwinTrack(), src = e.AddTwinTrack();
+            TwinPatterns.WritePattern(e, src, 0, new[] { "C3", "E3", "G3" });
+            var doc = PresetService.Capture(e, src, -1, "Seq")!;
+            e.ClearUndoHistory();
+            PresetEdit.Apply(e, t, PresetSurface.Instrument, -1, "", "Seq", () => PresetService.ApplyInPlace(doc, e, t, -1));
+            bool applied = TwinPatterns.FromState(e.GetPluginState(t, -1))![0].Length == 3;
+            bool undone = e.Undo() && TwinPatterns.FromState(e.GetPluginState(t, -1))![0].Length == 16 && !e.CanUndo;
+            yield return (applied && undone, "undoing a Twin preset brings the old patterns back with the old sound, in one step");
+        }
+
+        // On an Instrument Rack chain: the card's state reads the chain's Twin, and pattern edits undo.
+        {
+            using var e = new NotaEngine();
+            int r = e.AddInstrumentRackTrack();
+            e.RackAddChain(r, 18);
+            var px = RackChainEngineProxy.Create(e, 0);
+            e.ClearUndoHistory();
+            TwinPatterns.Do(px, r, TwinPatterns.Act.AddStepNote, 2 << 8 | 64, 0.7f);
+            var read = TwinPatterns.FromState(px.GetPluginState(r, -1));
+            bool reads = read is not null && read[0].Steps[2].Notes.SequenceEqual(new[] { 64 });
+            bool undone = e.Undo() && TwinPatterns.FromState(px.GetPluginState(r, -1))![0].Steps[2].IsRest;
+            yield return (reads && undone, "a Twin on a rack chain: its patterns read through the chain, and a pattern edit is an undo step");
+        }
+
+        // To clip: refuses what a clip can't play as the sequencer does; keeps automation outside the clip;
+        // a stepped lane holds each value up to the next (swung) step, a smooth one glides on to the first.
+        {
+            using var e = new NotaEngine();
+            int t = e.AddTwinTrack();
+            TwinPatterns.WritePattern(e, t, 0, new[] { "C3", "E3", "G3", "C4" });
+            P(e, t, "mode", 0.5f); P(e, t, "seq.target", 0.5f); // Layer, the sequencer on Upper
+            bool refused = TwinPatterns.ToClipBlock(e, t, 0) == TwinPatterns.ClipBlock.LayerOnePart && TwinPatterns.ToClip(e, t, 0, 0) == -1;
+            P(e, t, "mode", 0f);
+            int pid = Pi(e, t, "lo.a.ldcut");
+            int li = e.AddPluginAutomationLane(t, -1, "lo.a.ldcut");
+            e.SetAutomationPoints(t, li, new[] { new AutomationPoint(32, 0.2f), new AutomationPoint(36, 0.9f) });
+            TwinPatterns.Do(e, t, TwinPatterns.Act.MotionTarget, pid);
+            for (int k = 0; k < 4; k++) TwinPatterns.Do(e, t, TwinPatterns.Act.MotionSet, k, k / 3f);
+            P(e, t, "seq.swing", 1f);
+            int clip = TwinPatterns.ToClip(e, t, 0, 0);
+            var pts = e.GetAutomationPoints(t, li);
+            bool kept = pts.Any(p => p.Beat == 32 && Math.Abs(p.Value - 0.2f) < 1e-6) && pts.Any(p => p.Beat == 36);
+            bool ordered = pts.Zip(pts.Skip(1)).All(z => z.First.Beat <= z.Second.Beat);
+            // Step 1 (odd) is swung late by half a step: step 0's value holds until just before it.
+            double sb = 0.25, on1 = sb + 0.5 * sb;
+            bool held = pts.Any(p => Math.Abs(p.Beat - (on1 - 1e-4)) < 1e-6 && p.Value == 0f) && !pts.Any(p => p.Beat > sb * 0.999 && p.Beat < on1 - 1e-3 && p.Value != 0f);
+            yield return (refused && clip >= 0 && kept && ordered && held,
+                $"To clip refuses a Layer pattern on one part, keeps the lane's other points and holds stepped motion to the swung next step ({pts.Length} points)");
         }
     }
 

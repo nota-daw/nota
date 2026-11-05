@@ -765,6 +765,13 @@ class Engine {
     bool mosaicStatus(int32_t trackId, NotaMosaicStatus* out) const;
     int64_t mosaicZoneSampleId(int32_t trackId, int32_t zone) const;
     void instrumentAction(int32_t trackId, int32_t id, int32_t iarg, float farg);       // UI editing channel
+    void instrumentActionUndoable(Instrument& inst, int32_t trackId, int32_t deviceIndex, int32_t chain, int32_t id,
+        int32_t iarg, float farg); // the action, plus its undo step when the edit state changed
+    bool instrumentSetStateUndoable(int32_t trackId, int32_t deviceIndex, int32_t chain, const uint8_t* data,
+        int32_t size); // chain -1: the track's instrument; else that chain of the rack at deviceIndex
+    Instrument* editStateInstrument(int32_t trackId, int32_t deviceIndex, int32_t chain) const;
+    void pushInstrumentEdit(int32_t trackId, int32_t deviceIndex, int32_t chain, std::vector<uint8_t> before,
+        std::vector<uint8_t> after);
     bool setRhythmVoiceSample(int32_t trackId, int32_t voice, const std::string& path); // Phase 2
     bool rhythmVoiceInfo(int32_t trackId, int32_t voice, NotaSamplerInfo* out) const;   // sample id per voice
     int32_t rhythmVoiceSource(int32_t trackId, int32_t voice) const;                    // 0 Synth, 1 Sample

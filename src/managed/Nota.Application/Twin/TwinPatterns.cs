@@ -224,20 +224,68 @@ public static class TwinPatterns
 
     private static readonly double[] RateBeats = { 1.0, 0.5, 1.0 / 3.0, 0.25, 1.0 / 6.0, 0.125 };
 
+    /// <summary>Why a pattern can't become a clip that sounds like the sequencer playing it: a clip's
+    /// notes reach the parts by the keyboard's rule (Layer: both; Split: by the split key), while the
+    /// sequencer plays the parts Sequencer Target names.</summary>
+    public enum ClipBlock
+    {
+        None,
+        LayerOnePart,   // Layer, the sequencer on one part: a clip would play both
+        SplitBothParts, // Split, the sequencer on both parts: a clip would play one per key
+        SplitOtherSide, // Split, a note on the other side of the split key from the part it plays
+    }
+
+    /// <summary>Whether <see cref="ToClip"/> can write the pattern (it refuses what it can't reproduce).</summary>
+    public static ClipBlock ToClipBlock(IAudioEngine e, int trackId, int pattern)
+    {
+        if (e.TrackInstrumentKind(trackId) != TwinMatrix.Kind) return ClipBlock.None;
+        var set = FromState(e.GetPluginState(trackId, -1));
+        if (set is null || pattern < 0 || pattern >= Patterns) return ClipBlock.None;
+        return Block(set[pattern], ParamReader(e, trackId).G);
+    }
+
+    private static (Dictionary<string, int> At, Func<string, float> G) ParamReader(IAudioEngine e, int trackId)
+    {
+        var at = new Dictionary<string, int>();
+        int pc = e.PluginParamCount(trackId, -1);
+        for (int i = 0; i < pc; i++) at[e.PluginParamId(trackId, -1, i)] = i;
+        return (at, id => e.PluginParamGet(trackId, -1, at[id]));
+    }
+
+    private static int StepOf(float v, int n) => Math.Clamp((int)Math.Round(v * (n - 1), MidpointRounding.AwayFromZero), 0, n - 1);
+
+    private static ClipBlock Block(Pattern pat, Func<string, float> G)
+    {
+        int mode = StepOf(G("mode"), 3);         // Single / Layer / Split
+        int target = StepOf(G("seq.target"), 3); // Lower / Upper / Both
+        if (mode == 1) return target == 2 ? ClipBlock.None : ClipBlock.LayerOnePart;
+        if (mode != 2) return ClipBlock.None;
+        if (target == 2) return ClipBlock.SplitBothParts;
+        int split = (int)Math.Round(G("splitkey") * 127f, MidpointRounding.AwayFromZero);
+        for (int k = 0; k < pat.Length; k++)
+            foreach (var n in pat.Steps[k].Notes)
+                if ((n < split) != (target == 0)) return ClipBlock.SplitOtherSide;
+        return ClipBlock.None;
+    }
+
+    // Motion points end this far before the next step's onset, so a held value steps there.
+    private const double MotionEdge = 1e-4;
+
     /// <summary>Writes a pattern of the track's Twin as a MIDI clip at `startBeat` (notes, velocities,
     /// gates, ties and the swing) and its motion lanes as automation over the clip, then turns the
-    /// sequencer off — one undo step. Returns the clip index, or -1.</summary>
+    /// sequencer off — one undo step. Automation already on those parameters outside the clip stays.
+    /// Returns the clip index, or -1 (also when <see cref="ToClipBlock"/> says the clip couldn't
+    /// sound as the sequencer does).</summary>
     public static int ToClip(IAudioEngine e, int trackId, int pattern, double startBeat)
     {
         if (e.TrackInstrumentKind(trackId) != TwinMatrix.Kind) return -1;
         var set = FromState(e.GetPluginState(trackId, -1));
         if (set is null || pattern < 0 || pattern >= Patterns) return -1;
         var pat = set[pattern];
-        var at = new Dictionary<string, int>();
-        int pc = e.PluginParamCount(trackId, -1);
-        for (int i = 0; i < pc; i++) at[e.PluginParamId(trackId, -1, i)] = i;
-        float G(string id) => e.PluginParamGet(trackId, -1, at[id]);
-        double sb = RateBeats[Math.Clamp((int)Math.Round(G("seq.rate") * 5), 0, 5)];
+        var (at, G) = ParamReader(e, trackId);
+        if (Block(pat, G) != ClipBlock.None) return -1;
+        int pc = at.Count;
+        double sb = RateBeats[StepOf(G("seq.rate"), 6)];
         double swing = G("seq.swing") * 0.5 * sb;
         double On(int k) => k * sb + ((k & 1) == 1 ? swing : 0);
 
@@ -268,15 +316,11 @@ public static class TwinPatterns
                 if (lane.Target < 0 || lane.Target >= pc || lane.Values.Take(pat.Length).All(v => v == MotionUnset)) continue;
                 int li = e.AddPluginAutomationLane(trackId, -1, e.PluginParamId(trackId, -1, lane.Target));
                 if (li < 0) continue;
-                var pts = new List<AutomationPoint>();
-                for (int k = 0; k < pat.Length; k++)
-                {
-                    if (lane.Values[k] == MotionUnset) continue;
-                    float v = lane.Values[k] / 65534f;
-                    pts.Add(new AutomationPoint(startBeat + On(k), v));
-                    if (!lane.Smooth) pts.Add(new AutomationPoint(startBeat + On(k) + sb * 0.999, v));
-                }
-                e.SetAutomationPoints(trackId, li, pts.ToArray());
+                var pts = MotionPoints(pat, lane, sb, On, length).Select(p => new AutomationPoint(startBeat + p.Beat, p.Value)).ToList();
+                // An existing lane keeps its points before and after the clip.
+                double end = startBeat + length;
+                var kept = e.GetAutomationPoints(trackId, li).Where(p => p.Beat < startBeat || p.Beat > end);
+                e.SetAutomationPoints(trackId, li, kept.Concat(pts).OrderBy(p => p.Beat).ToArray());
             }
             int seqOn = at["seq.on"];
             int g = e.BeginMixGesture(MixTarget.PluginParam(trackId, -1, seqOn)); // undoes with the clip
@@ -287,6 +331,38 @@ public static class TwinPatterns
         finally
         {
             e.EndUndoGroup();
+        }
+    }
+
+    // A motion lane as the sequencer plays it (Twin::fireStep / updateControl): from each step's
+    // onset to the next one's, a stepped lane holds the step's value, and a smooth one glides to the
+    // next step's value (the last to the first) over one step length — cut short at the next onset
+    // when the swing brings it early, held when it comes late.
+    private static IEnumerable<(double Beat, float Value)> MotionPoints(Pattern pat, Lane lane, double sb,
+        Func<int, double> on, double length)
+    {
+        for (int k = 0; k < pat.Length; k++)
+        {
+            if (lane.Values[k] == MotionUnset) continue;
+            float v = lane.Values[k] / 65534f;
+            double t0 = on(k), next = k + 1 < pat.Length ? on(k + 1) : length;
+            double hold = Math.Max(t0, next - MotionEdge);
+            yield return (t0, v);
+            if (!lane.Smooth)
+            {
+                yield return (hold, v);
+                continue;
+            }
+            ushort nx = lane.Values[(k + 1) % pat.Length];
+            float to = nx == MotionUnset ? v : nx / 65534f;
+            double glideEnd = t0 + sb;
+            if (glideEnd < hold)
+            {
+                yield return (glideEnd, to);
+                yield return (hold, to);
+            }
+            else
+                yield return (hold, v + (to - v) * (float)((hold - t0) / sb));
         }
     }
 }

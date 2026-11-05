@@ -440,6 +440,9 @@ public interface IAudioEngine : IDisposable
     long MosaicZoneSampleId(int trackId, int zone);
     /// <summary>UI editing channel for the track's instrument (e.g. Rhythm step patterns).</summary>
     void InstrumentAction(int trackId, int id, int iarg, float farg);
+    /// <summary>Loads a state blob into the track's instrument and records what it changed in the
+    /// instrument's edit state (a Nota Twin's patterns) as an undo step. False when not applied.</summary>
+    bool SetInstrumentStateUndoable(int trackId, byte[] data);
     /// <summary>Loads a sample file into a Nota Grain track (kind 10). True on success.</summary>
     bool SetTrackGrainSample(int trackId, string path, int rootNote = 60);
     /// <summary>Sets a Nota Grain's root note — the key that plays the sample at its own pitch.</summary>
@@ -760,6 +763,7 @@ public interface IAudioEngine : IDisposable
     int RackChainInstrumentVoiceCount(int trackId, int chain);
     int RackChainInstrumentHeldNotes(int trackId, int chain, int[] outNotes);
     void RackChainInstrumentAction(int trackId, int chain, int id, int iarg, float farg);
+    bool RackSetChainInstrumentStateUndoable(int trackId, int chain, byte[] data);
     /// <summary>Built-in Sampler settings for a chain instrument. False if it isn't a Sampler.</summary>
     bool RackChainSamplerInfo(int trackId, int chain, out NotaSamplerInfo info);
     /// <summary>Sets a chain Sampler's root note (lock-free). False if the chain isn't a Sampler.</summary>
@@ -926,6 +930,7 @@ public interface IAudioEngine : IDisposable
     int RackDevChainInstrumentVoiceCount(int trackId, int deviceIndex, int chain);
     int RackDevChainInstrumentHeldNotes(int trackId, int deviceIndex, int chain, int[] outNotes);
     void RackDevChainInstrumentAction(int trackId, int deviceIndex, int chain, int id, int iarg, float farg);
+    bool RackDevSetChainInstrumentStateUndoable(int trackId, int deviceIndex, int chain, byte[] data);
     void RackDevOpenChainInstrumentEditor(int trackId, int deviceIndex, int chain);
     string RackDevChainInstrumentPluginId(int trackId, int deviceIndex, int chain);
     byte[] RackDevGetChainInstrumentState(int trackId, int deviceIndex, int chain);

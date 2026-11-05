@@ -103,11 +103,18 @@ inline bool midiEvLess(const MidiEv& a, const MidiEv& b) {
 inline bool pedalHolds(const Instrument& inst, int32_t pitch) {
     return pitch >= 0 && pitch < 128 && ((inst.pedalHeld[pitch >> 6].load(std::memory_order_relaxed) >> (pitch & 63)) & 1u);
 }
+// A note-off the pedal held, sent now with the release velocity its key-up carried.
+inline void sendHeldNoteOff(Instrument& inst, int32_t pitch) {
+    const uint8_t rv = inst.pedalRelVel[pitch].exchange(0, std::memory_order_relaxed);
+    if (rv > 0) inst.noteOffVelocity(pitch, static_cast<float>(rv) / 127.0f);
+    else
+        inst.noteOff(pitch);
+}
 inline void sendNoteOn(Instrument& inst, int32_t pitch, float vel) {
     if (pedalHolds(inst, pitch)) {
         auto& h = inst.pedalHeld[pitch >> 6];
         h.store(h.load(std::memory_order_relaxed) & ~(uint64_t{1} << (pitch & 63)), std::memory_order_relaxed);
-        inst.noteOff(pitch);
+        sendHeldNoteOff(inst, pitch);
     }
     inst.noteOn(pitch, vel);
 }
@@ -115,6 +122,8 @@ inline void sendNoteOff(Instrument& inst, int32_t pitch, float releaseVel = 0.0f
     if (inst.pedalDown.load(std::memory_order_relaxed) && pitch >= 0 && pitch < 128 && !inst.handlesSustain()) {
         auto& h = inst.pedalHeld[pitch >> 6];
         h.store(h.load(std::memory_order_relaxed) | (uint64_t{1} << (pitch & 63)), std::memory_order_relaxed);
+        const long rv = std::lround(std::clamp(releaseVel, 0.0f, 1.0f) * 127.0f);
+        inst.pedalRelVel[pitch].store(static_cast<uint8_t>(releaseVel > 0.0f ? std::max(1L, rv) : 0L), std::memory_order_relaxed);
         return;
     }
     if (releaseVel > 0.0f) inst.noteOffVelocity(pitch, releaseVel);
@@ -127,7 +136,7 @@ inline void sendController(Instrument& inst, int32_t ctl, float value) {
         inst.pedalDown.store(down, std::memory_order_relaxed);
         if (!down) {
             for (int32_t p = 0; p < 128; ++p)
-                if (pedalHolds(inst, p)) inst.noteOff(p);
+                if (pedalHolds(inst, p)) sendHeldNoteOff(inst, p);
             inst.pedalHeld[0].store(0, std::memory_order_relaxed);
             inst.pedalHeld[1].store(0, std::memory_order_relaxed);
         }

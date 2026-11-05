@@ -217,6 +217,9 @@ void nota_path_root_set(const char* name, const char* path) {
 void nota_track_instrument_action(NotaEngine* e, int32_t track_id, int32_t id, int32_t iarg, float farg) {
     if (e) ENG(e)->instrumentAction(track_id, id, iarg, farg);
 }
+int32_t nota_track_instrument_set_state_undoable(NotaEngine* e, int32_t track_id, const uint8_t* data, int32_t size) {
+    return e && ENG(e)->instrumentSetStateUndoable(track_id, -1, -1, data, size) ? 1 : 0;
+}
 int32_t nota_track_rhythm_set_voice_sample(NotaEngine* e, int32_t track_id, int32_t voice, const char* path) {
     if (!e || !path) return 0;
     return ENG(e)->setRhythmVoiceSample(track_id, voice, std::string(path)) ? 1 : 0;

@@ -47,6 +47,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
@@ -353,7 +354,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 Graph(new TwinRouteView(), 116, 62),
                 Row(PKnob(S("brute"), "Brute", Pct, cellW: 58), PKnob(S("drive"), "Drive", Pct, cellW: 58))),
             Island("Ladder", Chips(S("ldslope"), Slopes), 144,
-                Fixed(24, Note("Slope in dB per octave")),
+                Fixed(24, Note(Loc.T("device.twin.slope_in_db_per_octave"))),
                 Row(PKnob(S("ldcut"), "Cutoff", Cutoff, 44, CutW), PKnob(S("ldres"), "Resonance", Pct, 44, CutW)),
                 Row(PKnob(S("ldkey"), "Key", Pct, cellW: CutW, arc: Teal), PKnob(S("ldenv"), "Env", EnvOct, cellW: CutW, arc: Teal))),
             Island("Response", null, 0, Graph(new TwinFilterView(), 172, 172)));
@@ -437,7 +438,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             if (I("padx") is var pi and >= 0) MidiLearn.Bind(pad, MidiTarget.PluginParam(track, -1, pi), "Pad X");
             var legendText = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, HorizontalAlignment = HorizontalAlignment.Center };
             readouts.Add(() => legendText.Text = $"X {Bip(G("padx"))} · Y {Bip(G("pady"))} · Z {Pct(G("padz"))}");
-            ToolTip.SetTip(pad, "X → multimode cutoff · Y → morph · hold for Z → vibrato");
+            ToolTip.SetTip(pad, Loc.T("device.twin.pad_hint"));
             return legend ? new StackPanel { Spacing = 3, Children = { pad, legendText } } : pad;
         }
 
@@ -448,7 +449,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         var rowReadouts = new List<Action>();
         readouts.Add(() => { foreach (var r in rowReadouts) r(); });
         var routeCount = new TextBlock { FontSize = NotaType.KnobValue, FontFamily = NotaFonts.MonoFamily, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center };
-        var fullNote = new TextBlock { FontSize = NotaType.KnobLabel, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, IsVisible = false, Text = "Matrix full (64 routes)" };
+        var fullNote = new TextBlock { FontSize = NotaType.KnobLabel, Foreground = TextSecondary, VerticalAlignment = VerticalAlignment.Center, IsVisible = false, Text = Loc.T("device.twin.matrix_full_64_routes") };
         string sideKey = sideIx == 0 ? "a" : "b";
         Control Picker(Func<string> text, string tip, Action<Control> open)
         {
@@ -538,7 +539,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 var arrow = new Glyph(GlyphKind.ChevronRight, 7) { Foreground = NotaPalette.TextFaint, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
                 var depth = DepthCell(amtId);
                 var remove = new Border { Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center, Child = new Glyph(GlyphKind.Close, 8) { Foreground = TextTertiary } };
-                ToolTip.SetTip(remove, "Remove the route");
+                ToolTip.SetTip(remove, Loc.T("device.twin.remove_the_route"));
                 remove.PointerPressed += (_, e) =>
                 {
                     if (!e.GetCurrentPoint(remove).Properties.IsLeftButtonPressed) return;
@@ -552,9 +553,9 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             }
             fullNote.IsVisible = false;
         }
-        var addRoute = TextButton("+ Route");
+        var addRoute = TextButton(Loc.T("device.twin.add_route"));
         addRoute.Padding = new Thickness(6, 1);
-        ToolTip.SetTip(addRoute, "Add a route (LFO 1 → Ladder Cutoff) in the first free slot");
+        ToolTip.SetTip(addRoute, Loc.T("device.twin.add_a_route_in_the_first_free_slot"));
         addRoute.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(addRoute).Properties.IsLeftButtonPressed) return;
@@ -580,7 +581,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         }
         var matrixBody = Chain(
             Island("Routes", routesHead, 412, colHeads, routesScroll),
-            Island("Macros", null, 0, Macros(), Note("Macros are sources in the matrix.")));
+            Island("Macros", null, 0, Macros(), Note(Loc.T("device.twin.macros_are_sources_in_the_matrix"))));
 
         // ---- FX tab -------------------------------------------------------------
         // Mod FX ▸ Delay ▸ Reverb, each with a preview of what it does; an effect that is off greys
@@ -610,7 +611,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             Island("Reverb", Toggle("On", S("revon")), 166, FxBody("revon",
                 Fixed(18), Graph(new TwinFxView(TwinFxView.Kind.Reverb), 150, 40),
                 Row(PKnob(S("revsize"), "Size", Pct, 44, 49), PKnob(S("revdamp"), "Damping", Pct, 44, 49), PKnob(S("revmix"), "Mix", Pct, 44, 49)))),
-            Island("All", null, 0, Toggle("On", Part + "fxon"), Note("Off bypasses all three, to use Nota's effect devices instead.")));
+            Island("All", null, 0, Toggle("On", Part + "fxon"), Note(Loc.T("device.twin.off_bypasses_all_three"))));
 
         // ---- Seq tab ------------------------------------------------------------
         // The patterns are structural state read from the state blob (re-read when the engine's
@@ -642,13 +643,21 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         void ShowStep()
         {
             var p = Pat();
-            stepInfo.Text = p is null || grid.Selected < 0 || grid.Selected >= p.Length ? "click a step"
-                : $"step {grid.Selected + 1}: {Nota.Application.Twin.TwinPatterns.StepText(p.Steps[grid.Selected])}";
+            stepInfo.Text = p is null || grid.Selected < 0 || grid.Selected >= p.Length ? Loc.T("device.twin.click_a_step")
+                : Loc.F("device.twin.step_n_text", grid.Selected + 1, Nota.Application.Twin.TwinPatterns.StepText(p.Steps[grid.Selected]));
         }
         grid.SelectStep = _ => ShowStep();
         grid.CommitVelocity = (st, v) => SeqAct(Nota.Application.Twin.TwinPatterns.Act.SetStepVelocity, st, v / 127f);
         grid.CommitGate = (st, g) => SeqAct(Nota.Application.Twin.TwinPatterns.Act.SetStepGate, st, g >= Nota.Application.Twin.TwinPatterns.GateTie ? 1.01f : g / 100f);
         readouts.Add(() => { if (pats is null) LoadPats(); SyncGrid(); ShowStep(); });
+        // The record switches live on this card: when it goes (a rebuild — A / B, the part, the
+        // layout — or another track), recording stops rather than staying armed out of sight.
+        grid.DetachedFromVisualTree += (_, _) =>
+        {
+            if (stepRec) Nota.Application.Twin.TwinPatterns.Do(engine, track, Nota.Application.Twin.TwinPatterns.Act.StepRecordArm, 0);
+            if (motionRec) Nota.Application.Twin.TwinPatterns.Do(engine, track, Nota.Application.Twin.TwinPatterns.Act.MotionRecordArm, -1);
+            stepRec = motionRec = false;
+        };
 
         Control SeqPicker(Func<string> text, string tip, Func<string[]> items, Action<int> pick)
         {
@@ -684,12 +693,12 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             if (b.Child is TextBlock t) t.Foreground = on ? OnAccent : TextPrimary;
         }
         void SetParam(string id, float v) { Begin(id); SetP(id, v); End(id); Refresh(); }
-        var patPick = SeqPicker(() => $"Pattern {EditPat() + 1}", "The pattern that plays and that you edit (switches at the end of the running one)",
+        var patPick = SeqPicker(() => $"Pattern {EditPat() + 1}", Loc.T("device.twin.the_pattern_that_plays_and_you_edit"),
             () => Enumerable.Range(1, 8).Select(i => $"Pattern {i}").ToArray(), k => { SetParam("seq.pattern", k / 7f); page = 0; LoadPats(); SyncGrid(); });
-        var lenPick = SeqPicker(() => $"{Pat()?.Length ?? 16} steps", "Pattern length", () => SeqLengths.Select(n => $"{n} steps").ToArray(),
+        var lenPick = SeqPicker(() => $"{Pat()?.Length ?? 16} steps", Loc.T("device.twin.pattern_length"), () => SeqLengths.Select(n => $"{n} steps").ToArray(),
             k => SeqAct(Nota.Application.Twin.TwinPatterns.Act.SetLength, SeqLengths[k]));
-        var ratePick = SeqPicker(() => SeqRates[Sel("seq.rate", 6)], "Step rate", () => SeqRates, k => SetParam("seq.rate", k / 5f));
-        var recBtn = TextAction("Record", "Step record: play a chord, lift it, and it fills the next step", () =>
+        var ratePick = SeqPicker(() => SeqRates[Sel("seq.rate", 6)], Loc.T("device.twin.step_rate"), () => SeqRates, k => SetParam("seq.rate", k / 5f));
+        var recBtn = TextAction(Loc.T("common.record"), Loc.T("device.twin.step_record_play_a_chord"), () =>
         {
             stepRec = !stepRec;
             Nota.Application.Twin.TwinPatterns.Do(engine, track, Nota.Application.Twin.TwinPatterns.Act.SelectPattern, EditPat());
@@ -697,15 +706,22 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             Refresh();
         });
         readouts.Add(() => Lit(recBtn, stepRec));
-        var toClip = TextAction("To clip", "Write this pattern as a MIDI clip at the playhead's bar and switch the sequencer off", () =>
+        var toClip = TextAction(Loc.T("device.twin.to_clip"), Loc.T("device.twin.write_this_pattern_as_a_midi_clip"), () =>
         {
             double at = Math.Floor(engine.PositionBeats / 4.0) * 4.0;
+            // A clip plays the parts as the keys do; say so when that isn't how the pattern plays.
+            switch (Nota.Application.Twin.TwinPatterns.ToClipBlock(engine, track, EditPat()))
+            {
+                case Nota.Application.Twin.TwinPatterns.ClipBlock.LayerOnePart: ctx.Status(Loc.T("device.twin.to_clip_layer_one_part")); return;
+                case Nota.Application.Twin.TwinPatterns.ClipBlock.SplitBothParts: ctx.Status(Loc.T("device.twin.to_clip_split_both_parts")); return;
+                case Nota.Application.Twin.TwinPatterns.ClipBlock.SplitOtherSide: ctx.Status(Loc.T("device.twin.to_clip_split_other_side")); return;
+            }
             Nota.Application.Twin.TwinPatterns.ToClip(engine, track, EditPat(), at);
             ctx.NotifyChanged(); Refresh();
         });
         var pagePick = Segments(new[] { "1–16", "17–32", "33–48", "49–64" }, () => page, k => { page = k; SyncGrid(); }, out var pageSync, padX: 3);
         readouts.Add(() => { pageSync(); pagePick.IsVisible = (Pat()?.Length ?? 16) > 16; });
-        var restBtn = TextAction("Rest", "Make the selected step a rest", () => { if (grid.Selected >= 0) SeqAct(Nota.Application.Twin.TwinPatterns.Act.ClearStep, grid.Selected); });
+        var restBtn = TextAction(Loc.T("device.twin.rest"), Loc.T("device.twin.make_the_selected_step_a_rest"), () => { if (grid.Selected >= 0) SeqAct(Nota.Application.Twin.TwinPatterns.Act.ClearStep, grid.Selected); });
         var laneTargets = new List<(string Name, int Index)> { ("None", -1), ("Morph", I(Part + "morph")), ("Pad X", I("padx")), ("Pad Y", I("pady")), ("Pad Z", I("padz")) };
         foreach (var id in Nota.Application.Twin.TwinMatrix.SideDestinationIds)
             if (I(Side + id) is var li and >= 0) laneTargets.Add((Nota.Application.Twin.TwinMatrix.DestinationName(engine, track, Nota.Application.Twin.TwinMatrix.DestinationOfSide(id)) + $" ({(sideIx == 0 ? "A" : "B")})", li));
@@ -714,20 +730,20 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         var targetPick = SeqPicker(() =>
             {
                 int tg = Pat()?.Lanes[laneSel].Target ?? -1;
-                return tg < 0 ? "No target" : laneTargets.FirstOrDefault(x => x.Index == tg).Name ?? engine.PluginParamName(track, -1, tg);
-            }, "What this motion lane sets, step by step (on the side being edited)", () => laneTargets.Select(x => x.Name).ToArray(),
+                return tg < 0 ? Loc.T("device.twin.no_target") : laneTargets.FirstOrDefault(x => x.Index == tg).Name ?? engine.PluginParamName(track, -1, tg);
+            }, Loc.T("device.twin.what_this_motion_lane_sets"), () => laneTargets.Select(x => x.Name).ToArray(),
             k => SeqAct(Nota.Application.Twin.TwinPatterns.Act.MotionTarget, laneSel << 16 | (laneTargets[k].Index < 0 ? 0xFFFF : laneTargets[k].Index)));
-        var motionRecBtn = TextAction("Rec motion", "Record the lane: each step takes the target's value as the pattern passes it", () =>
+        var motionRecBtn = TextAction(Loc.T("device.twin.rec_motion"), Loc.T("device.twin.record_the_lane"), () =>
         {
             motionRec = !motionRec;
             Nota.Application.Twin.TwinPatterns.Do(engine, track, Nota.Application.Twin.TwinPatterns.Act.MotionRecordArm, motionRec ? laneSel : -1);
             Refresh();
         });
         readouts.Add(() => Lit(motionRecBtn, motionRec));
-        var clearLane = TextAction("Clear", "Clear the lane", () => SeqAct(Nota.Application.Twin.TwinPatterns.Act.ClearMotion, laneSel));
+        var clearLane = TextAction(Loc.T("common.clear"), Loc.T("device.twin.clear_the_lane"), () => SeqAct(Nota.Application.Twin.TwinPatterns.Act.ClearMotion, laneSel));
         var smoothSw = Switch("Smooth", () => Pat()?.Lanes[laneSel].Smooth ?? false,
             () => SeqAct(Nota.Application.Twin.TwinPatterns.Act.MotionMode, laneSel, Pat()?.Lanes[laneSel].Smooth == true ? 0f : 1f), out var smoothSync);
-        ToolTip.SetTip(smoothSw, "Glide from step to step instead of jumping");
+        ToolTip.SetTip(smoothSw, Loc.T("device.twin.glide_from_step_to_step"));
         readouts.Add(smoothSync);
         // Live: the playing step, the record cursor, chords played while recording, recorded motion.
         var seqScope = new float[32];
@@ -781,10 +797,10 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 Bar(Line(patPick, lenPick, ratePick, Cap("Swing"), SeqSwing(), Toggle("Transpose", "seq.transpose"), Toggle("Latch", "seq.latch"))),
                 grid,
                 Bar(Line(Cap("Motion"), lanePick, targetPick, smoothSw, motionRecBtn, clearLane), pageRow),
-                Bar(Line(stepInfo, restBtn), Note("Click a step to edit it; hold keys while Record is on to enter chords.")),
+                Bar(Line(stepInfo, restBtn), Note(Loc.T("device.twin.click_a_step_to_edit_it"))),
             },
         };
-        var arpHint = Note("Hold a chord to hear it; Hold keeps it after you let go.");
+        var arpHint = Note(Loc.T("device.twin.hold_a_chord_to_hear_it"));
         arpHint.Width = 150;
         var arpKnobs = Row(PKnob("arp.gate", "Gate", Pct, 44, 64), PKnob("seq.swing", "Swing", Pct, 44, 64));
         arpKnobs.HorizontalAlignment = HorizontalAlignment.Left;
@@ -793,8 +809,8 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             Spacing = 10,
             Children =
             {
-                Bar(Line(Cap("Mode"), SeqPicker(() => ArpModes[Sel("arp.mode", 6)], "Arpeggio order", () => ArpModes, k => SetParam("arp.mode", k / 5f)),
-                    Cap("Rate"), SeqPicker(() => SeqRates[Sel("seq.rate", 6)], "Step rate", () => SeqRates, k => SetParam("seq.rate", k / 5f)),
+                Bar(Line(Cap("Mode"), SeqPicker(() => ArpModes[Sel("arp.mode", 6)], Loc.T("device.twin.arpeggio_order"), () => ArpModes, k => SetParam("arp.mode", k / 5f)),
+                    Cap("Rate"), SeqPicker(() => SeqRates[Sel("seq.rate", 6)], Loc.T("device.twin.step_rate"), () => SeqRates, k => SetParam("seq.rate", k / 5f)),
                     Cap("Octaves"), Chips("arp.oct", new[] { "1", "2", "3", "4" }, 4), Toggle("Hold", "arp.hold"))),
                 Line(arpKnobs, arpHint),
             },
@@ -806,7 +822,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         if (layout != 0)
         {
             var target = Chips("seq.target", SeqTargets, 4);
-            ToolTip.SetTip(target, "The part the sequencer or arpeggiator plays");
+            ToolTip.SetTip(target, Loc.T("device.twin.the_part_the_sequencer_plays"));
             seqHead.Children.Add(Cap("Plays"));
             seqHead.Children.Add(target);
         }
@@ -830,7 +846,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                     yield return (p.Path, p.DisplayName, prm);
         }
         Control partsMenu = null!;
-        partsMenu = TextAction("Parts", "Copy or swap the parts, or load a preset into one", () =>
+        partsMenu = TextAction("Parts", Loc.T("device.twin.copy_or_swap_the_parts"), () =>
         {
             var f = new MenuFlyout();
             void Item(ItemsControl into, string header, Action act)
@@ -842,11 +858,11 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             var menu = new MenuItem(); // a holder: its items move into the flyout below
             if (layout != 0)
             {
-                Item(menu, "Copy Lower → Upper", () => Nota.Application.Twin.TwinParts.Apply(engine, track, Nota.Application.Twin.TwinParts.Edit.CopyLowerToUpper));
-                Item(menu, "Copy Upper → Lower", () => Nota.Application.Twin.TwinParts.Apply(engine, track, Nota.Application.Twin.TwinParts.Edit.CopyUpperToLower));
-                Item(menu, "Swap parts", () => Nota.Application.Twin.TwinParts.Apply(engine, track, Nota.Application.Twin.TwinParts.Edit.Swap));
+                Item(menu, Loc.T("device.twin.copy_lower_to_upper"), () => Nota.Application.Twin.TwinParts.Apply(engine, track, Nota.Application.Twin.TwinParts.Edit.CopyLowerToUpper));
+                Item(menu, Loc.T("device.twin.copy_upper_to_lower"), () => Nota.Application.Twin.TwinParts.Apply(engine, track, Nota.Application.Twin.TwinParts.Edit.CopyUpperToLower));
+                Item(menu, Loc.T("device.twin.swap_parts"), () => Nota.Application.Twin.TwinParts.Apply(engine, track, Nota.Application.Twin.TwinParts.Edit.Swap));
             }
-            foreach (var (part, name) in new[] { ("lo", "Load into Lower"), ("up", "Load into Upper") })
+            foreach (var (part, name) in new[] { ("lo", Loc.T("device.twin.load_into_lower")), ("up", Loc.T("device.twin.load_into_upper")) })
             {
                 var sub = new MenuItem { Header = name };
                 foreach (var p in ctx.Factory?.All() ?? Array.Empty<FactoryPresetInfo>())
@@ -879,7 +895,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         Control BendRange()
         {
             var seg = Chips("bendrange", new[] { "±2", "±5", "±12", "±24" }, 5);
-            ToolTip.SetTip(seg, "Pitch-bend range in semitones");
+            ToolTip.SetTip(seg, Loc.T("device.twin.pitch_bend_range_in_semitones"));
             return new StackPanel { Spacing = 3, Children = { Cap("Bend range"), seg } };
         }
         Control Output()
@@ -889,7 +905,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                     Row(PKnob(Part + "vol", "Volume", Pct, 44, 58), PKnob(Part + "pan", "Pan", PanText, 44, 58)), BendRange());
             bool learn = false;
             int lastKey = int.MinValue;
-            var learnBtn = TextAction("Learn", "Play a key: it becomes the first key of the Upper part", () => { learn = !learn; lastKey = int.MinValue; Refresh(); });
+            var learnBtn = TextAction(Loc.T("device.twin.learn"), Loc.T("device.twin.play_a_key_it_becomes_the_split"), () => { learn = !learn; lastKey = int.MinValue; Refresh(); });
             readouts.Add(() => Lit(learnBtn, learn));
             var keyScope = new float[32];
             ctx.AddDeviceRefresher(() =>
@@ -914,10 +930,10 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
         }
         int VoiceMode() => Sel(Part + "voicemode", 4);
         var detune = DimWhen(PKnob(S("unidetune"), "Detune", Detune, 44, 58), () => VoiceMode() != 3);
-        var detuneNote = Note("Detune works in Unison.");
+        var detuneNote = Note(Loc.T("device.twin.detune_works_in_unison"));
         readouts.Add(() => detuneNote.IsVisible = VoiceMode() != 3);
         var spreadBy = Chips(S("spreadmode"), SpreadModes, 5);
-        var padNote = Note("X cutoff · Y morph · Z vibrato");
+        var padNote = Note(Loc.T("device.twin.pad_hint_short"));
         var voiceBody = Chain(
             Island("Voices", Chips(Part + "voicemode", VoiceModes, 4), 200,
                 Row(PKnob("voices", "Voices", Voices, 44, 58), PKnob(Part + "glide", "Glide", Glide, 44, 58), detune),
@@ -968,7 +984,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             SetParam("mode", iv / 2f);
             ctx.RequestRebuild();
         }, out var layoutSync, padX: 6);
-        ToolTip.SetTip(layoutSeg, "One sound, two layered on every key, or two split across the keyboard");
+        ToolTip.SetTip(layoutSeg, Loc.T("device.twin.one_sound_two_layered_or_split"));
         readouts.Add(layoutSync);
         var partBar = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Margin = new Thickness(0, 0, 0, 2), VerticalAlignment = VerticalAlignment.Center, Children = { layoutSeg } };
         if (layout != 0)
@@ -979,7 +995,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 EditParts[track] = iv;
                 ctx.RequestRebuild();
             }, out var partSync, padX: 6);
-            ToolTip.SetTip(partSeg, "The part every tab edits");
+            ToolTip.SetTip(partSeg, Loc.T("device.twin.the_part_every_tab_edits"));
             readouts.Add(partSync);
             partBar.Children.Insert(0, partSeg);
         }
@@ -1002,7 +1018,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
             col.Children.Add(PKnob(Part + "morph", "", v => NotaNum.Pct(v), 44, 58));
             // The part (accent) and every sounding voice (dots), live, with A and B at the ends.
             var strip = new TwinMorphStrip { Height = 8, VerticalAlignment = VerticalAlignment.Center };
-            ToolTip.SetTip(strip, "The morph as it sounds now: the part, and each sounding voice");
+            ToolTip.SetTip(strip, Loc.T("device.twin.the_morph_as_it_sounds_now"));
             TextBlock End(string t, bool edited) => new()
             {
                 Text = t, FontFamily = NotaFonts.MonoFamily, FontSize = NotaType.KnobValue, VerticalAlignment = VerticalAlignment.Center,
@@ -1022,7 +1038,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 for (int l = 0; l < 3; l++)
                     if (lfoGraphs[l] is { } lg) { lg.Phase = scope[20 + l]; lg.Refresh(); }
             });
-            var editCap = Cap("Edit"); editCap.HorizontalAlignment = HorizontalAlignment.Center; editCap.Margin = new Thickness(0, 8, 0, 0);
+            var editCap = Cap(Loc.T("device.twin.edit")); editCap.HorizontalAlignment = HorizontalAlignment.Center; editCap.Margin = new Thickness(0, 8, 0, 0);
             col.Children.Add(editCap);
             var sideSeg = Segments(new[] { "A", "B" }, () => sideIx, iv =>
             {
@@ -1031,7 +1047,7 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 ctx.RequestRebuild();
             }, out var sideSync, fill: true, fontSize: NotaType.DeviceSection);
             readouts.Add(sideSync);
-            ToolTip.SetTip(sideSeg, "The side the knobs edit");
+            ToolTip.SetTip(sideSeg, Loc.T("device.twin.the_side_the_knobs_edit"));
             col.Children.Add(sideSeg);
             if (!actions) return col;
             // A quiet action: no frame at rest, a hover tone; it rewrites a side in one undo step.
@@ -1057,9 +1073,9 @@ internal sealed class TwinInstrumentCard : IInstrumentCard
                 Spacing = 2, Margin = new Thickness(0, 8, 0, 0),
                 Children =
                 {
-                    SideAction("A → B", "Copy side A onto side B", Nota.Application.Twin.TwinSides.Edit.CopyAToB),
-                    SideAction("B → A", "Copy side B onto side A", Nota.Application.Twin.TwinSides.Edit.CopyBToA),
-                    SideAction("Swap", "Swap sides A and B", Nota.Application.Twin.TwinSides.Edit.Swap),
+                    SideAction("A → B", Loc.T("device.twin.copy_side_a_onto_side_b"), Nota.Application.Twin.TwinSides.Edit.CopyAToB),
+                    SideAction("B → A", Loc.T("device.twin.copy_side_b_onto_side_a"), Nota.Application.Twin.TwinSides.Edit.CopyBToA),
+                    SideAction(Loc.T("device.twin.swap"), Loc.T("device.twin.swap_sides_a_and_b"), Nota.Application.Twin.TwinSides.Edit.Swap),
                 },
             });
             return col;

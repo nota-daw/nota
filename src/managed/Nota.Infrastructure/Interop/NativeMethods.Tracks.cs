@@ -464,6 +464,9 @@ internal static partial class NativeMethods
     [LibraryImport(Lib, EntryPoint = "nota_track_instrument_action")]
     internal static partial void InstrumentAction(IntPtr engine, int trackId, int id, int iarg, float farg);
 
+    [LibraryImport(Lib, EntryPoint = "nota_track_instrument_set_state_undoable")]
+    internal static partial int InstrumentSetStateUndoable(IntPtr engine, int trackId, byte[] data, int size);
+
     [LibraryImport(Lib, EntryPoint = "nota_track_set_grain_sample", StringMarshalling = StringMarshalling.Utf8)]
     internal static partial int SetTrackGrainSample(IntPtr engine, int trackId, string path, int rootNote);
 

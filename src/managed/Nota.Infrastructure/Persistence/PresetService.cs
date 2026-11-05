@@ -390,12 +390,16 @@ public static class PresetService
     /// device is created) — for the in-header preset picker. Built-in instruments reset all
     /// params to default first so the patch is clean; effects set the preset's named params.</summary>
     // A Nota Twin preset's patterns (a params-free state blob): applied after its params; a preset
-    // without patterns leaves the track's own (a sound preset doesn't wipe a sequence).
-    private static void LoadTwinPatterns(PresetDocument doc, IAudioEngine engine, int trackId)
+    // without patterns leaves the track's own (a sound preset doesn't wipe a sequence). On a Twin
+    // already there (undoable) the old patterns come back with the old sound on undo.
+    private static void LoadTwinPatterns(PresetDocument doc, IAudioEngine engine, int trackId, bool undoable = false)
     {
         if (string.IsNullOrEmpty(doc.StateBase64)) return;
-        try { engine.SetPluginState(trackId, -1, Convert.FromBase64String(doc.StateBase64)); }
-        catch (FormatException) { }
+        byte[] state;
+        try { state = Convert.FromBase64String(doc.StateBase64); }
+        catch (FormatException) { return; }
+        if (undoable) engine.SetInstrumentStateUndoable(trackId, state);
+        else engine.SetPluginState(trackId, -1, state);
     }
 
     public static string ApplyInPlace(PresetDocument doc, IAudioEngine engine, int trackId, int deviceIndex)
@@ -421,7 +425,7 @@ public static class PresetService
                     float v = named ? doc.NamedParams![id] : engine.InstrumentParamDefault(trackId, i);
                     engine.PluginParamSet(trackId, -1, i, v);
                 }
-                if (kind == Nota.Application.Twin.TwinMatrix.Kind) LoadTwinPatterns(doc, engine, trackId);
+                if (kind == Nota.Application.Twin.TwinMatrix.Kind) LoadTwinPatterns(doc, engine, trackId, undoable: true);
                 return kind == 10 ? LoadGrainSource(doc, engine, trackId)
                      : kind == MosaicModel.Kind ? LoadMosaicProgram(doc, engine, trackId) : "";
             }

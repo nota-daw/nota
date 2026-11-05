@@ -86,17 +86,16 @@ int dstIndexOfSide(int side) {
     return 0;
 }
 
-int liveRoutes(const std::atomic<float>* pn, int part, float morph, LiveRoute* out) {
+int liveRoutes(const std::atomic<float>* pn, int part, LiveRoute* out) {
     int n = 0;
     for (int r = 0; r < kRoutes; ++r) {
         const int src = stepOf(pn[partIdx(part, PRoute0 + 2 * r)].load(std::memory_order_relaxed), kSrcScale + 1);
         const int dst = stepOf(pn[partIdx(part, PRoute0 + 2 * r + 1)].load(std::memory_order_relaxed), kDstScale + 1);
         if (src <= SrcNone || src >= kSrcN || dst <= 0 || dst >= dstCount()) continue;
-        const float a = pn[sideIdx(part, 0, MatAmt0 + r)].load(std::memory_order_relaxed);
-        const float b = pn[sideIdx(part, 1, MatAmt0 + r)].load(std::memory_order_relaxed);
-        const float amt = ((morph <= 0.0f ? a : morph >= 1.0f ? b : a + (b - a) * morph) - 0.5f) * 2.0f;
-        if (amt == 0.0f) continue;
-        out[n++] = {src, dst, amt};
+        const float a = (pn[sideIdx(part, 0, MatAmt0 + r)].load(std::memory_order_relaxed) - 0.5f) * 2.0f;
+        const float b = (pn[sideIdx(part, 1, MatAmt0 + r)].load(std::memory_order_relaxed) - 0.5f) * 2.0f;
+        if (a == 0.0f && b == 0.0f) continue; // a route set on one side only still lives on the other
+        out[n++] = {src, dst, a, b};
     }
     return n;
 }
@@ -174,6 +173,9 @@ void evalPart(const std::atomic<float>* pn, int part, float morph, double spb, d
         c.lfoFade[l] = fadeSec(S(Lfo1Fade + o));
         c.lfoAmt[l] = S(Lfo1Amt + o);
     }
+    // LFO 3's shaping, as the card draws it: the triangle's peak, and a curve of 1/4 … 4.
+    c.lfoSym[2] = std::clamp(S(Lfo3Sym), 0.02f, 0.98f);
+    c.lfoCurve[2] = std::exp2((S(Lfo3Curve) - 0.5f) * 4.0f);
     c.vibSemis = S(VibAmt);
     c.drift = S(Drift);
     c.uniDetune = S(UniDetune);

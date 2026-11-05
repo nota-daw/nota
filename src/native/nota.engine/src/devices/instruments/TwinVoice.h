@@ -92,6 +92,7 @@ struct PartCtl {
     // LFO 1 (vibrato in US1; the matrix reads all three in US4)
     float lfoHz[3] = {1, 1, 1}, lfoFade[3] = {0, 0, 0}, lfoAmt[3] = {1, 1, 1};
     int lfoShape[3] = {0, 0, 0};
+    float lfoSym[3] = {0.5f, 0.5f, 0.5f}, lfoCurve[3] = {1, 1, 1}; // LFO 3's Symmetry / Curve
     bool lfoGlobal[3] = {false, false, true}, lfoRetrig[3] = {false, false, false};
     float vibSemis = 0;
     // voice
@@ -128,10 +129,14 @@ struct MotionOverride {
 };
 
 // One live matrix route of a part for a control interval (TwinMod): depth morphed, −1..1.
+// A route's depth on each side (−1..1); it morphs like a sound control: at(m) is the depth at the
+// morph position m. A route to Morph is weighed at the knob's morph (it moves the morph, so it
+// can't depend on where it moves it); every other route at the morph the part or voice sounds.
 struct LiveRoute {
     int src;
     int dst;
-    float amt;
+    float a, b;
+    float at(float m) const { return m <= 0.0f ? a : m >= 1.0f ? b : a + (b - a) * m; }
 };
 
 constexpr float kRoutePitchSt = 24.0f;  // a full-depth route to a pitch destination: ±24 st
@@ -210,8 +215,10 @@ struct Lfo {
     float rPrev = 0, rNext = 0;
     pentad::Rng rng;
 
-    // Advance by inc (cycles per sample) and return the shape's value −1..1.
-    float step(double inc, int shape) {
+    // Advance by inc (cycles per sample) and return the shape's value −1..1. sym moves the
+    // triangle's peak (0.5 = centred); curve bends every shape as sign · |v|^curve (1 = straight).
+    // Only LFO 3 has the two controls; the others pass the neutral values.
+    float step(double inc, int shape, float sym = 0.5f, float curve = 1.0f) {
         ph += inc;
         if (ph >= 1.0) {
             ph -= std::floor(ph);
@@ -221,7 +228,10 @@ struct Lfo {
         const float p = static_cast<float>(ph);
         switch (shape) {
         case 0: val = fastSin(p); break;
-        case 1: val = p < 0.5f ? 4.0f * p - 1.0f : 3.0f - 4.0f * p; break;
+        case 1:
+            if (sym == 0.5f) val = p < 0.5f ? 4.0f * p - 1.0f : 3.0f - 4.0f * p;
+            else val = p < sym ? 2.0f * p / sym - 1.0f : 1.0f - 2.0f * (p - sym) / (1.0f - sym);
+            break;
         case 2: val = 1.0f - 2.0f * p; break;
         case 3: val = p < 0.5f ? 1.0f : -1.0f; break;
         case 4: val = rNext; break;
@@ -230,6 +240,7 @@ struct Lfo {
             val = rPrev + (rNext - rPrev) * s;
         }
         }
+        if (curve != 1.0f) val = std::copysign(std::pow(std::fabs(val), curve), val);
         return val;
     }
 };
@@ -264,8 +275,9 @@ struct Voice {
     VoiceExpr ex; // this note's bend / pressure / slide
     // pitch
     float pitch = 60, pitchTgt = 60, glideC = 1;
-    float det = 0; // unison stack detune (semitones)
-    float panL = 0.7071f, panR = 0.7071f;
+    // Stereo and unison: where the voice sits (-1..1 in its stack, and its pan position before
+    // Spread / Pan scale it), set at the note-on; detune and pan follow the controls from there.
+    float stackU = 0, panPos = 0;
     // oscillators
     pentad::Osc osc[2];
     float o2Out = 0;          // Osc 2's last sample (FM into Osc 1)
@@ -289,6 +301,7 @@ struct Voice {
     pentad::Rng rng;
     // ramps across the control interval
     Ramp rPitch[2], rMmCut, rLdCut, rLvl[2], rNoise, rDuty[2], rWave[2], rMetal[2], rGain;
+    Ramp rDet, rPanL, rPanR; // unison detune (semitones) and the equal-power pan gains
     // The matrix (US4): when a route moves anything for this voice — a per-note source on the
     // Morph included — the voice sounds its own values, re-evaluated each interval into `own`.
     float morphOff = 0.0f; // this voice's morph offset (telemetry)

@@ -790,6 +790,10 @@ NOTA_API int64_t nota_file_decode_mono(const char* path_utf8, double max_seconds
 /* UI editing channel for the track's instrument (e.g. Nota Rhythm step patterns):
  * id/iarg/farg are instrument-specific (see the instrument's action()). */
 NOTA_API void    nota_track_instrument_action(NotaEngine* engine, int32_t track_id, int32_t id, int32_t iarg, float farg);
+/* Loads a state blob into the track's instrument (as nota_plugin_set_state with device -1) and
+ * records what it changed in the instrument's edit state (a Nota Twin's patterns) as one undo
+ * step — a preset's sequence undoes with its sound. Returns 1 when applied. */
+NOTA_API int32_t nota_track_instrument_set_state_undoable(NotaEngine* engine, int32_t track_id, const uint8_t* data, int32_t size);
 /* Nota Rhythm Phase 2 — per-voice one-shot samples. set returns 1 on success; info fills the
  * voice's sample id (0 = none); source returns 0 Synth / 1 Sample. */
 NOTA_API int32_t nota_track_rhythm_set_voice_sample(NotaEngine* engine, int32_t track_id, int32_t voice, const char* path);
@@ -2033,6 +2037,8 @@ NOTA_API int32_t     nota_rack_chain_instrument_scope(const NotaEngine* engine, 
 NOTA_API int32_t     nota_rack_chain_instrument_voice_count(const NotaEngine* engine, int32_t track_id, int32_t chain);
 NOTA_API int32_t     nota_rack_chain_instrument_held_notes(const NotaEngine* engine, int32_t track_id, int32_t chain, int32_t* out, int32_t max_n);
 NOTA_API void        nota_rack_chain_instrument_action(NotaEngine* engine, int32_t track_id, int32_t chain, int32_t id, int32_t iarg, float farg);
+/* As nota_track_instrument_set_state_undoable, for a chain's instrument. */
+NOTA_API int32_t     nota_rack_chain_instrument_set_state_undoable(NotaEngine* engine, int32_t track_id, int32_t chain, const uint8_t* data, int32_t size);
 /* Chain instrument GUI + preset (hosted plugins). */
 NOTA_API void        nota_rack_open_chain_instrument_editor(NotaEngine* engine, int32_t track_id, int32_t chain);
 NOTA_API void        nota_rack_open_chain_device_editor(NotaEngine* engine, int32_t track_id, int32_t chain, int32_t dev);
@@ -2197,6 +2203,7 @@ NOTA_API int32_t nota_rackdev_chain_instrument_scope(const NotaEngine* engine, i
 NOTA_API int32_t nota_rackdev_chain_instrument_voice_count(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain);
 NOTA_API int32_t nota_rackdev_chain_instrument_held_notes(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t* out, int32_t max_n);
 NOTA_API void nota_rackdev_chain_instrument_action(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, int32_t id, int32_t iarg, float farg);
+NOTA_API int32_t nota_rackdev_chain_instrument_set_state_undoable(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, const uint8_t* data, int32_t size);
 NOTA_API void nota_rackdev_open_chain_instrument_editor(NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain);
 NOTA_API const char* nota_rackdev_chain_instrument_plugin_id(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain);
 NOTA_API int32_t nota_rackdev_chain_instrument_get_state(const NotaEngine* engine, int32_t track_id, int32_t device_index, int32_t chain, uint8_t* out, int32_t capacity);

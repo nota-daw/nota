@@ -371,7 +371,9 @@ void Twin::resetAll() {
     transpose_ = transKeys_ = 0;
     arpN_ = arpKeys_ = 0;
     pendPat_ = -1;
+    patStartK_ = 0;
     playStep_ = -1;
+    seqStepV_ = 0.0f;
     seqResync_ = true;
     for (auto& m : motion_) m = Motion{};
     for (auto& m : motionOvr_) m = twin::MotionOverride{};
@@ -495,7 +497,7 @@ void Twin::startVoice(int v, int note, float vel, int s, int S, bool glide) {
     V.stackN = S;
     V.order = ++orderCtr_;
     const float u = S > 1 ? 2.0f * static_cast<float>(s) / static_cast<float>(S - 1) - 1.0f : 0.0f;
-    V.det = u * c.uniDetune * 0.5f;
+    V.stackU = u;
     V.pitchTgt = static_cast<float>(note);
     if (!V.hasPitch || !glide) V.pitch = V.pitchTgt;
     V.hasPitch = true;
@@ -506,9 +508,7 @@ void Twin::startVoice(int v, int note, float vel, int s, int S, bool glide) {
         pos = std::clamp((static_cast<float>(note) - 60.0f) / 30.0f, -1.0f, 1.0f);
     else
         pos = static_cast<float>((v * 7) % kMaxVoices) / static_cast<float>(kMaxVoices - 1) * 2.0f - 1.0f;
-    const float pan = std::clamp(pos * c.spread + c.pan, -1.0f, 1.0f);
-    V.panL = std::cos((pan + 1.0f) * 0.78539816f);
-    V.panR = std::sin((pan + 1.0f) * 0.78539816f);
+    V.panPos = pos; // voiceControl() turns it into the pan gains, and keeps them current
     for (int l = 0; l < 3; ++l) {
         if (c.lfoRetrig[l] && !c.lfoGlobal[l]) V.lfo[l].ph = 0.0;
         V.lfoFadeLvl[l] = c.lfoFade[l] > 0.0f ? 0.0f : 1.0f;
@@ -546,7 +546,7 @@ void Twin::noteOn(int32_t pitch, float velocity) {
     if (pitch < 0 || pitch > 127) return;
     wake();
     applyRate();
-    if (!ctlInit_) updateControl();
+    if (!ctlInit_) updateControl(tPos_ + tFrames_);
     const float vel = std::clamp(velocity, 0.0f, 1.0f);
     tele_[ScLastKey].store(static_cast<float>(pitch), std::memory_order_relaxed);
     if (recArmed_.load(std::memory_order_relaxed)) { // step record: the card turns these into steps
@@ -813,7 +813,11 @@ int Twin::seqService(int offset) {
         seqStepBeats_ = sb;
         nextK_ = static_cast<int64_t>(std::ceil(now / spb_ / sb - 1e-9));
         while (onsetSample(nextK_) < now) ++nextK_;
-        if (!seqRunning_) curPat_ = twin::stepOf(get(twin::GSeqPattern), twin::kPatterns), pendPat_ = -1;
+        if (!seqRunning_) {
+            curPat_ = twin::stepOf(get(twin::GSeqPattern), twin::kPatterns);
+            pendPat_ = -1;
+            patStartK_ = 0; // a pattern started from stopped sits on the song's grid
+        }
         seqResync_ = false;
         seqRunning_ = true;
     }
@@ -844,7 +848,7 @@ void Twin::fireStep(int64_t k, double onset) {
     double off = onset + 0.5 * stepLen;
     bool tie = false;
     const int want = twin::stepOf(get(twin::GSeqPattern), twin::kPatterns);
-    if (want != curPat_ && pendPat_ != want) pendPat_ = want; // switches at the pattern's end
+    pendPat_ = want == curPat_ ? -1 : want; // switches at the pattern's end; picking the playing one cancels
     if (twin::stepOf(get(twin::GSeqKind), 2) == 1) {
         // The arpeggiator: the held (or held-over) chord, one note — or all of it — per step.
         n = twin::arpNotes(arpList_, arpN_, twin::stepOf(get(twin::GArpMode), twin::kArpModes),
@@ -852,16 +856,24 @@ void Twin::fireStep(int64_t k, double onset) {
         vel = arpVel_;
         off = onset + std::max(0.05, static_cast<double>(get(twin::GArpGate))) * stepLen;
         playStep_ = arpN_ > 0 ? static_cast<int>((k - arpStartK_) % 64) : -1;
+        for (auto& m : motion_) m.set = false; // the arpeggiator has no motion: the knobs are back
+        seqStepV_ = 0.0f;
     } else {
+        auto stepIn = [&](const twin::Pattern& P) {
+            const int64_t r = k - patStartK_;
+            return static_cast<int>(((r % P.length) + P.length) % P.length);
+        };
         const twin::Pattern* P = &ps->pat[curPat_];
-        int st = static_cast<int>(((k % P->length) + P->length) % P->length);
+        int st = stepIn(*P);
         if (st == 0 && pendPat_ >= 0) {
             curPat_ = pendPat_;
             pendPat_ = -1;
+            patStartK_ = k; // the queued pattern starts on its first step, whatever its length
             P = &ps->pat[curPat_];
-            st = static_cast<int>(((k % P->length) + P->length) % P->length);
+            st = 0;
         }
         playStep_ = st;
+        seqStepV_ = P->length > 1 ? static_cast<float>(st) / static_cast<float>(P->length - 1) : 0.0f;
         const twin::Step& S = P->step[st];
         for (int i = 0; i < S.n; ++i) notes[n++] = std::clamp(S.note[i] + transpose_, 0, 127);
         vel = S.vel / 127.0f;
@@ -966,7 +978,9 @@ float Twin::globalValue(int part, const twin::PartCtl& c, int src) const {
     case SrcPadZ: return pad(GPadZ);
     default:
         if (src >= SrcMacro1 && src < SrcMacro1 + kMacros) return get(partIdx(part, PMacro0 + src - SrcMacro1));
-        return 0.0f; // the sequencer: not yet
+        return 0.0f;
+    case SrcSeqGate: return seqRunning_ && seqNoteN_ > 0 ? 1.0f : 0.0f; // a step's notes are sounding
+    case SrcSeqStep: return seqRunning_ ? seqStepV_ : 0.0f;
     }
 }
 
@@ -1012,10 +1026,24 @@ bool globalSource(int src, const twin::PartCtl& c) {
     }
 }
 
+// One route's amount onto the offsets: a side param, the two pitches or the vibrato.
+void addRoute(const twin::Dst& d, float x, float* off, float* pitch, float& vib) {
+    using namespace twin;
+    switch (d.kind) {
+    case DstPitch: pitch[0] += x * kRoutePitchSt, pitch[1] += x * kRoutePitchSt; break;
+    case DstPitch1: pitch[0] += x * kRoutePitchSt; break;
+    case DstPitch2: pitch[1] += x * kRoutePitchSt; break;
+    case DstVibrato: vib += x * kRouteVibratoSt; break;
+    case DstSide: off[d.side] += x; break;
+    default: break;
+    }
+}
+
 } // namespace
 
 // The part's routes from patch-wide sources, once per interval: offsets the part's PartCtl and
-// every voice of it start from.
+// every voice of it start from. The routes to Morph go first, at the knob's morph; the rest are
+// weighed at the morph that gives, so a route that lives only on B starts as the part reaches B.
 void Twin::partModulation(int part, float morph) {
     using namespace twin;
     const PartCtl& c = ctl_[part];
@@ -1025,65 +1053,74 @@ void Twin::partModulation(int part, float morph) {
     bool any = false;
     for (int i = 0; i < routeN_[part]; ++i) {
         const LiveRoute& r = routes_[part][i];
-        if (!globalSource(r.src, c)) continue;
-        const float val = globalValue(part, c, r.src);
-        if (val == 0.0f) continue;
-        const float x = r.amt * val;
-        const Dst d = dstAt(r.dst);
+        if (dstAt(r.dst).kind != DstMorph || !globalSource(r.src, c)) continue;
+        const float x = r.at(morph) * globalValue(part, c, r.src);
+        if (x == 0.0f) continue;
+        partMorphOff_[part] += x;
         any = true;
-        switch (d.kind) {
-        case DstMorph: partMorphOff_[part] += x; break;
-        case DstPitch: partPitch_[part][0] += x * kRoutePitchSt, partPitch_[part][1] += x * kRoutePitchSt; break;
-        case DstPitch1: partPitch_[part][0] += x * kRoutePitchSt; break;
-        case DstPitch2: partPitch_[part][1] += x * kRoutePitchSt; break;
-        case DstVibrato: partVib_[part] += x * kRouteVibratoSt; break;
-        case DstSide: off[d.side] += x; break;
-        default: break;
-        }
+    }
+    const float pm = std::clamp(morph + partMorphOff_[part], 0.0f, 1.0f);
+    for (int i = 0; i < routeN_[part]; ++i) {
+        const LiveRoute& r = routes_[part][i];
+        const Dst d = dstAt(r.dst);
+        if (d.kind == DstMorph || !globalSource(r.src, c)) continue;
+        const float x = r.at(pm) * globalValue(part, c, r.src);
+        if (x == 0.0f) continue;
+        any = true;
+        addRoute(d, x, off, partPitch_[part], partVib_[part]);
     }
     partHasOff_[part] = any;
-    (void)morph;
 }
 
 // One voice's routes from its own sources (envelopes, LFOs, velocity, key, expression, random):
 // when any moves something, the voice evaluates its own values from the part's offsets plus its own.
+// Its routes to Morph go first (at the knob's morph). When they move this voice's morph away from
+// the part's, every other route — the part's patch-wide ones too — is weighed again at the voice's.
 void Twin::modulateVoice(twin::Voice& V, float morph, const twin::LiveRoute* routes, int n) {
     using namespace twin;
     const PartCtl& pc = ctl_[V.part];
     const PartCtl& cur = V.hasOwn ? V.own : pc; // this voice's LFO rates and fades last interval
-    float mo = 0.0f, pitch[2] = {0.0f, 0.0f}, vib = 0.0f;
-    bool any = false, sideAny = false;
+    const int p = V.part;
+    float mo = 0.0f;
     for (int i = 0; i < n; ++i) {
-        if (globalSource(routes[i].src, pc)) continue; // already in the part's values
-        const float v = sourceValue(V, cur, routes[i].src);
-        if (v == 0.0f) continue;
-        const float x = routes[i].amt * v;
-        const Dst d = dstAt(routes[i].dst);
+        if (dstAt(routes[i].dst).kind != DstMorph || globalSource(routes[i].src, pc)) continue;
+        mo += routes[i].at(morph) * sourceValue(V, cur, routes[i].src);
+    }
+    const float pm = std::clamp(morph + partMorphOff_[p], 0.0f, 1.0f);
+    const float vm = std::clamp(morph + partMorphOff_[p] + mo, 0.0f, 1.0f);
+    const bool own = vm != pm; // the voice sounds another morph: the part's offsets don't hold
+    float pitch[2] = {own ? 0.0f : partPitch_[p][0], own ? 0.0f : partPitch_[p][1]};
+    float vib = own ? 0.0f : partVib_[p];
+    bool any = mo != 0.0f, sideAny = false;
+    if (own) {
+        std::fill(modOff_, modOff_ + kSideN, 0.0f);
+        sideAny = true;
+    }
+    for (int i = 0; i < n; ++i) {
+        const LiveRoute& r = routes[i];
+        const Dst d = dstAt(r.dst);
+        if (d.kind == DstMorph) continue;
+        const bool global = globalSource(r.src, pc);
+        if (global && !own) continue; // already in the part's values
+        const float x = r.at(vm) * (global ? globalValue(p, pc, r.src) : sourceValue(V, cur, r.src));
+        if (x == 0.0f) continue;
         any = true;
-        switch (d.kind) {
-        case DstMorph: mo += x; break;
-        case DstPitch: pitch[0] += x * kRoutePitchSt, pitch[1] += x * kRoutePitchSt; break;
-        case DstPitch1: pitch[0] += x * kRoutePitchSt; break;
-        case DstPitch2: pitch[1] += x * kRoutePitchSt; break;
-        case DstVibrato: vib += x * kRouteVibratoSt; break;
-        case DstSide:
-            if (!sideAny) std::copy(partOff_[V.part], partOff_[V.part] + kSideN, modOff_), sideAny = true;
-            modOff_[d.side] += x;
-            break;
-        default: break;
+        if (d.kind == DstSide && !sideAny) {
+            std::copy(partOff_[p], partOff_[p] + kSideN, modOff_);
+            sideAny = true;
         }
+        addRoute(d, x, modOff_, pitch, vib);
     }
     V.morphOff = mo;
     V.hasOwn = any;
     if (!any) return;
-    const int p = V.part;
-    evalPart(pn_, p, std::clamp(morph + partMorphOff_[p] + mo, 0.0f, 1.0f), spb_, sr_, V.own,
+    evalPart(pn_, p, vm, spb_, sr_, V.own,
         sideAny ? modOff_ : (partHasOff_[p] ? partOff_[p] : nullptr), motionOvr_[p].n > 0 ? &motionOvr_[p] : nullptr);
     std::copy(pc.exAdd, pc.exAdd + kExprDims, V.own.exAdd); // expression is the part's, not a side's
     V.own.exCoef = pc.exCoef;
-    V.own.semi[0] += partPitch_[p][0] + pitch[0];
-    V.own.semi[1] += partPitch_[p][1] + pitch[1];
-    V.own.vibExtra = partVib_[p] + vib;
+    V.own.semi[0] += pitch[0];
+    V.own.semi[1] += pitch[1];
+    V.own.vibExtra = vib;
 }
 
 // The part's effect values onto its devices (normalized params, smoothed by the devices).
@@ -1121,7 +1158,7 @@ void Twin::pushFx(int part) {
     rv->setParam(Reverb::DryWet, c.revMix);
 }
 
-void Twin::updateControl() {
+void Twin::updateControl(double now) {
     using namespace twin;
     ctlInit_ = true;
     static constexpr float kBendRanges[4] = {2.0f, 5.0f, 12.0f, 24.0f};
@@ -1129,7 +1166,6 @@ void Twin::updateControl() {
     const int layout = layoutMode();
     const int parts = layout == 0 ? 1 : 2;
     const int recLane = recLane_.load(std::memory_order_relaxed);
-    const double now = tPos_ + tFrames_;
     for (int part = 0; part < parts; ++part) {
         // The sequencer's motion lanes (paused on a lane that is recording): this interval's values.
         MotionOverride& mo = motionOvr_[part];
@@ -1156,7 +1192,7 @@ void Twin::updateControl() {
         morphNow_[part] = morph;
         PartCtl& c = ctl_[part];
         evalPart(pn_, part, morph, spb_, sr_, c, nullptr, ovr);
-        routeN_[part] = liveRoutes(pn_, part, morph, routes_[part]);
+        routeN_[part] = liveRoutes(pn_, part, routes_[part]);
         partModulation(part, morph);
         if (partHasOff_[part]) {
             evalPart(pn_, part, std::clamp(morph + partMorphOff_[part], 0.0f, 1.0f), spb_, sr_, c, partOff_[part], ovr);
@@ -1199,12 +1235,13 @@ void Twin::updateControl() {
     // The LFOs that only feed the matrix move once per interval (LFO 1 runs per sample, for vibrato).
     for (int part = 0; part < parts; ++part)
         for (int l = 1; l < 3; ++l)
-            if (ctl_[part].lfoGlobal[l]) glfo_[part][l].step(ctl_[part].lfoHz[l] / sr_ * kCtl, ctl_[part].lfoShape[l]);
+            if (ctl_[part].lfoGlobal[l])
+                glfo_[part][l].step(ctl_[part].lfoHz[l] / sr_ * kCtl, ctl_[part].lfoShape[l], ctl_[part].lfoSym[l], ctl_[part].lfoCurve[l]);
     for (auto& V : voices_) {
         if (!V.active) continue;
         const PartCtl& vc = V.hasOwn ? V.own : ctl_[V.part];
         for (int l = 1; l < 3; ++l) {
-            if (!vc.lfoGlobal[l]) V.lfo[l].step(vc.lfoHz[l] / sr_ * kCtl, vc.lfoShape[l]);
+            if (!vc.lfoGlobal[l]) V.lfo[l].step(vc.lfoHz[l] / sr_ * kCtl, vc.lfoShape[l], vc.lfoSym[l], vc.lfoCurve[l]);
             if (V.lfoFadeLvl[l] < 1.0f) V.lfoFadeLvl[l] = std::min(1.0f, V.lfoFadeLvl[l] + V.lfoFadeInc[l] * kCtl);
         }
         modulateVoice(V, morphNow_[V.part], routes_[V.part], routeN_[V.part]);
@@ -1305,13 +1342,17 @@ void Twin::render(float* out, int32_t frames) {
     applyRate();
     // Asleep — no voice, a quiet hangover, no sequencer that could play — so nothing to add
     // until a note, a pattern edit or a transport start wakes it (SC-006).
-    if (idle_ && !seqActive()) {
+    if (wakeReq_.exchange(false, std::memory_order_acquire)) {
+        quiet_ = 0;
+        idle_.store(false, std::memory_order_relaxed);
+    }
+    if (idle_.load(std::memory_order_relaxed) && !seqActive()) {
         tFrames_ += frames;
         return;
     }
     for (int32_t done = 0; done < frames;) {
         if (ctlLeft_ == 0) {
-            updateControl();
+            updateControl(tPos_ + tFrames_ + done);
             ctlLeft_ = twin::kCtl;
         }
         const int toEvent = seqService(done); // fires due steps, says when the next one is
@@ -1327,7 +1368,7 @@ void Twin::render(float* out, int32_t frames) {
     bool delayOn = false;
     for (const auto& part : fxWasOn_) delayOn |= part[FxDelay];
     const uint64_t hang = kIdleHangover + (delayOn ? static_cast<uint64_t>(sampleRate_.load(std::memory_order_relaxed) * kDelayHoldSec) : 0);
-    idle_ = quiet_ > hang;
+    idle_.store(quiet_ > hang, std::memory_order_relaxed);
     publishTelemetry(blockPeak_);
     blockPeak_ = 0.0f;
     heldPub_[0].store(heldBits_[0], std::memory_order_relaxed);

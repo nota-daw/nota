@@ -993,6 +993,9 @@ public sealed partial class NotaEngine
     public void InstrumentAction(int trackId, int id, int iarg, float farg)
     { ThrowIfDisposed(); NativeMethods.InstrumentAction(_handle, trackId, id, iarg, farg); }
 
+    public bool SetInstrumentStateUndoable(int trackId, byte[] data)
+    { ThrowIfDisposed(); return NativeMethods.InstrumentSetStateUndoable(_handle, trackId, data, data.Length) != 0; }
+
     public bool SetTrackGrainSample(int trackId, string path, int rootNote = 60)
     { ThrowIfDisposed(); return NativeMethods.SetTrackGrainSample(_handle, trackId, path, rootNote) != 0; }
 

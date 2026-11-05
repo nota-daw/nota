@@ -174,8 +174,10 @@ public sealed class TwinTools(IAudioEngine engine, IEngineDispatch dispatch, IAr
 
     [McpServerTool(Name = "twin_pattern_to_clip"), Description(
         "Write a Nota Twin sequencer pattern (1..8) as an ordinary MIDI clip on its track at a bar (1 = the first bar): notes, "
-        + "velocities, gates, ties and swing; motion lanes become automation. Turns the sequencer off. One undo step. Returns "
-        + "the clip index, or -1.")]
+        + "velocities, gates, ties and swing; motion lanes become automation (existing automation outside the clip stays). Turns "
+        + "the sequencer off. One undo step. Returns the clip index, or -1 — also when a clip would play other parts than the "
+        + "sequencer does (Layer with Sequencer Target on one part; Split with the target on both parts, or a note on the other "
+        + "side of the split key).")]
     public Task<int> TwinPatternToClip(int trackId, int pattern = 1, int startBar = 1) => Mutate(() =>
         E.TrackInstrumentKind(trackId) != TwinMatrix.Kind ? -1 : TwinPatterns.ToClip(E, trackId, pattern - 1, Math.Max(0, startBar - 1) * 4.0));
 

@@ -108,6 +108,11 @@ void voiceControl(Voice& V, const PartCtl& c, double sr) {
     V.rNoise.to(c.noiseLvl, snap);
     const float stackGain = V.stackN > 1 ? std::pow(static_cast<float>(V.stackN), -0.4f) : 1.0f;
     V.rGain.to(c.gain * stackGain, snap);
+    // Detune, Spread and Pan move a held chord too, not just the next note.
+    V.rDet.to(V.stackU * c.uniDetune * 0.5f, snap);
+    const float pan = std::clamp(V.panPos * c.spread + c.pan, -1.0f, 1.0f);
+    V.rPanL.to(std::cos((pan + 1.0f) * 0.78539816f), snap);
+    V.rPanR.to(std::sin((pan + 1.0f) * 0.78539816f), snap);
     V.fresh = false;
 }
 
@@ -122,7 +127,9 @@ int renderVoice(Voice& V, const PartCtl& c, int from, int n, int os, double sr, 
     const float vib = (c.vibSemis * modWheel + c.vibExtra) * c.lfoAmt[0];
     const double lfoInc = c.lfoHz[0] / sr;
     const float noiseA = fast_math::exp2f(-c.noiseCol * 7.0f), noiseG = 1.0f + c.noiseCol * 2.5f;
-    const float o2Key = c.o2lo ? -36.0f : 0.0f; // low-frequency Osc 2 drops off the keyboard
+    // Low mode: Osc 2 leaves the keyboard (and the bend and vibrato) and sits three octaves below
+    // middle C, Coarse / Fine and the matrix still moving it, so it can act as a modulator.
+    constexpr float kO2LowKey = 60.0f - 36.0f;
     const float invFade = fadeLen > 0 ? 1.0f / static_cast<float>(fadeLen) : 1.0f;
 
     for (int i = from; i < n; ++i) {
@@ -158,9 +165,9 @@ int renderVoice(Voice& V, const PartCtl& c, int from, int n, int os, double sr, 
             V.lfo[0].step(lfoInc, c.lfoShape[0]); // keep the phase running
         if (V.lfoFadeLvl[0] < 1.0f) V.lfoFadeLvl[0] = std::min(1.0f, V.lfoFadeLvl[0] + V.lfoFadeInc[0]);
 
-        const float key = V.pitch + V.det + V.ex.bend();
+        const float key = V.pitch + V.rDet.next() + V.ex.bend();
         const float p1 = key + V.rPitch[0].next() + lv;
-        const float p2 = key + o2Key + V.rPitch[1].next() + lv;
+        const float p2 = (c.o2lo ? kO2LowKey : key + lv) + V.rPitch[1].next();
         const double dt1 = std::min(440.0 * fast_math::exp2f((p1 - 69.0f) * (1.0f / 12.0f)) * invFsOs, 0.45);
         const double dt2 = std::min(440.0 * fast_math::exp2f((p2 - 69.0f) * (1.0f / 12.0f)) * invFsOs, 0.45);
         const float kt = (key - 60.0f) * (1.0f / 12.0f);
@@ -177,6 +184,7 @@ int renderVoice(Voice& V, const PartCtl& c, int from, int n, int os, double sr, 
         const float a1 = l1 * (1.0f - c.bal[0]), b1 = l1 * c.bal[0];
         const float a2 = l2 * (1.0f - c.bal[1]), b2 = l2 * c.bal[1];
         const float an = ln * (1.0f - c.noiseBal), bn = ln * c.noiseBal;
+        const float panL = V.rPanL.next(), panR = V.rPanR.next();
         float* L = osL + i * os;
         float* R = osR + i * os;
 
@@ -213,8 +221,8 @@ int renderVoice(Voice& V, const PartCtl& c, int from, int n, int os, double sr, 
             if (c.drive > 0.0f)
                 out = V.sat.process(out * (1.0f + 6.0f * c.drive) * 0.6f) * (1.0f / 0.6f) / (1.0f + 1.5f * c.drive);
             const float o = out * amp;
-            L[s] += o * V.panL;
-            R[s] += o * V.panR;
+            L[s] += o * panL;
+            R[s] += o * panR;
         }
         // Extreme settings must never poison the voice.
         if (!std::isfinite(V.fb)) {

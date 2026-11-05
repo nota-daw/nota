@@ -126,6 +126,9 @@ public sealed partial class NotaEngine
     public void RackChainInstrumentAction(int trackId, int chain, int id, int iarg, float farg)
     { ThrowIfDisposed(); NativeMethods.RackChainInstrumentAction(_handle, trackId, chain, id, iarg, farg); }
 
+    public bool RackSetChainInstrumentStateUndoable(int trackId, int chain, byte[] data)
+    { ThrowIfDisposed(); return NativeMethods.RackChainInstrumentSetStateUndoable(_handle, trackId, chain, data, data.Length) != 0; }
+
     public bool RackChainSamplerInfo(int trackId, int chain, out NotaSamplerInfo info)
     { ThrowIfDisposed(); return NativeMethods.RackChainSamplerInfo(_handle, trackId, chain, out info) != 0; }
 
@@ -353,6 +356,12 @@ public sealed partial class NotaEngine
     { ThrowIfDisposed(); return NativeMethods.RackDevChainInstrumentHeldNotes(_handle, trackId, deviceIndex, chain, outNotes, outNotes.Length); }
     public void RackDevChainInstrumentAction(int trackId, int deviceIndex, int chain, int id, int iarg, float farg)
     { ThrowIfDisposed(); NativeMethods.RackDevChainInstrumentAction(_handle, trackId, deviceIndex, chain, id, iarg, farg); }
+
+    public bool RackDevSetChainInstrumentStateUndoable(int trackId, int deviceIndex, int chain, byte[] data)
+    {
+        ThrowIfDisposed();
+        return NativeMethods.RackDevChainInstrumentSetStateUndoable(_handle, trackId, deviceIndex, chain, data, data.Length) != 0;
+    }
     public void RackDevOpenChainInstrumentEditor(int trackId, int deviceIndex, int chain)
     { ThrowIfDisposed(); NativeMethods.RackDevOpenChainInstrumentEditor(_handle, trackId, deviceIndex, chain); }
     public string RackDevChainInstrumentPluginId(int trackId, int deviceIndex, int chain)

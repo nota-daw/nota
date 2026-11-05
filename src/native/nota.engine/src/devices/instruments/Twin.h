@@ -300,11 +300,12 @@ class Twin final : public Instrument {
     // quiet for a hangover (the decimator drain), the instrument may sleep. Notes, param
     // edits and transport starts wake it.
     bool hasTail() const override { return true; }
-    bool isIdle() const override { return idle_; }
-    void wake() override {
-        idle_ = false;
-        quiet_ = 0;
+    // wake() may come from the UI thread (a knob, a pattern edit) while render() runs, so it only
+    // raises a request; the audio thread owns quiet_ / idle_ and clears them when it takes it.
+    bool isIdle() const override {
+        return idle_.load(std::memory_order_relaxed) && !wakeReq_.load(std::memory_order_relaxed);
     }
+    void wake() override { wakeReq_.store(true, std::memory_order_release); }
 
     // ---- parameters -----------------------------------------------------------
     int32_t pluginParamCount() const override { return kNumParams; }
@@ -342,7 +343,7 @@ class Twin final : public Instrument {
     void applyRate();
     void resetAll();
     void computeStatics(int v);
-    void updateControl();
+    void updateControl(double now); // now: the interval's first sample, absolute (song) frames
     float sourceValue(const twin::Voice& V, const twin::PartCtl& c, int src) const;
     float globalValue(int part, const twin::PartCtl& c, int src) const;
     void modulateVoice(twin::Voice& V, float morph, const twin::LiveRoute* routes, int n);
@@ -447,6 +448,8 @@ class Twin final : public Instrument {
     bool seqResync_ = true, seqRunning_ = false;
     double seqStepBeats_ = 0.25;
     int64_t nextK_ = 0, arpStartK_ = 0;
+    int64_t patStartK_ = 0; // the step index the playing pattern's first step fell on
+    float seqStepV_ = 0.0f; // the Seq step source: the playing step, 0 (first) … 1 (last)
     int curPat_ = 0, pendPat_ = -1, playStep_ = -1;
     struct SeqNote {
         int pitch;
@@ -468,8 +471,9 @@ class Twin final : public Instrument {
     Motion motion_[twin::kLanes];
     twin::MotionOverride motionOvr_[twin::kParts];
     // sleep
-    bool idle_ = false;
-    uint64_t quiet_ = 0;
+    std::atomic<bool> idle_{false};    // written by render() only
+    std::atomic<bool> wakeReq_{false}; // wake(): any thread; taken by render()
+    uint64_t quiet_ = 0;               // audio thread only
     float blockPeak_ = 0.0f;
 };
 
