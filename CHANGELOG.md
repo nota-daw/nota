@@ -258,6 +258,10 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Leftovers from the History multi-delete and MIDI CC lane changes** (#496): a failed delete
+  of several versions no longer reports success over its error; drawing a controller curve
+  while recording is no longer cancelled by the recording's refresh, in any lane; the main
+  window's minimum height follows the interface scale again when the clip editor is fitted.
 - **Reset velocity in the piano roll**: double-clicking the stem of a note already at the default
   velocity, below its cap, no longer adds an empty undo step, and the right-click **Reset
   velocity** menu opens at the pointer instead of the middle of the lane.

@@ -842,8 +842,11 @@ public sealed partial class PianoRollView : UserControl
             for (int i = 0; i < _notes.Count; i++)
                 burstVel.Add((_notes[i].Pitch, _notes[i].StartBeat, _notes[i].Velocity));
         }
-        DropControllerCache();
+        // A reload of the same clip (recording reloads ~60 Hz) keeps a lane's drag going on
+        // the fresh curve; another clip cancels every lane's gesture.
+        DropControllerCache(cancelGestures: !sameController);
         _ctlLane.OnClipReloaded(sameController);
+        foreach (var item in _controllerLanes) item.Lane.OnClipReloaded(sameController);
         _ctlClip = (_set.ActiveClip.TrackId, _set.ActiveClip.ClipIndex);
         ReplaceAll(notes, owners);
         // What the engine holds is what was just loaded, before a held burst's velocities go
