@@ -9,6 +9,7 @@
 // queued behind the transport moves, so nothing from before the restart reaches it.
 
 #include "Engine.h"
+#include "ParamPath.h"
 
 #include <algorithm>
 #include <cmath>
@@ -59,6 +60,37 @@ void Engine::syncTakeEpoch() {
 void Engine::closeTakeAttempt() {
     takeAttempt_ = TakeAttempt{};
     retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
+}
+
+// The pre-take lanes of `base`, aimed at the devices as `cur` has them: a device moved during
+// the take keeps its lanes (devices are shared between track copies, so the object finds its
+// new slot), one removed takes its lanes with it — as remapAutomationAfterDeviceChange does.
+static std::vector<TrackLane> lanesOnto(const Track& base, const Track& cur) {
+    auto slotIn = [](const auto& from, const auto& to, int32_t idx) -> int32_t {
+        if (idx < 0 || idx >= static_cast<int32_t>(from.size())) return -1;
+        auto it = std::find(to.begin(), to.end(), from[static_cast<size_t>(idx)]);
+        return it == to.end() ? -1 : static_cast<int32_t>(it - to.begin());
+    };
+    std::vector<TrackLane> out;
+    out.reserve(base.automation.size());
+    for (TrackLane l : base.automation) {
+        const bool midiRack = l.nested() && isMidiHost(l.deviceIndex);
+        const bool midi = midiRack || (!l.nested() && l.target == AutomationTarget::MidiDeviceParam);
+        const bool effect = !midi && (l.nested() ? l.deviceIndex >= 0
+                                                 : l.target == AutomationTarget::DeviceParam ||
+                                                       (l.target == AutomationTarget::PluginParam && l.deviceIndex >= 0));
+        if (midi) {
+            const int32_t ni = slotIn(base.midiEffects, cur.midiEffects, midiRack ? midiHostIndex(l.deviceIndex) : l.deviceIndex);
+            if (ni < 0) continue;
+            l.deviceIndex = midiRack ? midiHost(ni) : ni;
+        } else if (effect) {
+            const int32_t ni = slotIn(base.devices, cur.devices, l.deviceIndex);
+            if (ni < 0) continue;
+            l.deviceIndex = ni;
+        }
+        out.push_back(std::move(l));
+    }
+    return out;
 }
 
 void Engine::discardTake() {
@@ -113,7 +145,7 @@ void Engine::discardTake() {
             nt->clips = base->clips;
             nt->takes = base->takes;
             nt->midiClips = base->midiClips;
-            nt->automation = base->automation;
+            nt->automation = lanesOnto(*base, *cur);
             return nt;
         }
         const int32_t sc = a.sessionScene;

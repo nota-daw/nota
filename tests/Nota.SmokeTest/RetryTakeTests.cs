@@ -34,6 +34,7 @@ internal static class RetryTakeTests
         foreach (var r in AutomationOnAnotherTrack()) yield return r;
         foreach (var r in EditsMadeMeanwhile()) yield return r;
         foreach (var r in RecordingTrackEditedMeanwhile()) yield return r;
+        foreach (var r in DeviceMovedMeanwhile()) yield return r;
         foreach (var r in DisarmedTakeIsKept()) yield return r;
         foreach (var r in SessionHeldIntoRelaunch()) yield return r;
         foreach (var r in SessionToggleSlot()) yield return r;
@@ -206,6 +207,41 @@ internal static class RetryTakeTests
         bool renameUndone = e.GetTrackName(t) == "Before" && Notes(e, t).All(n => n.Note.Pitch != 60);
         yield return (named && dropped && renameUndone,
             $"retry keeps a rename of the recording track (name kept {named}, take dropped {dropped}, rename undoes to the old name without the take {renameUndone})");
+    }
+
+    // Moving an automated effect mid-take: the pre-take lane comes back aimed at the effect
+    // where it now sits; removing one takes its lane with it.
+    private static IEnumerable<(bool, string)> DeviceMovedMeanwhile()
+    {
+        const int Utility = 4, Delay = 3;
+        using var e = Armed(out int t);
+        e.AddBuiltinDevice(t, Utility);
+        e.AddBuiltinDevice(t, Delay);
+        int lane = e.AddAutomationLane(t, AutomationTarget.DeviceParam, 0, 0);   // the Utility
+        e.SetAutomationPoints(t, lane, new[] { new AutomationPoint(0, 0.2f), new AutomationPoint(4, 0.8f) });
+        int lanes = e.AutomationLaneCount(t);
+        e.SetCountIn(0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.5);
+        e.BeginAutomationWrite(t, AutomationTarget.Pan, -1, -1, "");
+        Beats(e, 0.5);
+        e.EndAutomationWrite(t, AutomationTarget.Pan, -1, -1, "");
+        e.MoveDevice(t, 0, 1);                   // the Utility now sits second
+        e.RetryTake();
+        Beats(e, 0.01);
+        var moved = Enumerable.Range(0, e.AutomationLaneCount(t)).Select(i => e.AutomationLaneInfo(t, i))
+            .Where(i => i.Target == AutomationTarget.DeviceParam).ToArray();
+        yield return (e.AutomationLaneCount(t) == lanes && moved.Length == 1 && moved[0].DeviceIndex == 1 && moved[0].PointCount == 2,
+            $"retry after moving an automated effect: its lane follows it (lanes {lanes} → {e.AutomationLaneCount(t)}, device {(moved.Length == 1 ? moved[0].DeviceIndex : -9)})");
+        e.RemoveDevice(t, 1);                    // the Utility goes, mid-take
+        e.RetryTake();
+        Beats(e, 0.01);
+        bool gone = Enumerable.Range(0, e.AutomationLaneCount(t)).All(i => e.AutomationLaneInfo(t, i).Target != AutomationTarget.DeviceParam);
+        yield return (gone, "retry after removing an automated effect: its lane goes with it");
+        e.SetRecording(false);
+        e.StopTransport();
     }
 
     // Disarming the track ends (and keeps) its take: a retry afterwards has nothing to discard.
