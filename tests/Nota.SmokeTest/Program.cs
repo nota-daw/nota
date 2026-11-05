@@ -15485,6 +15485,8 @@ Console.WriteLine("-- group link --");
 foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+Console.WriteLine("-- meter --");
+foreach (var (ok, label) in MeterTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota vocoder --");

@@ -17,7 +17,8 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
 {
     private readonly IAudioEngine _engine = engine;
 
-    private const int BeatsPerBar = 4;
+    // A bar is the time signature's numerator in beats, as the metronome counts it (#405).
+    private int BeatsPerBar => Math.Max(1, TimeSigNumerator);
 
     [ObservableProperty] private string _positionText = "1.1.00";
     [ObservableProperty] private string _playLabel = "▶ Play";
@@ -81,7 +82,12 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         _sentBpmAt = Environment.TickCount64;
         _engine.SetBpm((double)value);
     }
-    partial void OnTimeSigNumeratorChanged(int value) => _engine.SetTimeSignature(value, TimeSigDenominator);
+    partial void OnTimeSigNumeratorChanged(int value)
+    {
+        _engine.SetTimeSignature(value, TimeSigDenominator);
+        if (!IsCountingIn) UpdatePositionText(_lastBeats);   // the readouts re-count at once
+        SyncLoop();
+    }
     partial void OnTimeSigDenominatorChanged(int value) => _engine.SetTimeSignature(TimeSigNumerator, value);
     partial void OnMasterVolumeChanged(double value)
     {
@@ -121,8 +127,8 @@ public partial class TransportViewModel(IAudioEngine engine) : ObservableObject
         LoopRangeText = FormatRange(s, e);
     }
 
-    private static string FormatRange(double startBeat, double endBeat) => $"{BarBeat(startBeat)}–{BarBeat(endBeat)}";   // closed: plain numbers
-    private static string BarBeat(double beat)
+    private string FormatRange(double startBeat, double endBeat) => $"{BarBeat(startBeat)}–{BarBeat(endBeat)}";   // closed: plain numbers
+    private string BarBeat(double beat)
     {
         int bar = (int)(beat / BeatsPerBar) + 1;
         int b = (int)(beat % BeatsPerBar) + 1;
