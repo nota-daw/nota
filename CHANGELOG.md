@@ -267,6 +267,9 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   grouped.
 - **Click a group's lane to select it** (#490): a click on a group's row in the Arrangement
   selects the group and a double-click shows its devices, as on its header.
+- **Reset velocity in the piano roll**: double-clicking the stem of a note already at the default
+  velocity, below its cap, no longer adds an empty undo step, and the right-click **Reset
+  velocity** menu opens at the pointer instead of the middle of the lane.
 - **Bars follow the time signature** (#405): in 3/4, 5/4 or 7/4 the arrangement's bar lines
   and bar numbers, the clip editors' grids and rulers, the step grid, the transport's position
   readout, the clip and Session readouts and Export's range fields count the time signature's
