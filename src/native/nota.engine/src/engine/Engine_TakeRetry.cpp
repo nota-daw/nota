@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
+#include <typeinfo>
 
 namespace nota {
 
@@ -62,14 +64,48 @@ void Engine::closeTakeAttempt() {
     retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
 }
 
-// The pre-take lanes of `base`, aimed at the devices as `cur` has them: a device moved during
-// the take keeps its lanes (devices are shared between track copies, so the object finds its
-// new slot), one removed takes its lanes with it — as remapAutomationAfterDeviceChange does.
+// Where each device of `from` sits in `to` (-1: removed). The same object first — devices are
+// shared between track copies, so a moved one is found in its new slot; then a device an edit
+// replaced with a copy (a rack fork, a MIDI effect's loaded state) pairs with the unmatched
+// device of the same type and name next in chain order.
+template <class Chain>
+static std::vector<int32_t> deviceMap(const Chain& from, const Chain& to) {
+    std::vector<int32_t> map(from.size(), -1);
+    std::vector<bool> taken(to.size(), false);
+    for (size_t i = 0; i < from.size(); ++i)
+        for (size_t j = 0; j < to.size(); ++j)
+            if (!taken[j] && from[i] && from[i] == to[j]) {
+                map[i] = static_cast<int32_t>(j);
+                taken[j] = true;
+                break;
+            }
+    auto same = [](const auto& x, const auto& y) {
+        return x && y && typeid(*x) == typeid(*y) && std::strcmp(x->displayName(), y->displayName()) == 0;
+    };
+    size_t next = 0;
+    for (size_t i = 0; i < from.size(); ++i) {
+        if (map[i] >= 0) {
+            next = std::max(next, static_cast<size_t>(map[i]) + 1);
+            continue;
+        }
+        for (size_t j = next; j < to.size(); ++j)
+            if (!taken[j] && same(from[i], to[j])) {
+                map[i] = static_cast<int32_t>(j);
+                taken[j] = true;
+                next = j + 1;
+                break;
+            }
+    }
+    return map;
+}
+
+// The pre-take lanes of `base`, aimed at the devices where `cur` has them (deviceMap); a lane
+// whose device was removed goes with it, as remapAutomationAfterDeviceChange does.
 static std::vector<TrackLane> lanesOnto(const Track& base, const Track& cur) {
-    auto slotIn = [](const auto& from, const auto& to, int32_t idx) -> int32_t {
-        if (idx < 0 || idx >= static_cast<int32_t>(from.size())) return -1;
-        auto it = std::find(to.begin(), to.end(), from[static_cast<size_t>(idx)]);
-        return it == to.end() ? -1 : static_cast<int32_t>(it - to.begin());
+    const auto fx = deviceMap(base.devices, cur.devices);
+    const auto mfx = deviceMap(base.midiEffects, cur.midiEffects);
+    auto at = [](const std::vector<int32_t>& m, int32_t idx) {
+        return idx >= 0 && idx < static_cast<int32_t>(m.size()) ? m[static_cast<size_t>(idx)] : -1;
     };
     std::vector<TrackLane> out;
     out.reserve(base.automation.size());
@@ -80,11 +116,11 @@ static std::vector<TrackLane> lanesOnto(const Track& base, const Track& cur) {
                                                  : l.target == AutomationTarget::DeviceParam ||
                                                        (l.target == AutomationTarget::PluginParam && l.deviceIndex >= 0));
         if (midi) {
-            const int32_t ni = slotIn(base.midiEffects, cur.midiEffects, midiRack ? midiHostIndex(l.deviceIndex) : l.deviceIndex);
+            const int32_t ni = at(mfx, midiRack ? midiHostIndex(l.deviceIndex) : l.deviceIndex);
             if (ni < 0) continue;
             l.deviceIndex = midiRack ? midiHost(ni) : ni;
         } else if (effect) {
-            const int32_t ni = slotIn(base.devices, cur.devices, l.deviceIndex);
+            const int32_t ni = at(fx, l.deviceIndex);
             if (ni < 0) continue;
             l.deviceIndex = ni;
         }

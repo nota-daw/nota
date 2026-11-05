@@ -35,6 +35,7 @@ internal static class RetryTakeTests
         foreach (var r in EditsMadeMeanwhile()) yield return r;
         foreach (var r in RecordingTrackEditedMeanwhile()) yield return r;
         foreach (var r in DeviceMovedMeanwhile()) yield return r;
+        foreach (var r in DeviceReplacedMeanwhile()) yield return r;
         foreach (var r in DisarmedTakeIsKept()) yield return r;
         foreach (var r in SessionHeldIntoRelaunch()) yield return r;
         foreach (var r in SessionToggleSlot()) yield return r;
@@ -240,6 +241,36 @@ internal static class RetryTakeTests
         Beats(e, 0.01);
         bool gone = Enumerable.Range(0, e.AutomationLaneCount(t)).All(i => e.AutomationLaneInfo(t, i).Target != AutomationTarget.DeviceParam);
         yield return (gone, "retry after removing an automated effect: its lane goes with it");
+        e.SetRecording(false);
+        e.StopTransport();
+    }
+
+    // Edits that swap a device for a copy in its slot — renaming a MIDI Effect Rack's macro,
+    // loading a MIDI effect's state — keep its automation through a retry.
+    private static IEnumerable<(bool, string)> DeviceReplacedMeanwhile()
+    {
+        const int Arp = 0, MidiEffectRack = 6;
+        using var e = Armed(out int t);
+        int arp = e.AddMidiEffect(t, Arp);
+        int rack = e.AddMidiEffect(t, MidiEffectRack);
+        foreach (int d in new[] { arp, rack })
+        {
+            int l = e.AddAutomationLane(t, AutomationTarget.MidiDeviceParam, d, 0);
+            e.SetAutomationPoints(t, l, new[] { new AutomationPoint(0, 0.2f), new AutomationPoint(4, 0.8f) });
+        }
+        e.SetCountIn(0);
+        e.Seek(0.0);
+        Beats(e, 0.01);
+        e.SetRecording(true);
+        Beats(e, 0.5);
+        e.MidiRackSetMacroName(t, rack, 0, "Spread");      // forks the rack
+        e.MidiEffectSetState(t, arp, e.MidiEffectGetState(t, arp), true);   // copies the Arp
+        e.RetryTake();
+        Beats(e, 0.01);
+        var on = Enumerable.Range(0, e.AutomationLaneCount(t)).Select(i => e.AutomationLaneInfo(t, i))
+            .Where(i => i.Target == AutomationTarget.MidiDeviceParam && i.PointCount == 2).Select(i => i.DeviceIndex).OrderBy(x => x).ToArray();
+        yield return (on.SequenceEqual(new[] { arp, rack }) && e.MidiRackMacroName(t, rack, 0) == "Spread",
+            $"retry after editing a MIDI rack and loading an effect's state: their automation stays (lanes on {string.Join(",", on)})");
         e.SetRecording(false);
         e.StopTransport();
     }
