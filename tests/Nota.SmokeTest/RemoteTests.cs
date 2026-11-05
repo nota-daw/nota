@@ -63,10 +63,12 @@ internal static class RemoteTests
                 $"macOS hardware ports read in-process from SystemConfiguration ({string.Join(", ", ports.Select(kv => kv.Key + "=" + kv.Value))})");
 
             RemoteLinks.Invalidate();
-            int before = RemoteLinks.PortReads;
+            int before = RemoteLinks.PortReads, cleared = RemoteLinks.Invalidations;
             for (int i = 0; i < 20; i++) { RemoteLinks.All(); RemoteLinks.OnUsbLink(IPAddress.Parse("192.0.2.2")); }
-            yield return (RemoteLinks.PortReads == before + 1,
-                $"link queries reuse the port map until the network changes (read {RemoteLinks.PortReads - before}× for 40 queries)");
+            // A real network change mid-loop clears the map once more and earns one more read.
+            int reads = RemoteLinks.PortReads - before, changes = RemoteLinks.Invalidations - cleared;
+            yield return (reads >= 1 && reads <= 1 + changes,
+                $"link queries reuse the port map until the network changes (read {reads}× for 40 queries, {changes} network change(s))");
         }
 
         yield return (RemoteLinks.InSubnet(IPAddress.Parse("192.0.2.2"), IPAddress.Parse("192.0.2.1"), 24),

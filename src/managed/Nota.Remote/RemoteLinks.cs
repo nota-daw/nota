@@ -136,7 +136,7 @@ public static class RemoteLinks
     /// <summary>Forget the device → port map; the next query reads it again.</summary>
     public static void Invalidate()
     {
-        lock (Gate) _ports = null;
+        lock (Gate) { _ports = null; Invalidations++; }
     }
 
     /// <summary>The macOS device → hardware-port map, as the USB check sees it. Public for the
@@ -146,6 +146,11 @@ public static class RemoteLinks
     /// <summary>How many times the port map has been read since launch. Public so the smoke test
     /// can check that link queries reuse it.</summary>
     public static int PortReads { get; private set; }
+
+    /// <summary>How many times the map has been forgotten (a network change or
+    /// <see cref="Invalidate"/>). Public so the smoke test can allow for a real network change
+    /// landing mid-check.</summary>
+    public static int Invalidations { get; private set; }
 
     private static readonly object Gate = new();
     private static Dictionary<string, string>? _ports;
