@@ -28,6 +28,7 @@ internal static class TakeLaneTests
         foreach (var r in CompBeforeBlock()) yield return r;
         foreach (var r in RecordBeforeBlock()) yield return r;
         foreach (var r in FlattenKeepsSeparateJoin()) yield return r;
+        foreach (var r in FlattenedJoinFollowsTempo()) yield return r;
         foreach (var r in MoveToTrackFadesExposedEdge()) yield return r;
         foreach (var r in DeactivatedSideFades()) yield return r;
         foreach (var r in UndoKeepsJoins()) yield return r;
@@ -396,6 +397,15 @@ internal static class TakeLaneTests
         int bad = RenderMismatch(Render(e), before);
         yield return (bad < 0, $"flatten keeps the full-level join (first mismatch {bad})");
 
+        // Silencing a side fades the edge it leaves; the join itself outlives that.
+        int flatLeft = ClipAt(e, track, 0.0);
+        e.SetClipActive(track, flatLeft, false);
+        var muted = Render(e);
+        e.SetClipActive(track, flatLeft, true);
+        bad = RenderMismatch(Render(e), before);
+        yield return (Math.Abs(muted[30000]) < 1e-3 && bad < 0,
+            $"after flatten, deactivating and reactivating a side joins full-level again (edge {muted[30000]:G4}, first mismatch {bad})");
+
         // The takes are gone, so only the saved project knows that join plays full-level.
         string dir = Path.Combine(Path.GetTempPath(), "nota-smoke-join-" + Guid.NewGuid().ToString("N") + ".nota");
         try
@@ -413,6 +423,28 @@ internal static class TakeLaneTests
         {
             try { Directory.Delete(dir, true); } catch { }
         }
+    }
+
+    // A flattened join has no takes left to re-place, but a tempo change still parts it.
+    private static IEnumerable<(bool, string)> FlattenedJoinFollowsTempo()
+    {
+        using var e = Rig(out int track);
+        int left = Record(e, track, RecFrames, 1.0) ? ClipAt(e, track, 0.0) : -1;
+        if (left < 0)
+        {
+            yield return (false, "flatten tempo: recording failed");
+            yield break;
+        }
+        e.SetClipReverse(track, left, true);
+        var before = Render(e);
+        bool flat = e.FlattenTakes(track) && e.TakeCount(track) == 0 && RenderMismatch(Render(e), before) < 0;
+        // At 60 BPM the reversed section still ends at frame 30000, its neighbour now starts at
+        // beat 1.25 = frame 60000: they no longer meet, so both ends fade against the silence.
+        e.SetBpm(60);
+        var slow = Render(e);
+        bool faded = Math.Abs(slow[29999]) < 0.01 && Math.Abs(slow[60000]) < 1e-3 && Math.Abs(slow[60300]) > 0.05;
+        yield return (flat && faded,
+            $"after flatten, a tempo change that parts the join fades both ends (tail {slow[29999]:G4}, head {slow[60000]:G4})");
     }
 
     // A silent section joins nothing: the one that still plays fades where they met.

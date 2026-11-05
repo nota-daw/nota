@@ -99,10 +99,13 @@ struct AudioClip {
     // The take this clip plays a section of (specs/067), 0 = none. Drives the take lanes'
     // highlight and flatten only; playback never looks at it.
     int32_t takeId = 0;
-    // Edge fades (~3 ms) at the played ends. Take sections of one recording that meet turn
-    // the shared edge off, so the comp does not dip to silence there. Derived when the
-    // track is published (settleTakeJoins); a join whose takes are gone (flatten) is kept
-    // while the clips meet, so the project saves it (nota_clip_joined_edges).
+    // The ends that join the clip meeting them (bit 1 head, bit 2 tail): take sections of one
+    // recording, or a join that outlived its takes (flatten, delete). Kept while the clips
+    // meet, silent or not, so deactivating a side does not lose it; the project saves it
+    // (nota_clip_joined_edges). Derived when the track is published (settleTakeJoins).
+    uint8_t joinedEdges = 0;
+    // Edge fades (~3 ms) at the played ends: off at a join both sides of which play, so the
+    // comp does not dip to silence there. Derived with joinedEdges, read by playback only.
     bool fadeHead = true;
     bool fadeTail = true;
 
