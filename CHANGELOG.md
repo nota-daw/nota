@@ -22,6 +22,8 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
 
 ## [Unreleased]
 
+## [0.59.1] — 2026-11-05
+
 ### Added
 - **Discard and retry take** (#185): ⌘. (Ctrl+. on Windows and Linux) — also in the
   Transport menu, the command palette and over MCP (`retry_take`) — throws away the take

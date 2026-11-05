@@ -2,7 +2,7 @@
 # Nota — full feature list
 
 A consolidated list of what Nota (a cross-platform DAW) can do, as of version
-**0.58.1** (plus changes in development on `main`). This document describes what is
+**0.59.1** (plus changes in development on `main`). This document describes what is
 implemented in the code, not what is planned. Sources: `CHANGELOG.md`, `README.md`,
 `ARCHITECTURE.md`.
 
@@ -239,7 +239,10 @@ docks as a panel under any of the three, or floats in its own window — see
 ## Tracks and mixer
 
 - **Track types**: Audio, MIDI/Instrument, Return, Master, **Group** (nestable submixes —
-  ⌘/Ctrl+G to group, ⌘/Ctrl+Shift+G to ungroup).
+  ⌘/Ctrl+G to group, ⌘/Ctrl+Shift+G to ungroup: on a group it dissolves the group, on a
+  track inside one it takes just that track out, after the group). Dragging a header above
+  the first row or below the last takes the track out of its group; clicking a group's lane
+  selects the group.
 - **Linked groups** — a group's **Link** key (a chain link on its header, its Mixer and
   Session strip, and **Link tracks** in its menu) ties the tracks below it together, nested
   groups included. Arming one arms them all; clicking a clip also selects the clips with the
@@ -1429,7 +1432,9 @@ audio effects after it keep running and keep their settings; saved with the proj
   clips when splitting** — on by default; a split then writes a 4 ms fade at the cut, which
   the corner handles can drag longer or shorter. **Track
   headers** — Left / Right side of the arrangement's track list. **Open the detail panel
-  when you select a track or clip** (off by default: a double-click opens it). Also
+  when you select a track or clip** (off by default: a double-click opens it). **Label every
+  note in the piano roll** — the keys column names every note instead of only C (off by
+  default; very short rows keep C only). Also
   **AI control (MCP)** on/off, a port field, and "Copy config" (copies a
   ready-made client JSON config to the clipboard).
 - **Language** (Appearance): the interface language. Nota ships in **English**; every other
