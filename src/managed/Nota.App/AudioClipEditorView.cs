@@ -710,7 +710,7 @@ public sealed class AudioClipEditorView : UserControl
         private static readonly IBrush ChipInkHot = NotaPalette.AccentBright;
         // Ruler 24, marker strip 22, then the wave.
         private const double RulerH = 24, StripH = 22, WaveTop = RulerH + StripH;
-        private const int BeatsPerBar = 4;   // matches the props-rail bar.beat readouts
+        private static int BeatsPerBar => Meter.BeatsPerBar;   // the project's bars, as the props-rail readouts (#405)
         private IBrush _wave = NotaPalette.TrackBrushes[1];
         private float[]? _peaks, _rms;
         private int _count;

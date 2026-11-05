@@ -367,21 +367,23 @@ internal static class ClipEditorKit
 
     // ---- positions --------------------------------------------------------
 
-    /// <summary>bar.beat.16th (4/4), 1-based: 11.1.1.</summary>
+    /// <summary>bar.beat.16th, 1-based, in the project's bars (<see cref="Meter"/>): 11.1.1.</summary>
     public static string Position(double beat)
     {
-        int bar = (int)Math.Floor(beat / 4) + 1, be = (int)Math.Floor(beat % 4) + 1, six = (int)Math.Round(beat % 1 * 4) + 1;
+        int bpb = Meter.BeatsPerBar;
+        int bar = (int)Math.Floor(beat / bpb) + 1, be = (int)Math.Floor(beat % bpb) + 1, six = (int)Math.Round(beat % 1 * 4) + 1;
         if (six > 4) { six = 1; be++; }
-        if (be > 4) { be = 1; bar++; }
+        if (be > bpb) { be = 1; bar++; }
         return string.Format(NotaNum.Culture, "{0}.{1}.{2}", bar, be, six);
     }
 
     /// <summary>bars.beats.16ths as a duration (0-based): 2.0.0.</summary>
     public static string Duration(double beats)
     {
-        int bars = (int)Math.Floor(beats / 4), be = (int)Math.Floor(beats % 4), six = (int)Math.Round(beats % 1 * 4);
+        int bpb = Meter.BeatsPerBar;
+        int bars = (int)Math.Floor(beats / bpb), be = (int)Math.Floor(beats % bpb), six = (int)Math.Round(beats % 1 * 4);
         if (six > 3) { six = 0; be++; }
-        if (be > 3) { be = 0; bars++; }
+        if (be > bpb - 1) { be = 0; bars++; }
         return string.Format(NotaNum.Culture, "{0}.{1}.{2}", bars, be, six);
     }
 

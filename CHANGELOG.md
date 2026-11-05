@@ -258,6 +258,11 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Bars follow the time signature** (#405): in 3/4, 5/4 or 7/4 the arrangement's bar lines
+  and bar numbers, the clip editors' grids and rulers, the step grid, the transport's position
+  readout, the clip and Session readouts and Export's range fields count the time signature's
+  beats per bar, as the metronome does. Before, every view drew and counted 4/4 bars whatever
+  the signature, so a 3/4 bar line fell in the middle of the second bar.
 - **Drawing a controller no longer changes the rest of the curve** (#169): a stroke in the
   piano-roll controller lane replaces only the stretch you draw. A shaped curve on either side
   keeps its bend, and points recorded while the button is down are not replaced by the older
