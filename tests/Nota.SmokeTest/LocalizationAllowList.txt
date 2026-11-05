@@ -2753,6 +2753,7 @@ Nota.Application/Palette/CommandCatalog.cs	copy clone	# data: search keyword or 
 Nota.Application/Palette/CommandCatalog.cs	copy rename	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	copy repeat section clips automation ripple at playhead	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
 Nota.Application/Palette/CommandCatalog.cs	create blank empty	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
+Nota.Application/Palette/CommandCatalog.cs	crossfade declick	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	cut slice	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	cycle repeat	# data: search keyword or alias of the palette and the browser, not shown
 Nota.Application/Palette/CommandCatalog.cs	default automatic rename section at playhead	# data: search keywords, device and node names, category ids (FR-004; what is drawn goes through Loc)
