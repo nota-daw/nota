@@ -258,6 +258,15 @@ Entry categories: `Added`, `Changed`, `Fixed`, `Removed`.
   returns, then the master.
 
 ### Fixed
+- **Take one track out of a group** (#488, #489): **Remove from group** in a grouped track's
+  menu, and ⌘⇧G (Ctrl+Shift+G) on it, take just that track out — it lands right after the
+  group, which keeps its other tracks and its effects. Before, **Ungroup** there dissolved the
+  whole group and its effects went with it; on a group, **Ungroup** still does that, and undo
+  brings the group back with its effects. Dragging a header above the first row or below the
+  last one now takes it out of its group too, so a track can leave even when every track is
+  grouped.
+- **Click a group's lane to select it** (#490): a click on a group's row in the Arrangement
+  selects the group and a double-click shows its devices, as on its header.
 - **Reset velocity in the piano roll**: double-clicking the stem of a note already at the default
   velocity, below its cap, no longer adds an empty undo step, and the right-click **Reset
   velocity** menu opens at the pointer instead of the middle of the lane.

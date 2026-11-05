@@ -227,13 +227,19 @@ public sealed partial class ArrangementView
         return gid;
     }
 
-    /// <summary>The group to ungroup for a header: the track itself if it is a group, else the
-    /// group that contains it, else -1.</summary>
-    private int GroupToUngroupFor(int trackId)
+    /// <summary>True when the track sits inside a group (it can be taken out of it).</summary>
+    private bool IsInGroup(int trackId) => _tracks.FirstOrDefault(x => x.Id == trackId) is { GroupId: > 0 };
+
+    private bool IsGroupId(int trackId) => _tracks.FirstOrDefault(x => x.Id == trackId) is { IsGroup: true };
+
+    /// <summary>Takes one track out of its group (#489): the group, its other members and its
+    /// devices stay. One undo step.</summary>
+    private void RemoveFromGroup(int trackId)
     {
-        var t = _tracks.FirstOrDefault(x => x.Id == trackId);
-        if (t is null) return -1;
-        return t.IsGroup ? t.Id : t.GroupId;
+        if (_engine is null || !TrackGroups.LeaveGroup(_engine, trackId)) return;
+        Refresh();
+        Select(trackId, -1);
+        SessionChanged?.Invoke();
     }
 
     private void UngroupGroup(int groupId)
@@ -249,23 +255,49 @@ public sealed partial class ArrangementView
     // ---- header drag drop (reorder + into/out of a group) -----------------
     /// <summary>Resolves a header drag-drop at viewport <paramref name="y"/>: joins the target
     /// group (drop onto a group or one of its members), leaves the group (drop on a top-level
-    /// row), and reorders next to the target. Membership + order are separate engine edits.</summary>
+    /// row), and reorders next to the target. Above the first row or below the last one is the
+    /// top level, first or last — the way out of a group when every track is grouped (#488).
+    /// Membership + order are separate engine edits, made as one undo step.</summary>
     private void HandleHeaderDrop(int id, double y)
     {
         if (_engine is null || _tracks.Count == 0) { Select(id, -1); return; }
-        int row = RowAtYClamped(y);
-        if (row < 0) { Select(id, -1); return; }
-        var target = _tracks[row];
         var dragged = _tracks.FirstOrDefault(t => t.Id == id);
-        if (dragged is null || target.Id == id) { Select(id, -1); return; }
-        // Drop onto a group → join it; onto a member → join that member's group; else top-level.
-        int desiredParent = target.IsGroup ? target.Id : target.GroupId;
-        if (desiredParent != dragged.GroupId) _engine.SetTrackGroup(id, desiredParent);
-        int destIdx = RegularIndexOf(target.Id);   // position next to the target in the flat list
-        if (destIdx >= 0) _engine.MoveTrack(id, destIdx);
+        if (dragged is null) { Select(id, -1); return; }
+        int desiredParent, destIdx;
+        if (RowGapAtY(y) == 0 || y >= RowsHeight)
+        {
+            desiredParent = -1;
+            destIdx = y >= RowsHeight ? RegularCount() - 1 : 0;
+        }
+        else
+        {
+            var target = _tracks[RowAtYClamped(y)];
+            if (target.Id == id) { Select(id, -1); return; }
+            // Drop onto a group → join it; onto a member → join that member's group; else top-level.
+            desiredParent = target.IsGroup ? target.Id : target.GroupId;
+            destIdx = RegularIndexOf(target.Id);   // position next to the target in the flat list
+        }
+        if (desiredParent == dragged.GroupId && destIdx == RegularIndexOf(id)) { Select(id, -1); return; }
+        _engine.BeginUndoGroup();
+        try
+        {
+            if (desiredParent != dragged.GroupId) _engine.SetTrackGroup(id, desiredParent);
+            if (destIdx >= 0) _engine.MoveTrack(id, destIdx);
+        }
+        finally { _engine.EndUndoGroup(); }
         Refresh();
         Select(id, -1);
         SessionChanged?.Invoke();
+    }
+
+    /// <summary>How many non-return tracks the engine holds (MoveTrack's index space).</summary>
+    private int RegularCount()
+    {
+        if (_engine is null) return 0;
+        int n = 0;
+        for (int i = 0; i < _engine.TrackCount; i++)
+            if (_engine.TryGetTrackInfo(i, out var ti) && !ti.IsReturn) n++;
+        return n;
     }
 
     /// <summary>Index of a track among the engine's non-return tracks (the space MoveTrack uses).</summary>
@@ -286,12 +318,13 @@ public sealed partial class ArrangementView
     /// <summary>Cmd+G — group the selected tracks. Returns true if a group was formed.</summary>
     public bool GroupSelection() => GroupTracks(-1) > 0;
 
-    /// <summary>Cmd+Shift+G — ungroup the selected group (or the group of the selected track).</summary>
+    /// <summary>Cmd+Shift+G — ungroup the selected group, or take the selected track out of its
+    /// group (#489: the group and its devices stay).</summary>
     public bool UngroupSelection()
     {
-        int gid = GroupToUngroupFor(SelTrackId);
-        if (gid <= 0) return false;
-        UngroupGroup(gid);
+        if (IsGroupId(SelTrackId)) { UngroupGroup(SelTrackId); return true; }
+        if (!IsInGroup(SelTrackId)) return false;
+        RemoveFromGroup(SelTrackId);
         return true;
     }
 }
