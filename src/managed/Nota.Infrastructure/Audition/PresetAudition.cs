@@ -15,6 +15,7 @@ using System.IO;
 using Nota.Application;
 
 using Nota.Application.Mosaic;
+using Nota.Application.Localization;
 
 namespace Nota.Infrastructure;
 
@@ -61,7 +62,7 @@ public sealed partial class PresetAudition : IPresetAudition
             case AuditionSubjectKind.Preset when s.Path.StartsWith("rhythmkit:", StringComparison.Ordinal):
                 return KitPlan(s.Path, s.Path[10..], rhythm: true, out reason);
             case AuditionSubjectKind.Preset:
-                reason = "Preset not found.";
+                reason = Loc.T("audition.preset_audition.preset_not_found");
                 return null;
             // A fresh Drum Rack / Nota Rhythm is heard with the kit a new Rhythm starts with.
             case AuditionSubjectKind.Instrument when s.BuiltinKind is 4 or 12:
@@ -81,7 +82,7 @@ public sealed partial class PresetAudition : IPresetAudition
             default:
                 return null;
         }
-        if (doc is null) { reason = "Preset not found."; return null; }
+        if (doc is null) { reason = Loc.T("audition.preset_audition.preset_not_found"); return null; }
 
         var named = doc.NamedParams ?? new Dictionary<string, float>();
         switch (doc.Type)
@@ -89,7 +90,7 @@ public sealed partial class PresetAudition : IPresetAudition
             case "builtin-instrument":
             {
                 int kind = doc.BuiltinKind;
-                if (kind is 3 or 4) { reason = "Racks play what their chains hold — nothing to preview on its own."; return null; }
+                if (kind is 3 or 4) { reason = Loc.T("audition.preset_audition.racks_play_what_their_chains"); return null; }
                 var phrase = PhraseFor(kind, category, s.Name);
                 return new AuditionPlan(keyBase, DeviceName(doc, kind, instrument: true), phrase.Label, false, "", "",
                     rig =>
@@ -141,7 +142,7 @@ public sealed partial class PresetAudition : IPresetAudition
             case "builtin-effect":
             {
                 int kind = doc.BuiltinKind;
-                if (kind == 5) { reason = "The Effect Rack plays what its chains hold — nothing to preview on its own."; return null; }
+                if (kind == 5) { reason = Loc.T("audition.preset_audition.the_effect_rack_plays_what"); return null; }
                 string id = trackId == AuditionTrackIds.Auto ? AutoTrack(kind) : trackId;
                 if (id == AuditionTrackIds.Sample && string.IsNullOrEmpty(samplePath)) id = AutoTrack(kind);
                 var track = id == AuditionTrackIds.Sample ? null : TrackById(id) ?? TrackById(AutoTrack(kind))!;
@@ -162,7 +163,7 @@ public sealed partial class PresetAudition : IPresetAudition
                     Array.Empty<AuditionNote>(), track?.Bpm ?? Bpm, 0, 4.0, true);
             }
             default:
-                reason = "Plug-in presets can't be previewed — load the plug-in to hear them.";
+                reason = Loc.T("audition.preset_audition.plug_in_presets_cant_be");
                 return null;
         }
     }

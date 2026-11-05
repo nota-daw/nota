@@ -34,6 +34,7 @@ using Nota.Application.Input;
 using Nota.Application.Samples;
 using Nota.Presentation;
 using Microsoft.Extensions.DependencyInjection;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -114,7 +115,7 @@ public sealed class BrowserView : UserControl
         }
         if (paths.Count == 0)
             App.Services.GetService<ILogSink>()?.Info(
-                $"External drop named no files Nota can read. Formats: {string.Join(", ", data.Formats.Select(f => $"{f.Kind}:{f.Identifier}"))}");
+                Loc.F("browser.external_drop_named_no_files", string.Join(", ", data.Formats.Select(f => $"{f.Kind}:{f.Identifier}"))));
         return paths;
     }
 
@@ -156,13 +157,14 @@ public sealed class BrowserView : UserControl
         return g;
     }
 
-    private const int TabCount = 8;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History
+    private const int TabCount = 9;   // Instr / FX / MIDI / Files / Preset / Proj / Map / History / Track
     private const int EffectsTab = 1; // Audio effects
     private const int FilesTab = 3;   // samples: the player auditions the file
     private const int PresetsTab = 4; // Instr / FX / MIDI / Files / Presets carry the player
     private const int MapTab = 6;     // MIDI-learn mappings — hosts a MidiMapView, not a list
     private const int HistoryTab = 7; // the open project's versions — hosts a HistoryView
-    private static bool IsCustomTab(int index) => index is MapTab or HistoryTab;
+    private const int InspectorTab = 8; // the selected track's settings — hosts a TrackInspectorView
+    private static bool IsCustomTab(int index) => index is MapTab or HistoryTab or InspectorTab;
     private const double RowH = 26;   // single-line index row (almanac list row: 26–28, one line)
     private const double GroupRowH = 22;
 
@@ -176,6 +178,7 @@ public sealed class BrowserView : UserControl
     private ISettingsService? _settings;
     private MidiMapView? _midiMap;
     private HistoryView? _historyView;
+    private Control? _trackInspector;
 
     // Collapsed: only the icon rail shows; clicking an icon unfolds the browser on that tab.
     private bool _collapsed;
@@ -259,24 +262,25 @@ public sealed class BrowserView : UserControl
 
         _tabs = new[]
         {
-            RailTab(0, "Instruments", GlyphKind.Keyboard),
-            RailTab(1, "Audio effects", GlyphKind.Sliders),
-            RailTab(2, "MIDI effects", GlyphKind.Midi),
-            RailTab(3, "Files", GlyphKind.Folder),
-            RailTab(4, "Presets", GlyphKind.Bookmark),
-            RailTab(5, "Projects", GlyphKind.Doc),
-            RailTab(6, "MIDI map", GlyphKind.Map),
-            RailTab(7, "History", GlyphKind.History),
+            RailTab(0, Loc.T("common.instruments"), GlyphKind.Keyboard),
+            RailTab(1, Loc.T("browser.audio_effects_2"), GlyphKind.Sliders),
+            RailTab(2, Loc.T("browser.midi_effects_2"), GlyphKind.Midi),
+            RailTab(3, Loc.T("browser.files"), GlyphKind.Folder),
+            RailTab(4, Loc.T("browser.presets"), GlyphKind.Bookmark),
+            RailTab(5, Loc.T("browser.projects"), GlyphKind.Doc),
+            RailTab(6, Loc.T("browser.midi_map"), GlyphKind.Map),
+            RailTab(7, Loc.T("browser.history"), GlyphKind.History),
+            RailTab(InspectorTab, Loc.T("browser.track_inspector"), GlyphKind.Track),
         };
-        // A hairline above Files and above Map: devices · library · mappings.
-        foreach (int i in new[] { 3, 6 })
+        // A hairline above Files, Map and the inspector: devices · library · mappings · track.
+        foreach (int i in new[] { 3, 6, InspectorTab })
         {
             _tabs[i].BorderThickness = new Thickness(0, 1, 0, 0);
             _tabs[i].BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         }
         var tabStack = new StackPanel();
         foreach (var t in _tabs) tabStack.Children.Add(t);
-        _collapseBtn = RailButton(GlyphKind.Sidebar, "Collapse browser", () => SetCollapsed(!_collapsed, persist: true));
+        _collapseBtn = RailButton(GlyphKind.Sidebar, Loc.T("browser.collapse_browser"), () => SetCollapsed(!_collapsed, persist: true));
         _collapseBtn.BorderThickness = new Thickness(0, 1, 0, 0);
         _collapseBtn.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
         var rail = new DockPanel { Width = 40 };
@@ -287,7 +291,7 @@ public sealed class BrowserView : UserControl
         // --- Search (26h): accent border on focus, match count on the right ---
         _search = new TextBox
         {
-            Watermark = "Search",
+            Watermark = Loc.T("browser.search"),
             BorderThickness = new Thickness(0),
             Background = Brushes.Transparent,
             FontSize = 11,
@@ -455,6 +459,13 @@ public sealed class BrowserView : UserControl
         if (_active == HistoryTab) _content.Content = view;
     }
 
+    /// <summary>Give the browser the track inspector tab (specs/060).</summary>
+    internal void SetTrackInspector(Control view)
+    {
+        _trackInspector = view;
+        if (_active == InspectorTab) _content.Content = view;
+    }
+
     /// <summary>Reveal the MIDI-mappings tab (called when learn mode is armed).</summary>
     public void ShowMidiMap() { SelectTab(MapTab); SetCollapsed(false, persist: true); }
     /// <summary>Opens the History tab (the project's versions).</summary>
@@ -481,7 +492,7 @@ public sealed class BrowserView : UserControl
         // Nothing is open while folded, so no tab is marked active.
         for (int i = 0; i < _tabs.Length; i++)
             _tabs[i].Classes.Set("active", !collapsed && i == _active);
-        ToolTip.SetTip(_collapseBtn, collapsed ? "Expand browser" : "Collapse browser");
+        ToolTip.SetTip(_collapseBtn, collapsed ? Loc.T("browser.expand_browser") : Loc.T("browser.collapse_browser"));
         if (persist && _settings is not null)
         {
             _settings.Current.BrowserCollapsed = collapsed;
@@ -624,16 +635,16 @@ public sealed class BrowserView : UserControl
                          && (_vm.FilterMode != BrowserFilter.None || _vm.CategoryFilter(tab).Length > 0);
         bool sampleFilter = tab == FilesTab && _vm is not null && (!_vm.SampleFilter.IsEmpty || _vm.SimilarAnchor is not null);
         if (sampleFilter && _vm!.IndexProgress.Total > 0)
-            return ("No matches yet", "Nota is still analysing your samples — more matches appear as it goes.");
-        if (searching || filtering || sampleFilter) return ("No matches", "Try a different search or clear the filters.");
+            return (Loc.T("browser.no_matches_yet"), Loc.T("browser.nota_is_still_analysing_your"));
+        if (searching || filtering || sampleFilter) return (Loc.T("browser.no_matches"), Loc.T("browser.try_a_different_search_or"));
         return tab switch
         {
-            0 => ("No instruments yet", "Nota's built-in synths plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
-            1 => ("No audio effects yet", "Nota's built-in effects plus your VST/AU plug-ins. Scan your plug-ins in Settings → Plug-ins to add more."),
-            2 => ("No MIDI effects yet", "Arpeggiator, chord, scale and more — they process notes before an instrument; drop one to the left of an instrument in a track."),
-            3 => ("No samples yet", "Add audio files to your Samples folder (Settings → Library) or install free packs from Settings → Downloads → Sample packs, then browse them here as a folder tree. You can also drag files in from Finder."),
-            4 => ("No presets yet", "Right-click a device header and choose Save preset; it appears here grouped by category and device."),
-            _ => ("No projects yet", MenuKit.Keys("Save a project (⌘S) into your Projects folder (Settings → Library) and it shows up here.")),
+            0 => (Loc.T("browser.no_instruments_yet"), Loc.T("browser.notas_built_in_synths_plus")),
+            1 => (Loc.T("browser.no_audio_effects_yet"), Loc.T("browser.notas_built_in_effects_plus")),
+            2 => (Loc.T("browser.no_midi_effects_yet"), Loc.T("browser.arpeggiator_chord_scale_and_more")),
+            3 => (Loc.T("browser.no_samples_yet"), Loc.T("browser.add_audio_files_to_your")),
+            4 => (Loc.T("browser.no_presets_yet"), Loc.T("browser.right_click_a_device_header")),
+            _ => (Loc.T("browser.no_projects_yet"), MenuKit.Keys(Loc.T("browser.save_a_project_s_into"))),
         };
     }
 
@@ -656,7 +667,7 @@ public sealed class BrowserView : UserControl
             var (bi, pl) = _vm.VisibleDeviceCounts(tab);
             // The total is already in the search box, so spend the line on the split — it is
             // the thing the sections exist to show, and it fits a narrow panel.
-            return $"{bi} built-in · {Plural(pl, "plug-in")}";
+            return Loc.F("browser.built_in", bi, Loc.Plural("browser.plug_ins", pl));
         }
         int n = VisibleCount(tab);
         // Filtered, the folders on screen are only there to hold the matches: count those.
@@ -664,19 +675,17 @@ public sealed class BrowserView : UserControl
             n = System.Linq.Enumerable.Count(_vm.Samples, s => s.Kind != BrowserItemKind.Folder);
         return tab switch
         {
-            3 => Plural(n, "sample") + AnalysingSuffix(),
-            4 => Plural(n, "preset"),
-            _ => Plural(n, "project"),
+            3 => Loc.Plural("browser.samples", n) + AnalysingSuffix(),
+            4 => Loc.Plural("browser.presets_n", n),
+            _ => Loc.Plural("browser.projects_n", n),
         };
     }
-
-    private static string Plural(int n, string noun) => $"{n} {noun}{(n == 1 ? "" : "s")}";
 
     // " · analysing 34 %" while the library scan runs.
     private string AnalysingSuffix()
     {
         var (done, total) = _vm?.IndexProgress ?? (0, 0);
-        return total > 0 ? $" · analysing {done * 100 / total}\u2009%" : "";
+        return total > 0 ? Loc.F("browser.analysing", done * 100 / total) : "";
     }
 
     private void SelectTab(int index)
@@ -685,9 +694,15 @@ public sealed class BrowserView : UserControl
         _active = index;
         for (int i = 0; i < _tabs.Length; i++)
             _tabs[i].Classes.Set("active", !_collapsed && i == index);
-        // The MIDI-map and History tabs host bespoke views, not a filtered item list.
+        // The MIDI-map, History and inspector tabs host bespoke views, not a filtered item list.
         bool isMap = IsCustomTab(index);
-        _content.Content = index == MapTab ? _midiMap : index == HistoryTab ? (Control?)_historyView : _pages[index];
+        _content.Content = index switch
+        {
+            MapTab => _midiMap,
+            HistoryTab => _historyView,
+            InspectorTab => _trackInspector,
+            _ => _pages[index],
+        };
         if (index == HistoryTab) _historyView?.Refresh();
         _searchWrap.IsVisible = !isMap;
         _optionsBtn.IsVisible = !isMap;
@@ -796,7 +811,7 @@ public sealed class BrowserView : UserControl
         if (foldable)
         {
             grid.Cursor = new Cursor(StandardCursorType.Hand);
-            ToolTip.SetTip(grid, item.IsExpanded ? "Collapse" : "Expand");
+            ToolTip.SetTip(grid, item.IsExpanded ? Loc.T("browser.collapse") : Loc.T("browser.expand"));
             grid.PointerPressed += (_, e) =>
             {
                 if (!e.GetCurrentPoint(grid).Properties.IsLeftButtonPressed) return;
@@ -1049,7 +1064,7 @@ public sealed class BrowserView : UserControl
         };
         btn.BindResource(Border.BackgroundProperty, "Brush.BgSunken");
         btn.BindResource(Border.BorderBrushProperty, "Brush.BorderDefault");
-        ToolTip.SetTip(btn, "Sort and view");
+        ToolTip.SetTip(btn, Loc.T("browser.sort_and_view"));
         btn.PointerPressed += (_, e) => { ShowOptionsMenu(btn); e.Handled = true; };
         return btn;
     }
@@ -1057,14 +1072,14 @@ public sealed class BrowserView : UserControl
     private void ShowOptionsMenu(Control anchor)
     {
         var flyout = new MenuFlyout();
-        flyout.Items.Add(CheckItem("Show type tags", _settings?.Current.BrowserShowTypeTags ?? true, v =>
+        flyout.Items.Add(CheckItem(Loc.T("browser.show_type_tags"), _settings?.Current.BrowserShowTypeTags ?? true, v =>
         {
             if (_settings is null) return;
             _settings.Current.BrowserShowTypeTags = v;
             _settings.Save();
             RefreshRows();
         }));
-        flyout.Items.Add(CheckItem("Category chips", CategoryChipsOn, v =>
+        flyout.Items.Add(CheckItem(Loc.T("browser.category_chips"), CategoryChipsOn, v =>
         {
             if (_settings is not null) { _settings.Current.BrowserCategoryChips = v; _settings.Save(); }
             // A hidden chip must not keep narrowing the list.
@@ -1072,13 +1087,13 @@ public sealed class BrowserView : UserControl
             RebuildCategoryChips();
             RefreshCounts();
         }));
-        flyout.Items.Add(CheckItem("Group by source", _vm?.GroupBySource ?? true, v =>
+        flyout.Items.Add(CheckItem(Loc.T("browser.group_by_source"), _vm?.GroupBySource ?? true, v =>
         {
             if (_vm is not null) _vm.GroupBySource = v;
             if (_settings is not null) { _settings.Current.BrowserGroupBySource = v; _settings.Save(); }
             RefreshCounts();
         }));
-        flyout.Items.Add(CheckItem("Favorites first", _vm?.FavoritesFirst ?? true, v =>
+        flyout.Items.Add(CheckItem(Loc.T("browser.favorites_first"), _vm?.FavoritesFirst ?? true, v =>
         {
             if (_vm is not null) _vm.FavoritesFirst = v;
             if (_settings is not null) { _settings.Current.BrowserFavoritesFirst = v; _settings.Save(); }
@@ -1089,11 +1104,11 @@ public sealed class BrowserView : UserControl
             // What happens when a sample lands on the arrangement.
             var s = _settings;
             flyout.Items.Add(new Separator());
-            flyout.Items.Add(CheckItem("Warp loops to project tempo", s.Current.SamplesWarpLoops, v => { s.Current.SamplesWarpLoops = v; s.Save(); }));
-            flyout.Items.Add(CheckItem("Transpose to project key", s.Current.SamplesMatchKey, v => { s.Current.SamplesMatchKey = v; s.Save(); }));
+            flyout.Items.Add(CheckItem(Loc.T("browser.warp_loops_to_project_tempo"), s.Current.SamplesWarpLoops, v => { s.Current.SamplesWarpLoops = v; s.Save(); }));
+            flyout.Items.Add(CheckItem(Loc.T("browser.transpose_to_project_key"), s.Current.SamplesMatchKey, v => { s.Current.SamplesMatchKey = v; s.Save(); }));
         }
         flyout.Items.Add(new Separator());
-        var editTags = new MenuItem { Header = "Edit tags…" };
+        var editTags = new MenuItem { Header = Loc.T("browser.edit_tags") };
         editTags.Click += (_, _) => EditTagsRequested?.Invoke(null);
         flyout.Items.Add(editTags);
         flyout.ShowAt(anchor);
@@ -1233,7 +1248,7 @@ public sealed class BrowserView : UserControl
     {
         _chipsPanel.ClearChips();   // the "+N" is a permanent child, not one of the chips
         if (_vm is null) return;
-        _chipsPanel.Children.Add(MakeChip("Favorites", null,
+        _chipsPanel.Children.Add(MakeChip(Loc.T("browser.favorites"), null,
             _vm.FilterMode == BrowserFilter.Favorites, () => ToggleFilter(BrowserFilter.Favorites, "")));
         foreach (var t in _vm.Tags)
         {
@@ -1261,7 +1276,7 @@ public sealed class BrowserView : UserControl
         {
             var category = name;
             bool active = picked == category;
-            _categoryChips.Children.Add(MakeChip(category, null, active, () =>
+            _categoryChips.Children.Add(MakeChip(DeviceCategories.Display(category), null, active, () =>
             {
                 _vm.SetCategoryFilter(tab, active ? "" : category);
                 RebuildCategoryChips();
@@ -1302,19 +1317,19 @@ public sealed class BrowserView : UserControl
         {
             string stem = System.IO.Path.GetFileNameWithoutExtension(anchor.Name);
             if (stem.Length > 18) stem = stem[..17] + "…";
-            var like = MakeChip($"Like {stem}", null, true, () => { _vm.ClearSimilar(); RebuildSampleChips(); RefreshCounts(); });
-            ToolTip.SetTip(like, $"Sounds like {anchor.Name}, closest first — click to go back to all samples");
+            var like = MakeChip(Loc.F("browser.like", stem), null, true, () => { _vm.ClearSimilar(); RebuildSampleChips(); RefreshCounts(); });
+            ToolTip.SetTip(like, Loc.F("browser.sounds_like_closest_first_click", anchor.Name));
             _sampleChips.Children.Add(like);
         }
-        _sampleChips.Children.Add(MakeChip("Loops", null, f.Kind == SampleKind.Loop,
+        _sampleChips.Children.Add(MakeChip(Loc.T("browser.loops"), null, f.Kind == SampleKind.Loop,
             () => SetSampleFilter(f with { Kind = f.Kind == SampleKind.Loop ? SampleKind.Unknown : SampleKind.Loop })));
-        _sampleChips.Children.Add(MakeChip("One-shots", null, f.Kind == SampleKind.OneShot,
+        _sampleChips.Children.Add(MakeChip(Loc.T("browser.one_shots"), null, f.Kind == SampleKind.OneShot,
             () => SetSampleFilter(f with { Kind = f.Kind == SampleKind.OneShot ? SampleKind.Unknown : SampleKind.OneShot })));
         ChipBorder? bpm = null, key = null;
         bpm = MakeChip(f.HasBpm ? f.BpmCaption + "\u2009BPM" : "BPM", null, f.HasBpm, () => ShowBpmFilter(bpm!));
-        key = MakeChip(f.Key?.Long ?? "Key", null, f.Key is not null, () => ShowKeyFilter(key!));
-        ToolTip.SetTip(bpm, "Filter by tempo");
-        ToolTip.SetTip(key, "Filter by key — a key also shows its relative (A minor ↔ C major)");
+        key = MakeChip(f.Key?.Long ?? Loc.T("browser.key"), null, f.Key is not null, () => ShowKeyFilter(key!));
+        ToolTip.SetTip(bpm, Loc.T("browser.filter_by_tempo"));
+        ToolTip.SetTip(key, Loc.T("browser.filter_by_key_a_key"));
         _sampleChips.Children.Add(bpm);
         _sampleChips.Children.Add(key);
     }
@@ -1349,14 +1364,14 @@ public sealed class BrowserView : UserControl
         max.TextChanged += (_, _) => Apply();
         var dash = new TextBlock { Text = "–", VerticalAlignment = VerticalAlignment.Center };
         dash.BindResource(TextBlock.ForegroundProperty, "Brush.TextTertiary");
-        var unit = new TextBlock { Text = "BPM", Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
+        var unit = new TextBlock { Text = Loc.T("browser.bpm_caps"), Classes = { "Caption" }, VerticalAlignment = VerticalAlignment.Center };
         var fields = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { min, dash, max, unit } };
 
         var actions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         if (ProjectTempo?.Invoke() is > 0 and var tempo)
         {
-            var near = new Button { Content = $"Project tempo ±5\u2009%", Classes = { "ghost" } };
-            ToolTip.SetTip(near, $"Loops within 5\u2009% of {SampleInfo.FormatBpm(tempo)}\u2009BPM warp to it cleanly");
+            var near = new Button { Content = Loc.F("browser.project_tempo_5"), Classes = { "ghost" } };
+            ToolTip.SetTip(near, Loc.F("browser.loops_within_5_of_bpm", SampleInfo.FormatBpm(tempo)));
             near.Click += (_, _) =>
             {
                 min.Text = SampleInfo.FormatBpm(Math.Floor(tempo * 0.95));
@@ -1364,7 +1379,7 @@ public sealed class BrowserView : UserControl
             };
             actions.Children.Add(near);
         }
-        var any = new Button { Content = "Any tempo", Classes = { "ghost" } };
+        var any = new Button { Content = Loc.T("browser.any_tempo"), Classes = { "ghost" } };
         any.Click += (_, _) => { flyout.Hide(); SetSampleFilter(_vm.SampleFilter with { BpmMin = 0, BpmMax = 0 }); };
         actions.Children.Add(any);
 
@@ -1376,18 +1391,18 @@ public sealed class BrowserView : UserControl
     {
         if (_vm is null) return;
         var extras = new List<(string, MusicalKey)>();
-        if (ProjectKey?.Invoke() is { } pk) extras.Add(($"Project key · {pk.Short}", pk));
-        KeyPicker.Show(anchor, _vm.SampleFilter.Key, "Any key", k => SetSampleFilter(_vm.SampleFilter with { Key = k }), extras);
+        if (ProjectKey?.Invoke() is { } pk) extras.Add((Loc.F("browser.project_key", pk.Short), pk));
+        KeyPicker.Show(anchor, _vm.SampleFilter.Key, Loc.T("browser.any_key"), k => SetSampleFilter(_vm.SampleFilter with { Key = k }), extras);
     }
 
     private async void ShowSimilar(BrowserItem item)
     {
         if (_vm is null) return;
-        _statusText.Text = $"Finding sounds like {item.Name}…";
+        _statusText.Text = Loc.F("browser.finding_sounds_like", item.Name);
         int n = await _vm.ShowSimilarAsync(item);
         RebuildSampleChips();
         RefreshCounts();
-        if (n == 0) _statusText.Text = "Couldn't analyse that sample";
+        if (n == 0) _statusText.Text = Loc.T("browser.couldnt_analyse_that_sample");
     }
 
     private void ToggleFilter(BrowserFilter mode, string tagId)
@@ -1555,14 +1570,14 @@ public sealed class BrowserView : UserControl
 
     private static string ItemKindLabel(BrowserItem item) => item.Kind switch
     {
-        BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument => "Instrument",
-        BrowserItemKind.BuiltinEffect or BrowserItemKind.PluginEffect => "Audio effect",
-        BrowserItemKind.BuiltinMidiEffect => "MIDI effect",
-        BrowserItemKind.Sample => "Sample",
-        BrowserItemKind.MidiFile => "MIDI file",
-        BrowserItemKind.Project => "Project",
-        BrowserItemKind.Preset => "Preset",
-        BrowserItemKind.Folder => "Folder",
+        BrowserItemKind.BuiltinInstrument or BrowserItemKind.PluginInstrument => Loc.T("common.instrument"),
+        BrowserItemKind.BuiltinEffect or BrowserItemKind.PluginEffect => Loc.T("browser.audio_effect"),
+        BrowserItemKind.BuiltinMidiEffect => Loc.T("browser.midi_effect"),
+        BrowserItemKind.Sample => Loc.T("common.sample"),
+        BrowserItemKind.MidiFile => Loc.T("browser.midi_file"),
+        BrowserItemKind.Project => Loc.T("browser.project"),
+        BrowserItemKind.Preset => Loc.T("browser.preset"),
+        BrowserItemKind.Folder => Loc.T("browser.folder"),
         _ => "",
     };
 
@@ -1574,11 +1589,11 @@ public sealed class BrowserView : UserControl
         if (item.LibraryKey.Length > 0 && _vm is not null)
         {
             bool fav = _vm.IsFavorite(item);
-            var favItem = new MenuItem { Header = fav ? "Remove from favorites" : "Add to favorites" };
+            var favItem = new MenuItem { Header = fav ? Loc.T("browser.remove_from_favorites") : Loc.T("browser.add_to_favorites") };
             favItem.Click += (_, _) => _vm.ToggleFavorite(item);
             flyout.Items.Add(favItem);
 
-            var tagsMenu = new MenuItem { Header = "Tags" };
+            var tagsMenu = new MenuItem { Header = Loc.T("browser.tags") };
             foreach (var t in _vm.Tags)
             {
                 var tag = t;
@@ -1589,9 +1604,9 @@ public sealed class BrowserView : UserControl
                 tagsMenu.Items.Add(mi);
             }
             if (_vm.Tags.Count > 0) tagsMenu.Items.Add(new Separator());
-            var newTag = new MenuItem { Header = "New tag…" };
+            var newTag = new MenuItem { Header = Loc.T("browser.new_tag") };
             newTag.Click += (_, _) => EditTagsRequested?.Invoke(item);   // create + assign to this device
-            var editTags = new MenuItem { Header = "Edit tags…" };
+            var editTags = new MenuItem { Header = Loc.T("browser.edit_tags") };
             editTags.Click += (_, _) => EditTagsRequested?.Invoke(null); // manage all
             tagsMenu.Items.Add(newTag);
             tagsMenu.Items.Add(editTags);
@@ -1603,7 +1618,7 @@ public sealed class BrowserView : UserControl
         {
             case BrowserItemKind.Sample when _vm?.HasSampleIndex == true:
             {
-                var similar = new MenuItem { Header = "Show similar sounds" };
+                var similar = new MenuItem { Header = Loc.T("browser.show_similar_sounds") };
                 similar.Click += (_, _) => ShowSimilar(item);
                 var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
@@ -1619,7 +1634,7 @@ public sealed class BrowserView : UserControl
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(reveal);
                 flyout.Items.Add(new Separator());
-                flyout.Items.Add(MenuKit.Danger("Delete…", GlyphKind.Trash, () => DeletePresetRequested?.Invoke(item)));
+                flyout.Items.Add(MenuKit.Danger(Loc.T("browser.delete"), GlyphKind.Trash, () => DeletePresetRequested?.Invoke(item)));
                 return flyout;
             }
             // The Presets tab's category / device rows group by what a preset holds; the files
@@ -1641,9 +1656,9 @@ public sealed class BrowserView : UserControl
             }
             case BrowserItemKind.Folder when _active == FilesTab:   // real sample folders (preset folders are synthetic)
             {
-                var multi = new MenuItem { Header = "Create multisample…" };
+                var multi = new MenuItem { Header = Loc.T("browser.create_multisample") };
                 multi.Click += (_, _) => CreateMultisampleRequested?.Invoke(item);
-                ToolTip.SetTip(multi, "Map the folder's samples by their names into Nota Mosaic presets");
+                ToolTip.SetTip(multi, Loc.T("browser.map_the_folders_samples_by"));
                 var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
                 flyout.Items.Add(multi);
@@ -1652,11 +1667,11 @@ public sealed class BrowserView : UserControl
             }
             case BrowserItemKind.Project:
             {
-                var open = new MenuItem { Header = "Open" };
+                var open = new MenuItem { Header = Loc.T("common.open") };
                 open.Click += (_, _) => ItemActivated?.Invoke(item, KeyModifiers.None);
                 var reveal = new MenuItem { Header = MenuKit.RevealLabel };
                 reveal.Click += (_, _) => RevealRequested?.Invoke(item);
-                var del = MenuKit.Danger("Delete…", GlyphKind.Trash, () => DeleteProjectRequested?.Invoke(item));
+                var del = MenuKit.Danger(Loc.T("browser.delete"), GlyphKind.Trash, () => DeleteProjectRequested?.Invoke(item));
                 flyout.Items.Add(open);
                 flyout.Items.Add(reveal);
                 flyout.Items.Add(new Separator());

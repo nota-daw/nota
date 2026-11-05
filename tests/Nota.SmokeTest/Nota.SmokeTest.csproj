@@ -49,6 +49,9 @@
     <Compile Include="..\..\src\managed\Nota.App\Controls\ValueText.cs" Link="ValueText.cs" />
     <!-- Clip editor position / tempo / ruler math (specs/036; no Avalonia inside). -->
     <Compile Include="..\..\src\managed\Nota.App\ClipEditor\*.cs" LinkBase="ClipEditor" />
+    <!-- The splash's per-release art: scene + composer (specs/074; no Avalonia inside). -->
+    <Compile Include="..\..\src\managed\Nota.App\Theme\SplashArt\SplashScene.cs" Link="SplashArt/SplashScene.cs" />
+    <Compile Include="..\..\src\managed\Nota.App\Theme\SplashArt\SplashArtComposer.cs" Link="SplashArt/SplashArtComposer.cs" />
   </ItemGroup>
 
 </Project>

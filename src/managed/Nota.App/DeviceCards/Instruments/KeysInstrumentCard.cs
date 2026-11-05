@@ -29,6 +29,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -206,7 +207,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
                 double pk = Math.Max(mt.PeakL, mt.PeakR);
                 meterOut.Text = pk > 1e-6 ? $"out {NotaNum.Db(AudioMath.LinToDb((float)pk))}" : "out −∞\u2009dB";
             }
-            meta.Text = mini ? meterOut.Text : $"{Rate()} · {VoicesText()} voices";
+            meta.Text = mini ? meterOut.Text : Loc.F("device.keys.voices_n", Rate(), VoicesText());
         });
 
         if (mini) return BuildMini(ctx, pickup, ModelChips(true), Knob, status, meta, Refresh);
@@ -289,7 +290,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
             SetP("pedal", On("pedal") ? 0f : 1f); Refresh(); e.Handled = true;
         };
         if (I("pedal") is var pedI and >= 0) MidiLearn.Bind(pedalPill, MidiTarget.PluginParam(track, -1, pedI), "Damper Pedal");
-        ToolTip.SetTip(pedalPill, "Sustain pedal — click to hold it down; a keyboard's CC64 works too");
+        ToolTip.SetTip(pedalPill, Loc.T("device.keys.sustain_pedal_click_to_hold"));
         ctx.AddDeviceRefresher(() =>
         {
             bool down = Sc(KeysModel.ScPedal) > 0 || On("pedal");
@@ -359,7 +360,7 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
 
         var chMix = Knob("chorusmix", "Mix", v => NotaNum.Pct(v));
         DimWhen(() => !On("choruson"), chMix);
-        var chNote = new TextBlock { Text = "2 lines · BBD", FontSize = 7, Foreground = NotaPalette.TextAxis, HorizontalAlignment = HorizontalAlignment.Center };
+        var chNote = new TextBlock { Text = Loc.T("device.keys.2_lines_bbd"), FontSize = 7, Foreground = NotaPalette.TextAxis, HorizontalAlignment = HorizontalAlignment.Center };
         var chorus = Island("Chorus", VStack(chMix, chNote), "choruson", width: 62);
 
         var cabList = new StackPanel { Spacing = 3, VerticalAlignment = VerticalAlignment.Center };
@@ -417,8 +418,8 @@ internal sealed class KeysInstrumentCard : IInstrumentCard
             int limit = KeysModel.VoiceCounts[Sel("voices", 4)];
             int held = Sc(KeysModel.ScHeld), sus = Sc(KeysModel.ScSustained), act = Sc(KeysModel.ScActive);
             grid.Set(limit, held, Math.Max(0, act - held));
-            voicesLine.Text = $"{act} / {limit} voices";
-            pedalLine.Text = sus > 0 ? $"{sus} held by the pedal" : act > held ? $"{act - held} ringing out" : "";
+            voicesLine.Text = Loc.F("device.keys.voices", act, limit);
+            pedalLine.Text = sus > 0 ? Loc.F("device.keys.held_by_the_pedal", sus) : act > held ? Loc.F("device.keys.ringing_out", act - held) : "";
         });
         var railMeter = new MeterBar { VerticalAlignment = VerticalAlignment.Stretch, Width = MeterScale.StereoWidth };
         ctx.AddDeviceRefresher(() => { if (engine.TryGetTrackMeter(track, out var m)) railMeter.Push(m); });

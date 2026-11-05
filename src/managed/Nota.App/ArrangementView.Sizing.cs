@@ -53,11 +53,19 @@ public sealed partial class ArrangementView
     private readonly List<(Border grip, int trackId)> _rowSeamGrips = new();
     // Layout tier each live card was built at, so a drag rebuilds a card only when it crosses one.
     private readonly Dictionary<int, HeaderTier> _cardTiers = new();
+    // Whether each live card was built with its send row (specs/072).
+    private readonly Dictionary<int, bool> _cardSends = new();
     // Heights of the tracks last copied/cut, in order — the engine's track clipboard knows no view sizes.
     private List<double?>? _clipboardHeights;
     private Border _columnSeam = null!;
 
     internal enum HeaderTier { Compact, Standard, Large }
+
+    // A live card was built for another layout than this height asks for: another tier, or the
+    // send row (specs/072) coming or going inside one.
+    private bool CardLayoutStale(TrackVM t, double h)
+        => _cardTiers.TryGetValue(t.Id, out var built)
+           && (built != TierFor(h) || (_cardSends.TryGetValue(t.Id, out var sends) && sends != ShowSendsOn(t, TierFor(h), h)));
 
     // The standard header needs ~61 px of visible content (three rows), the large one ~106,
     // so each tier starts where its layout fits — below 62 a row is compact.
@@ -226,15 +234,15 @@ public sealed partial class ArrangementView
         var children = _headers.Children;
         int crossing = 0;
         for (int i = 0; i < _tracks.Count; i++)
-            if (!IsSlimRow(_tracks[i]) && _cardTiers.TryGetValue(_tracks[i].Id, out var b) && b != TierFor(RowHeightAt(i))) crossing++;
+            if (!IsSlimRow(_tracks[i]) && CardLayoutStale(_tracks[i], ClipAreaHeightAt(i))) crossing++;
         bool rebuildTiers = crossing <= LiveTierRebuildLimit;
         for (int i = 0; i < _tracks.Count; i++)
         {
             var t = _tracks[i];
             if (!_headerCards.TryGetValue(t.Id, out var hc)) continue;
             Control card = hc.card;
-            double h = RowHeightAt(i);
-            if (rebuildTiers && !IsSlimRow(t) && _cardTiers.TryGetValue(t.Id, out var built) && built != TierFor(h))
+            double h = ClipAreaHeightAt(i);
+            if (rebuildTiers && !IsSlimRow(t) && CardLayoutStale(t, h))
             {
                 int at = children.IndexOf(card);
                 var fresh = BuildHeaderCard(t);
@@ -245,6 +253,7 @@ public sealed partial class ArrangementView
             Canvas.SetTop(card, RowTop(i));
             card.Height = h;
         }
+        PlaceTakeHeaders();
         PlaceRowSeamGrips();
         _headers.Height = Math.Max(DefaultRowHeight, RowsHeight);
         _lanes.Height = _headers.Height;
@@ -478,7 +487,7 @@ public sealed partial class ArrangementView
         foreach (var hc in _headerCards.Values) hc.card.Width = w;
         foreach (var c in _footerHeaders.Children) c.Width = w;
         PlaceRowSeamGrips();
-        if (_columnSeam is not null) _columnSeam.Margin = new Thickness(w - SeamGrabPx / 2, 0, 0, 0);
+        PlaceColumnSeam();
         if (final)
         {
             RebuildHeaders();
@@ -498,8 +507,7 @@ public sealed partial class ArrangementView
         var line = new Border { Width = 1, HorizontalAlignment = HorizontalAlignment.Center, Background = Brushes.Transparent };
         var seam = new Border
         {
-            Width = SeamGrabPx, HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Stretch,
-            Margin = new Thickness(_headerW - SeamGrabPx / 2, 0, 0, 0),
+            Width = SeamGrabPx, VerticalAlignment = VerticalAlignment.Stretch,
             Background = Brushes.Transparent, Child = line,
             Cursor = new Cursor(StandardCursorType.SizeWestEast),
         };
@@ -519,7 +527,8 @@ public sealed partial class ArrangementView
         {
             if (!_colResizing) return;
             e.Handled = true;
-            SetHeaderWidth(_colResizeStartW + e.GetPosition(this).X - _colResizeStartX, final: false);
+            double dx = e.GetPosition(this).X - _colResizeStartX;
+            SetHeaderWidth(_colResizeStartW + (_headersRight ? -dx : dx), final: false);
         };
         void End()
         {
@@ -531,6 +540,69 @@ public sealed partial class ArrangementView
         seam.PointerReleased += (_, e) => { if (_colResizing) { e.Handled = true; e.Pointer.Capture(null); End(); } };
         seam.PointerCaptureLost += (_, _) => End();
         return seam;
+    }
+
+    private void PlaceColumnSeam()
+    {
+        if (_columnSeam is null) return;
+        double inset = _headerW - SeamGrabPx / 2;
+        _columnSeam.HorizontalAlignment = _headersRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        _columnSeam.Margin = _headersRight ? new Thickness(0, 0, inset, 0) : new Thickness(inset, 0, 0, 0);
+    }
+
+    // ---- header column side (specs/065) -----------------------------------------
+    // Every horizontal band is a two-column grid: the header part and the lane part(s).
+    // Moving the column to the right swaps those columns; hit-testing is relative to the
+    // header canvases and the lane controls, so the gestures need no change.
+
+    private bool _headersRight;
+    private readonly List<(Grid grid, Control header, Control[] lanes)> _sideRows = new();
+    // Header-column borders whose 1 px divider must face the lanes.
+    private readonly List<Border> _columnDividers = new();
+    private Border _columnBackdrop = null!;
+
+    private Thickness ColumnDivider => _headersRight ? new Thickness(1, 0, 0, 0) : new Thickness(0, 0, 1, 0);
+    // A header card also keeps its bottom rule.
+    private Thickness CardBorder => _headersRight ? new Thickness(1, 0, 0, 1) : new Thickness(0, 0, 1, 1);
+
+    /// <summary>The track-header column sits on the right of the lanes (View ▸ Track headers
+    /// on the right, Settings → Appearance). A per-user view preference, not project state.</summary>
+    public bool HeadersOnRight
+    {
+        get => _headersRight;
+        set
+        {
+            if (_headersRight == value) return;
+            _headersRight = value;
+            ApplyHeaderSide();
+        }
+    }
+
+    private void AddSideRow(Grid grid, Control header, params Control[] lanes)
+    {
+        _sideRows.Add((grid, header, lanes));
+        PlaceSideRow(grid, header, lanes);
+    }
+
+    private void PlaceSideRow(Grid grid, Control header, Control[] lanes)
+    {
+        grid.ColumnDefinitions = new ColumnDefinitions(_headersRight ? "*,Auto" : "Auto,*");
+        Grid.SetColumn(header, _headersRight ? 1 : 0);
+        foreach (var lane in lanes) Grid.SetColumn(lane, _headersRight ? 0 : 1);
+    }
+
+    private void ApplyHeaderSide()
+    {
+        foreach (var (grid, header, lanes) in _sideRows) PlaceSideRow(grid, header, lanes);
+        foreach (var b in _columnDividers) b.BorderThickness = ColumnDivider;
+        _columnBackdrop.HorizontalAlignment = _headersRight ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+        PlaceColumnSeam();
+        // The cards carry their own divider: rebuild them with it on the new side.
+        RebuildHeaders();
+        RebuildFooterHeaders();
+        _lanes.InvalidateVisual();
+        _overlay.InvalidateVisual();
+        _footerLanes.InvalidateVisual();
     }
 
     // ---- duplicate / copy / paste carry the height ----------------------------
@@ -565,6 +637,8 @@ public sealed partial class ArrangementView
         [JsonPropertyName("trackHeights")] public List<TrackHeightDto> TrackHeights { get; set; } = new();
         // specs/045: return rows ride in trackHeights by index; the master has no index.
         [JsonPropertyName("masterHeight")] public double? MasterHeight { get; set; }
+        // specs/070: folded groups by track index, shared with the Mixer. Additive — version stays 1.
+        [JsonPropertyName("collapsedGroups")] public List<int>? CollapsedGroups { get; set; }
     }
 
     private sealed class TrackHeightDto
@@ -573,8 +647,8 @@ public sealed partial class ArrangementView
         [JsonPropertyName("height")] public double Height { get; set; }
     }
 
-    /// <summary>Write the track, return and master heights and the header width into a .nota bundle, keyed by track
-    /// index (ids only last a session). Cosmetic — a failure here never fails the save.</summary>
+    /// <summary>Write the track, return and master heights, the header width and the folded groups
+    /// into a .nota bundle, keyed by track index (ids only last a session). Cosmetic — a failure here never fails the save.</summary>
     public void SaveTrackView(string bundleDir)
     {
         var path = System.IO.Path.Combine(bundleDir, TrackViewSidecar);
@@ -587,7 +661,14 @@ public sealed partial class ArrangementView
                     if (_engine.TryGetTrackInfo(i, out var ti) && _trackHeights.TryGetValue(ti.Id, out var h))
                         dto.TrackHeights.Add(new TrackHeightDto { Index = i, Height = h });
             if (Math.Abs(_masterHeight - DefaultFooterRowHeight) >= 0.5) dto.MasterHeight = _masterHeight;
-            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null)
+            if (_engine is not null && _fold.Folded.Count > 0)
+            {
+                var folded = new List<int>();
+                for (int i = 0; i < _engine.TrackCount; i++)
+                    if (_engine.TryGetTrackInfo(i, out var ti) && ti.IsGroup && _fold.IsFolded(ti.Id)) folded.Add(i);
+                if (folded.Count > 0) dto.CollapsedGroups = folded;
+            }
+            if (dto.HeaderWidth is null && dto.TrackHeights.Count == 0 && dto.MasterHeight is null && dto.CollapsedGroups is null)
             {
                 if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
                 return;
@@ -613,6 +694,13 @@ public sealed partial class ArrangementView
                 if (th.Index >= 0 && _engine.TryGetTrackInfo(th.Index, out var ti))
                     StoreRowHeight(ti.Id, th.Height);
             if (dto.MasterHeight is { } mh) _masterHeight = ClampRowHeight(mh);
+            if (dto.CollapsedGroups is { } groups)   // an index out of range or not a group is skipped
+            {
+                var ids = new List<int>();
+                foreach (int idx in groups)
+                    if (idx >= 0 && _engine.TryGetTrackInfo(idx, out var gi) && gi.IsGroup) ids.Add(gi.Id);
+                _fold.Set(ids);
+            }
         }
         catch { /* a corrupt sidecar just means the default layout */ }
         finally { ApplyHeaderWidth(final: false); }
@@ -622,6 +710,7 @@ public sealed partial class ArrangementView
     public void ResetTrackView()
     {
         _trackHeights.Clear();
+        _fold.Clear();
         _masterHeight = DefaultFooterRowHeight;
         _clipboardHeights = null;
         _userHeaderW = DefaultHeaderW;

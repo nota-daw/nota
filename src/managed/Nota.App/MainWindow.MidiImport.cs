@@ -11,6 +11,7 @@ using System.IO;
 using Nota.Application;
 using Nota.Application.Midi;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -40,14 +41,14 @@ public partial class MainWindow
         }
         finally { Engine.EndUndoGroup(); }
         if (firstTrack > 0) _lastInstrumentTrackId = firstTrack;
-        _vm.StatusText = multi ? $"Imported {item.Name} ({file.Parts.Count} parts)" : $"Imported {item.Name}";
+        _vm.StatusText = multi ? Loc.F("main.midi_import.imported_parts", item.Name, file.Parts.Count) : Loc.F("main.imported", item.Name);
         return firstTrack;
     }
 
     private void ImportMidiFileToSlot(BrowserItem item, int trackId, int scene, bool instrumentTrack)
     {
         if (_vm is null) return;
-        if (!instrumentTrack) { _vm.StatusText = "Drop MIDI files onto instrument slots."; return; }
+        if (!instrumentTrack) { _vm.StatusText = Loc.T("main.midi_import.drop_midi_files_onto_instrument"); return; }
         if (ReadMidiFile(item) is not { } file) return;
         Engine.BeginUndoGroup();
         try
@@ -56,7 +57,7 @@ public partial class MainWindow
             Engine.SetSessionNotes(trackId, scene, file.AllNotes().ToArray());
         }
         finally { Engine.EndUndoGroup(); }
-        _vm.StatusText = $"Added {item.Name} to slot";
+        _vm.StatusText = Loc.F("main.added_to_slot", item.Name);
     }
 
     // Parses the file, reporting a bad / empty one in the status bar instead of throwing.
@@ -66,9 +67,9 @@ public partial class MainWindow
         {
             var file = MidiFileReader.Read(item.Path);
             if (file.Parts.Count > 0) return file;
-            _vm!.StatusText = $"{item.Name} has no notes.";
+            _vm!.StatusText = Loc.F("main.midi_import.has_no_notes", item.Name);
         }
-        catch (Exception ex) { _vm!.StatusText = $"Couldn't read {item.Name}: {ex.Message}"; }
+        catch (Exception ex) { _vm!.StatusText = Loc.F("main.midi_import.couldnt_read", item.Name, ex.Message); }
         return null;
     }
 

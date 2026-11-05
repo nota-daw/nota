@@ -9,6 +9,7 @@
 // state glued to a moved device) comes back in the InsertResult.
 
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.Presentation;
 
@@ -216,10 +217,10 @@ public sealed class DeviceInsertService
             return TagPlugin(item, Group(() =>
             {
                 if (TryReplaceInstrument(item, trackId))
-                    return new InsertResult { Ok = true, TrackId = trackId, InstrumentReplaced = true, Status = $"Changed instrument to {item.Name} (track {trackId})" };
+                    return new InsertResult { Ok = true, TrackId = trackId, InstrumentReplaced = true, Status = Loc.F("device_insert.changed_instrument_to_track", item.Name, trackId) };
                 int t = CreateInstrumentTrack(item, beat);
-                return t > 0 ? new InsertResult { Ok = true, TrackId = t, CreatedTrack = true, Status = $"Added {item.Name} (track {t})" }
-                             : InsertResult.Fail($"Couldn't load {item.Name}.");
+                return t > 0 ? new InsertResult { Ok = true, TrackId = t, CreatedTrack = true, Status = Loc.F("device_insert.added_track", item.Name, t) }
+                             : InsertResult.Fail(Loc.F("common.couldnt_load", item.Name));
             }));
         // A preset on a plain instrument track loads into its instrument, like a bare instrument.
         if (item.Kind == BrowserItemKind.Preset) return ApplyPreset(item, new InsertTarget(trackId, Beat: beat, InPlace: true));
@@ -241,12 +242,12 @@ public sealed class DeviceInsertService
                 {
                     if (_engine.TrackInstrumentKind(trackId) is 3 or 4) return AddToTrack(item, trackId);
                     return TryReplaceInstrument(item, trackId)
-                        ? new InsertResult { Ok = true, TrackId = trackId, InstrumentReplaced = true, Status = $"Changed instrument to {item.Name} (track {trackId})" }
-                        : InsertResult.Fail($"Couldn't load {item.Name}.");
+                        ? new InsertResult { Ok = true, TrackId = trackId, InstrumentReplaced = true, Status = Loc.F("device_insert.changed_instrument_to_track", item.Name, trackId) }
+                        : InsertResult.Fail(Loc.F("common.couldnt_load", item.Name));
                 }
                 int t = CreateInstrumentTrack(item, 0);
-                return t > 0 ? new InsertResult { Ok = true, TrackId = t, CreatedTrack = true, Status = $"Added {item.Name} (track {t})" }
-                             : InsertResult.Fail($"Couldn't load {item.Name}.");
+                return t > 0 ? new InsertResult { Ok = true, TrackId = t, CreatedTrack = true, Status = Loc.F("device_insert.added_track", item.Name, t) }
+                             : InsertResult.Fail(Loc.F("common.couldnt_load", item.Name));
             }));
         // A preset: in place on an instrument track; on another column an instrument preset
         // spawns its own track and an effect preset lands on the column.
@@ -256,7 +257,7 @@ public sealed class DeviceInsertService
             && _engine.TrackInstrumentKind(trackId) is int rk and (3 or 4))
         {
             if (rk == 3) return new InsertResult { Ok = true, TrackId = trackId, ToRackCard = true, ShowDevices = true };
-            if (!IsKit(item)) return InsertResult.Fail("A Drum Rack takes kits and instruments; load an instrument preset on a pad from its card.");
+            if (!IsKit(item)) return InsertResult.Fail(Loc.T("device_insert.a_drum_rack_takes_kits"));
         }
         if (item.Kind == BrowserItemKind.Preset)
             return hostsInstrument ? ApplyPreset(item, new InsertTarget(trackId, InPlace: true))
@@ -280,15 +281,15 @@ public sealed class DeviceInsertService
         if (isInstrument && (target.NewTrack || t <= 0 || !TryTrackInfo(t, out var ti0) || !ti0.IsInstrument || ti0.IsGroup || ti0.IsReturn))
         {
             int nt = CreateInstrumentTrack(item, target.Beat);
-            return nt > 0 ? new InsertResult { Ok = true, TrackId = nt, CreatedTrack = true, ShowDevices = item.BuiltinKind is 1 or 3 or 4, Status = $"Added {item.Name} (track {nt})" }
-                          : InsertResult.Fail($"Couldn't load {item.Name}.");
+            return nt > 0 ? new InsertResult { Ok = true, TrackId = nt, CreatedTrack = true, ShowDevices = item.BuiltinKind is 1 or 3 or 4, Status = Loc.F("device_insert.added_track", item.Name, nt) }
+                          : InsertResult.Fail(Loc.F("common.couldnt_load", item.Name));
         }
         if (item.Kind == BrowserItemKind.Preset) return ApplyPreset(item, target);
-        if (t <= 0) return InsertResult.Fail("Select a track first.");
+        if (t <= 0) return InsertResult.Fail(Loc.T("common.select_a_track_first"));
         if (isInstrument && target.Placement == InsertPlacement.ReplaceInstrument)
             return TryReplaceInstrument(item, t, evenRack: true)
-                ? new InsertResult { Ok = true, TrackId = t, InstrumentReplaced = true, ShowDevices = true, Status = $"Changed instrument to {item.Name}" }
-                : InsertResult.Fail($"Couldn't load {item.Name}.");
+                ? new InsertResult { Ok = true, TrackId = t, InstrumentReplaced = true, ShowDevices = true, Status = Loc.F("device_insert.changed_instrument_to", item.Name) }
+                : InsertResult.Fail(Loc.F("common.couldnt_load", item.Name));
 
         if (target.Placement != InsertPlacement.Default)
             switch (item.Kind)
@@ -296,21 +297,21 @@ public sealed class DeviceInsertService
                 case BrowserItemKind.BuiltinInstrument:
                 case BrowserItemKind.PluginInstrument:
                     if (TryReplaceInstrument(item, t))
-                        return new InsertResult { Ok = true, TrackId = t, InstrumentReplaced = true, Status = $"Changed instrument to {item.Name} (track {t})" };
+                        return new InsertResult { Ok = true, TrackId = t, InstrumentReplaced = true, Status = Loc.F("device_insert.changed_instrument_to_track", item.Name, t) };
                     break;   // a rack: the default routing adds a chain / pad
                 case BrowserItemKind.BuiltinEffect:
                 case BrowserItemKind.PluginEffect:
                 case BrowserItemKind.BuiltinMidiEffect:
                 {
                     bool midi = item.Kind == BrowserItemKind.BuiltinMidiEffect;
-                    if (midi && !(TryTrackInfo(t, out var mt) && mt.IsInstrument)) return InsertResult.Fail("MIDI effects need an instrument track.");
+                    if (midi && !(TryTrackInfo(t, out var mt) && mt.IsInstrument)) return InsertResult.Fail(Loc.T("device_insert.midi_effects_need_an_instrument"));
                     int idx = AddEffect(item, t);
-                    if (idx < 0) return InsertResult.Fail($"Couldn't load {item.Name}.");
+                    if (idx < 0) return InsertResult.Fail(Loc.F("common.couldnt_load", item.Name));
                     var placed = Place(t, midi, idx, target);
                     return new InsertResult
                     {
                         Ok = true, TrackId = t, ShowDevices = true, Placed = placed,
-                        Status = placed.Replaced ? $"Replaced with {item.Name}" : $"Added {item.Name} to track {t}",
+                        Status = placed.Replaced ? Loc.F("device_insert.replaced_with", item.Name) : Loc.F("device_insert.added_to_track", item.Name, t),
                     };
                 }
             }
@@ -320,65 +321,65 @@ public sealed class DeviceInsertService
     // The Devices-panel / Modular default routing (was MainWindow.DropBrowserItem).
     private InsertResult AddToTrack(BrowserItem item, int t)
     {
-        if (t <= 0) return InsertResult.Fail("Select a track first.");
+        if (t <= 0) return InsertResult.Fail(Loc.T("common.select_a_track_first"));
         int kind = _engine.TrackInstrumentKind(t);
         switch (item.Kind)
         {
             case BrowserItemKind.BuiltinInstrument when kind == 3:      // Instrument Rack → new chain
                 _engine.RackAddChain(t, item.BuiltinKind);
-                return Done(t, $"Added {item.Name} chain");
+                return Done(t, Loc.F("device_insert.added_chain", item.Name));
             case BrowserItemKind.BuiltinInstrument when kind == 4:      // Drum Rack → next free pad
             {
                 int note = NextFreeDrumPad(t);
-                if (note < 0) return InsertResult.Fail("All 16 pads are used.");
+                if (note < 0) return InsertResult.Fail(Loc.T("device_insert.all_16_pads_are_used"));
                 int c = _engine.RackAddChain(t, item.BuiltinKind);
                 if (c >= 0) _engine.RackSetChainTriggerNote(t, c, note);
-                return Done(t, $"Added {item.Name} pad");
+                return Done(t, Loc.F("device_insert.added_pad", item.Name));
             }
             case BrowserItemKind.PluginInstrument when kind == 3:      // Instrument Rack → plugin chain
                 return _engine.RackAddPluginInstrumentChain(t, item.CatalogIndex) < 0
-                    ? InsertResult.Fail($"Couldn't load {item.Name}.") : Done(t, $"Added {item.Name} chain");
+                    ? InsertResult.Fail(Loc.F("common.couldnt_load", item.Name)) : Done(t, Loc.F("device_insert.added_chain", item.Name));
             case BrowserItemKind.PluginInstrument when kind == 4:      // Drum Rack → plugin pad
             {
                 int note = NextFreeDrumPad(t);
-                if (note < 0) return InsertResult.Fail("All 16 pads are used.");
+                if (note < 0) return InsertResult.Fail(Loc.T("device_insert.all_16_pads_are_used"));
                 int c = _engine.RackAddPluginInstrumentChain(t, item.CatalogIndex);
-                if (c < 0) return InsertResult.Fail($"Couldn't load {item.Name}.");
+                if (c < 0) return InsertResult.Fail(Loc.F("common.couldnt_load", item.Name));
                 _engine.RackSetChainTriggerNote(t, c, note);
-                return Done(t, $"Added {item.Name} pad");
+                return Done(t, Loc.F("device_insert.added_pad", item.Name));
             }
             case BrowserItemKind.BuiltinInstrument:
             case BrowserItemKind.PluginInstrument:
                 if (TryReplaceInstrument(item, t))
-                    return new InsertResult { Ok = true, TrackId = t, InstrumentReplaced = true, Status = $"Changed instrument to {item.Name} (track {t})" };
-                return InsertResult.Fail($"Couldn't load {item.Name}.");
+                    return new InsertResult { Ok = true, TrackId = t, InstrumentReplaced = true, Status = Loc.F("device_insert.changed_instrument_to_track", item.Name, t) };
+                return InsertResult.Fail(Loc.F("common.couldnt_load", item.Name));
             case BrowserItemKind.Sample when kind == 4:                 // sample → drum pad (Sampler)
             {
                 int note = NextFreeDrumPad(t);
-                if (note < 0) return InsertResult.Fail("All 16 pads are used.");
+                if (note < 0) return InsertResult.Fail(Loc.T("device_insert.all_16_pads_are_used"));
                 int c = _engine.RackAddSamplerChain(t, item.Path, note, false);   // root = pad note → natural pitch
-                if (c < 0) return InsertResult.Fail($"Couldn't load {item.Name}.");
+                if (c < 0) return InsertResult.Fail(Loc.F("common.couldnt_load", item.Name));
                 _engine.RackSetChainTriggerNote(t, c, note);
-                return Done(t, $"Added {item.Name} pad");
+                return Done(t, Loc.F("device_insert.added_pad", item.Name));
             }
             case BrowserItemKind.Sample when kind == 3:                 // sample → instrument-rack Sampler chain
                 return _engine.RackAddSamplerChain(t, item.Path, 60, false) < 0
-                    ? InsertResult.Fail($"Couldn't load {item.Name}.") : Done(t, $"Added {item.Name} chain");
+                    ? InsertResult.Fail(Loc.F("common.couldnt_load", item.Name)) : Done(t, Loc.F("device_insert.added_chain", item.Name));
             case BrowserItemKind.Sample when kind == 1:                 // sample → load into the Sampler
                 return !_engine.SetTrackSamplerSample(t, item.Path, 60)
-                    ? InsertResult.Fail($"Couldn't load {item.Name}.") : Done(t, $"Loaded {item.Name}") with { ShowDevices = true };
+                    ? InsertResult.Fail(Loc.F("common.couldnt_load", item.Name)) : Done(t, Loc.F("device_insert.loaded", item.Name)) with { ShowDevices = true };
             case BrowserItemKind.Sample when kind == 10:                // sample → load into Nota Grain
             {
                 // The root from a note in the file name ("Pad_F#3.wav"), else C4.
                 int root = SamplerModel.DetectRoot(item.Path) is var d and >= 0 ? d : 60;
                 return !_engine.SetTrackGrainSample(t, item.Path, root)
-                    ? InsertResult.Fail($"Couldn't load {item.Name}.")
-                    : Done(t, $"Loaded {item.Name} · root {SamplerModel.NoteName(root)}") with { ShowDevices = true };
+                    ? InsertResult.Fail(Loc.F("common.couldnt_load", item.Name))
+                    : Done(t, Loc.F("device_insert.loaded_root", item.Name, SamplerModel.NoteName(root))) with { ShowDevices = true };
             }
             case BrowserItemKind.Sample:
-                return InsertResult.Fail("Drop samples onto the arrangement.");
+                return InsertResult.Fail(Loc.T("device_insert.drop_samples_onto_the_arrangement"));
             case BrowserItemKind.MidiFile:
-                return InsertResult.Fail("Drop MIDI files onto the arrangement or a session slot.");
+                return InsertResult.Fail(Loc.T("device_insert.drop_midi_files_onto_the"));
             default:                                                    // effects + presets
                 return RouteToTrack(item, t);
         }
@@ -392,18 +393,18 @@ public sealed class DeviceInsertService
         // Presets first: an instrument preset spawns its own track, so it doesn't need a
         // target; an effect preset reports "Select a track first." itself.
         if (item.Kind == BrowserItemKind.Preset) return ApplyPreset(item, new InsertTarget(trackId));
-        if (trackId <= 0) return InsertResult.Fail("Drop onto a track.");
+        if (trackId <= 0) return InsertResult.Fail(Loc.T("device_insert.drop_onto_a_track"));
         switch (item.Kind)
         {
             case BrowserItemKind.BuiltinEffect:
             case BrowserItemKind.BuiltinMidiEffect:
             case BrowserItemKind.PluginEffect:
                 if (item.Kind == BrowserItemKind.BuiltinMidiEffect && !(TryTrackInfo(trackId, out var ti) && ti.IsInstrument))
-                    return InsertResult.Fail("MIDI effects need an instrument track.");
-                if (AddEffect(item, trackId) < 0) return InsertResult.Fail(item.Kind == BrowserItemKind.PluginEffect ? "Failed to load effect." : $"Couldn't load {item.Name}.");
-                return Done(trackId, $"Added {item.Name} to track {trackId}") with { ShowDevices = true };
+                    return InsertResult.Fail(Loc.T("device_insert.midi_effects_need_an_instrument"));
+                if (AddEffect(item, trackId) < 0) return InsertResult.Fail(item.Kind == BrowserItemKind.PluginEffect ? Loc.T("device_insert.failed_to_load_effect") : Loc.F("common.couldnt_load", item.Name));
+                return Done(trackId, Loc.F("device_insert.added_to_track", item.Name, trackId)) with { ShowDevices = true };
         }
-        return InsertResult.Fail($"{item.Name} can't go on a track.");
+        return InsertResult.Fail(Loc.F("device_insert.cant_go_on_a_track", item.Name));
     }
 
     /// <summary>An effect activated with nothing to land on (no selected track, no instrument
@@ -412,12 +413,12 @@ public sealed class DeviceInsertService
     public InsertResult EffectOnNewTrack(BrowserItem item) => Group(() =>
     {
         if (item.Kind == BrowserItemKind.BuiltinMidiEffect)
-            return InsertResult.Fail("MIDI effects need an instrument track: add an instrument first.");
+            return InsertResult.Fail(Loc.T("device_insert.midi_effects_need_an_instrument_2"));
         int t = _engine.AddAudioTrack();
-        if (t <= 0) return InsertResult.Fail($"Couldn't add a track for {item.Name}.");
+        if (t <= 0) return InsertResult.Fail(Loc.F("device_insert.couldnt_add_a_track_for", item.Name));
         var r = RouteToTrack(item, t);
         if (!r.Ok) { _engine.RemoveTrack(t); return r; }
-        return r with { CreatedTrack = true, Status = $"Added {item.Name} on a new audio track (track {t})" };
+        return r with { CreatedTrack = true, Status = Loc.F("device_insert.added_on_a_new_audio", item.Name, t) };
     });
 
     // Names the plug-in a successful insertion added (#250). Rack chains / pads are left out:
@@ -499,7 +500,7 @@ public sealed class DeviceInsertService
             bool swapped = false;
             if (_engine.TrackInstrumentKind(t) != f.BuiltinKind)
             {
-                if (!_engine.SetTrackBuiltinInstrument(t, f.BuiltinKind)) return InsertResult.Fail($"Couldn't load {item.Name}.");
+                if (!_engine.SetTrackBuiltinInstrument(t, f.BuiltinKind)) return InsertResult.Fail(Loc.F("common.couldnt_load", item.Name));
                 swapped = true;
             }
             // On the same instrument the sound and the name change as one undo step, so undo
@@ -510,7 +511,7 @@ public sealed class DeviceInsertService
             return new InsertResult
             {
                 Ok = w.Length == 0, TrackId = t, InstrumentReplaced = swapped, ShowDevices = true,
-                Status = w.Length > 0 ? w : $"Applied preset {item.Name}",
+                Status = w.Length > 0 ? w : Loc.F("device_insert.applied_preset", item.Name),
                 PresetLanded = (t, PresetChain.Instrument, -1, item.Name, factoryId), PresetTagged = !swapped,
             };
         }
@@ -522,12 +523,12 @@ public sealed class DeviceInsertService
         {
             bool fileSwapped = false;
             string sw = InstrumentInPlace(t, "file:" + item.Path, item.Name,
-                () => _presets!.ApplyInstrumentInPlace(_engine, item.Path, t, out fileSwapped) ?? "Presets are unavailable.");
+                () => _presets!.ApplyInstrumentInPlace(_engine, item.Path, t, out fileSwapped) ?? Loc.T("device_insert.presets_are_unavailable"));
             if (sw.Length == 0) InstrumentPresetApplied?.Invoke(t);
             return new InsertResult
             {
                 Ok = sw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped, ShowDevices = true,
-                Status = sw.Length > 0 ? sw : $"Applied preset {item.Name}",
+                Status = sw.Length > 0 ? sw : Loc.F("device_insert.applied_preset", item.Name),
                 PresetLanded = (t, PresetChain.Instrument, -1, item.Name, ""), PresetTagged = !fileSwapped,
             };
         }
@@ -538,7 +539,7 @@ public sealed class DeviceInsertService
             return new InsertResult
             {
                 Ok = fw.Length == 0, TrackId = t, InstrumentReplaced = fileSwapped2, ShowDevices = true,
-                Status = fw.Length > 0 ? fw : $"Applied preset {item.Name}",
+                Status = fw.Length > 0 ? fw : Loc.F("device_insert.applied_preset", item.Name),
                 PresetLanded = (t, PresetChain.Instrument, -1, item.Name, ""),
             };
         }
@@ -549,7 +550,7 @@ public sealed class DeviceInsertService
         int fxBefore = t > 0 ? _engine.TrackDeviceCount(t) : 0;
         int midiBefore = t > 0 ? _engine.TrackMidiEffectCount(t) : 0;
         string warn = fp is not null ? _factory.Apply(_engine, factoryId, t)
-            : _presets?.ApplyFromFile(_engine, item.Path, t) ?? "Presets are unavailable.";
+            : _presets?.ApplyFromFile(_engine, item.Path, t) ?? Loc.T("device_insert.presets_are_unavailable");
         if (warn.Length > 0) return InsertResult.Fail(warn);
 
         int newTrack = TrackIds().FirstOrDefault(id => !before.Contains(id));
@@ -557,7 +558,7 @@ public sealed class DeviceInsertService
         if (newTrack > 0)
             return new InsertResult
             {
-                Ok = true, TrackId = newTrack, CreatedTrack = true, ShowDevices = true, Status = $"Applied preset {item.Name}",
+                Ok = true, TrackId = newTrack, CreatedTrack = true, ShowDevices = true, Status = Loc.F("device_insert.applied_preset", item.Name),
                 PresetLanded = (newTrack, PresetChain.Instrument, -1, item.Name, factoryId),
             };
         if (t > 0 && _engine.TrackDeviceCount(t) is var fx && fx > fxBefore)
@@ -565,7 +566,7 @@ public sealed class DeviceInsertService
             var placed = Place(t, false, fx - 1, target);
             return new InsertResult
             {
-                Ok = true, TrackId = t, ShowDevices = true, Placed = placed, Status = $"Applied preset {item.Name}",
+                Ok = true, TrackId = t, ShowDevices = true, Placed = placed, Status = Loc.F("device_insert.applied_preset", item.Name),
                 PresetLanded = (t, PresetChain.Effect, placed.Final, item.Name, factoryId),
             };
         }
@@ -574,30 +575,30 @@ public sealed class DeviceInsertService
             var placed = Place(t, true, midi - 1, target);
             return new InsertResult
             {
-                Ok = true, TrackId = t, ShowDevices = true, Placed = placed, Status = $"Applied preset {item.Name}",
+                Ok = true, TrackId = t, ShowDevices = true, Placed = placed, Status = Loc.F("device_insert.applied_preset", item.Name),
                 PresetLanded = (t, PresetChain.Midi, placed.Final, item.Name, factoryId),
             };
         }
-        return new InsertResult { Ok = true, TrackId = t, ShowDevices = t > 0, Status = $"Applied preset {item.Name}" };
+        return new InsertResult { Ok = true, TrackId = t, ShowDevices = t > 0, Status = Loc.F("device_insert.applied_preset", item.Name) };
     }
 
     // A factory kit. On a Drum Rack or Nota Rhythm it replaces the pads / voices; anywhere else
     // it spawns its own track — a Drum Rack, or a Rhythm for a row under Rhythm.
     private InsertResult ApplyKit(BrowserItem item, InsertTarget target)
     {
-        if (_kits is null) return InsertResult.Fail("Kits are unavailable.");
+        if (_kits is null) return InsertResult.Fail(Loc.T("device_insert.kits_are_unavailable"));
         bool rhythm = item.Path.StartsWith(RhythmKitPrefix, StringComparison.Ordinal);
         string id = item.Path[(rhythm ? RhythmKitPrefix.Length : KitPrefix.Length)..];
         int t = target.TrackId;
         if (!target.NewTrack && t > 0 && _engine.TrackInstrumentKind(t) is 4 or RhythmModel.Kind)
         {
             _kits.LoadInto(_engine, t, id, out string replaceWarn);
-            return new InsertResult { Ok = true, TrackId = t, ShowDevices = true, Status = replaceWarn.Length > 0 ? replaceWarn : $"Loaded {item.Name} kit" };
+            return new InsertResult { Ok = true, TrackId = t, ShowDevices = true, Status = replaceWarn.Length > 0 ? replaceWarn : Loc.F("device_insert.loaded_kit", item.Name) };
         }
         int track = rhythm ? _kits.CreateRhythmTrack(_engine, id, out string warn) : _kits.CreateTrack(_engine, id, out warn);
-        if (track <= 0) return InsertResult.Fail(warn.Length > 0 ? warn : $"Couldn't load {item.Name}.");
+        if (track <= 0) return InsertResult.Fail(warn.Length > 0 ? warn : Loc.F("common.couldnt_load", item.Name));
         _engine.AddMidiClip(track, 0.0, 4.0);
-        return new InsertResult { Ok = true, TrackId = track, CreatedTrack = true, ShowDevices = true, Status = warn.Length > 0 ? warn : $"Loaded {item.Name} kit" };
+        return new InsertResult { Ok = true, TrackId = track, CreatedTrack = true, ShowDevices = true, Status = warn.Length > 0 ? warn : Loc.F("device_insert.loaded_kit", item.Name) };
     }
 
     // ---- helpers ----------------------------------------------------------------------------
@@ -620,7 +621,7 @@ public sealed class DeviceInsertService
     {
         _engine.BeginUndoGroup();
         try { return body(); }
-        catch (Exception ex) { return InsertResult.Fail($"Drop failed: {ex.Message}"); }
+        catch (Exception ex) { return InsertResult.Fail(Loc.F("device_insert.drop_failed", ex.Message)); }
         finally { _engine.EndUndoGroup(); }
     }
 }

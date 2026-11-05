@@ -18,6 +18,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
 using Nota.Remote;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -67,10 +68,10 @@ internal sealed class ConnectPhoneView : Border
         _qr = null; _code = _left = null; _ring = null;
         bool on = _settings.Current.RemoteEnabled;
 
-        var title = new TextBlock { Text = "Connect phone", FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
+        var title = new TextBlock { Text = Loc.T("remote.connect.connect_phone"), FontSize = 13, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center };
         var sw = new ToggleSwitch(on) { VerticalAlignment = VerticalAlignment.Center };
         sw.Changed += v => { _settings.Current.RemoteEnabled = v; _settings.Save(); _ = _remote.ApplyAsync(); };
-        var allow = new TextBlock { Text = "Allow", FontSize = 11, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
+        var allow = new TextBlock { Text = Loc.T("remote.connect.allow"), FontSize = 11, Foreground = NotaPalette.TextSecondary, VerticalAlignment = VerticalAlignment.Center };
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto"), ColumnSpacing = 7, Margin = new Thickness(18, 16, 18, 12) };
         head.Children.Add(title);
         Grid.SetColumn(sw, 1); head.Children.Add(sw);
@@ -80,10 +81,10 @@ internal sealed class ConnectPhoneView : Border
         if (!on)
         {
             _body.Children.Add(Note(OperatingSystem.IsMacOS()
-                ? "Remote is off. Turn it on to show a QR code. The first time, macOS asks to allow Nota on the local network; click Allow."
+                ? Loc.T("remote.connect.remote_is_off_turn_it_3")
                 : OperatingSystem.IsWindows()
-                    ? "Remote is off. Turn it on to show a QR code. The first time, Windows asks whether Nota may use the network; allow private networks."
-                    : "Remote is off. Turn it on to show a QR code a phone on the same Wi-Fi can scan.", new Thickness(18, 0, 18, 18)));
+                    ? Loc.T("remote.connect.remote_is_off_turn_it_2")
+                    : Loc.T("remote.connect.remote_is_off_turn_it"), new Thickness(18, 0, 18, 18)));
             _lastDevices = "";
             return;
         }
@@ -94,23 +95,23 @@ internal sealed class ConnectPhoneView : Border
         }
         if (_remote.Url is null)
         {
-            _body.Children.Add(Note("This computer isn't on a network. Join the same Wi-Fi as the phone, share the phone's hotspot with it, or plug in a USB cable (USB tethering on the phone; Internet Sharing on the Mac).", new Thickness(18, 0, 18, 18)));
+            _body.Children.Add(Note(Loc.T("remote.connect.this_computer_isnt_on_a"), new Thickness(18, 0, 18, 18)));
             return;
         }
 
         _qr = new QrView { Width = 150, Height = 150, Text = _remote.QrText };
         var info = new StackPanel { Spacing = 10 };
-        info.Children.Add(Field("Address", AddressRows()));
+        info.Children.Add(Field(Loc.T("remote.connect.address"), AddressRows()));
         _code = new TextBlock { FontSize = 24, FontWeight = FontWeight.Medium, LetterSpacing = 4.8, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextHeading, VerticalAlignment = VerticalAlignment.Center };
         _ring = new Arc { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.VizInk, StartAngle = -90, VerticalAlignment = VerticalAlignment.Center };
         var ringBack = new Ellipse { Width = 20, Height = 20, StrokeThickness = 2.5, Stroke = NotaPalette.TrackOff };
         _left = new TextBlock { FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = NotaPalette.TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         var codeRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10, Children = { _code, new Panel { Children = { ringBack, _ring } }, _left } };
-        info.Children.Add(Field("Code", codeRow));
+        info.Children.Add(Field(Loc.T("remote.connect.code"), codeRow));
         bool usb = _remote.Links is { Count: > 0 } links && links[0].Usb;
         info.Children.Add(Note(usb
-            ? "Point the phone camera at the code. Over the cable the link is instant and needs no Wi-Fi; the code changes every 2 minutes and after each connection."
-            : "Point the phone camera at the code. Same Wi-Fi only — or plug in a USB cable (USB tethering on the phone; Internet Sharing on the Mac) for an instant link. The code changes every 2 minutes and after each connection.",
+            ? Loc.T("remote.connect.point_the_phone_camera_at")
+            : Loc.T("remote.connect.point_the_phone_camera_at_2"),
             new Thickness(0)));
         var top = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 16, Margin = new Thickness(18, 0, 18, 16) };
         top.Children.Add(_qr);
@@ -138,9 +139,10 @@ internal sealed class ConnectPhoneView : Border
         for (int b = 0; b < 3; b++)
             sig.Children.Add(new Border { Width = 3, Height = 4 + b * 4, CornerRadius = NotaRadius.Bar, VerticalAlignment = VerticalAlignment.Bottom, Background = b < bars ? c : NotaPalette.BorderStrong });
 
-        string sub = d.RttMs < 0 ? "connecting" : weak ? $"{d.RttMs} ms · weak network"
-            : d.Usb ? $"USB · {d.RttMs} ms · {(d.Screen.Length > 0 ? d.Screen : "connected")}"
-            : $"{d.RttMs} ms · {(d.Screen.Length > 0 ? d.Screen : "connected")}";
+        string screen = d.Screen.Length > 0 ? d.Screen : Loc.T("remote.connect.connected");
+        string sub = d.RttMs < 0 ? Loc.T("remote.connect.connecting") : weak ? Loc.F("remote.connect.ms_weak_network", d.RttMs)
+            : d.Usb ? Loc.F("remote.connect.usb_ms", d.RttMs, screen)
+            : Loc.F("remote.connect.ms", d.RttMs, screen);
         var names = new StackPanel { Spacing = 1, VerticalAlignment = VerticalAlignment.Center };
         names.Children.Add(new TextBlock { Text = d.Name, FontSize = 12, FontWeight = FontWeight.Medium, Foreground = NotaPalette.TextPrimary, TextTrimming = TextTrimming.CharacterEllipsis });
         names.Children.Add(new TextBlock { Text = sub, FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = weak ? NotaPalette.Warning : NotaPalette.TextTertiary });
@@ -153,7 +155,7 @@ internal sealed class ConnectPhoneView : Border
             Width = 26, Height = 26, CornerRadius = NotaRadius.Tile, Background = Brushes.Transparent, Cursor = new Cursor(StandardCursorType.Hand),
             Child = new Glyph(GlyphKind.Close, 9) { Foreground = NotaPalette.TextMuted, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
         };
-        ToolTip.SetTip(x, "Disconnect this phone (it stays trusted — forget it in Settings → Remote)");
+        ToolTip.SetTip(x, Loc.T("remote.connect.disconnect_this_phone_it_stays"));
         x.PointerEntered += (_, _) => x.Background = NotaPalette.SurfaceHover;
         x.PointerExited += (_, _) => x.Background = Brushes.Transparent;
         int conn = d.ConnectionId;
@@ -193,7 +195,7 @@ internal sealed class ConnectPhoneView : Border
             {
                 Height = 16, Padding = new Thickness(5, 0), CornerRadius = NotaRadius.Bar, VerticalAlignment = VerticalAlignment.Center,
                 Background = NotaPalette.SurfaceRaised, BorderBrush = NotaPalette.Seam, BorderThickness = new Thickness(1),
-                Child = new TextBlock { Text = "USB", FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center },
+                Child = new TextBlock { Text = Loc.T("remote.connect.usb_caps"), FontSize = 9, FontWeight = FontWeight.SemiBold, Foreground = NotaPalette.TextPrimary, VerticalAlignment = VerticalAlignment.Center },
             });
         var rows = new StackPanel { Spacing = links.Count > 1 ? 3 : 0, Children = { first } };
         for (int i = 1; i < links.Count; i++)

@@ -30,6 +30,8 @@ std::shared_ptr<SampleBuffer> Engine::findSampleById(int64_t sampleId) const {
     for (auto& t : authoring_->tracks) {
         for (auto& c : t->clips)
             if (c.sample && c.sample->id == sampleId) return c.sample;
+        for (auto& k : t->takes)
+            if (k.sample && k.sample->id == sampleId) return k.sample;
         for (auto& sl : t->sessionSlots)
             if (sl.audio.sample && sl.audio.sample->id == sampleId) return sl.audio.sample;
         if (auto* smp = dynamic_cast<Sampler*>(t->instrument.get()))
@@ -1322,6 +1324,56 @@ double placeAudioNonOverlap(const Track& t, double start, double len, double spb
 // --- overwrite / comp: carve existing clips out of a timeline range ---------
 // Replace-on-drop: a newly placed clip (recorded / dragged) replaces the region it covers.
 // The parts of an existing clip outside the range survive as trimmed remainders.
+// The curvature of the lane's segment running through `t` (0 before the first point).
+float curveThrough(const AutomationLane& lane, double t) {
+    float c = 0.0f;
+    for (const auto& q : lane.points) {
+        if (q.beat > t + 1e-9) break;
+        c = q.curve;
+    }
+    return c;
+}
+
+// Append the lane from `t` up to (not including) its next point, shifted by `shift`, stopping
+// before `limit`. Cut at its end a power curve keeps its shape with the same curve (t^e
+// scales), but cut at its start it is no power curve any more: that partial segment is laid
+// as short straight pieces, well under 0.1 % off.
+void appendLaneFrom(std::vector<AutomationPoint>& out, const AutomationLane& lane, double t, double limit, double shift) {
+    constexpr double eps = 1e-9;
+    constexpr int pieces = 32;
+    const auto& p = lane.points;
+    const auto next = std::find_if(p.begin(), p.end(), [&](const AutomationPoint& q) { return q.beat > t + eps; });
+    const bool before = next != p.begin(), onPoint = before && std::abs(std::prev(next)->beat - t) < eps;
+    const float k = before ? std::prev(next)->curve : 0.0f;
+    if (k == 0.0f || onPoint || next == p.end()) {
+        out.push_back({t + shift, lane.valueAt(t), onPoint ? k : 0.0f});
+        return;
+    }
+    out.push_back({t + shift, lane.valueAt(t), 0.0f});
+    for (int i = 1; i < pieces; ++i) {
+        const double b = t + (next->beat - t) * i / pieces;
+        if (b >= limit - eps) break;
+        out.push_back({b + shift, lane.valueAt(b), 0.0f});
+    }
+}
+
+// The lane over [a,b] re-based so `a` is 0, playing as it did: the value at each edge plus
+// every point strictly inside. Empty when the lane is.
+std::vector<AutomationPoint> laneSliceExact(const AutomationLane& lane, double a, double b) {
+    constexpr double eps = 1e-9;
+    std::vector<AutomationPoint> out;
+    if (lane.points.empty()) return out;
+    appendLaneFrom(out, lane, a, b, -a);
+    for (const auto& q : lane.points)
+        if (q.beat > a + eps && q.beat < b - eps) {
+            if (!out.empty() && q.beat - a <= out.back().beat + eps) continue;
+            out.push_back({q.beat - a, q.value, q.curve});
+        }
+    out.push_back({b - a, lane.valueAt(b), 0.0f});
+    return out;
+}
+
+
 MidiClip midiCarveLeft(const MidiClip& src, double endLocal) { // keep [start, start+endLocal)
     MidiClip r;
     r.name = src.name;
@@ -1421,20 +1473,74 @@ void audioOverwriteRange(std::vector<AudioClip>& clips, double ns, double ne, do
 }
 // A clip clipped to the timeline range [ns,ne] (its intersection), timeline positions
 // preserved — used to lift the covered slice for a range duplicate.
+// The carves keep a MIDI piece's notes and controllers only, and leave an audio piece's
+// envelopes where the whole clip had them. A slice is a piece that moves on its own (range
+// duplicate, insert time, section edits — specs/073), so it also keeps the clip's
+// deactivation and its own share of the envelopes. (The carves themselves stay lean: a split
+// is a hot edit, perf-gate edit-warp-split.)
 MidiClip midiSlice(const MidiClip& c, double ns, double ne) {
     const double cs = c.startBeat, ce = cs + c.lengthBeats;
     const double a = std::max(cs, ns), b = std::min(ce, ne);
-    return midiCarveLeft(midiCarveRight(c, a - cs), b - a);
+    MidiClip r = midiCarveLeft(midiCarveRight(c, a - cs), b - a);
+    r.active = c.active;
+    if (!c.velocityEnvelope.points.empty()) {
+        r.velocityEnvelope = c.velocityEnvelope;
+        r.velocityEnvelope.points = laneSliceExact(c.velocityEnvelope, a - cs, b - cs);
+    }
+    if (!c.volumeEnvelope.points.empty()) {
+        r.volumeEnvelope = c.volumeEnvelope;
+        r.volumeEnvelope.points = laneSliceExact(c.volumeEnvelope, a - cs, b - cs);
+    }
+    return r;
 }
 AudioClip audioSlice(const AudioClip& c, double ns, double ne, double spb, double devSR) {
     const double cs = c.startBeat, ce = cs + audioDisplayLenBeats(c, spb, devSR);
     const double a = std::max(cs, ns), b = std::min(ce, ne);
-    return audioCarveLeft(audioCarveRight(c, a - cs, spb, devSR), b - a, spb, devSR);
+    // Carve only the edges that are cut: a carve resets that edge's ADSR stages (attack and
+    // decay at a new head, release at a new tail), and a piece that keeps the clip's own start
+    // or end keeps the user's fade there.
+    constexpr double eps = 1e-6;
+    AudioClip r = a > cs + eps ? audioCarveRight(c, a - cs, spb, devSR) : c;
+    if (b < ce - eps) r = audioCarveLeft(r, b - a, spb, devSR);
+    if (!c.volumeEnvelope.points.empty()) r.volumeEnvelope.points = laneSliceExact(c.volumeEnvelope, a - cs, b - cs);
+    if (!c.panEnvelope.points.empty()) r.panEnvelope.points = laneSliceExact(c.panEnvelope, a - cs, b - cs);
+    return r;
+}
+
+// A split fade (issue #286) is a short ADSR edge at a cut. Clips on one track cannot
+// overlap, so it is a fade-out on the left piece and a fade-in on the right — the same
+// handles the user can drag — not a hidden declick and not an overlapping crossfade.
+// Only raises an edge that is shorter than `fadeBeats`; a longer fade stays as the user
+// left it. Each edge is capped at half the piece and at the room the other stages leave.
+constexpr double kSplitFadeSeconds = 0.004;
+
+bool raiseSplitEdge(AudioClip& clip, bool fadeIn, bool fadeOut, double fadeBeats, double lenBeats) {
+    if (!(fadeBeats > 0.0) || !(lenBeats > 1e-9)) return false;
+    bool changed = false;
+    if (fadeIn && clip.adsr.attack + 1e-9 < fadeBeats) {
+        const double cap = std::min(lenBeats * 0.5, std::max(0.0, lenBeats - clip.adsr.decay - clip.adsr.release));
+        const double v = std::min(fadeBeats, cap);
+        if (v > clip.adsr.attack + 1e-12) {
+            clip.adsr.attack = v;
+            changed = true;
+        }
+    }
+    if (fadeOut && clip.adsr.release + 1e-9 < fadeBeats) {
+        const double cap = std::min(lenBeats * 0.5, std::max(0.0, lenBeats - clip.adsr.attack - clip.adsr.decay));
+        const double v = std::min(fadeBeats, cap);
+        if (v > clip.adsr.release + 1e-12) {
+            clip.adsr.release = v;
+            changed = true;
+        }
+    }
+    return changed;
 }
 } // namespace
 
-void Engine::overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne) {
-    audioOverwriteRange(clips, ns, ne, transport_.samplesPerBeat(), transport_.sampleRate());
+void Engine::overwriteAudioClipsInRange(std::vector<AudioClip>& clips, double ns, double ne, double spb) {
+    // The caller measured ns/ne with `spb`. Comp and a loop take use the authoring tempo;
+    // a recording that just stopped uses the same clock as the clip it is about to place.
+    audioOverwriteRange(clips, ns, ne, spb, transport_.sampleRate());
 }
 
 int32_t Engine::pasteAudioFrames(
@@ -1541,7 +1647,7 @@ bool Engine::moveClipToTrack(int32_t srcTrackId, int32_t clipIndex, int32_t sour
     }
 
     // Automation follow across tracks (req 8.3.1/8.3.4). Identical device layout → everything
-    // follows, exactly like a same-track move. Otherwise only the common params (Volume/Pan)
+    // follows, exactly like a same-track move. Otherwise only the mix lanes (volume, pan, sends)
     // move and device/plugin automation stays on the source (its indices are positional); we
     // flag that so the UI can tell the user.
     if (!automationLock_ && len > 1e-6) {
@@ -1551,14 +1657,14 @@ bool Engine::moveClipToTrack(int32_t srcTrackId, int32_t clipIndex, int32_t sour
             applyClipAutomation(*ndst, sourceTrackId, snips, newStartBeat, len, /*sameTrack*/ true);
         } else {
             for (const auto& s : snips)
-                if (s.target != AutomationTarget::Volume && s.target != AutomationTarget::Pan) {
+                if (!isMixTarget(s.target)) {
                     lastMoveKeptDeviceAuto_ = true;
                     break;
                 }
-            // Clear only Volume/Pan from the source span; leave device/plugin points in place.
+            // Clear only the mix lanes from the source span; leave device/plugin points in place.
             constexpr double eps = 1e-6;
             for (auto& lane : nsrc->automation) {
-                if (lane.target != AutomationTarget::Volume && lane.target != AutomationTarget::Pan) continue;
+                if (!isMixTarget(lane.target)) continue;
                 auto& pts = lane.points;
                 pts.erase(std::remove_if(pts.begin(), pts.end(),
                               [&](const AutomationPoint& p) {
@@ -1703,12 +1809,12 @@ bool Engine::moveClipBlock(const std::vector<ClipMoveReq>& moves) {
             continue;
         }
         for (const auto& s : it.snips)
-            if (s.target != AutomationTarget::Volume && s.target != AutomationTarget::Pan) {
+            if (!isMixTarget(s.target)) {
                 lastMoveKeptDeviceAuto_ = true;
                 break;
             }
         for (auto& lane : src.automation) {
-            if (lane.target != AutomationTarget::Volume && lane.target != AutomationTarget::Pan) continue;
+            if (!isMixTarget(lane.target)) continue;
             auto& pts = lane.points;
             pts.erase(std::remove_if(pts.begin(), pts.end(),
                           [&](const AutomationPoint& p) {
@@ -1846,17 +1952,87 @@ bool Engine::splitClipsAtRange(const std::vector<int32_t>& trackIds, double star
                     out.push_back(c);
                     continue;
                 }
+                const double fadeBeats = splitFades_ ? splitFadeBeats() : 0.0;
                 double a = cs;
+                auto pushPiece = [&](double from, double to) {
+                    AudioClip piece = audioSlice(c, from, to, spb, devSR);
+                    if (fadeBeats > 0.0)
+                        raiseSplitEdge(piece, from > cs + eps, to < ce - eps, fadeBeats, to - from);
+                    out.push_back(std::move(piece));
+                };
                 for (int i = 0; i < nc; ++i) {
-                    out.push_back(audioSlice(c, a, cuts[i], spb, devSR));
+                    pushPiece(a, cuts[i]);
                     a = cuts[i];
                 }
-                out.push_back(audioSlice(c, a, ce, spb, devSR));
+                pushPiece(a, ce);
                 split = true;
             }
             if (split) nt->clips.swap(out);
         }
         if (split) {
+            g->tracks.push_back(nt);
+            any = true;
+        } else
+            g->tracks.push_back(t);
+    }
+    if (!any) return false;
+    pushUndo();
+    publishRaw(std::move(g));
+    return true;
+}
+
+double Engine::splitFadeBeats() const {
+    double bpm = authoringBpm_;
+    if (!(bpm > 0.0)) bpm = 120.0;
+    return kSplitFadeSeconds * bpm / 60.0;
+}
+
+bool Engine::fadeTouchingSplits(const std::vector<std::pair<int32_t, int32_t>>& sel) {
+    if (sel.empty() || !authoring_) return false;
+    const double fade = splitFadeBeats();
+    if (!(fade > 0.0)) return false;
+    const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
+    constexpr double join = 1e-4;
+    auto picked = [&](int32_t trackId, int32_t clipIndex) {
+        for (const auto& s : sel)
+            if (s.first == trackId && s.second == clipIndex) return true;
+        return false;
+    };
+    auto trackPicked = [&](int32_t trackId) {
+        for (const auto& s : sel)
+            if (s.first == trackId) return true;
+        return false;
+    };
+    bool any = false;
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks) {
+        if (t->type() != TrackType::Audio || !trackPicked(t->id())) {
+            g->tracks.push_back(t);
+            continue;
+        }
+        auto nt = cloneTrack(*t);
+        const int n = static_cast<int>(nt->clips.size());
+        std::vector<int> order(n);
+        for (int i = 0; i < n; ++i) order[i] = i;
+        std::sort(order.begin(), order.end(), [&](int a, int b) {
+            const double ds = nt->clips[a].startBeat - nt->clips[b].startBeat;
+            return ds < 0.0 || (ds == 0.0 && a < b);
+        });
+        bool changed = false;
+        for (int i = 0; i + 1 < n; ++i) {
+            const int li = order[i], ri = order[i + 1];
+            if (!picked(t->id(), li) && !picked(t->id(), ri)) continue;
+            AudioClip& left = nt->clips[li];
+            AudioClip& right = nt->clips[ri];
+            const double llen = audioDisplayLenBeats(left, spb, devSR);
+            const double rlen = audioDisplayLenBeats(right, spb, devSR);
+            if (std::abs((left.startBeat + llen) - right.startBeat) > join) continue;
+            if (raiseSplitEdge(left, false, true, fade, llen)) changed = true;
+            if (raiseSplitEdge(right, true, false, fade, rlen)) changed = true;
+        }
+        if (changed) {
             g->tracks.push_back(nt);
             any = true;
         } else
@@ -1920,21 +2096,10 @@ double Engine::duplicateRange(const std::vector<int32_t>& trackIds, double start
 
 // --- insert time (Insert Silence ⌘⇧I / Duplicate Time ⌘⇧D) ----------------------
 namespace {
-// The lane's curve over [a,b] re-based so `a` is 0: the value at each edge plus every point
-// strictly inside (a partial first segment keeps its curvature).
+// The lane's curve over [a,b] re-based so `a` is 0 (laneSliceExact: the value at each edge,
+// every point strictly inside, a curved segment cut at its start laid as short straight pieces).
 std::vector<AutomationPoint> laneSlice(const AutomationLane& lane, double a, double b) {
-    constexpr double eps = 1e-9;
-    std::vector<AutomationPoint> out;
-    float c0 = 0.0f;
-    for (const auto& q : lane.points) {
-        if (q.beat > a + eps) break;
-        c0 = q.curve;
-    }
-    out.push_back({0.0, lane.valueAt(a), c0});
-    for (const auto& q : lane.points)
-        if (q.beat > a + eps && q.beat < b - eps) out.push_back({q.beat - a, q.value, q.curve});
-    out.push_back({b - a, lane.valueAt(b), 0.0f});
-    return out;
+    return laneSliceExact(lane, a, b);
 }
 
 // Opens a `len`-beat gap at `at`: points at or after `at` move right. With `fill` (a
@@ -1974,8 +2139,17 @@ bool laneInsertGap(AutomationLane& lane, double at, double len, const std::vecto
 bool Engine::insertTime(double at, double len, bool duplicate) {
     at = std::max(0.0, at);
     if (len <= 1e-9) return false;
+    if (duplicate && at - len < -1e-9) return false;
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    if (!insertTimeInto(*g, at, len, duplicate)) return false;
+    pushUndo();
+    publishRaw(std::move(g));
+    return true;
+}
+
+bool Engine::insertTimeInto(Graph& g, double at, double len, bool duplicate) {
     const double src = at - len; // Duplicate Time copies [src, at) into the gap
-    if (duplicate && src < -1e-9) return false;
     const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
     constexpr double eps = 1e-6;
 
@@ -2055,23 +2229,375 @@ bool Engine::insertTime(double at, double len, bool duplicate) {
     };
 
     bool any = false;
-    auto g = std::make_shared<Graph>();
-    inheritGraphLevel(*g, *authoring_);
-    any |= shiftLane(g->masterVolume);
-    if (g->masterTrack)
-        if (auto nm = shiftTrack(*g->masterTrack)) {
-            g->masterTrack = nm;
+    any |= shiftLane(g.masterVolume);
+    if (g.masterTrack)
+        if (auto nm = shiftTrack(*g.masterTrack)) {
+            g.masterTrack = nm;
             any = true;
         }
-    g->tracks.reserve(authoring_->tracks.size());
+    g.tracks.reserve(authoring_->tracks.size());
     for (auto& t : authoring_->tracks) {
         if (auto nt = shiftTrack(*t)) {
-            g->tracks.push_back(nt);
+            g.tracks.push_back(nt);
             any = true;
         } else
-            g->tracks.push_back(t);
+            g.tracks.push_back(t);
     }
-    if (!any) return false;
+    return any;
+}
+
+// --- section edits with content (specs/073) ----------------------------------------
+// Moving, duplicating or deleting a section carries everything in its span. A move is a
+// remap of a window [lo,hi) tiled by regions that each shift by their own offset (the moved
+// section one way, the material it passes the other), so clips, lanes, takes and sections
+// all follow the same map and cannot drift apart. Clips are cut where a region ends, like
+// Insert silence; each lane plays every region's own curve, stepping at a join.
+namespace {
+
+constexpr double kSecEps = 1e-6;
+
+const TimeRegion* regionAt(const std::vector<TimeRegion>& rs, double t) {
+    for (const auto& r : rs)
+        if (t >= r.start - kSecEps && t < r.end - kSecEps) return &r;
+    return nullptr;
+}
+
+// Cut every clip crossing a region edge and shift each piece by its region's offset (dropped
+// regions lose theirs); what lies outside [lo,hi) stays. True when a clip was touched.
+template <class Clip, class LenFn, class SliceFn>
+bool remapClips(std::vector<Clip>& clips, double lo, double hi, const std::vector<TimeRegion>& rs, LenFn len,
+                SliceFn slice) {
+    std::vector<Clip> out;
+    out.reserve(clips.size() + 4);
+    bool changed = false;
+    for (const auto& c : clips) {
+        const double cs = c.startBeat, ce = cs + len(c);
+        if (ce <= lo + kSecEps || cs >= hi - kSecEps) {
+            out.push_back(c);
+            continue;
+        }
+        changed = true;
+        if (cs < lo - kSecEps) out.push_back(slice(c, cs, lo));
+        for (const auto& r : rs) {
+            const double a = std::max(cs, r.start), b = std::min(ce, r.end);
+            if (r.drop || b <= a + kSecEps) continue;
+            Clip piece = a <= cs + kSecEps && b >= ce - kSecEps ? c : slice(c, a, b);
+            piece.startBeat += r.offset;
+            out.push_back(std::move(piece));
+        }
+        if (ce > hi + kSecEps) out.push_back(slice(c, hi, ce));
+    }
+    clips.swap(out);
+    return changed;
+}
+
+// Two points on one beat make a step, but AutomationLane::valueAt returns the first (outgoing)
+// value exactly on that beat — so a section starting there would begin with its neighbour's
+// setting for a block. The outgoing point moves a hair earlier (a millionth of a beat, under a
+// sample at any tempo), so the incoming value holds from the join itself; where there is no
+// room for it (beat 0, or right after another point) it goes, and an equal pair is merged.
+void settleJoins(std::vector<AutomationPoint>& pts) {
+    constexpr double eps = 1e-9, nudge = 1e-6;
+    std::vector<AutomationPoint> out;
+    out.reserve(pts.size());
+    for (size_t i = 0; i < pts.size(); ++i) {
+        const bool join = i + 1 < pts.size() && std::abs(pts[i + 1].beat - pts[i].beat) < eps;
+        if (!join) {
+            out.push_back(pts[i]);
+            continue;
+        }
+        if (pts[i + 1].value == pts[i].value) continue; // same value: the incoming point alone
+        AutomationPoint q = pts[i];
+        q.beat -= nudge;
+        if (q.beat < 0.0 || (!out.empty() && out.back().beat > q.beat - eps)) continue; // no room: drop it
+        out.push_back(q);
+    }
+    pts.swap(out);
+}
+
+// Rebuild the lane over [lo,hi): points before and after keep their place, each kept region's
+// curve (laneSlice: exact values at both edges) is laid at its new start, in new order. Every
+// cut and join holds the value the original had there (FR-005). False when the lane is empty
+// or holds one value through the window.
+bool laneRemap(AutomationLane& lane, double lo, double hi, const std::vector<TimeRegion>& rs) {
+    constexpr double eps = 1e-9;
+    auto& p = lane.points;
+    if (p.empty() || p.back().beat < lo - eps) return false;
+    if (std::isfinite(hi) && p.front().beat > hi + eps) return false;
+
+    std::vector<AutomationPoint> out;
+    out.reserve(p.size() + 2 * rs.size() + 2);
+    for (const auto& q : p)
+        if (q.beat < lo - eps) out.push_back(q);
+    out.push_back({lo, lane.valueAt(lo), 0.0f}); // the left side ends (or holds) as it did
+
+    std::vector<const TimeRegion*> order;
+    for (const auto& r : rs)
+        if (!r.drop) order.push_back(&r);
+    std::sort(order.begin(), order.end(),
+              [](const TimeRegion* a, const TimeRegion* b) { return a->start + a->offset < b->start + b->offset; });
+    for (const TimeRegion* r : order) {
+        const double at = r->start + r->offset;
+        if (std::isfinite(r->end)) {
+            for (auto q : laneSlice(lane, r->start, r->end)) {
+                q.beat += at;
+                out.push_back(q);
+            }
+        } else { // to the end of the song: the curve from its start, then every later point
+            appendLaneFrom(out, lane, r->start, std::numeric_limits<double>::infinity(), r->offset);
+            for (const auto& q : p)
+                if (q.beat > r->start + eps) out.push_back({q.beat + r->offset, q.value, q.curve});
+        }
+    }
+
+    if (std::isfinite(hi)) {
+        // The right side starts (or holds) on hi as it did, playing the rest of the segment
+        // that ran through it.
+        const auto right = std::find_if(p.begin(), p.end(), [&](const AutomationPoint& q) { return q.beat > hi + eps; });
+        appendLaneFrom(out, lane, hi, std::numeric_limits<double>::infinity(), 0.0);
+        out.insert(out.end(), right, p.end());
+    }
+    settleJoins(out);
+    p.swap(out);
+    return true;
+}
+
+// The lane with a copy of [a,b) inserted at b (Duplicate with content): the original up to b,
+// the copy, then the rest from b on, later by the section's length — every piece playing as
+// it did, cuts laid as in laneRemap. False when the lane is empty or holds one value from a on.
+bool laneDuplicate(AutomationLane& lane, double a, double b) {
+    constexpr double eps = 1e-9;
+    auto& p = lane.points;
+    if (p.empty() || p.back().beat < a - eps) return false;
+    const double len = b - a;
+    std::vector<AutomationPoint> out;
+    out.reserve(p.size() * 2 + 4);
+    for (const auto& q : p)
+        if (q.beat < b - eps) out.push_back(q);
+    out.push_back({b, lane.valueAt(b), 0.0f}); // the left side ends as it did
+    for (auto q : laneSliceExact(lane, a, b)) {
+        q.beat += b;
+        out.push_back(q);
+    }
+    appendLaneFrom(out, lane, b, std::numeric_limits<double>::infinity(), len);
+    for (const auto& q : p)
+        if (q.beat > b + eps) out.push_back({q.beat + len, q.value, q.curve});
+    settleJoins(out);
+    p.swap(out);
+    return true;
+}
+
+} // namespace
+
+void Engine::remapTimeline(double lo, double hi, const std::vector<TimeRegion>& rs, std::vector<Section> sections) {
+    const double spb = transport_.samplesPerBeat(), devSR = transport_.sampleRate();
+    auto remapTrack = [&](const Track& t) -> std::shared_ptr<Track> {
+        auto nt = cloneTrack(t);
+        bool changed = false;
+        if (nt->type() == TrackType::Instrument)
+            changed |= remapClips(
+                nt->midiClips, lo, hi, rs, [](const MidiClip& c) { return c.lengthBeats; },
+                [](const MidiClip& c, double a, double b) { return midiSlice(c, a, b); });
+        else if (nt->type() == TrackType::Audio)
+            changed |= remapClips(
+                nt->clips, lo, hi, rs, [&](const AudioClip& c) { return audioDisplayLenBeats(c, spb, devSR); },
+                [&](const AudioClip& c, double a, double b) { return audioSlice(c, a, b, spb, devSR); });
+        for (auto& lane : nt->automation) changed |= laneRemap(lane, lo, hi, rs);
+        // A take travels with the region its first played frame is in, so the comp sections
+        // still where it put them stay on it (specs/067).
+        for (auto& k : nt->takes)
+            if (const TimeRegion* r = regionAt(rs, k.originBeat + k.sourceOffsetFrames * k.beatsPerFrame);
+                r && !r->drop && r->offset != 0.0) {
+                k.originBeat += r->offset;
+                changed = true;
+            }
+        return changed ? nt : nullptr;
+    };
+
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    laneRemap(g->masterVolume, lo, hi, rs);
+    if (g->masterTrack)
+        if (auto nm = remapTrack(*g->masterTrack)) g->masterTrack = nm;
+    g->tracks.reserve(authoring_->tracks.size());
+    for (auto& t : authoring_->tracks) {
+        auto nt = remapTrack(*t);
+        g->tracks.push_back(nt ? nt : t);
+    }
+    std::stable_sort(sections.begin(), sections.end(),
+                     [](const Section& a, const Section& b) { return a.startBeat < b.startBeat; });
+    g->sections = std::move(sections);
+    pushUndo();
+    publishRaw(std::move(g));
+}
+
+bool Engine::sectionOverlaps(int32_t index) const {
+    const auto& ss = sections();
+    if (index < 0 || index >= static_cast<int32_t>(ss.size())) return false;
+    const Section& s = ss[index];
+    for (int32_t i = 0; i < static_cast<int32_t>(ss.size()); ++i) {
+        if (i == index) continue;
+        const double a = std::max(s.startBeat, ss[i].startBeat);
+        const double b = std::min(s.startBeat + s.lengthBeats, ss[i].startBeat + ss[i].lengthBeats);
+        if (b - a > kSecEps) return true;
+    }
+    return false;
+}
+
+namespace {
+// True when `beat` lies strictly inside a section's span — a cut there would split it.
+bool insideSection(const std::vector<Section>& ss, double beat) {
+    for (const auto& s : ss)
+        if (beat > s.startBeat + kSecEps && beat < s.startBeat + s.lengthBeats - kSecEps) return true;
+    return false;
+}
+} // namespace
+
+bool Engine::moveSection(int32_t index, int32_t toBoundary) {
+    if (!authoring_) return false;
+    const auto& ss = authoring_->sections;
+    const auto n = static_cast<int32_t>(ss.size());
+    if (index < 0 || index >= n || toBoundary < 0 || toBoundary > n) return false;
+    if (toBoundary == index || toBoundary == index + 1) return false; // already there
+    if (sectionOverlaps(index)) return false;
+    double end = 0.0; // "after the last section": the end of the song's structure
+    for (const auto& s : ss) end = std::max(end, s.startBeat + s.lengthBeats);
+    const double a = ss[index].startBeat, b = a + ss[index].lengthBeats, len = b - a;
+    const double d = toBoundary < n ? ss[toBoundary].startBeat : end;
+    if (insideSection(ss, d)) return false;
+
+    std::vector<TimeRegion> rs;
+    double lo, hi;
+    if (d <= a) { // earlier: [d,a) moves right by the section's length, the section lands on d
+        lo = d;
+        hi = b;
+        rs.push_back({d, a, len, false});
+        rs.push_back({a, b, d - a, false});
+    } else { // later: [b,d) moves left, the section lands so it ends on d
+        lo = a;
+        hi = d;
+        rs.push_back({a, b, d - b, false});
+        rs.push_back({b, d, -len, false});
+    }
+    std::vector<Section> next = ss;
+    for (auto& s : next)
+        if (const TimeRegion* r = regionAt(rs, s.startBeat)) s.startBeat += r->offset;
+    remapTimeline(lo, hi, rs, std::move(next));
+    return true;
+}
+
+bool Engine::deleteSectionWithContent(int32_t index) {
+    if (!authoring_) return false;
+    const auto& ss = authoring_->sections;
+    if (index < 0 || index >= static_cast<int32_t>(ss.size()) || sectionOverlaps(index)) return false;
+    const double a = ss[index].startBeat, b = a + ss[index].lengthBeats, len = b - a;
+    constexpr double inf = std::numeric_limits<double>::infinity();
+    const std::vector<TimeRegion> rs{{a, b, 0.0, true}, {b, inf, -len, false}};
+    std::vector<Section> next;
+    next.reserve(ss.size());
+    for (int32_t i = 0; i < static_cast<int32_t>(ss.size()); ++i) {
+        if (i == index) continue;
+        Section s = ss[i];
+        if (s.startBeat >= b - kSecEps) s.startBeat -= len;
+        next.push_back(std::move(s));
+    }
+    // Take lanes that start in the deleted span — picked before the remap shifts later ones in.
+    std::set<int32_t> inSpan;
+    for (const auto& t : authoring_->tracks)
+        for (const auto& k : t->takes)
+            if (const double ks = k.originBeat + k.sourceOffsetFrames * k.beatsPerFrame; ks >= a - kSecEps && ks < b - kSecEps)
+                inSpan.insert(k.id);
+    remapTimeline(a, inf, rs, std::move(next));
+    if (inSpan.empty()) return true;
+    // Such a take goes with the section, unless a comp clip still plays from it elsewhere
+    // (specs/067).
+    auto g = std::make_shared<Graph>(*authoring_);
+    bool dropped = false;
+    for (auto& t : g->tracks) {
+        auto gone = [&](const AudioTake& k) {
+            return inSpan.count(k.id) && std::none_of(t->clips.begin(), t->clips.end(), [&](const AudioClip& c) { return c.takeId == k.id; });
+        };
+        if (std::none_of(t->takes.begin(), t->takes.end(), gone)) continue;
+        auto nt = cloneTrack(*t);
+        std::erase_if(nt->takes, gone);
+        t = nt;
+        dropped = true;
+    }
+    if (dropped) publishRaw(std::move(g)); // part of the same undo step
+    return true;
+}
+
+bool Engine::duplicateSectionWithContent(int32_t index) {
+    if (!authoring_) return false;
+    const auto& ss = authoring_->sections;
+    if (index < 0 || index >= static_cast<int32_t>(ss.size()) || sectionOverlaps(index)) return false;
+    const double a = ss[index].startBeat, b = a + ss[index].lengthBeats, len = b - a;
+    auto g = std::make_shared<Graph>();
+    inheritGraphLevel(*g, *authoring_);
+    insertTimeInto(*g, b, len, true); // nothing to copy is fine: the section still doubles
+    // Automation: Duplicate time's gap closes a curved segment cut at b with a straight line, so
+    // the lanes are rebuilt from the originals the way a move lays them (laneDuplicate).
+    auto redoLanes = [&](std::shared_ptr<Track>& t, const Track& orig) {
+        if (std::none_of(orig.automation.begin(), orig.automation.end(), [](const TrackLane& l) { return !l.points.empty(); }))
+            return;
+        auto nt = cloneTrack(*t);
+        for (size_t j = 0; j < nt->automation.size() && j < orig.automation.size(); ++j) {
+            nt->automation[j].points = orig.automation[j].points;
+            laneDuplicate(nt->automation[j], a, b);
+        }
+        t = nt;
+    };
+    for (size_t i = 0; i < g->tracks.size() && i < authoring_->tracks.size(); ++i) redoLanes(g->tracks[i], *authoring_->tracks[i]);
+    if (g->masterTrack && authoring_->masterTrack) redoLanes(g->masterTrack, *authoring_->masterTrack);
+    g->masterVolume = authoring_->masterVolume;
+    laneDuplicate(g->masterVolume, a, b);
+    // Take lanes: later ones move with the song; one starting in the section gets a copy (a new
+    // id, number and recording group) under the copied section, and the copied comp clips point at it so the
+    // copy can be comped on its own (specs/067).
+    auto takeStart = [](const AudioTake& k) { return k.originBeat + k.sourceOffsetFrames * k.beatsPerFrame; };
+    for (auto& t : g->tracks) {
+        if (t->takes.empty()) continue;
+        auto nt = cloneTrack(*t);
+        std::map<int32_t, int32_t> copied; // old take id -> its copy's
+        std::map<int32_t, int32_t> groups; // old recording group -> its copy's: Flatten reads a
+                                           // group's origin from its first take
+        int32_t number = 0;
+        for (const auto& k : nt->takes) number = std::max(number, k.number);
+        std::vector<AudioTake> copies;
+        for (auto& k : nt->takes) {
+            const double ks = takeStart(k);
+            if (ks >= b - kSecEps) k.originBeat += len;
+            else if (ks >= a - kSecEps) {
+                AudioTake c = k;
+                c.id = ++nextTakeId_;
+                c.number = ++number;
+                c.originBeat += len;
+                auto [git, fresh] = groups.try_emplace(k.group, 0);
+                if (fresh) git->second = ++nextTakeGroup_;
+                c.group = git->second;
+                copied[k.id] = c.id;
+                copies.push_back(std::move(c));
+            }
+        }
+        for (auto& c : copies) nt->takes.push_back(std::move(c));
+        for (auto& c : nt->clips) // the copies insertTimeInto laid in [b, b+len)
+            if (c.takeId != 0 && c.startBeat >= b - kSecEps && c.startBeat < b + len - kSecEps)
+                if (auto it = copied.find(c.takeId); it != copied.end()) c.takeId = it->second;
+        t = nt;
+    }
+    std::vector<Section> next;
+    next.reserve(ss.size() + 1);
+    for (const auto& s0 : ss) {
+        Section s = s0;
+        if (s.startBeat >= b - kSecEps) s.startBeat += len;
+        next.push_back(std::move(s));
+    }
+    Section copy = ss[index];
+    copy.startBeat = b;
+    next.push_back(std::move(copy));
+    std::stable_sort(next.begin(), next.end(),
+                     [](const Section& x, const Section& y) { return x.startBeat < y.startBeat; });
+    g->sections = std::move(next);
     pushUndo();
     publishRaw(std::move(g));
     return true;
@@ -2458,8 +2984,16 @@ int32_t Engine::splitClip(int32_t trackId, int32_t clipIndex, double atBeat) {
         // split over the beat window (not lengthFrames, which warp ignores) and a reversed
         // clip's halves keep the audio each one sounded. Each warped half also gets its own
         // stretch cache, since the stretcher's seek state is per-clip.
-        nt->clips[clipIndex] = audioCarveLeft(src, local, spb, devSR);
-        nt->clips.insert(nt->clips.begin() + clipIndex + 1, audioCarveRight(src, local, spb, devSR));
+        const double display = audioDisplayLenBeats(src, spb, devSR);
+        AudioClip left = audioCarveLeft(src, local, spb, devSR);
+        AudioClip right = audioCarveRight(src, local, spb, devSR);
+        if (splitFades_) {
+            const double fade = splitFadeBeats();
+            raiseSplitEdge(left, false, true, fade, local);
+            raiseSplitEdge(right, true, false, fade, display - local);
+        }
+        nt->clips[clipIndex] = std::move(left);
+        nt->clips.insert(nt->clips.begin() + clipIndex + 1, std::move(right));
     }
     republishWithTrack(trackId, nt);
     return clipIndex + 1;
@@ -2557,7 +3091,7 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<T
     double placedStart, double len, bool sameTrack) const {
     const double s = placedStart, e = placedStart + len;
     for (const auto& snip : snips) {
-        if (!sameTrack && snip.target != AutomationTarget::Volume && snip.target != AutomationTarget::Pan) continue;
+        if (!sameTrack && !isMixTarget(snip.target)) continue;
         // Find the matching lane on nt, or create one bound to the same target.
         TrackLane* lane = nullptr;
         for (auto& l : nt.automation) {
@@ -2571,6 +3105,7 @@ void Engine::applyClipAutomation(Track& nt, int32_t trackId, const std::vector<T
             case AutomationTarget::PluginParam:
                 match = l.deviceIndex == snip.deviceIndex && l.paramId == snip.paramId;
                 break;
+            case AutomationTarget::Send: match = l.deviceIndex == snip.deviceIndex; break; // one lane per bus
             default: break; // Volume / Pan: single lane
             }
             if (match) {
@@ -3091,6 +3626,19 @@ int32_t Engine::trackPianoFold(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
     return t ? (t->pianoFold ? 1 : 0) : -1;
 }
+bool Engine::setTrackEditLink(int32_t trackId, bool on) {
+    auto old = findTrackAuthoring(trackId);
+    if (!old || old->type() != TrackType::Group) return false;
+    if (old->editLink == on) return true; // no change, no undo step
+    auto nt = cloneTrack(*old);
+    nt->editLink = on;
+    republishWithTrack(trackId, nt); // changes what edits do: an undo step (unlike pianoFold)
+    return true;
+}
+int32_t Engine::trackEditLink(int32_t trackId) const {
+    auto t = findTrackAuthoring(trackId);
+    return t ? (t->editLink ? 1 : 0) : -1;
+}
 
 bool Engine::deleteClip(int32_t trackId, int32_t clipIndex) {
     auto old = findTrackAuthoring(trackId);
@@ -3126,6 +3674,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     for (int b = 0; b < kMaxReturns; ++b) nt->setSend(b, src.send(b));
     if (withContent) {
         nt->clips = src.clips; // sample buffers are shared_ptr (immutable) — fine
+        nt->takes = src.takes;
         nt->midiClips = src.midiClips;
         nt->sessionSlots = src.sessionSlots;
         nt->automation = src.automation;
@@ -3133,6 +3682,7 @@ std::shared_ptr<Track> Engine::deepCloneTrack(const Track& src, int32_t newId, b
     nt->name = src.name;
     nt->colorIndex = src.colorIndex;
     nt->pianoFold = src.pianoFold;
+    nt->editLink = src.editLink;
     nt->instrument = cloneInstrument(src);
     if (nt->instrument && src.instrument) nt->instrument->setBypassed(src.instrument->bypassed());
     for (auto& m : src.midiEffects)
@@ -3376,7 +3926,8 @@ std::vector<std::shared_ptr<Track>> Engine::expandTrackSet(const int32_t* ids, i
 
 // Deleting a return leaves a hole in the bus slots, but the renderer only runs buses
 // 0..count-1 and addReturnTrack hands out slot `count` — so the survivors move down to
-// 0..n-1 (in track order) and every send follows its bus; sends to a deleted bus go.
+// 0..n-1 (in track order) and every send — level and lane — follows its bus; sends to a
+// deleted bus go.
 // Changed tracks are cloned, never edited in place: the old graph is the undo snapshot.
 void Engine::compactReturns(Graph& g) const {
     int32_t remap[kMaxReturns];
@@ -3403,9 +3954,21 @@ void Engine::compactReturns(Graph& g) const {
         bool changed = false;
         for (int32_t b = 0; b < kMaxReturns; ++b)
             if (sends[b] != t->send(b)) changed = true;
+        // Send lanes (specs/072) follow their bus too; a lane to a deleted bus goes.
+        auto busOf = [&](const TrackLane& l) {
+            return l.deviceIndex >= 0 && l.deviceIndex < kMaxReturns ? remap[l.deviceIndex] : -1;
+        };
+        for (const auto& l : t->automation)
+            if (l.target == AutomationTarget::Send && !l.nested() && busOf(l) != l.deviceIndex) changed = true;
         if (!changed) continue;
         auto nt = cloneTrack(*t);
         for (int32_t b = 0; b < kMaxReturns; ++b) nt->setSend(b, sends[b]);
+        auto& lanes = nt->automation;
+        for (auto& l : lanes)
+            if (l.target == AutomationTarget::Send && !l.nested()) l.deviceIndex = busOf(l);
+        lanes.erase(std::remove_if(lanes.begin(), lanes.end(),
+                        [](const TrackLane& l) { return l.target == AutomationTarget::Send && l.deviceIndex < 0; }),
+            lanes.end());
         t = std::move(nt);
     }
 }

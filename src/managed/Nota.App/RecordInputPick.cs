@@ -8,6 +8,7 @@
 
 using System;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -16,9 +17,9 @@ internal readonly record struct RecordInputPick(int Source, InputChannels Channe
     /// <summary>The hardware-input entries, in picker order, with their menu and short labels.</summary>
     public static readonly (RecordInputPick Pick, string Label, string Short)[] Hardware =
     {
-        (new(0, InputChannels.Mono1), "Audio input 1 (mono)", "Ext 1"),
-        (new(0, InputChannels.Mono2), "Audio input 2 (mono)", "Ext 2"),
-        (new(0, InputChannels.Stereo), "Audio inputs 1/2 (stereo)", "Ext 1/2"),
+        (new(0, InputChannels.Mono1), Loc.T("record_input_pick.audio_input_1_mono"), Loc.T("record_input_pick.ext_1")),
+        (new(0, InputChannels.Mono2), Loc.T("record_input_pick.audio_input_2_mono"), Loc.T("record_input_pick.ext_2")),
+        (new(0, InputChannels.Stereo), Loc.T("record_input_pick.audio_inputs_1_2_stereo"), "Ext 1/2"),
     };
 
     /// <summary>A track's current pick. Channels only matter for the hardware input.</summary>
@@ -30,7 +31,7 @@ internal readonly record struct RecordInputPick(int Source, InputChannels Channe
 
     /// <summary>The short label of a hardware pick ("Ext 1", "Ext 2", "Ext 1/2").</summary>
     public static string HardwareShort(InputChannels channels)
-        => Array.Find(Hardware, h => h.Pick.Channels == channels).Short ?? "Ext";
+        => Array.Find(Hardware, h => h.Pick.Channels == channels).Short ?? Loc.T("record_input_pick.ext");
 
     /// <summary>A track or return as a source (any channel setting: only hardware has one).</summary>
     public static RecordInputPick Track(int source) => new(source, InputChannels.Stereo);

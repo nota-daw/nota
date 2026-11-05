@@ -10,6 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -19,7 +20,7 @@ public partial class MainWindow
     {
         if (_vm is null) return;
         var ai = App.Services.GetRequiredService<IClipAi>();
-        if (!await EnsureModelAsync(AiModels.Stems, "Separate Stems")) return;
+        if (!await EnsureModelAsync(AiModels.Stems, Loc.T("main.stems.separate_stems"))) return;
 
         StemJob job;
         try { job = ai.ReadStemSource(trackId, clipIndex); }
@@ -28,27 +29,27 @@ public partial class MainWindow
         StemResult? stems = null;
         try
         {
-            bool done = await RunBlockingAsync("Separate Stems", "Preparing audio…", async (prog, ct) =>
+            bool done = await RunBlockingAsync(Loc.T("main.stems.separate_stems"), Loc.T("main.stems.preparing_audio"), async (prog, ct) =>
             {
                 var p = new Progress<(double Fraction, string Label)>(r => prog.Report(ProgressReport.At(r.Fraction, r.Label)));
                 stems = await Task.Run(() => ai.Separate(job, p, ct), ct);
             });
-            if (!done || stems is null) { _vm.StatusText = "Separate Stems cancelled."; return; }
+            if (!done || stems is null) { _vm.StatusText = Loc.T("main.stems.separate_stems_cancelled"); return; }
 
             int group = ai.ApplyStems(job, stems);
             Timeline.Refresh();
             if (group > 0) Timeline.Select(group, -1);
             _session?.Refresh();
-            _vm.StatusText = $"Separated \"{job.Name}\" into drums, bass, other and vocals.";
+            _vm.StatusText = Loc.F("main.stems.separated_into_drums_bass_other", job.Name);
         }
         catch (Exception ex) when (ex is InvalidOperationException or StoreException)
         {
-            _vm.StatusText = $"Separate Stems failed: {ex.Message}";
+            _vm.StatusText = Loc.F("main.stems.separate_stems_failed", ex.Message);
         }
         catch (Exception ex)
         {
             App.Services.GetRequiredService<ILogSink>().Error("Separate Stems failed", ex);
-            _vm.StatusText = $"Separate Stems failed: {ex.Message}";
+            _vm.StatusText = Loc.F("main.stems.separate_stems_failed", ex.Message);
         }
         finally
         {
@@ -65,33 +66,33 @@ public partial class MainWindow
         if (_vm is null) return false;
         if (store.Runtime is null)
         {
-            _vm.StatusText = $"{feature} isn't available on this computer.";
+            _vm.StatusText = Loc.F("main.stems.isnt_available_on_this_computer", feature);
             return false;
         }
 
         if (DownloadJobs.Shared.BusyId == "model:" + id)
         {
-            _vm.StatusText = $"{feature} is waiting for its model — it's downloading (see the status bar).";
+            _vm.StatusText = Loc.F("main.stems.is_waiting_for_its_model", feature);
             return false;
         }
 
         var model = store.Models.First(m => m.Id == id);
         bool withRuntime = store.RuntimePath is null;
-        string what = withRuntime ? $"the {model.Name} model and the AI runtime it runs on" : $"the {model.Name} model";
+        string what = withRuntime ? Loc.F("main.stems.the_model_and_the_ai", model.Name) : Loc.F("main.stems.the_model", model.Name);
         bool ok = await new ConfirmWindow(feature,
-            $"{feature} uses an AI model that runs on this computer. Download {what} ({Size(store.DownloadSize(id))}) once? " +
-            "You can remove it later in Settings → Downloads → AI Models.",
-            "Download", "Cancel").ShowDialog<bool>(this);
+            Loc.F("main.stems.uses_an_ai_model_that", feature, what, Size(store.DownloadSize(id))) +
+            Loc.T("main.stems.you_can_remove_it_later"),
+            Loc.T("common.download"), Loc.T("common.cancel")).ShowDialog<bool>(this);
         if (!ok) return false;
 
         try
         {
-            bool done = await RunBlockingAsync(feature, "Downloading…", async (prog, ct) =>
+            bool done = await RunBlockingAsync(feature, Loc.T("main.stems.downloading"), async (prog, ct) =>
             {
                 var p = new Progress<StoreProgress>(r => prog.Report(r.Fraction < 0 ? ProgressReport.Indeterminate(r.Message) : ProgressReport.At(r.Fraction, r.Message)));
                 await store.InstallAsync(id, p, ct);
             });
-            if (!done) _vm.StatusText = "Download cancelled.";
+            if (!done) _vm.StatusText = Loc.T("main.stems.download_cancelled");
             return done && store.IsInstalled(id);
         }
         catch (StoreException ex)

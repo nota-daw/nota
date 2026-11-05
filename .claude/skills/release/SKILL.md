@@ -17,8 +17,8 @@ Two files describe a release, for two readers:
   text: summarised, deduplicated, checked against the code. **Everything published comes
   from them**, and the app bundles the EN file for its What's New window, so the notes must
   be committed on the release branch before the tag is built. They hold a summary, the
-  full Added / Changed / Fixed list with a commit link on each item, and the contributors
-  (format in P4). `scripts/release-notes.sh X.Y.Z <target>` renders them for each place:
+  full Added / Changed / Fixed list with a commit link on each item, the contributors and
+  the thanks to the people whose issues the release answers (format in P4). `scripts/release-notes.sh X.Y.Z <target>` renders them for each place:
 
   | target    | where it goes                                   | full list |
   |-----------|-------------------------------------------------|-----------|
@@ -83,7 +83,7 @@ are.
 ### P4. Write the curated notes, EN and RU
 
 This is the main work of the phase. Create `release-notes/X.Y.Z.en.md` and
-`release-notes/X.Y.Z.ru.md`. Each has four parts, in this order:
+`release-notes/X.Y.Z.ru.md`. Each has five parts, in this order:
 
 1. **Summary**: the lede and the numbered headline features, for someone who reads only
    this part.
@@ -92,6 +92,9 @@ This is the main work of the phase. Create `release-notes/X.Y.Z.en.md` and
 3. **Commit links**: each full-list item ends with a link to its commit.
 4. **Contributors**: everyone who has a commit in the release, linked to their GitHub
    profile.
+5. **Thanks for the feedback**: the authors of the issues (bug reports, feature requests)
+   this release closes or answers, who aren't contributors, linked to their GitHub
+   profile. Left out when there is nobody.
 
 Steps:
 
@@ -106,6 +109,12 @@ Steps:
    - `scripts/release-credits.sh <prev-tag> origin/develop contributors` prints the
      ready Contributors line. It asks GitHub for every commit's authors and co-authors
      (needs `gh` signed in) and leaves out bots and AI co-authors.
+   - `scripts/release-credits.sh <prev-tag> origin/develop reporters` prints the ready
+     thanks line: the authors of every issue the release's commits reference (`#N`, or the
+     issues a referenced pull request closes), minus anyone with a commit in the
+     repository, bots and AI. On stderr it lists `issue #N by @login: title` — check each
+     one: drop a reporter whose issue the release only mentions without addressing it (a
+     "see #N" in passing, a partial step the issue is still open for).
 2. **Reconcile.** Merge entries that describe the same thing. Where entries conflict (a
    shortcut reassigned twice, a feature added and then reworked), **the code decides**:
    read the handler, the default or the UI and describe what ships. Drop anything that
@@ -148,6 +157,9 @@ Steps:
    <!-- contributors -->
    **Contributors**
    [@login](https://github.com/login), [@other](https://github.com/other)
+
+   **Thanks for the feedback**
+   [@reporter](https://github.com/reporter), [@another](https://github.com/another)
    ```
 
    Rules for the format:
@@ -160,22 +172,26 @@ Steps:
      `main` through the develop → main merge, so the links keep working after the release.
    - New notes have no **Also** block: the full list replaces it, so nothing is listed
      twice.
-   - RU titles: **Добавлено**, **Изменено**, **Исправлено**, **Удалено**, **Участники**.
-     The EN and RU files have the same groups, the items in the same order with the same
-     links, and the same contributors.
+   - RU titles: **Добавлено**, **Изменено**, **Исправлено**, **Удалено**, **Участники**,
+     **Спасибо за обратную связь**. The EN and RU files have the same groups, the items in the same
+     order with the same links, the same contributors and the same reporters.
    - Contributors: paste the `contributors` line. Resolve every `warn:` line it printed
      on stderr:
      - An author with no GitHub login can be a second address of someone already listed
        (the user's work email, for example). Drop that name.
      - Otherwise, find the login and link it, or keep the plain name.
      - Don't add or remove people by hand otherwise.
+   - Thanks for the feedback: paste the `reporters` line under the contributors, after the
+     review above. It sits after the `<!-- contributors -->` marker, so the news posts and
+     What's New carry it too. Nobody is in both lines: a contributor is credited as one.
    - Leave out the title and the download link, because `release-notes.sh` adds them per
      target. Use the user's product language: "track", "device card", "piano roll", not
      class names.
 4. Show the user the three renders and iterate until they approve. The rest of the
    release depends on this text.
-   - `scripts/release-notes.sh X.Y.Z github` has all four parts.
-   - `post-en` and `post-ru` have the summary and the contributors but no full list. A
+   - `scripts/release-notes.sh X.Y.Z github` has all five parts.
+   - `post-en` and `post-ru` have the summary, the contributors and the thanks but no
+     full list. A
      Telegram message holds 4096 characters, and the posts end with the link to the
      GitHub release, which has the full list.
 
@@ -272,6 +288,11 @@ already has `develop` as a parent.
    after the tag), show the diff and fix it at the source. Don't edit the draft by hand to
    make it match. The user reviews the draft and publishes it themselves, then posts
    `../media/news/X.Y.Z.{en,ru}.md` with `X.Y.Z.png` to the channels.
+5. Interface languages (spec 077): nota-translations pulls each release's English reference
+   on its own once a day. So that the language list knows this version straight away, start
+   its publish run now: `gh workflow run publish.yml --repo nota-daw/nota-translations`, then
+   check that `reference/X.Y.Z.json` is on its `published` branch
+   (`gh api repos/nota-daw/nota-translations/contents/reference/X.Y.Z.json?ref=published -q .name`).
 
 ---
 
@@ -283,7 +304,7 @@ already has `develop` as a parent.
   `release-notes/`.
 - Don't write published text anywhere except `release-notes/`. GitHub and the channels
   must come from the same files.
-- Don't type the contributors or commit shas from memory. Take them from
+- Don't type the contributors, reporters or commit shas from memory. Take them from
   `scripts/release-credits.sh`, and resolve its warnings instead of ignoring them.
 - Don't bump only one of app or engine, and don't reset a component to 0.
 - Don't hard-code the date or reuse an existing version or tag.

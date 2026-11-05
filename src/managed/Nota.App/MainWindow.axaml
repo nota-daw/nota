@@ -18,106 +18,108 @@
   </Window.Resources>
   <NativeMenu.Menu>
     <NativeMenu>
-      <NativeMenuItem Header="File">
+      <NativeMenuItem Header="{app:T 'common.file'}">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="New" app:Commands.Id="file.new"/>
-            <NativeMenuItem Header="Open…" app:Commands.Id="file.open"/>
-            <NativeMenuItem Header="Save" app:Commands.Id="file.save"/>
-            <NativeMenuItem Header="Save as…" app:Commands.Id="file.saveAs"/>
-            <NativeMenuItem Header="Save version with note…" app:Commands.Id="file.saveVersion"/>
+            <NativeMenuItem Header="{app:T 'main.new'}" app:Commands.Id="file.new"/>
+            <NativeMenuItem Header="{app:T 'main.open'}" app:Commands.Id="file.open"/>
+            <NativeMenuItem Header="{app:T 'main.save'}" app:Commands.Id="file.save"/>
+            <NativeMenuItem Header="{app:T 'main.save_as'}" app:Commands.Id="file.saveAs"/>
+            <NativeMenuItem Header="{app:T 'main.save_version_with_note'}" app:Commands.Id="file.saveVersion"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Import audio…" app:Commands.Id="file.import"/>
-            <NativeMenuItem Header="Export audio…" app:Commands.Id="file.export"/>
+            <NativeMenuItem Header="{app:T 'main.import_audio'}" app:Commands.Id="file.import"/>
+            <NativeMenuItem Header="{app:T 'main.export_audio'}" app:Commands.Id="file.export"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Settings…" app:Commands.Id="prefs.open"/>
+            <NativeMenuItem Header="{app:T 'main.settings'}" app:Commands.Id="prefs.open"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Exit" app:Commands.Id="file.exit"/>
+            <NativeMenuItem Header="{app:T 'main.exit'}" app:Commands.Id="file.exit"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
-      <NativeMenuItem Header="Edit">
+      <NativeMenuItem Header="{app:T 'common.edit'}">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Undo" app:Commands.Id="edit.undo"/>
-            <NativeMenuItem Header="Redo" app:Commands.Id="edit.redo"/>
+            <NativeMenuItem Header="{app:T 'common.undo'}" app:Commands.Id="edit.undo"/>
+            <NativeMenuItem Header="{app:T 'main.redo'}" app:Commands.Id="edit.redo"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Duplicate clip" app:Commands.Id="edit.duplicate"/>
-            <NativeMenuItem Header="Insert scene" app:Commands.Id="session.insertScene"/>
-            <NativeMenuItem Header="Split at playhead" app:Commands.Id="edit.split"/>
-            <NativeMenuItem Header="Consolidate" app:Commands.Id="edit.consolidate"/>
-            <NativeMenuItem Header="Duplicate time" app:Commands.Id="edit.duplicateTime"/>
-            <NativeMenuItem Header="Insert silence" app:Commands.Id="edit.insertSilence"/>
+            <NativeMenuItem Header="{app:T 'main.duplicate_clip'}" app:Commands.Id="edit.duplicate"/>
+            <NativeMenuItem Header="{app:T 'main.insert_scene'}" app:Commands.Id="session.insertScene"/>
+            <NativeMenuItem Header="{app:T 'main.split_at_playhead'}" app:Commands.Id="edit.split"/>
+            <NativeMenuItem Header="{app:T 'common.consolidate'}" app:Commands.Id="edit.consolidate"/>
+            <NativeMenuItem Header="{app:T 'common.duplicate_time'}" app:Commands.Id="edit.duplicateTime"/>
+            <NativeMenuItem Header="{app:T 'common.insert_silence'}" app:Commands.Id="edit.insertSilence"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Lock envelopes" app:Commands.Id="edit.lockEnvelopes" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="{app:T 'main.lock_envelopes'}" app:Commands.Id="edit.lockEnvelopes" ToggleType="CheckBox"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Cut" app:Commands.Id="edit.cut"/>
-            <NativeMenuItem Header="Copy" app:Commands.Id="edit.copy"/>
-            <NativeMenuItem Header="Paste" app:Commands.Id="edit.paste"/>
-            <NativeMenuItem Header="Paste bounced audio" app:Commands.Id="edit.pasteBounced"/>
-            <NativeMenuItem Header="Copy clips to Session / Arrangement" app:Commands.Id="edit.copyToOtherView"/>
-            <NativeMenuItem Header="Delete" app:Commands.Id="edit.delete"/>
+            <NativeMenuItem Header="{app:T 'common.cut'}" app:Commands.Id="edit.cut"/>
+            <NativeMenuItem Header="{app:T 'common.copy'}" app:Commands.Id="edit.copy"/>
+            <NativeMenuItem Header="{app:T 'common.paste'}" app:Commands.Id="edit.paste"/>
+            <NativeMenuItem Header="{app:T 'common.paste_bounced_audio'}" app:Commands.Id="edit.pasteBounced"/>
+            <NativeMenuItem Header="{app:T 'main.copy_clips_to_session_arrangement'}" app:Commands.Id="edit.copyToOtherView"/>
+            <NativeMenuItem Header="{app:T 'common.delete'}" app:Commands.Id="edit.delete"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Grid">
+            <NativeMenuItem Header="{app:T 'common.grid'}">
               <NativeMenuItem.Menu>
                 <NativeMenu>
-                  <NativeMenuItem Header="Narrow grid" app:Commands.Id="grid.narrower"/>
-                  <NativeMenuItem Header="Widen grid" app:Commands.Id="grid.wider"/>
-                  <NativeMenuItem Header="Triplet grid" app:Commands.Id="grid.triplets"/>
-                  <NativeMenuItem Header="Snap to grid" app:Commands.Id="grid.snap"/>
-                  <NativeMenuItem Header="Adaptive grid" app:Commands.Id="grid.adaptive"/>
+                  <NativeMenuItem Header="{app:T 'main.narrow_grid'}" app:Commands.Id="grid.narrower"/>
+                  <NativeMenuItem Header="{app:T 'main.widen_grid'}" app:Commands.Id="grid.wider"/>
+                  <NativeMenuItem Header="{app:T 'main.triplet_grid'}" app:Commands.Id="grid.triplets"/>
+                  <NativeMenuItem Header="{app:T 'main.snap_to_grid'}" app:Commands.Id="grid.snap"/>
+                  <NativeMenuItem Header="{app:T 'main.adaptive_grid'}" app:Commands.Id="grid.adaptive"/>
                 </NativeMenu>
               </NativeMenuItem.Menu>
             </NativeMenuItem>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
-      <NativeMenuItem Header="View">
+      <NativeMenuItem Header="{app:T 'main.view'}">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Command palette…" app:Commands.Id="view.palette"/>
+            <NativeMenuItem Header="{app:T 'main.command_palette'}" app:Commands.Id="view.palette"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Mixer" app:Commands.Id="view.mixer"/>
-            <NativeMenuItem Header="Mixer in its own window" app:Commands.Id="view.mixerFloat" ToggleType="CheckBox"/>
-            <NativeMenuItem Header="Connect phone…" app:Commands.Id="view.connectPhone"/>
+            <NativeMenuItem Header="{app:T 'common.mixer'}" app:Commands.Id="view.mixer"/>
+            <NativeMenuItem Header="{app:T 'main.mixer_in_its_own_window'}" app:Commands.Id="view.mixerFloat" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="{app:T 'main.connect_phone'}" app:Commands.Id="view.connectPhone"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Toggle browser" app:Commands.Id="view.toggleBrowser"/>
-            <NativeMenuItem Header="Toggle detail panel" app:Commands.Id="view.toggleDetail"/>
-            <NativeMenuItem Header="Clip editor fills the window" app:Commands.Id="view.maximizeDetail" ToggleType="CheckBox"/>
-            <NativeMenuItem Header="Toggle overview" app:Commands.Id="view.toggleOverview"/>
-            <NativeMenuItem Header="Toggle sections" app:Commands.Id="view.toggleSections"/>
-            <NativeMenuItem Header="Toggle full screen" app:Commands.Id="view.fullscreen"/>
+            <NativeMenuItem Header="{app:T 'main.toggle_browser'}" app:Commands.Id="view.toggleBrowser"/>
+            <NativeMenuItem Header="{app:T 'main.toggle_detail_panel'}" app:Commands.Id="view.toggleDetail"/>
+            <NativeMenuItem Header="{app:T 'main.clip_editor_fills_the_window'}" app:Commands.Id="view.maximizeDetail" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="{app:T 'main.toggle_overview'}" app:Commands.Id="view.toggleOverview"/>
+            <NativeMenuItem Header="{app:T 'main.toggle_sections'}" app:Commands.Id="view.toggleSections"/>
+            <NativeMenuItem Header="{app:T 'main.toggle_full_screen'}" app:Commands.Id="view.fullscreen"/>
             <NativeMenuItemSeparator/>
             <!-- Header text is matched from code to keep this checkmark in step with the
                  transport bar's Follow button — see MainWindow.SetFollowPlayhead. -->
-            <NativeMenuItem Header="Follow playhead" app:Commands.Id="view.follow" ToggleType="CheckBox"/>
-            <NativeMenuItem Header="Show playhead" app:Commands.Id="view.showPlayhead"/>
+            <NativeMenuItem Header="{app:T 'main.follow_playhead'}" app:Commands.Id="view.follow" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="{app:T 'main.show_playhead'}" app:Commands.Id="view.showPlayhead"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="Clip names" app:Commands.Id="view.clipNames"/>
+            <NativeMenuItem Header="{app:T 'main.clip_names'}" app:Commands.Id="view.clipNames"/>
+            <NativeMenuItem Header="{app:T 'main.track_headers_on_the_right'}" app:Commands.Id="view.headersRight" ToggleType="CheckBox"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
-      <NativeMenuItem Header="Transport">
+      <NativeMenuItem Header="{app:T 'common.transport'}">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Play / stop" app:Commands.Id="transport.playStop"/>
-            <NativeMenuItem Header="Play / pause" app:Commands.Id="transport.playPause"/>
-            <NativeMenuItem Header="Record" app:Commands.Id="transport.record"/>
-            <NativeMenuItem Header="Auto-arm selected track" app:Commands.Id="transport.armOnSelect" ToggleType="CheckBox"/>
-            <NativeMenuItem Header="Loop" app:Commands.Id="transport.loop"/>
-            <NativeMenuItem Header="Loop record: overdub / replace" app:Commands.Id="transport.loopRecordMode"/>
-            <NativeMenuItem Header="Metronome" app:Commands.Id="transport.metronome"/>
+            <NativeMenuItem Header="{app:T 'common.play_stop'}" app:Commands.Id="transport.playStop"/>
+            <NativeMenuItem Header="{app:T 'main.play_pause'}" app:Commands.Id="transport.playPause"/>
+            <NativeMenuItem Header="{app:T 'common.record'}" app:Commands.Id="transport.record"/>
+            <NativeMenuItem Header="{app:T 'commands.discard_and_retry_take'}" app:Commands.Id="transport.retryTake"/>
+            <NativeMenuItem Header="{app:T 'main.auto_arm_selected_track'}" app:Commands.Id="transport.armOnSelect" ToggleType="CheckBox"/>
+            <NativeMenuItem Header="{app:T 'common.loop'}" app:Commands.Id="transport.loop"/>
+            <NativeMenuItem Header="{app:T 'main.loop_record_overdub_replace'}" app:Commands.Id="transport.loopRecordMode"/>
+            <NativeMenuItem Header="{app:T 'common.metronome'}" app:Commands.Id="transport.metronome"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
-      <NativeMenuItem Header="Help">
+      <NativeMenuItem Header="{app:T 'main.help'}">
         <NativeMenuItem.Menu>
           <NativeMenu>
-            <NativeMenuItem Header="Documentation" app:Commands.Id="help.docs"/>
-            <NativeMenuItem Header="What's new" app:Commands.Id="help.whatsNew"/>
-            <NativeMenuItem Header="Check for updates…" app:Commands.Id="help.checkUpdates"/>
+            <NativeMenuItem Header="{app:T 'common.documentation'}" app:Commands.Id="help.docs"/>
+            <NativeMenuItem Header="{app:T 'common.whats_new'}" app:Commands.Id="help.whatsNew"/>
+            <NativeMenuItem Header="{app:T 'common.check_for_updates'}" app:Commands.Id="help.checkUpdates"/>
             <NativeMenuItemSeparator/>
-            <NativeMenuItem Header="About Nota" app:Commands.Id="help.about"/>
+            <NativeMenuItem Header="{app:T 'common.about_nota'}" app:Commands.Id="help.about"/>
           </NativeMenu>
         </NativeMenuItem.Menu>
       </NativeMenuItem>
@@ -168,15 +170,15 @@
               <!-- The views as icon keys (spec 012): the tooltip and the accessible name carry
                    the view name. View → Arrangement / Session / Modular do the same. -->
               <ToggleButton x:Name="ArrangeBtn" Classes="seg view" IsChecked="True" Click="OnShowArrangement"
-                            ToolTip.Tip="Arrangement" AutomationProperties.Name="Arrangement">
+                            ToolTip.Tip="{app:T 'main.arrangement'}" AutomationProperties.Name="{app:T 'main.arrangement'}">
                 <app:Glyph Kind="Arrangement" Size="16"/>
               </ToggleButton>
               <ToggleButton x:Name="SessionBtn" Classes="seg view" Click="OnShowSession"
-                            ToolTip.Tip="Session" AutomationProperties.Name="Session">
+                            ToolTip.Tip="{app:T 'main.session'}" AutomationProperties.Name="{app:T 'main.session'}">
                 <app:Glyph Kind="Session" Size="16"/>
               </ToggleButton>
               <ToggleButton x:Name="ModularBtn" Classes="seg view" Click="OnShowModular"
-                            ToolTip.Tip="Modular" AutomationProperties.Name="Modular">
+                            ToolTip.Tip="{app:T 'common.modular'}" AutomationProperties.Name="{app:T 'common.modular'}">
                 <app:Glyph Kind="Modular" Size="16"/>
               </ToggleButton>
             </StackPanel>
@@ -189,15 +191,15 @@
             <StackPanel Orientation="Horizontal" Spacing="1" VerticalAlignment="Center">
               <!-- Shapes built from geometry: stop a square, play a filled triangle, record a
                    filled disc. No glyph font. Keys butt against each other on 1px seams. -->
-              <Button x:Name="StopBtn" Classes="tp-icon" ToolTip.Tip="Stop (Return)"
+              <Button x:Name="StopBtn" Classes="tp-icon" ToolTip.Tip="{app:T 'main.stop_return'}"
                       Foreground="{DynamicResource Brush.TextStrong}" Command="{Binding Transport.StopCommand}">
                 <app:Glyph x:Name="StopGlyph" Kind="Stop" Width="9" Height="9"/>
               </Button>
-              <Button x:Name="PlayBtn" Classes="tp-play" ToolTip.Tip="Play (Space)"
+              <Button x:Name="PlayBtn" Classes="tp-play" ToolTip.Tip="{app:T 'main.play_space'}"
                       Classes.playing="{Binding Transport.IsPlaying}" Command="{Binding Transport.PlayCommand}">
                 <app:Glyph x:Name="PlayGlyph" Kind="Play" Width="10" Height="12" Margin="2,0,0,0"/>
               </Button>
-              <ToggleButton x:Name="RecordBtn" Classes="tp-icon rec" ToolTip.Tip="Record (⌘R)"
+              <ToggleButton x:Name="RecordBtn" Classes="tp-icon rec" ToolTip.Tip="{app:T 'main.record_r'}"
                             IsChecked="{Binding Transport.RecordOn}">
                 <app:Glyph x:Name="RecordGlyph" Kind="Record" Width="10" Height="10"/>
               </ToggleButton>
@@ -208,7 +210,7 @@
             <!-- Position — click to flip bars.beats ↔ minutes:seconds; the unit beside says which -->
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Cursor="Hand" Background="Transparent"
                         PointerPressed="OnTogglePositionDisplay"
-                        ToolTip.Tip="Switch between bars and time">
+                        ToolTip.Tip="{app:T 'main.switch_between_bars_and_time'}">
               <TextBlock Classes="Readout" Text="{Binding Transport.PositionText}" FontSize="14"
                          MinWidth="72" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
               <TextBlock Classes="CellLabel" Text="{Binding Transport.PositionUnitText}" VerticalAlignment="Center"/>
@@ -217,9 +219,9 @@
             <Border x:Name="LoopSep" Width="1" Height="18" Background="{DynamicResource Brush.Rule}"/>
 
             <!-- Loop: the range is the key -->
-            <ToggleButton x:Name="LoopCell" Classes="cell" Height="22" IsChecked="{Binding Transport.LoopOn}" ToolTip.Tip="Loop the range set on the ruler">
+            <ToggleButton x:Name="LoopCell" Classes="cell" Height="22" IsChecked="{Binding Transport.LoopOn}" ToolTip.Tip="{app:T 'main.loop_the_range_set_on'}">
               <StackPanel Orientation="Horizontal" Spacing="6">
-                <TextBlock Classes="CellLabel" Text="Loop" VerticalAlignment="Center" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
+                <TextBlock Classes="CellLabel" Text="{app:T 'common.loop'}" VerticalAlignment="Center" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
                 <TextBlock Classes="Mono" FontSize="11" MinWidth="58" VerticalAlignment="Center"
                            Text="{Binding Transport.LoopRangeText}"
                            Foreground="{Binding $parent[ToggleButton].Foreground}"/>
@@ -227,13 +229,13 @@
             </ToggleButton>
             <!-- Loop record mode: Overdub (rests neutral) or Replace (lit, the non-default choice) -->
             <ToggleButton x:Name="LoopRecordCell" Classes="cell" Height="22" IsChecked="{Binding Transport.LoopRecordReplace}"
-                          ToolTip.Tip="Loop recording: Overdub adds every pass · Replace keeps the latest pass (⌘⇧R)">
+                          ToolTip.Tip="{app:T 'main.loop_recording_overdub_adds_every'}">
               <Panel>
                 <!-- Sizer: the cell keeps the longer label's width in both states, so the bar doesn't shift -->
-                <TextBlock Classes="CellLabel" Text="Overdub" Opacity="0" VerticalAlignment="Center"/>
-                <TextBlock Classes="CellLabel" Text="Overdub" VerticalAlignment="Center" HorizontalAlignment="Center"
+                <TextBlock Classes="CellLabel" Text="{app:T 'main.overdub'}" Opacity="0" VerticalAlignment="Center"/>
+                <TextBlock Classes="CellLabel" Text="{app:T 'main.overdub'}" VerticalAlignment="Center" HorizontalAlignment="Center"
                            IsVisible="{Binding !Transport.LoopRecordReplace}" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
-                <TextBlock Classes="CellLabel" Text="Replace" VerticalAlignment="Center" HorizontalAlignment="Center"
+                <TextBlock Classes="CellLabel" Text="{app:T 'main.replace'}" VerticalAlignment="Center" HorizontalAlignment="Center"
                            IsVisible="{Binding Transport.LoopRecordReplace}" Foreground="{Binding $parent[ToggleButton].Foreground}"/>
               </Panel>
             </ToggleButton>
@@ -243,7 +245,7 @@
         <!-- Readouts: one 26px well each, a mono value and its muted unit on one line -->
         <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="10,0,0,0">
           <!-- Tempo (drag ↕ or double-click to type) -->
-          <Border Classes="well" ToolTip.Tip="Set the tempo — drag, or double-click to type">
+          <Border Classes="well" ToolTip.Tip="{app:T 'main.set_the_tempo_drag_or'}">
             <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
               <Panel x:Name="BpmHost" Width="52" Height="18" VerticalAlignment="Center"/>
               <TextBlock Classes="CellLabel" Text="BPM" VerticalAlignment="Center"/>
@@ -252,7 +254,7 @@
           <!-- Tap tempo: fires on press (a release lags the beat). The dots count the beats
                of the current series, brass as each one lands; they clear when it times out. -->
           <Button x:Name="TapChip" Classes="cell" ClickMode="Press" Click="OnTapTempo"
-                  ToolTip.Tip="Tap the beat to set the tempo">
+                  ToolTip.Tip="{app:T 'main.tap_the_beat_to_set'}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <StackPanel x:Name="TapDots" Orientation="Horizontal" Spacing="3"
                           HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -261,11 +263,11 @@
                 <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
                 <Ellipse Width="4" Height="4" Fill="{DynamicResource Brush.BorderStrong}"/>
               </StackPanel>
-              <TextBlock Classes="CellLabel" Text="Tap" VerticalAlignment="Center"/>
+              <TextBlock Classes="CellLabel" Text="{app:T 'main.tap'}" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
           <!-- Time signature (drag ↕ each field) -->
-          <Border x:Name="TimeSigCell" Classes="well" ToolTip.Tip="Set the time signature — drag each field">
+          <Border x:Name="TimeSigCell" Classes="well" ToolTip.Tip="{app:T 'main.set_the_time_signature_drag'}">
             <StackPanel Orientation="Horizontal" Spacing="1" Height="18" VerticalAlignment="Center">
               <Panel x:Name="TimeSigNumHost" Width="16"/>
               <TextBlock Classes="Mono" Text="/" FontSize="13" VerticalAlignment="Center"
@@ -274,11 +276,11 @@
             </StackPanel>
           </Border>
           <!-- Project key: loops dropped in can be transposed to it -->
-          <Button x:Name="KeyChip" Classes="cell" Click="OnPickProjectKey" ToolTip.Tip="Set the project key — samples can be transposed to it">
+          <Button x:Name="KeyChip" Classes="cell" Click="OnPickProjectKey" ToolTip.Tip="{app:T 'main.set_the_project_key_samples'}">
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock x:Name="KeyLabel" Classes="Mono" Text="—" FontSize="13"
                          MinWidth="30" TextAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextMuted}"/>
-              <TextBlock Classes="CellLabel" Text="Key" VerticalAlignment="Center"/>
+              <TextBlock Classes="CellLabel" Text="{app:T 'main.key'}" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
           <!-- Clip snap grid (SnapChip.cs): the step in effect, live with the zoom in Auto;
@@ -287,7 +289,7 @@
             <StackPanel Orientation="Horizontal" Spacing="6">
               <TextBlock x:Name="SnapLabel" Classes="Mono" Text="1/4" FontSize="13"
                          MinWidth="36" TextAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource Brush.TextPrimary}"/>
-              <TextBlock x:Name="SnapCaption" Classes="CellLabel" Text="Grid" VerticalAlignment="Center"/>
+              <TextBlock x:Name="SnapCaption" Classes="CellLabel" Text="{app:T 'common.grid'}" VerticalAlignment="Center"/>
             </StackPanel>
           </Button>
         </StackPanel>
@@ -300,7 +302,7 @@
           <!-- Metronome: body, pendulum rod, weight -->
           <ToggleButton x:Name="MetronomeBtn" Classes="tp-icon" IsChecked="{Binding Transport.MetronomeOn}"
                         ContextRequested="OnMetronomeContext"
-                        ToolTip.Tip="Turn the metronome on or off (⌘M) · right-click for count-in">
+                        ToolTip.Tip="{app:T 'main.turn_the_metronome_on_or'}">
             <app:Glyph Kind="Metronome" Size="15"/>
           </ToggleButton>
           <!-- Follow playhead: keep the arrangement scrolling with the cursor. The
@@ -309,14 +311,14 @@
                brackets around it were tried too and collapse into noise at this size. Mirrored by View ▸ Follow playhead,
                which shares one code path. -->
           <ToggleButton x:Name="FollowBtn" Classes="tp-icon" Click="OnToggleFollow"
-                        ToolTip.Tip="Scroll the arrangement to keep the playhead in view">
+                        ToolTip.Tip="{app:T 'main.scroll_the_arrangement_to_keep'}">
             <app:Glyph Kind="Follow" Size="15"/>
           </ToggleButton>
           <!-- Snapping on/off, independent of which grid the GRID cell shows. Off is the
                same as holding Alt, but latched. A horseshoe magnet: the poles are banded
                off the body by a transparent gap, so the shape reads on any button state. -->
           <ToggleButton x:Name="SnapToggle" Classes="tp-icon" IsChecked="True" Click="OnToggleSnapEnabled"
-                        ToolTip.Tip="Snap clips to the grid (hold Alt to drag freely)">
+                        ToolTip.Tip="{app:T 'main.snap_clips_to_the_grid'}">
             <app:Glyph Kind="Snap" Size="15"/>
           </ToggleButton>
           <!-- Automation: a breakpoint envelope — the ramp and handles the lanes draw -->
@@ -325,9 +327,9 @@
           </ToggleButton>
           <!-- Shown only while a hand-moved control has taken a lane over from
                playback (M9-C); one click hands every overridden lane back. -->
-          <Button x:Name="ReenableAutoBtn" Classes="chip" Content="Re-enable"
+          <Button x:Name="ReenableAutoBtn" Classes="chip" Content="{app:T 'main.re_enable'}"
                   IsVisible="False" Click="OnReenableAutomation"
-                  ToolTip.Tip="Hand overridden controls back to their automation"/>
+                  ToolTip.Tip="{app:T 'main.hand_overridden_controls_back_to'}"/>
         </StackPanel>
 
         <!-- Add track: one menu instead of three chips -->
@@ -351,7 +353,7 @@
         <StackPanel x:Name="RemotePanel" Grid.Column="6" Orientation="Horizontal" Spacing="6" Margin="8,0,0,0">
           <ToggleButton x:Name="MidiLearnBtn" Classes="chip"
                         Click="OnToggleMidiLearn"
-                        ToolTip.Tip="Map a controller — click a control, then move a knob on the controller">
+                        ToolTip.Tip="{app:T 'main.map_a_controller_click_a'}">
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
               <TextBlock Text="MIDI" VerticalAlignment="Center"
                          Foreground="{Binding $parent[ToggleButton].Foreground}"/>
@@ -360,13 +362,13 @@
             </StackPanel>
           </ToggleButton>
           <Button x:Name="RemoteBtn" Classes="chip" Click="OnRemoteClick"
-                  ToolTip.Tip="Play and control Nota from a phone">
+                  ToolTip.Tip="{app:T 'main.play_and_control_nota_from'}">
             <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
               <Border x:Name="RemoteGlyph" Width="8" Height="12" CornerRadius="{StaticResource Radius.Clip}" BorderThickness="1.5"
                       BorderBrush="{Binding $parent[Button].Foreground}" VerticalAlignment="Center"/>
-              <TextBlock x:Name="RemoteLabel" Text="Remote" VerticalAlignment="Center"
+              <TextBlock x:Name="RemoteLabel" Text="{app:T 'main.remote'}" VerticalAlignment="Center"
                          Foreground="{Binding $parent[Button].Foreground}"/>
-              <TextBlock x:Name="RemoteCount" Classes="Mono" Text="Off" FontSize="10" VerticalAlignment="Center"
+              <TextBlock x:Name="RemoteCount" Classes="Mono" Text="{app:T 'main.off_remote'}" FontSize="10" VerticalAlignment="Center"
                          Foreground="{Binding $parent[Button].Foreground}"/>
               <Ellipse x:Name="RemoteDot" Width="5" Height="5" VerticalAlignment="Center"
                        Fill="{DynamicResource Brush.BorderStrong}"/>
@@ -390,7 +392,7 @@
         <!-- Master: fader over its meter, with the gain in dB -->
         <Border x:Name="MasterWell" Grid.Column="9" Classes="tp-well" Margin="10,0,0,0">
           <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-            <TextBlock Classes="CellLabel" Text="Master" VerticalAlignment="Center"/>
+            <TextBlock Classes="CellLabel" Text="{app:T 'common.master'}" VerticalAlignment="Center"/>
             <StackPanel Spacing="3" VerticalAlignment="Center">
               <Panel x:Name="MasterVolHost" Width="88" Height="10"/>
               <Panel x:Name="MasterMeterHost" Width="88" Height="4"/>
@@ -407,7 +409,7 @@
     <Border x:Name="StatusBar" DockPanel.Dock="Bottom" Background="{DynamicResource Brush.BgApp}"
             BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,1,0,0"
             Height="22" Padding="16,0">
-      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto,Auto,Auto">
         <TextBlock Classes="Caption" VerticalAlignment="Center" Text="{Binding StatusText}"/>
         <!-- Settings → Downloads job (MainWindow.Downloads.cs): it keeps running after Settings closes. -->
         <Panel x:Name="DownloadHost" Grid.Column="1" VerticalAlignment="Center"/>
@@ -425,12 +427,22 @@
         </StackPanel>
         <!-- A newer Nota release: available / downloading / ready to install (MainWindow.Updates.cs). -->
         <Panel x:Name="UpdateHost" Grid.Column="3" VerticalAlignment="Center"/>
-        <TextBlock Grid.Column="4" Classes="Caption Mono"
-                   VerticalAlignment="Center" Text="{Binding EngineInfo}"/>
+        <!-- Audio dropouts since the device started, in red and hidden at 0; a click resets it (#271). -->
+        <Button x:Name="DropoutButton" Grid.Column="4" Classes="ghost" IsVisible="{Binding HasDropouts}"
+                VerticalAlignment="Center" Margin="0" Padding="6,1" MinHeight="0" Cursor="Hand"
+                ToolTip.Tip="{app:T 'main.audio_dropouts_since_the_device'}">
+          <TextBlock Classes="Caption Mono alert" Text="{Binding DropoutText}"/>
+        </Button>
+        <!-- Sample rate · buffer size: opens the buffer menu (MainWindow.AudioFormat.cs, #373). -->
+        <Button x:Name="AudioFormatButton" Grid.Column="5" Classes="ghost"
+                VerticalAlignment="Center" Margin="0" Padding="6,1" MinHeight="0" Cursor="Hand"
+                ToolTip.Tip="{app:T 'main.sample_rate_and_buffer_size'}">
+          <TextBlock Classes="Caption Mono" Text="{Binding EngineInfo}"/>
+        </Button>
         <!-- The installed version: opens its release notes (What's New), never an update (#127). -->
-        <Button x:Name="VersionButton" Grid.Column="5" Classes="ghost"
-                VerticalAlignment="Center" Margin="6,0,-6,0" Padding="6,1" MinHeight="0"
-                Cursor="Hand" ToolTip.Tip="View release notes">
+        <Button x:Name="VersionButton" Grid.Column="6" Classes="ghost"
+                VerticalAlignment="Center" Margin="0,0,-6,0" Padding="6,1" MinHeight="0"
+                Cursor="Hand" ToolTip.Tip="{app:T 'main.view_release_notes'}">
           <TextBlock x:Name="VersionText" Classes="Caption Mono"/>
         </Button>
       </Grid>
@@ -482,22 +494,22 @@
           <Border DockPanel.Dock="Top" Height="32" Background="{DynamicResource Brush.Panel}"
                   BorderBrush="{DynamicResource Brush.Seam}" BorderThickness="0,0,0,1">
           <Grid Margin="12,0,6,0" ColumnDefinitions="Auto,Auto,*,Auto,Auto,Auto">
-            <TextBlock Text="Mixer" Classes="Title" VerticalAlignment="Center"/>
+            <TextBlock Text="{app:T 'common.mixer'}" Classes="Title" VerticalAlignment="Center"/>
             <Border Grid.Column="1" Classes="segmented" Margin="14,0,0,0" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal" Spacing="1">
-                <ToggleButton x:Name="MixerStripsBtn" Classes="seg" Content="Strips" Click="OnMixerStrips"/>
-                <ToggleButton x:Name="MixerMapBtn" Classes="seg" Content="Stereo map" Click="OnMixerMap"/>
+                <ToggleButton x:Name="MixerStripsBtn" Classes="seg" Content="{app:T 'main.strips'}" Click="OnMixerStrips"/>
+                <ToggleButton x:Name="MixerMapBtn" Classes="seg" Content="{app:T 'common.stereo_map'}" Click="OnMixerMap"/>
               </StackPanel>
             </Border>
             <Border Grid.Column="3" Width="1" Height="16" Margin="10,0,6,0" VerticalAlignment="Center"
                     Background="{DynamicResource Brush.Rule}"/>
             <Button x:Name="MixerPopOut" Grid.Column="4" Classes="ghost" Height="22" Padding="6,0"
                     Foreground="{DynamicResource Brush.TextTertiary}" Click="OnMixerPopOut"
-                    ToolTip.Tip="Open the mixer in a window">
+                    ToolTip.Tip="{app:T 'main.open_the_mixer_in_a'}">
               <app:Glyph Kind="PopOut"/>
             </Button>
             <Button Grid.Column="5" Classes="ghost" Height="22" Margin="2,0,0,0" Padding="6,0"
-                    Foreground="{DynamicResource Brush.TextTertiary}" Click="OnCloseMixer" ToolTip.Tip="Hide the mixer">
+                    Foreground="{DynamicResource Brush.TextTertiary}" Click="OnCloseMixer" ToolTip.Tip="{app:T 'main.hide_the_mixer'}">
               <app:Glyph Kind="Close"/>
             </Button>
           </Grid>
@@ -532,53 +544,53 @@
           <Grid Margin="8,0,6,0" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto,Auto">
             <Border Classes="segmented" VerticalAlignment="Center">
               <StackPanel Orientation="Horizontal" Spacing="1">
-                <ToggleButton x:Name="DetailDevicesBtn" Classes="seg" Content="Devices" Click="OnDetailDevices"/>
-                <ToggleButton x:Name="DetailPatternBtn" Classes="seg" Content="Pattern" IsEnabled="False" IsVisible="False"
-                              ToolTip.Tip="Step the selected MIDI clip on a Drum Rack track"
+                <ToggleButton x:Name="DetailDevicesBtn" Classes="seg" Content="{app:T 'main.devices'}" Click="OnDetailDevices"/>
+                <ToggleButton x:Name="DetailPatternBtn" Classes="seg" Content="{app:T 'common.pattern'}" IsEnabled="False" IsVisible="False"
+                              ToolTip.Tip="{app:T 'main.step_the_selected_midi_clip'}"
                               Click="OnDetailPattern"/>
-                <ToggleButton x:Name="DetailClipBtn" Classes="seg" Content="Clip" IsEnabled="False"
-                              ToolTip.Tip="Select a MIDI clip to edit it" Click="OnDetailClip"/>
+                <ToggleButton x:Name="DetailClipBtn" Classes="seg" Content="{app:T 'common.clip'}" IsEnabled="False"
+                              ToolTip.Tip="{app:T 'main.select_a_clip_to_edit'}" Click="OnDetailClip"/>
               </StackPanel>
             </Border>
             <ContentControl x:Name="DetailChipHost" Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center"/>
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
               <Button x:Name="FreezeBtn" Height="22" Padding="9,0" VerticalAlignment="Center"
                       Click="OnFreezeClick"
-                      ToolTip.Tip="Freeze the track to audio to free CPU (right-click to flatten)">
+                      ToolTip.Tip="{app:T 'main.freeze_the_track_to_audio'}">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <app:Glyph x:Name="FreezeIcon" Kind="Freeze" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                  <TextBlock x:Name="FreezeLabel" Text="Freeze" FontSize="12" VerticalAlignment="Center"
+                  <TextBlock x:Name="FreezeLabel" Text="{app:T 'common.freeze'}" FontSize="12" VerticalAlignment="Center"
                              Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </StackPanel>
               </Button>
               <Button x:Name="LiveFreezeBtn" Height="22" Padding="9,0" VerticalAlignment="Center"
                       IsVisible="False" Click="OnLiveFreezeClick"
-                      ToolTip.Tip="Bounce to a linked audio track below and put the source to sleep">
+                      ToolTip.Tip="{app:T 'main.bounce_to_a_linked_audio'}">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                   <app:Glyph Kind="ChainLink" Size="14" Foreground="{DynamicResource Brush.TextSecondary}"/>
-                  <TextBlock Text="Live freeze" FontSize="12" VerticalAlignment="Center"
+                  <TextBlock Text="{app:T 'main.live_freeze'}" FontSize="12" VerticalAlignment="Center"
                              Foreground="{DynamicResource Brush.TextSecondary}"/>
                 </StackPanel>
               </Button>
               <Button x:Name="EditBtn" Height="22" Padding="9,0" VerticalAlignment="Center"
                       IsVisible="False" Click="OnEditClick"
-                      ToolTip.Tip="Wake the frozen source to edit it (right-click to unfreeze or flatten)">
+                      ToolTip.Tip="{app:T 'main.wake_the_frozen_source_to'}">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                   <app:Glyph x:Name="EditGlyph" Kind="Edit" Foreground="{DynamicResource Brush.AccentBright}"/>
-                  <TextBlock Text="Edit" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
+                  <TextBlock Text="{app:T 'common.edit'}" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
                 </StackPanel>
               </Button>
               <Button x:Name="DoneBtn" Height="22" Padding="9,0" VerticalAlignment="Center"
                       IsVisible="False" Click="OnDoneClick"
-                      ToolTip.Tip="Re-freeze the source and put it back to sleep">
+                      ToolTip.Tip="{app:T 'main.re_freeze_the_source_and'}">
                 <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
                   <app:Glyph x:Name="DoneGlyph" Kind="Check" Foreground="{DynamicResource Brush.AccentBright}"/>
-                  <TextBlock Text="Done" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
+                  <TextBlock Text="{app:T 'main.done'}" FontSize="12" VerticalAlignment="Center" Foreground="{DynamicResource Brush.AccentBright}"/>
                 </StackPanel>
               </Button>
               <Button x:Name="DiscardBtn" Classes="ghost" Height="22" Padding="6,0" VerticalAlignment="Center"
                       IsVisible="False" Click="OnDiscardClick"
-                      ToolTip.Tip="Leave edit mode without re-freezing">
+                      ToolTip.Tip="{app:T 'main.leave_edit_mode_without_re'}">
                 <app:Glyph x:Name="DiscardGlyph" Kind="Cross" Foreground="{DynamicResource Brush.TextTertiary}"/>
               </Button>
             </StackPanel>
@@ -586,16 +598,16 @@
                     Background="{DynamicResource Brush.Rule}"/>
             <Button x:Name="DetailMaximizeBtn" Grid.Column="4" Classes="ghost" Height="22" Margin="0,0,2,0" Padding="6,0"
                     Foreground="{DynamicResource Brush.TextTertiary}" Click="OnDetailMaximize" IsVisible="False"
-                    ToolTip.Tip="Fill the window with the clip editor (⌘⇧F)">
+                    ToolTip.Tip="{app:T 'main.fill_the_window_with_the'}">
               <app:Glyph x:Name="DetailMaximizeGlyph" Kind="Expand"/>
             </Button>
             <Button x:Name="DetailPopOut" Grid.Column="5" Classes="ghost" Height="22" Padding="6,0"
                     Foreground="{DynamicResource Brush.TextTertiary}" Click="OnToggleDetailWindow"
-                    ToolTip.Tip="Open devices and clip in a separate window">
+                    ToolTip.Tip="{app:T 'main.open_devices_and_clip_in'}">
               <app:Glyph x:Name="PopOutGlyph" Kind="PopOut"/>
             </Button>
             <Button Grid.Column="6" Classes="ghost" Height="22" Margin="2,0,0,0" Padding="6,0"
-                    Foreground="{DynamicResource Brush.TextTertiary}" Click="OnCloseDetail" ToolTip.Tip="Close">
+                    Foreground="{DynamicResource Brush.TextTertiary}" Click="OnCloseDetail" ToolTip.Tip="{app:T 'common.close'}">
               <app:Glyph x:Name="CloseDetailGlyph" Kind="Close"/>
             </Button>
           </Grid>

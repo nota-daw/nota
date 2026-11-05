@@ -24,6 +24,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -166,7 +167,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
                 fill: true, padX: 2, fontSize: 8);
             readouts.Add(modeSync);
             Learn(modeSeg, PMode, "Mode");
-            ToolTip.SetTip(modeSeg, "Sync: a tempo division · ms: a fixed time · Gate %: a share of how long each note was held");
+            ToolTip.SetTip(modeSeg, Loc.T("device.length.sync_a_tempo_division_ms"));
 
             var bigVal = Mono("", Txt, 18); bigVal.FontWeight = FontWeight.Medium; bigVal.LetterSpacing = -0.3;
             var bigSub = Mono("", Cap, 7); bigSub.VerticalAlignment = VerticalAlignment.Bottom; bigSub.Margin = new Thickness(0, 0, 0, 4);
@@ -178,7 +179,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             lenTrack.Changed += n => { S(LenParam(G), LenFromNorm(G, n)); Refresh(); };
             lenTrack.GestureBegin += () => { lenGesture = LenParam(G); Begin(lenGesture); };
             lenTrack.GestureEnd += () => { if (lenGesture >= 0) End(lenGesture); lenGesture = -1; };
-            ToolTip.SetTip(lenTrack, "Length — drag up / down, double-click resets");
+            ToolTip.SetTip(lenTrack, Loc.T("device.length.length_drag_up_down_double"));
             ValueEntry.Attach(bigVal, () => LenNorm(G), n => S(LenParam(G), LenFromNorm(G, n)), () => LenValue(G),
                 () => { lenGesture = LenParam(G); Begin(lenGesture); }, () => { End(lenGesture); lenGesture = -1; }, Refresh, control: lenTrack);
             readouts.Add(() =>
@@ -215,7 +216,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
                 i => { Begin(PTrigger); S(PTrigger, i); End(PTrigger); Refresh(); }, out var trigSync, fill: true, padX: 2, fontSize: 8);
             readouts.Add(trigSync);
             Learn(trigSeg, PTrigger, "Start From");
-            ToolTip.SetTip(trigSeg, "Count the length from the note-on, or from the note-off (the note fires when the key is released)");
+            ToolTip.SetTip(trigSeg, Loc.T("device.length.count_the_length_from_the_2"));
             var trigBox = new Border { BorderBrush = Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0),
                 Child = new StackPanel { Spacing = 4, Children = { Caps("START FROM"), trigSeg } } };
 
@@ -231,24 +232,24 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             var gateInfo = Mono("", Cap, 7);
             readouts.Add(() =>
             {
-                gateInfo.Text = $"1 bar at {Bpm():0} BPM · {LengthGateViz.Input.Length} notes";
+                gateInfo.Text = Loc.F("device.length.1_bar_at_bpm_notes", Bpm(), LengthGateViz.Input.Length);
                 gate.Set(notes, now, Bpm(), Bypassed());
             });
-            ToolTip.SetTip(gate, "Outline — the note played in · fill — the note out · band — the range Random spreads it over. The shaded part is past the bar line.");
+            ToolTip.SetTip(gate, Loc.T("device.length.outline_the_note_played_in"));
             var gateIsland = IslandBox(IslandHead(Caps("GATE"), gateInfo), new Border { Padding = new Thickness(8, 5, 8, 4), Child = gate }, double.NaN);
 
             // ---- MODIFIERS ----
             var mods = new StackPanel { Spacing = 9, Children =
             {
-                ModSlider("VEL → LEN", PVelToLen, true, "loud notes longer at +"),
-                ModSlider("KEY → LEN", PKeyToLen, true, "low notes longer at +"),
-                ModSlider("RANDOM", PRandom, false, "spread per note"),
+                ModSlider("VEL → LEN", PVelToLen, true, Loc.T("device.length.loud_notes_longer_at")),
+                ModSlider("KEY → LEN", PKeyToLen, true, Loc.T("device.length.low_notes_longer_at")),
+                ModSlider("RANDOM", PRandom, false, Loc.T("device.length.spread_per_note")),
             } };
             var flags = new Border { BorderBrush = Rule, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(0, 6, 0, 0),
                 Child = new StackPanel { Spacing = 5, Children =
                 {
-                    Flag(PLegato, "Legato · retrigger held", "Each note lasts until the next one starts (at most to the bar line)"),
-                    Flag(PClipLimit, "Clip length limit", "No note crosses the bar line it started in"),
+                    Flag(PLegato, Loc.T("device.length.legato_retrigger_held"), Loc.T("device.length.each_note_lasts_until_the")),
+                    Flag(PClipLimit, Loc.T("device.length.clip_length_limit"), Loc.T("device.length.no_note_crosses_the_bar")),
                 } } };
             var modIsland = IslandBox(IslandHead(Caps("MODIFIERS"), null),
                 new DockPanel { Margin = new Thickness(8, 7), Children = { WithDock(flags, Dock.Bottom), mods } }, 172);
@@ -260,9 +261,9 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             var statusR = Mono("", Sub);
             readouts.Add(() =>
             {
-                statusL.Text = $"{Modes[Mode(G)]} {LenValue(G)} · from {TrigName()} · avg out {AvgOut()}"
+                statusL.Text = Loc.F("device.length.from_avg_out", Modes[Mode(G)], LenValue(G), TrigName(), AvgOut())
                              + (G(PLegato) >= 0.5f ? " · legato" : "") + (G(PClipLimit) >= 0.5f ? " · clip" : "");
-                statusR.Text = Bypassed() ? "bypassed" : "MIDI · latency 0 smp";
+                statusR.Text = Bypassed() ? "bypassed" : Loc.T("common.midi_latency_0_smp");
             });
             return Framed(islands, statusL, statusR);
         }
@@ -282,7 +283,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
                 int d = ev.KeyModifiers.HasFlag(KeyModifiers.Shift) ? 2 : 1;
                 Begin(PMode); S(PMode, (Mode(G) + d) % 3); End(PMode); Refresh(); ev.Handled = true;
             };
-            ToolTip.SetTip(modeChip, "Length mode: Sync / ms / Gate % — click for the next, Shift-click for the previous");
+            ToolTip.SetTip(modeChip, Loc.T("device.length.length_mode_sync_ms_gate"));
             Learn(modeChip, PMode, "Mode");
 
             var val = Mono("", Txt, 9); val.FontWeight = FontWeight.Medium;
@@ -290,7 +291,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             var head = new DockPanel { Height = 14, Children = { WithDock(modeChip, Dock.Left), WithDock(sub, Dock.Right), val } };
 
             var gate = new LengthGateViz { Full = false };
-            ToolTip.SetTip(gate, "Outline — in · fill — out · band — Random's range");
+            ToolTip.SetTip(gate, Loc.T("device.length.outline_in_fill_out_band"));
 
             var knobs = new Grid { Height = 53, ColumnDefinitions = new ColumnDefinitions("*,*,*,*") };
             var cells = new[]
@@ -323,7 +324,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
                 if (!ev.GetCurrentPoint(statusL).Properties.IsLeftButtonPressed) return;
                 Begin(PTrigger); S(PTrigger, G(PTrigger) >= 0.5f ? 0 : 1); End(PTrigger); Refresh(); ev.Handled = true;
             };
-            ToolTip.SetTip(statusL, "Count the length from the note-on or the note-off — click to switch");
+            ToolTip.SetTip(statusL, Loc.T("device.length.count_the_length_from_the"));
             Learn(statusL, PTrigger, "Start From");
             var statusR = Mono("", Sub);
             readouts.Add(() =>
@@ -370,7 +371,7 @@ internal sealed class LengthMidiBody : IMidiDeviceBody
             trk.GestureBegin += () => Begin(p);
             trk.GestureEnd += () => End(p);
             Learn(trk, p, label);
-            ToolTip.SetTip(trk, $"{label} — drag up / down, double-click resets");
+            ToolTip.SetTip(trk, Loc.F("device.length.drag_up_down_double_click", label));
             ValueEntry.Attach(v, toNorm, n => S(p, fromNorm(n)), () => bipolar ? Signed(G(p)) : $"±{Math.Round(G(p) * 100):0}\u2009%",
                 () => Begin(p), () => End(p), Refresh, control: trk);
             readouts.Add(() =>

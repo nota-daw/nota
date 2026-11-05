@@ -17,6 +17,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -204,7 +205,7 @@ internal sealed class AfEnvView : AfWindowBase
             ctx.DrawGeometry(null, NotaGraph.PrimaryPen, Line(_cut, v => YCut(v)));
         }
 
-        NotaGraph.Title(ctx, frame, "Cutoff over time");
+        NotaGraph.Title(ctx, frame, Loc.T("device.auto_filter.cutoff_over_time"));
         string pk = NotaNum.Hz(_peakHz);
         NotaGraph.Axis(ctx, frame, NotaGraph.Corner.TopRight, pk, Dragging ? NotaPalette.AccentBright : NotaPalette.TextSecondary);
         NotaGraph.Legend(ctx, w - 5, 16, ("input", NotaPalette.TealBright, NotaGraph.Mark.Line));

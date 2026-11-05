@@ -22,6 +22,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -277,7 +278,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         Control OscTab()
         {
             var hdr = new Grid { ColumnDefinitions = new ColumnDefinitions(OscCols), Height = 13 };
-            string[] h = { "OSC", "OCT", "SEMI", "FINE", "SHAPE · PULSE WIDTH", "OPTIONS" };
+            string[] h = { "OSC", "OCT", "SEMI", "FINE", Loc.T("device.pentad.shape_pulse_width_caps"), "OPTIONS" };
             for (int i = 0; i < h.Length; i++)
             {
                 var t = new TextBlock { Text = NotaText.Label(h[i]), FontSize = 7, FontWeight = FontWeight.Medium, Foreground = DimC, VerticalAlignment = VerticalAlignment.Center,
@@ -357,7 +358,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         {
             var d = new List<string>();
             if (On("pmfreqa")) d.Add("Freq A"); if (On("pmpwa")) d.Add("PW A"); if (On("pmfilter")) d.Add("Filter");
-            return d.Count == 0 ? "no dest" : string.Join(" + ", d);
+            return d.Count == 0 ? Loc.T("device.pentad.no_dest") : string.Join(" + ", d);
         }
         int ActiveRoutes()
         {
@@ -405,12 +406,12 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
             W("wmpwa", "PW A", 1, 0); W("wmpwb", "PW B", 1, 1);
             var mixRow = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 5, Children = {
                 Caps("SOURCE"), Col(Lbl("LFO", 7, DimC, FontWeight.Normal), 1), Col(HSlider("wmmix", v => Pct(v), 26), 2), Col(Lbl("NOISE", 7, DimC, FontWeight.Normal), 3) } };
-            var wm = new StackPanel { Spacing = 3, Children = { Caps("WHEEL MOD — DESTINATIONS"), wmGrid, mixRow } };
+            var wm = new StackPanel { Spacing = 3, Children = { Caps(Loc.T("device.pentad.wheel_mod_destinations_caps")), wmGrid, mixRow } };
             var wmBox = new Border { BorderBrush = BorderIn, BorderThickness = new Thickness(1, 0, 0, 0), Padding = new Thickness(10, 0, 0, 0), Child = wm };
             var bottom = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 10, Children = { lfo, Col(wmBox, 1) } };
 
             return new DockPanel { LastChildFill = true, Margin = new Thickness(8, 3, 8, 2), Children = {
-                Docked(Caps("POLY MOD — SOURCE → DESTINATION"), Avalonia.Controls.Dock.Top),
+                Docked(Caps(Loc.T("device.pentad.poly_mod_source_destination_caps")), Avalonia.Controls.Dock.Top),
                 Docked(Divider(bottom, 4), Avalonia.Controls.Dock.Bottom),
                 new Border { Padding = new Thickness(0, 2, 0, 0), Child = routes } } };
         }
@@ -477,14 +478,14 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         // Drift slider + seed re-roll (Oscillators tab bar)
         var reroll = new Border { Padding = new Thickness(3, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = new Glyph(GlyphKind.Cycle, 9) { Foreground = Txt2 } };
-        ToolTip.SetTip(reroll, "Re-roll the vintage seed (new per-voice spread)");
+        ToolTip.SetTip(reroll, Loc.T("device.pentad.re_roll_the_vintage_seed"));
         reroll.PointerPressed += (_, e) => { SetP("seed", (float)Random.Shared.NextDouble()); Refresh(); e.Handled = true; };
         var driftSl = HSlider("drift", v => $"{v * 100:0}\u2009%", 22); driftSl.Width = 76;
         Control[] extras = {
             Row(5, Caps("DRIFT"), driftSl, reroll),
             MonoText("4-pole LP · 24\u2009dB/oct", 7, MutedC),
             MonoText("", 7, MutedC) };
-        readouts.Add(() => { if (extras[2] is TextBlock t) { int n = ActiveRoutes(); t.Text = $"per voice · {n} active route{(n == 1 ? "" : "s")}"; } });
+        readouts.Add(() => { if (extras[2] is TextBlock t) { int n = ActiveRoutes(); t.Text = Loc.Plural("device.pentad.per_voice_active_routes", n); } });
 
         Control CentreBody(int t) => tabBodies[t] ??= t switch { 1 => FilterAmpTab(), 2 => PolyModTab(), _ => OscTab() };
         Control RightBody(int t) => rightBodies[t] ??= t == 1 ? OutputTab() : MixerTab();
@@ -522,7 +523,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         readouts.Add(() =>
         {
             statusLeft.Text = StatusText();
-            if (scN >= 8) statusRight.Text = $"{scope[7] / 1000:0.#}\u2009kHz · ×{(int)scope[6]} OS · CPU {scope[5] * 100:0}\u2009%";
+            if (scN >= 8) statusRight.Text = Loc.F("device.pentad.khz_os_cpu", scope[7] / 1000, (int)scope[6], scope[5] * 100);
         });
 
         var flyReadouts = new List<Action>();
@@ -544,7 +545,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
                 R("GLIDE", Chips("glidemode", new[] { "Off", "On", "Legato" }, null, flyReadouts, 8)),
                 R("RELEASE", Toggle("releaseon", "Release switch", flyReadouts)),
                 R("OVERSAMPLING", Chips("oversample", new[] { "×2", "×4" }, null, flyReadouts, 8)),
-                R("BASS COMP", Toggle("lowcomp", "Restore lows at high Q", flyReadouts)),
+                R("BASS COMP", Toggle("lowcomp", Loc.T("device.pentad.restore_lows_at_high_q"), flyReadouts)),
                 R("NOISE FLOOR", Toggle("noisefloor", "−100\u2009dBFS hiss", flyReadouts)),
                 R("VINTAGE SEED", Row(8, seedTxt, rr)),
                 R("MASTER TUNE", tune),
@@ -553,7 +554,7 @@ internal sealed class PentadInstrumentCard : IInstrumentCard
         }
         var voiceBtn = new Border { Height = 14, Padding = new Thickness(6, 0), CornerRadius = NotaRadius.Badge, Background = OffPill, Cursor = new Cursor(StandardCursorType.Hand), VerticalAlignment = VerticalAlignment.Center,
             Child = Glyph.WithChevron(new TextBlock { Text = "Voice", FontSize = 8, Foreground = TxtC, VerticalAlignment = VerticalAlignment.Center }, 7) };
-        ToolTip.SetTip(voiceBtn, "Voice setup: polyphony, allocation, glide mode, oversampling, vintage seed");
+        ToolTip.SetTip(voiceBtn, Loc.T("device.pentad.voice_setup_polyphony_allocation_glide"));
         voiceBtn.PointerPressed += (_, e) =>
         {
             setupFly ??= new Flyout { Content = SetupPanel(), Placement = PlacementMode.TopEdgeAlignedRight };

@@ -1,3 +1,4 @@
+using Nota.Application.Localization;
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms.
 //
@@ -102,16 +103,16 @@ public sealed class DeviceSelection
         bool inst = HasInstrument;
         static bool Consecutive(List<int> l) => l.Count == 0 || l[^1] - l[0] == l.Count - 1;
         GroupShape Refuse(string why) => new(GroupShapeKind.Refused, -1, 0, false, -1, 0, why);
-        if (!Consecutive(midi) || !Consecutive(fx)) return Refuse("Select devices next to each other to group them");
+        if (!Consecutive(midi) || !Consecutive(fx)) return Refuse(Loc.T("device_selection.select_devices_next_to_each"));
         int mf = midi.Count > 0 ? midi[0] : -1, ff = fx.Count > 0 ? fx[0] : -1;
         if (inst)
         {
-            if (midi.Count > 0 && midi[^1] != midiCount - 1) return Refuse("Select devices next to each other to group them");
-            if (fx.Count > 0 && ff != 0) return Refuse("Select devices next to each other to group them");
+            if (midi.Count > 0 && midi[^1] != midiCount - 1) return Refuse(Loc.T("device_selection.select_devices_next_to_each"));
+            if (fx.Count > 0 && ff != 0) return Refuse(Loc.T("device_selection.select_devices_next_to_each"));
             return new(GroupShapeKind.InstrumentRack, mf, midi.Count, true, ff, fx.Count, null);
         }
         if (midi.Count > 0 && fx.Count > 0)
-            return Refuse("MIDI and audio effects go in one rack only with the instrument between them");
+            return Refuse(Loc.T("device_selection.midi_and_audio_effects_go"));
         return midi.Count > 0
             ? new(GroupShapeKind.MidiRack, mf, midi.Count, false, -1, 0, null)
             : new(GroupShapeKind.AudioRack, -1, 0, false, ff, fx.Count, null);

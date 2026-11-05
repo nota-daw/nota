@@ -8,6 +8,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -18,7 +19,7 @@ internal sealed class GenericInstrumentCard : IInstrumentCard
         var engine = ctx.Engine;
         int track = ctx.TrackId;
 
-        var gui = TextButton("Open GUI ↗");
+        var gui = TextButton(Loc.T("device.generic.open_gui"));
         gui.PointerPressed += (_, _) => { try { engine.OpenPluginEditor(track, -1); } catch { /* no-op */ } };
         var body = new StackPanel { Spacing = 8, VerticalAlignment = VerticalAlignment.Center, Children = { gui } };
         return new Border { Padding = new Thickness(10), Child = body };

@@ -37,7 +37,8 @@ public sealed class ProjectService
     /// chain children's sidechain keys / CC targets.
     /// v26 (specs/048) adds Preset on instruments, devices and MIDI effects.
     /// v27 (specs/046) adds Preview on hosted plug-ins: the picture of their window.
-    public const int CurrentFormatVersion = 28;
+    /// v29 (specs/067) adds Takes on audio tracks and TakeId on audio clips.
+    public const int CurrentFormatVersion = 29;
 
     /// <summary>Manifest file name inside the bundle folder.</summary>
     public const string ManifestName = "project.json";
@@ -71,6 +72,8 @@ public sealed class ProjectService
                 MasterVolume = transport.MasterVolume,
                 MetronomeOn = transport.MetronomeOn,
                 LoopOn = transport.LoopOn,
+                LoopStart = engine.LoopEnd > engine.LoopStart ? engine.LoopStart : null,
+                LoopEnd = engine.LoopEnd > engine.LoopStart ? engine.LoopEnd : null,
                 TimeSigNumerator = transport.TimeSigNumerator,
                 TimeSigDenominator = transport.TimeSigDenominator,
                 Key = Nota.Application.Samples.MusicalKey.FromCode(transport.Key)?.Short,
@@ -106,6 +109,7 @@ public sealed class ProjectService
                 GroupId = ti.GroupId >= 0 && idToIndex.TryGetValue(ti.GroupId, out var gix) ? gix : -1,   // parent → doc index
                 ColorIndex = engine.GetTrackColorIndex(ti.Id),
                 PianoFold = engine.GetTrackPianoFold(ti.Id) ? true : null,
+                EditLink = ti.IsGroup && engine.GetTrackEditLink(ti.Id) ? true : null,
                 RecordInput = engine.GetTrackRecordInput(ti.Id) is var rin && rin > 0
                     ? (idToIndex.TryGetValue(rin, out var rix) ? rix + 2 : 0)   // track source → doc index + 2
                     : rin,                                                       // 0 hardware / -1 master
@@ -236,7 +240,22 @@ public sealed class ProjectService
                     if (rel == null) continue;
                     var dto = AudioClipState.Capture(engine, ti.Id, c, ac);
                     dto.Sample = rel;
+                    int take = engine.ClipTakeId(ti.Id, c);
+                    if (take != 0) dto.TakeId = take;
+                    int joined = engine.ClipJoinedEdges(ti.Id, c);
+                    if (joined != 0) dto.JoinedEdges = joined;
                     t.AudioClips.Add(dto);
+                }
+                for (int k = 0; k < engine.TakeCount(ti.Id); k++)
+                {
+                    if (!engine.TryGetTakeInfo(ti.Id, k, out var tk)) continue;
+                    string? rel = RegisterSample(doc, engine, tk.SampleId, warnings);
+                    if (rel == null) continue;
+                    (t.Takes ??= new List<AudioTakeDto>()).Add(new AudioTakeDto
+                    {
+                        Id = tk.Id, Number = tk.Number, Group = tk.Group, Sample = rel,
+                        OriginBeat = tk.OriginBeat, SourceOffsetFrames = tk.SourceOffsetFrames, LengthFrames = tk.LengthFrames,
+                    });
                 }
             }
 
@@ -537,13 +556,24 @@ public sealed class ProjectService
 
     /// <summary>Rebuilds the engine from a document. Resets the engine first, so
     /// call after the user confirms discarding the current project. Transport is
-    /// NOT applied here (the UI applies it via its view-model so controls update).
+    /// NOT applied here (the UI applies it via its view-model so controls update),
+    /// except the tempo as a baseline for the clips.
     /// <paramref name="bundleDir"/> resolves sample paths. Returns warnings for
     /// content downgraded on load.</summary>
     public static IReadOnlyList<string> Apply(ProjectDocument doc, IAudioEngine engine, string bundleDir)
     {
         var warnings = new List<string>();
         engine.Reset();
+
+        // The saved tempo before any clip (specs/067): take lanes lay their comp out on it, so a
+        // section the user moved isn't mistaken for one still on its take when the UI's tempo lands.
+        if (doc.Transport.Bpm > 0) engine.SetBpm(doc.Transport.Bpm);
+
+        // The loop: its region as saved (#455) and whether it's on; the transport bar reads both back.
+        if (doc.Transport.LoopStart is double ls && doc.Transport.LoopEnd is double le && le > ls)
+            engine.SetLoop(doc.Transport.LoopOn, ls, le);
+        else
+            engine.SetLoop(doc.Transport.LoopOn, engine.LoopStart, engine.LoopEnd);
 
         // Pan law (specs/006) first, as the baseline rather than an undo step. A missing mixer
         // is a pre-v21 project: Balance, so the mix sounds as it was saved.
@@ -716,6 +746,7 @@ public sealed class ProjectService
             if (t.Name is { Length: > 0 } trackName) engine.SetTrackName(id, trackName);
             if (t.ColorIndex >= 0) engine.SetTrackColorIndex(id, t.ColorIndex);
             if (t.PianoFold == true) engine.SetTrackPianoFold(id, true);
+            if (t.EditLink == true) engine.SetTrackEditLink(id, true);   // group Link (specs/076)
             if (t.RecordInput != 0) recInputDeferred.Add((id, t.RecordInput));   // resolve after all tracks exist
             if (t.Monitor) monitorDeferred.Add((id, true));                        // after record inputs resolve
             engine.SetTrackInputChannels(id, (InputChannels)(t.InputChannels ?? 0)); // older files: the stereo pair
@@ -771,11 +802,39 @@ public sealed class ProjectService
                 ApplyControllers(c.Controllers, warnings, (ctl, pts) => engine.SetMidiClipController(id, ci, ctl, pts));
             }
 
+            // Takes before clips: a comp section is re-linked to its take (and shares its buffer).
+            var takeIds = new Dictionary<int, int>();
+            if (t.Takes != null)
+                foreach (var tk in t.Takes)
+                {
+                    int nid = engine.RestoreTake(id, ResolveInBundle(bundleDir, tk.Sample), tk.Number, tk.Group,
+                                                 tk.OriginBeat, tk.SourceOffsetFrames, tk.LengthFrames);
+                    if (nid <= 0) { warnings.Add($"Couldn't reload take \"{tk.Sample}\"."); continue; }
+                    takeIds[tk.Id] = nid;
+                    for (int k = engine.TakeCount(id) - 1; k >= 0; k--)
+                        if (engine.TryGetTakeInfo(id, k, out var lti) && lti.Id == nid)
+                        {
+                            BundleContent.SeedSample(engine, lti.SampleId, tk.Sample);
+                            break;
+                        }
+                }
+
+            var joinedEdges = new List<(int Clip, int Edges)>();
             foreach (var ac in t.AudioClips)
             {
                 int ci = AudioClipState.Restore(engine, id, ac, ResolveInBundle(bundleDir, ac.Sample));
                 if (ci < 0) { warnings.Add($"Couldn't reload audio clip \"{ac.Sample}\"."); continue; }
+                if (ac.TakeId is int oldTake && takeIds.TryGetValue(oldTake, out int newTake))
+                    engine.SetClipTakeId(id, ci, newTake);
+                if (ac.JoinedEdges is int je && je != 0) joinedEdges.Add((ci, je));
                 if (engine.TryGetAudioClipInfo(id, ci, out var lci)) BundleContent.SeedSample(engine, lci.SampleId, ac.Sample);
+            }
+            // After every clip is in: a join is kept only where both of its clips are there.
+            if (joinedEdges.Count > 0)
+            {
+                var edges = new int[joinedEdges.Max(j => j.Clip) + 1];
+                foreach (var (clip, e) in joinedEdges) edges[clip] = e;
+                engine.RestoreJoinedEdges(id, edges);
             }
 
             // Freeze (M7): restore the frozen-audio buffer so the track re-opens frozen

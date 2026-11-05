@@ -19,6 +19,7 @@ using Avalonia.Threading;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Remote;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -56,8 +57,8 @@ public sealed partial class PreferencesWindow
         }
         foreach (var (i, name, sub) in new[]
                  {
-                     (0, "Play notes only", "Pads and keys. Mixer, transport and mappings are read-only."),
-                     (1, "Play and control the project", "Also mixer, transport, macros, XY and Session."),
+                     (0, Loc.T("preferences.remote.play_notes_only"), Loc.T("preferences.remote.pads_and_keys_mixer_transport")),
+                     (1, Loc.T("preferences.remote.play_and_control_the_project"), Loc.T("preferences.remote.also_mixer_transport_macros_xy")),
                  })
         {
             var ring = new Ellipse { Width = 12, Height = 12, StrokeThickness = 1.5 };
@@ -89,16 +90,16 @@ public sealed partial class PreferencesWindow
         {
             var connected = remote.Hub.Devices.Select(d => d.DeviceId).ToHashSet();
             var list = remote.Pairing.Trusted.OrderByDescending(d => d.LastSeen).ToList();
-            if (list.Count == 0) { trustedHost.Content = EmptyBox("No phone has paired yet. Turn Remote on and scan the code in Connect phone."); return; }
+            if (list.Count == 0) { trustedHost.Content = EmptyBox(Loc.T("preferences.remote.no_phone_has_paired_yet")); return; }
             var rows = new List<Control>();
             foreach (var d in list)
             {
                 bool live = connected.Contains(d.Id) && remote.Running;
                 var name = new TextBlock { Text = d.Name, FontSize = 12, Foreground = TextPrimary, VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
-                var seen = new TextBlock { Text = live ? "now" : Ago(d.LastSeen), FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
-                var forget = Btn("Forget");
+                var seen = new TextBlock { Text = live ? Loc.T("preferences.remote.now") : Ago(d.LastSeen), FontSize = 10, FontFamily = NotaFonts.MonoFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
+                var forget = Btn(Loc.T("preferences.remote.forget"));
                 forget.Height = 24; forget.FontSize = 11; forget.Padding = new Thickness(10, 0);
-                ToolTip.SetTip(forget, "Disconnect it and make it scan a new code to come back");
+                ToolTip.SetTip(forget, Loc.T("preferences.remote.disconnect_it_and_make_it"));
                 string id = d.Id;
                 forget.Click += (_, _) => { remote.Hub.Forget(id); RenderTrusted(); };
                 rows.Add(ListRow(38, "Auto,*,Auto,Auto", Dot(live ? NotaPalette.SuccessDim : BorderStrong), name, seen, forget));
@@ -111,9 +112,9 @@ public sealed partial class PreferencesWindow
         void Refresh()
         {
             bool on = Enabled();
-            string listen = remote.Links.Count == 0 ? "On · no network"
-                : "Listening on " + string.Join("  ·  ", remote.Links.Select(l => (l.Usb ? "USB " : "") + l.Address + ":" + settings.Current.RemotePort));
-            status.Text = !on ? "Off" : remote.Error ?? listen;
+            string listen = remote.Links.Count == 0 ? Loc.T("preferences.remote.on_no_network")
+                : Loc.F("preferences.remote.listening_on", string.Join("  ·  ", remote.Links.Select(l => (l.Usb ? Loc.T("preferences.remote.usb_caps") : "") + l.Address + ":" + settings.Current.RemotePort)));
+            status.Text = !on ? Loc.T("common.off") : remote.Error ?? listen;
             statusDot.Fill = !on ? BorderStrong : remote.Error is null ? NotaPalette.SuccessDim : NotaPalette.Danger;
             Inactive.Set(details, !on);
             RenderTrusted();
@@ -127,17 +128,17 @@ public sealed partial class PreferencesWindow
             _ = remote.ApplyAsync();
             Refresh();
         }
-        var enable = SwitchRow("Allow control from a phone", Enabled(), Apply);
+        var enable = SwitchRow(Loc.T("preferences.remote.allow_control_from_a_phone"), Enabled(), Apply);
         portBox.LostFocus += (_, _) => Apply(Enabled());
         void OnChanged() => Dispatcher.UIThread.Post(Refresh);
         remote.Changed += OnChanged;
         Closed += (_, _) => remote.Changed -= OnChanged;
         DetachedFromVisualTree += (_, _) => remote.Changed -= OnChanged;
 
-        details.Children.Add(Row("Port", portBox));
-        details.Children.Add(Row("Status", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { statusDot, status } }));
+        details.Children.Add(Row(Loc.T("preferences.port"), portBox));
+        details.Children.Add(Row(Loc.T("preferences.status"), new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { statusDot, status } }));
         var accessRow = new Grid { ColumnDefinitions = new ColumnDefinitions($"{LabelCol},*") };
-        var accessLabel = RowLabel("Phones may");
+        var accessLabel = RowLabel(Loc.T("preferences.remote.phones_may"));
         accessLabel.VerticalAlignment = VerticalAlignment.Top;
         accessLabel.Margin = new Thickness(0, 6, 0, 0);
         accessRow.Children.Add(accessLabel);
@@ -147,10 +148,10 @@ public sealed partial class PreferencesWindow
         Refresh();
 
         string sysNote = OperatingSystem.IsMacOS()
-            ? "When you turn this on, macOS asks whether Nota may find devices on the local network. Allow it, or phones can't reach Nota."
+            ? Loc.T("preferences.remote.when_you_turn_this_on_2")
             : OperatingSystem.IsWindows()
-                ? "When you turn this on, Windows asks whether Nota may use the network. Allow private networks, or phones can't reach Nota."
-                : "Phones reach Nota on the port above: if a firewall is on, allow it.";
+                ? Loc.T("preferences.remote.when_you_turn_this_on")
+                : Loc.T("preferences.remote.phones_reach_nota_on_the");
         var warn = new Border
         {
             Padding = new Thickness(14, 12), CornerRadius = NotaRadius.Panel, Background = RowBg, BorderBrush = Divider, BorderThickness = new Thickness(1),
@@ -160,25 +161,25 @@ public sealed partial class PreferencesWindow
                 Children =
                 {
                     new Ellipse { Width = 6, Height = 6, Fill = NotaPalette.Warning, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 5, 0, 0) },
-                    new TextBlock { Text = sysNote + " Nota never shows files or paths to the phone, and serves nothing from your disk.", FontSize = 11, LineHeight = 17, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap, MaxWidth = 560 },
+                    new TextBlock { Text = sysNote + Loc.T("preferences.remote.nota_never_shows_files_or"), FontSize = 11, LineHeight = 17, Foreground = TextSecondary, TextWrapping = TextWrapping.Wrap, MaxWidth = 560 },
                 },
             },
         };
 
         return Sections(
-            Section("Nota Remote", 10, enable, details),
-            Section("Trusted devices", 8, trustedHost,
-                Caption("A trusted phone reconnects from its Home Screen icon without a code. Forget it and it has to scan again. Turning Remote off disconnects everyone.", muted: true)),
+            Section(Loc.T("preferences.remote.nota_remote"), 10, enable, details),
+            Section(Loc.T("preferences.remote.trusted_devices"), 8, trustedHost,
+                Caption(Loc.T("preferences.remote.a_trusted_phone_reconnects_from"), muted: true)),
             warn);
     }
 
     private static string Ago(DateTime utc)
     {
         var d = DateTime.UtcNow - utc;
-        if (d.TotalMinutes < 2) return "just now";
-        if (d.TotalHours < 1) return $"{(int)d.TotalMinutes} min ago";
-        if (d.TotalDays < 1) return $"{(int)d.TotalHours} h ago";
+        if (d.TotalMinutes < 2) return Loc.T("preferences.remote.just_now");
+        if (d.TotalHours < 1) return Loc.F("preferences.remote.min_ago", (int)d.TotalMinutes);
+        if (d.TotalDays < 1) return Loc.F("preferences.remote.h_ago", (int)d.TotalHours);
         if (d.TotalDays < 2) return "yesterday";
-        return $"{(int)d.TotalDays} days ago";
+        return Loc.F("preferences.remote.days_ago", (int)d.TotalDays);
     }
 }

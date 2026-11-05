@@ -13,6 +13,10 @@
 
 #include "nota/nota_engine.h"
 
+#if defined(__linux__)
+#include <dlfcn.h>
+#endif
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -228,6 +232,9 @@ std::vector<Scenario> scenarios() {
     for (int n : {1, 4, 8, 16, 32}) s.push_back({"mix-" + std::to_string(n), std::to_string(n) + " tracks, all playing"});
     s.push_back({"sparse-32", "32 tracks, 1 in 4 playing"});
     s.push_back({"silent-32", "32 tracks, no clips"});
+    // Stopped after playing: the audio tracks' Reverb + Delay ring out (#449), then must cost
+    // nothing again; this measures the stopped engine once the tails are over.
+    s.push_back({"audio-tails-8", "8 audio tracks with Reverb + Delay, stopped, tails over"});
     s.push_back({"audio-warp-split", "Warped audio clip split in 8, playing"});
     // An edit, not a render: the measured loop splits a warped clip 8 times and undoes it (#299).
     s.push_back({"edit-warp-split", "Split a warped 8 s clip 8x + undo (ms per edit)"});
@@ -335,6 +342,18 @@ bool build(NotaEngine* e, const std::string& id) {
         fillFullChord(e, t, 6);
         return true;
     }
+    if (id == "audio-tails-8") {
+        const std::string wav = warpTestWav();
+        bool ok = true;
+        for (int i = 0; i < 8 && ok; ++i) {
+            const int t = nota_engine_add_audio_track(e);
+            ok = t >= 0 && nota_track_add_audio_clip(e, t, wav.c_str(), 0.0) == 0 &&
+                 nota_track_add_builtin_device(e, t, 2) >= 0 && nota_track_add_builtin_device(e, t, 3) >= 0;
+        }
+        std::error_code ec;
+        std::filesystem::remove(wav, ec);
+        return ok;
+    }
     if (id == "audio-warp-split" || id == "edit-warp-split") {
         const int t = warpedClipTrack(e);
         if (t < 0) return false;
@@ -380,6 +399,17 @@ int run(const std::string& id, double seconds) {
         return 2;
     }
     if (id == "edit-warp-split") { // split the last piece 8 times, then undo them
+        // Count the split and the undo, not the 4 ms fade a split now writes. This count
+        // is tiny and already moves by a percent or two when unrelated code is added; the
+        // fade pushed it just over the gate while the wall time stayed 0.00 ms. Playing a
+        // faded split is audio-warp-split. The fade itself is in the smoke test.
+        // Resolved at runtime: this file is also compiled against the base engine, which
+        // does not export the call.
+#if defined(__linux__)
+        using SetSplitFades = void (*)(NotaEngine*, int);
+        if (auto set = reinterpret_cast<SetSplitFades>(dlsym(RTLD_DEFAULT, "nota_engine_set_split_fades")))
+            set(e, 0);
+#endif
         constexpr int kEdits = 8;
         // Warm-up, not measured: one split + undo first, so the counted edits don't include the
         // first-call costs (lazy symbol binding, function-local statics). Those depend on the
@@ -406,6 +436,12 @@ int run(const std::string& id, double seconds) {
     std::vector<float> buf((size_t)kBlock * 2);
     for (int i = 0; i < (int)(0.25 * kSampleRate / kBlock); ++i) // warm-up: voices, caches, pool threads
         nota_engine_render_offline_at(e, buf.data(), kBlock, kSampleRate);
+
+    if (id == "audio-tails-8") { // stop while the clips sound, then let the tails ring out (not measured)
+        nota_transport_stop(e);
+        for (int i = 0; i < (int)(20.0 * kSampleRate / kBlock); ++i)
+            nota_engine_render_offline_at(e, buf.data(), kBlock, kSampleRate);
+    }
 
     const int blocks = std::max(1, (int)(seconds * kSampleRate / kBlock));
     float peak = 0.0f;

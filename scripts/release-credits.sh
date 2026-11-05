@@ -5,7 +5,7 @@
 # What /release needs to write the full change list and the contributors of a release
 # (release-notes/X.Y.Z.{en,ru}.md, format in .claude/skills/release/SKILL.md § P4).
 #
-# Usage: scripts/release-credits.sh <from> <to> <commits|contributors>
+# Usage: scripts/release-credits.sh <from> <to> <commits|contributors|reporters>
 #   e.g. scripts/release-credits.sh v0.56.1 origin/develop contributors
 #   commits       one line per commit in <from>..<to>, oldest first: short sha, sha,
 #                 subject (tab-separated). Local git only.
@@ -14,11 +14,16 @@
 #                 (Co-authored-by trailers), so it needs the gh CLI signed in and the
 #                 commits pushed. Bots and AI co-authors are left out; an author whose
 #                 email maps to no GitHub account is reported on stderr.
+#   reporters     the ready "Thanks for the feedback" line: the authors of the issues the
+#                 release's commits reference (#N, or a pull request's closing issues),
+#                 without anyone who has a commit in the repository — they are
+#                 contributors. Lists "issue #N by @login: title" on stderr for review.
+#                 Needs the gh CLI signed in. Prints nothing when nobody is left.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-usage="usage: $0 <from> <to> <commits|contributors>"
+usage="usage: $0 <from> <to> <commits|contributors|reporters>"
 from="${1:?$usage}"
 to="${2:?$usage}"
 mode="${3:?$usage}"
@@ -74,7 +79,7 @@ case "$mode" in
     # Every author of a commit counts once for it. Bots and AI co-authors (Claude signs
     # its commits as noreply@anthropic.com) aren't contributors.
     people='[.[] | .authors.nodes | map(select(
-                (.user.login // "" | test("\\[bot\\]$|^claude$") | not)
+                (.user.login // "" | test("\\[bot\\]$|^(claude|cursoragent)$") | not)
                 and (.email // "" | ascii_downcase) != "noreply@anthropic.com"))
               | unique_by(.user.login // ("~" + (.email // .name | ascii_downcase)))[]]'
 
@@ -106,8 +111,70 @@ case "$mode" in
       | sort_by(-.n, (.key | ascii_downcase))
       | map(.text) | join(", ")' "$authors"
     ;;
+  reporters)
+    for tool in gh jq; do
+      command -v "$tool" >/dev/null || { echo "error: $tool is not installed" >&2; exit 1; }
+    done
+
+    # Every "#N" or "nota-daw/nota#N" in the release's commit messages. A number can be an
+    # issue or a pull request; a pull request counts through the issues it closes. Each
+    # reference is matched whole (with whatever owner/repo or word stands before the #), so
+    # "other/project#12" or "nota-docs#12" isn't taken for issue 12 here.
+    nums="$(git log --format='%B' "${from}..${to}" \
+              | grep -oE "[A-Za-z0-9_./-]*#[0-9]+" \
+              | grep -E "^(${repo_owner}/${repo_name})?#[0-9]+$" \
+              | sed 's/.*#//' | sort -un)" || true
+    if [ -z "$nums" ]; then
+      echo "warn: no issue references in ${from}..${to}" >&2
+      exit 0
+    fi
+
+    issues="$(mktemp)"
+    trap 'rm -f "$issues"' EXIT
+    batch=()
+    flush() {
+      [ "${#batch[@]}" -eq 0 ] && return
+      local q="query{repository(owner:\"${repo_owner}\",name:\"${repo_name}\"){" n
+      for n in "${batch[@]}"; do
+        q+="i${n}:issueOrPullRequest(number:${n}){__typename "
+        q+="...on Issue{number title author{login}} "
+        q+="...on PullRequest{closingIssuesReferences(first:20){nodes{number title author{login}}}}} "
+      done
+      q+="}}"
+      gh api graphql -f query="$q" \
+        --jq '.data.repository | to_entries[] | .value // empty
+              | if .__typename == "Issue" then {number, title, login: .author.login}
+                else (.closingIssuesReferences.nodes[] | {number, title, login: .author.login}) end
+              | tojson' >>"$issues"
+      batch=()
+    }
+    for n in $nums; do
+      batch+=("$n")
+      [ "${#batch[@]}" -ge 50 ] && flush
+    done
+    flush
+
+    # Contributors are credited in their own line, so they aren't thanked again here:
+    # anyone with a commit in the repository (GitHub's contributors list, all time).
+    known="$(gh api "repos/${repo_owner}/${repo_name}/contributors?per_page=100&anon=0" \
+               --paginate --jq '.[].login' | jq -Rsc 'split("\n") | map(select(length > 0) | ascii_downcase)')"
+
+    reporters='[.[] | select(.login != null)
+                    | select(.login | test("\\[bot\\]$|^(claude|cursoragent)$") | not)
+                    | select((.login | ascii_downcase) as $l | $known | index($l) | not)]
+               | unique_by(.number)'
+
+    # For review: which issue each reporter is thanked for.
+    jq -rs --argjson known "$known" "$reporters"'[]
+      | "issue #\(.number) by @\(.login): \(.title)"' "$issues" >&2
+
+    jq -rs --argjson known "$known" "$reporters"'
+      | group_by(.login) | map({login: .[0].login, n: length})
+      | sort_by(-.n, (.login | ascii_downcase))
+      | map("[@\(.login)](https://github.com/\(.login))") | join(", ")' "$issues"
+    ;;
   *)
-    echo "error: unknown mode '$mode' (commits | contributors)" >&2
+    echo "error: unknown mode '$mode' (commits | contributors | reporters)" >&2
     exit 1
     ;;
 esac

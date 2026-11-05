@@ -67,6 +67,9 @@ public sealed class Settings
     /// <summary>Height of the docked Mixer panel in design units, set by dragging its top edge
     /// (specs/054). 0 = its natural height (full strips), clamped to what the window fits.</summary>
     public double MixerDockHeight { get; set; }
+    /// <summary>The Mixer's strip layout (specs/070): false = regular strips, true = compact
+    /// 72 px strips. Shared by the docked panel and the pop-out window.</summary>
+    public bool MixerCompact { get; set; }
     /// <summary>Record a project version on every save (the History tab). On by default.</summary>
     public bool KeepVersionHistory { get; set; } = true;
     /// <summary>Bars of metronome count-in before Play / Record from stop (0 = off). Set from
@@ -161,20 +164,52 @@ public sealed class Settings
     public int ArrangementClipLabels { get; set; } = 1;
     /// <summary>Show the song-structure (sections) lane over the ruler.</summary>
     public bool ArrangementShowSections { get; set; } = true;
+    /// <summary>The arrangement's track-header column sits on the right of the lanes (#72);
+    /// off = on the left. View ▸ Track headers on the right, or Settings → Appearance.</summary>
+    public bool ArrangementHeadersRight { get; set; }
     /// <summary>How audio clips draw their waveform on the lanes (Settings → Appearance):
     /// 0 smooth — the peak outline around its RMS body (default; was bars before #267, so a
     /// saved 0 moves to the new default), 1 solid — one column per pixel, 2 bars — spaced
     /// peak strokes.</summary>
     public int ArrangementWaveform { get; set; }
+    /// <summary>Splitting an audio clip writes a short fade at the cut (issue #286). On by
+    /// default; a missing key in an older settings file stays on. MIDI clips are left alone.
+    /// The command palette and the clip menu can still fade a join when this is off.</summary>
+    public bool SplitFades { get; set; } = true;
     /// <summary>Interface scale in percent (Settings → Appearance, spec 027): one of
     /// <see cref="Application.InterfaceScale.Presets"/>; anything else reads as 100.</summary>
     public int InterfaceScale { get; set; } = Application.InterfaceScale.Default;
+    /// <summary>Interface language code, lower-case (Settings → Appearance, spec 068): "en" or
+    /// "fr". Read at start-up, so a change applies after a restart. An empty, unknown or
+    /// hand-edited value reads as English (<see cref="Localization.UiLanguage.Normalize"/>).</summary>
+    public string Language { get; set; } = Localization.UiLanguage.Default;
     /// <summary>Piano-roll note audition (#46): notes sound while they are placed, clicked or
     /// dragged. The speaker chip in the clip editor's header; on by default.</summary>
     public bool PianoRollAudition { get; set; } = true;
+    /// <summary>Logical lane heights keyed by velocity, MPE dimension or MIDI controller.</summary>
+    public Dictionary<string, double> PianoRollLaneHeights { get; set; } = new();
+    /// <summary>Shift + wheel over a note in the piano roll (specs/063): false — wheel up raises
+    /// the velocity; true — wheel up lowers it.</summary>
+    public bool PianoRollVelocityWheelReversed { get; set; }
+    /// <summary>Velocity steps per wheel notch, 0–2 (<see cref="Editing.VelocityWheel"/>); 0 turns
+    /// the gesture off and Shift + wheel only scrolls.</summary>
+    public double PianoRollVelocityWheelMultiplier { get; set; } = 1.0;
+    /// <summary>Clip editor track mode (specs/059, #49): the piano roll shows every MIDI clip of
+    /// the edited track on the arrangement's timeline. The Clip | Track switch at the top of
+    /// the clip editor's inspector; off (clip mode) by default.</summary>
+    public bool ClipEditorTrackMode { get; set; }
     /// <summary>Arm-on-select (#332): selecting an instrument track arms it alone, so the
     /// keyboard plays the track you're on. Transport ▸ Auto-arm selected track; off by default.</summary>
     public bool ArmOnSelect { get; set; }
+    /// <summary>Open the Detail panel on select (#308): selecting a track or clip opens a closed
+    /// Detail panel, as before #308. Off by default — a selection only follows an open panel and
+    /// a double-click opens it. Settings → Appearance.</summary>
+    public bool OpenDetailOnSelect { get; set; }
+
+    /// <summary>Label every note of the piano-roll keyboard: the keys column
+    /// shows all note names (C, C#, D …) instead of only C. Off by default; a beginner aid
+    /// set from Settings → Appearance.</summary>
+    public bool PianoRollLabelAllNotes { get; set; } = false;
 }
 
 public interface ISettingsService

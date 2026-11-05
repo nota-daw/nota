@@ -101,6 +101,10 @@ cat > "${CONTENTS}/Info.plist" <<PLIST
   <key>CFBundlePackageType</key>     <string>APPL</string>
   <key>CFBundleShortVersionString</key> <string>${VERSION}</string>
   <key>CFBundleVersion</key>         <string>${BUILD_NUMBER}</string>
+  <key>CFBundleDevelopmentRegion</key> <string>en</string>
+  <!-- The languages of src/managed/Nota.App/Languages: macOS shows its own text (Hide, Quit, the
+       open panels) in one of these when the app asks for it (MacSystemLanguage.cs). -->
+  <key>CFBundleLocalizations</key>   <array><string>en</string><string>fr</string></array>
   <key>LSMinimumSystemVersion</key>  <string>13.0</string>
   <key>NSHighResolutionCapable</key> <true/>
   <key>NSMicrophoneUsageDescription</key>

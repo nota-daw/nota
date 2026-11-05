@@ -34,6 +34,7 @@ void Engine::applyAutomation(Graph* g, double beat) {
             switch (lane.target) {
             case AutomationTarget::Volume: t.setVolume(v); break;
             case AutomationTarget::Pan: t.setPan(v); break;
+            case AutomationTarget::Send: break; // specs/069: a send lane does not move the level
             case AutomationTarget::DeviceParam:
                 if (lane.deviceIndex >= 0 && lane.deviceIndex < static_cast<int32_t>(t.devices.size()))
                     if (auto* d = t.devices[lane.deviceIndex].get()) d->setParam(lane.paramIndex, v);
@@ -136,7 +137,13 @@ std::string Engine::pluginParamText(int32_t trackId, int32_t deviceIndex, int32_
 float Engine::pluginParamDefault(int32_t trackId, int32_t deviceIndex, int32_t paramIndex) const {
     auto t = findTrackAuthoring(trackId);
     if (!t) return 0.0f;
-    if (deviceIndex < 0) return t->instrument ? t->instrument->pluginParamDefault(paramIndex) : 0.0f;
+    if (deviceIndex < 0) {
+        if (!t->instrument) return 0.0f;
+        // A built-in instrument has no plugin default of its own (the base returns 0, which
+        // sent a graph's "Reset to default" to 0); its default is a fresh instance's value.
+        if (t->instrument->kind() >= 0) return instrumentParamDefault(trackId, paramIndex);
+        return t->instrument->pluginParamDefault(paramIndex);
+    }
     if (deviceIndex >= static_cast<int32_t>(t->devices.size())) return 0.0f;
     auto& d = t->devices[deviceIndex];
     return d ? d->pluginParamDefault(paramIndex) : 0.0f;
@@ -272,6 +279,7 @@ bool sameTarget(int32_t t0, int32_t d0, int32_t p0, const std::string& id0, int3
     case AutomationTarget::DeviceParam:
     case AutomationTarget::MidiDeviceParam: return d0 == d1 && p0 == p1;
     case AutomationTarget::PluginParam: return d0 == d1 && id0 == id1;
+    case AutomationTarget::Send: return d0 == d1; // the bus
     default: return true; // Volume / Pan
     }
 }
@@ -281,6 +289,7 @@ float Engine::currentTargetValue(const Track& t, int32_t target, int32_t deviceI
     switch (static_cast<AutomationTarget>(target)) {
     case AutomationTarget::Volume: return t.volume();
     case AutomationTarget::Pan: return t.pan();
+    case AutomationTarget::Send: return t.send(deviceIndex);
     case AutomationTarget::DeviceParam:
         if (deviceIndex >= 0 && deviceIndex < static_cast<int32_t>(t.devices.size()))
             if (auto* d = t.devices[deviceIndex].get()) return d->getParam(paramIndex);
@@ -326,6 +335,9 @@ static int32_t findLaneFor(
             break;
         case AutomationTarget::PluginParam:
             if (l.deviceIndex != deviceIndex || l.paramId != paramId) continue;
+            break;
+        case AutomationTarget::Send:
+            if (l.deviceIndex != deviceIndex) continue;
             break;
         default: break; // Volume / Pan: one lane per track
         }
@@ -398,6 +410,11 @@ void Engine::beginAutomationWrite(
         overrides_.push_back({trackId, lane});
         return;
     }
+
+    // Writing a lane during a take is part of the take (specs/078): remember the track as it was
+    // before, and mark the checkpoints below (a new lane, the pre-write state) as the take's.
+    noteTakeTrack(trackId);
+    TakePushScope takePush(*this);
 
     // Resolve (or create) the target's lane. PluginParam resolves paramIndex by id.
     int32_t laneIndex, resolvedParam = paramIndex;
@@ -552,6 +569,7 @@ int32_t Engine::addAutomationLane(int32_t trackId, int32_t target, int32_t devic
     auto old = findTrackAuthoring(trackId);
     if (!old) return -1;
     const auto tgt = static_cast<AutomationTarget>(target);
+    if (tgt == AutomationTarget::Send) return -1; // specs/069: sends are not an automation target
     const bool usesDev = tgt == AutomationTarget::DeviceParam || tgt == AutomationTarget::MidiDeviceParam;
     // Reuse an existing lane on the same target (no snapshot) — one lane per target.
     for (size_t i = 0; i < old->automation.size(); ++i) {

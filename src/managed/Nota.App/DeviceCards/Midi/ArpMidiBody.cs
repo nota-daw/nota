@@ -23,6 +23,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.ArpGrid;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -132,7 +133,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
         string ChordText()
         {
             var c = grid.Chord;
-            return c.Count == 0 ? "no notes yet" : string.Join(" ", c.Select(DeviceCardKit.NoteName));
+            return c.Count == 0 ? Loc.T("device.arp.no_notes_yet") : string.Join(" ", c.Select(DeviceCardKit.NoteName));
         }
         string RetrigText() => RetrigNames[Math.Clamp(GI(GRetrig), 0, 2)].ToLowerInvariant();
 
@@ -144,12 +145,12 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 var lane = Lanes[grid.LaneIndex];
                 (int s, double v) = grid.LastEdit ?? (Math.Max(0, grid.Position), lane.ToDisp(G(lane.Base + Math.Max(0, grid.Position))));
                 v = Math.Clamp(v, lane.Min, lane.Max);
-                return shortForm ? $"{s + 1} · {lane.Fmt(v)}" : $"step {s + 1} · {lane.Fmt(v)}";
+                return shortForm ? $"{s + 1} · {lane.Fmt(v)}" : Loc.F("device.arp.step", s + 1, lane.Fmt(v));
             }
             int len = Math.Max(1, grid.CurrentSequence().Count);
             if (shortForm) return $"{(grid.Position >= 0 ? grid.Position + 1 : 1)}/{grid.StepCount}";
-            if (grid.Chord.Count == 0) return "preview · play a chord";
-            return $"{grid.Chord.Count} notes · {Math.Clamp(GI(GOctaves), 1, 8)} oct · cycle {len} steps";
+            if (grid.Chord.Count == 0) return Loc.T("device.arp.preview_play_a_chord");
+            return Loc.F("device.arp.notes_oct_cycle_steps", grid.Chord.Count, Math.Clamp(GI(GOctaves), 1, 8), len);
         }
 
         Control root = mini ? BuildMini() : BuildLarge();
@@ -297,7 +298,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 Ruled(ButtonsRow()),
             };
             for (int i = 0; i < playRows.Count; i++) { Grid.SetRow(playRows[i], i * 2); play.Children.Add(playRows[i]); }
-            var playHead = IslandHead(Caps("PLAY"), Mono("MIDI out · ch 1", Cap, 7));
+            var playHead = IslandHead(Caps("PLAY"), Mono(Loc.T("device.arp.midi_out_ch_1"), Cap, 7));
             var playIsland = IslandBox(playHead, new Border { Padding = new Thickness(8, 5), Child = play }, 176);
 
             var islands = new DockPanel { Background = Ground, Children = { WithDock(orderIsland, Dock.Left), WithDock(playIsland, Dock.Right), centerIsland } };
@@ -309,7 +310,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             readouts.Add(() =>
             {
                 statusL.Text = $"{ChordText()} · {OrderName(GI(GOrder))} · {Math.Clamp(GI(GOctaves), 1, 8)} oct · {RateLabel(engine, track, mi)} · {grid.StepCount} steps · retrig {RetrigText()}{(G(GHold) > 0.5f ? " · hold" : "")}";
-                statusR.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : grid.Running ? "MIDI · latency 0 smp" : "MIDI · waiting for notes";
+                statusR.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : grid.Running ? Loc.T("common.midi_latency_0_smp") : Loc.T("device.arp.midi_waiting_for_notes");
             });
             return Framed(islands, statusL, statusR);
         }
@@ -323,7 +324,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             var laneName = new TextBlock { FontSize = 8, Foreground = Txt, VerticalAlignment = VerticalAlignment.Center };
             var laneBtn = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Cursor = new Cursor(StandardCursorType.Hand), Background = Brushes.Transparent,
                 Children = { laneName, new Glyph { Kind = GlyphKind.ChevronDown, Width = 6, Height = 6, Foreground = Cap, VerticalAlignment = VerticalAlignment.Center } } };
-            ToolTip.SetTip(laneBtn, "Next Groove lane");
+            ToolTip.SetTip(laneBtn, Loc.T("device.arp.next_groove_lane"));
             laneBtn.PointerPressed += (_, ev) =>
             {
                 if (!ev.GetCurrentPoint(laneBtn).Properties.IsLeftButtonPressed) return;
@@ -362,7 +363,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             var statusR = Mono("", Sub);
             readouts.Add(() =>
             {
-                statusL.Text = $"{ChordText()} · {Math.Clamp(GI(GOctaves), 1, 8)} oct";
+                statusL.Text = Loc.F("device.arp.oct", ChordText(), Math.Clamp(GI(GOctaves), 1, 8));
                 statusR.Text = engine.MidiEffectBypassed(track, mi) ? "bypassed" : RateLabel(engine, track, mi);
             });
             return Framed(new Border { Background = Ground, Child = island }, statusL, statusR);
@@ -468,7 +469,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
                 tb = t; return b;
             }
             var hold = Btn("Hold", () => { S(GHold, G(GHold) > 0.5f ? 0 : 1); Refresh(); }, out var holdTb);
-            ToolTip.SetTip(hold, "Hold: keep arpeggiating after the keys are released");
+            ToolTip.SetTip(hold, Loc.T("device.arp.hold_keep_arpeggiating_after_the"));
             Learn(hold, GHold, "Hold");
             readouts.Add(() =>
             {
@@ -481,7 +482,7 @@ internal sealed class ArpMidiBody : IMidiDeviceBody
             var restart = Btn("Restart", () => engine.MidiEffectCommand(track, mi, 1), out var rTb);
             restart.PointerEntered += (_, _) => restart.Background = NotaPalette.SurfaceHover;
             restart.PointerExited += (_, _) => restart.Background = NotaPalette.TrackOff;
-            ToolTip.SetTip(restart, "Restart the pattern from step 1");
+            ToolTip.SetTip(restart, Loc.T("device.arp.restart_the_pattern_from_step"));
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("*,*"), ColumnSpacing = 6 };
             Grid.SetColumn(restart, 1); g.Children.Add(hold); g.Children.Add(restart);
             return g;

@@ -1,0 +1,123 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
+<html><head><meta charset="utf-8"><title>Nota splash art prototype</title>
+<style>
+@font-face{font-family:'Geist';src:url(Geist-Regular.ttf);font-weight:400}@font-face{font-family:'Geist';src:url(Geist-SemiBold.ttf);font-weight:600}@font-face{font-family:'Geist Mono';src:url(GeistMono-Regular.ttf);font-weight:400}@font-face{font-family:'Geist Mono';src:url(GeistMono-SemiBold.ttf);font-weight:600}
+body{margin:0;padding:24px;background:#111214;color:#C0C4C9;font:13px -apple-system,system-ui,sans-serif}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 16px}
+input,select,button{background:#2B2D31;color:#E8E9EB;border:1px solid #45484E;border-radius:3px;padding:5px 8px;font:inherit}
+input{font-family:ui-monospace,Menlo,monospace;width:110px}
+button{cursor:pointer}
+.sheet{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:20px;max-width:1300px}
+.sheet div{cursor:pointer;font:12px ui-monospace,Menlo,monospace;color:#92969D}
+.sheet svg{display:block;width:100%;height:auto}
+#main svg{display:block;width:100%;max-width:630px;height:auto}
+@keyframes slide{0%{transform:translateX(-60px)}100%{transform:translateX(220px)}}
+</style></head><body>
+<div class="row">
+<input id="ver" value="0.58.1" aria-label="Version"/>
+<button id="prev">&larr; patch</button><button id="next">patch &rarr;</button>
+<select id="theme"><option value="sd">Studio Dark</option><option value="sl">Studio Light</option><option value="eg">Ember Graphite</option><option value="ep">Ember Paper</option></select>
+<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="col" checked style="width:auto"/>colour</label>
+<label style="display:flex;gap:4px;align-items:center"><input type="checkbox" id="grad" checked style="width:auto"/>gradients</label>
+<span id="info"></span>
+</div>
+<div id="main"></div>
+<div class="sheet" id="sheet"></div>
+<script>
+const LOGO='logo.png';
+const SANS='Geist',MONO='Geist Mono';
+const TH={
+sd:{g:'#17181A',app:'#1E1F22',p:'#2B2D31',r:'#34363B',h:'#393C41',seam:'#141517',rule:'#45484E',grid:'#2E2F32',faint:'#82868C',ter:'#92969D',ink:'#D7D8DA',tp:'#E8E9EB',acc:'#FF9F1C',tr:['#7FB87A','#5FB3A8','#5AA6C4','#6A9FD8','#E0A84A','#9D90C9','#D77A8F','#B3B45E','#8E9DB0']},
+sl:{g:'#D6D8DB',app:'#C9CBCF',p:'#E4E5E7',r:'#EEEFF1',h:'#F7F8F9',seam:'#9DA0A6',rule:'#B3B6BB',grid:'#C0C3C6',faint:'#797C81',ter:'#65696F',ink:'#252629',tp:'#16171A',acc:'#EF8A0C',tr:['#4A7F46','#3A8A7F','#357C99','#3F78B8','#B8862F','#7363A8','#B4566B','#7E7F2F','#5D6C80']},
+eg:{g:'#100F0D',app:'#0B0A09',p:'#141310',r:'#1C1A16',h:'#252219',seam:'#0C0B09',rule:'#3A362D',grid:'#232019',faint:'#646054',ter:'#716D60',ink:'#D8D3C8',tp:'#E9E4D8',acc:'#D8A03D',tr:['#58B368','#4E9E7A','#3E8E8E','#5AA0B8','#C77F55','#7A6FB0','#B05A7A','#9AA64A','#7FA88E']},
+ep:{g:'#E4DFD1',app:'#DCD6C5',p:'#EAE5D7',r:'#F8F5EC',h:'#E7E1D0',seam:'#E0DAC9',rule:'#BDB5A0',grid:'#DDD7C6',faint:'#8D866F',ter:'#7E786C',ink:'#332E26',tp:'#241F17',acc:'#AD7716',tr:['#328140','#306F53','#256464','#317187','#985127','#4B4082','#7F3450','#6C752C','#598C69']}};
+function seedOf(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}h^=h>>>15;h=Math.imul(h,2246822507);h^=h>>>13;return h>>>0}
+function rng(a){return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function mix(c,to,k){const a=parseInt(c.slice(1),16),b=parseInt(to.slice(1),16),f=(s)=>Math.round(((a>>s)&255)*(1-k)+((b>>s)&255)*k);return '#'+[16,8,0].map(s=>f(s).toString(16).padStart(2,'0')).join('')}
+const pick=(r,a)=>a[Math.floor(r()*a.length)];
+let D,GID,uid=0;
+function lin(stops,x1=0,y1=0,x2=0,y2=1,units){const id=`g${GID}_${D.length}`;D.push(`<linearGradient id="${id}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"${units?' gradientUnits="userSpaceOnUse"':''}>${stops.map(([o,c,a])=>`<stop offset="${o}" stop-color="${c}" stop-opacity="${a??1}"/>`).join('')}</linearGradient>`);return `url(#${id})`}
+function rad(stops,cx=.5,cy=.5,r=.5,units){const id=`g${GID}_${D.length}`;D.push(`<radialGradient id="${id}" cx="${cx}" cy="${cy}" r="${r}"${units?' gradientUnits="userSpaceOnUse"':''}>${stops.map(([o,c,a])=>`<stop offset="${o}" stop-color="${c}" stop-opacity="${a??1}"/>`).join('')}</radialGradient>`);return `url(#${id})`}
+const f1=v=>(+v).toFixed(1);
+function R(x,y,w,h,f,s,sw=1){return `<rect x="${f1(x)}" y="${f1(y)}" width="${f1(Math.max(1,w))}" height="${f1(Math.max(1,h))}" fill="${f}"${s?` stroke="${s}" stroke-width="${sw}"`:''}/>`}
+function L(x1,y1,x2,y2,c,w=1){return `<line x1="${f1(x1)}" y1="${f1(y1)}" x2="${f1(x2)}" y2="${f1(y2)}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`}
+function PL(pts,c,fill,w=1){return `<polyline points="${pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')}" fill="${fill||'none'}" stroke="${c}" stroke-width="${w}" stroke-linejoin="round" stroke-linecap="round"/>`}
+function playhead(b,x,T,w){return L(x,b.y+5,x,b.y+b.h,T.acc,Math.max(1.5,w*.75))+`<polygon points="${x-5},${b.y} ${x+5},${b.y} ${x},${b.y+6}" fill="${T.acc}"/>`}
+const F={
+roll(b,r,T,C){let o='';const steps=16*(1+Math.floor(r()*2)),sw=b.w/steps,rows=10+Math.floor(r()*12),rh=b.h/rows;
+for(let s=0;s<=steps;s++)o+=L(b.x+s*sw,b.y,b.x+s*sw,b.y+b.h,s%4?T.grid:T.rule,s%16?1:C.w);
+const voices=1+Math.floor(r()*3);
+for(let v=0;v<voices;v++){const vc=C.pal[v%C.pal.length];let p=Math.floor(rows*(.25+r()*.5)),s=Math.floor(r()*4);
+while(s<steps){const len=pick(r,[1,1,2,2,3,4]);if(r()<.78){const x=b.x+s*sw+1,w=len*sw-2,y=b.y+p*rh+1,vel=.35+r()*.65;
+const fill=C.grad?lin([[0,vc,1],[1,vc,.25+.4*(1-vel)]],0,0,1,0):vc;o+=`<rect x="${f1(x)}" y="${f1(y)}" width="${f1(w)}" height="${f1(rh-2)}" rx="2" fill="${fill}" stroke="${mix(vc,'#000000',.35)}" stroke-width="1"/>`}
+s+=len;p=Math.max(0,Math.min(rows-1,p+pick(r,[-2,-1,-1,0,1,1,2])))}}
+o+=playhead(b,b.x+sw*Math.floor(steps*(.3+r()*.4)),T,C.w);return o},
+rings(b,r,T,C){let o='';const cx=b.x+b.w*(.3+r()*.4),cy=b.y+b.h*(.3+r()*.4),k=3+Math.floor(r()*4),R0=Math.min(b.w,b.h)*.12,dr=(Math.max(b.w,b.h)*.6-R0)/k;let last=null;
+const lw=Math.max(1.5,C.w),dot=3+lw;
+if(C.grad)o+=`<circle cx="${cx}" cy="${cy}" r="${R0+(k-1)*dr}" fill="${rad([[0,C.pal[0],.35],[.6,C.pal[C.pal.length-1],.12],[1,T.g,0]])}"/>`;
+for(let i=0;i<k;i++){const radius=R0+i*dr,n=pick(r,[8,12,16,5,7,9,13]),hits=1+Math.floor(r()*(n-1)),rot=r()*6.28,rc=C.pal[i%C.pal.length];
+o+=`<circle cx="${cx}" cy="${cy}" r="${radius.toFixed(1)}" fill="none" stroke="${T.rule}" stroke-width="${lw}"/>`;
+for(let j=0;j<n;j++){const on=Math.floor((j+1)*hits/n)!==Math.floor(j*hits/n),a=rot+j/n*6.283,x=cx+Math.cos(a)*radius,y=cy+Math.sin(a)*radius;
+o+=on?`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${dot}" fill="${rc}"/>`:`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${lw}" fill="${T.h}"/>`;if(on&&i==k-1){o+=L(cx,cy,x,y,T.grid,lw*.7);last=[x,y]}}}
+if(last)o+=L(cx,cy,last[0],last[1],T.acc,lw)+`<circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="${dot+3}" fill="none" stroke="${T.acc}" stroke-width="${lw}"/>`;return o},
+strata(b,r,T,C){let o='';const n=9+Math.floor(r()*10),gap=b.h/(n+3),fs=[1+r()*3,4+r()*6,9+r()*9],ph=[r()*6,r()*6,r()*6],c=b.x+b.w*(.3+r()*.4),wid=b.w*(.12+r()*.2);
+const hero=new Map();C.pal.forEach((col,i)=>hero.set(Math.floor(n*(.35+.5*i/C.pal.length)),col));
+const stroke=C.grad&&C.pal.length>1?lin(C.pal.map((p,i)=>[i/(C.pal.length-1),p]),b.x,0,b.x+b.w,0,true):null;
+for(let i=0;i<n;i++){const y0=b.y+gap*(i+3);let pts=[];for(let x=0;x<=b.w;x+=2){const X=b.x+x,env=Math.exp(-Math.pow((X-c)/wid,2)),v=Math.sin(x/b.w*fs[0]*6.28+ph[0]+i*.4)*.5+Math.sin(x/b.w*fs[1]*6.28+ph[1]-i*.3)*.35+Math.sin(x/b.w*fs[2]*6.28+ph[2]+i)*.15;pts.push([X,y0-Math.abs(v)*env*gap*3.2])}
+const poly=[[b.x,b.y+b.h],...pts,[b.x+b.w,b.y+b.h]],hc=hero.get(i);o+=PL(poly,'none',T.g);
+if(C.grad&&hc)o+=PL(poly,'none',lin([[0,hc,.45],[.35,hc,0]]));
+o+=PL(pts,hc?(stroke||hc):T.ter,null,hc?C.w*1.4:Math.max(1,C.w*.6))}
+o+=playhead(b,c+wid*(r()-.5),T,C.w);return o},
+faders(b,r,T,C){let o='';const n=8+Math.floor(r()*10),sw=b.w/n,fq=r()*3+.5,ph=r()*6,hot=Math.floor(r()*n),lw=Math.max(1,C.w*.8);
+for(let i=0;i<n;i++){const x=b.x+sw*(i+.5),col=C.pal[Math.floor(i/n*C.pal.length)];o+=L(x,b.y+12,x,b.y+b.h-12,T.rule,lw);
+const v=.5+.4*Math.sin(i/n*fq*6.28+ph)+.1*(r()-.5),y=b.y+12+(1-v)*(b.h-24),fw=Math.min(8,sw*.3);
+o+=R(x-fw/2,y,fw,b.y+b.h-12-y,C.grad?lin([[0,col,1],[1,col,.15]]):col);
+o+=R(x-Math.min(10,sw*.38),y-4,Math.min(20,sw*.76),8,T.h,T.seam)+L(x-Math.min(6,sw*.22),y,x+Math.min(6,sw*.22),y,i==hot?T.acc:T.ink,i==hot?2:lw)}return o},
+panels(b,r,T,C){let o='';const tones=[T.g,T.p,T.r,T.h,T.app];let cells=[];
+function split(x,y,w,h,d){if(d>4||w<40||h<30||(d>1&&r()<.25)){cells.push([x,y,w,h]);return}
+if(w>h*1.2||(w>h*.8&&r()<.5)){const s=w*(.25+r()*.5);split(x,y,s,h,d+1);split(x+s,y,w-s,h,d+1)}else{const s=h*(.25+r()*.5);split(x,y,w,s,d+1);split(x,y+s,w,h-s,d+1)}}
+split(b.x,b.y,b.w,b.h,0);const colored=new Set();const m=Math.max(1,Math.round(cells.length*C.amt*.5));while(colored.size<Math.min(m,cells.length))colored.add(Math.floor(r()*cells.length));
+let accDone=false;
+cells.forEach(([x,y,w,h],idx)=>{const col=colored.has(idx)?pick(r,C.pal):null;const dir=pick(r,[[0,0,0,1],[0,0,1,0],[0,1,1,0]]);
+o+=R(x,y,w,h,col?(C.grad?lin([[0,col,1],[1,mix(col,T.g,.7),1]],...dir):col):pick(r,tones));const k=r(),ink=col?mix(col,'#000000',.35):T.rule;
+if(k<.22){for(let q=x+4;q<x+w;q+=3+C.w*2)o+=L(q,y,q,y+h-1,ink,C.w*.8)}else if(k<.38){for(let q=y+5;q<y+h;q+=6)for(let p=x+5;p<x+w;p+=6)o+=`<circle cx="${p}" cy="${q}" r="${C.w*.6}" fill="${col?ink:T.ter}"/>`}
+else if(k<.52){const ac=!accDone&&!col&&r()<.5;if(ac)accDone=true;o+=`<circle cx="${x+w/2}" cy="${y+h/2}" r="${Math.min(w,h)*.3}" fill="none" stroke="${ac?T.acc:col?ink:T.ink}" stroke-width="${C.w}"/>`}
+o+=`<rect x="${f1(x+.5)}" y="${f1(y+.5)}" width="${f1(w-1)}" height="${f1(h-1)}" fill="none" stroke="${T.seam}" stroke-width="${Math.max(1,C.w*.75)}"/>`});return o},
+lissa(b,r,T,C){let o='';for(let x=b.x+20;x<b.x+b.w;x+=20)o+=L(x,b.y,x,b.y+b.h,T.grid);for(let y=b.y+20;y<b.y+b.h;y+=20)o+=L(b.x,y,b.x+b.w,y,T.grid);
+const a=pick(r,[1,2,3,3,4,5]),bb=pick(r,[2,3,4,5,7]),d=r()*3,cx=b.x+b.w/2,cy=b.y+b.h/2,ax=b.w*.4,ay=b.h*.38;let pts=[];
+for(let t=0;t<=6.2832+.001;t+=.01)pts.push([cx+ax*Math.sin(a*t+d),cy+ay*Math.sin(bb*t)]);
+const g1=C.grad?lin(C.pal.length>1?C.pal.map((p,i)=>[i/(C.pal.length-1),p]):[[0,C.pal[0]],[1,mix(C.pal[0],T.g,.6)]],b.x+b.w*.1,b.y,b.x+b.w*.9,b.y+b.h,true):C.pal[0];
+o+=PL(pts.map(p=>[p[0],cy+(p[1]-cy)*.6]),C.pal[1]||T.rule,null,Math.max(1,C.w*.6))+PL(pts,g1,null,C.w*1.3);
+const q=pts[Math.floor(r()*pts.length)];o+=`<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="${3+C.w}" fill="${T.acc}"/>`;return o}};
+const PRIMARY=['roll','roll','rings','rings','strata','strata','faders','panels','panels','lissa','lissa'],OVER={panels:['rings','lissa'],strata:['rings'],faders:['strata'],roll:['rings']};
+function palette(r,T){const b=Math.floor(r()*9),mode=pick(r,['analog','analog','pair','triad','mono']);
+const idx=mode=='mono'?[b]:mode=='pair'?[b,(b+4)%9]:mode=='triad'?[b,(b+3)%9,(b+6)%9]:[b,(b+1)%9,(b+2)%9];return{mode,pal:idx.map(i=>T.tr[i])}}
+const neutral=T=>[T.ter,T.ink,T.faint];
+function art(ver,T,showText,colour,grad){const r=rng(seedOf(ver.trim()));const W=420,H=300,lay=pick(r,['left','right','bottom','left','bottom']);GID='u'+(uid++);D=[];
+let A,Tx;if(lay=='left'){A={x:150,y:0,w:270,h:300};Tx={x:0,y:0,w:150,h:300}}else if(lay=='right'){A={x:0,y:0,w:270,h:300};Tx={x:270,y:0,w:150,h:300}}else{A={x:0,y:0,w:420,h:196};Tx={x:0,y:196,w:420,h:104}}
+const fam=pick(r,PRIMARY);let ov=OVER[fam]&&r()<.35?pick(r,OVER[fam]):null;
+const pr=palette(r,T),amt=.35+r()*.5,w=pick(r,[1.5,2,2,2.5,3]),wash=pick(r,['none','radial','linear','radial']),wx=r(),wy=r();
+const C={pal:colour?pr.pal:neutral(T),amt,w,grad};
+const Cov={...C,pal:[T.rule,T.ter],grad:false,w:Math.max(1,w*.6)};
+let ground=R(0,0,W,H,T.g);
+if(grad&&colour&&wash!='none')ground+=R(A.x,A.y,A.w,A.h,wash=='radial'?rad([[0,pr.pal[0],.28],[1,pr.pal[pr.pal.length-1],0]],wx,wy,.8):lin([[0,pr.pal[0],.22],[1,pr.pal[pr.pal.length-1],0]],wx,0,1-wx,1));
+const body=F[fam](A,r,T,C),over=ov?F[ov](A,r,T,{...Cov}).replace(new RegExp(T.acc,'g'),T.ink):'';
+let o=`<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg"><defs>${D.join('')}<clipPath id="a${GID}"><rect x="${A.x}" y="${A.y}" width="${A.w}" height="${A.h}"/></clipPath><clipPath id="k${GID}"><rect width="420" height="300" rx="4"/></clipPath></defs><g clip-path="url(#k${GID})">`+R(0,0,W,H,T.g)+`<g clip-path="url(#a${GID})">`+ground+body+over+`</g>`;
+o+=lay=='left'?L(150.5,0,150.5,300,T.seam):lay=='right'?L(269.5,0,269.5,300,T.seam):L(0,195.5,420,195.5,T.seam);
+if(showText){let cx,cy;if(lay=='bottom'){cx=28;cy=226}else{cx=Tx.x+22;cy=110}
+o+=`<image href="${LOGO}" x="${cx}" y="${cy}" width="28" height="28"/>`;
+const tx=lay=='bottom'?cx+40:cx,ty=lay=='bottom'?cy+20:cy+58;
+o+=`<text x="${tx}" y="${ty}" font-size="22" font-weight="600" fill="${T.tp}" font-family="${SANS}">Nota</text><text x="${tx}" y="${ty+18}" font-size="11" fill="${T.ter}" font-family="${MONO}">Version ${ver}</text>`;
+const bx=tx,by=ty+30,bw=lay=='bottom'?160:106;o+=R(bx,by,bw,2,T.rule)+`<svg x="${bx}" y="${by}" width="${bw}" height="2"><rect width="50" height="2" fill="${T.acc}" style="animation:slide 1.4s linear infinite"/></svg>`}
+o+=`<rect x=".5" y=".5" width="419" height="299" rx="4" fill="none" stroke="${T.seam}"/></g></svg>`;return{svg:o,fam,ov,lay,mode:pr.mode,w,wash}}
+const $=id=>document.getElementById(id);
+function bump(v,d){const m=v.trim().match(/^(\d+)\.(\d+)\.(\d+)$/);if(!m)return v;return `${m[1]}.${m[2]}.${Math.max(0,+m[3]+d)}`}
+function draw(){const v=$('ver').value.trim()||'0.0.0',T=TH[$('theme').value],col=$('col').checked,gr=$('grad').checked;const a=art(v,T,true,col,gr);$('main').innerHTML=a.svg;$('info').textContent=`motif: ${a.fam}${a.ov?' + '+a.ov:''} · palette ${a.mode} · line ${a.w}px · wash ${a.wash} · text ${a.lay}`;
+const m=v.match(/^(\d+)\.(\d+)\.(\d+)$/);let list=[];if(m){const mi=+m[2];for(let i=0;i<4;i++)list.push(`${m[1]}.${mi}.${+m[3]+i+1}`);for(let i=1;i<=12;i++)list.push(`${m[1]}.${mi+i}.0`)}
+$('sheet').innerHTML=list.map(vv=>{const x=art(vv,T,false,col,gr);return `<div data-v="${vv}">${x.svg}<span>${vv} · ${x.fam}${x.ov?'+'+x.ov:''} · ${x.mode}</span></div>`}).join('');
+$('sheet').querySelectorAll('div').forEach(d=>d.onclick=()=>{$('ver').value=d.dataset.v;draw();scrollTo(0,0)})}
+$('ver').oninput=draw;$('theme').onchange=draw;$('col').onchange=draw;$('grad').onchange=draw;$('prev').onclick=()=>{$('ver').value=bump($('ver').value,-1);draw()};$('next').onclick=()=>{$('ver').value=bump($('ver').value,1);draw()};
+draw();
+</script></body></html>

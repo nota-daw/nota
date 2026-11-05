@@ -26,6 +26,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -150,11 +151,11 @@ internal sealed partial class RackCardView
     private string RcCentreSummary()
     {
         int n = _ra.ChainCount();
-        string chains = n == 1 ? "1 chain" : $"{n} chains";
+        string chains = Loc.Plural("device.rack.chains", n);
         return _rs.Centre switch
         {
-            RackCentreTab.Zones => _rp.KeyZones ? "Keys C−1–G9 · vel 0–127" : "Select 0–127",
-            RackCentreTab.Macros => $"{RcMappedMacros()} of 8 mapped",
+            RackCentreTab.Zones => _rp.KeyZones ? Loc.T("device.rack.keys_c_1_g9_vel") : "Select 0–127",
+            RackCentreTab.Macros => Loc.F("device.rack.of_8_mapped", RcMappedMacros()),
             _ => _rp.Modes.Length > 0 ? $"{chains} · {RcModeWord()}" : chains,
         };
     }
@@ -221,7 +222,7 @@ internal sealed partial class RackCardView
         if (_rp.TakesInstrument) { n = _ra.ChainInstrumentName(c); if (n.Length > 0) return n; }
         if (_rp.Kind == RackKind.MidiEffect && _ra.ChainMidiCount(c) > 0) return _ra.ChainMidiName(c, 0);
         if (_rp.Kind == RackKind.AudioEffect && _ra.ChainDeviceCount(c) > 0) return _ra.ChainDeviceName(c, 0);
-        return $"Chain {c + 1}";
+        return Loc.F("device.rack.chain", c + 1);
     }
 
     /// <summary>Whether a chain sounds: not muted, and soloed when any chain is.</summary>

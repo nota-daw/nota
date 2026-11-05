@@ -17,6 +17,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using static Nota.App.DeviceCardKit;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -67,7 +68,7 @@ internal sealed partial class RackCardView
     private bool RcCopy(RackDeviceSel s)
     {
         bool ok = s.Midi ? E.RackDevChainMidiCopy(T, s.Rack, s.Chain, s.Index) : E.RackDevChainDeviceCopy(T, s.Rack, s.Chain, s.Index);
-        if (ok) { _ctx.RackCopied(); _ctx.Status($"Copied {RcDeviceName(s)}"); }
+        if (ok) { _ctx.RackCopied(); _ctx.Status(Loc.F("device.rack.clipboard.copied", RcDeviceName(s))); }
         return ok;
     }
 
@@ -95,7 +96,7 @@ internal sealed partial class RackCardView
     private void RcDuplicate(RackDeviceSel s)
     {
         int at = s.Midi ? E.RackDevChainMidiDuplicate(T, s.Rack, s.Chain, s.Index) : E.RackDevChainDeviceDuplicate(T, s.Rack, s.Chain, s.Index);
-        if (at < 0) { _ctx.Status("This device can't be duplicated"); return; }
+        if (at < 0) { _ctx.Status(Loc.T("device.rack.clipboard.this_device_cant_be_duplicated")); return; }
         RcSelect(s with { Index = at });
         DeferRebuild();
     }
@@ -118,7 +119,7 @@ internal sealed partial class RackCardView
     {
         if (_ra.RackAddress is not int rack) return;
         int kind = E.DeviceClipboardKind();
-        if (kind == 0) { _ctx.Status("Nothing to paste"); return; }
+        if (kind == 0) { _ctx.Status(Loc.T("device.rack.clipboard.nothing_to_paste")); return; }
         if (kind == 4) { RcPasteMany(rack, c, after); return; }
         bool midi = kind == 2;
         int at = after is { Index: >= 0 } s && s.Chain == c && s.Midi == midi ? s.Index + 1 : -1;
@@ -126,7 +127,7 @@ internal sealed partial class RackCardView
         int r = midi ? E.RackDevChainMidiPaste(T, rack, c, at) : E.RackDevChainDevicePaste(T, rack, c, at);
         if (r < 0) { _ctx.Status(RcPasteRefusal(r, midi)); return; }
         var pasted = new RackDeviceSel(rack, c, midi, r);
-        _ctx.Status($"Pasted {RcDeviceName(pasted)}{(keyed ? " · sidechain dropped" : "")}");
+        _ctx.Status(Loc.F("device.rack.clipboard.pasted", RcDeviceName(pasted)) + (keyed ? Loc.T("device.rack.clipboard.sidechain_dropped") : ""));
         if (Sel != c) Sel = c;
         RcSelect(pasted);
         DeferRebuild();
@@ -139,9 +140,9 @@ internal sealed partial class RackCardView
         int midiAt = after is { Index: >= 0, Midi: true } m && m.Chain == c ? m.Index + 1 : -1;
         int fxAt = after is { Index: >= 0, Midi: false } d && d.Chain == c ? d.Index + 1 : -1;
         int n = E.RackDevChainPasteDevices(T, rack, c, midiAt, fxAt, out int skipped, out int firstMidi, out int firstFx);
-        if (n < 0) { _ctx.Status(n == -3 ? "Couldn't paste: a device failed to load." : "Nothing to paste here."); return; }
-        if (n == 0) { _ctx.Status("This chain can't take the copied devices."); return; }
-        _ctx.Status(skipped > 0 ? $"Pasted {n} devices, skipped {skipped} this chain can't take" : $"Pasted {n} devices");
+        if (n < 0) { _ctx.Status(n == -3 ? Loc.T("device.rack.clipboard.couldnt_paste_a_device_failed") : Loc.T("device.rack.clipboard.nothing_to_paste_here")); return; }
+        if (n == 0) { _ctx.Status(Loc.T("device.rack.clipboard.this_chain_cant_take_the")); return; }
+        _ctx.Status(skipped > 0 ? Loc.F("device.rack.clipboard.pasted_devices_skipped_this_chain", n, skipped) : Loc.F("device.rack.clipboard.pasted_devices", n));
         if (Sel != c) Sel = c;
         RcSelect(firstFx >= 0 ? new RackDeviceSel(rack, c, false, firstFx) : new RackDeviceSel(rack, c, true, firstMidi));
         DeferRebuild();
@@ -151,13 +152,13 @@ internal sealed partial class RackCardView
     {
         -2 => _rp.Kind switch
         {
-            RackKind.MidiEffect => "A MIDI Effect Rack takes MIDI effects only.",
-            RackKind.AudioEffect => "An Audio Effect Rack takes audio effects only.",
-            _ => midi ? "This rack's chains take no MIDI effects." : "This rack's chains take no audio effects.",
+            RackKind.MidiEffect => Loc.T("device.rack.a_midi_effect_rack_takes"),
+            RackKind.AudioEffect => Loc.T("device.rack.an_audio_effect_rack_takes"),
+            _ => midi ? Loc.T("device.rack.clipboard.this_racks_chains_take_no") : Loc.T("device.rack.clipboard.this_racks_chains_take_no_2"),
         },
-        -3 => "A rack can't go inside a rack.",
-        -5 => "MIDI effects run in the first 16 chains.",
-        _ => "Nothing to paste here.",
+        -3 => Loc.T("device.rack.a_rack_cant_go_inside"),
+        -5 => Loc.T("device.rack.clipboard.midi_effects_run_in_the"),
+        _ => Loc.T("device.rack.clipboard.nothing_to_paste_here"),
     };
 
     // ---- undo for the card's value controls -------------------------------------------
@@ -189,21 +190,21 @@ internal sealed partial class RackCardView
         MenuKit.AddGroups(f.Items,
             new Control[]
             {
-                MenuKit.Item("Move left", GlyphKind.StepLeft, () => RcMove(s, idx - 1), null, idx > 0),
-                MenuKit.Item("Move right", GlyphKind.StepRight, () => RcMove(s, idx + 1), null, idx < n - 1),
+                MenuKit.Item(Loc.T("device.rack.clipboard.move_left"), GlyphKind.StepLeft, () => RcMove(s, idx - 1), null, idx > 0),
+                MenuKit.Item(Loc.T("device.rack.clipboard.move_right"), GlyphKind.StepRight, () => RcMove(s, idx + 1), null, idx < n - 1),
             },
             new Control[]
             {
-                MenuKit.Item("Copy", GlyphKind.Copy, () => RcCopy(s), MenuKit.CopyKey),
-                MenuKit.Item("Cut", GlyphKind.Cut, () => RcCut(s), MenuKit.CutKey),
-                MenuKit.Item("Paste", GlyphKind.Paste, () => RcPaste(c, s), MenuKit.PasteKey, RcCanPaste(c)),
-                MenuKit.Item("Duplicate", GlyphKind.Duplicate, () => RcDuplicate(s), MenuKit.DuplicateKey),
+                MenuKit.Item(Loc.T("common.copy"), GlyphKind.Copy, () => RcCopy(s), MenuKit.CopyKey),
+                MenuKit.Item(Loc.T("common.cut"), GlyphKind.Cut, () => RcCut(s), MenuKit.CutKey),
+                MenuKit.Item(Loc.T("common.paste"), GlyphKind.Paste, () => RcPaste(c, s), MenuKit.PasteKey, RcCanPaste(c)),
+                MenuKit.Item(Loc.T("common.duplicate"), GlyphKind.Duplicate, () => RcDuplicate(s), MenuKit.DuplicateKey),
             },
-            new Control[] { MenuKit.Danger("Delete", GlyphKind.Trash, () => RcDelete(s), MenuKit.DeleteKey) });
+            new Control[] { MenuKit.Danger(Loc.T("common.delete"), GlyphKind.Trash, () => RcDelete(s), MenuKit.DeleteKey) });
     }
 
-    // A "Paste" item for a chain (its row menu, the lane's add menus): at the end of the section.
-    private MenuItem RcPasteItem(int c) => MenuKit.Item("Paste", GlyphKind.Paste, () => RcPaste(c), MenuKit.PasteKey, RcCanPaste(c));
+    // A Loc.T("Paste") item for a chain (its row menu, the lane's add menus): at the end of the section.
+    private MenuItem RcPasteItem(int c) => MenuKit.Item(Loc.T("common.paste"), GlyphKind.Paste, () => RcPaste(c), MenuKit.PasteKey, RcCanPaste(c));
 
     private void RcMove(RackDeviceSel s, int to)
     {
@@ -330,7 +331,7 @@ internal sealed partial class RackCardView
         if (_ra.RackAddress is not int rack) return;
         bool midi = t.Slot == RcSlot.Midi;
         int r = midi ? E.RackDevChainMidiMoveTo(T, rack, t.Chain, t.Index, to) : E.RackDevChainDeviceMoveTo(T, rack, t.Chain, t.Index, to);
-        if (r < 0) { _ctx.Status(r == -5 ? "MIDI effects run in the first 16 chains." : "The device can't go there."); return; }
+        if (r < 0) { _ctx.Status(r == -5 ? Loc.T("device.rack.clipboard.midi_effects_run_in_the") : Loc.T("device.rack.clipboard.the_device_cant_go_there")); return; }
         Sel = to;
         RcSelect(new RackDeviceSel(rack, to, midi, r));
         DeferRebuild();

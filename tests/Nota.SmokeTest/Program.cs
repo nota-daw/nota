@@ -79,10 +79,18 @@ Console.WriteLine($"engine v{NotaEngine.Version}");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunStudio()) Check(ok, label);
     Console.WriteLine("-- design: themes --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunThemes()) Check(ok, label);
+    Console.WriteLine("-- design: splash art --");
+    foreach (var (ok, label) in Nota.SmokeTest.SplashArtTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: appearance --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunAppearance()) Check(ok, label);
     Console.WriteLine("-- design: interface scale --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunInterfaceScale()) Check(ok, label);
+    Console.WriteLine("-- localization: language --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLanguage()) Check(ok, label);
+    Console.WriteLine("-- localization: source --");
+    foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLocalization()) Check(ok, label);
+    Console.WriteLine("-- localization: downloadable languages --");
+    foreach (var (ok, label) in Nota.SmokeTest.LanguageCatalogTests.Run()) Check(ok, label);
     Console.WriteLine("-- design: labels --");
     foreach (var (ok, label) in Nota.SmokeTest.DesignTokenCheck.RunLabels()) Check(ok, label);
     Console.WriteLine("-- design: icons --");
@@ -126,6 +134,28 @@ if (args.Length >= 1 && args[0] == "--audiocheck")
     return f == 0 ? 0 : 1;
 }
 
+if (args.Length >= 1 && args[0] == "--midi-lane-heights")
+{
+    foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
+    return failures == 0 ? 0 : 1;
+}
+
+// Design and localization checks alone, without the engine tests: `--localization`.
+// NOTA_LOC_WRITE_BASELINE=1 rewrites LocalizationAllowList.txt; NOTA_LOC_STRICT=1 fails on any
+// text French lacks.
+if (args.Length >= 1 && args[0] == "--localization")
+{
+    Console.WriteLine(failures == 0 ? "LOCALIZATION PASSED" : $"LOCALIZATION FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Splash art review sheet (specs/074): `--splash-sheet <out.html> [theme-id] [from-version] [count]`.
+if (args.Length >= 2 && args[0] == "--splash-sheet")
+{
+    var sheetError = SplashArtTests.WriteSheet(args[1], args.Length > 2 ? args[2] : "studio-dark", args.Length > 3 ? args[3] : null,
+        args.Length > 4 && int.TryParse(args[4], out var sheetCount) ? sheetCount : 40);
+    Console.WriteLine(sheetError ?? $"wrote {args[1]}");
+    return sheetError is null ? 0 : 1;
+}
 // Command palette alone: `--palette`; `--palette-dump <query>` prints a query's ranking.
 if (args.Length >= 2 && args[0] == "--palette-dump") { PaletteTests.Dump(string.Join(' ', args[1..])); return 0; }
 if (args.Length >= 1 && args[0] == "--palette")
@@ -248,12 +278,27 @@ if (args.Length >= 1 && args[0] == "--release-notes")
     return failures == 0 ? 0 : 1;
 }
 
+// A project saved in either language alone: `--language-project`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--language-project")
+{
+    foreach (var (ok, label) in LanguageProjectTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "LANGUAGE PROJECT PASSED" : $"LANGUAGE PROJECT FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
 // Content-addressed bundle alone (fast iteration): `--bundle`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--bundle")
 {
     Console.WriteLine("-- project: content-addressed bundle --");
     foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "BUNDLE PASSED" : $"BUNDLE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+
+// Deterministic display math and the transport-snapshot ABI, without the full DSP suite.
+if (args.Length >= 1 && args[0] == "--transport-display")
+{
+    foreach (var (ok, label) in TransportDisplayTests.Run()) Check(ok, label);
     return failures == 0 ? 0 : 1;
 }
 
@@ -279,6 +324,38 @@ if (args.Length >= 1 && args[0] == "--tap")
     Console.WriteLine("-- tap tempo --");
     foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "TAP PASSED" : $"TAP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Controller-stroke shaping alone: `--controller-stroke`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--controller-stroke")
+{
+    Console.WriteLine("-- controller stroke --");
+    foreach (var (ok, label) in ControllerStrokeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "CONTROLLER STROKE PASSED" : $"CONTROLLER STROKE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Piano-roll velocity wheel alone: `--velocity-wheel`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--velocity-wheel")
+{
+    Console.WriteLine("-- velocity wheel --");
+    foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "VELOCITY WHEEL PASSED" : $"VELOCITY WHEEL FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Piano-roll velocity reset alone: `--velocity-reset`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--velocity-reset")
+{
+    Console.WriteLine("-- velocity reset --");
+    foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "VELOCITY RESET PASSED" : $"VELOCITY RESET FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Piano-roll Bend lane range alone: `--bend-range`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--bend-range")
+{
+    Console.WriteLine("-- bend lane range --");
+    foreach (var (ok, label) in BendLaneRangeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "BEND RANGE PASSED" : $"BEND RANGE FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Filter knob glide alone: `--glide`. Also part of the full run.
@@ -342,6 +419,7 @@ if (args.Length >= 1 && args[0] == "--moves")
 {
     Console.WriteLine("-- arrangement moves --");
     foreach (var (ok, label) in ArrangementMovesTests.Run()) Check(ok, label);
+    foreach (var (ok, label) in SectionRearrangeTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "MOVES PASSED" : $"MOVES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
@@ -355,6 +433,14 @@ if (args.Length >= 1 && args[0] == "--linux-desktop")
     return failures == 0 ? 0 : 1;
 }
 
+// Sends stay out of undo and automation: `--sends` (specs/069). Also part of the full run.
+if (args.Length >= 1 && args[0] == "--sends")
+{
+    Console.WriteLine("-- sends --");
+    foreach (var (ok, label) in SendAutomationTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SENDS PASSED" : $"SENDS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Return-track automation alone: `--return-automation`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--return-automation")
 {
@@ -395,6 +481,14 @@ if (args.Length >= 1 && args[0] == "--mixundo")
     Console.WriteLine(failures == 0 ? "MIXUNDO PASSED" : $"MIXUNDO FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// The loop region saved with the project alone: `--loop`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--loop")
+{
+    Console.WriteLine("-- loop persistence --");
+    foreach (var (ok, label) in LoopPersistenceTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "LOOP PASSED" : $"LOOP FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Device-parameter and section undo alone: `--paramundo`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--paramundo")
 {
@@ -410,6 +504,14 @@ if (args.Length >= 1 && args[0] == "--device-undo")
     Console.WriteLine("-- device remove undo --");
     foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "DEVICE UNDO PASSED" : $"DEVICE UNDO FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Audio split fades alone: `--split-fades`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--split-fades")
+{
+    Console.WriteLine("-- split fades --");
+    foreach (var (ok, label) in SplitFadeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "SPLIT FADES PASSED" : $"SPLIT FADES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Warped clip split / range cut alone: `--warp-split`. Also part of the full run.
@@ -460,6 +562,22 @@ if (args.Length >= 1 && args[0] == "--instrument-chain")
     Console.WriteLine("-- instrument chain --");
     foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "INSTRUMENT CHAIN PASSED" : $"INSTRUMENT CHAIN FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Audio-track effect tails after Stop (#449) alone: `--audio-tails`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--audio-tails")
+{
+    Console.WriteLine("-- audio-track tails after Stop --");
+    foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "AUDIO TAILS PASSED" : $"AUDIO TAILS FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Opt-in (needs a VST3 built and scanned): `--hosted-plugin <vst3 folder> <nota-scanworker>`.
+if (args.Length >= 3 && args[0] == "--hosted-plugin")
+{
+    Console.WriteLine("-- hosted plug-ins: copies + long blocks --");
+    foreach (var (ok, label) in HostedPluginTests.Run(args[1], args[2])) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "HOSTED PLUGIN PASSED" : $"HOSTED PLUGIN FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // Drum Rack one-shot pads, pad audition, warp off/on alone: `--pad-warp`. Also part of the full run.
@@ -640,6 +758,22 @@ if (args.Length >= 1 && args[0] == "--session-input")
     Console.WriteLine(failures == 0 ? "SESSION INPUT PASSED" : $"SESSION INPUT FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
+// Group Link alone (fast iteration): `--group-link`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--group-link")
+{
+    Console.WriteLine("-- group link --");
+    foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "GROUP LINK PASSED" : $"GROUP LINK FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Discard and retry a take alone (fast iteration): `--retry-take`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--retry-take")
+{
+    Console.WriteLine("-- retry take --");
+    foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "RETRY TAKE PASSED" : $"RETRY TAKE FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
 // Live MIDI recording alone (fast iteration): `--live-record`. Also part of the full run.
 if (args.Length >= 1 && args[0] == "--live-record")
 {
@@ -650,6 +784,14 @@ if (args.Length >= 1 && args[0] == "--live-record")
     Console.WriteLine("-- loop record mode --");
     foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
     Console.WriteLine(failures == 0 ? "LIVE RECORD PASSED" : $"LIVE RECORD FAILED ({failures})");
+    return failures == 0 ? 0 : 1;
+}
+// Take lanes alone (fast iteration): `--takes`. Also part of the full run.
+if (args.Length >= 1 && args[0] == "--takes")
+{
+    Console.WriteLine("-- take lanes --");
+    foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
+    Console.WriteLine(failures == 0 ? "TAKES PASSED" : $"TAKES FAILED ({failures})");
     return failures == 0 ? 0 : 1;
 }
 // MIDI controllers alone (fast iteration): `--midi-ctl`. Also part of the full run.
@@ -1588,12 +1730,16 @@ Console.WriteLine("-- clip ADSR --");
     Check(ae.GetClipAdsr(at, ac).IsIdentity, "ADSR: redo re-applies");
     ae.Undo();
 
-    // Split: the left piece keeps attack/decay (no release at the cut), the right keeps the release.
+    // Split: the left piece keeps attack/decay. Those two stages already fill the left piece,
+    // so the automatic cut fade has no room and the release stays 0. The right piece keeps
+    // the release and gains a short fade-in at the cut.
     Check(ae.SplitClip(at, ac, 2.0) == ac + 1, "ADSR: split");
     var la = ae.GetClipAdsr(at, ac); var ra = ae.GetClipAdsr(at, ac + 1);
-    Check(la.AttackBeats > 0.99 && la.DecayBeats > 0.99 && la.ReleaseBeats == 0, "ADSR split: left keeps attack + decay, drops release");
-    Check(ra.AttackBeats == 0 && ra.DecayBeats == 0 && ra.ReleaseBeats > 0.99 && Math.Abs(ra.Sustain - 0.5f) < 1e-6,
-          "ADSR split: right keeps sustain + release, drops attack/decay");
+    Check(la.AttackBeats > 0.99 && la.DecayBeats > 0.99 && la.ReleaseBeats == 0,
+          "ADSR split: left keeps attack + decay; the cut fade has no room beside them");
+    Check(ra.AttackBeats > 0 && ra.AttackBeats < 0.05 && ra.DecayBeats == 0 && ra.ReleaseBeats > 0.99
+          && Math.Abs(ra.Sustain - 0.5f) < 1e-6,
+          "ADSR split: right keeps sustain + release and gains a short fade-in");
     ae.Undo();
 
     // Warped clips shape the stretched output the same way.
@@ -8273,6 +8419,12 @@ Console.WriteLine("-- Param defaults (knob reset) --");
     de.PluginParamSet(t, -1, pos, Math.Clamp(idef + 0.4f, 0f, 1f));
     Check(Math.Abs(de.InstrumentParamDefault(t, pos) - idef) < 1e-4f, "instrument param default is stable after a change");
     Check(Math.Abs(de.PluginParamGet(t, -1, pos) - idef) > 0.1f, "changed instrument value differs from its default");
+    // A graph handle's "Reset to default" asks through PluginParamDefault(track, -1, …): a
+    // built-in instrument must answer with its own default there too (Aurora Sustain read 0).
+    int sus = -1; for (int i = 0; i < de.PluginParamCount(t, -1); i++) if (de.PluginParamId(t, -1, i) == "sustain") sus = i;
+    Check(sus >= 0 && de.InstrumentParamDefault(t, sus) > 0.1f
+          && Math.Abs(de.PluginParamDefault(t, -1, sus) - de.InstrumentParamDefault(t, sus)) < 1e-6f,
+        "a built-in instrument's plugin-param default is its own default (Aurora Sustain, not 0)");
 
     int cmp = de.AddBuiltinDevice(t, 1);   // Compressor
     float ddef = de.DeviceParamDefault(t, cmp, 0);
@@ -9771,6 +9923,9 @@ Console.WriteLine("-- M7-8: xrun / dropout telemetry --");
     Check(engine.XrunCount == 0, "xrun count starts at zero");
     Check(engine.XrunSelfTest(), "notifying a dropout bumps the counter");
     Check(engine.XrunCount == 1, "xrun count reflects the dropout");
+    Check(engine.TimedEventsSelfTest(),
+        "a hosted plug-in renders once per block with its events at their offsets (#436)");
+    Check(engine.GraphRetireSelfTest(), "a replaced engine graph is freed two renders later, not kept for the session");
 }
 
 // ===================== M9-A1: parameter automation (engine) ================
@@ -13149,6 +13304,75 @@ Console.WriteLine("-- input monitoring --");
     me.SetTrackMonitor(mon, false);
     me.RenderOffline(mbuf, 2048);
     Check(Rms(mbuf, 2048) < 1e-4f, $"monitor off silences the input (RMS {Rms(mbuf, 2048):F5})");
+
+    // Armed without monitoring (#352): the meter shows the input, nothing is heard.
+    me.TryGetTrackMeter(mon, out var offMeter);
+    Check(offMeter.Peak < 1e-4f, $"an unarmed, unmonitored track meters nothing (peak {offMeter.Peak:F5})");
+    me.SetTrackArmed(mon, true);
+    me.PushMonitorFramesForTest(sine, 8192);
+    me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var armMeter);
+    Check(armMeter.Peak > 0.1f, $"an armed track meters its hardware input without monitoring (peak {armMeter.Peak:F3})");
+    Check(Rms(mbuf, 2048) < 1e-4f, $"... and the input stays unheard (RMS {Rms(mbuf, 2048):F5})");
+    me.SetTrackVolume(mon, 0f);
+    me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var preMeter);
+    Check(preMeter.Peak > 0.1f, $"the armed input meter is pre-fader (peak {preMeter.Peak:F3})");
+    me.SetTrackVolume(mon, 1f);
+    me.SetTrackArmed(mon, false);
+    me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var disarmMeter);
+    Check(disarmMeter.Peak < 1e-4f, $"disarming drops the input meter (peak {disarmMeter.Peak:F5})");
+
+    // An internal source: an armed track meters its source track's output.
+    me.SetTrackRecordInput(mon, minst);
+    me.SetTrackSolo(mon, false);
+    me.SetTrackArmed(mon, true);
+    me.Seek(0); me.Play();
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var srcMeter);
+    Check(srcMeter.Peak > 0.001f, $"an armed track meters its source track without monitoring (peak {srcMeter.Peak:F3})");
+
+    // The sources monitoring refuses (they would feed back) still meter: nothing is heard.
+    me.SetTrackRecordInput(mon, -1);
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var masterMeter);
+    Check(masterMeter.Peak > 0.001f, $"an armed track meters the master it records from (peak {masterMeter.Peak:F3})");
+    int monGroup = me.CreateGroup(new[] { minst, mon });
+    me.SetTrackRecordInput(mon, monGroup);
+    for (int b = 0; b < 4; b++) me.RenderOffline(mbuf, 2048);
+    me.TryGetTrackMeter(mon, out var groupMeter);
+    Check(groupMeter.Peak > 0.001f, $"an armed track meters the group it sits in (peak {groupMeter.Peak:F3})");
+    me.StopTransport();
+    me.SetTrackArmed(mon, false);
+}
+
+// ============ an armed track's input meter never takes a sidechain route (#352) ============
+Console.WriteLine("-- armed input meter and the sidechain route pool --");
+{
+    using var re = new NotaEngine();
+    int armed = re.AddAudioTrack();                 // first in track order: claims would start here
+    int host = re.AddAudioTrack();
+    var keyed = new System.Collections.Generic.List<(int dev, int src)>();
+    for (int i = 0; i < 16; i++)
+    {
+        int d = re.AddBuiltinDevice(host, 1);
+        int s = re.AddAudioTrack();
+        re.SetDeviceSidechainKey(host, d, s, -1);
+        keyed.Add((d, s));
+    }
+    int metered = re.AddAudioTrack();
+    re.SetTrackRecordInput(armed, metered);
+    re.SetTrackArmed(armed, true);
+    Check(re.SidechainRoutesFree() == 0 && keyed.TrueForAll(k => re.SidechainRouteInUse(k.src, -1)) && !re.SidechainRouteInUse(metered, -1),
+          "arming a track with the route pool full leaves every sidechain route in place");
+    re.SetDeviceSidechainKey(host, keyed[15].dev, -1, -1);  // a free route: the meter takes it
+    Check(re.SidechainRouteInUse(metered, -1), "the armed track's meter takes a route once one is free");
+    int late = re.AddAudioTrack();
+    int r = re.SetDeviceSidechainKey(host, keyed[15].dev, late, -1);
+    Check(r == 0 && re.SidechainRouteInUse(late, -1) && !re.SidechainRouteInUse(metered, -1),
+          $"a new sidechain key takes the route back from the meter (result {r})");
+    re.SetTrackArmed(armed, false);
 }
 
 // ============ input monitoring survives a project round-trip ===============
@@ -13201,8 +13425,8 @@ Console.WriteLine("-- simultaneous instrument + audio record --");
 }
 
 // ============ loop recording punches the loop region =======================
-// Loop on → each pass wraps and overwrites the loop region in place; the take is bounded
-// to the loop and placed at its start. The playhead wraps with the loop (stays inside it).
+// Loop on → each pass is kept as a take (specs/067). The comp covers the loop: the newest
+// pass where it recorded, earlier passes behind it. The playhead wraps with the loop.
 Console.WriteLine("-- loop recording (punch) --");
 {
     using var le = new NotaEngine();
@@ -13223,10 +13447,17 @@ Console.WriteLine("-- loop recording (punch) --");
     le.SetRecording(false);
     le.Poll();
     le.TryGetTrackInfo(1, out var lti);
-    Check(lti.ClipCount == 1, $"loop record makes one clip ({lti.ClipCount})");
-    le.TryGetClipInfo(lr, 0, out var lci);
-    Check(Math.Abs(lci.StartBeat) < 1e-6, $"take placed at the loop start ({lci.StartBeat:F2})");
-    Check(Math.Abs(lci.LengthBeats - 2.0) < 0.3, $"take is bounded to the loop (~2 beats) ({lci.LengthBeats:F2})");
+    double lLo = double.MaxValue, lHi = 0;
+    for (int c = 0; c < lti.ClipCount; c++)
+        if (le.TryGetClipInfo(lr, c, out var ci))
+        {
+            lLo = Math.Min(lLo, ci.StartBeat);
+            lHi = Math.Max(lHi, ci.StartBeat + ci.LengthBeats);
+        }
+    Check(lti.ClipCount >= 2 && le.TakeCount(lr) >= 2,
+        $"loop record keeps a take per pass ({lti.ClipCount} comp clips, {le.TakeCount(lr)} takes)");
+    Check(Math.Abs(lLo) < 1e-6 && Math.Abs(lHi - 2.0) < 0.3,
+        $"comp covers the loop [{lLo:F2}, {lHi:F2}]");
     le.SetTrackMute(li, true);
     le.SetLoop(false, 0, 0); le.Seek(0); le.Play();
     var lpb = new float[8192 * 2]; le.RenderOffline(lpb, 8192); le.StopTransport();
@@ -13252,9 +13483,16 @@ Console.WriteLine("-- loop enabled mid-record --");
     for (int b = 0; b < 60; b++) { me.RenderOffline(mcap, 2048); me.Poll(); }
     me.SetRecording(false);
     me.Poll();
-    me.TryGetClipInfo(mr, 0, out var mci);
-    Check(Math.Abs(mci.StartBeat) < 1e-6 && Math.Abs(mci.LengthBeats - 2.0) < 0.3,
-        $"mid-record loop switches to punch (start={mci.StartBeat:F2} len={mci.LengthBeats:F2})");
+    me.TryGetTrackInfo(1, out var mti);
+    double mLo = double.MaxValue, mHi = 0;
+    for (int c = 0; c < mti.ClipCount; c++)
+        if (me.TryGetClipInfo(mr, c, out var mci))
+        {
+            mLo = Math.Min(mLo, mci.StartBeat);
+            mHi = Math.Max(mHi, mci.StartBeat + mci.LengthBeats);
+        }
+    Check(mti.ClipCount >= 2 && me.TakeCount(mr) >= 2 && Math.Abs(mLo) < 1e-6 && Math.Abs(mHi - 2.0) < 0.3,
+        $"mid-record loop switches to punch (takes {me.TakeCount(mr)}, comp [{mLo:F2}, {mHi:F2}])");
 }
 
 // ============ overwrite / comp: a dropped clip carves what it lands on ======
@@ -15222,6 +15460,7 @@ foreach (var (ok, label) in ClipEditorTests.Run()) Check(ok, label);
 // --- project: content-addressed bundle (samples / plugin states named by hash) ---
 Console.WriteLine("-- project: content-addressed bundle --");
 foreach (var (ok, label) in BundleContentTests.Run()) Check(ok, label);
+foreach (var (ok, label) in LanguageProjectTests.Run()) Check(ok, label);
 Console.WriteLine("-- project: version history --");
 foreach (var (ok, label) in HistoryTests.Run()) Check(ok, label);
 foreach (var (ok, label) in HistoryTests.RunGraph()) Check(ok, label);
@@ -15236,6 +15475,8 @@ Console.WriteLine("-- mpe: per-note expression --");
 foreach (var (ok, label) in MpeTests.Run()) Check(ok, label);
 Console.WriteLine("-- live midi recording --");
 foreach (var (ok, label) in LiveRecordTests.Run()) Check(ok, label);
+Console.WriteLine("-- retry take --");
+foreach (var (ok, label) in RetryTakeTests.Run()) Check(ok, label);
 Console.WriteLine("-- midi controllers --");
 foreach (var (ok, label) in MidiControllerTests.Run()) Check(ok, label);
 Console.WriteLine("-- sustain pedal --");
@@ -15244,10 +15485,18 @@ Console.WriteLine("-- loop seam --");
 foreach (var (ok, label) in LoopSeamTests.Run()) Check(ok, label);
 Console.WriteLine("-- loop record mode --");
 foreach (var (ok, label) in LoopRecordModeTests.Run()) Check(ok, label);
+Console.WriteLine("-- take lanes --");
+foreach (var (ok, label) in TakeLaneTests.Run()) Check(ok, label);
 Console.WriteLine("-- session launch + record input --");
 foreach (var (ok, label) in SessionInputTests.Run()) Check(ok, label);
+Console.WriteLine("-- group link --");
+foreach (var (ok, label) in GroupLinkTests.Run()) Check(ok, label);
+Console.WriteLine("-- group membership --");
+foreach (var (ok, label) in GroupMembershipTests.Run()) Check(ok, label);
 Console.WriteLine("-- tempo follow --");
 foreach (var (ok, label) in TempoFollowTests.Run()) Check(ok, label);
+Console.WriteLine("-- meter --");
+foreach (var (ok, label) in MeterTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota keys --");
 foreach (var (ok, label) in KeysTests.Run()) Check(ok, label);
 Console.WriteLine("-- nota twin --");
@@ -15270,6 +15519,26 @@ foreach (var (ok, label) in RenderPoolTests.Run()) Check(ok, label);
 Console.WriteLine("-- tap tempo --");
 foreach (var (ok, label) in TapTempoTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- transport display --");
+foreach (var (ok, label) in TransportDisplayTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- MIDI lane heights --");
+foreach (var (ok, label) in MidiLaneHeightTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- velocity wheel --");
+foreach (var (ok, label) in VelocityWheelTests.Run()) Check(ok, label);
+Console.WriteLine("-- controller stroke --");
+foreach (var (ok, label) in ControllerStrokeTests.Run()) Check(ok, label);
+Console.WriteLine("-- velocity reset --");
+foreach (var (ok, label) in VelocityResetTests.Run()) Check(ok, label);
+Console.WriteLine("-- bend lane range --");
+foreach (var (ok, label) in BendLaneRangeTests.Run()) Check(ok, label);
+Console.WriteLine("-- status bar audio format --");
+foreach (var (ok, label) in AudioFormatStatusTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- status bar dropout counter --");
+foreach (var (ok, label) in DropoutCounterTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- process cpu --");
 foreach (var (ok, label) in ProcessCpuTests.Run()) Check(ok, label);
 
@@ -15291,8 +15560,14 @@ foreach (var (ok, label) in ReturnDeleteTests.Run()) Check(ok, label);
 Console.WriteLine("-- return automation --");
 foreach (var (ok, label) in ReturnAutomationTests.Run()) Check(ok, label);
 
+Console.WriteLine("-- sends --");
+foreach (var (ok, label) in SendAutomationTests.Run()) Check(ok, label);
+
 Console.WriteLine("-- arrangement moves --");
 foreach (var (ok, label) in ArrangementMovesTests.Run()) Check(ok, label);
+
+Console.WriteLine("-- section rearrange (specs/073) --");
+foreach (var (ok, label) in SectionRearrangeTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- linux desktop --");
 foreach (var (ok, label) in LinuxDesktopTests.Run()) Check(ok, label);
@@ -15340,10 +15615,14 @@ Console.WriteLine("-- param + section undo --");
 foreach (var (ok, label) in ParamSectionUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- section names --");
 foreach (var (ok, label) in SectionNamingTests.Run()) Check(ok, label);
+Console.WriteLine("-- loop persistence --");
+foreach (var (ok, label) in LoopPersistenceTests.Run()) Check(ok, label);
 Console.WriteLine("-- device remove undo --");
 foreach (var (ok, label) in DeviceRemoveUndoTests.Run()) Check(ok, label);
 Console.WriteLine("-- device copy + rack undo --");
 foreach (var (ok, label) in DeviceCopyTests.Run()) Check(ok, label);
+Console.WriteLine("-- audio-track tails after Stop --");
+foreach (var (ok, label) in AudioTailTests.Run()) Check(ok, label);
 Console.WriteLine("-- instrument chain --");
 foreach (var (ok, label) in InstrumentChainTests.Run()) Check(ok, label);
 foreach (var (ok, label) in DeviceGroupTests.Run()) Check(ok, label);
@@ -15360,6 +15639,8 @@ foreach (var (ok, label) in PadAndWarpTests.Run()) Check(ok, label);
 
 Console.WriteLine("-- stereo map --");
 foreach (var (ok, label) in StereoMeasureTests.Run()) Check(ok, label);
+Console.WriteLine("-- split fades --");
+foreach (var (ok, label) in SplitFadeTests.Run()) Check(ok, label);
 Console.WriteLine("-- warp split --");
 foreach (var (ok, label) in WarpSplitTests.Run()) Check(ok, label);
 

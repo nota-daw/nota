@@ -22,6 +22,7 @@ internal static class WarpSplitTests
         WavWriter.WriteSine(wav, seconds: 30.0, freq: 330, sampleRate: Sr);
 
         using var e = new NotaEngine();
+        e.SplitFades = false; // this test's sample-exact guarantee is the split with no fade
         e.SetBpm(120);
         int t = e.AddAudioTrack();
         int c = e.AddAudioClip(t, wav, 0.0);
@@ -50,6 +51,7 @@ internal static class WarpSplitTests
         // A beat that isn't a whole number of frames (123 BPM): split after split, each slice
         // still lines up with the original stretch instead of drifting a frame per split.
         using var f = new NotaEngine();
+        f.SplitFades = false;
         f.SetBpm(123);
         Render(f, 1, 123);               // the tempo lands before the clip is stretched
         int ft = f.AddAudioTrack();

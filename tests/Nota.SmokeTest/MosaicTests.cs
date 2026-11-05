@@ -384,6 +384,47 @@ internal static class MosaicTests
             bool ok = WaitReady(e, t);
             e.TrackNoteOn(t, 60, 0.3f);
             yield return (ok && Rms(Render(e, 4096)) > 0.01, "an imported SFZ plays");
+
+            // #349 (Salamander Grand Piano): a dropped folder opens its instrument, not a fragment
+            // it #includes, and set_hdcc (0..1) starts a controller as set_cc does.
+            yield return (SfzImporter.ProgramIn(new[] { sfzDir }) is { } found && Path.GetFileName(found) == "main.sfz"
+                          && SfzImporter.ProgramIn(new[] { Path.Combine(sfzDir, "Samples", "brush.wav"), Path.Combine(sfzDir, "Programs", "map", "keys.sfz") }) is { } named
+                          && Path.GetFileName(named) == "keys.sfz",
+                "a dropped SFZ, or the SFZ instrument in a dropped folder, is what opens");
+            string hdPath = Path.Combine(dir, "sfz-hd.sfz");   // beside the pack folder, not in it
+            File.WriteAllText(hdPath, "<control> set_hdcc20=0.5\n<global> trigger=release\n<region> sample=sfz/Samples/c4_rel.wav key=c4 locc20=1\n");
+            var hd = SfzImporter.Import(hdPath);
+            yield return (hd.Report.Imported == 1 && hd.Program.Zones[0].Release && hd.Report.CcState.TryGetValue(20, out int cc20) && cc20 == 64,
+                $"set_hdcc20=0.5 starts CC20 at 64, so its release layer imports ({hd.Report.Imported} zones)");
+
+            // A dropped SFZ brings its envelope like an installed pack's preset (ParamsFrom), an
+            // upper-case .SFZ in a folder is found, and the drag check finds it without reading.
+            string upDir = Path.Combine(dir, "sfz-upper");
+            Directory.CreateDirectory(upDir);
+            File.WriteAllText(Path.Combine(upDir, "Piano.SFZ"), "<global> ampeg_release=4\n<region> sample=../sfz/Samples/c4_rel.wav key=c4\n");
+            var upFound = SfzImporter.ProgramIn(new[] { upDir });
+            yield return (upFound is not null && Path.GetFileName(upFound) == "Piano.SFZ" && SfzImporter.HasSfz(new[] { upDir })
+                          && !SfzImporter.HasSfz(new[] { Path.Combine(dir, "sfz", "Samples") }),
+                "a folder's upper-case .SFZ is found, and a drag of a folder without one isn't taken for an SFZ");
+            var upParams = SfzImporter.ParamsFrom(SfzImporter.Import(upFound!).Report);
+            yield return (upParams.TryGetValue("release", out float relN) && Math.Abs(MosaicModel.ReleaseSec(relN) - 4.0) < 0.2,
+                $"a dropped SFZ's ampeg_release=4 sets Mosaic's release (got {(upParams.TryGetValue("release", out float r2) ? MosaicModel.ReleaseSec(r2) : -1):F2} s)");
+
+            // The card loads a dropped SFZ as an undoable program and then sets its params on the
+            // instrument that published: one undo brings back the old zones with their own release.
+            using (var ue = new NotaEngine())
+            {
+                int ut = ue.AddMosaicTrack();
+                int ri = Pi(ue, ut, "release");
+                ue.PluginParamSet(ut, -1, ri, 0.2f);
+                ue.MosaicSetProgram(ut, SfzImporter.Import(upFound!).Program.Serialize());
+                ue.PluginParamSet(ut, -1, ri, relN);
+                float after = ue.PluginParamGet(ut, -1, ri);
+                ue.Undo();
+                float undone = ue.PluginParamGet(ut, -1, ri);
+                yield return (Math.Abs(after - relN) < 1e-4 && Math.Abs(undone - 0.2f) < 1e-4,
+                    $"undoing an SFZ drop brings back the old release too ({undone:F3}, was 0.200)");
+            }
         }
 
         // ---- factory multisamples: rendered once, mapped by their names, playable -----------------

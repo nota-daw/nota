@@ -46,7 +46,15 @@ class Instrument {
         bool /*playing*/) {}
     virtual void midiTimeJump(double /*deltaBeats*/) {}
 
-    // Note events (applied at segment boundaries by the engine for sample accuracy).
+    // A hosted plug-in places events inside a block itself (its MIDI buffer is sample-accurate)
+    // and pays a fixed cost per render call, so the engine renders it once per block instead of
+    // in segments between events (#436): before each event it sets eventOffset to the event's
+    // sample offset within the next render(). Outside that it stays 0. Audio thread only.
+    virtual bool takesTimedEvents() const { return false; }
+    int32_t eventOffset = 0;
+
+    // Note events (applied at segment boundaries by the engine for sample accuracy, or at
+    // eventOffset — see takesTimedEvents).
     virtual void noteOn(int32_t pitch, float velocity) = 0;
     virtual void noteOff(int32_t pitch) = 0;
     // A note-off that carries its release velocity (0..1, from a MIDI note-off message); one
