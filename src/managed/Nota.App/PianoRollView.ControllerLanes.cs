@@ -262,10 +262,16 @@ public sealed partial class PianoRollView
 
             void Draw(string label, float value)
             {
-                var text = new NotaFormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight,
-                    NumFace, _lane.Bounds.Height < 40 ? 7 : 8, LabelText);
+                // Steps down at the larger text sizes so "127" stays whole in the narrow column.
+                double size = _lane.Bounds.Height < 40 ? 7 : 8;
+                NotaFormattedText text;
+                do
+                {
+                    text = new NotaFormattedText(label, NotaNum.Culture, FlowDirection.LeftToRight, NumFace, size, LabelText);
+                    size -= 0.5;
+                } while (text.Width > Bounds.Width - 3 && size >= 6);
                 if (_lane.TranslatePoint(new Point(0, _lane.ValueToY(value)), this) is { } point)
-                    context.DrawText(text, new Point(Bounds.Width - text.Width - 3, point.Y - text.Height / 2));
+                    context.DrawText(text, new Point(Math.Max(0, Bounds.Width - text.Width - 2), point.Y - text.Height / 2));
             }
         }
     }

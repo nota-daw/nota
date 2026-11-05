@@ -181,10 +181,19 @@ public sealed partial class PianoRollView
                 // Style guide: the lane shown sits on the well in ink 1, the others ink 3 (ink 1 on hover).
                 bool on = Tabs[i].Mode == _o._laneMode;
                 var ink = on || i == _hover ? NotaPalette.TextPrimary : NotaPalette.TextTertiary;
-                var ft = new NotaFormattedText(Tabs[i].Label, NotaNum.Culture, FlowDirection.LeftToRight,
-                    on ? NotaFonts.SansMedium : NotaFonts.Sans, NotaType.Caption, ink);
+                // The gutter is narrow (the controller scale takes its right edge in CC mode) and the
+                // rows are 14 apart: a label steps down until it fits, so Text size Larger and Largest
+                // never run it into the scale or the next row.
+                double pad = Bounds.Width < 40 ? 2 : 6, size = NotaType.Caption;
+                NotaFormattedText ft;
+                do
+                {
+                    ft = new NotaFormattedText(Tabs[i].Label, NotaNum.Culture, FlowDirection.LeftToRight,
+                        on ? NotaFonts.SansMedium : NotaFonts.Sans, size, ink);
+                    size -= 0.5;
+                } while ((ft.Width > Bounds.Width - 2 * pad - 2 || ft.Height > ChipH + 1) && size >= 6);
                 double y = Top + i * RowStep;
-                if (on) ctx.DrawRectangle(NotaPalette.Well, null, new Rect(6, y, Math.Max(0, Bounds.Width - 12), ChipH), 5, 5);
+                if (on) ctx.DrawRectangle(NotaPalette.Well, null, new Rect(pad, y, Math.Max(0, Bounds.Width - 2 * pad), ChipH), 5, 5);
                 ctx.DrawText(ft, new Point((Bounds.Width - ft.Width) / 2, y + (ChipH - ft.Height) / 2));
             }
         }
