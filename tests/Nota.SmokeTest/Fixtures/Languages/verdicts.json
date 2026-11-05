@@ -1,0 +1,10 @@
+{
+  "notes": "Expected results of reading each fixture and checking it against en-ref.json (spec 077 research R11). The app's smoke test and nota-translations/tools/validate.py must both agree with this file.",
+  "reference": "en-ref.json",
+  "files": {
+    "xx.json": { "loads": true, "problems": [], "coverage": 33 },
+    "xx-broken.json": { "loads": true, "problems": ["Not A Key", "test.bad", "test.bars", "test.blank", "test.delete_clips", "test.number", "test.save", "test.unknown"], "coverage": 25 },
+    "xx-v1.json": { "loads": false },
+    "xx-badrule.json": { "loads": false }
+  }
+}

@@ -20,6 +20,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
@@ -92,7 +93,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         space.PreGestureBegin += () => Begin(PreDelay);
         space.PreGestureEnd += () => End(PreDelay);
         space.PreReset += () => { Reset(PreDelay); SyncGraphs(); };
-        ToolTip.SetTip(space, MenuKit.Keys("The tail of your audio — the input (grey) and the reverb's tail before the mix, over the last six seconds. The dashed line falls from the tail's latest peak at the set RT60. Drag the dotted pre-delay marker (0 … 200 ms), drag anywhere else to lengthen or shorten the decay; ⌥-click to type, double-click to reset."));
+        ToolTip.SetTip(space, MenuKit.Keys(Loc.T("device.reverb.the_tail_of_your_audio")));
         ValueEntry.AttachHandles(space, [ValueEntry.DeviceParam(engine, track, di, Decay, "Decay", DecayF, SyncGraphs)],
             [ValueEntry.DeviceParam(engine, track, di, PreDelay, "Pre-delay", PreF, SyncGraphs)]);
         MidiLearn.Bind(space, MidiTarget.DeviceParam(track, di, Decay), "Decay");
@@ -101,10 +102,10 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         tone.GestureBegin += hd => Begin(hd == 0 ? LowCut : HighCut);
         tone.GestureEnd += hd => End(hd == 0 ? LowCut : HighCut);
         tone.Reset += hd => { Reset(hd == 0 ? LowCut : HighCut); SyncGraphs(); };
-        ToolTip.SetTip(tone, MenuKit.Keys("Decay by frequency — how long the tail rings at each pitch (HF Damp shortens the highs), the low and high cut on the tail (drag the handles; ⌥-click one to type it, double-click resets) and the tail's live spectrum (grey)."));
-        ValueEntry.AttachHandles(tone, [ValueEntry.DeviceParam(engine, track, di, LowCut, "Low cut", v => Hz(LowHz(v)), SyncGraphs)],
-            [ValueEntry.DeviceParam(engine, track, di, HighCut, "High cut", v => Hz(HighHz(v)), SyncGraphs)]);
-        MidiLearn.Bind(tone, MidiTarget.DeviceParam(track, di, HighCut), "High Cut");
+        ToolTip.SetTip(tone, MenuKit.Keys(Loc.T("device.reverb.decay_by_frequency_how_long")));
+        ValueEntry.AttachHandles(tone, [ValueEntry.DeviceParam(engine, track, di, LowCut, Loc.T("device.reverb.low_cut"), v => Hz(LowHz(v)), SyncGraphs)],
+            [ValueEntry.DeviceParam(engine, track, di, HighCut, Loc.T("device.reverb.high_cut"), v => Hz(HighHz(v)), SyncGraphs)]);
+        MidiLearn.Bind(tone, MidiTarget.DeviceParam(track, di, HighCut), Loc.T("device.reverb.high_cut"));
 
         void SyncGraphs()
         {
@@ -196,9 +197,9 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         var tailTitle = Caps("TAIL"); tailTitle.HorizontalAlignment = HorizontalAlignment.Center;
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 1, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 3) };
         faders.Children.Add(TailFader(Decay, "DECAY", NotaPalette.VizInk, NotaPalette.VizInk,
-            "Decay — RT60, the time the tail takes to fall 60 dB (0.2 … 12 s); Freeze holds it forever. Double-click resets."));
+            Loc.T("device.reverb.decay_rt60_the_time_the")));
         faders.Children.Add(Col(TailFader(HFDamp, "DAMP", DeviceCardKit.ModInk, DeviceCardKit.ModInkBright,
-            "HF Damp — how much faster the highs die than the lows. Double-click resets."), 1));
+            Loc.T("device.reverb.hf_damp_how_much_faster")), 1));
         var decVal = Mono("", 7, TextPrimary); decVal.HorizontalAlignment = HorizontalAlignment.Center;
         var dmpVal = Mono("", 7, TextPrimary); dmpVal.HorizontalAlignment = HorizontalAlignment.Center;
         readouts.Add(() =>
@@ -240,11 +241,11 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         Control SpacePanel()
         {
             var mode = Seg(Algorithm, Algos);
-            ToolTip.SetTip(mode, "Algorithm — Hall (large, spaced reflections) · Room (small, close walls) · Plate (dense, no room at all) · Chamber (between)");
+            ToolTip.SetTip(mode, Loc.T("device.reverb.algorithm_hall_large_spaced_reflections"));
             var er = Toggle(EarlyRefl, "Early reflections");
-            ToolTip.SetTip(er, "Early reflections — the first discrete echoes off the walls, spaced by the algorithm and the size");
+            ToolTip.SetTip(er, Loc.T("device.reverb.early_reflections_the_first_discrete"));
             var fr = Toggle(Freeze, "Freeze");
-            ToolTip.SetTip(fr, "Freeze — hold the tail forever; the input is muted and nothing decays");
+            ToolTip.SetTip(fr, Loc.T("device.reverb.freeze_hold_the_tail_forever"));
             // The mode's hint: Plate has no room, so it is always at maximum density.
             var hint = Mono("", 7, TextTertiary); hint.HorizontalAlignment = HorizontalAlignment.Right;
             readouts.Add(() => hint.Text = Sel(Algorithm, 4) == 2
@@ -264,13 +265,13 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         Control TonePanel()
         {
             var mt = Toggle(ModOnTail, "Mod on tail");
-            ToolTip.SetTip(mt, "Mod on tail — the modulation wobbles the tail itself (a chorused, evolving decay); off, it moves only the early part and the tail stays still");
+            ToolTip.SetTip(mt, Loc.T("device.reverb.mod_on_tail_the_modulation"));
             var vi = Toggle(Vintage, "Vintage");
-            ToolTip.SetTip(vi, "Vintage — an early-digital colour: a band-limited input, 12-bit wet and a deeper wobble");
+            ToolTip.SetTip(vi, Loc.T("device.reverb.vintage_an_early_digital_colour"));
             return Rows(
                 SliderRow("LOW CUT", LowCut, v => Hz(LowHz(v))),
                 SliderRow("HIGH CUT", HighCut, v => Hz(HighHz(v))),
-                SliderRow("HF DAMP", HFDamp, Pct),
+                SliderRow(Loc.T("device.reverb.hf_damp_caps"), HFDamp, Pct),
                 Rule(),
                 SliderRow("MOD RATE", ModRate, RateF, teal: true),
                 SliderRow("DEPTH", ModDepth, Pct, teal: true),
@@ -302,7 +303,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 6, RowSpacing = 1, VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(Caps("L / R")); g.Children.Add(Col(bars, 1));
             g.Children.Add(GRow(Col(scale, 1), 1));
-            ToolTip.SetTip(g, "Output level after Out: left on top, right below");
+            ToolTip.SetTip(g, Loc.T("common.output_level_after_out_left"));
             return g;
         }
 
@@ -319,15 +320,15 @@ internal sealed class ReverbDeviceBody : IDeviceBody
                 wetDb.Foreground = db > -6 ? NotaPalette.Warning : TextPrimary;
             });
             var meter = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
-            meter.Children.Add(Btn("Kill tail", () => engine.DeviceAction(track, di, A_KillTail, 0, 0), "Kill tail — empty the reverb at once; whatever is still ringing (or frozen) stops"));
+            meter.Children.Add(Btn("Kill tail", () => engine.DeviceAction(track, di, A_KillTail, 0, 0), Loc.T("device.reverb.kill_tail_empty_the_reverb")));
             meter.Children.Add(Col(Caps("WET"), 1)); meter.Children.Add(Col(wetBar, 2)); meter.Children.Add(Col(wetDb, 3));
 
-            var wetOnly = Toggle(WetOnly, "Wet only");
-            ToolTip.SetTip(wetOnly, "Wet only — the tail with no dry, for a return / send track");
-            var comp = Toggle(LatencyComp, "Lat. comp");
-            ToolTip.SetTip(comp, "Latency comp — the input diffuser delays the tail by a fixed group delay; on, the pre-delay is shortened by exactly that so the tail starts on the set pre-delay (it cannot go below zero).");
+            var wetOnly = Toggle(WetOnly, Loc.T("common.wet_only"));
+            ToolTip.SetTip(wetOnly, Loc.T("device.reverb.wet_only_the_tail_with"));
+            var comp = Toggle(LatencyComp, Loc.T("common.lat_comp"));
+            ToolTip.SetTip(comp, Loc.T("device.reverb.latency_comp_the_input_diffuser"));
             var mono = SliderRow("MONO", BassMono, v => v <= 0.001 ? "off" : NotaNum.F($"{Exp(v, 30, 500):0} Hz"));
-            ToolTip.SetTip(mono, "Bass mono — below this frequency the tail is mono, so a wide reverb does not smear the low end (off at the far left)");
+            ToolTip.SetTip(mono, Loc.T("device.reverb.bass_mono_below_this_frequency"));
             return Rows(
                 SliderRow("MIX", DryWet, Pct, () => On(WetOnly), () => On(WetOnly)),
                 SliderRow("DRY", DryLevel, v => Db(DryDb(v)), () => On(WetOnly)),
@@ -355,7 +356,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         {
             if (On(Freeze))
             {
-                extras.Text = "input muted · tail held";
+                extras.Text = Loc.T("device.reverb.input_muted_tail_held");
                 extras.Foreground = AccentBright;
                 return;
             }
@@ -389,7 +390,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
         string StatusText()
         {
             if (On(Freeze))
-                return NotaNum.F($"Freeze: tail held, input muted · damp {Pct(P(HFDamp))}");
+                return Loc.F("device.reverb.freeze_tail_held_input_muted", Pct(P(HFDamp)));
             string rt = NotaNum.F($"{Algo()} · RT60 {Secs(Rt60(P(Decay)))}");
             string vin = On(Vintage) ? " · vintage" : "";
             return centreTab == 0
@@ -404,7 +405,7 @@ internal sealed class ReverbDeviceBody : IDeviceBody
             // How much of the diffuser delay the pre-delay could actually absorb.
             double preSmp = P(PreDelay) * 0.2 * sr;
             string comp = diff < 1 ? "" : On(LatencyComp)
-                ? NotaNum.F($" · diffuser −{Math.Min(diff, preSmp):0} smp compensated")
+                ? Loc.F("device.reverb.diffuser_smp_compensated", Math.Min(diff, preSmp))
                 : NotaNum.F($" · diffuser +{diff:0} smp");
             statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp{comp} · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
         });

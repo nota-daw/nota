@@ -26,6 +26,7 @@ using Avalonia.Media;
 using Nota.Application;
 using static Nota.App.DeviceCardKit;
 using static Nota.App.LevelMath;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -188,7 +189,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
                 }));
             }
             list.Add(null);
-            list.Add(("Fixed target — no reference", !HasRef(), () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); }));
+            list.Add((Loc.T("device.auto_gain.fixed_target_no_reference"), !HasRef(), () => { engine.SetDeviceSidechainSource(track, di, -1); ctx.NotifyChanged(); }));
             Menu(at, list, SidechainSourcePicker.MenuRows(engine, track, di, ctx.NotifyChanged, "Match track: "));
         }
 
@@ -205,7 +206,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
                 SetP(Auto, 0);
             }
             else if (i == 1) SetP(Auto, 1);
-        }, Auto, "Auto rides the gain to the target over Window; Manual holds the fader where you put it (Match sets it to the distance to the target)", 84);
+        }, Auto, Loc.T("device.auto_gain.auto_rides_the_gain_to"), 84);
         var corrHead = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         corrHead.Children.Add(Caps("CORRECTION")); corrHead.Children.Add(Col(modeSeg, 1));
 
@@ -215,7 +216,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         fader.Changed += db => { Raw(Gain, GainNorm(db)); RefreshAll(); };
         fader.ResetRequested += () => { Reset(Gain); RefreshAll(); };
         Learn(fader, Gain);
-        ToolTip.SetTip(fader, MenuKit.Keys("The correction around 0\u2009dB, ±Max Gain. In Manual drag it (Shift for fine steps); ⌥-click types, double-click resets to 0\u2009dB. In Auto it shows the ride"));
+        ToolTip.SetTip(fader, MenuKit.Keys(Loc.T("device.auto_gain.the_correction_around_0_db")));
         ValueEntry.Attach(fader, ValueEntry.DeviceParam(engine, track, di, Gain, "Gain", v => Sgn(GainDb(v)) + "\u2009dB", RefreshAll));
 
         var maxTop = Mono("", 7, TextDisabled);
@@ -247,8 +248,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         {
             matchTxt.Text = Manual() ? "Match" : "Reset";
             ToolTip.SetTip(match, Manual()
-                ? "Match — set the manual gain to the distance between the measured input and the target"
-                : "Reset — restart the measurement from the loudness now, so the ride catches up at once");
+                ? Loc.T("device.auto_gain.match_set_the_manual_gain")
+                : Loc.T("device.auto_gain.reset_restart_the_measurement_from"));
         });
 
         var topLine = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -264,11 +265,11 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         gainArea.Children.Add(fader); gainArea.Children.Add(Col(numCol, 1));
 
         var targetRow = Slider("TARGET", Target, TargetF,
-            "Target loudness, −36 … 0 LUFS. Click the value for the standards or to match another track's loudness (a reference); drag the dashed line in the graph for the same",
+            Loc.T("device.auto_gain.target_loudness_36_0_lufs"),
             38, 50, dim: HasRef,
             valueOverride: () => HasRef() ? ("REF " + RefName(), TextSecondary) : ("", null),
             valueClick: TargetMenu);
-        var trimRow = Slider("TRIM", Trim, TrimF, "Trim — a fixed offset after the correction, −12 … +12\u2009dB (the output then sits that far off the target)", 38, 50, bipolar: true);
+        var trimRow = Slider("TRIM", Trim, TrimF, Loc.T("device.auto_gain.trim_a_fixed_offset_after"), 38, 50, bipolar: true);
 
         var leftBody = new DockPanel { Margin = new Thickness(8, 6), LastChildFill = true };
         leftBody.Children.Add(Docked(new StackPanel { Spacing = 5, Margin = new Thickness(0, 6, 0, 0), Children = { targetRow, trimRow } }, Dock.Bottom));
@@ -280,7 +281,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         // CENTRE — scale + loudness history
         // ======================================================================
         var scaleSeg = Seg(ScaleNames, () => ScaleIndex(P(Scale)), i => SetP(Scale, i / 2.0), Scale,
-            "Scale — what the correction reads: Momentary (400\u2009ms, fast and nervous), Short-term (3\u2009s) or Integrated (12\u2009s with BS.1770 gating, the steadiest)", 118);
+            Loc.T("device.auto_gain.scale_what_the_correction_reads"), 118);
         var legend = new LvLegend { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
         var centreHead = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto,*"), ColumnSpacing = 8 };
         centreHead.Children.Add(Caps("SCALE")); centreHead.Children.Add(Col(scaleSeg, 1)); centreHead.Children.Add(Col(legend, 2));
@@ -291,7 +292,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         hist.Changed += v => { Raw(Target, v); RefreshAll(); };
         hist.ResetRequested += () => { Reset(Target); RefreshAll(); };
         Learn(hist, Target);
-        ToolTip.SetTip(hist, MenuKit.Keys("The last 8\u2009s: input, output and the target with its ±1\u2009LU band (momentary loudness). Drag up / down to move the target; ⌥-click types, double-click resets it"));
+        ToolTip.SetTip(hist, MenuKit.Keys(Loc.T("device.auto_gain.the_last_8_s_input")));
         ValueEntry.Attach(hist, ValueEntry.DeviceParam(engine, track, di, Target, "Target", TargetF, RefreshAll));
 
         IBrush Dim() => TextDisabled;
@@ -324,22 +325,22 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             ToolTip.SetTip(g, tip);
             return (g, m, v);
         }
-        var mIn = MeterRow("IN", "Input loudness on the chosen scale (LUFS); the grey mark is the target");
-        var mOut = MeterRow("OUT", "Output loudness on the chosen scale (LUFS); the grey mark is the target");
-        var mTp = MeterRow("TP", "Output true peak (dBTP); the grey mark is the ceiling while True-peak safe is on");
-        var mCor = MeterRow("COR", "The correction applied, ±Max Gain around 0\u2009dB (trim not included)");
+        var mIn = MeterRow("IN", Loc.T("device.auto_gain.input_loudness_on_the_chosen"));
+        var mOut = MeterRow("OUT", Loc.T("device.auto_gain.output_loudness_on_the_chosen"));
+        var mTp = MeterRow("TP", Loc.T("device.auto_gain.output_true_peak_dbtp_the"));
+        var mCor = MeterRow("COR", Loc.T("device.auto_gain.the_correction_applied_max_gain"));
 
         var respSeg = Seg(new[] { "Fast", "Slow" }, () => On(Response) ? 1 : 0, i => SetP(Response, i), Response,
-            "Response — Slow glides over the whole Window with a 20\u2009ms look-ahead; Fast over a quarter of it with 5\u2009ms", 76);
+            Loc.T("device.auto_gain.response_slow_glides_over_the"), 76);
         var respRow = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         respRow.Children.Add(Caps("RESPONSE", Teal)); respRow.Children.Add(Col(respSeg, 1));
-        var winRow = Slider("WINDOW", WindowP, WindowF, "Window — how long the ride takes to reach the target, 0.4 … 10\u2009s (Fast: a quarter of it)", 48, 36);
-        var maxRow = Slider("MAX GAIN", MaxGain, MaxF, "Max gain — the most the correction may boost or cut, 0 … 24\u2009dB", 48, 36);
+        var winRow = Slider("WINDOW", WindowP, WindowF, Loc.T("device.auto_gain.window_how_long_the_ride"), 48, 36);
+        var maxRow = Slider("MAX GAIN", MaxGain, MaxF, Loc.T("device.auto_gain.max_gain_the_most_the"), 48, 36);
 
         var safeSw = Switch("True-peak safe", () => On(Safe), () => { SetP(Safe, On(Safe) ? 0 : 1); RefreshAll(); }, out var safeSync);
         readouts.Add(safeSync);
         Learn(safeSw, Safe);
-        ToolTip.SetTip(safeSw, "True-peak safe — a look-ahead limiter keeps the output under the ceiling (adds 5 / 20\u2009ms of latency, compensated)");
+        ToolTip.SetTip(safeSw, Loc.T("device.auto_gain.true_peak_safe_a_look"));
         var ceilTxt = Mono("", 8, TextPrimary);
         var ceilBox = new Border
         {
@@ -364,7 +365,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         ceilBox.PointerReleased += (_, e) => { if (cd) { cd = false; End(Ceiling); e.Pointer.Capture(null); } };
         ceilBox.PointerCaptureLost += (_, _) => { if (cd) { cd = false; End(Ceiling); } };
         Learn(ceilBox, Ceiling);
-        ToolTip.SetTip(ceilBox, MenuKit.Keys("Ceiling, −6 … 0\u2009dBTP — drag up / down (Shift for fine steps), ⌥-click to type, double-click resets to −1.0"));
+        ToolTip.SetTip(ceilBox, MenuKit.Keys(Loc.T("device.auto_gain.ceiling_6_0_dbtp_drag")));
         ValueEntry.Attach(ceilBox, ValueEntry.DeviceParam(engine, track, di, Ceiling, "Ceiling", v => NotaNum.F($"{CeilingDb(v):0.0;−0.0;0.0}\u2009dBTP"), RefreshAll), ceilTxt);
         readouts.Add(() =>
         {
@@ -396,7 +397,7 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
         statusGrid.Children.Add(Col(statusRight, 1));
         var status = new Border { Height = 18, Background = Sunken, BorderBrush = BorderDef, BorderThickness = new Thickness(0, 1, 0, 0), Padding = new Thickness(8, 0), Child = statusGrid };
         DockPanel.SetDock(status, Dock.Bottom);
-        ToolTip.SetTip(statusLeft, "What the leveler is doing now");
+        ToolTip.SetTip(statusLeft, Loc.T("device.auto_gain.what_the_leveler_is_doing"));
 
         // ---- live state ---------------------------------------------------------------------
         static double MeterX(double lufs) => Math.Clamp((lufs - LevelMath.LBot) / (LevelMath.LTop - LevelMath.LBot), 0, 1);
@@ -420,8 +421,8 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             modeTag.Text = manual ? "fader" : "auto";
             big.Text = on ? Sgn(g) : "off";
             big.Foreground = on ? TextPrimary : TextDisabled;
-            string why = !on ? "" : !primed ? "waiting for signal" : silent ? "silence · holding"
-                : tpClamp ? "limited by true-peak" : clamp == 1 && !manual ? "limited by max gain" : clamp == 2 && !manual ? "limited by max cut"
+            string why = !on ? "" : !primed ? Loc.T("device.auto_gain.waiting_for_signal") : silent ? "silence · holding"
+                : tpClamp ? Loc.T("device.auto_gain.limited_by_true_peak") : clamp == 1 && !manual ? Loc.T("device.auto_gain.limited_by_max_gain") : clamp == 2 && !manual ? Loc.T("device.auto_gain.limited_by_max_cut")
                 : manual ? "manual" : "auto · " + (On(Response) ? "slow" : "fast");
             reason.Text = why;
             reason.Foreground = on && (tpClamp || (clamp > 0 && !manual)) ? NotaPalette.Warning : TextTertiary;
@@ -451,12 +452,12 @@ internal sealed class AutoGainDeviceBody : IDeviceBody
             // Status.
             string foot; IBrush footInk = TextSecondary;
             double matchG = Math.Clamp(target - measured - trim, -maxG, maxG);
-            if (!on) foot = "Leveler bypassed: the output equals the input";
-            else if (!primed) foot = "Waiting for signal — the gain holds until the input has been measured";
-            else if (silent) foot = "Input silent: the measurement and the gain hold";
-            else if (manual && Math.Abs(delta) >= 1) { foot = $"Output {Sgn(delta)}\u2009LU from the target · Match sets {Sgn(matchG)}\u2009dB"; footInk = NotaPalette.Warning; }
+            if (!on) foot = Loc.T("device.auto_gain.leveler_bypassed_the_output_equals");
+            else if (!primed) foot = Loc.T("device.auto_gain.waiting_for_signal_the_gain");
+            else if (silent) foot = Loc.T("device.auto_gain.input_silent_the_measurement_and");
+            else if (manual && Math.Abs(delta) >= 1) { foot = Loc.F("device.auto_gain.output_lu_from_the_target", Sgn(delta), Sgn(matchG)); footInk = NotaPalette.Warning; }
             else if (tpClamp) { foot = $"True-peak limits the gain to the {NotaNum.F($"{CeilingDb(P(Ceiling)):0.0;−0.0;0.0}")}\u2009dBTP ceiling"; footInk = NotaPalette.Warning; }
-            else if (clamp > 0 && !manual) { foot = NotaNum.F($"Needs more than {maxG:0} dB: raise Max gain or Trim"); footInk = NotaPalette.Warning; }
+            else if (clamp > 0 && !manual) { foot = Loc.F("device.auto_gain.needs_more_than_db_raise", maxG); footInk = NotaPalette.Warning; }
             else
             {
                 foot = (locked ? "On target" : "Catching up") + " · " + ScaleLong[si] + " · window " + WindowF(P(WindowP));

@@ -17,6 +17,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -31,7 +32,7 @@ public sealed class MeterBar : Control
         _horizontal = horizontal;
         if (horizontal) { Height = MeterScale.StereoWidth; MinWidth = 80; }
         else { Width = MeterScale.StereoWidth; MinHeight = 40; }
-        ToolTip.SetTip(this, "Clear the peak hold");
+        ToolTip.SetTip(this, Loc.T("control.clear_the_peak_hold"));
     }
 
     /// <summary>Feed a fresh reading. The bar takes the value at once; the hold keeps the maximum.</summary>

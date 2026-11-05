@@ -12,6 +12,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Nota.Application;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -31,7 +32,7 @@ internal sealed class LensWindow : NotaWindow
     {
         _engine = card.Engine; _trackId = card.TrackId; _device = device;
         _instance = Instance();
-        Title = $"Nota Lens · {TrackNames.Of(_engine, _trackId)}";
+        Title = Loc.F("lens.nota_lens", TrackNames.Of(_engine, _trackId));
         Width = 1100; Height = 520; MinWidth = 640; MinHeight = 260;
         CanResize = true;
         ShowInTaskbar = false;

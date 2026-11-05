@@ -15,6 +15,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -217,7 +218,7 @@ internal sealed class ReverbTailView : Control, IValueHandles
         }
 
         // ---- labels ------------------------------------------------------------------
-        if (_freeze) ctx.DrawText(new NotaFormattedText("Tail held · no decay", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+        if (_freeze) ctx.DrawText(new NotaFormattedText(Loc.T("device.reverb.tail_held_no_decay"), CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));
         else NotaGraph.Title(ctx, new Rect(0, 0, w, h), "Decay tail");
         var rt = Text(_freeze ? "RT60 ∞" : NotaNum.F($"RT60 {_rt60:0.00} s"), _freeze ? NotaPalette.AccentBright : NotaPalette.TextSecondary);

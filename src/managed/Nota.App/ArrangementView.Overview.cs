@@ -15,6 +15,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -47,15 +48,16 @@ public sealed partial class ArrangementView
     {
         var label = new TextBlock
         {
-            Text = "Overview", Classes = { "SectionLabel" },
+            Text = Loc.T("arrangement.overview.overview"), Classes = { "SectionLabel" },
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(NameGap, 0, 0, 0),
         };
-        var grid = new Grid { Height = OverviewH, ColumnDefinitions = new ColumnDefinitions("Auto,*") };
-        grid.Children.Add(HeaderPanel(label));
-        Grid.SetColumn(_overview, 1);
+        var grid = new Grid { Height = OverviewH };
+        var header = HeaderPanel(label);
+        grid.Children.Add(header);
         grid.Children.Add(_overview);
+        AddSideRow(grid, header, _overview);
 
         // A hairline under the strip separates it from the ruler (structure over shadows).
         var row = new Border { BorderThickness = new Thickness(0, 0, 0, 1), Child = grid };
@@ -101,7 +103,7 @@ public sealed partial class ArrangementView
         int first = (int)Math.Floor(_scrollBeats / bpb) + 1;
         int last = Math.Max(first, (int)Math.Ceiling((_scrollBeats + ViewportBeats) / bpb));
         int total = Math.Max(last, (int)Math.Ceiling(OverviewSpan / bpb));
-        _overviewRange.Text = $"bars {first} to {last} of {total}";
+        _overviewRange.Text = Loc.F("arrangement.overview.bar", first, last, total);
     }
 
     // Repaint the strip when the playhead crossed into another of its pixels (called from
@@ -111,7 +113,7 @@ public sealed partial class ArrangementView
         if (!_overviewRow.IsVisible) return;
         double w = _overview.Bounds.Width;
         if (w <= 0) return;
-        int px = (int)(_playheadBeats / OverviewSpan * w);
+        int px = (int)(_displayPlayheadBeats / OverviewSpan * w);
         if (px == _ovPlayheadPx) return;
         _ovPlayheadPx = px;
         _overview.InvalidateVisual();
@@ -286,7 +288,7 @@ public sealed partial class ArrangementView
             int n = _o._tracks.Count;
             if (n == 0)
             {
-                var hint = new NotaFormattedText("the project appears here", CultureInfo.InvariantCulture,
+                var hint = new NotaFormattedText(Loc.T("arrangement.overview.the_project_appears_here"), CultureInfo.InvariantCulture,
                     FlowDirection.LeftToRight, Typeface.Default, 10, OvEmptyText);
                 ctx.DrawText(hint, new Point(10, (h - hint.Height) / 2));
             }
@@ -298,14 +300,14 @@ public sealed partial class ArrangementView
                 // fixed pitch and squeeze together only when the strip can't hold them all.
                 int lines = 0;
                 for (int i = 0; i < n; i++)
-                    if (!_o._tracks[i].IsGroup || _o._collapsed.Contains(_o._tracks[i].Id)) lines++;
+                    if (!_o._tracks[i].IsGroup || _o._fold.IsFolded(_o._tracks[i].Id)) lines++;
                 double rowH = Math.Min(LineStride, (h - 2 * PadY - LineH) / Math.Max(1, lines - 1));
                 double bandH = Math.Min(LineH, Math.Max(1, rowH - 0.6));
                 int line = 0;
                 for (int i = 0; i < n; i++)
                 {
                     var t = _o._tracks[i];
-                    bool collapsedGroup = t.IsGroup && _o._collapsed.Contains(t.Id);
+                    bool collapsedGroup = t.IsGroup && _o._fold.IsFolded(t.Id);
                     if (t.IsGroup && !collapsedGroup) continue;
                     double y = PadY + line++ * rowH;
                     if (collapsedGroup)
@@ -338,7 +340,7 @@ public sealed partial class ArrangementView
             }
 
             // Playhead over the whole project.
-            double px = BeatToX(_o._playheadBeats);
+            double px = BeatToX(_o._displayPlayheadBeats);
             if (px >= 0 && px <= w) ctx.DrawLine(PlayheadPen, new Point(px, 0), new Point(px, h));
         }
 

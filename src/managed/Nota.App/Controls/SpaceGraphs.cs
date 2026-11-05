@@ -19,6 +19,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -447,7 +448,7 @@ internal sealed class ReverbSpaceView : Control, IValueHandles
             CompDraw.Polyline(ctx, NotaGraph.PrimaryPen, wet);
             DrawGuide(ctx, x0, x1, top, bot, Y, XAge);
         }
-        else SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), "Play audio to see its tail");
+        else SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), Loc.T("control.space_graphs.play_audio_to_see_its_tail"));
 
         // The pre-delay marker (grey, orange in the hand), where the tail starts after the latest hit: drag it, double-click resets.
         {
@@ -462,11 +463,11 @@ internal sealed class ReverbSpaceView : Control, IValueHandles
             ctx.DrawText(lbl, new Point(lx, top + 4 - lbl.Height / 2));
         }
 
-        if (_freeze) ctx.DrawText(new NotaFormattedText("Tail held · no decay", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+        if (_freeze) ctx.DrawText(new NotaFormattedText(Loc.T("control.space_graphs.tail_held_no_decay"), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));
-        else NotaGraph.Title(ctx, rect, "Tail");
+        else NotaGraph.Title(ctx, rect, Loc.T("control.space_graphs.tail"));
         NotaGraph.Legend(ctx, x1 - 2, 4, ("tail", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Area),
-            (_freeze ? "RT60 ∞" : NotaNum.F($"RT60 {_rt60:0.00} s"), NotaPalette.Accent, NotaGraph.Mark.Dashed));
+            (_freeze ? Loc.T("control.space_graphs.rt60_infinite") : NotaNum.F($"RT60 {_rt60:0.00} s"), NotaPalette.Accent, NotaGraph.Mark.Dashed));
         NotaGraph.EdgeLabels(ctx, rect, false, (Y(0) + 6, "0 dB"), (Y(-20), "−20"), (Y(-40), "−40"));
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomLeft, NotaNum.F($"−{SpaceDraw.HistorySec:0} s"));
         NotaGraph.Axis(ctx, rect, NotaGraph.Corner.BottomRight, "now");
@@ -581,8 +582,8 @@ internal sealed class ReverbToneView : CutHandleGraph
         for (double x = x0; x <= x1 + 0.1; x += 2) decay.Add(new Point(Math.Min(x, x1), CurveY(Math.Min(x, x1))));
         CompDraw.Polyline(ctx, _freeze ? new Pen(NotaPalette.AccentBright, NotaGraph.PrimaryWidth) : NotaGraph.PrimaryPen, decay);
 
-        NotaGraph.Title(ctx, rect, "Decay by frequency");
-        NotaGraph.Legend(ctx, x1 - 2, 4, ("decay", NotaPalette.VizInk, NotaGraph.Mark.Line), ("tail spectrum", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
+        NotaGraph.Title(ctx, rect, Loc.T("control.space_graphs.decay_by_frequency"));
+        NotaGraph.Legend(ctx, x1 - 2, 4, ("decay", NotaPalette.VizInk, NotaGraph.Mark.Line), (Loc.T("control.space_graphs.tail_spectrum"), NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         if (_freeze) NotaGraph.EdgeLabels(ctx, rect, false, (top + 8, "held"));
         else NotaGraph.EdgeLabels(ctx, rect, false, (YT(full) + 6, Secs(full)), (YT(full / 2), Secs(full / 2)));
     }
@@ -686,12 +687,12 @@ internal sealed class DelayEchoView : Control
         else
         {
             if (_grid) BeatGrid();
-            SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), "Play audio to see its echoes");
+            SpaceDraw.Hint(ctx, new Rect(x0, top, x1 - x0, span), Loc.T("control.space_graphs.play_audio_to_see_its_echoes"));
         }
 
-        if (_freeze) ctx.DrawText(new NotaFormattedText("Loop held · no decay", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+        if (_freeze) ctx.DrawText(new NotaFormattedText(Loc.T("control.space_graphs.loop_held_no_decay"), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));
-        else NotaGraph.Title(ctx, rect, "Echoes");
+        else NotaGraph.Title(ctx, rect, Loc.T("control.space_graphs.echoes"));
         NotaGraph.Legend(ctx, x1 - 2, 4, ("echoes", NotaPalette.VizInk, NotaGraph.Mark.Line), ("input", NotaPalette.TextTertiary, NotaGraph.Mark.Area),
             ("repeats", NotaPalette.Accent, NotaGraph.Mark.Dashed));
         NotaGraph.EdgeLabels(ctx, rect, false, (Y(0) + 6, "0 dB"), (Y(-20), "−20"), (Y(-40), "−40"));
@@ -816,11 +817,11 @@ internal sealed class DelayRepeatsView : CutHandleGraph
             if (ny > top - 4) ctx.DrawText(num, new Point(Math.Clamp(bestX - num.Width / 2, x0 + 2, x1 - num.Width - 2), ny));
         }
 
-        if (_freeze) ctx.DrawText(new NotaFormattedText("Loop held · filters bypassed", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+        if (_freeze) ctx.DrawText(new NotaFormattedText(Loc.T("control.space_graphs.loop_held_filters_bypassed"), System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
             NotaFonts.SansMedium, NotaGraph.TitleSize, NotaPalette.AccentBright, this), new Point(6, 4));
-        else NotaGraph.Title(ctx, rect, "Repeats");
-        NotaGraph.Legend(ctx, x1 - 2, 4, (_freeze ? "every repeat" : NotaNum.F($"repeats 1–{Repeats}"), NotaPalette.VizInk, NotaGraph.Mark.Line),
-            ("echo spectrum", NotaPalette.TextTertiary, NotaGraph.Mark.Line));
+        else NotaGraph.Title(ctx, rect, Loc.T("control.space_graphs.repeats"));
+        NotaGraph.Legend(ctx, x1 - 2, 4, (_freeze ? Loc.T("control.space_graphs.every_repeat") : NotaNum.F($"repeats 1–{Repeats}"), NotaPalette.VizInk, NotaGraph.Mark.Line),
+            (Loc.T("control.space_graphs.echo_spectrum"), NotaPalette.TextTertiary, NotaGraph.Mark.Line));
         NotaGraph.EdgeLabels(ctx, rect, false, (Y(0) + 6, "0 dB"), (Y(-24), "−24"));
     }
 }

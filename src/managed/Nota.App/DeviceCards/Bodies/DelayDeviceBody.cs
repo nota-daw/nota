@@ -20,6 +20,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Nota.Application;
+using Nota.Application.Localization;
 using static Nota.App.DeviceCardKit;
 
 namespace Nota.App;
@@ -82,7 +83,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         string LowCutF(double v) => v <= 0.001 ? "off" : Hz(LowHz(v));
         string HighCutF(double v) => v >= 0.999 ? "off" : Hz(HighHz(v));
         // "filter 80 Hz — 6 kHz", or "filter off" when neither cut is on.
-        string FilterF() => P(LowCut) <= 0.001 && P(HighCut) >= 0.999 ? "filter off" : NotaNum.F($"filter {LowCutF(P(LowCut))} — {HighCutF(P(HighCut))}");
+        string FilterF() => P(LowCut) <= 0.001 && P(HighCut) >= 0.999 ? Loc.T("device.delay.filter_off") : Loc.F("device.delay.filter_range", LowCutF(P(LowCut)), HighCutF(P(HighCut)));
         static string Window(double s) => s >= 1 ? NotaNum.F($"{s:0.#} s") : NotaNum.F($"{s * 1000:0} ms");
         static double NiceWindow(double seconds)
         {
@@ -106,13 +107,13 @@ internal sealed class DelayDeviceBody : IDeviceBody
         int centreTab = 0;
         double windowSec = 0;
         var echo = new DelayEchoView();
-        ToolTip.SetTip(echo, "Your echoes — the input (grey) and the repeats before the mix, now at the right; on the beat grid in Sync while the transport rolls. The dots mark where the repeats of the latest hit land and how loud the feedback leaves them.");
+        ToolTip.SetTip(echo, Loc.T("device.delay.your_echoes_the_input_grey"));
         var repeats = new DelayRepeatsView();
         repeats.Changed += (hd, v) => Raw(hd == 0 ? LowCut : HighCut, (float)v);
         repeats.GestureBegin += hd => Begin(hd == 0 ? LowCut : HighCut);
         repeats.GestureEnd += hd => End(hd == 0 ? LowCut : HighCut);
         repeats.Reset += hd => { Begin(hd == 0 ? LowCut : HighCut); Raw(hd == 0 ? LowCut : HighCut, hd == 0 ? 0f : 1f); End(hd == 0 ? LowCut : HighCut); };
-        ToolTip.SetTip(repeats, MenuKit.Keys("The repeats — each pass round the loop goes through the low cut, the high cut (and the tape's head loss) again and loses the feedback, so each curve sits lower and narrower. Drag the handles for the cuts; ⌥-click one to type it, double-click one to open it. Grey: the echoes' live spectrum."));
+        ToolTip.SetTip(repeats, MenuKit.Keys(Loc.T("device.delay.the_repeats_each_pass_round")));
         // A double-click opens the cut (the graph's own Reset), so the fields leave it alone; the menu's Reset to default still resets.
         ValueEntry.AttachHandles(repeats, [ValueEntry.DeviceParam(engine, track, di, LowCut, "Low cut", LowCutF) with { ResetOnDoubleClick = false }],
             [ValueEntry.DeviceParam(engine, track, di, HighCut, "High cut", HighCutF) with { ResetOnDoubleClick = false }]);
@@ -240,10 +241,10 @@ internal sealed class DelayDeviceBody : IDeviceBody
         var faders = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,Auto"), ColumnSpacing = 4, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 2) };
         faders.Children.Add(LoopFader(Feedback, "FEEDBACK", NotaPalette.VizInk, NotaPalette.VizInk,
             v => On(Freeze) ? "Hold" : Pct(v),
-            "Feedback — how much of each repeat goes round again; Freeze pins it at 100 %. ⌥-click types, double-click resets."));
+            Loc.T("device.delay.feedback_how_much_of_each")));
         faders.Children.Add(Col(LoopFader(Spread, "SPREAD", DeviceCardKit.ModInk, DeviceCardKit.ModInkBright,
             v => NotaNum.F($"{v * 50:0}\u2009ms"),
-            "Spread — pushes the right channel later, up to 50 ms. ⌥-click types, double-click resets."), 1));
+            Loc.T("device.delay.spread_pushes_the_right_channel")), 1));
         var loopCol = new RuleSection
         {
             Width = 96, Padding = new Thickness(0, 5, 0, 4),
@@ -318,17 +319,17 @@ internal sealed class DelayDeviceBody : IDeviceBody
             }
             var modeSeg = Seg(SyncMode, new[] { "ms", "Sync" }, onPick: SyncTaps);
             var latches = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center, Children = {
-                Latch(LinkLR, "Link", "Link L/R — the right channel follows the left's time"),
-                Latch(PingPong, "Ping", "Ping-pong — each repeat crosses to the other channel"),
-                Latch(FadeChange, "Fade", "Fade on change — crossfade to a new delay time instead of gliding to it (which bends the pitch, tape style)") } };
+                Latch(LinkLR, "Link", Loc.T("device.delay.link_l_r_the_right")),
+                Latch(PingPong, "Ping", Loc.T("device.delay.ping_pong_each_repeat_crosses")),
+                Latch(FadeChange, "Fade", Loc.T("device.delay.fade_on_change_crossfade_to")) } };
             var head = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), VerticalAlignment = VerticalAlignment.Center };
             head.Children.Add(modeSeg); head.Children.Add(Col(latches, 1));
             var hint = Mono("", 7, TextTertiary); hint.HorizontalAlignment = HorizontalAlignment.Right;
             readouts.Add(() => hint.Text = On(SyncMode)
                 ? NotaNum.F($"L {DivNames[Sel(DivL, 8)]} · R {DivNames[On(LinkLR) ? Sel(DivL, 8) : Sel(DivR, 8)]}")
                 : On(LinkLR) ? "channels linked" : "channels independent");
-            var btns = Pair(Btn("Tap tempo", TapTempo, "Tap four times to set the delay time by ear (switches to free ms)"),
-                Btn("Clear loop", () => engine.DeviceAction(track, di, A_ClearLoop, 0, 0), "Empty the delay buffer — silences what is still circulating"));
+            var btns = Pair(Btn(Loc.T("device.delay.tap_tempo"), TapTempo, Loc.T("device.delay.tap_four_times_to_set")),
+                Btn(Loc.T("device.delay.clear_loop"), () => engine.DeviceAction(track, di, A_ClearLoop, 0, 0), Loc.T("device.delay.empty_the_delay_buffer_silences")));
             return Rows(
                 head,
                 hint,
@@ -343,14 +344,14 @@ internal sealed class DelayDeviceBody : IDeviceBody
         Control LoopPanel()
         {
             var fr = Toggle(Freeze, "Freeze");
-            ToolTip.SetTip(fr, "Freeze — hold the loop forever; the input is muted and the repeats stop decaying");
-            var tp = Toggle(TapeMode, "Tape");
-            ToolTip.SetTip(tp, "Tape mode — head loss and saturation in the loop, and a deeper wow");
+            ToolTip.SetTip(fr, Loc.T("device.delay.freeze_hold_the_loop_forever"));
+            var tp = Toggle(TapeMode, Loc.T("device.delay.tape"));
+            ToolTip.SetTip(tp, Loc.T("device.delay.tape_mode_head_loss_and"));
             return Rows(
                 SliderRow("FEEDBACK", Feedback, v => On(Freeze) ? "HOLD" : Pct(v)),
                 SliderRow("DIFFUSE", Diffuse, Pct),
-                SliderRow("LOW CUT", LowCut, LowCutF, 52, null, 40),
-                SliderRow("HIGH CUT", HighCut, HighCutF, 52, null, 40),
+                SliderRow(Loc.T("device.delay.low_cut_caps"), LowCut, LowCutF, 52, null, 40),
+                SliderRow(Loc.T("device.delay.high_cut_caps"), HighCut, HighCutF, 52, null, 40),
                 Rule(),
                 SliderRow("WOW RATE", WowRate, v => { double hz = Exp(v, 0.05, 8); return hz >= 1 ? NotaNum.F($"{hz:0.0} Hz") : NotaNum.F($"{hz:0.00} Hz"); }, 52, null, 40, teal: true),
                 SliderRow("WOW", WowDepth, Pct, teal: true),
@@ -382,7 +383,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
             var g = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), RowDefinitions = new RowDefinitions("Auto,Auto"), ColumnSpacing = 6, RowSpacing = 1, VerticalAlignment = VerticalAlignment.Center };
             g.Children.Add(Caps("L / R")); g.Children.Add(Col(bars, 1));
             g.Children.Add(GRow(Col(scale, 1), 1));
-            ToolTip.SetTip(g, "Output level after Out: left on top, right below");
+            ToolTip.SetTip(g, Loc.T("common.output_level_after_out_left"));
             return g;
         }
 
@@ -400,10 +401,10 @@ internal sealed class DelayDeviceBody : IDeviceBody
             });
             var wet = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto"), ColumnSpacing = 6, VerticalAlignment = VerticalAlignment.Center };
             wet.Children.Add(Caps("WET")); wet.Children.Add(Col(wetBar, 1)); wet.Children.Add(Col(wetDb, 2));
-            var wetOnly = Toggle(WetOnly, "Wet only");
-            ToolTip.SetTip(wetOnly, "Wet only — repeats with no dry, for a return / send track");
-            var comp = Toggle(LatencyComp, "Lat. comp");
-            ToolTip.SetTip(comp, "Latency comp — the diffuser lengthens the loop by a fixed group delay; on, the read pointer is pulled back by exactly that so each repeat lands on the set time.");
+            var wetOnly = Toggle(WetOnly, Loc.T("common.wet_only"));
+            ToolTip.SetTip(wetOnly, Loc.T("device.delay.wet_only_repeats_with_no"));
+            var comp = Toggle(LatencyComp, Loc.T("common.lat_comp"));
+            ToolTip.SetTip(comp, Loc.T("device.delay.latency_comp_the_diffuser_lengthens"));
             return Rows(
                 SliderRow("MIX", DryWet, Pct, 52, () => On(WetOnly)),
                 SliderRow("DRY", DryLevel, v => Db(DryDb(v)), 52, () => On(WetOnly), 40),
@@ -476,7 +477,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
         string StatusText()
         {
             if (On(Freeze))
-                return NotaNum.F($"Freeze: loop held, input muted · {FilterF()}");
+                return Loc.F("device.delay.freeze_loop_held_input_muted_filter", FilterF());
             string time = On(SyncMode)
                 ? NotaNum.F($"Sync {DivNames[Sel(DivL, 8)]}{(On(LinkLR) ? "" : NotaNum.F($" / {DivNames[Sel(DivR, 8)]}"))}")
                 : NotaNum.F($"ms · L {MsL():0} / R {(On(LinkLR) ? MsL() : MsR()):0}");
@@ -493,7 +494,7 @@ internal sealed class DelayDeviceBody : IDeviceBody
             statusLeft.Foreground = On(Freeze) ? AccentBright : TextSecondary;
             double sr = Sc(S_SampleRate), diff = Sc(S_DiffuseSmp);
             string comp = P(Diffuse) <= 0.001f || diff < 1 ? "" : On(LatencyComp)
-                ? NotaNum.F($" · diffuser −{diff:0}\u2009smp compensated")
+                ? Loc.F("device.delay.diffuser_smp_compensated", diff)
                 : NotaNum.F($" · diffuser +{diff:0}\u2009smp");
             statusRight.Text = sr > 0 ? NotaNum.F($"{sr / 1000:0.#} kHz · latency {Sc(S_Latency):0} smp{comp} · CPU {Sc(S_Cpu) * 100:0.0} %") : "";
         });

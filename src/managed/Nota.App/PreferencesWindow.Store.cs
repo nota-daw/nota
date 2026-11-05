@@ -28,12 +28,13 @@ using Avalonia.Media;
 using Microsoft.Extensions.DependencyInjection;
 using Nota.Application;
 using Nota.Presentation;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
 public sealed partial class PreferencesWindow
 {
-    private static readonly string[] StoreFilters = { "All", "Instruments", "Effects", "Installed" };
+    private static readonly string[] StoreFilters = { Loc.T("preferences.all"), Loc.T("common.instruments"), Loc.T("preferences.store.effects"), Loc.T("preferences.installed") };
 
     private readonly IPluginStore _store = App.Services.GetRequiredService<IPluginStore>();
     private IReadOnlyList<StorePlugin>? _storePlugins;
@@ -61,7 +62,7 @@ public sealed partial class PreferencesWindow
     private Button _dockCancel = null!;
     private Control _dockClose = null!;
 
-    private const string StoreIntro = "Open-source VST3 plugins from the Nota plugin registry. Each one downloads from the project's own GitHub release, is checked against the registry's checksum and unpacked — installers never run.";
+    private static readonly string StoreIntro = Loc.T("preferences.store.open_source_vst3_plugins_from");
 
     // The Plug-ins half of Downloads (PreferencesWindow.Downloads.cs): its toolbar pins to the
     // top while the body scrolls.
@@ -94,10 +95,10 @@ public sealed partial class PreferencesWindow
             segs.Add(b);
             strip.Children.Add(b);
         }
-        var search = new TextBox { PlaceholderText = "Search", Text = _storeSearch, Classes = { "search" }, FontSize = 11 };
+        var search = new TextBox { PlaceholderText = Loc.T("preferences.search"), Text = _storeSearch, Classes = { "search" }, FontSize = 11 };
         search.TextChanged += (_, _) => { _storeSearch = search.Text ?? ""; RenderStoreList(); };
-        var refresh = new Button { Content = "Refresh", Classes = { "ghost" }, Height = 30, FontSize = 11, Padding = new Thickness(12, 0), Foreground = TextSecondary };
-        ToolTip.SetTip(refresh, "Reload the registry");
+        var refresh = new Button { Content = Loc.T("preferences.refresh"), Classes = { "ghost" }, Height = 30, FontSize = 11, Padding = new Thickness(12, 0), Foreground = TextSecondary };
+        ToolTip.SetTip(refresh, Loc.T("preferences.reload_the_registry"));
         refresh.Click += (_, _) => { if (!_storeLoading) _storeLoad = LoadStoreAsync(refresh: true); };
         _storeRefresh = refresh;
 
@@ -120,7 +121,7 @@ public sealed partial class PreferencesWindow
             {
                 _storeStatus,
                 new StackPanel { Spacing = 6, Children = { _storeLoadBar, _storeList } },
-                Caption($"Installed to {_store.PluginsDir}"),
+                Caption(Loc.F("preferences.installed_to", _store.PluginsDir)),
             },
         };
         // Only forget the controls if they are still these: switching to Sample Packs and back
@@ -198,13 +199,13 @@ public sealed partial class PreferencesWindow
             Children =
             {
                 new ProgressBar { IsIndeterminate = true, Width = 180, Height = 4, MinWidth = 0 },
-                new TextBlock { Text = "Loading the plugin registry…", FontSize = 11, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
+                new TextBlock { Text = Loc.T("preferences.store.loading_the_plugin_registry"), FontSize = 11, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center },
             },
         },
     });
 
     private static string CurrentOsName =>
-        OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsWindows() ? "Windows" : OperatingSystem.IsLinux() ? "Linux" : "this computer";
+        OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsWindows() ? Loc.T("preferences.store.windows") : OperatingSystem.IsLinux() ? Loc.T("preferences.store.linux") : Loc.T("preferences.store.this_computer");
 
     private void RenderStoreList()
     {
@@ -214,7 +215,7 @@ public sealed partial class PreferencesWindow
         if (_storeRefresh is not null)
         {
             _storeRefresh.IsEnabled = !_storeLoading;
-            _storeRefresh.Content = _storeLoading && _storePlugins is not null ? "Refreshing…" : "Refresh";
+            _storeRefresh.Content = _storeLoading && _storePlugins is not null ? Loc.T("preferences.refreshing") : Loc.T("preferences.refresh");
         }
         if (_storeLoadBar is not null) _storeLoadBar.IsVisible = _storeLoading && _storePlugins is not null;
         if (_storePlugins is null)
@@ -239,7 +240,7 @@ public sealed partial class PreferencesWindow
         {
             var empty = new TextBlock
             {
-                Text = _storeFilter == 3 && q.Length == 0 ? "Nothing installed from the registry yet." : "Nothing matches.",
+                Text = _storeFilter == 3 && q.Length == 0 ? Loc.T("preferences.store.nothing_installed_from_the_registry") : Loc.T("preferences.nothing_matches"),
                 FontSize = 11, Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(28),
             };
             _storeList.Content = Table(new List<Control> { empty });
@@ -254,7 +255,7 @@ public sealed partial class PreferencesWindow
         if (unavailable.Count > 0)
         {
             // The heading sits at the very top when nothing else matched — no rule above it then.
-            if (available.Count > 0) items.Add(new StoreSection("Not available for this computer", unavailable.Count));
+            if (available.Count > 0) items.Add(new StoreSection(Loc.T("preferences.store.not_available_for_this_computer"), unavailable.Count));
             items.AddRange(unavailable.Select(p => new StoreEntry(p, installed.GetValueOrDefault(p.Id), First: false)));
         }
         if (available.Count == 0 && items[0] is StoreEntry first) items[0] = first with { First = true };
@@ -310,9 +311,9 @@ public sealed partial class PreferencesWindow
         _dockTitle = new TextBlock { FontSize = 11, FontWeight = FontWeight.Medium, Foreground = TextPrimary, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
         _dockDetail = new TextBlock { FontSize = 9, FontFamily = NotaFonts.UiFamily, Foreground = TextTertiary, VerticalAlignment = VerticalAlignment.Center };
         _dockBar = new ProgressBar { Minimum = 0, Maximum = 1, Height = 4, MinWidth = 0 };
-        _dockCancel = StoreButton("Cancel", enabled: true, Jobs.Cancel);
+        _dockCancel = StoreButton(Loc.T("common.cancel"), enabled: true, Jobs.Cancel);
         _dockCancel.VerticalAlignment = VerticalAlignment.Center;
-        ToolTip.SetTip(_dockCancel, "Stop the download — nothing is changed");
+        ToolTip.SetTip(_dockCancel, Loc.T("preferences.store.stop_the_download_nothing_is"));
         _dockClose = new Button
         {
             Content = new Glyph(GlyphKind.Close, 10), Classes = { "ghost" }, Width = 26, Height = 26, Padding = new Thickness(0),
@@ -394,7 +395,7 @@ public sealed partial class PreferencesWindow
         bool busy = Jobs.BusyId is not null;
         if (Jobs.BusyId == p.Id)
         {
-            actions.Children.Add(StoreButton(inst is null ? "Installing…" : "Working…", enabled: false, () => { }));
+            actions.Children.Add(StoreButton(inst is null ? Loc.T("preferences.installing") : Loc.T("preferences.working"), enabled: false, () => { }));
         }
         else if (p.Asset is null)
         {
@@ -402,19 +403,19 @@ public sealed partial class PreferencesWindow
         }
         else if (inst is null)
         {
-            actions.Children.Add(StoreButton("Install", enabled: !busy, () => InstallFromStore(p)));
+            actions.Children.Add(StoreButton(Loc.T("preferences.install"), enabled: !busy, () => InstallFromStore(p)));
         }
         else
         {
             if (inst.Version != p.Version)
-                actions.Children.Add(StoreButton($"Update to {p.Version}", enabled: !busy, () => InstallFromStore(p)));
+                actions.Children.Add(StoreButton(Loc.F("preferences.update_to", p.Version), enabled: !busy, () => InstallFromStore(p)));
             else
                 actions.Children.Add(new StackPanel
                 {
                     Orientation = Orientation.Horizontal, Spacing = 6, Height = 26, HorizontalAlignment = HorizontalAlignment.Right,
-                    Children = { Dot(Brass), new TextBlock { Text = "Installed", FontSize = 10, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
+                    Children = { Dot(Brass), new TextBlock { Text = Loc.T("preferences.installed"), FontSize = 10, FontWeight = FontWeight.Medium, Foreground = Brass, VerticalAlignment = VerticalAlignment.Center } },
                 });
-            actions.Children.Add(StoreLink("Remove", null, busy ? null : () => RemoveFromStore(p)));
+            actions.Children.Add(StoreLink(Loc.T("preferences.remove"), null, busy ? null : () => RemoveFromStore(p)));
         }
         if (inst is null && p.Asset is { Size: > 0 } asset)
             actions.Children.Add(new TextBlock
@@ -422,8 +423,8 @@ public sealed partial class PreferencesWindow
                 Text = NotaNum.Unit(asset.Size / 1048576.0, "0.0", "MB"), FontSize = 9, FontFamily = NotaFonts.UiFamily,
                 Foreground = TextTertiary, HorizontalAlignment = HorizontalAlignment.Right,
             });
-        var source = StoreLink("Source", GlyphKind.PopOut, () => _ = Launcher.LaunchUriAsync(new Uri(p.Repo)));
-        ToolTip.SetTip(source, "Open the source repository");
+        var source = StoreLink(Loc.T("preferences.source"), GlyphKind.PopOut, () => _ = Launcher.LaunchUriAsync(new Uri(p.Repo)));
+        ToolTip.SetTip(source, Loc.T("preferences.store.open_the_source_repository"));
         actions.Children.Add(source);
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto"), ColumnSpacing = 16, Margin = new Thickness(16, 14, 14, 14) };
@@ -472,8 +473,8 @@ public sealed partial class PreferencesWindow
         foreach (var (prefix, name, icon, current) in new[]
         {
             ("macos-", "macOS", GlyphKind.Apple, OperatingSystem.IsMacOS()),
-            ("windows-", "Windows", GlyphKind.Windows, OperatingSystem.IsWindows()),
-            ("linux-", "Linux", GlyphKind.Linux, OperatingSystem.IsLinux()),
+            ("windows-", Loc.T("preferences.store.windows"), GlyphKind.Windows, OperatingSystem.IsWindows()),
+            ("linux-", Loc.T("preferences.store.linux"), GlyphKind.Linux, OperatingSystem.IsLinux()),
         })
         {
             var archs = keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).Select(k => ArchLabel(k[prefix.Length..])).Distinct().ToList();
@@ -491,25 +492,25 @@ public sealed partial class PreferencesWindow
     {
         var os = CurrentOsName;
         var prefix = os is "macOS" ? "macos-" : os.ToLowerInvariant() + "-";
-        if (!keys.Any(k => k.StartsWith(prefix, StringComparison.Ordinal))) return $"No {os} version";
+        if (!keys.Any(k => k.StartsWith(prefix, StringComparison.Ordinal))) return Loc.F("preferences.store.no_version", os);
         var cpu = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64 ? "arm64" : "x64";
-        return $"No {os} version for {ArchLabel(cpu)}";
+        return Loc.F("preferences.store.no_version_for", os, ArchLabel(cpu));
     }
 
     private static string ArchLabel(string arch) => arch switch
     {
-        "universal" => "Apple silicon + Intel",
-        "arm64" => OperatingSystem.IsMacOS() ? "Apple silicon" : "ARM64",
+        "universal" => Loc.T("preferences.store.apple_silicon_intel"),
+        "arm64" => OperatingSystem.IsMacOS() ? Loc.T("preferences.store.apple_silicon") : "ARM64",
         "x64" => "x64",
         _ => arch,
     };
 
     private static string KindLabel(string kind) => kind switch
     {
-        "instrument" => "Instrument",
-        "effect" => "Effect",
+        "instrument" => Loc.T("common.instrument"),
+        "effect" => Loc.T("preferences.store.effect"),
         "midi" => "MIDI",
-        "bundle" => "Collection",
+        "bundle" => Loc.T("preferences.store.collection"),
         _ => NotaText.Label(kind.ToUpperInvariant()),
     };
 
@@ -517,31 +518,31 @@ public sealed partial class PreferencesWindow
     {
         var main = _main;
         var dir = _store.PluginsDir;
-        Jobs.Install(p.Id, source: 0, p.Name, p.Asset?.Size ?? 0, new StoreProgress(0, $"Downloading {p.Name}…"),
+        Jobs.Install(p.Id, source: 0, p.Name, p.Asset?.Size ?? 0, new StoreProgress(0, Loc.F("preferences.downloading", p.Name)),
             (progress, ct) => _store.InstallAsync(p, progress, ct),
             async () =>
             {
-                Jobs.Report(new StoreProgress(-1, $"Scanning {p.Name}…"));
-                return await RescanAfterStoreChange(main, dir, $"Scanning {p.Name}…")
-                    ? $"{p.Name} {p.Version} is installed — find it in the browser."
-                    : $"{p.Name} is installed. Rescan plugins to use it.";
+                Jobs.Report(new StoreProgress(-1, Loc.F("preferences.store.scanning", p.Name)));
+                return await RescanAfterStoreChange(main, dir, Loc.F("preferences.store.scanning", p.Name))
+                    ? Loc.F("preferences.store.is_installed_find_it_in", p.Name, p.Version)
+                    : Loc.F("preferences.store.is_installed_rescan_plugins_to", p.Name);
             });
     }
 
     private async void RemoveFromStore(StorePlugin p)
     {
         if (Jobs.Busy) return;
-        var ok = await new ConfirmWindow("Remove plugin",
-            $"Remove {p.Name}? Projects that use it will load without it until it's installed again.",
-            "Remove", "Cancel").ShowDialog<bool>(this);
+        var ok = await new ConfirmWindow(Loc.T("preferences.store.remove_plugin"),
+            Loc.F("preferences.store.remove_projects_that_use_it", p.Name),
+            Loc.T("preferences.remove"), Loc.T("common.cancel")).ShowDialog<bool>(this);
         if (!ok) return;
         var main = _main;
         var dir = _store.PluginsDir;
-        Jobs.Remove(p.Id, source: 0, $"Removing {p.Name}…", async () =>
+        Jobs.Remove(p.Id, source: 0, Loc.F("preferences.removing", p.Name), async () =>
         {
             _store.Uninstall(p.Id);
-            await RescanAfterStoreChange(main, dir, $"Removing {p.Name}…");
-            return $"{p.Name} was removed.";
+            await RescanAfterStoreChange(main, dir, Loc.F("preferences.removing", p.Name));
+            return Loc.F("preferences.was_removed", p.Name);
         });
     }
 

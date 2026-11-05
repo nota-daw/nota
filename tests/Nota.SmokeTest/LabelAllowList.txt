@@ -13,3 +13,5 @@ Nota.App/DeviceCards/Bodies/ShutterDeviceBody.cs	Ramp Up	# data: Shutter pattern
 Nota.App/DeviceCards/Instruments/PendulumInstrumentCard.cs	The voice: soft Keys, bright Glass, Saw, hollow Square or inharmonic Bell	# data: names the Pendulum voice models
 Nota.App/DetailWindow.cs	Devices / Clip	# data: names the window's two tabs, Devices and Clip
 Nota.App/MainWindow.Downloads.cs	Open Settings → Downloads	# data: names the Settings window and its Downloads page
+Nota.App/ModularView.cs	{0} NODES	# todo: ALL CAPS since before spec 068, hidden while it was an interpolated string; sentence-case it in a design pass
+Nota.App/ModularView.cs	CV LINK · LFO {0}	# todo: ALL CAPS since before spec 068, hidden while it was an interpolated string; sentence-case it in a design pass

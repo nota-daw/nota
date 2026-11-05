@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using Nota.Application;
 using Nota.Infrastructure;
 using Nota.Remote;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
@@ -53,6 +54,7 @@ public sealed class RemoteService
     private void OnNetworkChanged()
     {
         _linksAt = DateTime.MinValue;   // the USB map may have changed with the addresses
+        RemoteLinks.Invalidate();
         _networkRetry?.Dispose();
         _networkRetry = new System.Threading.Timer(_ => { RaiseChanged(); _networkRetry?.Dispose(); _networkRetry = null; },
             null, 800, -1);
@@ -115,7 +117,7 @@ public sealed class RemoteService
         catch (Exception e)
         {
             Error = e is IOException || e.InnerException is System.Net.Sockets.SocketException
-                ? $"Port {s.RemotePort} is in use by another app. Pick another port."
+                ? Loc.F("remote.port_is_in_use_by", s.RemotePort)
                 : e.Message;
             _log.Error($"Nota Remote: {e.Message}");
         }

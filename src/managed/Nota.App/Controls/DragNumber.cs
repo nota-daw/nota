@@ -63,7 +63,14 @@ public sealed class DragNumber : UserControl
         set { _value = Math.Clamp(value, _min, _max); Refresh(); }
     }
 
-    private void Refresh() => _display.Text = _value.ToString(_format, NotaNum.Culture);
+    /// <summary>Shown instead of the number when the value sits at the bottom of the range —
+    /// "−∞" for a gain whose floor means silence. Typing it ("-inf") lands there too.</summary>
+    public string? FloorText { get => _floorText; init { _floorText = value; Refresh(); } }
+    private readonly string? _floorText;
+
+    private string Shown => FloorText is { } floor && _value <= _min ? floor : _value.ToString(_format, NotaNum.Culture);
+
+    private void Refresh() => _display.Text = Shown;
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -114,7 +121,7 @@ public sealed class DragNumber : UserControl
     private void BeginEditor()
     {
         _editing = true;
-        _editor.Text = _value.ToString(_format, NotaNum.Culture);
+        _editor.Text = Shown;
         _editor.IsVisible = true;
         _display.IsVisible = false;
         _editor.Focus();

@@ -42,6 +42,14 @@ internal static class HistoryTests
         var skew = Nota.Presentation.HistoryGraph.Layout(new ProjectHistoryState([V("a", null, 10), V("b", "a", 5)], "b"));
         yield return (string.Concat(skew.Select(r => r.Version.Id)) == "ba" && skew.All(r => r.Lane == 0),
             "a child is never drawn below its parent");
+
+        // Several selected versions (#228): a delete never takes the current one, and a refresh
+        // keeps every selected version that still exists.
+        yield return (string.Concat(Nota.Presentation.HistoryGraph.Deletable(linear).Select(v => v.Id)) == "ba",
+            "deleting a selection keeps the current version");
+        var after = Nota.Presentation.HistoryGraph.Layout(new ProjectHistoryState([V("a", null, 0), V("c", "a", 2)], "c"));
+        yield return (Nota.Presentation.HistoryGraph.KeptSelection(after, new HashSet<string> { "b", "a" }).SequenceEqual([1]),
+            "a refresh keeps the selected versions that still exist");
     }
 
     /// <summary>What each version changed (VersionDiff) and how it reads (VersionSummary).</summary>

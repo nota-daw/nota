@@ -134,6 +134,17 @@ internal static partial class DesignTokenCheck
         var gradients = Offenders(@"\b(?:Linear|Radial|Conic)GradientBrush\b|NotaPalette\.VGradient\(");
         yield return (gradients.Length == 0,
             gradients.Length == 0 ? "no gradients in views" : $"gradients in: {string.Join(", ", gradients)}");
+        // Inside Theme/ too, gradients stay where DESIGN.md rule 6 names them: the palette
+        // (the plug-in preview wash) and the splash's release art (specs/074).
+        var themeGradients = Files(Path.Combine(app, "Theme"), "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains("/obj/") && !f.Contains("/bin/"))
+            .Where(f => Regex.IsMatch(File.ReadAllText(f), @"\b(?:Linear|Radial|Conic)GradientBrush\b"))
+            .Select(f => Rel(app, f))
+            .Where(f => f != "Theme/NotaPalette.cs" && !f.StartsWith("Theme/SplashArt/"))
+            .OrderBy(f => f).ToArray();
+        yield return (themeGradients.Length == 0, themeGradients.Length == 0
+            ? "gradients in Theme/ only in NotaPalette.cs and Theme/SplashArt/"
+            : $"gradients elsewhere in Theme/: {string.Join(", ", themeGradients)}");
 
         // A Rectangle's RadiusX/RadiusY is a corner radius too, so it keeps the style guide's
         // 0/2/3/4/5/6/7/9 scale (spec 038; spec 012 R9 started this check). Ratchet in

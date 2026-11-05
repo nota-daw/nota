@@ -17,6 +17,10 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     auto t = findTrackAuthoring(trackId);
     const bool wasArmed = t && t->armed();
     if (t) t->setArmed(armed);
+    if (t && t->type() == TrackType::Audio && armed != wasArmed) {
+        recomputeRouting();   // an armed track meters its source track's tap (#352)
+        updateMonitorInput(); // ... or the hardware input: open / close the capture device
+    }
     if (armed) return;
     // A key still held from live input loses its note-off once the track stops taking live
     // notes (#366): the audio thread releases the live notes this track is sounding. The key
@@ -27,6 +31,8 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
     }
     // Disarming a track that's currently recording finalizes its take (the audio clip is
     // materialised / MIDI capture stops), so toggling its REC button stops the recording.
+    const bool endsTake = (audioRecording_ && trackId == audioRecordTrackId_) ||
+                          (recording_.load(std::memory_order_relaxed) && trackId == recordTrackId_);
     if (audioRecording_ && trackId == audioRecordTrackId_) stopAudioRecording();
     if (recording_.load(std::memory_order_relaxed) && trackId == recordTrackId_) {
         flushCtlTake(); // the take's controllers still in flight (specs/020)
@@ -35,15 +41,21 @@ void Engine::setTrackArmed(int32_t trackId, bool armed) {
         recordClipIndex_ = -1;
         recording_.store(false, std::memory_order_relaxed);
     }
+    // Its take is kept (specs/078): with nothing else recording the attempt ends; otherwise a
+    // retry goes on covering the capture still running, without this track.
+    if (endsTake && takeAttempt_.active && !takeAttempt_.session) {
+        if (!isRecording()) closeTakeAttempt();
+        else keepTakeTrack(trackId);
+    }
 }
 void Engine::setTrackRecordInput(int32_t trackId, int32_t source) {
     auto t = findTrackAuthoring(trackId);
     if (!t) return;
     t->setRecordInputSource(source);
-    if (t->monitor()) {
+    if (t->monitor() || t->armed()) {
         recomputeRouting();
         updateMonitorInput();
-    } // monitored source moved
+    } // monitored / metered source moved
 }
 int32_t Engine::trackRecordInput(int32_t trackId) const {
     auto t = findTrackAuthoring(trackId);
@@ -87,7 +99,9 @@ bool Engine::ensureAudioInput() {
             if (n > inputBlockFrames_.load(std::memory_order_relaxed))
                 inputBlockFrames_.store(n, std::memory_order_relaxed);
             // The gate is shut while a count-in clicks: the take starts when the transport rolls.
-            if (hwRecordTap_.load(std::memory_order_relaxed) && captureGate_.load(std::memory_order_relaxed)) {
+            const uint32_t capEp = captureEpoch_.load(std::memory_order_acquire); // before the gate (specs/078)
+            if (hwRecordTap_.load(std::memory_order_relaxed) && captureGate_.load(std::memory_order_acquire)) {
+                markCaptureEpoch(hwCaptureEpoch_, capEp);
                 int64_t dropped = 0;
                 for (int32_t i = 0; i < n; ++i)
                     if (!inputQueue_.push(InputFrame{s[i * 2], s[i * 2 + 1]})) ++dropped;
@@ -106,12 +120,13 @@ void Engine::releaseAudioInputIfIdle() {
 }
 
 // Keep the capture device open exactly while some audio track monitors the hardware
-// input. Only acts on a change, so a failed open isn't retried on every edit.
+// input, or is armed on it and meters it (#352). Only acts on a change, so a failed open
+// isn't retried on every edit.
 void Engine::updateMonitorInput() {
     bool want = false;
     if (authoring_)
         for (auto& t : authoring_->tracks)
-            if (t->type() == TrackType::Audio && t->monitor() && t->recordInputSource() == 0) {
+            if (t->type() == TrackType::Audio && (t->monitor() || t->armed()) && t->recordInputSource() == 0) {
                 want = true;
                 break;
             }
@@ -350,6 +365,7 @@ void Engine::setRecording(bool on) {
         }
         recording_.store(false, std::memory_order_relaxed);
         stopAudioRecording(); // materialise if an audio take was rolling
+        if (!takeAttempt_.session) closeTakeAttempt(); // the take is kept: nothing to put back
         // If the take started the transport, stop it and rewind to where the
         // take began so re-recording lands in the same place (no drift).
         if (recordStartedTransport_) {
@@ -359,11 +375,16 @@ void Engine::setRecording(bool on) {
         }
         return;
     }
+    startArrangementTake(transport_.uiIsPlaying(), transport_.uiPositionBeats(), false);
+}
+
+// The take start behind setRecording(true). A retry (specs/078) passes where the take starts
+// and whether the clock rolls — the transport mirror still shows the take it just dropped —
+// and retryCountIn counts in again right away (the stop it queued hasn't landed yet).
+bool Engine::startArrangementTake(bool wasPlaying, double playhead, bool retryCountIn) {
     // Record every armed track together: the first armed audio track captures audio
     // (hardware or internal), the first armed instrument track captures MIDI. Both run
     // at once, so arming an instrument + an audio track and hitting REC records both.
-    const bool wasPlaying = transport_.uiIsPlaying();
-    const double playhead = transport_.uiPositionBeats();
     std::shared_ptr<Track> audioT, instT;
     for (auto& t : authoring_->tracks) {
         if (!t->armed()) continue;
@@ -376,14 +397,23 @@ void Engine::setRecording(bool on) {
     if (!audioT && !instT) {
         recording_.store(false, std::memory_order_relaxed);
         recordStartStatus_ = 1;
-        return;
+        return false;
     }
 
     // A take started from stop gets the count-in (if one is set); the capture taps stay
     // gated until it runs out, so the clicks-only pre-roll isn't recorded.
     recordCountIn_ = !wasPlaying && !recordSessionAudio_ && countInBars() > 0;
+    // Remember what the take may write before it writes anything (the MIDI clip below).
+    openTakeAttempt(false);
+    takeAttempt_.countedIn = recordCountIn_;
+    if (audioT) noteTakeTrack(audioT->id());
+    if (instT) noteTakeTrack(instT->id());
+    takeStartOverride_ = playhead;
+    takePlayingOverride_ = wasPlaying ? 1 : 0;
     bool audioOk = true;
     if (audioT) audioOk = startAudioRecording(audioT->id());
+    takeStartOverride_ = std::numeric_limits<double>::quiet_NaN();
+    takePlayingOverride_ = -1;
 
     if (instT) {
         recordTrackId_ = instT->id();
@@ -404,6 +434,7 @@ void Engine::setRecording(bool on) {
             c.lengthBeats = 4.0;
             nt->midiClips.push_back(c);
             idx = static_cast<int32_t>(nt->midiClips.size()) - 1;
+            TakePushScope takePush(*this); // the take's own clip (specs/078)
             republishWithTrack(recordTrackId_, nt);
         }
         recordClipIndex_ = idx;
@@ -422,12 +453,26 @@ void Engine::setRecording(bool on) {
         recordStartedTransport_ = !wasPlaying;
     }
     if (!wasPlaying) { // roll so the take advances (idempotent if already rolling)
-        if (recordCountIn_) transportPlayCountIn();
+        if (recordCountIn_ && retryCountIn) {
+            arrangementActive_.store(true, std::memory_order_relaxed);
+            startCountIn(countInBars());
+        } else if (recordCountIn_)
+            transportPlayCountIn();
         else
             transportPlay();
     }
     recordCountIn_ = false;
     recordStartStatus_ = (audioT && !audioOk && !instT) ? 2 : 0;
+    if (!isRecording()) closeTakeAttempt(); // nothing started: nothing to retry
+    return isRecording();
+}
+
+double Engine::takePlayhead() const {
+    return std::isnan(takeStartOverride_) ? transport_.uiPositionBeats() : takeStartOverride_;
+}
+
+bool Engine::takeTransportPlaying() const {
+    return takePlayingOverride_ < 0 ? transport_.uiIsPlaying() : takePlayingOverride_ != 0;
 }
 
 // Decide the capture layout at take start: loop punch if the transport loop is on
@@ -437,6 +482,8 @@ void Engine::beginCaptureLayout() {
     captureWrapped_ = false;
     captureWritePos_ = 0;
     captureOrigin_ = 0;
+    capturePasses_.clear();
+    capturePassFrom_ = 0;
     if (!recordSessionAudio_ && loopEnabled_ && loopEnd_ > loopStart_) activateLoopPunch(audioRecordStartBeat_);
 }
 
@@ -460,6 +507,22 @@ void Engine::activateLoopPunch(double atBeat) {
     captureWrapped_ = false;
     audioCaptureBuf_.assign(captureLoopFrames_ * 2, 0.0f); // fresh loop-region buffer, zeroed
     captureLoop_ = true;
+    capturePasses_.clear();
+    capturePassFrom_ = captureOrigin_;
+}
+
+// The pass that started at capturePassFrom_ ends at `to`: keep a copy as a future take
+// (specs/067) before the next pass overwrites the loop buffer. Message thread (the drain).
+void Engine::finishLoopPass(size_t to) {
+    if (to <= capturePassFrom_ || captureLoopFrames_ == 0) return;
+    LoopPass p;
+    p.buf.assign(captureLoopFrames_ * 2, 0.0f);
+    std::copy(audioCaptureBuf_.begin() + static_cast<std::ptrdiff_t>(capturePassFrom_ * 2),
+              audioCaptureBuf_.begin() + static_cast<std::ptrdiff_t>(to * 2),
+              p.buf.begin() + static_cast<std::ptrdiff_t>(capturePassFrom_ * 2));
+    p.from = capturePassFrom_;
+    p.to = to;
+    capturePasses_.push_back(std::move(p));
 }
 
 double Engine::audioRecordLengthBeats() const {
@@ -480,9 +543,16 @@ void Engine::drainInputQueue() {
     captureScratch_.clear();
     InputFrame f;
     while (inputQueue_.pop(f)) {
+        if (isCaptureMarker(f)) { // the producer's first frames of a new capture epoch follow
+            if (awaitCaptureMarker_) captureScratch_.clear();
+            awaitCaptureMarker_ = false;
+            continue;
+        }
+        if (awaitCaptureMarker_) continue; // written for the take a retry threw away (specs/078)
         captureScratch_.push_back(f.l);
         captureScratch_.push_back(f.r);
     }
+    if (awaitCaptureMarker_) inputDroppedFrames_.store(0, std::memory_order_relaxed);
     Track::foldInputChannels(captureScratch_.data(), captureScratch_.size() / 2, captureChannels_);
     // Frames the audio thread had to drop while this drain was stalled (ring full).
     // They are the newest samples — the ones that couldn't fit after the popped batch —
@@ -502,8 +572,10 @@ void Engine::drainInputQueue() {
             audioCaptureBuf_[idx] = captureScratch_[i * 2];
             audioCaptureBuf_[idx + 1] = captureScratch_[i * 2 + 1];
             if (++captureWritePos_ >= captureLoopFrames_) {
+                finishLoopPass(captureLoopFrames_);
                 captureWritePos_ = 0;
                 captureWrapped_ = true;
+                capturePassFrom_ = 0;
             }
         }
         return;
@@ -515,6 +587,17 @@ void Engine::drainInputQueue() {
     if (audioCaptureBuf_.size() < need) audioCaptureBuf_.resize(need, 0.0f);
     std::copy_n(captureScratch_.data(), frames * 2, audioCaptureBuf_.data() + base * 2);
     captureWritePos_ = base + frames;
+    // A retried Session audio take (specs/078) keeps what follows its launch boundary: note the
+    // capture frame where it was crossed now, at the tempo it was crossed at.
+    if (recordSessionAudio_ && !std::isnan(retryStartBeat_) && retryKeepFrom_ < 0) {
+        const double pos = transport_.uiPositionBeats();
+        if (pos >= retryStartBeat_) {
+            const double devSR = transport_.sampleRate();
+            const double fpb = transport_.samplesPerBeat() * (devSR > 0.0 ? audioRecordSampleRate_ / devSR : 1.0);
+            const int64_t past = static_cast<int64_t>(std::llround((pos - retryStartBeat_) * fpb));
+            retryKeepFrom_ = std::max<int64_t>(0, static_cast<int64_t>(captureWritePos_) - past);
+        }
+    }
 }
 
 bool Engine::startAudioRecording(int32_t trackId) {
@@ -524,8 +607,10 @@ bool Engine::startAudioRecording(int32_t trackId) {
     captureWritePos_ = 0;
     captureLoop_ = false;
     inputDroppedFrames_.store(0, std::memory_order_relaxed); // fresh drop accounting per take
+    awaitCaptureMarker_ = retryingTake_; // a retried take keeps nothing from before its marker
+    retryKeepFrom_ = -1;
     audioRecordTrackId_ = trackId;
-    audioRecordStartBeat_ = transport_.uiPositionBeats();
+    audioRecordStartBeat_ = takePlayhead();
 
     // Internal resampling: capture another track / send / master output instead of the
     // hardware input. The audio thread feeds the ring from mixGraph; no device is opened.
@@ -541,9 +626,9 @@ bool Engine::startAudioRecording(int32_t trackId) {
         audioRecording_ = true;
         if (!recordSessionAudio_) {
             recordReturnBeat_ = audioRecordStartBeat_;
-            recordStartedTransport_ = !transport_.uiIsPlaying();
+            recordStartedTransport_ = !takeTransportPlaying();
         }
-        if (!transport_.uiIsPlaying() && !recordCountIn_) transportPlay();
+        if (!takeTransportPlaying() && !recordCountIn_) transportPlay();
         return true;
     }
 
@@ -565,10 +650,29 @@ bool Engine::startAudioRecording(int32_t trackId) {
     // their own transport via launchSlot, so don't arm the rewind for them.
     if (!recordSessionAudio_) {
         recordReturnBeat_ = audioRecordStartBeat_;
-        recordStartedTransport_ = !transport_.uiIsPlaying();
+        recordStartedTransport_ = !takeTransportPlaying();
     }
-    if (!transport_.uiIsPlaying() && !recordCountIn_) transportPlay(); // else setRecording counts in
+    if (!takeTransportPlaying() && !recordCountIn_) transportPlay(); // else setRecording counts in
     return true;
+}
+
+// Stop capturing and throw the capture away (a discarded take, specs/078): the taps go quiet,
+// whatever the input or mix thread already queued is drained and dropped with the rest.
+void Engine::abortAudioRecording() {
+    if (!audioRecording_) return;
+    audioRecording_ = false;
+    internalRecordSource_.store(0, std::memory_order_relaxed);
+    hwRecordTap_.store(false, std::memory_order_relaxed);
+    releaseAudioInputIfIdle();
+    drainInputQueue();
+    audioCaptureBuf_.clear();
+    captureScratch_.clear();
+    capturePasses_.clear();
+    captureWritePos_ = 0;
+    captureLoop_ = false;
+    captureWrapped_ = false;
+    audioRecordTrackId_ = 0;
+    retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
 }
 
 void Engine::stopAudioRecording() {
@@ -598,6 +702,40 @@ void Engine::stopAudioRecording() {
     const size_t loopReached = captureWritePos_;
     const size_t loopFrames = captureLoopFrames_;
     const double loopStartBeat = captureLoopStartBeat_;
+    std::vector<LoopPass> passes;
+    if (loopTake) {
+        finishLoopPass(loopReached); // the open pass, up to where recording stopped
+        passes = std::move(capturePasses_);
+    }
+    capturePasses_.clear();
+
+    // Two or more passes keep every pass as a take (specs/067). A session take never loops here.
+    if (loopTake && passes.size() >= 2 && !(recordSessionAudio_ && recordSessionScene_ >= 0)) {
+        const double sr = audioRecordSampleRate_ > 0 ? audioRecordSampleRate_ : transport_.sampleRate();
+        audioCaptureBuf_.clear();
+        captureWritePos_ = 0;
+        captureLoop_ = false;
+        auto nt = cloneTrack(*old);
+        materialiseLoopTakes(*nt, passes, loopFrames, loopStartBeat, sr);
+        republishWithTrack(trackId, nt);
+        return;
+    }
+
+    // A Session audio retry (specs/078) captured from the retry on; the take starts on the launch
+    // quantum after it, so what came before that boundary goes.
+    // The boundary frame was noted as the capture crossed it (drainInputQueue); stopped before
+    // that, nothing of the retried take is kept.
+    if (recordSessionAudio_ && !std::isnan(retryStartBeat_)) {
+        const size_t have = audioCaptureBuf_.size() / 2;
+        const size_t drop = retryKeepFrom_ < 0 ? have : std::min(have, static_cast<size_t>(retryKeepFrom_));
+        audioCaptureBuf_.erase(audioCaptureBuf_.begin(), audioCaptureBuf_.begin() + static_cast<std::ptrdiff_t>(drop * 2));
+    }
+    retryStartBeat_ = std::numeric_limits<double>::quiet_NaN();
+    retryKeepFrom_ = -1;
+    if (audioCaptureBuf_.empty()) { // stopped before the retried take's boundary: nothing to keep
+        recordSessionAudio_ = false;
+        return;
+    }
 
     auto sample = std::make_shared<SampleBuffer>();
     sample->channels = 2;
@@ -637,7 +775,9 @@ void Engine::stopAudioRecording() {
     // Place the take and carve whatever it lands on (overwrite/comp). Loop punch: a
     // completed pass fills the loop region [loopStart, loopEnd]; a partial pass is the
     // recorded sub-range. Linear: sits where recording began, spanning the captured length.
-    const double spb = transport_.samplesPerBeat();
+    // setBpm stores the new tempo before the transport applies it. Playback will measure
+    // this clip in that tempo, so the beat range it occupies — and the carve — must too.
+    const double spb = authoringSamplesPerBeat();
     const double devSR = transport_.sampleRate();
     const double sampleSR = sample->sourceSampleRate > 0 ? sample->sourceSampleRate : devSR;
     const double beatsPerFrame = (spb > 0.0 && sampleSR > 0.0) ? devSR / sampleSR / spb : 0.0;
@@ -675,9 +815,66 @@ void Engine::stopAudioRecording() {
         ne = clip.startBeat + kept * beatsPerFrame;
     }
     if (ne <= ns) return;
-    overwriteAudioClipsInRange(nt->clips, ns, ne);
+    overwriteAudioClipsInRange(nt->clips, ns, ne, spb);
     nt->clips.push_back(clip);
     republishWithTrack(trackId, nt);
+}
+
+// Every pass becomes a take (one new group, numbers continuing on the track), and the comp is
+// what the in-place loop buffer would have held: each frame from the newest pass that recorded
+// it. The loop region is carved as a wrapped loop take always was.
+void Engine::materialiseLoopTakes(Track& nt, std::vector<LoopPass>& passes, size_t loopFrames, double loopStartBeat,
+                                  double sampleRate) {
+    const double bpf = beatsPerSourceFrame(sampleRate);
+    const int32_t group = ++nextTakeGroup_;
+    int32_t number = 0;
+    for (const auto& k : nt.takes) number = std::max(number, k.number);
+
+    std::vector<AudioTake> takes;
+    takes.reserve(passes.size());
+    for (auto& p : passes) {
+        auto sb = std::make_shared<SampleBuffer>();
+        sb->channels = 2;
+        sb->frames = static_cast<int64_t>(loopFrames);
+        sb->sourceSampleRate = sampleRate;
+        sb->samples = std::move(p.buf);
+        AudioTake k;
+        k.sample = std::move(sb);
+        k.id = ++nextTakeId_;
+        k.number = ++number;
+        k.group = group;
+        k.originBeat = loopStartBeat;
+        k.sourceOffsetFrames = static_cast<double>(p.from);
+        k.lengthFrames = static_cast<int64_t>(p.to - p.from);
+        k.beatsPerFrame = bpf;
+        takes.push_back(std::move(k));
+    }
+
+    overwriteAudioClipsInRange(nt.clips, loopStartBeat,
+                               loopStartBeat + static_cast<double>(loopFrames) * bpf, authoringSamplesPerBeat());
+    std::vector<std::pair<size_t, size_t>> open{{0, loopFrames}}; // loop frames no newer pass covers yet
+    for (size_t i = passes.size(); i-- > 0 && !open.empty();) {
+        const size_t from = passes[i].from, to = passes[i].to;
+        std::vector<std::pair<size_t, size_t>> rest;
+        for (auto [a, b] : open) {
+            const size_t s = std::max(a, from), e = std::min(b, to);
+            if (s >= e) {
+                rest.emplace_back(a, b);
+                continue;
+            }
+            AudioClip clip;
+            clip.sample = takes[i].sample;
+            clip.startBeat = loopStartBeat + static_cast<double>(s) * bpf;
+            clip.sourceOffsetFrames = static_cast<double>(s);
+            clip.lengthFrames = static_cast<int64_t>(e - s);
+            clip.takeId = takes[i].id;
+            nt.clips.push_back(std::move(clip));
+            if (a < s) rest.emplace_back(a, s);
+            if (e < b) rest.emplace_back(e, b);
+        }
+        open = std::move(rest);
+    }
+    for (auto& k : takes) nt.takes.push_back(std::move(k));
 }
 
 double Engine::latencyCompensatedStart(double startBeat, int32_t latencyFrames, double samplesPerBeat,

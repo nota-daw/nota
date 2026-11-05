@@ -1,0 +1,237 @@
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<!-- Copyright (c) 2026 Egor Khindikaynen (Nota). See LICENSES/ for license terms. -->
+<!-- specs/070 mockup: group bands, folding, compact strips. Built by build.py (colours come
+     from the theme files); ?variant=dark|light|ember-graphite|ember-paper, ?scene=<id>. -->
+<!doctype html>
+<html data-variant="dark">
+<head>
+<meta charset="utf-8">
+<title>Mixer · groups and compact strips (specs/070)</title>
+<style>
+@font-face { font-family: Geist; src: url("{{FONTS}}/Geist-Regular.ttf"); font-weight: 400; }
+@font-face { font-family: Geist; src: url("{{FONTS}}/Geist-Medium.ttf"); font-weight: 500; }
+@font-face { font-family: Geist; src: url("{{FONTS}}/Geist-SemiBold.ttf"); font-weight: 600; }
+@font-face { font-family: GeistMono; src: url("{{FONTS}}/GeistMono-Regular.ttf"); font-weight: 400; }
+@font-face { font-family: GeistMono; src: url("{{FONTS}}/GeistMono-SemiBold.ttf"); font-weight: 600; }
+/*THEMES*/
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--BgApp); color: var(--TextPrimary); font-family: Geist; }
+.scene { margin: 24px; }
+.cap { font-size: 12px; font-weight: 600; color: var(--TextSecondary); margin: 0 0 8px 2px; }
+.cap span { font-weight: 400; color: var(--TextTertiary); }
+.panel { background: var(--BgApp); border: 1px solid var(--Seam); display: flex; flex-direction: column; overflow: hidden; }
+.toolbar { height: 32px; background: var(--Panel); border-bottom: 1px solid var(--Seam); display: flex; align-items: center; padding: 0 10px; gap: 10px; font-size: 12px; }
+.seg { display: flex; border: 1px solid var(--Seam); border-radius: 3px; overflow: hidden; }
+.seg div { height: 22px; padding: 0 9px; display: flex; align-items: center; font-size: 11px; background: var(--SurfaceRaised); color: var(--TextSecondary); }
+.seg div + div { border-left: 1px solid var(--Seam); }
+.seg .on { background: var(--Accent); color: var(--TextOnAccent); }
+.body { position: relative; flex: none; overflow: hidden; }
+.bands { position: absolute; left: 0; top: 0; right: 0; bottom: 0; pointer-events: none; }
+.row { position: absolute; left: 10px; display: flex; gap: 2px; }
+.strip { background: var(--SurfaceCard); border: 1px solid var(--BorderDefault); border-radius: 3px; overflow: hidden; display: flex; flex-direction: column; position: relative; }
+.strip.sel::after { content: ""; position: absolute; inset: 0; border: 1px solid var(--Accent); border-radius: 3px; pointer-events: none; }
+.hdr { height: 24px; border-bottom: 1px solid var(--BorderDefault); position: relative; display: flex; align-items: center; padding: 3px 7px 0; gap: 4px; font-size: 10px; font-weight: 600; white-space: nowrap; }
+.hdr .bar { position: absolute; left: 0; right: 0; top: 0; height: 3px; }
+.hdr .nm { overflow: hidden; text-overflow: ellipsis; flex: 1; }
+.tri { width: 10px; height: 10px; flex: none; }
+.tri path { fill: var(--TextSecondary); }
+.dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.sec { border-bottom: 1px solid var(--Rule); display: flex; flex-direction: column; justify-content: center; padding: 4px 7px; font-size: 8px; color: var(--TextTertiary); }
+.mono { font-family: GeistMono; }
+.mf { position: relative; height: 7px; }
+.mf .t { position: absolute; left: 0; right: 0; top: 2px; height: 3px; background: var(--BgSunken); border-radius: 2px; }
+.mf .f { position: absolute; left: 0; top: 2px; height: 3px; background: color-mix(in srgb, var(--VizInk) 45%, transparent); border-radius: 2px; }
+.mf .h { position: absolute; top: 0; width: 6px; height: 7px; background: var(--VizInk); border-radius: 2px; }
+.sendrow { display: grid; grid-template-columns: 9px 1fr; align-items: center; }
+.panbar { position: relative; height: 13px; background: var(--BgSunken); border: 1px solid var(--Rule); border-radius: 3px; overflow: hidden; font-family: GeistMono; font-size: 8.5px; color: var(--TextSecondary); display: flex; align-items: center; justify-content: center; }
+.panbar .f { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--VizInk) 25%, transparent); }
+.panbar .c { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: var(--BorderStrong); }
+.panbar span { position: relative; }
+.tag { font-family: GeistMono; font-size: 7px; color: var(--TextTertiary); border: 1px solid var(--BorderDefault); border-radius: 2px; padding: 0 3px; height: 11px; display: inline-flex; align-items: center; }
+.db { font-family: GeistMono; font-size: 8px; color: var(--TextSecondary); text-align: center; height: 16px; line-height: 16px; }
+.btns { border-top: 1px solid var(--Rule); display: flex; align-items: center; justify-content: center; gap: 4px; height: 28px; }
+.key { height: 17px; width: 20px; border-radius: 3px; border: 1px solid var(--Seam); background: var(--SurfaceRaised); color: var(--TextSecondary); font-size: 9px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.key.m { background: var(--Mute); border-color: var(--Mute); color: var(--TextOnAccent); }
+.key.s { background: var(--Solo); border-color: var(--Solo); color: var(--TextOnAccent); }
+.key.r { background: var(--Record); border-color: var(--Record); }
+.disc { width: 7px; height: 7px; border-radius: 50%; background: var(--Record); }
+.key.r .disc { background: var(--RecordInk); }
+.cbtns { border-top: 1px solid var(--Rule); display: flex; flex-direction: column; gap: 2px; padding: 4px; }
+.cbtns .key { width: auto; height: 18px; }
+.footer { height: 44px; background: var(--SurfaceCard); border-top: 1px solid var(--Seam); display: flex; align-items: center; padding: 0 12px; gap: 14px; font-size: 10px; }
+.toggle { height: 22px; padding: 0 8px; border-radius: 3px; border: 1px solid var(--Seam); background: var(--SurfaceRaised); color: var(--TextSecondary); font-weight: 600; display: flex; align-items: center; }
+.toggle.on { background: var(--Accent); border-color: var(--Accent); color: var(--TextOnAccent); }
+.notes { margin: 6px 2px 0; font-size: 11px; color: var(--TextTertiary); max-width: 1100px; line-height: 1.5; }
+.callout { position: absolute; font-size: 10px; color: var(--TextSecondary); white-space: nowrap; }
+.callout::before { content: ""; position: absolute; left: -26px; top: 6px; width: 22px; height: 1px; background: var(--TextTertiary); }
+</style>
+</head>
+<body>
+<div id="out"></div>
+<script>
+const P = new URLSearchParams(location.search);
+document.documentElement.dataset.variant = P.get("variant") || "dark";
+const V = n => getComputedStyle(document.documentElement).getPropertyValue("--" + n).trim();
+
+// ---- the test project --------------------------------------------------------------
+// hue: Track1..8; members without their own colour take the group's hue in shades (design 1a).
+function project(big) {
+  const t = [];
+  const add = (name, kind, parent, hue, o = {}) => { const tr = { id: t.length + 1, name, kind, parent, hue, vol: o.vol ?? -6, pan: o.pan ?? 0, pk: o.pk ?? [-14, -15], m: !!o.m, s: !!o.s, a: !!o.a }; t.push(tr); return tr.id; };
+  const bus = add("Bus", "group", 0, 4, { vol: 0, pk: [-4, -5] });
+  const drums = add("Drums", "group", bus, 1, { vol: -2, pk: [-6, -7] });
+  add("Kick", "audio", drums, 1, { vol: -4, pk: [-5, -5], a: true });
+  add("Snare", "audio", drums, 1, { vol: -7, pk: [-9, -8], s: !big });
+  add("Hats", "audio", drums, 1, { vol: -12, pan: 0.3, pk: [-20, -16] });
+  if (big) add("Perc", "audio", drums, 1, { vol: -14, pan: -0.4, pk: [-24, -26] });
+  add("Bass", "inst", bus, 4, { vol: -5, pk: [-8, -8] });
+  if (big) {
+    const syn = add("Synths", "group", 0, 6, { vol: -3, pk: [-10, -9] });
+    add("Pad", "inst", syn, 6, { vol: -14, pan: -0.2, pk: [-22, -20] });
+    add("Lead", "inst", syn, 6, { vol: -8, pk: [-12, -12], m: true });
+    add("Arp", "inst", syn, 6, { vol: -11, pan: 0.5, pk: [-18, -21] });
+    add("Pluck", "inst", syn, 6, { vol: -13, pan: -0.5, pk: [-19, -17] });
+    const vx = add("Vocals", "group", 0, 7, { vol: -1, pk: [-5, -6] });
+    add("Lead vox", "audio", vx, 7, { vol: -3, pk: [-6, -7], a: true });
+    add("Double L", "audio", vx, 7, { vol: -10, pan: -0.7, pk: [-14, -18] });
+    add("Double R", "audio", vx, 7, { vol: -10, pan: 0.7, pk: [-18, -14] });
+    add("Harmony", "audio", vx, 7, { vol: -12, pk: [-17, -17] });
+    add("Keys", "inst", 0, 3, { vol: -9, pk: [-13, -12] });
+    add("Guitar", "audio", 0, 5, { vol: -8, pan: -0.25, pk: [-11, -13] });
+    add("Strings", "inst", 0, 8, { vol: -15, pk: [-25, -24] });
+    add("FX riser", "audio", 0, 2, { vol: -18, pk: [-40, -38] });
+  } else add("Vox", "audio", 0, 7, { vol: -3, pk: [0.6, -2] });
+  add("A Reverb", "return", 0, 0, { vol: -8, pk: [-22, -23] });
+  add("B Delay", "return", 0, 0, { vol: -10, pk: [-28, -27] });
+  return t;
+}
+const depthOf = (t, tr) => { let d = 0, p = tr.parent; while (p) { d++; p = t.find(x => x.id === p).parent; } return d; };
+const ancestors = (t, tr) => { const a = []; let p = tr.parent; while (p) { a.push(p); p = t.find(x => x.id === p).parent; } return a; };
+function colourOf(t, tr) {
+  if (tr.kind === "return") return tr.name.startsWith("A") ? V("ReturnA") : V("ReturnB");
+  const base = V("Track" + tr.hue);
+  if (!tr.parent) return base;
+  const sib = t.filter(x => x.parent === tr.parent).indexOf(tr) % 3;   // three shades per family
+  return sib === 0 ? base : `color-mix(in srgb, ${base} 78%, ${sib === 1 ? "white" : "black"})`;
+}
+
+// ---- strip parts ---------------------------------------------------------------------
+const norm = db => Math.max(0, Math.min(1, (db + 60) / 66));
+const fmtDb = d => (d > 0 ? "+" : d < 0 ? "−" : "") + Math.abs(d).toFixed(1);
+const tri = open => `<svg class="tri" viewBox="0 0 16 16"><path d="${open ? "M3 5h10l-5 6z" : "M5 3v10l6-5z"}"/></svg>`;
+function channel(w, h, db) {
+  const n = norm(db), c = norm(-6), a = norm(0);
+  const seg = (f, to, col) => to > f ? `<div style="position:absolute;left:0;right:0;bottom:${f * h}px;height:${(to - f) * h}px;background:var(--${col})"></div>` : "";
+  return `<div style="position:relative;width:${w}px;height:${h}px;background:var(--BgSunken);border-radius:2px;overflow:hidden">${seg(0, Math.min(n, c), "Success")}${seg(c, Math.min(n, a), "Warning")}${seg(a, n, "Danger")}<div style="position:absolute;left:0;right:0;bottom:${n * h}px;height:2px;background:var(--${n >= a ? "Danger" : n >= c ? "Warning" : "Success"})"></div></div>`;
+}
+const scale = (h, w) => `<div class="mono" style="position:relative;width:${w}px;height:${h}px;font-size:7px;color:var(--TextDisabled)">${[6, 0, -12, -48].map(d => `<div style="position:absolute;right:1px;top:${(1 - norm(d)) * h - 4}px">${d > 0 ? "+6" : d === 0 ? "0" : "−" + -d}</div>`).join("")}</div>`;
+const miniFader = v => `<div class="mf"><div class="t"></div><div class="f" style="width:${v * 100}%"></div><div class="h" style="left:calc(${v * 100}% - 3px)"></div></div>`;
+function panBar(p, w) {
+  const amt = Math.round(Math.abs(p) * 50), lbl = amt ? amt + (p < 0 ? "L" : "R") : "C";
+  const l = p < 0 ? 50 + p * 50 : 50, wd = Math.abs(p) * 50;
+  return `<div class="panbar" style="width:${w}px"><div class="f" style="left:${l}%;width:${wd}%"></div><div class="c"></div><span>${lbl}</span></div>`;
+}
+function keys(tr, compact) {
+  const k = (cls, txt) => `<div class="key ${cls}">${txt}</div>`;
+  const out = [k(tr.m ? "m" : "", "M"), k(tr.s ? "s" : "", "S")];
+  if (tr.kind !== "return") out.push(k(tr.a ? "r" : "", '<div class="disc"></div>'));
+  return compact ? `<div class="cbtns">${out.join("")}</div>` : `<div class="btns">${out.join("")}</div>`;
+}
+function header(t, tr, compact, folded, hidden) {
+  const col = tr.kind === "master" ? V("Master") : colourOf(t, tr);
+  let lead = tr.kind === "group" ? tri(!folded.has(tr.id)) : "";
+  let trail = "";
+  if (tr.kind === "group" && folded.has(tr.id)) {
+    if (hidden.some(h => h.s)) trail += `<div class="dot" style="background:var(--Solo)" title="A hidden track is soloed"></div>`;
+    if (hidden.some(h => h.a)) trail += `<div class="dot" style="background:var(--Record)" title="A hidden track is armed"></div>`;
+    if (hidden.some(h => h.pk[0] > 0 || h.pk[1] > 0)) trail += `<div class="dot" style="background:var(--Danger)"></div>`;
+  }
+  return `<div class="hdr" style="font-size:${compact ? 9 : 10}px;padding-left:${compact ? 4 : 7}px;padding-right:${compact ? 4 : 7}px"><div class="bar" style="background:${col}"></div>${lead}<div class="nm">${tr.name}</div>${trail}</div>`;
+}
+function io(tr, compact) {
+  const [a, b] = tr.kind === "return" ? ["Return in", "→ Master"] : tr.kind === "group" ? ["Group in", "→ Master"] : tr.kind === "inst" ? ["MIDI in", "Monitor auto"] : tr.kind === "master" ? ["Sum bus", "→ Output"] : ["In 1", "Monitor in"];
+  return compact ? `<div class="sec" style="height:18px;padding:0 4px;white-space:nowrap;overflow:hidden">${a} ${b.startsWith("→") ? b : "· " + b.split(" ")[1]}</div>`
+                 : `<div class="sec" style="height:34px">${a}<br>${b}</div>`;
+}
+function sends(tr, compact) {
+  // Compact keeps every strip's sections aligned: returns and master get an empty slot.
+  if (tr.kind === "return" || tr.kind === "master") return compact ? `<div class="sec" style="height:24px"></div>` : "";
+  const v = [0.3 + (tr.id % 3) * 0.12, tr.id % 2 ? 0.2 : 0];
+  const rows = v.map((x, i) => `<div class="sendrow" style="grid-template-columns:${compact ? 8 : 9}px 1fr"><span style="font-size:${compact ? 7 : 8}px">${"AB"[i]}</span>${miniFader(x)}</div>`).join("");
+  return `<div class="sec" style="height:${compact ? 24 : 42}px;gap:${compact ? 3 : 5}px;padding:${compact ? "3px 4px" : "5px 7px"}">${rows}</div>`;
+}
+function pan(tr, compact, w) {
+  if (tr.kind === "master") return compact ? `<div class="sec" style="height:22px"></div>` : "";
+  const bal = tr.kind === "group" ? `<span class="tag">BAL</span>` : "";
+  if (compact) return `<div class="sec" style="height:22px;flex-direction:row;align-items:center;gap:3px;padding:0 4px">${panBar(tr.pan, tr.kind === "group" ? w - 8 - 25 : w - 8)}${bal}</div>`;
+  const ang = tr.pan * 140 * Math.PI / 180, x = 13 + Math.sin(ang) * 9, y = 13 - Math.cos(ang) * 9;
+  return `<div class="sec" style="height:38px;flex-direction:row;align-items:center;justify-content:center;gap:8px"><svg width="26" height="26"><circle cx="13" cy="13" r="11" fill="var(--SurfaceRaised)" stroke="var(--Rule)"/><line x1="13" y1="13" x2="${x}" y2="${y}" stroke="var(--VizInk)" stroke-width="1.6" stroke-linecap="round"/></svg><div style="display:flex;flex-direction:column;gap:2px"><span class="mono">Pan</span>${bal}</div></div>`;
+}
+function level(tr, compact, h, live) {
+  const col = tr.kind === "master" ? V("Master") : "var(--VizInk)";
+  if (!compact) {
+    const capY = (h - 14) * (1 - Math.pow(10, tr.vol / 20) / 1.5);
+    return `<div style="height:${h + 16}px;padding:8px 7px;display:flex;gap:0">${scale(h, 16)}<div style="position:relative;flex:1;height:${h}px"><div style="position:absolute;left:calc(50% - 2px);width:4px;top:0;bottom:0;background:var(--BgSunken);border-radius:2px"></div><div style="position:absolute;left:calc(50% - 13px);top:${capY}px;width:26px;height:14px;background:var(--SurfaceHover);border:1px solid var(--TextDisabled);border-radius:4px"><div style="margin:4px auto 0;width:18px;height:2px;background:${tr.kind === "master" ? col : colourOf(TR, tr)}"></div></div></div><div style="margin-left:4px;display:flex;gap:5px">${channel(11, h, tr.pk[0])}${channel(11, h, tr.pk[1])}</div></div>`;
+  }
+  // Compact: scale · two wide channels · a 11 px gutter with the triangular handle, which sits
+  // at the volume's dB on the meter's own scale; a hairline across the channels marks it.
+  const y = (1 - norm(tr.vol)) * h, ink = live ? "var(--Accent)" : "var(--VizInk)";
+  return `<div style="height:${h + 8}px;padding:4px 4px;display:flex">${scale(h, 14)}<div style="position:relative;display:flex;gap:3px;margin-left:1px">${channel(18, h, tr.pk[0])}${channel(18, h, tr.pk[1])}<div style="position:absolute;left:0;right:0;top:${y}px;height:1px;background:color-mix(in srgb, ${ink} 55%, transparent)"></div></div><div style="position:relative;width:11px;height:${h}px"><div style="position:absolute;left:2px;top:${y - 5}px;width:9px;height:10px;background:${ink};clip-path:polygon(0 50%,100% 0,100% 100%)"></div></div></div>`;
+}
+
+// ---- a mixer panel ---------------------------------------------------------------------
+let TR = [];
+function mixer({ big = false, compact = false, folded = [], selected = 0, width, height = 0, liveId = 0, title, notes }) {
+  const t = project(big); TR = t;
+  const fold = new Set(folded.map(n => t.find(x => x.name === n).id));
+  const sel = selected ? t.find(x => x.name === selected).id : 0;
+  // Hierarchical order: group, then its members (DFS); returns; master.
+  const order = [];
+  const walk = p => t.filter(x => x.parent === p && x.kind !== "return").forEach(x => { order.push(x); walk(x.id); });
+  walk(0); t.filter(x => x.kind === "return").forEach(x => order.push(x));
+  order.push({ id: 999, name: "Master", kind: "master", parent: 0, vol: 0, pan: 0, pk: [-3, -4] });
+  const visible = order.filter(x => !ancestors(t, x).some(a => fold.has(a)));
+  const maxDepth = Math.max(0, ...t.filter(x => x.kind === "group").map(g => depthOf(t, g) + 1));
+  const W = compact ? 72 : 154, gap = 2, BAR = 14;
+  const lh = compact ? 220 : 190;
+  const strips = visible.map(tr => {
+    const hidden = t.filter(x => ancestors(t, x).includes(tr.id));
+    // A hidden selected track outlines its outermost folded ancestor.
+    const selHere = tr.id === sel || (sel && !visible.some(v => v.id === sel) && ancestors(t, t.find(x => x.id === sel)).filter(a => fold.has(a)).pop() === tr.id);
+    return `<div class="strip${selHere ? " sel" : ""}" style="width:${W}px">${header(t, tr, compact, fold, hidden)}${io(tr, compact)}${sends(tr, compact)}${pan(tr, compact, W)}${level(tr, compact, lh, tr.id === liveId)}<div class="db">${fmtDb(tr.vol)}</div>${tr.kind === "master" ? `<div style="height:${compact ? 66 : 28}px;border-top:1px solid var(--Rule)"></div>` : keys(tr, compact)}</div>`;
+  });
+  // Bands: one bar row per nesting level, the group strip through its last visible member,
+  // plus a faint tint behind those strips.
+  let bands = "";
+  t.filter(x => x.kind === "group").forEach(g => {
+    const idx = visible.map((v, i) => v.id === g.id || ancestors(t, v).includes(g.id) ? i : -1).filter(i => i >= 0);
+    if (!idx.length) return;
+    const d = depthOf(t, g), x0 = 10 + idx[0] * (W + gap), x1 = 10 + idx[idx.length - 1] * (W + gap) + W;
+    const col = colourOf(t, g), n = t.filter(x => ancestors(t, x).includes(g.id)).length;
+    const label = fold.has(g.id) ? `${g.name} <span class="mono" style="font-weight:400;opacity:1;color:var(--TextSecondary)">+${n}</span>` : g.name;
+    bands += `<div style="position:absolute;left:${x0}px;width:${x1 - x0}px;top:${10 + d * BAR}px;bottom:0;background:color-mix(in srgb, ${col} 7%, transparent);border-radius:3px 3px 0 0"></div>`;
+    bands += `<div style="position:absolute;left:${x0}px;width:${x1 - x0}px;top:${10 + d * BAR}px;height:${BAR - 2}px;background:color-mix(in srgb, ${col} 32%, transparent);border-radius:2px;font-size:9px;font-weight:600;line-height:${BAR - 2}px;padding:0 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--TextPrimary)">${label}</div>`;
+  });
+  const top = 10 + maxDepth * BAR + 2;
+  const stripH = 24 + (compact ? 18 + 24 + 22 + lh + 8 + 16 + 66 : 34 + 42 + 38 + lh + 16 + 16 + 28) + 2;
+  const bodyH = height || top + stripH + 10;
+  const w = width || 20 + visible.length * (W + gap);
+  const tb = `<div class="toolbar"><b style="font-weight:600">Mixer</b><div class="seg"><div class="on">Strips</div><div>Stereo map</div></div></div>`;
+  const ft = `<div class="footer"><span style="font-size:9px;color:var(--TextTertiary)">Show</span><div class="toggle on">Sends</div><div class="toggle on">I/O</div><div class="toggle${compact ? " on" : ""}">Compact</div><div style="width:1px;height:20px;background:var(--BorderDefault)"></div><span style="font-weight:600;color:var(--TextTertiary)">Pan law</span><div class="seg"><div class="on" style="font-size:9px">Stereo</div><div style="font-size:9px">Balance</div></div><span style="font-size:11px;color:var(--TextTertiary)">Pan moves the whole image of stereo tracks and returns</span></div>`;
+  return `<div class="scene"><div class="cap">${title}</div><div class="panel" style="width:${w}px">${tb}<div class="body" style="height:${bodyH}px"><div class="bands">${bands}</div><div class="row" style="top:${top}px">${strips.join("")}</div></div>${ft}</div>${notes ? `<div class="notes">${notes}</div>` : ""}</div>`;
+}
+
+const scenes = {
+  regular: () => mixer({ selected: "Kick", title: "Regular strips · groups unfolded <span>· Bus holds Drums and Bass; Kick selected</span>",
+    notes: "Order follows the Arrangement: each group strip first, then its members. One 14 px bar row per nesting level carries the group name in the group colour; a faint tint of the same colour sits behind the group's strips. The triangle in a group's header folds it." }),
+  folded: () => mixer({ folded: ["Drums"], selected: "Hats", title: "Regular strips · Drums folded <span>· Hats selected while hidden → the Drums strip takes the outline</span>",
+    notes: "Folded: the bar shows +3 hidden strips; dots in the header say a hidden member is soloed (blue) or armed (red). Folding is view-only — the audio does not change. Selection never unfolds." }),
+  compact: () => mixer({ big: true, compact: true, selected: "Lead vox", width: 1440, liveId: 14, title: "Compact strips · 1440 px window, 24 tracks <span>· Compact on in the footer; the Lead vox handle is being dragged (accent)</span>",
+    notes: "72 px strips: name, one-line I/O, A/B send bars, a pan bar, a wide stereo meter (2 × 18 px) with the volume as a triangle on its right edge — at the volume's dB on the meter's scale, with a hairline across the channels — dB, then M, S and Arm at full width. 19 strips fit where the regular layout shows 9." }),
+  "compact-folded": () => mixer({ big: true, compact: true, folded: ["Drums", "Synths"], selected: "Snare", width: 1440, title: "Compact strips · Drums and Synths folded <span>· every track of the song on one screen</span>" }),
+};
+const only = P.get("scene");
+document.getElementById("out").innerHTML = Object.entries(scenes).filter(([k]) => !only || k === only).map(([, f]) => f()).join("");
+</script>
+</body>
+</html>

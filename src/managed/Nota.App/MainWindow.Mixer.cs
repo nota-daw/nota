@@ -7,7 +7,7 @@
 // rebuilt), so meters, scroll and the Stereo Map carry over. View → Mixer / ⌘⇧M shows or hides
 // it in the remembered placement; the panel's pop-out button, the window's dock button and
 // View → Mixer in its own window switch placement. Shown / placement / docked height are
-// per-user settings, restored on launch.
+// per-user settings, restored on launch. Groups, selection and compact strips: specs/070.
 
 using System;
 using Avalonia.Controls;
@@ -36,6 +36,26 @@ public partial class MainWindow
 
     private double MixerPanelMin => MixerPanelChrome + (_mixer?.MinContentHeight ?? 0);
     private double MixerPanelNatural => MixerPanelChrome + (_mixer?.NaturalContentHeight ?? 0);
+
+    // specs/070: one fold state for the Arrangement and the Mixer, the Mixer follows the selected
+    // track (wired here, beside the rest of the Mixer), and its compact layout is a user setting.
+    private void WireMixerGroups()
+    {
+        if (_mixer is null) return;
+        var fold = new GroupFold();
+        Timeline.Fold = fold;
+        _mixer.Fold = fold;
+        _mixer.Compact = MixerSettings.Current.MixerCompact;
+        _mixer.CompactChanged += compact =>
+        {
+            var settings = MixerSettings;
+            settings.Current.MixerCompact = compact;
+            settings.Save();
+        };
+        Timeline.TrackSelected += id => _mixer?.FollowSelection(id);
+        Timeline.SelectionCleared += () => _mixer?.FollowSelection(-1);
+        if (_modular is not null) _modular.TrackActivated += id => _mixer?.FollowSelection(id);
+    }
 
     private void OnMenuMixer(object? sender, EventArgs e) => ToggleMixer();
 
@@ -127,6 +147,7 @@ public partial class MainWindow
     private void DockMixer()
     {
         if (_mixer is null) return;
+        SetDetailMaximized(false);   // asked for, the Mixer must be seen
         _mixer.View = MixerViewFromSettings();
         SyncMixerViewButtons();
         _mixerDocked = true;
@@ -167,6 +188,17 @@ public partial class MainWindow
         var settings = MixerSettings;
         settings.Current.MixerDockHeight = h;
         settings.Save();
+    }
+
+    // Double-clicking its top edge forgets the dragged height: back to the first-dock default.
+    private void ResetMixerHeight()
+    {
+        if (!_mixerDocked) return;
+        var settings = MixerSettings;
+        settings.Current.MixerDockHeight = 0;
+        settings.Save();
+        _mixerWanted = DockedMixerHeight();
+        FitBottomPanels();
     }
 
     private void OnMixerMinHeightChanged()

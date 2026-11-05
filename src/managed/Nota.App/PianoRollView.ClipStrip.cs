@@ -15,11 +15,18 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Nota.Application.Localization;
 
 namespace Nota.App;
 
 public sealed partial class PianoRollView
 {
+    private readonly ScrollViewer _clipStripScroll = new()
+    {
+        HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+        VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+    };
+
     private sealed class ClipStrip : Control
     {
         public const double RowH = 18;
@@ -32,7 +39,7 @@ public sealed partial class PianoRollView
         {
             _o = o;
             Cursor = new Cursor(StandardCursorType.Hand);
-            ToolTip.SetTip(this, "Click a clip to edit it · the lock keeps a clip for reference");
+            ToolTip.SetTip(this, Loc.T("piano_roll.clip_strip.click_a_clip_to_edit"));
         }
 
         /// <summary>Re-stacks the bars (clips added, removed, moved) and sizes the strip.</summary>
@@ -51,6 +58,7 @@ public sealed partial class PianoRollView
             }
             _rows = Math.Max(1, rowEnds.Count);
             Height = _rows * RowH;
+            _o.FitControllerLanes();
             InvalidateVisual();
         }
 
@@ -90,7 +98,7 @@ public sealed partial class PianoRollView
                     }
                     IBrush ink = active ? NotaPalette.InkOn(track) : locked ? NotaPalette.TextTertiary : NotaPalette.TextSecondary;
                     var clip = set.Clips[k];
-                    string name = _o.ClipNameOf?.Invoke(clip.TrackId, clip.ClipIndex) ?? $"Track {clip.TrackId}";
+                    string name = _o.ClipNameOf?.Invoke(clip.TrackId, clip.ClipIndex) ?? Loc.F("common.track_n", clip.TrackId);
                     var ft = new NotaFormattedText(name, NotaNum.Culture, FlowDirection.LeftToRight, NotaFonts.SansMedium, 9, ink);
                     double textX = r.X + (active ? 6 : Stripe + 5);
                     double room = r.Width - (textX - r.X) - (active ? 6 : LockW + 2);

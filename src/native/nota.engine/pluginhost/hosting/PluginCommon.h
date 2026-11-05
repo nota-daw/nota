@@ -15,6 +15,8 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
+#include "engine/TransportInfo.h"
+
 namespace juce {
 class PluginDescription;
 } // namespace juce
@@ -46,6 +48,24 @@ void enableEveryBus(juce::AudioPluginInstance& p);
 // Bus layout on stderr when NOTA_DEBUG_PLUGIN_BUSES is set. Message thread.
 void logBuses(const juce::AudioPluginInstance& p);
 
+// Hands the device workgroup (setPluginAudioWorkgroup) to one Audio Unit through its render
+// context observer (kAudioUnitProperty_RenderContextObserver, macOS 12+), the way Logic does:
+// on the render thread, before processing, whenever the workgroup changed. A plug-in without
+// an observer (VST3, an AU that doesn't ask) is left alone.
+class WorkgroupLink {
+  public:
+    WorkgroupLink() = default;
+    WorkgroupLink(const WorkgroupLink&) = delete;
+    WorkgroupLink& operator=(const WorkgroupLink&) = delete;
+    ~WorkgroupLink();
+    void bind(juce::AudioPluginInstance& p); // message thread, after prepareToPlay
+    void update();                           // audio thread, right before processBlock
+
+  private:
+    void* observer_ = nullptr; // the AU's AURenderContextObserver block (copied)
+    uint32_t seen_ = 0;        // generation of the workgroup last handed over
+};
+
 // Opaque plugin state <-> byte vector (M3-5).
 std::vector<uint8_t> readState(juce::AudioPluginInstance* p);
 void writeState(juce::AudioPluginInstance* p, const uint8_t* data, int32_t size);
@@ -61,6 +81,15 @@ float paramGetImpl(juce::AudioPluginInstance* p, int32_t i);
 void paramSetImpl(juce::AudioPluginInstance* p, int32_t i, float v);
 int32_t paramIndexOfIdImpl(juce::AudioPluginInstance* p, const std::string& id);
 
+// The largest block a hosted plug-in is prepared for and handed (#447). The engine's own
+// buffers go to 16384 frames, but plug-ins cap theirs (sfizz asserts above 8192, others
+// size their scratch from it), so a longer host block is played to them in pieces.
+constexpr int kPluginMaxBlock = 4096;
+
+// The transport `frames` samples later, for the next piece of a split block: the position
+// moves on while playing and wraps at the loop end.
+void advanceTransport(nota::TransportInfo& ti, int32_t frames, double sr);
+
 // Instantiate a full description in-process (message thread). Null on failure.
 std::unique_ptr<juce::AudioPluginInstance> createInstance(const juce::PluginDescription& desc, double sr, int maxBlock);
 
@@ -69,6 +98,10 @@ std::unique_ptr<juce::AudioPluginInstance> createInstance(const juce::PluginDesc
 // same entry that is instantiated, so a scan landing in between can't swap it.
 std::unique_ptr<juce::AudioPluginInstance> instantiateCatalog(
     int catalogIndex, double sr, int maxBlock, bool instrumentOnly);
+
+// A second instance of `src`'s plug-in with `src`'s state (Duplicate track, device copy, rack
+// copy; message thread). Null when it can't be made.
+std::unique_ptr<juce::AudioPluginInstance> cloneInstance(juce::AudioPluginInstance& src, double sr, int maxBlock);
 
 } // namespace hosting
 } // namespace nota
